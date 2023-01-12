@@ -1,5 +1,31 @@
-﻿function initializeInfoLinks() {
+﻿window.initializeInfoLinks = function() {
     $('[id^="sensorInfo_link_"]').off("click").on("click", metaInfoLinkClicked);
+}
+
+window.editInfoButtonClick = function () {
+    let sensorId = $('#sensorMetaInfo_encodedId').val();
+
+    $('#interval_' + sensorId).removeAttr("disabled");
+    $('#description_' + sensorId).removeAttr("disabled");
+    $('#unit_' + sensorId).removeAttr("disabled");
+    $('#saveInfo_' + sensorId).removeAttr("disabled");
+    $('#revertInfo_' + sensorId).removeAttr("disabled");
+
+    $('#expectedUpdateInterval_' + sensorId + ' :input').each(function () {
+        this.removeAttribute('disabled');
+    });
+}
+
+window.revertInfoClick = function () {
+    let sensorId = $('#sensorMetaInfo_encodedId').val();
+
+    showMetaInfo(sensorId);
+}
+
+window.displaySensorMetaInfo = function (sensorId, viewData) {
+    $('#sensor_info_' + sensorId).html(viewData);
+
+    disableExpectedUpdateIntervalControl();
 }
 
 function metaInfoLinkClicked() {
@@ -41,30 +67,4 @@ function disableExpectedUpdateIntervalControl() {
     $('#expectedUpdateInterval_' + sensorId + ' :input').each(function () {
         this.setAttribute('disabled', true);
     });
-}
-
-function editInfoButtonClick() {
-    let sensorId = $('#sensorMetaInfo_encodedId').val();
-
-    $('#interval_' + sensorId).removeAttr("disabled");
-    $('#description_' + sensorId).removeAttr("disabled");
-    $('#unit_' + sensorId).removeAttr("disabled");
-    $('#saveInfo_' + sensorId).removeAttr("disabled");
-    $('#revertInfo_' + sensorId).removeAttr("disabled");
-
-    $('#expectedUpdateInterval_' + sensorId + ' :input').each(function () {
-        this.removeAttribute('disabled');
-    });
-}
-
-function revertInfoClick() {
-    let sensorId = $('#sensorMetaInfo_encodedId').val();
-
-    showMetaInfo(sensorId);
-}
-
-function displaySensorMetaInfo(sensorId, viewData) {
-    $('#sensor_info_' + sensorId).html(viewData);
-
-    disableExpectedUpdateIntervalControl();
 }

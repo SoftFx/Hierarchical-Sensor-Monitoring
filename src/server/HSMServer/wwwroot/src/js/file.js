@@ -3,25 +3,7 @@ const mimeTypesMap = new Map();
 mimeTypesMap.set('html', 'text/html');
 mimeTypesMap.set('pdf', 'application/pdf');
 
-//files functionality
-function getMimeType(fileName) {
-    let extension = getExtensionFromName(fileName);
-    let fileType = mimeTypesMap.get(extension);
-    if (fileType === undefined) {
-        fileType = "text/html";
-    }
-    return fileType;
-}
-
-function getExtensionFromName(fileName) {
-    let dotIndex = fileName.indexOf('.');
-    if (dotIndex === -1) {
-        return fileName;
-    }
-    return fileName.substring(dotIndex + 1, fileName.length);
-}
-
-function openFileInBrowser(path, fileName, viewFileAction) {
+window.openFileInBrowser = function(path, fileName, viewFileAction) {
     let fileType = getMimeType(fileName);
     //var xhr = new XMLHttpRequest();
     //xhr.open('POST', viewFileAction, true);
@@ -64,4 +46,22 @@ function openFileInBrowser(path, fileName, viewFileAction) {
             $("#navbar").css("display", "block");
         }
     });
+}
+
+//files functionality
+function getMimeType(fileName) {
+    let extension = getExtensionFromName(fileName);
+    let fileType = mimeTypesMap.get(extension);
+    if (fileType === undefined) {
+        fileType = "text/html";
+    }
+    return fileType;
+}
+
+function getExtensionFromName(fileName) {
+    let dotIndex = fileName.indexOf('.');
+    if (dotIndex === -1) {
+        return fileName;
+    }
+    return fileName.substring(dotIndex + 1, fileName.length);
 }

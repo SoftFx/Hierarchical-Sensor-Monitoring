@@ -6,12 +6,12 @@ var needToActivateListTab = false;
 var currentSelectedNodeId = "";
 
 
-function initializeUserRights(userIsAdmin, userProducts) {
+window.initializeUserRights = function(userIsAdmin, userProducts) {
     isCurrentUserAdmin = userIsAdmin;
     currentUserProducts = userProducts.split(' ');
 }
 
-function initializeTree() {
+window.initializeTree = function() {
     var sortingType = $("input[name='TreeSortType']:checked");
 
     $('#jstree').jstree({
@@ -47,6 +47,16 @@ function initializeTree() {
     });
 
     initializeActivateNodeTree();
+}
+
+window.activateNode = function (currentNodeId, nodeIdToActivate) {
+    needToActivateListTab = $(`#list_${currentNodeId}`).hasClass('active');
+
+    $('#jstree').jstree('activate_node', nodeIdToActivate);
+
+    if (currentSelectedNodeId != nodeIdToActivate) {
+        selectNodeAjax(nodeIdToActivate);
+    }
 }
 
 function initializeActivateNodeTree() {
@@ -118,16 +128,6 @@ function selectNodeInfoTab(tab, selectedId) {
 
     if (tabLink != null)
         tabLink.click();
-}
-
-function activateNode(currentNodeId, nodeIdToActivate) {
-    needToActivateListTab = $(`#list_${currentNodeId}`).hasClass('active');
-
-    $('#jstree').jstree('activate_node', nodeIdToActivate);
-
-    if (currentSelectedNodeId != nodeIdToActivate) {
-        selectNodeAjax(nodeIdToActivate);
-    }
 }
 
 function timeSorting(a, b) {

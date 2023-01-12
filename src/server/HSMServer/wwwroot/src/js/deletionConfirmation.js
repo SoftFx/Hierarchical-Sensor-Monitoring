@@ -4,7 +4,7 @@ var modalBodyId = "deletionConfirmation_body";
 var modalOkButton = "deletionConfirmation_okButton";
 
 
-function showDeletionConfirmationModal(title, body, okButtonAction) {
+window.showDeletionConfirmationModal = function(title, body, okButtonAction) {
     setDeletionConfirmationModalTitle(title);
     setDeletionConfirmationModalBody(body);
     setDeletionConfirmationModalOkButton(okButtonAction);
@@ -14,7 +14,7 @@ function showDeletionConfirmationModal(title, body, okButtonAction) {
     $(`#${modalId}`).modal('show');
 }
 
-function hideDeletionConfirmationModal() {
+window.hideDeletionConfirmationModal = function() {
     $(`#${modalId}`).modal('hide');
 }
 

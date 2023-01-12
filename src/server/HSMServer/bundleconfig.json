@@ -1,49 +1,5 @@
 [
   {
-    "outputFileName": "wwwroot/js/bundles/site.min.js",
-    "inputFiles": [
-      "wwwroot/js/site.js"
-    ],
-    "minify": {
-      "enabled": true,
-      "renameLocals": false
-    }
-  },
-  {
-    "outputFileName": "wwwroot/js/bundles/deletionConfirmation.min.js",
-    "inputFiles": [
-      "wwwroot/js/home/deletionConfirmation.js"
-    ],
-    "minify": {
-      "enabled": true,
-      "renameLocals": false
-    }
-  },
-  {
-    "outputFileName": "wwwroot/js/bundles/accessKey.min.js",
-    "inputFiles": [
-      "wwwroot/js/home/accessKey.js"
-    ],
-    "minify": {
-      "enabled": true,
-      "renameLocals": false
-    }
-  },
-  {
-    "outputFileName": "wwwroot/js/bundles/homeBundle.min.js",
-    "inputFiles": [
-      "wwwroot/js/home/file.js",
-      "wwwroot/js/home/history.js",
-      "wwwroot/js/home/plotting.js",
-      "wwwroot/js/home/sensorInfo.js",
-      "wwwroot/js/home/tree.js"
-    ],
-    "minify": {
-      "enabled": true,
-      "renameLocals": false
-    }
-  },
-  {
     "outputFileName": "wwwroot/css/bundles/homeBundle.min.css",
     "inputFiles": [
       "wwwroot/css/home/home.css"

@@ -1,43 +1,19 @@
-﻿function showLargeModal() {
-    var modal = document.getElementById("accessKeys_modalDialog");
-    modal.classList.remove("w-50");
-    modal.classList.add("w-75");
-}
-
-function showMiddleModal() {
-    var modal = document.getElementById("accessKeys_modalDialog");
-    modal.classList.remove("w-75");
-    modal.classList.add("w-50");
-}
-
-function setModalTitle(title) {
-    $('#accessKeys_modalTitle').empty();
-    $('#accessKeys_modalTitle').append(title);
-}
-
-function setModalBody(viewData) {
+﻿window.setModalBody = function(viewData) {
     $("#accessKeys_modalBody").html(viewData);
 }
 
-function showAccessKeysListModal() {
+window.showAccessKeysListModal = function() {
     showLargeModal();
 
     let productName = $('#accessKey_productName').val();
     setModalTitle(`Access keys for product '${productName}'`);
 }
 
-function showModal() {
-    $('#accessKeys_modal').modal({    
-        backdrop: 'static'
-    });
-    $('#accessKeys_modal').modal('show');
-}
-
-function hideModal() {
+window.hideModal = function() {
     $('#accessKeys_modal').modal('hide');
 }
 
-function showAccessKeysList(productId, showModalFirst) {
+window.showAccessKeysList = function(productId, showModalFirst) {
     $.ajax({
         type: 'get',
         url: showProductAccessKeyTable + '?Selected=' + productId,
@@ -56,7 +32,7 @@ function showAccessKeysList(productId, showModalFirst) {
     });
 }
 
-function showNewAccessKeyModal(url, openModal) {
+window.showNewAccessKeyModal = function(url, openModal) {
     $.ajax({
         type: 'get',
         url: url,
@@ -76,7 +52,7 @@ function showNewAccessKeyModal(url, openModal) {
     });
 }
 
-function changeAccessKey(url, id) {
+window.changeAccessKey = function(url, id) {
     const isModalOpen = $('#accessKeys_modal').is(':visible')
     $.ajax({
         type: 'GET',
@@ -93,7 +69,7 @@ function changeAccessKey(url, id) {
     });
 }
 
-function deleteAccessKey(url, id, name) {
+window.deleteAccessKey = function(url, id, name) {
     showDeletionConfirmationModal(
         `Removing ${name} access key`,
         `Do you really want to remove selected access key <strong>${name}</strong> ('${id}') ?`,
@@ -111,7 +87,7 @@ function deleteAccessKey(url, id, name) {
     );
 }
 
-function blockAccessKey(url, id) {
+window.blockAccessKey = function(url, id) {
     $.ajax({
         type: 'POST',
         url: url,
@@ -121,4 +97,28 @@ function blockAccessKey(url, id) {
             $('#accessKeysTable').html(viewData);
         }
     })
+}
+
+function showModal() {
+    $('#accessKeys_modal').modal({
+        backdrop: 'static'
+    });
+    $('#accessKeys_modal').modal('show');
+}
+
+function showLargeModal() {
+    var modal = document.getElementById("accessKeys_modalDialog");
+    modal.classList.remove("w-50");
+    modal.classList.add("w-75");
+}
+
+function showMiddleModal() {
+    var modal = document.getElementById("accessKeys_modalDialog");
+    modal.classList.remove("w-75");
+    modal.classList.add("w-50");
+}
+
+function setModalTitle(title) {
+    $('#accessKeys_modalTitle').empty();
+    $('#accessKeys_modalTitle').append(title);
 }

@@ -19,7 +19,7 @@ function Data(to, from, type, encodedId) {
 
 //Initialization
 {
-    function initialize() {
+    window.initialize = function() {
         initializeSensorAccordion();
         initializeFileSensorEvents();
         initializeInfoLinks();
@@ -292,7 +292,7 @@ function Data(to, from, type, encodedId) {
 
 //Pagination
 {
-    function showPage(getPageAction, encodedId) {
+    window.showPage = function(getPageAction, encodedId) {
         $('#nextPageButton').addClass('disabled');
         $('#prevPageButton').addClass('disabled');
 

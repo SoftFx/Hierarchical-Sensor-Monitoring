@@ -1,4 +1,4 @@
-﻿function copyToClipboard(text) {
+﻿window.copyToClipboard = function(text) {
     const copyToClipboardAsync = str => {
         if (navigator && navigator.clipboard && navigator.clipboard.writeText) {
             return navigator.clipboard.writeText(str);
