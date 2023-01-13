@@ -13,11 +13,8 @@ namespace HSMServer.Authentication
         /// Add new user with the specified parameters
         /// </summary>
         /// <param name="userName">Login of the new user, must be unique and not empty</param>
-        /// <param name="certificateThumbprint">Can be empty for website users</param>
-        /// <param name="certificateFileName">Must end with .crt (certificate files extension), can be empty for website users</param>
         /// <param name="passwordHash">Password hash computed with HashComputer.ComputePasswordHash().</param>
-        void AddUser(string userName, string certificateThumbprint, string certificateFileName,
-            string passwordHash, bool isAdmin, List<KeyValuePair<string, ProductRoleEnum>> productRoles = null);
+        void AddUser(string userName, string passwordHash, bool isAdmin, List<KeyValuePair<string, ProductRoleEnum>> productRoles = null);
         public void AddUser(User user);
 
         /// <summary>

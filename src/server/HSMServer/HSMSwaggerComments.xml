@@ -4,13 +4,11 @@
         <name>HSMServer</name>
     </assembly>
     <members>
-        <member name="M:HSMServer.Authentication.IUserManager.AddUser(System.String,System.String,System.String,System.String,System.Boolean,System.Collections.Generic.List{System.Collections.Generic.KeyValuePair{System.String,HSMServer.Model.Authentication.ProductRoleEnum}})">
+        <member name="M:HSMServer.Authentication.IUserManager.AddUser(System.String,System.String,System.Boolean,System.Collections.Generic.List{System.Collections.Generic.KeyValuePair{System.String,HSMServer.Model.Authentication.ProductRoleEnum}})">
             <summary>
             Add new user with the specified parameters
             </summary>
             <param name="userName">Login of the new user, must be unique and not empty</param>
-            <param name="certificateThumbprint">Can be empty for website users</param>
-            <param name="certificateFileName">Must end with .crt (certificate files extension), can be empty for website users</param>
             <param name="passwordHash">Password hash computed with HashComputer.ComputePasswordHash().</param>
         </member>
         <member name="M:HSMServer.Authentication.IUserManager.UpdateUser(HSMServer.Model.Authentication.User)">

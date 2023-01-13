@@ -1,3 +1,4 @@
+using System;
 using System.IO;
 using System.Security.Cryptography.X509Certificates;
 using System.Text.Json.Serialization;
@@ -28,7 +29,7 @@ public class ServerCertificateConfig
                 ? new X509Certificate2(certificatePath)
                 : new X509Certificate2(certificatePath, Key);
         }
-
-        return null;
+        
+        return new X509Certificate2(Path.Combine(ServerConfig.ExecutableDirectory, "default.server.pfx"));
     }
 }

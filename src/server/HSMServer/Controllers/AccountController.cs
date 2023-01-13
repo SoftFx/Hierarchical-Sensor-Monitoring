@@ -134,7 +134,7 @@ namespace HSMServer.Controllers
                     (ProductRoleEnum)int.Parse(model.Role))};
             }
 
-            _userManager.AddUser(model.Username, null, null,
+            _userManager.AddUser(model.Username,
                 HashComputer.ComputePasswordHash(model.Password), false, products);
             await Authenticate(model.Username, true);
 
@@ -173,7 +173,7 @@ namespace HSMServer.Controllers
                 TempData[TextConstants.TempDataErrorText] = ValidatorHelper.GetErrorString(results.Errors);
 
             else
-                _userManager.AddUser(model.Username, string.Empty, string.Empty,
+                _userManager.AddUser(model.Username,
                 HashComputer.ComputePasswordHash(model.Password), model.IsAdmin);
         }
 
