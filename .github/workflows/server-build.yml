@@ -24,10 +24,16 @@ jobs:
       ServerPath: src/server/HSMServer/HSMServer.csproj
     steps:
     - uses: actions/checkout@v3
+
     - name: Setup .NET Core
       uses: actions/setup-dotnet@v2
       with:
         dotnet-version: 7.0.x
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: 18
 
     - name: Install dependencies
       run: dotnet restore ${{ env.SolutionPath }}

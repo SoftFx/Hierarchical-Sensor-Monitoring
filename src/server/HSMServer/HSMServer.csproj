@@ -73,4 +73,14 @@
             <TargetPath>default.server.pfx</TargetPath>
         </EmbeddedResource>
     </ItemGroup>
+
+    <Target Name="NpmProdBuild" AfterTargets="Build" Condition="'$(Configuration)'=='Release'">
+        <Exec Command="npm install" />
+        <Exec Command="npm run build_prod" />
+    </Target>
+
+    <Target Name="NpmDevBuild" AfterTargets="Build" Condition="'$(Configuration)'=='Debug'">
+        <Exec Command="npm install" />
+        <Exec Command="npm run build_dev" />
+    </Target>
 </Project>

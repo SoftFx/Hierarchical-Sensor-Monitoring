@@ -4,8 +4,8 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "build": "webpack --mode=development --watch",
-    "release": "webpack --mode=production"
+    "build_dev": "webpack --mode=development",
+    "build_prod": "webpack --mode=production"
   },
   "author": "HSM team",
   "license": "MIT",
