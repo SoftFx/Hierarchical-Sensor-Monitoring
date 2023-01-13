@@ -44,8 +44,8 @@ jobs:
     - name: Test Solution
       run: dotnet test ${{ env.SolutionPath }}
 
-    - name: Build HSMServer
-      run: dotnet build ${{ env.ServerPath }} -c Release -o ${{ env.OUTPUT_FOLDER }}
+    - name: Publish HSMServer
+      run: dotnet publish ${{ env.ServerPath }} -c Release -o ${{ env.OUTPUT_FOLDER }}
 
     - id: save-version
       name: Try to get server version
