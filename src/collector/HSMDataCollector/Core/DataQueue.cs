@@ -176,10 +176,10 @@ namespace HSMDataCollector.Core
                         
                         default:
                             dataList.Add(value);
+                            ++count;
                             break;
                     }
 
-                    ++count;
                     --_internalCount;
                 }
             }
