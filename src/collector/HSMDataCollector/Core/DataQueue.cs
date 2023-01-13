@@ -136,10 +136,20 @@ namespace HSMDataCollector.Core
                 {
                     foreach (var failedValue in _failedList)
                     {
-                        if (failedValue is FileSensorValue fileValue)
-                            FileReceving?.Invoke(this, fileValue);
-                        else
-                            dataList.Add(failedValue);
+                        switch (failedValue)
+                        {
+                            case FileSensorValue fileValue:
+                                FileReceving?.Invoke(this, fileValue);
+                                break;
+                        
+                            case IntBarSensorValue intBar when intBar.Count == 0:
+                            case DoubleBarSensorValue doubleBar when doubleBar.Count == 0:
+                                break;
+                        
+                            default:
+                                dataList.Add(failedValue);
+                                break;
+                        }
                     }
 
                     _failedList.Clear();
@@ -154,11 +164,20 @@ namespace HSMDataCollector.Core
                 while (count < MAX_VALUES_MESSAGE_CAPACITY && _internalCount > 0)
                 {
                     var value = _valuesQueue.Dequeue();
-
-                    if (value is FileSensorValue fileValue)
-                        FileReceving?.Invoke(this, fileValue);
-                    else
-                        dataList.Add(value);
+                    switch (value)
+                    {
+                        case FileSensorValue fileValue:
+                            FileReceving?.Invoke(this, fileValue);
+                            break;
+                        
+                        case IntBarSensorValue intBar when intBar.Count == 0:
+                        case DoubleBarSensorValue doubleBar when doubleBar.Count == 0:
+                            break;
+                        
+                        default:
+                            dataList.Add(value);
+                            break;
+                    }
 
                     ++count;
                     --_internalCount;
