@@ -142,8 +142,7 @@ namespace HSMDataCollector.Core
                                 FileReceving?.Invoke(this, fileValue);
                                 break;
                         
-                            case IntBarSensorValue intBar when intBar.Count == 0:
-                            case DoubleBarSensorValue doubleBar when doubleBar.Count == 0:
+                            case BarSensorValueBase barSensor when barSensor.Count == 0:
                                 break;
                         
                             default:
