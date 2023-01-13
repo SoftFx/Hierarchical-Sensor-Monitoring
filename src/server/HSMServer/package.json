@@ -1,8 +1,6 @@
 {
   "name": "hsmserver",
   "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
   "scripts": {
     "build_dev": "webpack --mode=development",
     "build_prod": "webpack --mode=production"
