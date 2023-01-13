@@ -130,11 +130,10 @@ namespace HSMServer.Controllers
             if (!string.IsNullOrEmpty(model.ProductKey) && !string.IsNullOrEmpty(model.Role))
             {
                 products = new List<(Guid, ProductRoleEnum)>()
-                    { (Guid.Parse(model.ProductKey), (ProductRoleEnum)int.Parse(model.Role))};
+                { (Guid.Parse(model.ProductKey), (ProductRoleEnum)int.Parse(model.Role)) };
             }
 
-            _userManager.AddUser(model.Username,
-                HashComputer.ComputePasswordHash(model.Password), false, products);
+            _userManager.AddUser(model.Username, HashComputer.ComputePasswordHash(model.Password), false, products);
             await Authenticate(model.Username, true);
 
             if (!string.IsNullOrEmpty(model.TicketId))
