@@ -7,10 +7,6 @@
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
 
 
-<script src="~/lib/jquery-validation/dist/jquery.validate.min.js"></script>
-<script src="~/lib/jquery-validation-unobtrusive/jquery.validate.unobtrusive.min.js"></script>
-
-
 <form asp-controller="@ViewConstants.AccessKeysController"
       asp-action="@(Model.IsModify ? nameof(AccessKeysController.ModifyAccessKey) : nameof(AccessKeysController.NewAccessKey))"
       method="post" id="newEditAccessKey_form">

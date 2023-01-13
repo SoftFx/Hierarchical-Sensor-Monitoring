@@ -11,12 +11,8 @@
     var user = User as User;
 }
 
-<link rel="stylesheet" href="~/css/bundles/accessKeyBundle.min.css"/>
-<script src="~/js/clipboard.js/clipboard.min.js"></script>
-
 
 @await Html.PartialAsync("~/Views/Shared/_DeletionConfirmationModal.cshtml")
-<script src="~/js/bundles/accessKey.min.js"></script>
 
 <input class="d-none" id='accessKey_prodcutId' value="@Model.EncodedId"/>
 <input class="d-none" id='accessKey_productName' value="@Model.Name"/>

@@ -50,31 +50,12 @@
 
     <ItemGroup>
         <Folder Include="Images\"/>
-        <Folder Include="wwwroot\js\bundles\"/>
     </ItemGroup>
 
     <ItemGroup>
         <None Include="nlog.config">
             <CopyToOutputDirectory>Always</CopyToOutputDirectory>
         </None>
-        <None Include="wwwroot\lib\bootstrap\dist\css\bootstrap-grid.css.map"/>
-        <None Include="wwwroot\lib\bootstrap\dist\css\bootstrap-grid.min.css.map"/>
-        <None Include="wwwroot\lib\bootstrap\dist\css\bootstrap-reboot.css.map"/>
-        <None Include="wwwroot\lib\bootstrap\dist\css\bootstrap-reboot.min.css.map"/>
-        <None Include="wwwroot\lib\bootstrap\dist\css\bootstrap.css.map"/>
-        <None Include="wwwroot\lib\bootstrap\dist\css\bootstrap.min.css.map"/>
-        <None Include="wwwroot\lib\bootstrap\dist\js\bootstrap.bundle.js"/>
-        <None Include="wwwroot\lib\bootstrap\dist\js\bootstrap.bundle.js.map"/>
-        <None Include="wwwroot\lib\bootstrap\dist\js\bootstrap.bundle.min.js"/>
-        <None Include="wwwroot\lib\bootstrap\dist\js\bootstrap.bundle.min.js.map"/>
-        <None Include="wwwroot\lib\bootstrap\dist\js\bootstrap.js.map"/>
-        <None Include="wwwroot\lib\bootstrap\dist\js\bootstrap.min.js"/>
-        <None Include="wwwroot\lib\bootstrap\dist\js\bootstrap.min.js.map"/>
-        <None Include="wwwroot\lib\jquery-validation-unobtrusive\jquery.validate.unobtrusive.min.js"/>
-        <None Include="wwwroot\lib\jquery-validation\dist\additional-methods.min.js"/>
-        <None Include="wwwroot\lib\jquery-validation\dist\jquery.validate.min.js"/>
-        <None Include="wwwroot\lib\jquery\dist\jquery.min.js"/>
-        <None Include="wwwroot\lib\jquery\dist\jquery.min.map"/>
     </ItemGroup>
 
     <ItemGroup>
@@ -92,4 +73,14 @@
             <TargetPath>default.server.pfx</TargetPath>
         </EmbeddedResource>
     </ItemGroup>
+
+    <Target Name="NpmProdBuild" AfterTargets="Build" Condition="'$(Configuration)'=='Release'">
+        <Exec Command="npm install" />
+        <Exec Command="npm run build_prod" />
+    </Target>
+
+    <Target Name="NpmDevBuild" AfterTargets="Build" Condition="'$(Configuration)'=='Debug'">
+        <Exec Command="npm install" />
+        <Exec Command="npm run build_dev" />
+    </Target>
 </Project>

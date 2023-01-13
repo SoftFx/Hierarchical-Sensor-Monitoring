@@ -10,9 +10,6 @@
 
 @{ ViewData["Title"] = $"Product {Model.ProductName}"; }
 
-<link rel="stylesheet" href="~/css/bundles/accessKeyBundle.min.css"/>
-<script src="~/js/clipboard.js/clipboard.min.js"></script>
-
 <script>
     var addUserRight = "@Html.Raw(Url.Action(ViewConstants.AddUserRightAction, ViewConstants.ProductController))";
     var editUserRole = "@Html.Raw(Url.Action(ViewConstants.EditUserRoleAction, ViewConstants.ProductController))";

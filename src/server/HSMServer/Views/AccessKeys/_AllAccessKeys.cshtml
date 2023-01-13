@@ -128,9 +128,8 @@
         </tbody>
     </table>
 </div>
-@await Html.PartialAsync("~/Views/Shared/_DeletionConfirmationModal.cshtml")
 
-<script src="~/js/bundles/accessKey.min.js"></script>
+@await Html.PartialAsync("~/Views/Shared/_DeletionConfirmationModal.cshtml")
 
 <script>
     var changeAccessKeyAction = "@Html.Raw(Url.Action(nameof(AccessKeysController.ModifyAccessKey), ViewConstants.AccessKeysController))";
