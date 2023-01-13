@@ -1,4 +1,5 @@
-﻿using HSMCommon;
+﻿using System;
+using HSMCommon;
 using HSMServer.Model.Authentication;
 using System.Collections.Generic;
 
@@ -51,9 +52,9 @@ namespace HSMServer.Core.Tests.Infrastructure
         {
             var user = BuildUser(isAdmin: false);
 
-            user.ProductsRoles = new List<KeyValuePair<string, ProductRoleEnum>>()
+            user.ProductsRoles = new List<(Guid, ProductRoleEnum)>()
             {
-                new KeyValuePair<string, ProductRoleEnum>(productId, productRole),
+                (Guid.Parse(productId), productRole),
             };
 
             return user;
@@ -71,9 +72,9 @@ namespace HSMServer.Core.Tests.Infrastructure
             {
                 IsAdmin = RandomGenerator.GetRandomBool(),
                 Password = HashComputer.ComputePasswordHash(name),
-                ProductsRoles = new List<KeyValuePair<string, ProductRoleEnum>>()
+                ProductsRoles = new List<(Guid, ProductRoleEnum)>()
                 {
-                    new KeyValuePair<string, ProductRoleEnum>(TestProductsManager.TestProduct.Id, productRole)
+                    (Guid.Parse(TestProductsManager.TestProduct.Id), productRole)
                 },
             };
 

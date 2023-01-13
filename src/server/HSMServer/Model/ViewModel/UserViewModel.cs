@@ -1,11 +1,12 @@
-﻿using HSMServer.Model.Authentication;
+﻿using System;
+using HSMServer.Model.Authentication;
 using System.Collections.Generic;
 
 namespace HSMServer.Model.ViewModel
 {
     public class UserViewModel
     {
-        public List<KeyValuePair<string, ProductRoleEnum>> ProductsRoles { get; }
+        public List<(Guid, ProductRoleEnum)> ProductsRoles { get; }
 
 
         public bool IsAdmin { get; set; }

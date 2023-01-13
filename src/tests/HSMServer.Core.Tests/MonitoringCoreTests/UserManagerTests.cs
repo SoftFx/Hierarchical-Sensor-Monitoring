@@ -83,7 +83,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
             var defaultUserFromDB = await GetDefaultUserFromDB();
 
             var updatedUser = BuildUpdatedUser(defaultUserFromDB);
-            updatedUser.ProductsRoles = new List<KeyValuePair<string, ProductRoleEnum>>(_testUser.ProductsRoles);
+            updatedUser.ProductsRoles = new List<(Guid, ProductRoleEnum)>(_testUser.ProductsRoles);
 
             _userManager.UpdateUser(updatedUser);
 
@@ -259,7 +259,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
 
             for (int i = 0; i < result.Count; i++)
             {
-                var actual = result[i].ProductsRoles.FirstOrDefault(p => p.Key == TestProductsManager.TestProduct.Id);
+                var actual = result[i].ProductsRoles.FirstOrDefault(p => p.Item1.ToString() == TestProductsManager.TestProduct.Id);
                 Assert.Equal(default, actual);
             }
         }
@@ -366,7 +366,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         [Trait("Category", "Get users")]
         public void GetUsersOfProductTest()
         {
-            bool IsProductRole(User user) => user.ProductsRoles.Any(e => e.Key == TestProductsManager.TestProduct.Id);
+            bool IsProductRole(User user) => user.ProductsRoles.Any(e => e.Item1.ToString() == TestProductsManager.TestProduct.Id);
 
 
             AddUsers(TestUsersManager.TestUserViewer, TestUsersManager.TestUserManager, TestUsersManager.Admin, TestUsersManager.NotAdmin);
@@ -479,10 +479,10 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
             if (expected.ProductsRoles != null)
                 foreach (var productRole in expected.ProductsRoles)
                 {
-                    var actualRole = actual.ProductsRoles.FirstOrDefault(r => r.Key == productRole.Key);
+                    var actualRole = actual.ProductsRoles.FirstOrDefault(r => r.Item1 == productRole.Item1);
 
-                    Assert.Equal(productRole.Key, actualRole.Key);
-                    Assert.Equal(productRole.Value, actualRole.Value);
+                    Assert.Equal(productRole.Item1, actualRole.Item1);
+                    Assert.Equal(productRole.Item2, actualRole.Item2);
                 }
         }
 
@@ -543,9 +543,9 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
 
         private static User BuildUpdatedUser(User source)
         {
-            var productRoles = new List<KeyValuePair<string, ProductRoleEnum>>(source.ProductsRoles.Count);
+            var productRoles = new List<(Guid, ProductRoleEnum)>(source.ProductsRoles.Count);
             foreach (var role in source.ProductsRoles)
-                productRoles.Add(new KeyValuePair<string, ProductRoleEnum>(GetUpdatedProperty(role.Key), role.Value));
+                productRoles.Add((role.Item1, role.Item2));
 
             return new()
             {

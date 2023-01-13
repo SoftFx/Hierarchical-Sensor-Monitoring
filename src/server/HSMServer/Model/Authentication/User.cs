@@ -20,7 +20,7 @@ namespace HSMServer.Model.Authentication
 
         public string Password { get; set; }
 
-        public List<KeyValuePair<string, ProductRoleEnum>> ProductsRoles { get; set; }
+        public List<(Guid, ProductRoleEnum)> ProductsRoles { get; set; }
 
         public UserNotificationSettings Notifications { get; set; }
 
@@ -48,7 +48,7 @@ namespace HSMServer.Model.Authentication
         public User()
         {
             Id = Guid.NewGuid();
-            ProductsRoles = new List<KeyValuePair<string, ProductRoleEnum>>();
+            ProductsRoles = new List<(Guid, ProductRoleEnum)>();
             Notifications = new();
             TreeFilter = new();
         }
@@ -76,11 +76,11 @@ namespace HSMServer.Model.Authentication
             Password = entity.Password;
             IsAdmin = entity.IsAdmin;
 
-            ProductsRoles = new List<KeyValuePair<string, ProductRoleEnum>>();
+            ProductsRoles = new List<(Guid, ProductRoleEnum)>();
             if (entity.ProductsRoles != null && entity.ProductsRoles.Any())
             {
                 ProductsRoles.AddRange(entity.ProductsRoles.Select(
-                    r => new KeyValuePair<string, ProductRoleEnum>(r.Key, (ProductRoleEnum)r.Value)));
+                    r => (Guid.Parse(r.Key), (ProductRoleEnum)r.Value)));
             }
 
             Notifications = new(entity.NotificationSettings);
@@ -106,17 +106,17 @@ namespace HSMServer.Model.Authentication
         public User Copy()
         {
             var copy = this.MemberwiseClone() as User;
-            copy.ProductsRoles = new List<KeyValuePair<string, ProductRoleEnum>>(ProductsRoles);
+            copy.ProductsRoles = new List<(Guid, ProductRoleEnum)>(ProductsRoles);
             copy.Notifications = new(Notifications.ToEntity());
             copy.TreeFilter = TreeFilter;
             return copy;
         }
 
         public bool IsProductAvailable(Guid productId) =>
-            IsAdmin || (ProductsRoles?.Any(x => x.Key.Equals(productId.ToString())) ?? false);
+            IsAdmin || (ProductsRoles?.Any(x => x.Item1.Equals(productId)) ?? false);
 
         public List<Guid> GetManagerProducts() =>
-            ProductsRoles.Where(r => r.Value == ProductRoleEnum.ProductManager).Select(r => Guid.Parse(r.Key)).ToList();
+            ProductsRoles.Where(r => r.Item2 == ProductRoleEnum.ProductManager).Select(r => r.Item1).ToList();
 
         internal UserEntity ToEntity() =>
             new()
@@ -125,7 +125,7 @@ namespace HSMServer.Model.Authentication
                 Password = Password,
                 Id = Id,
                 IsAdmin = IsAdmin,
-                ProductsRoles = ProductsRoles?.Select(r => new KeyValuePair<string, byte>(r.Key, (byte)r.Value))?.ToList(),
+                ProductsRoles = ProductsRoles?.Select(r => new KeyValuePair<string, byte>(r.Item1.ToString(), (byte)r.Item2))?.ToList(),
                 NotificationSettings = Notifications.ToEntity(),
                 TreeFilter = TreeFilter,
             };

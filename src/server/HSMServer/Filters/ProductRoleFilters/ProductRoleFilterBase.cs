@@ -36,7 +36,7 @@ namespace HSMServer.Filters.ProductRoleFilters
 
             if (TryGetProductId(context, out var productId))
                 foreach (var role in _roles)
-                    if (user.ProductsRoles.Any(r => r.Key == productId.ToString() && r.Value == role))
+                    if (user.ProductsRoles.Any(r => r.Item1 == productId && r.Item2 == role))
                         return;
 
             context.Result = _redirectToHomeIndex;
