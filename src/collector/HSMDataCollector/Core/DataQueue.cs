@@ -136,10 +136,19 @@ namespace HSMDataCollector.Core
                 {
                     foreach (var failedValue in _failedList)
                     {
-                        if (failedValue is FileSensorValue fileValue)
-                            FileReceving?.Invoke(this, fileValue);
-                        else
-                            dataList.Add(failedValue);
+                        switch (failedValue)
+                        {
+                            case FileSensorValue fileValue:
+                                FileReceving?.Invoke(this, fileValue);
+                                break;
+                        
+                            case BarSensorValueBase barSensor when barSensor.Count == 0:
+                                break;
+                        
+                            default:
+                                dataList.Add(failedValue);
+                                break;
+                        }
                     }
 
                     _failedList.Clear();
@@ -154,13 +163,21 @@ namespace HSMDataCollector.Core
                 while (count < MAX_VALUES_MESSAGE_CAPACITY && _internalCount > 0)
                 {
                     var value = _valuesQueue.Dequeue();
+                    switch (value)
+                    {
+                        case FileSensorValue fileValue:
+                            FileReceving?.Invoke(this, fileValue);
+                            break;
+                        
+                        case BarSensorValueBase barSensor when barSensor.Count == 0:
+                            break;
+                        
+                        default:
+                            dataList.Add(value);
+                            ++count;
+                            break;
+                    }
 
-                    if (value is FileSensorValue fileValue)
-                        FileReceving?.Invoke(this, fileValue);
-                    else
-                        dataList.Add(value);
-
-                    ++count;
                     --_internalCount;
                 }
             }

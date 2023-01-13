@@ -62,7 +62,7 @@ namespace HSMDataCollector.Core
             ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
             _dataQueue = new DataQueue();
             _dataQueue.QueueOverflow += DataQueue_QueueOverflow;
-            _dataQueue.FileReceving += DataQueue_FileReceving; ;
+            _dataQueue.FileReceving += DataQueue_FileReceving;
             _dataQueue.SendValues += DataQueue_SendValues;
             _isStopped = false;
         }
