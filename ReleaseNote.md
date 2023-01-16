@@ -39,4 +39,4 @@
 # Docker
 
 * Dockerfile and .dockerignore have been removed (.Net 7 features)
-* Image size has been decreased from 300mb to ~220mb
+* Container size has been decreased from 300mb to ~220mb
