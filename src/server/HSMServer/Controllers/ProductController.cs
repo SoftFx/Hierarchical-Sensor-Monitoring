@@ -118,8 +118,8 @@ namespace HSMServer.Controllers
                 return;
             }
 
-            var user = _userManager.GetCopyUser(Guid.Parse(model.UserId));
-            var pair = (Guid.Parse(model.ProductKey), (ProductRoleEnum)model.ProductRole);
+            var user = _userManager.GetCopyUser(model.UserId);
+            var pair = (model.ProductKey, (ProductRoleEnum)model.ProductRole);
 
             if (user.ProductsRoles == null || !user.ProductsRoles.Any())
                 user.ProductsRoles = new List<(Guid, ProductRoleEnum)> { pair };
@@ -132,12 +132,12 @@ namespace HSMServer.Controllers
         [HttpPost]
         public void RemoveUserRole([FromBody] UserRightViewModel model)
         {
-            var user = _userManager.GetCopyUser(Guid.Parse(model.UserId));
+            var user = _userManager.GetCopyUser(model.UserId);
 
-            var role = user.ProductsRoles.First(ur => ur.Item1.ToString().Equals(model.ProductKey));
+            var role = user.ProductsRoles.First(ur => ur.Item1.Equals(model.ProductKey));
             user.ProductsRoles.Remove(role);
 
-            foreach (var sensorId in _treeViewModel.GetNodeAllSensors(Guid.Parse(model.ProductKey)))
+            foreach (var sensorId in _treeViewModel.GetNodeAllSensors(model.ProductKey))
                 user.Notifications.RemoveSensor(sensorId);
 
             _userManager.UpdateUser(user);
@@ -146,10 +146,10 @@ namespace HSMServer.Controllers
         [HttpPost]
         public void EditUserRole([FromBody] UserRightViewModel model)
         {
-            var user = _userManager.GetCopyUser(Guid.Parse(model.UserId));
-            var pair = (Guid.Parse(model.ProductKey), (ProductRoleEnum)model.ProductRole);
+            var user = _userManager.GetCopyUser(model.UserId);
+            var pair = ((model.ProductKey, (ProductRoleEnum)model.ProductRole));
 
-            var role = user.ProductsRoles.FirstOrDefault(ur => ur.Item1.ToString().Equals(model.ProductKey));
+            var role = user.ProductsRoles.FirstOrDefault(ur => ur.Item1.Equals(model.ProductKey));
             //Skip empty corresponding pair
             if (role.Item1 == Guid.Empty && role.Item2 == 0)
                 return;
