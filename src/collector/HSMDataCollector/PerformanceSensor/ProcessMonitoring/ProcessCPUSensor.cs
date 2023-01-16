@@ -14,7 +14,7 @@ namespace HSMDataCollector.PerformanceSensor.ProcessMonitoring
 
 
         public ProcessCPUSensor(IValuesQueue queue, string processName, string nodeName)
-            : base($"{nodeName ?? TextConstants.CurrentProcessNodeName}/{SensorName}", "Process", "% Processor Time", processName, GetProcessCPUFunc())
+            : base($"{nodeName ?? DataCollector.CurrentProcessNodeName}/{SensorName}", "Process", "% Processor Time", processName, GetProcessCPUFunc())
         {
             _internalBar = new BarSensor<double>(Path, queue, SensorType.DoubleBarSensor);
         }

@@ -16,7 +16,7 @@ namespace HSMDataCollector.PerformanceSensor.SystemMonitoring
 
 
         public TotalCPUSensor(IValuesQueue queue, string nodeName)
-            : base($"{nodeName ?? TextConstants.PerformanceNodeName}/{SensorName}", "Processor", "% Processor Time", "_Total", GetTotalCPUFunc())
+            : base($"{nodeName ?? DataCollector.PerformanceNodeName}/{SensorName}", "Processor", "% Processor Time", "_Total", GetTotalCPUFunc())
         {
             _internalBar = new BarSensor<int>(Path, queue, SensorType.IntegerBarSensor);
         }

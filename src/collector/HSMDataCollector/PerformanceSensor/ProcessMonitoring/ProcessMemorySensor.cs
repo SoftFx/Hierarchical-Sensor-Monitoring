@@ -15,7 +15,7 @@ namespace HSMDataCollector.PerformanceSensor.ProcessMonitoring
 
 
         public ProcessMemorySensor(IValuesQueue queue, string processName, string nodeName)
-            : base($"{nodeName ?? TextConstants.CurrentProcessNodeName}/{SensorName}", "Process", "Working set", processName, GetProcessMemoryFunc())
+            : base($"{nodeName ?? DataCollector.CurrentProcessNodeName}/{SensorName}", "Process", "Working set", processName, GetProcessMemoryFunc())
         {
             _internalBar = new BarSensor<int>(Path, queue, SensorType.IntegerBarSensor);
         }

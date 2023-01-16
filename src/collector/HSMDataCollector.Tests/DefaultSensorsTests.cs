@@ -6,6 +6,7 @@ namespace HSMDataCollector.Tests
 {
     public class DefaultSensorsTests : IDisposable
     {
+        private const string CurrentProcessNodeName = "CurrentProcess";
         private const string ProductName = "TestProduct";
 
         private readonly DataCollector _dataCollector;
@@ -24,7 +25,7 @@ namespace HSMDataCollector.Tests
         {
             _dataCollector.InitializeProcessMonitoring(true, false, false);
 
-            Assert.True(_dataCollector.IsSensorExists($"{TextConstants.CurrentProcessNodeName}/Process CPU"));
+            Assert.True(_dataCollector.IsSensorExists($"{CurrentProcessNodeName}/Process CPU"));
         }
 
         [Fact]
@@ -36,7 +37,7 @@ namespace HSMDataCollector.Tests
             _dataCollector.InitializeProcessMonitoring(true, false, false, specificPath);
 
             Assert.True(_dataCollector.IsSensorExists($"{specificPath}/Process CPU"));
-            Assert.False(_dataCollector.IsSensorExists($"{TextConstants.CurrentProcessNodeName}/Process CPU"));
+            Assert.False(_dataCollector.IsSensorExists($"{CurrentProcessNodeName}/Process CPU"));
         }
 
 

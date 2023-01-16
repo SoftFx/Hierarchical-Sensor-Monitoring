@@ -30,6 +30,14 @@ namespace HSMDataCollector.Core
     /// </summary>
     public sealed class DataCollector : IDataCollector
     {
+        private const string LogDefaultFolder = "Logs";
+        private const string LogFormatFileName = "DataCollector_${shortdate}.log";
+
+        private const string ServiceAlive = "Service alive";
+
+        internal const string CurrentProcessNodeName = "CurrentProcess";
+        internal const string PerformanceNodeName = "System monitoring";
+
         private readonly string _productKey;
         private readonly string _listSendingAddress;
         private readonly string _fileSendingAddress;
@@ -87,8 +95,8 @@ namespace HSMDataCollector.Core
             {
                 _logger = Logger.Create(nameof(DataCollector));
 
-                Logger.UpdateFilePath(folderPath ?? $"{AppDomain.CurrentDomain.BaseDirectory}/{TextConstants.LogDefaultFolder}",
-                                      fileNameFormat ?? TextConstants.LogFormatFileName);
+                Logger.UpdateFilePath(folderPath ?? $"{AppDomain.CurrentDomain.BaseDirectory}/{LogDefaultFolder}",
+                                      fileNameFormat ?? LogFormatFileName);
 
                 _isLogging = true;
             }
@@ -158,7 +166,7 @@ namespace HSMDataCollector.Core
 
         public void MonitorServiceAlive(string specificPath = null)
         {
-            var path = $"{specificPath ?? TextConstants.PerformanceNodeName}/{TextConstants.ServiceAlive}";
+            var path = $"{specificPath ?? PerformanceNodeName}/{ServiceAlive}";
 
             _logger?.Info($"Initialize {path} sensor...");
 

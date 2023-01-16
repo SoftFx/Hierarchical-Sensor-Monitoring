@@ -9,6 +9,8 @@ namespace HSMDataCollector.CustomFuncSensor
 {
     internal sealed class WindowsUpdateFuncSensor : CustomFuncSensorBase
     {
+        private const string WindowsUpdateNodeName = "Is need Windows update";
+
         private readonly NLog.Logger _logger;
         private readonly TimeSpan _updateInterval;
         private readonly DateTime _windowsLastUpdate;
@@ -17,7 +19,7 @@ namespace HSMDataCollector.CustomFuncSensor
 
         public WindowsUpdateFuncSensor(string nodeName, IValuesQueue queue,
             string description, TimeSpan timerSpan, SensorType type, bool isLogging, TimeSpan updateInterval)
-            : base($"{nodeName ?? TextConstants.PerformanceNodeName}/{TextConstants.WindowsUpdateNodeName}", queue, description, timerSpan, type)
+            : base($"{nodeName ?? DataCollector.PerformanceNodeName}/{WindowsUpdateNodeName}", queue, description, timerSpan, type)
         {
             _updateInterval = updateInterval;
 

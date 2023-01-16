@@ -5,6 +5,8 @@ namespace HSMDataCollector.Logging
 {
     public static class Logger
     {
+        private const string LogTargetFile = "file";
+
         //https://github.com/NLog/NLog/wiki/Configure-from-code
         //ToDo: take level from configuration
         public static NLog.Logger Create(string className)
@@ -18,7 +20,7 @@ namespace HSMDataCollector.Logging
         public static void UpdateFilePath(string folderPath, string fileFormat)
         {
             var configuration = LogManager.Configuration;
-            var fileTarget = configuration.FindTargetByName<FileTarget>(TextConstants.LogTargetFile);
+            var fileTarget = configuration.FindTargetByName<FileTarget>(LogTargetFile);
             fileTarget.FileName = $@"{folderPath}/" + fileFormat;
             LogManager.Configuration = configuration;
         }
@@ -28,9 +30,9 @@ namespace HSMDataCollector.Logging
             if (LogManager.Configuration is null)
                 LogManager.Configuration = new NLog.Config.LoggingConfiguration();
 
-            if (LogManager.Configuration.FindTargetByName<FileTarget>(TextConstants.LogTargetFile) == null)
+            if (LogManager.Configuration.FindTargetByName<FileTarget>(LogTargetFile) == null)
             {
-                var file = new FileTarget(TextConstants.LogTargetFile)
+                var file = new FileTarget(LogTargetFile)
                 {
                     FileName = "${basedir}/logs/DataCollector_${shortdate}.log",
                     Layout = "${longdate} [${uppercase:${level}}] ${logger}: ${message}"
