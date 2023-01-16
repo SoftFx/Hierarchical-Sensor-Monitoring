@@ -14,17 +14,17 @@ namespace HSMDataCollector.Bar
         private readonly List<T> _valuesList;
 
 
-        public BarSensor(string path, string productKey, IValuesQueue queue, SensorType type, int barTimerPeriod, int smallTimerPeriod,
+        public BarSensor(string path, IValuesQueue queue, SensorType type, int barTimerPeriod, int smallTimerPeriod,
             string description = "", int precision = 2)
-            : base(path, productKey, queue, barTimerPeriod, smallTimerPeriod, description, precision)
+            : base(path, queue, barTimerPeriod, smallTimerPeriod, description, precision)
         {
             _valuesList = new List<T>();
             _type = type;
         }
 
-        public BarSensor(string path, string productKey, IValuesQueue queue, SensorType type, int barTimerPeriod = 300000,
+        public BarSensor(string path, IValuesQueue queue, SensorType type, int barTimerPeriod = 300000,
             int smallTimerPeriod = 15000, int precision = 2, string description = "")
-            : this(path, productKey, queue, type, barTimerPeriod, smallTimerPeriod, description, precision) { }
+            : this(path, queue, type, barTimerPeriod, smallTimerPeriod, description, precision) { }
 
 
         public void AddValue(T value)

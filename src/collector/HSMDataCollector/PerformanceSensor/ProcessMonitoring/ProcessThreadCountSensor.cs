@@ -13,10 +13,10 @@ namespace HSMDataCollector.PerformanceSensor.ProcessMonitoring
         private const string SensorName = "Process thread count";
 
 
-        public ProcessThreadCountSensor(string productKey, IValuesQueue queue, string processName, string nodeName)
+        public ProcessThreadCountSensor(IValuesQueue queue, string processName, string nodeName)
             : base($"{nodeName ?? TextConstants.CurrentProcessNodeName}/{SensorName}", "Process", "Thread Count", processName, GetProcessThreadCountFunc())
         {
-            _internalBar = new BarSensor<int>(Path, productKey, queue, SensorType.IntegerBarSensor);
+            _internalBar = new BarSensor<int>(Path, queue, SensorType.IntegerBarSensor);
         }
 
 

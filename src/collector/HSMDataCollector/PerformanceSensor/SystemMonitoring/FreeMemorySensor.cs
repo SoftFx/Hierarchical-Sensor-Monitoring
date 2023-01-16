@@ -15,10 +15,10 @@ namespace HSMDataCollector.PerformanceSensor.SystemMonitoring
         private const string SensorName = "Free memory MB";
 
 
-        public FreeMemorySensor(string productKey, IValuesQueue queue, string nodeName) :
+        public FreeMemorySensor(IValuesQueue queue, string nodeName) :
             base($"{nodeName ?? TextConstants.PerformanceNodeName}/{SensorName}", "Memory", "Available MBytes", string.Empty, GetFreeMemoryFunc())
         {
-            _internalBar = new BarSensor<int>(Path, productKey, queue, SensorType.IntegerBarSensor);
+            _internalBar = new BarSensor<int>(Path, queue, SensorType.IntegerBarSensor);
         }
 
 

@@ -14,7 +14,7 @@ namespace HSMDataCollector.Base
         public abstract bool HasLastValue { get; }
 
 
-        protected SensorBase(string path, string productKey, IValuesQueue queue, string description)
+        protected SensorBase(string path, IValuesQueue queue, string description)
         {
             _queue = queue;
             Path = path;

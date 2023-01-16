@@ -14,10 +14,10 @@ namespace HSMDataCollector.PerformanceSensor.ProcessMonitoring
         private const string SensorName = "Process memory MB";
 
 
-        public ProcessMemorySensor(string productKey, IValuesQueue queue, string processName, string nodeName)
+        public ProcessMemorySensor(IValuesQueue queue, string processName, string nodeName)
             : base($"{nodeName ?? TextConstants.CurrentProcessNodeName}/{SensorName}", "Process", "Working set", processName, GetProcessMemoryFunc())
         {
-            _internalBar = new BarSensor<int>(Path, productKey, queue, SensorType.IntegerBarSensor);
+            _internalBar = new BarSensor<int>(Path, queue, SensorType.IntegerBarSensor);
         }
 
 

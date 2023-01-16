@@ -18,8 +18,8 @@ namespace HSMDataCollector.CustomFuncSensor
         public override bool HasLastValue => true;
 
 
-        protected CustomFuncSensorBase(string path, string productKey, IValuesQueue queue, string description, TimeSpan timerSpan, SensorType type)
-            : base(path, productKey, queue, description)
+        protected CustomFuncSensorBase(string path, IValuesQueue queue, string description, TimeSpan timerSpan, SensorType type)
+            : base(path, queue, description)
         {
             _type = type;
             RestartTimerInternal(timerSpan);

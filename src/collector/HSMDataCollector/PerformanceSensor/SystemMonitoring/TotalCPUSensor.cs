@@ -15,10 +15,10 @@ namespace HSMDataCollector.PerformanceSensor.SystemMonitoring
         private const string SensorName = "Total CPU";
 
 
-        public TotalCPUSensor(string productKey, IValuesQueue queue, string nodeName)
+        public TotalCPUSensor(IValuesQueue queue, string nodeName)
             : base($"{nodeName ?? TextConstants.PerformanceNodeName}/{SensorName}", "Processor", "% Processor Time", "_Total", GetTotalCPUFunc())
         {
-            _internalBar = new BarSensor<int>(Path, productKey, queue, SensorType.IntegerBarSensor);
+            _internalBar = new BarSensor<int>(Path, queue, SensorType.IntegerBarSensor);
         }
 
 

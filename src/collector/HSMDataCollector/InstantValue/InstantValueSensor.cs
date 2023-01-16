@@ -15,8 +15,8 @@ namespace HSMDataCollector.InstantValue
         public override bool HasLastValue => false;
 
 
-        public InstantValueSensor(string path, string productKey, IValuesQueue queue, SensorType type, string description = "")
-            : base(path, productKey, queue, description)
+        public InstantValueSensor(string path, IValuesQueue queue, string description = "")
+            : base(path, queue, description)
         {
             _description = description;
         }

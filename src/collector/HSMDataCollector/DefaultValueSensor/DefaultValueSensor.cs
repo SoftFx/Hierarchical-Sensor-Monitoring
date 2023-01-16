@@ -18,8 +18,8 @@ namespace HSMDataCollector.DefaultValueSensor
         public override bool HasLastValue => true;
 
 
-        public DefaultValueSensor(string path, string productKey, IValuesQueue queue, SensorType type, T defaultValue, string description = "")
-            : base(path, productKey, queue, description)
+        public DefaultValueSensor(string path, IValuesQueue queue, T defaultValue, string description = "")
+            : base(path, queue, description)
         {
             lock (_syncRoot)
             {

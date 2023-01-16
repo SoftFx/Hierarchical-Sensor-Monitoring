@@ -57,6 +57,7 @@ namespace HSMDataCollector.Core
         /// <param name="isMemory">Specifies whether the sensor for the specified process RAM (in mb) is created</param>
         /// <param name="isThreads">Specifies whether the sensor for the specified process thread count is created</param>
         /// <param name="specificPath">Specifies where sensors are created</param>
+        [Obsolete("Method has no implementation")]
         void InitializeProcessMonitoring(string processName, bool isCPU, bool isMemory, bool isThreads, string specificPath = null);
 
         /// <summary>
