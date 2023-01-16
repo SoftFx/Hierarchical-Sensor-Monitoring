@@ -360,7 +360,15 @@ function customMenu(node) {
         delete items.Notifications.submenu.IgnoreNotifications;
         delete items.Notifications.submenu.RemoveIgnoreNotifications;
     }
-
+   
+    if (isCurrentUserAdmin === "True")
+        return items;
+    
+    if (!currentUserProducts.includes(node.id)){
+        delete items.DeleteNode;
+        delete items.CleanHistory;
+    }
+    
     return items;
 }
 

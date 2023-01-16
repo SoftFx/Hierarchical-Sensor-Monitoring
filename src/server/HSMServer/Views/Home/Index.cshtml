@@ -119,9 +119,9 @@
 
 
 <script>
-    initializeTree();
     initializeUserRights('@(user.IsAdmin)',
                          '@(string.Join(' ', user.GetManagerProducts().Select(SensorPathHelper.EncodeGuid)))');
+    initializeTree();
     initialize();
     
 
