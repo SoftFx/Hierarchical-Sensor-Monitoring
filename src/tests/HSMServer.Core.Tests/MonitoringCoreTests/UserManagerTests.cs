@@ -480,9 +480,8 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
                 foreach (var productRole in expected.ProductsRoles)
                 {
                     var actualRole = actual.ProductsRoles.FirstOrDefault(r => r.Item1 == productRole.Item1);
-
-                    Assert.Equal(productRole.Item1, actualRole.Item1);
-                    Assert.Equal(productRole.Item2, actualRole.Item2);
+                    
+                    Assert.Equal(productRole, actualRole);
                 }
         }
 
@@ -544,8 +543,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         private static User BuildUpdatedUser(User source)
         {
             var productRoles = new List<(Guid, ProductRoleEnum)>(source.ProductsRoles.Count);
-            foreach (var role in source.ProductsRoles)
-                productRoles.Add((role.Item1, role.Item2));
+            productRoles.AddRange(source.ProductsRoles);
 
             return new()
             {
