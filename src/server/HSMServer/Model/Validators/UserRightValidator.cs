@@ -9,7 +9,7 @@ namespace HSMServer.Model.Validators
         public UserRightValidator()
         {
             RuleFor(x => x.UserId)
-                .NotNull()
+                .NotEmpty()
                 .WithMessage(ErrorConstants.UserNotNull);
         }
     }
