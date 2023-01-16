@@ -259,7 +259,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
 
             for (int i = 0; i < result.Count; i++)
             {
-                var actual = result[i].ProductsRoles.FirstOrDefault(p => p.Item1.ToString() == TestProductsManager.TestProduct.Id);
+                var actual = result[i].ProductsRoles.FirstOrDefault(p => p.Item1 == TestProductsManager.ProductId);
                 Assert.Equal(default, actual);
             }
         }
@@ -366,7 +366,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         [Trait("Category", "Get users")]
         public void GetUsersOfProductTest()
         {
-            bool IsProductRole(User user) => user.ProductsRoles.Any(e => e.Item1.ToString() == TestProductsManager.TestProduct.Id);
+            bool IsProductRole(User user) => user.ProductsRoles.Any(e => e.Item1 == TestProductsManager.ProductId);
 
 
             AddUsers(TestUsersManager.TestUserViewer, TestUsersManager.TestUserManager, TestUsersManager.Admin, TestUsersManager.NotAdmin);
