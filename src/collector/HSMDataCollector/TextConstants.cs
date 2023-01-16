@@ -9,7 +9,7 @@
 
         public const string LogTargetFile = "file";
         public const string LogDefaultFolder = "Logs";
-        public const string LogFormatFileName = "DataCollector_${shortdate}.log";//${date:format=yyyy-MM-dd HH-mm-ss}.log
+        public const string LogFormatFileName = "DataCollector_${shortdate}.log";
         public const string LogDebug = "Debug";
         public const string LogInfo = "Info";
         public const string LogWarn = "Warn";

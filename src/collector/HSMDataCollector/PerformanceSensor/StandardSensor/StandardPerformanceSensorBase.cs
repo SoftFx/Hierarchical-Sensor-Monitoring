@@ -7,27 +7,31 @@ using System.Runtime.InteropServices;
 
 namespace HSMDataCollector.PerformanceSensor.StandardSensor
 {
-    abstract class StandardPerformanceSensorBase<T> : PerformanceSensorBase where T: struct
+    internal abstract class StandardPerformanceSensorBase<T> : PerformanceSensorBase where T : struct
     {
-        protected readonly IExtendedPerformanceCounter InternalCounter;
-        protected BarSensor<T> InternalBar;
+        protected readonly IExtendedPerformanceCounter _internalCounter;
+
+        protected BarSensor<T> _internalBar;
+
+
         protected StandardPerformanceSensorBase(string path, string categoryName, string counterName, string instanceName, Func<double> unixFunc) : base(path)
         {
             bool isUnix = IsUnixOS();
             if (isUnix)
             {
-                InternalCounter = new ExtendedPerformanceCounter(true, null, unixFunc);
+                _internalCounter = new ExtendedPerformanceCounter(true, null, unixFunc);
             }
             else
             {
                 PerformanceCounter windowsCounter = string.IsNullOrEmpty(instanceName)
                     ? new PerformanceCounter(categoryName, counterName)
                     : new PerformanceCounter(categoryName, counterName, instanceName);
-                InternalCounter = new ExtendedPerformanceCounter(false, windowsCounter, unixFunc);
+                _internalCounter = new ExtendedPerformanceCounter(false, windowsCounter, unixFunc);
             }
         }
-        
-        private bool IsUnixOS()
+
+
+        private static bool IsUnixOS()
         {
             return RuntimeInformation.IsOSPlatform(OSPlatform.OSX) ||
                    RuntimeInformation.IsOSPlatform(OSPlatform.Linux);

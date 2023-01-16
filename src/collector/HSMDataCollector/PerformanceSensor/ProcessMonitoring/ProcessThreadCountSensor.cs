@@ -8,44 +8,48 @@ using System.Diagnostics;
 
 namespace HSMDataCollector.PerformanceSensor.ProcessMonitoring
 {
-    internal class ProcessThreadCountSensor : StandardPerformanceSensorBase<int>
+    internal sealed class ProcessThreadCountSensor : StandardPerformanceSensorBase<int>
     {
-        private const string _sensorName = "Process thread count";
+        private const string SensorName = "Process thread count";
+
+
         public ProcessThreadCountSensor(string productKey, IValuesQueue queue, string processName, string nodeName)
-            : base($"{nodeName ?? TextConstants.CurrentProcessNodeName}/{_sensorName}", "Process", "Thread Count", processName, GetProcessThreadCountFunc())
+            : base($"{nodeName ?? TextConstants.CurrentProcessNodeName}/{SensorName}", "Process", "Thread Count", processName, GetProcessThreadCountFunc())
         {
-            InternalBar = new BarSensor<int>(Path, productKey, queue, SensorType.IntegerBarSensor);
+            _internalBar = new BarSensor<int>(Path, productKey, queue, SensorType.IntegerBarSensor);
+        }
+
+
+        public override void Dispose()
+        {
+            _monitoringTimer?.Dispose();
+            _internalCounter?.Dispose();
+            _internalBar?.Dispose();
+        }
+
+        public override SensorValueBase GetLastValue()
+        {
+            return _internalBar.GetLastValue();
         }
 
         protected override void OnMonitoringTimerTick(object state)
         {
             try
             {
-                InternalBar.AddValue((int)InternalCounter.NextValue());
+                _internalBar.AddValue((int)_internalCounter.NextValue());
             }
-            catch (Exception e)
-            { }
-        }
-
-        public override SensorValueBase GetLastValue()
-        {
-            return InternalBar.GetLastValue();
+            catch { }
         }
 
         private static Func<double> GetProcessThreadCountFunc()
         {
-            Func<double> func = delegate ()
+            double func()
             {
                 Process currentProcess = Process.GetCurrentProcess();
                 return currentProcess.Threads.Count;
-            };
+            }
+
             return func;
-        }
-        public override void Dispose()
-        {
-            _monitoringTimer?.Dispose();
-            InternalCounter?.Dispose();
-            InternalBar?.Dispose();
         }
     }
 }

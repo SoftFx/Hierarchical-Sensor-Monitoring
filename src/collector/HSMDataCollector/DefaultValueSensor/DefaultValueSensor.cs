@@ -8,13 +8,16 @@ using System;
 
 namespace HSMDataCollector.DefaultValueSensor
 {
-    internal class DefaultValueSensor<T> : SensorBase, ILastValueSensor<T>
+    internal sealed class DefaultValueSensor<T> : SensorBase, ILastValueSensor<T>
     {
-        private readonly SensorType _type;
-        protected readonly object _syncRoot = new object();
-        protected T _currentValue;
-        protected string _currentComment;
-        protected SensorStatus _currentStatus;
+        private readonly object _syncRoot = new object();
+        private T _currentValue;
+        private string _currentComment;
+        private SensorStatus _currentStatus;
+
+        public override bool HasLastValue => true;
+
+
         public DefaultValueSensor(string path, string productKey, IValuesQueue queue, SensorType type, T defaultValue, string description = "")
             : base(path, productKey, queue, description)
         {
@@ -22,21 +25,15 @@ namespace HSMDataCollector.DefaultValueSensor
             {
                 _currentValue = defaultValue;
             }
-            _type = type;
         }
 
-        public override bool HasLastValue => true;
 
-        public override void Dispose()
-        {
-
-        }
+        public override void Dispose() { }
 
         public override SensorValueBase GetLastValue()
         {
             var value = SensorValuesFactory.BuildValue(_currentValue);
 
-            value.Key = ProductKey;
             value.Path = Path;
             value.Time = DateTime.Now;
             lock (_syncRoot)

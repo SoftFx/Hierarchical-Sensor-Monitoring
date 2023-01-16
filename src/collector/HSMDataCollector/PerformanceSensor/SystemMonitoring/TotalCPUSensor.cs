@@ -10,44 +10,44 @@ namespace HSMDataCollector.PerformanceSensor.SystemMonitoring
     /// <summary>
     /// The sensor monitors the whole CPU usage, currently works for windows only
     /// </summary>
-    internal class TotalCPUSensor : StandardPerformanceSensorBase<int>
+    internal sealed class TotalCPUSensor : StandardPerformanceSensorBase<int>
     {
-        private const string _sensorName = "Total CPU";
+        private const string SensorName = "Total CPU";
+
+
         public TotalCPUSensor(string productKey, IValuesQueue queue, string nodeName)
-            : base($"{nodeName ?? TextConstants.PerformanceNodeName}/{_sensorName}", "Processor", "% Processor Time", "_Total", GetTotalCPUFunc())
+            : base($"{nodeName ?? TextConstants.PerformanceNodeName}/{SensorName}", "Processor", "% Processor Time", "_Total", GetTotalCPUFunc())
         {
-            InternalBar = new BarSensor<int>(Path, productKey, queue, SensorType.IntegerBarSensor);
+            _internalBar = new BarSensor<int>(Path, productKey, queue, SensorType.IntegerBarSensor);
+        }
+
+
+        public override void Dispose()
+        {
+            _monitoringTimer?.Dispose();
+            _internalCounter?.Dispose();
+            _internalBar?.Dispose();
+        }
+
+        public override SensorValueBase GetLastValue()
+        {
+            return _internalBar.GetLastValue();
         }
 
         protected override void OnMonitoringTimerTick(object state)
         {
             try
             {
-                InternalBar.AddValue((int)InternalCounter.NextValue());
+                _internalBar.AddValue((int)_internalCounter.NextValue());
             }
-            catch (Exception e)
-            { }
-        }
-
-        public override SensorValueBase GetLastValue()
-        {
-            return InternalBar.GetLastValue();
+            catch { }
         }
 
         private static Func<double> GetTotalCPUFunc()
         {
-            Func<double> func = delegate ()
-            {
-                return 0.0;
-            };
-            return func;
-        }
+            double func() => 0.0;
 
-        public override void Dispose()
-        {
-            _monitoringTimer?.Dispose();
-            InternalCounter?.Dispose();
-            InternalBar?.Dispose();
+            return func;
         }
     }
 }

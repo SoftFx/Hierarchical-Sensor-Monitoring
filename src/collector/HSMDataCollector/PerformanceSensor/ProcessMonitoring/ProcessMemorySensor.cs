@@ -8,45 +8,49 @@ using System.Diagnostics;
 
 namespace HSMDataCollector.PerformanceSensor.ProcessMonitoring
 {
-    internal class ProcessMemorySensor : StandardPerformanceSensorBase<int>
+    internal sealed class ProcessMemorySensor : StandardPerformanceSensorBase<int>
     {
-        private const int _mbDivisor = 1048576;
-        private const string _sensorName = "Process memory MB";
+        private const int MbDivisor = 1048576;
+        private const string SensorName = "Process memory MB";
+
+
         public ProcessMemorySensor(string productKey, IValuesQueue queue, string processName, string nodeName)
-            : base($"{nodeName ?? TextConstants.CurrentProcessNodeName}/{_sensorName}", "Process", "Working set", processName, GetProcessMemoryFunc())
+            : base($"{nodeName ?? TextConstants.CurrentProcessNodeName}/{SensorName}", "Process", "Working set", processName, GetProcessMemoryFunc())
         {
-            InternalBar = new BarSensor<int>(Path, productKey, queue, SensorType.IntegerBarSensor);
+            _internalBar = new BarSensor<int>(Path, productKey, queue, SensorType.IntegerBarSensor);
+        }
+
+
+        public override void Dispose()
+        {
+            _monitoringTimer?.Dispose();
+            _internalCounter?.Dispose();
+            _internalBar?.Dispose();
+        }
+
+        public override SensorValueBase GetLastValue()
+        {
+            return _internalBar.GetLastValue();
         }
 
         protected override void OnMonitoringTimerTick(object state)
         {
             try
             {
-                InternalBar.AddValue((int)InternalCounter.NextValue() / _mbDivisor);
+                _internalBar.AddValue((int)_internalCounter.NextValue() / MbDivisor);
             }
-            catch (Exception e)
-            { }
-        }
-
-        public override SensorValueBase GetLastValue()
-        {
-            return InternalBar.GetLastValue();
+            catch { }
         }
 
         private static Func<double> GetProcessMemoryFunc()
         {
-            Func<double> func = delegate ()
+            double func()
             {
                 Process currentProcess = Process.GetCurrentProcess();
                 return currentProcess.WorkingSet64;
-            };
+            }
+
             return func;
-        }
-        public override void Dispose()
-        {
-            _monitoringTimer?.Dispose();
-            InternalCounter?.Dispose();
-            InternalBar?.Dispose();
         }
     }
 }

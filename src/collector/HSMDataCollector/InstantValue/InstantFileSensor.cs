@@ -44,7 +44,6 @@ namespace HSMDataCollector.InstantValue
         private FileSensorValue CreateFile(string value, string comment = null, SensorStatus status = SensorStatus.Ok) =>
             new FileSensorValue()
             {
-                Key = ProductKey,
                 Path = Path,
                 Status = status,
                 Time = DateTime.Now,

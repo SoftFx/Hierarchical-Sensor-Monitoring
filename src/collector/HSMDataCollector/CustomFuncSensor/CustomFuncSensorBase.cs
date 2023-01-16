@@ -10,9 +10,9 @@ namespace HSMDataCollector.CustomFuncSensor
 {
     internal abstract class CustomFuncSensorBase : SensorBase
     {
-        protected readonly SensorType _type;
-
         private Timer _internalTimer;
+
+        protected readonly SensorType _type;
         protected TimeSpan _timerSpan;
 
         public override bool HasLastValue => true;
@@ -42,7 +42,6 @@ namespace HSMDataCollector.CustomFuncSensor
             var valueObject = SensorValuesFactory.BuildValue(value);
 
             valueObject.Path = Path;
-            valueObject.Key = ProductKey;
             valueObject.Time = DateTime.Now;
             valueObject.Status = status;
             valueObject.Comment = comment;

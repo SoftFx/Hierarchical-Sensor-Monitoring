@@ -8,45 +8,49 @@ using System.Diagnostics;
 
 namespace HSMDataCollector.PerformanceSensor.ProcessMonitoring
 {
-    internal class ProcessCPUSensor : StandardPerformanceSensorBase<double>
+    internal sealed class ProcessCPUSensor : StandardPerformanceSensorBase<double>
     {
-        private const string _sensorName = "Process CPU";
+        private const string SensorName = "Process CPU";
+
+
         public ProcessCPUSensor(string productKey, IValuesQueue queue, string processName, string nodeName)
-            : base($"{nodeName ?? TextConstants.CurrentProcessNodeName}/{_sensorName}", "Process", "% Processor Time", processName, GetProcessCPUFunc())
+            : base($"{nodeName ?? TextConstants.CurrentProcessNodeName}/{SensorName}", "Process", "% Processor Time", processName, GetProcessCPUFunc())
         {
-            InternalBar = new BarSensor<double>(Path, productKey, queue, SensorType.DoubleBarSensor);
+            _internalBar = new BarSensor<double>(Path, productKey, queue, SensorType.DoubleBarSensor);
+        }
+
+
+        public override void Dispose()
+        {
+            _monitoringTimer?.Dispose();
+            _internalCounter?.Dispose();
+            _internalBar?.Dispose();
+        }
+
+        public override SensorValueBase GetLastValue()
+        {
+            return _internalBar.GetLastValue();
         }
 
         protected override void OnMonitoringTimerTick(object state)
         {
             try
             {
-                InternalBar?.AddValue(Math.Round(InternalCounter?.NextValue() ?? 0.0, 2, MidpointRounding.AwayFromZero));
+                _internalBar?.AddValue(Math.Round(_internalCounter?.NextValue() ?? 0.0, 2, MidpointRounding.AwayFromZero));
             }
-            catch (Exception e)
-            { }
-        }
-
-        public override SensorValueBase GetLastValue()
-        {
-            return InternalBar.GetLastValue();
+            catch { }
         }
 
         private static Func<double> GetProcessCPUFunc()
         {
-            Func<double> func = delegate ()
+            double func()
             {
                 Process currentProcess = Process.GetCurrentProcess();
                 return 100 * currentProcess.PrivilegedProcessorTime.TotalMilliseconds /
                        currentProcess.TotalProcessorTime.TotalMilliseconds;
-            };
+            }
+
             return func;
-        }
-        public override void Dispose()
-        {
-            _monitoringTimer?.Dispose();
-            InternalCounter?.Dispose();
-            InternalBar?.Dispose();
         }
     }
 }

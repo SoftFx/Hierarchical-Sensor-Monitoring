@@ -5,18 +5,28 @@ using System.Threading;
 
 namespace HSMDataCollector.Core
 {
-    internal class DataQueue : IDataQueue, IValuesQueue
+    internal sealed class DataQueue : IDataQueue, IValuesQueue
     {
+        private const int MaxSensorValueStringLength = 1024;
+        private const int MaxValuesMessageCapacity = 1000;
+        private const int MaxQueueCapacity = 10000;
+
         private readonly Queue<SensorValueBase> _valuesQueue;
         private readonly List<SensorValueBase> _failedList;
-        private const int MAX_VALUES_MESSAGE_CAPACITY = 1000;
-        private const int MAX_QUEUE_CAPACITY = 10000;
-        private int _internalCount = 0;
         private readonly object _lockObj;
         private readonly object _listLock;
+
+        private int _internalCount = 0;
         private Timer _sendTimer;
         private bool _hasFailedData;
+
         public bool Disposed { get; private set; }
+
+
+        public event EventHandler<List<SensorValueBase>> SendValues;
+        public event EventHandler<DateTime> QueueOverflow;
+        public event EventHandler<FileSensorValue> FileReceving;
+
 
         public DataQueue()
         {
@@ -27,9 +37,6 @@ namespace HSMDataCollector.Core
             Disposed = false;
         }
 
-        public event EventHandler<List<SensorValueBase>> SendValues;
-        public event EventHandler<DateTime> QueueOverflow;
-        public event EventHandler<FileSensorValue> FileReceving;
 
         public void ReturnData(List<SensorValueBase> values)
         {
@@ -53,12 +60,13 @@ namespace HSMDataCollector.Core
 
         public List<SensorValueBase> GetCollectedData()
         {
-            var values = new List<SensorValueBase>();
+            var values = new List<SensorValueBase>(1 << 3);
+
             if (_hasFailedData)
-            {
                 values.AddRange(DequeueData());
-            }
+
             values.AddRange(DequeueData());
+
             return values;
         }
 
@@ -87,10 +95,8 @@ namespace HSMDataCollector.Core
             }
 
             ++_internalCount;
-            if (_internalCount == MAX_QUEUE_CAPACITY)
-            {
+            if (_internalCount == MaxQueueCapacity)
                 OnQueueOverflow();
-            }
         }
 
         public void EnqueueData(SensorValueBase value)
@@ -99,13 +105,6 @@ namespace HSMDataCollector.Core
             Enqueue(value);
         }
 
-        private void TrimDataIfNecessary(SensorValueBase value)
-        {
-            if (!string.IsNullOrEmpty(value?.Comment))
-            {
-                value.Comment = value.Comment.Substring(0, Constants.MaxSensorValueStringLength);
-            }
-        }
         private void OnTimerTick(object state)
         {
             var data = DequeueData();
@@ -127,9 +126,11 @@ namespace HSMDataCollector.Core
                 _valuesQueue.Clear();
             }
         }
+
         private List<SensorValueBase> DequeueData()
         {
-            var dataList = new List<SensorValueBase>();
+            var dataList = new List<SensorValueBase>(1 << 3);
+
             if (_hasFailedData)
             {
                 lock (_listLock)
@@ -141,10 +142,10 @@ namespace HSMDataCollector.Core
                             case FileSensorValue fileValue:
                                 FileReceving?.Invoke(this, fileValue);
                                 break;
-                        
+
                             case BarSensorValueBase barSensor when barSensor.Count == 0:
                                 break;
-                        
+
                             default:
                                 dataList.Add(failedValue);
                                 break;
@@ -160,7 +161,7 @@ namespace HSMDataCollector.Core
             int count = 0;
             lock (_lockObj)
             {
-                while (count < MAX_VALUES_MESSAGE_CAPACITY && _internalCount > 0)
+                while (count < MaxValuesMessageCapacity && _internalCount > 0)
                 {
                     var value = _valuesQueue.Dequeue();
                     switch (value)
@@ -168,10 +169,10 @@ namespace HSMDataCollector.Core
                         case FileSensorValue fileValue:
                             FileReceving?.Invoke(this, fileValue);
                             break;
-                        
+
                         case BarSensorValueBase barSensor when barSensor.Count == 0:
                             break;
-                        
+
                         default:
                             dataList.Add(value);
                             ++count;
@@ -193,6 +194,14 @@ namespace HSMDataCollector.Core
         private void OnSendValues(List<SensorValueBase> values)
         {
             SendValues?.Invoke(this, values);
+        }
+
+        private static void TrimDataIfNecessary(SensorValueBase value)
+        {
+            if (!string.IsNullOrEmpty(value?.Comment))
+            {
+                value.Comment = value.Comment.Substring(0, MaxSensorValueStringLength);
+            }
         }
     }
 }
