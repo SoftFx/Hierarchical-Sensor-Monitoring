@@ -222,6 +222,7 @@ function customMenu(node) {
                         async: true
                     }).done(function () {
                         updateTreeTimer();
+                        showToast(`Deleted node`);
                     });
                 });
 
@@ -258,6 +259,7 @@ function customMenu(node) {
                         async: true
                     }).done(function () {
                         updateTreeTimer();
+                        showToast(`Cleared history for node`);
                     });
                 });
 

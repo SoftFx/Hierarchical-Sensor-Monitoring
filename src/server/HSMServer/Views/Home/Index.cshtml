@@ -117,6 +117,7 @@
     </div>
 </div>
 
+@await Html.PartialAsync("_ToastTemplate")
 
 <script>
     initializeUserRights('@(user.IsAdmin)',
