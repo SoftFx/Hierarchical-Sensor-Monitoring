@@ -195,16 +195,16 @@ function customMenu(node) {
         //        changeSensorBlockedState(node, false);
         //    }
         //},
-        "CleanHistory": {
-            "separator_before": false,
+        "DeleteNode":{
+            "separator_before": true,
             "separator_after": true,
-            "label": "Clean history",
+            "label": "Delete",
             "action": function (obj) {
                 //modal
                 $('#modalDeleteLabel').empty();
-                $('#modalDeleteLabel').append('Remove node');
+                $('#modalDeleteLabel').append('Delete node');
                 $('#modalDeleteBody').empty();
-                $('#modalDeleteBody').append('Do you really want to remove "' + node.text + '" node?');
+                $('#modalDeleteBody').append('Do you really want to delete "' + node.text + '" node?');
 
                 var modal = new bootstrap.Modal(document.getElementById('modalDelete'));
                 modal.show();
@@ -216,6 +216,42 @@ function customMenu(node) {
                     $.ajax({
                         type: 'POST',
                         url: removeNode + '?Selected=' + node.id,
+                        dataType: 'html',
+                        contentType: 'application/json',
+                        cache: false,
+                        async: true
+                    }).done(function () {
+                        updateTreeTimer();
+                    });
+                });
+
+                $('#closeDeleteButton').off('click').on('click', function () {
+                    modal.hide();
+                });
+            }
+        },
+        
+        "CleanHistory": {
+            "separator_before": false,
+            "separator_after": true,
+            "label": "Clean history",
+            "action": function (obj) {
+                //modal
+                $('#modalDeleteLabel').empty();
+                $('#modalDeleteLabel').append('Clean history of node');
+                $('#modalDeleteBody').empty();
+                $('#modalDeleteBody').append('Do you really want to erase history "' + node.text + '" node?');
+
+                var modal = new bootstrap.Modal(document.getElementById('modalDelete'));
+                modal.show();
+
+                //modal confirm
+                $('#confirmDeleteButton').off('click').on('click', function () {
+                    modal.hide();
+
+                    $.ajax({
+                        type: 'POST',
+                        url: clearHistoryNode + '?Selected=' + node.id,
                         dataType: 'html',
                         contentType: 'application/json',
                         cache: false,

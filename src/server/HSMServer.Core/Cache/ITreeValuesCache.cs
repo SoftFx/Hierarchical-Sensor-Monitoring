@@ -51,7 +51,8 @@ namespace HSMServer.Core.Cache
         void UpdateSensor(SensorUpdate updatedSensor);
         void RemoveSensor(Guid sensorId);
         void RemoveSensorsData(Guid product);
-        void RemoveSensorData(Guid sensorId);
+        void ClearSensorHistory(Guid sensorId);
+        void ClearSensorsHistoryData(Guid productId);
         BaseSensorModel GetSensor(Guid sensorId);
         void NotifyAboutChanges(BaseSensorModel model, ValidationResult oldStatus);
 

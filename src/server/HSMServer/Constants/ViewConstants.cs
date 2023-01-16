@@ -27,6 +27,7 @@
         public const string SelectNodeAction = "SelectNode";
         public const string RefreshTreeAction = "RefreshTree";
         public const string RemoveNodeAction = "RemoveNode";
+        public const string ClearHistoryNodeAction = "ClearHistoryNode";
 
         public const string RemoveProductAction = "RemoveProduct";
         public const string CreateProductAction = "CreateProduct";

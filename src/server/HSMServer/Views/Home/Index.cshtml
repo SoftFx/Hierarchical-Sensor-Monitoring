@@ -26,7 +26,8 @@
 
     var changeSensorState = "@Html.Raw(Url.Action(nameof(HomeController.ChangeSensorState), ViewConstants.HomeController))";
     var removeNode = "@Html.Raw(Url.Action(ViewConstants.RemoveNodeAction, ViewConstants.HomeController))";
-
+    var clearHistoryNode = "@Html.Raw(Url.Action(ViewConstants.ClearHistoryNodeAction, ViewConstants.HomeController))";
+    
     var enableNotifications = "@Html.Raw(Url.Action(nameof(HomeController.EnableNotifications), ViewConstants.HomeController))";
     var disableNotifications = "@Html.Raw(Url.Action(nameof(HomeController.DisableNotifications), ViewConstants.HomeController))";
     var ignoreNotifications = "@Html.Raw(Url.Action(nameof(HomeController.IgnoreNotifications), ViewConstants.HomeController))";

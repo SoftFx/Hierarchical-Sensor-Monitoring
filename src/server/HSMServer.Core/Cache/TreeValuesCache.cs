@@ -282,10 +282,22 @@ namespace HSMServer.Core.Cache
                 RemoveSensorsData(subProductId);
 
             foreach (var (sensorId, _) in product.Sensors)
-                RemoveSensorData(sensorId);
+                RemoveSensor(sensorId);
+        }
+        
+        public void ClearSensorsHistoryData(Guid productId)
+        {
+            if (!_tree.TryGetValue(productId, out var product))
+                return;
+
+            foreach (var (subProductId, _) in product.SubProducts)
+                ClearSensorsHistoryData(subProductId);
+
+            foreach (var (sensorId, _) in product.Sensors)
+                ClearSensorHistory(sensorId);
         }
 
-        public void RemoveSensorData(Guid sensorId)
+        public void ClearSensorHistory(Guid sensorId)
         {
             if (!_sensors.TryGetValue(sensorId, out var sensor))
                 return;
