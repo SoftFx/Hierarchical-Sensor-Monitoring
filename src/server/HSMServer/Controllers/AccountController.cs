@@ -126,16 +126,16 @@ namespace HSMServer.Controllers
                 return View("Registration", model);
             }
 
-            List<KeyValuePair<string, ProductRoleEnum>> products = null;
+            List<(Guid, ProductRoleEnum)> products = null;
             if (!string.IsNullOrEmpty(model.ProductKey) && !string.IsNullOrEmpty(model.Role))
             {
-                products = new List<KeyValuePair<string, ProductRoleEnum>>()
-                    { new KeyValuePair<string, ProductRoleEnum>(model.ProductKey,
-                    (ProductRoleEnum)int.Parse(model.Role))};
+                products = new List<(Guid, ProductRoleEnum)>()
+                {
+                    (Guid.Parse(model.ProductKey), (ProductRoleEnum)int.Parse(model.Role))
+                };
             }
 
-            _userManager.AddUser(model.Username,
-                HashComputer.ComputePasswordHash(model.Password), false, products);
+            _userManager.AddUser(model.Username, HashComputer.ComputePasswordHash(model.Password), false, products);
             await Authenticate(model.Username, true);
 
             if (!string.IsNullOrEmpty(model.TicketId))

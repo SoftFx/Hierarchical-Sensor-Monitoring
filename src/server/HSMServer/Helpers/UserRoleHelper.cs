@@ -37,7 +37,7 @@ namespace HSMServer.Helpers
 
         public static bool IsManager(User user)
         {
-            return user.ProductsRoles.Any(x => x.Value == ProductRoleEnum.ProductManager);
+            return user.ProductsRoles.Any(x => x.Item2 == ProductRoleEnum.ProductManager);
         }
     }
 }

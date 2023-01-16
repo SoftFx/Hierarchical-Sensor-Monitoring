@@ -4,7 +4,7 @@
         <name>HSMServer</name>
     </assembly>
     <members>
-        <member name="M:HSMServer.Authentication.IUserManager.AddUser(System.String,System.String,System.Boolean,System.Collections.Generic.List{System.Collections.Generic.KeyValuePair{System.String,HSMServer.Model.Authentication.ProductRoleEnum}})">
+        <member name="M:HSMServer.Authentication.IUserManager.AddUser(System.String,System.String,System.Boolean,System.Collections.Generic.List{System.ValueTuple{System.Guid,HSMServer.Model.Authentication.ProductRoleEnum}})">
             <summary>
             Add new user with the specified parameters
             </summary>

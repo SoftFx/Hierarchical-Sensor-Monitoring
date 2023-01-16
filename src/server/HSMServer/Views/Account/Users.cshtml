@@ -81,8 +81,8 @@
                                         foreach (var right in userItem.ProductsRoles)
                                         {
                                             string name = string.Empty;
-                                            products?.TryGetValue(Guid.Parse(right.Key), out name);
-                                            <span>@(name ?? right.Key) (@right.Value)</span>
+                                            products?.TryGetValue(right.Item1, out name);
+                                            <span>@(name ?? right.Item1.ToString()) (@right.Item2)</span>
                                             <br>
                                         }
                                     }

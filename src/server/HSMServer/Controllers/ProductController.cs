@@ -98,11 +98,10 @@ namespace HSMServer.Controllers
 
             var pairs = new List<(User, ProductRoleEnum)>(1 << 6);
 
-            var productNodeId = productNode.Id.ToString();
+            var productNodeId = productNode?.Id;
             foreach (var user in users.OrderBy(x => x.UserName))
             {
-                pairs.Add(new(user,
-                    user.ProductsRoles.First(x => x.Key.Equals(productNodeId)).Value));
+                pairs.Add((user, user.ProductsRoles.First(x => x.Item1.Equals(productNodeId)).Item2));
             }
 
             return View(new EditProductViewModel(productNode, pairs, notAdminUsers));
@@ -119,11 +118,11 @@ namespace HSMServer.Controllers
                 return;
             }
 
-            var user = _userManager.GetCopyUser(Guid.Parse(model.UserId));
-            var pair = new KeyValuePair<string, ProductRoleEnum>(model.ProductKey, (ProductRoleEnum)model.ProductRole);
+            var user = _userManager.GetCopyUser(model.UserId);
+            var pair = (model.ProductKey, (ProductRoleEnum)model.ProductRole);
 
             if (user.ProductsRoles == null || !user.ProductsRoles.Any())
-                user.ProductsRoles = new List<KeyValuePair<string, ProductRoleEnum>> { pair };
+                user.ProductsRoles = new List<(Guid, ProductRoleEnum)> { pair };
             else
                 user.ProductsRoles.Add(pair);
 
@@ -133,12 +132,12 @@ namespace HSMServer.Controllers
         [HttpPost]
         public void RemoveUserRole([FromBody] UserRightViewModel model)
         {
-            var user = _userManager.GetCopyUser(Guid.Parse(model.UserId));
+            var user = _userManager.GetCopyUser(model.UserId);
 
-            var role = user.ProductsRoles.First(ur => ur.Key.Equals(model.ProductKey));
+            var role = user.ProductsRoles.First(ur => ur.Item1.Equals(model.ProductKey));
             user.ProductsRoles.Remove(role);
 
-            foreach (var sensorId in _treeViewModel.GetNodeAllSensors(Guid.Parse(model.ProductKey)))
+            foreach (var sensorId in _treeViewModel.GetNodeAllSensors(model.ProductKey))
                 user.Notifications.RemoveSensor(sensorId);
 
             _userManager.UpdateUser(user);
@@ -147,18 +146,18 @@ namespace HSMServer.Controllers
         [HttpPost]
         public void EditUserRole([FromBody] UserRightViewModel model)
         {
-            var user = _userManager.GetCopyUser(Guid.Parse(model.UserId));
-            var pair = new KeyValuePair<string, ProductRoleEnum>(model.ProductKey, (ProductRoleEnum)model.ProductRole);
+            var user = _userManager.GetCopyUser(model.UserId);
+            var pair = ((model.ProductKey, (ProductRoleEnum)model.ProductRole));
 
-            var role = user.ProductsRoles.FirstOrDefault(ur => ur.Key.Equals(model.ProductKey));
+            var role = user.ProductsRoles.FirstOrDefault(ur => ur.Item1.Equals(model.ProductKey));
             //Skip empty corresponding pair
-            if (string.IsNullOrEmpty(role.Key) && role.Value == 0)
+            if (role.Item1 == Guid.Empty && role.Item2 == 0)
                 return;
 
             user.ProductsRoles.Remove(role);
 
             if (user.ProductsRoles == null || !user.ProductsRoles.Any())
-                user.ProductsRoles = new List<KeyValuePair<string, ProductRoleEnum>> { pair };
+                user.ProductsRoles = new List<(Guid, ProductRoleEnum)> { pair };
             else
                 user.ProductsRoles.Add(pair);
 

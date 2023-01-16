@@ -52,7 +52,7 @@ namespace HSMServer.Authentication
             _logger.LogInformation("UserManager initialized");
         }
 
-        public void AddUser(string userName, string passwordHash, bool isAdmin, List<KeyValuePair<string, ProductRoleEnum>> productRoles = null)
+        public void AddUser(string userName, string passwordHash, bool isAdmin, List<(Guid, ProductRoleEnum)> productRoles = null)
         {
             User user = new(userName)
             {
@@ -122,8 +122,8 @@ namespace HSMServer.Authentication
 
             foreach (var user in _users)
             {
-                var pair = user.Value.ProductsRoles?.FirstOrDefault(r => r.Key.Equals(productId.ToString()));
-                if (pair != null && pair.Value.Key != null)
+                var pair = user.Value.ProductsRoles?.FirstOrDefault(r => r.Item1.Equals(productId));
+                if (pair != null && pair.Value.Item1 != Guid.Empty)
                     result.Add(user.Value);
             }
 
@@ -180,7 +180,7 @@ namespace HSMServer.Authentication
 
                 foreach (var user in _users)
                 {
-                    var removedRolesCount = user.Value.ProductsRoles.RemoveAll(role => role.Key == product.Id.ToString());
+                    var removedRolesCount = user.Value.ProductsRoles.RemoveAll(role => role.Item1 == product.Id);
                     if (removedRolesCount == 0)
                         continue;
 
