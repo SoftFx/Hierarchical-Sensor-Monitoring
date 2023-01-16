@@ -70,7 +70,7 @@ namespace HSMServer.Model
 
         private T Register<T>(string sectionName) where T : class, new()
         {
-            return _configuration.GetSection(sectionName).Get<T>();
+            return _configuration.GetSection(sectionName).Get<T>() ?? new T();
         }
 
         private void ResaveSettings() =>
