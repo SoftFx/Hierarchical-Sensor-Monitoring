@@ -49,11 +49,11 @@ jobs:
 
     - id: save-version
       name: Try to get server version
-      run: echo "::set-output name=version::$((Get-Item ${{ env.OUTPUT_FOLDER }}/HSMServer.exe).VersionInfo.ProductVersion)"
+      run: echo "version=$((Get-Item ${{ env.OUTPUT_FOLDER }}/HSMServer.exe).VersionInfo.ProductVersion)" >> $env:GITHUB_OUTPUT
 
     - id: build-artifact-name
       name: Build artifact name
-      run: echo "::set-output name=name::HSMServer v${{ steps.save-version.outputs.version }}"
+      run: echo "name=HSMServer v${{ steps.save-version.outputs.version }}" >> $env:GITHUB_OUTPUT
 
     - name: Upload artifact
       uses: actions/upload-artifact@v3
@@ -73,7 +73,7 @@ jobs:
 
       - id: save-tag
         name: Create tag
-        run: echo "::set-output name=tag::server-v${{ needs.build.outputs.VERSION }}"
+        run: echo "tag=server-v${{ needs.build.outputs.VERSION }}" >> $env:GITHUB_OUTPUT
 
       - name: Build release tag message
         if: ${{ !github.event.inputs.isPreRelease }}
