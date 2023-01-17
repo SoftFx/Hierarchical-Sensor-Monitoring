@@ -63,7 +63,7 @@
                         var userItem = Model[i];
                         <tr>
                             <th scope='row'>@(i + 1)</th>
-                            <td class="text-break">@userItem.Username</td>
+                            <td class="text-break">@userItem.Username.Trim()</td>
                             <td>**************</td>
                             <td>
                                 <input id='isAdmin_@userItem.Username' type='checkbox' class='form-check-input ms-0'
