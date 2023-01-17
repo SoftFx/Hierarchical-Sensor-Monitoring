@@ -195,14 +195,14 @@ function customMenu(node) {
         //        changeSensorBlockedState(node, false);
         //    }
         //},
-        "DeleteNode":{
+        "RemoveNode":{
             "separator_before": true,
             "separator_after": true,
-            "label": "Delete",
+            "label": "Remove",
             "action": function (obj) {
                 //modal
                 $('#modalDeleteLabel').empty();
-                $('#modalDeleteLabel').append('Delete node');
+                $('#modalDeleteLabel').append('Remove node');
                 $('#modalDeleteBody').empty();
                 $('#modalDeleteBody').append('Do you really want to delete "' + node.text + '" node?');
 
@@ -222,7 +222,7 @@ function customMenu(node) {
                         async: true
                     }).done(function () {
                         updateTreeTimer();
-                        showToast(`Deleted node`);
+                        showToast(`Node has been removed`);
                     });
                 });
 
@@ -259,7 +259,7 @@ function customMenu(node) {
                         async: true
                     }).done(function () {
                         updateTreeTimer();
-                        showToast(`Cleared history for node`);
+                        showToast(`Node has been cleared`);
                     });
                 });
 
@@ -367,7 +367,7 @@ function customMenu(node) {
         return items;
     
     if (!currentUserProducts.includes(node.id)){
-        delete items.DeleteNode;
+        delete items.RemoveNode;
         delete items.CleanHistory;
     }
     
