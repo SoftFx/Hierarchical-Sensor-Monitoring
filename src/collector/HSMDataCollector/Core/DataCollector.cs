@@ -38,7 +38,6 @@ namespace HSMDataCollector.Core
         internal const string CurrentProcessNodeName = "CurrentProcess";
         internal const string PerformanceNodeName = "System monitoring";
 
-        private readonly string _productKey;
         private readonly string _listSendingAddress;
         private readonly string _fileSendingAddress;
         private readonly ConcurrentDictionary<string, ISensor> _nameToSensor;
@@ -55,15 +54,11 @@ namespace HSMDataCollector.Core
         /// <summary>
         /// Creates new instance of <see cref="DataCollector"/> class, initializing main parameters
         /// </summary>
-        /// <param name="productKey">Key, which identifies the product (logical group) for all sensors that will be created.</param>
-        /// <param name="address">HSM server address to send data to (Do not forget https:// if needed)</param>
-        /// <param name="port">HSM sensors API port, which defaults to 44330. Specify if your HSM server Docker container configured differently.</param>
-        public DataCollector(string productKey, string address, int port = 44330)
+        /// <param name="options">Common options for datacollector</param>
+        public DataCollector(CollectorOptions options)
         {
-            var connectionAddress = $"{address}:{port}/api/sensors";
-            _listSendingAddress = $"{connectionAddress}/list";
-            _fileSendingAddress = $"{connectionAddress}/file";
-            _productKey = productKey;
+            _listSendingAddress = options.ListEndpoint;
+            _fileSendingAddress = options.FileEndpoint;
             _nameToSensor = new ConcurrentDictionary<string, ISensor>();
 
             HttpClientHandler handler = new HttpClientHandler
@@ -71,17 +66,28 @@ namespace HSMDataCollector.Core
                 ServerCertificateCustomValidationCallback = (message, certificate2, arg3, arg4) => true
             };
             _client = new HttpClient(handler);
-            _client.DefaultRequestHeaders.Add(nameof(BaseRequest.Key), productKey);
+            _client.DefaultRequestHeaders.Add(nameof(BaseRequest.Key), options.AccessKey);
 
             ServicePointManager.ServerCertificateValidationCallback = delegate { return true; };
             ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
 
-            _dataQueue = new DataQueue();
+            _dataQueue = new DataQueue(options);
             _dataQueue.QueueOverflow += DataQueue_QueueOverflow;
             _dataQueue.FileReceving += DataQueue_FileReceving;
             _dataQueue.SendValues += DataQueue_SendValues;
             _isStopped = false;
         }
+
+        /// <summary>
+        /// Creates new instance of <see cref="DataCollector"/> class, initializing main parameters
+        /// </summary>
+        /// <param name="productKey">Key, which identifies the product (logical group) for all sensors that will be created.</param>
+        /// <param name="address">HSM server address to send data to (Do not forget https:// if needed)</param>
+        /// <param name="port">HSM sensors API port, which defaults to 44330. Specify if your HSM server Docker container configured differently.</param>
+        [Obsolete("Use constructor with DataCollectorOptions")]
+        public DataCollector(string productKey, string address, int port = 44330)
+            : this(new CollectorOptions() { AccessKey = productKey, ServerAddress = address, Port = port })
+        { }
 
 
         public void Dispose()

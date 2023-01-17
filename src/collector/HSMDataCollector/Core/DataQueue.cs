@@ -8,8 +8,10 @@ namespace HSMDataCollector.Core
     internal sealed class DataQueue : IDataQueue, IValuesQueue
     {
         private const int MaxSensorValueStringLength = 1024;
-        private const int MaxValuesMessageCapacity = 1000;
-        private const int MaxQueueCapacity = 10000;
+
+        private readonly int _maxQueueSize;
+        private readonly int _maxValuesInPackage;
+        private readonly TimeSpan _packageSendingPeriod;
 
         private readonly Queue<SensorValueBase> _valuesQueue;
         private readonly List<SensorValueBase> _failedList;
@@ -28,12 +30,17 @@ namespace HSMDataCollector.Core
         public event EventHandler<FileSensorValue> FileReceving;
 
 
-        public DataQueue()
+        public DataQueue(CollectorOptions options)
         {
+            _maxQueueSize = options.MaxQueueSize;
+            _maxValuesInPackage = options.MaxValuesInPackage;
+            _packageSendingPeriod = options.PackageSendingPeriod;
+
             _valuesQueue = new Queue<SensorValueBase>();
             _failedList = new List<SensorValueBase>();
             _lockObj = new object();
             _listLock = new object();
+
             Disposed = false;
         }
 
@@ -72,8 +79,7 @@ namespace HSMDataCollector.Core
 
         public void InitializeTimer()
         {
-            TimeSpan timerTime = TimeSpan.FromSeconds(15);
-            _sendTimer = new Timer(OnTimerTick, null, timerTime, timerTime);
+            _sendTimer = new Timer(OnTimerTick, null, _packageSendingPeriod, _packageSendingPeriod);
         }
 
         public void Stop()
@@ -95,7 +101,7 @@ namespace HSMDataCollector.Core
             }
 
             ++_internalCount;
-            if (_internalCount == MaxQueueCapacity)
+            if (_internalCount == _maxQueueSize)
                 OnQueueOverflow();
         }
 
@@ -161,7 +167,7 @@ namespace HSMDataCollector.Core
             int count = 0;
             lock (_lockObj)
             {
-                while (count < MaxValuesMessageCapacity && _internalCount > 0)
+                while (count < _maxValuesInPackage && _internalCount > 0)
                 {
                     var value = _valuesQueue.Dequeue();
                     switch (value)
