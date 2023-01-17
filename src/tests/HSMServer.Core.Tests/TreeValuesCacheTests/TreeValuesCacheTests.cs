@@ -369,7 +369,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
 
             _valuesCache.ChangeSensorEvent += UpdateSensorEventHandler;
 
-            _valuesCache.ClearSensorsHistoryData(product.Id);
+            _valuesCache.ClearNodeHistory(product.Id);
 
             _valuesCache.ChangeSensorEvent -= UpdateSensorEventHandler;
 
