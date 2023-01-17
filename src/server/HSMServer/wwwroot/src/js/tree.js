@@ -202,9 +202,9 @@ function customMenu(node) {
             "action": function (obj) {
                 //modal
                 $('#modalDeleteLabel').empty();
-                $('#modalDeleteLabel').append('Remove node');
+                $('#modalDeleteLabel').append('Remove confirmation');
                 $('#modalDeleteBody').empty();
-                $('#modalDeleteBody').append('Do you really want to delete "' + node.text + '" node?');
+                $('#modalDeleteBody').append(`Do you really want to remove "${node.text}" ?`);
 
                 var modal = new bootstrap.Modal(document.getElementById('modalDelete'));
                 modal.show();
@@ -239,10 +239,10 @@ function customMenu(node) {
             "action": function (obj) {
                 //modal
                 $('#modalDeleteLabel').empty();
-                $('#modalDeleteLabel').append('Clean history of node');
+                $('#modalDeleteLabel').append('Clear history confirmation');
                 $('#modalDeleteBody').empty();
-                $('#modalDeleteBody').append('Do you really want to erase history "' + node.text + '" node?');
-
+                $('#modalDeleteBody').append(`Do you really want to erase history of "${node.text}" ?`);
+                
                 var modal = new bootstrap.Modal(document.getElementById('modalDelete'));
                 modal.show();
 
