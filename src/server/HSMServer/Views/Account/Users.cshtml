@@ -171,7 +171,7 @@
         isAdmin = $('#createIsAdmin').is(":checked");
 
         var data = createData(username, password, role, isAdmin, null);
-        //console.log(data);
+        
         $.ajax({
             type: 'POST',
             url: createAction,
@@ -198,10 +198,14 @@
         //modal confirm
         $('#confirmDeleteButton').on('click', function () {
             modal.hide();
-
+            
+            let data = createData(username)
+            
             $.ajax({//AccountController -> RemoveUser
-                type: 'GET',
-                url: deleteAction + "?Username=" + username,
+                type: 'POST',
+                url: deleteAction,
+                data: JSON.stringify(data),
+                contentType: 'application/json',
                 cache: false,
                 async: true,
                 success: function () {
