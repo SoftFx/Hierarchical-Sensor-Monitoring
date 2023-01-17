@@ -16,7 +16,7 @@ namespace HSMServer.Model.Validators
                 .NotEmpty()
                 .WithMessage(ErrorConstants.UsernameNotNull)
                 .MaximumLength(100)
-                .WithMessage(ErrorConstants.UserNameMaxLength)
+                .WithMessage(ErrorConstants.UsernameMaxLength)
                 .Must(IsUniqueUsername)
                 .WithMessage(ErrorConstants.UsernameUnique)
                 .Matches(@"^[0-9a-zA-Z]+$")
