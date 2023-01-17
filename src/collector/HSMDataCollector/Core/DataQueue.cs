@@ -198,7 +198,7 @@ namespace HSMDataCollector.Core
 
         private static void TrimDataIfNecessary(SensorValueBase value)
         {
-            if (!string.IsNullOrEmpty(value?.Comment))
+            if (value?.Comment != null && value.Comment.Length > MaxSensorValueStringLength)
             {
                 value.Comment = value.Comment.Substring(0, MaxSensorValueStringLength);
             }
