@@ -200,27 +200,16 @@ function customMenu(node) {
             "separator_after": true,
             "label": "Remove",
             "action": function (obj) {
+                var modal = new bootstrap.Modal(document.getElementById('modalDelete'));
                 //modal
                 $('#modalDeleteLabel').empty();
                 $('#modalDeleteLabel').append('Remove confirmation');
                 $('#modalDeleteBody').empty();
                 
-                let path;
-                $.ajax({
-                    type: 'POST',
-                    url: getPath + '?Selected=' + node.id,
-                    dataType: 'html',
-                    contentType: 'application/json',
-                    cache: false,
-                    async: false
-                }).done(function (data) {
-                    path = data
-                });
-                
-                $('#modalDeleteBody').append(`Do you really want to remove ${path} ?`);
-
-                var modal = new bootstrap.Modal(document.getElementById('modalDelete'));
-                modal.show();
+                $.when(getCurrentPathRequest(node.id)).done(function(path){
+                    $('#modalDeleteBody').append(`Do you really want to remove ${path} ?`);
+                    modal.show();
+                })
 
                 //modal confirm
                 $('#confirmDeleteButton').off('click').on('click', function () {
@@ -255,28 +244,17 @@ function customMenu(node) {
             "separator_after": true,
             "label": "Clean history",
             "action": function (obj) {
+                var modal = new bootstrap.Modal(document.getElementById('modalDelete'));
                 //modal
                 $('#modalDeleteLabel').empty();
                 $('#modalDeleteLabel').append('Clean history confirmation');
                 $('#modalDeleteBody').empty();
 
-                let path;
-                $.ajax({
-                    type: 'POST',
-                    url: getPath + '?Selected=' + node.id,
-                    dataType: 'html',
-                    contentType: 'application/json',
-                    cache: false,
-                    async: false
-                }).done(function (data) {
-                    path = data
-                });
+                $.when(getCurrentPathRequest(node.id)).done(function(path){
+                    $('#modalDeleteBody').append(`Do you really want to clean history for ${path} ?`);
+                    modal.show();
+                })
                 
-                $('#modalDeleteBody').append(`Do you really want to clean history for ${path} ?`);
-
-                var modal = new bootstrap.Modal(document.getElementById('modalDelete'));
-                modal.show();
-
                 //modal confirm
                 $('#confirmDeleteButton').off('click').on('click', function () {
                     modal.hide();
@@ -440,4 +418,15 @@ function hasUserNodeRights(node) {
         : node.parents[node.parents.length - 2];
 
     return isCurrentUserAdmin === "True" || currentUserProducts.includes(productId);
+}
+
+function getCurrentPathRequest(nodeId){
+    return $.ajax({
+        type: 'POST',
+        url: getPath + '?Selected=' + nodeId,
+        dataType: 'html',
+        contentType: 'application/json',
+        cache: false,
+        async: false
+    });
 }
