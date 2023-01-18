@@ -97,29 +97,37 @@
                             <div class='btn-group'>
                                 @if (key.ParentProduct.IsChangingAccessKeysAvailable(user))
                                 {
-                                    <i class="fa-solid fa-ellipsis-vertical" id="dropdownMenuButton" style="cursor: pointer" data-bs-toggle="dropdown" data-bs-display="static" aria-haspopup="true" aria-expanded="false"></i>
+                                    <button class="btn" data-bs-toggle="dropdown" data-bs-auto-close="true" aria-haspopup="true" aria-expanded="false">
+                                        <i class="fa-solid fa-ellipsis-vertical" style="cursor: pointer"></i>
+                                    </button>
                                 }
                                 else
                                 {
-                                    <i class="fa fa-ellipsis-vertical disabled" style="color: darkgrey" data-bs-toggle="dropdown"></i>
+                                    <i class="fa fa-ellipsis-vertical disabled" style="color: darkgrey"></i>
                                 }
-                                <div class='dropdown-menu overflow-auto'  aria-labelledby="dropdownMenuButton">
-                                    <button id='changeAccessKey_@key.Id' class='dropdown-item'>Edit</button>
+                                <ul id="dropdown_@key.Id" class='dropdown-menu overflow-auto' aria-labelledby="dropdownMenuButton">
+                                    <li>
+                                        <button id='changeAccessKey_@key.Id' class='dropdown-item'>Edit</button>
+                                    </li>
                                     @if (key.State != KeyState.Expired)
                                     {
-                                        <button id='blockAccessKey_@key.Id' class='dropdown-item'>
-                                            @if (key.State == KeyState.Blocked)
-                                            {
-                                                <span id="state_value_@key.Id">Unblock</span>
-                                            }
-                                            else
-                                            {
-                                                <span id="state_value_@key.Id">Block</span>
-                                            }
-                                        </button>
+                                        <li>
+                                            <button id='blockAccessKey_@key.Id' class='dropdown-item'>
+                                                @if (key.State == KeyState.Blocked)
+                                                {
+                                                    <span id="state_value_@key.Id">Unblock</span>
+                                                }
+                                                else
+                                                {
+                                                    <span id="state_value_@key.Id">Block</span>
+                                                }
+                                            </button>
+                                        </li>
                                     }
-                                    <button id='deleteAccessKey_@key.Id' class='dropdown-item'>Remove</button>
-                                </div>
+                                    <li>
+                                        <button id='deleteAccessKey_@key.Id' class='dropdown-item'>Remove</button>
+                                    </li>
+                                </ul>
                             </div>
                         </td>
                     }
