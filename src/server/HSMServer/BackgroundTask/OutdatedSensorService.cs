@@ -57,7 +57,7 @@ namespace HSMServer.BackgroundTask
                     }
 
                     foreach (var sensorId in sensorsToRemove)
-                        _treeValuesCache.RemoveSensorData(sensorId);
+                        _treeValuesCache.ClearSensorHistory(sensorId);
 
                     _logger.LogInformation($"{sensorsToRemove.Count} sensors removed.");
                     _lastChecked = DateTime.Now;

@@ -195,19 +195,21 @@ function customMenu(node) {
         //        changeSensorBlockedState(node, false);
         //    }
         //},
-        "CleanHistory": {
-            "separator_before": false,
+        "RemoveNode":{
+            "separator_before": true,
             "separator_after": true,
-            "label": "Clean history",
+            "label": "Remove",
             "action": function (obj) {
+                var modal = new bootstrap.Modal(document.getElementById('modalDelete'));
                 //modal
                 $('#modalDeleteLabel').empty();
-                $('#modalDeleteLabel').append('Remove node');
+                $('#modalDeleteLabel').append('Remove confirmation');
                 $('#modalDeleteBody').empty();
-                $('#modalDeleteBody').append('Do you really want to remove "' + node.text + '" node?');
-
-                var modal = new bootstrap.Modal(document.getElementById('modalDelete'));
-                modal.show();
+                
+                $.when(getCurrentPathRequest(node.id)).done(function(path){
+                    $('#modalDeleteBody').append(`Do you really want to remove ${path} ?`);
+                    modal.show();
+                })
 
                 //modal confirm
                 $('#confirmDeleteButton').off('click').on('click', function () {
@@ -222,6 +224,55 @@ function customMenu(node) {
                         async: true
                     }).done(function () {
                         updateTreeTimer();
+                        if(node.children.length === 0){
+                            showToast(`Sensor has been removed`);
+                        }else{
+                            showToast(`Node has been removed`);
+                        }
+                        
+                    });
+                });
+
+                $('#closeDeleteButton').off('click').on('click', function () {
+                    modal.hide();
+                });
+            }
+        },
+        
+        "CleanHistory": {
+            "separator_before": false,
+            "separator_after": true,
+            "label": "Clean history",
+            "action": function (obj) {
+                var modal = new bootstrap.Modal(document.getElementById('modalDelete'));
+                //modal
+                $('#modalDeleteLabel').empty();
+                $('#modalDeleteLabel').append('Clean history confirmation');
+                $('#modalDeleteBody').empty();
+
+                $.when(getCurrentPathRequest(node.id)).done(function(path){
+                    $('#modalDeleteBody').append(`Do you really want to clean history for ${path} ?`);
+                    modal.show();
+                })
+                
+                //modal confirm
+                $('#confirmDeleteButton').off('click').on('click', function () {
+                    modal.hide();
+
+                    $.ajax({
+                        type: 'POST',
+                        url: clearHistoryNode + '?Selected=' + node.id,
+                        dataType: 'html',
+                        contentType: 'application/json',
+                        cache: false,
+                        async: true
+                    }).done(function () {
+                        updateTreeTimer();
+                        if(node.children.length === 0){
+                            showToast(`Sensor has been cleared`);
+                        }else{
+                            showToast(`Node has been cleared`);
+                        }
                     });
                 });
 
@@ -324,7 +375,15 @@ function customMenu(node) {
         delete items.Notifications.submenu.IgnoreNotifications;
         delete items.Notifications.submenu.RemoveIgnoreNotifications;
     }
-
+   
+    if (isCurrentUserAdmin === "True")
+        return items;
+    
+    if (!hasUserNodeRights(node)){
+        delete items.RemoveNode;
+        delete items.CleanHistory;
+    }
+    
     return items;
 }
 
@@ -359,4 +418,15 @@ function hasUserNodeRights(node) {
         : node.parents[node.parents.length - 2];
 
     return isCurrentUserAdmin === "True" || currentUserProducts.includes(productId);
+}
+
+function getCurrentPathRequest(nodeId){
+    return $.ajax({
+        type: 'POST',
+        url: getPath + '?Selected=' + nodeId,
+        dataType: 'html',
+        contentType: 'application/json',
+        cache: false,
+        async: false
+    });
 }
