@@ -25,7 +25,6 @@
     <table class="table table-striped">
         <thead>
             <tr>
-                <th scope="col">#</th>
                 <th scope="col">Name</th>
                 <th scope="col">Key</th>
                 <th scope="col" colspan="2"></th>
@@ -42,7 +41,6 @@
             @if (isProductCrudAllowed)
             {
                 <tr>
-                    <th>0</th>
                     <th>
                         <input id='createName' type='text' class='form-control'/>
                         <span class="d-none" id='new_product_name_span'></span>
@@ -64,7 +62,6 @@
             {
                 var product = Model[i];
                 <tr>
-                    <th scope='row'>@(i + 1)</th>
                     <td>
                         @Html.Raw(product.Name)
                     </td>
@@ -82,24 +79,30 @@
                         <div class='btn-group'>
                             @if (isProductCrudAllowed || ProductRoleHelper.IsManager(product.Id, user?.ProductsRoles))
                             {
-                                <i class="fa-solid fa-ellipsis-vertical" id="dropdownMenuButton" style="cursor: pointer" data-bs-toggle="dropdown" data-bs-display="static" aria-haspopup="true" aria-expanded="false"></i>
+                                <button class="btn" data-bs-toggle="dropdown" data-bs-auto-close="true" aria-haspopup="true" aria-expanded="false">
+                                    <i class="fa-solid fa-ellipsis-vertical" style="cursor: pointer"></i>
+                                </button>
                             }
                             else
                             {
                                 <i class="fa fa-ellipsis-vertical disabled" style="color: darkgrey" data-bs-toggle="dropdown"></i>
                             }
-                            <div class='dropdown-menu overflow-auto' aria-labelledby="dropdownMenuButton">
-                                <button id='change_@product.EncodedId' class='dropdown-item'>
-                                    Edit
-                                </button>
+                            <ul class='dropdown-menu overflow-auto' aria-labelledby="dropdownMenuButton">
+                                <li>
+                                    <button id='change_@product.EncodedId' class='dropdown-item'>
+                                        Edit
+                                    </button>
+                                </li>
 
                                 @if (isProductCrudAllowed)
                                 {
-                                    <button id='delete_@product.Id' class='dropdown-item'>
-                                        Delete
-                                    </button>
+                                    <li>
+                                        <button id='delete_@product.Id' class='dropdown-item'>
+                                            Delete
+                                        </button>
+                                    </li>
                                 }
-                            </div>
+                            </ul>
                         </div>
                     </td>
                 </tr>
