@@ -7,4 +7,12 @@
     };
 
     copyToClipboardAsync(text);
+    showToast("Copied!");
+}
+
+window.showToast = function (message){
+    document.getElementById('toast_body').innerHTML = message;
+    let currentToast = document.getElementById('liveToast')
+    let currentToastInstance = bootstrap.Toast.getOrCreateInstance(currentToast)
+    currentToastInstance.show();
 }

@@ -2,7 +2,9 @@
 
 ## Site
 
-
+* Remove for sensors has been added
+* Remove for nodes has been added
+* Toasts for copy logic have been added
 
 ## Rest API
 
