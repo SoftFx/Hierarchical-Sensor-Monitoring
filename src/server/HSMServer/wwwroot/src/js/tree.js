@@ -239,9 +239,9 @@ function customMenu(node) {
             "action": function (obj) {
                 //modal
                 $('#modalDeleteLabel').empty();
-                $('#modalDeleteLabel').append('Clear history confirmation');
+                $('#modalDeleteLabel').append('Clean history confirmation');
                 $('#modalDeleteBody').empty();
-                $('#modalDeleteBody').append(`Do you really want to erase history of "${node.text}" ?`);
+                $('#modalDeleteBody').append(`Do you really want to clean history of "${node.text}" ?`);
                 
                 var modal = new bootstrap.Modal(document.getElementById('modalDelete'));
                 modal.show();
@@ -366,7 +366,7 @@ function customMenu(node) {
     if (isCurrentUserAdmin === "True")
         return items;
     
-    if (!currentUserProducts.includes(node.id)){
+    if (hasUserNodeRights(node)){
         delete items.RemoveNode;
         delete items.CleanHistory;
     }

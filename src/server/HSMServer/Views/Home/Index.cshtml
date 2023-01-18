@@ -25,8 +25,8 @@
     var refreshTree = "@Html.Raw(Url.Action(ViewConstants.RefreshTreeAction, ViewConstants.HomeController))";
 
     var changeSensorState = "@Html.Raw(Url.Action(nameof(HomeController.ChangeSensorState), ViewConstants.HomeController))";
-    var removeNode = "@Html.Raw(Url.Action(ViewConstants.RemoveNodeAction, ViewConstants.HomeController))";
-    var clearHistoryNode = "@Html.Raw(Url.Action(ViewConstants.ClearHistoryNodeAction, ViewConstants.HomeController))";
+    var removeNode = "@Html.Raw(Url.Action(nameof(HomeController.RemoveNode), ViewConstants.HomeController))";
+    var clearHistoryNode = "@Html.Raw(Url.Action(nameof(HomeController.ClearHistoryNode), ViewConstants.HomeController))";
     
     var enableNotifications = "@Html.Raw(Url.Action(nameof(HomeController.EnableNotifications), ViewConstants.HomeController))";
     var disableNotifications = "@Html.Raw(Url.Action(nameof(HomeController.DisableNotifications), ViewConstants.HomeController))";
@@ -117,7 +117,6 @@
     </div>
 </div>
 
-@await Html.PartialAsync("_ToastTemplate")
 
 <script>
     initializeUserRights('@(user.IsAdmin)',
