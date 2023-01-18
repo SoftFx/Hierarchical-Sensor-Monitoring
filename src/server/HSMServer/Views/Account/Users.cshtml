@@ -190,7 +190,7 @@
         //console.log(username);
 
         $('#modalDeleteBody').empty();
-        $('#modalDeleteBody').append('Do you really want to remove "' + username + '" user?');
+        $('#modalDeleteBody').append('Do you really want to remove "' + username.substring(0,100) + '" user?');
 
         var modal = new bootstrap.Modal(document.getElementById('modalDelete'));
         modal.show();
