@@ -70,7 +70,7 @@
                 </td>
                 <td id='key_@product.Id' value='@product.Id'>@product.Key</td>
                 <td>
-                    <button id='copy_@product.Id' data-clipboard-text='@product.Key' title='copy key' type='button' class='btn btn-secondary'>
+                    <button id='copy_@product.Id' onclick="copyToClipboard(`@product.Key`)" title='copy key' type='button' class='btn btn-secondary'>
                         <i class='far fa-copy'></i>
                     </button>
                     <input class="d-none" type='text' id='inputName_@product.Id' value='@product.Name'/>

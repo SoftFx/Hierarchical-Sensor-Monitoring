@@ -366,7 +366,7 @@ function customMenu(node) {
     if (isCurrentUserAdmin === "True")
         return items;
     
-    if (hasUserNodeRights(node)){
+    if (!hasUserNodeRights(node)){
         delete items.RemoveNode;
         delete items.CleanHistory;
     }
