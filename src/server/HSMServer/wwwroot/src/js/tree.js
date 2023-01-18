@@ -200,14 +200,16 @@ function customMenu(node) {
             "separator_after": true,
             "label": "Remove",
             "action": function (obj) {
+                var modal = new bootstrap.Modal(document.getElementById('modalDelete'));
                 //modal
                 $('#modalDeleteLabel').empty();
                 $('#modalDeleteLabel').append('Remove confirmation');
                 $('#modalDeleteBody').empty();
-                $('#modalDeleteBody').append(`Do you really want to remove "${node.text}" ?`);
-
-                var modal = new bootstrap.Modal(document.getElementById('modalDelete'));
-                modal.show();
+                
+                $.when(getCurrentPathRequest(node.id)).done(function(path){
+                    $('#modalDeleteBody').append(`Do you really want to remove ${path} ?`);
+                    modal.show();
+                })
 
                 //modal confirm
                 $('#confirmDeleteButton').off('click').on('click', function () {
@@ -222,7 +224,12 @@ function customMenu(node) {
                         async: true
                     }).done(function () {
                         updateTreeTimer();
-                        showToast(`Node has been removed`);
+                        if(node.children.length === 0){
+                            showToast(`Sensor has been removed`);
+                        }else{
+                            showToast(`Node has been removed`);
+                        }
+                        
                     });
                 });
 
@@ -237,15 +244,17 @@ function customMenu(node) {
             "separator_after": true,
             "label": "Clean history",
             "action": function (obj) {
+                var modal = new bootstrap.Modal(document.getElementById('modalDelete'));
                 //modal
                 $('#modalDeleteLabel').empty();
                 $('#modalDeleteLabel').append('Clean history confirmation');
                 $('#modalDeleteBody').empty();
-                $('#modalDeleteBody').append(`Do you really want to clean history for "${node.text}" ?`);
 
-                var modal = new bootstrap.Modal(document.getElementById('modalDelete'));
-                modal.show();
-
+                $.when(getCurrentPathRequest(node.id)).done(function(path){
+                    $('#modalDeleteBody').append(`Do you really want to clean history for ${path} ?`);
+                    modal.show();
+                })
+                
                 //modal confirm
                 $('#confirmDeleteButton').off('click').on('click', function () {
                     modal.hide();
@@ -259,7 +268,11 @@ function customMenu(node) {
                         async: true
                     }).done(function () {
                         updateTreeTimer();
-                        showToast(`Node has been cleared`);
+                        if(node.children.length === 0){
+                            showToast(`Sensor has been cleared`);
+                        }else{
+                            showToast(`Node has been cleared`);
+                        }
                     });
                 });
 
@@ -405,4 +418,15 @@ function hasUserNodeRights(node) {
         : node.parents[node.parents.length - 2];
 
     return isCurrentUserAdmin === "True" || currentUserProducts.includes(productId);
+}
+
+function getCurrentPathRequest(nodeId){
+    return $.ajax({
+        type: 'POST',
+        url: getPath + '?Selected=' + nodeId,
+        dataType: 'html',
+        contentType: 'application/json',
+        cache: false,
+        async: false
+    });
 }
