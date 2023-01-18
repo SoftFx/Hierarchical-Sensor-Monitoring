@@ -19,31 +19,37 @@
 
 ## Rest API
 
-* Access key has been moved from request Body to Header. **(It's a breaking change)**
-* Old /file request for file sensor with string content has been removed. **(It's a breaking change)**
-* /fileBytes request has been renamed to /file. **(It's a breaking change)**
-* /listNew request has been marked as Obsolete
-* /history and /historyFile requests use async method for getting sensor values history pages (pagination)
+* New endpoint **/timpsan** for TimeSpan sensor data has been added
 
-## Swagger
+## Kestrel
 
-* Swagger has been updated to v3
-* Key is required header field for every request
+* Bulder has been moved to minimal builder architecture (.Net 6+)
+* Appsettings.json has been added for server configuration. The file mounted in Config folder
+* Port settings and Certificate settings have been moved to Appsettings.json
+* Config.xml file has been removed
+
+## Project:
+
+* Target framework has been updated to .Net 7.0
+* Webpack for building client side part of application has been added
+* All js and css libraries has been uploaded
+* Bootstrap has been uploaded to version 5.2
 
 ## Other
 
-* If there is some exception while sending sensor values, log message contains information about request Access Key
 * Bugfixing & optimization
 
 # HSM DataObjects
 
-* Nuget package has been updated to v.3.0.0
-* Obsolete properties and classes have been removed. **(It's a breaking change)**
-* Property 'key' in requests has been marked as Obsolete
-* Property 'value' in FileSensorValue has been redone from byte[] to List<byte>
+* Nuget package has been updated to v.3.0.1
+* New sensor type Timespan has been added
 
 # HSM Datacollector
 
-* Nuget package has been updated to v.3.0.0
-* Using obsolete classes has been removed
-* New API method for creating FileSensorValue from string has been added
+* Nuget package has been updated to v.3.0.1
+* Now datacollector skips bars with Count equals 0
+
+# Docker
+
+* Dockerfile and .dockerignore have been removed (.Net 7 features)
+* Container size has been decreased from 300mb to ~220mb

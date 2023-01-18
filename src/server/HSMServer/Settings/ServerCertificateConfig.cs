@@ -11,9 +11,9 @@ public class ServerCertificateConfig
     private X509Certificate2 _certificate;
 
 
-    public string Name { get; set; }
+    public string Name { get; set; } = string.Empty;
 
-    public string Key { get; set; }
+    public string Key { get; set; } = string.Empty;
     
     [JsonIgnore] 
     public X509Certificate2 Certificate => _certificate ??= GetCertificate();
