@@ -21,6 +21,20 @@
         </div>
     </div>
 </div>
+@if (isProductCrudAllowed)
+{
+    <div class="container row my-1">
+        <div class="col-4 p-0">
+            <input id='createName' placeholder="Product name"  type='text' class='form-control'/>
+            <span class="d-none" id='new_product_name_span'></span>
+        </div>
+        <div class="col">
+            <button id='createButton' type='button' class='btn btn-secondary ms-1' title='create'>
+                <i class='fas fa-plus'></i>
+            </button>
+        </div>
+    </div>
+}
 <div class="col-xxl">
     <table class="table table-striped">
         <thead>
@@ -38,26 +52,6 @@
             </tr>
         </thead>
         <tbody>
-            @if (isProductCrudAllowed)
-            {
-                <tr>
-                    <th>
-                        <input id='createName' type='text' class='form-control'/>
-                        <span class="d-none" id='new_product_name_span'></span>
-                    </th>
-                    <th>---</th>
-                    <th></th>
-                    <th></th>
-                    <th>---</th>
-                    <th>---</th>
-                    <th>
-                        <button id='createButton' type='button' class='btn btn-secondary ms-1' title='create'>
-                            <i class='fas fa-plus'></i>
-                        </button>
-                    </th>
-                    <th></th>
-                </tr>
-            }
             @for (var i = 0; i < Model.Count; i++)
             {
                 var product = Model[i];
