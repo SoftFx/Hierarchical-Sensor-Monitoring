@@ -6,6 +6,10 @@ namespace HSMDataCollector.Core
 {
     public interface IDataCollector : IDisposable
     {
+        IWindowsCollection Windows { get; }
+
+        IUnixCollection Unix { get; }
+
         #region Common methods
 
         /// <summary>

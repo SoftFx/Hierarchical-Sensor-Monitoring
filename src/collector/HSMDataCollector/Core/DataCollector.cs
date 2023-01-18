@@ -1,6 +1,7 @@
 ﻿using HSMDataCollector.Bar;
 using HSMDataCollector.Base;
 using HSMDataCollector.CustomFuncSensor;
+using HSMDataCollector.DefaultSensors;
 using HSMDataCollector.DefaultValueSensor;
 using HSMDataCollector.Exceptions;
 using HSMDataCollector.InstantValue;
@@ -43,10 +44,16 @@ namespace HSMDataCollector.Core
         private readonly ConcurrentDictionary<string, ISensor> _nameToSensor;
         private readonly HttpClient _client;
         private readonly IDataQueue _dataQueue;
+        private readonly DefaultSensorsCollection _defaultSensors;
 
         private NLog.Logger _logger;
         private bool _isStopped;
         private bool _isLogging;
+
+        public IWindowsCollection Windows => _defaultSensors;
+
+        public IUnixCollection Unix => _defaultSensors;
+
 
         public event EventHandler ValuesQueueOverflow;
 
@@ -76,6 +83,9 @@ namespace HSMDataCollector.Core
             _dataQueue.FileReceving += DataQueue_FileReceving;
             _dataQueue.SendValues += DataQueue_SendValues;
             _isStopped = false;
+
+            var sensorsDict = new SensorsStorage(_dataQueue as IValuesQueue);
+            _defaultSensors = new DefaultSensorsCollection(sensorsDict);
         }
 
         /// <summary>
@@ -153,8 +163,23 @@ namespace HSMDataCollector.Core
             StartSystemMonitoring(isCPU, isFreeRam, specificPath);
         }
 
+        [Obsolete()]
         public void InitializeProcessMonitoring(bool isCPU, bool isMemory, bool isThreads, string specificPath = null)
         {
+            if (specificPath == null)
+                specificPath = CurrentProcessNodeName;
+
+            if (_defaultSensors.IsUnixOS)
+            {
+                if (isCPU)
+                    Unix.AddProcessCPUSensor(specificPath);
+            }
+            else
+            {
+                if (isCPU)
+                    Windows.AddProcessCPUSensor(specificPath);
+            }
+
             StartCurrentProcessMonitoring(isCPU, isMemory, isThreads, specificPath);
         }
 

@@ -16,6 +16,8 @@ namespace HSMDataCollector.SensorsFactory
                     return new DoubleSensorValue() { Value = doubleV };
                 case string stringV:
                     return new StringSensorValue() { Value = stringV };
+                case SensorValueBase sensorV:
+                    return sensorV;
                 default:
                     return null;
             }
