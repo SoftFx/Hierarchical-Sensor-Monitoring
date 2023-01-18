@@ -24,80 +24,86 @@
 <div class="col-xxl">
     <table class="table table-striped">
         <thead>
-        <tr>
-            <th scope="col">#</th>
-            <th scope="col">Name</th>
-            <th scope="col">Key</th>
-            <th scope="col" colspan="2"></th>
-            <th scope="col">Creation Date</th>
-            <th scope="col">Manager</th>
-            @if (isProductCrudAllowed || isProductActionAllowed)
-            {
-                <th scope="col">Action</th>
-            }
-            <th></th>
-        </tr>
+            <tr>
+                <th scope="col">#</th>
+                <th scope="col">Name</th>
+                <th scope="col">Key</th>
+                <th scope="col" colspan="2"></th>
+                <th scope="col">Creation Date</th>
+                <th scope="col">Manager</th>
+                @if (isProductCrudAllowed || isProductActionAllowed)
+                {
+                    <th scope="col" class="text-center">Action</th>
+                }
+                <th></th>
+            </tr>
         </thead>
         <tbody>
-        @if (isProductCrudAllowed)
-        {
-            <tr>
-                <th>0</th>
-                <th>
-                    <input id='createName' type='text' class='form-control'/>
-                    <span class="d-none" id='new_product_name_span'></span>
-                </th>
-                <th>---</th>
-                <th></th>
-                <th></th>
-                <th>---</th>
-                <th>---</th>
-                <th>
-                    <button id='createButton' type='button' class='btn btn-secondary ms-1' title='create'>
-                        <i class='fas fa-plus'></i>
-                    </button>
-                </th>
-                <th></th>
-            </tr>
-        }
-        @for (var i = 0; i < Model.Count; i++)
-        {
-            var product = Model[i];
-            <tr>
-                <th scope='row'>@(i + 1)</th>
-                <td>
-                    @Html.Raw(product.Name)
-                </td>
-                <td id='key_@product.Id' value='@product.Id'>@product.Key</td>
-                <td>
-                    <button id='copy_@product.Id' data-clipboard-text='@product.Key' title='copy key' type='button' class='btn btn-secondary'>
-                        <i class='far fa-copy'></i>
-                    </button>
-                    <input class="d-none" type='text' id='inputName_@product.Id' value='@product.Name'/>
-                </td>
-                <td> </td>
-                <td>@product.CreationDate.ToDefaultFormat()</td>
-                <td>@product.ManagerName</td>
-                @if (isProductCrudAllowed || ProductRoleHelper.IsManager(product.Id, user?.ProductsRoles))
-                {
-                    <td>
-                        <button id='change_@product.EncodedId'
-                                type='button' class='btn btn-secondary ms-1' title='edit'>
-                            <i class='fas fa-edit'></i>
+            @if (isProductCrudAllowed)
+            {
+                <tr>
+                    <th>0</th>
+                    <th>
+                        <input id='createName' type='text' class='form-control'/>
+                        <span class="d-none" id='new_product_name_span'></span>
+                    </th>
+                    <th>---</th>
+                    <th></th>
+                    <th></th>
+                    <th>---</th>
+                    <th>---</th>
+                    <th>
+                        <button id='createButton' type='button' class='btn btn-secondary ms-1' title='create'>
+                            <i class='fas fa-plus'></i>
                         </button>
-                    </td>
-                }
-                @if (isProductCrudAllowed)
-                {
+                    </th>
+                    <th></th>
+                </tr>
+            }
+            @for (var i = 0; i < Model.Count; i++)
+            {
+                var product = Model[i];
+                <tr>
+                    <th scope='row'>@(i + 1)</th>
                     <td>
-                        <button id='delete_@product.Id'
-                                type='button' class='btn btn-secondary ms-1' title='delete'>
-                            <i class='fas fa-trash-alt'></i>
-                        </button>
+                        @Html.Raw(product.Name)
                     </td>
-                }
-            </tr>
-        }
+                    <td id='key_@product.Id' value='@product.Id'>@product.Key</td>
+                    <td>
+                        <button id='copy_@product.Id' data-clipboard-text='@product.Key' title='copy key' type='button' class='btn btn-secondary'>
+                            <i class='far fa-copy'></i>
+                        </button>
+                        <input class="d-none" type='text' id='inputName_@product.Id' value='@product.Name'/>
+                    </td>
+                    <td> </td>
+                    <td>@product.CreationDate.ToDefaultFormat()</td>
+                    <td>@product.ManagerName</td>
+                    <td nowrap class="text-center">
+                        <div class='btn-group'>
+                            @if (isProductCrudAllowed || ProductRoleHelper.IsManager(product.Id, user?.ProductsRoles))
+                            {
+                                <i class="fa-solid fa-ellipsis-vertical" id="dropdownMenuButton" style="cursor: pointer" data-bs-toggle="dropdown" data-bs-display="static" aria-haspopup="true" aria-expanded="false"></i>
+                            }
+                            else
+                            {
+                                <i class="fa fa-ellipsis-vertical disabled" style="color: darkgrey" data-bs-toggle="dropdown"></i>
+                            }
+                            <div class='dropdown-menu overflow-auto' aria-labelledby="dropdownMenuButton">
+                                <button id='change_@product.EncodedId' class='dropdown-item'>
+                                    Edit
+                                </button>
+
+                                @if (isProductCrudAllowed)
+                                {
+                                    <button id='delete_@product.Id' class='dropdown-item'>
+                                        Delete
+                                    </button>
+                                }
+                            </div>
+                        </div>
+                    </td>
+                </tr>
+            }
         </tbody>
     </table>
 </div>
