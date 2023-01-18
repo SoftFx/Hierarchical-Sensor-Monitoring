@@ -2,20 +2,9 @@
 
 ## Site
 
-* Tree rendering has been improved
-* All Access keys tables have been improved
-* Logic for Block/Unblock for Access keys has been added
-* Buttons 'Previos page', 'Next page' and number of current page have been added for sensor values history table
-* Limit for getting sensor values history from database has been increased to 50000 values (for graph and table)
-* Real time refreshing for graph and table with sensor values history has been removed
 * Remove for sensors has been added
 * Remove for nodes has been added
 * Toasts for copy logic have been added
-## Core:
-
-* Supporting of old sensor history databases (MonitoringData_ folders) has been removed. **(It's a breaking change)**
-* Supporting of sending sensor values by product ID has been removed. **(It's a breaking change)**
-* Supporting of file sensors with string content has been removed. **(It's a breaking change)**
 
 ## Rest API
 

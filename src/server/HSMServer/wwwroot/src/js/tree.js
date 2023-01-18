@@ -241,8 +241,8 @@ function customMenu(node) {
                 $('#modalDeleteLabel').empty();
                 $('#modalDeleteLabel').append('Clean history confirmation');
                 $('#modalDeleteBody').empty();
-                $('#modalDeleteBody').append(`Do you really want to clean history of "${node.text}" ?`);
-                
+                $('#modalDeleteBody').append(`Do you really want to clean history for "${node.text}" ?`);
+
                 var modal = new bootstrap.Modal(document.getElementById('modalDelete'));
                 modal.show();
 
