@@ -6,7 +6,7 @@ window.bootstrap = bootstrap;
 import 'bootstrap/dist/css/bootstrap.min.css';
 
 window.ClipboardJS = require('clipboard');
-
+bootstrap.Toast.Default.delay = 5000;
 import * as moment from 'moment';
 window.moment = moment;
 

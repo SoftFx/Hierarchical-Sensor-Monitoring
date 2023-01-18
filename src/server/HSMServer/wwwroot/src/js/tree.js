@@ -204,7 +204,20 @@ function customMenu(node) {
                 $('#modalDeleteLabel').empty();
                 $('#modalDeleteLabel').append('Remove confirmation');
                 $('#modalDeleteBody').empty();
-                $('#modalDeleteBody').append(`Do you really want to remove "${node.text}" ?`);
+                
+                let path;
+                $.ajax({
+                    type: 'POST',
+                    url: getPath + '?Selected=' + node.id,
+                    dataType: 'html',
+                    contentType: 'application/json',
+                    cache: false,
+                    async: false
+                }).done(function (data) {
+                    path = data
+                });
+                
+                $('#modalDeleteBody').append(`Do you really want to remove ${path} ?`);
 
                 var modal = new bootstrap.Modal(document.getElementById('modalDelete'));
                 modal.show();
@@ -222,7 +235,12 @@ function customMenu(node) {
                         async: true
                     }).done(function () {
                         updateTreeTimer();
-                        showToast(`Node has been removed`);
+                        if(node.children.length === 0){
+                            showToast(`Sensor has been removed`);
+                        }else{
+                            showToast(`Node has been removed`);
+                        }
+                        
                     });
                 });
 
@@ -241,7 +259,20 @@ function customMenu(node) {
                 $('#modalDeleteLabel').empty();
                 $('#modalDeleteLabel').append('Clean history confirmation');
                 $('#modalDeleteBody').empty();
-                $('#modalDeleteBody').append(`Do you really want to clean history for "${node.text}" ?`);
+
+                let path;
+                $.ajax({
+                    type: 'POST',
+                    url: getPath + '?Selected=' + node.id,
+                    dataType: 'html',
+                    contentType: 'application/json',
+                    cache: false,
+                    async: false
+                }).done(function (data) {
+                    path = data
+                });
+                
+                $('#modalDeleteBody').append(`Do you really want to clean history for ${path} ?`);
 
                 var modal = new bootstrap.Modal(document.getElementById('modalDelete'));
                 modal.show();
@@ -259,7 +290,11 @@ function customMenu(node) {
                         async: true
                     }).done(function () {
                         updateTreeTimer();
-                        showToast(`Node has been cleared`);
+                        if(node.children.length === 0){
+                            showToast(`Sensor has been cleared`);
+                        }else{
+                            showToast(`Node has been cleared`);
+                        }
                     });
                 });
 
