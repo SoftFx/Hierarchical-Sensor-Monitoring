@@ -283,6 +283,8 @@ namespace HSMServer.Core.Cache
 
             foreach (var (sensorId, _) in product.Sensors)
                 RemoveSensor(sensorId);
+            
+            RemoveProduct(product.Id);
         }
         
         public void ClearNodeHistory(Guid productId)
