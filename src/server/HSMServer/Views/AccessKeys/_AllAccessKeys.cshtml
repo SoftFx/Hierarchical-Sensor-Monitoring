@@ -56,7 +56,7 @@
                         </td>
                         <td class="displayName" nowrap>@Html.Raw(key.DisplayName)</td>
                         <td nowrap>
-                            <a role="button" tabindex="0" id="copy_@key.Id" data-clipboard-text="@key.Id" title="copy key" class="link-primary">copy</a>
+                            <a role="button" tabindex="0" id="copy_@key.Id" onclick="copyToClipboard(`@key.Id`)" title="copy key" class="link-primary">copy</a>
                         </td>
                         <td>@key.Permissions</td>
                         <td>@key.AuthorName</td>
@@ -74,14 +74,14 @@
                                     <div class="col-8">
                                         @key.Id
                                     </div>
-                                    <a role="button" id="copy_@key.Id" data-clipboard-text="@key.Id" title="copy key" class="col-1 link-primary mx-5 align-items-end">copy</a>
+                                    <a role="button" id="copy_@key.Id" onclick="copyToClipboard(`@key.Id`)" title="copy key" class="col-1 link-primary mx-5 align-items-end">copy</a>
                                 </div>
                             </td>
                         }
                         else
                         {
                             <td>
-                                <a role="button" id="copy_@key.Id" data-clipboard-text="@key.Id" title="copy key" class="link-primary">copy</a>
+                                <a role="button" id="copy_@key.Id" onclick="copyToClipboard(`@key.Id`)" title="copy key" class="link-primary">copy</a>
                             </td>
                         }
 
@@ -97,29 +97,37 @@
                             <div class='btn-group'>
                                 @if (key.ParentProduct.IsChangingAccessKeysAvailable(user))
                                 {
-                                    <i class="fa-solid fa-ellipsis-vertical" style="cursor: pointer" data-bs-toggle="dropdown"></i>
+                                    <button class="btn" data-bs-toggle="dropdown" data-bs-auto-close="true" aria-haspopup="true" aria-expanded="false">
+                                        <i class="fa-solid fa-ellipsis-vertical" style="cursor: pointer"></i>
+                                    </button>
                                 }
                                 else
                                 {
-                                    <i class="fa fa-ellipsis-vertical disabled" style="color: darkgrey" data-bs-toggle="dropdown"></i>
+                                    <i class="fa fa-ellipsis-vertical disabled" style="color: darkgrey"></i>
                                 }
-                                <div class='dropdown-menu overflow-auto'>
-                                    <button id='changeAccessKey_@key.Id' class='dropdown-item'>Edit</button>
+                                <ul id="dropdown_@key.Id" class='dropdown-menu overflow-auto' aria-labelledby="dropdownMenuButton">
+                                    <li>
+                                        <button id='changeAccessKey_@key.Id' class='dropdown-item'>Edit</button>
+                                    </li>
                                     @if (key.State != KeyState.Expired)
                                     {
-                                        <button id='blockAccessKey_@key.Id' class='dropdown-item'>
-                                            @if (key.State == KeyState.Blocked)
-                                            {
-                                                <span id="state_value_@key.Id">Unblock</span>
-                                            }
-                                            else
-                                            {
-                                                <span id="state_value_@key.Id">Block</span>
-                                            }
-                                        </button>
+                                        <li>
+                                            <button id='blockAccessKey_@key.Id' class='dropdown-item'>
+                                                @if (key.State == KeyState.Blocked)
+                                                {
+                                                    <span id="state_value_@key.Id">Unblock</span>
+                                                }
+                                                else
+                                                {
+                                                    <span id="state_value_@key.Id">Block</span>
+                                                }
+                                            </button>
+                                        </li>
                                     }
-                                    <button id='deleteAccessKey_@key.Id' class='dropdown-item'>Remove</button>
-                                </div>
+                                    <li>
+                                        <button id='deleteAccessKey_@key.Id' class='dropdown-item'>Remove</button>
+                                    </li>
+                                </ul>
                             </div>
                         </td>
                     }

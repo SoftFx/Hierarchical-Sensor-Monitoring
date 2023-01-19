@@ -63,7 +63,7 @@
                         var userItem = Model[i];
                         <tr>
                             <th scope='row'>@(i + 1)</th>
-                            <td>@userItem.Username</td>
+                            <td class="text-break">@userItem.Username.Trim()</td>
                             <td>**************</td>
                             <td>
                                 <input id='isAdmin_@userItem.Username' type='checkbox' class='form-check-input ms-0'
@@ -122,12 +122,12 @@
 
 <div class="modal fade" id="modalDelete" tabindex="-1" aria-labelledby="modalDeleteLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content">
+        <div class="modal-content" style="display: inline-table">
             <div class="modal-header">
                 <h5 class="modal-title" id="modalDeleteLabel">Remove user</h5>
             </div>
 
-            <div id="modalDeleteBody" class="modal-body">
+            <div id="modalDeleteBody" class="modal-body text-nowrap">
 
             </div>
 
@@ -171,7 +171,7 @@
         isAdmin = $('#createIsAdmin').is(":checked");
 
         var data = createData(username, password, role, isAdmin, null);
-        //console.log(data);
+        
         $.ajax({
             type: 'POST',
             url: createAction,
@@ -190,7 +190,7 @@
         //console.log(username);
 
         $('#modalDeleteBody').empty();
-        $('#modalDeleteBody').append('Do you really want to remove "' + username + '" user?');
+        $('#modalDeleteBody').append('Do you really want to remove "' + username.substring(0,100) + '" user?');
 
         var modal = new bootstrap.Modal(document.getElementById('modalDelete'));
         modal.show();
@@ -198,10 +198,14 @@
         //modal confirm
         $('#confirmDeleteButton').on('click', function () {
             modal.hide();
-
+            
+            let data = createData(username)
+            
             $.ajax({//AccountController -> RemoveUser
-                type: 'GET',
-                url: deleteAction + "?Username=" + username,
+                type: 'POST',
+                url: deleteAction,
+                data: JSON.stringify(data),
+                contentType: 'application/json',
                 cache: false,
                 async: true,
                 success: function () {

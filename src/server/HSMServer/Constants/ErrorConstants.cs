@@ -13,6 +13,7 @@
         public const string UsernameNotNull = "Username must be not null.";
         public const string UsernameUnique = "Username must be unique.";
         public const string UsernameLatin = "Username must include latin or numeric characters.";
+        public const string UsernameMaxLength = "Username max lenght is 100 characters";
 
         public const string PasswordMinLength = "Password min lenght is 8 characters.";
         public const string PasswordsEquals = "Password and second password must be equals.";
