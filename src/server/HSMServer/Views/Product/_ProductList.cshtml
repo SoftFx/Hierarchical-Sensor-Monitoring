@@ -52,25 +52,22 @@
             </tr>
         </thead>
         <tbody>
-            @if (isProductCrudAllowed)
-            {
-                <form asp-controller="Product" asp-action="Index">
-                    <tr>
-                        <th colspan="2">
-                            <input id='searchProduct' type='text' class='form-control' name='searchString' value="@ViewBag.ProductName"/>
-                        </th>
-                        <th></th>
-                        <th>---</th>
-                        <th>---</th>
-                        <th class="text-center">
-                            <button type="submit" class="btn btn-secondary">
-                                <i type="button" class="fas fa-search"></i>
-                            </button>
-                        </th>
-                        <th></th>
-                    </tr>
-                </form>
-            }
+            <form asp-controller="Product" asp-action="Index">
+                <tr>
+                    <th colspan="2">
+                        <input id='searchProduct' type='text' class='form-control' name='searchString' value="@ViewBag.ProductName"/>
+                    </th>
+                    <th></th>
+                    <th>---</th>
+                    <th>---</th>
+                    <th class="text-center">
+                        <button type="submit" class="btn btn-secondary">
+                            <i type="button" class="fas fa-search"></i>
+                        </button>
+                    </th>
+                    <th></th>
+                </tr>
+            </form>
             @for (var i = 0; i < Model.Count; i++)
             {
                 var product = Model[i];
