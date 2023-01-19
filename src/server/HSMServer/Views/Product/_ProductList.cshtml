@@ -82,7 +82,16 @@
                         <input class="d-none" type='text' id='inputName_@product.Id' value='@product.Name'/>
                     </td>
                     <td> </td>
-                    <td>@product.LastUpdateDate.ToDefaultFormat()</td>
+                    <td>
+                        @if (product.LastUpdateDate == DateTime.MinValue)
+                        {
+                            @product.CreationDate.ToDefaultFormat()
+                        }
+                        else
+                        {
+                            @product.LastUpdateDate.ToDefaultFormat()
+                        }
+                    </td>
                     <td>@product.ManagerName</td>
                     <td nowrap class="text-center">
                         <div class='btn-group'>
