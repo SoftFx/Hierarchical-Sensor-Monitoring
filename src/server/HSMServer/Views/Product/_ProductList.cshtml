@@ -4,6 +4,7 @@
 @using HSMServer.Extensions
 @using HSMServer.Model.ViewModel
 @model List<ProductViewModel>
+@addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
 
 @{
     var user = Context.User as User;
@@ -25,7 +26,7 @@
 {
     <div class="container row my-1">
         <div class="col-4 p-0">
-            <input id='createName' placeholder="Product name"  type='text' class='form-control'/>
+            <input placeholder="Product name" type='text' class='form-control'/>
             <span class="d-none" id='new_product_name_span'></span>
         </div>
         <div class="col">
@@ -40,7 +41,6 @@
         <thead>
             <tr>
                 <th scope="col">Name</th>
-                <th scope="col">Key</th>
                 <th scope="col" colspan="2"></th>
                 <th scope="col">Creation Date</th>
                 <th scope="col">Manager</th>
@@ -52,6 +52,25 @@
             </tr>
         </thead>
         <tbody>
+            @if (isProductCrudAllowed)
+            {
+                <form asp-controller="Product" asp-action="Index">
+                <tr>
+                    <th colspan="2">
+                        <input id='searchProduct' type='text' class='form-control' name='searchString' value="@ViewBag.ProductName"/>
+                    </th>
+                    <th></th>
+                    <th>---</th>
+                    <th>---</th>
+                    <th class="text-center">
+                        <button type="submit" class="btn btn-secondary">
+                            <i type="button" class="fas fa-search"></i>
+                        </button>
+                    </th>
+                    <th></th>
+                </tr>
+            </form>
+            }
             @for (var i = 0; i < Model.Count; i++)
             {
                 var product = Model[i];
@@ -59,7 +78,7 @@
                     <td>
                         @Html.Raw(product.Name)
                     </td>
-                    <td id='key_@product.Id' value='@product.Id'>@product.Key</td>
+                    @*<td id='key_@product.Id' value='@product.Id'>@product.Key</td>*@
                     <td>
                         <button id='copy_@product.Id' data-clipboard-text='@product.Key' title='copy key' type='button' class='btn btn-secondary'>
                             <i class='far fa-copy'></i>
@@ -104,3 +123,9 @@
         </tbody>
     </table>
 </div>
+
+<script>
+     if (window.history.replaceState) {
+            window.history.replaceState( null, null, window.location.href );
+        }
+</script>

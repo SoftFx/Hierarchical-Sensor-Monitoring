@@ -49,13 +49,15 @@ namespace HSMServer.Controllers
 
         #region Products
 
-        public IActionResult Index()
+        public IActionResult Index(string searchString = "")
         {
+            ViewBag.ProductName = searchString;
+            
             var user = HttpContext.User as User;
 
             var products = _treeViewModel.GetUserProducts(user);
 
-            products = products?.OrderBy(x => x.DisplayName).ToList();
+            products = products?.Where(x => x.DisplayName.Contains(searchString)).OrderBy(x => x.DisplayName.Contains(searchString)).ToList();
 
             var result = products?.Select(x => new ProductViewModel(
                 _userManager.GetManagers(x.Id).FirstOrDefault()?.UserName ?? "---", x)).ToList();
