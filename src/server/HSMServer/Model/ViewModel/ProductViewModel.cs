@@ -17,6 +17,8 @@ namespace HSMServer.Model.ViewModel
         
         public DateTime CreationDate { get; }
         
+        public DateTime LastUpdateDate { get; }
+        
         public string ManagerName { get; }
         
         public ProductViewModel(string manager, ProductModel product)
@@ -26,6 +28,7 @@ namespace HSMServer.Model.ViewModel
             Key = product.AccessKeys.FirstOrDefault().Value?.Id.ToString();
             Name = product.DisplayName;
             CreationDate = product.CreationDate;
+            LastUpdateDate = product.LastUpdateTime;
             ManagerName = manager;
         }
     }

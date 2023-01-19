@@ -42,7 +42,7 @@
             <tr>
                 <th scope="col">Name</th>
                 <th scope="col" colspan="2"></th>
-                <th scope="col">Creation Date</th>
+                <th scope="col">Last Update Date</th>
                 <th scope="col">Manager</th>
                 @if (isProductCrudAllowed || isProductActionAllowed)
                 {
@@ -86,7 +86,7 @@
                         <input class="d-none" type='text' id='inputName_@product.Id' value='@product.Name'/>
                     </td>
                     <td> </td>
-                    <td>@product.CreationDate.ToDefaultFormat()</td>
+                    <td>@product.LastUpdateDate.ToDefaultFormat()</td>
                     <td>@product.ManagerName</td>
                     <td nowrap class="text-center">
                         <div class='btn-group'>

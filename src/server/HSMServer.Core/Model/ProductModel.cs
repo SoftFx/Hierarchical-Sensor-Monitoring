@@ -14,6 +14,8 @@ namespace HSMServer.Core.Model
 
     public sealed class ProductModel : NodeBaseModel, INotificatable
     {
+        public DateTime LastUpdateTime { get; set; }
+        
         public ProductState State { get; }
 
         public ConcurrentDictionary<Guid, AccessKeyModel> AccessKeys { get; }

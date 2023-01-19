@@ -57,11 +57,37 @@ namespace HSMServer.Controllers
 
             var products = _treeViewModel.GetUserProducts(user);
 
-            products = products?.Where(x => x.DisplayName.Contains(searchString)).OrderBy(x => x.DisplayName.Contains(searchString)).ToList();
+            products = products?.Where(x => x.DisplayName.Contains(searchString)).OrderBy(x => x.DisplayName).ToList();
+
+            long GetLastUpdateTime(ProductModel productModel)
+            {
+                if (productModel.SubProducts.IsEmpty)
+                {
+                    return Math.Max(productModel.LastUpdateTime.Ticks ,
+                        productModel.Sensors.IsEmpty ? 0L :
+                        productModel.Sensors.Max(x => x.Value.LastUpdateTime).Ticks);
+                }
+
+                foreach (var product in productModel.SubProducts.Values)
+                {
+                    product.LastUpdateTime = new DateTime( GetLastUpdateTime(product));
+                }
+                
+                
+                return Math.Max(productModel.Sensors.IsEmpty ? 0L : productModel.Sensors.Max(x => x.Value.LastUpdateTime).Ticks,
+                                productModel.SubProducts.IsEmpty ? 0L : productModel.SubProducts.Max(x => x.Value.LastUpdateTime).Ticks);
+            }
+            
+            foreach (var productModel in products)
+            {
+                productModel.LastUpdateTime = new DateTime(GetLastUpdateTime(productModel));
+            }
+            
 
             var result = products?.Select(x => new ProductViewModel(
                 _userManager.GetManagers(x.Id).FirstOrDefault()?.UserName ?? "---", x)).ToList();
-
+            
+            
             return View(result);
         }
 
