@@ -33,3 +33,4 @@ import './js/site.js';
 import './css/site.css';
 import './css/accessKey.css';
 import './css/home.css';
+import './css/product.css';

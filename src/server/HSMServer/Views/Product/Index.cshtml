@@ -12,7 +12,7 @@
 </script>
 
 <div class="container">
-    <div class="row justify-content-center">
+    <div class="row w-100 justify-content-center">
         @await Html.PartialAsync("_ProductList", Model)
         <script>
         let errorText = '@TempData[TextConstants.TempDataErrorText]';

@@ -1,0 +1,15 @@
+
+#productTable td{
+    min-width: 10rem;
+    max-width: 10rem;
+}
+
+#productTable .form-control{
+    border: 0;
+    padding-bottom: 0;
+    border-bottom: solid;
+    border-bottom-color: grey;
+    border-bottom-width: thin;
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+}

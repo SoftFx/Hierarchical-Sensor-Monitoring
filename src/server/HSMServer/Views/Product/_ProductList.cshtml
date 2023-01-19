@@ -18,7 +18,7 @@
             <span style="color: red;font-size: large;font-weight:normal">@TempData[TextConstants.TempDataErrorText].ToString()</span>
         }
         <div class="col-2">
-            <h5 class="mx-4 my-2">Products</h5>
+            <h5 class="my-2">Products</h5>
         </div>
     </div>
 </div>
@@ -26,107 +26,91 @@
 {
     <div class="container row my-1">
         <div class="col-4 p-0">
-            <input id="createName" placeholder="Product name" type='text' class='form-control'/>
+            <input id="createName" placeholder="New product name" type='text' class='form-control'/>
             <span class="d-none" id='new_product_name_span'></span>
         </div>
         <div class="col">
-            <button id='createButton' type='button' class='btn btn-secondary ms-1' title='create'>
+            <button id='createButton' type='button' class='btn btn-secondary ms-1' title='Add new product'>
                 <i class='fas fa-plus'></i>
             </button>
         </div>
     </div>
 }
-<div class="col-xxl">
-    <table class="table table-striped">
-        <thead>
-            <tr>
-                <th scope="col">Name</th>
-                <th scope="col" colspan="2"></th>
-                <th scope="col">Last Update Date</th>
-                <th scope="col">Manager</th>
-                @if (isProductCrudAllowed || isProductActionAllowed)
-                {
-                    <th scope="col" class="text-center">Action</th>
-                }
-                <th></th>
-            </tr>
-        </thead>
-        <tbody>
-            <form asp-controller="Product" asp-action="Index">
+<div class="col-12-xxl">
+    <div class="w-100" id="productTable">
+        <table class="table">
+            <thead>
                 <tr>
-                    <th colspan="2">
-                        <input id='searchProduct' type='text' class='form-control' name='searchString' value="@ViewBag.ProductName"/>
+
+                    <th scope="col">
+                        <form asp-controller="Product" asp-action="Index">
+                            <input placeholder="Name" id='searchProduct' type='text' class='form-control' name='searchString' value="@ViewBag.ProductName"/>
+                        </form>
                     </th>
-                    <th></th>
-                    <th>---</th>
-                    <th>---</th>
-                    <th class="text-center">
-                        <button type="submit" class="btn btn-secondary">
-                            <i type="button" class="fas fa-search"></i>
-                        </button>
+                    <th scope="col">
+                        <input class='form-control' type='text' placeholder="Manager"/>
                     </th>
-                    <th></th>
+                    <th scope="col">Last update</th>
+                    @if (isProductCrudAllowed || isProductActionAllowed)
+                    {
+                        <th scope="col" class="text-center">Actions</th>
+                    }
                 </tr>
-            </form>
-            @for (var i = 0; i < Model.Count; i++)
-            {
-                var product = Model[i];
-                <tr>
-                    <td>
-                        @Html.Raw(product.Name)
-                    </td>
-                    <td>
-                        <button id='copy_@product.Id' onclick="copyToClipboard(`@product.Key`)" title='copy key' type='button' class='btn btn-secondary'>
-                            <i class='far fa-copy'></i>
-                        </button>
-                        <input class="d-none" type='text' id='inputName_@product.Id' value='@product.Name'/>
-                    </td>
-                    <td> </td>
-                    <td>
-                        @if (product.LastUpdateDate == DateTime.MinValue)
-                        {
-                            @product.CreationDate.ToDefaultFormat()
-                        }
-                        else
-                        {
-                            @product.LastUpdateDate.ToDefaultFormat()
-                        }
-                    </td>
-                    <td>@product.ManagerName</td>
-                    <td nowrap class="text-center">
-                        <div class='btn-group'>
-                            @if (isProductCrudAllowed || ProductRoleHelper.IsManager(product.Id, user?.ProductsRoles))
+            </thead>
+            <tbody>
+                @for (var i = 0; i < Model.Count; i++)
+                {
+                    var product = Model[i];
+                    <tr>
+                        <td class="text-break">
+                            @Html.Raw(product.Name)
+                        </td>
+                        <td>@Html.Raw(@product.ManagerName)</td>
+                        <td>
+                            @if (product.LastUpdateDate == DateTime.MinValue)
                             {
-                                <button class="btn" data-bs-toggle="dropdown" data-bs-auto-close="true" aria-haspopup="true" aria-expanded="false">
-                                    <i class="fa-solid fa-ellipsis-vertical" style="cursor: pointer"></i>
-                                </button>
+                                @product.CreationDate.ToDefaultFormat()
                             }
                             else
                             {
-                                <i class="fa fa-ellipsis-vertical disabled" style="color: darkgrey" data-bs-toggle="dropdown"></i>
+                                @product.LastUpdateDate.ToDefaultFormat()
                             }
-                            <ul class='dropdown-menu overflow-auto' aria-labelledby="dropdownMenuButton">
-                                <li>
-                                    <button id='change_@product.EncodedId' class='dropdown-item'>
-                                        Edit
-                                    </button>
-                                </li>
-
-                                @if (isProductCrudAllowed)
+                        </td>
+                        <td nowrap class="text-center">
+                            <div class='btn-group'>
+                                @if (isProductCrudAllowed || ProductRoleHelper.IsManager(product.Id, user?.ProductsRoles))
                                 {
+                                    <button class="btn" data-bs-toggle="dropdown" data-bs-auto-close="true" aria-haspopup="true" aria-expanded="false">
+                                        <i class="fa-solid fa-ellipsis-vertical" style="cursor: pointer"></i>
+                                    </button>
+                                }
+                                else
+                                {
+                                    <i class="fa fa-ellipsis-vertical disabled" style="color: darkgrey" data-bs-toggle="dropdown"></i>
+                                }
+                                <ul class='dropdown-menu overflow-auto' aria-labelledby="dropdownMenuButton">
                                     <li>
-                                        <button id='delete_@product.Id' class='dropdown-item'>
-                                            Delete
+                                        <button id='change_@product.EncodedId' class='dropdown-item'>
+                                            Edit
                                         </button>
                                     </li>
-                                }
-                            </ul>
-                        </div>
-                    </td>
-                </tr>
-            }
-        </tbody>
-    </table>
+
+                                    @if (isProductCrudAllowed)
+                                    {
+                                        <li>
+                                            <button id='delete_@product.Id' class='dropdown-item'>
+                                                Delete
+                                            </button>
+                                        </li>
+                                    }
+                                </ul>
+                            </div>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
 </div>
 
 <script>
