@@ -55,21 +55,21 @@
             @if (isProductCrudAllowed)
             {
                 <form asp-controller="Product" asp-action="Index">
-                <tr>
-                    <th colspan="2">
-                        <input id='searchProduct' type='text' class='form-control' name='searchString' value="@ViewBag.ProductName"/>
-                    </th>
-                    <th></th>
-                    <th>---</th>
-                    <th>---</th>
-                    <th class="text-center">
-                        <button type="submit" class="btn btn-secondary">
-                            <i type="button" class="fas fa-search"></i>
-                        </button>
-                    </th>
-                    <th></th>
-                </tr>
-            </form>
+                    <tr>
+                        <th colspan="2">
+                            <input id='searchProduct' type='text' class='form-control' name='searchString' value="@ViewBag.ProductName"/>
+                        </th>
+                        <th></th>
+                        <th>---</th>
+                        <th>---</th>
+                        <th class="text-center">
+                            <button type="submit" class="btn btn-secondary">
+                                <i type="button" class="fas fa-search"></i>
+                            </button>
+                        </th>
+                        <th></th>
+                    </tr>
+                </form>
             }
             @for (var i = 0; i < Model.Count; i++)
             {
@@ -79,7 +79,7 @@
                         @Html.Raw(product.Name)
                     </td>
                     <td>
-                        <button id='copy_@product.Id' data-clipboard-text='@product.Key' title='copy key' type='button' class='btn btn-secondary'>
+                        <button id='copy_@product.Id' onclick="copyToClipboard(`@product.Key`)" title='copy key' type='button' class='btn btn-secondary'>
                             <i class='far fa-copy'></i>
                         </button>
                         <input class="d-none" type='text' id='inputName_@product.Id' value='@product.Name'/>
