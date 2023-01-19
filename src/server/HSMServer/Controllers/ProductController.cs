@@ -57,36 +57,13 @@ namespace HSMServer.Controllers
 
             var products = _treeViewModel.GetUserProducts(user);
 
-            products = products?.Where(x => x.DisplayName.Contains(searchString)).OrderBy(x => x.DisplayName).ToList();
-
-            long GetLastUpdateTime(ProductModel productModel)
-            {
-                if (productModel.SubProducts.IsEmpty)
-                {
-                    return Math.Max(productModel.LastUpdateTime.Ticks ,
-                        productModel.Sensors.IsEmpty ? 0L :
-                        productModel.Sensors.Max(x => x.Value.LastUpdateTime).Ticks);
-                }
-
-                foreach (var product in productModel.SubProducts.Values)
-                {
-                    product.LastUpdateTime = new DateTime( GetLastUpdateTime(product));
-                }
-                
-                
-                return Math.Max(productModel.Sensors.IsEmpty ? 0L : productModel.Sensors.Max(x => x.Value.LastUpdateTime).Ticks,
-                                productModel.SubProducts.IsEmpty ? 0L : productModel.SubProducts.Max(x => x.Value.LastUpdateTime).Ticks);
-            }
+            products = products?
+                .Where(x => x.DisplayName.Contains(searchString))
+                .Select(GetProductWithLastUpdateTime)
+                .OrderBy(x => x.DisplayName).ToList();
             
-            foreach (var productModel in products)
-            {
-                productModel.LastUpdateTime = new DateTime(GetLastUpdateTime(productModel));
-            }
-            
-
             var result = products?.Select(x => new ProductViewModel(
                 _userManager.GetManagers(x.Id).FirstOrDefault()?.UserName ?? "---", x)).ToList();
-            
             
             return View(result);
         }
@@ -224,6 +201,31 @@ namespace HSMServer.Controllers
 
         #endregion
 
+        private static ProductModel GetProductWithLastUpdateTime(ProductModel productModel)
+        {
+            productModel.LastUpdateDate = new DateTime(GetLastUpdateTicks(productModel));
+            return productModel;
+        }
+        
+        private static long GetLastUpdateTicks(ProductModel productModel)
+        {
+            if (productModel.SubProducts.IsEmpty)
+            {
+                return Math.Max(productModel.LastUpdateDate.Ticks ,
+                    productModel.Sensors.IsEmpty ? 0L :
+                        productModel.Sensors.Max(x => x.Value.LastUpdateTime).Ticks);
+            }
+
+            foreach (var product in productModel.SubProducts.Values)
+            {
+                product.LastUpdateDate = new DateTime( GetLastUpdateTicks(product));
+            }
+                
+                
+            return Math.Max(productModel.Sensors.IsEmpty ? 0L : productModel.Sensors.Max(x => x.Value.LastUpdateTime).Ticks,
+                productModel.SubProducts.IsEmpty ? 0L : productModel.SubProducts.Max(x => x.Value.LastUpdateDate).Ticks);
+        }
+        
         private (string, string, string, string, string) GetMailConfiguration()
         {
             var server = _configurationProvider.ReadOrDefault(ConfigurationConstants.SMTPServer).Value;

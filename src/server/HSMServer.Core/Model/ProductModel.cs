@@ -14,7 +14,7 @@ namespace HSMServer.Core.Model
 
     public sealed class ProductModel : NodeBaseModel, INotificatable
     {
-        public DateTime LastUpdateTime { get; set; }
+        public DateTime LastUpdateDate { get; set; }
         
         public ProductState State { get; }
 

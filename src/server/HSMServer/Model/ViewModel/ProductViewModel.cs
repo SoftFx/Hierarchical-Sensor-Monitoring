@@ -28,7 +28,7 @@ namespace HSMServer.Model.ViewModel
             Key = product.AccessKeys.FirstOrDefault().Value?.Id.ToString();
             Name = product.DisplayName;
             CreationDate = product.CreationDate;
-            LastUpdateDate = product.LastUpdateTime;
+            LastUpdateDate = product.LastUpdateDate;
             ManagerName = manager;
         }
     }
