@@ -1,9 +1,9 @@
-﻿using HSMSensorDataObjects.SensorValueRequests;
+﻿using HSMDataCollector.DefaultSensors.MonitoringSensor;
 using System.Diagnostics;
 
 namespace HSMDataCollector.DefaultSensors.Windows
 {
-    public abstract class WindowsSensorBase : BarMonitoringSensorBase<double, DoubleBarSensorValue>
+    public abstract class WindowsSensorBase : BarMonitoringSensorBase<DoubleMonitoringBar, double>
     {
         private readonly PerformanceCounter _performanceCounter;
 

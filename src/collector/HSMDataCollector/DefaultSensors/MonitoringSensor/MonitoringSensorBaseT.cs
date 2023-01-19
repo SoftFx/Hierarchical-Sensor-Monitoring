@@ -12,7 +12,7 @@ namespace HSMDataCollector.DefaultSensors
 
         protected abstract T GetValue();
 
-        protected sealed override void OnTimerTick(object _)
+        protected override void OnTimerTick(object _ = null)
         {
             try
             {

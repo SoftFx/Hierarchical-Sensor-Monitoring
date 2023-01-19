@@ -1,12 +1,16 @@
-﻿using HSMSensorDataObjects.SensorValueRequests;
+﻿using HSMDataCollector.DefaultSensors.MonitoringSensor;
 using System;
 using System.Threading;
 
 namespace HSMDataCollector.DefaultSensors
 {
-    public abstract class BarMonitoringSensorBase<U, T> : MonitoringSensorBase<T> where T : BarSensorValueBase, new()
+    public abstract class BarMonitoringSensorBase<BarType, T> : MonitoringSensorBase<BarType>
+        where BarType : MonitoringBar<T>, new()
+        where T : struct
     {
         private readonly Timer _collectTimer;
+
+        private BarType _internalBar;
 
 
         internal virtual TimeSpan CollectBarPeriod { get; } = TimeSpan.FromSeconds(5);
@@ -15,6 +19,8 @@ namespace HSMDataCollector.DefaultSensors
         public BarMonitoringSensorBase(string nodePath) : base(nodePath)
         {
             _collectTimer = new Timer(CollectBar, null, Timeout.Infinite, Timeout.Infinite);
+
+            BuildNewBar();
         }
 
 
@@ -33,21 +39,33 @@ namespace HSMDataCollector.DefaultSensors
         }
 
 
-        protected abstract U GetBarData();
+        protected abstract T GetBarData();
 
-        protected sealed override T GetValue()
+        protected sealed override BarType GetValue() => _internalBar.Complete() as BarType;
+
+        protected override void OnTimerTick(object _)
         {
-            var bar = new T();
+            base.OnTimerTick();
 
-            return bar;
+            BuildNewBar();
         }
 
 
         private void CollectBar(object _)
         {
-            var partialValue = GetBarData();
+            try
+            {
+                var partialValue = GetBarData();
 
-            //add partialValue to bar
+                _internalBar.AddValue(partialValue);
+            }
+            catch { }
+        }
+
+        private void BuildNewBar()
+        {
+            _internalBar = new BarType();
+            _internalBar.Init(ReceiveDataPeriod);
         }
     }
 }

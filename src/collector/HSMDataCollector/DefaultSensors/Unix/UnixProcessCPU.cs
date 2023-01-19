@@ -1,9 +1,9 @@
-﻿using HSMSensorDataObjects.SensorValueRequests;
+﻿using HSMDataCollector.DefaultSensors.MonitoringSensor;
 using System.Diagnostics;
 
 namespace HSMDataCollector.DefaultSensors.Unix
 {
-    internal sealed class UnixProcessCPU : BarMonitoringSensorBase<double, DoubleBarSensorValue>
+    internal sealed class UnixProcessCPU : BarMonitoringSensorBase<DoubleMonitoringBar, double>
     {
         internal override string SensorName => "Process CPU";
 

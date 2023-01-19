@@ -43,7 +43,7 @@ namespace HSMDataCollector.DefaultSensors
         }
 
 
-        protected abstract void OnTimerTick(object _);
+        protected abstract void OnTimerTick(object _ = null);
 
         protected void SendCollectedValue(SensorValueBase value) => ReceiveSensorValue?.Invoke(value);
     }
