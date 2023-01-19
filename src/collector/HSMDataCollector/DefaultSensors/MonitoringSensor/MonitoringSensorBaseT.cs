@@ -1,4 +1,7 @@
-﻿using HSMDataCollector.SensorsFactory;
+﻿using HSMDataCollector.Extensions;
+using HSMDataCollector.SensorsFactory;
+using HSMSensorDataObjects;
+using System;
 
 namespace HSMDataCollector.DefaultSensors
 {
@@ -15,11 +18,13 @@ namespace HSMDataCollector.DefaultSensors
             {
                 var value = SensorValuesFactory.BuildValue(GetValue());
 
-                SendCollectedValue(value);
+                SendCollectedValue(value.Complete(SensorPath));
             }
-            catch
+            catch (Exception ex)
             {
+                var value = SensorValuesFactory.BuildValue(default(T));
 
+                SendCollectedValue(value.Complete(SensorPath, SensorStatus.Error, ex.Message));
             }
         }
     }
