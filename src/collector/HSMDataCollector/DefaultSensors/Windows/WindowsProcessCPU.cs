@@ -1,5 +1,4 @@
-﻿using System;
-using System.Diagnostics;
+﻿using System.Diagnostics;
 
 namespace HSMDataCollector.DefaultSensors.Windows
 {
@@ -13,10 +12,6 @@ namespace HSMDataCollector.DefaultSensors.Windows
 
 
         internal override string SensorName => "Process CPU";
-
-        internal override TimeSpan CollectBarPeriod { get; } = TimeSpan.FromSeconds(5);
-
-        internal override TimeSpan ReceiveDataPeriod { get; } = TimeSpan.FromMinutes(5);
 
 
         internal WindowsProcessCPU(string nodePath) : base(nodePath) { }
