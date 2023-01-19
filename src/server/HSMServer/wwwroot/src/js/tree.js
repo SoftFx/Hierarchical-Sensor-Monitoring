@@ -423,7 +423,7 @@ function hasUserNodeRights(node) {
 function getCurrentPathRequest(nodeId){
     return $.ajax({
         type: 'POST',
-        url: getPath + '?Selected=' + nodeId,
+        url: getPath + '?Selected=' + nodeId + '&IsFullPath=true',
         dataType: 'html',
         contentType: 'application/json',
         cache: false,
