@@ -41,14 +41,18 @@
         <table class="table">
             <thead>
                 <tr>
-
                     <th scope="col">
-                        <form asp-controller="Product" asp-action="Index">
+                        <form class="form-floating" asp-controller="Product" asp-action="Index">
                             <input placeholder="Name" id='searchProduct' type='text' class='form-control' name='searchString' value="@ViewBag.ProductName"/>
+                            <label for="searchProduct" >Name</label>
                         </form>
                     </th>
                     <th scope="col">
-                        <input class='form-control' type='text' placeholder="Manager"/>
+                        <form class="form-floating" asp-controller="" asp-action="">
+                            <input id="searchManager" class='form-control' type='text' placeholder="Manager"/>
+                            <label for="searchManager" style="padding-bottom: 1rem" >Manager</label>
+                        </form>
+
                     </th>
                     <th scope="col">Last update</th>
                     @if (isProductCrudAllowed || isProductActionAllowed)

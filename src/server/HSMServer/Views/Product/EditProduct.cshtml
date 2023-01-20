@@ -24,7 +24,7 @@
                 <h5 class="modal-title" id="modalDeleteLabel">Remove user right</h5>
             </div>
 
-            <div id="modalDeleteBody" class="modal-body">
+            <div id="modalDeleteBody" class="modal-body text-break">
 
             </div>
 
@@ -123,7 +123,7 @@
                                 var userRight = Model.UsersRights[i];
                                 <tr>
                                     <th scope='row'>@(i + 1)</th>
-                                    <td>
+                                    <td class="text-break">
                                         @userRight.Item1.Username
                                         <input id='userId_@userRight.Item1.Username' class="d-none" value='@userRight.Item1.UserId'/>
                                     </td>
@@ -346,7 +346,6 @@
         $('#modalDeleteLabel').append('Remove user right');
         $('#modalDeleteBody').empty();
         $('#modalDeleteBody').append('Do you really want to remove "' + username + '" user right?');
-
         var modal = new bootstrap.Modal(document.getElementById('modalDelete'));
         modal.show();
 
