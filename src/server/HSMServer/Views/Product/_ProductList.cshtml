@@ -84,13 +84,10 @@
                             }
                         </td>
                         <td>
-                            @if (product.LastUpdateDate == DateTime.MinValue)
+                            <span title="@product.LastUpdateDate">@product.ShortLastUpdateTime</span>
+                            @if (product.ShortLastUpdateTime.Equals("> a month ago"))
                             {
-                                @product.CreationDate.ToDefaultFormat()
-                            }
-                            else
-                            {
-                                @product.LastUpdateDate.ToDefaultFormat()
+                                <i class="fa fa-exclamation-circle key-icon-expired" title="Sensor update time is greater than 30 days"></i>
                             }
                         </td>
                         <td nowrap class="text-center">
