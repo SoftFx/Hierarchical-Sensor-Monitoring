@@ -1,6 +1,7 @@
 ﻿using HSMServer.Core.Model;
 using HSMServer.Helpers;
 using System;
+using System.Collections.Generic;
 using System.Linq;
 
 namespace HSMServer.Model.ViewModel
@@ -18,10 +19,10 @@ namespace HSMServer.Model.ViewModel
         public DateTime CreationDate { get; }
         
         public DateTime LastUpdateDate { get; }
+
+        public List<string> ManagerNames { get; }
         
-        public string ManagerName { get; }
-        
-        public ProductViewModel(string manager, ProductModel product)
+        public ProductViewModel(List<string> managerNames, ProductModel product)
         {
             Id = product.Id;
             EncodedId = SensorPathHelper.EncodeGuid(product.Id);
@@ -29,7 +30,7 @@ namespace HSMServer.Model.ViewModel
             Name = product.DisplayName;
             CreationDate = product.CreationDate;
             LastUpdateDate = product.LastUpdateDate;
-            ManagerName = manager;
+            ManagerNames = managerNames;
         }
     }
 }

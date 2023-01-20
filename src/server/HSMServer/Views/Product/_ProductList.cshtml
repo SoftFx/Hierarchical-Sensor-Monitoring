@@ -65,7 +65,20 @@
                         <td class="text-break">
                             @Html.Raw(product.Name)
                         </td>
-                        <td>@Html.Raw(@product.ManagerName)</td>
+                        <td class="text-break">
+                            @if (product.ManagerNames.Count == 0)
+                            {
+                                <span>---</span>
+                            }
+                            @for (int j = 0; j < product.ManagerNames.Count; j++)
+                            {
+                                @Html.Raw(product.ManagerNames[j].Trim(' '))
+                                @if (j != product.ManagerNames.Count - 1)
+                                {
+                                    <span>,</span>
+                                }
+                            }
+                        </td>
                         <td>
                             @if (product.LastUpdateDate == DateTime.MinValue)
                             {

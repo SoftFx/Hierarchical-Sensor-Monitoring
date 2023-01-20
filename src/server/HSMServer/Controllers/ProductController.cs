@@ -63,7 +63,7 @@ namespace HSMServer.Controllers
                 .OrderBy(x => x.DisplayName).ToList();
             
             var result = products?.Select(x => new ProductViewModel(
-                _userManager.GetManagers(x.Id).FirstOrDefault()?.UserName ?? "---", x)).ToList();
+                _userManager.GetManagers(x.Id).Select(manager => manager.UserName).ToList(), x)).ToList();
             
             return View(result);
         }
