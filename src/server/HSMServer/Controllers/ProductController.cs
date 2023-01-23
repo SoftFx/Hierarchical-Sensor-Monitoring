@@ -58,7 +58,7 @@ namespace HSMServer.Controllers
             var products = _treeViewModel.GetUserProducts(user);
 
             products = products?
-                .Where(x => x.DisplayName.Contains(searchString))
+                .Where(x => x.DisplayName.Contains(searchString, StringComparison.CurrentCultureIgnoreCase))
                 .Select(GetProductWithLastUpdateTime)
                 .OrderBy(x => x.DisplayName).ToList();
             

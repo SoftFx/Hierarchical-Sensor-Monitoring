@@ -22,9 +22,9 @@ namespace HSMServer.Model.ViewModel
 
         public DateTime LastUpdateDate { get; }
 
-        public List<string> ManagerNames { get; }
+        public List<string> Managers { get; }
 
-        public ProductViewModel(List<string> managerNames, ProductModel product)
+        public ProductViewModel(List<string> managers, ProductModel product)
         {
             Id = product.Id;
             EncodedId = SensorPathHelper.EncodeGuid(product.Id);
@@ -33,7 +33,7 @@ namespace HSMServer.Model.ViewModel
             CreationDate = product.CreationDate;
             LastUpdateDate = product.LastUpdateDate == DateTime.MinValue ? CreationDate : product.LastUpdateDate;
             ShortLastUpdateTime = GetTimeAgo(this);
-            ManagerNames = managerNames;
+            Managers = managers;
         }
 
         private static string GetTimeAgo(ProductViewModel productViewModel)

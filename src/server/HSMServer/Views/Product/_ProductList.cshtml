@@ -1,7 +1,6 @@
 @using HSMServer.Helpers
 @using HSMServer.Model.Authentication
 @using HSMServer.Constants
-@using HSMServer.Extensions
 @using HSMServer.Model.ViewModel
 @model List<ProductViewModel>
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
@@ -49,8 +48,8 @@
                     </th>
                     <th scope="col">
                         <form class="form-floating" asp-controller="" asp-action="">
-                            <input id="searchManager" class='form-control' type='text' placeholder="Manager"/>
-                            <label for="searchManager" style="padding-bottom: 1rem" >Manager</label>
+                            <input id="searchManager" class='form-control' type='text' name="searchManager" placeholder="Manager"/>
+                            <label for="searchManager" style="padding-bottom: 1rem" >Managers</label>
                         </form>
 
                     </th>
@@ -70,14 +69,14 @@
                             @Html.Raw(product.Name)
                         </td>
                         <td class="text-break">
-                            @if (product.ManagerNames.Count == 0)
+                            @if (product.Managers.Count == 0)
                             {
                                 <span>---</span>
                             }
-                            @for (int j = 0; j < product.ManagerNames.Count; j++)
+                            @for (int j = 0; j < product.Managers.Count; j++)
                             {
-                                @Html.Raw(product.ManagerNames[j].Trim(' '))
-                                @if (j != product.ManagerNames.Count - 1)
+                                @Html.Raw(product.Managers[j].Trim(' '))
+                                @if (j != product.Managers.Count - 1)
                                 {
                                     <span>,</span>
                                 }
@@ -94,7 +93,7 @@
                             <div class='btn-group'>
                                 @if (isProductCrudAllowed || ProductRoleHelper.IsManager(product.Id, user?.ProductsRoles))
                                 {
-                                    <button class="btn" data-bs-toggle="dropdown" data-bs-auto-close="true" aria-haspopup="true" aria-expanded="false">
+                                    <button id="actionButton" class="btn" data-bs-toggle="dropdown" data-bs-auto-close="true" aria-haspopup="true" aria-expanded="false">
                                         <i class="fa-solid fa-ellipsis-vertical" style="cursor: pointer"></i>
                                     </button>
                                 }
