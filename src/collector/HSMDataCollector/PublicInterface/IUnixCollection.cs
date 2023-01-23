@@ -7,5 +7,8 @@
         IUnixCollection AddProcessMemorySensor(string nodePath);
 
         IUnixCollection AddProcessThreadCountSensor(string nodePath);
+
+
+        IUnixCollection AddFreeRamMemorySensor(string nodePath);
     }
 }

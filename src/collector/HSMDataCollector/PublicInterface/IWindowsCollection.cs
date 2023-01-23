@@ -7,5 +7,8 @@
         IWindowsCollection AddProcessMemorySensor(string nodePath);
 
         IWindowsCollection AddProcessThreadCountSensor(string nodePath);
+
+
+        IWindowsCollection AddFreeRamMemorySensor(string nodePath);
     }
 }

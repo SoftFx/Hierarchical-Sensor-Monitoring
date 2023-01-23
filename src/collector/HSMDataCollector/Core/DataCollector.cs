@@ -156,8 +156,23 @@ namespace HSMDataCollector.Core
             _logger?.Info("DataCollector successfully stopped.");
         }
 
+        [Obsolete()]
         public void InitializeSystemMonitoring(bool isCPU, bool isFreeRam, string specificPath = null)
         {
+            if (specificPath == null)
+                specificPath = PerformanceNodeName;
+
+            if (_defaultSensors.IsUnixOS)
+            {
+                if (isFreeRam)
+                    Unix.AddFreeRamMemorySensor(specificPath);
+            }
+            else
+            {
+                if (isFreeRam)
+                    Windows.AddFreeRamMemorySensor(specificPath);
+            }
+
             StartSystemMonitoring(isCPU, isFreeRam, specificPath);
         }
 
@@ -492,12 +507,6 @@ namespace HSMDataCollector.Core
             {
                 TotalCPUSensor cpuSensor = new TotalCPUSensor(_dataQueue as IValuesQueue, specificPath);
                 AddNewSensor(cpuSensor, cpuSensor.Path);
-            }
-
-            if (isFreeRam)
-            {
-                FreeMemorySensor freeMemorySensor = new FreeMemorySensor(_dataQueue as IValuesQueue, specificPath);
-                AddNewSensor(freeMemorySensor, freeMemorySensor.Path);
             }
         }
 
