@@ -3,9 +3,11 @@
 @using HSMServer.Controllers
 @using HSMServer.Model.Authentication
 @using HSMServer.Model.AccessKeysViewModels
+@using HSMServer.Notifications
 @using Microsoft.AspNetCore.Mvc.TagHelpers
 @model EditProductViewModel
 
+@inject INotificationsCenter NotificationsCenter
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
 
 @{ ViewData["Title"] = $"Product {Model.ProductName}"; }
@@ -204,8 +206,8 @@
                     <div class="row mx-4 my-1">
                         <ul class="list-group" style="--bs-list-group-border-width: 0">
                             <li class="list-group-item">1. Create group chat in Telegram;</li>
-                            <li class="list-group-item">2. Add Telegram Bot (TGbot_name_configuration) to group chat;</li>
-                            <li class="list-group-item">3. Give Admin right to Telegram Bot (TGbot_name_configuration);</li>
+                            <li class="list-group-item">2. Add Telegram Bot (@NotificationsCenter.TelegramBot.GetBotName()) to group chat;</li>
+                            <li class="list-group-item">3. Give Admin right to Telegram Bot (@NotificationsCenter.TelegramBot.GetBotName());</li>
                             <li class="list-group-item">4. <a href="javascript:getGroupStartCommand()">Copy message</a></li>
                             <li class="list-group-item">5. Send message from clipboard to group chat.</li>
                             <li class="list-group-item">The bot will send a notification that it has been successfully initialized.</li>
