@@ -500,11 +500,6 @@ namespace HSMDataCollector.Core
         private void StartCurrentProcessMonitoring(bool isCPU, bool isMemory, bool isThreads, string specificPath)
         {
             Process currentProcess = Process.GetCurrentProcess();
-            if (isCPU)
-            {
-                ProcessCPUSensor currentCpuSensor = new ProcessCPUSensor(_dataQueue as IValuesQueue, currentProcess.ProcessName, specificPath);
-                AddNewSensor(currentCpuSensor, currentCpuSensor.Path);
-            }
 
             if (isMemory)
             {
