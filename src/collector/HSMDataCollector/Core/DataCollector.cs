@@ -7,7 +7,6 @@ using HSMDataCollector.Exceptions;
 using HSMDataCollector.InstantValue;
 using HSMDataCollector.Logging;
 using HSMDataCollector.PerformanceSensor.Base;
-using HSMDataCollector.PerformanceSensor.ProcessMonitoring;
 using HSMDataCollector.PerformanceSensor.SystemMonitoring;
 using HSMDataCollector.PublicInterface;
 using HSMSensorDataObjects;
@@ -16,7 +15,6 @@ using Newtonsoft.Json;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
@@ -175,6 +173,8 @@ namespace HSMDataCollector.Core
                     Unix.AddProcessCPUSensor(specificPath);
                 if (isMemory)
                     Unix.AddProcessMemorySensor(specificPath);
+                if (isThreads)
+                    Unix.AddProcessThreadCountSensor(specificPath);
             }
             else
             {
@@ -182,9 +182,9 @@ namespace HSMDataCollector.Core
                     Windows.AddProcessCPUSensor(specificPath);
                 if (isMemory)
                     Windows.AddProcessMemorySensor(specificPath);
+                if (isThreads)
+                    Windows.AddProcessThreadCountSensor(specificPath);
             }
-
-            StartCurrentProcessMonitoring(isCPU, isMemory, isThreads, specificPath);
         }
 
         [Obsolete("Method has no implementation")]
@@ -498,17 +498,6 @@ namespace HSMDataCollector.Core
             {
                 FreeMemorySensor freeMemorySensor = new FreeMemorySensor(_dataQueue as IValuesQueue, specificPath);
                 AddNewSensor(freeMemorySensor, freeMemorySensor.Path);
-            }
-        }
-
-        private void StartCurrentProcessMonitoring(bool isCPU, bool isMemory, bool isThreads, string specificPath)
-        {
-            Process currentProcess = Process.GetCurrentProcess();
-
-            if (isThreads)
-            {
-                ProcessThreadCountSensor currentThreadCount = new ProcessThreadCountSensor(_dataQueue as IValuesQueue, currentProcess.ProcessName, specificPath);
-                AddNewSensor(currentThreadCount, currentThreadCount.Path);
             }
         }
 

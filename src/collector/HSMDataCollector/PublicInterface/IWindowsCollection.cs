@@ -5,5 +5,7 @@
         IWindowsCollection AddProcessCPUSensor(string nodePath);
 
         IWindowsCollection AddProcessMemorySensor(string nodePath);
+
+        IWindowsCollection AddProcessThreadCountSensor(string nodePath);
     }
 }
