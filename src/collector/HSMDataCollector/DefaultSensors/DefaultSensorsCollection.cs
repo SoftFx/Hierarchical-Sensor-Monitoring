@@ -51,6 +51,14 @@ namespace HSMDataCollector.DefaultSensors
             return Register(new WindowsProcessThreadCount(nodePath));
         }
 
+        IWindowsCollection IWindowsCollection.AddTotalCpuSensor(string nodePath)
+        {
+            if (IsUnixOS)
+                throw new NotSupportedException(NotSupportedSensor);
+
+            return Register(new WindowsTotalCpu(nodePath));
+        }
+
         IWindowsCollection IWindowsCollection.AddFreeRamMemorySensor(string nodePath)
         {
             if (IsUnixOS)

@@ -7,7 +7,6 @@ using HSMDataCollector.Exceptions;
 using HSMDataCollector.InstantValue;
 using HSMDataCollector.Logging;
 using HSMDataCollector.PerformanceSensor.Base;
-using HSMDataCollector.PerformanceSensor.SystemMonitoring;
 using HSMDataCollector.PublicInterface;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.SensorValueRequests;
@@ -169,11 +168,11 @@ namespace HSMDataCollector.Core
             }
             else
             {
+                if (isCPU)
+                    Windows.AddTotalCpuSensor(specificPath);
                 if (isFreeRam)
                     Windows.AddFreeRamMemorySensor(specificPath);
             }
-
-            StartSystemMonitoring(isCPU, isFreeRam, specificPath);
         }
 
         [Obsolete()]
@@ -500,15 +499,6 @@ namespace HSMDataCollector.Core
         }
 
         #endregion
-
-        private void StartSystemMonitoring(bool isCPU, bool isFreeRam, string specificPath)
-        {
-            if (isCPU)
-            {
-                TotalCPUSensor cpuSensor = new TotalCPUSensor(_dataQueue as IValuesQueue, specificPath);
-                AddNewSensor(cpuSensor, cpuSensor.Path);
-            }
-        }
 
         private SensorBase GetExistingSensor(string path)
         {
