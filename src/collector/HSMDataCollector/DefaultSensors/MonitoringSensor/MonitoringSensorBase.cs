@@ -4,7 +4,7 @@ using System.Threading;
 
 namespace HSMDataCollector.DefaultSensors
 {
-    public abstract class MonitoringSensorBase
+    public abstract class MonitoringSensorBase : IDisposable
     {
         private readonly string _nodePath;
         private readonly Timer _sendTimer;
@@ -25,15 +25,16 @@ namespace HSMDataCollector.DefaultSensors
         {
             _nodePath = nodePath;
             _sendTimer = new Timer(OnTimerTick, null, Timeout.Infinite, Timeout.Infinite);
-
-            Start();
         }
 
 
-        internal virtual void Start()
+        public void Dispose()
         {
             Stop();
+        }
 
+        internal virtual void Start()
+        {
             _sendTimer.Change(ReceiveDataPeriod, ReceiveDataPeriod);
         }
 

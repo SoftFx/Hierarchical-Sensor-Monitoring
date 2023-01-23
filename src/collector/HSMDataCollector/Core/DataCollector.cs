@@ -229,7 +229,7 @@ namespace HSMDataCollector.Core
             return true;
         }
 
-        public bool IsSensorExists(string path) => _nameToSensor.ContainsKey(path);
+        public bool IsSensorExists(string path) => _nameToSensor.ContainsKey(path) || _defaultSensors.IsSensorExists(path);
 
         #region Generic sensors functionality
 

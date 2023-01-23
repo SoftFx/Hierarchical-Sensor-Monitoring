@@ -24,6 +24,9 @@ namespace HSMDataCollector.DefaultSensors
         }
 
 
+        internal bool IsSensorExists(string path) => _storage.ContainsKey(path);
+
+
         IWindowsCollection IWindowsCollection.AddProcessCPUSensor(string nodePath)
         {
             if (IsUnixOS)
