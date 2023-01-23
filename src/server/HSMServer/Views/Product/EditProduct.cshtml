@@ -202,11 +202,14 @@
                     </div>
     
                     <div class="row mx-4 my-1">
-                        <label class="col-auto p-0">If you want to start getting messages in telegram group</label>
-                        <div class="col-auto">
-                            <a href="javascript:getGroupStartCommand()">copy message</a>
-                        </div>
-                        <label class="col-auto p-0">and send it in your telegram group. (Telegram bot should be added in the group and has admin rights)</label>
+                        <ul class="list-group">
+                            <li class="list-group-item">1. Create group chat in Telegram;</li>
+                            <li class="list-group-item">2. Add Telegram Bot (TGbot_name_configuration) to group chat;</li>
+                            <li class="list-group-item">3. Give Admin right to Telegram Bot (TGbot_name_configuration);</li>
+                            <li class="list-group-item">4. <a href="javascript:getGroupStartCommand()">Copy message</a></li>
+                            <li class="list-group-item">5. Send message from clipboard to group chat.</li>
+                            <li class="list-group-item">The bot will send a notification that it has been successfully initialized.</li>
+                        </ul>
                     </div>
                     @if (Model.Telegram.Chats.Count > 0)
                     {
