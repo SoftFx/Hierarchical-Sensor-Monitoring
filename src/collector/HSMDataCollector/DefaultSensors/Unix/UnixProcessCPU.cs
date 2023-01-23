@@ -3,12 +3,12 @@ using System.Diagnostics;
 
 namespace HSMDataCollector.DefaultSensors.Unix
 {
-    internal sealed class UnixProcessCPU : BarMonitoringSensorBase<DoubleMonitoringBar, double>
+    internal sealed class UnixProcessCpu : BarMonitoringSensorBase<DoubleMonitoringBar, double>
     {
         internal override string SensorName => "Process CPU";
 
 
-        internal UnixProcessCPU(string nodePath) : base(nodePath) { }
+        internal UnixProcessCpu(string nodePath) : base(nodePath) { }
 
 
         protected override double GetBarData()

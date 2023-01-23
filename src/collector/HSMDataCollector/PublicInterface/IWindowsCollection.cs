@@ -2,7 +2,7 @@
 {
     public interface IWindowsCollection
     {
-        IWindowsCollection AddProcessCPUSensor(string nodePath);
+        IWindowsCollection AddProcessCpuSensor(string nodePath);
 
         IWindowsCollection AddProcessMemorySensor(string nodePath);
 

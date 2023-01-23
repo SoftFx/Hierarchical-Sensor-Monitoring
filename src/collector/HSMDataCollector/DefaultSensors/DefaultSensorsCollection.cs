@@ -27,12 +27,12 @@ namespace HSMDataCollector.DefaultSensors
         internal bool IsSensorExists(string path) => _storage.ContainsKey(path);
 
 
-        IWindowsCollection IWindowsCollection.AddProcessCPUSensor(string nodePath)
+        IWindowsCollection IWindowsCollection.AddProcessCpuSensor(string nodePath)
         {
             if (IsUnixOS)
                 throw new NotSupportedException(NotSupportedSensor);
 
-            return Register(new WindowsProcessCPU(nodePath));
+            return Register(new WindowsProcessCpu(nodePath));
         }
 
         IWindowsCollection IWindowsCollection.AddProcessMemorySensor(string nodePath)
@@ -68,12 +68,12 @@ namespace HSMDataCollector.DefaultSensors
         }
 
 
-        IUnixCollection IUnixCollection.AddProcessCPUSensor(string nodePath)
+        IUnixCollection IUnixCollection.AddProcessCpuSensor(string nodePath)
         {
             if (!IsUnixOS)
                 throw new NotSupportedException(NotSupportedSensor);
 
-            return Register(new UnixProcessCPU(nodePath));
+            return Register(new UnixProcessCpu(nodePath));
         }
 
         IUnixCollection IUnixCollection.AddProcessMemorySensor(string nodePath)
@@ -90,14 +90,6 @@ namespace HSMDataCollector.DefaultSensors
                 throw new NotSupportedException(NotSupportedSensor);
 
             return Register(new UnixProcessThreadCount(nodePath));
-        }
-
-        IUnixCollection IUnixCollection.AddFreeRamMemorySensor(string nodePath)
-        {
-            if (!IsUnixOS)
-                throw new NotSupportedException(NotSupportedSensor);
-
-            return Register(new UnixFreeRamMemory(nodePath));
         }
 
 

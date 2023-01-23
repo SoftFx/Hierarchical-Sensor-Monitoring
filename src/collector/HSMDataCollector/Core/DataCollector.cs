@@ -6,7 +6,6 @@ using HSMDataCollector.DefaultValueSensor;
 using HSMDataCollector.Exceptions;
 using HSMDataCollector.InstantValue;
 using HSMDataCollector.Logging;
-using HSMDataCollector.PerformanceSensor.Base;
 using HSMDataCollector.PublicInterface;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.SensorValueRequests;
@@ -161,12 +160,7 @@ namespace HSMDataCollector.Core
             if (specificPath == null)
                 specificPath = PerformanceNodeName;
 
-            if (_defaultSensors.IsUnixOS)
-            {
-                if (isFreeRam)
-                    Unix.AddFreeRamMemorySensor(specificPath);
-            }
-            else
+            if (!_defaultSensors.IsUnixOS)
             {
                 if (isCPU)
                     Windows.AddTotalCpuSensor(specificPath);
@@ -184,7 +178,7 @@ namespace HSMDataCollector.Core
             if (_defaultSensors.IsUnixOS)
             {
                 if (isCPU)
-                    Unix.AddProcessCPUSensor(specificPath);
+                    Unix.AddProcessCpuSensor(specificPath);
                 if (isMemory)
                     Unix.AddProcessMemorySensor(specificPath);
                 if (isThreads)
@@ -193,7 +187,7 @@ namespace HSMDataCollector.Core
             else
             {
                 if (isCPU)
-                    Windows.AddProcessCPUSensor(specificPath);
+                    Windows.AddProcessCpuSensor(specificPath);
                 if (isMemory)
                     Windows.AddProcessMemorySensor(specificPath);
                 if (isThreads)
@@ -502,18 +496,18 @@ namespace HSMDataCollector.Core
 
         private SensorBase GetExistingSensor(string path)
         {
-            SensorBase sensor = null;
-            if (_nameToSensor.TryGetValue(path, out var readValue))
-                sensor = readValue as SensorBase;
-
-            if (sensor == null && (sensor as IPerformanceSensor) != null)
+            if (_defaultSensors.IsSensorExists(path))
             {
                 var message = $"Path {path} is used by standard performance sensor!";
                 _logger?.Error(message);
+
                 throw new InvalidSensorPathException(message);
             }
 
-            return sensor;
+            if (_nameToSensor.TryGetValue(path, out var readValue))
+                return readValue as SensorBase;
+
+            return null;
         }
 
         private void AddNewSensor(ISensor sensor, string path)
