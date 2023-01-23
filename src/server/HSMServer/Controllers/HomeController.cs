@@ -177,14 +177,14 @@ namespace HSMServer.Controllers
         }
 
         [HttpPost]
-        public string GetPath([FromQuery(Name = "Selected")] string selectedId)
+        public string GetPath([FromQuery(Name = "Selected")] string selectedId, [FromQuery(Name ="IsFullPath")] bool isFullPath)
         {
             var decodedId = SensorPathHelper.DecodeGuid(selectedId);
 
             if (_treeViewModel.Nodes.TryGetValue(decodedId, out var node))
-                return node.Path;
+                return isFullPath ? $"{node.Product}{node.Path}" : node.Path;
             else if (_treeViewModel.Sensors.TryGetValue(decodedId, out var sensor))
-                return sensor.Path;
+                return isFullPath ? $"{sensor.Product}{sensor.Path}" : sensor.Path;
 
             return string.Empty;
         }
