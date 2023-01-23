@@ -8,7 +8,7 @@ namespace HSMDataCollector.DefaultSensors.MonitoringSensor
 {
     public abstract class MonitoringBar<T> : BarSensorValueBase<T>
     {
-        protected readonly List<T> _barValues = new List<T>();
+        protected readonly List<T> _barValues = new List<T>(1 << 6);
 
 
         internal void Init(TimeSpan timerPeriod)

@@ -6,8 +6,6 @@
 
         protected override string CounterName => "Available MBytes";
 
-        protected override string InstanceName { get; }
-
 
         internal override string SensorName => "Free memory MB";
 

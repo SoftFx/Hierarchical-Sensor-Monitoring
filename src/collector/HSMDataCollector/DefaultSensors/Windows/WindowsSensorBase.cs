@@ -12,7 +12,7 @@ namespace HSMDataCollector.DefaultSensors.Windows
 
         protected abstract string CounterName { get; }
 
-        protected abstract string InstanceName { get; }
+        protected virtual string InstanceName { get; }
 
 
         internal WindowsSensorBase(string nodePath) : base(nodePath)

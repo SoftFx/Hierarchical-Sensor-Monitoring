@@ -9,17 +9,17 @@ namespace HSMDataCollector.Core
     {
         private const int MaxSensorValueStringLength = 1024;
 
+        private readonly TimeSpan _packageSendingPeriod;
         private readonly int _maxQueueSize;
         private readonly int _maxValuesInPackage;
-        private readonly TimeSpan _packageSendingPeriod;
 
         private readonly Queue<SensorValueBase> _valuesQueue;
         private readonly List<SensorValueBase> _failedList;
         private readonly object _lockObj;
         private readonly object _listLock;
 
-        private int _internalCount = 0;
         private Timer _sendTimer;
+        private int _internalCount = 0;
         private bool _hasFailedData;
 
         public bool Disposed { get; private set; }

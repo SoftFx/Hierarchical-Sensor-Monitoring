@@ -2,10 +2,10 @@
 {
     public interface IUnixCollection
     {
-        IUnixCollection AddProcessCpuSensor(string nodePath);
+        IUnixCollection AddProcessCpuSensor(string nodePath = null);
 
-        IUnixCollection AddProcessMemorySensor(string nodePath);
+        IUnixCollection AddProcessMemorySensor(string nodePath = null);
 
-        IUnixCollection AddProcessThreadCountSensor(string nodePath);
+        IUnixCollection AddProcessThreadCountSensor(string nodePath = null);
     }
 }
