@@ -1,8 +1,8 @@
-﻿using HSMServer.Core.Model;
-using HSMServer.Helpers;
+﻿using HSMServer.Helpers;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using HSMServer.Model.TreeViewModels;
 
 namespace HSMServer.Model.ViewModel
 {
@@ -24,14 +24,13 @@ namespace HSMServer.Model.ViewModel
 
         public List<string> Managers { get; }
 
-        public ProductViewModel(List<string> managers, ProductModel product)
+        public ProductViewModel(List<string> managers, ProductNodeViewModel product)
         {
             Id = product.Id;
             EncodedId = SensorPathHelper.EncodeGuid(product.Id);
             Key = product.AccessKeys.FirstOrDefault().Value?.Id.ToString();
-            Name = product.DisplayName;
-            CreationDate = product.CreationDate;
-            LastUpdateDate = product.LastUpdateDate == DateTime.MinValue ? CreationDate : product.LastUpdateDate;
+            Name = product.Name;
+            LastUpdateDate = product.UpdateTime == DateTime.MinValue ? CreationDate : product.UpdateTime;
             ShortLastUpdateTime = GetTimeAgo(this);
             Managers = managers;
         }

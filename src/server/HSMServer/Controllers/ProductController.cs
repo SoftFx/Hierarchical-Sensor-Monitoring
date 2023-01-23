@@ -54,15 +54,13 @@ namespace HSMServer.Controllers
             ViewBag.ProductName = searchString;
             
             var user = HttpContext.User as User;
-
-            var products = _treeViewModel.GetUserProducts(user);
-
-            products = products?
-                .Where(x => x.DisplayName.Contains(searchString, StringComparison.CurrentCultureIgnoreCase))
-                .Select(GetProductWithLastUpdateTime)
-                .OrderBy(x => x.DisplayName).ToList();
+            var productsV2 = _treeViewModel.Nodes
+                .Where(x => user.IsProductAvailable(x.Key) && x.Value.Parent is null)
+                .Where(x => x.Value.Name.Contains(searchString, StringComparison.CurrentCultureIgnoreCase))
+                .OrderBy(x => x.Value.Name)
+                .Select(x => x.Value).ToList();
             
-            var result = products?.Select(x => new ProductViewModel(
+            var result = productsV2?.Select(x => new ProductViewModel(
                 _userManager.GetManagers(x.Id).Select(manager => manager.UserName).ToList(), x)).ToList();
             
             return View(result);
