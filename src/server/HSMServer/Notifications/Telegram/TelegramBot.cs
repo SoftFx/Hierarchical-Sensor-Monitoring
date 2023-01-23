@@ -80,6 +80,8 @@ namespace HSMServer.Notifications
             return link.InviteLink;
         }
 
+        internal string GetBotName() => BotName;
+        
         internal void RemoveOldInvitationTokens() => _addressBook.RemoveOldTokens();
 
         internal void RemoveChat(INotificatable entity, long chatId)
