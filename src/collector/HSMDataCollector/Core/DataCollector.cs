@@ -173,11 +173,15 @@ namespace HSMDataCollector.Core
             {
                 if (isCPU)
                     Unix.AddProcessCPUSensor(specificPath);
+                if (isMemory)
+                    Unix.AddProcessMemorySensor(specificPath);
             }
             else
             {
                 if (isCPU)
                     Windows.AddProcessCPUSensor(specificPath);
+                if (isMemory)
+                    Windows.AddProcessMemorySensor(specificPath);
             }
 
             StartCurrentProcessMonitoring(isCPU, isMemory, isThreads, specificPath);
@@ -500,12 +504,6 @@ namespace HSMDataCollector.Core
         private void StartCurrentProcessMonitoring(bool isCPU, bool isMemory, bool isThreads, string specificPath)
         {
             Process currentProcess = Process.GetCurrentProcess();
-
-            if (isMemory)
-            {
-                ProcessMemorySensor currentMemorySensor = new ProcessMemorySensor(_dataQueue as IValuesQueue, currentProcess.ProcessName, specificPath);
-                AddNewSensor(currentMemorySensor, currentMemorySensor.Path);
-            }
 
             if (isThreads)
             {
