@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using HSMServer.Authentication;
 using HSMServer.Extensions;
 using HSMServer.Model.TreeViewModels;
 
@@ -25,7 +26,7 @@ namespace HSMServer.Model.ViewModel
 
         public List<string> Managers { get; }
 
-        public ProductViewModel(List<string> managers, ProductNodeViewModel product)
+        public ProductViewModel( ProductNodeViewModel product, IUserManager userManager)
         {
             Id = product.Id;
             EncodedId = SensorPathHelper.EncodeGuid(product.Id);
@@ -33,7 +34,7 @@ namespace HSMServer.Model.ViewModel
             Name = product.Name;
             LastUpdateDate = product.UpdateTime;
             ShortLastUpdateTime = LastUpdateDate.GetStaticTimeAgo();
-            Managers = managers;
+            Managers = userManager.GetManagers(Id).Select(manager => manager.UserName).ToList();
         }
     }
 }

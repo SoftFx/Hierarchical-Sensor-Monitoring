@@ -57,12 +57,16 @@ namespace HSMServer.Controllers
             var user = HttpContext.User as User;
             
             var result = _treeViewModel.GetUserProducts(user)
-                .Where(x => x.Name.Contains(searchProductName, StringComparison.CurrentCultureIgnoreCase))
                 .OrderBy(x => x.Name)
-                .Select(x => new ProductViewModel(
-                _userManager.GetManagers(x.Id).Select(manager => manager.UserName).ToList(), x)).ToList();
+                .Select(x => new ProductViewModel(x, _userManager));
+
+            if (!string.IsNullOrEmpty(searchProductName))
+                result = result.Where(x => x.Name.Contains(searchProductName, StringComparison.CurrentCultureIgnoreCase));
             
-            return View(result.Where(x =>searchProductManager == string.Empty || x.Managers.Any(y => y.Contains(searchProductManager))).ToList());
+            if (!string.IsNullOrEmpty(searchProductManager))
+                result = result.Where(x => x.Managers.Any(y => y.Contains(searchProductManager)));
+            
+            return View(result.ToList());
         }
 
         public void CreateProduct([FromQuery(Name = "Product")] string productName)
