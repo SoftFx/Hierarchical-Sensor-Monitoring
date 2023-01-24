@@ -27,3 +27,14 @@
     transform-origin: 0 -4rem;
     padding: 0;
 }
+.settingsList{
+    --bs-list-group-border-width: 0;
+}
+
+.settingsList > li{
+    color: grey;
+}
+
+.settingsList > li > a:link{
+    color: cadetblue;
+}
