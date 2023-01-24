@@ -29,6 +29,7 @@
 }
 .settingsList{
     --bs-list-group-border-width: 0;
+    line-height: 0.75rem;
 }
 
 .settingsList > li{
