@@ -37,92 +37,96 @@
 }
 <div class="col-12-xxl">
     <div class="w-100" id="productTable">
-        <table class="table">
-            <thead>
-                <tr>
-                    <th scope="col">
-                        <form class="form-floating" asp-controller="Product" asp-action="Index">
-                            <input placeholder="Name" id='searchProduct' type='text' class='form-control' name='searchString' value="@ViewBag.ProductName"/>
-                            <label for="searchProduct">Name</label>
-                        </form>
-                    </th>
-                    <th scope="col">
-                        <form class="form-floating" asp-controller="" asp-action="">
-                            <input id="searchManager" class='form-control' type='text' name="searchManager" placeholder="Manager"/>
-                            <label for="searchManager">Managers</label>
-                        </form>
-
-                    </th>
-                    <th scope="col">Last update</th>
-                    @if (isProductCrudAllowed || isProductActionAllowed)
-                    {
-                        <th scope="col" class="text-center">Actions</th>
-                    }
-                </tr>
-            </thead>
-            <tbody>
-                @for (var i = 0; i < Model.Count; i++)
-                {
-                    var product = Model[i];
+        <form asp-controller="Product" asp-action="Index">
+            <table class="table">
+                <thead>
                     <tr>
-                        <td class="text-break">
-                            @Html.Raw(product.Name)
-                        </td>
-                        <td class="text-break">
-                            @if (product.Managers.Count == 0)
-                            {
-                                <span>---</span>
-                            }
-                            @for (int j = 0; j < product.Managers.Count; j++)
-                            {
-                                @Html.Raw(product.Managers[j].Trim(' '))
-                                @if (j != product.Managers.Count - 1)
-                                {
-                                    <span>,</span>
-                                }
-                            }
-                        </td>
-                        <td>
-                            <span title="@product.LastUpdateDate">@product.ShortLastUpdateTime</span>
-                            @if (product.ShortLastUpdateTime.Equals("> a month ago"))
-                            {
-                                <i class="fa fa-exclamation-circle key-icon-expired" title="Sensor update time is greater than 30 days"></i>
-                            }
-                        </td>
-                        <td nowrap class="text-center">
-                            <div class='btn-group'>
-                                @if (isProductCrudAllowed || ProductRoleHelper.IsManager(product.Id, user?.ProductsRoles))
-                                {
-                                    <button id="actionButton" class="btn" data-bs-toggle="dropdown" data-bs-auto-close="true" aria-haspopup="true" aria-expanded="false">
-                                        <i class="fa-solid fa-ellipsis-vertical" style="cursor: pointer"></i>
-                                    </button>
-                                }
-                                else
-                                {
-                                    <i class="fa fa-ellipsis-vertical disabled" style="color: darkgrey" data-bs-toggle="dropdown"></i>
-                                }
-                                <ul class='dropdown-menu overflow-auto' aria-labelledby="dropdownMenuButton">
-                                    <li>
-                                        <button id='change_@product.EncodedId' class='dropdown-item'>
-                                            Edit
-                                        </button>
-                                    </li>
-
-                                    @if (isProductCrudAllowed)
-                                    {
-                                        <li>
-                                            <button id='delete_@product.Id' class='dropdown-item'>
-                                                Delete
-                                            </button>
-                                        </li>
-                                    }
-                                </ul>
+                        <th scope="col">
+                            <div class="form-floating">
+                                <input placeholder="Name" id='searchProduct' type='text' class='form-control' name='searchProductName' value="@ViewBag.ProductName"/>
+                                <label for="searchProduct">Name</label>
                             </div>
-                        </td>
+                        </th>
+                        <th class="form-floating" scope="col">
+                            <div class="form-floating">
+                                <input id="searchManager" class='form-control' type='text' name="searchProductManager" placeholder="Manager" value="@ViewBag.ProductManager"/>
+                                <label for="searchManager">Managers</label>
+                            </div>
+                        </th>
+                        <button class="d-none" type="submit"></button>
+                        <th scope="col">Last update</th>
+                        @if (isProductCrudAllowed || isProductActionAllowed)
+                        {
+                            <th scope="col" class="text-center">Actions</th>
+                        }
                     </tr>
-                }
-            </tbody>
-        </table>
+                </thead>
+                <tbody>
+                    @for (var i = 0; i < Model.Count; i++)
+                    {
+                        var product = Model[i];
+                        <tr>
+                            <td class="text-break">
+                                <a id="inputName_@product.Id" asp-controller="Product" asp-action="EditProduct" asp-route-Product="@product.EncodedId">
+                                    @Html.Raw(product.Name)
+                                </a>
+                            </td>
+                            <td class="text-break">
+                                @if (product.Managers.Count == 0)
+                                {
+                                    <span>---</span>
+                                }
+                                @for (int j = 0; j < product.Managers.Count; j++)
+                                {
+                                    @Html.Raw(product.Managers[j].Trim(' '))
+                                    @if (j != product.Managers.Count - 1)
+                                    {
+                                        <span>,</span>
+                                    }
+                                }
+                            </td>
+                            <td>
+                                <span title="@product.LastUpdateDate">@product.ShortLastUpdateTime</span>
+                                @if (product.ShortLastUpdateTime.Equals("> a month ago"))
+                                {
+                                    <i class="fa fa-exclamation-circle key-icon-expired" title="Sensor update time is greater than 30 days"></i>
+                                }
+                            </td>
+                            <td nowrap class="text-center">
+                                <div class='btn-group'>
+                                    @if (isProductCrudAllowed || ProductRoleHelper.IsManager(product.Id, user?.ProductsRoles))
+                                    {
+                                        <button id="actionButton" class="btn" data-bs-toggle="dropdown" data-bs-auto-close="true" aria-haspopup="true" aria-expanded="false">
+                                            <i class="fa-solid fa-ellipsis-vertical" style="cursor: pointer"></i>
+                                        </button>
+                                    }
+                                    else
+                                    {
+                                        <i class="fa fa-ellipsis-vertical disabled" style="color: darkgrey" data-bs-toggle="dropdown"></i>
+                                    }
+                                    <ul class='dropdown-menu overflow-auto' aria-labelledby="dropdownMenuButton">
+                                        <li>
+
+                                            <a id='change_@product.EncodedId' class='dropdown-item' style="cursor: pointer;">
+                                                Edit
+                                            </a>
+                                        </li>
+                                        @if (isProductCrudAllowed)
+                                        {
+                                            <li>
+                                                <a id='delete_@product.Id' class='dropdown-item' style="cursor: pointer;">
+                                                    Delete
+                                                </a>
+                                            </li>
+                                        }
+                                    </ul>
+                                </div>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </form>
     </div>
 </div>
 
@@ -130,4 +134,5 @@
      if (window.history.replaceState) {
             window.history.replaceState( null, null, window.location.href );
         }
+     $('input#searchProduct').trigger("click").submit();
 </script>

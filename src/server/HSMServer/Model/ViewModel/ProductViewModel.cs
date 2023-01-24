@@ -30,7 +30,7 @@ namespace HSMServer.Model.ViewModel
             EncodedId = SensorPathHelper.EncodeGuid(product.Id);
             Key = product.AccessKeys.FirstOrDefault().Value?.Id.ToString();
             Name = product.Name;
-            LastUpdateDate = product.UpdateTime == DateTime.MinValue ? CreationDate : product.UpdateTime;
+            LastUpdateDate = product.UpdateTime;
             ShortLastUpdateTime = GetTimeAgo(this);
             Managers = managers;
         }

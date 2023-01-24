@@ -56,8 +56,8 @@
     $('[id^="delete_"]').on("click",
         function () {
             key = this.id.substring("delete_".length, this.id.length);
-            name = $('#inputName_' + key).val();
-
+            name = $('#inputName_' + key).text();
+            
             $('#modalDeleteBody').empty();
             $('#modalDeleteBody').append('Do you really want to remove "' + name + '" product?');
 

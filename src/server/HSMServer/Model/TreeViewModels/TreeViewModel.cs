@@ -66,24 +66,31 @@ namespace HSMServer.Model.TreeViewModels
             return tree;
         }
 
-        public List<ProductModel> GetUserProducts(User user)
+        public List<ProductNodeViewModel> GetUserProducts(User user)
         {
-            var products = _treeValuesCache.GetProducts();
+            var products = GetRootProducts();
 
             if (user == null || user.IsAdmin)
-                return products;
+                return products.ToList();
 
             if (user.ProductsRoles == null || user.ProductsRoles.Count == 0)
-                return new List<ProductModel>();
+                return new List<ProductNodeViewModel>();
 
             return products.Where(p => user.IsProductAvailable(p.Id)).ToList();
         }
 
         internal void RecalculateNodesCharacteristics()
         {
-            foreach (var (_, node) in Nodes)
-                if (node.Parent == null)
-                    node.RecalculateCharacteristics();
+            foreach (var node in GetRootProducts())
+                node.RecalculateCharacteristics();
+        }
+
+        private IEnumerable<ProductNodeViewModel> GetRootProducts()
+        {
+            return Nodes.Where(x => x.Value.Parent is null).Select(x => {
+                x.Value.RecalculateCharacteristics();
+                return x.Value;
+            });
         }
 
         internal List<Guid> GetNodeAllSensors(Guid selectedNode)
@@ -120,8 +127,8 @@ namespace HSMServer.Model.TreeViewModels
                 AddNewProductViewModel(product);
 
             foreach (var product in products)
-                foreach (var (_, subProduct) in product.SubProducts)
-                    Nodes[product.Id].AddSubNode(Nodes[subProduct.Id]);
+            foreach (var (_, subProduct) in product.SubProducts)
+                Nodes[product.Id].AddSubNode(Nodes[subProduct.Id]);
 
             foreach (var (_, key) in AccessKeys)
                 key.UpdateNodePath();
