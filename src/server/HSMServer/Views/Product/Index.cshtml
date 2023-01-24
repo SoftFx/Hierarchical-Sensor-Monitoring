@@ -36,7 +36,7 @@
                 <h5 class="modal-title" id="modalDeleteLabel">Remove product</h5>
             </div>
 
-            <div id="modalDeleteBody" class="modal-body">
+            <div id="modalDeleteBody" class="modal-body text-break">
 
             </div>
 
@@ -59,7 +59,7 @@
             name = $('#inputName_' + key).text();
             
             $('#modalDeleteBody').empty();
-            $('#modalDeleteBody').append('Do you really want to remove "' + name + '" product?');
+            $('#modalDeleteBody').append(`Do you really want to remove "${name.trim().substring(0, 100)}" product?`);
 
             var modal = new bootstrap.Modal(document.getElementById('modalDelete'));
             modal.show();
