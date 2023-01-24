@@ -94,9 +94,12 @@
                             </td>
                             <td>
                                 <span title="@product.LastUpdateDate">@product.ShortLastUpdateTime</span>
-                                @if (product.ShortLastUpdateTime.Equals("> a month ago"))
+                                @if (product.ShortLastUpdateTime.Equals("> a month ago") || product.ShortLastUpdateTime.Equals(" - no data"))
                                 {
-                                    <i class="fa fa-exclamation-circle key-icon-expired" title="Sensor update time is greater than 30 days"></i>
+                                    <span class="fa-stack" title="Sensor update time is greater than 30 days">
+                                        <i class="fa-regular fa-circle fa-stack-1x" style="color: #ffc107"></i>
+                                        <i class="fa-solid fa-exclamation fa-xs fa-stack-1x" style="color: #ffc107"></i>
+                                    </span>
                                 }
                             </td>
                             <td nowrap class="text-center">
