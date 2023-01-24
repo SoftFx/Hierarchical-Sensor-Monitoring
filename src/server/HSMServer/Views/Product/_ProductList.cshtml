@@ -12,7 +12,7 @@
 }
 
 <script>
-    var sorting = true;
+    var sorting = undefined;
 </script>
 
 <div class="m-2">
@@ -60,7 +60,10 @@
                         </th>
                         <button class="d-none"></button>
                         <th scope="col">
-                            <a class="btn sortSubmit" onclick="sortTable(sorting)" type="submit">Last update</a>
+                            <a class="btn sortSubmit" onclick="sortTable(this, sorting)" type="submit">
+                                Last update
+                               <i id="sortIcon" class="fa-solid fa-sort"></i>
+                            </a>
                         </th>
                         @if (isProductCrudAllowed || isProductActionAllowed)
                         {
@@ -145,7 +148,7 @@
             window.history.replaceState( null, null, window.location.href );
         }
      
-     function sortTable(asc) {
+     function sortTable(test, asc) {
         var table, rows, switching, i, x, y, shouldSwitch;
         table = document.getElementById("formProductTable");
         switching = true;
@@ -184,7 +187,16 @@
             switching = true;
           }
        }
-       
+       if (sorting === undefined){
+           sorting = false
+       }
        sorting = !sorting;
+       
+       var icon = test.querySelector("svg");
+       if (sorting){
+         icon.classList.toggle('fa-sort-up');
+       }else icon.classList.toggle('fa-sort-down');
+       
+    
      }
 </script>
