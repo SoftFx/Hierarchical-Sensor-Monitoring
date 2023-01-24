@@ -23,7 +23,7 @@ namespace HSMServer.Model.TreeViewModels
             Status = node.Status.ToString();
             StatusIconColorClass = node.Status.ToCssIconClass();
             GridCellColorClass = node.Status.ToCssGridCellClass();
-            UpdatedTimeStr = $"updated {node.GetTimeAgo()}";
+            UpdatedTimeStr = $"updated {node.UpdateTime.GetStaticTimeAgo()}";
             Tooltip = node.Tooltip;
         }
     }

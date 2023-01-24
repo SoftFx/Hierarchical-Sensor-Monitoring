@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using HSMServer.Extensions;
 using HSMServer.Model.TreeViewModels;
 
 namespace HSMServer.Model.ViewModel
@@ -31,32 +32,8 @@ namespace HSMServer.Model.ViewModel
             Key = product.AccessKeys.FirstOrDefault().Value?.Id.ToString();
             Name = product.Name;
             LastUpdateDate = product.UpdateTime;
-            ShortLastUpdateTime = GetTimeAgo(this);
+            ShortLastUpdateTime = LastUpdateDate.GetStaticTimeAgo();
             Managers = managers;
-        }
-
-        private static string GetTimeAgo(ProductViewModel productViewModel)
-        {
-            string UnitsToString(double value, string unit)
-            {
-                int intValue = Convert.ToInt32(value);
-                return intValue > 1 ? $"{intValue} {unit}s" : $"1 {unit}";
-            }
-
-            var time = new TimeSpan((DateTime.UtcNow - productViewModel.LastUpdateDate).Ticks);
-
-            if (time.TotalDays > 30)
-                return "> a month ago";
-            else if (time.TotalDays >= 1)
-                return $"> {UnitsToString(time.TotalDays, "day")} ago";
-            else if (time.TotalHours >= 1)
-                return $"> {UnitsToString(time.TotalHours, "hour")} ago";
-            else if (time.TotalMinutes >= 1)
-                return $"{UnitsToString(time.TotalMinutes, "minute")} ago";
-            else if (time.TotalSeconds < 60)
-                return "< 1 minute ago";
-
-            return "no info";
         }
     }
 }

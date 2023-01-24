@@ -37,35 +37,6 @@ namespace HSMServer.Extensions
                 _ => "grid-cell-offTime",
             };
 
-
-        internal static string GetTimeAgo(this NodeViewModel node)
-        {
-            string UnitsToString(double value, string unit)
-            {
-                int intValue = Convert.ToInt32(value);
-                return intValue > 1 ? $"{intValue} {unit}s" : $"1 {unit}";
-            }
-
-
-            var time = node.UpdateTime != DateTime.MinValue ? DateTime.UtcNow - node.UpdateTime : TimeSpan.MinValue;
-
-            if (time == TimeSpan.MinValue)
-                return " - no data";
-            else if (time.TotalDays > 30)
-                return "> a month ago";
-            else if (time.TotalDays >= 1)
-                return $"> {UnitsToString(time.TotalDays, "day")} ago";
-            else if (time.TotalHours >= 1)
-                return $"> {UnitsToString(time.TotalHours, "hour")} ago";
-            else if (time.TotalMinutes >= 1)
-                return $"{UnitsToString(time.TotalMinutes, "minute")} ago";
-            else if (time.TotalSeconds < 60)
-                return "< 1 minute ago";
-
-            return "no info";
-        }
-
-
         internal static string GetShortNodeName(this string name) => name.Cut(NodeNameMaxLength);
 
         internal static string GetShortCellName(this string name) => name.Cut(CellNameMaxLength);
