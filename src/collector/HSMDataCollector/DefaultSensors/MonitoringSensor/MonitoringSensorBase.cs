@@ -10,9 +10,9 @@ namespace HSMDataCollector.DefaultSensors
         private readonly Timer _sendTimer;
 
 
-        internal abstract string SensorName { get; }
+        protected abstract string SensorName { get; }
 
-        internal virtual TimeSpan ReceiveDataPeriod { get; } = TimeSpan.FromMinutes(5);
+        protected virtual TimeSpan ReceiveDataPeriod { get; set; } = TimeSpan.FromMinutes(5);
 
 
         internal string SensorPath => $"{_nodePath}/{SensorName}";

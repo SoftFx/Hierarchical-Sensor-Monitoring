@@ -15,6 +15,8 @@ namespace HSMDataCollector.DefaultSensors
 
         protected abstract T GetValue();
 
+        protected virtual string GetComment() => null;
+
         protected override void OnTimerTick(object _ = null) => SendCollectedValue(BuildValue());
 
         private SensorValueBase BuildValue()
@@ -23,13 +25,13 @@ namespace HSMDataCollector.DefaultSensors
             {
                 var value = SensorValuesFactory.BuildValue(GetValue());
 
-                return value.Complete(SensorPath);
+                return value.Complete(SensorPath, GetComment());
             }
             catch (Exception ex)
             {
                 var value = SensorValuesFactory.BuildValue(default(T));
 
-                return value.Complete(SensorPath, SensorStatus.Error, ex.Message);
+                return value.Complete(SensorPath, ex.Message, SensorStatus.Error);
             }
         }
     }

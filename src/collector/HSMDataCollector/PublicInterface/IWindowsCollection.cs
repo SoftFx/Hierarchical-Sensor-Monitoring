@@ -1,4 +1,6 @@
-﻿namespace HSMDataCollector.PublicInterface
+﻿using System;
+
+namespace HSMDataCollector.PublicInterface
 {
     public interface IWindowsCollection
     {
@@ -12,5 +14,8 @@
         IWindowsCollection AddTotalCpuSensor(string nodePath = null);
 
         IWindowsCollection AddFreeRamMemorySensor(string nodePath = null);
+
+
+        IWindowsCollection AddWindowsNeedUpdateSensor(string nodePath = null, TimeSpan? recevedDataPeriod = null, TimeSpan? updateInterval = null);
     }
 }

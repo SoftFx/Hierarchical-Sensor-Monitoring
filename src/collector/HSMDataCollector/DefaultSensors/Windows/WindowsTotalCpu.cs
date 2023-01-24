@@ -9,7 +9,7 @@
         protected override string InstanceName => "_Total";
 
 
-        internal override string SensorName => "Total CPU";
+        protected override string SensorName => "Total CPU";
 
 
         internal WindowsTotalCpu(string nodePath) : base(nodePath) { }

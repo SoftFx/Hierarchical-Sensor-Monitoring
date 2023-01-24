@@ -7,7 +7,7 @@ namespace HSMDataCollector.Extensions
     internal static class SensorValueExtensions
     {
         internal static SensorValueBase Complete(this SensorValueBase sensor,
-            string path, SensorStatus status = SensorStatus.Ok, string comment = null)
+            string path, string comment = null, SensorStatus status = SensorStatus.Ok)
         {
             sensor.Path = path;
             sensor.Time = DateTime.UtcNow;

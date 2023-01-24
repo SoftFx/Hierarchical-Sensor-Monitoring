@@ -61,6 +61,14 @@ namespace HSMDataCollector.DefaultSensors
             return !IsUnixOS ? Register(new WindowsFreeRamMemory(nodePath)) : throw _notSupportedException;
         }
 
+        IWindowsCollection IWindowsCollection.AddWindowsNeedUpdateSensor(string nodePath,
+            TimeSpan? recevedDataPeriod, TimeSpan? updateInterval)
+        {
+            return !IsUnixOS
+                ? Register(new WindowsNeedUpdate(nodePath, recevedDataPeriod, updateInterval))
+                : throw _notSupportedException;
+        }
+
 
         IUnixCollection IUnixCollection.AddProcessCpuSensor(string nodePath)
         {

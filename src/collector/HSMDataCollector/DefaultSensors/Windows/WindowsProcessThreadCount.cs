@@ -11,7 +11,7 @@ namespace HSMDataCollector.DefaultSensors.Windows
         protected override string InstanceName { get; } = Process.GetCurrentProcess().ProcessName;
 
 
-        internal override string SensorName => "Process thread count";
+        protected override string SensorName => "Process thread count";
 
 
         internal WindowsProcessThreadCount(string nodePath) : base(nodePath) { }

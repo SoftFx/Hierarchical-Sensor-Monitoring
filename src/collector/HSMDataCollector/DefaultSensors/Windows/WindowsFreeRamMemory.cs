@@ -7,7 +7,7 @@
         protected override string CounterName => "Available MBytes";
 
 
-        internal override string SensorName => "Free memory MB";
+        protected override string SensorName => "Free memory MB";
 
 
         internal WindowsFreeRamMemory(string nodePath) : base(nodePath) { }

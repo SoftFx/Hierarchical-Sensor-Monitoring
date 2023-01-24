@@ -2,6 +2,7 @@
 using HSMDataCollector.Base;
 using HSMDataCollector.CustomFuncSensor;
 using HSMDataCollector.DefaultSensors;
+using HSMDataCollector.DefaultSensors.Windows;
 using HSMDataCollector.DefaultValueSensor;
 using HSMDataCollector.Exceptions;
 using HSMDataCollector.InstantValue;
@@ -16,7 +17,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
-using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading;
 
@@ -207,10 +207,14 @@ namespace HSMDataCollector.Core
 
         }
 
+        [Obsolete()]
         public void InitializeOsMonitoring(bool isUpdated, string specificPath = null)
         {
+            if (specificPath == null)
+                specificPath = PerformanceNodeName;
+
             if (isUpdated)
-                InitializeWindowsUpdateMonitoring(new TimeSpan(24, 0, 0), new TimeSpan(30, 0, 0, 0), specificPath);
+                InitializeWindowsNeedUpdate(specificPath);
         }
 
         public void MonitorServiceAlive(string specificPath = null)
@@ -225,25 +229,31 @@ namespace HSMDataCollector.Core
             AddNewSensor(aliveSensor, aliveSensor.Path);
         }
 
+        [Obsolete()]
         public bool InitializeWindowsUpdateMonitoring(TimeSpan sensorInterval, TimeSpan updateInterval, string specificPath = null)
         {
-            if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            if (specificPath == null)
+                specificPath = PerformanceNodeName;
+
+            return InitializeWindowsNeedUpdate(specificPath, sensorInterval, updateInterval);
+        }
+
+        public bool IsSensorExists(string path) => _nameToSensor.ContainsKey(path) || _defaultSensors.IsSensorExists(path);
+
+        private bool InitializeWindowsNeedUpdate(string specificPath, TimeSpan? sensorInterval = null, TimeSpan? updateInterval = null)
+        {
+            if (_defaultSensors.IsUnixOS)
             {
-                _logger?.Error($"Failed to create {nameof(WindowsUpdateFuncSensor)} because current OS is not Windows");
+                _logger?.Error($"Failed to create {nameof(WindowsNeedUpdate)} because current OS is not Windows");
                 return false;
             }
 
             _logger?.Info($"Initialize windows update sensor...");
 
-            var updateSensor = new WindowsUpdateFuncSensor(specificPath,
-                _dataQueue as IValuesQueue, string.Empty, sensorInterval,
-                SensorType.BooleanSensor, _isLogging, updateInterval);
-            AddNewSensor(updateSensor, updateSensor.Path);
+            Windows.AddWindowsNeedUpdateSensor(specificPath, sensorInterval, updateInterval);
 
             return true;
         }
-
-        public bool IsSensorExists(string path) => _nameToSensor.ContainsKey(path) || _defaultSensors.IsSensorExists(path);
 
         #region Generic sensors functionality
 

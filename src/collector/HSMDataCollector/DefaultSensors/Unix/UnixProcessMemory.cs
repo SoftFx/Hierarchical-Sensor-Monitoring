@@ -8,7 +8,7 @@ namespace HSMDataCollector.DefaultSensors.Unix
         private const int MbDivisor = 1 << 20;
 
 
-        internal override string SensorName => "Process memory MB";
+        protected override string SensorName => "Process memory MB";
 
 
         internal UnixProcessMemory(string nodePath) : base(nodePath) { }

@@ -5,7 +5,7 @@ namespace HSMDataCollector.DefaultSensors.Unix
 {
     internal sealed class UnixProcessCpu : BarMonitoringSensorBase<DoubleMonitoringBar, double>
     {
-        internal override string SensorName => "Process CPU";
+        protected override string SensorName => "Process CPU";
 
 
         internal UnixProcessCpu(string nodePath) : base(nodePath) { }

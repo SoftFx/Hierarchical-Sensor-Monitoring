@@ -14,7 +14,7 @@ namespace HSMDataCollector.DefaultSensors.Windows
         protected override string InstanceName { get; } = Process.GetCurrentProcess().ProcessName;
 
 
-        internal override string SensorName => "Process memory MB";
+        protected override string SensorName => "Process memory MB";
 
 
         internal WindowsProcessMemory(string nodePath) : base(nodePath) { }
