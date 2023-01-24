@@ -38,3 +38,9 @@
 .settingsList > li > a:link{
     color: cadetblue;
 }
+
+.sortSubmit{
+    padding: 0;
+    font-weight: 700;
+    border-width: 0;
+}

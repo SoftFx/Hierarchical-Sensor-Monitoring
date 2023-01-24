@@ -53,7 +53,7 @@ namespace HSMServer.Controllers
         {
             ViewBag.ProductName = searchProductName;
             ViewBag.ProductManager = searchProductManager;
-            
+        
             var user = HttpContext.User as User;
             
             var result = _treeViewModel.GetUserProducts(user)
@@ -62,7 +62,7 @@ namespace HSMServer.Controllers
                 .Select(x => new ProductViewModel(
                 _userManager.GetManagers(x.Id).Select(manager => manager.UserName).ToList(), x)).ToList();
             
-            return View(result.Where(x =>searchProductManager == string.Empty || x.Managers.Any(x => x.Contains(searchProductManager))).ToList());
+            return View(result.Where(x =>searchProductManager == string.Empty || x.Managers.Any(y => y.Contains(searchProductManager))).ToList());
         }
 
         public void CreateProduct([FromQuery(Name = "Product")] string productName)

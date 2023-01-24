@@ -10,6 +10,11 @@
     bool isProductCrudAllowed = UserRoleHelper.IsUserCRUDAllowed(user);
     bool isProductActionAllowed = ProductRoleHelper.IsProductActionAllowed(user?.ProductsRoles);
 }
+
+<script>
+    var sorting = true;
+</script>
+
 <div class="m-2">
     <div class="row" justify-content-start>
         @if (TempData[TextConstants.TempDataErrorText] != null)
@@ -37,8 +42,8 @@
 }
 <div class="col-12-xxl">
     <div class="w-100" id="productTable">
-        <form asp-controller="Product" asp-action="Index">
-            <table class="table">
+        <form id="formSearch" asp-controller="Product" asp-action="Index">
+            <table id="formProductTable" class="table">
                 <thead>
                     <tr>
                         <th scope="col">
@@ -53,8 +58,10 @@
                                 <label for="searchManager">Managers</label>
                             </div>
                         </th>
-                        <button class="d-none" type="submit"></button>
-                        <th scope="col">Last update</th>
+                        <button class="d-none"></button>
+                        <th scope="col">
+                            <a class="btn sortSubmit" onclick="sortTable(sorting)" type="submit">Last update</a>
+                        </th>
                         @if (isProductCrudAllowed || isProductActionAllowed)
                         {
                             <th scope="col" class="text-center">Actions</th>
@@ -134,5 +141,47 @@
      if (window.history.replaceState) {
             window.history.replaceState( null, null, window.location.href );
         }
-     $('input#searchProduct').trigger("click").submit();
+     
+     function sortTable(asc) {
+        var table, rows, switching, i, x, y, shouldSwitch;
+        table = document.getElementById("formProductTable");
+        switching = true;
+       
+        while (switching) {
+        
+          switching = false;
+          rows = table.rows;
+         
+          for (i = 1; i < (rows.length - 1); i++) {
+          
+            shouldSwitch = false;
+          
+            x = rows[i].getElementsByTagName("TD")[2];
+            y = rows[i + 1].getElementsByTagName("TD")[2];
+           
+            let xdate = (new Date(x.getElementsByTagName('span')[0].attributes[0].value)).getTime()
+            let ydate =(new Date(y.getElementsByTagName('span')[0].attributes[0].value)).getTime()
+           
+            if (asc === true){
+                 if (xdate > ydate) {
+                    shouldSwitch = true;
+                    break;
+                 }
+            }
+            else{
+                if (xdate < ydate) {
+                   shouldSwitch = true;
+                   break;
+                }
+            }
+          
+          }
+          if (shouldSwitch) {
+            rows[i].parentNode.insertBefore(rows[i + 1], rows[i]);
+            switching = true;
+          }
+       }
+       
+       sorting = !sorting;
+     }
 </script>
