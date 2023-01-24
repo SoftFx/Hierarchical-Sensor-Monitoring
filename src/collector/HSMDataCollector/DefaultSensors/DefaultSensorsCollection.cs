@@ -38,67 +38,43 @@ namespace HSMDataCollector.DefaultSensors
 
         IWindowsCollection IWindowsCollection.AddProcessCpuSensor(string nodePath)
         {
-            if (IsUnixOS)
-                throw _notSupportedException;
-
-            return Register(new WindowsProcessCpu(nodePath));
+            return !IsUnixOS ? Register(new WindowsProcessCpu(nodePath)) : throw _notSupportedException;
         }
 
         IWindowsCollection IWindowsCollection.AddProcessMemorySensor(string nodePath)
         {
-            if (IsUnixOS)
-                throw _notSupportedException;
-
-            return Register(new WindowsProcessMemory(nodePath));
+            return !IsUnixOS ? Register(new WindowsProcessMemory(nodePath)) : throw _notSupportedException;
         }
 
         IWindowsCollection IWindowsCollection.AddProcessThreadCountSensor(string nodePath)
         {
-            if (IsUnixOS)
-                throw _notSupportedException;
-
-            return Register(new WindowsProcessThreadCount(nodePath));
+            return !IsUnixOS ? Register(new WindowsProcessThreadCount(nodePath)) : throw _notSupportedException;
         }
 
         IWindowsCollection IWindowsCollection.AddTotalCpuSensor(string nodePath)
         {
-            if (IsUnixOS)
-                throw _notSupportedException;
-
-            return Register(new WindowsTotalCpu(nodePath));
+            return !IsUnixOS ? Register(new WindowsTotalCpu(nodePath)) : throw _notSupportedException;
         }
 
         IWindowsCollection IWindowsCollection.AddFreeRamMemorySensor(string nodePath)
         {
-            if (IsUnixOS)
-                throw _notSupportedException;
-
-            return Register(new WindowsFreeRamMemory(nodePath));
+            return !IsUnixOS ? Register(new WindowsFreeRamMemory(nodePath)) : throw _notSupportedException;
         }
 
 
         IUnixCollection IUnixCollection.AddProcessCpuSensor(string nodePath)
         {
-            if (!IsUnixOS)
-                throw _notSupportedException;
-
-            return Register(new UnixProcessCpu(nodePath));
+            return IsUnixOS ? Register(new UnixProcessCpu(nodePath)) : throw _notSupportedException;
         }
 
         IUnixCollection IUnixCollection.AddProcessMemorySensor(string nodePath)
         {
-            if (!IsUnixOS)
-                throw _notSupportedException;
-
-            return Register(new UnixProcessMemory(nodePath));
+            return IsUnixOS ? Register(new UnixProcessMemory(nodePath)) : throw _notSupportedException;
         }
 
         IUnixCollection IUnixCollection.AddProcessThreadCountSensor(string nodePath)
         {
-            if (!IsUnixOS)
-                throw _notSupportedException;
-
-            return Register(new UnixProcessThreadCount(nodePath));
+            return IsUnixOS ? Register(new UnixProcessThreadCount(nodePath)) : throw _notSupportedException;
         }
 
 
