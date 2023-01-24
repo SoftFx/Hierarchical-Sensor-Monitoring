@@ -146,6 +146,12 @@ namespace HSMDataCollector.Core
             foreach (var pair in _nameToSensor)
                 pair.Value.Dispose();
 
+            foreach (var defaultSensor in _defaultSensors)
+            {
+                defaultSensor.Dispose();
+                allData.Add(defaultSensor.GetLastValue());
+            }
+
             if (allData.Count != 0)
                 SendMonitoringData(allData);
 

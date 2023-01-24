@@ -46,7 +46,7 @@ namespace HSMDataCollector.CustomFuncSensor
                 var view = Environment.Is64BitOperatingSystem ? RegistryView.Registry64 : RegistryView.Registry32;
 
                 RegistryKey localMachineX64View = RegistryKey.OpenBaseKey(RegistryHive.LocalMachine, view);
-                RegistryKey key = localMachineX64View.OpenSubKey("Software\\Microsoft\\Windows NT\\CurrentVersion");
+                RegistryKey key = localMachineX64View.OpenSubKey(@"Software\Microsoft\Windows NT\CurrentVersion");
 
                 if (key != null)
                 {

@@ -1,6 +1,7 @@
 ﻿using HSMDataCollector.Extensions;
 using HSMDataCollector.SensorsFactory;
 using HSMSensorDataObjects;
+using HSMSensorDataObjects.SensorValueRequests;
 using System;
 
 namespace HSMDataCollector.DefaultSensors
@@ -10,21 +11,25 @@ namespace HSMDataCollector.DefaultSensors
         protected MonitoringSensorBase(string nodePath) : base(nodePath) { }
 
 
+        internal override SensorValueBase GetLastValue() => BuildValue();
+
         protected abstract T GetValue();
 
-        protected override void OnTimerTick(object _ = null)
+        protected override void OnTimerTick(object _ = null) => SendCollectedValue(BuildValue());
+
+        private SensorValueBase BuildValue()
         {
             try
             {
                 var value = SensorValuesFactory.BuildValue(GetValue());
 
-                SendCollectedValue(value.Complete(SensorPath));
+                return value.Complete(SensorPath);
             }
             catch (Exception ex)
             {
                 var value = SensorValuesFactory.BuildValue(default(T));
 
-                SendCollectedValue(value.Complete(SensorPath, SensorStatus.Error, ex.Message));
+                return value.Complete(SensorPath, SensorStatus.Error, ex.Message);
             }
         }
     }

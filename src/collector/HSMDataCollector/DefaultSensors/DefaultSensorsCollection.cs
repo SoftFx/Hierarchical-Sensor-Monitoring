@@ -3,11 +3,13 @@ using HSMDataCollector.DefaultSensors.Unix;
 using HSMDataCollector.DefaultSensors.Windows;
 using HSMDataCollector.PublicInterface;
 using System;
+using System.Collections;
+using System.Collections.Generic;
 using System.Runtime.InteropServices;
 
 namespace HSMDataCollector.DefaultSensors
 {
-    internal sealed class DefaultSensorsCollection : IWindowsCollection, IUnixCollection
+    internal sealed class DefaultSensorsCollection : IEnumerable<MonitoringSensorBase>, IWindowsCollection, IUnixCollection
     {
         private const string NotSupportedSensor = "Sensor is not supported for current OS";
 
@@ -24,6 +26,11 @@ namespace HSMDataCollector.DefaultSensors
         {
             _storage = storage;
         }
+
+
+        public IEnumerator<MonitoringSensorBase> GetEnumerator() => _storage.Values.GetEnumerator();
+
+        IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
 
 
         internal bool IsSensorExists(string path) => _storage.ContainsKey(path);

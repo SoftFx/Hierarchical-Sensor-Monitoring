@@ -33,6 +33,8 @@ namespace HSMDataCollector.DefaultSensors
             Stop();
         }
 
+        internal abstract SensorValueBase GetLastValue();
+
         internal virtual void Start()
         {
             _sendTimer.Change(ReceiveDataPeriod, ReceiveDataPeriod);
