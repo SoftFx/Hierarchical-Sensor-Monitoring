@@ -18,7 +18,16 @@
         <tbody>
             <tr>
                 <td class="w-25">Product</td>
-                <td>@productName</td>
+                <td>
+                    @if (productName.Length >= 100)
+                    {
+                        @Html.Raw(productName[..100])
+                    }
+                    else
+                    {
+                        @Html.Raw(productName)
+                    }
+                </td>
             </tr>
             @if (Model.Parent != null)
             {
