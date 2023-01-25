@@ -1,4 +1,5 @@
-﻿using HSMSensorDataObjects.SensorValueRequests;
+﻿using HSMDataCollector.Options;
+using HSMSensorDataObjects.SensorValueRequests;
 using System;
 using System.Threading;
 
@@ -12,7 +13,7 @@ namespace HSMDataCollector.DefaultSensors
 
         protected abstract string SensorName { get; }
 
-        protected virtual TimeSpan ReceiveDataPeriod { get; set; } = TimeSpan.FromMinutes(5);
+        protected TimeSpan ReceiveDataPeriod { get; }
 
 
         internal string SensorPath => $"{_nodePath}/{SensorName}";
@@ -21,9 +22,11 @@ namespace HSMDataCollector.DefaultSensors
         internal event Action<SensorValueBase> ReceiveSensorValue;
 
 
-        protected MonitoringSensorBase(string nodePath)
+        protected MonitoringSensorBase(SensorOptions options)
         {
-            _nodePath = nodePath;
+            _nodePath = options.NodePath;
+            ReceiveDataPeriod = options.PostDataPeriod;
+
             _sendTimer = new Timer(OnTimerTick, null, Timeout.Infinite, Timeout.Infinite);
         }
 

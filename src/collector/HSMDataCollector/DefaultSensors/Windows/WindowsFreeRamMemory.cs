@@ -1,4 +1,6 @@
-﻿namespace HSMDataCollector.DefaultSensors.Windows
+﻿using HSMDataCollector.Options;
+
+namespace HSMDataCollector.DefaultSensors.Windows
 {
     internal sealed class WindowsFreeRamMemory : WindowsSensorBase
     {
@@ -10,6 +12,6 @@
         protected override string SensorName => "Free RAM memory MB";
 
 
-        internal WindowsFreeRamMemory(string nodePath) : base(nodePath) { }
+        internal WindowsFreeRamMemory(BarSensorOptions options) : base(options) { }
     }
 }

@@ -1,4 +1,5 @@
 ﻿using HSMDataCollector.DefaultSensors.MonitoringSensor;
+using HSMDataCollector.Options;
 using System;
 using System.Threading;
 
@@ -13,11 +14,13 @@ namespace HSMDataCollector.DefaultSensors
         private BarType _internalBar;
 
 
-        internal virtual TimeSpan CollectBarPeriod { get; } = TimeSpan.FromSeconds(5);
+        private TimeSpan CollectBarPeriod { get; }
 
 
-        public BarMonitoringSensorBase(string nodePath) : base(nodePath)
+        public BarMonitoringSensorBase(BarSensorOptions options) : base(options)
         {
+            CollectBarPeriod = options.CollectBarPeriod;
+
             _collectTimer = new Timer(CollectBar, null, Timeout.Infinite, Timeout.Infinite);
 
             BuildNewBar();

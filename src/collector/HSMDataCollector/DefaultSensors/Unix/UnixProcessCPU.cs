@@ -1,4 +1,5 @@
 ﻿using HSMDataCollector.DefaultSensors.MonitoringSensor;
+using HSMDataCollector.Options;
 using System.Diagnostics;
 
 namespace HSMDataCollector.DefaultSensors.Unix
@@ -10,7 +11,7 @@ namespace HSMDataCollector.DefaultSensors.Unix
         protected override string SensorName => "Process CPU";
 
 
-        internal UnixProcessCpu(string nodePath) : base(nodePath) { }
+        internal UnixProcessCpu(BarSensorOptions options) : base(options) { }
 
 
         protected override double GetBarData() =>

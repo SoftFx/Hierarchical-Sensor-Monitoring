@@ -1,4 +1,5 @@
 ﻿using HSMDataCollector.Extensions;
+using HSMDataCollector.Options;
 using HSMDataCollector.SensorsFactory;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.SensorValueRequests;
@@ -8,7 +9,7 @@ namespace HSMDataCollector.DefaultSensors
 {
     public abstract class MonitoringSensorBase<T> : MonitoringSensorBase
     {
-        protected MonitoringSensorBase(string nodePath) : base(nodePath) { }
+        protected MonitoringSensorBase(SensorOptions options) : base(options) { }
 
 
         internal override void Stop()

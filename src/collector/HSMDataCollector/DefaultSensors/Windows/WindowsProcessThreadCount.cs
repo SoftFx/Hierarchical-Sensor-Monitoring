@@ -1,4 +1,5 @@
-﻿using System.Diagnostics;
+﻿using HSMDataCollector.Options;
+using System.Diagnostics;
 
 namespace HSMDataCollector.DefaultSensors.Windows
 {
@@ -14,6 +15,6 @@ namespace HSMDataCollector.DefaultSensors.Windows
         protected override string SensorName => "Process thread count";
 
 
-        internal WindowsProcessThreadCount(string nodePath) : base(nodePath) { }
+        internal WindowsProcessThreadCount(BarSensorOptions options) : base(options) { }
     }
 }

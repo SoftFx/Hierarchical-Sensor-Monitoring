@@ -1,9 +1,10 @@
-﻿using System;
+﻿using HSMDataCollector.Options;
+using System;
 using System.Diagnostics;
 
 namespace HSMDataCollector.DefaultSensors.Windows
 {
-    internal sealed class WindowsSystemLastRestart : MonitoringSensorBase<TimeSpan>
+    internal sealed class WindowsLastRestart : MonitoringSensorBase<TimeSpan>
     {
         private const string _categoryName = "System";
         private const string _counterName = "System Up Time";
@@ -14,7 +15,7 @@ namespace HSMDataCollector.DefaultSensors.Windows
         protected override string SensorName => "Windows last restart";
 
 
-        public WindowsSystemLastRestart(string nodePath) : base(nodePath)
+        public WindowsLastRestart(SensorOptions options) : base(options)
         {
             _performanceCounter = new PerformanceCounter(_categoryName, _counterName);
             _performanceCounter.NextValue();

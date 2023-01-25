@@ -1,4 +1,6 @@
-﻿namespace HSMDataCollector.DefaultSensors.Windows
+﻿using HSMDataCollector.Options;
+
+namespace HSMDataCollector.DefaultSensors.Windows
 {
     internal sealed class WindowsTotalCpu : WindowsSensorBase
     {
@@ -12,6 +14,6 @@
         protected override string SensorName => "Total CPU";
 
 
-        internal WindowsTotalCpu(string nodePath) : base(nodePath) { }
+        internal WindowsTotalCpu(BarSensorOptions options) : base(options) { }
     }
 }

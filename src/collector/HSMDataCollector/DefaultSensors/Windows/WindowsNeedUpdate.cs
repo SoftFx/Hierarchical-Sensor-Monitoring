@@ -1,35 +1,30 @@
 ﻿using HSMDataCollector.Helpers;
+using HSMDataCollector.Options;
 using System;
 
 namespace HSMDataCollector.DefaultSensors.Windows
 {
     internal sealed class WindowsNeedUpdate : MonitoringSensorBase<bool>
     {
-        private readonly TimeSpan _defaultReceivedDataPeriod = TimeSpan.FromHours(24);
-        private readonly TimeSpan _defaultExpectedUpdateInterval = TimeSpan.FromDays(30);
-
-
         private string WindowsVersion { get; } = System.Runtime.InteropServices.RuntimeInformation.OSDescription;
 
         private DateTime WindowsLastUpdate { get; }
 
-        private TimeSpan ExpectedUpdateInterval { get; }
+        private TimeSpan AcceptableUpdateInterval { get; }
 
 
         protected override string SensorName => "Is need Windows update";
 
 
-        public WindowsNeedUpdate(string nodePath, TimeSpan? receivedDataPeriod, TimeSpan? updateInterval)
-            : base(nodePath)
+        public WindowsNeedUpdate(WindowsSensorOptions options) : base(options)
         {
-            ReceiveDataPeriod = receivedDataPeriod ?? _defaultReceivedDataPeriod;
-            ExpectedUpdateInterval = updateInterval ?? _defaultExpectedUpdateInterval;
+            AcceptableUpdateInterval = options.AcceptableUpdateInterval;
 
             WindowsLastUpdate = WindowsInfo.GetInstallationDate();
         }
 
 
-        protected override bool GetValue() => DateTime.UtcNow - WindowsLastUpdate >= ExpectedUpdateInterval;
+        protected override bool GetValue() => DateTime.UtcNow - WindowsLastUpdate >= AcceptableUpdateInterval;
 
         protected override string GetComment() => $"{WindowsVersion}. Last update date: {WindowsLastUpdate}";
     }

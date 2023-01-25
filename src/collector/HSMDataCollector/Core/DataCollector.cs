@@ -7,6 +7,7 @@ using HSMDataCollector.DefaultValueSensor;
 using HSMDataCollector.Exceptions;
 using HSMDataCollector.InstantValue;
 using HSMDataCollector.Logging;
+using HSMDataCollector.Options;
 using HSMDataCollector.PublicInterface;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.SensorValueRequests;
@@ -31,9 +32,6 @@ namespace HSMDataCollector.Core
         private const string LogFormatFileName = "DataCollector_${shortdate}.log";
 
         private const string ServiceAlive = "Service alive";
-
-        internal const string CurrentProcessNodeName = "CurrentProcess";
-        internal const string PerformanceNodeName = "System monitoring";
 
         private readonly string _listSendingAddress;
         private readonly string _fileSendingAddress;
@@ -157,44 +155,48 @@ namespace HSMDataCollector.Core
             _logger?.Info("DataCollector successfully stopped.");
         }
 
-        [Obsolete()]
+        [Obsolete("Use method AddSystemMonitoringSensors(options) in Windows collection")]
         public void InitializeSystemMonitoring(bool isCPU, bool isFreeRam, string specificPath = null)
         {
             if (specificPath == null)
-                specificPath = PerformanceNodeName;
+                specificPath = DefaultSensorsCollection.SystemMonitoringNodeName;
 
             if (!_defaultSensors.IsUnixOS)
             {
+                var options = new BarSensorOptions(specificPath);
+
                 if (isCPU)
-                    Windows.AddTotalCpuSensor(specificPath);
+                    Windows.AddTotalCpu(options);
                 if (isFreeRam)
-                    Windows.AddFreeRamMemorySensor(specificPath);
+                    Windows.AddFreeRamMemory(options);
             }
         }
 
-        [Obsolete()]
+        [Obsolete("Use method AddProcessSensors(options) in Windows or Unix collections")]
         public void InitializeProcessMonitoring(bool isCPU, bool isMemory, bool isThreads, string specificPath = null)
         {
             if (specificPath == null)
-                specificPath = CurrentProcessNodeName;
+                specificPath = DefaultSensorsCollection.CurrentProcessNodeName;
+
+            var options = new BarSensorOptions(specificPath);
 
             if (_defaultSensors.IsUnixOS)
             {
                 if (isCPU)
-                    Unix.AddProcessCpuSensor(specificPath);
+                    Unix.AddProcessCpu(options);
                 if (isMemory)
-                    Unix.AddProcessMemorySensor(specificPath);
+                    Unix.AddProcessMemory(options);
                 if (isThreads)
-                    Unix.AddProcessThreadCountSensor(specificPath);
+                    Unix.AddProcessThreadCount(options);
             }
             else
             {
                 if (isCPU)
-                    Windows.AddProcessCpuSensor(specificPath);
+                    Windows.AddProcessCpu(options);
                 if (isMemory)
-                    Windows.AddProcessMemorySensor(specificPath);
+                    Windows.AddProcessMemory(options);
                 if (isThreads)
-                    Windows.AddProcessThreadCountSensor(specificPath);
+                    Windows.AddProcessThreadCount(options);
             }
         }
 
@@ -204,19 +206,16 @@ namespace HSMDataCollector.Core
 
         }
 
-        [Obsolete()]
+        [Obsolete("Use method AddWindowsSensors(options) in Windows collection")]
         public void InitializeOsMonitoring(bool isUpdated, string specificPath = null)
         {
-            if (specificPath == null)
-                specificPath = PerformanceNodeName;
-
             if (isUpdated)
                 InitializeWindowsNeedUpdate(specificPath);
         }
 
         public void MonitorServiceAlive(string specificPath = null)
         {
-            var path = $"{specificPath ?? PerformanceNodeName}/{ServiceAlive}";
+            var path = $"{specificPath ?? DefaultSensorsCollection.SystemMonitoringNodeName}/{ServiceAlive}";
 
             _logger?.Info($"Initialize {path} sensor...");
 
@@ -226,12 +225,9 @@ namespace HSMDataCollector.Core
             AddNewSensor(aliveSensor, aliveSensor.Path);
         }
 
-        [Obsolete()]
+        [Obsolete("Use method AddWindowsSensors(options) in Windows collection")]
         public bool InitializeWindowsUpdateMonitoring(TimeSpan sensorInterval, TimeSpan updateInterval, string specificPath = null)
         {
-            if (specificPath == null)
-                specificPath = PerformanceNodeName;
-
             return InitializeWindowsNeedUpdate(specificPath, sensorInterval, updateInterval);
         }
 
@@ -247,7 +243,13 @@ namespace HSMDataCollector.Core
 
             _logger?.Info($"Initialize windows update sensor...");
 
-            Windows.AddWindowsNeedUpdateSensor(specificPath, sensorInterval, updateInterval);
+            var options = new WindowsSensorOptions(specificPath ?? DefaultSensorsCollection.SystemMonitoringNodeName);
+            if (options.PostDataPeriod != null)
+                options.PostDataPeriod = sensorInterval.Value;
+            if (options.AcceptableUpdateInterval != null)
+                options.AcceptableUpdateInterval = updateInterval.Value;
+
+            Windows.AddWindowsNeedUpdate(options);
 
             return true;
         }

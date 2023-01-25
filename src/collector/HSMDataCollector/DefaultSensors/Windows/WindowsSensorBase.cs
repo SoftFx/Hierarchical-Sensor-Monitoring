@@ -1,4 +1,5 @@
 ﻿using HSMDataCollector.DefaultSensors.MonitoringSensor;
+using HSMDataCollector.Options;
 using System.Diagnostics;
 
 namespace HSMDataCollector.DefaultSensors.Windows
@@ -15,7 +16,7 @@ namespace HSMDataCollector.DefaultSensors.Windows
         protected virtual string InstanceName { get; }
 
 
-        internal WindowsSensorBase(string nodePath) : base(nodePath)
+        internal WindowsSensorBase(BarSensorOptions options) : base(options)
         {
             _performanceCounter = string.IsNullOrEmpty(InstanceName)
                 ? new PerformanceCounter(CategoryName, CounterName)

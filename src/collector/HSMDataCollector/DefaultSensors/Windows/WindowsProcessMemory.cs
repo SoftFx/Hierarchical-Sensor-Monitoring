@@ -1,4 +1,5 @@
-﻿using System.Diagnostics;
+﻿using HSMDataCollector.Options;
+using System.Diagnostics;
 
 namespace HSMDataCollector.DefaultSensors.Windows
 {
@@ -17,7 +18,7 @@ namespace HSMDataCollector.DefaultSensors.Windows
         protected override string SensorName => "Process memory MB";
 
 
-        internal WindowsProcessMemory(string nodePath) : base(nodePath) { }
+        internal WindowsProcessMemory(BarSensorOptions options) : base(options) { }
 
 
         protected override double GetBarData() => base.GetBarData() / MbDivisor;

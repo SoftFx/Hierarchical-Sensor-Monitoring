@@ -1,11 +1,16 @@
-﻿namespace HSMDataCollector.PublicInterface
+﻿using HSMDataCollector.Options;
+
+namespace HSMDataCollector.PublicInterface
 {
     public interface IUnixCollection
     {
-        IUnixCollection AddProcessCpuSensor(string nodePath = null);
+        IUnixCollection AddCurrentProcessSensors(BarSensorOptions options = null);
 
-        IUnixCollection AddProcessMemorySensor(string nodePath = null);
 
-        IUnixCollection AddProcessThreadCountSensor(string nodePath = null);
+        IUnixCollection AddProcessCpu(BarSensorOptions options = null);
+
+        IUnixCollection AddProcessMemory(BarSensorOptions options = null);
+
+        IUnixCollection AddProcessThreadCount(BarSensorOptions options = null);
     }
 }

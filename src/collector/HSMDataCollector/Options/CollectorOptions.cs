@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace HSMDataCollector.Core
+namespace HSMDataCollector.Options
 {
     public sealed class CollectorOptions
     {
