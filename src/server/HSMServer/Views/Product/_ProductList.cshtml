@@ -1,6 +1,7 @@
 @using HSMServer.Helpers
 @using HSMServer.Model.Authentication
 @using HSMServer.Constants
+@using HSMServer.Extensions
 @using HSMServer.Model.ViewModel
 @model List<ProductViewModel>
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
@@ -86,27 +87,22 @@
                                 {
                                     <span>---</span>
                                 }
-                                @for (int j = 0; j < product.Managers.Count; j++)
+                                else
                                 {
-                                    @Html.Raw(product.Managers[j].Trim(' '))
-                                    @if (j != product.Managers.Count - 1)
-                                    {
-                                        <span>,</span>
-                                    }
+                                    var managers = string.Join(",", product.Managers);
+                                    <span>@Html.Raw(managers)</span>
                                 }
                             </td>
                             <td>
-                                <span title="@product.LastUpdateDate">
+                                <span title="@product.LastUpdateDate.ToDefaultFormat()">
                                     @product.ShortLastUpdateTime
-
                                 </span>
-                                @if (product.ShortLastUpdateTime.Equals("> a month ago") || product.ShortLastUpdateTime.Equals(" - no data"))
+                                @if (product.ProductUpdateIsExpired)
                                 {
                                     <span title="Sensor update time is greater than 30 days">
-                                        <img title="Sensor update time is greater than 30 days" src="~/dist/warning.svg" id="svg_exclamation" alt="warning icon"/>
+                                        <img title="@product.ProductExpiredMessage" src="~/dist/warning.svg" id="svg_exclamation" alt="warning icon"/>
                                     </span>
                                 }
-
                             </td>
                             <td nowrap class="text-center">
                                 <div class='btn-group'>
@@ -196,9 +192,11 @@
        sorting = !sorting;
        
        var icon = test.querySelector("svg");
-       if (sorting){
-         icon.classList.toggle('fa-sort-up');
-       }else icon.classList.toggle('fa-sort-down');
+       
+       if (sorting)
+           icon.classList.toggle('fa-sort-up');
+       else 
+           icon.classList.toggle('fa-sort-down');
        
     
      }

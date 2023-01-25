@@ -124,8 +124,8 @@ namespace HSMServer.Model.TreeViewModels
                 AddNewProductViewModel(product);
 
             foreach (var product in products)
-            foreach (var (_, subProduct) in product.SubProducts)
-                Nodes[product.Id].AddSubNode(Nodes[subProduct.Id]);
+                foreach (var (_, subProduct) in product.SubProducts)
+                    Nodes[product.Id].AddSubNode(Nodes[subProduct.Id]);
 
             foreach (var (_, key) in AccessKeys)
                 key.UpdateNodePath();

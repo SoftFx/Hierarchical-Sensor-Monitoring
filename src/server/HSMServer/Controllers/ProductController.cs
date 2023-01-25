@@ -64,7 +64,7 @@ namespace HSMServer.Controllers
                 result = result.Where(x => x.Name.Contains(searchProductName, StringComparison.CurrentCultureIgnoreCase));
             
             if (!string.IsNullOrEmpty(searchProductManager))
-                result = result.Where(x => x.Managers.Any(y => y.Contains(searchProductManager)));
+                result = result.Where(x => x.Managers.Any(y => y.Contains(searchProductManager, StringComparison.CurrentCultureIgnoreCase)));
             
             return View(result.ToList());
         }

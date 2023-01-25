@@ -9,7 +9,7 @@ namespace HSMServer.Extensions
 
         public static string ToDefaultFormat(this DateTime dateTime) => dateTime.ToString(DateTimeDefaultFormat);
 
-        public static string GetStaticTimeAgo(this DateTime lastUpdateDate)
+        public static string GetTimeAgo(this DateTime lastUpdateDate)
         {
             string UnitsToString(double value, string unit)
             {

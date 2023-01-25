@@ -29,7 +29,7 @@
                             </div>
                             @Model.Name
                         </div>
-                        <div class='col-md-auto time-ago-div me-1' id='update_@nodeId'>updated @Model.UpdateTime.GetStaticTimeAgo()</div>
+                        <div class='col-md-auto time-ago-div me-1' id='update_@nodeId'>updated @Model.UpdateTime.GetTimeAgo()</div>
                     </div>
                     <span class="text-break">
                         @if (Model is SensorNodeViewModel sensorModel)
