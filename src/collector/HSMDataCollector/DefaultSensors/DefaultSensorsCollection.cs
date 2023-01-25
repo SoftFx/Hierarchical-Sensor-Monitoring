@@ -69,6 +69,11 @@ namespace HSMDataCollector.DefaultSensors
                 : throw _notSupportedException;
         }
 
+        IWindowsCollection IWindowsCollection.AddWindowsSystemLastRestartSensor(string nodePath)
+        {
+            return !IsUnixOS ? Register(new WindowsSystemLastRestart(nodePath)) : throw _notSupportedException;
+        }
+
 
         IUnixCollection IUnixCollection.AddProcessCpuSensor(string nodePath)
         {

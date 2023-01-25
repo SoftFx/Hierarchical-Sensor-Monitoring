@@ -148,8 +148,8 @@ namespace HSMDataCollector.Core
 
             foreach (var defaultSensor in _defaultSensors)
             {
-                defaultSensor.Dispose();
                 allData.Add(defaultSensor.GetLastValue());
+                defaultSensor.Dispose();
             }
 
             if (allData.Count != 0)

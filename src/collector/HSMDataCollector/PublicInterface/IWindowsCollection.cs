@@ -17,5 +17,7 @@ namespace HSMDataCollector.PublicInterface
 
 
         IWindowsCollection AddWindowsNeedUpdateSensor(string nodePath = null, TimeSpan? recevedDataPeriod = null, TimeSpan? updateInterval = null);
+
+        IWindowsCollection AddWindowsSystemLastRestartSensor(string nodePath = null);
     }
 }

@@ -1,4 +1,5 @@
 ﻿using HSMSensorDataObjects.SensorValueRequests;
+using System;
 
 namespace HSMDataCollector.SensorsFactory
 {
@@ -16,6 +17,8 @@ namespace HSMDataCollector.SensorsFactory
                     return new DoubleSensorValue() { Value = doubleV };
                 case string stringV:
                     return new StringSensorValue() { Value = stringV };
+                case TimeSpan timeSpanV:
+                    return new TimeSpanSensorValue() { Value = timeSpanV };
                 case SensorValueBase sensorV:
                     return sensorV;
                 default:
