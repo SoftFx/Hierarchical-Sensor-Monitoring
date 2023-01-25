@@ -130,6 +130,9 @@ namespace HSMDataCollector.Core
 
             _logger?.Info("DataCollector stopping...");
 
+            foreach (var defaultSensor in _defaultSensors)
+                defaultSensor.Dispose();
+
             var allData = new List<SensorValueBase>(1 << 3);
             if (_dataQueue != null)
             {
@@ -145,12 +148,6 @@ namespace HSMDataCollector.Core
 
             foreach (var pair in _nameToSensor)
                 pair.Value.Dispose();
-
-            foreach (var defaultSensor in _defaultSensors)
-            {
-                allData.Add(defaultSensor.GetLastValue());
-                defaultSensor.Dispose();
-            }
 
             if (allData.Count != 0)
                 SendMonitoringData(allData);

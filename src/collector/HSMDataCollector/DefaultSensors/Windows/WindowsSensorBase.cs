@@ -25,9 +25,9 @@ namespace HSMDataCollector.DefaultSensors.Windows
 
         internal override void Stop()
         {
-            _performanceCounter?.Dispose();
-
             base.Stop();
+
+            _performanceCounter?.Dispose();
         }
 
         protected override double GetBarData() => _performanceCounter.NextValue();

@@ -11,13 +11,20 @@ namespace HSMDataCollector.DefaultSensors
         protected MonitoringSensorBase(string nodePath) : base(nodePath) { }
 
 
-        internal override SensorValueBase GetLastValue() => BuildValue();
+        internal override void Stop()
+        {
+            base.Stop();
 
-        protected override void OnTimerTick(object _ = null) => SendCollectedValue(BuildValue());
+            SendValue();
+        }
+
+        protected override void OnTimerTick(object _ = null) => SendValue();
 
         protected virtual string GetComment() => null;
 
         protected abstract T GetValue();
+
+        private void SendValue() => SendCollectedValue(BuildValue());
 
         private SensorValueBase BuildValue()
         {
