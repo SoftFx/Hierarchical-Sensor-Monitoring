@@ -20,6 +20,8 @@ namespace HSMServer.Model.Validators
             RuleFor(x => x)
                 .NotNull()
                 .WithMessage(ErrorConstants.NameNotNull)
+                .MaximumLength(100)
+                .WithMessage(ErrorConstants.ProductNameMaxLength)
                 .Must(IsUniqueName)
                 .WithMessage(ErrorConstants.NameUnique)
                 .Matches(@"^[0-9a-zA-Z .,_\-=#:;%&*()]*$", RegexOptions.IgnoreCase)

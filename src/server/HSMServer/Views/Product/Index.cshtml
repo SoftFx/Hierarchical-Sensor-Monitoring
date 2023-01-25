@@ -12,7 +12,7 @@
 </script>
 
 <div class="container">
-    <div class="row justify-content-center">
+    <div class="row w-100 justify-content-center">
         @await Html.PartialAsync("_ProductList", Model)
         <script>
         let errorText = '@TempData[TextConstants.TempDataErrorText]';
@@ -21,7 +21,6 @@
             if (errorSpan != undefined) {
                 errorSpan.textContent = errorText;//.slice(0, errorText.length - 5);
                 errorSpan.setAttribute("style", "display: block;color: red;font-size: large;font-weight: normal;white-space: pre-line");
-
             }
         }
         </script>
@@ -36,13 +35,13 @@
                 <h5 class="modal-title" id="modalDeleteLabel">Remove product</h5>
             </div>
 
-            <div id="modalDeleteBody" class="modal-body">
+            <div id="modalDeleteBody" class="modal-body text-break">
 
             </div>
 
             <div class="modal-footer">
-                <button id="closeDeleteButton" type="button" class="btn btn-secondary" data-bs-dismiss="modalDelete">Close</button>
-                <button id="confirmDeleteButton" type="button" class="btn btn-secondary">Confirm</button>
+                <button id="closeDeleteButton" type="button" class="btn btn-secondary col-2" data-bs-dismiss="modalDelete">Close</button>
+                <button id="confirmDeleteButton" type="button" class="btn btn-secondary col-2">Confirm</button>
             </div>
         </div>
     </div>
@@ -56,10 +55,10 @@
     $('[id^="delete_"]').on("click",
         function () {
             key = this.id.substring("delete_".length, this.id.length);
-            name = $('#inputName_' + key).val();
-
+            name = $('#inputName_' + key).text();
+            
             $('#modalDeleteBody').empty();
-            $('#modalDeleteBody').append('Do you really want to remove "' + name + '" product?');
+            $('#modalDeleteBody').append(`Do you really want to remove "${name.trim().substring(0, 100)}" product?`);
 
             var modal = new bootstrap.Modal(document.getElementById('modalDelete'));
             modal.show();
