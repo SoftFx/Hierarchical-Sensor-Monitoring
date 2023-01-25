@@ -11,7 +11,7 @@ namespace HSMServer.Model.ViewModel
 {
     public record ProductViewModel
     {
-        public static string ProductExpiredMessage => $"Sensor hasn't been updated since {(DateTime.UtcNow - ConfigurationConstants.DefaultExpirationTime).ToDefaultFormat()}";
+        public static TimeSpan ProductExpiredTime => ConfigurationConstants.DefaultExpirationTime;
         
         
         public Guid Id { get; }
@@ -39,7 +39,7 @@ namespace HSMServer.Model.ViewModel
             LastUpdateDate = product.UpdateTime;
             ShortLastUpdateTime = LastUpdateDate.GetTimeAgo();
             Managers = userManager.GetManagers(Id).Select(manager => manager.UserName).ToList();
-            ProductUpdateIsExpired = (DateTime.UtcNow - LastUpdateDate).Ticks >= ConfigurationConstants.DefaultExpirationTime.Ticks;
+            ProductUpdateIsExpired = (DateTime.UtcNow - LastUpdateDate).Ticks >= ProductExpiredTime.Ticks;
         }
     }
 }

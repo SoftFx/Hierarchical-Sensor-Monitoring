@@ -100,7 +100,7 @@
                                 @if (product.ProductUpdateIsExpired)
                                 {
                                     <span>
-                                        <img title="@ProductViewModel.ProductExpiredMessage" src="~/dist/warning.svg" id="svg_exclamation" alt="warning icon"/>
+                                        <img title="Sensors haven't been updated for @ProductViewModel.ProductExpiredTime.ToToolTip()" src="~/dist/warning.svg" id="svg_exclamation" alt="warning icon"/>
                                     </span>
                                 }
                             </td>
