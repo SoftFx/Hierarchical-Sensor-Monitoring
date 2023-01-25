@@ -94,7 +94,7 @@
                                 }
                             </td>
                             <td>
-                                <span title="@product.LastUpdateDate.ToDefaultFormat()">
+                                <span title="@product.LastUpdateDate.ToDefaultFormat()" time="@product.LastUpdateDate">
                                     @product.ShortLastUpdateTime
                                 </span>
                                 @if (product.ProductUpdateIsExpired)
@@ -163,10 +163,10 @@
           
             x = rows[i].getElementsByTagName("TD")[2];
             y = rows[i + 1].getElementsByTagName("TD")[2];
-           
-            let xdate = (new Date(x.getElementsByTagName('span')[0].attributes[0].value)).getTime()
-            let ydate =(new Date(y.getElementsByTagName('span')[0].attributes[0].value)).getTime()
-           
+            
+            let xdate = (new Date(x.getElementsByTagName('span')[0].attributes[1].value)).getTime()
+            let ydate =(new Date(y.getElementsByTagName('span')[0].attributes[1].value)).getTime()
+        
             if (asc === true){
                  if (xdate > ydate) {
                     shouldSwitch = true;
@@ -197,5 +197,7 @@
            icon.classList.toggle('fa-sort-up');
        else 
            icon.classList.toggle('fa-sort-down');
+       
+    
      }
 </script>
