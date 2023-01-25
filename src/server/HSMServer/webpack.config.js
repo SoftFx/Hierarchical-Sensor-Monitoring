@@ -35,7 +35,7 @@ module.exports = {
         new CopyPlugin({
             patterns: [
                 { 
-                    from: "wwwroot/src/svg",
+                    from: path.resolve(__dirname, "wwwroot/src/svg"),
                     to: "" 
                 }
             ]
