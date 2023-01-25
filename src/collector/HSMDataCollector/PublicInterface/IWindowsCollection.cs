@@ -16,7 +16,7 @@ namespace HSMDataCollector.PublicInterface
         IWindowsCollection AddFreeRamMemorySensor(string nodePath = null);
 
 
-        IWindowsCollection AddWindowsNeedUpdateSensor(string nodePath = null, TimeSpan? recevedDataPeriod = null, TimeSpan? updateInterval = null);
+        IWindowsCollection AddWindowsNeedUpdateSensor(string nodePath = null, TimeSpan? receivedDataPeriod = null, TimeSpan? updateInterval = null);
 
         IWindowsCollection AddWindowsSystemLastRestartSensor(string nodePath = null);
     }

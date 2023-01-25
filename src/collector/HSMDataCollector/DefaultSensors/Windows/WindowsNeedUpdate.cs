@@ -5,7 +5,7 @@ namespace HSMDataCollector.DefaultSensors.Windows
 {
     internal sealed class WindowsNeedUpdate : MonitoringSensorBase<bool>
     {
-        private readonly TimeSpan _defaultRecevedDataPeriod = TimeSpan.FromHours(24);
+        private readonly TimeSpan _defaultReceivedDataPeriod = TimeSpan.FromHours(24);
         private readonly TimeSpan _defaultExpectedUpdateInterval = TimeSpan.FromDays(30);
 
 
@@ -19,10 +19,10 @@ namespace HSMDataCollector.DefaultSensors.Windows
         protected override string SensorName => "Is need Windows update";
 
 
-        public WindowsNeedUpdate(string nodePath, TimeSpan? recevedDataPeriod, TimeSpan? updateInterval)
+        public WindowsNeedUpdate(string nodePath, TimeSpan? receivedDataPeriod, TimeSpan? updateInterval)
             : base(nodePath)
         {
-            ReceiveDataPeriod = recevedDataPeriod ?? _defaultRecevedDataPeriod;
+            ReceiveDataPeriod = receivedDataPeriod ?? _defaultReceivedDataPeriod;
             ExpectedUpdateInterval = updateInterval ?? _defaultExpectedUpdateInterval;
 
             WindowsLastUpdate = WindowsInfo.GetInstallationDate();

@@ -7,6 +7,8 @@ namespace HSMDataCollector.DefaultSensors.Unix
     {
         private const int MbDivisor = 1 << 20;
 
+        private readonly Process _currentProcess = Process.GetCurrentProcess();
+
 
         protected override string SensorName => "Process memory MB";
 
@@ -14,11 +16,6 @@ namespace HSMDataCollector.DefaultSensors.Unix
         internal UnixProcessMemory(string nodePath) : base(nodePath) { }
 
 
-        protected override double GetBarData()
-        {
-            Process currentProcess = Process.GetCurrentProcess();
-
-            return currentProcess.WorkingSet64 / MbDivisor;
-        }
+        protected override double GetBarData() => _currentProcess.WorkingSet64 / MbDivisor;
     }
 }

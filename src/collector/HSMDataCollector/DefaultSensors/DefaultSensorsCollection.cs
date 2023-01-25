@@ -62,10 +62,10 @@ namespace HSMDataCollector.DefaultSensors
         }
 
         IWindowsCollection IWindowsCollection.AddWindowsNeedUpdateSensor(string nodePath,
-            TimeSpan? recevedDataPeriod, TimeSpan? updateInterval)
+            TimeSpan? receivedDataPeriod, TimeSpan? updateInterval)
         {
             return !IsUnixOS
-                ? Register(new WindowsNeedUpdate(nodePath, recevedDataPeriod, updateInterval))
+                ? Register(new WindowsNeedUpdate(nodePath, receivedDataPeriod, updateInterval))
                 : throw _notSupportedException;
         }
 

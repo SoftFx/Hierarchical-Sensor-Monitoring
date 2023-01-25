@@ -13,11 +13,11 @@ namespace HSMDataCollector.DefaultSensors
 
         internal override SensorValueBase GetLastValue() => BuildValue();
 
-        protected abstract T GetValue();
+        protected override void OnTimerTick(object _ = null) => SendCollectedValue(BuildValue());
 
         protected virtual string GetComment() => null;
 
-        protected override void OnTimerTick(object _ = null) => SendCollectedValue(BuildValue());
+        protected abstract T GetValue();
 
         private SensorValueBase BuildValue()
         {
