@@ -89,7 +89,7 @@
                                 }
                                 else
                                 {
-                                    var managers = string.Join(",", product.Managers);
+                                    var managers = string.Join(", ", product.Managers);
                                     <span>@Html.Raw(managers)</span>
                                 }
                             </td>
@@ -100,7 +100,7 @@
                                 @if (product.ProductUpdateIsExpired)
                                 {
                                     <span>
-                                        <img title="Sensors haven't been updated for @ProductViewModel.ProductExpiredTime.ToToolTip()" src="~/dist/warning.svg" id="svg_exclamation" alt="warning icon"/>
+                                        <img title="Product sensor(s) haven't been updated for @ProductViewModel.ProductExpiredTime.ToToolTip()" src="~/dist/warning.svg" id="svg_exclamation" alt="warning icon"/>
                                     </span>
                                 }
                             </td>
