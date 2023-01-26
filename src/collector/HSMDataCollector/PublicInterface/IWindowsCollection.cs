@@ -8,6 +8,8 @@ namespace HSMDataCollector.PublicInterface
 
         IWindowsCollection AddSystemMonitoringSensors(BarSensorOptions options = null);
 
+        IWindowsCollection AddDriveMonitoringSensors(DriveSensorOptions options = null);
+
         IWindowsCollection AddWindowsSensors(WindowsSensorOptions options = null);
 
 
@@ -21,6 +23,9 @@ namespace HSMDataCollector.PublicInterface
         IWindowsCollection AddTotalCpu(BarSensorOptions options = null);
 
         IWindowsCollection AddFreeRamMemory(BarSensorOptions options = null);
+
+
+        IWindowsCollection AddFreeDriveSpace(DriveSensorOptions options = null);
 
 
         IWindowsCollection AddWindowsNeedUpdate(WindowsSensorOptions options = null);

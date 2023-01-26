@@ -25,6 +25,15 @@ namespace HSMDataCollector.Options
     }
 
 
+    public sealed class DriveSensorOptions : SensorOptions
+    {
+        public string DriveName { get; set; } = @"C:\";
+
+
+        public DriveSensorOptions(string nodePath) : base(nodePath) { }
+    }
+
+
     public sealed class WindowsSensorOptions : SensorOptions
     {
         public TimeSpan AcceptableUpdateInterval { get; set; } = TimeSpan.FromDays(30);
