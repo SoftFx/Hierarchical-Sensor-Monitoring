@@ -25,6 +25,8 @@ namespace HSMDataCollector.PublicInterface
 
         IWindowsCollection AddWindowsNeedUpdate(WindowsSensorOptions options = null);
 
+        IWindowsCollection AddWindowsLastUpdate(WindowsSensorOptions options = null);
+
         IWindowsCollection AddWindowsLastRestart(WindowsSensorOptions options = null);
     }
 }

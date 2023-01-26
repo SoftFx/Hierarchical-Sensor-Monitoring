@@ -79,6 +79,7 @@ namespace HSMDataCollector.DefaultSensors
                 options.NodePath = SystemMonitoringNodeName;
 
             return (this as IWindowsCollection).AddWindowsNeedUpdate(options)
+                                               .AddWindowsLastUpdate(options)
                                                .AddWindowsLastRestart(options);
         }
 
@@ -123,6 +124,13 @@ namespace HSMDataCollector.DefaultSensors
             return !IsUnixOS
                 ? Register(new WindowsNeedUpdate(GetWindowsOptions(options)))
                 : throw _notSupportedException;
+        }
+
+        IWindowsCollection IWindowsCollection.AddWindowsLastUpdate(WindowsSensorOptions options)
+        {
+            return !IsUnixOS
+               ? Register(new WindowsLastUpdate(GetWindowsOptions(options)))
+               : throw _notSupportedException;
         }
 
         IWindowsCollection IWindowsCollection.AddWindowsLastRestart(WindowsSensorOptions options)
