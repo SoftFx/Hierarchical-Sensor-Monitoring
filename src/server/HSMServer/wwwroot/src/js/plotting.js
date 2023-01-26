@@ -131,7 +131,7 @@ function convertToGraphData(graphData, graphType, graphName) {
                     //     size: 8
                     // }
                     tickformat: '%s',
-                    dtick: 10000
+                    dtick: 60*60*24
                 },
                 xaxis:{
                     range:[]
