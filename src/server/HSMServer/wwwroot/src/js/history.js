@@ -233,7 +233,7 @@ function Data(to, from, type, encodedId) {
     }
 
     function isGraphAvailable(type) {
-        return !(type === "3" || type === "6" || type === "7");
+        return !(type === "3" || type === "6");
     }
 
     function isTableHistorySelected(encodedId) {

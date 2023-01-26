@@ -1,18 +1,33 @@
 ﻿window.displayGraph = function(graphData, graphType, graphElementId, graphName) {
     let convertedData = convertToGraphData(graphData, graphType, graphName);
 
-    //console.log('converted graph data:', convertedData);
+    console.log('converted graph data:', convertedData);
     let zoomData = getPreviousZoomData(graphElementId);
-    if (zoomData === undefined || zoomData === null) {
-        var layout = { autosize: true };
-        var config = { responsive: true }
-        Plotly.newPlot(graphElementId, convertedData, layout, config);    
-    } else {
-        let layout = createLayoutFromZoomData(zoomData);
-        var config = { responsive: true }
-        Plotly.newPlot(graphElementId, convertedData, layout, config);
+    var config = { responsive: true }
+    if(graphType === "7"){
+        convertedData[1].autosize = true;
+        if (zoomData === undefined || zoomData === null) {
+            Plotly.newPlot(graphElementId, convertedData[0], convertedData[1], config);
+        } else {
+            let processedData = Object.values(JSON.parse(zoomData));
+            console.log('zoomData:', zoomData);
+            console.log('processedData:', processedData);
+            if(processedData.length >= 2){
+                convertedData[1].xaxis.range = [processedData[1], processedData[0]];
+                //convertedData[1].yaxis.range =  [processedData[2], processedData[3]];
+            }
+            convertedData[1].autosize = true;
+            Plotly.newPlot(graphElementId, convertedData[0], convertedData[1], config);
+        }
+    }else{
+        if (zoomData === undefined || zoomData === null) {
+            var layout = { autosize: true };
+            Plotly.newPlot(graphElementId, convertedData, layout, config);
+        } else {
+            let layout = createLayoutFromZoomData(zoomData);
+            Plotly.newPlot(graphElementId, convertedData, layout, config);
+        }
     }
-
     let graphDiv = document.getElementById(graphElementId);
     graphDiv.on('plotly_relayout',
         function(eventData) {
@@ -22,6 +37,7 @@
 
 function createLayoutFromZoomData(zoomData) {
     let processedData = Object.values(JSON.parse(zoomData));
+    console.log("processedData:", processedData)
     var layout = {
         xaxis : {
             range: [processedData[0], processedData[1]]
@@ -43,9 +59,10 @@ function convertToGraphData(graphData, graphType, graphName) {
     
     let data;
     let timeList;
+    var uniqueData;
     switch (graphType) {
         case "0":
-            const uniqueData = getUniqueData(escapedData)
+            uniqueData = getUniqueData(escapedData)
             data = getBoolData(uniqueData);
             timeList = getTimeList(uniqueData);
             return getSimpleGraphData(timeList, data, "bar");
@@ -61,6 +78,51 @@ function convertToGraphData(graphData, graphType, graphName) {
             return createBarGraphData(escapedData, graphName);
         case "5":
             return createBarGraphData(escapedData, graphName);
+        case "7":
+            uniqueData = getUniqueData(escapedData)
+            timeList = getTimeList(uniqueData);
+            data = uniqueData.map(function (i) {
+                let time = i.value.split(':');
+                let temp = time[0].split('.')
+                let days, hours, minutes,seconds;
+                if(temp.length > 1){
+                    days = temp[0]
+                    hours = temp[1]
+                }else{
+                    hours = time[0];
+                    minutes = time[1];
+                    seconds = time[2];
+                    days = 0;
+                }
+                // let t = new Date(1970, 0, 1); // Epoch
+                // t.setSeconds(new TimeSpan.TimeSpan(0, seconds, minutes, hours, days).totalSeconds());
+                // return t;
+                return new TimeSpan.TimeSpan(0, seconds, minutes, hours, days).totalSeconds();
+            })
+            let dataText = data.map(function (i){
+                const timespan = TimeSpan.fromSeconds(i)
+                let text = ``;
+                if(timespan.days !== 0){
+                    text += `${timespan.days}d `
+                }
+                text += `${timespan.hours}h ${timespan.minutes}m ${timespan.seconds}s`
+                return text
+            })
+            const layout ={
+                yaxis: {
+                    ticktext: dataText,
+                    tickvals: data,
+                    // tickfont:{
+                    //     size: 8
+                    // }
+                    //tickformat: '%H:%M:%S'
+                },
+                xaxis:{
+                    range:[]
+                }
+            };
+            console.log(layout.yaxis)
+            return getTimeSpanGraphData(timeList, data, "bar", layout)
         default:
             return undefined;
     }
@@ -95,7 +157,19 @@ function convertToGraphData(graphData, graphType, graphName) {
         ];
         return data;
     }
-
+    
+    function getTimeSpanGraphData(timeList, dataList, chartType, layout){
+        let data = [
+            {
+                x: timeList,
+                y: dataList,
+                type: chartType,
+                //mode: "lines"
+            }
+        ];
+        return [data, layout];
+    }
+    
     function getNumbersData(escapedItems) {
         let numbers = escapedItems.map(function (i) {
             return i.value;
