@@ -1,5 +1,6 @@
 ﻿const path = require("path");
 const webpack = require('webpack');
+const CopyPlugin = require("copy-webpack-plugin");
 
 const MomentLocalesPlugin = require('moment-locales-webpack-plugin');
 
@@ -30,6 +31,14 @@ module.exports = {
         new webpack.ProvidePlugin({
             $: 'jquery',
             jQuery: 'jquery',
+        }),
+        new CopyPlugin({
+            patterns: [
+                { 
+                    from: path.resolve(__dirname, "wwwroot/src/svg"),
+                    to: "" 
+                }
+            ]
         }),
         new MomentLocalesPlugin(),
     ]

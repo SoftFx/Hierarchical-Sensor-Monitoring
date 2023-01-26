@@ -1,0 +1,56 @@
+
+#productTable td{
+    min-width: 10rem;
+    max-width: 10rem;
+}
+
+#productTable .form-control{
+    border: 0;
+    padding-bottom: 0;
+    padding-left: 0;
+    border-bottom: solid;
+    border-bottom-color: grey;
+    border-bottom-width: thin;
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+}
+
+#productTable .form-control:focus {
+    border-color: inherit;
+    -webkit-box-shadow: none!important;
+    box-shadow: none!important;
+}
+
+#productTable .form-floating>label{
+    display: flex;
+    align-items: flex-end;
+    transform-origin: 0 -4rem;
+    padding: 0;
+}
+.settingsList{
+    --bs-list-group-border-width: 0;
+    line-height: 0.75rem;
+}
+
+.settingsList > li{
+    color: grey;
+}
+
+.settingsList > li > a:link{
+    color: cadetblue;
+}
+
+.sortSubmit{
+    padding: 0;
+    font-weight: 700;
+    border-width: 0;
+}
+
+#svg_exclamation {
+    height: 1em;
+    width: 1.25em;
+}
+
+#formProductTable{
+    --bs-table-striped-bg: #edf0f5;
+}

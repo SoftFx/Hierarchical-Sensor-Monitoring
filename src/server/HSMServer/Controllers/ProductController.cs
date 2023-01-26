@@ -49,18 +49,24 @@ namespace HSMServer.Controllers
 
         #region Products
 
-        public IActionResult Index()
+        public IActionResult Index(string searchProductName = "", string searchProductManager = "")
         {
+            ViewBag.ProductName = searchProductName;
+            ViewBag.ProductManager = searchProductManager;
+        
             var user = HttpContext.User as User;
+            
+            var result = _treeViewModel.GetUserProducts(user)
+                .OrderBy(x => x.Name)
+                .Select(x => new ProductViewModel(x, _userManager));
 
-            var products = _treeViewModel.GetUserProducts(user);
-
-            products = products?.OrderBy(x => x.DisplayName).ToList();
-
-            var result = products?.Select(x => new ProductViewModel(
-                _userManager.GetManagers(x.Id).FirstOrDefault()?.UserName ?? "---", x)).ToList();
-
-            return View(result);
+            if (!string.IsNullOrEmpty(searchProductName))
+                result = result.Where(x => x.Name.Contains(searchProductName, StringComparison.CurrentCultureIgnoreCase));
+            
+            if (!string.IsNullOrEmpty(searchProductManager))
+                result = result.Where(x => x.Managers.Any(y => y.Contains(searchProductManager, StringComparison.CurrentCultureIgnoreCase)));
+            
+            return View(result.ToList());
         }
 
         public void CreateProduct([FromQuery(Name = "Product")] string productName)

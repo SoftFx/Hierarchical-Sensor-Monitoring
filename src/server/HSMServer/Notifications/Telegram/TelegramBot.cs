@@ -35,8 +35,6 @@ namespace HSMServer.Notifications
 
         private bool IsBotRunning => _bot is not null;
 
-        private string BotName => _configurationProvider.ReadOrDefault(ConfigurationConstants.BotName).Value;
-
         private string BotToken => _configurationProvider.ReadOrDefault(ConfigurationConstants.BotToken).Value;
 
         private bool AreBotMessagesEnabled => bool.TryParse(_configurationProvider.ReadOrDefault(
@@ -66,7 +64,9 @@ namespace HSMServer.Notifications
 
             await StopBot();
         }
-
+        
+        internal string BotName => _configurationProvider.ReadOrDefault(ConfigurationConstants.BotName).Value;
+        
         internal string GetInvitationLink(User user) =>
             $"https://t.me/{BotName}?start={_addressBook.BuildInvitationToken(user)}";
 
@@ -79,7 +79,7 @@ namespace HSMServer.Notifications
 
             return link.InviteLink;
         }
-
+        
         internal void RemoveOldInvitationTokens() => _addressBook.RemoveOldTokens();
 
         internal void RemoveChat(INotificatable entity, long chatId)

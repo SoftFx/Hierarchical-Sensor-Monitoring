@@ -2,9 +2,23 @@
 
 ## Site
 
-* Remove for sensors has been added
-* Remove for nodes has been added
-* Toasts for copy logic have been added
+* Toasts for Copy and Remove logic have been added
+
+### Tree
+
+* Removal logic for sensors has been added
+* Removal logic for nodes has been added
+
+### Edit product
+
+* The guid how to add a bot in a telegram group has been added
+
+### Product Table
+
+* Product table has been refactored
+* Last update column has been added
+* Filters by Name and Managers have been added
+* Sorting by Last update has been added
 
 ## Rest API
 

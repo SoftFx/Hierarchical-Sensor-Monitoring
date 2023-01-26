@@ -8,6 +8,7 @@
   "author": "HSM team",
   "license": "MIT",
   "devDependencies": {
+    "copy-webpack-plugin": "11.0.0",
     "css-loader": "6.7.3",
     "expose-loader": "4.0.0",
     "style-loader": "3.3.1",
