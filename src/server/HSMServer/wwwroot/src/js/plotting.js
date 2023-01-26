@@ -19,6 +19,21 @@
             convertedData[1].autosize = true;
             Plotly.newPlot(graphElementId, convertedData[0], convertedData[1], config);
         }
+        
+        var graph = document.getElementById(graphElementId)
+        let ticks = graph.querySelectorAll('.ytick')
+        ticks.forEach((tick) => {
+           let text = Number(tick.querySelector('text').innerHTML);
+           console.log(text);
+           
+           let newText = new TimeSpan.TimeSpan();
+           newText.addSeconds(text);
+           let newFormat = `${newText.days}d ${newText.hours}h ${newText.minutes}m ${newText.seconds}s`
+           console.log(newText.days, newText.hours, newText.minutes, newText.seconds);
+           tick.querySelector('text').innerHTML = newFormat;
+        })
+        console.log(ticks)
+        
     }else{
         if (zoomData === undefined || zoomData === null) {
             var layout = { autosize: true };
@@ -110,12 +125,13 @@ function convertToGraphData(graphData, graphType, graphName) {
             })
             const layout ={
                 yaxis: {
-                    ticktext: dataText,
-                    tickvals: data,
+                    // ticktext: dataText,
+                    // tickvals: data,
                     // tickfont:{
                     //     size: 8
                     // }
-                    //tickformat: '%H:%M:%S'
+                    tickformat: '%s',
+                    dtick: 10000
                 },
                 xaxis:{
                     range:[]

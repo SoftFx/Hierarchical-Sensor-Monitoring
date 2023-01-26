@@ -18,8 +18,8 @@ import * as Plotly from 'plotly.js/dist/plotly';
 window.Plotly = Plotly;
 
 import * as TimeSpan from 'timespan'
-window.TimeSpan = TimeSpan
 window.TimeSpan = require('timespan');
+window.TimeSpan = TimeSpan
 
 import * as d3 from 'd3-time-format'
 window.d3 = d3
