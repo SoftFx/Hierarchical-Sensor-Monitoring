@@ -24,7 +24,6 @@ namespace HSMDataCollector.DefaultSensors
             _collectTimer = new Timer(CollectBar, null, Timeout.Infinite, Timeout.Infinite);
 
             BuildNewBar();
-            Start();
         }
 
 

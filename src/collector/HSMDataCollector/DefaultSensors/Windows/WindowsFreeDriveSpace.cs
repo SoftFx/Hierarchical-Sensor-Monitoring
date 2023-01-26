@@ -7,16 +7,16 @@ namespace HSMDataCollector.DefaultSensors.Windows
     {
         private const double MbDivisor = 1 << 20;
 
-        private readonly string _driveName;
+        private readonly char _driveName;
         private readonly DriveInfo _driveInfo;
 
-        protected override string SensorName => $"Free drive {_driveName} space MB";
+        protected override string SensorName => $"Free space on disk {_driveName} MB";
 
 
         public WindowsFreeDriveSpace(DriveSensorOptions options) : base(options)
         {
-            _driveName = Path.GetPathRoot(options.DriveName);
-            _driveInfo = new DriveInfo(_driveName);
+            _driveInfo = new DriveInfo(options.DriveName);
+            _driveName = _driveInfo.Name[0];
         }
 
 

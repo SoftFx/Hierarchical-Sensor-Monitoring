@@ -40,6 +40,7 @@ namespace HSMDataCollector.Core
         /// <param name="isCPU">Specifies whether the sensor for current CPU usage is created</param>
         /// <param name="isFreeRam">Specifies whether the sensor for current free RAM in mb is created</param>
         /// <param name="specificPath">Specifies where sensors are created</param>
+        [Obsolete("Use method AddSystemMonitoringSensors(options) in Windows collection")]
         void InitializeSystemMonitoring(bool isCPU, bool isFreeRam, string specificPath = null);
 
         /// <summary>
@@ -50,6 +51,7 @@ namespace HSMDataCollector.Core
         /// <param name="isMemory">Specifies whether the sensor for current process RAM (in mb) is created</param>
         /// <param name="isThreads">Specifies whether the sensor for current process thread count is created</param>
         /// <param name="specificPath">Specifies where sensors are created</param>
+        [Obsolete("Use method AddProcessSensors(options) in Windows or Unix collections")]
         void InitializeProcessMonitoring(bool isCPU, bool isMemory, bool isThreads, string specificPath = null);
 
         /// <summary>
@@ -70,6 +72,7 @@ namespace HSMDataCollector.Core
         /// </summary>
         /// <param name="isUpdated">Specifies whether the sensor for the OS update status is created</param>
         /// <param name="specificPath">Specifies where sensors are created</param>
+        [Obsolete("Use method AddWindowsSensors(options) in Windows collection")]
         void InitializeOsMonitoring(bool isUpdated, string specificPath = null);
 
         /// <summary>
@@ -84,6 +87,7 @@ namespace HSMDataCollector.Core
         /// <param name="sensorInterval">The function is invoked every time the interval passes</param>
         /// <param name="updateInterval">Time interval for the version to become old</param>
         /// <param name="specificPath">Specifies where sensors are created</param>
+        [Obsolete("Use method AddWindowsSensors(options) in Windows collection")]
         bool InitializeWindowsUpdateMonitoring(TimeSpan sensorInterval, TimeSpan updateInterval, string specificPath = null);
 
         #endregion

@@ -20,6 +20,8 @@ namespace HSMDataCollector.Core
             {
                 value.ReceiveSensorValue += _valuesQueue.EnqueueData;
 
+                value.Start();
+
                 //_logger?.Info($"Added new sensor {key}");
             }
         }
