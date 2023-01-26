@@ -16,7 +16,7 @@ namespace HSMDataCollector.DefaultSensors
 
         internal const string CurrentProcessNodeName = "CurrentProcess";
         internal const string SystemMonitoringNodeName = "System monitoring";
-        internal const string DriveMonitoringNodeName = "Drive monitoring";
+        internal const string DiskMonitoringNodeName = "Disk monitoring";
 
         private static readonly NotSupportedException _notSupportedException = new NotSupportedException(NotSupportedSensor);
 
@@ -24,7 +24,7 @@ namespace HSMDataCollector.DefaultSensors
 
         private readonly BarSensorOptions _processOptions = new BarSensorOptions(CurrentProcessNodeName);
         private readonly BarSensorOptions _monitoringOptions = new BarSensorOptions(SystemMonitoringNodeName);
-        private readonly DriveSensorOptions _driveOptions = new DriveSensorOptions(DriveMonitoringNodeName);
+        private readonly DiskSensorOptions _diskOptions = new DiskSensorOptions(DiskMonitoringNodeName);
         private readonly WindowsSensorOptions _windowsOptions =
             new WindowsSensorOptions(SystemMonitoringNodeName)
             {
@@ -73,17 +73,17 @@ namespace HSMDataCollector.DefaultSensors
                                                .AddTotalCpu(options);
         }
 
-        IWindowsCollection IWindowsCollection.AddDriveMonitoringSensors(DriveSensorOptions options)
+        IWindowsCollection IWindowsCollection.AddDiskMonitoringSensors(DiskSensorOptions options)
         {
-            options = GetDriveMonitoringOptions(options);
+            options = GetDiskMonitoringOptions(options);
 
             if (options.NodePath == null)
-                options.NodePath = DriveMonitoringNodeName;
+                options.NodePath = DiskMonitoringNodeName;
 
-            return (this as IWindowsCollection).AddFreeDriveSpace(options);
+            return (this as IWindowsCollection).AddFreeDiskSpace(options);
         }
 
-        IWindowsCollection IWindowsCollection.AddWindowsSensors(WindowsSensorOptions options)
+        IWindowsCollection IWindowsCollection.AddWindowsInfoSensors(WindowsSensorOptions options)
         {
             options = GetWindowsOptions(options);
 
@@ -131,10 +131,10 @@ namespace HSMDataCollector.DefaultSensors
                 : throw _notSupportedException;
         }
 
-        IWindowsCollection IWindowsCollection.AddFreeDriveSpace(DriveSensorOptions options)
+        IWindowsCollection IWindowsCollection.AddFreeDiskSpace(DiskSensorOptions options)
         {
             return !IsUnixOS
-                ? Register(new WindowsFreeDriveSpace(GetDriveMonitoringOptions(options)))
+                ? Register(new WindowsFreeDiskSpace(GetDiskMonitoringOptions(options)))
                 : throw _notSupportedException;
         }
 
@@ -206,7 +206,7 @@ namespace HSMDataCollector.DefaultSensors
 
         private BarSensorOptions GetSystemMonitoringOptions(BarSensorOptions options) => options ?? _monitoringOptions;
 
-        private DriveSensorOptions GetDriveMonitoringOptions(DriveSensorOptions options) => options ?? _driveOptions;
+        private DiskSensorOptions GetDiskMonitoringOptions(DiskSensorOptions options) => options ?? _diskOptions;
 
         private WindowsSensorOptions GetWindowsOptions(WindowsSensorOptions options) => options ?? _windowsOptions;
     }

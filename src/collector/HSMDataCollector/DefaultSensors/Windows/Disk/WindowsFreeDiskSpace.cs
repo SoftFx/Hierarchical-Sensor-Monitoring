@@ -3,19 +3,20 @@ using System.IO;
 
 namespace HSMDataCollector.DefaultSensors.Windows
 {
-    internal sealed class WindowsFreeDriveSpace : MonitoringSensorBase<double>
+    internal sealed class WindowsFreeDiskSpace : MonitoringSensorBase<double>
     {
         private const double MbDivisor = 1 << 20;
 
         private readonly char _driveName;
         private readonly DriveInfo _driveInfo;
 
+
         protected override string SensorName => $"Free space on disk {_driveName} MB";
 
 
-        public WindowsFreeDriveSpace(DriveSensorOptions options) : base(options)
+        public WindowsFreeDiskSpace(DiskSensorOptions options) : base(options)
         {
-            _driveInfo = new DriveInfo(options.DriveName);
+            _driveInfo = new DriveInfo(options.TargetPath);
             _driveName = _driveInfo.Name[0];
         }
 

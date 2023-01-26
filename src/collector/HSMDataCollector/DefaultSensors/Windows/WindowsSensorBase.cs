@@ -1,5 +1,4 @@
-﻿using HSMDataCollector.DefaultSensors.MonitoringSensor;
-using HSMDataCollector.Options;
+﻿using HSMDataCollector.Options;
 using System.Diagnostics;
 
 namespace HSMDataCollector.DefaultSensors.Windows

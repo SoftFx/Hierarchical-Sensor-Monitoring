@@ -2,17 +2,17 @@
 using Microsoft.Win32;
 using System;
 
-namespace HSMDataCollector.Helpers
+namespace HSMDataCollector.DefaultSensors.Windows
 {
-    internal static class WindowsInfo
+    internal static class RegistryInfo
     {
-        private static readonly NLog.Logger _logger = Logger.Create(nameof(WindowsInfo));
+        private static readonly NLog.Logger _logger = Logger.Create(nameof(RegistryInfo));
 
         private static readonly RegistryView _view;
         private static readonly RegistryKey _localMachineKey;
 
 
-        static WindowsInfo()
+        static RegistryInfo()
         {
             _view = Environment.Is64BitOperatingSystem ? RegistryView.Registry64 : RegistryView.Registry32;
             _localMachineKey = RegistryKey.OpenBaseKey(RegistryHive.LocalMachine, _view);

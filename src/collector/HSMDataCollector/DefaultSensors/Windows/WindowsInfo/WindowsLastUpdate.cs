@@ -1,5 +1,4 @@
-﻿using HSMDataCollector.Helpers;
-using HSMDataCollector.Options;
+﻿using HSMDataCollector.Options;
 using System;
 
 namespace HSMDataCollector.DefaultSensors.Windows
@@ -13,7 +12,7 @@ namespace HSMDataCollector.DefaultSensors.Windows
 
         public WindowsLastUpdate(SensorOptions options) : base(options)
         {
-            LastUpdateDate = WindowsInfo.GetInstallationDate();
+            LastUpdateDate = RegistryInfo.GetInstallationDate();
         }
 
 

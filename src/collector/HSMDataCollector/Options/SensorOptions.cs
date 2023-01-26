@@ -25,12 +25,12 @@ namespace HSMDataCollector.Options
     }
 
 
-    public sealed class DriveSensorOptions : SensorOptions
+    public sealed class DiskSensorOptions : SensorOptions
     {
-        public string DriveName { get; set; } = @"C:\";
+        public string TargetPath { get; set; } = @"C:\";
 
 
-        public DriveSensorOptions(string nodePath) : base(nodePath) { }
+        public DiskSensorOptions(string nodePath) : base(nodePath) { }
     }
 
 

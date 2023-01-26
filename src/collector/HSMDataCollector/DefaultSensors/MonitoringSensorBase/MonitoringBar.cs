@@ -4,9 +4,9 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace HSMDataCollector.DefaultSensors.MonitoringSensor
+namespace HSMDataCollector.DefaultSensors
 {
-    public abstract class MonitoringBar<T> : BarSensorValueBase<T>
+    public abstract class MonitoringBarBase<T> : BarSensorValueBase<T>
     {
         protected readonly List<T> _barValues = new List<T>(1 << 6);
 
@@ -23,7 +23,7 @@ namespace HSMDataCollector.DefaultSensors.MonitoringSensor
                 _barValues.Add(value);
         }
 
-        internal MonitoringBar<T> Complete()
+        internal MonitoringBarBase<T> Complete()
         {
             Count = _barValues.Count;
 
@@ -58,7 +58,7 @@ namespace HSMDataCollector.DefaultSensors.MonitoringSensor
     }
 
 
-    public sealed class IntMonitoringBar : MonitoringBar<int>
+    public sealed class IntMonitoringBar : MonitoringBarBase<int>
     {
         public override SensorType Type => SensorType.IntegerBarSensor;
 
@@ -67,7 +67,7 @@ namespace HSMDataCollector.DefaultSensors.MonitoringSensor
     }
 
 
-    public sealed class DoubleMonitoringBar : MonitoringBar<double>
+    public sealed class DoubleMonitoringBar : MonitoringBarBase<double>
     {
         public override SensorType Type => SensorType.DoubleBarSensor;
 

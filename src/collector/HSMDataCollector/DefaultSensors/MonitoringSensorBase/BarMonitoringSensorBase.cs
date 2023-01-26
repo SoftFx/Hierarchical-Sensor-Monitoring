@@ -1,12 +1,11 @@
-﻿using HSMDataCollector.DefaultSensors.MonitoringSensor;
-using HSMDataCollector.Options;
+﻿using HSMDataCollector.Options;
 using System;
 using System.Threading;
 
 namespace HSMDataCollector.DefaultSensors
 {
     public abstract class BarMonitoringSensorBase<BarType, T> : MonitoringSensorBase<BarType>
-        where BarType : MonitoringBar<T>, new()
+        where BarType : MonitoringBarBase<T>, new()
         where T : struct
     {
         private readonly Timer _collectTimer;

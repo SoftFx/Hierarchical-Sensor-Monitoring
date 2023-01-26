@@ -1,5 +1,4 @@
-﻿using HSMDataCollector.Helpers;
-using HSMDataCollector.Options;
+﻿using HSMDataCollector.Options;
 using System;
 
 namespace HSMDataCollector.DefaultSensors.Windows
@@ -20,7 +19,7 @@ namespace HSMDataCollector.DefaultSensors.Windows
         {
             AcceptableUpdateInterval = options.AcceptableUpdateInterval;
 
-            WindowsLastUpdate = WindowsInfo.GetInstallationDate();
+            WindowsLastUpdate = RegistryInfo.GetInstallationDate();
         }
 
 
