@@ -172,9 +172,10 @@ function convertToGraphData(graphData, graphType, graphName) {
                     ticktext: tText,
                     tickvals: tVals,
                     tickfont:{
-                        size: 8
+                        size: 10
                     },
                     //dtick: 60*60*24
+                    automargin: "width+height"
                 }
             };
             return getTimeSpanGraphData(timeList, data, "bar", layout)
