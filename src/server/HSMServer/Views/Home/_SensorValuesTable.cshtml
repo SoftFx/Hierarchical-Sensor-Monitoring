@@ -56,7 +56,15 @@ else
                         else
                         {
                             var simpleValue = value as SimpleSensorValueViewModel;
-                            <td>@simpleValue.Value</td>
+
+                            if (Model.SensorType == SensorType.TimeSpan)
+                            {
+                                <td>@simpleValue.Value.ToFormattedString()</td>
+                            }
+                            else
+                            {
+                                <td>@simpleValue.Value</td>
+                            }
                         }
                         <td>
                             <span class="@value.Status.ToIcon()"></span> @value.Status
