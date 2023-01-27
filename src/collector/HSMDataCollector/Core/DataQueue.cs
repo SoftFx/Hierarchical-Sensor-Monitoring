@@ -1,4 +1,4 @@
-﻿using HSMDataCollector.Options;
+﻿using HSMDataCollector.Extensions;
 using HSMSensorDataObjects.SensorValueRequests;
 using System;
 using System.Collections.Generic;
@@ -8,8 +8,6 @@ namespace HSMDataCollector.Core
 {
     internal sealed class DataQueue : IDataQueue, IValuesQueue
     {
-        private const int MaxSensorValueStringLength = 1024;
-
         private readonly TimeSpan _packageSendingPeriod;
         private readonly int _maxQueueSize;
         private readonly int _maxValuesInPackage;
@@ -108,7 +106,7 @@ namespace HSMDataCollector.Core
 
         public void EnqueueData(SensorValueBase value)
         {
-            TrimDataIfNecessary(value);
+            value?.TrimLongComment();
             Enqueue(value);
         }
 
@@ -201,14 +199,6 @@ namespace HSMDataCollector.Core
         private void OnSendValues(List<SensorValueBase> values)
         {
             SendValues?.Invoke(this, values);
-        }
-
-        private static void TrimDataIfNecessary(SensorValueBase value)
-        {
-            if (value?.Comment != null && value.Comment.Length > MaxSensorValueStringLength)
-            {
-                value.Comment = value.Comment.Substring(0, MaxSensorValueStringLength);
-            }
         }
     }
 }

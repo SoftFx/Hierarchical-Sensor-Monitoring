@@ -58,9 +58,9 @@ namespace HSMDataCollector.Core
         /// <param name="options">Common options for datacollector</param>
         public DataCollector(CollectorOptions options)
         {
+            _nameToSensor = new ConcurrentDictionary<string, ISensor>();
             _listSendingAddress = options.ListEndpoint;
             _fileSendingAddress = options.FileEndpoint;
-            _nameToSensor = new ConcurrentDictionary<string, ISensor>();
 
             HttpClientHandler handler = new HttpClientHandler
             {
@@ -220,8 +220,7 @@ namespace HSMDataCollector.Core
             _logger?.Info($"Initialize {path} sensor...");
 
             NoParamsFuncSensor<bool> aliveSensor = new NoParamsFuncSensor<bool>(path,
-                _dataQueue as IValuesQueue, string.Empty, TimeSpan.FromSeconds(15),
-                SensorType.BooleanSensor, () => true, _isLogging);
+                _dataQueue as IValuesQueue, string.Empty, TimeSpan.FromSeconds(15), () => true, _isLogging);
             AddNewSensor(aliveSensor, aliveSensor.Path);
         }
 
@@ -473,7 +472,7 @@ namespace HSMDataCollector.Core
                 return typedSensor;
 
             OneParamFuncSensor<T, U> sensor = new OneParamFuncSensor<T, U>(path, _dataQueue as IValuesQueue, description,
-                interval, GetSensorType(typeof(T)), function, _isLogging);
+                interval, function, _isLogging);
             AddNewSensor(sensor, path);
 
             return sensor;
@@ -487,24 +486,10 @@ namespace HSMDataCollector.Core
                 return typedSensor;
 
             NoParamsFuncSensor<T> sensor = new NoParamsFuncSensor<T>(path, _dataQueue as IValuesQueue, description,
-                interval, GetSensorType(typeof(T)), function, _isLogging);
+                interval, function, _isLogging);
             AddNewSensor(sensor, path);
 
             return sensor;
-        }
-
-        private static SensorType GetSensorType(Type type)
-        {
-            if (type == typeof(int))
-                return SensorType.IntSensor;
-
-            if (type == typeof(double))
-                return SensorType.DoubleSensor;
-
-            if (type == typeof(bool))
-                return SensorType.BooleanSensor;
-
-            return SensorType.StringSensor;
         }
 
         #endregion

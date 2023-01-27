@@ -7,8 +7,8 @@ namespace HSMDataCollector.DefaultSensors.Windows
     {
         private const double MbDivisor = 1 << 20;
 
-        private readonly char _driveName;
         private readonly DriveInfo _driveInfo;
+        private readonly char _driveName;
 
 
         protected override string SensorName => $"Free space on disk {_driveName} MB";

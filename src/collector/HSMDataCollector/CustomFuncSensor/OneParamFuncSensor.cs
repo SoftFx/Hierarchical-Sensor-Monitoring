@@ -1,6 +1,5 @@
 ﻿using HSMDataCollector.Core;
 using HSMDataCollector.PublicInterface;
-using HSMSensorDataObjects;
 using HSMSensorDataObjects.SensorValueRequests;
 using System;
 using System.Collections.Generic;
@@ -16,8 +15,8 @@ namespace HSMDataCollector.CustomFuncSensor
         private readonly NLog.Logger _logger;
 
 
-        public OneParamFuncSensor(string path, IValuesQueue queue, string description, TimeSpan timerSpan, SensorType type,
-            Func<List<U>, T> funcToInvoke, bool isLogging) : base(path, queue, description, timerSpan, type)
+        public OneParamFuncSensor(string path, IValuesQueue queue, string description, TimeSpan timerSpan, Func<List<U>, T> funcToInvoke, bool isLogging)
+            : base(path, queue, description, timerSpan)
         {
             _funcToInvoke = funcToInvoke;
             _paramsList = new List<U>();

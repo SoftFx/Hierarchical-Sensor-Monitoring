@@ -7,8 +7,8 @@ namespace HSMDataCollector.DefaultSensors
 {
     public abstract class MonitoringSensorBase : IDisposable
     {
-        private readonly string _nodePath;
         private readonly Timer _sendTimer;
+        private readonly string _nodePath;
 
 
         protected abstract string SensorName { get; }
@@ -48,6 +48,8 @@ namespace HSMDataCollector.DefaultSensors
 
 
         protected abstract void OnTimerTick(object _ = null);
+
+        protected virtual string GetComment() => null;
 
         protected void SendCollectedValue(SensorValueBase value) => ReceiveSensorValue?.Invoke(value);
     }

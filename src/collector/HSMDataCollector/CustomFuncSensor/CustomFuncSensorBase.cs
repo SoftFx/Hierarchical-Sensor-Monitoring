@@ -12,16 +12,14 @@ namespace HSMDataCollector.CustomFuncSensor
     {
         private Timer _internalTimer;
 
-        protected readonly SensorType _type;
         protected TimeSpan _timerSpan;
 
         public override bool HasLastValue => true;
 
 
-        protected CustomFuncSensorBase(string path, IValuesQueue queue, string description, TimeSpan timerSpan, SensorType type)
+        protected CustomFuncSensorBase(string path, IValuesQueue queue, string description, TimeSpan timerSpan)
             : base(path, queue, description)
         {
-            _type = type;
             RestartTimerInternal(timerSpan);
             _timerSpan = timerSpan;
         }

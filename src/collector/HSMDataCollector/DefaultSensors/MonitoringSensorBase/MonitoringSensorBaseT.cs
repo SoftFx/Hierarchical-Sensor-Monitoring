@@ -24,8 +24,6 @@ namespace HSMDataCollector.DefaultSensors
 
         protected override void OnTimerTick(object _ = null) => SendValue();
 
-        protected virtual string GetComment() => null;
-
         protected abstract T GetValue();
 
         private void SendValue()
