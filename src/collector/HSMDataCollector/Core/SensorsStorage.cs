@@ -1,9 +1,10 @@
 ﻿using HSMDataCollector.DefaultSensors;
+using System;
 using System.Collections.Concurrent;
 
 namespace HSMDataCollector.Core
 {
-    internal sealed class SensorsStorage : ConcurrentDictionary<string, MonitoringSensorBase>
+    internal sealed class SensorsStorage : ConcurrentDictionary<string, MonitoringSensorBase>, IDisposable
     {
         private readonly IValuesQueue _valuesQueue;
 
@@ -13,6 +14,12 @@ namespace HSMDataCollector.Core
             _valuesQueue = queue;
         }
 
+
+        public void Dispose()
+        {
+            foreach (var sensor in Values)
+                sensor.Dispose();
+        }
 
         internal void Register(string key, MonitoringSensorBase value)
         {

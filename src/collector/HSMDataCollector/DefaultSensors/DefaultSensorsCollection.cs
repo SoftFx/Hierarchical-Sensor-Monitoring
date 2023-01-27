@@ -4,58 +4,37 @@ using HSMDataCollector.DefaultSensors.Windows;
 using HSMDataCollector.Options;
 using HSMDataCollector.PublicInterface;
 using System;
-using System.Collections;
-using System.Collections.Generic;
 using System.Runtime.InteropServices;
 
 namespace HSMDataCollector.DefaultSensors
 {
-    internal sealed class DefaultSensorsCollection : IEnumerable<MonitoringSensorBase>, IWindowsCollection, IUnixCollection
+    internal sealed class DefaultSensorsCollection : IWindowsCollection, IUnixCollection
     {
         private const string NotSupportedSensor = "Sensor is not supported for current OS";
-
-        internal const string CurrentProcessNodeName = "CurrentProcess";
-        internal const string SystemMonitoringNodeName = "System monitoring";
-        internal const string DiskMonitoringNodeName = "Disk monitoring";
 
         private static readonly NotSupportedException _notSupportedException = new NotSupportedException(NotSupportedSensor);
 
         private readonly SensorsStorage _storage;
-
-        private readonly BarSensorOptions _processOptions = new BarSensorOptions(CurrentProcessNodeName);
-        private readonly BarSensorOptions _monitoringOptions = new BarSensorOptions(SystemMonitoringNodeName);
-        private readonly DiskSensorOptions _diskOptions = new DiskSensorOptions(DiskMonitoringNodeName);
-        private readonly WindowsSensorOptions _windowsOptions =
-            new WindowsSensorOptions(SystemMonitoringNodeName)
-            {
-                PostDataPeriod = TimeSpan.FromHours(24)
-            };
+        private readonly SensorsDefaultOptions _defaultOptions;
 
 
         internal bool IsUnixOS { get; } = RuntimeInformation.IsOSPlatform(OSPlatform.OSX) ||
                                           RuntimeInformation.IsOSPlatform(OSPlatform.Linux);
 
 
-        internal DefaultSensorsCollection(SensorsStorage storage)
+        internal DefaultSensorsCollection(SensorsStorage storage, SensorsDefaultOptions sensorsOptions)
         {
             _storage = storage;
+            _defaultOptions = sensorsOptions;
         }
-
-
-        public IEnumerator<MonitoringSensorBase> GetEnumerator() => _storage.Values.GetEnumerator();
-
-        IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
-
-
-        internal bool IsSensorExists(string path) => _storage.ContainsKey(path);
 
 
         IWindowsCollection IWindowsCollection.AddProcessSensors(BarSensorOptions options)
         {
-            options = GetProcessOptions(options);
+            options = _defaultOptions.GetProcessOptions(options);
 
             if (options.NodePath == null)
-                options.NodePath = CurrentProcessNodeName;
+                options.NodePath = SensorsDefaultOptions.CurrentProcessNodeName;
 
             return (this as IWindowsCollection).AddProcessCpu(options)
                                                .AddProcessMemory(options)
@@ -64,10 +43,10 @@ namespace HSMDataCollector.DefaultSensors
 
         IWindowsCollection IWindowsCollection.AddSystemMonitoringSensors(BarSensorOptions options)
         {
-            options = GetSystemMonitoringOptions(options);
+            options = _defaultOptions.GetSystemMonitoringOptions(options);
 
             if (options.NodePath == null)
-                options.NodePath = SystemMonitoringNodeName;
+                options.NodePath = SensorsDefaultOptions.SystemMonitoringNodeName;
 
             return (this as IWindowsCollection).AddFreeRamMemory(options)
                                                .AddTotalCpu(options);
@@ -75,10 +54,10 @@ namespace HSMDataCollector.DefaultSensors
 
         IWindowsCollection IWindowsCollection.AddDiskMonitoringSensors(DiskSensorOptions options)
         {
-            options = GetDiskMonitoringOptions(options);
+            options = _defaultOptions.GetDiskMonitoringOptions(options);
 
             if (options.NodePath == null)
-                options.NodePath = DiskMonitoringNodeName;
+                options.NodePath = SensorsDefaultOptions.DiskMonitoringNodeName;
 
             return (this as IWindowsCollection).AddFreeDiskSpace(options)
                                                .AddFreeDiskSpacePredictor(options);
@@ -86,10 +65,10 @@ namespace HSMDataCollector.DefaultSensors
 
         IWindowsCollection IWindowsCollection.AddWindowsInfoSensors(WindowsSensorOptions options)
         {
-            options = GetWindowsOptions(options);
+            options = _defaultOptions.GetWindowsOptions(options);
 
             if (options.NodePath == null)
-                options.NodePath = SystemMonitoringNodeName;
+                options.NodePath = SensorsDefaultOptions.WindowsInfoNodeName;
 
             return (this as IWindowsCollection).AddWindowsNeedUpdate(options)
                                                .AddWindowsLastUpdate(options)
@@ -99,81 +78,61 @@ namespace HSMDataCollector.DefaultSensors
 
         IWindowsCollection IWindowsCollection.AddProcessCpu(BarSensorOptions options)
         {
-            return !IsUnixOS
-                ? Register(new WindowsProcessCpu(GetProcessOptions(options)))
-                : throw _notSupportedException;
+            return ToWindows(new WindowsProcessCpu(_defaultOptions.GetProcessOptions(options)));
         }
 
         IWindowsCollection IWindowsCollection.AddProcessMemory(BarSensorOptions options)
         {
-            return !IsUnixOS
-                ? Register(new WindowsProcessMemory(GetProcessOptions(options)))
-                : throw _notSupportedException;
+            return ToWindows(new WindowsProcessMemory(_defaultOptions.GetProcessOptions(options)));
         }
 
         IWindowsCollection IWindowsCollection.AddProcessThreadCount(BarSensorOptions options)
         {
-            return !IsUnixOS
-                ? Register(new WindowsProcessThreadCount(GetProcessOptions(options)))
-                : throw _notSupportedException;
+            return ToWindows(new WindowsProcessThreadCount(_defaultOptions.GetProcessOptions(options)));
         }
 
         IWindowsCollection IWindowsCollection.AddTotalCpu(BarSensorOptions options)
         {
-            return !IsUnixOS
-                ? Register(new WindowsTotalCpu(GetSystemMonitoringOptions(options)))
-                : throw _notSupportedException;
+            return ToWindows(new WindowsTotalCpu(_defaultOptions.GetSystemMonitoringOptions(options)));
         }
 
         IWindowsCollection IWindowsCollection.AddFreeRamMemory(BarSensorOptions options)
         {
-            return !IsUnixOS
-                ? Register(new WindowsFreeRamMemory(GetSystemMonitoringOptions(options)))
-                : throw _notSupportedException;
+            return ToWindows(new WindowsFreeRamMemory(_defaultOptions.GetSystemMonitoringOptions(options)));
         }
 
         IWindowsCollection IWindowsCollection.AddFreeDiskSpace(DiskSensorOptions options)
         {
-            return !IsUnixOS
-                ? Register(new WindowsFreeDiskSpace(GetDiskMonitoringOptions(options)))
-                : throw _notSupportedException;
+            return ToWindows(new WindowsFreeDiskSpace(_defaultOptions.GetDiskMonitoringOptions(options)));
         }
 
         IWindowsCollection IWindowsCollection.AddFreeDiskSpacePredictor(DiskSensorOptions options)
         {
-            return !IsUnixOS
-                ? Register(new WindowsFreeDiskSpacePredictor(GetDiskMonitoringOptions(options)))
-                : throw _notSupportedException;
+            return ToWindows(new WindowsFreeDiskSpacePredictor(_defaultOptions.GetDiskMonitoringOptions(options)));
         }
 
         IWindowsCollection IWindowsCollection.AddWindowsNeedUpdate(WindowsSensorOptions options)
         {
-            return !IsUnixOS
-                ? Register(new WindowsNeedUpdate(GetWindowsOptions(options)))
-                : throw _notSupportedException;
+            return ToWindows(new WindowsNeedUpdate(_defaultOptions.GetWindowsOptions(options)));
         }
 
         IWindowsCollection IWindowsCollection.AddWindowsLastUpdate(WindowsSensorOptions options)
         {
-            return !IsUnixOS
-               ? Register(new WindowsLastUpdate(GetWindowsOptions(options)))
-               : throw _notSupportedException;
+            return ToWindows(new WindowsLastUpdate(_defaultOptions.GetWindowsOptions(options)));
         }
 
         IWindowsCollection IWindowsCollection.AddWindowsLastRestart(WindowsSensorOptions options)
         {
-            return !IsUnixOS
-                ? Register(new WindowsLastRestart(GetWindowsOptions(options)))
-                : throw _notSupportedException;
+            return ToWindows(new WindowsLastRestart(_defaultOptions.GetWindowsOptions(options)));
         }
 
 
-        public IUnixCollection AddCurrentProcessSensors(BarSensorOptions options = null)
+        public IUnixCollection AddProcessSensors(BarSensorOptions options = null)
         {
-            options = GetProcessOptions(options);
+            options = _defaultOptions.GetProcessOptions(options);
 
             if (options.NodePath == null)
-                options.NodePath = CurrentProcessNodeName;
+                options.NodePath = SensorsDefaultOptions.CurrentProcessNodeName;
 
             return (this as IUnixCollection).AddProcessCpu(options)
                                             .AddProcessMemory(options)
@@ -183,25 +142,29 @@ namespace HSMDataCollector.DefaultSensors
 
         IUnixCollection IUnixCollection.AddProcessCpu(BarSensorOptions options)
         {
-            return IsUnixOS
-                ? Register(new UnixProcessCpu(GetProcessOptions(options)))
-                : throw _notSupportedException;
+            return ToUnix(new UnixProcessCpu(_defaultOptions.GetProcessOptions(options)));
         }
 
         IUnixCollection IUnixCollection.AddProcessMemory(BarSensorOptions options)
         {
-            return IsUnixOS
-                ? Register(new UnixProcessMemory(GetProcessOptions(options)))
-                : throw _notSupportedException;
+            return ToUnix(new UnixProcessMemory(_defaultOptions.GetProcessOptions(options)));
         }
 
         IUnixCollection IUnixCollection.AddProcessThreadCount(BarSensorOptions options)
         {
-            return IsUnixOS
-                ? Register(new UnixProcessThreadCount(GetProcessOptions(options)))
-                : throw _notSupportedException;
+            return ToUnix(new UnixProcessThreadCount(_defaultOptions.GetProcessOptions(options)));
         }
 
+
+        private DefaultSensorsCollection ToWindows(MonitoringSensorBase sensor)
+        {
+            return !IsUnixOS ? Register(sensor) : throw _notSupportedException;
+        }
+
+        private DefaultSensorsCollection ToUnix(MonitoringSensorBase sensor)
+        {
+            return IsUnixOS ? Register(sensor) : throw _notSupportedException;
+        }
 
         private DefaultSensorsCollection Register(MonitoringSensorBase sensor)
         {
@@ -209,13 +172,5 @@ namespace HSMDataCollector.DefaultSensors
 
             return this;
         }
-
-        private BarSensorOptions GetProcessOptions(BarSensorOptions options) => options ?? _processOptions;
-
-        private BarSensorOptions GetSystemMonitoringOptions(BarSensorOptions options) => options ?? _monitoringOptions;
-
-        private DiskSensorOptions GetDiskMonitoringOptions(DiskSensorOptions options) => options ?? _diskOptions;
-
-        private WindowsSensorOptions GetWindowsOptions(WindowsSensorOptions options) => options ?? _windowsOptions;
     }
 }

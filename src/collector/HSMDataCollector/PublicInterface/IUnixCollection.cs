@@ -4,7 +4,7 @@ namespace HSMDataCollector.PublicInterface
 {
     public interface IUnixCollection
     {
-        IUnixCollection AddCurrentProcessSensors(BarSensorOptions options = null);
+        IUnixCollection AddProcessSensors(BarSensorOptions options = null);
 
 
         IUnixCollection AddProcessCpu(BarSensorOptions options = null);
