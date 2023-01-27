@@ -7,6 +7,8 @@ namespace HSMDataCollector.DefaultSensors
 {
     public abstract class MonitoringSensorBase : IDisposable
     {
+        protected const int MbDivisor = 1 << 20;
+
         private readonly Timer _sendTimer;
         private readonly string _nodePath;
 

@@ -12,7 +12,7 @@ namespace HSMDataCollector.DefaultSensors.Windows
         private readonly PerformanceCounter _performanceCounter;
 
 
-        protected override string SensorName => "Windows last restart";
+        protected override string SensorName => "Last restart";
 
 
         public WindowsLastRestart(SensorOptions options) : base(options)

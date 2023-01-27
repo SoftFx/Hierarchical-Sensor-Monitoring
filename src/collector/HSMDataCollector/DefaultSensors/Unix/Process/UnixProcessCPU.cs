@@ -5,7 +5,7 @@ namespace HSMDataCollector.DefaultSensors.Unix
 {
     internal sealed class UnixProcessCpu : BarMonitoringSensorBase<DoubleMonitoringBar, double>
     {
-        private readonly Process _currentProcess = Process.GetCurrentProcess();
+        private readonly Process _currentProcess = ProcessInfo.CurrentProcess;
 
         protected override string SensorName => "Process CPU";
 

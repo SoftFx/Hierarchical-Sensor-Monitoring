@@ -43,13 +43,13 @@ namespace HSMDataCollector.DefaultSensors
 
         protected abstract T GetBarData();
 
-        protected sealed override BarType GetValue() => _internalBar.Complete() as BarType;
-
-        protected override void OnTimerTick(object _)
+        protected sealed override BarType GetValue()
         {
-            base.OnTimerTick();
+            var value = _internalBar.Complete() as BarType;
 
             BuildNewBar();
+
+            return value;
         }
 
 

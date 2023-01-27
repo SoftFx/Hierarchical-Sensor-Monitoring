@@ -5,17 +5,17 @@ namespace HSMDataCollector.DefaultSensors.Windows
 {
     internal sealed class WindowsLastUpdate : MonitoringSensorBase<TimeSpan>
     {
-        private DateTime LastUpdateDate { get; }
+        private readonly DateTime _lastUpdateDate;
 
-        protected override string SensorName => "Windows last update";
+        protected override string SensorName => "Last update";
 
 
         public WindowsLastUpdate(SensorOptions options) : base(options)
         {
-            LastUpdateDate = RegistryInfo.GetInstallationDate();
+            _lastUpdateDate = RegistryInfo.GetInstallationDate();
         }
 
 
-        protected override TimeSpan GetValue() => DateTime.UtcNow - LastUpdateDate;
+        protected override TimeSpan GetValue() => DateTime.UtcNow - _lastUpdateDate;
     }
 }

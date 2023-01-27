@@ -19,20 +19,18 @@ namespace HSMDataCollector.DefaultSensors
         {
             base.Stop();
 
-            SendValue();
+            OnTimerTick();
         }
 
-        protected override void OnTimerTick(object _ = null) => SendValue();
-
-        protected abstract T GetValue();
-
-        private void SendValue()
+        protected sealed override void OnTimerTick(object _ = null)
         {
             var value = BuildValue();
 
             if (CanSendValue)
                 SendCollectedValue(value);
         }
+
+        protected abstract T GetValue();
 
         private SensorValueBase BuildValue()
         {

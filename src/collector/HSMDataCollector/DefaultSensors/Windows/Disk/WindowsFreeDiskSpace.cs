@@ -5,8 +5,6 @@ namespace HSMDataCollector.DefaultSensors.Windows
 {
     internal sealed class WindowsFreeDiskSpace : MonitoringSensorBase<double>
     {
-        private const double MbDivisor = 1 << 20;
-
         private readonly DriveInfo _driveInfo;
         private readonly char _driveName;
 
