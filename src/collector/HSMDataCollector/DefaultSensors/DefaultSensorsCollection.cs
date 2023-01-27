@@ -80,7 +80,8 @@ namespace HSMDataCollector.DefaultSensors
             if (options.NodePath == null)
                 options.NodePath = DiskMonitoringNodeName;
 
-            return (this as IWindowsCollection).AddFreeDiskSpace(options);
+            return (this as IWindowsCollection).AddFreeDiskSpace(options)
+                                               .AddFreeDiskSpacePredictor(options);
         }
 
         IWindowsCollection IWindowsCollection.AddWindowsInfoSensors(WindowsSensorOptions options)
@@ -135,6 +136,13 @@ namespace HSMDataCollector.DefaultSensors
         {
             return !IsUnixOS
                 ? Register(new WindowsFreeDiskSpace(GetDiskMonitoringOptions(options)))
+                : throw _notSupportedException;
+        }
+
+        IWindowsCollection IWindowsCollection.AddFreeDiskSpacePredictor(DiskSensorOptions options)
+        {
+            return !IsUnixOS
+                ? Register(new WindowsFreeDiskSpacePredictor(GetDiskMonitoringOptions(options)))
                 : throw _notSupportedException;
         }
 

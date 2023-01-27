@@ -9,6 +9,9 @@ namespace HSMDataCollector.DefaultSensors
 {
     public abstract class MonitoringSensorBase<T> : MonitoringSensorBase
     {
+        protected bool CanSendValue { get; set; } = true;
+
+
         protected MonitoringSensorBase(SensorOptions options) : base(options) { }
 
 
@@ -25,7 +28,13 @@ namespace HSMDataCollector.DefaultSensors
 
         protected abstract T GetValue();
 
-        private void SendValue() => SendCollectedValue(BuildValue());
+        private void SendValue()
+        {
+            var value = BuildValue();
+
+            if (CanSendValue)
+                SendCollectedValue(value);
+        }
 
         private SensorValueBase BuildValue()
         {

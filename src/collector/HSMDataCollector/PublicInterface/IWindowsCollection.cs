@@ -27,6 +27,8 @@ namespace HSMDataCollector.PublicInterface
 
         IWindowsCollection AddFreeDiskSpace(DiskSensorOptions options = null);
 
+        IWindowsCollection AddFreeDiskSpacePredictor(DiskSensorOptions options = null);
+
 
         IWindowsCollection AddWindowsNeedUpdate(WindowsSensorOptions options = null);
 
