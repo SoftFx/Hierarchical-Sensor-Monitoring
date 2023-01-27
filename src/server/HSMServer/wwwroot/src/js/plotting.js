@@ -140,16 +140,21 @@ function convertToGraphData(graphData, graphType, graphName) {
             })
             let minVal = Math.min(...data);
             let maxVal = Math.max(...data);
-            let diff =  minVal;
-            console.log(diff, minVal, maxVal)
+            let diff = minVal;
             const timespan = TimeSpan.fromSeconds(diff)
+            timespan.minutes = 0;
+            timespan.seconds = 0;
+            let currMinVal = timespan.days * 24 * 60*60 + timespan.hours * 60*60;
+            let i = currMinVal;
+            
+            console.log(diff, '-', currMinVal, i)
             let array = []
-            diff += minVal;
-            while (diff < maxVal)
+            i += currMinVal;
+            while (i < maxVal)
             {
-                console.log(diff)
-                array.push(diff);
-                diff += minVal
+                console.log(i)
+                array.push(i);
+                i += currMinVal
             }
             console.log(array)
             let tVals = [minVal, ...array ,maxVal];
