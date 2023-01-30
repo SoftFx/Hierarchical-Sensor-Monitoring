@@ -117,7 +117,7 @@ function convertToGraphData(graphData, graphType, graphName) {
     }
     
     function getUniqueData(data){
-        return [...new Map(data.map(item => [item['time'] ,item])).values()]
+        return [...new Map(data.map(item => [item['time'], item])).values()]
     }
 }
 
@@ -134,7 +134,7 @@ function convertToGraphData(graphData, graphType, graphName) {
         ];
         return data;
     }
-    
+
     function getNumbersData(escapedItems) {
         let numbers = escapedItems.map(function (i) {
             return i.value;
@@ -167,7 +167,6 @@ function getTimeSpanGraphData(timeList, dataList, chartType){
             type: chartType,
             customdata: cData,
             hovertemplate: '%{customdata}<extra></extra>'
-            //mode: "lines"
         }
     ];
 }
