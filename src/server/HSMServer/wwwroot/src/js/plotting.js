@@ -1,41 +1,16 @@
 ﻿window.displayGraph = function(graphData, graphType, graphElementId, graphName) {
     let convertedData = convertToGraphData(graphData, graphType, graphName);
 
-    console.log('converted graph data:', convertedData);
+    //console.log('converted graph data:', convertedData);
     let zoomData = getPreviousZoomData(graphElementId);
     var config = { responsive: true }
     if(graphType === "7"){
-        convertedData[1].autosize = true;
-        if (zoomData === undefined || zoomData === null) {
-            Plotly.newPlot(graphElementId, convertedData[0], convertedData[1], config);
-        } else {
-            let processedData = Object.values(JSON.parse(zoomData));
-            console.log('zoomData:', zoomData);
-            console.log('processedData:', processedData);
-            // if(processedData.length >= 2){
-            //     convertedData[1].xaxis.range = [processedData[1], processedData[0]];
-            //     //convertedData[1].yaxis.range =  [processedData[2], processedData[3]];
-            // }
-            Plotly.newPlot(graphElementId, convertedData[0], convertedData[1], config);
-        }
-        //
-        // var graph = document.getElementById(graphElementId)
-        // let ticks = graph.querySelectorAll('.ytick')
-        // ticks.forEach((tick) => {
-        //    let text = Number(tick.querySelector('text').innerHTML);
-        //    console.log(text);
-        //   
-        //    let newText = new TimeSpan.TimeSpan();
-        //    newText.addSeconds(text);
-        //    let newFormat = `${newText.days}d ${newText.hours}h ${newText.minutes}m ${newText.seconds}s`
-        //    console.log(newText.days, newText.hours, newText.minutes, newText.seconds);
-        //    tick.querySelector('text').innerHTML = newFormat;
-        // })
-        // console.log(ticks)
-        
+        let layout = getTimeSpanLayout(convertedData[0].y)
+        layout.autosize = true;
+        Plotly.newPlot(graphElementId, convertedData, layout, config);
     }else{
         if (zoomData === undefined || zoomData === null) {
-            var layout = { autosize: true };
+            let layout = { autosize: true };
             Plotly.newPlot(graphElementId, convertedData, layout, config);
         } else {
             let layout = createLayoutFromZoomData(zoomData);
@@ -51,7 +26,7 @@
 
 function createLayoutFromZoomData(zoomData) {
     let processedData = Object.values(JSON.parse(zoomData));
-    console.log("processedData:", processedData)
+
     var layout = {
         xaxis : {
             range: [processedData[0], processedData[1]]
@@ -93,12 +68,10 @@ function convertToGraphData(graphData, graphType, graphName) {
         case "5":
             return createBarGraphData(escapedData, graphName);
         case "7":
-            console.log("escapedData:", escapedData)
             uniqueData = getUniqueData(escapedData)
-            console.log("uniqueData:", uniqueData)
             escapedData.forEach(x => {
                 uniqueData.forEach(y => {
-                    if(x.time === y.time && (new Date(x.receivingTime)) >= (new Date(y.receivingTime))){
+                    if(x.time === y.time && ((new Date(x.receivingTime)) > (new Date(y.receivingTime)))){
                         y.comment = x.comment;
                         y.receivingTime = x.receivingTime;
                         y.status = x.status;
@@ -108,7 +81,6 @@ function convertToGraphData(graphData, graphType, graphName) {
                 })
             });
             
-          
             timeList = getTimeList(uniqueData);
             data = uniqueData.map(function (i) {
                 let time = i.value.split(':');
@@ -124,58 +96,10 @@ function convertToGraphData(graphData, graphType, graphName) {
                 minutes = Number(time[1]);
                 seconds = Number(time[2]);
                
-                // let t = new Date(1970, 0, 1); // Epoch
-                // t.setSeconds(new TimeSpan.TimeSpan(0, seconds, minutes, hours, days).totalSeconds());
-                // return t;
                 return new TimeSpan.TimeSpan(0, seconds, minutes, hours, days).totalSeconds();
             })
-            let dataText = data.map(function (i){
-                const timespan = TimeSpan.fromSeconds(i)
-                let text = ``;
-                if(timespan.days !== 0){
-                    text += `${timespan.days}d `
-                }
-                text += `${timespan.hours}h ${timespan.minutes}m ${timespan.seconds}s`
-                return text
-            })
-            let minVal = Math.min(...data);
-            let maxVal = Math.max(...data)
-            let diff = maxVal - minVal;
-            const timespan = TimeSpan.fromSeconds(diff)
-            diff /= 20;
             
-            let array = []
-            
-            let i = minVal;
-            while (i < maxVal)
-            {
-                console.log(i)
-                array.push(i);
-                i += diff;
-            }
-            console.log(array)
-            let tVals = [minVal, ...array ,maxVal];
-            let tText = tVals.map(function (i){
-                const timespan = TimeSpan.fromSeconds(i)
-                let text = ``;
-                if(timespan.days !== 0){
-                    text += `${timespan.days}d `
-                }
-                text += `${timespan.hours}h ${timespan.minutes}m ${timespan.seconds}s`
-                return text
-                })
-            const layout ={
-                yaxis: {
-                    ticktext: tText,
-                    tickvals: tVals,
-                    tickfont:{
-                        size: 10
-                    },
-                    //dtick: 60*60*24
-                    automargin: "width+height"
-                }
-            };
-            return getTimeSpanGraphData(timeList, data, "bar", layout)
+            return getTimeSpanGraphData(timeList, data, "bar")
         default:
             return undefined;
     }
@@ -211,29 +135,6 @@ function convertToGraphData(graphData, graphType, graphName) {
         return data;
     }
     
-    function getTimeSpanGraphData(timeList, dataList, chartType, layout){
-        let cData = dataList.map(function (i){
-            const timespan = TimeSpan.fromSeconds(i)
-            let text = ``;
-            if(timespan.days !== 0){
-                text += `${timespan.days}d `
-            }
-            text += `${timespan.hours}h ${timespan.minutes}m ${timespan.seconds}s`
-            return text
-        })
-        let data = [
-            {
-                x: timeList,
-                y: dataList,
-                type: chartType,
-                customdata: cData,
-                hovertemplate: '%{customdata}<extra></extra>'
-                //mode: "lines"
-            }
-        ];
-        return [data, layout];
-    }
-    
     function getNumbersData(escapedItems) {
         let numbers = escapedItems.map(function (i) {
             return i.value;
@@ -247,6 +148,68 @@ function convertToGraphData(graphData, graphType, graphName) {
             return i.time;
         });
     }
+}
+
+function getTimeSpanGraphData(timeList, dataList, chartType){
+    let cData = dataList.map(function (i){
+        const timespan = TimeSpan.fromSeconds(i)
+        let text = ``;
+        if(timespan.days !== 0){
+            text += `${timespan.days}d `
+        }
+        text += `${timespan.hours}h ${timespan.minutes}m ${timespan.seconds}s`
+        return text
+    })
+    return [
+        {
+            x: timeList,
+            y: dataList,
+            type: chartType,
+            customdata: cData,
+            hovertemplate: '%{customdata}<extra></extra>'
+            //mode: "lines"
+        }
+    ];
+}
+
+function getTimeSpanLayout(datalist){
+    let minVal = Math.min(...datalist);
+    let maxVal = Math.max(...datalist)
+    let diff = maxVal - minVal;
+    let array = []
+    
+    if(diff >= 36000){
+        diff /= 20;
+
+        let i = minVal;
+        while (i < maxVal - minVal / 2)
+        {
+            array.push(i);
+            i += diff;
+        }
+    }
+    
+    let tVals = [minVal, ...array ,maxVal];
+    let tText = tVals.map(function (i){
+        const timespan = TimeSpan.fromSeconds(i)
+        let text = ``;
+        if(timespan.days !== 0){
+            text += `${timespan.days}d `
+        }
+        text += `${timespan.hours}h ${timespan.minutes}m ${timespan.seconds}s`
+        return text
+    })
+    
+    return {
+        yaxis: {
+            ticktext: tText,
+            tickvals: tVals,
+            tickfont: {
+                size: 10
+            },
+            automargin: "width+height"
+        }
+    };
 }
 
 //Boxplots
