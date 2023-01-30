@@ -17,7 +17,7 @@ namespace HSMServer.Model.Validators
         {
             _cache = cache;
 
-            RuleFor(x => x)
+            RuleFor(x => x.Trim())
                 .NotNull()
                 .WithMessage(ErrorConstants.NameNotNull)
                 .MaximumLength(100)
