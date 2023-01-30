@@ -31,8 +31,6 @@ namespace HSMDataCollector.Core
         private const string LogDefaultFolder = "Logs";
         private const string LogFormatFileName = "DataCollector_${shortdate}.log";
 
-        private const string ServiceAlive = "Service alive";
-
         private readonly string _listSendingAddress;
         private readonly string _fileSendingAddress;
         private readonly ConcurrentDictionary<string, ISensor> _nameToSensor;
@@ -209,15 +207,15 @@ namespace HSMDataCollector.Core
                 InitializeWindowsNeedUpdate(specificPath);
         }
 
+        [Obsolete("Use method AddCollectorAlive(options) in Windows or Unix collections")]
         public void MonitorServiceAlive(string specificPath = null)
         {
-            var path = $"{specificPath ?? SensorsDefaultOptions.SystemMonitoringNodeName}/{ServiceAlive}";
+            var options = _sensorsOptions.BuildCollectorAliveOptions(specificPath);
 
-            _logger?.Info($"Initialize {path} sensor...");
-
-            NoParamsFuncSensor<bool> aliveSensor = new NoParamsFuncSensor<bool>(path,
-                _dataQueue as IValuesQueue, string.Empty, TimeSpan.FromSeconds(15), () => true, _isLogging);
-            AddNewSensor(aliveSensor, aliveSensor.Path);
+            if (_defaultSensors.IsUnixOS)
+                Unix.AddCollectorAlive(options);
+            else
+                Windows.AddCollectorAlive(options);
         }
 
         [Obsolete("Use method AddWindowsSensors(options) in Windows collection")]

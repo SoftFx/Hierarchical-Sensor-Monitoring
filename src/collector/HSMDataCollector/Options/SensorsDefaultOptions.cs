@@ -17,6 +17,11 @@ namespace HSMDataCollector.Options
             {
                 PostDataPeriod = TimeSpan.FromHours(12)
             };
+        private readonly SensorOptions _collectorAliveOptions =
+            new SensorOptions(SystemMonitoringNodeName)
+            {
+                PostDataPeriod = TimeSpan.FromSeconds(15)
+            };
 
 
         internal BarSensorOptions GetSystemMonitoringOptions(BarSensorOptions options) => options ?? _monitoringOptions;
@@ -26,6 +31,8 @@ namespace HSMDataCollector.Options
         internal DiskSensorOptions GetDiskMonitoringOptions(DiskSensorOptions options) => options ?? _diskOptions;
 
         internal WindowsSensorOptions GetWindowsOptions(WindowsSensorOptions options) => options ?? _windowsOptions;
+
+        internal SensorOptions GetCollectorAliveOptions(SensorOptions options) => options ?? _collectorAliveOptions;
 
 
         internal BarSensorOptions BuildSystemMonitoringOptions(string path)
@@ -54,6 +61,14 @@ namespace HSMDataCollector.Options
                 options.AcceptableUpdateInterval = updateInterval.Value;
 
             return options;
+        }
+
+        internal SensorOptions BuildCollectorAliveOptions(string path)
+        {
+            if (path == null)
+                path = SystemMonitoringNodeName;
+
+            return new SensorOptions(path) { PostDataPeriod = TimeSpan.FromSeconds(15) };
         }
     }
 }

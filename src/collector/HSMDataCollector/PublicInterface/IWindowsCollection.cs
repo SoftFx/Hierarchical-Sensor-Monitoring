@@ -35,5 +35,8 @@ namespace HSMDataCollector.PublicInterface
         IWindowsCollection AddWindowsLastUpdate(WindowsSensorOptions options = null);
 
         IWindowsCollection AddWindowsLastRestart(WindowsSensorOptions options = null);
+
+
+        IWindowsCollection AddCollectorAlive(SensorOptions options = null);
     }
 }
