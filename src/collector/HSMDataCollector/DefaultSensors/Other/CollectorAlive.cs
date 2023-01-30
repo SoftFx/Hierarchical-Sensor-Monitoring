@@ -1,6 +1,6 @@
 ﻿using HSMDataCollector.Options;
 
-namespace HSMDataCollector.DefaultSensors.Common
+namespace HSMDataCollector.DefaultSensors.Other
 {
     internal sealed class CollectorAlive : MonitoringSensorBase<bool>
     {
