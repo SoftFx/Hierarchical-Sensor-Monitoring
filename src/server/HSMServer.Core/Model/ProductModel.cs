@@ -22,7 +22,7 @@ namespace HSMServer.Core.Model
 
         public ConcurrentDictionary<Guid, BaseSensorModel> Sensors { get; }
 
-        public ProductNotificationSettings Notifications { get; }
+        public NotificationSettings Notifications { get; }
 
 
         string INotificatable.Name => DisplayName;
@@ -30,7 +30,9 @@ namespace HSMServer.Core.Model
         NotificationSettings INotificatable.Notifications => Notifications;
 
         bool INotificatable.AreNotificationsEnabled(BaseSensorModel sensor) =>
-            Notifications.Telegram.MessagesAreEnabled && sensor.RootProductId == Id;
+            Notifications.Telegram.MessagesAreEnabled &&
+            Notifications.IsSensorEnabled(sensor.Id) &&
+            !Notifications.IsSensorIgnored(sensor.Id);
 
 
         public ProductModel()

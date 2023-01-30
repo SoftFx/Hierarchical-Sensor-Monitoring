@@ -1,6 +1,7 @@
 ﻿using HSMServer.Model.TreeViewModels;
 using System;
 using System.Collections.Generic;
+using HSMServer.Notifications;
 
 namespace HSMServer.Model
 {
@@ -23,7 +24,8 @@ namespace HSMServer.Model
                 TimeInterval.Custom
             };
 
-
+        public TelegramActionType TelegramActionType { get; set; }
+        
         public string Path { get; }
 
         public string TreeElement { get; }

@@ -22,7 +22,7 @@ namespace HSMServer.Model.Authentication
 
         public List<(Guid, ProductRoleEnum)> ProductsRoles { get; set; }
 
-        public UserNotificationSettings Notifications { get; set; }
+        public NotificationSettings Notifications { get; set; }
 
         public TreeUserFilter TreeFilter { get; set; }
 

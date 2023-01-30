@@ -1,22 +1,25 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities;
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
+using System.Linq;
 
 namespace HSMServer.Core.Model
 {
-    public abstract class NotificationSettings
+    public class NotificationSettings
     {
         public TelegramSettings Telegram { get; }
 
         public ConcurrentDictionary<Guid, DateTime> IgnoredSensors { get; } = new();
-
-
-        internal NotificationSettings()
+        
+        public HashSet<Guid> EnabledSensors { get; } = new();
+        
+        public NotificationSettings()
         {
             Telegram = new();
         }
 
-        internal NotificationSettings(NotificationSettingsEntity entity)
+        public NotificationSettings(NotificationSettingsEntity entity)
         {
             Telegram = new(entity?.TelegramSettings);
 
@@ -28,10 +31,24 @@ namespace HSMServer.Core.Model
                     if (Guid.TryParse(sensorIdStr, out var sensorId))
                         IgnoredSensors.TryAdd(sensorId, new DateTime(endIgnorePeriodTicks));
             }
+            
+            if (entity?.EnabledSensors is not null)
+            {
+                EnabledSensors.Clear();
+
+                foreach (var sensorIdStr in entity.EnabledSensors)
+                    if (Guid.TryParse(sensorIdStr, out var sensorId))
+                        EnabledSensors.Add(sensorId);
+            }
         }
 
 
-        public bool IsSensorIgnored(Guid sensorId) => IgnoredSensors.ContainsKey(sensorId);
+        public bool IsSensorIgnored(Guid sensorId)
+        {
+            return IgnoredSensors.ContainsKey(sensorId);
+        }
+        
+        public bool IsSensorEnabled(Guid sensorId) => EnabledSensors.Contains(sensorId);
 
         public bool RemoveSensor(Guid sensorId)
         {
@@ -42,7 +59,15 @@ namespace HSMServer.Core.Model
 
             return isSensorRemoved;
         }
+        
+        public NotificationSettingsEntity ToEntity() =>
+            new()
+            {
+                TelegramSettings = Telegram.ToEntity(),
+                EnabledSensors = EnabledSensors.Select(s => s.ToString()).ToList(),
+                IgnoredSensors = IgnoredSensors.ToDictionary(s => s.Key.ToString(), s => s.Value.Ticks),
+            };
 
-        protected virtual bool RemoveSensorInternal(Guid sensorId) => false;
+        protected bool RemoveSensorInternal(Guid sensorId) => EnabledSensors.Remove(sensorId);
     }
 }

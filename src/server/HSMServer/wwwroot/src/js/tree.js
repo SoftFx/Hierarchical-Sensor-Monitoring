@@ -134,9 +134,11 @@ function timeSorting(a, b) {
     return b.diff(a);
 }
 
+const TelegramActionType = {Groups : 0, Accounts : 1};
+
 function customMenu(node) {
     var tree = $("#jstree").jstree(true);
-
+    
     var items =
     {
         "AccessKeys": {
@@ -289,49 +291,120 @@ function customMenu(node) {
                 "EnableNotifications": {
                     "separator_before": false,
                     "separator_after": false,
-                    "label": "Enable",
+                    "label": "Enable for ...",
                     "icon": "fab fa-telegram",
-                    "action": function (obj) {
-                        updateSensorsNotifications(enableNotifications, node);
-                    }
+                    submenu: {
+                        Groups:{
+                            separator_before: false,
+                            separator_after: false,
+                            label: "Groups",
+                            "action": function (obj) {
+                                updateSensorsNotifications(enableNotifications, node, TelegramActionType.Groups);
+                            }
+                        },
+                        Account:{
+                            separator_before: false,
+                            separator_after: false,
+                            label: "Accounts",
+                            "action": function (obj) {
+                                updateSensorsNotifications(enableNotifications, node, TelegramActionType.Accounts);
+                            }
+                        }
+                    },
                 },
                 "DisableNotifications": {
                     "separator_before": false,
                     "separator_after": false,
-                    "label": "Disable",
+                    "label": "Disable for ...",
                     "icon": "fab fa-telegram",
-                    "action": function (obj) {
-                        updateSensorsNotifications(disableNotifications, node);
-                    }
+                    submenu: {
+                        Groups:{
+                            separator_before: false,
+                            separator_after: false,
+                            label: "Groups",
+                            "action": function (obj) {
+                                updateSensorsNotifications(disableNotifications, node, TelegramActionType.Groups);
+                            }
+                        },
+                        Account:{
+                            separator_before: false,
+                            separator_after: false,
+                            label: "Accounts",
+                            "action": function (obj) {
+                                updateSensorsNotifications(disableNotifications, node, TelegramActionType.Accounts);
+                            }
+                        }
+                    },
                 },
                 "IgnoreNotifications": {
                     "separator_before": false,
                     "separator_after": false,
-                    "label": "Ignore",
+                    "label": "Ignore for ...",
                     "icon": "fa-solid fa-bell-slash",
-                    "action": function (obj) {
-                        $.ajax({
-                            type: 'get',
-                            url: ignoreNotifications + '?Selected=' + node.id,
-                            datatype: 'html',
-                            contenttype: 'application/json',
-                            cache: false,
-                            success: function (viewData) {
-                                $("#ignoreNotificatios_partial").html(viewData);
+                    submenu: {
+                        Groups:{
+                            separator_before: false,
+                            separator_after: false,
+                            label: "Groups",
+                            "action": function (obj) {
+                                $.ajax({
+                                    type: 'get',
+                                    url: ignoreNotifications + '?Selected=' + node.id + '&ActionType=' + TelegramActionType.Groups,
+                                    datatype: 'html',
+                                    contenttype: 'application/json',
+                                    cache: false,
+                                    success: function (viewData) {
+                                        $("#ignoreNotificatios_partial").html(viewData);
+                                    }
+                                }).done(function () {
+                                    $('#ignoreNotifications_modal').modal('show');
+                                });
                             }
-                        }).done(function () {
-                            $('#ignoreNotifications_modal').modal('show');
-                        });
-                    }
+                        },
+                        Account:{
+                            separator_before: false,
+                            separator_after: false,
+                            label: "Accounts",
+                            "action": function (obj) {
+                                $.ajax({
+                                    type: 'get',
+                                    url: ignoreNotifications + '?Selected=' + node.id + '&ActionType=' + TelegramActionType.Accounts,
+                                    datatype: 'html',
+                                    contenttype: 'application/json',
+                                    cache: false,
+                                    success: function (viewData) {
+                                        $("#ignoreNotificatios_partial").html(viewData);
+                                    }
+                                }).done(function () {
+                                    $('#ignoreNotifications_modal').modal('show');
+                                });
+                            }
+                        }
+                    },
                 },
                 "RemoveIgnoreNotifications": {
                     "separator_before": false,
                     "separator_after": false,
-                    "label": "Remove ignoring",
+                    "label": "Remove ignoring for ...",
                     "icon": "fa-solid fa-bell",
-                    "action": function (obj) {
-                        updateSensorsNotifications(removeIgnoringNotifications, node);
-                    }
+                    submenu: {
+                        Groups:{
+                            separator_before: false,
+                            separator_after: false,
+                            label: "Groups",
+                            "action": function (obj) {
+                                updateSensorsNotifications(removeIgnoringNotifications, node, TelegramActionType.Groups);
+                            }
+                        },
+                        Account:{
+                            separator_before: false,
+                            separator_after: false,
+                            label: "Accounts",
+                            "action": function (obj) {
+                                updateSensorsNotifications(removeIgnoringNotifications, node, TelegramActionType.Accounts);
+                            }
+                        }
+                    },
                 }
             }
         }
@@ -358,23 +431,23 @@ function customMenu(node) {
     //    delete items.BlockSensor;
     //}
 
-    if (document.getElementById(`${node.id}_ignoreNotifications`)) {
-        delete items.Notifications.submenu.EnableNotifications;
-        delete items.Notifications.submenu.IgnoreNotifications;
-    }
-    else if (document.getElementById(`${node.id}_notifications`)) {
-        let partialNotifications = $(`#${node.id}_partialNotifications`).val();
-        if (partialNotifications !== "True") {
-            delete items.Notifications.submenu.EnableNotifications;
-        }
-
-        delete items.Notifications.submenu.RemoveIgnoreNotifications;
-    }
-    else {
-        delete items.Notifications.submenu.DisableNotifications;
-        delete items.Notifications.submenu.IgnoreNotifications;
-        delete items.Notifications.submenu.RemoveIgnoreNotifications;
-    }
+    // if (document.getElementById(`${node.id}_ignoreNotifications`)) {
+    //     delete items.Notifications.submenu.EnableNotifications;
+    //     delete items.Notifications.submenu.IgnoreNotifications;
+    // }
+    // else if (document.getElementById(`${node.id}_notifications`)) {
+    //     let partialNotifications = $(`#${node.id}_partialNotifications`).val();
+    //     if (partialNotifications !== "True") {
+    //         delete items.Notifications.submenu.EnableNotifications;
+    //     }
+    //
+    //     delete items.Notifications.submenu.RemoveIgnoreNotifications;
+    // }
+    // else {
+    //     delete items.Notifications.submenu.DisableNotifications;
+    //     delete items.Notifications.submenu.IgnoreNotifications;
+    //     delete items.Notifications.submenu.RemoveIgnoreNotifications;
+    // }
    
     if (isCurrentUserAdmin === "True")
         return items;
@@ -387,10 +460,10 @@ function customMenu(node) {
     return items;
 }
 
-function updateSensorsNotifications(action, node) {
+function updateSensorsNotifications(action, node, type) {
     $.ajax({
         type: 'post',
-        url: action + '?Selected=' + node.id,
+        url: action + '?Selected=' + node.id + '&ActionType=' + type,
         datatype: 'html',
         contenttype: 'application/json',
         cache: false
