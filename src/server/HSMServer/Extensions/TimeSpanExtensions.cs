@@ -1,8 +1,5 @@
 using System;
-using System.Globalization;
 using System.Text;
-using Org.BouncyCastle.Asn1.Pkcs;
-
 namespace HSMServer.Extensions;
 
 public static class TimeSpanExtensions
@@ -21,5 +18,4 @@ public static class TimeSpanExtensions
 
     public static string ToTableValueRepresentation(this string timeSpanRepresentation) =>
         TimeSpan.TryParse(timeSpanRepresentation, out var timeSpan) ? timeSpan.ToToolTip() : string.Empty;
-    
 }
