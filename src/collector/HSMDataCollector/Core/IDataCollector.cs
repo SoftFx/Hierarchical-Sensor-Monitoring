@@ -1,6 +1,7 @@
 ﻿using HSMDataCollector.PublicInterface;
 using System;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 
 namespace HSMDataCollector.Core
 {
@@ -10,7 +11,7 @@ namespace HSMDataCollector.Core
 
         IUnixCollection Unix { get; }
 
-        void Start();
+        Task Start();
 
         #region Common methods
 

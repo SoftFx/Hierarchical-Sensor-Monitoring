@@ -1,6 +1,7 @@
 ﻿using HSMDataCollector.Options;
 using System;
 using System.Threading;
+using System.Threading.Tasks;
 
 namespace HSMDataCollector.DefaultSensors
 {
@@ -26,14 +27,14 @@ namespace HSMDataCollector.DefaultSensors
         }
 
 
-        internal override void Start()
+        internal override async Task<bool> Start()
         {
-            if (IsMonitoringStarted)
-                return;
+            var isStarted = await base.Start();
 
-            _collectTimer.Change(CollectBarPeriod, CollectBarPeriod);
+            if (isStarted)
+                _collectTimer.Change(CollectBarPeriod, CollectBarPeriod);
 
-            base.Start();
+            return isStarted;
         }
 
         internal override void Stop()

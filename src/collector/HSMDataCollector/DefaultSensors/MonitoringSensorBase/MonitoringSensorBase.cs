@@ -2,6 +2,7 @@
 using HSMSensorDataObjects.SensorValueRequests;
 using System;
 using System.Threading;
+using System.Threading.Tasks;
 
 namespace HSMDataCollector.DefaultSensors
 {
@@ -40,14 +41,16 @@ namespace HSMDataCollector.DefaultSensors
             Stop();
         }
 
-        internal virtual void Start()
+        internal virtual Task<bool> Start()
         {
             if (IsMonitoringStarted)
-                return;
+                return Task.FromResult(false);
 
             _sendTimer.Change(ReceiveDataPeriod, ReceiveDataPeriod);
 
             IsMonitoringStarted = true;
+
+            return Task.FromResult(IsMonitoringStarted);
         }
 
         internal virtual void Stop()

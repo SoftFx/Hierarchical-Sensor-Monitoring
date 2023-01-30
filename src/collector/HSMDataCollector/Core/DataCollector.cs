@@ -20,6 +20,7 @@ using System.Net;
 using System.Net.Http;
 using System.Text;
 using System.Threading;
+using System.Threading.Tasks;
 
 namespace HSMDataCollector.Core
 {
@@ -122,11 +123,7 @@ namespace HSMDataCollector.Core
             _dataQueue.InitializeTimer();
         }
 
-        public void Start()
-        {
-            foreach (var sensor in _sensorsStorage)
-                sensor.Value.Start();
-        }
+        public Task Start() => Task.WhenAll(_sensorsStorage.Select(s => s.Value.Start()));
 
         public void Stop()
         {
