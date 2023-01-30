@@ -56,7 +56,7 @@ namespace HSMServer.Core.Model
         {
             Id = Guid.NewGuid();
             State = ProductState.FullAccess;
-            DisplayName = name;
+            DisplayName = name.Trim();
             CreationDate = DateTime.UtcNow;
         }
 
