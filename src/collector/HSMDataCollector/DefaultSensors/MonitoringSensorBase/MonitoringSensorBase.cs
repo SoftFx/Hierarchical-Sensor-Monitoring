@@ -12,6 +12,8 @@ namespace HSMDataCollector.DefaultSensors
         private readonly Timer _sendTimer;
         private readonly string _nodePath;
 
+        protected bool IsMonitoringStarted { get; private set; }
+
 
         protected abstract string SensorName { get; }
 
@@ -40,12 +42,19 @@ namespace HSMDataCollector.DefaultSensors
 
         internal virtual void Start()
         {
+            if (IsMonitoringStarted)
+                return;
+
             _sendTimer.Change(ReceiveDataPeriod, ReceiveDataPeriod);
+
+            IsMonitoringStarted = true;
         }
 
         internal virtual void Stop()
         {
             _sendTimer?.Dispose();
+
+            IsMonitoringStarted = false;
         }
 
 

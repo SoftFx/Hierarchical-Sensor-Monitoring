@@ -122,6 +122,12 @@ namespace HSMDataCollector.Core
             _dataQueue.InitializeTimer();
         }
 
+        public void Start()
+        {
+            foreach (var sensor in _sensorsStorage)
+                sensor.Value.Start();
+        }
+
         public void Stop()
         {
             if (_isStopped)
@@ -167,6 +173,8 @@ namespace HSMDataCollector.Core
                 if (isFreeRam)
                     Windows.AddFreeRamMemory(options);
             }
+
+            Start();
         }
 
         [Obsolete("Use method AddProcessSensors(options) in Windows or Unix collections")]
@@ -192,6 +200,8 @@ namespace HSMDataCollector.Core
                 if (isThreads)
                     Windows.AddProcessThreadCount(options);
             }
+
+            Start();
         }
 
         [Obsolete("Method has no implementation")]
@@ -216,6 +226,8 @@ namespace HSMDataCollector.Core
                 Unix.AddCollectorAlive(options);
             else
                 Windows.AddCollectorAlive(options);
+
+            Start();
         }
 
         [Obsolete("Use method AddWindowsSensors(options) in Windows collection")]
@@ -237,6 +249,8 @@ namespace HSMDataCollector.Core
             _logger?.Info($"Initialize windows update sensor...");
 
             Windows.AddWindowsNeedUpdate(_sensorsOptions.BuildWindowsInfoOptions(specificPath, sensorInterval, updateInterval));
+
+            Start();
 
             return true;
         }

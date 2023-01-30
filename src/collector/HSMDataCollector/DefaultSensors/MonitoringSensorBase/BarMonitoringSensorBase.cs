@@ -28,6 +28,9 @@ namespace HSMDataCollector.DefaultSensors
 
         internal override void Start()
         {
+            if (IsMonitoringStarted)
+                return;
+
             _collectTimer.Change(CollectBarPeriod, CollectBarPeriod);
 
             base.Start();

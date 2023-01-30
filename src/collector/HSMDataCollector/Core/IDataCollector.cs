@@ -10,6 +10,8 @@ namespace HSMDataCollector.Core
 
         IUnixCollection Unix { get; }
 
+        void Start();
+
         #region Common methods
 
         /// <summary>
