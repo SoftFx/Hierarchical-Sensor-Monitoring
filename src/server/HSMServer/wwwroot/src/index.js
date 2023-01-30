@@ -21,8 +21,6 @@ import * as TimeSpan from 'timespan'
 window.TimeSpan = require('timespan');
 window.TimeSpan = TimeSpan
 
-import * as d3 from 'd3-time-format'
-window.d3 = d3
 import '@fortawesome/fontawesome-free/js/all.min.js';
 import '@fortawesome/fontawesome-free/css/all.min.css';
 

@@ -20,7 +20,6 @@
     "@popperjs/core": "2.11.6",
     "bootstrap": "5.2.3",
     "clipboard": "2.0.11",
-    "d3-time-format": "^4.1.0",
     "jquery": "3.6.3",
     "jstree": "3.3.12",
     "moment": "2.29.4",
