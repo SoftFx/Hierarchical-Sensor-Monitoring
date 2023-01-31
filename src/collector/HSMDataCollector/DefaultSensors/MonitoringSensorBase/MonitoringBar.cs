@@ -29,13 +29,13 @@ namespace HSMDataCollector.DefaultSensors
 
             if (Count > 0)
             {
-                LastValue = _barValues.LastOrDefault();
+                LastValue = Round(_barValues.LastOrDefault());
 
                 _barValues.Sort();
 
-                Min = _barValues.First();
-                Max = _barValues.Last();
-                Mean = CountMean();
+                Min = Round(_barValues.First());
+                Max = Round(_barValues.Last());
+                Mean = Round(CountMean());
 
                 AddPercentile(_barValues, 0.25);
                 AddPercentile(_barValues, 0.5);
@@ -47,13 +47,15 @@ namespace HSMDataCollector.DefaultSensors
 
         protected abstract T CountMean();
 
+        protected abstract T Round(T value);
+
         private void AddPercentile(List<T> listValues, double percent)
         {
             var count = listValues.Count;
             var index = count > 1 ? (int)Math.Floor(count * percent) : 0;
             var percentile = count > 0 ? listValues[index] : default;
 
-            Percentiles.Add(percent, percentile);
+            Percentiles.Add(percent, Round(percentile));
         }
     }
 
@@ -64,14 +66,21 @@ namespace HSMDataCollector.DefaultSensors
 
 
         protected override int CountMean() => _barValues.Sum() / Count;
+
+        protected override int Round(int value) => value;
     }
 
 
     public sealed class DoubleMonitoringBar : MonitoringBarBase<double>
     {
+        private const int Precision = 2;
+
+
         public override SensorType Type => SensorType.DoubleBarSensor;
 
 
         protected override double CountMean() => _barValues.Sum() / Count;
+
+        protected override double Round(double value) => Math.Round(value, Precision, MidpointRounding.AwayFromZero);
     }
 }
