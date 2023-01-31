@@ -10,7 +10,7 @@ namespace HSMDataCollector.PublicInterface
 
         IWindowsCollection AddProcessThreadCount(BarSensorOptions options = null);
 
-        IWindowsCollection AddProcessSensors(BarSensorOptions options = null);
+        IWindowsCollection AddProcessMonitoringSensors(BarSensorOptions options = null);
 
 
         IWindowsCollection AddTotalCpu(BarSensorOptions options = null);
@@ -33,7 +33,7 @@ namespace HSMDataCollector.PublicInterface
 
         IWindowsCollection AddWindowsLastRestart(WindowsSensorOptions options = null);
 
-        IWindowsCollection AddWindowsInfoSensors(WindowsSensorOptions options = null);
+        IWindowsCollection AddWindowsInfoMonitoringSensors(WindowsSensorOptions options = null);
 
 
         IWindowsCollection AddCollectorAlive(SensorOptions options = null);

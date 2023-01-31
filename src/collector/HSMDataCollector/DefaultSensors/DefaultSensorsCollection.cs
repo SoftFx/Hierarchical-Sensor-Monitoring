@@ -45,7 +45,7 @@ namespace HSMDataCollector.DefaultSensors
             return ToWindows(new WindowsProcessThreadCount(_defaultOptions.GetProcessOptions(options)));
         }
 
-        IWindowsCollection IWindowsCollection.AddProcessSensors(BarSensorOptions options)
+        IWindowsCollection IWindowsCollection.AddProcessMonitoringSensors(BarSensorOptions options)
         {
             options = _defaultOptions.GetProcessOptions(options);
 
@@ -117,7 +117,7 @@ namespace HSMDataCollector.DefaultSensors
             return ToWindows(new WindowsLastRestart(_defaultOptions.GetWindowsOptions(options)));
         }
 
-        IWindowsCollection IWindowsCollection.AddWindowsInfoSensors(WindowsSensorOptions options)
+        IWindowsCollection IWindowsCollection.AddWindowsInfoMonitoringSensors(WindowsSensorOptions options)
         {
             options = _defaultOptions.GetWindowsOptions(options);
 
@@ -151,7 +151,7 @@ namespace HSMDataCollector.DefaultSensors
             return ToUnix(new UnixProcessThreadCount(_defaultOptions.GetProcessOptions(options)));
         }
 
-        IUnixCollection IUnixCollection.AddProcessSensors(BarSensorOptions options)
+        IUnixCollection IUnixCollection.AddProcessMonitoringSensors(BarSensorOptions options)
         {
             options = _defaultOptions.GetProcessOptions(options);
 
