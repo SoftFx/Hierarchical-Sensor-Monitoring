@@ -1,9 +1,12 @@
 ﻿@using HSMServer.Extensions
+@using HSMServer.Model.Authentication
 
 @model HSMServer.Model.TreeViewModels.TreeNodeStateViewModel
 
 @{
     var data = Model.Data;
+    var userNotifications = (User as User).Notifications;
+    var groupNotifications = Model.Data.NotificationSettings;
 }
 
 
@@ -20,17 +23,40 @@
         }
         else if (Model.IsAnyNotificationsEnabled)
         {
-            <span>
-                <i id="@(data.EncodedId)_notifications" class="fab fa-telegram fa-xs"></i>
-                <input id='@(data.EncodedId)_partialNotifications' value='@((!Model.IsAllNotificationsEnabled).ToString())' style='display: none' />
-            </span>
+            if (userNotifications.EnabledSensors.Count > 0)
+            {
+                <span>
+        <img src="~/dist/user.png" style="height: 1em;width: 1em;" alt=""/>
+    </span>
+            }
+
+            if (groupNotifications.EnabledSensors.Count > 0)
+            {
+                <span>
+                    <img src="~/dist/users.png" style="height: 1em; width: 1em;"/>
+                </span>
+            }
+            @* <span> *@
+            @*     <i id="@(data.EncodedId)_notifications" class="fab fa-telegram fa-xs"></i> *@
+            @*     <input id='@(data.EncodedId)_partialNotifications' value='@((!Model.IsAllNotificationsEnabled).ToString())' style='display: none'/> *@
+            @*     <i class="fa-solid fa-pen fa-xs"></i> *@
+            @* </span> *@
         }
     }
 
     @if (data.TelegramSettings.Chats.Count > 0)
     {
         <span>
-            <i class="fa-solid fa-people-group"></i>
+            
+            @* <i class="fa-solid fa-user-group"></i> *@
+            @* <i class="fa-solid fa-user"></i> *@
+            @* <i class="fa-solid fa-user-slash"></i> *@
+            @* <i class="fa-solid fa-users-slash"></i> *@
+            @* <span class="fa-stack fa-1x"> *@
+            @*     *@
+            @*     <i class="fa-solid fa-user-group fa-stack-1x"></i> *@
+            @*      <i class="fa-solid fa-slash fa-stack-1x" style="z-index: 100000"></i> *@
+            @* </span> *@
         </span>
     }
 
@@ -38,12 +64,12 @@
     {
         <ul>@await Html.PartialAsync("_TreeNode", child)</ul>
     }
-    
+
     @if (Model.Sensors.Count > 0)
     {
         <ul>
             @foreach (var sensor in Model.Sensors)
-                @await Html.PartialAsync("_TreeSensor", sensor)
+                                                  @await Html.PartialAsync("_TreeSensor", sensor)
         </ul>
     }
 </li>

@@ -1,4 +1,5 @@
-﻿@using HSMServer.Extensions
+﻿@using HSMServer.Core.Model.UserFilters
+@using HSMServer.Extensions
 @using HSMServer.Model.Authentication
 
 @model HSMServer.Model.TreeViewModels.SensorNodeViewModel
@@ -10,17 +11,42 @@
 
 <li id='@Model.EncodedId' title='@Model.Tooltip' data-jstree='{"title" : "@Model.Title", "icon" : "@Model.Status.ToIcon()", "time" : "@Model.UpdateTime.ToDefaultFormat()"}'>
     <span class="@Model.State.ToCssClass()">@Html.Raw(Model.Name.GetShortNodeName())</span>
-
+    
     @if (userNotifications.IsSensorIgnored(Model.Id))
     {
         <span>
-            <i id="@(Model.EncodedId)_ignoreNotifications" class="fa-solid fa-bell-slash fa-xs"></i>
+            <img src="~/dist/user-crossed.png" style="height: 1em;width: 1em;" alt=""/>
         </span>
+        @* <span> *@
+        @*     <i id="@(Model.EncodedId)_ignoreNotifications" class="fa-solid fa-bell-slash fa-xs"></i> *@
+        @* </span> *@
     }
     else if (userNotifications.IsSensorEnabled(Model.Id))
     {
         <span>
-            <i id="@(Model.EncodedId)_notifications" class="fab fa-telegram fa-xs"></i>
+            <img src="~/dist/user.png" style="height: 1em;width: 1em;" alt=""/>
+        </span>
+        @* <span> *@
+        @*     <i id="@(Model.EncodedId)_notifications" class="fab fa-telegram fa-xs"></i> *@
+        @* </span> *@
+    }
+
+    @if (Model.GroupNotificationSettings.IsSensorIgnored(Model.Id))
+    {
+        <span>
+            <img src="~/dist/users-crossed.png" style="height: 1em; width: 1em;"/>
+        </span>
+        @* <span> *@
+        @*     <i id="@(Model.EncodedId)_ignoreNotifications12" class="fa-regular fa-bell-slash fa-xs"></i> *@
+        @* </span> *@
+    }
+    else if (Model.GroupNotificationSettings.IsSensorEnabled(Model.Id))
+    {
+        @* <span> *@
+        @*     <i id="@(Model.EncodedId)_notifications12" class="fa-solid fa-pen fa-xs"></i> *@
+        @* </span> *@
+        <span>
+            <img src="~/dist/users.png" style="height: 1em; width: 1em;"/>
         </span>
     }
 </li>

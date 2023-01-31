@@ -43,7 +43,10 @@ namespace HSMServer.Model.TreeViewModels
         {
             ChangeEnableState(user.Notifications.IsSensorEnabled(sensor.Id));
             ChangeIgnoreState(user.Notifications.IsSensorIgnored(sensor.Id));
-
+            
+            ChangeEnableState(sensor.GroupNotificationSettings.IsSensorEnabled(sensor.Id));
+            ChangeIgnoreState(sensor.GroupNotificationSettings.IsSensorIgnored(sensor.Id));
+            
             if (user.IsSensorVisible(sensor))
             {
                 VisibleSensorsCount++;
@@ -55,7 +58,7 @@ namespace HSMServer.Model.TreeViewModels
         {
             ChangeEnableState(node.IsAnyNotificationsEnabled);
             ChangeIgnoreState(node.IsAllNotificationsIgnored);
-
+            
             VisibleSensorsCount += node.VisibleSensorsCount;
 
             if (node.VisibleSensorsCount > 0 || user.IsEmptyProductVisible(node.Data))

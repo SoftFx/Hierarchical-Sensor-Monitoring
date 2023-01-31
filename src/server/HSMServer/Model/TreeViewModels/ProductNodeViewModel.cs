@@ -23,6 +23,8 @@ namespace HSMServer.Model.TreeViewModels
         public ConcurrentDictionary<Guid, AccessKeyViewModel> AccessKeys { get; } = new();
 
         public TelegramSettingsViewModel TelegramSettings { get; } = new();
+        
+        public NotificationSettings NotificationSettings { get; }
 
         public int AllSensorsCount { get; private set; }
 
@@ -33,7 +35,8 @@ namespace HSMServer.Model.TreeViewModels
         {
             Product = model.RootProductName;
             Path = $"{model.Path}{CommonConstants.SensorPathSeparator}";
-
+            NotificationSettings = model.Notifications;
+            
             Update(model);
         }
 
