@@ -6,7 +6,7 @@ namespace HSMDataCollector.Tests
 {
     public class DefaultSensorsTests : IDisposable
     {
-        private const string CurrentProcessNodeName = "CurrentProcess";
+        private const string CurrentProcessNodeName = "Process monitoring";
         private const string ProductName = "TestProduct";
 
         private readonly DataCollector _dataCollector;

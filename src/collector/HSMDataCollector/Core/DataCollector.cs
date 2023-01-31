@@ -169,7 +169,7 @@ namespace HSMDataCollector.Core
         {
             if (!_defaultSensors.IsUnixOS)
             {
-                var options = _sensorsOptions.BuildSystemMonitoringOptions(specificPath);
+                var options = _sensorsOptions.SystemMonitoring.GetAndFill(new BarSensorOptions() { NodePath = specificPath });
 
                 if (isCPU)
                     Windows.AddTotalCpu(options);
@@ -183,7 +183,7 @@ namespace HSMDataCollector.Core
         [Obsolete("Use method AddProcessSensors(options) in Windows or Unix collections")]
         public void InitializeProcessMonitoring(bool isCPU, bool isMemory, bool isThreads, string specificPath = null)
         {
-            var options = _sensorsOptions.BuildCurrentProcessOptions(specificPath);
+            var options = _sensorsOptions.ProcessMonitoring.GetAndFill(new BarSensorOptions() { NodePath = specificPath });
 
             if (_defaultSensors.IsUnixOS)
             {
@@ -223,7 +223,7 @@ namespace HSMDataCollector.Core
         [Obsolete("Use method AddCollectorAlive(options) in Windows or Unix collections")]
         public void MonitorServiceAlive(string specificPath = null)
         {
-            var options = _sensorsOptions.BuildCollectorAliveOptions(specificPath);
+            var options = _sensorsOptions.CollectorAliveMonitoring.GetAndFill(new SensorOptions() { NodePath = specificPath });
 
             if (_defaultSensors.IsUnixOS)
                 Unix.AddCollectorAlive(options);
@@ -245,7 +245,13 @@ namespace HSMDataCollector.Core
         {
             try
             {
-                Windows.AddWindowsNeedUpdate(_sensorsOptions.BuildWindowsInfoOptions(specificPath, sensorInterval, updateInterval));
+                var options = new WindowsSensorOptions() { NodePath = specificPath };
+                if (sensorInterval.HasValue)
+                    options.PostDataPeriod = sensorInterval.Value;
+                if (updateInterval.HasValue)
+                    options.AcceptableUpdateInterval = updateInterval.Value;
+
+                Windows.AddWindowsNeedUpdate(_sensorsOptions.WindowsInfoMonitoring.GetAndFill(options));
             }
             catch
             {
