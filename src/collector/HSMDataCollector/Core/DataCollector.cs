@@ -2,7 +2,6 @@
 using HSMDataCollector.Base;
 using HSMDataCollector.CustomFuncSensor;
 using HSMDataCollector.DefaultSensors;
-using HSMDataCollector.DefaultSensors.Windows;
 using HSMDataCollector.DefaultValueSensor;
 using HSMDataCollector.Exceptions;
 using HSMDataCollector.InstantValue;
@@ -32,14 +31,14 @@ namespace HSMDataCollector.Core
         private const string LogDefaultFolder = "Logs";
         private const string LogFormatFileName = "DataCollector_${shortdate}.log";
 
+        private readonly ConcurrentDictionary<string, ISensor> _nameToSensor;
+        private readonly DefaultSensorsCollection _defaultSensors;
+        private readonly SensorsDefaultOptions _sensorsOptions;
+        private readonly SensorsStorage _sensorsStorage;
+        private readonly IDataQueue _dataQueue;
+        private readonly HttpClient _client;
         private readonly string _listSendingAddress;
         private readonly string _fileSendingAddress;
-        private readonly ConcurrentDictionary<string, ISensor> _nameToSensor;
-        private readonly HttpClient _client;
-        private readonly IDataQueue _dataQueue;
-        private readonly SensorsStorage _sensorsStorage;
-        private readonly SensorsDefaultOptions _sensorsOptions;
-        private readonly DefaultSensorsCollection _defaultSensors;
 
         private NLog.Logger _logger;
         private bool _isStopped;
@@ -50,6 +49,7 @@ namespace HSMDataCollector.Core
         public IUnixCollection Unix => _defaultSensors;
 
 
+        [Obsolete]
         public event EventHandler ValuesQueueOverflow;
 
 
@@ -101,6 +101,7 @@ namespace HSMDataCollector.Core
             Stop();
         }
 
+        [Obsolete("Use method Start() after default sensors initialization")]
         public void Initialize(bool useLogging = true, string folderPath = null, string fileNameFormat = null)
         {
             if (useLogging)
@@ -123,7 +124,12 @@ namespace HSMDataCollector.Core
             _dataQueue.InitializeTimer();
         }
 
-        public Task Start() => Task.WhenAll(_sensorsStorage.Select(s => s.Value.Start()));
+        public Task Start()
+        {
+            _dataQueue.InitializeTimer();
+
+            return _sensorsStorage.Start();
+        }
 
         public void Stop()
         {
@@ -237,15 +243,14 @@ namespace HSMDataCollector.Core
 
         private bool InitializeWindowsNeedUpdate(string specificPath, TimeSpan? sensorInterval = null, TimeSpan? updateInterval = null)
         {
-            if (_defaultSensors.IsUnixOS)
+            try
             {
-                _logger?.Error($"Failed to create {nameof(WindowsNeedUpdate)} because current OS is not Windows");
+                Windows.AddWindowsNeedUpdate(_sensorsOptions.BuildWindowsInfoOptions(specificPath, sensorInterval, updateInterval));
+            }
+            catch
+            {
                 return false;
             }
-
-            _logger?.Info($"Initialize windows update sensor...");
-
-            Windows.AddWindowsNeedUpdate(_sensorsOptions.BuildWindowsInfoOptions(specificPath, sensorInterval, updateInterval));
 
             Start();
 

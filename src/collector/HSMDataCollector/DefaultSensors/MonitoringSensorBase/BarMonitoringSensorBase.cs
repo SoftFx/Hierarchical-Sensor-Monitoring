@@ -61,9 +61,7 @@ namespace HSMDataCollector.DefaultSensors
         {
             try
             {
-                var partialValue = GetBarData();
-
-                _internalBar.AddValue(partialValue);
+                _internalBar.AddValue(GetBarData());
             }
             catch { }
         }

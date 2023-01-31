@@ -1,4 +1,5 @@
-﻿using HSMDataCollector.Options;
+﻿using HSMDataCollector.Extensions;
+using HSMDataCollector.Options;
 
 namespace HSMDataCollector.DefaultSensors.Windows
 {
@@ -17,6 +18,6 @@ namespace HSMDataCollector.DefaultSensors.Windows
         internal WindowsProcessMemory(BarSensorOptions options) : base(options) { }
 
 
-        protected override double GetBarData() => base.GetBarData() / MbDivisor;
+        protected override double GetBarData() => base.GetBarData().ToMegabytes();
     }
 }

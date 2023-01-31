@@ -78,7 +78,8 @@ namespace HSMDataCollector.Core
 
         public void InitializeTimer()
         {
-            _sendTimer = new Timer(OnTimerTick, null, _packageSendingPeriod, _packageSendingPeriod);
+            if (_sendTimer != null)
+                _sendTimer = new Timer(OnTimerTick, null, _packageSendingPeriod, _packageSendingPeriod);
         }
 
         public void Stop()

@@ -1,6 +1,8 @@
 ﻿using HSMDataCollector.DefaultSensors;
 using System;
 using System.Collections.Concurrent;
+using System.Linq;
+using System.Threading.Tasks;
 
 namespace HSMDataCollector.Core
 {
@@ -17,9 +19,15 @@ namespace HSMDataCollector.Core
 
         public void Dispose()
         {
-            foreach (var sensor in Values)
-                sensor.Dispose();
+            foreach (var value in Values)
+            {
+                value.ReceiveSensorValue -= _valuesQueue.EnqueueData;
+
+                value.Dispose();
+            }
         }
+
+        internal Task Start() => Task.WhenAll(Values.Select(s => s.Start()));
 
         internal void Register(string key, MonitoringSensorBase value)
         {

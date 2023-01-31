@@ -20,10 +20,12 @@ namespace HSMDataCollector.Extensions
             return sensor;
         }
 
-        internal static void TrimLongComment(this SensorValueBase value)
+        internal static SensorValueBase TrimLongComment(this SensorValueBase value)
         {
             if (value?.Comment != null && value.Comment.Length > MaxSensorValueCommentLength)
                 value.Comment = value.Comment.Substring(0, MaxSensorValueCommentLength);
+
+            return value;
         }
     }
 }

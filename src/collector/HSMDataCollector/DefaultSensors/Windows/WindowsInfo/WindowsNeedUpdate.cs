@@ -6,7 +6,6 @@ namespace HSMDataCollector.DefaultSensors.Windows
 {
     internal sealed class WindowsNeedUpdate : MonitoringSensorBase<bool>
     {
-        private readonly string _windowsVersion = RuntimeInformation.OSDescription;
         private readonly DateTime _windowsLastUpdate;
         private readonly TimeSpan _acceptableUpdateInterval;
 
@@ -24,6 +23,6 @@ namespace HSMDataCollector.DefaultSensors.Windows
 
         protected override bool GetValue() => DateTime.UtcNow - _windowsLastUpdate >= _acceptableUpdateInterval;
 
-        protected override string GetComment() => $"{_windowsVersion}. Last update date: {_windowsLastUpdate}";
+        protected override string GetComment() => $"{RuntimeInformation.OSDescription}. Last update date: {_windowsLastUpdate}";
     }
 }

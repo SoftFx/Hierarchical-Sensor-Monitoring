@@ -1,4 +1,5 @@
-﻿using HSMDataCollector.Options;
+﻿using HSMDataCollector.Extensions;
+using HSMDataCollector.Options;
 using System.IO;
 
 namespace HSMDataCollector.DefaultSensors.Windows
@@ -19,6 +20,6 @@ namespace HSMDataCollector.DefaultSensors.Windows
         }
 
 
-        protected override double GetValue() => _driveInfo.AvailableFreeSpace / MbDivisor;
+        protected override double GetValue() => _driveInfo.AvailableFreeSpace.ToMegabytes();
     }
 }

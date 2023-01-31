@@ -8,12 +8,10 @@ namespace HSMDataCollector.DefaultSensors
 {
     public abstract class MonitoringSensorBase : IDisposable
     {
-        protected const int MbDivisor = 1 << 20;
-
         private readonly Timer _sendTimer;
         private readonly string _nodePath;
 
-        protected bool IsMonitoringStarted { get; private set; }
+        protected bool IsStarted { get; private set; }
 
 
         protected abstract string SensorName { get; }
@@ -43,21 +41,21 @@ namespace HSMDataCollector.DefaultSensors
 
         internal virtual Task<bool> Start()
         {
-            if (IsMonitoringStarted)
+            if (IsStarted)
                 return Task.FromResult(false);
 
             _sendTimer.Change(ReceiveDataPeriod, ReceiveDataPeriod);
 
-            IsMonitoringStarted = true;
+            IsStarted = true;
 
-            return Task.FromResult(IsMonitoringStarted);
+            return Task.FromResult(IsStarted);
         }
 
         internal virtual void Stop()
         {
             _sendTimer?.Dispose();
 
-            IsMonitoringStarted = false;
+            IsStarted = false;
         }
 
 

@@ -27,6 +27,7 @@ namespace HSMDataCollector.Core
         /// <param name="useLogging">Specifies whether runtime errors will be logged or not</param>
         /// <param name="folderPath">Path to logs folder, if null current folder will be used</param>
         /// <param name="fileNameFormat">File name format, if null default file name is specified</param>
+        [Obsolete("Use method Start() after default sensors initialization")]
         void Initialize(bool useLogging = true, string folderPath = null, string fileNameFormat = null);
 
         /// <summary>
