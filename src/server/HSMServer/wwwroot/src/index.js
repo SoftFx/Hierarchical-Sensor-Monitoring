@@ -18,7 +18,6 @@ import * as Plotly from 'plotly.js/dist/plotly';
 window.Plotly = Plotly;
 
 import * as TimeSpan from 'timespan'
-window.TimeSpan = require('timespan');
 window.TimeSpan = TimeSpan
 
 import '@fortawesome/fontawesome-free/js/all.min.js';

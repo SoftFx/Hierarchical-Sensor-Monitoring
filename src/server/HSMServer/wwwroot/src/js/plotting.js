@@ -151,53 +151,50 @@ function convertToGraphData(graphData, graphType, graphName) {
 }
 
 function getTimeSpanGraphData(timeList, dataList, chartType){
-    let cData = dataList.map(function (i){
-        const timespan = TimeSpan.fromSeconds(i)
-        let text = ``;
-        if(timespan.days !== 0){
-            text += `${timespan.days}d `
-        }
-        text += `${timespan.hours}h ${timespan.minutes}m ${timespan.seconds}s`
-        return text
-    })
     return [
         {
             x: timeList,
             y: dataList,
             type: chartType,
-            customdata: cData,
+            customdata: getTextValForTimeSpan(dataList),
             hovertemplate: '%{customdata}<extra></extra>'
         }
     ];
+}
+
+function getTextValForTimeSpan(data){
+    return data.map(function (i){
+        const timespan = window.TimeSpan.fromSeconds(i)
+
+        if (timespan === undefined) 
+            return '0h 0m 0s';
+
+        let text = `${timespan.hours}h ${timespan.minutes}m ${timespan.seconds}s`;
+
+        if(timespan.days !== 0){
+            return `${timespan.days}d ` + text;
+        }
+        return text
+    })
 }
 
 function getTimeSpanLayout(datalist){
     let minVal = Math.min(...datalist);
     let maxVal = Math.max(...datalist)
     let diff = maxVal - minVal;
-    let array = []
+    let tVals = [minVal]
     
     if(diff >= 36000){
-        diff /= 20;
+        diff /= 10;
 
         let i = minVal;
-        while (i < maxVal - minVal / 2)
-        {
-            array.push(i);
+        while (tVals.length <= 9){
             i += diff;
+            tVals.push(i);
         }
     }
-    
-    let tVals = [minVal, ...array ,maxVal];
-    let tText = tVals.map(function (i){
-        const timespan = TimeSpan.fromSeconds(i)
-        let text = ``;
-        if(timespan.days !== 0){
-            text += `${timespan.days}d `
-        }
-        text += `${timespan.hours}h ${timespan.minutes}m ${timespan.seconds}s`
-        return text
-    })
+    tVals.push(maxVal)
+    let tText =  getTextValForTimeSpan(tVals);
     
     return {
         yaxis: {
