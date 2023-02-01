@@ -186,3 +186,7 @@
     line-height: 18px;
     margin: 3px 2px 3px 0px;
 }
+
+.jstree-node {
+    font-family: 'Titillium Web', sans-serif, Arial, sans-serif;
+}
