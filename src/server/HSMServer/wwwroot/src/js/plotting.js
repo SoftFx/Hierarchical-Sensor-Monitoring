@@ -178,22 +178,34 @@ function getTextValForTimeSpan(data){
     })
 }
 
-function getTimeSpanLayout(datalist){
-    let minVal = Math.min(...datalist);
+function getTimeSpanLayout(datalist) {
+    const MAX_TIME_POINTS = 10
+    //let minVal = Math.min(...datalist);
     let maxVal = Math.max(...datalist)
-    let diff = maxVal - minVal;
-    let tVals = [minVal]
-    
-    if(diff >= 36000){
-        diff /= 10;
+    let step = Math.max(maxVal / MAX_TIME_POINTS, 1)
+    let tVals = []
+    let cur = 0
 
-        let i = minVal;
-        while (tVals.length <= 9){
-            i += diff;
-            tVals.push(i);
-        }
+    while (cur <= maxVal) {
+        tVals.push(cur);
+        cur += step;
     }
-    tVals.push(maxVal)
+    //for (let i = 0, cur = 0; i < MAX_TIME_POINTS; i++) {
+    //    cur += step;
+    //}
+    //let diff = maxVal - minVal;
+    //let tVals = [minVal]
+    
+    //if(diff >= 36000){
+    //    diff /= 10;
+
+    //    let i = minVal;
+    //    while (tVals.length <= 9){
+    //        i += diff;
+    //        tVals.push(i);
+    //    }
+    //}
+    //tVals.push(maxVal)
     let tText =  getTextValForTimeSpan(tVals);
     
     return {
