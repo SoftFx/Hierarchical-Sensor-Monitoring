@@ -1,6 +1,5 @@
 ﻿@using HSMServer.Extensions
 @using HSMServer.Model.Authentication
-@using Microsoft.AspNetCore.Mvc.ApiExplorer
 
 @model HSMServer.Model.TreeViewModels.TreeNodeStateViewModel
 
@@ -13,9 +12,16 @@
 
 <li id='@data.EncodedId' title='@data.Tooltip' data-jstree='{"title" : "@data.Title", "icon" : "@data.Status.ToIcon()", "time" : "@data.UpdateTime.ToDefaultFormat()"}'>
     <span>@Html.Raw(data.Name.GetShortNodeName()) @Model.SensorsCountString</span>
-
+    
     @if (!data.IsEmpty)
     {
+        @if (data.TelegramSettings.Chats.Count > 0)
+        {
+            <span>
+                <i id="@(data.EncodedId)_notifications" class="fab fa-telegram fa-xs"></i>
+            </span>
+        }
+        
         @if (Model.IsAllAccountsNotificationsIgnored)
         {
             <span>
@@ -41,71 +47,8 @@
                 <img src="~/dist/users.png" style="height: 1em;width: 1em;" alt="!"/>
             </span>
         }
-
-
-        @* @if (Model.IsAllNotificationsIgnored) *@
-        @* { *@
-        @*     <span> *@
-        @*         <i id="@(data.EncodedId)_ignoreNotifications" class="fa-solid fa-bell-slash fa-xs"></i> *@
-        @*     </span> *@
-        @* } *@
-        @* else if (Model.IsAnyNotificationsEnabled) *@
-        @* { *@
-        @*     if (userNotifications.EnabledSensors.Count > 0) *@
-        @*     { *@
-        @*         if (Model.Data.Sensors.All(x => userNotifications.IsSensorIgnored(x.Key))) *@
-        @*         { *@
-        @*             <span> *@
-        @*                 <img src="~/dist/user-crossed.png" style="height: 1em;width: 1em;" alt="!"/> *@
-        @*             </span> *@
-        @*         } *@
-        @*         else if (Model.Data.Sensors.Any(x => userNotifications.IsSensorEnabled(x.Key))) *@
-        @*         { *@
-        @*             <span> *@
-        @*                 <img src="~/dist/user.png" style="height: 1em;width: 1em;" alt="!"/> *@
-        @*             </span> *@
-        @*         } *@
-        @*     } *@
-        @* *@
-        @*     if (groupNotifications.EnabledSensors.Count > 0) *@
-        @*     { *@
-        @*         if (groupNotifications.EnabledSensors.Count == groupNotifications.IgnoredSensors.Count) *@
-        @*         { *@
-        @*             <span id="@(data.EncodedId)_notifications"> *@
-        @*                 <img src="~/dist/users-crossed.png" style="height: 1em; width: 1em;" alt="!"/> *@
-        @*             </span> *@
-        @*         } *@
-        @*         else *@
-        @*         { *@
-        @*             <span id="@(data.EncodedId)_notifications"> *@
-        @*                 <img src="~/dist/users.png" style="height: 1em; width: 1em;" alt="!"/> *@
-        @*             </span> *@
-        @*         } *@
-        @*     } *@
-        @*     $1$ <span> #1# *@
-        @*     $1$     <i id="@(data.EncodedId)_notifications" class="fab fa-telegram fa-xs"></i> #1# *@
-        @*     $1$     <input id='@(data.EncodedId)_partialNotifications' value='@((!Model.IsAllNotificationsEnabled).ToString())' style='display: none'/> #1# *@
-        @*     $1$     <i class="fa-solid fa-pen fa-xs"></i> #1# *@
-        @*     $1$ </span> #1# *@
-        @* } *@
     }
-
-    @if (data.TelegramSettings.Chats.Count > 0)
-    {
-        <span>
-
-            @* <i class="fa-solid fa-user-group"></i> *@
-            @* <i class="fa-solid fa-user"></i> *@
-            @* <i class="fa-solid fa-user-slash"></i> *@
-            @* <i class="fa-solid fa-users-slash"></i> *@
-            @* <span class="fa-stack fa-1x"> *@
-            @*     *@
-            @*     <i class="fa-solid fa-user-group fa-stack-1x"></i> *@
-            @*      <i class="fa-solid fa-slash fa-stack-1x" style="z-index: 100000"></i> *@
-            @* </span> *@
-        </span>
-    }
-
+    
     @foreach (var child in Model.Nodes)
     {
         <ul>@await Html.PartialAsync("_TreeNode", child)</ul>
