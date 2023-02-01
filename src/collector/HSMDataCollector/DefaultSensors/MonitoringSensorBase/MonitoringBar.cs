@@ -1,4 +1,5 @@
-﻿using HSMSensorDataObjects;
+﻿using HSMDataCollector.Extensions;
+using HSMSensorDataObjects;
 using HSMSensorDataObjects.SensorValueRequests;
 using System;
 using System.Collections.Generic;
@@ -13,10 +14,7 @@ namespace HSMDataCollector.DefaultSensors
 
         internal void Init(TimeSpan timerPeriod)
         {
-            var now = DateTime.UtcNow.Ticks;
-            var period = timerPeriod.Ticks;
-
-            OpenTime = new DateTime(now / period * period);
+            OpenTime = timerPeriod.CalculateOpenTime();
             CloseTime = OpenTime + timerPeriod;
         }
 

@@ -6,12 +6,14 @@ namespace HSMDataCollector.Options
     {
         public string NodePath { get; set; }
 
-        public TimeSpan PostDataPeriod { get; set; } = TimeSpan.FromMinutes(5);
+        public TimeSpan PostDataPeriod { get; set; } = TimeSpan.FromSeconds(15);
     }
 
 
     public sealed class BarSensorOptions : SensorOptions
     {
+        public TimeSpan BarPeriod { get; set; } = TimeSpan.FromMinutes(5);
+
         public TimeSpan CollectBarPeriod { get; set; } = TimeSpan.FromSeconds(5);
     }
 

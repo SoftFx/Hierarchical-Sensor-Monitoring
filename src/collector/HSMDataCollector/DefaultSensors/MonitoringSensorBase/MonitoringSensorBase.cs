@@ -11,13 +11,14 @@ namespace HSMDataCollector.DefaultSensors
         private readonly Timer _sendTimer;
         private readonly string _nodePath;
 
-        protected bool IsStarted { get; private set; }
+        protected readonly TimeSpan _receiveDataPeriod;
+
+        private bool _isStarted;
 
 
         protected abstract string SensorName { get; }
 
-        protected TimeSpan ReceiveDataPeriod { get; }
-
+        protected virtual TimeSpan TimerDueTime => _receiveDataPeriod;
 
         internal string SensorPath => $"{_nodePath}/{SensorName}";
 
@@ -28,7 +29,7 @@ namespace HSMDataCollector.DefaultSensors
         protected MonitoringSensorBase(SensorOptions options)
         {
             _nodePath = options.NodePath;
-            ReceiveDataPeriod = options.PostDataPeriod;
+            _receiveDataPeriod = options.PostDataPeriod;
 
             _sendTimer = new Timer(OnTimerTick, null, Timeout.Infinite, Timeout.Infinite);
         }
@@ -41,27 +42,25 @@ namespace HSMDataCollector.DefaultSensors
 
         internal virtual Task<bool> Start()
         {
-            if (IsStarted)
+            if (_isStarted)
                 return Task.FromResult(false);
 
-            _sendTimer.Change(GetTimerDueTime(), ReceiveDataPeriod);
+            _sendTimer.Change(TimerDueTime, _receiveDataPeriod);
 
-            IsStarted = true;
+            _isStarted = true;
 
-            return Task.FromResult(IsStarted);
+            return Task.FromResult(_isStarted);
         }
 
         internal virtual void Stop()
         {
             _sendTimer?.Dispose();
 
-            IsStarted = false;
+            _isStarted = false;
         }
 
 
         protected abstract void OnTimerTick(object _ = null);
-
-        protected virtual TimeSpan GetTimerDueTime() => ReceiveDataPeriod;
 
         protected virtual string GetComment() => null;
 

@@ -1,4 +1,5 @@
-﻿using HSMDataCollector.Options;
+﻿using HSMDataCollector.Extensions;
+using HSMDataCollector.Options;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
@@ -10,16 +11,18 @@ namespace HSMDataCollector.DefaultSensors
         where T : struct
     {
         private readonly Timer _collectTimer;
+        private readonly TimeSpan _barPeriod;
+        private readonly TimeSpan _collectBarPeriod;
 
         private BarType _internalBar;
 
-
-        private TimeSpan CollectBarPeriod { get; }
+        protected sealed override TimeSpan TimerDueTime => _receiveDataPeriod.CalculateTimerDueTime();
 
 
         public BarMonitoringSensorBase(BarSensorOptions options) : base(options)
         {
-            CollectBarPeriod = options.CollectBarPeriod;
+            _barPeriod = options.BarPeriod;
+            _collectBarPeriod = options.CollectBarPeriod;
 
             _collectTimer = new Timer(CollectBar, null, Timeout.Infinite, Timeout.Infinite);
 
@@ -32,7 +35,7 @@ namespace HSMDataCollector.DefaultSensors
             var isStarted = await base.Start();
 
             if (isStarted)
-                _collectTimer.Change(CollectBarPeriod, CollectBarPeriod);
+                _collectTimer.Change(_collectBarPeriod, _collectBarPeriod);
 
             return isStarted;
         }
@@ -56,13 +59,6 @@ namespace HSMDataCollector.DefaultSensors
             return value;
         }
 
-        protected sealed override TimeSpan GetTimerDueTime()
-        {
-            var dueTime = _internalBar.CloseTime - DateTime.UtcNow;
-
-            return dueTime >= TimeSpan.Zero ? dueTime : TimeSpan.Zero;
-        }
-
 
         private void CollectBar(object _)
         {
@@ -76,7 +72,7 @@ namespace HSMDataCollector.DefaultSensors
         private void BuildNewBar()
         {
             _internalBar = new BarType();
-            _internalBar.Init(ReceiveDataPeriod);
+            _internalBar.Init(_barPeriod);
         }
     }
 }
