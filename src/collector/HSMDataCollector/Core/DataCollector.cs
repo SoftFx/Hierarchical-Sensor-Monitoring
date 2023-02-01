@@ -217,7 +217,7 @@ namespace HSMDataCollector.Core
         public void InitializeOsMonitoring(bool isUpdated, string specificPath = null)
         {
             if (isUpdated)
-                InitializeWindowsNeedUpdate(specificPath);
+                InitializeWindowsUpdateMonitoring(TimeSpan.FromHours(12), TimeSpan.FromDays(30), specificPath);
         }
 
         [Obsolete("Use method AddCollectorAlive(options) in Windows or Unix collections")]
@@ -236,20 +236,14 @@ namespace HSMDataCollector.Core
         [Obsolete("Use method AddWindowsSensors(options) in Windows collection")]
         public bool InitializeWindowsUpdateMonitoring(TimeSpan sensorInterval, TimeSpan updateInterval, string specificPath = null)
         {
-            return InitializeWindowsNeedUpdate(specificPath, sensorInterval, updateInterval);
-        }
-
-        public bool IsSensorExists(string path) => _nameToSensor.ContainsKey(path) || _sensorsStorage.ContainsKey(path);
-
-        private bool InitializeWindowsNeedUpdate(string specificPath, TimeSpan? sensorInterval = null, TimeSpan? updateInterval = null)
-        {
             try
             {
-                var options = new WindowsSensorOptions() { NodePath = specificPath };
-                if (sensorInterval.HasValue)
-                    options.PostDataPeriod = sensorInterval.Value;
-                if (updateInterval.HasValue)
-                    options.AcceptableUpdateInterval = updateInterval.Value;
+                var options = new WindowsSensorOptions()
+                {
+                    NodePath = specificPath,
+                    PostDataPeriod = sensorInterval,
+                    AcceptableUpdateInterval = updateInterval,
+                };
 
                 Windows.AddWindowsNeedUpdate(_sensorsOptions.WindowsInfoMonitoring.GetAndFill(options));
             }
@@ -262,6 +256,8 @@ namespace HSMDataCollector.Core
 
             return true;
         }
+
+        public bool IsSensorExists(string path) => _nameToSensor.ContainsKey(path) || _sensorsStorage.ContainsKey(path);
 
         #region Generic sensors functionality
 
