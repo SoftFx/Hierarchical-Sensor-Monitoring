@@ -25,26 +25,26 @@
         @if (Model.IsAllAccountsNotificationsIgnored)
         {
             <span>
-                <img src="~/dist/user-crossed.png" style="height: 1em;width: 1em;" alt="!"/>
+                <img id="@(data.EncodedId)_accountsIgnoreNotifications" src="~/dist/user-crossed.png" style="height: 1em;width: 1em;" alt="!"/>
             </span>
         }
         else if (Model.IsAnyAccountsNotificationsEnabled)
         {
             <span>
-                <img src="~/dist/user.png" style="height: 1em;width: 1em;" alt="!"/>
+                <img id="@(data.EncodedId)_accountsNotifications" src="~/dist/user.png" style="height: 1em;width: 1em;" alt="!"/>
             </span>
         }
         
         @if (Model.IsAllGroupsNotificationsIgnored)
         {
             <span>
-                <img src="~/dist/users-crossed.png" style="height: 1em;width: 1em;" alt="!"/>
+                <img id="@(data.EncodedId)_groupsIgnoreNotifications" src="~/dist/users-crossed.png" style="height: 1em;width: 1em;" alt="!"/>
             </span>
         }
         else if (Model.IsAnyGroupsNotificationsEnabled)
         {
             <span>
-                <img src="~/dist/users.png" style="height: 1em;width: 1em;" alt="!"/>
+                <img id="@(data.EncodedId)_groupsNotifications" src="~/dist/users.png" style="height: 1em;width: 1em;" alt="!"/>
             </span>
         }
     }

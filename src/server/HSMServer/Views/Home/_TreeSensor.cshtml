@@ -14,26 +14,26 @@
     @if (userNotifications.IsSensorIgnored(Model.Id))
     {
         <span>
-            <img src="~/dist/user-crossed.png" style="height: 1em;width: 1em;" alt=""/>
+            <img id="@(Model.EncodedId)_accountsIgnoreNotifications" src="~/dist/user-crossed.png" style="height: 1em;width: 1em;" alt=""/>
         </span>
     }
     else if (userNotifications.IsSensorEnabled(Model.Id))
     {
         <span>
-            <img src="~/dist/user.png" style="height: 1em;width: 1em;" alt=""/>
+            <img id="@(Model.EncodedId)_accountsNotifications" src="~/dist/user.png" style="height: 1em;width: 1em;" alt=""/>
         </span>
     }
 
     @if (Model.GroupNotificationSettings.IsSensorIgnored(Model.Id))
     {
         <span>
-            <img src="~/dist/users-crossed.png" style="height: 1em; width: 1em;" alt=""/>
+            <img id="@(Model.EncodedId)_groupsIgnoreNotifications" src="~/dist/users-crossed.png" style="height: 1em; width: 1em;" alt=""/>
         </span>
     }
     else if (Model.GroupNotificationSettings.IsSensorEnabled(Model.Id))
     {
         <span>
-            <img src="~/dist/users.png" style="height: 1em; width: 1em;" alt=""/>
+            <img id="@(Model.EncodedId)_groupsNotifications" src="~/dist/users.png" style="height: 1em; width: 1em;" alt=""/>
         </span>
     }
 </li>

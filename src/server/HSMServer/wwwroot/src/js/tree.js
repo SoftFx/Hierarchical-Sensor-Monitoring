@@ -302,7 +302,7 @@ function customMenu(node) {
                                 updateSensorsNotifications(enableNotifications, node, TelegramActionType.Groups);
                             }
                         },
-                        Account:{
+                        Accounts:{
                             separator_before: false,
                             separator_after: false,
                             label: "Accounts",
@@ -326,7 +326,7 @@ function customMenu(node) {
                                 updateSensorsNotifications(disableNotifications, node, TelegramActionType.Groups);
                             }
                         },
-                        Account:{
+                        Accounts:{
                             separator_before: false,
                             separator_after: false,
                             label: "Accounts",
@@ -361,7 +361,7 @@ function customMenu(node) {
                                 });
                             }
                         },
-                        Account:{
+                        Accounts:{
                             separator_before: false,
                             separator_after: false,
                             label: "Accounts",
@@ -396,7 +396,7 @@ function customMenu(node) {
                                 updateSensorsNotifications(removeIgnoringNotifications, node, TelegramActionType.Groups);
                             }
                         },
-                        Account:{
+                        Accounts:{
                             separator_before: false,
                             separator_after: false,
                             label: "Accounts",
@@ -431,23 +431,39 @@ function customMenu(node) {
     //    delete items.BlockSensor;
     //}
 
-    // if (document.getElementById(`${node.id}_ignoreNotifications`)) {
-    //     delete items.Notifications.submenu.EnableNotifications;
-    //     delete items.Notifications.submenu.IgnoreNotifications;
-    // }
-    // else if (document.getElementById(`${node.id}_notifications`)) {
-    //     let partialNotifications = $(`#${node.id}_partialNotifications`).val();
-    //     if (partialNotifications !== "True") {
-    //         delete items.Notifications.submenu.EnableNotifications;
-    //     }
-    //
-    //     delete items.Notifications.submenu.RemoveIgnoreNotifications;
-    // }
-    // else {
-    //     delete items.Notifications.submenu.DisableNotifications;
-    //     delete items.Notifications.submenu.IgnoreNotifications;
-    //     delete items.Notifications.submenu.RemoveIgnoreNotifications;
-    // }
+    
+    let accountsIgnoreNotifications = document.getElementById(`${node.id}_accountsIgnoreNotifications`);
+    let groupsIgnoreNotifications = document.getElementById(`${node.id}_groupsIgnoreNotifications`);
+    
+    if (accountsIgnoreNotifications) {
+        delete items.Notifications.submenu.EnableNotifications.submenu.Accounts;
+        delete items.Notifications.submenu.IgnoreNotifications.submenu.Accounts;
+    }
+    if (groupsIgnoreNotifications) {
+        delete items.Notifications.submenu.EnableNotifications.submenu.Groups;
+        delete items.Notifications.submenu.IgnoreNotifications.submenu.Groups;
+    }
+    
+    
+    let accountsNotifications = document.getElementById(`${node.id}_accountsNotifications`)
+    let groupsNotifications = document.getElementById(`${node.id}_groupsNotifications`);
+    
+    if (accountsNotifications) {
+        delete items.Notifications.submenu.EnableNotifications.submenu.Accounts;
+        delete items.Notifications.submenu.RemoveIgnoreNotifications.submenu.Accounts;
+    }
+    if (groupsNotifications) {
+        delete items.Notifications.submenu.EnableNotifications.submenu.Groups;
+        delete items.Notifications.submenu.RemoveIgnoreNotifications.submenu.Groups;
+    }
+    
+    if(Object.keys(items.Notifications.submenu.EnableNotifications.submenu).length === 0)
+        delete items.Notifications.submenu.EnableNotifications
+    if(Object.keys(items.Notifications.submenu.IgnoreNotifications.submenu).length === 0)
+        delete items.Notifications.submenu.IgnoreNotifications
+    if(Object.keys(items.Notifications.submenu.RemoveIgnoreNotifications.submenu).length === 0)
+        delete items.Notifications.submenu.RemoveIgnoreNotifications
+    
    
     if (isCurrentUserAdmin === "True")
         return items;
