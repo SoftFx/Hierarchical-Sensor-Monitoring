@@ -13,7 +13,10 @@ namespace HSMDataCollector.DefaultSensors
 
         internal void Init(TimeSpan timerPeriod)
         {
-            OpenTime = DateTime.UtcNow;
+            var now = DateTime.UtcNow.Ticks;
+            var period = timerPeriod.Ticks;
+
+            OpenTime = new DateTime(now / period * period);
             CloseTime = OpenTime + timerPeriod;
         }
 

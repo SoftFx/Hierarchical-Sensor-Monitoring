@@ -56,6 +56,13 @@ namespace HSMDataCollector.DefaultSensors
             return value;
         }
 
+        protected sealed override TimeSpan GetTimerDueTime()
+        {
+            var dueTime = _internalBar.CloseTime - DateTime.UtcNow;
+
+            return dueTime >= TimeSpan.Zero ? dueTime : TimeSpan.Zero;
+        }
+
 
         private void CollectBar(object _)
         {

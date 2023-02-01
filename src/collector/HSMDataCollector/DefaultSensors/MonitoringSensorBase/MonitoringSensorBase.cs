@@ -44,7 +44,7 @@ namespace HSMDataCollector.DefaultSensors
             if (IsStarted)
                 return Task.FromResult(false);
 
-            _sendTimer.Change(ReceiveDataPeriod, ReceiveDataPeriod);
+            _sendTimer.Change(GetTimerDueTime(), ReceiveDataPeriod);
 
             IsStarted = true;
 
@@ -60,6 +60,8 @@ namespace HSMDataCollector.DefaultSensors
 
 
         protected abstract void OnTimerTick(object _ = null);
+
+        protected virtual TimeSpan GetTimerDueTime() => ReceiveDataPeriod;
 
         protected virtual string GetComment() => null;
 
