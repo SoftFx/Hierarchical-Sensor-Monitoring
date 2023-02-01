@@ -157,7 +157,7 @@ namespace HSMServer.Notifications
                     _addressBook.RegisterChat(user, chat);
 
             foreach (var product in _cache.GetProducts())
-                foreach (var (_, chat) in product.Notifications.Telegram.Chats)
+                foreach (var (_, chat) in product.NotificationsSettings.Telegram.Chats)
                     _addressBook.RegisterChat(product, chat);
         }
 

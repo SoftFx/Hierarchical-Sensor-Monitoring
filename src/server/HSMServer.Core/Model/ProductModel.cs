@@ -22,17 +22,17 @@ namespace HSMServer.Core.Model
 
         public ConcurrentDictionary<Guid, BaseSensorModel> Sensors { get; }
 
-        public NotificationSettings Notifications { get; }
+        public NotificationSettings NotificationsSettings { get; }
 
 
         string INotificatable.Name => DisplayName;
 
-        NotificationSettings INotificatable.Notifications => Notifications;
+        NotificationSettings INotificatable.Notifications => NotificationsSettings;
 
         bool INotificatable.AreNotificationsEnabled(BaseSensorModel sensor) =>
-            Notifications.Telegram.MessagesAreEnabled &&
-            Notifications.IsSensorEnabled(sensor.Id) &&
-            !Notifications.IsSensorIgnored(sensor.Id);
+            NotificationsSettings.Telegram.MessagesAreEnabled &&
+            NotificationsSettings.IsSensorEnabled(sensor.Id) &&
+            !NotificationsSettings.IsSensorIgnored(sensor.Id);
 
 
         public ProductModel()
@@ -40,7 +40,7 @@ namespace HSMServer.Core.Model
             AccessKeys = new ConcurrentDictionary<Guid, AccessKeyModel>();
             SubProducts = new ConcurrentDictionary<Guid, ProductModel>();
             Sensors = new ConcurrentDictionary<Guid, BaseSensorModel>();
-            Notifications = new();
+            NotificationsSettings = new();
         }
 
         public ProductModel(ProductEntity entity) : this()
@@ -51,7 +51,7 @@ namespace HSMServer.Core.Model
             DisplayName = entity.DisplayName;
             Description = entity.Description;
             CreationDate = new DateTime(entity.CreationDate);
-            Notifications = new(entity.NotificationSettings);
+            NotificationsSettings = new(entity.NotificationSettings);
         }
 
         public ProductModel(string name) : this()
@@ -89,7 +89,7 @@ namespace HSMServer.Core.Model
                 DisplayName = DisplayName,
                 Description = Description,
                 CreationDate = CreationDate.Ticks,
-                NotificationSettings = Notifications.ToEntity(),
+                NotificationSettings = NotificationsSettings.ToEntity(),
                 Policies = GetPolicyIds(),
             };
 

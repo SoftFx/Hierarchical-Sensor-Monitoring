@@ -35,7 +35,7 @@ namespace HSMServer.Model.TreeViewModels
 
         public SensorNodeViewModel(BaseSensorModel model) : base(model.Id)
         {
-            GroupNotificationSettings = model.ParentProduct.Notifications;
+            GroupNotificationSettings = model.ParentProduct.NotificationsSettings;
             Update(model);
         }
 
@@ -44,7 +44,7 @@ namespace HSMServer.Model.TreeViewModels
         {
             base.Update(model);
 
-            GroupNotificationSettings = model.ParentProduct.Notifications;
+            GroupNotificationSettings = model.ParentProduct.NotificationsSettings;
             SensorType = model.Type;
             Description = model.Description;
             State = model.State;
@@ -58,7 +58,7 @@ namespace HSMServer.Model.TreeViewModels
             LastValue = model.LastValue;
             HasData = model.HasData;
             ShortStringValue = model.LastValue?.ShortInfo;
-            
+
             IsPlottingSupported = IsSensorPlottingAvailable(model.Type);
             FileNameString = GetFileNameString(model.Type, ShortStringValue);
         }

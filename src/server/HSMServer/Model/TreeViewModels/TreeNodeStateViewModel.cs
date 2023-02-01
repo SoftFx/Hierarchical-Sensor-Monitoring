@@ -11,13 +11,21 @@ namespace HSMServer.Model.TreeViewModels
         public List<SensorNodeViewModel> Sensors { get; } = new(1 << 4);
 
         public ProductNodeViewModel Data { get; }
+        
 
-        public bool IsAnyNotificationsEnabled { get; private set; }
+        public bool IsAnyAccountsNotificationsEnabled { get; private set; }
 
-        public bool IsAllNotificationsEnabled { get; private set; } = true;
+        public bool IsAllAccountsNotificationsEnabled { get; private set; } = true;
 
-        public bool IsAllNotificationsIgnored { get; private set; } = true;
-
+        public bool IsAllAccountsNotificationsIgnored { get; private set; } = true;
+        
+        public bool IsAnyGroupsNotificationsEnabled { get; private set; }
+        
+        public bool IsAllGroupsNotificationsEnabled { get; private set; } = true;
+        
+        public bool IsAllGroupsNotificationsIgnored { get; private set; } = true;
+        
+        
         public int VisibleSensorsCount { get; private set; }
 
         public string SensorsCountString
@@ -44,8 +52,8 @@ namespace HSMServer.Model.TreeViewModels
             ChangeEnableState(user.Notifications.IsSensorEnabled(sensor.Id));
             ChangeIgnoreState(user.Notifications.IsSensorIgnored(sensor.Id));
             
-            ChangeEnableState(sensor.GroupNotificationSettings.IsSensorEnabled(sensor.Id));
-            ChangeIgnoreState(sensor.GroupNotificationSettings.IsSensorIgnored(sensor.Id));
+            ChangeGroupsEnableState(sensor.GroupNotificationSettings.IsSensorEnabled(sensor.Id));
+            ChangeGroupsIgnoreState(sensor.GroupNotificationSettings.IsSensorIgnored(sensor.Id));
             
             if (user.IsSensorVisible(sensor))
             {
@@ -56,8 +64,11 @@ namespace HSMServer.Model.TreeViewModels
 
         internal void AddChild(TreeNodeStateViewModel node, User user)
         {
-            ChangeEnableState(node.IsAnyNotificationsEnabled);
-            ChangeIgnoreState(node.IsAllNotificationsIgnored);
+            ChangeEnableState(node.IsAnyAccountsNotificationsEnabled);
+            ChangeIgnoreState(node.IsAllAccountsNotificationsIgnored);
+            
+            ChangeGroupsEnableState(node.IsAnyGroupsNotificationsEnabled);
+            ChangeGroupsIgnoreState(node.IsAllGroupsNotificationsIgnored);
             
             VisibleSensorsCount += node.VisibleSensorsCount;
 
@@ -67,11 +78,20 @@ namespace HSMServer.Model.TreeViewModels
 
         private void ChangeEnableState(bool isEnabled)
         {
-            IsAnyNotificationsEnabled |= isEnabled;
-            IsAllNotificationsEnabled &= isEnabled;
+            IsAnyAccountsNotificationsEnabled |= isEnabled;
+            IsAllAccountsNotificationsEnabled &= isEnabled;
         }
 
         private void ChangeIgnoreState(bool isIgnored) =>
-            IsAllNotificationsIgnored &= isIgnored;
+            IsAllAccountsNotificationsIgnored &= isIgnored;
+        
+        private void ChangeGroupsEnableState(bool isEnabled)
+        {
+            IsAnyGroupsNotificationsEnabled |= isEnabled;
+            IsAllGroupsNotificationsEnabled &= isEnabled;
+        }
+
+        private void ChangeGroupsIgnoreState(bool isIgnored) =>
+            IsAllGroupsNotificationsIgnored &= isIgnored;
     }
 }

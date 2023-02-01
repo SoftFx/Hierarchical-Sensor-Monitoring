@@ -5,5 +5,7 @@
 
 <ul>
     @foreach (var product in Model)
+    {
         @await Html.PartialAsync("_TreeNode", product)
+    }
 </ul>
