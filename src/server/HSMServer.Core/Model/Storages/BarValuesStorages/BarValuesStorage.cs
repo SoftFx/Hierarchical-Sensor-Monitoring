@@ -14,9 +14,14 @@ namespace HSMServer.Core.Model
 
         internal override T AddValue(T value)
         {
-            var addedValue = LocalLastValue != null && LocalLastValue.OpenTime != value.OpenTime
-                ? base.AddValue(LocalLastValue)
-                : null;
+            if (LocalLastValue?.OpenTime == value.OpenTime)
+            {
+                LocalLastValue = Merge(value);
+
+                return null;
+            }
+
+            var addedValue = base.AddValue(LocalLastValue);
 
             LocalLastValue = value;
 
@@ -52,5 +57,8 @@ namespace HSMServer.Core.Model
 
             LocalLastValue = null;
         }
+
+
+        protected abstract T Merge(T value);
     }
 }
