@@ -49,8 +49,8 @@ namespace HSMServer.Model.TreeViewModels
 
         internal void AddChild(SensorNodeViewModel sensor, User user)
         {
-            ChangeEnableState(user.Notifications.IsSensorEnabled(sensor.Id));
-            ChangeIgnoreState(user.Notifications.IsSensorIgnored(sensor.Id));
+            ChangeAccountsEnableState(user.Notifications.IsSensorEnabled(sensor.Id));
+            ChangeAccountsIgnoreState(user.Notifications.IsSensorIgnored(sensor.Id));
             
             ChangeGroupsEnableState(sensor.GroupNotificationSettings.IsSensorEnabled(sensor.Id));
             ChangeGroupsIgnoreState(sensor.GroupNotificationSettings.IsSensorIgnored(sensor.Id));
@@ -64,8 +64,8 @@ namespace HSMServer.Model.TreeViewModels
 
         internal void AddChild(TreeNodeStateViewModel node, User user)
         {
-            ChangeEnableState(node.IsAnyAccountsNotificationsEnabled);
-            ChangeIgnoreState(node.IsAllAccountsNotificationsIgnored);
+            ChangeAccountsEnableState(node.IsAnyAccountsNotificationsEnabled);
+            ChangeAccountsIgnoreState(node.IsAllAccountsNotificationsIgnored);
             
             ChangeGroupsEnableState(node.IsAnyGroupsNotificationsEnabled);
             ChangeGroupsIgnoreState(node.IsAllGroupsNotificationsIgnored);
@@ -76,13 +76,13 @@ namespace HSMServer.Model.TreeViewModels
                 Nodes.Add(node);
         }
 
-        private void ChangeEnableState(bool isEnabled)
+        private void ChangeAccountsEnableState(bool isEnabled)
         {
             IsAnyAccountsNotificationsEnabled |= isEnabled;
             IsAllAccountsNotificationsEnabled &= isEnabled;
         }
 
-        private void ChangeIgnoreState(bool isIgnored) =>
+        private void ChangeAccountsIgnoreState(bool isIgnored) =>
             IsAllAccountsNotificationsIgnored &= isIgnored;
         
         private void ChangeGroupsEnableState(bool isEnabled)
