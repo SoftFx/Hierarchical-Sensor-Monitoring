@@ -106,4 +106,15 @@ input.input-validation-error {
     border: 0;
 }
 
+.vakata-context ul li a{
+    padding-left: 0;
+}
+
+.vakata-context ul li a svg{
+    padding-left: 1rem;
+    padding-right: 1rem;
+    width: 1em;
+    height: 1em;
+}
+
 
