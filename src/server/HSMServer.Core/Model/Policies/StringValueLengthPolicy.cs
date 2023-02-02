@@ -16,7 +16,7 @@
 
         internal override ValidationResult Validate(StringValue value)
         {
-            if (value.Value.Length > MaxStringLength)
+            if (value.Value?.Length > MaxStringLength)
                 return _tooLongStringSensor;
 
             return ValidationResult.Ok;
