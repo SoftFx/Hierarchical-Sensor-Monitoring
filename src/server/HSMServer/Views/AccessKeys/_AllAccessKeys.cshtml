@@ -96,7 +96,16 @@
 
                         <td style="width: 1%;white-space: nowrap">@key.Permissions</td>
                         <td class="text-center">
-                            <i class='@key.State.ToIcon()' title="@key.StatusTitle"></i>
+                            @if (key.State == KeyState.Expired)
+                            {
+                                <span title="@key.StatusTitle">
+                                    <img class="mb-1" src="~/dist/warning.svg" id="svg_exclamation" alt="warning icon"/>
+                                </span>
+                            }
+                            else
+                            {
+                                <i class='@key.State.ToIcon()' title="@key.StatusTitle"></i>
+                            }
                         </td>
                     }
 
