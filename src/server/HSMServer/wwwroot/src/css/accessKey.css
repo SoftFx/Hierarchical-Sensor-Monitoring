@@ -22,3 +22,13 @@
     max-width: 20rem;
     min-width: 10rem;
 }
+#accessTable .form-control{
+    border: 0;
+    padding-bottom: 0;
+    padding-left: 0;
+    border-bottom: solid;
+    border-bottom-color: grey;
+    border-bottom-width: thin;
+    border-bottom-left-radius: 0;
+    border-bottom-right-radius: 0;
+}
