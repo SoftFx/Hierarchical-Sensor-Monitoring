@@ -78,7 +78,7 @@
                         var product = Model[i];
                         <tr>
                             <td class="text-break">
-                                <a id="inputName_@product.Id" asp-controller="Product" asp-action="EditProduct" asp-route-Product="@product.EncodedId">
+                                <a class="productName_anchor" id="inputName_@product.Id" asp-controller="Product" asp-action="EditProduct" asp-route-Product="@product.EncodedId">
                                     @Html.Raw(product.Name)
                                 </a>
                             </td>

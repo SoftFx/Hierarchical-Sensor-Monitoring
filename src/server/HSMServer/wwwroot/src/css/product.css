@@ -54,3 +54,13 @@
 #formProductTable{
     --bs-table-striped-bg: #edf0f5;
 }
+
+.productName_anchor{
+    text-decoration: none;
+    font-weight: bold;
+}
+
+.productName_anchor:hover{
+    text-decoration: underline;
+    text-underline-offset: 0.3rem;
+}
