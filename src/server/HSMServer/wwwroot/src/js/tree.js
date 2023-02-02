@@ -230,6 +230,7 @@ function customMenu(node) {
                             showToast(`Node has been removed`);
                         }
                         
+                        $(`#${node.parents[0]}_anchor`).trigger('click');
                     });
                 });
 

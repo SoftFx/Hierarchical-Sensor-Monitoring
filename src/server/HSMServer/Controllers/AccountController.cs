@@ -174,7 +174,7 @@ namespace HSMServer.Controllers
                 TempData[TextConstants.TempDataErrorText] = ValidatorHelper.GetErrorString(results.Errors);
 
             else
-                _userManager.AddUser(model.Username,
+                _userManager.AddUser(model.Username.Trim(),
                 HashComputer.ComputePasswordHash(model.Password), model.IsAdmin);
         }
 
