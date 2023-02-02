@@ -96,7 +96,7 @@ function convertToGraphData(graphData, graphType, graphName) {
                 minutes = Number(time[1]);
                 seconds = Number(time[2]);
                
-                return new TimeSpan.TimeSpan(0, seconds, minutes, hours, days).totalSeconds();
+                return new TimeSpan.TimeSpan(0, seconds, minutes, hours, days).totalMilliseconds();
             })
             
             return getTimeSpanGraphData(timeList, data, "bar")
@@ -164,7 +164,7 @@ function getTimeSpanGraphData(timeList, dataList, chartType){
 
 function getTextValForTimeSpan(data){
     return data.map(function (i){
-        const timespan = window.TimeSpan.fromSeconds(i)
+        const timespan = window.TimeSpan.fromMilliseconds(i)
 
         if (timespan === undefined) 
             return '0h 0m 0s';
@@ -180,18 +180,16 @@ function getTextValForTimeSpan(data){
 
 function getTimeSpanLayout(datalist) {
     const MAX_TIME_POINTS = 10
-    
+   
     let maxVal = Math.max(...datalist)
-    let step = Math.max(maxVal / MAX_TIME_POINTS, 1)
+    let step = Math.max(maxVal / MAX_TIME_POINTS, 1);
     let tVals = []
     let cur = 0
-
     while (cur <= maxVal) {
         tVals.push(cur);
         cur += step;
     }
     
-    tVals.push(maxVal)
     let tText =  getTextValForTimeSpan(tVals);
     
     return {
