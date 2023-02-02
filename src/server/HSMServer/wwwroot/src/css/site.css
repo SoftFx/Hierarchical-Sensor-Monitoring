@@ -105,3 +105,13 @@ input.input-validation-error {
 #actionButton {
     border: 0;
 }
+
+.table td a {
+    text-decoration: none;
+    font-weight: bold;
+}
+
+.table td a:hover {
+    text-decoration: underline;
+    text-underline-offset: 0.3rem;
+}
