@@ -27,6 +27,11 @@
     transform-origin: 0 -4rem;
     padding: 0;
 }
+
+#productTable th{
+    padding-top: 0;
+}
+
 .settingsList{
     --bs-list-group-border-width: 0;
     line-height: 0.75rem;
