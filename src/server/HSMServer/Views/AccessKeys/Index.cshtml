@@ -34,14 +34,15 @@
                 </button>
             </div>
         </div>
+        <div class="container">
+            <div class="d-flex align-items-center w-100 justify-content-center" id="accessTable">
+                @await Html.PartialAsync("_AllAccessKeys", Model)
+            </div>
+        </div>
+
     </div>
 </div>
 
-<div class="container">
-    <div class="d-flex align-items-center w-100 justify-content-center" id="accessTable">
-        @await Html.PartialAsync("_AllAccessKeys", Model)
-    </div>
-</div>
 
 
 @await Html.PartialAsync("_AccessKeysModal")
