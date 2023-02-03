@@ -430,31 +430,39 @@ function customMenu(node) {
     //else {
     //    delete items.BlockSensor;
     //}
+    
+    let IsGroupDisabled = document.getElementById(`${node.id}_groupsDisabledNotifications`)
+    if (IsGroupDisabled) {
+        delete items.Notifications.submenu.DisableNotifications.submenu.Groups;
+        delete items.Notifications.submenu.IgnoreNotifications.submenu.Groups;
+        delete items.Notifications.submenu.RemoveIgnoreNotifications.submenu.Groups;
+    }
+    
+    let IsGroupIgnored = document.getElementById(`${node.id}_groupsIgnoredNotifications`)
+    if (IsGroupIgnored) {
+        delete items.Notifications.submenu.IgnoreNotifications.submenu.Groups;
+        delete items.Notifications.submenu.EnableNotifications.submenu.Groups;
+    }
+    
+    if(!IsGroupIgnored && !IsGroupDisabled){
+        delete items.Notifications.submenu.EnableNotifications.submenu.Groups;
+        delete items.Notifications.submenu.RemoveIgnoreNotifications.submenu.Groups;
+    }
 
-    
     let accountsIgnoreNotifications = document.getElementById(`${node.id}_accountsIgnoreNotifications`);
-    let groupsIgnoreNotifications = document.getElementById(`${node.id}_groupsIgnoreNotifications`);
-    
     if (accountsIgnoreNotifications) {
         delete items.Notifications.submenu.EnableNotifications.submenu.Accounts;
         delete items.Notifications.submenu.IgnoreNotifications.submenu.Accounts;
     }
-    if (groupsIgnoreNotifications) {
-        delete items.Notifications.submenu.EnableNotifications.submenu.Groups;
-        delete items.Notifications.submenu.IgnoreNotifications.submenu.Groups;
-    }
-    
     
     let accountsNotifications = document.getElementById(`${node.id}_accountsNotifications`)
-    let groupsNotifications = document.getElementById(`${node.id}_groupsNotifications`);
-    
     if (accountsNotifications) {
         delete items.Notifications.submenu.EnableNotifications.submenu.Accounts;
         delete items.Notifications.submenu.RemoveIgnoreNotifications.submenu.Accounts;
-    }
-    if (groupsNotifications) {
-        delete items.Notifications.submenu.EnableNotifications.submenu.Groups;
-        delete items.Notifications.submenu.RemoveIgnoreNotifications.submenu.Groups;
+    }else{
+        delete items.Notifications.submenu.DisableNotifications.submenu.Accounts;
+        delete items.Notifications.submenu.RemoveIgnoreNotifications.submenu.Accounts;
+        delete items.Notifications.submenu.IgnoreNotifications.submenu.Accounts;
     }
     
     if(Object.keys(items.Notifications.submenu.EnableNotifications.submenu).length === 0)

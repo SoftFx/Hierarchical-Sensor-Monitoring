@@ -10,16 +10,16 @@
 
 <li id='@Model.EncodedId' title='@Model.Tooltip' data-jstree='{"title" : "@Model.Title", "icon" : "@Model.Status.ToIcon()", "time" : "@Model.UpdateTime.ToDefaultFormat()"}'>
     <span class="@Model.State.ToCssClass()">@Html.Raw(Model.Name.GetShortNodeName())</span>
-    
+
     @if (userNotifications.IsSensorIgnored(Model.Id))
     {
-        <span>
+        <span class="d-none">
             <img id="@(Model.EncodedId)_accountsIgnoreNotifications" src="~/dist/user-crossed.png" style="height: 1em;width: 1em;" alt=""/>
         </span>
     }
     else if (userNotifications.IsSensorEnabled(Model.Id))
     {
-        <span>
+        <span class="d-none">
             <img id="@(Model.EncodedId)_accountsNotifications" src="~/dist/user.png" style="height: 1em;width: 1em;" alt=""/>
         </span>
     }
@@ -27,13 +27,19 @@
     @if (Model.GroupNotificationSettings.IsSensorIgnored(Model.Id))
     {
         <span>
-            <img id="@(Model.EncodedId)_groupsIgnoreNotifications" src="~/dist/users-crossed.png" style="height: 1em; width: 1em;" alt=""/>
+            <img id="@(Model.EncodedId)_groupsIgnoredNotifications" src="~/dist/snooze.png" style="height: 1em;width: 1em;" alt="!"/>
         </span>
     }
     else if (Model.GroupNotificationSettings.IsSensorEnabled(Model.Id))
     {
-        <span>
+        <span class="d-none">
             <img id="@(Model.EncodedId)_groupsNotifications" src="~/dist/users.png" style="height: 1em; width: 1em;" alt=""/>
+        </span>
+    }
+    else
+    {
+        <span>
+            <i id="@(Model.EncodedId)_groupsDisabledNotifications" class="fa-solid fa-bell-slash"></i>
         </span>
     }
 </li>

@@ -5,50 +5,50 @@
 
 @{
     var data = Model.Data;
-    var userNotifications = (User as User).Notifications;
-    var groupNotifications = Model.Data.NotificationSettings;
 }
 
 
 <li id='@data.EncodedId' title='@data.Tooltip' data-jstree='{"title" : "@data.Title", "icon" : "@data.Status.ToIcon()", "time" : "@data.UpdateTime.ToDefaultFormat()"}'>
     <span>@Html.Raw(data.Name.GetShortNodeName()) @Model.SensorsCountString</span>
-    
+
     @if (!data.IsEmpty)
     {
         @if (data.TelegramSettings.Chats.Count > 0)
         {
             <span>
-                <i id="@(data.EncodedId)_notifications" class="fab fa-telegram fa-xs"></i>
+                <i id="@(data.EncodedId)_notifications" class="fa-solid fa-bell"></i>
             </span>
+        }
+        else
+        {
+            @if (Model.IsAllGroupsNotificationsIgnored)
+            {
+                <span>
+                    <img id="@(data.EncodedId)_groupsIgnoredNotifications" src="~/dist/snooze.png" style="height: 1em;width: 1em;" alt="!"/>
+                </span>
+            }
+            else if (!Model.IsAnyGroupsNotificationsEnabled)
+            {
+                <span>
+                    <i id="@(data.EncodedId)_groupsDisabledNotifications" class="fa-solid fa-bell-slash"></i>
+                </span>
+            }
         }
         
         @if (Model.IsAllAccountsNotificationsIgnored)
         {
-            <span>
+            <span class="d-none">
                 <img id="@(data.EncodedId)_accountsIgnoreNotifications" src="~/dist/user-crossed.png" style="height: 1em;width: 1em;" alt="!"/>
             </span>
         }
         else if (Model.IsAnyAccountsNotificationsEnabled)
         {
-            <span>
+            <span class="d-none">
                 <img id="@(data.EncodedId)_accountsNotifications" src="~/dist/user.png" style="height: 1em;width: 1em;" alt="!"/>
             </span>
         }
-        
-        @if (Model.IsAllGroupsNotificationsIgnored)
-        {
-            <span>
-                <img id="@(data.EncodedId)_groupsIgnoreNotifications" src="~/dist/users-crossed.png" style="height: 1em;width: 1em;" alt="!"/>
-            </span>
-        }
-        else if (Model.IsAnyGroupsNotificationsEnabled)
-        {
-            <span>
-                <img id="@(data.EncodedId)_groupsNotifications" src="~/dist/users.png" style="height: 1em;width: 1em;" alt="!"/>
-            </span>
-        }
     }
-    
+
     @foreach (var child in Model.Nodes)
     {
         <ul>@await Html.PartialAsync("_TreeNode", child)</ul>
