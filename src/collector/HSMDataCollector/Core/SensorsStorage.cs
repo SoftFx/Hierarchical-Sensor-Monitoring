@@ -1,4 +1,5 @@
 ﻿using HSMDataCollector.DefaultSensors;
+using HSMDataCollector.Logging;
 using System;
 using System.Collections.Concurrent;
 using System.Linq;
@@ -9,11 +10,13 @@ namespace HSMDataCollector.Core
     internal sealed class SensorsStorage : ConcurrentDictionary<string, MonitoringSensorBase>, IDisposable
     {
         private readonly IValuesQueue _valuesQueue;
+        private readonly LoggerManager _logManager;
 
 
-        internal SensorsStorage(IValuesQueue queue)
+        internal SensorsStorage(IValuesQueue queue, LoggerManager logManager)
         {
             _valuesQueue = queue;
+            _logManager = logManager;
         }
 
 
@@ -35,7 +38,7 @@ namespace HSMDataCollector.Core
             {
                 value.ReceiveSensorValue += _valuesQueue.EnqueueData;
 
-                //_logger?.Info($"Added new sensor {key}");
+                _logManager.Logger?.Info($"Added new default sensor {key}");
             }
         }
     }

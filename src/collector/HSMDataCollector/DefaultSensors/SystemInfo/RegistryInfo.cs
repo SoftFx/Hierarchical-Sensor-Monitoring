@@ -1,13 +1,10 @@
-﻿using HSMDataCollector.Logging;
-using Microsoft.Win32;
+﻿using Microsoft.Win32;
 using System;
 
 namespace HSMDataCollector.DefaultSensors
 {
     internal static class RegistryInfo
     {
-        private static readonly NLog.Logger _logger = Logger.Create(nameof(RegistryInfo));
-
         private static readonly RegistryView _view;
         private static readonly RegistryKey _localMachineKey;
 
@@ -31,10 +28,7 @@ namespace HSMDataCollector.DefaultSensors
                     return unixStartTime.AddSeconds(Convert.ToInt64($"{key.GetValue("InstallDate")}"));
                 }
             }
-            catch (Exception ex)
-            {
-                _logger?.Error(ex, $"Failed to get windows InstallDate");
-            }
+            catch { }
 
             return DateTime.MinValue;
         }

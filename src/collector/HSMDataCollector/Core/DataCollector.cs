@@ -11,6 +11,7 @@ using HSMDataCollector.PublicInterface;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.SensorValueRequests;
 using Newtonsoft.Json;
+using NLog;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -28,8 +29,7 @@ namespace HSMDataCollector.Core
     /// </summary>
     public sealed class DataCollector : IDataCollector
     {
-        private const string LogDefaultFolder = "Logs";
-        private const string LogFormatFileName = "DataCollector_${shortdate}.log";
+        private readonly LoggerManager _loggerManager = new LoggerManager();
 
         private readonly ConcurrentDictionary<string, ISensor> _nameToSensor;
         private readonly DefaultSensorsCollection _defaultSensors;
@@ -40,9 +40,8 @@ namespace HSMDataCollector.Core
         private readonly string _listSendingAddress;
         private readonly string _fileSendingAddress;
 
-        private NLog.Logger _logger;
+        private Logger _logger;
         private bool _isStopped;
-        private bool _isLogging;
 
         public IWindowsCollection Windows => _defaultSensors;
 
@@ -79,7 +78,7 @@ namespace HSMDataCollector.Core
             _dataQueue.SendValues += DataQueue_SendValues;
             _isStopped = false;
 
-            _sensorsStorage = new SensorsStorage(_dataQueue as IValuesQueue);
+            _sensorsStorage = new SensorsStorage(_dataQueue as IValuesQueue, _loggerManager);
             _sensorsOptions = new SensorsDefaultOptions();
             _defaultSensors = new DefaultSensorsCollection(_sensorsStorage, _sensorsOptions);
         }
@@ -101,18 +100,20 @@ namespace HSMDataCollector.Core
             Stop();
         }
 
-        [Obsolete("Use method Start() after default sensors initialization")]
+        public IDataCollector AddNLog(LoggerOptions options = null)
+        {
+            _loggerManager.InitializeLogger(options);
+
+            _logger = _loggerManager.Logger;
+
+            return this;
+        }
+
+        [Obsolete("Use method AddNLog() to add logging and method Start() after default sensors initialization")]
         public void Initialize(bool useLogging = true, string folderPath = null, string fileNameFormat = null)
         {
             if (useLogging)
-            {
-                _logger = Logger.Create(nameof(DataCollector));
-
-                Logger.UpdateFilePath(folderPath ?? $"{AppDomain.CurrentDomain.BaseDirectory}/{LogDefaultFolder}",
-                                      fileNameFormat ?? LogFormatFileName);
-
-                _isLogging = true;
-            }
+                AddNLog();
 
             _logger?.Info("Initialize timer...");
             _dataQueue.InitializeTimer();
@@ -477,8 +478,7 @@ namespace HSMDataCollector.Core
             if (existingSensor is IParamsFuncSensor<T, U> typedSensor)
                 return typedSensor;
 
-            OneParamFuncSensor<T, U> sensor = new OneParamFuncSensor<T, U>(path, _dataQueue as IValuesQueue, description,
-                interval, function, _isLogging);
+            OneParamFuncSensor<T, U> sensor = new OneParamFuncSensor<T, U>(path, _dataQueue as IValuesQueue, description, interval, function, _logger);
             AddNewSensor(sensor, path);
 
             return sensor;
@@ -491,8 +491,7 @@ namespace HSMDataCollector.Core
             if (existingSensor is INoParamsFuncSensor<T> typedSensor)
                 return typedSensor;
 
-            NoParamsFuncSensor<T> sensor = new NoParamsFuncSensor<T>(path, _dataQueue as IValuesQueue, description,
-                interval, function, _isLogging);
+            NoParamsFuncSensor<T> sensor = new NoParamsFuncSensor<T>(path, _dataQueue as IValuesQueue, description, interval, function, _logger);
             AddNewSensor(sensor, path);
 
             return sensor;

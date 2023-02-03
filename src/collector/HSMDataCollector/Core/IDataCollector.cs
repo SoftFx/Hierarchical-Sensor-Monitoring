@@ -1,4 +1,5 @@
-﻿using HSMDataCollector.PublicInterface;
+﻿using HSMDataCollector.Logging;
+using HSMDataCollector.PublicInterface;
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
@@ -12,6 +13,8 @@ namespace HSMDataCollector.Core
         IUnixCollection Unix { get; }
 
         Task Start();
+
+        IDataCollector AddNLog(LoggerOptions options = null);
 
         #region Common methods
 
@@ -27,7 +30,7 @@ namespace HSMDataCollector.Core
         /// <param name="useLogging">Specifies whether runtime errors will be logged or not</param>
         /// <param name="folderPath">Path to logs folder, if null current folder will be used</param>
         /// <param name="fileNameFormat">File name format, if null default file name is specified</param>
-        [Obsolete("Use method Start() after default sensors initialization")]
+        [Obsolete("Use method AddNLog() to add logging and method Start() after default sensors initialization")]
         void Initialize(bool useLogging = true, string folderPath = null, string fileNameFormat = null);
 
         /// <summary>
