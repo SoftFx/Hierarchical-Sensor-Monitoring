@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
 using System.Text.Json.Serialization;
 
 namespace HSMServer.Core.Model.UserFilters
@@ -79,38 +78,19 @@ namespace HSMServer.Core.Model.UserFilters
         public static string GetEnabledFiltersMessage(TreeUserFilter treeUserFilter)
         {
             var filters = new List<string>(1 << 4);
-            if (treeUserFilter.ByStatus.HasAnyEnabledFilters)
+            foreach (var group in treeUserFilter.Groups)
             {
-                if (treeUserFilter.ByStatus.Ok.Value)
-                    filters.Add("Ok");
-                if (treeUserFilter.ByStatus.Warning.Value)
-                    filters.Add("Warning");
-                if (treeUserFilter.ByStatus.Error.Value)
-                    filters.Add("Error");
-                if (treeUserFilter.ByStatus.OffTime.Value)
-                    filters.Add("OffTime");
-            }
-            
-            if (treeUserFilter.ByHistory.HasAnyEnabledFilters)
-            {
-                filters.Add("No data");
-            }
+                if (!group.HasAnyEnabledFilters) continue;
 
-            if (treeUserFilter.ByNotifications.HasAnyEnabledFilters)
-            {
-                if (treeUserFilter.ByNotifications.Enabled.Value)
-                    filters.Add("Enabled");
-                if (treeUserFilter.ByNotifications.Ignored.Value)
-                    filters.Add("Ignored");
-            }
-            
-            if (treeUserFilter.ByState.HasAnyEnabledFilters)
-            {
-                if (treeUserFilter.ByState.Blocked.Value)
-                    filters.Add("Blocked");
-            }
+                var specificFilters = new List<string>(1 << 2);
 
-            return "Enabled filters: " + string.Join(", ", filters);
+                var tittle = $"{group.Type}: ";
+                specificFilters.AddRange(group.Properties.Where(property => property.Value).Select(property => property.Name));
+                
+                filters.Add($"{tittle} {string.Join(", ",specificFilters)}");
+            }
+                
+            return $"Enabled filters: \n{string.Join('\n', filters)}";
         }
     }
 }

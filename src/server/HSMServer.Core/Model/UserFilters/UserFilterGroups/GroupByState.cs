@@ -2,12 +2,12 @@
 {
     public class GroupByState : UserFilterGroupBase
     {
-        protected override FilterProperty[] Properties => new[] { Blocked };
+        public override FilterProperty[] Properties => new[] { Blocked };
 
         internal override FilterGroupType Type => FilterGroupType.ByState;
 
 
-        public FilterProperty Blocked { get; init; } = new();
+        public FilterProperty Blocked { get; init; } = new(){Name = "Blocked"};
 
         public GroupByState() { }
 

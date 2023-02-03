@@ -194,4 +194,6 @@
     max-width: 15rem;
     align-self: end;
     color: grey;
+    line-height: 1rem;
+    white-space: pre-line;
 }
