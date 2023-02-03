@@ -18,17 +18,13 @@ namespace HSMDataCollector.DefaultSensors
 
         internal static DateTime GetInstallationDate()
         {
-            try
-            {
-                RegistryKey key = _localMachineKey.OpenSubKey(@"Software\Microsoft\Windows NT\CurrentVersion");
+            RegistryKey key = _localMachineKey?.OpenSubKey(@"Software\Microsoft\Windows NT\CurrentVersion");
 
-                if (key != null)
-                {
-                    var unixStartTime = new DateTime(1970, 1, 1);
-                    return unixStartTime.AddSeconds(Convert.ToInt64($"{key.GetValue("InstallDate")}"));
-                }
+            if (key != null)
+            {
+                var unixStartTime = new DateTime(1970, 1, 1);
+                return unixStartTime.AddSeconds(Convert.ToInt64($"{key.GetValue("InstallDate")}"));
             }
-            catch { }
 
             return DateTime.MinValue;
         }

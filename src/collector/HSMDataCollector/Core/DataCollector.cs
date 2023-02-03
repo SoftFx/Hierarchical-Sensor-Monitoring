@@ -11,7 +11,6 @@ using HSMDataCollector.PublicInterface;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.SensorValueRequests;
 using Newtonsoft.Json;
-using NLog;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -29,7 +28,7 @@ namespace HSMDataCollector.Core
     /// </summary>
     public sealed class DataCollector : IDataCollector
     {
-        private readonly LoggerManager _loggerManager = new LoggerManager();
+        private readonly LoggerManager _logManager = new LoggerManager();
 
         private readonly ConcurrentDictionary<string, ISensor> _nameToSensor;
         private readonly DefaultSensorsCollection _defaultSensors;
@@ -40,7 +39,6 @@ namespace HSMDataCollector.Core
         private readonly string _listSendingAddress;
         private readonly string _fileSendingAddress;
 
-        private Logger _logger;
         private bool _isStopped;
 
         public IWindowsCollection Windows => _defaultSensors;
@@ -78,7 +76,7 @@ namespace HSMDataCollector.Core
             _dataQueue.SendValues += DataQueue_SendValues;
             _isStopped = false;
 
-            _sensorsStorage = new SensorsStorage(_dataQueue as IValuesQueue, _loggerManager);
+            _sensorsStorage = new SensorsStorage(_dataQueue as IValuesQueue, _logManager);
             _sensorsOptions = new SensorsDefaultOptions();
             _defaultSensors = new DefaultSensorsCollection(_sensorsStorage, _sensorsOptions);
         }
@@ -102,9 +100,7 @@ namespace HSMDataCollector.Core
 
         public IDataCollector AddNLog(LoggerOptions options = null)
         {
-            _loggerManager.InitializeLogger(options);
-
-            _logger = _loggerManager.Logger;
+            _logManager.InitializeLogger(options);
 
             return this;
         }
@@ -115,7 +111,7 @@ namespace HSMDataCollector.Core
             if (useLogging)
                 AddNLog();
 
-            _logger?.Info("Initialize timer...");
+            _logManager.Logger?.Info("Initialize timer...");
             _dataQueue.InitializeTimer();
         }
 
@@ -137,7 +133,7 @@ namespace HSMDataCollector.Core
             if (_isStopped)
                 return;
 
-            _logger?.Info("DataCollector stopping...");
+            _logManager.Logger?.Info("DataCollector stopping...");
 
             _sensorsStorage.Dispose();
 
@@ -162,7 +158,7 @@ namespace HSMDataCollector.Core
 
             _client?.Dispose();
             _isStopped = true;
-            _logger?.Info("DataCollector successfully stopped.");
+            _logManager.Logger?.Info("DataCollector successfully stopped.");
         }
 
         [Obsolete("Use method AddSystemMonitoringSensors(options) in Windows collection")]
@@ -478,7 +474,7 @@ namespace HSMDataCollector.Core
             if (existingSensor is IParamsFuncSensor<T, U> typedSensor)
                 return typedSensor;
 
-            OneParamFuncSensor<T, U> sensor = new OneParamFuncSensor<T, U>(path, _dataQueue as IValuesQueue, description, interval, function, _logger);
+            OneParamFuncSensor<T, U> sensor = new OneParamFuncSensor<T, U>(path, _dataQueue as IValuesQueue, description, interval, function, _logManager.Logger);
             AddNewSensor(sensor, path);
 
             return sensor;
@@ -491,7 +487,7 @@ namespace HSMDataCollector.Core
             if (existingSensor is INoParamsFuncSensor<T> typedSensor)
                 return typedSensor;
 
-            NoParamsFuncSensor<T> sensor = new NoParamsFuncSensor<T>(path, _dataQueue as IValuesQueue, description, interval, function, _logger);
+            NoParamsFuncSensor<T> sensor = new NoParamsFuncSensor<T>(path, _dataQueue as IValuesQueue, description, interval, function, _logManager.Logger);
             AddNewSensor(sensor, path);
 
             return sensor;
@@ -504,7 +500,7 @@ namespace HSMDataCollector.Core
             if (_sensorsStorage.ContainsKey(path))
             {
                 var message = $"Path {path} is used by standard performance sensor!";
-                _logger?.Error(message);
+                _logManager.Logger?.Error(message);
 
                 throw new InvalidSensorPathException(message);
             }
@@ -519,7 +515,7 @@ namespace HSMDataCollector.Core
         {
             _nameToSensor[path] = sensor;
 
-            _logger?.Info($"Added new sensor {path}");
+            _logManager.Logger?.Info($"Added new sensor {path}");
         }
 
         private void DataQueue_SendValues(object sender, List<SensorValueBase> e)
@@ -536,14 +532,14 @@ namespace HSMDataCollector.Core
                 var res = _client.PostAsync(_fileSendingAddress, data).Result;
 
                 if (!res.IsSuccessStatusCode)
-                    _logger?.Error($"Failed to send data. StatusCode={res.StatusCode}, Content={res.Content.ReadAsStringAsync().Result}");
+                    _logManager.Logger?.Error($"Failed to send data. StatusCode={res.StatusCode}, Content={res.Content.ReadAsStringAsync().Result}");
             }
             catch (Exception e)
             {
                 if (_dataQueue != null && !_dataQueue.Disposed)
                     _dataQueue?.ReturnFile(value);
 
-                _logger?.Error($"Failed to send: {e}");
+                _logManager.Logger?.Error($"Failed to send: {e}");
             }
         }
 
@@ -559,14 +555,14 @@ namespace HSMDataCollector.Core
                 var res = _client.PostAsync(_listSendingAddress, data).Result;
 
                 if (!res.IsSuccessStatusCode)
-                    _logger?.Error($"Failed to send data. StatusCode={res.StatusCode}, Content={res.Content.ReadAsStringAsync().Result}");
+                    _logManager.Logger?.Error($"Failed to send data. StatusCode={res.StatusCode}, Content={res.Content.ReadAsStringAsync().Result}");
             }
             catch (Exception e)
             {
                 if (_dataQueue != null && !_dataQueue.Disposed)
                     _dataQueue?.ReturnData(values);
 
-                _logger?.Error($"Failed to send: {e}");
+                _logManager.Logger?.Error($"Failed to send: {e}");
             }
         }
 

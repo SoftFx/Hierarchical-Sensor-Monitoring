@@ -4,7 +4,7 @@ using System.IO;
 
 namespace HSMDataCollector.DefaultSensors.Windows
 {
-    internal sealed class WindowsFreeDiskSpacePredictor : MonitoringSensorBase<TimeSpan>
+    internal sealed class WindowsFreeDiskSpacePrediction : MonitoringSensorBase<TimeSpan>
     {
         private readonly DriveInfo _driveInfo;
         private readonly char _driveName;
@@ -13,10 +13,10 @@ namespace HSMDataCollector.DefaultSensors.Windows
         private long _startAvailableSpace;
 
 
-        protected override string SensorName => $"Free space on disk {_driveName} predictor";
+        protected override string SensorName => $"Free space on disk {_driveName} prediction";
 
 
-        public WindowsFreeDiskSpacePredictor(DiskSensorOptions options) : base(options)
+        public WindowsFreeDiskSpacePrediction(DiskSensorOptions options) : base(options)
         {
             _driveInfo = new DriveInfo(options.TargetPath);
             _driveName = _driveInfo.Name[0];

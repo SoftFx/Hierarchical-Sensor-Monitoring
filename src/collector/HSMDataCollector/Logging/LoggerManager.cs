@@ -16,10 +16,10 @@ namespace HSMDataCollector.Logging
 
         internal void InitializeLogger(LoggerOptions options)
         {
-            var rawPath = options?.ConfigPath;
-            var configPath = string.IsNullOrEmpty(rawPath)
-                ? Path.Combine(AppContext.BaseDirectory, DefaultConfigPath)
-                : rawPath;
+            var configPath = options?.ConfigPath;
+            if (string.IsNullOrEmpty(configPath))
+                configPath = Path.Combine(AppContext.BaseDirectory, DefaultConfigPath);
+
             var factory = new LogFactory(new XmlLoggingConfiguration(configPath));
 
             Logger = factory.GetLogger(nameof(DataCollector));

@@ -14,7 +14,7 @@ namespace HSMDataCollector.DefaultSensors
 
         internal void Init(TimeSpan timerPeriod)
         {
-            OpenTime = timerPeriod.CalculateOpenTime();
+            OpenTime = timerPeriod.GetOpenTime();
             CloseTime = OpenTime + timerPeriod;
         }
 

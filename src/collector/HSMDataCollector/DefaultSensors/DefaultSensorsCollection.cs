@@ -79,9 +79,9 @@ namespace HSMDataCollector.DefaultSensors
             return ToWindows(new WindowsFreeDiskSpace(_defaultOptions.DiskMonitoring.Get(options)));
         }
 
-        IWindowsCollection IWindowsCollection.AddFreeDiskSpacePredictor(DiskSensorOptions options)
+        IWindowsCollection IWindowsCollection.AddFreeDiskSpacePrediction(DiskSensorOptions options)
         {
-            return ToWindows(new WindowsFreeDiskSpacePredictor(_defaultOptions.DiskMonitoring.Get(options)));
+            return ToWindows(new WindowsFreeDiskSpacePrediction(_defaultOptions.DiskMonitoring.Get(options)));
         }
 
         IWindowsCollection IWindowsCollection.AddDiskMonitoringSensors(DiskSensorOptions options)
@@ -89,7 +89,7 @@ namespace HSMDataCollector.DefaultSensors
             options = _defaultOptions.DiskMonitoring.GetAndFill(options);
 
             return (this as IWindowsCollection).AddFreeDiskSpace(options)
-                                               .AddFreeDiskSpacePredictor(options);
+                                               .AddFreeDiskSpacePrediction(options);
         }
 
 
