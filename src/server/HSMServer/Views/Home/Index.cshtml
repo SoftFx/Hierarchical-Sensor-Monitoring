@@ -80,13 +80,19 @@
     <div>
         <div class="d-flex my-1">
             <div class="d-flex me-auto">
-                <button id="show" type="button" class="btn btn-sm btn-secondary ms-4">
-                    <i class="fa-solid fa-filter"></i> Filters (@(user.TreeFilter.EnabledFiltersCount))
+                <button id="show" type="button" class="btn btn-sm btn-outline-primary ms-4 position-relative">
+                    <i class="fa-solid fa-filter"></i> 
+                    Filters
+                    <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">
+                        @(user.TreeFilter.EnabledFiltersCount)
+                    </span>
                 </button>
-
+                
                 <div class="mx-3 my-2">
                     <i id="currentSort" class="@(user.TreeFilter.TreeSortType == TreeSortType.ByTime ? "fas fa-sort-numeric-down-alt" : "fas fa-sort-alpha-down")"></i>
                 </div>
+                
+                <span class="enabled-filters-message text-break">@user.TreeFilter.EnabledFiltersMessage</span>
             </div>
         </div>
 

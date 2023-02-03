@@ -186,3 +186,12 @@
     line-height: 18px;
     margin: 3px 2px 3px 0px;
 }
+
+.enabled-filters-message{
+    font-size: small;
+    font-weight: 500;
+    align-self: center;
+    min-width: 1rem;
+    max-width: 15rem;
+    color: cornflowerblue;
+}

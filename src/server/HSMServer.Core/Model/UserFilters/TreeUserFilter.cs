@@ -1,5 +1,7 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Linq;
+using System.Text;
 using System.Text.Json.Serialization;
 
 namespace HSMServer.Core.Model.UserFilters
@@ -45,7 +47,9 @@ namespace HSMServer.Core.Model.UserFilters
         [JsonIgnore]
         public int EnabledFiltersCount => Groups.Sum(g => g.EnableFiltersCount);
 
-
+        [JsonIgnore] 
+        public string EnabledFiltersMessage => GetEnabledFiltersMessage(this);
+        
         public TreeUserFilter() { }
 
 
@@ -70,6 +74,43 @@ namespace HSMServer.Core.Model.UserFilters
                     isSensorVisible &= group.IsSensorSuitable(sensor);
 
             return isSensorVisible;
+        }
+
+        public static string GetEnabledFiltersMessage(TreeUserFilter treeUserFilter)
+        {
+            var filters = new List<string>(1 << 4);
+            if (treeUserFilter.ByStatus.HasAnyEnabledFilters)
+            {
+                if (treeUserFilter.ByStatus.Ok.Value)
+                    filters.Add("Ok");
+                if (treeUserFilter.ByStatus.Warning.Value)
+                    filters.Add("Warning");
+                if (treeUserFilter.ByStatus.Error.Value)
+                    filters.Add("Error");
+                if (treeUserFilter.ByStatus.OffTime.Value)
+                    filters.Add("OffTime");
+            }
+            
+            if (treeUserFilter.ByHistory.HasAnyEnabledFilters)
+            {
+                filters.Add("No data");
+            }
+
+            if (treeUserFilter.ByNotifications.HasAnyEnabledFilters)
+            {
+                if (treeUserFilter.ByNotifications.Enabled.Value)
+                    filters.Add("Enabled");
+                if (treeUserFilter.ByNotifications.Ignored.Value)
+                    filters.Add("Ignored");
+            }
+            
+            if (treeUserFilter.ByState.HasAnyEnabledFilters)
+            {
+                if (treeUserFilter.ByState.Blocked.Value)
+                    filters.Add("Blocked");
+            }
+
+            return "Enabled filters: " + string.Join(", ", filters);
         }
     }
 }
