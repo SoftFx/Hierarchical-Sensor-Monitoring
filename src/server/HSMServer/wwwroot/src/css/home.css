@@ -190,8 +190,8 @@
 .enabled-filters-message{
     font-size: small;
     font-weight: 500;
-    align-self: center;
     min-width: 1rem;
     max-width: 15rem;
     color: cornflowerblue;
+    align-self: end;
 }
