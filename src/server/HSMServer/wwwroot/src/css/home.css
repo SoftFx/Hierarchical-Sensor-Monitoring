@@ -192,6 +192,6 @@
     font-weight: 500;
     min-width: 1rem;
     max-width: 15rem;
-    color: cornflowerblue;
     align-self: end;
+    color: grey;
 }
