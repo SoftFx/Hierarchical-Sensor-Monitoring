@@ -81,7 +81,7 @@
     text-decoration: line-through;
 }
 
-.container {
+.grid-container {
     display: grid;
     grid-template-columns: repeat(auto-fill, 105px);
     grid-gap: 5px;
@@ -183,4 +183,15 @@
 .independentSizeButton{
     min-width: 5rem;
     max-width: 10rem;
+}
+
+.enabled-filters-message{
+    font-size: small;
+    font-weight: 500;
+    min-width: 1rem;
+    max-width: 15rem;
+    align-self: end;
+    color: grey;
+    line-height: 1rem;
+    white-space: pre-line;
 }
