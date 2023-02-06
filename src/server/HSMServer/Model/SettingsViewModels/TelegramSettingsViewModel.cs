@@ -12,8 +12,8 @@ namespace HSMServer.Model
         [Display(Name = "Enable messages")]
         public bool EnableMessages { get; set; }
 
-        [Display(Name = "Min status level")]
-        public SensorStatus MinStatusLevel { get; set; }
+        [Display(Name = "Min status level")] 
+        public SensorStatus MinStatusLevel { get; set; } = SensorStatus.Warning;
 
         [Display(Name = "Messages delay")]
         public int MessagesDelay { get; set; }

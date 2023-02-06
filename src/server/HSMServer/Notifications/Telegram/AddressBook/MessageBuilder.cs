@@ -79,7 +79,7 @@ namespace HSMServer.Notifications
         private static MessageInfo GenerateMessageInfo(BaseSensorModel sensor)
         {
             var builder = new StringBuilder(1 << 2);
-
+ 
             builder.Append($"    {sensor.Path}: {sensor.ValidationResult.Result}");
             if (!sensor.ValidationResult.IsSuccess)
                 builder.Append($" ({sensor.ValidationResult.Message})");

@@ -5,7 +5,7 @@ namespace HSMServer.Core.Model
 {
     public sealed class ExpectedUpdateIntervalPolicy : Policy
     {
-        private const string SensorValueOutdated = "Sensor value is older than ExpectedUpdateInterval!";
+        private const string SensorValueOutdated = "Sensor update timeout";
 
         internal static ValidationResult OutdatedSensor { get; } = new(SensorValueOutdated, SensorStatus.Warning);
 
