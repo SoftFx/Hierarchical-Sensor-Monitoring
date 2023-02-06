@@ -46,9 +46,9 @@ namespace HSMServer.Core.Model.UserFilters
         [JsonIgnore]
         public int EnabledFiltersCount => Groups.Sum(g => g.EnableFiltersCount);
 
-        [JsonIgnore] 
-        public string EnabledFiltersMessage => GetEnabledFiltersMessage(this);
-        
+        [JsonIgnore]
+        public string EnabledFiltersMessage => GetEnabledFiltersMessage();
+
         public TreeUserFilter() { }
 
 
@@ -75,10 +75,10 @@ namespace HSMServer.Core.Model.UserFilters
             return isSensorVisible;
         }
 
-        public static string GetEnabledFiltersMessage(TreeUserFilter treeUserFilter)
+        private string GetEnabledFiltersMessage()
         {
             var filters = new List<string>(1 << 4);
-            foreach (var group in treeUserFilter.Groups)
+            foreach (var group in Groups)
             {
                 if (!group.HasAnyEnabledFilters) continue;
 

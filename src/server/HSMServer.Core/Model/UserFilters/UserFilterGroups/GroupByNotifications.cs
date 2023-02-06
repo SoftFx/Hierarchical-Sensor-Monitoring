@@ -2,14 +2,14 @@
 {
     public class GroupByNotifications : UserFilterGroupBase
     {
-        public override FilterProperty[] Properties => new[] { Enabled, Ignored };
+        internal override FilterProperty[] Properties => new[] { Enabled, Ignored };
 
         internal override FilterGroupType Type => FilterGroupType.ByNotifications;
 
 
-        public FilterProperty Enabled { get; init; } = new(){Name = "Enabled"};
+        public FilterProperty Enabled { get; init; } = new("Enabled");
 
-        public FilterProperty Ignored { get; init; } = new(){Name = "Ignored"};
+        public FilterProperty Ignored { get; init; } = new("Ignored");
 
 
         public GroupByNotifications() { }
