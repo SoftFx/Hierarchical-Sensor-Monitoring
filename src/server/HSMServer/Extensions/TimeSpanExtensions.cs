@@ -1,6 +1,5 @@
 using System;
 using System.Text;
-
 namespace HSMServer.Extensions;
 
 public static class TimeSpanExtensions
@@ -16,4 +15,7 @@ public static class TimeSpanExtensions
             
         return tooltip.ToString();
     }
+
+    public static string ToTableView(this string timeSpanRepresentation) =>
+        TimeSpan.TryParse(timeSpanRepresentation, out var timeSpan) ? timeSpan.ToToolTip() : string.Empty;
 }

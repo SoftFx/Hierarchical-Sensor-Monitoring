@@ -12,7 +12,7 @@ namespace HSMServer.Model.Validators
         {
             _userManager = userManager;
 
-            RuleFor(x => x.Username)
+            RuleFor(x => x.Username.Trim())
                 .NotEmpty()
                 .WithMessage(ErrorConstants.UsernameNotNull)
                 .MaximumLength(100)

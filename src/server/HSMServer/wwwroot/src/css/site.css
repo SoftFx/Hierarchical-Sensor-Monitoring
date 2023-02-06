@@ -144,3 +144,13 @@ input.input-validation-error {
     overflow: hidden;
     border-top: 1px solid rgba(0,0,0,.15);
 }
+
+.table td a {
+    text-decoration: none;
+    font-weight: bold;
+}
+
+.table td a:hover {
+    text-decoration: underline;
+    text-underline-offset: 0.3rem;
+}

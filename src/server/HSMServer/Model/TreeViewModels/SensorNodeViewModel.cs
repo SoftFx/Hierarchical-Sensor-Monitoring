@@ -63,7 +63,7 @@ namespace HSMServer.Model.TreeViewModels
             FileNameString = GetFileNameString(model.Type, ShortStringValue);
         }
 
-        private static bool IsSensorPlottingAvailable(SensorType type) => type is not (SensorType.String or SensorType.TimeSpan);
+        private static bool IsSensorPlottingAvailable(SensorType type) => type is not SensorType.String;
 
         private static string GetFileNameString(SensorType sensorType, string value)
         {
