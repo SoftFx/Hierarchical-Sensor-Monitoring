@@ -7,7 +7,7 @@
         internal override FilterGroupType Type => FilterGroupType.ByState;
 
 
-        public FilterProperty Blocked { get; init; } = new("Blocked");
+        public FilterProperty Blocked { get; init; } = new(nameof(Blocked));
 
         public GroupByState() { }
 

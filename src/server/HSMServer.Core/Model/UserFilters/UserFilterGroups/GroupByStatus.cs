@@ -7,13 +7,13 @@
         internal override FilterGroupType Type => FilterGroupType.ByStatus;
 
 
-        public FilterProperty Ok { get; init; } = new("Ok");
+        public FilterProperty Ok { get; init; } = new(nameof(Ok));
 
-        public FilterProperty Warning { get; init; } = new("Warning");
+        public FilterProperty Warning { get; init; } = new(nameof(Warning));
 
-        public FilterProperty Error { get; init; } = new("Error");
+        public FilterProperty Error { get; init; } = new(nameof(Error));
 
-        public FilterProperty OffTime { get; init; } = new("OffTime");
+        public FilterProperty OffTime { get; init; } = new(nameof(OffTime));
 
         public GroupByStatus() { }
 

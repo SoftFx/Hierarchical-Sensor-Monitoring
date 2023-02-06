@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text;
 using System.Text.Json.Serialization;
 
 namespace HSMServer.Core.Model.UserFilters
@@ -77,17 +78,18 @@ namespace HSMServer.Core.Model.UserFilters
 
         private string GetEnabledFiltersMessage()
         {
-            var filters = new List<string>(1 << 4);
+            var filters = new StringBuilder(1 << 4);
+            var specificFilters = new List<string>(1 << 2);
             foreach (var group in Groups)
             {
-                if (!group.HasAnyEnabledFilters) continue;
-
-                var specificFilters = new List<string>(1 << 2);
-
+                if (!group.HasAnyEnabledFilters) 
+                    continue;
+                
                 var tittle = $"{group.Type}: ";
                 specificFilters.AddRange(group.Properties.Where(property => property.Value).Select(property => property.Name));
                 
-                filters.Add($"{tittle} {string.Join(", ",specificFilters)}");
+                filters.Append($"{tittle} {string.Join(", ",specificFilters)}\n");
+                specificFilters.Clear();
             }
                 
             return $"Enabled filters: \n{string.Join('\n', filters)}";
