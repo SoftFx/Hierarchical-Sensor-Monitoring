@@ -78,21 +78,20 @@ namespace HSMServer.Core.Model.UserFilters
 
         private string GetEnabledFiltersMessage()
         {
-            var filters = new StringBuilder(1 << 4);
+            var filters = new StringBuilder("Enabled filters: \n", 1 << 4);
             var specificFilters = new List<string>(1 << 2);
             foreach (var group in Groups)
             {
                 if (!group.HasAnyEnabledFilters) 
                     continue;
                 
-                var tittle = $"{group.Type}: ";
                 specificFilters.AddRange(group.Properties.Where(property => property.Value).Select(property => property.Name));
                 
-                filters.Append($"{tittle} {string.Join(", ",specificFilters)}\n");
+                filters.AppendLine($"{group.Type}: {string.Join(", ",specificFilters)}");
                 specificFilters.Clear();
             }
                 
-            return $"Enabled filters: \n{string.Join('\n', filters)}";
+            return $"{filters}";
         }
     }
 }
