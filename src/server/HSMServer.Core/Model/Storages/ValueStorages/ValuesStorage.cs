@@ -34,9 +34,6 @@ namespace HSMServer.Core.Model
 
         internal virtual T AddValueBase(T value)
         {
-            if (value == null)
-                return null;
-
             _cachedValues.Enqueue(value);
 
             if (_cachedValues.Count > CacheSize)
