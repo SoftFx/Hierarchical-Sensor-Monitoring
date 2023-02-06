@@ -50,20 +50,19 @@ namespace HSMDataCollector.DefaultSensors
 
         protected abstract T GetBarData();
 
-        protected sealed override BarType GetValue()
-        {
-            var value = _internalBar.Complete() as BarType;
-
-            BuildNewBar();
-
-            return value;
-        }
+        protected sealed override BarType GetValue() => _internalBar.Complete() as BarType;
 
 
         private void CollectBar(object _)
         {
             try
             {
+                if (_internalBar.CloseTime < DateTime.UtcNow)
+                {
+                    OnTimerTick();
+                    BuildNewBar();
+                }
+
                 _internalBar.AddValue(GetBarData());
             }
             catch { }

@@ -18,11 +18,7 @@ namespace HSMDataCollector.DefaultSensors
             CloseTime = OpenTime + timerPeriod;
         }
 
-        internal void AddValue(T value)
-        {
-            if (DateTime.UtcNow <= CloseTime)
-                _barValues.Add(value);
-        }
+        internal void AddValue(T value) => _barValues.Add(value);
 
         internal MonitoringBarBase<T> Complete()
         {
@@ -56,7 +52,7 @@ namespace HSMDataCollector.DefaultSensors
             var index = count > 1 ? (int)Math.Floor(count * percent) : 0;
             var percentile = count > 0 ? listValues[index] : default;
 
-            Percentiles.Add(percent, Round(percentile));
+            Percentiles[percent] = Round(percentile);
         }
     }
 
