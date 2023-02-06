@@ -475,7 +475,8 @@ function customMenu(node) {
         delete items.Notifications.submenu.IgnoreNotifications
     if(Object.keys(items.Notifications.submenu.RemoveIgnoreNotifications.submenu).length === 0)
         delete items.Notifications.submenu.RemoveIgnoreNotifications
-    
+    if(Object.keys(items.Notifications.submenu.DisableNotifications.submenu).length === 0)
+        delete items.Notifications.submenu.DisableNotifications
    
     if (isCurrentUserAdmin === "True")
         return items;
