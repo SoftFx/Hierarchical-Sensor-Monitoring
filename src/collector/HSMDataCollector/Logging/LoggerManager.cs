@@ -13,6 +13,8 @@ namespace HSMDataCollector.Logging
 
         internal Logger Logger { get; private set; }
 
+        internal bool IncludeDebug { get; private set; }
+
 
         internal void InitializeLogger(LoggerOptions options)
         {
@@ -23,6 +25,7 @@ namespace HSMDataCollector.Logging
             var factory = new LogFactory(new XmlLoggingConfiguration(configPath));
 
             Logger = factory.GetLogger(nameof(DataCollector));
+            IncludeDebug = options?.IncludeDebug ?? false;
         }
     }
 }
