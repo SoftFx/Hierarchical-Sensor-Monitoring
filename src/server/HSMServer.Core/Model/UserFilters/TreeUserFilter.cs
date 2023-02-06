@@ -80,6 +80,7 @@ namespace HSMServer.Core.Model.UserFilters
         {
             var filters = new StringBuilder("Enabled filters: \n", 1 << 4);
             var specificFilters = new List<string>(1 << 2);
+            
             foreach (var group in Groups)
             {
                 if (!group.HasAnyEnabledFilters) 
@@ -87,7 +88,7 @@ namespace HSMServer.Core.Model.UserFilters
                 
                 specificFilters.AddRange(group.Properties.Where(property => property.Value).Select(property => property.Name));
                 
-                filters.AppendLine($"{group.Type}: {string.Join(", ",specificFilters)}");
+                filters.AppendLine($"{group.Type}: {string.Join(", ", specificFilters)}");
                 specificFilters.Clear();
             }
                 
