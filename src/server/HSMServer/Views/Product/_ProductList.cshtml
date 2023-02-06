@@ -47,20 +47,20 @@
             <table id="formProductTable" class="table table-striped">
                 <thead>
                     <tr>
-                        <th scope="col">
-                            <div class="form-floating">
+                        <th>
+                            <div class="form-floating m-0 p-0">
                                 <input placeholder="Name" id='searchProduct' type='text' class='form-control' name='searchProductName' value="@ViewBag.ProductName"/>
                                 <label for="searchProduct">Name</label>
                             </div>
                         </th>
-                        <th class="form-floating" scope="col">
-                            <div class="form-floating">
+                        <th>
+                            <div class="form-floating m-0 p-0">
                                 <input id="searchManager" class='form-control' type='text' name="searchProductManager" placeholder="Manager" value="@ViewBag.ProductManager"/>
                                 <label for="searchManager">Managers</label>
                             </div>
                         </th>
                         <button class="d-none"></button>
-                        <th scope="col">
+                        <th>
                             <a class="btn sortSubmit" onclick="sortTable(this, sorting)" type="submit">
                                 Last update
                                 <i id="sortIcon" class="fa-solid fa-sort"></i>
@@ -68,7 +68,7 @@
                         </th>
                         @if (isProductCrudAllowed || isProductActionAllowed)
                         {
-                            <th scope="col" class="text-center">Actions</th>
+                            <th class="text-center">Actions</th>
                         }
                     </tr>
                 </thead>
@@ -78,7 +78,7 @@
                         var product = Model[i];
                         <tr>
                             <td class="text-break">
-                                <a id="inputName_@product.Id" asp-controller="Product" asp-action="EditProduct" asp-route-Product="@product.EncodedId">
+                                <a class="productName_anchor" id="inputName_@product.Id" asp-controller="Product" asp-action="EditProduct" asp-route-Product="@product.EncodedId">
                                     @Html.Raw(product.Name)
                                 </a>
                             </td>
@@ -119,14 +119,14 @@
                                     <ul class='dropdown-menu overflow-auto' aria-labelledby="dropdownMenuButton">
                                         <li>
 
-                                            <a id='change_@product.EncodedId' class='dropdown-item' style="cursor: pointer;">
+                                            <a id='change_@product.EncodedId' class='dropdown-item text-decoration-none fw-normal' style="cursor: pointer;">
                                                 Edit
                                             </a>
                                         </li>
                                         @if (isProductCrudAllowed)
                                         {
                                             <li>
-                                                <a id='delete_@product.Id' class='dropdown-item' style="cursor: pointer;">
+                                                <a id='delete_@product.Id' class='dropdown-item text-decoration-none fw-normal' style="cursor: pointer;">
                                                     Delete
                                                 </a>
                                             </li>
