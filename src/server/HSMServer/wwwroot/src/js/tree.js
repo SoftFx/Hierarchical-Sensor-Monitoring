@@ -459,7 +459,10 @@ function customMenu(node) {
     if (accountsNotifications) {
         delete items.Notifications.submenu.EnableNotifications.submenu.Accounts;
         delete items.Notifications.submenu.RemoveIgnoreNotifications.submenu.Accounts;
-    }else{
+    }
+    
+    if(!accountsIgnoreNotifications && !accountsNotifications)
+    {
         delete items.Notifications.submenu.DisableNotifications.submenu.Accounts;
         delete items.Notifications.submenu.RemoveIgnoreNotifications.submenu.Accounts;
         delete items.Notifications.submenu.IgnoreNotifications.submenu.Accounts;

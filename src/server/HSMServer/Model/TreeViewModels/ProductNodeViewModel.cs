@@ -35,7 +35,7 @@ namespace HSMServer.Model.TreeViewModels
         {
             Product = model.RootProductName;
             Path = $"{model.Path}{CommonConstants.SensorPathSeparator}";
-            NotificationSettings = model.NotificationsSettings;
+            NotificationSettings = model.Notifications;
             
             Update(model);
         }
@@ -49,7 +49,7 @@ namespace HSMServer.Model.TreeViewModels
         {
             base.Update(model);
 
-            TelegramSettings.Update(model.NotificationsSettings.Telegram);
+            TelegramSettings.Update(model.Notifications.Telegram);
         }
 
         internal void AddSubNode(ProductNodeViewModel node)

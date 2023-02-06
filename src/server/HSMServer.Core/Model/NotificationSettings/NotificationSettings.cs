@@ -43,10 +43,7 @@ namespace HSMServer.Core.Model
         }
 
 
-        public bool IsSensorIgnored(Guid sensorId)
-        {
-            return IgnoredSensors.ContainsKey(sensorId);
-        }
+        public bool IsSensorIgnored(Guid sensorId) => IgnoredSensors.ContainsKey(sensorId);
         
         public bool IsSensorEnabled(Guid sensorId) => EnabledSensors.Contains(sensorId);
 
@@ -54,7 +51,7 @@ namespace HSMServer.Core.Model
         {
             bool isSensorRemoved = false;
 
-            isSensorRemoved |= RemoveSensorInternal(sensorId);
+            isSensorRemoved |= DisableSensor(sensorId);
             isSensorRemoved |= IgnoredSensors.TryRemove(sensorId, out _);
 
             return isSensorRemoved;
@@ -68,6 +65,6 @@ namespace HSMServer.Core.Model
                 IgnoredSensors = IgnoredSensors.ToDictionary(s => s.Key.ToString(), s => s.Value.Ticks),
             };
 
-        protected bool RemoveSensorInternal(Guid sensorId) => EnabledSensors.Remove(sensorId);
+        private bool DisableSensor(Guid sensorId) => EnabledSensors.Remove(sensorId);
     }
 }

@@ -231,7 +231,7 @@ namespace HSMServer.Controllers
             foreach (var sensorId in sensors)
             {
                 var parent = _treeValuesCache.GetSensor(sensorId).ParentProduct;
-                updateSettings.Invoke(parent.NotificationsSettings, sensorId);
+                updateSettings.Invoke(parent.Notifications, sensorId);
                 _treeValuesCache.UpdateProduct(parent);
             }
         }

@@ -35,7 +35,7 @@ namespace HSMServer.Model.TreeViewModels
 
         public SensorNodeViewModel(BaseSensorModel model) : base(model.Id)
         {
-            GroupNotificationSettings = model.ParentProduct.NotificationsSettings;
+            GroupNotificationSettings = model.ParentProduct.Notifications;
             Update(model);
         }
 
@@ -44,7 +44,7 @@ namespace HSMServer.Model.TreeViewModels
         {
             base.Update(model);
 
-            GroupNotificationSettings = model.ParentProduct.NotificationsSettings;
+            GroupNotificationSettings = model.ParentProduct.Notifications;
             SensorType = model.Type;
             Description = model.Description;
             State = model.State;
