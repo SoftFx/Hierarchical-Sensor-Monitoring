@@ -47,13 +47,8 @@
         #region Sensors history
 
         public const string HistoryAction = "History";
-        public const string HistoryAllAction = "HistoryAll";
-
         public const string RawHistoryAction = "RawHistory";
-        public const string RawHistoryAllAction = "RawHistoryAll";
-
         public const string ExportHistoryAction = "ExportHistory";
-        public const string ExportHistoryAllAction = "ExportHistoryAll";
 
         #endregion
     }

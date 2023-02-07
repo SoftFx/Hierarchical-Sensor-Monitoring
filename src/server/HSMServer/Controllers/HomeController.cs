@@ -227,24 +227,12 @@ namespace HSMServer.Controllers
             if (model == null)
                 return null;
 
-            var enumerator = _treeValuesCache.GetSensorValuesPage(SensorPathHelper.DecodeGuid(model.EncodedId),
-                model.From.ToUniversalTime(), model.To.ToUniversalTime(), MaxHistoryCount);
+            var enumerator = _treeValuesCache.GetSensorValuesPage(SensorPathHelper.DecodeGuid(model.EncodedId), model.From, model.To, MaxHistoryCount);
+            var viewModel = await new HistoryValuesViewModel(model.EncodedId, model.Type, enumerator, GetLocalLastValue(model.EncodedId, model.From, model.To)).Initialize();
 
-            var viewModel = await new HistoryValuesViewModel(model.EncodedId, model.Type, enumerator, GetLocalLastValue(model.EncodedId)).Initialize();
-            
             _userManager.GetUser((HttpContext.User as User).Id).Pagination = viewModel;
 
             return GetHistoryTable(viewModel);
-        }
-
-        [HttpPost]
-        public Task<IActionResult> HistoryAll([FromQuery(Name = "EncodedId")] string encodedId, [FromQuery(Name = "Type")] int type)
-        {
-            return History(new GetSensorHistoryModel()
-            {
-                EncodedId = encodedId,
-                Type = type
-            });
         }
 
         [HttpGet]
@@ -266,44 +254,23 @@ namespace HSMServer.Controllers
                 return _emptyJsonResult;
 
             var values = await GetSensorValues(model.EncodedId, model.From, model.To);
-            
-            var localValue = GetLocalLastValue(model.EncodedId);
+
+            var localValue = GetLocalLastValue(model.EncodedId, model.From, model.To);
             if (localValue is not null)
                 values.Add(localValue);
-            
+
             return new(HistoryProcessorFactory.BuildProcessor(model.Type).ProcessingAndCompression(values).Select(v => (object)v));
-        }
-
-        [HttpPost]
-        public async Task<JsonResult> RawHistoryAll([FromQuery(Name = "EncodedId")] string encodedId, [FromQuery(Name = "Type")] int type)
-        {
-            var values = await GetAllSensorValues(encodedId);
-
-            return new(values.Select(v => (object)v));
         }
 
 
         public async Task<FileResult> ExportHistory([FromQuery(Name = "EncodedId")] string encodedId, [FromQuery(Name = "Type")] int type,
             [FromQuery(Name = "From")] DateTime from, [FromQuery(Name = "To")] DateTime to)
         {
-            DateTime fromUTC = from.ToUniversalTime();
-            DateTime toUTC = to.ToUniversalTime();
-
             var (productName, path) = GetSensorProductAndPath(encodedId);
-            string fileName = $"{productName}_{path.Replace('/', '_')}_from_{fromUTC:s}_to{toUTC:s}.csv";
+            string fileName = $"{productName}_{path.Replace('/', '_')}_from_{from:s}_to{to:s}.csv";
             Response.Headers.Add("Content-Disposition", $"attachment;filename={fileName}");
 
-            var values = await GetSensorValues(encodedId, fromUTC, toUTC);
-
-            return GetExportHistory(values, type, fileName);
-        }
-
-        public async Task<FileResult> ExportHistoryAll([FromQuery(Name = "EncodedId")] string encodedId, [FromQuery(Name = "Type")] int type)
-        {
-            var (productName, path) = GetSensorProductAndPath(encodedId);
-            string fileName = $"{productName}_{path.Replace('/', '_')}_all_{DateTime.Now.ToUniversalTime():s}.csv";
-
-            var values = await GetAllSensorValues(encodedId);
+            var values = await GetSensorValues(encodedId, from, to);
 
             return GetExportHistory(values, type, fileName);
         }
@@ -325,15 +292,7 @@ namespace HSMServer.Controllers
             if (string.IsNullOrEmpty(encodedId))
                 return new(new List<BaseValue>());
 
-            return _treeValuesCache.GetSensorValuesPage(SensorPathHelper.DecodeGuid(encodedId), from.ToUniversalTime(), to.ToUniversalTime(), MaxHistoryCount).Flatten();
-        }
-
-        private async Task<List<BaseValue>> GetAllSensorValues(string encodedId)
-        {
-            var from = DateTime.MinValue;
-            var to = DateTime.MaxValue;
-
-            return await GetSensorValues(encodedId, from, to);
+            return _treeValuesCache.GetSensorValuesPage(SensorPathHelper.DecodeGuid(encodedId), from, to, MaxHistoryCount).Flatten();
         }
 
         #endregion
@@ -441,11 +400,13 @@ namespace HSMServer.Controllers
             return (sensor?.Product, sensor?.Path);
         }
 
-        private BarBaseValue GetLocalLastValue(string encodedId)
+        private BarBaseValue GetLocalLastValue(string encodedId, DateTime from, DateTime to)
         {
             var sensor = _treeValuesCache.GetSensor(SensorPathHelper.DecodeGuid(encodedId));
 
-            return sensor is IBarSensor barSensor ? barSensor.LocalLastValue : null;
+            var localValue = sensor is IBarSensor barSensor ? barSensor.LocalLastValue : null;
+
+            return localValue?.ReceivingTime >= from && localValue?.ReceivingTime <= to ? localValue : null;
         }
     }
 }
