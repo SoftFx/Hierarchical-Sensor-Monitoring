@@ -33,9 +33,9 @@ namespace HSMServer.Notifications
 
         internal string GenerateOutputSensors()
         {
-            var sensors = Count <= MaxSensorsCount
-                ? string.Join(", ", this)
-                : string.Join(", ", this.Take(MaxSensorsCount)) + $" ... (and other {Count - MaxSensorsCount})";
+            var sensors = TotalCount > MaxSensorsCount
+                ? string.Join(", ", this.Take(MaxSensorsCount)) + $" ... (and other {TotalCount - MaxSensorsCount})"
+                : string.Join(", ", this);
             
             Clear();
             
