@@ -177,13 +177,8 @@ namespace HSMServer.Notifications
                 foreach (var (entity, chats) in _addressBook.ServerBook)
                 {
                     if (WhetherSendMessage(entity, sensor, oldStatus))
-                        foreach (var (_, chat) in chats)
-                        {
-                            if (entity.Notifications.Telegram.MessagesDelay > 0)
-                                chat.MessageBuilder.AddMessage(sensor);
-                            // else
-                            //     SendMessageAsync(chat.ChatId, MessageBuilder.GetSingleMessage(sensor));
-                        }
+                        foreach (var (_, chat) in chats) 
+                            chat.MessageBuilder.AddMessage(sensor);
                 }
         }
 
