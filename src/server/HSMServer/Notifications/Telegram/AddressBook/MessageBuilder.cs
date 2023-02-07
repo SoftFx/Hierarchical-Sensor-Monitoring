@@ -97,7 +97,7 @@ namespace HSMServer.Notifications
             var builder = new StringBuilder(1 << 6);
             var response = new Dictionary<string, List<string>>(1 << 8);
 
-            foreach (var (_, messages) in _messages)
+            foreach (var (_, messages) in _messageTree)
             {
                 var productName = messages?.FirstOrDefault().Value?.FirstOrDefault().ProductName;
                 builder.AppendLine(productName);
@@ -151,43 +151,43 @@ namespace HSMServer.Notifications
             LastSentTime = DateTime.UtcNow;
         }
 
-        private static MessageInfo GenerateMessageInfo(BaseSensorModel sensor)
-        {
-            var builder = new StringBuilder(1 << 2);
+        //private static MessageInfo GenerateMessageInfo(BaseSensorModel sensor)
+        //{
+        //    var builder = new StringBuilder(1 << 2);
 
-            builder.Append($"{sensor.ValidationResult.Result}");
-            if (!sensor.ValidationResult.IsSuccess)
-                builder.Append($" ({sensor.ValidationResult.Message})");
+        //    builder.Append($"{sensor.ValidationResult.Result}");
+        //    if (!sensor.ValidationResult.IsSuccess)
+        //        builder.Append($" ({sensor.ValidationResult.Message})");
 
-            return new()
-            {
-                SensorValueTime = sensor.LastValue?.Time ?? DateTime.MinValue,
-                SensorPath = sensor.Path,
-                ProductName = sensor.RootProductName,
-                Message = builder.ToString(),
-                SensorDisplayName = sensor.DisplayName
-            };
-        }
+        //    return new()
+        //    {
+        //        SensorValueTime = sensor.LastValue?.Time ?? DateTime.MinValue,
+        //        SensorPath = sensor.Path,
+        //        ProductName = sensor.RootProductName,
+        //        Message = builder.ToString(),
+        //        SensorDisplayName = sensor.DisplayName
+        //    };
+        //}
 
         private static string GenerateOutputSensors(List<string> sensors) =>
             sensors.Count > MaxSensorMessages
             ? string.Join(", ", sensors.Take(MaxSensorMessages)) + $" ... (and other {sensors.Count - MaxSensorMessages})"
             : string.Join(", ", sensors);
 
-        private static string GetNodePath(string sensorPath) => sensorPath.Remove(sensorPath.LastIndexOf('/'));
+        //private static string GetNodePath(string sensorPath) => sensorPath.Remove(sensorPath.LastIndexOf('/'));
 
 
-        private readonly struct MessageInfo
-        {
-            //internal DateTime SensorValueTime { get; init; }
+        //private readonly struct MessageInfo
+        //{
+        //    //internal DateTime SensorValueTime { get; init; }
 
-            //internal string SensorPath { get; init; }
+        //    //internal string SensorPath { get; init; }
 
-            //internal string ProductName { get; init; }
+        //    //internal string ProductName { get; init; }
 
-            internal string Message { get; init; }
+        //    internal string Message { get; init; }
 
-            internal string SensorDName { get; init; }
-        }
+        //    internal string SensorName { get; init; }
+        //}
     }
 }
