@@ -95,18 +95,24 @@ namespace HSMServer.Controllers
 
             if (_treeViewModel.Sensors.TryGetValue(decodedId, out var sensor))
                 _treeValuesCache.UpdateIgnoreSensorState(sensor.Id, newIgnorePeriod);
+            
+            UpdateUserNotificationSettings(model.EncodedId,  (s, g) =>
+            {
+                if (model.IgnorePeriod.TimeInterval == Model.TimeInterval.Forever)
+                    s.Disable(g);
+                else
+                    s.Ignore(g, model.EndOfIgnorePeriod);
+            });
+            
+            UpdateGroupNotificationSettings(model.EncodedId,  (s, g) =>
+            {
+                if (model.IgnorePeriod.TimeInterval == Model.TimeInterval.Forever)
+                    s.Disable(g);
+                else
+                    s.Ignore(g, model.EndOfIgnorePeriod);
+            });
         }
-
-        //[HttpPost]
-        //public void SetIgnoreStateToSensor([FromQuery] string selectedId, [FromQuery] bool isIgnored)
-        //{
-        //    var decodedId = SensorPathHelper.DecodeGuid(selectedId);
-        //    var newIgnorePeriod = DateTime.UtcNow.AddSeconds(1);
-
-        //    if (_treeViewModel.Sensors.TryGetValue(decodedId, out var sensor))
-        //        _treeValuesCache.UpdateIgnoreSensorState(sensor.Id, newIgnorePeriod);
-        //}
-
+        
         [HttpPost]
         public void RemoveIgnoreStateToSensor([FromQuery] string selectedId)
         {
