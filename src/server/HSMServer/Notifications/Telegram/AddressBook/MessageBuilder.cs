@@ -40,23 +40,23 @@ namespace HSMServer.Notifications
                 var productName = messages?.FirstOrDefault().Value?.FirstOrDefault().ProductName;
                 builder.AppendLine(productName);
              
-                foreach (var (nodepath, messagesQueue) in messages)
+                foreach (var (nodepath, notifications) in messages)
                 {
-                    foreach (var messageInfo in messagesQueue)
+                    foreach (var notification in notifications)
                     {
-                        if (!response.ContainsKey(messageInfo.Message))
+                        if (!response.ContainsKey(notification.Message))
                         {
-                            response.TryAdd(messageInfo.Message, new List<string>(1 << 4));
+                            response.TryAdd(notification.Message, new List<string>(1 << 4));
                         }
 
-                        response[messageInfo.Message].Add(messageInfo.SensorDisplayName);
+                        response[notification.Message].Add(notification.SensorDisplayName);
                     }
 
-                    foreach (var (message, output) in response)
+                    foreach (var (state, sensors) in response)
                     {
-                        var outputSensors = GenerateOutputSensors(output);
+                        var outputSensors = GenerateOutputSensors(sensors);
                         
-                        builder.Append($"    {(string.IsNullOrEmpty(nodepath) ? "/" : $"{nodepath}")}: {outputSensors} -> {message}");
+                        builder.Append($"    {(string.IsNullOrEmpty(nodepath) ? "/" : $"{nodepath}")}: {outputSensors} -> {state}");
                     }
 
                     builder.AppendLine();
