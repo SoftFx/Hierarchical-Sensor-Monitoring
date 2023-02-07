@@ -11,7 +11,7 @@ namespace HSMServer.Notifications
     {
         private const int MaxSensorMessages = 20;
 
-        private readonly ConcurrentDictionary<Guid, ConcurrentDictionary<string, List<MessageInfo>>> _newMessages = new();
+        private readonly ConcurrentDictionary<Guid, ConcurrentDictionary<string, List<MessageInfo>>> _messages = new();
 
         internal DateTime LastSentTime { get; private set; } = DateTime.UtcNow;
 
@@ -20,14 +20,14 @@ namespace HSMServer.Notifications
         {
             var productId = sensor.RootProductId;
 
-            if (!_newMessages.ContainsKey(productId))
-                _newMessages[productId] = new ConcurrentDictionary<string, List<MessageInfo>>();
+            if (!_messages.ContainsKey(productId))
+                _messages[productId] = new ConcurrentDictionary<string, List<MessageInfo>>();
 
             var nodePath = GetNodePath(sensor.Path);
-            if (!_newMessages[productId].ContainsKey(nodePath))
-                _newMessages[productId].TryAdd(nodePath, new List<MessageInfo>());
+            if (!_messages[productId].ContainsKey(nodePath))
+                _messages[productId].TryAdd(nodePath, new List<MessageInfo>());
 
-            _newMessages[productId][nodePath].Add(GenerateMessageInfo(sensor));
+            _messages[productId][nodePath].Add(GenerateMessageInfo(sensor));
         }
 
         internal string GetAggregateMessage()
@@ -35,7 +35,7 @@ namespace HSMServer.Notifications
             var builder = new StringBuilder(1 << 6);
             var response = new Dictionary<string, List<string>>(1 << 8);
 
-            foreach (var (_, messages) in _newMessages)
+            foreach (var (_, messages) in _messages)
             {
                 var productName = messages?.FirstOrDefault().Value?.FirstOrDefault().ProductName;
                 builder.AppendLine(productName);
@@ -84,7 +84,7 @@ namespace HSMServer.Notifications
 
         private void Reset()
         {
-            _newMessages.Clear();
+            _messages.Clear();
 
             LastSentTime = DateTime.UtcNow;
         }
