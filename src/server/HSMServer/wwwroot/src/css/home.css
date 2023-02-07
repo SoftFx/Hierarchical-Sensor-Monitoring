@@ -186,3 +186,14 @@
     line-height: 18px;
     margin: 3px 2px 3px 0px;
 }
+
+.enabled-filters-message{
+    font-size: small;
+    font-weight: 500;
+    min-width: 1rem;
+    max-width: 15rem;
+    align-self: end;
+    color: grey;
+    line-height: 1rem;
+    white-space: pre-line;
+}

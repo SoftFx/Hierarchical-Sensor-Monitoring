@@ -15,7 +15,7 @@
     var hasProductColumn = Model.FullTable;
 }
 <div class="w-100" id="accessKeysTable">
-    <table class="table">
+    <table class="table table-striped">
         <thead>
             <tr>
                 @if (hasProductColumn)
@@ -32,7 +32,7 @@
                 <th class="text-center">State</th>
                 @if (UserRoleHelper.IsManager(user) || UserRoleHelper.IsProductCRUDAllowed(user))
                 {
-                    <th scope="col" class="text-center">Actions</th>
+                    <th class="text-center">Actions</th>
                 }
             </tr>
         </thead>
@@ -56,7 +56,7 @@
                         </td>
                         <td class="displayName text-break">@Html.Raw(key.DisplayName)</td>
                         <td nowrap>
-                            <a role="button" tabindex="0" id="copy_@key.Id" onclick="copyToClipboard(`@key.Id`)" title="copy key" class="link-primary">copy</a>
+                            <a role="button" tabindex="0" id="copy_@key.Id" onclick="copyToClipboard(`@key.Id`)" title="copy key" class="link-primary fw-normal">copy</a>
                         </td>
                         <td>@key.Permissions</td>
                         <td>@key.AuthorName</td>
@@ -96,7 +96,16 @@
 
                         <td style="width: 1%;white-space: nowrap">@key.Permissions</td>
                         <td class="text-center">
-                            <i class='@key.State.ToIcon()' title="@key.StatusTitle"></i>
+                            @if (key.State == KeyState.Expired)
+                            {
+                                <span title="@key.StatusTitle">
+                                    <img class="mb-1" src="~/dist/warning.svg" id="svg_exclamation" alt="warning icon"/>
+                                </span>
+                            }
+                            else
+                            {
+                                <i class='@key.State.ToIcon()' title="@key.StatusTitle"></i>
+                            }
                         </td>
                     }
 
