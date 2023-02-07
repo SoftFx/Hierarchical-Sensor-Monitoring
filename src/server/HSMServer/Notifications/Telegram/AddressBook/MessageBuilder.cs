@@ -8,7 +8,7 @@ namespace HSMServer.Notifications
 {
     internal sealed class CQueue : ConcurrentQueue<string>
     {
-        private const int MaxMessagesCount = 20;
+        private const int MaxSensorsCount = 10;
 
         internal long TotalCount { get; private set; }
 
@@ -17,7 +17,7 @@ namespace HSMServer.Notifications
         {
             TotalCount++;
 
-            while (Count > MaxMessagesCount)
+            while (Count > MaxSensorsCount)
                 TryDequeue(out _);
 
             Enqueue(message);
@@ -29,6 +29,17 @@ namespace HSMServer.Notifications
             base.Clear();
 
             TotalCount = 0L;
+        }
+
+        internal string GenerateOutputSensors()
+        {
+            var sensors = Count > MaxSensorsCount
+                ? string.Join(", ", this.Take(MaxSensorsCount)) + $" ... (and other {Count - MaxSensorsCount})"
+                : string.Join(", ", this);
+            
+            Clear();
+            
+            return sensors;
         }
     }
 
@@ -51,9 +62,6 @@ namespace HSMServer.Notifications
 
     internal sealed class MessageBuilder
     {
-        private const int MaxSensorMessages = 10;
-
-
         private readonly CDict<CDict<CDict<CDict<CQueue>>>> _messageTree = new();
 
         
@@ -79,7 +87,9 @@ namespace HSMServer.Notifications
 
             foreach (var (productName, nodes) in _messageTree)
             {
-                builder.AppendLine(productName);
+                if(!nodes.IsEmpty)
+                    builder.AppendLine(productName);
+                
                 foreach (var (nodepath, results) in nodes)
                 {
                     builder.Append($"   {(string.IsNullOrEmpty(nodepath) ? "/" : $"{nodepath}")}: ");
@@ -87,17 +97,16 @@ namespace HSMServer.Notifications
                     {
                         foreach (var (message, sensors) in messages)
                         {
-                            builder.Append(GenerateOutputSensors(sensors));
-                            builder.Append($" -> {result} {(result.Equals("Ok") ? "" : $"({message})")}");
-                            
-                            sensors.Clear();
+                            builder.Append(sensors.GenerateOutputSensors());
+                            builder.Append($" -> {result} ");
+                            if (!string.IsNullOrEmpty(message)) 
+                                builder.Append($"({message})");
                         }
                     }
 
                     builder.AppendLine();
                 }
 
-                builder.AppendLine();
                 builder.AppendLine();
             }
 
@@ -108,13 +117,24 @@ namespace HSMServer.Notifications
 
         private void Reset()
         {
-            _messageTree.Clear();
+            foreach (var (_, nodes) in _messageTree)
+            {
+                nodes.Clear();
+            }
+            
             LastSentTime = DateTime.UtcNow;
         }
 
-        private static string GenerateOutputSensors(CQueue sensors) =>
-            sensors.Count > MaxSensorMessages
-            ? string.Join(", ", sensors.Take(MaxSensorMessages)) + $" ... (and other {sensors.Count - MaxSensorMessages})"
-            : string.Join(", ", sensors);
+        public static string GetSingleMessage(BaseSensorModel sensor)
+        {
+            var product = sensor.RootProductName;
+            var nodePath = sensor.ParentProduct.Path ?? "";
+            
+            var message = sensor.ValidationResult.Message;
+            var result = sensor.ValidationResult.Result;
+            var resultMessage = string.IsNullOrEmpty(message) ? $"{result}" : $"{result} ({message})";
+            
+            return $"{product}\n\r   {(string.IsNullOrEmpty(nodePath) ? "/" : $"{nodePath}")}: {sensor.DisplayName} -> {resultMessage}";
+        }
     }
 }
