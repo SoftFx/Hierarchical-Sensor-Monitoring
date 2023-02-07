@@ -9,10 +9,9 @@ namespace HSMServer.Notifications
 {
     internal sealed class MessageBuilder
     {
-        private const int MaxSensorMessages = 5;
+        private const int MaxSensorMessages = 20;
 
-        private readonly ConcurrentDictionary<Guid, ConcurrentDictionary<string, MessagesQueue>> _messages = new();
-
+        private readonly ConcurrentDictionary<Guid, ConcurrentDictionary<string, List<MessageInfo>>> _newMessages = new();
 
         internal DateTime LastSentTime { get; private set; } = DateTime.UtcNow;
 
@@ -21,33 +20,47 @@ namespace HSMServer.Notifications
         {
             var productId = sensor.RootProductId;
 
-            if (!_messages.ContainsKey(productId))
-                _messages[productId] = new ConcurrentDictionary<string, MessagesQueue>();
+            if (!_newMessages.ContainsKey(productId))
+                _newMessages[productId] = new ConcurrentDictionary<string, List<MessageInfo>>();
 
-            var productMessages = _messages[productId];
+            var nodePath = GetNodePath(sensor.Path);
+            if (!_newMessages[productId].ContainsKey(nodePath))
+                _newMessages[productId].TryAdd(nodePath, new List<MessageInfo>());
 
-            if (!productMessages.ContainsKey(sensor.Path))
-                productMessages.TryAdd(sensor.Path, new MessagesQueue());
-
-            productMessages[sensor.Path].AddMessage(GenerateMessageInfo(sensor));
+            _newMessages[productId][nodePath].Add(GenerateMessageInfo(sensor));
         }
 
         internal string GetAggregateMessage()
         {
             var builder = new StringBuilder(1 << 6);
+            var response = new Dictionary<string, List<string>>(1 << 8);
 
-            foreach (var (_, messages) in _messages)
+            foreach (var (_, messages) in _newMessages)
             {
-                var productName = messages?.FirstOrDefault().Value.Messages?.FirstOrDefault().ProductName;
+                var productName = messages?.FirstOrDefault().Value?.FirstOrDefault().ProductName;
                 builder.AppendLine(productName);
-
-                foreach (var (_, messagesQueue) in messages)
+             
+                foreach (var (nodepath, messagesQueue) in messages)
                 {
-                    if (messagesQueue.AllMessagesCount > MaxSensorMessages)
-                        builder.AppendLine($"    ... ({messagesQueue.AllMessagesCount - MaxSensorMessages} other message(s))");
+                    foreach (var messageInfo in messagesQueue)
+                    {
+                        if (!response.ContainsKey(messageInfo.Message))
+                        {
+                            response.TryAdd(messageInfo.Message, new List<string>(1 << 4));
+                        }
 
-                    foreach (var message in messagesQueue.Messages.OrderBy(m => m.SensorValueTime))
-                        builder.AppendLine(message.Message);
+                        response[messageInfo.Message].Add(messageInfo.SensorDisplayName);
+                    }
+
+                    foreach (var (message, output) in response)
+                    {
+                        var outputSensors = GenerateOutputSensors(output);
+                        
+                        builder.Append($"    {(string.IsNullOrEmpty(nodepath) ? "/" : $"{nodepath}")}: {outputSensors} -> {message}");
+                    }
+
+                    builder.AppendLine();
+                    response.Clear();
                 }
 
                 builder.AppendLine();
@@ -71,7 +84,7 @@ namespace HSMServer.Notifications
 
         private void Reset()
         {
-            _messages.Clear();
+            _newMessages.Clear();
 
             LastSentTime = DateTime.UtcNow;
         }
@@ -80,7 +93,7 @@ namespace HSMServer.Notifications
         {
             var builder = new StringBuilder(1 << 2);
  
-            builder.Append($"    {sensor.Path}: {sensor.ValidationResult.Result}");
+            builder.Append($"{sensor.ValidationResult.Result}");
             if (!sensor.ValidationResult.IsSuccess)
                 builder.Append($" ({sensor.ValidationResult.Message})");
 
@@ -90,27 +103,16 @@ namespace HSMServer.Notifications
                 SensorPath = sensor.Path,
                 ProductName = sensor.RootProductName,
                 Message = builder.ToString(),
+                SensorDisplayName = sensor.DisplayName
             };
         }
 
+        private static string GenerateOutputSensors(List<string> sensors) =>
+            sensors.Count > MaxSensorMessages
+            ? string.Join(", ", sensors.Take(MaxSensorMessages)) + $" ... (and other {sensors.Count - MaxSensorMessages})"
+            : string.Join(", ", sensors);
 
-        private sealed record MessagesQueue
-        {
-            internal Queue<MessageInfo> Messages { get; } = new();
-
-            internal int AllMessagesCount { get; private set; }
-
-
-            internal void AddMessage(MessageInfo message)
-            {
-                AllMessagesCount++;
-
-                Messages.Enqueue(message);
-
-                if (Messages.Count > MaxSensorMessages)
-                    Messages.Dequeue();
-            }
-        }
+        private static string GetNodePath(string sensorPath) => sensorPath.Remove(sensorPath.LastIndexOf('/'));
 
 
         private readonly struct MessageInfo
@@ -122,6 +124,8 @@ namespace HSMServer.Notifications
             internal string ProductName { get; init; }
 
             internal string Message { get; init; }
+            
+            internal string SensorDisplayName { get; init; }
         }
     }
 }
