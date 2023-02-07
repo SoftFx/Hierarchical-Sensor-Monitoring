@@ -31,12 +31,13 @@ namespace HSMDataCollector.DefaultSensors.Windows
             var deltaSpace = _startAvailableSpace - currentAvailableSpace;
             var deltaTime = DateTime.UtcNow - _startTime;
 
-            NeedSendValue = deltaSpace >= 0;
+            NeedSendValue = deltaSpace > 0;
 
             if (NeedSendValue)
                 return new TimeSpan(currentAvailableSpace / deltaSpace * deltaTime.Ticks);
 
-            InitStartingPoint(currentAvailableSpace);
+            if (deltaSpace < 0)
+                InitStartingPoint(currentAvailableSpace);
 
             return TimeSpan.Zero;
         }

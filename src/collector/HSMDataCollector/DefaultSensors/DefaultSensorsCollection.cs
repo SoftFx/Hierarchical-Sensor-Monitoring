@@ -84,6 +84,16 @@ namespace HSMDataCollector.DefaultSensors
             return ToWindows(new WindowsFreeDiskSpacePrediction(_defaultOptions.DiskMonitoring.Get(options)));
         }
 
+        IWindowsCollection IWindowsCollection.AddFreeDisksSpace(DiskSensorOptions options)
+        {
+            return AddDisksMonitoring(options, o => new WindowsFreeDiskSpace(o));
+        }
+
+        IWindowsCollection IWindowsCollection.AddFreeDisksSpacePrediction(DiskSensorOptions options)
+        {
+            return AddDisksMonitoring(options, o => new WindowsFreeDiskSpacePrediction(o));
+        }
+
         IWindowsCollection IWindowsCollection.AddDiskMonitoringSensors(DiskSensorOptions options)
         {
             options = _defaultOptions.DiskMonitoring.GetAndFill(options);
@@ -154,6 +164,14 @@ namespace HSMDataCollector.DefaultSensors
             return Register(new CollectorAlive(_defaultOptions.CollectorAliveMonitoring.Get(options)));
         }
 
+
+        private DefaultSensorsCollection AddDisksMonitoring(DiskSensorOptions options, Func<DiskSensorOptions, MonitoringSensorBase> newSensorFunc)
+        {
+            foreach (var diskOptions in _defaultOptions.DiskMonitoring.GetAllDisksOptions(options))
+                ToWindows(newSensorFunc(diskOptions));
+
+            return this;
+        }
 
         private DefaultSensorsCollection ToWindows(MonitoringSensorBase sensor)
         {
