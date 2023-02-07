@@ -181,8 +181,8 @@ namespace HSMServer.Notifications
                         {
                             if (entity.Notifications.Telegram.MessagesDelay > 0)
                                 chat.MessageBuilder.AddMessage(sensor);
-                            else
-                                SendMessageAsync(chat.ChatId, MessageBuilder.GetSingleMessage(sensor));
+                            // else
+                            //     SendMessageAsync(chat.ChatId, MessageBuilder.GetSingleMessage(sensor));
                         }
                 }
         }
