@@ -81,7 +81,7 @@
     text-decoration: line-through;
 }
 
-.grid-container {
+.container {
     display: grid;
     grid-template-columns: repeat(auto-fill, 105px);
     grid-gap: 5px;
