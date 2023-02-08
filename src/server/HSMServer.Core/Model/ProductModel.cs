@@ -28,13 +28,8 @@ namespace HSMServer.Core.Model
         string INotificatable.Name => DisplayName;
 
         NotificationSettings INotificatable.Notifications => Notifications;
-
-        bool INotificatable.AreNotificationsEnabled(BaseSensorModel sensor) =>
-            Notifications.Telegram.MessagesAreEnabled &&
-            Notifications.IsSensorEnabled(sensor.Id) &&
-            !Notifications.IsSensorIgnored(sensor.Id);
-
-
+        
+        
         public ProductModel()
         {
             AccessKeys = new ConcurrentDictionary<Guid, AccessKeyModel>();

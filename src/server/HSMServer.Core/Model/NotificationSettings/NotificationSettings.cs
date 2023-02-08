@@ -8,11 +8,12 @@ namespace HSMServer.Core.Model
 {
     public class NotificationSettings
     {
-        public TelegramSettings Telegram { get; }
-
         public ConcurrentDictionary<Guid, DateTime> IgnoredSensors { get; } = new();
         
         public HashSet<Guid> EnabledSensors { get; } = new();
+        
+        public TelegramSettings Telegram { get; }
+        
         
         public NotificationSettings()
         {
@@ -51,7 +52,7 @@ namespace HSMServer.Core.Model
         {
             bool isSensorRemoved = false;
 
-            isSensorRemoved |= DisableSensor(sensorId);
+            isSensorRemoved |= EnabledSensors.Remove(sensorId);;
             isSensorRemoved |= IgnoredSensors.TryRemove(sensorId, out _);
 
             return isSensorRemoved;
@@ -64,7 +65,5 @@ namespace HSMServer.Core.Model
                 EnabledSensors = EnabledSensors.Select(s => s.ToString()).ToList(),
                 IgnoredSensors = IgnoredSensors.ToDictionary(s => s.Key.ToString(), s => s.Value.Ticks),
             };
-
-        private bool DisableSensor(Guid sensorId) => EnabledSensors.Remove(sensorId);
     }
 }

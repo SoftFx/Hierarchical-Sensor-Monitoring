@@ -24,7 +24,7 @@ namespace HSMServer.Model.TreeViewModels
 
         public TelegramSettingsViewModel TelegramSettings { get; } = new();
         
-        public NotificationSettings NotificationSettings { get; }
+        public NotificationSettings Notifications { get; }
 
         public int AllSensorsCount { get; private set; }
 
@@ -35,7 +35,7 @@ namespace HSMServer.Model.TreeViewModels
         {
             Product = model.RootProductName;
             Path = $"{model.Path}{CommonConstants.SensorPathSeparator}";
-            NotificationSettings = model.Notifications;
+            Notifications = model.Notifications;
             
             Update(model);
         }

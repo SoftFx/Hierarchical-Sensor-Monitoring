@@ -33,12 +33,7 @@ namespace HSMServer.Model.Authentication
         string INotificatable.Name => UserName;
 
         NotificationSettings INotificatable.Notifications => Notifications;
-
-        bool INotificatable.AreNotificationsEnabled(BaseSensorModel sensor) =>
-            Notifications.Telegram.MessagesAreEnabled &&
-            Notifications.IsSensorEnabled(sensor.Id) &&
-            !Notifications.IsSensorIgnored(sensor.Id);
-
+        
 
         public User(string userName) : this()
         {

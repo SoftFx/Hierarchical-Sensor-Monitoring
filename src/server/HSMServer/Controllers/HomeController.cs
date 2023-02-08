@@ -135,8 +135,7 @@ namespace HSMServer.Controllers
         {
             void DisableSensors(NotificationSettings settings, Guid sensorId)
             {
-                settings.EnabledSensors.Remove(sensorId);
-                settings.IgnoredSensors.TryRemove(sensorId, out _);
+                settings.RemoveSensor(sensorId);
             }
 
             UpdateNotificationSettings(selectedId, DisableSensors, actionType);
@@ -215,11 +214,10 @@ namespace HSMServer.Controllers
         
         private void UpdateUserNotificationSettings(string selectedNode, Action<NotificationSettings, Guid> updateSettings)
         {
-            var sensors = GetNodeSensors(selectedNode);
-            var user = _userManager.GetCopyUser((HttpContext.User as User).Id);
-            foreach (var sensorId in sensors)
+            var user = _userManager.GetUser((HttpContext.User as User).Id);
+            foreach (var sensorId in GetNodeSensors(selectedNode))
             {
-                updateSettings.Invoke(user.Notifications, sensorId);
+                updateSettings?.Invoke(user.Notifications, sensorId);
             }
             
             _userManager.UpdateUser(user);
@@ -227,11 +225,10 @@ namespace HSMServer.Controllers
 
         private void UpdateGroupNotificationSettings(string selectedNode, Action<NotificationSettings, Guid> updateSettings)
         {
-            var sensors = GetNodeSensors(selectedNode);
-            foreach (var sensorId in sensors)
+            foreach (var sensorId in GetNodeSensors(selectedNode))
             {
                 var parent = _treeValuesCache.GetSensor(sensorId).ParentProduct;
-                updateSettings.Invoke(parent.Notifications, sensorId);
+                updateSettings?.Invoke(parent.Notifications, sensorId);
                 _treeValuesCache.UpdateProduct(parent);
             }
         }
