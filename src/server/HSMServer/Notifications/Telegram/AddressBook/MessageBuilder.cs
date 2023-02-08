@@ -33,11 +33,11 @@ namespace HSMServer.Notifications
         internal string GenerateOutputSensors()
         {
             var sensors = string.Join(", ", this);
-            if (TotalCount > MaxSensorsCount) 
+            if (TotalCount > MaxSensorsCount)
                 sensors = $"{sensors} ... (and other(s) {TotalCount - MaxSensorsCount})";
-            
+
             Clear();
-            
+
             return sensors;
         }
     }
@@ -63,7 +63,7 @@ namespace HSMServer.Notifications
     {
         private readonly CDict<CDict<CDict<CDict<CQueue>>>> _messageTree = new();
 
-        
+
         internal DateTime LastSentTime { get; private set; } = DateTime.UtcNow;
 
 
@@ -86,9 +86,9 @@ namespace HSMServer.Notifications
 
             foreach (var (productName, nodes) in _messageTree)
             {
-                if(!nodes.IsEmpty)
+                if (!nodes.IsEmpty)
                     builder.AppendLine(productName);
-                
+
                 foreach (var (nodepath, results) in nodes)
                 {
                     builder.Append($"   {(string.IsNullOrEmpty(nodepath) ? "/" : $"{nodepath}")}: ");
@@ -100,7 +100,7 @@ namespace HSMServer.Notifications
                             builder.Append(sensors.GenerateOutputSensors())
                                    .Append($" -> {result} ");
 
-                            if (!string.IsNullOrEmpty(message)) 
+                            if (!string.IsNullOrEmpty(message))
                                 builder.Append($"({message})");
                         }
                     }
@@ -109,7 +109,7 @@ namespace HSMServer.Notifications
                 }
 
                 nodes.Clear();
-                
+
                 builder.AppendLine();
             }
 
@@ -122,11 +122,11 @@ namespace HSMServer.Notifications
         {
             var product = sensor.RootProductName;
             var nodePath = sensor.ParentProduct.Path ?? string.Empty;
-            
+
             var message = sensor.ValidationResult.Message;
             var result = sensor.ValidationResult.Result;
             var resultMessage = string.IsNullOrEmpty(message) ? $"{result}" : $"{result} ({message})";
-            
+
             return $"{product}{Environment.NewLine}   {(string.IsNullOrEmpty(nodePath) ? "/" : $"{nodePath}")}: {sensor.DisplayName} -> {resultMessage}";
         }
     }
