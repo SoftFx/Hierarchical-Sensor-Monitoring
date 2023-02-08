@@ -1,5 +1,7 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Linq;
+using System.Text;
 using System.Text.Json.Serialization;
 
 namespace HSMServer.Core.Model.UserFilters
@@ -45,6 +47,8 @@ namespace HSMServer.Core.Model.UserFilters
         [JsonIgnore]
         public int EnabledFiltersCount => Groups.Sum(g => g.EnableFiltersCount);
 
+        [JsonIgnore]
+        public string EnabledFiltersMessage => GetEnabledFiltersMessage();
 
         public TreeUserFilter() { }
 
@@ -70,6 +74,24 @@ namespace HSMServer.Core.Model.UserFilters
                     isSensorVisible &= group.IsSensorSuitable(sensor);
 
             return isSensorVisible;
+        }
+
+        private string GetEnabledFiltersMessage()
+        {
+            var filters = new StringBuilder("Enabled filters: \n", 1 << 4);
+            var specificFilters = new List<string>(1 << 2);
+            foreach (var group in Groups)
+            {
+                if (!group.HasAnyEnabledFilters) 
+                    continue;
+                
+                specificFilters.AddRange(group.Properties.Where(property => property.Value).Select(property => property.Name));
+                
+                filters.AppendLine($"{group.Type}: {string.Join(", ",specificFilters)}");
+                specificFilters.Clear();
+            }
+                
+            return $"{filters}";
         }
     }
 }

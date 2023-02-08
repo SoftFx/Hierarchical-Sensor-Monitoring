@@ -2,18 +2,18 @@
 {
     public sealed class GroupByStatus : UserFilterGroupBase
     {
-        protected override FilterProperty[] Properties => new[] { Ok, Warning, Error, OffTime };
+        internal override FilterProperty[] Properties => new[] { Ok, Warning, Error, OffTime };
 
         internal override FilterGroupType Type => FilterGroupType.ByStatus;
 
 
-        public FilterProperty Ok { get; init; } = new();
+        public FilterProperty Ok { get; init; } = new(nameof(Ok));
 
-        public FilterProperty Warning { get; init; } = new();
+        public FilterProperty Warning { get; init; } = new(nameof(Warning));
 
-        public FilterProperty Error { get; init; } = new();
+        public FilterProperty Error { get; init; } = new(nameof(Error));
 
-        public FilterProperty OffTime { get; init; } = new();
+        public FilterProperty OffTime { get; init; } = new(nameof(OffTime));
 
         public GroupByStatus() { }
 
