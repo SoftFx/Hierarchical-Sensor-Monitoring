@@ -230,7 +230,7 @@ function Data(to, from, type, encodedId) {
     function getBarsCount(encodedId) {
         let barsCount = $(`#barsCount_${encodedId}`).val();
 
-        if (barsCount == "") {
+        if (barsCount == "" || barsCount == undefined) {
             return setBarsCount(encodedId, 100);
         }
         if (barsCount > 1000) {
