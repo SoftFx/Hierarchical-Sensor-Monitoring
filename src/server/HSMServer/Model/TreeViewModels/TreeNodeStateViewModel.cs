@@ -52,8 +52,8 @@ namespace HSMServer.Model.TreeViewModels
             ChangeAccountsEnableState(user.Notifications.IsSensorEnabled(sensor.Id));
             ChangeAccountsIgnoreState(user.Notifications.IsSensorIgnored(sensor.Id));
             
-            ChangeGroupsEnableState(sensor.GroupNotificationSettings.IsSensorEnabled(sensor.Id));
-            ChangeGroupsIgnoreState(sensor.GroupNotificationSettings.IsSensorIgnored(sensor.Id));
+            ChangeGroupsEnableState(sensor.GroupNotifications.IsSensorEnabled(sensor.Id));
+            ChangeGroupsIgnoreState(sensor.GroupNotifications.IsSensorIgnored(sensor.Id));
             
             if (user.IsSensorVisible(sensor))
             {

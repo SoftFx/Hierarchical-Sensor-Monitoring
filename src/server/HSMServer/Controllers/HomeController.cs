@@ -121,26 +121,6 @@ namespace HSMServer.Controllers
                 _treeValuesCache.ClearSensorHistory(sensor.Id);
         }
         
-        [HttpPost]
-        public void EnableNotifications([FromQuery(Name = "Selected")] string selectedId, [FromQuery] TelegramActionType actionType)
-        {
-            void EnableSensors(NotificationSettings settings, Guid sensorId) =>
-                settings.EnabledSensors.Add(sensorId);
-
-            UpdateNotificationSettings(selectedId, EnableSensors, actionType);
-        }
-
-        [HttpPost]
-        public void DisableNotifications([FromQuery(Name = "Selected")] string selectedId, [FromQuery] TelegramActionType actionType)
-        {
-            void DisableSensors(NotificationSettings settings, Guid sensorId)
-            {
-                settings.RemoveSensor(sensorId);
-            }
-
-            UpdateNotificationSettings(selectedId, DisableSensors, actionType);
-        }
-
         [HttpGet]
         public IActionResult IgnoreNotifications([FromQuery(Name = "Selected")] string selectedId, [FromQuery] TelegramActionType actionType)
         {
@@ -159,33 +139,23 @@ namespace HSMServer.Controllers
             
             return PartialView("_IgnoreNotificationsModal", viewModel);
         }
+  
+        [HttpPost]
+        public void EnableNotifications([FromQuery(Name = "Selected")] string selectedId, [FromQuery] TelegramActionType actionType) =>
+            GetHandler(actionType)(selectedId, (s, g) => s.Enable(g));
 
         [HttpPost]
-        public void IgnoreNotifications(IgnoreNotificationsViewModel model)
-        {
-            void IgnoreSensors(NotificationSettings settings, Guid sensorId)
-            {
-                if (settings.IsSensorEnabled(sensorId))
-                { 
-                    settings.IgnoredSensors.TryAdd(sensorId, model.EndOfIgnorePeriod);
-                }
-            }
-
-            UpdateNotificationSettings(model.EncodedId, IgnoreSensors, model.TelegramActionType);
-        }
+        public void DisableNotifications([FromQuery(Name = "Selected")] string selectedId, [FromQuery] TelegramActionType actionType) =>
+            GetHandler(actionType)(selectedId, (s, g) => s.Disable(g));
+        
+        [HttpPost]
+        public void IgnoreNotifications(IgnoreNotificationsViewModel model) =>
+            GetHandler(model.TelegramActionType)(model.EncodedId, (s, g) => s.Ignore(g, model.EndOfIgnorePeriod));
 
         [HttpPost]
-        public void RemoveIgnoringNotifications([FromQuery(Name = "Selected")] string selectedId, [FromQuery] TelegramActionType actionType)
-        {
-            void RemoveIgnoredSensors(NotificationSettings settings, Guid sensorId)
-            { 
-                settings.IgnoredSensors.TryRemove(sensorId, out _);
-            }
-                
-
-            UpdateNotificationSettings(selectedId, RemoveIgnoredSensors, actionType);
-        }
-
+        public void RemoveIgnoringNotifications([FromQuery(Name = "Selected")] string selectedId, [FromQuery] TelegramActionType actionType) =>
+            GetHandler(actionType)(selectedId, (s, g) => s.RemoveIgnore(g));
+        
         [HttpPost]
         public string GetPath([FromQuery(Name = "Selected")] string selectedId, [FromQuery(Name ="IsFullPath")] bool isFullPath)
         {
@@ -199,19 +169,12 @@ namespace HSMServer.Controllers
             return string.Empty;
         }
 
-        private void UpdateNotificationSettings(string selectedNode, Action<NotificationSettings, Guid> updateSettings, TelegramActionType actionType)
+        private Action<string, Action<NotificationSettings, Guid>> GetHandler(TelegramActionType actionType) => actionType switch
         {
-            switch (actionType)
-            {
-                case TelegramActionType.Groups:
-                    UpdateGroupNotificationSettings(selectedNode, updateSettings);
-                    break;
-                case TelegramActionType.Accounts:
-                    UpdateUserNotificationSettings(selectedNode, updateSettings);
-                    break;
-            }
-        }
-        
+            TelegramActionType.Groups => UpdateGroupNotificationSettings,
+            TelegramActionType.Accounts => UpdateUserNotificationSettings
+        };
+
         private void UpdateUserNotificationSettings(string selectedNode, Action<NotificationSettings, Guid> updateSettings)
         {
             var user = _userManager.GetUser((HttpContext.User as User).Id);

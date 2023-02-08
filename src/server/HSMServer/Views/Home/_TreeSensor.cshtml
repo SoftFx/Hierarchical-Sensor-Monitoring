@@ -24,13 +24,13 @@
         </span>
     }
 
-    @if (Model.GroupNotificationSettings.IsSensorIgnored(Model.Id))
+    @if (Model.GroupNotifications.IsSensorIgnored(Model.Id))
     {
         <span>
             <img id="@(Model.EncodedId)_groupsIgnoredNotifications" src="~/dist/snooze.png" style="height: 1em;width: 1em;" alt="!"/>
         </span>
     }
-    else if (Model.GroupNotificationSettings.IsSensorEnabled(Model.Id))
+    else if (Model.GroupNotifications.IsSensorEnabled(Model.Id))
     {
         <span class="d-none">
             <img id="@(Model.EncodedId)_groupsNotifications" src="~/dist/users.png" style="height: 1em; width: 1em;" alt=""/>

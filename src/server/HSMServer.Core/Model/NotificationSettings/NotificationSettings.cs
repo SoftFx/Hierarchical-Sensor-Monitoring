@@ -3,6 +3,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.Serialization;
 
 namespace HSMServer.Core.Model
 {
@@ -65,5 +66,20 @@ namespace HSMServer.Core.Model
                 EnabledSensors = EnabledSensors.Select(s => s.ToString()).ToList(),
                 IgnoredSensors = IgnoredSensors.ToDictionary(s => s.Key.ToString(), s => s.Value.Ticks),
             };
+
+        public void Ignore(Guid sensorId, DateTime endOfIgnorePeriod)
+        {
+            if (IsSensorEnabled(sensorId))
+            { 
+                IgnoredSensors.TryAdd(sensorId, endOfIgnorePeriod);
+            }
+        }
+        
+        public void RemoveIgnore(Guid sensorId) => IgnoredSensors.TryRemove(sensorId, out _);
+
+        public void Enable(Guid sensorId) => EnabledSensors.Add(sensorId);
+        
+        public void Disable(Guid sensorId) => RemoveSensor(sensorId);
+
     }
 }
