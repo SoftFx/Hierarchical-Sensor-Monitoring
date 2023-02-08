@@ -19,13 +19,13 @@
                 <i id="@(data.EncodedId)_notifications" class="fa-solid fa-bell"></i>
             </span>
             
-            @if (Model.IsAllGroupsNotificationsIgnored)
+            @if (Model.NotificationsState.IsAllIgnored)
             {
                 <span class="d-none">
                     <img id="@(data.EncodedId)_groupsIgnoredNotifications" src="~/dist/snooze.png" style="height: 1em;width: 1em;" alt="!"/>
                 </span>
             }
-            else if (!Model.IsAnyGroupsNotificationsEnabled)
+            else if (!Model.NotificationsState.IsAnyEnabled)
             {
                 <span class="d-none">
                     <i id="@(data.EncodedId)_groupsDisabledNotifications" class="fa-solid fa-bell-slash"></i>
@@ -34,13 +34,13 @@
         }
         else
         {
-            @if (Model.IsAllGroupsNotificationsIgnored)
+            @if (Model.NotificationsState.IsAllIgnored)
             {
                 <span>
                     <img id="@(data.EncodedId)_groupsIgnoredNotifications" src="~/dist/snooze.png" style="height: 1em;width: 1em;" alt="!"/>
                 </span>
             }
-            else if (!Model.IsAnyGroupsNotificationsEnabled)
+            else if (!Model.NotificationsState.IsAnyEnabled)
             {
                 <span>
                     <i id="@(data.EncodedId)_groupsDisabledNotifications" class="fa-solid fa-bell-slash"></i>
