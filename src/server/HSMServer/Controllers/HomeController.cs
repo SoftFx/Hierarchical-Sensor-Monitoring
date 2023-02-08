@@ -227,8 +227,8 @@ namespace HSMServer.Controllers
             if (model == null)
                 return null;
 
-            var enumerator = _treeValuesCache.GetSensorValuesPage(SensorPathHelper.DecodeGuid(model.EncodedId), model.From, model.To, MaxHistoryCount);
-            var viewModel = await new HistoryValuesViewModel(model.EncodedId, model.Type, enumerator, GetLocalLastValue(model.EncodedId, model.From, model.To)).Initialize();
+            var enumerator = _treeValuesCache.GetSensorValuesPage(SensorPathHelper.DecodeGuid(model.EncodedId), model.FromUtc, model.ToUtc, MaxHistoryCount);
+            var viewModel = await new HistoryValuesViewModel(model.EncodedId, model.Type, enumerator, GetLocalLastValue(model.EncodedId, model.FromUtc, model.ToUtc)).Initialize();
 
             _userManager.GetUser((HttpContext.User as User).Id).Pagination = viewModel;
 
@@ -253,13 +253,13 @@ namespace HSMServer.Controllers
             if (model == null)
                 return _emptyJsonResult;
 
-            var values = await GetSensorValues(model.EncodedId, model.From, model.To);
+            var values = await GetSensorValues(model.EncodedId, model.FromUtc, model.ToUtc);
 
-            var localValue = GetLocalLastValue(model.EncodedId, model.From, model.To);
+            var localValue = GetLocalLastValue(model.EncodedId, model.FromUtc, model.ToUtc);
             if (localValue is not null)
                 values.Add(localValue);
 
-            return new(HistoryProcessorFactory.BuildProcessor(model.Type).ProcessingAndCompression(values).Select(v => (object)v));
+            return new(HistoryProcessorFactory.BuildProcessor(model.Type).ProcessingAndCompression(values, model.BarsCount).Select(v => (object)v));
         }
 
 
@@ -270,7 +270,7 @@ namespace HSMServer.Controllers
             string fileName = $"{productName}_{path.Replace('/', '_')}_from_{from:s}_to{to:s}.csv";
             Response.Headers.Add("Content-Disposition", $"attachment;filename={fileName}");
 
-            var values = await GetSensorValues(encodedId, from, to);
+            var values = await GetSensorValues(encodedId, from.ToUtc(), to.ToUtc());
 
             return GetExportHistory(values, type, fileName);
         }

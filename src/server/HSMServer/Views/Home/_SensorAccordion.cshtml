@@ -103,6 +103,12 @@
                                 <label class="me-1" for="to_@sensorId">To:</label>
                                 <input class="me-2" type="datetime-local" id="to_@sensorId" name="to">
 
+                                @if (Model.SensorType == SensorType.IntegerBar || Model.SensorType == SensorType.DoubleBar)
+                                {
+                                    <label class="me-1" for="barsCount_@sensorId" id="labelBarsCount_@sensorId">Bars count:</label>
+                                    <input class="me-2" style="width:70px" type="number" id="barsCount_@sensorId" name="barsCount" min="1" max="1000">
+                                }
+
                                 <button onclick="searchHistory('@sensorId')" type="button" class="btn btn-secondary">
                                     <i type="button" class="fas fa-search"></i>
                                 </button>

@@ -14,7 +14,7 @@ Date.prototype.AddHours = function(hours) {
 }
 
 function Data(to, from, type, encodedId) {
-    return { "To": to, "From": from, "Type": type, "EncodedId": encodedId };
+    return { "To": to, "From": from, "Type": type, "EncodedId": encodedId, "BarsCount": getBarsCount(encodedId) };
 }
 
 //Initialization
@@ -79,6 +79,7 @@ function Data(to, from, type, encodedId) {
         const { from, to } = getFromAndTo(encodedId);
         let body = Data(to, from, type, encodedId);
 
+        showBarsCount(encodedId);
         initializeGraph(encodedId, rawHistoryAction, type, body);
     }
 
@@ -88,6 +89,7 @@ function Data(to, from, type, encodedId) {
         const { from, to } = getFromAndTo(encodedId);
         let body = Data(to, from, type, encodedId);
 
+        hideBarsCount(encodedId);
         initializeTable(encodedId, historyAction, type, body);
     }
 
@@ -215,12 +217,36 @@ function Data(to, from, type, encodedId) {
     }
 
 
-    function getCountForId(id) {
-        let inputCount = $('#inputCount_' + id).val();
-        if (inputCount === undefined) {
-            inputCount = 10;
+    function hideBarsCount(encodedId) {
+        $(`#labelBarsCount_${encodedId}`).hide();
+        $(`#barsCount_${encodedId}`).hide();
+    }
+
+    function showBarsCount(encodedId) {
+        $(`#labelBarsCount_${encodedId}`).show();
+        $(`#barsCount_${encodedId}`).show();
+    }
+
+    function getBarsCount(encodedId) {
+        let barsCount = $(`#barsCount_${encodedId}`).val();
+
+        if (barsCount == "") {
+            return setBarsCount(encodedId, 100);
         }
-        return inputCount;
+        if (barsCount > 1000) {
+            return setBarsCount(encodedId, 1000);
+        }
+        if (barsCount < 1) {
+            return setBarsCount(encodedId, 1);
+        }
+
+        return barsCount;
+    }
+
+    function setBarsCount(encodedId, count) {
+        $(`#barsCount_${encodedId}`).val(count);
+
+        return count
     }
 
     function getTypeForSensor(encodedId) {
