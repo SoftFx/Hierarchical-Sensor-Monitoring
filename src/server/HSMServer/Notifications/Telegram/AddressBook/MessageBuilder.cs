@@ -34,7 +34,7 @@ namespace HSMServer.Notifications
         {
             var sensors = string.Join(", ", this);
             if (TotalCount > MaxSensorsCount) 
-                sensors = $"{sensors} ... (and other {TotalCount - MaxSensorsCount})";
+                sensors = $"{sensors} ... (and other(s) {TotalCount - MaxSensorsCount})";
             
             Clear();
             
@@ -92,12 +92,14 @@ namespace HSMServer.Notifications
                 foreach (var (nodepath, results) in nodes)
                 {
                     builder.Append($"   {(string.IsNullOrEmpty(nodepath) ? "/" : $"{nodepath}")}: ");
+
                     foreach (var (result, messages) in results)
                     {
                         foreach (var (message, sensors) in messages)
                         {
                             builder.Append(sensors.GenerateOutputSensors())
                                    .Append($" -> {result} ");
+
                             if (!string.IsNullOrEmpty(message)) 
                                 builder.Append($"({message})");
                         }

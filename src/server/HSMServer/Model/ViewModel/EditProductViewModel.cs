@@ -43,7 +43,7 @@ namespace HSMServer.Model.ViewModel
             _usedUsers = UsersRights.Select(ur => ur.Item1).ToList();
             NotAdminUsers = notAdminUsers.Select(x => new UserViewModel(x)).ToHashSet();
             NotAdminUsers.ExceptWith(_usedUsers);
-            
+
             Telegram.MinStatusLevelHelper = GetStatusPairs();
         }
 
@@ -51,18 +51,13 @@ namespace HSMServer.Model.ViewModel
         {
             var minStatusLevel = (int)Telegram.MinStatusLevel;
             var length = Enum.GetValues<SensorStatus>().Length;
-            
-            var builder = new StringBuilder(1 << 4);
-         
-            for (int i = minStatusLevel; i < length - 1; i++)
-            {
-                for (int j = i + 1; j < length; j++)
-                {
-                    builder.Append($"{(SensorStatus)i} -> {(SensorStatus)j}, ")
-                           .Append($"{(SensorStatus)j} -> {(SensorStatus)i}, ");
-                }
 
-            }
+            var builder = new StringBuilder(1 << 4);
+
+            for (int i = 0; i < length; i++)
+                for (int j = 0; j < length; j++)
+                    if (i != j && (i >= minStatusLevel || j >= minStatusLevel))
+                        builder.Append($"{(SensorStatus)i} -> {(SensorStatus)j}, ");
 
             var response = builder.ToString();
             return string.IsNullOrEmpty(response) ? response : response[..^2];
