@@ -122,7 +122,7 @@ namespace HSMServer.Controllers
         }
         
         [HttpGet]
-        public IActionResult IgnoreNotifications([FromQuery(Name = "Selected")] string selectedId, [FromQuery] TelegramActionType actionType)
+        public IActionResult IgnoreNotifications([FromQuery(Name = "Selected")] string selectedId, [FromQuery] NotificationsTarget actionType)
         {
             var decodedId = SensorPathHelper.DecodeGuid(selectedId);
             IgnoreNotificationsViewModel viewModel = null;
@@ -134,26 +134,26 @@ namespace HSMServer.Controllers
 
             if (viewModel != null)
             {
-                viewModel.TelegramActionType = actionType;
+                viewModel.NotificationsTarget = actionType;
             }
             
             return PartialView("_IgnoreNotificationsModal", viewModel);
         }
   
         [HttpPost]
-        public void EnableNotifications([FromQuery(Name = "Selected")] string selectedId, [FromQuery] TelegramActionType actionType) =>
+        public void EnableNotifications([FromQuery(Name = "Selected")] string selectedId, [FromQuery] NotificationsTarget actionType) =>
             GetHandler(actionType)(selectedId, (s, g) => s.Enable(g));
 
         [HttpPost]
-        public void DisableNotifications([FromQuery(Name = "Selected")] string selectedId, [FromQuery] TelegramActionType actionType) =>
+        public void DisableNotifications([FromQuery(Name = "Selected")] string selectedId, [FromQuery] NotificationsTarget actionType) =>
             GetHandler(actionType)(selectedId, (s, g) => s.Disable(g));
         
         [HttpPost]
         public void IgnoreNotifications(IgnoreNotificationsViewModel model) =>
-            GetHandler(model.TelegramActionType)(model.EncodedId, (s, g) => s.Ignore(g, model.EndOfIgnorePeriod));
+            GetHandler(model.NotificationsTarget)(model.EncodedId, (s, g) => s.Ignore(g, model.EndOfIgnorePeriod));
 
         [HttpPost]
-        public void RemoveIgnoringNotifications([FromQuery(Name = "Selected")] string selectedId, [FromQuery] TelegramActionType actionType) =>
+        public void RemoveIgnoringNotifications([FromQuery(Name = "Selected")] string selectedId, [FromQuery] NotificationsTarget actionType) =>
             GetHandler(actionType)(selectedId, (s, g) => s.RemoveIgnore(g));
         
         [HttpPost]
@@ -169,10 +169,10 @@ namespace HSMServer.Controllers
             return string.Empty;
         }
 
-        private Action<string, Action<NotificationSettings, Guid>> GetHandler(TelegramActionType actionType) => actionType switch
+        private Action<string, Action<NotificationSettings, Guid>> GetHandler(NotificationsTarget actionType) => actionType switch
         {
-            TelegramActionType.Groups => UpdateGroupNotificationSettings,
-            TelegramActionType.Accounts => UpdateUserNotificationSettings
+            NotificationsTarget.Groups => UpdateGroupNotificationSettings,
+            NotificationsTarget.Accounts => UpdateUserNotificationSettings
         };
 
         private void UpdateUserNotificationSettings(string selectedNode, Action<NotificationSettings, Guid> updateSettings)

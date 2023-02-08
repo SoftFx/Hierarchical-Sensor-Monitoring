@@ -1,10 +1,15 @@
 ﻿using HSMServer.Model.TreeViewModels;
 using System;
 using System.Collections.Generic;
-using HSMServer.Notifications;
 
 namespace HSMServer.Model
 {
+    public enum NotificationsTarget
+    {
+        Groups,
+        Accounts
+    }
+    
     public class IgnoreNotificationsViewModel
     {
         private const string NodeTreeElement = "node";
@@ -24,7 +29,7 @@ namespace HSMServer.Model
                 TimeInterval.Custom
             };
 
-        public TelegramActionType TelegramActionType { get; set; }
+        public NotificationsTarget NotificationsTarget { get; set; }
         
         public string Path { get; }
 
