@@ -34,7 +34,7 @@ namespace HSMServer.Notifications
         {
             var sensors = string.Join(", ", this);
             if (TotalCount > MaxSensorsCount)
-                sensors = $"{sensors} ... (and other(s) {TotalCount - MaxSensorsCount})";
+                sensors = $"{sensors} ... (and other {TotalCount - MaxSensorsCount})";
 
             Clear();
 
