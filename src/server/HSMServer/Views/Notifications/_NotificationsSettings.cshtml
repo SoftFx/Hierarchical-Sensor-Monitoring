@@ -22,6 +22,9 @@
         <div class="col-auto p-0">
             <select class="form-select" asp-for="MinStatusLevel" asp-items="Html.GetEnumSelectList<SensorStatus>()"></select>
         </div>
+        <div class="col-auto mx-2" style="align-self: center;color: grey;font-weight: 500;font-size: smaller;max-width: 20rem; line-height: 0.8rem;">
+            <span>@Model.MinStatusLevelHelper</span>
+        </div>
     </div>
 
     <div class="form-group row mt-2">
