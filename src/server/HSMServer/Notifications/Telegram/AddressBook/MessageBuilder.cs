@@ -1,7 +1,6 @@
 ﻿using HSMServer.Core.Model;
 using System;
 using System.Collections.Concurrent;
-using System.Linq;
 using System.Text;
 
 namespace HSMServer.Notifications
@@ -33,9 +32,9 @@ namespace HSMServer.Notifications
 
         internal string GenerateOutputSensors()
         {
-            var sensors = TotalCount > MaxSensorsCount
-                ? string.Join(", ", this.Take(MaxSensorsCount)) + $" ... (and other {TotalCount - MaxSensorsCount})"
-                : string.Join(", ", this);
+            var sensors = string.Join(", ", this);
+            if (TotalCount > MaxSensorsCount) 
+                sensors = $"{sensors} ... (and other {TotalCount - MaxSensorsCount})";
             
             Clear();
             
