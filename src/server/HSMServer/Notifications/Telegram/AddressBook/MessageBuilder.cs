@@ -1,17 +1,67 @@
 ﻿using HSMServer.Core.Model;
 using System;
 using System.Collections.Concurrent;
-using System.Collections.Generic;
-using System.Linq;
 using System.Text;
 
 namespace HSMServer.Notifications
 {
+    internal sealed class CQueue : ConcurrentQueue<string>
+    {
+        private const int MaxSensorsCount = 10;
+
+        internal long TotalCount { get; private set; }
+
+
+        internal void Push(string message)
+        {
+            TotalCount++;
+
+            while (Count > MaxSensorsCount)
+                TryDequeue(out _);
+
+            Enqueue(message);
+        }
+
+
+        internal new void Clear()
+        {
+            base.Clear();
+
+            TotalCount = 0L;
+        }
+
+        internal string GenerateOutputSensors()
+        {
+            var sensors = string.Join(", ", this);
+            if (TotalCount > MaxSensorsCount)
+                sensors = $"{sensors} ... (and other {TotalCount - MaxSensorsCount})";
+
+            Clear();
+
+            return sensors;
+        }
+    }
+
+    internal sealed class CDict<T> : ConcurrentDictionary<string, T> where T : class, new()
+    {
+        public new T this[string key] => GetOrAdd(key);
+
+        internal T GetOrAdd(string key)
+        {
+            if (!TryGetValue(key, out T value))
+            {
+                base[key] = new T();
+
+                return base[key];
+            }
+
+            return value;
+        }
+    }
+
     internal sealed class MessageBuilder
     {
-        private const int MaxSensorMessages = 5;
-
-        private readonly ConcurrentDictionary<Guid, ConcurrentDictionary<string, MessagesQueue>> _messages = new();
+        private readonly CDict<CDict<CDict<CDict<CQueue>>>> _messageTree = new();
 
 
         internal DateTime LastSentTime { get; private set; } = DateTime.UtcNow;
@@ -19,109 +69,65 @@ namespace HSMServer.Notifications
 
         internal void AddMessage(BaseSensorModel sensor)
         {
-            var productId = sensor.RootProductId;
+            var product = sensor.RootProductName;
+            var nodePath = sensor.ParentProduct.Path ?? "";
 
-            if (!_messages.ContainsKey(productId))
-                _messages[productId] = new ConcurrentDictionary<string, MessagesQueue>();
+            var pathDict = _messageTree[product][nodePath];
 
-            var productMessages = _messages[productId];
+            var messages = sensor.ValidationResult.Message;
+            var result = $"{sensor.ValidationResult.Result}";
 
-            if (!productMessages.ContainsKey(sensor.Path))
-                productMessages.TryAdd(sensor.Path, new MessagesQueue());
-
-            productMessages[sensor.Path].AddMessage(GenerateMessageInfo(sensor));
+            pathDict[result][messages].Push(sensor.DisplayName);
         }
 
         internal string GetAggregateMessage()
         {
-            var builder = new StringBuilder(1 << 6);
+            var builder = new StringBuilder(1 << 8);
 
-            foreach (var (_, messages) in _messages)
+            foreach (var (productName, nodes) in _messageTree)
             {
-                var productName = messages?.FirstOrDefault().Value.Messages?.FirstOrDefault().ProductName;
-                builder.AppendLine(productName);
+                if (!nodes.IsEmpty)
+                    builder.AppendLine(productName);
 
-                foreach (var (_, messagesQueue) in messages)
+                foreach (var (nodepath, results) in nodes)
                 {
-                    if (messagesQueue.AllMessagesCount > MaxSensorMessages)
-                        builder.AppendLine($"    ... ({messagesQueue.AllMessagesCount - MaxSensorMessages} other message(s))");
+                    builder.Append($"   {(string.IsNullOrEmpty(nodepath) ? "/" : $"{nodepath}")}: ");
 
-                    foreach (var message in messagesQueue.Messages.OrderBy(m => m.SensorValueTime))
-                        builder.AppendLine(message.Message);
+                    foreach (var (result, messages) in results)
+                    {
+                        foreach (var (message, sensors) in messages)
+                        {
+                            builder.Append(sensors.GenerateOutputSensors())
+                                   .Append($" -> {result} ");
+
+                            if (!string.IsNullOrEmpty(message))
+                                builder.Append($"({message})");
+                        }
+                    }
+
+                    builder.AppendLine();
                 }
+
+                nodes.Clear();
 
                 builder.AppendLine();
             }
 
-            Reset();
-
-            return builder.ToString();
-        }
-
-        internal static string GetSingleMessage(BaseSensorModel sensor)
-        {
-            var messageInfo = GenerateMessageInfo(sensor);
-            var builder = new StringBuilder(1 << 5);
-
-            builder.AppendLine(messageInfo.ProductName);
-            builder.Append(messageInfo.Message);
-
-            return builder.ToString();
-        }
-
-        private void Reset()
-        {
-            _messages.Clear();
-
             LastSentTime = DateTime.UtcNow;
+
+            return builder.ToString();
         }
 
-        private static MessageInfo GenerateMessageInfo(BaseSensorModel sensor)
+        public static string GetSingleMessage(BaseSensorModel sensor)
         {
-            var builder = new StringBuilder(1 << 2);
+            var product = sensor.RootProductName;
+            var nodePath = sensor.ParentProduct.Path ?? string.Empty;
 
-            builder.Append($"    {sensor.Path}: {sensor.ValidationResult.Result}");
-            if (!sensor.ValidationResult.IsSuccess)
-                builder.Append($" ({sensor.ValidationResult.Message})");
+            var message = sensor.ValidationResult.Message;
+            var result = sensor.ValidationResult.Result;
+            var resultMessage = string.IsNullOrEmpty(message) ? $"{result}" : $"{result} ({message})";
 
-            return new()
-            {
-                SensorValueTime = sensor.LastValue?.Time ?? DateTime.MinValue,
-                SensorPath = sensor.Path,
-                ProductName = sensor.RootProductName,
-                Message = builder.ToString(),
-            };
-        }
-
-
-        private sealed record MessagesQueue
-        {
-            internal Queue<MessageInfo> Messages { get; } = new();
-
-            internal int AllMessagesCount { get; private set; }
-
-
-            internal void AddMessage(MessageInfo message)
-            {
-                AllMessagesCount++;
-
-                Messages.Enqueue(message);
-
-                if (Messages.Count > MaxSensorMessages)
-                    Messages.Dequeue();
-            }
-        }
-
-
-        private readonly struct MessageInfo
-        {
-            internal DateTime SensorValueTime { get; init; }
-
-            internal string SensorPath { get; init; }
-
-            internal string ProductName { get; init; }
-
-            internal string Message { get; init; }
+            return $"{product}{Environment.NewLine}   {(string.IsNullOrEmpty(nodePath) ? "/" : $"{nodePath}")}: {sensor.DisplayName} -> {resultMessage}";
         }
     }
 }

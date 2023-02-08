@@ -8,5 +8,7 @@ namespace HSMServer.Extensions
 
 
         public static string ToDefaultFormat(this DateTime dateTime) => dateTime.ToString(DateTimeDefaultFormat);
+
+        internal static DateTime ToUtc(this DateTime dateTime) => DateTime.SpecifyKind(dateTime, DateTimeKind.Utc);
     }
 }

@@ -32,16 +32,12 @@
     var ignoreNotifications = "@Html.Raw(Url.Action(nameof(HomeController.IgnoreNotifications), ViewConstants.HomeController))";
     var removeIgnoringNotifications = "@Html.Raw(Url.Action(nameof(HomeController.RemoveIgnoringNotifications), ViewConstants.HomeController))";
 
-    var historyAllAction = "@Html.Raw(Url.Action(ViewConstants.HistoryAllAction, ViewConstants.HomeController))";
     var historyAction = "@Html.Raw(Url.Action(ViewConstants.HistoryAction, ViewConstants.HomeController))";
     var nextPageAction = "@Html.Raw(Url.Action(nameof(HomeController.GetNextPage), ViewConstants.HomeController))";
     var prevPageAction = "@Html.Raw(Url.Action(nameof(HomeController.GetPreviousPage), ViewConstants.HomeController))";
 
     var rawHistoryAction = "@Html.Raw(Url.Action(ViewConstants.RawHistoryAction, ViewConstants.HomeController))";
-    var rawHistoryAllAction = "@Html.Raw(Url.Action(ViewConstants.RawHistoryAllAction, ViewConstants.HomeController))";
-
     var exportHistoryAction = "@Html.Raw(Url.Action(ViewConstants.ExportHistoryAction, ViewConstants.HomeController))";
-    var exportHistoryAllAction = "@Html.Raw(Url.Action(ViewConstants.ExportHistoryAllAction, ViewConstants.HomeController))";
 
     var getSensorInfoAction = "@Html.Raw(Url.Action(ViewConstants.GetSensorInfoAction, ViewConstants.HomeController))";
     var updateSensorInfoAction = "@Html.Raw(Url.Action(ViewConstants.UpdateSensorInfoAction, ViewConstants.HomeController))";
