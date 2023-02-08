@@ -49,8 +49,10 @@ function editInfoButtonClick() {
     $('#interval_' + sensorId).removeAttr("disabled");
     $('#description_' + sensorId).removeAttr("disabled");
     $('#unit_' + sensorId).removeAttr("disabled");
-    $('#saveInfo_' + sensorId).removeAttr("disabled");
-    $('#revertInfo_' + sensorId).removeAttr("disabled");
+    $('#saveInfo_' + sensorId).removeAttr("disabled").removeAttr("hidden");
+    $('#revertInfo_' + sensorId).removeAttr("disabled").removeAttr("hidden");
+    
+    $('#editButtonMetaInfo').attr('hidden', 'true');
 
     $('#expectedUpdateInterval_' + sensorId + ' :input').each(function () {
         this.removeAttribute('disabled');
