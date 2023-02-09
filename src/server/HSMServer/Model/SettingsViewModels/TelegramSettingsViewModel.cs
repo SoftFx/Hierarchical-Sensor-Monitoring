@@ -3,6 +3,7 @@ using HSMServer.Extensions;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
+using System.Text;
 using SensorStatus = HSMServer.Model.TreeViewModels.SensorStatus;
 
 namespace HSMServer.Model
@@ -30,8 +31,7 @@ namespace HSMServer.Model
         {
             Update(settings);
         }
-
-
+        
         internal void Update(TelegramSettings settings)
         {
             EnableMessages = settings.MessagesAreEnabled;
@@ -50,6 +50,22 @@ namespace HSMServer.Model
                 Enabled = EnableMessages,
                 Delay = MessagesDelay,
             };
+        
+        public static string GetStatusPairs(SensorStatus newStatus)
+        {
+            var length = Enum.GetValues<SensorStatus>().Length;
+
+            var builder = new StringBuilder(1 << 4);
+
+            for (int i = 0; i < length; i++)
+            for (int j = 0; j < length; j++)
+                if (i != j && (i >= (int)newStatus || j >= (int)newStatus))
+                    builder.Append($"{(SensorStatus)i} -> {(SensorStatus)j}, ");
+
+            var response = builder.ToString();
+            return string.IsNullOrEmpty(response) ? response : response[..^2];
+        }
+
     }
 
 
