@@ -95,6 +95,8 @@ namespace HSMServer.Core.Model.Authentication
             TreeFilter = entity.TreeFilter is null
                 ? new TreeUserFilter()
                 : JsonSerializer.Deserialize<TreeUserFilter>(((JsonElement)entity.TreeFilter).GetRawText());
+
+            TreeFilter?.RestoreFilterNames();
         }
 
         /// <summary>
