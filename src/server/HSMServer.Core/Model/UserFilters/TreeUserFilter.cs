@@ -53,6 +53,21 @@ namespace HSMServer.Core.Model.UserFilters
         public TreeUserFilter() { }
 
 
+        public TreeUserFilter RestoreFilterNames()
+        {
+            var tempUserFilter = new TreeUserFilter();
+
+            for (int i = 0; i < Groups.Length; i++)
+            {
+                for (int j = 0; j < Groups[i].Properties.Length; j++)
+                {
+                    Groups[i].Properties[j].Name = tempUserFilter.Groups[i].Properties[j].Name;
+                }
+            }
+
+            return this;
+        }
+        
         public FilterGroupType ToMask()
         {
             FilterGroupType selectedFiltersMask = 0;
