@@ -85,8 +85,13 @@ input.input-validation-error {
     border: 1px solid #b94a48;
 }
 
-.form-check-input:checked {
+.form-check-input:checked{
     background-color: grey !important;
+    border: 0;
+}
+
+#messages-settings:checked{
+    background-color: #0d6efd !important;
     border: 0;
 }
 
