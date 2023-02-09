@@ -53,7 +53,7 @@ namespace HSMServer.Core.Model.UserFilters
         public TreeUserFilter() { }
 
 
-        public void RestoreFilterNames()
+        public TreeUserFilter RestoreFilterNames()
         {
             var tempUserFilter = new TreeUserFilter();
 
@@ -64,6 +64,8 @@ namespace HSMServer.Core.Model.UserFilters
                     Groups[i].Properties[j].Name = tempUserFilter.Groups[i].Properties[j].Name;
                 }
             }
+
+            return this;
         }
         
         public FilterGroupType ToMask()
