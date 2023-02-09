@@ -1,4 +1,6 @@
-﻿@using HSMServer.Model
+﻿@using HSMServer.Constants
+@using HSMServer.Controllers
+@using HSMServer.Model
 @using HSMServer.Model.TreeViewModels;
 
 @model TelegramSettingsViewModel
@@ -20,10 +22,10 @@
     <div class="form-group row mt-2">
         <label class="col-2 col-form-label" asp-for="MinStatusLevel"></label>
         <div class="col-auto p-0">
-            <select class="form-select" asp-for="MinStatusLevel" asp-items="Html.GetEnumSelectList<SensorStatus>()"></select>
+            <select id="statusSelect" class="form-select" asp-for="MinStatusLevel" asp-items="Html.GetEnumSelectList<SensorStatus>()"></select>
         </div>
         <div class="col-auto mx-2" style="align-self: center;color: grey;font-weight: 500;font-size: smaller;max-width: 20rem; line-height: 0.8rem;">
-            <span>@Model.MinStatusLevelHelper</span>
+            <span id="minStatusLevelHelper">@Model.MinStatusLevelHelper</span>
         </div>
     </div>
 
@@ -35,3 +37,26 @@
     </div>
     <button type="submit" class="btn btn-secondary my-1">Save</button>
 </form>
+
+<script>
+    $.ajax({
+            type: 'GET',
+            url: "@Html.Raw(Url.Action(nameof(NotificationsController.UpdateViewStatusLevelHelper), ViewConstants.NotificationsController))" + '?newSensorStatus=' + $('#statusSelect')[0].value,
+            cache: false,
+            async: true
+          }).done(function (data) {
+              $('#minStatusLevelHelper')[0].innerText = data;
+          });
+
+    $('#statusSelect').on('change', function() {
+      let currentStatus = this.value;
+      $.ajax({
+        type: 'GET',
+        url: "@Html.Raw(Url.Action(nameof(NotificationsController.UpdateViewStatusLevelHelper), ViewConstants.NotificationsController))" + '?newSensorStatus=' + currentStatus,
+        cache: false,
+        async: true
+      }).done(function (data) {
+          $('#minStatusLevelHelper')[0].innerText = data;
+      });
+    });
+</script>
