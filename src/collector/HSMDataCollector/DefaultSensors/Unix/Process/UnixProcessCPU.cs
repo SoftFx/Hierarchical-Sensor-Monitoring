@@ -1,4 +1,5 @@
 ﻿using HSMDataCollector.Options;
+using System;
 using System.Diagnostics;
 
 namespace HSMDataCollector.DefaultSensors.Unix
@@ -7,13 +8,36 @@ namespace HSMDataCollector.DefaultSensors.Unix
     {
         private readonly Process _currentProcess = ProcessInfo.CurrentProcess;
 
+        private TimeSpan _startCpuUsage;
+        private DateTime _startTime;
+
         protected override string SensorName => "Process CPU";
 
 
-        internal UnixProcessCpu(BarSensorOptions options) : base(options) { }
+        internal UnixProcessCpu(BarSensorOptions options) : base(options)
+        {
+            InitStartingPoint();
+        }
 
 
-        protected override double GetBarData() =>
-            100.0 * _currentProcess.PrivilegedProcessorTime.TotalMilliseconds / _currentProcess.TotalProcessorTime.TotalMilliseconds;
+        protected override double GetBarData()
+        {
+            var endCpuUsage = _currentProcess.TotalProcessorTime;
+            var endTime = DateTime.UtcNow;
+
+            var cpuUsedMs = (endCpuUsage - _startCpuUsage).TotalMilliseconds;
+            var totalMsPassed = (endTime - _startTime).TotalMilliseconds;
+            var cpuUsageTotal = cpuUsedMs / totalMsPassed;
+
+            InitStartingPoint();
+
+            return cpuUsageTotal * 100;
+        }
+
+        private void InitStartingPoint()
+        {
+            _startCpuUsage = _currentProcess.TotalProcessorTime;
+            _startTime = DateTime.UtcNow;
+        }
     }
 }
