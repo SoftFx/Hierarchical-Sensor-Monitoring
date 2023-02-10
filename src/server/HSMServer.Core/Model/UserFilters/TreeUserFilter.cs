@@ -93,7 +93,7 @@ namespace HSMServer.Core.Model.UserFilters
 
         private string GetEnabledFiltersMessage()
         {
-            var filters = new StringBuilder("Enabled filters: \n", 1 << 4);
+            var filters = new StringBuilder(1 << 4);
             var specificFilters = new List<string>(1 << 2);
             foreach (var group in Groups)
             {
