@@ -165,14 +165,14 @@ namespace HSMServer.Notifications
 
         private static void GetSingleLine(StringBuilder builder, string productName,string result, string message, string sensors, string nodePath = null)
         {
-            builder.Append($"{productName.EscapeMarkdownV2()}: ");
+            builder.Append($"{productName.EscapeMarkdownV2()}: ")
+                   .Append($"*{result.EscapeMarkdownV2()}* ");
             
-            builder.Append($"*{result.EscapeMarkdownV2()}* ");
-
             if (!string.IsNullOrEmpty(message))
                 builder.Append($"* {('(' + message + ')').EscapeMarkdownV2()}* ");
 
-            builder.Append(" -> ".EscapeMarkdownV2()).Append(sensors.EscapeMarkdownV2());
+            builder.Append(" -> ".EscapeMarkdownV2())
+                   .Append(sensors.EscapeMarkdownV2());
             
             if(!string.IsNullOrEmpty(nodePath))
                 builder.Append($" at {nodePath}".EscapeMarkdownV2());
