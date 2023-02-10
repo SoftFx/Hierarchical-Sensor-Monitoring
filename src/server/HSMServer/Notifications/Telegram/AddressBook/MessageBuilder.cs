@@ -4,40 +4,7 @@ using System.Collections.Concurrent;
 using System.Text;
 
 namespace HSMServer.Notifications
-{ 
-    internal static class NotificationExtensions
-    {
-        private static readonly string[] _specialSymbolsMarkdownV2 = new[]
-            {"_", "[", "]", "(", ")", "~", "`", ">", "#", "+", "-", "=", "|", "{", "}", ".", "!", "*"};
-
-        private static string[] _escapedSymbols;
-
-
-        static NotificationExtensions()
-        {
-            BuildEscapedSymbols();
-        }
-
-
-        public static string EscapeMarkdownV2(this string message)
-        {
-            for (int i = 0; i < _escapedSymbols.Length; i++)
-                message = message.Replace(_specialSymbolsMarkdownV2[i], _escapedSymbols[i]);
-
-            return message;
-        }
-
-
-        private static void BuildEscapedSymbols()
-        {
-            _escapedSymbols = new string[_specialSymbolsMarkdownV2.Length];
-
-            for (int i = 0; i < _escapedSymbols.Length; i++)
-                _escapedSymbols[i] = $"\\{_specialSymbolsMarkdownV2[i]}";
-        }
-    }
-    
-    
+{
     internal sealed class CQueue : ConcurrentQueue<string>
     {
         private const int MaxSensorsCount = 10;
@@ -97,7 +64,7 @@ namespace HSMServer.Notifications
     {
         private readonly CDict<CDict<CDict<CDict<CQueue>>>> _messageTree = new();
 
-        private ConcurrentDictionary<string, int> NodeSensorsCount = new();
+        private readonly ConcurrentDictionary<string, int> NodeSensorsCount = new();
 
         internal DateTime LastSentTime { get; private set; } = DateTime.UtcNow;
 
@@ -105,11 +72,14 @@ namespace HSMServer.Notifications
         internal void AddMessage(BaseSensorModel sensor)
         {
             var product = sensor.RootProductName;
-            var nodePath = sensor.ParentProduct.Path ?? string.Empty;
+            var nodePath = sensor?.ParentProduct?.Path ?? string.Empty;
 
             var pathDict = _messageTree[product][nodePath];
-            
-            NodeSensorsCount[nodePath] = sensor.ParentProduct.Sensors.Count;
+
+            if (sensor.ParentProduct != null)
+                NodeSensorsCount[nodePath] = sensor.ParentProduct.Sensors.Count;
+            else
+                NodeSensorsCount[nodePath] = 0;
             
             var messages = sensor.ValidationResult.Message;
             var result = $"{sensor.ValidationResult.Result}";
@@ -129,12 +99,9 @@ namespace HSMServer.Notifications
                     {
                         foreach (var (message, sensors) in messages)
                         {
-                            GetSingleLine(builder, productName, result, message, sensors.GenerateOutputSensors(NodeSensorsCount[nodePath]));
+                            BuildMessage(builder, productName, result, message, sensors.GenerateOutputSensors(NodeSensorsCount[nodePath]), nodePath);
                         }
                     }
-                    
-                    if(!string.IsNullOrEmpty(nodePath))
-                        builder.Append($" at {nodePath}".EscapeMarkdownV2());
                     
                     builder.AppendLine();
                 }
@@ -145,7 +112,9 @@ namespace HSMServer.Notifications
             }
 
             LastSentTime = DateTime.UtcNow;
-
+            
+            NodeSensorsCount.Clear();
+            
             return builder.ToString();
         }
 
@@ -154,28 +123,33 @@ namespace HSMServer.Notifications
             var builder = new StringBuilder(1 << 2);
             
             var product = sensor.RootProductName;
-            var nodePath = sensor.ParentProduct.Path ?? string.Empty;
+            var nodePath = sensor?.ParentProduct?.Path ?? string.Empty;
             var message = sensor.ValidationResult.Message;
             var result = $"{sensor.ValidationResult.Result}";
             
-            GetSingleLine(builder, product, result, message, sensor.DisplayName, nodePath);
+            BuildMessage(builder, product, result, message, sensor.DisplayName, nodePath);
 
             return builder.ToString();
         }
 
-        private static void GetSingleLine(StringBuilder builder, string productName,string result, string message, string sensors, string nodePath = null)
+        private static void BuildMessage(StringBuilder builder, string productName, string result, string message, string sensors, string nodePath)
         {
-            builder.Append($"{productName.EscapeMarkdownV2()}: ")
-                   .Append($"*{result.EscapeMarkdownV2()}* ");
+            productName = productName.EscapeMarkdownV2();
+            result = result.EscapeMarkdownV2();
+            message = $"({message})".EscapeMarkdownV2();
+            sensors = $" -> {sensors}".EscapeMarkdownV2();
+            nodePath = nodePath.EscapeMarkdownV2();
+            
+            builder.Append($"{productName}: ")
+                   .Append($"*{result}* ");
             
             if (!string.IsNullOrEmpty(message))
-                builder.Append($"* {('(' + message + ')').EscapeMarkdownV2()}* ");
+                builder.Append($"* {message}* ");
 
-            builder.Append(" -> ".EscapeMarkdownV2())
-                   .Append(sensors.EscapeMarkdownV2());
+            builder.Append(sensors);
             
             if(!string.IsNullOrEmpty(nodePath))
-                builder.Append($" at {nodePath}".EscapeMarkdownV2());
+                builder.Append($" at {nodePath}");
         }
     }
 }
