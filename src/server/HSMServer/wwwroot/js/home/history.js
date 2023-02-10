@@ -57,14 +57,14 @@ function Data(to, from, type, encodedId) {
     function accordionClicked() {
         let encodedId = this.id.substring("collapse_".length);
         let type = getTypeForSensor(encodedId);
-        const { from, to } = getFromAndTo(encodedId);
+        let date = new Date();
         if (isFileSensor(type)) {
             return;
         }
         if (isGraphAvailable(type)) {
-            initializeGraph(encodedId, rawHistoryAction, type, Data(to, from, type, encodedId));
+            initializeGraph(encodedId, rawHistoryLatestAction, type, Data(date, date, type, encodedId), true);
         } else {
-            initializeTable(encodedId, historyAction, type, Data(to, from, type, encodedId));
+            initializeTable(encodedId, historyLatestAction, type, Data(date, date, type, encodedId), true);
         }
     }
 
@@ -128,7 +128,7 @@ function Data(to, from, type, encodedId) {
         window.location.href = exportHistoryAction + "?EncodedId=" + encodedId + "&Type=" + type + "&From=" + from + "&To=" + to;
     }
 
-    function initializeTable(encodedId, tableAction, type, body) {
+    function initializeTable(encodedId, tableAction, type, body, needFillFromTo = false) {
         $.ajax({
             type: 'POST',
             data: JSON.stringify(body),
@@ -149,10 +149,19 @@ function Data(to, from, type, encodedId) {
 
             $('#history_' + encodedId).show();
             $('#no_data_' + encodedId).hide();
+
+            if (needFillFromTo) {
+                let from = new Date($(`#oldest_date_${encodedId}`).val());
+                from.setMinutes(from.getMinutes() - from.getTimezoneOffset());
+                let to = new Date();
+
+                $(`#from_${encodedId}`).val(datetimeLocal(from));
+                $(`#to_${encodedId}`).val(datetimeLocal(to));
+            }
         });
     }
 
-    function initializeGraph(encodedId, rawHistoryAction, type, body) {
+    function initializeGraph(encodedId, rawHistoryAction, type, body, needFillFromTo = false) {
         $.ajax({
             type: 'POST',
             data: JSON.stringify(body),
@@ -162,7 +171,9 @@ function Data(to, from, type, encodedId) {
             cache: false,
             async: true
         }).done(function (data) {
-            if (JSON.parse(data).length === 0) {
+            let parsedData = JSON.parse(data);
+
+            if (parsedData.length === 0) {
                 $('#history_' + encodedId).hide();
                 $('#no_data_' + encodedId).show();
                 return;
@@ -170,9 +181,16 @@ function Data(to, from, type, encodedId) {
 
             $('#history_' + encodedId).show();
             $('#no_data_' + encodedId).hide();
-            let graphDivId = "graph_" + encodedId;
 
-            displayGraph(data, type, graphDivId, encodedId);
+            if (needFillFromTo) {
+                let from = new Date(parsedData[0].time);
+                let to = new Date();
+
+                $(`#from_${encodedId}`).val(datetimeLocal(from));
+                $(`#to_${encodedId}`).val(datetimeLocal(to));
+            }
+
+            displayGraph(data, type, `graph_${encodedId}`, encodedId);
         });
     }
 }

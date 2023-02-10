@@ -1,4 +1,5 @@
-﻿using HSMServer.Core.Authentication;
+﻿using HSMDatabase.DatabaseWorkCore;
+using HSMServer.Core.Authentication;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Model;
@@ -25,7 +26,8 @@ namespace HSMServer.Controllers
     [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
     public class HomeController : Controller
     {
-        private const int MaxHistoryCount = -TreeValuesCache.MaxHistoryCount;
+        private const int LatestHistoryCount = -DatabaseCore.SensorValuesPageCount;
+        internal const int MaxHistoryCount = -TreeValuesCache.MaxHistoryCount;
 
         private static readonly JsonResult _emptyJsonResult = new(new EmptyResult());
         private static readonly EmptyResult _emptyResult = new();
@@ -222,12 +224,21 @@ namespace HSMServer.Controllers
         #region SensorsHistory
 
         [HttpPost]
+        public Task<IActionResult> HistoryLatest([FromBody] GetSensorHistoryModel model)
+        {
+            if (model == null)
+                return Task.FromResult(_emptyResult as IActionResult);
+
+            return History(SpecifyLatestHistoryModel(model));
+        }
+
+        [HttpPost]
         public async Task<IActionResult> History([FromBody] GetSensorHistoryModel model)
         {
             if (model == null)
-                return null;
+                return _emptyResult;
 
-            var enumerator = _treeValuesCache.GetSensorValuesPage(SensorPathHelper.DecodeGuid(model.EncodedId), model.FromUtc, model.ToUtc, MaxHistoryCount);
+            var enumerator = _treeValuesCache.GetSensorValuesPage(SensorPathHelper.DecodeGuid(model.EncodedId), model.FromUtc, model.ToUtc, model.Count);
             var viewModel = await new HistoryValuesViewModel(model.EncodedId, model.Type, enumerator, GetLocalLastValue(model.EncodedId, model.FromUtc, model.ToUtc)).Initialize();
 
             _userManager.GetUser((HttpContext.User as User).Id).Pagination = viewModel;
@@ -247,13 +258,23 @@ namespace HSMServer.Controllers
             return GetHistoryTable(await (_userManager.GetUser((HttpContext.User as User).Id).Pagination?.ToNextPage()));
         }
 
+
+        [HttpPost]
+        public Task<JsonResult> RawHistoryLatest([FromBody] GetSensorHistoryModel model)
+        {
+            if (model == null)
+                return Task.FromResult(_emptyJsonResult);
+
+            return RawHistory(SpecifyLatestHistoryModel(model));
+        }
+
         [HttpPost]
         public async Task<JsonResult> RawHistory([FromBody] GetSensorHistoryModel model)
         {
             if (model == null)
                 return _emptyJsonResult;
 
-            var values = await GetSensorValues(model.EncodedId, model.FromUtc, model.ToUtc);
+            var values = await GetSensorValues(model.EncodedId, model.FromUtc, model.ToUtc, model.Count);
 
             var localValue = GetLocalLastValue(model.EncodedId, model.FromUtc, model.ToUtc);
             if (localValue is not null)
@@ -270,7 +291,7 @@ namespace HSMServer.Controllers
             string fileName = $"{productName}_{path.Replace('/', '_')}_from_{from:s}_to{to:s}.csv";
             Response.Headers.Add("Content-Disposition", $"attachment;filename={fileName}");
 
-            var values = await GetSensorValues(encodedId, from.ToUtc(), to.ToUtc());
+            var values = await GetSensorValues(encodedId, from.ToUtc(), to.ToUtc(), MaxHistoryCount);
 
             return GetExportHistory(values, type, fileName);
         }
@@ -287,12 +308,23 @@ namespace HSMServer.Controllers
             return File(content, fileName.GetContentType(), fileName);
         }
 
-        private ValueTask<List<BaseValue>> GetSensorValues(string encodedId, DateTime from, DateTime to)
+        private ValueTask<List<BaseValue>> GetSensorValues(string encodedId, DateTime from, DateTime to, int count)
         {
             if (string.IsNullOrEmpty(encodedId))
                 return new(new List<BaseValue>());
 
-            return _treeValuesCache.GetSensorValuesPage(SensorPathHelper.DecodeGuid(encodedId), from, to, MaxHistoryCount).Flatten();
+            return _treeValuesCache.GetSensorValuesPage(SensorPathHelper.DecodeGuid(encodedId), from, to, count).Flatten();
+        }
+
+        private GetSensorHistoryModel SpecifyLatestHistoryModel(GetSensorHistoryModel model)
+        {
+            _treeViewModel.Sensors.TryGetValue(SensorPathHelper.DecodeGuid(model.EncodedId), out var sensor);
+
+            model.From = DateTime.MinValue;
+            model.To = sensor?.LastValue?.ReceivingTime ?? DateTime.MinValue;
+            model.Count = LatestHistoryCount;
+
+            return model;
         }
 
         #endregion
