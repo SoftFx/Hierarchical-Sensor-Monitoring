@@ -1,17 +1,17 @@
-﻿using System;
+﻿using HSMServer.Core.Model;
 using HSMServer.Extensions;
 using HSMServer.Model.Authentication;
+using System;
 using System.Collections.Generic;
-using HSMServer.Core.Model;
 
 namespace HSMServer.Model.TreeViewModels
 {
     public sealed class NotificationsState
     {
         public bool IsAnyEnabled { get; private set; }
-        
+
         public bool IsAllEnabled { get; private set; }
-        
+
         public bool IsAllIgnored { get; private set; }
 
         public void CalculateState(NotificationSettings settings, Guid sensorId)
@@ -34,8 +34,9 @@ namespace HSMServer.Model.TreeViewModels
 
         private void ChangeIgnoreState(bool isIgnored) =>
             IsAllIgnored &= isIgnored;
-        
     }
+
+
     public sealed class TreeNodeStateViewModel
     {
         public List<TreeNodeStateViewModel> Nodes { get; } = new(1 << 4);
@@ -43,15 +44,15 @@ namespace HSMServer.Model.TreeViewModels
         public List<SensorNodeViewModel> Sensors { get; } = new(1 << 4);
 
         public ProductNodeViewModel Data { get; }
-        
+
         public NotificationsState NotificationsState { get; set; }
-        
+
         public bool IsAnyAccountsNotificationsEnabled { get; private set; }
 
         public bool IsAllAccountsNotificationsEnabled { get; private set; } = true;
 
         public bool IsAllAccountsNotificationsIgnored { get; private set; } = true;
-        
+
         public int VisibleSensorsCount { get; private set; }
 
         public string SensorsCountString
@@ -77,9 +78,9 @@ namespace HSMServer.Model.TreeViewModels
         {
             ChangeAccountsEnableState(user.Notifications.IsSensorEnabled(sensor.Id));
             ChangeAccountsIgnoreState(user.Notifications.IsSensorIgnored(sensor.Id));
-            
+
             NotificationsState.CalculateState(sensor.GroupNotifications, sensor.Id);
-            
+
             if (user.IsSensorVisible(sensor))
             {
                 VisibleSensorsCount++;
@@ -91,9 +92,9 @@ namespace HSMServer.Model.TreeViewModels
         {
             ChangeAccountsEnableState(node.IsAnyAccountsNotificationsEnabled);
             ChangeAccountsIgnoreState(node.IsAllAccountsNotificationsIgnored);
-            
+
             NotificationsState.CalculateState(node);
-            
+
             VisibleSensorsCount += node.VisibleSensorsCount;
 
             if (node.VisibleSensorsCount > 0 || user.IsEmptyProductVisible(node.Data))

@@ -18,7 +18,6 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using HSMServer.Notifications;
 
 namespace HSMServer.Controllers
 {
@@ -120,7 +119,7 @@ namespace HSMServer.Controllers
             else if (_treeViewModel.Sensors.TryGetValue(decodedId, out var sensor))
                 _treeValuesCache.ClearSensorHistory(sensor.Id);
         }
-        
+
         [HttpGet]
         public IActionResult IgnoreNotifications([FromQuery(Name = "Selected")] string selectedId, [FromQuery] NotificationsTarget actionType)
         {
@@ -136,10 +135,10 @@ namespace HSMServer.Controllers
             {
                 viewModel.NotificationsTarget = actionType;
             }
-            
+
             return PartialView("_IgnoreNotificationsModal", viewModel);
         }
-  
+
         [HttpPost]
         public void EnableNotifications([FromQuery(Name = "Selected")] string selectedId, [FromQuery] NotificationsTarget actionType) =>
             GetHandler(actionType)(selectedId, (s, g) => s.Enable(g));
@@ -147,7 +146,7 @@ namespace HSMServer.Controllers
         [HttpPost]
         public void DisableNotifications([FromQuery(Name = "Selected")] string selectedId, [FromQuery] NotificationsTarget actionType) =>
             GetHandler(actionType)(selectedId, (s, g) => s.Disable(g));
-        
+
         [HttpPost]
         public void IgnoreNotifications(IgnoreNotificationsViewModel model) =>
             GetHandler(model.NotificationsTarget)(model.EncodedId, (s, g) => s.Ignore(g, model.EndOfIgnorePeriod));
@@ -155,9 +154,9 @@ namespace HSMServer.Controllers
         [HttpPost]
         public void RemoveIgnoringNotifications([FromQuery(Name = "Selected")] string selectedId, [FromQuery] NotificationsTarget actionType) =>
             GetHandler(actionType)(selectedId, (s, g) => s.RemoveIgnore(g));
-        
+
         [HttpPost]
-        public string GetPath([FromQuery(Name = "Selected")] string selectedId, [FromQuery(Name ="IsFullPath")] bool isFullPath)
+        public string GetPath([FromQuery(Name = "Selected")] string selectedId, [FromQuery(Name = "IsFullPath")] bool isFullPath)
         {
             var decodedId = SensorPathHelper.DecodeGuid(selectedId);
 
@@ -182,7 +181,7 @@ namespace HSMServer.Controllers
             {
                 updateSettings?.Invoke(user.Notifications, sensorId);
             }
-            
+
             _userManager.UpdateUser(user);
         }
 

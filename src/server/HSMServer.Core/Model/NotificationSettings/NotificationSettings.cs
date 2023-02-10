@@ -3,24 +3,24 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
-using System.Runtime.Serialization;
 
 namespace HSMServer.Core.Model
 {
     public class NotificationSettings
     {
         public ConcurrentDictionary<Guid, DateTime> IgnoredSensors { get; } = new();
-        
+
         public HashSet<Guid> EnabledSensors { get; } = new();
-        
+
         public TelegramSettings Telegram { get; }
-        
-        
+
+
         public NotificationSettings()
         {
             Telegram = new();
         }
 
+        // TODO public -> internal after move NotificationSettings to Server project
         public NotificationSettings(NotificationSettingsEntity entity)
         {
             Telegram = new(entity?.TelegramSettings);
@@ -33,7 +33,7 @@ namespace HSMServer.Core.Model
                     if (Guid.TryParse(sensorIdStr, out var sensorId))
                         IgnoredSensors.TryAdd(sensorId, new DateTime(endIgnorePeriodTicks));
             }
-            
+
             if (entity?.EnabledSensors is not null)
             {
                 EnabledSensors.Clear();
@@ -46,19 +46,19 @@ namespace HSMServer.Core.Model
 
 
         public bool IsSensorIgnored(Guid sensorId) => IgnoredSensors.ContainsKey(sensorId);
-        
+
         public bool IsSensorEnabled(Guid sensorId) => EnabledSensors.Contains(sensorId);
 
         public bool RemoveSensor(Guid sensorId)
         {
             bool isSensorRemoved = false;
 
-            isSensorRemoved |= EnabledSensors.Remove(sensorId);;
+            isSensorRemoved |= EnabledSensors.Remove(sensorId); ;
             isSensorRemoved |= IgnoredSensors.TryRemove(sensorId, out _);
 
             return isSensorRemoved;
         }
-        
+
         public NotificationSettingsEntity ToEntity() =>
             new()
             {
@@ -70,15 +70,15 @@ namespace HSMServer.Core.Model
         public void Ignore(Guid sensorId, DateTime endOfIgnorePeriod)
         {
             if (IsSensorEnabled(sensorId))
-            { 
+            {
                 IgnoredSensors.TryAdd(sensorId, endOfIgnorePeriod);
             }
         }
-        
+
         public void RemoveIgnore(Guid sensorId) => IgnoredSensors.TryRemove(sensorId, out _);
 
         public void Enable(Guid sensorId) => EnabledSensors.Add(sensorId);
-        
+
         public void Disable(Guid sensorId) => RemoveSensor(sensorId);
 
     }
