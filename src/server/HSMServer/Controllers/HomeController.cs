@@ -26,7 +26,7 @@ namespace HSMServer.Controllers
     [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
     public class HomeController : Controller
     {
-        private const int LatestHistoryCount = -DatabaseCore.SensorValuesPageCount;
+        private const int LatestHistoryCount = -100;
         internal const int MaxHistoryCount = -TreeValuesCache.MaxHistoryCount;
 
         private static readonly JsonResult _emptyJsonResult = new(new EmptyResult());

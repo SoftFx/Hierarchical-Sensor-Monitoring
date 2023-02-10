@@ -18,7 +18,7 @@ namespace HSMDatabase.DatabaseWorkCore
 {
     public sealed class DatabaseCore : IDatabaseCore
     {
-        public const int SensorValuesPageCount = 100;
+        private const int SensorValuesPageCount = 100;
 
         private static readonly Logger _logger = LogManager.GetLogger(CommonConstants.InfrastructureLoggerName);
 
