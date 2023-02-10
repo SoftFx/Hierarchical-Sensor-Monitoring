@@ -39,14 +39,13 @@ if ($ExpectedImageId)
 	Write-Host "Image id to run = $ExpectedImageId"
 
 	$LogsFolder = "/usr/HSM/Logs:/app/Logs"
-	$SensorDataFolder = "/usr/HSM/MonitoringData:/app/MonitoringData"
 	$SensorConfigFolder = "/usr/HSM/Config:/app/Config"
-	$EnviromentDatabaseFolder = "/usr/HSM/Databases:/app/Databases"
+	$EnvironmentDatabaseFolder = "/usr/HSM/Databases:/app/Databases"
 
 	$SensorDataPort = "44330:44330"
 	$SensorSitePort = "44333:44333"
 
-	docker run -d -it -p $SensorDataPort -p $SensorSitePort -v $LogsFolder -v $SensorDataFolder -v $SensorConfigFolder -v $EnviromentDatabaseFolder $ExpectedImageId
+	docker run -d -it -v $LogsFolder -v $SensorConfigFolder -v $EnvironmentDatabaseFolder -p $SensorDataPort -p $SensorSitePort $ExpectedImageId
 }
 else
 {
