@@ -4,6 +4,6 @@
     {
         public string ConfigPath { get; set; }
 
-        public bool IncludeDebug { get; set; }
+        public bool WriteDebug { get; set; }
     }
 }

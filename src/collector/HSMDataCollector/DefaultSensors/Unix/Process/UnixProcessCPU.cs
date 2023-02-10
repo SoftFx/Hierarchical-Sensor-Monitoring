@@ -1,4 +1,5 @@
-﻿using HSMDataCollector.Options;
+﻿using HSMDataCollector.Extensions;
+using HSMDataCollector.Options;
 using System;
 using System.Diagnostics;
 
@@ -27,11 +28,10 @@ namespace HSMDataCollector.DefaultSensors.Unix
 
             var cpuUsedMs = (endCpuUsage - _startCpuUsage).TotalMilliseconds;
             var totalMsPassed = (endTime - _startTime).TotalMilliseconds;
-            var cpuUsageTotal = cpuUsedMs / totalMsPassed;
 
             InitStartingPoint();
 
-            return cpuUsageTotal * 100;
+            return (cpuUsedMs / totalMsPassed).ToPercent();
         }
 
         private void InitStartingPoint()

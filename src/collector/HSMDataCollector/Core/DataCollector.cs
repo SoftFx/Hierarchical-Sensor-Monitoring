@@ -529,7 +529,7 @@ namespace HSMDataCollector.Core
             {
                 string jsonString = JsonConvert.SerializeObject(value);
 
-                if (_logManager.IncludeDebug)
+                if (_logManager.WriteDebug)
                     _logManager.Logger?.Debug($"{nameof(DataQueue_FileReceving)}: {jsonString}");
 
                 var data = new StringContent(jsonString, Encoding.UTF8, "application/json");
@@ -556,7 +556,7 @@ namespace HSMDataCollector.Core
 
                 string jsonString = JsonConvert.SerializeObject(values.Cast<object>());
 
-                if (_logManager.IncludeDebug)
+                if (_logManager.WriteDebug)
                     _logManager.Logger?.Debug($"{nameof(SendMonitoringData)}: {jsonString}");
 
                 var data = new StringContent(jsonString, Encoding.UTF8, "application/json");
