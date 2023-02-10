@@ -88,15 +88,15 @@ namespace HSMServer.Notifications
 
         internal int GetAllSensorsFromSpecificPath(ProductModel productModel, string path)
         {
-            if (productModel.SubProducts.Count == 0 && productModel.Path != path)
-                return -1;
-
+            if (productModel.Path == path)
+                return productModel.Sensors.Count;
+            
             foreach (var (_, subProduct) in productModel.SubProducts)
             {
                 GetAllSensorsFromSpecificPath(subProduct, path);
             }
 
-            return productModel.Sensors.Count;
+            return 0;
         }
 
         internal string GetAggregateMessage()
