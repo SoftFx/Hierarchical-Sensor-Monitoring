@@ -31,10 +31,12 @@
     var ignoreNotifications = "@Html.Raw(Url.Action(nameof(HomeController.IgnoreNotifications), ViewConstants.HomeController))";
     var removeIgnoringNotifications = "@Html.Raw(Url.Action(nameof(HomeController.RemoveIgnoringNotifications), ViewConstants.HomeController))";
 
+    var historyLatestAction = "@Html.Raw(Url.Action(nameof(HomeController.HistoryLatest), ViewConstants.HomeController))";
     var historyAction = "@Html.Raw(Url.Action(ViewConstants.HistoryAction, ViewConstants.HomeController))";
     var nextPageAction = "@Html.Raw(Url.Action(nameof(HomeController.GetNextPage), ViewConstants.HomeController))";
     var prevPageAction = "@Html.Raw(Url.Action(nameof(HomeController.GetPreviousPage), ViewConstants.HomeController))";
 
+    var rawHistoryLatestAction = "@Html.Raw(Url.Action(nameof(HomeController.RawHistoryLatest), ViewConstants.HomeController))";
     var rawHistoryAction = "@Html.Raw(Url.Action(ViewConstants.RawHistoryAction, ViewConstants.HomeController))";
     var exportHistoryAction = "@Html.Raw(Url.Action(ViewConstants.ExportHistoryAction, ViewConstants.HomeController))";
 

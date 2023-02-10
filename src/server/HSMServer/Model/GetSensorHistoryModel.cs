@@ -1,4 +1,5 @@
-﻿using HSMServer.Extensions;
+﻿using HSMServer.Controllers;
+using HSMServer.Extensions;
 using System;
 using System.Text.Json.Serialization;
 
@@ -16,6 +17,9 @@ namespace HSMServer.Model
 
         public int BarsCount { get; set; }
 
+
+        [JsonIgnore]
+        internal int Count { get; set; } = HomeController.MaxHistoryCount;
 
         [JsonIgnore]
         internal DateTime ToUtc => To.ToUtc();

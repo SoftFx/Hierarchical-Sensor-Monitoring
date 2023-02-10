@@ -4,6 +4,9 @@
 
 * The logic of selecting a period of history has been changed
 * The ability to change bars count for graph has been added
+* The history of the last 100 sensor values is requested by default for any opened sensor
+* Tree filter button has been improved
+* The message about what tree filters are enabled has been added
 * The Buttons in sensor meta info control has been moved
 * Copyright has been changed from 2022 to 2023
 
