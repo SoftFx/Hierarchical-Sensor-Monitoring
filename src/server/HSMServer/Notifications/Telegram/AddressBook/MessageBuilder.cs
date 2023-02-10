@@ -30,11 +30,11 @@ namespace HSMServer.Notifications
             TotalCount = 0L;
         }
 
-        internal string GenerateOutputSensors()
+        internal string GenerateOutputSensors(int nodeSensorsCount)
         {
             var sensors = string.Join(", ", this);
             if (TotalCount > MaxSensorsCount)
-                sensors = $"{sensors} ... (and other {TotalCount - MaxSensorsCount})";
+                sensors = $"{sensors} ... ({TotalCount}/{nodeSensorsCount})";
 
             Clear();
 
@@ -42,10 +42,12 @@ namespace HSMServer.Notifications
         }
     }
 
-    internal sealed class CDict<T> : ConcurrentDictionary<string, T> where T : class, new()
+    internal sealed class CDict<T> : ConcurrentDictionary<string, T> where T : new()
     {
         public new T this[string key] => GetOrAdd(key);
 
+        public int NodeSensorsCount { get; set; }
+        
         internal T GetOrAdd(string key)
         {
             if (!TryGetValue(key, out T value))
@@ -74,10 +76,27 @@ namespace HSMServer.Notifications
 
             var pathDict = _messageTree[product][nodePath];
 
+            if (pathDict.NodeSensorsCount == 0) 
+                pathDict.NodeSensorsCount = GetAllSensorsFromSpecificPath(sensor.ParentProduct, nodePath);
+            
+            
             var messages = sensor.ValidationResult.Message;
             var result = $"{sensor.ValidationResult.Result}";
 
             pathDict[result][messages].Push(sensor.DisplayName);
+        }
+
+        internal int GetAllSensorsFromSpecificPath(ProductModel productModel, string path)
+        {
+            if (productModel.SubProducts.Count == 0 && productModel.Path != path)
+                return -1;
+
+            foreach (var (_, subProduct) in productModel.SubProducts)
+            {
+                GetAllSensorsFromSpecificPath(subProduct, path);
+            }
+
+            return productModel.Sensors.Count;
         }
 
         internal string GetAggregateMessage()
@@ -86,25 +105,26 @@ namespace HSMServer.Notifications
 
             foreach (var (productName, nodes) in _messageTree)
             {
-                if (!nodes.IsEmpty)
-                    builder.AppendLine(productName);
-
                 foreach (var (nodepath, results) in nodes)
                 {
-                    builder.Append($"   {(string.IsNullOrEmpty(nodepath) ? "/" : $"{nodepath}")}: ");
+                    if (!nodes.IsEmpty) 
+                        builder.Append($"{productName}: ");
 
                     foreach (var (result, messages) in results)
                     {
                         foreach (var (message, sensors) in messages)
                         {
-                            builder.Append(sensors.GenerateOutputSensors())
-                                   .Append($" -> {result} ");
+                            builder.Append($"<b>{result}</b> ");
 
                             if (!string.IsNullOrEmpty(message))
-                                builder.Append($"({message})");
+                                builder.Append($"<b>({message})</b> ");
+
+                            builder.Append(" -> ").Append(sensors.GenerateOutputSensors(results.NodeSensorsCount));
                         }
                     }
 
+                    builder.Append($" at {(string.IsNullOrEmpty(nodepath) ? "/" : $"{nodepath}")} ");
+                    
                     builder.AppendLine();
                 }
 
