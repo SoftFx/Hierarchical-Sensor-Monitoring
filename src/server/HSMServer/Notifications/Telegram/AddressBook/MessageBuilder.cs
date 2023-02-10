@@ -46,7 +46,7 @@ namespace HSMServer.Notifications
     {
         public new T this[string key] => GetOrAdd(key);
 
-        
+
         internal T GetOrAdd(string key)
         {
             if (!TryGetValue(key, out T value))
@@ -76,11 +76,8 @@ namespace HSMServer.Notifications
 
             var pathDict = _messageTree[product][nodePath];
 
-            if (sensor.ParentProduct != null)
-                NodeSensorsCount[nodePath] = sensor.ParentProduct.Sensors.Count;
-            else
-                NodeSensorsCount[nodePath] = 0;
-            
+            NodeSensorsCount[nodePath] = sensor.ParentProduct?.Sensors?.Count ?? 0;
+
             var messages = sensor.ValidationResult.Message;
             var result = $"{sensor.ValidationResult.Result}";
 
@@ -102,7 +99,7 @@ namespace HSMServer.Notifications
                             BuildMessage(builder, productName, result, message, sensors.GenerateOutputSensors(NodeSensorsCount[nodePath]), nodePath);
                         }
                     }
-                    
+
                     builder.AppendLine();
                 }
 
@@ -112,21 +109,21 @@ namespace HSMServer.Notifications
             }
 
             LastSentTime = DateTime.UtcNow;
-            
+
             NodeSensorsCount.Clear();
-            
+
             return builder.ToString();
         }
 
         public static string GetSingleMessage(BaseSensorModel sensor)
         {
             var builder = new StringBuilder(1 << 2);
-            
+
             var product = sensor.RootProductName;
             var nodePath = sensor?.ParentProduct?.Path ?? string.Empty;
             var message = sensor.ValidationResult.Message;
             var result = $"{sensor.ValidationResult.Result}";
-            
+
             BuildMessage(builder, product, result, message, sensor.DisplayName, nodePath);
 
             return builder.ToString();
@@ -136,20 +133,15 @@ namespace HSMServer.Notifications
         {
             productName = productName.EscapeMarkdownV2();
             result = result.EscapeMarkdownV2();
-            message = $"({message})".EscapeMarkdownV2();
-            sensors = $" -> {sensors}".EscapeMarkdownV2();
-            nodePath = nodePath.EscapeMarkdownV2();
-            
-            builder.Append($"{productName}: ")
-                   .Append($"*{result}* ");
-            
-            if (!string.IsNullOrEmpty(message))
-                builder.Append($"* {message}* ");
+            sensors = $"-> {sensors}".EscapeMarkdownV2();
 
-            builder.Append(sensors);
-            
-            if(!string.IsNullOrEmpty(nodePath))
-                builder.Append($" at {nodePath}");
+            if (!string.IsNullOrEmpty(nodePath))
+                nodePath = $" at {nodePath}".EscapeMarkdownV2();
+
+            if (!string.IsNullOrEmpty(message))
+                message = $" ({message})".EscapeMarkdownV2();
+
+            builder.AppendLine($"{productName}: *{result}{message}* {sensors}{nodePath}");
         }
     }
 }
