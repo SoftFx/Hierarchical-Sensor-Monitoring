@@ -217,7 +217,7 @@ namespace HSMServer.Notifications
         }
 
         private void SendMessageAsync(ChatId chat, string message) =>
-            _bot?.SendTextMessageAsync(chat, message, ParseMode.Html, cancellationToken: _tokenSource.Token);
+            _bot?.SendTextMessageAsync(chat, message, ParseMode.MarkdownV2, cancellationToken: _tokenSource.Token);
 
         private void RemoveUserEventHandler(User user) => _addressBook.RemoveAllChats(user);
 
