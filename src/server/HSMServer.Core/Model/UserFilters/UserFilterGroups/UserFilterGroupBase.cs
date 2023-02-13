@@ -6,7 +6,7 @@ namespace HSMServer.Core.Model.UserFilters
     public abstract class UserFilterGroupBase
     {
         [JsonIgnore]
-        protected abstract FilterProperty[] Properties { get; }
+        internal abstract FilterProperty[] Properties { get; }
 
         [JsonIgnore]
         internal abstract FilterGroupType Type { get; }
@@ -30,7 +30,15 @@ namespace HSMServer.Core.Model.UserFilters
     {
         public bool Value { get; set; }
 
+        [JsonIgnore] 
+        public string Name { get; set; }
 
         public FilterProperty() { }
+
+        public FilterProperty(string name)
+        {
+            Name = name;
+        }
+        
     }
 }

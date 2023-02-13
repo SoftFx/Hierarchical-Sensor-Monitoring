@@ -179,3 +179,19 @@
 .hidden_element {
     visibility : hidden;
 }
+
+.independentSizeButton{
+    min-width: 5rem;
+    max-width: 10rem;
+}
+
+.enabled-filters-message{
+    font-size: small;
+    font-weight: 500;
+    min-width: 1rem;
+    max-width: 15rem;
+    align-self: end;
+    color: grey;
+    line-height: 1rem;
+    white-space: pre-line;
+}
