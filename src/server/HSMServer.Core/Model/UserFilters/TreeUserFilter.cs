@@ -53,6 +53,21 @@ namespace HSMServer.Core.Model.UserFilters
         public TreeUserFilter() { }
 
 
+        public TreeUserFilter RestoreFilterNames()
+        {
+            var tempUserFilter = new TreeUserFilter();
+
+            for (int i = 0; i < Groups.Length; i++)
+            {
+                for (int j = 0; j < Groups[i].Properties.Length; j++)
+                {
+                    Groups[i].Properties[j].Name = tempUserFilter.Groups[i].Properties[j].Name;
+                }
+            }
+
+            return this;
+        }
+        
         public FilterGroupType ToMask()
         {
             FilterGroupType selectedFiltersMask = 0;
@@ -78,9 +93,8 @@ namespace HSMServer.Core.Model.UserFilters
 
         private string GetEnabledFiltersMessage()
         {
-            var filters = new StringBuilder("Enabled filters: \n", 1 << 4);
+            var filters = new StringBuilder(1 << 4);
             var specificFilters = new List<string>(1 << 2);
-            
             foreach (var group in Groups)
             {
                 if (!group.HasAnyEnabledFilters) 
@@ -88,7 +102,7 @@ namespace HSMServer.Core.Model.UserFilters
                 
                 specificFilters.AddRange(group.Properties.Where(property => property.Value).Select(property => property.Name));
                 
-                filters.AppendLine($"{group.Type}: {string.Join(", ", specificFilters)}");
+                filters.AppendLine($"{group.Type}: {string.Join(", ",specificFilters)}");
                 specificFilters.Clear();
             }
                 

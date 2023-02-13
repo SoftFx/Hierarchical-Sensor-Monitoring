@@ -29,9 +29,9 @@ namespace HSMServer.Core.Model.UserFilters
     public sealed class FilterProperty
     {
         public bool Value { get; set; }
-        
-        [JsonIgnore]
-        public string Name { get; }
+
+        [JsonIgnore] 
+        public string Name { get; set; }
 
         public FilterProperty() { }
 

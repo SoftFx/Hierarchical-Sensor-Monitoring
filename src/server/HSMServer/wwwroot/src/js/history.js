@@ -14,7 +14,7 @@ Date.prototype.AddHours = function(hours) {
 }
 
 function Data(to, from, type, encodedId) {
-    return { "To": to, "From": from, "Type": type, "EncodedId": encodedId };
+    return { "To": to, "From": from, "Type": type, "EncodedId": encodedId, "BarsCount": getBarsCount(encodedId) };
 }
 
 //Initialization
@@ -57,14 +57,14 @@ function Data(to, from, type, encodedId) {
     function accordionClicked() {
         let encodedId = this.id.substring("collapse_".length);
         let type = getTypeForSensor(encodedId);
-        const { from, to } = getFromAndTo(encodedId);
+        let date = new Date();
         if (isFileSensor(type)) {
             return;
         }
         if (isGraphAvailable(type)) {
-            initializeGraph(encodedId, rawHistoryAction, type, Data(to, from, type, encodedId));
+            initializeGraph(encodedId, rawHistoryLatestAction, type, Data(date, date, type, encodedId), true);
         } else {
-            initializeTable(encodedId, historyAction, type, Data(to, from, type, encodedId));
+            initializeTable(encodedId, historyLatestAction, type, Data(date, date, type, encodedId), true);
         }
     }
 
@@ -78,8 +78,9 @@ function Data(to, from, type, encodedId) {
         let type = getTypeForSensor(encodedId);
         const { from, to } = getFromAndTo(encodedId);
         let body = Data(to, from, type, encodedId);
-        let action = isAllHistorySelected(encodedId) ? rawHistoryAllAction : rawHistoryAction;
-        initializeGraph(encodedId, action, type, body);
+
+        showBarsCount(encodedId);
+        initializeGraph(encodedId, rawHistoryAction, type, body);
     }
 
     function requestTable() {
@@ -87,65 +88,20 @@ function Data(to, from, type, encodedId) {
         let type = getTypeForSensor(encodedId);
         const { from, to } = getFromAndTo(encodedId);
         let body = Data(to, from, type, encodedId);
-        let action = isAllHistorySelected(encodedId) ? historyAllAction : historyAction;
-        initializeTable(encodedId, action, type, body);
+
+        hideBarsCount(encodedId);
+        initializeTable(encodedId, historyAction, type, body);
     }
 
     function InitializePeriodRequests() {
-        $('[id^="radio_hour_"]').off("click").on("click", requestHistoryHour);
-        $('[id^="radio_day_"]').off("click").on("click", requestHistoryDay);
-        $('[id^="radio_three_days_"]').off("click").on("click", requestHistoryThreeDays);
-        $('[id^="radio_week_"]').off("click").on("click", requestHistoryWeek);
-        $('[id^="radio_month_"]').off("click").on("click", requestHistoryMonth);
-        $('[id^="radio_all_"]').off("click").on("click", requestHistoryAll);
-
         $('[id^="button_export_csv_"]').off("click").on("click", exportCsv);
     }
 
-    function requestHistoryHour() {
-        let encodedId = this.id.substring("radio_hour_".length);
+    function searchHistory(encodedId) {
         let type = getTypeForSensor(encodedId);
-        const to = new Date();
-        const from = to.AddHours(-1);
-        requestHistory(encodedId, historyAction, rawHistoryAction, type, Data(to, from, type, encodedId));
-    }
+        const { from, to } = getFromAndTo(encodedId);
 
-    function requestHistoryDay() {
-        let encodedId = this.id.substring("radio_day_".length);
-        let type = getTypeForSensor(encodedId);
-        const to = new Date();
-        const from = to.AddDays(-1);
         requestHistory(encodedId, historyAction, rawHistoryAction, type, Data(to, from, type, encodedId));
-    }
-
-    function requestHistoryThreeDays() {
-        let encodedId = this.id.substring("radio_three_days_".length);
-        let type = getTypeForSensor(encodedId);
-        const to = new Date();
-        const from = to.AddDays(-3);
-        requestHistory(encodedId, historyAction, rawHistoryAction, type, Data(to, from, type, encodedId));
-    }
-
-    function requestHistoryWeek() {
-        let encodedId = this.id.substring("radio_week_".length);
-        let type = getTypeForSensor(encodedId);
-        const to = new Date();
-        const from = to.AddDays(-7);
-        requestHistory(encodedId, historyAction, rawHistoryAction, type, Data(to, from, type, encodedId));
-    }
-
-    function requestHistoryMonth() {
-        let encodedId = this.id.substring("radio_month_".length);
-        let type = getTypeForSensor(encodedId);
-        const to = new Date();
-        const from = to.AddDays(-30);
-        requestHistory(encodedId, historyAction, rawHistoryAction, type, Data(to, from, type, encodedId));
-    }
-
-    function requestHistoryAll() {
-        let encodedId = this.id.substring("radio_all_".length);
-        let type = getTypeForSensor(encodedId);
-        requestHistory(encodedId, historyAllAction, rawHistoryAllAction, type, {});
     }
 }
 
@@ -167,16 +123,12 @@ function Data(to, from, type, encodedId) {
     function exportCsv() {
         let encodedId = this.id.substring("button_export_csv_".length);
         let type = getTypeForSensor(encodedId);
-        if (isAllHistorySelected(encodedId)) {
-            window.location.href = exportHistoryAllAction + "?EncodedId=" + encodedId + "&Type=" + type;
-            return;
-        }
-
         const { from, to } = getFromAndTo(encodedId);
-        window.location.href = exportHistoryAction + "?EncodedId=" + encodedId + "&Type=" + type + "&From=" + from.toISOString() + "&To=" + to.toISOString();
+
+        window.location.href = exportHistoryAction + "?EncodedId=" + encodedId + "&Type=" + type + "&From=" + from + "&To=" + to;
     }
 
-    function initializeTable(encodedId, tableAction, type, body) {
+    function initializeTable(encodedId, tableAction, type, body, needFillFromTo = false) {
         $.ajax({
             type: 'POST',
             data: JSON.stringify(body),
@@ -197,10 +149,19 @@ function Data(to, from, type, encodedId) {
 
             $('#history_' + encodedId).show();
             $('#no_data_' + encodedId).hide();
+
+            if (needFillFromTo) {
+                let from = new Date($(`#oldest_date_${encodedId}`).val());
+                from.setMinutes(from.getMinutes() - from.getTimezoneOffset());
+                let to = new Date().getTime() + 60000;
+
+                $(`#from_${encodedId}`).val(datetimeLocal(from));
+                $(`#to_${encodedId}`).val(datetimeLocal(to));
+            }
         });
     }
 
-    function initializeGraph(encodedId, rawHistoryAction, type, body) {
+    function initializeGraph(encodedId, rawHistoryAction, type, body, needFillFromTo = false) {
         $.ajax({
             type: 'POST',
             data: JSON.stringify(body),
@@ -210,7 +171,9 @@ function Data(to, from, type, encodedId) {
             cache: false,
             async: true
         }).done(function (data) {
-            if (JSON.parse(data).length === 0) {
+            let parsedData = JSON.parse(data);
+
+            if (parsedData.length === 0) {
                 $('#history_' + encodedId).hide();
                 $('#no_data_' + encodedId).show();
                 return;
@@ -218,9 +181,16 @@ function Data(to, from, type, encodedId) {
 
             $('#history_' + encodedId).show();
             $('#no_data_' + encodedId).hide();
-            let graphDivId = "graph_" + encodedId;
 
-            displayGraph(data, type, graphDivId, encodedId);
+            if (needFillFromTo) {
+                let from = new Date(parsedData[0].time);
+                let to = new Date().getTime() + 60000;
+
+                $(`#from_${encodedId}`).val(datetimeLocal(from));
+                $(`#to_${encodedId}`).val(datetimeLocal(to));
+            }
+
+            displayGraph(data, type, `graph_${encodedId}`, encodedId);
         });
     }
 }
@@ -241,48 +211,60 @@ function Data(to, from, type, encodedId) {
         return el.hasClass("show");
     }
 
-    function isAllHistorySelected(encodedId) {
-        return $('#radio_all_' + encodedId).is(":checked");
-    }
-
     function getFromAndTo(encodedId) {
-        let from = null;
-        let to = null;
-        if ($('#radio_hour_' + encodedId).is(":checked")) {
-            to = new Date();
-            from = to.AddHours(-1);
+        let from = $(`#from_${encodedId}`).val();
+        let to = $(`#to_${encodedId}`).val();
+
+        if (to == "") {
+            to = new Date().getTime() + 60000;
+            $(`#to_${encodedId}`).val(datetimeLocal(to));
         }
 
-        if ($('#radio_day_' + encodedId).is(":checked")) {
-            to = new Date();
+        if (from == "") {
             from = to.AddDays(-1);
-        }
-
-        if ($('#radio_three_days_' + encodedId).is(":checked")) {
-            to = new Date();
-            from = to.AddDays(-3);
-        }
-
-        if ($('#radio_week_' + encodedId).is(":checked")) {
-            to = new Date();
-            from = to.AddDays(-7);
-        }
-
-        if ($('#radio_month_' + encodedId).is(":checked")) {
-            to = new Date();
-            from = to.AddDays(-30);
+            $(`#from_${encodedId}`).val(datetimeLocal(from));
         }
 
         return { from, to };
     }
 
+    function datetimeLocal(datetime) {
+        const dt = new Date(datetime);
 
-    function getCountForId(id) {
-        let inputCount = $('#inputCount_' + id).val();
-        if (inputCount === undefined) {
-            inputCount = 10;
+        return dt.toISOString().slice(0, 16);
+    }
+
+
+    function hideBarsCount(encodedId) {
+        $(`#labelBarsCount_${encodedId}`).hide();
+        $(`#barsCount_${encodedId}`).hide();
+    }
+
+    function showBarsCount(encodedId) {
+        $(`#labelBarsCount_${encodedId}`).show();
+        $(`#barsCount_${encodedId}`).show();
+    }
+
+    function getBarsCount(encodedId) {
+        let barsCount = $(`#barsCount_${encodedId}`).val();
+
+        if (barsCount == "" || barsCount == undefined) {
+            return setBarsCount(encodedId, 100);
         }
-        return inputCount;
+        if (barsCount > 1000) {
+            return setBarsCount(encodedId, 1000);
+        }
+        if (barsCount < 1) {
+            return setBarsCount(encodedId, 1);
+        }
+
+        return barsCount;
+    }
+
+    function setBarsCount(encodedId, count) {
+        $(`#barsCount_${encodedId}`).val(count);
+
+        return count
     }
 
     function getTypeForSensor(encodedId) {
