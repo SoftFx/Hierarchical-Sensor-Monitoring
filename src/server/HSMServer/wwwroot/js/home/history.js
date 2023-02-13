@@ -153,7 +153,7 @@ function Data(to, from, type, encodedId) {
             if (needFillFromTo) {
                 let from = new Date($(`#oldest_date_${encodedId}`).val());
                 from.setMinutes(from.getMinutes() - from.getTimezoneOffset());
-                let to = new Date();
+                let to = new Date().getTime() + 60000;
 
                 $(`#from_${encodedId}`).val(datetimeLocal(from));
                 $(`#to_${encodedId}`).val(datetimeLocal(to));
@@ -184,7 +184,7 @@ function Data(to, from, type, encodedId) {
 
             if (needFillFromTo) {
                 let from = new Date(parsedData[0].time);
-                let to = new Date();
+                let to = new Date().getTime() + 60000;
 
                 $(`#from_${encodedId}`).val(datetimeLocal(from));
                 $(`#to_${encodedId}`).val(datetimeLocal(to));
@@ -216,7 +216,7 @@ function Data(to, from, type, encodedId) {
         let to = $(`#to_${encodedId}`).val();
 
         if (to == "") {
-            to = new Date();
+            to = new Date().getTime() + 60000;
             $(`#to_${encodedId}`).val(datetimeLocal(to));
         }
 
