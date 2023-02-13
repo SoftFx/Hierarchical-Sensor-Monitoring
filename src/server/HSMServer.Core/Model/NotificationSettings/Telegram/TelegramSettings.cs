@@ -11,7 +11,7 @@ namespace HSMServer.Core.Model
         private const bool DefaultEnableState = true;
 
 
-        public SensorStatus MessagesMinStatus { get; private set; }
+        public SensorStatus MessagesMinStatus { get; private set; } = SensorStatus.Warning;
 
         public bool MessagesAreEnabled { get; private set; } = DefaultEnableState;
 
