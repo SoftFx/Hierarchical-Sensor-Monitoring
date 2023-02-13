@@ -19,13 +19,13 @@
                 <i id="@(data.EncodedId)_notifications" class="fa-solid fa-bell"></i>
             </span>
             
-            @if (Model.NotificationsState.IsAllIgnored)
+            @if (Model.GroupState.IsAllIgnored)
             {
                 <span class="d-none">
                     <img id="@(data.EncodedId)_groupsIgnoredNotifications" src="~/dist/snooze.png" style="height: 1em;width: 1em;" alt="!"/>
                 </span>
             }
-            else if (!Model.NotificationsState.IsAnyEnabled)
+            else if (!Model.GroupState.IsAnyEnabled)
             {
                 <span class="d-none">
                     <i id="@(data.EncodedId)_groupsDisabledNotifications" class="fa-solid fa-bell-slash"></i>
@@ -34,13 +34,13 @@
         }
         else
         {
-            @if (Model.NotificationsState.IsAllIgnored)
+            @if (Model.GroupState.IsAllIgnored)
             {
                 <span>
                     <img id="@(data.EncodedId)_groupsIgnoredNotifications" src="~/dist/snooze.png" style="height: 1em;width: 1em;" alt="!"/>
                 </span>
             }
-            else if (!Model.NotificationsState.IsAnyEnabled)
+            else if (!Model.GroupState.IsAnyEnabled)
             {
                 <span>
                     <i id="@(data.EncodedId)_groupsDisabledNotifications" class="fa-solid fa-bell-slash"></i>
@@ -48,13 +48,13 @@
             }
         }
         
-        @if (Model.IsAllAccountsNotificationsIgnored)
+        @if (Model.AccountState.IsAllIgnored)
         {
             <span class="d-none">
                 <img id="@(data.EncodedId)_accountsIgnoreNotifications" src="~/dist/user-crossed.png" style="height: 1em;width: 1em;" alt="!"/>
             </span>
         }
-        else if (Model.IsAnyAccountsNotificationsEnabled)
+        else if (Model.AccountState.IsAnyEnabled)
         {
             <span class="d-none">
                 <img id="@(data.EncodedId)_accountsNotifications" src="~/dist/user.png" style="height: 1em;width: 1em;" alt="!"/>
