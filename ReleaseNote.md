@@ -1,18 +1,56 @@
-# HSM Server
-
 ## Site
 
-* The logic of selecting a period of history has been changed
-* The ability to change bars count for graph has been added
-* The history of the last 100 sensor values is requested by default for any opened sensor
-* Tree filter button has been improved
-* The message about what tree filters are enabled has been added
-* The Buttons in sensor meta info control has been moved
-* Copyright has been changed from 2022 to 2023
+* Toasts for Copy and Remove logic have been added
 
-## Telegram:
+### Tree
 
-* Aggregation message format has been improved
-* The notification message about exceeding the expected update interval has been changed to 'Timeout'
-* The default min status level for notifications has been changed to Warning
-* Information about status pairs has been added
+* Removal logic for sensors has been added
+* Removal logic for nodes has been added
+
+### Edit product
+
+* The guid how to add a bot in a telegram group has been added
+
+### Product Table
+
+* Product table has been refactored
+* Last update column has been added
+* Filters by Name and Managers have been added
+* Sorting by Last update has been added
+
+## Rest API
+
+* New endpoint **/timpsan** for TimeSpan sensor data has been added
+
+## Kestrel
+
+* Bulder has been moved to minimal builder architecture (.Net 6+)
+* Appsettings.json has been added for server configuration. The file mounted in Config folder
+* Port settings and Certificate settings have been moved to Appsettings.json
+* Config.xml file has been removed
+
+## Project:
+
+* Target framework has been updated to .Net 7.0
+* Webpack for building client side part of application has been added
+* All js and css libraries has been uploaded
+* Bootstrap has been uploaded to version 5.2
+
+## Other
+
+* Bugfixing & optimization
+
+# HSM DataObjects
+
+* Nuget package has been updated to v.3.0.1
+* New sensor type Timespan has been added
+
+# HSM Datacollector
+
+* Nuget package has been updated to v.3.0.1
+* Now datacollector skips bars with Count equals 0
+
+# Docker
+
+* Dockerfile and .dockerignore have been removed (.Net 7 features)
+* Container size has been decreased from 300mb to ~220mb
