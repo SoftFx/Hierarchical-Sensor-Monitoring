@@ -45,7 +45,7 @@ namespace HSMServer.Model.TreeViewModels
 
         public ProductNodeViewModel Data { get; }
 
-        public NotificationsState NotificationsState { get; set; }
+        public NotificationsState NotificationsState { get; set; } = new();
 
         public bool IsAnyAccountsNotificationsEnabled { get; private set; }
 
