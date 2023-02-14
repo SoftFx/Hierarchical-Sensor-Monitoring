@@ -53,7 +53,7 @@ namespace HSMServer.Core.Model
         {
             bool isSensorRemoved = false;
 
-            isSensorRemoved |= EnabledSensors.Remove(sensorId); ;
+            isSensorRemoved |= EnabledSensors.Remove(sensorId);
             isSensorRemoved |= IgnoredSensors.TryRemove(sensorId, out _);
 
             return isSensorRemoved;

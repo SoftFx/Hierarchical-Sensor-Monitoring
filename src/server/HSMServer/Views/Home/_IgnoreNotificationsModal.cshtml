@@ -133,12 +133,22 @@
     }
 
     function updateNote() {
-        let now = moment.utc('@(Model?.DateTimeNow.ToDefaultFormat())', "DD/MM/YYYY HH:mm:ss");
-        let endOfIgnorePeriod = moment(now).add($('#ignoreNotifications_minutes').val(), 'm')
-                                           .add($('#ignoreNotifications_hours').val(), 'h')
-                                           .add($('#ignoreNotifications_days').val(), 'd');
+        let note = `Note: ${'@(Model?.TreeElement)'} notifications will be`;
 
-        let note = `Note: ${'@(Model?.TreeElement)'} notifications will be ignored until ${endOfIgnorePeriod.format('DD/MM/YYYY HH:mm')}`;
+        if ($('option:selected', $('#timeIntervalSelect')).text() == '@TimeInterval.Forever') {
+            note = `${note} disabled`;
+            $('#interval_inputs').hide();
+        }
+        else {
+            let now = moment.utc('@(Model?.DateTimeNow.ToDefaultFormat())', "DD/MM/YYYY HH:mm:ss");
+            let endOfIgnorePeriod = moment(now).add($('#ignoreNotifications_minutes').val(), 'm')
+                                               .add($('#ignoreNotifications_hours').val(), 'h')
+                                               .add($('#ignoreNotifications_days').val(), 'd');
+
+            note = `${note} ignored until ${endOfIgnorePeriod.format('DD/MM/YYYY HH:mm')}`;
+            $('#interval_inputs').show();
+        }
+
         $('#ignoreNotifications_note').html(note);
     }
 </script>

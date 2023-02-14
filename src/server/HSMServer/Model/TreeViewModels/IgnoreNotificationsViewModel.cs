@@ -26,6 +26,7 @@ namespace HSMServer.Model
                 TimeInterval.SixteenHours,
                 TimeInterval.ThirtySixHours,
                 TimeInterval.SixtyHours,
+                TimeInterval.Forever,
                 TimeInterval.Custom
             };
 

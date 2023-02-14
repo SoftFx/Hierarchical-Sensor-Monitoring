@@ -174,12 +174,14 @@ namespace HSMServer.Controllers
             GetHandler(actionType)(selectedId, (s, g) => s.Enable(g));
 
         [HttpPost]
-        public void DisableNotifications([FromQuery(Name = "Selected")] string selectedId, [FromQuery] NotificationsTarget actionType) =>
-            GetHandler(actionType)(selectedId, (s, g) => s.Disable(g));
-
-        [HttpPost]
         public void IgnoreNotifications(IgnoreNotificationsViewModel model) =>
-            GetHandler(model.NotificationsTarget)(model.EncodedId, (s, g) => s.Ignore(g, model.EndOfIgnorePeriod));
+            GetHandler(model.NotificationsTarget)(model.EncodedId, (s, g) =>
+            {
+                if (model.IgnorePeriod.TimeInterval == Model.TimeInterval.Forever)
+                    s.Disable(g);
+                else
+                    s.Ignore(g, model.EndOfIgnorePeriod);
+            });
 
         [HttpPost]
         public void RemoveIgnoringNotifications([FromQuery(Name = "Selected")] string selectedId, [FromQuery] NotificationsTarget actionType) =>
