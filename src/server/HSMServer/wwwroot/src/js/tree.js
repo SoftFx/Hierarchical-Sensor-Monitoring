@@ -139,6 +139,13 @@ const TelegramActionType = { Groups: 0, Accounts: 1 };
 function customMenu(node) {
     var tree = $("#jstree").jstree(true);
 
+    let elementType;
+    if(node.children.length === 0){
+        elementType = 'sensor';
+    }else if(node.parents.length === 1){
+       elementType = 'product' ;
+    }else elementType = 'node';  
+    
     var items =
     {
         "AccessKeys": {
@@ -209,7 +216,7 @@ function customMenu(node) {
         "RemoveNode": {
             "separator_before": true,
             "separator_after": true,
-            "label": "Remove",
+            "label": `Remove ${elementType}`,
             "action": function (obj) {
                 var modal = new bootstrap.Modal(document.getElementById('modalDelete'));
                 //modal
@@ -296,7 +303,7 @@ function customMenu(node) {
         "Notifications": {
             "separator_before": false,
             "separator_after": false,
-            "label": "Private notifications",
+            "label": "Notifications",
             "submenu": {
                 "EnableNotifications": {
                     "separator_before": false,
