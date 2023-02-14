@@ -6,12 +6,12 @@ var needToActivateListTab = false;
 var currentSelectedNodeId = "";
 
 
-window.initializeUserRights = function(userIsAdmin, userProducts) {
+window.initializeUserRights = function (userIsAdmin, userProducts) {
     isCurrentUserAdmin = userIsAdmin;
     currentUserProducts = userProducts.split(' ');
 }
 
-window.initializeTree = function() {
+window.initializeTree = function () {
     var sortingType = $("input[name='TreeSortType']:checked");
 
     $('#jstree').jstree({
@@ -134,11 +134,11 @@ function timeSorting(a, b) {
     return b.diff(a);
 }
 
-const TelegramActionType = {Groups : 0, Accounts : 1};
+const TelegramActionType = { Groups: 0, Accounts: 1 };
 
 function customMenu(node) {
     var tree = $("#jstree").jstree(true);
-    
+
     var items =
     {
         "AccessKeys": {
@@ -179,6 +179,15 @@ function customMenu(node) {
                 }
             }
         },
+        "Ignore": {
+            "separator_before": false,
+            "separator_after": false,
+            "label": "Ignore",
+            //"icon": "fa-solid fa-ban",
+            "action": function (_) {
+                setIgnoreState(node, true);
+            }
+        },
         //"BlockSensor": {
         //    "separator_before": false,
         //    "separator_after": false,
@@ -197,7 +206,7 @@ function customMenu(node) {
         //        changeSensorBlockedState(node, false);
         //    }
         //},
-        "RemoveNode":{
+        "RemoveNode": {
             "separator_before": true,
             "separator_after": true,
             "label": "Remove",
@@ -207,8 +216,8 @@ function customMenu(node) {
                 $('#modalDeleteLabel').empty();
                 $('#modalDeleteLabel').append('Remove confirmation');
                 $('#modalDeleteBody').empty();
-                
-                $.when(getCurrentPathRequest(node.id)).done(function(path){
+
+                $.when(getCurrentPathRequest(node.id)).done(function (path) {
                     $('#modalDeleteBody').append(`Do you really want to remove ${path} ?`);
                     modal.show();
                 })
@@ -226,12 +235,12 @@ function customMenu(node) {
                         async: true
                     }).done(function () {
                         updateTreeTimer();
-                        if(node.children.length === 0){
+                        if (node.children.length === 0) {
                             showToast(`Sensor has been removed`);
-                        }else{
+                        } else {
                             showToast(`Node has been removed`);
                         }
-                        
+
                         $(`#${node.parents[0]}_anchor`).trigger('click');
                     });
                 });
@@ -241,7 +250,7 @@ function customMenu(node) {
                 });
             }
         },
-        
+
         "CleanHistory": {
             "separator_before": false,
             "separator_after": true,
@@ -253,11 +262,11 @@ function customMenu(node) {
                 $('#modalDeleteLabel').append('Clean history confirmation');
                 $('#modalDeleteBody').empty();
 
-                $.when(getCurrentPathRequest(node.id)).done(function(path){
+                $.when(getCurrentPathRequest(node.id)).done(function (path) {
                     $('#modalDeleteBody').append(`Do you really want to clean history for ${path} ?`);
                     modal.show();
                 })
-                
+
                 //modal confirm
                 $('#confirmDeleteButton').off('click').on('click', function () {
                     modal.hide();
@@ -271,9 +280,9 @@ function customMenu(node) {
                         async: true
                     }).done(function () {
                         updateTreeTimer();
-                        if(node.children.length === 0){
+                        if (node.children.length === 0) {
                             showToast(`Sensor has been cleared`);
-                        }else{
+                        } else {
                             showToast(`Node has been cleared`);
                         }
                     });
@@ -295,7 +304,7 @@ function customMenu(node) {
                     "label": "Enable for ...",
                     "icon": "fab fa-telegram",
                     submenu: {
-                        Groups:{
+                        Groups: {
                             separator_before: false,
                             separator_after: false,
                             label: "Groups",
@@ -303,7 +312,7 @@ function customMenu(node) {
                                 updateSensorsNotifications(enableNotifications, node, TelegramActionType.Groups);
                             }
                         },
-                        Accounts:{
+                        Accounts: {
                             separator_before: false,
                             separator_after: false,
                             label: "Accounts",
@@ -319,7 +328,7 @@ function customMenu(node) {
                     "label": "Disable for ...",
                     "icon": "fab fa-telegram",
                     submenu: {
-                        Groups:{
+                        Groups: {
                             separator_before: false,
                             separator_after: false,
                             label: "Groups",
@@ -327,7 +336,7 @@ function customMenu(node) {
                                 updateSensorsNotifications(disableNotifications, node, TelegramActionType.Groups);
                             }
                         },
-                        Accounts:{
+                        Accounts: {
                             separator_before: false,
                             separator_after: false,
                             label: "Accounts",
@@ -343,7 +352,7 @@ function customMenu(node) {
                     "label": "Ignore for ...",
                     "icon": "fa-solid fa-bell-slash",
                     submenu: {
-                        Groups:{
+                        Groups: {
                             separator_before: false,
                             separator_after: false,
                             label: "Groups",
@@ -362,7 +371,7 @@ function customMenu(node) {
                                 });
                             }
                         },
-                        Accounts:{
+                        Accounts: {
                             separator_before: false,
                             separator_after: false,
                             label: "Accounts",
@@ -389,7 +398,7 @@ function customMenu(node) {
                     "label": "Remove ignoring for ...",
                     "icon": "fa-solid fa-bell",
                     submenu: {
-                        Groups:{
+                        Groups: {
                             separator_before: false,
                             separator_after: false,
                             label: "Groups",
@@ -397,7 +406,7 @@ function customMenu(node) {
                                 updateSensorsNotifications(removeIgnoringNotifications, node, TelegramActionType.Groups);
                             }
                         },
-                        Accounts:{
+                        Accounts: {
                             separator_before: false,
                             separator_after: false,
                             label: "Accounts",
@@ -431,21 +440,21 @@ function customMenu(node) {
     //else {
     //    delete items.BlockSensor;
     //}
-    
+
     let IsGroupDisabled = document.getElementById(`${node.id}_groupsDisabledNotifications`)
     if (IsGroupDisabled) {
         delete items.Notifications.submenu.DisableNotifications.submenu.Groups;
         delete items.Notifications.submenu.IgnoreNotifications.submenu.Groups;
         delete items.Notifications.submenu.RemoveIgnoreNotifications.submenu.Groups;
     }
-    
+
     let IsGroupIgnored = document.getElementById(`${node.id}_groupsIgnoredNotifications`)
     if (IsGroupIgnored) {
         delete items.Notifications.submenu.IgnoreNotifications.submenu.Groups;
         delete items.Notifications.submenu.EnableNotifications.submenu.Groups;
     }
-    
-    if(!IsGroupIgnored && !IsGroupDisabled){
+
+    if (!IsGroupIgnored && !IsGroupDisabled) {
         delete items.Notifications.submenu.EnableNotifications.submenu.Groups;
         delete items.Notifications.submenu.RemoveIgnoreNotifications.submenu.Groups;
     }
@@ -455,37 +464,36 @@ function customMenu(node) {
         delete items.Notifications.submenu.EnableNotifications.submenu.Accounts;
         delete items.Notifications.submenu.IgnoreNotifications.submenu.Accounts;
     }
-    
+
     let accountsNotifications = document.getElementById(`${node.id}_accountsNotifications`)
     if (accountsNotifications) {
         delete items.Notifications.submenu.EnableNotifications.submenu.Accounts;
         delete items.Notifications.submenu.RemoveIgnoreNotifications.submenu.Accounts;
     }
-    
-    if(!accountsIgnoreNotifications && !accountsNotifications)
-    {
+
+    if (!accountsIgnoreNotifications && !accountsNotifications) {
         delete items.Notifications.submenu.DisableNotifications.submenu.Accounts;
         delete items.Notifications.submenu.RemoveIgnoreNotifications.submenu.Accounts;
         delete items.Notifications.submenu.IgnoreNotifications.submenu.Accounts;
     }
-    
-    if(Object.keys(items.Notifications.submenu.EnableNotifications.submenu).length === 0)
+
+    if (Object.keys(items.Notifications.submenu.EnableNotifications.submenu).length === 0)
         delete items.Notifications.submenu.EnableNotifications
-    if(Object.keys(items.Notifications.submenu.IgnoreNotifications.submenu).length === 0)
+    if (Object.keys(items.Notifications.submenu.IgnoreNotifications.submenu).length === 0)
         delete items.Notifications.submenu.IgnoreNotifications
-    if(Object.keys(items.Notifications.submenu.RemoveIgnoreNotifications.submenu).length === 0)
+    if (Object.keys(items.Notifications.submenu.RemoveIgnoreNotifications.submenu).length === 0)
         delete items.Notifications.submenu.RemoveIgnoreNotifications
-    if(Object.keys(items.Notifications.submenu.DisableNotifications.submenu).length === 0)
+    if (Object.keys(items.Notifications.submenu.DisableNotifications.submenu).length === 0)
         delete items.Notifications.submenu.DisableNotifications
-   
+
     if (isCurrentUserAdmin === "True")
         return items;
-    
-    if (!hasUserNodeRights(node)){
+
+    if (!hasUserNodeRights(node)) {
         delete items.RemoveNode;
         delete items.CleanHistory;
     }
-    
+
     return items;
 }
 
@@ -514,6 +522,15 @@ function changeSensorBlockedState(node, isBlocked) {
     });
 }
 
+function setIgnoreState(node, isIgnored) {
+    $.ajax(`${setIgnoreStateAction}?selectedId=${node.id}&isIgnored=${isIgnored}`,
+        {
+            type: 'post',
+            cache: false,
+            success: updateTreeTimer,
+        });
+}
+
 function hasUserNodeRights(node) {
     let productId = node.parents.length === 1
         ? node.id
@@ -522,7 +539,7 @@ function hasUserNodeRights(node) {
     return isCurrentUserAdmin === "True" || currentUserProducts.includes(productId);
 }
 
-function getCurrentPathRequest(nodeId){
+function getCurrentPathRequest(nodeId) {
     return $.ajax({
         type: 'POST',
         url: getPath + '?Selected=' + nodeId + '&IsFullPath=true',

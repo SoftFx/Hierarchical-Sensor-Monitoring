@@ -100,6 +100,18 @@ namespace HSMServer.Controllers
         }
 
         [HttpPost]
+        public void SetIgnoreStateToSensor([FromQuery] string selectedId, [FromQuery] bool isIgnored)
+        {
+            //var sensorUpdate = new SensorUpdate()
+            //{
+            //    Id = SensorPathHelper.DecodeGuid(selectedId),
+            //    State = isBlocked ? SensorState.Blocked : SensorState.Available,
+            //};
+
+            //_treeValuesCache.UpdateSensor(sensorUpdate);
+        }
+
+        [HttpPost]
         public void RemoveNode([FromQuery(Name = "Selected")] string selectedId)
         {
             var decodedId = SensorPathHelper.DecodeGuid(selectedId);

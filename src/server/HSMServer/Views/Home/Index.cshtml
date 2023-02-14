@@ -25,6 +25,8 @@
     var refreshTree = "@Html.Raw(Url.Action(ViewConstants.RefreshTreeAction, ViewConstants.HomeController))";
 
     var changeSensorState = "@Html.Raw(Url.Action(nameof(HomeController.ChangeSensorState), ViewConstants.HomeController))";
+    var setIgnoreStateAction = "@Url.Action(nameof(HomeController.SetIgnoreStateToSensor), ViewConstants.HomeController)";
+
     var removeNode = "@Html.Raw(Url.Action(nameof(HomeController.RemoveNode), ViewConstants.HomeController))";
     var clearHistoryNode = "@Html.Raw(Url.Action(nameof(HomeController.ClearHistoryNode), ViewConstants.HomeController))";
     

@@ -8,7 +8,7 @@ namespace HSMServer.Core.Model
     public enum SensorState : byte
     {
         Available,
-        Freezed,
+        Ignored,
         Blocked = byte.MaxValue,
     }
 
