@@ -21,6 +21,11 @@ namespace HSMServer.Core.Model
 
     public abstract class BaseSensorModel : NodeBaseModel
     {
+        private readonly ValidationResult _ignoreStatus = new("Ignored sensor", SensorStatus.OffTime);
+
+        private ValidationResult _curStatus;
+
+
         protected abstract ValuesStorage Storage { get; }
 
         public abstract SensorType Type { get; }
@@ -30,7 +35,15 @@ namespace HSMServer.Core.Model
 
         public string Unit { get; private set; }
 
-        public ValidationResult ValidationResult { get; protected set; }
+
+        public DateTime? EndOfIgnore { get; private set; }
+
+        public ValidationResult ValidationResult
+        {
+            get => State == SensorState.Ignored ? _ignoreStatus : _curStatus;
+
+            set => _curStatus = value;
+        }
 
 
         public BaseValue LastValue => Storage.LastValue;
@@ -67,11 +80,12 @@ namespace HSMServer.Core.Model
         }
 
 
-        internal void Update(SensorUpdate sensor)
+        internal void Update(SensorUpdate update)
         {
-            Description = sensor.Description ?? Description;
-            Unit = sensor.Unit ?? Unit;
-            State = sensor?.State ?? State;
+            Description = update.Description ?? Description;
+            Unit = update.Unit ?? Unit;
+            State = update?.State ?? State;
+            EndOfIgnore = update?.EndOfIgnorePeriod ?? EndOfIgnore;
         }
 
         internal BaseSensorModel ApplyEntity(SensorEntity entity)
@@ -87,6 +101,7 @@ namespace HSMServer.Core.Model
             Description = entity.Description;
             State = (SensorState)entity.State;
             Unit = entity.Unit;
+            EndOfIgnore = entity.EndOfIgnore == 0L ? null : new DateTime(entity.EndOfIgnore);
 
             ValidationResult = ValidationResult.Ok;
 
@@ -106,6 +121,7 @@ namespace HSMServer.Core.Model
                 Type = (byte)Type,
                 State = (byte)State,
                 Policies = GetPolicyIds(),
+                EndOfIgnore = EndOfIgnore?.Ticks ?? 0L,
             };
 
 

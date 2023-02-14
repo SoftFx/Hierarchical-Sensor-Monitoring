@@ -273,6 +273,19 @@ namespace HSMServer.Core.Cache
             ChangeSensorEvent?.Invoke(sensor, TransactionType.Delete);
         }
 
+        public void IgnoreSensor(Guid sensorId, DateTime endOfIgnore)
+        {
+            if (!_sensors.TryGetValue(sensorId, out var sensor) || sensor.State == SensorState.Blocked)
+                return;
+
+            UpdateSensor(new SensorUpdate
+            {
+                Id = sensorId,
+                State = endOfIgnore == DateTime.MinValue ? SensorState.Available : SensorState.Ignored,
+                EndOfIgnorePeriod = endOfIgnore,
+            });
+        }
+
         public void RemoveNode(Guid productId)
         {
             if (!_tree.TryGetValue(productId, out var product))
@@ -283,10 +296,10 @@ namespace HSMServer.Core.Cache
 
             foreach (var (sensorId, _) in product.Sensors)
                 RemoveSensor(sensorId);
-            
+
             RemoveProduct(product.Id);
         }
-        
+
         public void ClearNodeHistory(Guid productId)
         {
             if (!_tree.TryGetValue(productId, out var product))
