@@ -103,15 +103,10 @@ namespace HSMServer.Controllers
         public void SetIgnoreStateToSensor([FromQuery] string selectedId, [FromQuery] bool isIgnored)
         {
             var decodedId = SensorPathHelper.DecodeGuid(selectedId);
-            var newIgnorePeriod = DateTime.UtcNow.AddMinutes(1);
+            var newIgnorePeriod = DateTime.UtcNow.AddSeconds(1);
 
-            if (_treeViewModel.Nodes.TryGetValue(decodedId, out var node))
-            {
-                foreach (var (_, sensor) in node.Sensors)
-                    _treeValuesCache.IgnoreSensor(sensor.Id, newIgnorePeriod);
-            }
-            else if (_treeViewModel.Sensors.TryGetValue(decodedId, out var sensor))
-                _treeValuesCache.IgnoreSensor(sensor.Id, newIgnorePeriod);
+            if (_treeViewModel.Sensors.TryGetValue(decodedId, out var sensor))
+                _treeValuesCache.UpdateIgnoreSensorState(sensor.Id, newIgnorePeriod);
         }
 
         [HttpPost]
@@ -119,13 +114,8 @@ namespace HSMServer.Controllers
         {
             var decodedId = SensorPathHelper.DecodeGuid(selectedId);
 
-            if (_treeViewModel.Nodes.TryGetValue(decodedId, out var node))
-            {
-                foreach (var (_, sensor) in node.Sensors)
-                    _treeValuesCache.IgnoreSensor(sensor.Id, DateTime.MinValue);
-            }
-            else if (_treeViewModel.Sensors.TryGetValue(decodedId, out var sensor))
-                _treeValuesCache.IgnoreSensor(sensor.Id, DateTime.MinValue);
+            if (_treeViewModel.Sensors.TryGetValue(decodedId, out var sensor))
+                _treeValuesCache.UpdateIgnoreSensorState(sensor.Id);
         }
 
         [HttpPost]

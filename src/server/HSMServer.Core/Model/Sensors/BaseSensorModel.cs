@@ -86,6 +86,9 @@ namespace HSMServer.Core.Model
             Unit = update.Unit ?? Unit;
             State = update?.State ?? State;
             EndOfIgnore = update?.EndOfIgnorePeriod ?? EndOfIgnore;
+
+            if (State == SensorState.Available)
+                EndOfIgnore = null;
         }
 
         internal BaseSensorModel ApplyEntity(SensorEntity entity)
