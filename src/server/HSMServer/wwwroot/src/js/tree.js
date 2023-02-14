@@ -138,13 +138,7 @@ const TelegramActionType = { Groups: 0, Accounts: 1 };
 
 function customMenu(node) {
     var tree = $("#jstree").jstree(true);
-
-    let elementType;
-    if(node.children.length === 0){
-        elementType = 'sensor';
-    }else if(node.parents.length === 1){
-       elementType = 'product' ;
-    }else elementType = 'node';  
+    let elementType = getCurrentElementType(node);
     
     var items =
     {
@@ -189,7 +183,7 @@ function customMenu(node) {
         "Ignore": {
             "separator_before": false,
             "separator_after": false,
-            "label": "Ignore",
+            "label": `Ignore ${elementType}`,
             //"icon": "fa-solid fa-ban",
             "action": function (_) {
                 setIgnoreState(node, true);
@@ -555,4 +549,16 @@ function getCurrentPathRequest(nodeId) {
         cache: false,
         async: false
     });
+}
+
+function getCurrentElementType(node) {
+    if (node.children.length === 0) {
+        return 'sensor';
+    }
+
+    if (node.parents.length === 1) {
+        return 'product';
+    }
+
+    return 'node';
 }
