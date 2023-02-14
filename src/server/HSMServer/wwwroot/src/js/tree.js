@@ -299,123 +299,81 @@ function customMenu(node) {
             "separator_after": false,
             "label": "Notifications",
             "submenu": {
-                "EnableNotifications": {
+                "EnableGroupsNotifications": {
                     "separator_before": false,
                     "separator_after": false,
-                    "label": "Enable for ...",
+                    "label": "Enable for groups",
                     "icon": "fab fa-telegram",
-                    submenu: {
-                        Groups: {
-                            separator_before: false,
-                            separator_after: false,
-                            label: "Groups",
-                            "action": function (obj) {
-                                updateSensorsNotifications(enableNotifications, node, TelegramActionType.Groups);
-                            }
-                        },
-                        Accounts: {
-                            separator_before: false,
-                            separator_after: false,
-                            label: "Accounts",
-                            "action": function (obj) {
-                                updateSensorsNotifications(enableNotifications, node, TelegramActionType.Accounts);
-                            }
-                        }
-                    },
+                    "action": function (obj) {
+                        updateSensorsNotifications(enableNotifications, node, TelegramActionType.Groups);
+                    }
                 },
-                "DisableNotifications": {
+                "IgnoreGroupsNotifications": {
                     "separator_before": false,
                     "separator_after": false,
-                    "label": "Disable for ...",
-                    "icon": "fab fa-telegram",
-                    submenu: {
-                        Groups: {
-                            separator_before: false,
-                            separator_after: false,
-                            label: "Groups",
-                            "action": function (obj) {
-                                updateSensorsNotifications(disableNotifications, node, TelegramActionType.Groups);
-                            }
-                        },
-                        Accounts: {
-                            separator_before: false,
-                            separator_after: false,
-                            label: "Accounts",
-                            "action": function (obj) {
-                                updateSensorsNotifications(disableNotifications, node, TelegramActionType.Accounts);
-                            }
-                        }
-                    },
-                },
-                "IgnoreNotifications": {
-                    "separator_before": false,
-                    "separator_after": false,
-                    "label": "Ignore for ...",
+                    "label": "Ignore for groups",
                     "icon": "fa-solid fa-bell-slash",
-                    submenu: {
-                        Groups: {
-                            separator_before: false,
-                            separator_after: false,
-                            label: "Groups",
-                            "action": function (obj) {
-                                $.ajax({
-                                    type: 'get',
-                                    url: ignoreNotifications + '?Selected=' + node.id + '&ActionType=' + TelegramActionType.Groups,
-                                    datatype: 'html',
-                                    contenttype: 'application/json',
-                                    cache: false,
-                                    success: function (viewData) {
-                                        $("#ignoreNotificatios_partial").html(viewData);
-                                    }
-                                }).done(function () {
-                                    $('#ignoreNotifications_modal').modal('show');
-                                });
+                    "action": function (obj) {
+                        $.ajax({
+                            type: 'get',
+                            url: ignoreNotifications + '?Selected=' + node.id + '&ActionType=' + TelegramActionType.Groups,
+                            datatype: 'html',
+                            contenttype: 'application/json',
+                            cache: false,
+                            success: function (viewData) {
+                                $("#ignoreNotificatios_partial").html(viewData);
                             }
-                        },
-                        Accounts: {
-                            separator_before: false,
-                            separator_after: false,
-                            label: "Accounts",
-                            "action": function (obj) {
-                                $.ajax({
-                                    type: 'get',
-                                    url: ignoreNotifications + '?Selected=' + node.id + '&ActionType=' + TelegramActionType.Accounts,
-                                    datatype: 'html',
-                                    contenttype: 'application/json',
-                                    cache: false,
-                                    success: function (viewData) {
-                                        $("#ignoreNotificatios_partial").html(viewData);
-                                    }
-                                }).done(function () {
-                                    $('#ignoreNotifications_modal').modal('show');
-                                });
-                            }
-                        }
-                    },
+                        }).done(function () {
+                            $('#ignoreNotifications_modal').modal('show');
+                        });
+                    }
                 },
-                "RemoveIgnoreNotifications": {
+                "RemoveGroupsIgnoreNotifications": {
                     "separator_before": false,
                     "separator_after": false,
-                    "label": "Remove ignoring for ...",
+                    "label": "Remove ignoring for groups",
                     "icon": "fa-solid fa-bell",
-                    submenu: {
-                        Groups: {
-                            separator_before: false,
-                            separator_after: false,
-                            label: "Groups",
-                            "action": function (obj) {
-                                updateSensorsNotifications(removeIgnoringNotifications, node, TelegramActionType.Groups);
+                    "action": function (obj) {
+                        updateSensorsNotifications(removeIgnoringNotifications, node, TelegramActionType.Groups);
+                    }
+                },
+                "EnableAccountsNotifications": {
+                    "separator_before": false,
+                    "separator_after": false,
+                    "label": "Enable for accounts",
+                    "icon": "fab fa-telegram",
+                    "action": function (obj) {
+                        updateSensorsNotifications(enableNotifications, node, TelegramActionType.Accounts);
+                    }
+                },
+                "IgnoreAccountsNotifications": {
+                    "separator_before": false,
+                    "separator_after": false,
+                    "label": "Ignore for accounts",
+                    "icon": "fa-solid fa-bell-slash",
+                    "action": function (obj) {
+                        $.ajax({
+                            type: 'get',
+                            url: ignoreNotifications + '?Selected=' + node.id + '&ActionType=' + TelegramActionType.Accounts,
+                            datatype: 'html',
+                            contenttype: 'application/json',
+                            cache: false,
+                            success: function (viewData) {
+                                $("#ignoreNotificatios_partial").html(viewData);
                             }
-                        },
-                        Accounts: {
-                            separator_before: false,
-                            separator_after: false,
-                            label: "Accounts",
-                            "action": function (obj) {
-                                updateSensorsNotifications(removeIgnoringNotifications, node, TelegramActionType.Accounts);
-                            }
-                        }
-                    },
+                        }).done(function () {
+                            $('#ignoreNotifications_modal').modal('show');
+                        });
+                    }
+                },
+                "RemoveAccountsIgnoreNotifications": {
+                    "separator_before": false,
+                    "separator_after": false,
+                    "label": "Remove ignoring for accounts",
+                    "icon": "fa-solid fa-bell",
+                    "action": function (obj) {
+                        updateSensorsNotifications(removeIgnoringNotifications, node, TelegramActionType.Accounts);
+                    }
                 }
             }
         }
@@ -442,50 +400,35 @@ function customMenu(node) {
     //    delete items.BlockSensor;
     //}
 
-    let IsGroupDisabled = document.getElementById(`${node.id}_groupsDisabledNotifications`)
-    if (IsGroupDisabled) {
-        delete items.Notifications.submenu.DisableNotifications.submenu.Groups;
-        delete items.Notifications.submenu.IgnoreNotifications.submenu.Groups;
-        delete items.Notifications.submenu.RemoveIgnoreNotifications.submenu.Groups;
+    let isGroupsDisabled = document.getElementById(`${node.id}_groupsDisabledNotifications`);
+    let isGroupsIgnored = document.getElementById(`${node.id}_groupsIgnoredNotifications`);
+    if (isGroupsDisabled) {
+        delete items.Notifications.submenu.IgnoreGroupsNotifications;
+        delete items.Notifications.submenu.RemoveGroupsIgnoreNotifications;
+    }
+    if (isGroupsIgnored) {
+        delete items.Notifications.submenu.EnableGroupsNotifications;
+        delete items.Notifications.submenu.IgnoreGroupsNotifications;
+    }
+    if (!isGroupsDisabled && !isGroupsIgnored) {
+        delete items.Notifications.submenu.EnableGroupsNotifications;
+        delete items.Notifications.submenu.RemoveGroupsIgnoreNotifications;
     }
 
-    let IsGroupIgnored = document.getElementById(`${node.id}_groupsIgnoredNotifications`)
-    if (IsGroupIgnored) {
-        delete items.Notifications.submenu.IgnoreNotifications.submenu.Groups;
-        delete items.Notifications.submenu.EnableNotifications.submenu.Groups;
+    let isAccountsEnabled = document.getElementById(`${node.id}_accountsNotifications`);
+    let isAccountsIgnored = document.getElementById(`${node.id}_accountsIgnoreNotifications`);
+    if (isAccountsEnabled) {
+        delete items.Notifications.submenu.EnableAccountsNotifications;
+        delete items.Notifications.submenu.RemoveAccountsIgnoreNotifications;
     }
-
-    if (!IsGroupIgnored && !IsGroupDisabled) {
-        delete items.Notifications.submenu.EnableNotifications.submenu.Groups;
-        delete items.Notifications.submenu.RemoveIgnoreNotifications.submenu.Groups;
+    if (isAccountsIgnored) {
+        delete items.Notifications.submenu.EnableAccountsNotifications;
+        delete items.Notifications.submenu.IgnoreAccountsNotifications;
     }
-
-    let accountsIgnoreNotifications = document.getElementById(`${node.id}_accountsIgnoreNotifications`);
-    if (accountsIgnoreNotifications) {
-        delete items.Notifications.submenu.EnableNotifications.submenu.Accounts;
-        delete items.Notifications.submenu.IgnoreNotifications.submenu.Accounts;
+    if (!isAccountsEnabled && !isAccountsIgnored) {
+        delete items.Notifications.submenu.IgnoreAccountsNotifications;
+        delete items.Notifications.submenu.RemoveAccountsIgnoreNotifications;
     }
-
-    let accountsNotifications = document.getElementById(`${node.id}_accountsNotifications`)
-    if (accountsNotifications) {
-        delete items.Notifications.submenu.EnableNotifications.submenu.Accounts;
-        delete items.Notifications.submenu.RemoveIgnoreNotifications.submenu.Accounts;
-    }
-
-    if (!accountsIgnoreNotifications && !accountsNotifications) {
-        delete items.Notifications.submenu.DisableNotifications.submenu.Accounts;
-        delete items.Notifications.submenu.RemoveIgnoreNotifications.submenu.Accounts;
-        delete items.Notifications.submenu.IgnoreNotifications.submenu.Accounts;
-    }
-
-    if (Object.keys(items.Notifications.submenu.EnableNotifications.submenu).length === 0)
-        delete items.Notifications.submenu.EnableNotifications
-    if (Object.keys(items.Notifications.submenu.IgnoreNotifications.submenu).length === 0)
-        delete items.Notifications.submenu.IgnoreNotifications
-    if (Object.keys(items.Notifications.submenu.RemoveIgnoreNotifications.submenu).length === 0)
-        delete items.Notifications.submenu.RemoveIgnoreNotifications
-    if (Object.keys(items.Notifications.submenu.DisableNotifications.submenu).length === 0)
-        delete items.Notifications.submenu.DisableNotifications
 
     if (isCurrentUserAdmin === "True")
         return items;
