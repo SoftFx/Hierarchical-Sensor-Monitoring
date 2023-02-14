@@ -1,4 +1,4 @@
-﻿using HSMServer.Model.TreeViewModels;
+﻿using HSMServer.Model.TreeViewModel;
 using System;
 using System.Collections.Generic;
 
@@ -9,7 +9,7 @@ namespace HSMServer.Model
         Groups,
         Accounts
     }
-    
+
     public class IgnoreNotificationsViewModel
     {
         private const string NodeTreeElement = "node";
@@ -31,7 +31,7 @@ namespace HSMServer.Model
             };
 
         public NotificationsTarget NotificationsTarget { get; set; }
-        
+
         public string Path { get; }
 
         public string TreeElement { get; }
@@ -56,11 +56,12 @@ namespace HSMServer.Model
         // public constructor without parameters for action Home/IgnoreNotifications
         public IgnoreNotificationsViewModel() { }
 
-        public IgnoreNotificationsViewModel(NodeViewModel node)
+        public IgnoreNotificationsViewModel(NodeViewModel node, NotificationsTarget target)
         {
             EncodedId = node.EncodedId;
             Path = $"{node.Product}{node.Path}";
             TreeElement = node is SensorNodeViewModel ? SensorTreeElement : NodeTreeElement;
+
             IgnorePeriod = new(_predefinedIntervals)
             {
                 CanCustomInputBeVisible = false,

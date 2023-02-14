@@ -1,14 +1,15 @@
 ﻿@using HSMServer.Extensions
 @using HSMServer.Model.Authentication
+@using HSMServer.Model.UserTreeShallowCopy
 
-@model HSMServer.Model.TreeViewModels.TreeNodeStateViewModel
+@model NodeShallowModel
 
 @{
     var data = Model.Data;
 }
 
 
-<li id='@data.EncodedId' title='@data.Tooltip' data-jstree='{"title" : "@data.Title", "icon" : "@data.Status.ToIcon()", "time" : "@data.UpdateTime.ToDefaultFormat()"}'>
+<li id='@data.EncodedId' title='@data.Tooltip' data-jstree='@Model.ToJSTree()'>
     <span>@Html.Raw(data.Name.GetShortNodeName()) @Model.SensorsCountString</span>
 
     @if (!data.IsEmpty)

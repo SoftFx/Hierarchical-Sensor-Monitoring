@@ -1,7 +1,7 @@
 ﻿using HSMServer.Core.Model;
 using HSMServer.Extensions;
 
-namespace HSMServer.Model.TreeViewModels
+namespace HSMServer.Model.TreeViewModel
 {
     public class SensorNodeViewModel : NodeViewModel
     {

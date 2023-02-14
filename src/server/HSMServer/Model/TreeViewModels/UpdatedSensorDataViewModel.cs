@@ -1,6 +1,6 @@
 ﻿using HSMServer.Extensions;
 
-namespace HSMServer.Model.TreeViewModels
+namespace HSMServer.Model.TreeViewModel
 {
     public record UpdatedNodeDataViewModel
     {

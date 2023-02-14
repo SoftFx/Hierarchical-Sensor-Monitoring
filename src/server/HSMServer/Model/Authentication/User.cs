@@ -107,7 +107,7 @@ namespace HSMServer.Model.Authentication
             return copy;
         }
 
-        public bool IsProductAvailable(Guid productId) =>
+        public bool IsManager(Guid productId) =>
             IsAdmin || (ProductsRoles?.Any(x => x.Item1.Equals(productId)) ?? false);
 
         public List<Guid> GetManagerProducts() =>

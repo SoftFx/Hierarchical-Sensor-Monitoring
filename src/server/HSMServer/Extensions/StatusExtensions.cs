@@ -1,4 +1,4 @@
-﻿using Client = HSMServer.Model.TreeViewModels;
+﻿using Client = HSMServer.Model.TreeViewModel;
 using Server = HSMServer.Core.Model;
 
 namespace HSMServer.Extensions

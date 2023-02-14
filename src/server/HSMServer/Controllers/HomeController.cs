@@ -8,7 +8,7 @@ using HSMServer.Helpers;
 using HSMServer.Model;
 using HSMServer.Model.Authentication;
 using HSMServer.Model.Authentication.History;
-using HSMServer.Model.TreeViewModels;
+using HSMServer.Model.TreeViewModel;
 using HSMServer.Model.ViewModel;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -119,7 +119,7 @@ namespace HSMServer.Controllers
         }
 
         [HttpPost]
-        public void RemoveNode([FromQuery(Name = "Selected")] string selectedId)
+        public void RemoveNode([FromQuery] string selectedId)
         {
             var decodedId = SensorPathHelper.DecodeGuid(selectedId);
 
@@ -130,7 +130,7 @@ namespace HSMServer.Controllers
         }
 
         [HttpPost]
-        public void ClearHistoryNode([FromQuery(Name = "Selected")] string selectedId)
+        public void ClearHistoryNode([FromQuery] string selectedId)
         {
             var decodedId = SensorPathHelper.DecodeGuid(selectedId);
 
@@ -141,27 +141,23 @@ namespace HSMServer.Controllers
         }
 
         [HttpGet]
-        public IActionResult IgnoreNotifications([FromQuery(Name = "Selected")] string selectedId, [FromQuery] NotificationsTarget actionType)
+        public IActionResult IgnoreNotifications([FromQuery] string selectedId, [FromQuery] NotificationsTarget target)
         {
             var decodedId = SensorPathHelper.DecodeGuid(selectedId);
+
             IgnoreNotificationsViewModel viewModel = null;
 
             if (_treeViewModel.Nodes.TryGetValue(decodedId, out var node))
-                viewModel = new IgnoreNotificationsViewModel(node);
+                viewModel = new IgnoreNotificationsViewModel(node, target);
             else if (_treeViewModel.Sensors.TryGetValue(decodedId, out var sensor))
-                viewModel = new IgnoreNotificationsViewModel(sensor);
-
-            if (viewModel != null)
-            {
-                viewModel.NotificationsTarget = actionType;
-            }
+                viewModel = new IgnoreNotificationsViewModel(sensor, target);
 
             return PartialView("_IgnoreNotificationsModal", viewModel);
         }
 
         [HttpPost]
-        public void EnableNotifications([FromQuery(Name = "Selected")] string selectedId, [FromQuery] NotificationsTarget actionType) =>
-            GetHandler(actionType)(selectedId, (s, g) => s.Enable(g));
+        public void EnableNotifications([FromQuery] string selectedId, [FromQuery] NotificationsTarget target) =>
+            GetHandler(target)(selectedId, (s, g) => s.Enable(g));
 
         [HttpPost]
         public void IgnoreNotifications(IgnoreNotificationsViewModel model) =>
@@ -174,11 +170,11 @@ namespace HSMServer.Controllers
             });
 
         [HttpPost]
-        public void RemoveIgnoringNotifications([FromQuery(Name = "Selected")] string selectedId, [FromQuery] NotificationsTarget actionType) =>
-            GetHandler(actionType)(selectedId, (s, g) => s.RemoveIgnore(g));
+        public void RemoveIgnoringNotifications([FromQuery] string selectedId, [FromQuery] NotificationsTarget target) =>
+            GetHandler(target)(selectedId, (s, g) => s.RemoveIgnore(g));
 
         [HttpPost]
-        public string GetPath([FromQuery(Name = "Selected")] string selectedId, [FromQuery(Name = "IsFullPath")] bool isFullPath)
+        public string GetNodePath([FromQuery] string selectedId, [FromQuery] bool isFullPath = false)
         {
             var decodedId = SensorPathHelper.DecodeGuid(selectedId);
 

@@ -1,4 +1,4 @@
-﻿using HSMServer.Model.TreeViewModels;
+﻿using HSMServer.Model.TreeViewModel;
 using System.Collections.Generic;
 
 namespace HSMServer.Model.ViewModel

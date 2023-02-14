@@ -4,12 +4,13 @@ using HSMServer.Core.Model;
 using HSMServer.Extensions;
 using HSMServer.Model.AccessKeysViewModels;
 using HSMServer.Model.Authentication;
+using HSMServer.Model.UserTreeShallowCopy;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace HSMServer.Model.TreeViewModels
+namespace HSMServer.Model.TreeViewModel
 {
     public class TreeViewModel
     {
@@ -37,26 +38,26 @@ namespace HSMServer.Model.TreeViewModels
         }
 
 
-        public List<TreeNodeStateViewModel> GetUserTree(User user)
+        public List<NodeShallowModel> GetUserTree(User user)
         {
-            TreeNodeStateViewModel FilterNodes(ProductNodeViewModel product)
+            NodeShallowModel FilterNodes(ProductNodeViewModel product)
             {
-                var node = new TreeNodeStateViewModel(product);
+                var node = new NodeShallowModel(product, user);
 
                 foreach (var (_, childNode) in product.Nodes)
                     node.AddChild(FilterNodes(childNode), user);
 
                 foreach (var (_, sensor) in product.Sensors)
-                    node.AddChild(sensor, user);
+                    node.AddChild(new SensorShallowModel(sensor, user), user);
 
                 return node;
             }
 
 
-            var tree = new List<TreeNodeStateViewModel>(1 << 4);
+            var tree = new List<NodeShallowModel>(1 << 4);
 
             foreach (var (_, product) in Nodes)
-                if (product.Parent == null && user.IsProductAvailable(product.Id))
+                if (product.Parent == null && user.IsManager(product.Id))
                 {
                     var node = FilterNodes(product);
                     if (node.VisibleSensorsCount > 0 || user.IsEmptyProductVisible(product))
@@ -76,7 +77,7 @@ namespace HSMServer.Model.TreeViewModels
             if (user.ProductsRoles == null || user.ProductsRoles.Count == 0)
                 return new List<ProductNodeViewModel>();
 
-            return products.Where(p => user.IsProductAvailable(p.Id)).ToList();
+            return products.Where(p => user.IsManager(p.Id)).ToList();
         }
 
         internal void RecalculateNodesCharacteristics()

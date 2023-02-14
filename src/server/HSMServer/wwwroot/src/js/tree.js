@@ -1,15 +1,7 @@
-﻿var isCurrentUserAdmin = false;
-var currentUserProducts = [];
-
-var needToActivateListTab = false;
+﻿var needToActivateListTab = false;
 
 var currentSelectedNodeId = "";
 
-
-window.initializeUserRights = function (userIsAdmin, userProducts) {
-    isCurrentUserAdmin = userIsAdmin;
-    currentUserProducts = userProducts.split(' ');
-}
 
 window.initializeTree = function () {
     var sortingType = $("input[name='TreeSortType']:checked");
@@ -19,7 +11,7 @@ window.initializeTree = function () {
             "check_callback": true,
         },
         "contextmenu": {
-            "items": customMenu
+            "items": buildContextMenu
         },
         "plugins": ["state", "contextmenu", "themes", "wholerow", "sort"],
         "sort": function (a, b) {
@@ -33,7 +25,7 @@ window.initializeTree = function () {
                 timeA = moment(nodeA.data.jstree.time, format);
                 timeB = moment(nodeB.data.jstree.time, format);
 
-                return timeSorting(timeA, timeB);
+                return timeB.diff(timeA);
             }
             else {
                 a = this.get_node(a).data.jstree.title.toLowerCase();
@@ -130,378 +122,346 @@ function selectNodeInfoTab(tab, selectedId) {
         tabLink.click();
 }
 
-function timeSorting(a, b) {
-    return b.diff(a);
-}
+const TelegramTarget = { Groups: 0, Accounts: 1 };
+const NodeType = { Product: 0, Node: 1, Sensor: 2 };
 
-const TelegramActionType = { Groups: 0, Accounts: 1 };
+const AjaxPost = {
+    type: 'POST',
+    cache: false,
+    async: true
+};
 
-function customMenu(node) {
-    var tree = $("#jstree").jstree(true);
-    let elementType = getCurrentElementType(node);
-    
-    var items =
-    {
-        "AccessKeys": {
-            "separator_before": false,
-            "separator_after": false,
+function buildContextMenu(node) {
+    let curType = getCurrentElementType(node);
+    let isManager = node.data.jstree.isManager === "True";
+
+    console.info(node.data.jstree);
+
+    var contextMenu = {};
+
+    if (curType === NodeType.Product) {
+        contextMenu["AccessKeys"] = {
             "label": "Access keys",
-            "action": function (obj) {
-                showAccessKeysList(node.id, true);
-            }
-        },
-        "CopyPath": {
-            "separator_before": false,
-            "separator_after": false,
-            "label": "Copy path",
-            "action": function (obj) {
-                $.ajax({
-                    type: 'POST',
-                    url: getPath + '?Selected=' + node.id,
-                    dataType: 'html',
-                    contentType: 'application/json',
-                    cache: false,
-                    async: true
-                }).done(function (data) {
-                    copyToClipboard(data);
-                });
-            }
-        },
-        "Edit": {
-            "separator_before": false,
-            "separator_after": false,
-            "label": "Edit",
-            "action": function (obj) {
-                if (node.parents.length == 1) {
-                    window.location.href = editProduct + "?Product=" + node.id;
-                }
-                else if (node.children.length == 0) {
-                    $("#sensorInfo_link_" + node.id).click();
-                }
-            }
-        },
-        "Ignore": {
-            "separator_before": false,
-            "separator_after": false,
-            "label": `Ignore ${elementType}`,
-            //"icon": "fa-solid fa-ban",
-            "action": function (_) {
-                setIgnoreState(node, true);
-            }
-        },
-        //"BlockSensor": {
-        //    "separator_before": false,
-        //    "separator_after": false,
-        //    "label": "Block sensor",
-        //    "icon": "fa-solid fa-ban",
-        //    "action": function (obj) {
-        //        changeSensorBlockedState(node, true);
-        //    }
-        //},
-        //"UnblockSensor": {
-        //    "separator_before": false,
-        //    "separator_after": false,
-        //    "label": "Unblock sensor",
-        //    "icon": "fa-solid fa-ban",
-        //    "action": function (obj) {
-        //        changeSensorBlockedState(node, false);
-        //    }
-        //},
-        "RemoveNode": {
-            "separator_before": true,
             "separator_after": true,
-            "label": `Remove ${elementType}`,
-            "action": function (obj) {
+            "action": _ => showAccessKeysList(node.id, true),
+        };
+    }
+    else {
+        contextMenu["CopyPath"] = {
+            "label": "Copy path",
+            "separator_after": true,
+            "action": _ => $.ajax(`${getNodePathAction}?selectedId=${node.id}`, AjaxPost).done(copyToClipboard),
+        };
+    }
+
+    if (isManager) {
+        if (curType !== NodeType.Node) {
+            contextMenu["Edit"] = {
+                "label": `Edit ${getKeyByValue(curType)}`,
+                "action": _ => {
+                    if (curType === NodeType.Product)
+                        window.location.href = `${editProductAction}?Product=${node.id}`;
+
+                    if (curType === NodeType.Sensor)
+                        $(`#sensorInfo_link_${node.id}`).click();
+                }
+            };
+        }
+
+        contextMenu["RemoveNode"] = {
+            "label": `Remove ${getKeyByValue(curType)}`,
+            "action": _ => {
                 var modal = new bootstrap.Modal(document.getElementById('modalDelete'));
+
                 //modal
                 $('#modalDeleteLabel').empty();
-                $('#modalDeleteLabel').append('Remove confirmation');
+                $('#modalDeleteLabel').append(`Remove ${getKeyByValue(curType)}`);
                 $('#modalDeleteBody').empty();
 
-                $.when(getCurrentPathRequest(node.id)).done(function (path) {
+                $.when(getFullPathAction(node.id)).done((path) => {
                     $('#modalDeleteBody').append(`Do you really want to remove ${path} ?`);
                     modal.show();
                 })
 
                 //modal confirm
-                $('#confirmDeleteButton').off('click').on('click', function () {
+                $('#confirmDeleteButton').off('click').on('click', () => {
                     modal.hide();
 
-                    $.ajax({
-                        type: 'POST',
-                        url: removeNode + '?Selected=' + node.id,
-                        dataType: 'html',
-                        contentType: 'application/json',
-                        cache: false,
-                        async: true
-                    }).done(function () {
-                        updateTreeTimer();
-                        if (node.children.length === 0) {
-                            showToast(`Sensor has been removed`);
-                        } else {
-                            showToast(`Node has been removed`);
-                        }
+                    $.ajax(`${removeNodeAction}?selectedId=${node.id}`, AjaxPost)
+                        .done(() => {
+                            updateTreeTimer();
+                            showToast(`${getKeyByValue(curType)} has been removed`);
 
-                        $(`#${node.parents[0]}_anchor`).trigger('click');
-                    });
+                            $(`#${node.parents[0]}_anchor`).trigger('click');
+                        });
                 });
 
-                $('#closeDeleteButton').off('click').on('click', function () {
-                    modal.hide();
-                });
+                $('#closeDeleteButton').off('click').on('click', modal.hide);
             }
-        },
+        }
 
-        "CleanHistory": {
-            "separator_before": false,
-            "separator_after": true,
+        contextMenu["CleanHistory"] = {
             "label": "Clean history",
-            "action": function (obj) {
+            "action": _ => {
                 var modal = new bootstrap.Modal(document.getElementById('modalDelete'));
                 //modal
                 $('#modalDeleteLabel').empty();
-                $('#modalDeleteLabel').append('Clean history confirmation');
+                $('#modalDeleteLabel').append(`Clean history for ${getKeyByValue(curType)}`);
                 $('#modalDeleteBody').empty();
 
-                $.when(getCurrentPathRequest(node.id)).done(function (path) {
+                $.when(getFullPathAction(node.id)).done((path) => {
                     $('#modalDeleteBody').append(`Do you really want to clean history for ${path} ?`);
                     modal.show();
                 })
 
                 //modal confirm
-                $('#confirmDeleteButton').off('click').on('click', function () {
+                $('#confirmDeleteButton').off('click').on('click', () => {
                     modal.hide();
 
-                    $.ajax({
-                        type: 'POST',
-                        url: clearHistoryNode + '?Selected=' + node.id,
-                        dataType: 'html',
-                        contentType: 'application/json',
-                        cache: false,
-                        async: true
-                    }).done(function () {
-                        updateTreeTimer();
-                        if (node.children.length === 0) {
-                            showToast(`Sensor has been cleared`);
-                        } else {
-                            showToast(`Node has been cleared`);
-                        }
-                    });
+                    $.ajax(`${clearHistoryAction}?selectedId=${node.id}`, AjaxPost)
+                        .done(() => {
+                            updateTreeTimer();
+                            showToast(`${getKeyByValue(curType)} has been cleared`);
+
+                            $(`#${node.parents[0]}_anchor`).trigger('click');
+                        });
                 });
 
-                $('#closeDeleteButton').off('click').on('click', function () {
-                    modal.hide();
-                });
-            }
-        },
-        "Notifications": {
-            "separator_before": false,
-            "separator_after": false,
-            "label": "Notifications",
-            "submenu": {
-                "EnableGroupsNotifications": {
-                    "separator_before": false,
-                    "separator_after": false,
-                    "label": "Enable for groups",
-                    "icon": "fab fa-telegram",
-                    "action": function (obj) {
-                        updateSensorsNotifications(enableNotifications, node, TelegramActionType.Groups);
-                    }
-                },
-                "IgnoreGroupsNotifications": {
-                    "separator_before": false,
-                    "separator_after": false,
-                    "label": "Ignore for groups",
-                    "icon": "fa-solid fa-bell-slash",
-                    "action": function (obj) {
-                        $.ajax({
-                            type: 'get',
-                            url: ignoreNotifications + '?Selected=' + node.id + '&ActionType=' + TelegramActionType.Groups,
-                            datatype: 'html',
-                            contenttype: 'application/json',
-                            cache: false,
-                            success: function (viewData) {
-                                $("#ignoreNotificatios_partial").html(viewData);
-                            }
-                        }).done(function () {
-                            $('#ignoreNotifications_modal').modal('show');
-                        });
-                    }
-                },
-                "RemoveGroupsIgnoreNotifications": {
-                    "separator_before": false,
-                    "separator_after": false,
-                    "label": "Remove ignoring for groups",
-                    "icon": "fa-solid fa-bell",
-                    "action": function (obj) {
-                        updateSensorsNotifications(removeIgnoringNotifications, node, TelegramActionType.Groups);
-                    }
-                },
-                "EnableAccountsNotifications": {
-                    "separator_before": false,
-                    "separator_after": false,
-                    "label": "Enable for accounts",
-                    "icon": "fab fa-telegram",
-                    "action": function (obj) {
-                        updateSensorsNotifications(enableNotifications, node, TelegramActionType.Accounts);
-                    }
-                },
-                "IgnoreAccountsNotifications": {
-                    "separator_before": false,
-                    "separator_after": false,
-                    "label": "Ignore for accounts",
-                    "icon": "fa-solid fa-bell-slash",
-                    "action": function (obj) {
-                        $.ajax({
-                            type: 'get',
-                            url: ignoreNotifications + '?Selected=' + node.id + '&ActionType=' + TelegramActionType.Accounts,
-                            datatype: 'html',
-                            contenttype: 'application/json',
-                            cache: false,
-                            success: function (viewData) {
-                                $("#ignoreNotificatios_partial").html(viewData);
-                            }
-                        }).done(function () {
-                            $('#ignoreNotifications_modal').modal('show');
-                        });
-                    }
-                },
-                "RemoveAccountsIgnoreNotifications": {
-                    "separator_before": false,
-                    "separator_after": false,
-                    "label": "Remove ignoring for accounts",
-                    "icon": "fa-solid fa-bell",
-                    "action": function (obj) {
-                        updateSensorsNotifications(removeIgnoringNotifications, node, TelegramActionType.Accounts);
-                    }
-                }
+                $('#closeDeleteButton').off('click').on('click', modal.hide);
             }
         }
     }
 
-    if (node.parents.length != 1) {
-        delete items.AccessKeys;
+    notificationSubmenu = {}
+    isAccEnabled = node.data.jstree.isAccountsEnable === "True";
 
-        if (node.children.length != 0) {
-            delete items.Edit;
+    if (isAccEnabled) {
+        notificationSubmenu["Accounts ignore"] = {
+            "label": "Ignore for accounts...",
+            "icon": "fab fa-telegram",
+            "action": _ => updateSensorsNotifications(ignoreNotificationsAction, node, TelegramTarget.Accounts),
+        }
+    } else {
+        notificationSubmenu["Accounts enable"] = {
+            "label": "Enable for accounts",
+            "icon": "fab fa-telegram",
+            "action": _ => updateSensorsNotifications(enableNotificationsAction, node, TelegramTarget.Accounts),
         }
     }
 
-    // TODO : if you remove Block sensor logic, also remove changeSensorBlockedState, hasUserNodeRights, initializeUserRights functions
-    //if (!hasUserNodeRights(node) || node.children.length != 0 || node.parents.length == 1) {
-    //    delete items.BlockSensor;
-    //    delete items.UnblockSensor;
-    //}
+    if (isManager) {
+        isGroupEnabled = node.data.jstree.isGroupsEnable === "True";
 
-    //if ($(`#${node.id} span.blockedSensor-span`).length === 0) {
-    //    delete items.UnblockSensor;
-    //}
-    //else {
-    //    delete items.BlockSensor;
-    //}
-
-    let isGroupsDisabled = document.getElementById(`${node.id}_groupsDisabledNotifications`);
-    let isGroupsIgnored = document.getElementById(`${node.id}_groupsIgnoredNotifications`);
-    if (isGroupsDisabled) {
-        delete items.Notifications.submenu.IgnoreGroupsNotifications;
-        delete items.Notifications.submenu.RemoveGroupsIgnoreNotifications;
-    }
-    if (isGroupsIgnored) {
-        delete items.Notifications.submenu.EnableGroupsNotifications;
-        delete items.Notifications.submenu.IgnoreGroupsNotifications;
-    }
-    if (!isGroupsDisabled && !isGroupsIgnored) {
-        delete items.Notifications.submenu.EnableGroupsNotifications;
-        delete items.Notifications.submenu.RemoveGroupsIgnoreNotifications;
-    }
-
-    let isAccountsEnabled = document.getElementById(`${node.id}_accountsNotifications`);
-    let isAccountsIgnored = document.getElementById(`${node.id}_accountsIgnoreNotifications`);
-    if (isAccountsEnabled) {
-        delete items.Notifications.submenu.EnableAccountsNotifications;
-        delete items.Notifications.submenu.RemoveAccountsIgnoreNotifications;
-    }
-    if (isAccountsIgnored) {
-        delete items.Notifications.submenu.EnableAccountsNotifications;
-        delete items.Notifications.submenu.IgnoreAccountsNotifications;
-    }
-    if (!isAccountsEnabled && !isAccountsIgnored) {
-        delete items.Notifications.submenu.IgnoreAccountsNotifications;
-        delete items.Notifications.submenu.RemoveAccountsIgnoreNotifications;
-    }
-
-    if (isCurrentUserAdmin === "True")
-        return items;
-
-    if (!hasUserNodeRights(node)) {
-        delete items.RemoveNode;
-        delete items.CleanHistory;
-    }
-
-    return items;
-}
-
-function updateSensorsNotifications(action, node, type) {
-    $.ajax({
-        type: 'post',
-        url: action + '?Selected=' + node.id + '&ActionType=' + type,
-        datatype: 'html',
-        contenttype: 'application/json',
-        cache: false
-    }).done(function () {
-        updateTreeTimer();
-    });
-}
-
-function changeSensorBlockedState(node, isBlocked) {
-    $.ajax({
-        type: 'post',
-        url: changeSensorState + '?Selected=' + node.id + '&Block=' + isBlocked,
-        datatype: 'html',
-        contenttype: 'application/json',
-        cache: false,
-        success: function () {
-            updateTreeTimer();
+        if (isGroupEnabled) {
+            notificationSubmenu["Groups ignore"] = {
+                "label": "Ignore for groups...",
+                "icon": "fab fa-telegram",
+                "action": _ => updateSensorsNotifications(ignoreNotificationsAction, node, TelegramTarget.Groups),
+            }
+        } else {
+            notificationSubmenu["Groups enable"] = {
+                "label": "Enable for groups",
+                "icon": "fab fa-telegram",
+                "action": _ => updateSensorsNotifications(enableNotificationsAction, node, TelegramTarget.Groups),
+            }
         }
-    });
-}
-
-function setIgnoreState(node, isIgnored) {
-    $.ajax(`${setIgnoreStateAction}?selectedId=${node.id}&isIgnored=${isIgnored}`,
-        {
-            type: 'post',
-            cache: false,
-            success: updateTreeTimer,
-        });
-}
-
-function hasUserNodeRights(node) {
-    let productId = node.parents.length === 1
-        ? node.id
-        : node.parents[node.parents.length - 2];
-
-    return isCurrentUserAdmin === "True" || currentUserProducts.includes(productId);
-}
-
-function getCurrentPathRequest(nodeId) {
-    return $.ajax({
-        type: 'POST',
-        url: getPath + '?Selected=' + nodeId + '&IsFullPath=true',
-        dataType: 'html',
-        contentType: 'application/json',
-        cache: false,
-        async: false
-    });
-}
-
-function getCurrentElementType(node) {
-    if (node.children.length === 0) {
-        return 'sensor';
     }
 
-    if (node.parents.length === 1) {
-        return 'product';
+    contextMenu["Notifications"] = {
+        "label": "Notifications",
+        "separator_before": true,
+        "submenu": notificationSubmenu,
+    };
+
+    return contextMenu;
+}
+    //var items =
+    //{
+    //    "Ignore": {
+    //        "separator_before": false,
+    //        "separator_after": false,
+    //        "label": `Ignore ${elementType}`,
+    //        //"icon": "fa-solid fa-ban",
+    //        "action": function (_) {
+    //            setIgnoreState(node, true);
+    //        }
+    //    },
+    //    "Notifications": {
+    //        "separator_before": false,
+    //        "separator_after": false,
+    //        "label": "Notifications",
+    //        "submenu": {
+    //            "EnableGroupsNotifications": {
+    //                "separator_before": false,
+    //                "separator_after": false,
+    //                "label": "Enable for groups",
+    //                "icon": "fab fa-telegram",
+    //                "action": function (obj) {
+    //                    updateSensorsNotifications(enableNotifications, node, TelegramTarget.Groups);
+    //                }
+    //            },
+    //            "IgnoreGroupsNotifications": {
+    //                "separator_before": false,
+    //                "separator_after": false,
+    //                "label": "Ignore for groups",
+    //                "icon": "fa-solid fa-bell-slash",
+    //                "action": function (obj) {
+    //                    $.ajax({
+    //                        type: 'get',
+    //                        url: ignoreNotifications + '?Selected=' + node.id + '&target=' + TelegramTarget.Groups,
+    //                        datatype: 'html',
+    //                        contenttype: 'application/json',
+    //                        cache: false,
+    //                        success: function (viewData) {
+    //                            $("#ignoreNotificatios_partial").html(viewData);
+    //                        }
+    //                    }).done(function () {
+    //                        $('#ignoreNotifications_modal').modal('show');
+    //                    });
+    //                }
+    //            },
+    //            "RemoveGroupsIgnoreNotifications": {
+    //                "separator_before": false,
+    //                "separator_after": false,
+    //                "label": "Remove ignoring for groups",
+    //                "icon": "fa-solid fa-bell",
+    //                "action": function (obj) {
+    //                    updateSensorsNotifications(removeIgnoringNotifications, node, TelegramTarget.Groups);
+    //                }
+    //            },
+    //            "EnableAccountsNotifications": {
+    //                "separator_before": false,
+    //                "separator_after": false,
+    //                "label": "Enable for accounts",
+    //                "icon": "fab fa-telegram",
+    //                "action": function (obj) {
+    //                    updateSensorsNotifications(enableNotifications, node, TelegramTarget.Accounts);
+    //                }
+    //            },
+    //            "IgnoreAccountsNotifications": {
+    //                "separator_before": false,
+    //                "separator_after": false,
+    //                "label": "Ignore for accounts",
+    //                "icon": "fa-solid fa-bell-slash",
+    //                "action": function (obj) {
+    //                    $.ajax({
+    //                        type: 'get',
+    //                        url: ignoreNotifications + '?Selected=' + node.id + '&target=' + TelegramTarget.Accounts,
+    //                        datatype: 'html',
+    //                        contenttype: 'application/json',
+    //                        cache: false,
+    //                        success: function (viewData) {
+    //                            $("#ignoreNotificatios_partial").html(viewData);
+    //                        }
+    //                    }).done(function () {
+    //                        $('#ignoreNotifications_modal').modal('show');
+    //                    });
+    //                }
+    //            },
+    //            "RemoveAccountsIgnoreNotifications": {
+    //                "separator_before": false,
+    //                "separator_after": false,
+    //                "label": "Remove ignoring for accounts",
+    //                "icon": "fa-solid fa-bell",
+    //                "action": function (obj) {
+    //                    updateSensorsNotifications(removeIgnoringNotifications, node, TelegramTarget.Accounts);
+    //                }
+    //            }
+    //        }
+    //    }
+    //}
+
+    //if (node.parents.length != 1) {
+    //    delete items.AccessKeys;
+
+    //    if (node.children.length != 0) {
+    //        delete items.Edit;
+    //    }
+    //}
+
+    //// TODO : if you remove Block sensor logic, also remove changeSensorBlockedState, hasUserNodeRights, initializeUserRights functions
+    ////if (!hasUserNodeRights(node) || node.children.length != 0 || node.parents.length == 1) {
+    ////    delete items.BlockSensor;
+    ////    delete items.UnblockSensor;
+    ////}
+
+    ////if ($(`#${node.id} span.blockedSensor-span`).length === 0) {
+    ////    delete items.UnblockSensor;
+    ////}
+    ////else {
+    ////    delete items.BlockSensor;
+    ////}
+
+    //let isGroupsDisabled = document.getElementById(`${node.id}_groupsDisabledNotifications`);
+    //let isGroupsIgnored = document.getElementById(`${node.id}_groupsIgnoredNotifications`);
+    //if (isGroupsDisabled) {
+    //    delete items.Notifications.submenu.IgnoreGroupsNotifications;
+    //    delete items.Notifications.submenu.RemoveGroupsIgnoreNotifications;
+    //}
+    //if (isGroupsIgnored) {
+    //    delete items.Notifications.submenu.EnableGroupsNotifications;
+    //    delete items.Notifications.submenu.IgnoreGroupsNotifications;
+    //}
+    //if (!isGroupsDisabled && !isGroupsIgnored) {
+    //    delete items.Notifications.submenu.EnableGroupsNotifications;
+    //    delete items.Notifications.submenu.RemoveGroupsIgnoreNotifications;
+    //}
+
+    //let isAccountsEnabled = document.getElementById(`${node.id}_accountsNotifications`);
+    //let isAccountsIgnored = document.getElementById(`${node.id}_accountsIgnoreNotifications`);
+    //if (isAccountsEnabled) {
+    //    delete items.Notifications.submenu.EnableAccountsNotifications;
+    //    delete items.Notifications.submenu.RemoveAccountsIgnoreNotifications;
+    //}
+    //if (isAccountsIgnored) {
+    //    delete items.Notifications.submenu.EnableAccountsNotifications;
+    //    delete items.Notifications.submenu.IgnoreAccountsNotifications;
+    //}
+    //if (!isAccountsEnabled && !isAccountsIgnored) {
+    //    delete items.Notifications.submenu.IgnoreAccountsNotifications;
+    //    delete items.Notifications.submenu.RemoveAccountsIgnoreNotifications;
+    //}
+
+    //if (isCurrentUserAdmin === "True")
+    //    return items;
+
+    //if (!hasUserNodeRights(node)) {
+    //    delete items.RemoveNode;
+    //    delete items.CleanHistory;
+    //}
+
+    //return items;
+    //    return contextMenu;
+    //}
+
+    function updateSensorsNotifications(action, node, type) {
+        return $.ajax(`${action}?selectedId=${node}&target=${type}`, AjaxPost).done(updateTreeTimer);
     }
 
-    return 'node';
-}
+    function getFullPathAction(nodeId) {
+        return $.ajax(`${getNodePathAction}?selectedId=${nodeId}&isFullPath=true`, AjaxPost);
+    }
+
+
+    function setIgnoreState(node, isIgnored) {
+        $.ajax(`${setIgnoreStateAction}?selectedId=${node.id}&isIgnored=${isIgnored}`,
+            {
+                type: 'post',
+                cache: false,
+                success: updateTreeTimer,
+            });
+    }
+
+    function getCurrentElementType(node) {
+        if (node.children.length === 0)
+            return NodeType.Sensor;
+
+        if (node.parents.length === 1)
+            return NodeType.Product;
+
+        return NodeType.Node;
+    }
+
+    function getKeyByValue(type) {
+        return Object.keys(NodeType).find(key => NodeType[key] === type).toLowerCase();
+    }

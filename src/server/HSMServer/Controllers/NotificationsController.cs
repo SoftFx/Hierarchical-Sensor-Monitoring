@@ -8,7 +8,7 @@ using HSMServer.Model.Authentication;
 using HSMServer.Notifications;
 using Microsoft.AspNetCore.Mvc;
 using System.Threading.Tasks;
-using SensorStatus = HSMServer.Model.TreeViewModels.SensorStatus;
+using SensorStatus = HSMServer.Model.TreeViewModel.SensorStatus;
 
 namespace HSMServer.Controllers
 {

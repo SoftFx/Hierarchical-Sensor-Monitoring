@@ -3,7 +3,7 @@ using HSMServer.Extensions;
 using HSMServer.Helpers;
 using System;
 
-namespace HSMServer.Model.TreeViewModels
+namespace HSMServer.Model.TreeViewModel
 {
     public enum SensorStatus
     {
