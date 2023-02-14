@@ -1,4 +1,5 @@
-﻿using System;
+﻿using HSMServer.Core.Model;
+using System;
 using System.ComponentModel.DataAnnotations;
 using System.Linq;
 using System.Reflection;
