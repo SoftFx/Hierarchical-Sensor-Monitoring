@@ -86,9 +86,10 @@ namespace HSMServer.Core.Model
             return string.Join(Environment.NewLine, items.Where(u => !string.IsNullOrEmpty(u)));
         }
 
+
         public static ValidationResult operator +(ValidationResult result1, ValidationResult result2)
         {
-            static HashSet<string> GetUnionErrors(HashSet<string> errors1, HashSet<string> errors2)
+            static HashSet<string> GetUnionHash(HashSet<string> errors1, HashSet<string> errors2)
             {
                 var errors = new HashSet<string>(errors1);
                 errors.UnionWith(errors2);
@@ -98,15 +99,15 @@ namespace HSMServer.Core.Model
 
             return new()
             {
-                Messages = GetUnionErrors(result1.Messages, result2.Messages),
-                Warnings = GetUnionErrors(result1.Warnings, result2.Warnings),
-                Errors = GetUnionErrors(result1.Errors, result2.Errors),
+                Messages = GetUnionHash(result1.Messages, result2.Messages),
+                Warnings = GetUnionHash(result1.Warnings, result2.Warnings),
+                Errors = GetUnionHash(result1.Errors, result2.Errors),
             };
         }
 
         public static ValidationResult operator -(ValidationResult result1, ValidationResult result2)
         {
-            static HashSet<string> GetExceptErrors(HashSet<string> errors1, HashSet<string> errors2)
+            static HashSet<string> GetExceptHash(HashSet<string> errors1, HashSet<string> errors2)
             {
                 var errors = new HashSet<string>(errors1);
                 errors.ExceptWith(errors2);
@@ -116,9 +117,9 @@ namespace HSMServer.Core.Model
 
             return new()
             {
-                Warnings = GetExceptErrors(result1.Warnings, result2.Warnings),
-                Errors = GetExceptErrors(result1.Errors, result2.Errors),
-                Messages = GetExceptErrors(result1.Messages, result2.Messages),
+                Warnings = GetExceptHash(result1.Warnings, result2.Warnings),
+                Errors = GetExceptHash(result1.Errors, result2.Errors),
+                Messages = GetExceptHash(result1.Messages, result2.Messages),
             };
         }
 
