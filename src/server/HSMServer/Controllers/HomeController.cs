@@ -88,18 +88,6 @@ namespace HSMServer.Controllers
         }
 
         [HttpPost]
-        public void ChangeSensorState([FromQuery(Name = "Selected")] string selectedId, [FromQuery(Name = "Block")] bool isBlocked)
-        {
-            var sensorUpdate = new SensorUpdate()
-            {
-                Id = SensorPathHelper.DecodeGuid(selectedId),
-                State = isBlocked ? SensorState.Blocked : SensorState.Available,
-            };
-
-            _treeValuesCache.UpdateSensor(sensorUpdate);
-        }
-
-        [HttpPost]
         public void SetIgnoreStateToSensor([FromQuery] string selectedId, [FromQuery] bool isIgnored)
         {
             var decodedId = SensorPathHelper.DecodeGuid(selectedId);

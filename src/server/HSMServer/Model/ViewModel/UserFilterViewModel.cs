@@ -12,9 +12,10 @@ namespace HSMServer.Model.ViewModel
         public bool IsEmptyHistory { get; set; }
 
         public bool HasTelegramNotifications { get; set; }
+        
         public bool IsIgnoredSensors { get; set; }
 
-        public bool IsBlockedSensors { get; set; }
+        public bool IsIgnoredStateSensors { get; set; }
 
         public int TreeUpdateInterval { get; set; }
 
@@ -35,7 +36,7 @@ namespace HSMServer.Model.ViewModel
             HasTelegramNotifications = filter.ByNotifications.Enabled.Value;
             IsIgnoredSensors = filter.ByNotifications.Ignored.Value;
 
-            IsBlockedSensors = filter.ByState.Blocked.Value;
+            IsIgnoredStateSensors = filter.ByState.Ignored.Value;
 
             TreeUpdateInterval = filter.TreeUpdateInterval;
             TreeSortType = (int)filter.TreeSortType;
@@ -60,7 +61,7 @@ namespace HSMServer.Model.ViewModel
             filter.ByNotifications.Enabled.Value = HasTelegramNotifications;
             filter.ByNotifications.Ignored.Value = IsIgnoredSensors;
 
-            filter.ByState.Blocked.Value = IsBlockedSensors;
+            filter.ByState.Ignored.Value = IsIgnoredStateSensors;
 
             return filter;
         }
