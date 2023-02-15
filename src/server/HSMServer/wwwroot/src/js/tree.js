@@ -145,6 +145,12 @@ function buildContextMenu(node) {
             "separator_after": true,
             "action": _ => showAccessKeysList(node.id, true),
         };
+        
+        contextMenu["CopyName"] = {
+            "label": "Copy name",
+            "separator_after": true,
+            "action": _ => copyToClipboard(node.data.jstree.title),
+        };
     }
     else {
         contextMenu["CopyPath"] = {
@@ -155,6 +161,25 @@ function buildContextMenu(node) {
     }
 
     if (isManager) {
+        if(curType === NodeType.Sensor){
+            let isSensorIgnored = node.data.jstree.isSensorIgnored === "True";
+            if(!isSensorIgnored){
+                contextMenu["Ignore"] = {
+                    "label": `Ignore ${getKeyByValue(curType)}`,
+                    "separator_after": true,
+                    "separator_before": true,
+                    "action": _ => ignoreNotificationsRequest(node, TelegramTarget.Groups, 'true')
+                }
+            }else{
+                contextMenu["Ignore"] = {
+                    "label": `Enable ${getKeyByValue(curType)}`,
+                    "separator_after": true,
+                    "separator_before": true,
+                    "action": _ => removeIgnoreStateRequest(node)
+                }
+            }
+        }
+        
         if (curType !== NodeType.Node) {
             contextMenu["Edit"] = {
                 "label": `Edit ${getKeyByValue(curType)}`,
@@ -263,21 +288,6 @@ function buildContextMenu(node) {
                 "label": "Enable for groups",
                 "icon": "fab fa-telegram",
                 "action": _ => enableNotificationsRequest(node, TelegramTarget.Groups),
-            }
-        }
-        
-        if(curType === NodeType.Sensor){
-            let isSensorIgnored = node.data.jstree.isSensorIgnored === "True";
-            if(!isSensorIgnored){
-                contextMenu["Ignore"] = {
-                    "label": "Ignore",
-                    "action": _ => ignoreNotificationsRequest(node, TelegramTarget.Groups, 'true')
-                }
-            }else{
-                contextMenu["Ignore"] = {
-                    "label": "Enable",
-                    "action": _ => removeIgnoreStateRequest(node)
-                }
             }
         }
     }
