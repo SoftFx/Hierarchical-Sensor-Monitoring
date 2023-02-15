@@ -66,12 +66,29 @@ namespace HSMServer.BackgroundTask
                 bool needUpdateUser = false;
 
                 foreach (var (sensorId, endOfIgnorePeriod) in user.Notifications.IgnoredSensors)
-                    if (DateTime.UtcNow >= endOfIgnorePeriod &&
-                        user.Notifications.IgnoredSensors.TryRemove(sensorId, out _))
+                    if (DateTime.UtcNow >= endOfIgnorePeriod)
+                    {
+                        user.Notifications.RemoveIgnore(sensorId);
                         needUpdateUser = true;
+                    }
 
                 if (needUpdateUser)
                     _userManager.UpdateUser(user);
+            }
+
+            foreach (var product in _cache.GetProducts())
+            {
+                bool needUpdate = false;
+
+                foreach (var (sensorId, endOfIgnorePeriod) in product.Notifications.IgnoredSensors)
+                    if (DateTime.UtcNow >= endOfIgnorePeriod)
+                    {
+                        product.Notifications.RemoveIgnore(sensorId);
+                        needUpdate = true;
+                    }
+
+                if (needUpdate)
+                    _cache.UpdateProduct(product);
             }
         }
 
