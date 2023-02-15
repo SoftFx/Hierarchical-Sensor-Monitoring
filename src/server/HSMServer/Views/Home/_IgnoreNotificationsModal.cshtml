@@ -19,7 +19,14 @@
                 <div class="modal-content">
                     <div class="modal-header">
                         <div>
-                            <h5 class="modal-title">[@Model.NotificationsTarget] Ignore notifications for @Model.TreeElement</h5>
+                            @if (Model.IsOffTimeModal)
+                            {
+                                <h5 class="modal-title">Ignore @Model.TreeElement</h5>
+                            }
+                            else
+                            {
+                                <h5 class="modal-title">[@Model.NotificationsTarget] Ignore notifications for @Model.TreeElement</h5>
+                            }
                             <h6 class="modal-title">@Model.Path</h6>
                         </div>
                     </div>

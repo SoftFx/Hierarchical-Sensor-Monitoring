@@ -72,6 +72,7 @@ namespace HSMServer.Model
             DateTimeNow = now.AddSeconds(-now.Second)
                              .AddMilliseconds(-now.Millisecond);
             
+            NotificationsTarget = target;
             IsOffTimeModal = isOffTimeModal;
         }
     }

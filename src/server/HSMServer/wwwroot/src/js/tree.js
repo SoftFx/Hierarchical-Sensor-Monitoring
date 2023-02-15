@@ -265,6 +265,21 @@ function buildContextMenu(node) {
                 "action": _ => enableNotificationsRequest(node, TelegramTarget.Groups),
             }
         }
+        
+        if(curType === NodeType.Sensor){
+            let isSensorIgnored = node.data.jstree.isSensorIgnored === "True";
+            if(!isSensorIgnored){
+                contextMenu["Ignore"] = {
+                    "label": "Ignore",
+                    "action": _ => ignoreNotificationsRequest(node, TelegramTarget.Groups, 'true')
+                }
+            }else{
+                contextMenu["Ignore"] = {
+                    "label": "Enable",
+                    "action": _ => removeIgnoreStateRequest(node)
+                }
+            }
+        }
     }
 
     contextMenu["Notifications"] = {
@@ -438,9 +453,12 @@ function enableNotificationsRequest(node, target) {
     return $.ajax(`${enableNotificationsAction}?selectedId=${node.id}&target=${target}`, AjaxPost).done(updateTreeTimer);
 }
 
+function removeIgnoreStateRequest(node){
+    return $.ajax(`${removeIgnoreStateAction}?selectedId=${node.id}`, AjaxPost).done(updateTreeTimer);
+}
 
-function ignoreNotificationsRequest(node, target) {
-    return $.ajax(`${ignoreNotificationsAction}?selectedId=${node.id}&target=${target}`, {
+function ignoreNotificationsRequest(node, target, isOffTimeModal = 'false') {
+    return $.ajax(`${ignoreNotificationsAction}?selectedId=${node.id}&target=${target}&isOffTimeModal=${isOffTimeModal}`, {
         cache: false,
         success: (v) => $("#ignoreNotificatios_partial").html(v),
     }).done(() => $('#ignoreNotifications_modal').modal('show'))
