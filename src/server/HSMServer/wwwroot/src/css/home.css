@@ -81,6 +81,10 @@
     text-decoration: line-through;
 }
 
+.ignored-state-text{
+    color: grey;
+}
+
 .grid-container {
     display: grid;
     grid-template-columns: repeat(auto-fill, 105px);
