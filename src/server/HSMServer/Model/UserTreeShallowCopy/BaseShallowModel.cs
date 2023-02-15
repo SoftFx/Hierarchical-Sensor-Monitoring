@@ -15,6 +15,8 @@ namespace HSMServer.Model.UserTreeShallowCopy
 
         public abstract bool IsGroupsEnable { get; }
 
+        public abstract bool IsIgnoredState { get; }
+        
 
         protected BaseShallowModel(T data, User user)
         {
@@ -32,7 +34,8 @@ namespace HSMServer.Model.UserTreeShallowCopy
             "time": "{{Data.UpdateTime.ToDefaultFormat()}}",
             "isManager": "{{_curUserIsManager}}",
             "isAccountsEnable": "{{IsAccountsEnable}}",
-            "isGroupsEnable": "{{IsGroupsEnable}}"
+            "isGroupsEnable": "{{IsGroupsEnable}}",
+            "isSensorIgnored": "{{IsIgnoredState}}"
         }
         """;
     }
