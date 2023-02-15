@@ -204,7 +204,7 @@ function customMenu(node) {
         //},
         "RemoveNode":{
             "separator_before": true,
-            "separator_after": true,
+            "separator_after": false,
             "label": `Remove ${elementType}`,
             "action": function (obj) {
                 var modal = new bootstrap.Modal(document.getElementById('modalDelete'));
