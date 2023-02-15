@@ -9,7 +9,7 @@
 
 @if (Model != null)
 {
-    <form id="ignoreNotifications_form" asp-action="@(Model.IsOffTimeModal ? nameof(HomeController.IgnoreNotifications) : nameof(HomeController.SetIgnoreStateToSensorFromModal))" method="post">
+    <form id="ignoreNotifications_form" asp-action="@(Model.IsOffTimeModal ? nameof(HomeController.IgnoreNotifications) : nameof(HomeController.IgnoreNotifications))" method="post">
         <input class="d-none" asp-for="EncodedId" />
         <input class="d-none" asp-for="DateTimeNow" />
         <input class="d-none" asp-for="NotificationsTarget" />

@@ -454,14 +454,14 @@ function getFullPathAction(nodeId) {
     return $.ajax(`${getNodePathAction}?selectedId=${nodeId}&isFullPath=true`, AjaxPost);
 }
 
-function setIgnoreState(node, isIgnored) {
-    $.ajax(`${setIgnoreStateAction}?selectedId=${node.id}&isIgnored=${isIgnored}`,
-        {
-            type: 'post',
-            cache: false,
-            success: updateTreeTimer,
-        });
-}
+//function setIgnoreState(node, isIgnored) {
+//    $.ajax(`${setIgnoreStateAction}?selectedId=${node.id}&isIgnored=${isIgnored}`,
+//        {
+//            type: 'post',
+//            cache: false,
+//            success: updateTreeTimer,
+//        });
+//}
 
 function getCurrentElementType(node) {
     if (node.children.length === 0)
