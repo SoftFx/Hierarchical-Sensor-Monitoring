@@ -52,11 +52,12 @@ namespace HSMServer.Model
                                                         .AddHours(Hours)
                                                         .AddMinutes(Minutes);
 
+        public bool IsOffTimeModal { get; set; }
 
         // public constructor without parameters for action Home/IgnoreNotifications
         public IgnoreNotificationsViewModel() { }
 
-        public IgnoreNotificationsViewModel(NodeViewModel node, NotificationsTarget target)
+        public IgnoreNotificationsViewModel(NodeViewModel node, NotificationsTarget target, bool isOffTimeModal)
         {
             EncodedId = node.EncodedId;
             Path = $"{node.Product}{node.Path}";
@@ -70,6 +71,8 @@ namespace HSMServer.Model
             var now = DateTime.UtcNow;
             DateTimeNow = now.AddSeconds(-now.Second)
                              .AddMilliseconds(-now.Millisecond);
+            
+            IsOffTimeModal = isOffTimeModal;
         }
     }
 }

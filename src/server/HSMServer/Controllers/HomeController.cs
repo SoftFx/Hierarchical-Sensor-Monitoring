@@ -88,6 +88,16 @@ namespace HSMServer.Controllers
         }
 
         [HttpPost]
+        public void SetIgnoreStateToSensorFromModal(IgnoreNotificationsViewModel model)
+        {
+            var decodedId = SensorPathHelper.DecodeGuid(model.EncodedId);
+            var newIgnorePeriod = model.EndOfIgnorePeriod;
+
+            if (_treeViewModel.Sensors.TryGetValue(decodedId, out var sensor))
+                _treeValuesCache.UpdateIgnoreSensorState(sensor.Id, newIgnorePeriod);
+        }
+
+        [HttpPost]
         public void SetIgnoreStateToSensor([FromQuery] string selectedId, [FromQuery] bool isIgnored)
         {
             var decodedId = SensorPathHelper.DecodeGuid(selectedId);
@@ -129,16 +139,16 @@ namespace HSMServer.Controllers
         }
 
         [HttpGet]
-        public IActionResult IgnoreNotifications([FromQuery] string selectedId, [FromQuery] NotificationsTarget target)
+        public IActionResult IgnoreNotifications([FromQuery] string selectedId, [FromQuery] NotificationsTarget target, [FromQuery] bool isOffTimeModal)
         {
             var decodedId = SensorPathHelper.DecodeGuid(selectedId);
 
             IgnoreNotificationsViewModel viewModel = null;
 
             if (_treeViewModel.Nodes.TryGetValue(decodedId, out var node))
-                viewModel = new IgnoreNotificationsViewModel(node, target);
+                viewModel = new IgnoreNotificationsViewModel(node, target, isOffTimeModal);
             else if (_treeViewModel.Sensors.TryGetValue(decodedId, out var sensor))
-                viewModel = new IgnoreNotificationsViewModel(sensor, target);
+                viewModel = new IgnoreNotificationsViewModel(sensor, target, isOffTimeModal);
 
             return PartialView("_IgnoreNotificationsModal", viewModel);
         }
