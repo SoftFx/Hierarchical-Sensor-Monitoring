@@ -72,6 +72,7 @@ namespace HSMServer.Core.Model
             if (IsSensorEnabled(sensorId))
             {
                 IgnoredSensors.TryAdd(sensorId, endOfIgnorePeriod);
+                EnabledSensors.Remove(sensorId);
             }
         }
 

@@ -26,9 +26,6 @@
     var refreshTree = "@Html.Raw(Url.Action(ViewConstants.RefreshTreeAction, ViewConstants.HomeController))";
 
     var setIgnoreStateAction = "@Url.Action(nameof(HomeController.SetIgnoreStateToSensor), ViewConstants.HomeController)";
-
-    var enableNotificationsAction = "@Url.Action(nameof(HomeController.EnableNotifications), ViewConstants.HomeController)";
-    var ignoreNotificationsAction = "@Url.Action(nameof(HomeController.IgnoreNotifications), ViewConstants.HomeController)";
     var removeIgnoringNotifications = "@Html.Raw(Url.Action(nameof(HomeController.RemoveIgnoringNotifications), ViewConstants.HomeController))";
 
     var historyLatestAction = "@Html.Raw(Url.Action(nameof(HomeController.HistoryLatest), ViewConstants.HomeController))";
@@ -47,6 +44,9 @@
     var editProductAction = "@Url.Action(nameof(ProductController.EditProduct), ViewConstants.ProductController)";
     var removeNodeAction = "@Url.Action(nameof(HomeController.RemoveNode), ViewConstants.HomeController)";
     var clearHistoryAction = "@Url.Action(nameof(HomeController.ClearHistoryNode), ViewConstants.HomeController)";
+
+    var enableNotificationsAction = "@Url.Action(nameof(HomeController.EnableNotifications), ViewConstants.HomeController)";
+    var ignoreNotificationsAction = "@Url.Action(nameof(HomeController.IgnoreNotifications), ViewConstants.HomeController)";
 </script>
 
 

@@ -14,33 +14,47 @@
 
     @*@if (userNotifications.IsSensorIgnored(Model.Id))
     {
-        <span class="d-none">
-            <img id="@(Model.EncodedId)_accountsIgnoreNotifications" src="~/dist/user-crossed.png" style="height: 1em;width: 1em;" alt=""/>
-        </span>
+    <span class="d-none">
+    <img id="@(Model.EncodedId)_accountsIgnoreNotifications" src="~/dist/user-crossed.png" style="height: 1em;width: 1em;" alt=""/>
+    </span>
     }
     else if (userNotifications.IsSensorEnabled(Model.Id))
     {
-        <span class="d-none">
-            <img id="@(Model.EncodedId)_accountsNotifications" src="~/dist/user.png" style="height: 1em;width: 1em;" alt=""/>
+    <span class="d-none">
+    <img id="@(Model.EncodedId)_accountsNotifications" src="~/dist/user.png" style="height: 1em;width: 1em;" alt=""/>
+    </span>
+    }*@
+
+    @if (Model.IsGroupsEnable)
+    {
+        <span>
+            <img src="~/dist/users.png" style="height: 1em; width: 1em;" alt="!" />
+        </span>
+    }
+
+    @*else
+    {
+        <span>
+            <img src="~/dist/users.png" style="height: 1em; width: 1em;" alt="!" />
         </span>
     }*@
 
-    @if (data.GroupNotifications.IsSensorIgnored(data.Id))
+    @*    @if (data.GroupNotifications.IsSensorIgnored(data.Id))
     {
-        <span>
-            <img id="@(data.EncodedId)_groupsIgnoredNotifications" src="~/dist/snooze.png" style="height: 1em;width: 1em;" alt="!" />
-        </span>
+    <span>
+    <img id="@(data.EncodedId)_groupsIgnoredNotifications" src="~/dist/snooze.png" style="height: 1em;width: 1em;" alt="!" />
+    </span>
     }
     else if (data.GroupNotifications.IsSensorEnabled(data.Id))
     {
-        <span class="d-none">
-            <img id="@(data.EncodedId)_groupsNotifications" src="~/dist/users.png" style="height: 1em; width: 1em;" alt="" />
-        </span>
+    <span class="d-none">
+    <img id="@(data.EncodedId)_groupsNotifications" src="~/dist/users.png" style="height: 1em; width: 1em;" alt="" />
+    </span>
     }
     else
     {
-        <span>
-            <i id="@(data.EncodedId)_groupsDisabledNotifications" class="fa-solid fa-bell-slash"></i>
-        </span>
-    }
+    <span>
+    <i id="@(data.EncodedId)_groupsDisabledNotifications" class="fa-solid fa-bell-slash"></i>
+    </span>
+    }*@
 </li>
