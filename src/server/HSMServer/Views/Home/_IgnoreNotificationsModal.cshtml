@@ -100,9 +100,16 @@
     }
 
     function calculateInputs() {
+        let selectedOptionText = $('option:selected', $('#timeIntervalSelect')).text();
+        if (selectedOptionText === 'Forever'){
+            disableInputs();
+        }
+        else{
+            enableInputs();    
+        }
+       
         clearInputs();
 
-        let selectedOptionText = $('option:selected', $('#timeIntervalSelect')).text();
         let periods = selectedOptionText.split(' ');
 
         if (periods.length % 2 != 0) {
@@ -125,6 +132,17 @@
         }
     }
 
+    function disableInputs(){
+        $('#interval_inputs :input').each(function () {
+            $(this).prop('disabled',true);
+        });
+    }
+    
+    function enableInputs(){
+        $('#interval_inputs :input').each(function () {
+            $(this).prop('disabled',false);
+        });
+    }
     function clearInputs() {
         $('#interval_inputs :input').each(function () {
             this.value = '0';
@@ -132,12 +150,20 @@
     }
 
     function updateNote() {
-        let now = moment.utc('@(Model?.DateTimeNow.ToDefaultFormat())', "DD/MM/YYYY HH:mm:ss");
-        let endOfIgnorePeriod = moment(now).add($('#ignoreNotifications_minutes').val(), 'm')
-                                           .add($('#ignoreNotifications_hours').val(), 'h')
-                                           .add($('#ignoreNotifications_days').val(), 'd');
+        let note = `Note: ${'@(Model?.TreeElement)'} notifications will be ignored `;
+        let selectedOptionText = $('option:selected', $('#timeIntervalSelect')).text();
+        if (selectedOptionText === 'Forever'){
+            note += `forever`;
+            $('#ignoreNotifications_note').html(note);
+        }
+        else{
+            let now = moment.utc('@(Model?.DateTimeNow.ToDefaultFormat())', "DD/MM/YYYY HH:mm:ss");
+            let endOfIgnorePeriod = moment(now).add($('#ignoreNotifications_minutes').val(), 'm')
+                                               .add($('#ignoreNotifications_hours').val(), 'h')
+                                               .add($('#ignoreNotifications_days').val(), 'd');
 
-        let note = `Note: ${'@(Model?.TreeElement)'} notifications will be ignored until ${endOfIgnorePeriod.format('DD/MM/YYYY HH:mm')}`;
-        $('#ignoreNotifications_note').html(note);
+            note += `until ${endOfIgnorePeriod.format('DD/MM/YYYY HH:mm')}`;
+            $('#ignoreNotifications_note').html(note);
+        }
     }
 </script>

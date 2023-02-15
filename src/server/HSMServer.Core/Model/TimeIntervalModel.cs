@@ -7,6 +7,7 @@
         Day,
         Week,
         Month,
+        Forever,
         Custom = byte.MaxValue,
     }
 

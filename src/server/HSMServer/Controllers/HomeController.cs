@@ -18,6 +18,7 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using TimeInterval = HSMServer.Model.TimeInterval;
 
 namespace HSMServer.Controllers
 {
@@ -162,7 +163,7 @@ namespace HSMServer.Controllers
             void IgnoreSensors(UserNotificationSettings settings, Guid sensorId)
             {
                 if (settings.IsSensorEnabled(sensorId))
-                    settings.IgnoredSensors.TryAdd(sensorId, model.EndOfIgnorePeriod);
+                    settings.IgnoredSensors.TryAdd(sensorId, model.IgnorePeriod.TimeInterval == TimeInterval.Forever ? DateTime.MaxValue : model.EndOfIgnorePeriod);
             }
 
             UpdateUserNotificationSettings(model.EncodedId, IgnoreSensors);

@@ -35,6 +35,7 @@ namespace HSMServer.Model
         Week,
         [Display(Name = "1 month")]
         Month,
+        Forever,
         Custom,
     }
 
@@ -93,6 +94,7 @@ namespace HSMServer.Model
                 TimeInterval.Week => CoreTimeInterval.Week,
                 TimeInterval.Month => CoreTimeInterval.Month,
                 TimeInterval.Custom => CoreTimeInterval.Custom,
+                TimeInterval.Forever => CoreTimeInterval.Forever,
                 _ => CoreTimeInterval.Custom,
             };
 
@@ -112,6 +114,7 @@ namespace HSMServer.Model
                 CoreTimeInterval.Day => TimeInterval.Day,
                 CoreTimeInterval.Week => TimeInterval.Week,
                 CoreTimeInterval.Month => TimeInterval.Month,
+                CoreTimeInterval.Forever => TimeInterval.Forever,
                 CoreTimeInterval.Custom => customIntervalTicks == 0L ? TimeInterval.None : TimeInterval.Custom,
                 _ => TimeInterval.None,
             };
