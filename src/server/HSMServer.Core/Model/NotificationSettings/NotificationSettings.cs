@@ -75,7 +75,14 @@ namespace HSMServer.Core.Model
             }
         }
 
-        public void RemoveIgnore(Guid sensorId) => IgnoredSensors.TryRemove(sensorId, out _);
+        public void RemoveIgnore(Guid sensorId)
+        {
+            if (IsSensorIgnored(sensorId))
+            {
+                IgnoredSensors.TryRemove(sensorId, out _);
+                EnabledSensors.Add(sensorId);
+            }
+        }
 
         public void Disable(Guid sensorId) => RemoveSensor(sensorId);
 

@@ -16,6 +16,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
 
@@ -95,24 +96,11 @@ namespace HSMServer.Controllers
 
             if (_treeViewModel.Sensors.TryGetValue(decodedId, out var sensor))
                 _treeValuesCache.UpdateIgnoreSensorState(sensor.Id, newIgnorePeriod);
-            
-            UpdateUserNotificationSettings(model.EncodedId,  (s, g) =>
-            {
-                if (model.IgnorePeriod.TimeInterval == Model.TimeInterval.Forever)
-                    s.Disable(g);
-                else
-                    s.Ignore(g, model.EndOfIgnorePeriod);
-            });
-            
-            UpdateGroupNotificationSettings(model.EncodedId,  (s, g) =>
-            {
-                if (model.IgnorePeriod.TimeInterval == Model.TimeInterval.Forever)
-                    s.Disable(g);
-                else
-                    s.Ignore(g, model.EndOfIgnorePeriod);
-            });
+
+            UpdateUserNotificationSettings(model.EncodedId, (s, g) => s.Ignore(g, model.EndOfIgnorePeriod));
+            UpdateGroupNotificationSettings(model.EncodedId, (s, g) => s.Ignore(g, model.EndOfIgnorePeriod));
         }
-        
+
         [HttpPost]
         public void RemoveIgnoreStateToSensor([FromQuery] string selectedId)
         {
@@ -120,6 +108,9 @@ namespace HSMServer.Controllers
 
             if (_treeViewModel.Sensors.TryGetValue(decodedId, out var sensor))
                 _treeValuesCache.UpdateIgnoreSensorState(sensor.Id);
+
+            UpdateUserNotificationSettings(selectedId, (s, g) => s.RemoveIgnore(g));
+            UpdateGroupNotificationSettings(selectedId, (s, g) => s.RemoveIgnore(g));
         }
 
         [HttpPost]
@@ -172,10 +163,6 @@ namespace HSMServer.Controllers
                 else
                     s.Ignore(g, model.EndOfIgnorePeriod);
             });
-
-        [HttpPost]
-        public void RemoveIgnoringNotifications([FromQuery] string selectedId, [FromQuery] NotificationsTarget target) =>
-            GetHandler(target)(selectedId, (s, g) => s.RemoveIgnore(g));
 
         [HttpPost]
         public string GetNodePath([FromQuery] string selectedId, [FromQuery] bool isFullPath = false)

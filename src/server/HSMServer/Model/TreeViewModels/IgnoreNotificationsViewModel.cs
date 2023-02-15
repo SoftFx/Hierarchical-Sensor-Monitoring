@@ -48,11 +48,11 @@ namespace HSMServer.Model
 
         public DateTime DateTimeNow { get; set; }
 
-        public DateTime EndOfIgnorePeriod => DateTimeNow.AddDays(Days)
-                                                        .AddHours(Hours)
-                                                        .AddMinutes(Minutes);
+        public DateTime EndOfIgnorePeriod => IgnorePeriod.TimeInterval == TimeInterval.Forever ? 
+                                             DateTime.MaxValue : DateTimeNow.AddDays(Days).AddHours(Hours).AddMinutes(Minutes);
 
         public bool IsOffTimeModal { get; set; }
+
 
         // public constructor without parameters for action Home/IgnoreNotifications
         public IgnoreNotificationsViewModel() { }
