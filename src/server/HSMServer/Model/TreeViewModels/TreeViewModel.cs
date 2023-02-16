@@ -77,7 +77,7 @@ namespace HSMServer.Model.TreeViewModel
             if (user.ProductsRoles == null || user.ProductsRoles.Count == 0)
                 return new List<ProductNodeViewModel>();
 
-            return products.Where(p => user.IsManager(p.Id)).ToList();
+            return products.Where(p => user.IsProductAvailable(p.Id)).ToList();
         }
 
         internal void RecalculateNodesCharacteristics()
