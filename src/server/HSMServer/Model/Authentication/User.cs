@@ -111,10 +111,7 @@ namespace HSMServer.Model.Authentication
             IsAdmin || (ProductsRoles?.Any(x => x.Item1.Equals(productId)) ?? false);
         
         public bool IsManager(Guid productId) =>
-            IsAdmin || (ProductsRoles?.Any(x => x.Item1.Equals(productId) && x.Item2 == ProductRoleEnum.ProductManager) ?? false);
-
-        public List<Guid> GetManagerProducts() =>
-            ProductsRoles.Where(r => r.Item2 == ProductRoleEnum.ProductManager).Select(r => r.Item1).ToList();
+            IsAdmin || (ProductsRoles?.Any(x => x == (productId, ProductRoleEnum.ProductManager)) ?? false);
 
         internal UserEntity ToEntity() =>
             new()
