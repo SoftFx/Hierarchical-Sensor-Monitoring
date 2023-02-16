@@ -30,7 +30,7 @@
                                     <span id='validation_@sensorId'>
                                         @if (Model.IsValidationErrorVisible)
                                         {
-                                            <li id='errorIcon_@sensorId' class='fas fa-exclamation-triangle' style='margin-right:5px' title='@Model.ValidationError'></li>
+                                            <li id='errorIcon_@sensorId' class='fas fa-exclamation-triangle' style='margin-right:5px' title='@Model.ErrorIconTooltip'></li>
                                         }
                                     </span>
                                 </div>
@@ -75,7 +75,7 @@
                                     <span id='validation_@sensorId'>
                                         @if (Model.IsValidationErrorVisible)
                                         {
-                                            <li id='errorIcon_@sensorId' class='fas fa-exclamation-triangle' style='margin-right:5px' title='@Model.ValidationError'></li>
+                                            <li id='errorIcon_@sensorId' class='fas fa-exclamation-triangle' style='margin-right:5px' title='@Model.ErrorIconTooltip'></li>
                                         }
                                     </span>
                                 </div>

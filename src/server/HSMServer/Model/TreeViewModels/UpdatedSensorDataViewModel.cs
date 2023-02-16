@@ -37,12 +37,14 @@ namespace HSMServer.Model.TreeViewModel
 
         public bool IsValidationErrorVisible { get; }
 
+        public string ErrorIconTooltip { get; }
 
         public UpdatedSensorDataViewModel(SensorNodeViewModel sensor) : base(sensor)
         {
             Value = sensor.ShortStringValue;
             ValidationError = sensor.ValidationError;
             IsValidationErrorVisible = sensor.IsValidationErrorVisible;
+            ErrorIconTooltip = sensor.ErrorIconTooltip;
         }
     }
 }
