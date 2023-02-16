@@ -31,6 +31,13 @@
             <img class="tree-png-icon" src="~/dist/users.png" alt="!" />
         </span>
     }
+    
+    @if (Model.IsAccountsEnable)
+    {
+        <span>
+            <img class="tree-png-icon" src="~/dist/user.png" alt="!" />
+        </span>
+    }
 
     @*else
     {
