@@ -21,7 +21,7 @@ namespace HSMServer.Core.Model
 
     public abstract class BaseSensorModel : NodeBaseModel
     {
-        private readonly ValidationResult _ignoreStatus = new("Ignored sensor", SensorStatus.OffTime);
+        private readonly ValidationResult _ignoreStatus = new("Ignored forever", SensorStatus.OffTime);
 
         private ValidationResult _curStatus;
 
@@ -40,8 +40,13 @@ namespace HSMServer.Core.Model
 
         public ValidationResult ValidationResult
         {
-            get => State == SensorState.Ignored ? _ignoreStatus : _curStatus;
-
+            get
+            {
+                if (State == SensorState.Ignored) 
+                    return EndOfIgnore == DateTime.MaxValue ? _ignoreStatus : new ValidationResult($"Ignored until {EndOfIgnore.Value}", SensorStatus.OffTime);
+                
+                return _curStatus;
+            }
             set => _curStatus = value;
         }
 

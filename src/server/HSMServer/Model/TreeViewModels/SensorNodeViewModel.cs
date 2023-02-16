@@ -29,8 +29,7 @@ namespace HSMServer.Model.TreeViewModel
 
         public NotificationSettings GroupNotifications { get; set; }
         
-        public bool IsValidationErrorVisible =>
-            !string.IsNullOrEmpty(ValidationError) && Status != SensorStatus.OffTime;
+        public bool IsValidationErrorVisible => !string.IsNullOrEmpty(ValidationError);
 
 
         public SensorNodeViewModel(BaseSensorModel model) : base(model.Id)
@@ -54,7 +53,7 @@ namespace HSMServer.Model.TreeViewModel
             Product = model.RootProductName;
             Path = model.Path;
             Unit = model.Unit;
-
+            
             LastValue = model.LastValue;
             HasData = model.HasData;
             ShortStringValue = model.LastValue?.ShortInfo;
