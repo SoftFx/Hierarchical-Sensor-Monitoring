@@ -464,7 +464,10 @@ function enableNotificationsRequest(node, target) {
 }
 
 function removeIgnoreStateRequest(node){
-    return $.ajax(`${removeIgnoreStateAction}?selectedId=${node.id}`, AjaxPost).done(updateTreeTimer);
+    return $.ajax(`${removeIgnoreStateAction}?selectedId=${node.id}`, AjaxPost).done(() => { 
+        updateSelectedNodeData();
+        updateTreeTimer();
+    });
 }
 
 function ignoreNotificationsRequest(node, target, isOffTimeModal = 'false') {
