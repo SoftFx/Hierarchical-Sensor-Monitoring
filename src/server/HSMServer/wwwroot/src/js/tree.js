@@ -221,7 +221,7 @@ function buildContextMenu(node) {
                         });
                 });
 
-                $('#closeDeleteButton').off('click').on('click', modal.hide);
+                $('#closeDeleteButton').off('click').on('click', () => modal.hide());
             }
         }
 
@@ -252,7 +252,7 @@ function buildContextMenu(node) {
                         });
                 });
 
-                $('#closeDeleteButton').off('click').on('click', modal.hide);
+                $('#closeDeleteButton').off('click').on('click', () => modal.hide());
             }
         }
     }
