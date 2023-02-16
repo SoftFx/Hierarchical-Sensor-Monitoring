@@ -495,12 +495,12 @@ function getFullPathAction(nodeId) {
 //}
 
 function getCurrentElementType(node) {
-    if (node.children.length === 0)
-        return NodeType.Sensor;
-
     if (node.parents.length === 1)
         return NodeType.Product;
-
+    
+    if (node.children.length === 0)
+        return NodeType.Sensor;
+    
     return NodeType.Node;
 }
 
