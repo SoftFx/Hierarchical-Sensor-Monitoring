@@ -57,7 +57,7 @@ namespace HSMServer.Model.TreeViewModel
             var tree = new List<NodeShallowModel>(1 << 4);
 
             foreach (var (_, product) in Nodes)
-                if (product.Parent == null && user.IsManager(product.Id))
+                if (product.Parent == null && user.IsProductAvailable(product.Id))
                 {
                     var node = FilterNodes(product);
                     if (node.VisibleSensorsCount > 0 || user.IsEmptyProductVisible(product))
