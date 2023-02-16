@@ -210,3 +210,8 @@
 .jstree-node {
     font-family: 'Titillium Web', sans-serif, Arial, sans-serif;
 }
+
+.tree-png-icon{
+    width: 1rem;
+    height: 1rem;
+}
