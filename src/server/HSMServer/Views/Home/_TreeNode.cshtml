@@ -17,7 +17,7 @@
         @if (data.TelegramSettings.Chats.Count > 0)
         {
             <span>
-                <i id="notifications" class="fa-solid fa-bell"></i>
+                <i  id="notifications" class="fa-solid fa-bell"></i>
             </span>
             
             @if (Model.GroupState.IsAllIgnored)
@@ -32,19 +32,44 @@
                     <i id="groupsDisabledNotifications" class="fa-solid fa-bell-slash"></i>
                 </span>
             }
+            @if (Model.IsGroupsEnable)
+            {
+                <span>
+                    <img class="tree-png-icon" src="~/dist/users.png" alt="!" />
+                </span>
+            }
+            @if (Model.IsAccountsEnable)
+            {
+                <span>
+                    <img class="tree-png-icon" src="~/dist/user.png" alt="!" />
+                </span>
+            }
         }
         else
         {
-            @if (Model.GroupState.IsAllIgnored)
+            @* @if (Model.GroupState.IsAllIgnored) *@
+            @* { *@
+            @*     <span> *@
+            @*         <img class="tree-png-icon" id="groupsIgnoredNotifications" src="~/dist/snooze.png" alt="!"/> *@
+            @*     </span> *@
+            @* } *@
+            @* else if (!Model.GroupState.IsAnyEnabled) *@
+            @* { *@
+            @*     <span> *@
+            @*         <i id="groupsDisabledNotifications tree-png-icon" class="fa-solid fa-bell-slash"></i> *@
+            @*     </span> *@
+            @* } *@
+            
+            @if (Model.IsGroupsEnable)
             {
                 <span>
-                    <img class="tree-png-icon" id="groupsIgnoredNotifications" src="~/dist/snooze.png" alt="!"/>
+                    <img class="tree-png-icon" src="~/dist/users.png" alt="!" />
                 </span>
             }
-            else if (!Model.GroupState.IsAnyEnabled)
+            @if (Model.IsAccountsEnable)
             {
                 <span>
-                    <i id="groupsDisabledNotifications tree-png-icon" class="fa-solid fa-bell-slash"></i>
+                    <img class="tree-png-icon" src="~/dist/user.png" alt="!" />
                 </span>
             }
         }
@@ -73,6 +98,8 @@
         <ul>
             @foreach (var sensor in Model.Sensors)
             {
+                sensor.IsParentHasGroupsEnabled = Model.IsGroupsEnable;
+                sensor.IsParentHasAccountsEnabled = Model.IsAccountsEnable;
                 @await Html.PartialAsync("_TreeSensor", sensor)
             }
         </ul>

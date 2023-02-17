@@ -25,14 +25,14 @@
     </span>
     }*@
 
-    @if (Model.IsGroupsEnable)
+    @if (Model.IsGroupsEnable && !Model.IsParentHasGroupsEnabled)
     {
         <span>
             <img class="tree-png-icon" src="~/dist/users.png" alt="!" />
         </span>
     }
     
-    @if (Model.IsAccountsEnable)
+    @if (Model.IsAccountsEnable && !Model.IsParentHasAccountsEnabled)
     {
         <span>
             <img class="tree-png-icon" src="~/dist/user.png" alt="!" />
