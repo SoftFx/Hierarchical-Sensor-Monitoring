@@ -177,7 +177,7 @@ namespace HSMServer.Notifications
             if (IsBotRunning && AreBotMessagesEnabled)
                 foreach (var (entity, chats) in _addressBook.ServerBook)
                 {
-                    if (WhetherSendMessage(entity, sensor, oldStatus))
+                    if (WhetherSendMessage(entity.Id == sensor.RootProductId && entity.Id != sensor.Id ? sensor.ParentProduct : entity, sensor, oldStatus))
                         foreach (var (_, chat) in chats)
                         {
                             if (entity.Notifications.Telegram.MessagesDelay > 0)
