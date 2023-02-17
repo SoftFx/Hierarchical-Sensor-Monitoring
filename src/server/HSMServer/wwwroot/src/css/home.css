@@ -212,6 +212,11 @@
 }
 
 .tree-png-icon{
-    width: 1rem;
-    height: 1rem;
+    max-width: 1rem!important;
+    max-height: 1rem!important;
+}
+
+img .tree-png-icon{
+    width: 1rem!important;
+    height: 1rem!important;
 }

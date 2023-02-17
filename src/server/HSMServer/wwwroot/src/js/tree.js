@@ -161,22 +161,20 @@ function buildContextMenu(node) {
     }
 
     if (isManager) {
-        if(curType === NodeType.Sensor){
-            let isSensorIgnored = node.data.jstree.isSensorIgnored === "True";
-            if(!isSensorIgnored){
-                contextMenu["Ignore"] = {
-                    "label": `Ignore ${getKeyByValue(curType)}`,
-                    "separator_after": true,
-                    "separator_before": true,
-                    "action": _ => ignoreNotificationsRequest(node, TelegramTarget.Groups, 'true')
-                }
-            }else{
-                contextMenu["Ignore"] = {
-                    "label": `Enable ${getKeyByValue(curType)}`,
-                    "separator_after": true,
-                    "separator_before": true,
-                    "action": _ => removeIgnoreStateRequest(node)
-                }
+        let isIgnoredState = node.data.jstree.isIgnoredState === "True";
+        if(!isIgnoredState){
+            contextMenu["Ignore"] = {
+                "label": `Ignore ${getKeyByValue(curType)}`,
+                "separator_after": true,
+                "separator_before": true,
+                "action": _ => ignoreNotificationsRequest(node, TelegramTarget.Groups, 'true')
+            }
+        }else{
+            contextMenu["Ignore"] = {
+                "label": `Enable ${getKeyByValue(curType)}`,
+                "separator_after": true,
+                "separator_before": true,
+                "action": _ => removeIgnoreStateRequest(node)
             }
         }
         

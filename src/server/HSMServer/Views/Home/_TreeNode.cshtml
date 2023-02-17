@@ -23,13 +23,13 @@
             @if (Model.GroupState.IsAllIgnored)
             {
                 <span class="d-none">
-                    <img id="groupsIgnoredNotifications tree-png-icon" src="~/dist/snooze.png" alt="!"/>
+                    <img class="tree-png-icon" id="groupsIgnoredNotifications" src="~/dist/snooze.png" alt="!"/>
                 </span>
             }
             else if (!Model.GroupState.IsAnyEnabled)
             {
                 <span class="d-none">
-                    <i id="groupsDisabledNotifications tree-png-icon" class="fa-solid fa-bell-slash"></i>
+                    <i id="groupsDisabledNotifications" class="fa-solid fa-bell-slash"></i>
                 </span>
             }
         }
@@ -38,13 +38,13 @@
             @if (Model.GroupState.IsAllIgnored)
             {
                 <span>
-                    <img id="groupsIgnoredNotifications tree-png-icon" src="~/dist/snooze.png" alt="!"/>
+                    <img class="tree-png-icon" id="groupsIgnoredNotifications" src="~/dist/snooze.png" alt="!"/>
                 </span>
             }
             else if (!Model.GroupState.IsAnyEnabled)
             {
                 <span>
-                    <i id="groupsDisabledNotifications" class="fa-solid fa-bell-slash"></i>
+                    <i id="groupsDisabledNotifications tree-png-icon" class="fa-solid fa-bell-slash"></i>
                 </span>
             }
         }
@@ -52,13 +52,13 @@
         @if (Model.AccountState.IsAllIgnored)
         {
             <span class="d-none">
-                <img id="accountsIgnoreNotifications tree-png-icon" src="~/dist/user-crossed.png" alt="!"/>
+                <img class="tree-png-icon" id="accountsIgnoreNotifications" src="~/dist/user-crossed.png" alt="!"/>
             </span>
         }
         else if (Model.AccountState.IsAnyEnabled)
         {
             <span class="d-none">
-                <img id="accountsNotifications tree-png-icon" src="~/dist/user.png" alt="!"/>
+                <img class="tree-png-icon" id="accountsNotifications" src="~/dist/user.png" alt="!"/>
             </span>
         }
     }

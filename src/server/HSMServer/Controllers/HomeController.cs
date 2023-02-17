@@ -93,12 +93,22 @@ namespace HSMServer.Controllers
         {
             var decodedId = SensorPathHelper.DecodeGuid(model.EncodedId);
             var newIgnorePeriod = model.EndOfIgnorePeriod;
-
-            if (_treeViewModel.Sensors.TryGetValue(decodedId, out var sensor))
-                _treeValuesCache.UpdateIgnoreSensorState(sensor.Id, newIgnorePeriod);
-
-            UpdateUserNotificationSettings(model.EncodedId, (s, g) => s.Ignore(g, model.EndOfIgnorePeriod));
-            UpdateGroupNotificationSettings(model.EncodedId, (s, g) => s.Ignore(g, model.EndOfIgnorePeriod));
+            
+            if (_treeViewModel.Nodes.TryGetValue(decodedId, out _))
+            {
+                foreach (var sensorId in GetNodeSensors(decodedId))
+                {
+                    _treeValuesCache.UpdateIgnoreSensorState(sensorId, newIgnorePeriod);
+                }
+            }
+            else
+            {
+                if (_treeViewModel.Sensors.TryGetValue(decodedId, out var sensor))
+                    _treeValuesCache.UpdateIgnoreSensorState(sensor.Id, newIgnorePeriod);
+            }
+            
+            UpdateUserNotificationSettings(decodedId, (s, g) => s.Ignore(g, model.EndOfIgnorePeriod));
+            UpdateGroupNotificationSettings(decodedId, (s, g) => s.Ignore(g, model.EndOfIgnorePeriod));
         }
 
         [HttpPost]
@@ -106,11 +116,21 @@ namespace HSMServer.Controllers
         {
             var decodedId = SensorPathHelper.DecodeGuid(selectedId);
 
-            if (_treeViewModel.Sensors.TryGetValue(decodedId, out var sensor))
-                _treeValuesCache.UpdateIgnoreSensorState(sensor.Id);
+            if (_treeViewModel.Nodes.TryGetValue(decodedId, out _))
+            {
+                foreach (var sensorId in GetNodeSensors(decodedId))
+                {
+                    _treeValuesCache.UpdateIgnoreSensorState(sensorId);
+                }
+            }
+            else
+            {
+                if (_treeViewModel.Sensors.TryGetValue(decodedId, out var sensor))
+                    _treeValuesCache.UpdateIgnoreSensorState(sensor.Id);
+            }
 
-            UpdateUserNotificationSettings(selectedId, (s, g) => s.RemoveIgnore(g));
-            UpdateGroupNotificationSettings(selectedId, (s, g) => s.RemoveIgnore(g));
+            UpdateUserNotificationSettings(decodedId, (s, g) => s.RemoveIgnore(g));
+            UpdateGroupNotificationSettings(decodedId, (s, g) => s.RemoveIgnore(g));
         }
 
         [HttpPost]
@@ -152,11 +172,11 @@ namespace HSMServer.Controllers
 
         [HttpPost]
         public void EnableNotifications([FromQuery] string selectedId, [FromQuery] NotificationsTarget target) =>
-            GetHandler(target)(selectedId, (s, g) => s.Enable(g));
-
+            GetHandler(target)(SensorPathHelper.DecodeGuid(selectedId), (s, g) => s.Enable(g));
+        
         [HttpPost]
         public void IgnoreNotifications(IgnoreNotificationsViewModel model) =>
-            GetHandler(model.NotificationsTarget)(model.EncodedId, (s, g) =>
+            GetHandler(model.NotificationsTarget)(SensorPathHelper.DecodeGuid(model.EncodedId), (s, g) =>
             {
                 if (model.IgnorePeriod.TimeInterval == Model.TimeInterval.Forever)
                     s.Disable(g);
@@ -177,13 +197,13 @@ namespace HSMServer.Controllers
             return string.Empty;
         }
 
-        private Action<string, Action<NotificationSettings, Guid>> GetHandler(NotificationsTarget actionType) => actionType switch
+        private Action<Guid, Action<NotificationSettings, Guid>> GetHandler(NotificationsTarget actionType) => actionType switch
         {
             NotificationsTarget.Groups => UpdateGroupNotificationSettings,
             NotificationsTarget.Accounts => UpdateUserNotificationSettings
         };
 
-        private void UpdateUserNotificationSettings(string selectedNode, Action<NotificationSettings, Guid> updateSettings)
+        private void UpdateUserNotificationSettings(Guid selectedNode, Action<NotificationSettings, Guid> updateSettings)
         {
             var user = _userManager.GetUser((HttpContext.User as User).Id);
             foreach (var sensorId in GetNodeSensors(selectedNode))
@@ -194,7 +214,7 @@ namespace HSMServer.Controllers
             _userManager.UpdateUser(user);
         }
 
-        private void UpdateGroupNotificationSettings(string selectedNode, Action<NotificationSettings, Guid> updateSettings)
+        private void UpdateGroupNotificationSettings(Guid selectedNode, Action<NotificationSettings, Guid> updateSettings)
         {
             foreach (var sensorId in GetNodeSensors(selectedNode))
             {
@@ -204,8 +224,8 @@ namespace HSMServer.Controllers
             }
         }
 
-        private List<Guid> GetNodeSensors(string encodedId) =>
-            _treeViewModel.GetNodeAllSensors(SensorPathHelper.DecodeGuid(encodedId));
+        private List<Guid> GetNodeSensors(Guid id) =>
+            _treeViewModel.GetNodeAllSensors(id);
 
         #region Update
 
