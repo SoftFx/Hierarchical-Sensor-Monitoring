@@ -6,6 +6,7 @@
 
 @{
     var data = Model.Data;
+    var userNotifications = (User as User)?.Notifications;
 }
 
 
@@ -38,7 +39,18 @@
             <img class="tree-png-icon" src="~/dist/user.png" alt="!" />
         </span>
     }
-
+    @if (data.RootProduct.Notifications.IgnoredSensors.TryGetValue(data.Id, out var time) && time != DateTime.MaxValue)
+    {
+          <span>
+                    <img class="tree-png-icon" src="~/dist/users-crossed.png" alt="!" />
+              </span>
+    }
+    @if ( userNotifications.IgnoredSensors.TryGetValue(data.Id, out var time2) && time2 != DateTime.MaxValue)
+    {
+        <span>
+            <img class="tree-png-icon" src="~/dist/user-crossed.png" alt="!" />
+        </span>
+    }
     @*else
     {
         <span>

@@ -217,8 +217,11 @@ namespace HSMServer.Model.TreeViewModel
 
         private ProductNodeViewModel AddNewProductViewModel(ProductModel product)
         {
-            var node = new ProductNodeViewModel(product);
-
+            var node = new ProductNodeViewModel(product)
+            {
+                RootProduct = _treeValuesCache.GetProduct(product.RootProductId)
+            };
+            
             foreach (var (_, sensor) in product.Sensors)
                 AddNewSensorViewModel(sensor, node);
 
@@ -232,7 +235,10 @@ namespace HSMServer.Model.TreeViewModel
 
         private void AddNewSensorViewModel(BaseSensorModel sensor, ProductNodeViewModel parent)
         {
-            var viewModel = new SensorNodeViewModel(sensor);
+            var viewModel = new SensorNodeViewModel(sensor)
+            {
+                RootProduct = _treeValuesCache.GetProduct(sensor.RootProductId)
+            };
 
             parent.AddSensor(viewModel);
             Sensors.TryAdd(viewModel.Id, viewModel);

@@ -190,9 +190,9 @@ namespace HSMServer.Controllers
             var decodedId = SensorPathHelper.DecodeGuid(selectedId);
 
             if (_treeViewModel.Nodes.TryGetValue(decodedId, out var node))
-                return isFullPath ? $"{node.Product}{node.Path}" : node.Path;
+                return isFullPath ? $"{node.RootProduct.DisplayName}{node.Path}" : node.Path;
             else if (_treeViewModel.Sensors.TryGetValue(decodedId, out var sensor))
-                return isFullPath ? $"{sensor.Product}{sensor.Path}" : sensor.Path;
+                return isFullPath ? $"{sensor.RootProduct.DisplayName}{sensor.Path}" : sensor.Path;
 
             return string.Empty;
         }
@@ -216,12 +216,19 @@ namespace HSMServer.Controllers
 
         private void UpdateGroupNotificationSettings(Guid selectedNode, Action<NotificationSettings, Guid> updateSettings)
         {
+            var rootProductId = Guid.Empty;
+            if (_treeViewModel.Nodes.TryGetValue(selectedNode, out var node))
+                rootProductId = node.RootProduct.Id;
+            else if (_treeViewModel.Sensors.TryGetValue(selectedNode, out var sensor))
+                rootProductId = sensor.RootProduct.Id;
+
+            var rootProduct = _treeValuesCache.GetProduct(rootProductId);
             foreach (var sensorId in GetNodeSensors(selectedNode))
             {
-                var parent = _treeValuesCache.GetSensor(sensorId).ParentProduct;
-                updateSettings?.Invoke(parent.Notifications, sensorId);
-                _treeValuesCache.UpdateProduct(parent);
+                updateSettings?.Invoke(rootProduct.Notifications, sensorId);
             }
+            
+            _treeValuesCache.UpdateProduct(rootProduct);
         }
 
         private List<Guid> GetNodeSensors(Guid id) =>
@@ -462,7 +469,7 @@ namespace HSMServer.Controllers
 
             _treeViewModel.Sensors.TryGetValue(decodedId, out var sensor);
 
-            return (sensor?.Product, sensor?.Path);
+            return (sensor?.RootProduct.DisplayName, sensor?.Path);
         }
 
         private BarBaseValue GetLocalLastValue(string encodedId, DateTime from, DateTime to)

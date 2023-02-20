@@ -19,7 +19,7 @@ namespace HSMServer.Model.UserTreeShallowCopy
         internal SensorShallowModel(SensorNodeViewModel data, User user) : base(data, user)
         {
             IsAccountsEnable = user.Notifications.IsSensorEnabled(data.Id);
-            IsGroupsEnable = data.GroupNotifications.IsSensorEnabled(data.Id);
+            IsGroupsEnable = data.RootProduct.Notifications.IsSensorEnabled(data.Id);
             IsIgnoredState = data.State == SensorState.Ignored;
         }
     }

@@ -49,7 +49,7 @@ namespace HSMServer.Model.UserTreeShallowCopy
             if (sensor.State != SensorState.Ignored)
             {
                 AccountState.CalculateState(user.Notifications, sensor.Id);
-                GroupState.CalculateState(sensor.GroupNotifications, sensor.Id);
+                GroupState.CalculateState(sensor.RootProduct.Notifications, sensor.Id);
             }
             
             IsIgnoredState &= sensor.State == SensorState.Ignored;

@@ -27,14 +27,14 @@ namespace HSMServer.Model.TreeViewModel
         public SensorStatus Status { get; protected set; }
 
         public virtual bool HasData { get; protected set; }
-
-        public string Product { get; protected set; }
-
+        
         public string Path { get; protected set; }
 
         public bool IsOwnExpectedUpdateInterval { get; protected set; }
 
         public NodeViewModel Parent { get; internal set; }
+        
+        public ProductModel RootProduct { get; set; }
 
         public TimeIntervalViewModel ExpectedUpdateInterval { get; set; } = new();
 

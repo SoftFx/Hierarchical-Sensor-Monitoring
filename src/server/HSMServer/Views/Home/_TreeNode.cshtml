@@ -1,5 +1,4 @@
 ﻿@using HSMServer.Extensions
-@using HSMServer.Model.Authentication
 @using HSMServer.Model.UserTreeShallowCopy
 
 @model NodeShallowModel
@@ -16,10 +15,6 @@
     {
         @if (data.TelegramSettings.Chats.Count > 0)
         {
-            <span>
-                <i  id="notifications" class="fa-solid fa-bell"></i>
-            </span>
-            
             @if (Model.GroupState.IsAllIgnored)
             {
                 <span class="d-none">
@@ -44,6 +39,7 @@
                     <img class="tree-png-icon" src="~/dist/user.png" alt="!" />
                 </span>
             }
+            
         }
         else
         {

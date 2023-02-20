@@ -38,6 +38,7 @@ namespace HSMServer.Model.TreeViewModel
         public SensorNodeViewModel(BaseSensorModel model) : base(model.Id)
         {
             GroupNotifications = model.ParentProduct.Notifications;
+
             Update(model);
         }
 
@@ -53,7 +54,6 @@ namespace HSMServer.Model.TreeViewModel
             UpdateTime = model.LastUpdateTime;
             Status = model.ValidationResult.Result.ToClient();
             ValidationError = model.ValidationResult.Message;
-            Product = model.RootProductName;
             Path = model.Path;
             Unit = model.Unit;
             
