@@ -35,7 +35,7 @@ namespace HSMServer.Model.UserTreeShallowCopy
 
         public override bool IsGroupsEnable => GroupState.IsAllEnabled;
 
-        public override bool? IsIgnoredState { get; set; } = true;
+        public override bool IsIgnoredState { get; set; } = true;
 
         internal NodeShallowModel(ProductNodeViewModel data, User user) : base(data, user)
         {
@@ -63,7 +63,7 @@ namespace HSMServer.Model.UserTreeShallowCopy
 
         internal void AddChild(NodeShallowModel node, User user)
         {
-            if (!node.IsIgnoredState.Value)
+            if (!node.IsIgnoredState)
             {
                 AccountState.CalculateState(node.AccountState);
                 GroupState.CalculateState(node.GroupState);
