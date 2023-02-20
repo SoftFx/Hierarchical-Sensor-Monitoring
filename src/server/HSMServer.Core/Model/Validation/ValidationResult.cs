@@ -20,11 +20,17 @@ namespace HSMServer.Core.Model
         {
             get
             {
+                if (Messages.Count != 0 && Errors.Count != 0)
+                    return SensorStatus.Error;
+                
+                if (Messages.Count != 0 && Warnings.Count != 0)
+                    return SensorStatus.Warning;
+
                 if (Messages.Count != 0)
                     return SensorStatus.OffTime;
-                else if (Errors.Count != 0)
+                if (Errors.Count != 0)
                     return SensorStatus.Error;
-                else if (Warnings.Count != 0)
+                if (Warnings.Count != 0)
                     return SensorStatus.Warning;
 
                 return SensorStatus.Ok;

@@ -10,7 +10,7 @@
 
 
 <li id='@data.EncodedId' title='@data.Tooltip' data-jstree='@Model.ToJSTree()'>
-    <span>@Html.Raw(data.Name.GetShortNodeName()) @Model.SensorsCountString</span>
+    <span class="@(Model.IsIgnoredState ? "ignored-state-text" : "")">@Html.Raw(data.Name.GetShortNodeName()) @Model.SensorsCountString</span>
 
     @if (!data.IsEmpty)
     {

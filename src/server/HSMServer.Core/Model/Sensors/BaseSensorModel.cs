@@ -41,8 +41,14 @@ namespace HSMServer.Core.Model
         public ValidationResult ValidationResult
         {
             get => State == SensorState.Ignored ? _ignoreStatus : _curStatus;
-            
-            set => _curStatus = value;
+
+            set
+            {
+                if (value.Result is not SensorStatus.OffTime)
+                {
+                    _curStatus = value;
+                }
+            }
         }
 
 
@@ -86,7 +92,7 @@ namespace HSMServer.Core.Model
             Unit = update.Unit ?? Unit;
             State = update?.State ?? State;
             EndOfIgnore = update?.EndOfIgnorePeriod ?? EndOfIgnore;
-
+           
             if (State == SensorState.Available)
                 EndOfIgnore = null;
         }

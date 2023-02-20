@@ -35,7 +35,7 @@ namespace HSMServer.Model.UserTreeShallowCopy
 
         public override bool IsGroupsEnable => GroupState.IsAllEnabled;
 
-        public override bool IsIgnoredState { get; set; } = true;
+        public override bool? IsIgnoredState { get; set; } = true;
 
         internal NodeShallowModel(ProductNodeViewModel data, User user) : base(data, user)
         {
@@ -46,8 +46,12 @@ namespace HSMServer.Model.UserTreeShallowCopy
         {
             var sensor = shallowSensor.Data;
 
-            AccountState.CalculateState(user.Notifications, sensor.Id);
-            GroupState.CalculateState(sensor.GroupNotifications, sensor.Id);
+            if (sensor.State != SensorState.Ignored)
+            {
+                AccountState.CalculateState(user.Notifications, sensor.Id);
+                GroupState.CalculateState(sensor.GroupNotifications, sensor.Id);
+            }
+            
             IsIgnoredState &= sensor.State == SensorState.Ignored;
 
             if (user.IsSensorVisible(sensor))
@@ -59,8 +63,12 @@ namespace HSMServer.Model.UserTreeShallowCopy
 
         internal void AddChild(NodeShallowModel node, User user)
         {
-            AccountState.CalculateState(node.AccountState);
-            GroupState.CalculateState(node.GroupState);
+            if (!node.IsIgnoredState.Value)
+            {
+                AccountState.CalculateState(node.AccountState);
+                GroupState.CalculateState(node.GroupState);
+            }
+            
             IsIgnoredState &= node.IsIgnoredState;
 
             VisibleSensorsCount += node.VisibleSensorsCount;
