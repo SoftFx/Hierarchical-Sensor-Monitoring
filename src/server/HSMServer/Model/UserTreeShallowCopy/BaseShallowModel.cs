@@ -17,6 +17,9 @@ namespace HSMServer.Model.UserTreeShallowCopy
 
         public abstract bool IsIgnoredState { get; set; }
         
+        public bool IsParentHasGroupsEnabled { get; set; }
+        
+        public bool IsParentHasAccountsEnabled { get; set; }
 
         protected BaseShallowModel(T data, User user)
         {
