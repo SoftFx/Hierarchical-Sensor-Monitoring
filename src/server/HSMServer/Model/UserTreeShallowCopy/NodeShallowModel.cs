@@ -36,6 +36,10 @@ namespace HSMServer.Model.UserTreeShallowCopy
         public override bool IsGroupsEnable => GroupState.IsAllEnabled;
 
         public override bool IsIgnoredState { get; set; } = true;
+        
+        public bool IsParentHasGroupsEnabled { get; set; }
+        
+        public bool IsParentHasAccountsEnabled { get; set; }
 
         internal NodeShallowModel(ProductNodeViewModel data, User user) : base(data, user)
         {

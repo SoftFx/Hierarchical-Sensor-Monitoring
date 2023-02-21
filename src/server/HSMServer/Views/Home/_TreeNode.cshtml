@@ -15,54 +15,28 @@
     {
         @if (data.TelegramSettings.Chats.Count > 0)
         {
-            @if (Model.GroupState.IsAllIgnored)
-            {
-                <span class="d-none">
-                    <img class="tree-png-icon" id="groupsIgnoredNotifications" src="~/dist/snooze.png" alt="!"/>
-                </span>
-            }
-            else if (!Model.GroupState.IsAnyEnabled)
-            {
-                <span class="d-none">
-                    <i id="groupsDisabledNotifications" class="fa-solid fa-bell-slash"></i>
-                </span>
-            }
-            @if (Model.IsGroupsEnable)
+            @if (Model.IsGroupsEnable && !Model.IsParentHasGroupsEnabled)
             {
                 <span>
                     <img class="tree-png-icon" src="~/dist/users.png" alt="!" />
                 </span>
             }
-            @if (Model.IsAccountsEnable)
+            @if (Model.IsAccountsEnable && !Model.IsParentHasAccountsEnabled)
             {
                 <span>
                     <img class="tree-png-icon" src="~/dist/user.png" alt="!" />
                 </span>
             }
-            
         }
         else
         {
-            @* @if (Model.GroupState.IsAllIgnored) *@
-            @* { *@
-            @*     <span> *@
-            @*         <img class="tree-png-icon" id="groupsIgnoredNotifications" src="~/dist/snooze.png" alt="!"/> *@
-            @*     </span> *@
-            @* } *@
-            @* else if (!Model.GroupState.IsAnyEnabled) *@
-            @* { *@
-            @*     <span> *@
-            @*         <i id="groupsDisabledNotifications tree-png-icon" class="fa-solid fa-bell-slash"></i> *@
-            @*     </span> *@
-            @* } *@
-            
-            @if (Model.IsGroupsEnable)
+            @if (Model.IsGroupsEnable && !Model.IsParentHasGroupsEnabled)
             {
                 <span>
                     <img class="tree-png-icon" src="~/dist/users.png" alt="!" />
                 </span>
             }
-            @if (Model.IsAccountsEnable)
+            @if (Model.IsAccountsEnable && !Model.IsParentHasAccountsEnabled)
             {
                 <span>
                     <img class="tree-png-icon" src="~/dist/user.png" alt="!" />
@@ -86,6 +60,8 @@
 
     @foreach (var child in Model.Nodes)
     {
+        child.IsParentHasGroupsEnabled = Model.IsGroupsEnable;
+        child.IsParentHasAccountsEnabled = Model.IsAccountsEnable;
         <ul>@await Html.PartialAsync("_TreeNode", child)</ul>
     }
 

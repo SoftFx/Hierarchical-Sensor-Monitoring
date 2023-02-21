@@ -12,20 +12,7 @@
 
 <li id='@data.EncodedId' title='@data.Tooltip' data-jstree='@Model.ToJSTree()'>
     <span class="@data.State.ToCssClass()">@Html.Raw(data.Name.GetShortNodeName())</span>
-
-    @*@if (userNotifications.IsSensorIgnored(Model.Id))
-    {
-    <span class="d-none">
-    <img id="@(Model.EncodedId)_accountsIgnoreNotifications" src="~/dist/user-crossed.png" style="height: 1em;width: 1em;" alt=""/>
-    </span>
-    }
-    else if (userNotifications.IsSensorEnabled(Model.Id))
-    {
-    <span class="d-none">
-    <img id="@(Model.EncodedId)_accountsNotifications" src="~/dist/user.png" style="height: 1em;width: 1em;" alt=""/>
-    </span>
-    }*@
-
+    
     @if (Model.IsGroupsEnable && !Model.IsParentHasGroupsEnabled)
     {
         <span>
@@ -39,41 +26,18 @@
             <img class="tree-png-icon" src="~/dist/user.png" alt="!" />
         </span>
     }
+    
     @if (data.RootProduct.Notifications.IgnoredSensors.TryGetValue(data.Id, out var time) && time != DateTime.MaxValue)
     {
           <span>
                     <img class="tree-png-icon" src="~/dist/users-crossed.png" alt="!" />
               </span>
     }
-    @if ( userNotifications.IgnoredSensors.TryGetValue(data.Id, out var time2) && time2 != DateTime.MaxValue)
+    
+    @if (userNotifications.IgnoredSensors.TryGetValue(data.Id, out var time2) && time2 != DateTime.MaxValue)
     {
         <span>
             <img class="tree-png-icon" src="~/dist/user-crossed.png" alt="!" />
         </span>
     }
-    @*else
-    {
-        <span>
-            <img src="~/dist/users.png" style="height: 1em; width: 1em;" alt="!" />
-        </span>
-    }*@
-
-    @*    @if (data.GroupNotifications.IsSensorIgnored(data.Id))
-    {
-    <span>
-    <img id="@(data.EncodedId)_groupsIgnoredNotifications" src="~/dist/snooze.png" style="height: 1em;width: 1em;" alt="!" />
-    </span>
-    }
-    else if (data.GroupNotifications.IsSensorEnabled(data.Id))
-    {
-    <span class="d-none">
-    <img id="@(data.EncodedId)_groupsNotifications" src="~/dist/users.png" style="height: 1em; width: 1em;" alt="" />
-    </span>
-    }
-    else
-    {
-    <span>
-    <i id="@(data.EncodedId)_groupsDisabledNotifications" class="fa-solid fa-bell-slash"></i>
-    </span>
-    }*@
 </li>
