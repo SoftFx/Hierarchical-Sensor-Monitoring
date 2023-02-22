@@ -68,11 +68,25 @@
     </div>
 
     <div class="form-check">
-        <input type="checkbox" class="form-check-input" id="ignored" asp-for="IsIgnoredSensors"/>
+        <input type="checkbox" onchange="ignoreAllNotificationsClick()" class="form-check-input" id="ignored" asp-for="IsIgnoredSensors"/>
         <label class="form-check-label" for="ignored" title="Ignored sensors">
             Ignored sensors <i class="fa-solid fa-bell-slash"></i>
         </label>
+        
+        <div class="form-check">
+            <input type="checkbox" class="form-check-input" id="ignoredGroup" asp-for="IsIgnoredGroupSensors"/>
+            <label class="form-check-label" for="ignoredGroup" title="Ignored sensors">
+                Group <i class="fa-solid fa-bell-slash"></i>
+            </label>
+        </div>
+        <div class="form-check">
+            <input type="checkbox" class="form-check-input" id="ignoredAccount" asp-for="IsIgnoredAccountSensors"/>
+            <label class="form-check-label" for="ignoredAccount" title="Ignored sensors">
+                Personal <i class="fa-solid fa-bell-slash"></i>
+            </label>
+        </div>
     </div>
+    
     <div class="dropdown-divider"></div>
 
     <h6 class="dropdown-header">Sensor state</h6>
@@ -92,9 +106,23 @@
     </div>
     <div class="form-check">
         <input class="form-check-input" type="radio" id="sorting"
-               value="@((int)TreeSortType.ByTime)" asp-for="TreeSortType" />
+               value="@((int)TreeSortType.ByTime)" asp-for="TreeSortType"/>
         <label class="form-check-label" for="time">By Last Update <i class="fas fa-sort-numeric-down-alt"></i></label>
     </div>
 
     <button id="applyBtn" type="submit" class="btn btn-sm btn-secondary mt-1">Apply</button>
 </form>
+
+<script>
+    function ignoreAllNotificationsClick(){
+        @{
+            Model.IsIgnoredSensors = !Model.IsIgnoredSensors;
+            Model.IsIgnoredAccountSensors = Model.IsIgnoredSensors;
+            Model.IsIgnoredGroupSensors = Model.IsIgnoredSensors;
+        }
+        var curStatus = $('#ignored').is(':checked');
+        $('#ignoredAccount').prop('checked', curStatus);
+        $('#ignoredGroup').prop('checked', curStatus);
+    }
+
+</script>

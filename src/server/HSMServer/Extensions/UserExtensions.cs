@@ -23,7 +23,8 @@ namespace HSMServer.Extensions
                 var filteredSensor = new FilteredSensor()
                 {
                     IsNotificationsEnabled = user.Notifications.IsSensorEnabled(sensor.Id) || sensor.RootProduct.Notifications.IsSensorEnabled(sensor.Id),
-                    IsNotificationsIgnored = user.Notifications.IsSensorIgnored(sensor.Id) || sensor.RootProduct.Notifications.IsSensorIgnored(sensor.Id),
+                    IsNotificationsAccountIgnored = user.Notifications.IsSensorIgnored(sensor.Id),
+                    IsNotificationsGroupIgnored = sensor.RootProduct.Notifications.IsSensorIgnored(sensor.Id),
                     HasData = sensor.HasData,
                     Status = sensor.Status.ToCore(),
                     State = sensor.State,

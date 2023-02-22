@@ -6,7 +6,9 @@
     {
         public bool IsNotificationsEnabled { get; init; }
 
-        public bool IsNotificationsIgnored { get; init; }
+        public bool IsNotificationsGroupIgnored { get; init; }
+        
+        public bool IsNotificationsAccountIgnored { get; init; }
 
         public SensorStatus Status { get; init; }
 

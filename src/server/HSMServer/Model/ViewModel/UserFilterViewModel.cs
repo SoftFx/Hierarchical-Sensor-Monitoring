@@ -14,6 +14,10 @@ namespace HSMServer.Model.ViewModel
         public bool HasTelegramNotifications { get; set; }
         
         public bool IsIgnoredSensors { get; set; }
+        
+        public bool IsIgnoredGroupSensors { get; set; }
+        
+        public bool IsIgnoredAccountSensors { get; set; }
 
         public bool IsIgnoredStateSensors { get; set; }
 
@@ -34,7 +38,8 @@ namespace HSMServer.Model.ViewModel
             IsEmptyHistory = filter.ByHistory.Empty.Value;
 
             HasTelegramNotifications = filter.ByNotifications.Enabled.Value;
-            IsIgnoredSensors = filter.ByNotifications.Ignored.Value;
+            IsIgnoredAccountSensors = filter.ByNotifications.AccountIgnored.Value;
+            IsIgnoredGroupSensors = filter.ByNotifications.GroupIgnored.Value;
 
             IsIgnoredStateSensors = filter.ByState.Ignored.Value;
 
@@ -59,7 +64,8 @@ namespace HSMServer.Model.ViewModel
             filter.ByHistory.Empty.Value = IsEmptyHistory;
 
             filter.ByNotifications.Enabled.Value = HasTelegramNotifications;
-            filter.ByNotifications.Ignored.Value = IsIgnoredSensors;
+            filter.ByNotifications.AccountIgnored.Value = IsIgnoredAccountSensors;
+            filter.ByNotifications.GroupIgnored.Value = IsIgnoredGroupSensors;
 
             filter.ByState.Ignored.Value = IsIgnoredStateSensors;
 

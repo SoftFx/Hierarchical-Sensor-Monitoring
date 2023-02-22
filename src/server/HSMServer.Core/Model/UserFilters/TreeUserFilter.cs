@@ -100,7 +100,7 @@ namespace HSMServer.Core.Model.UserFilters
                 if (!group.HasAnyEnabledFilters) 
                     continue;
                 
-                specificFilters.AddRange(group.Properties.Where(property => property.Value).Select(property => property.Name));
+                specificFilters.AddRange(group.Properties.Where(property => property.Value).Select(property => property.Name).Distinct());
                 
                 filters.AppendLine($"{group.Type}: {string.Join(", ",specificFilters)}");
                 specificFilters.Clear();
