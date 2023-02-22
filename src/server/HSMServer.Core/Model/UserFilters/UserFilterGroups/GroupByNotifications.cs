@@ -17,19 +17,9 @@
         public GroupByNotifications() { }
 
 
-        internal override bool IsSensorSuitable(FilteredSensor sensor)
-        {
-            if (GroupIgnored.Value != AccountIgnored.Value)
-            {
-                if (GroupIgnored.Value && GroupIgnored.Value == sensor.IsNotificationsGroupIgnored) 
-                    return true;
-                
-                return AccountIgnored.Value && AccountIgnored.Value == sensor.IsNotificationsAccountIgnored;
-            }
-            
-            return Enabled.Value == sensor.IsNotificationsEnabled ||
-                   GroupIgnored.Value == sensor.IsNotificationsGroupIgnored ||
-                   AccountIgnored.Value == sensor.IsNotificationsAccountIgnored;
-        }
+        internal override bool IsSensorSuitable(FilteredSensor sensor) =>
+            Enabled.Value == sensor.IsNotificationsEnabled ||
+            (AccountIgnored.Value && AccountIgnored.Value == sensor.IsNotificationsAccountIgnored) || 
+            (GroupIgnored.Value && GroupIgnored.Value == sensor.IsNotificationsGroupIgnored);
     }
 }
