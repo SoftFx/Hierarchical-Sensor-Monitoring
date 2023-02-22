@@ -34,7 +34,7 @@ namespace HSMServer.Model.TreeViewModel
 
         public NodeViewModel Parent { get; internal set; }
         
-        public ProductModel RootProduct { get; init; }
+        public required ProductModel RootProduct { get; init; }
 
         public TimeIntervalViewModel ExpectedUpdateInterval { get; set; } = new();
 
