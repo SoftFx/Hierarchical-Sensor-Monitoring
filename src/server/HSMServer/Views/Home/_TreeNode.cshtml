@@ -46,14 +46,14 @@
         
         @if (Model.AccountState.IsAllIgnored)
         {
-            <span class="d-none">
-                <img class="tree-png-icon" id="accountsIgnoreNotifications" src="~/dist/user-crossed.png" alt="!"/>
+            <span>
+                <img class="tree-png-icon" src="~/dist/user-crossed.png" alt="!"/>
             </span>
         }
-        else if (Model.AccountState.IsAnyEnabled)
+        @if (Model.GroupState.IsAllIgnored)
         {
-            <span class="d-none">
-                <img class="tree-png-icon" id="accountsNotifications" src="~/dist/user.png" alt="!"/>
+            <span>
+                <img class="tree-png-icon" src="~/dist/users-crossed.png" alt="!"/>
             </span>
         }
     }
