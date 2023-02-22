@@ -141,10 +141,12 @@
     }
 
     function updateNote() {
-        let note = `Note: ${'@(Model?.TreeElement)'} notifications will be`;
+        let firstNotePart = `Note: @(Model?.TreeElement)`;
+        let action = `@(Model?.IsOffTimeModal)` === 'True' ? 'disabled ' : 'ignored ';
+        let secondNotePart = '';
 
         if ($('option:selected', $('#timeIntervalSelect')).text() == '@TimeInterval.Forever') {
-            note = `${note} disabled`;
+            action = 'disabled ';
             $('#interval_inputs').hide();
         }
         else {
@@ -153,10 +155,14 @@
                                                .add($('#ignoreNotifications_hours').val(), 'h')
                                                .add($('#ignoreNotifications_days').val(), 'd');
 
-            note = `${note} ignored until ${endOfIgnorePeriod.format('DD/MM/YYYY HH:mm')}`;
+            secondNotePart += ` until ${endOfIgnorePeriod.format('DD/MM/YYYY HH:mm')}`;
             $('#interval_inputs').show();
         }
-
-        $('#ignoreNotifications_note').html(note);
+        
+        if (`@(Model?.IsOffTimeModal)` === 'True'){
+            $('#ignoreNotifications_note').html(firstNotePart + ' will be ' + action + secondNotePart);
+        }else{
+            $('#ignoreNotifications_note').html(firstNotePart + ' notifications will be ' + action + secondNotePart);
+        }
     }
 </script>
