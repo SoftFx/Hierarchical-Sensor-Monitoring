@@ -44,17 +44,20 @@
             }
         }
         
-        @if (Model.AccountState.IsAllIgnored)
+        @if (!Model.IsIgnoredState)
         {
-            <span>
-                <img class="tree-png-icon" src="~/dist/user-crossed.png" alt="!"/>
-            </span>
-        }
-        @if (Model.GroupState.IsAllIgnored)
-        {
-            <span>
-                <img class="tree-png-icon" src="~/dist/users-crossed.png" alt="!"/>
-            </span>
+            @if (Model.AccountState.IsAllIgnored)
+            {
+                <span>
+                    <img class="tree-png-icon" src="~/dist/user-crossed.png" alt="!"/>
+                </span>
+            }
+            @if (Model.GroupState.IsAllIgnored)
+            {
+                <span>
+                    <img class="tree-png-icon" src="~/dist/users-crossed.png" alt="!"/>
+                </span>
+            }
         }
     }
 
