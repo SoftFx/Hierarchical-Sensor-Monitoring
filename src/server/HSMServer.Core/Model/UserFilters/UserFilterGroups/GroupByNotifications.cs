@@ -2,23 +2,31 @@
 {
     public class GroupByNotifications : UserFilterGroupBase
     {
-        internal override FilterProperty[] Properties => new[] { Enabled, GroupIgnored, AccountIgnored };
+        private const string EnabledName = "Enabled";
+        
+        private const string IgnoredName = "Ignored";
+        
+
+        internal override FilterProperty[] Properties => new[] { GroupEnabled, AccountEnabled, GroupIgnored, AccountIgnored };
 
         internal override FilterGroupType Type => FilterGroupType.ByNotifications;
+        
 
+        public FilterProperty GroupEnabled { get; init; } = new(EnabledName);
+        
+        public FilterProperty AccountEnabled { get; init; } = new(EnabledName);
 
-        public FilterProperty Enabled { get; init; } = new(nameof(Enabled));
+        public FilterProperty GroupIgnored { get; init; } = new(IgnoredName);
 
-        public FilterProperty GroupIgnored { get; init; } = new("Ignored");
-
-        public FilterProperty AccountIgnored { get; init; } = new("Ignored");
+        public FilterProperty AccountIgnored { get; init; } = new(IgnoredName);
 
 
         public GroupByNotifications() { }
 
 
         internal override bool IsSensorSuitable(FilteredSensor sensor) =>
-            Enabled.Value == sensor.IsNotificationsEnabled ||
+            (AccountEnabled.Value && AccountEnabled.Value == sensor.IsNotificationsAccountEnabled) || 
+            (GroupEnabled.Value && GroupEnabled.Value == sensor.IsNotificationsGroupEnabled) ||
             (AccountIgnored.Value && AccountIgnored.Value == sensor.IsNotificationsAccountIgnored) || 
             (GroupIgnored.Value && GroupIgnored.Value == sensor.IsNotificationsGroupIgnored);
     }
