@@ -13,14 +13,14 @@
 <li id='@data.EncodedId' title='@data.Tooltip' data-jstree='@Model.ToJSTree()'>
     <span class="@data.State.ToCssClass()">@Html.Raw(data.Name.GetShortNodeName())</span>
     
-    @if (Model.IsGroupsEnable && !Model.IsParentHasGroupsEnabled)
+    @if (Model.IsGroupsEnable && !Model.AreParentGroupsEnabled)
     {
         <span>
             <img class="tree-png-icon" src="~/dist/users.png" alt="!" />
         </span>
     }
     
-    @if (Model.IsAccountsEnable && !Model.IsParentHasAccountsEnabled)
+    @if (Model.IsAccountsEnable && !Model.AreParentAccountsEnabled)
     {
         <span>
             <img class="tree-png-icon" src="~/dist/user.png" alt="!" />
@@ -29,14 +29,14 @@
     
     @if (!Model.IsIgnoredState)
     {
-        @if (data.RootProduct.Notifications.IgnoredSensors.TryGetValue(data.Id, out var time) && time != DateTime.MaxValue)
+        @if (data.RootProduct.Notifications.IgnoredSensors.TryGetValue(data.Id, out var time) && time != DateTime.MaxValue && !Model.AreParentGroupsIgnored)
         {
             <span>
                 <img class="tree-png-icon" src="~/dist/users-crossed.png" alt="!" />
             </span>
         }
     
-        @if (userNotifications.IgnoredSensors.TryGetValue(data.Id, out var time2) && time2 != DateTime.MaxValue)
+        @if (userNotifications.IgnoredSensors.TryGetValue(data.Id, out var time2) && time2 != DateTime.MaxValue && !Model.AreParentAccountsIgnored)
         {
             <span>
                 <img class="tree-png-icon" src="~/dist/user-crossed.png" alt="!" />
