@@ -11,20 +11,20 @@
 <li id='@data.EncodedId' title='@data.Tooltip' data-jstree='@Model.ToJSTree()'>
     <span class="@(Model.IsIgnoredState ? "ignored-state-text" : "")">@Html.Raw(data.Name.GetShortNodeName()) @Model.SensorsCountString</span>
 
-    @if (!data.IsEmpty)
+    @if (!data.IsEmpty && !Model.IsIgnoredState)
     {
         @if (data.TelegramSettings.Chats.Count > 0)
         {
             @if (Model.IsGroupsEnable && !Model.AreParentGroupsEnabled)
             {
                 <span>
-                    <img class="tree-png-icon" src="~/dist/users.png" alt="!" />
+                    <img class="tree-png-icon" src="~/dist/users.png" alt="!"/>
                 </span>
             }
             @if (Model.IsAccountsEnable && !Model.AreParentAccountsEnabled)
             {
                 <span>
-                    <img class="tree-png-icon" src="~/dist/user.png" alt="!" />
+                    <img class="tree-png-icon" src="~/dist/user.png" alt="!"/>
                 </span>
             }
         }
@@ -33,31 +33,28 @@
             @if (Model.IsGroupsEnable && !Model.AreParentGroupsEnabled)
             {
                 <span>
-                    <img class="tree-png-icon" src="~/dist/users.png" alt="!" />
+                    <img class="tree-png-icon" src="~/dist/users.png" alt="!"/>
                 </span>
             }
             @if (Model.IsAccountsEnable && !Model.AreParentAccountsEnabled)
             {
                 <span>
-                    <img class="tree-png-icon" src="~/dist/user.png" alt="!" />
+                    <img class="tree-png-icon" src="~/dist/user.png" alt="!"/>
                 </span>
             }
         }
-        
-        @if (!Model.IsIgnoredState)
+
+        @if (Model.AccountState.IsAllIgnored && !Model.AreParentAccountsIgnored)
         {
-            @if (Model.AccountState.IsAllIgnored && !Model.AreParentAccountsIgnored)
-            {
-                <span>
-                    <img class="tree-png-icon" src="~/dist/user-crossed.png" alt="!"/>
-                </span>
-            }
-            @if (Model.GroupState.IsAllIgnored && !Model.AreParentGroupsIgnored)
-            {
-                <span>
-                    <img class="tree-png-icon" src="~/dist/users-crossed.png" alt="!"/>
-                </span>
-            }
+            <span>
+                <img class="tree-png-icon" src="~/dist/user-crossed.png" alt="!"/>
+            </span>
+        }
+        @if (Model.GroupState.IsAllIgnored && !Model.AreParentGroupsIgnored)
+        {
+            <span>
+                <img class="tree-png-icon" src="~/dist/users-crossed.png" alt="!"/>
+            </span>
         }
     }
 
