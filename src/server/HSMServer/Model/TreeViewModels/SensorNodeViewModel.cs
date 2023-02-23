@@ -1,6 +1,6 @@
-﻿using System;
-using HSMServer.Core.Model;
+﻿using HSMServer.Core.Model;
 using HSMServer.Extensions;
+using System;
 
 namespace HSMServer.Model.TreeViewModel
 {
@@ -29,10 +29,8 @@ namespace HSMServer.Model.TreeViewModel
         public string ValidationError { get; private set; }
 
         public NotificationSettings GroupNotifications { get; set; }
-        
-        public bool IsValidationErrorVisible => !string.IsNullOrEmpty(ValidationError);
 
-        public string ErrorIconTooltip { get; private set; } = string.Empty;
+        public bool IsValidationErrorVisible => !string.IsNullOrEmpty(ValidationError);
 
 
         public SensorNodeViewModel(BaseSensorModel model) : base(model.Id)
@@ -53,12 +51,10 @@ namespace HSMServer.Model.TreeViewModel
             State = model.State;
             UpdateTime = model.LastUpdateTime;
             Status = model.ValidationResult.Result.ToClient();
-            ValidationError = model.ValidationResult.Message;
+            ValidationError = State == SensorState.Ignored ? GetIgnoredErrorTooltip(model.EndOfIgnore) : model.ValidationResult.Message;
             Path = model.Path;
             Unit = model.Unit;
-            
-            ErrorIconTooltip = State == SensorState.Ignored ? GetIgnoredErrorTooltip(model.EndOfIgnore) : model.ValidationResult.Message;
-            
+
             LastValue = model.LastValue;
             HasData = model.HasData;
             ShortStringValue = model.LastValue?.ShortInfo;
@@ -94,12 +90,9 @@ namespace HSMServer.Model.TreeViewModel
             return string.Empty;
         }
 
-        private static string GetIgnoredErrorTooltip(DateTime? endOfIgnore)
-        {
-            if (endOfIgnore is not null && endOfIgnore != DateTime.MaxValue) 
-                return $"Ignore until {endOfIgnore.Value.ToDefaultFormat()}";
-            
-            return "Ignored forever";
-        }
+        private static string GetIgnoredErrorTooltip(DateTime? endOfIgnore) =>
+            endOfIgnore is not null && endOfIgnore != DateTime.MaxValue
+                ? $"Ignore until {endOfIgnore.Value.ToDefaultFormat()}"
+                : $"Ignored forever";
     }
 }

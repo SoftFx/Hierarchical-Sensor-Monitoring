@@ -23,7 +23,7 @@ namespace HSMServer.Core.Model
     {
         private readonly ValidationResult _ignoreStatus = new("Ignored", SensorStatus.OffTime);
 
-        private ValidationResult _curStatus;
+        protected ValidationResult _internalValidationResult;
 
 
         protected abstract ValuesStorage Storage { get; }
@@ -38,18 +38,7 @@ namespace HSMServer.Core.Model
 
         public DateTime? EndOfIgnore { get; private set; }
 
-        public ValidationResult ValidationResult
-        {
-            get => State == SensorState.Ignored ? _ignoreStatus : _curStatus;
-
-            set
-            {
-                if (value.Result is not SensorStatus.OffTime)
-                {
-                    _curStatus = value;
-                }
-            }
-        }
+        public ValidationResult ValidationResult => State == SensorState.Ignored ? _ignoreStatus : _internalValidationResult;
 
 
         public BaseValue LastValue => Storage.LastValue;
@@ -71,16 +60,16 @@ namespace HSMServer.Core.Model
             if (UsedExpectedUpdateInterval == null || !HasData)
                 return false;
 
-            var oldValidationResult = ValidationResult;
+            var oldValidationResult = _internalValidationResult;
 
-            ValidationResult += UsedExpectedUpdateInterval.Validate(LastValue);
+            _internalValidationResult += UsedExpectedUpdateInterval.Validate(LastValue);
 
-            return ValidationResult != oldValidationResult;
+            return _internalValidationResult != oldValidationResult;
         }
 
         internal override void RefreshOutdatedError()
         {
-            ValidationResult -= ExpectedUpdateIntervalPolicy.OutdatedSensor;
+            _internalValidationResult -= ExpectedUpdateIntervalPolicy.OutdatedSensor;
 
             CheckExpectedUpdateInterval();
         }
@@ -92,7 +81,7 @@ namespace HSMServer.Core.Model
             Unit = update.Unit ?? Unit;
             State = update?.State ?? State;
             EndOfIgnore = update?.EndOfIgnorePeriod ?? EndOfIgnore;
-           
+
             if (State == SensorState.Available)
                 EndOfIgnore = null;
         }
@@ -112,7 +101,7 @@ namespace HSMServer.Core.Model
             Unit = entity.Unit;
             EndOfIgnore = entity.EndOfIgnore == 0L ? null : new DateTime(entity.EndOfIgnore);
 
-            ValidationResult = ValidationResult.Ok;
+            _internalValidationResult = ValidationResult.Ok;
 
             return this;
         }
@@ -143,7 +132,7 @@ namespace HSMServer.Core.Model
         internal void ClearValues()
         {
             Storage.Clear();
-            ValidationResult = ValidationResult.Ok;
+            _internalValidationResult = ValidationResult.Ok;
         }
     }
 }
