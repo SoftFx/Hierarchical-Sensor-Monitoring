@@ -13,7 +13,10 @@ namespace HSMServer.Model
     public class IgnoreNotificationsViewModel
     {
         private const string NodeTreeElement = "node";
+        
         private const string SensorTreeElement = "sensor";
+        
+        private const string ProductTreeElement = "product";
 
         private static readonly List<TimeInterval> _predefinedIntervals =
             new()
@@ -61,7 +64,7 @@ namespace HSMServer.Model
         {
             EncodedId = node.EncodedId;
             Path = $"{node.RootProduct.DisplayName}{node.Path}";
-            TreeElement = node is SensorNodeViewModel ? SensorTreeElement : NodeTreeElement;
+            TreeElement = node is SensorNodeViewModel ? SensorTreeElement : node.Id == node.RootProduct.Id ? ProductTreeElement : NodeTreeElement;
 
             IgnorePeriod = new(_predefinedIntervals)
             {
