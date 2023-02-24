@@ -118,17 +118,3 @@
 
     <button id="applyBtn" type="submit" class="btn btn-sm btn-secondary mt-1">Apply</button>
 </form>
-
-<script>
-    function ignoreAllNotificationsClick(){
-        @{
-            Model.IsIgnoredSensors = !Model.IsIgnoredSensors;
-            Model.IsIgnoredAccountSensors = Model.IsIgnoredSensors;
-            Model.IsIgnoredGroupSensors = Model.IsIgnoredSensors;
-        }
-        var curStatus = $('#ignored').is(':checked');
-        $('#ignoredAccount').prop('checked', curStatus);
-        $('#ignoredGroup').prop('checked', curStatus);
-    }
-
-</script>
