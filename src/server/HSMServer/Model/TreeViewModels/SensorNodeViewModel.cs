@@ -1,7 +1,8 @@
 ﻿using HSMServer.Core.Model;
 using HSMServer.Extensions;
+using System;
 
-namespace HSMServer.Model.TreeViewModels
+namespace HSMServer.Model.TreeViewModel
 {
     public class SensorNodeViewModel : NodeViewModel
     {
@@ -27,8 +28,7 @@ namespace HSMServer.Model.TreeViewModels
 
         public string ValidationError { get; private set; }
 
-        public bool IsValidationErrorVisible =>
-            !string.IsNullOrEmpty(ValidationError) && Status != SensorStatus.OffTime;
+        public bool IsValidationErrorVisible => !string.IsNullOrEmpty(ValidationError);
 
 
         public SensorNodeViewModel(BaseSensorModel model) : base(model.Id)
@@ -46,8 +46,7 @@ namespace HSMServer.Model.TreeViewModels
             State = model.State;
             UpdateTime = model.LastUpdateTime;
             Status = model.ValidationResult.Result.ToClient();
-            ValidationError = model.ValidationResult.Message;
-            Product = model.RootProductName;
+            ValidationError = State == SensorState.Ignored ? GetIgnoredErrorTooltip(model.EndOfIgnore) : model.ValidationResult.Message;
             Path = model.Path;
             Unit = model.Unit;
 
@@ -85,5 +84,10 @@ namespace HSMServer.Model.TreeViewModels
 
             return string.Empty;
         }
+
+        private static string GetIgnoredErrorTooltip(DateTime? endOfIgnore) =>
+            endOfIgnore is not null && endOfIgnore != DateTime.MaxValue
+                ? $"Ignore until {endOfIgnore.Value.ToDefaultFormat()}"
+                : $"Ignored forever";
     }
 }

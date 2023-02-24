@@ -111,6 +111,45 @@ input.input-validation-error {
     border: 0;
 }
 
+.vakata-context li>a {
+    display: block;
+    padding: 0 2em 0 2em;
+    text-decoration: none;
+    width: auto;
+    color: black;
+    white-space: nowrap;
+    line-height: 2.4em;
+    text-shadow: 1px 1px 0 white;
+    border-radius: 1px;
+}
+
+.vakata-context ul li a{
+    padding-left: 0;
+}
+
+.vakata-context ul li a svg{
+    padding-left: 1rem;
+    padding-right: 1rem;
+    width: 1em;
+    height: 1em;
+}
+
+.dropdown-header {
+    display: block;
+    padding: .5rem 1rem;
+    margin-bottom: 0;
+    font-size: .875rem;
+    color: #6c757d;
+    white-space: nowrap;
+}
+
+.dropdown-divider {
+    height: 0;
+    margin: .5rem 0;
+    overflow: hidden;
+    border-top: 1px solid rgba(0,0,0,.15);
+}
+
 .table td a {
     text-decoration: none;
     font-weight: bold;

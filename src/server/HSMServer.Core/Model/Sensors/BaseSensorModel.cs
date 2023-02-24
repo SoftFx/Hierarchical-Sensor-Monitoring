@@ -8,7 +8,7 @@ namespace HSMServer.Core.Model
     public enum SensorState : byte
     {
         Available,
-        Freezed,
+        Ignored,
         Blocked = byte.MaxValue,
     }
 
@@ -21,6 +21,11 @@ namespace HSMServer.Core.Model
 
     public abstract class BaseSensorModel : NodeBaseModel
     {
+        private readonly ValidationResult _ignoreStatus = new("Ignored", SensorStatus.OffTime);
+
+        protected ValidationResult _internalValidationResult;
+
+
         protected abstract ValuesStorage Storage { get; }
 
         public abstract SensorType Type { get; }
@@ -30,7 +35,10 @@ namespace HSMServer.Core.Model
 
         public string Unit { get; private set; }
 
-        public ValidationResult ValidationResult { get; protected set; }
+
+        public DateTime? EndOfIgnore { get; private set; }
+
+        public ValidationResult ValidationResult => State == SensorState.Ignored ? _ignoreStatus : _internalValidationResult;
 
 
         public BaseValue LastValue => Storage.LastValue;
@@ -52,26 +60,30 @@ namespace HSMServer.Core.Model
             if (UsedExpectedUpdateInterval == null || !HasData)
                 return false;
 
-            var oldValidationResult = ValidationResult;
+            var oldValidationResult = _internalValidationResult;
 
-            ValidationResult += UsedExpectedUpdateInterval.Validate(LastValue);
+            _internalValidationResult += UsedExpectedUpdateInterval.Validate(LastValue);
 
-            return ValidationResult != oldValidationResult;
+            return _internalValidationResult != oldValidationResult;
         }
 
         internal override void RefreshOutdatedError()
         {
-            ValidationResult -= ExpectedUpdateIntervalPolicy.OutdatedSensor;
+            _internalValidationResult -= ExpectedUpdateIntervalPolicy.OutdatedSensor;
 
             CheckExpectedUpdateInterval();
         }
 
 
-        internal void Update(SensorUpdate sensor)
+        internal void Update(SensorUpdate update)
         {
-            Description = sensor.Description ?? Description;
-            Unit = sensor.Unit ?? Unit;
-            State = sensor?.State ?? State;
+            Description = update.Description ?? Description;
+            Unit = update.Unit ?? Unit;
+            State = update?.State ?? State;
+            EndOfIgnore = update?.EndOfIgnorePeriod ?? EndOfIgnore;
+
+            if (State == SensorState.Available)
+                EndOfIgnore = null;
         }
 
         internal BaseSensorModel ApplyEntity(SensorEntity entity)
@@ -87,8 +99,9 @@ namespace HSMServer.Core.Model
             Description = entity.Description;
             State = (SensorState)entity.State;
             Unit = entity.Unit;
+            EndOfIgnore = entity.EndOfIgnore == 0L ? null : new DateTime(entity.EndOfIgnore);
 
-            ValidationResult = ValidationResult.Ok;
+            _internalValidationResult = ValidationResult.Ok;
 
             return this;
         }
@@ -106,6 +119,7 @@ namespace HSMServer.Core.Model
                 Type = (byte)Type,
                 State = (byte)State,
                 Policies = GetPolicyIds(),
+                EndOfIgnore = EndOfIgnore?.Ticks ?? 0L,
             };
 
 
@@ -118,7 +132,7 @@ namespace HSMServer.Core.Model
         internal void ClearValues()
         {
             Storage.Clear();
-            ValidationResult = ValidationResult.Ok;
+            _internalValidationResult = ValidationResult.Ok;
         }
     }
 }

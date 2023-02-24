@@ -22,7 +22,7 @@ namespace HSMServer.Model.Authentication
 
         public List<(Guid, ProductRoleEnum)> ProductsRoles { get; set; }
 
-        public UserNotificationSettings Notifications { get; set; }
+        public NotificationSettings Notifications { get; set; }
 
         public TreeUserFilter TreeFilter { get; set; }
 
@@ -33,12 +33,7 @@ namespace HSMServer.Model.Authentication
         string INotificatable.Name => UserName;
 
         NotificationSettings INotificatable.Notifications => Notifications;
-
-        bool INotificatable.AreNotificationsEnabled(BaseSensorModel sensor) =>
-            Notifications.Telegram.MessagesAreEnabled &&
-            Notifications.IsSensorEnabled(sensor.Id) &&
-            !Notifications.IsSensorIgnored(sensor.Id);
-
+        
 
         public User(string userName) : this()
         {
@@ -114,9 +109,9 @@ namespace HSMServer.Model.Authentication
 
         public bool IsProductAvailable(Guid productId) =>
             IsAdmin || (ProductsRoles?.Any(x => x.Item1.Equals(productId)) ?? false);
-
-        public List<Guid> GetManagerProducts() =>
-            ProductsRoles.Where(r => r.Item2 == ProductRoleEnum.ProductManager).Select(r => r.Item1).ToList();
+        
+        public bool IsManager(Guid productId) =>
+            IsAdmin || (ProductsRoles?.Any(x => x == (productId, ProductRoleEnum.ProductManager)) ?? false);
 
         internal UserEntity ToEntity() =>
             new()

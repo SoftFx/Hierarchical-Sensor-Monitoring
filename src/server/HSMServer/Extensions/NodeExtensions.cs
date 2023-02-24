@@ -1,5 +1,4 @@
-﻿using HSMServer.Model.TreeViewModels;
-using System;
+﻿using HSMServer.Model.TreeViewModel;
 
 namespace HSMServer.Extensions
 {
@@ -24,7 +23,7 @@ namespace HSMServer.Extensions
         internal static string ToCssClass(this Core.Model.SensorState state) =>
             state switch
             {
-                Core.Model.SensorState.Blocked => "blockedSensor-span",
+                Core.Model.SensorState.Ignored => "ignored-state-text",
                 _ => string.Empty,
             };
 

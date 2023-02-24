@@ -69,7 +69,6 @@
     
     function searchKey() {
         const keyToSearch = document.getElementById("searchKey").value;
-        console.log(keyToSearch)
         $.ajax({
                type: 'GET',
                url: getSearchKeyResult + "?SearchKey=" + keyToSearch,

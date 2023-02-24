@@ -1,49 +1,88 @@
 ﻿@using HSMServer.Extensions
+@using HSMServer.Model.UserTreeShallowCopy
 
-@model HSMServer.Model.TreeViewModels.TreeNodeStateViewModel
+@model NodeShallowModel
 
 @{
     var data = Model.Data;
 }
 
 
-<li id='@data.EncodedId' title='@data.Tooltip' data-jstree='{"title" : "@data.Title", "icon" : "@data.Status.ToIcon()", "time" : "@data.UpdateTime.ToDefaultFormat()"}'>
-    <span>@Html.Raw(data.Name.GetShortNodeName()) @Model.SensorsCountString</span>
+<li id='@data.EncodedId' title='@data.Tooltip' data-jstree='@Model.ToJSTree()'>
+    <span class="@(Model.IsIgnoredState ? "ignored-state-text" : "")">@Html.Raw(data.Name.GetShortNodeName()) @Model.SensorsCountString</span>
 
-    @if (!data.IsEmpty)
+    @if (!data.IsEmpty && !Model.IsIgnoredState)
     {
-        @if (Model.IsAllNotificationsIgnored)
+        @if (data.TelegramSettings.Chats.Count > 0)
         {
-            <span>
-                <i id="@(data.EncodedId)_ignoreNotifications" class="fa-solid fa-bell-slash fa-xs"></i>
-            </span>
+            @if (Model.IsAccountsEnable)
+            {
+                <span>
+                    <img class="tree-png-icon" src="~/dist/user.png" alt="!"/>
+                </span>
+            }
+            else if (Model.AccountState.IsAllIgnored)
+            {
+                <span>
+                    <img class="tree-png-icon" src="~/dist/user-crossed.png" alt="!"/>
+                </span>
+            }
+        
+            @if (Model.IsGroupsEnable)
+            {
+                <span>
+                    <img class="tree-png-icon" src="~/dist/users.png" alt="!"/>
+                </span>
+            }
+            else if (Model.GroupState.IsAllIgnored)
+            {
+                <span>
+                    <img class="tree-png-icon" src="~/dist/users-crossed.png" alt="!"/>
+                </span>
+            }
         }
-        else if (Model.IsAnyNotificationsEnabled)
+        else
         {
-            <span>
-                <i id="@(data.EncodedId)_notifications" class="fab fa-telegram fa-xs"></i>
-                <input id='@(data.EncodedId)_partialNotifications' value='@((!Model.IsAllNotificationsEnabled).ToString())' style='display: none' />
-            </span>
+            @if (Model.IsAccountsEnable && !Model.Parent.IsAccountsEnable)
+            {
+                <span>
+                    <img class="tree-png-icon" src="~/dist/user.png" alt="!"/>
+                </span>
+            }
+            else if (Model.AccountState.IsAllIgnored && !Model.Parent.AccountState.IsAllIgnored)
+            {
+                <span>
+                    <img class="tree-png-icon" src="~/dist/user-crossed.png" alt="!"/>
+                </span>
+            }
+        
+            @if (Model.IsGroupsEnable && !Model.Parent.IsGroupsEnable)
+            {
+                <span>
+                    <img class="tree-png-icon" src="~/dist/users.png" alt="!"/>
+                </span>
+            }
+            else if (Model.GroupState.IsAllIgnored && !Model.Parent.GroupState.IsAllIgnored)
+            {
+                <span>
+                    <img class="tree-png-icon" src="~/dist/users-crossed.png" alt="!"/>
+                </span>
+            }
         }
-    }
-
-    @if (data.TelegramSettings.Chats.Count > 0)
-    {
-        <span>
-            <i class="fa-solid fa-people-group"></i>
-        </span>
     }
 
     @foreach (var child in Model.Nodes)
     {
         <ul>@await Html.PartialAsync("_TreeNode", child)</ul>
     }
-    
+
     @if (Model.Sensors.Count > 0)
     {
         <ul>
             @foreach (var sensor in Model.Sensors)
+            {
                 @await Html.PartialAsync("_TreeSensor", sensor)
+            }
         </ul>
     }
 </li>

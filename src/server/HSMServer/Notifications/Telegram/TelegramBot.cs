@@ -167,7 +167,7 @@ namespace HSMServer.Notifications
             var newStatus = sensor.ValidationResult;
             var minWebStatus = entity.Notifications.Telegram.MessagesMinStatus.ToClient();
 
-            return entity.AreNotificationsEnabled(sensor) &&
+            return entity.NotificationsEnabled(sensor) &&
                    newStatus != oldStatus &&
                    (newStatus.Result.ToClient() >= minWebStatus || oldStatus.Result.ToClient() >= minWebStatus);
         }

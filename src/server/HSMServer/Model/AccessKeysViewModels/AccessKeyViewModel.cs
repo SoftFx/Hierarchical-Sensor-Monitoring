@@ -1,6 +1,6 @@
 ﻿using HSMCommon.Constants;
 using HSMServer.Core.Model;
-using HSMServer.Model.TreeViewModels;
+using HSMServer.Model.TreeViewModel;
 using System;
 using System.Collections.Generic;
 using HSMServer.Extensions;

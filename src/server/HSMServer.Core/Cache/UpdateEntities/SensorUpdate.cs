@@ -6,9 +6,9 @@ namespace HSMServer.Core.Cache.UpdateEntities
     /// <summary>
     /// If properties are null - there's no updates for that properties
     /// </summary>
-    public class SensorUpdate
+    public record SensorUpdate
     {
-        public Guid Id { get; init; }
+        public required Guid Id { get; init; }
 
         public string Description { get; init; }
 
@@ -17,5 +17,7 @@ namespace HSMServer.Core.Cache.UpdateEntities
         public string Unit { get; init; }
 
         public SensorState? State { get; init; }
+
+        public DateTime? EndOfIgnorePeriod { get; init; }
     }
 }

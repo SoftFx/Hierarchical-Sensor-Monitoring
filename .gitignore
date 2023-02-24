@@ -123,3 +123,6 @@ src/server/HSMServer/wwwroot/dist/*
 
 # package.lock
 src/server/HSMServer/package-lock.json
+
+# vs code coverage results
+src/server/HSMServer/TestResults/

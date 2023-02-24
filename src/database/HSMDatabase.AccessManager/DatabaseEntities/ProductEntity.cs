@@ -12,6 +12,6 @@ namespace HSMDatabase.AccessManager.DatabaseEntities
         public string Description { get; init; }
         public long CreationDate { get; set; }
         public List<string> Policies { get; init; }
-        public ProductNotificationSettingsEntity NotificationSettings { get; set; }
+        public NotificationSettingsEntity NotificationSettings { get; set; }
     }
 }
