@@ -13,35 +13,17 @@
 
     @if (!data.IsEmpty && !Model.IsIgnoredState)
     {
-        @if (data.TelegramSettings.Chats.Count > 0)
+        @if (Model.IsGroupsEnable && !Model.AreParentGroupsEnabled)
         {
-            @if (Model.IsGroupsEnable && !Model.AreParentGroupsEnabled)
-            {
-                <span>
-                    <img class="tree-png-icon" src="~/dist/users.png" alt="!"/>
-                </span>
-            }
-            @if (Model.IsAccountsEnable && !Model.AreParentAccountsEnabled)
-            {
-                <span>
-                    <img class="tree-png-icon" src="~/dist/user.png" alt="!"/>
-                </span>
-            }
+            <span>
+                <img class="tree-png-icon" src="~/dist/users.png" alt="!"/>
+            </span>
         }
-        else
+        @if (Model.IsAccountsEnable && !Model.AreParentAccountsEnabled)
         {
-            @if (Model.IsGroupsEnable && !Model.AreParentGroupsEnabled)
-            {
-                <span>
-                    <img class="tree-png-icon" src="~/dist/users.png" alt="!"/>
-                </span>
-            }
-            @if (Model.IsAccountsEnable && !Model.AreParentAccountsEnabled)
-            {
-                <span>
-                    <img class="tree-png-icon" src="~/dist/user.png" alt="!"/>
-                </span>
-            }
+            <span>
+                <img class="tree-png-icon" src="~/dist/user.png" alt="!"/>
+            </span>
         }
 
         @if (Model.AccountState.IsAllIgnored && !Model.AreParentAccountsIgnored)

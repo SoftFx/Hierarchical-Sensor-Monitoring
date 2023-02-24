@@ -22,10 +22,10 @@ namespace HSMServer.Extensions
             {
                 var filteredSensor = new FilteredSensor()
                 {
-                    IsNotificationsAccountEnabled = user.Notifications.IsSensorEnabled(sensor.Id),
-                    IsNotificationsGroupEnabled = sensor.RootProduct.Notifications.IsSensorEnabled(sensor.Id),
-                    IsNotificationsAccountIgnored = user.Notifications.IsSensorIgnored(sensor.Id),
-                    IsNotificationsGroupIgnored = sensor.RootProduct.Notifications.IsSensorIgnored(sensor.Id),
+                    IsAccountNotificationsEnabled = user.Notifications.IsSensorEnabled(sensor.Id),
+                    IsGroupNotificationsEnabled = sensor.RootProduct.Notifications.IsSensorEnabled(sensor.Id),
+                    IsAccountNotificationsIgnored = user.Notifications.IsSensorIgnored(sensor.Id),
+                    IsGroupNotificationsIgnored = sensor.RootProduct.Notifications.IsSensorIgnored(sensor.Id),
                     HasData = sensor.HasData,
                     Status = sensor.Status.ToCore(),
                     State = sensor.State,
@@ -74,7 +74,7 @@ namespace HSMServer.Extensions
             var sensorStateMask = DefaultNodeMask;
 
             if (user.Notifications.IsSensorEnabled(sensor.Id) || user.Notifications.IsSensorIgnored(sensor.Id) ||
-                sensor.GroupNotifications.IsSensorEnabled(sensor.Id) || sensor.GroupNotifications.IsSensorIgnored(sensor.Id))
+                sensor.RootProduct.Notifications.IsSensorEnabled(sensor.Id) || sensor.RootProduct.Notifications.IsSensorIgnored(sensor.Id))
                 sensorStateMask |= FilterGroupType.ByNotifications;
             if (sensor.State == SensorState.Ignored)
                 sensorStateMask |= FilterGroupType.ByState;

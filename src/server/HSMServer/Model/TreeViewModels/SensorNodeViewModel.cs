@@ -28,15 +28,11 @@ namespace HSMServer.Model.TreeViewModel
 
         public string ValidationError { get; private set; }
 
-        public NotificationSettings GroupNotifications { get; set; }
-
         public bool IsValidationErrorVisible => !string.IsNullOrEmpty(ValidationError);
 
 
         public SensorNodeViewModel(BaseSensorModel model) : base(model.Id)
         {
-            GroupNotifications = model.ParentProduct.Notifications;
-
             Update(model);
         }
 
@@ -45,7 +41,6 @@ namespace HSMServer.Model.TreeViewModel
         {
             base.Update(model);
 
-            GroupNotifications = model.ParentProduct.Notifications;
             SensorType = model.Type;
             Description = model.Description;
             State = model.State;

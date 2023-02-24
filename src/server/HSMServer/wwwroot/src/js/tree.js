@@ -137,8 +137,6 @@ function buildContextMenu(node) {
 
     var contextMenu = {};
 
-    console.info(node.data.jstree);
-
     if (curType === NodeType.Product) {
         contextMenu["AccessKeys"] = {
             "label": "Access keys",
@@ -162,14 +160,15 @@ function buildContextMenu(node) {
 
     if (isManager) {
         let isIgnoredState = node.data.jstree.isIgnoredState === "True";
-        if(!isIgnoredState){
+        if (!isIgnoredState){
             contextMenu["Ignore"] = {
                 "label": `Ignore ${getKeyByValue(curType)}`,
                 "separator_after": true,
                 "separator_before": true,
                 "action": _ => ignoreNotificationsRequest(node, TelegramTarget.Groups, 'true')
             }
-        }else{
+        }
+        else {
             contextMenu["Ignore"] = {
                 "label": `Enable ${getKeyByValue(curType)}`,
                 "separator_after": true,
@@ -264,7 +263,8 @@ function buildContextMenu(node) {
             "icon": "fab fa-telegram",
             "action": _ => ignoreNotificationsRequest(node, TelegramTarget.Accounts),
         }
-    } else {
+    }
+    else {
         notificationSubmenu["Accounts enable"] = {
             "label": "Enable for accounts",
             "icon": "fab fa-telegram",
@@ -281,7 +281,8 @@ function buildContextMenu(node) {
                 "icon": "fab fa-telegram",
                 "action": _ => ignoreNotificationsRequest(node, TelegramTarget.Groups),
             }
-        } else {
+        }
+        else {
             notificationSubmenu["Groups enable"] = {
                 "label": "Enable for groups",
                 "icon": "fab fa-telegram",

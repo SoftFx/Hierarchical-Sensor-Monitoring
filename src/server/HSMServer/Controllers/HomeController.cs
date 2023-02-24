@@ -222,7 +222,7 @@ namespace HSMServer.Controllers
             else if (_treeViewModel.Sensors.TryGetValue(selectedNode, out var sensor))
                 rootProduct = sensor.RootProduct;
 
-            if(rootProduct is null)
+            if (rootProduct is null)
                 return;
 
             foreach (var sensorId in GetNodeSensors(selectedNode))
@@ -233,8 +233,7 @@ namespace HSMServer.Controllers
             _treeValuesCache.UpdateProduct(rootProduct);
         }
 
-        private List<Guid> GetNodeSensors(Guid id) =>
-            _treeViewModel.GetNodeAllSensors(id);
+        private List<Guid> GetNodeSensors(Guid id) => _treeViewModel.GetNodeAllSensors(id);
 
         #region Update
 
