@@ -2,9 +2,9 @@
 {
     public class GroupByNotifications : UserFilterGroupBase
     {
-        private const string EnabledName = "Enabled";
+        private const string Enabled = "Enabled";
         
-        private const string IgnoredName = "Ignored";
+        private const string Ignored = "Ignored";
         
 
         internal override FilterProperty[] Properties => new[] { GroupEnabled, AccountEnabled, GroupIgnored, AccountIgnored };
@@ -12,13 +12,13 @@
         internal override FilterGroupType Type => FilterGroupType.ByNotifications;
         
 
-        public FilterProperty GroupEnabled { get; init; } = new(EnabledName);
+        public FilterProperty GroupEnabled { get; init; } = new($"{Enabled} Groups");
         
-        public FilterProperty AccountEnabled { get; init; } = new(EnabledName);
+        public FilterProperty AccountEnabled { get; init; } = new($"{Enabled} Accounts");
 
-        public FilterProperty GroupIgnored { get; init; } = new(IgnoredName);
+        public FilterProperty GroupIgnored { get; init; } = new($"{Ignored} Groups");
 
-        public FilterProperty AccountIgnored { get; init; } = new(IgnoredName);
+        public FilterProperty AccountIgnored { get; init; } = new($"{Ignored} Accounts");
 
 
         public GroupByNotifications() { }
