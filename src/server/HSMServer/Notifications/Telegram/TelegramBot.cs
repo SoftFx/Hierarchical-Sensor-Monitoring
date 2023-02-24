@@ -19,6 +19,7 @@ namespace HSMServer.Notifications
     public sealed class TelegramBot : IAsyncDisposable
     {
         private const string ConfigurationsError = "Invalid Bot configurations.";
+        private const int OneTickSecond = 10000000;
 
         private readonly AddressBook _addressBook = new();
         private readonly ReceiverOptions _options = new()
@@ -197,7 +198,7 @@ namespace HSMServer.Notifications
                     var notificationsDelay = entity.Notifications.Telegram.MessagesDelay;
 
                     foreach (var (_, chat) in chats)
-                        if (DateTime.UtcNow >= chat.MessageBuilder.LastSentTime.AddSeconds(notificationsDelay))
+                        if (DateTime.UtcNow.Ticks / OneTickSecond % notificationsDelay == 0)
                         {
                             var message = chat.MessageBuilder.GetAggregateMessage();
                             if (!string.IsNullOrEmpty(message))
