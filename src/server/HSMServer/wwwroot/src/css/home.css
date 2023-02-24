@@ -203,10 +203,6 @@
     max-width: 10rem;
 }
 
-.jstree-node {
-    font-family: 'Titillium Web', sans-serif, Arial, sans-serif;
-}
-
 .tree-png-icon{
     max-width: 1rem!important;
     max-height: 1rem!important;
