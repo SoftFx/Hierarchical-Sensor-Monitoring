@@ -12,35 +12,30 @@
 
 <li id='@data.EncodedId' title='@data.Tooltip' data-jstree='@Model.ToJSTree()'>
     <span class="@data.State.ToCssClass()">@Html.Raw(data.Name.GetShortNodeName())</span>
-    
-    @if (Model.IsGroupsEnable && !Model.AreParentGroupsEnabled)
+
+    @if (Model.IsAccountsEnable && !Model.Parent.IsAccountsEnable)
     {
         <span>
-            <img class="tree-png-icon" src="~/dist/users.png" alt="!" />
+            <img class="tree-png-icon" src="~/dist/user.png" alt="!"/>
+        </span>
+    }
+    else if (!Model.IsIgnoredState && userNotifications.IgnoredSensors.TryGetValue(data.Id, out var time) && time != DateTime.MaxValue && !Model.Parent.AccountState.IsAllIgnored)
+    {
+        <span>
+            <img class="tree-png-icon" src="~/dist/user-crossed.png" alt="!"/>
         </span>
     }
     
-    @if (Model.IsAccountsEnable && !Model.AreParentAccountsEnabled)
+    @if (Model.IsGroupsEnable && !Model.Parent.IsGroupsEnable)
     {
         <span>
-            <img class="tree-png-icon" src="~/dist/user.png" alt="!" />
+            <img class="tree-png-icon" src="~/dist/users.png" alt="!"/>
         </span>
     }
-    
-    @if (!Model.IsIgnoredState)
+    else if (!Model.IsIgnoredState && data.RootProduct.Notifications.IgnoredSensors.TryGetValue(data.Id, out var time) && time != DateTime.MaxValue && !Model.Parent.GroupState.IsAllIgnored)
     {
-        @if (data.RootProduct.Notifications.IgnoredSensors.TryGetValue(data.Id, out var time) && time != DateTime.MaxValue && !Model.AreParentGroupsIgnored)
-        {
-            <span>
-                <img class="tree-png-icon" src="~/dist/users-crossed.png" alt="!" />
-            </span>
-        }
-    
-        @if (userNotifications.IgnoredSensors.TryGetValue(data.Id, out var time2) && time2 != DateTime.MaxValue && !Model.AreParentAccountsIgnored)
-        {
-            <span>
-                <img class="tree-png-icon" src="~/dist/user-crossed.png" alt="!" />
-            </span>
-        }
+        <span>
+            <img class="tree-png-icon" src="~/dist/users-crossed.png" alt="!"/>
+        </span>
     }
 </li>

@@ -13,26 +13,26 @@
 
     @if (!data.IsEmpty && !Model.IsIgnoredState)
     {
-        @if (Model.IsGroupsEnable && !Model.AreParentGroupsEnabled)
-        {
-            <span>
-                <img class="tree-png-icon" src="~/dist/users.png" alt="!"/>
-            </span>
-        }
-        @if (Model.IsAccountsEnable && !Model.AreParentAccountsEnabled)
+        @if (Model.IsAccountsEnable && !Model.Parent.IsAccountsEnable)
         {
             <span>
                 <img class="tree-png-icon" src="~/dist/user.png" alt="!"/>
             </span>
         }
-
-        @if (Model.AccountState.IsAllIgnored && !Model.AreParentAccountsIgnored)
+        else if (Model.AccountState.IsAllIgnored && !Model.Parent.AccountState.IsAllIgnored)
         {
             <span>
                 <img class="tree-png-icon" src="~/dist/user-crossed.png" alt="!"/>
             </span>
         }
-        @if (Model.GroupState.IsAllIgnored && !Model.AreParentGroupsIgnored)
+        
+        @if (Model.IsGroupsEnable && !Model.Parent.IsGroupsEnable)
+        {
+            <span>
+                <img class="tree-png-icon" src="~/dist/users.png" alt="!"/>
+            </span>
+        }
+        else if (Model.GroupState.IsAllIgnored && !Model.Parent.GroupState.IsAllIgnored)
         {
             <span>
                 <img class="tree-png-icon" src="~/dist/users-crossed.png" alt="!"/>
@@ -42,10 +42,6 @@
 
     @foreach (var child in Model.Nodes)
     {
-        child.AreParentGroupsEnabled = Model.IsGroupsEnable;
-        child.AreParentAccountsEnabled = Model.IsAccountsEnable;
-        child.AreParentAccountsIgnored = Model.AccountState.IsAllIgnored;
-        child.AreParentGroupsIgnored = Model.GroupState.IsAllIgnored;
         <ul>@await Html.PartialAsync("_TreeNode", child)</ul>
     }
 
@@ -54,10 +50,6 @@
         <ul>
             @foreach (var sensor in Model.Sensors)
             {
-                sensor.AreParentGroupsEnabled = Model.IsGroupsEnable;
-                sensor.AreParentAccountsEnabled = Model.IsAccountsEnable;
-                sensor.AreParentAccountsIgnored = Model.AccountState.IsAllIgnored;
-                sensor.AreParentGroupsIgnored = Model.GroupState.IsAllIgnored;
                 @await Html.PartialAsync("_TreeSensor", sensor)
             }
         </ul>

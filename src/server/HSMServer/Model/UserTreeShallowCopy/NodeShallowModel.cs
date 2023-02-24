@@ -44,6 +44,8 @@ namespace HSMServer.Model.UserTreeShallowCopy
 
         internal void AddChild(SensorShallowModel shallowSensor, User user)
         {
+            shallowSensor.Parent = this;
+            
             var sensor = shallowSensor.Data;
 
             if (sensor.State != SensorState.Ignored)
@@ -63,6 +65,8 @@ namespace HSMServer.Model.UserTreeShallowCopy
 
         internal void AddChild(NodeShallowModel node, User user)
         {
+            node.Parent = this;
+            
             if (!node.IsIgnoredState)
             {
                 AccountState.CalculateState(node.AccountState);
