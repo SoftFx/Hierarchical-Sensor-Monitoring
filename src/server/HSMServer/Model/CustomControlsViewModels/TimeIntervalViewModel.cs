@@ -35,6 +35,7 @@ namespace HSMServer.Model
         Week,
         [Display(Name = "1 month")]
         Month,
+        Forever,
         Custom,
     }
 

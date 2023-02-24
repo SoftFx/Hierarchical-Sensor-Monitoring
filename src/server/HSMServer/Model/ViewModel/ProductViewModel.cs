@@ -5,7 +5,7 @@ using System.Linq;
 using HSMCommon.Constants;
 using HSMServer.Authentication;
 using HSMServer.Extensions;
-using HSMServer.Model.TreeViewModels;
+using HSMServer.Model.TreeViewModel;
 
 namespace HSMServer.Model.ViewModel
 {

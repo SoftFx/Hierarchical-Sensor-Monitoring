@@ -1,6 +1,6 @@
 ﻿using HSMServer.Extensions;
 
-namespace HSMServer.Model.TreeViewModels
+namespace HSMServer.Model.TreeViewModel
 {
     public record UpdatedNodeDataViewModel
     {
@@ -36,7 +36,6 @@ namespace HSMServer.Model.TreeViewModels
         public string ValidationError { get; }
 
         public bool IsValidationErrorVisible { get; }
-
 
         public UpdatedSensorDataViewModel(SensorNodeViewModel sensor) : base(sensor)
         {

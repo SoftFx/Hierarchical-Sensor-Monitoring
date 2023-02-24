@@ -23,5 +23,7 @@ namespace HSMDatabase.AccessManager.DatabaseEntities
         public byte State { get; init; }
 
         public List<string> Policies { get; init; }
+
+        public long EndOfIgnore { get; init; }
     }
 }

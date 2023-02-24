@@ -4,12 +4,13 @@ using HSMServer.Core.Model;
 using HSMServer.Extensions;
 using HSMServer.Model.AccessKeysViewModels;
 using HSMServer.Model.Authentication;
+using HSMServer.Model.UserTreeShallowCopy;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace HSMServer.Model.TreeViewModels
+namespace HSMServer.Model.TreeViewModel
 {
     public class TreeViewModel
     {
@@ -37,23 +38,23 @@ namespace HSMServer.Model.TreeViewModels
         }
 
 
-        public List<TreeNodeStateViewModel> GetUserTree(User user)
+        public List<NodeShallowModel> GetUserTree(User user)
         {
-            TreeNodeStateViewModel FilterNodes(ProductNodeViewModel product)
+            NodeShallowModel FilterNodes(ProductNodeViewModel product)
             {
-                var node = new TreeNodeStateViewModel(product);
+                var node = new NodeShallowModel(product, user);
 
                 foreach (var (_, childNode) in product.Nodes)
                     node.AddChild(FilterNodes(childNode), user);
 
                 foreach (var (_, sensor) in product.Sensors)
-                    node.AddChild(sensor, user);
+                    node.AddChild(new SensorShallowModel(sensor, user), user);
 
                 return node;
             }
 
 
-            var tree = new List<TreeNodeStateViewModel>(1 << 4);
+            var tree = new List<NodeShallowModel>(1 << 4);
 
             foreach (var (_, product) in Nodes)
                 if (product.Parent == null && user.IsProductAvailable(product.Id))
@@ -216,8 +217,11 @@ namespace HSMServer.Model.TreeViewModels
 
         private ProductNodeViewModel AddNewProductViewModel(ProductModel product)
         {
-            var node = new ProductNodeViewModel(product);
-
+            var node = new ProductNodeViewModel(product)
+            {
+                RootProduct = _treeValuesCache.GetProduct(product.RootProductId)
+            };
+            
             foreach (var (_, sensor) in product.Sensors)
                 AddNewSensorViewModel(sensor, node);
 
@@ -231,7 +235,10 @@ namespace HSMServer.Model.TreeViewModels
 
         private void AddNewSensorViewModel(BaseSensorModel sensor, ProductNodeViewModel parent)
         {
-            var viewModel = new SensorNodeViewModel(sensor);
+            var viewModel = new SensorNodeViewModel(sensor)
+            {
+                RootProduct = _treeValuesCache.GetProduct(sensor.RootProductId)
+            };
 
             parent.AddSensor(viewModel);
             Sensors.TryAdd(viewModel.Id, viewModel);

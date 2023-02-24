@@ -8,7 +8,7 @@ using HSMServer.Core.Tests.Infrastructure;
 using HSMServer.Core.Tests.MonitoringCoreTests;
 using HSMServer.Core.Tests.MonitoringCoreTests.Fixture;
 using HSMServer.Model.Authentication;
-using HSMServer.Model.TreeViewModels;
+using HSMServer.Model.TreeViewModel;
 using System;
 using System.Collections.Generic;
 using System.Linq;

@@ -1,5 +1,5 @@
 ﻿using HSMServer.Core.Cache.UpdateEntities;
-using HSMServer.Model.TreeViewModels;
+using HSMServer.Model.TreeViewModel;
 
 namespace HSMServer.Model.ViewModel
 {

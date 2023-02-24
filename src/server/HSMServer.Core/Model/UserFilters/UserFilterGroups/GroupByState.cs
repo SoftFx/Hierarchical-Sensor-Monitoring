@@ -2,17 +2,17 @@
 {
     public class GroupByState : UserFilterGroupBase
     {
-        internal override FilterProperty[] Properties => new[] { Blocked };
+        internal override FilterProperty[] Properties => new[] { Ignored };
 
         internal override FilterGroupType Type => FilterGroupType.ByState;
 
 
-        public FilterProperty Blocked { get; init; } = new(nameof(Blocked));
+        public FilterProperty Ignored { get; init; } = new(nameof(Ignored));
 
         public GroupByState() { }
 
 
         internal override bool IsSensorSuitable(FilteredSensor sensor) =>
-            Blocked.Value && sensor.State == SensorState.Blocked;
+            Ignored.Value && sensor.State == SensorState.Ignored;
     }
 }

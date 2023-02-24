@@ -9,7 +9,7 @@
 
 @if (Model != null)
 {
-    <form id="ignoreNotifications_form" asp-action="@nameof(HomeController.IgnoreNotifications)" method="post">
+    <form id="ignoreNotifications_form" asp-action="@(Model.IsOffTimeModal ? nameof(HomeController.SetIgnoreStateToSensorFromModal) : nameof(HomeController.IgnoreNotifications))" method="post">
         <input class="d-none" asp-for="EncodedId" />
         <input class="d-none" asp-for="DateTimeNow" />
         <input class="d-none" asp-for="NotificationsTarget" />
@@ -19,30 +19,37 @@
                 <div class="modal-content">
                     <div class="modal-header">
                         <div>
-                            <h5 class="modal-title">[@Model.NotificationsTarget] Ignore notifications for @Model.TreeElement</h5>
+                            @if (Model.IsOffTimeModal)
+                            {
+                                <h5 class="modal-title">Ignore @Model.TreeElement</h5>
+                            }
+                            else
+                            {
+                                <h5 class="modal-title">[@Model.NotificationsTarget] Ignore notifications for @Model.TreeElement</h5>
+                            }
                             <h6 class="modal-title">@Model.Path</h6>
                         </div>
                     </div>
 
                     <div class="modal-body">
-                        <p>Please, select how long you would like to ignore notifications</p>
-                            
-                        <partial name="_TimeIntervalSelect" for="IgnorePeriod" />
+                        <p>Please, select how long you would like to ignore @(Model.IsOffTimeModal ? Model.TreeElement : "notifications")</p>
+                        
+                        <partial name="_TimeIntervalSelect" for="IgnorePeriod"/>
 
                         <div class="row" id="interval_inputs">
                             <div class="form-group col-4">
                                 <label class="col-form-label" asp-for="Days"></label>
-                                <input id="ignoreNotifications_days" class="form-control" type="number" asp-for="Days" min="0" />
+                                <input id="ignoreNotifications_days" class="form-control" type="number" asp-for="Days" min="0"/>
                             </div>
 
                             <div class="form-group col-4">
                                 <label class="col-form-label" asp-for="Hours"></label>
-                                <input id="ignoreNotifications_hours" class="form-control" type="number" asp-for="Hours" min="0" max="23" />
+                                <input id="ignoreNotifications_hours" class="form-control" type="number" asp-for="Hours" min="0" max="23"/>
                             </div>
 
                             <div class="form-group col-4">
                                 <label class="col-form-label" asp-for="Minutes"></label>
-                                <input id="ignoreNotifications_minutes" class="form-control" type="number" asp-for="Minutes" min="0" max="59" />
+                                <input id="ignoreNotifications_minutes" class="form-control" type="number" asp-for="Minutes" min="0" max="59"/>
                             </div>
                         </div>
 
@@ -78,6 +85,7 @@
             async: true
         }).done(function () {
             hideIgnoreNotificationsModal();
+            updateSelectedNodeData();
             updateTreeTimer();
         });
     });
@@ -133,12 +141,29 @@
     }
 
     function updateNote() {
-        let now = moment.utc('@(Model?.DateTimeNow.ToDefaultFormat())', "DD/MM/YYYY HH:mm:ss");
-        let endOfIgnorePeriod = moment(now).add($('#ignoreNotifications_minutes').val(), 'm')
-                                           .add($('#ignoreNotifications_hours').val(), 'h')
-                                           .add($('#ignoreNotifications_days').val(), 'd');
+        let firstNotePart = `Note: @(Model?.TreeElement)`;
+        let action = `@(Model?.IsOffTimeModal)` === 'True' ? 'disabled ' : 'ignored ';
+        let secondNotePart = '';
 
-        let note = `Note: ${'@(Model?.TreeElement)'} notifications will be ignored until ${endOfIgnorePeriod.format('DD/MM/YYYY HH:mm')}`;
+        if ($('option:selected', $('#timeIntervalSelect')).text() == '@TimeInterval.Forever') {
+            action = 'disabled ';
+            $('#interval_inputs').hide();
+        }
+        else {
+            let now = moment.utc('@(Model?.DateTimeNow.ToDefaultFormat())', "DD/MM/YYYY HH:mm:ss");
+            let endOfIgnorePeriod = moment(now).add($('#ignoreNotifications_minutes').val(), 'm')
+                                               .add($('#ignoreNotifications_hours').val(), 'h')
+                                               .add($('#ignoreNotifications_days').val(), 'd');
+
+            secondNotePart += ` until ${endOfIgnorePeriod.format('DD/MM/YYYY HH:mm')}`;
+            $('#interval_inputs').show();
+        }
+        
+        let note = firstNotePart + ' notifications will be ' + action + secondNotePart;
+        if (`@(Model?.IsOffTimeModal)` === 'True'){
+            note = note.replace("notifications ", "");
+        }
+        
         $('#ignoreNotifications_note').html(note);
     }
 </script>

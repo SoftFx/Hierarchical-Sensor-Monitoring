@@ -1,64 +1,73 @@
 ﻿@using HSMServer.Extensions
-@using HSMServer.Model.Authentication
+@using HSMServer.Model.UserTreeShallowCopy
 
-@model HSMServer.Model.TreeViewModels.TreeNodeStateViewModel
+@model NodeShallowModel
 
 @{
     var data = Model.Data;
 }
 
 
-<li id='@data.EncodedId' title='@data.Tooltip' data-jstree='{"title" : "@data.Title", "icon" : "@data.Status.ToIcon()", "time" : "@data.UpdateTime.ToDefaultFormat()"}'>
-    <span>@Html.Raw(data.Name.GetShortNodeName()) @Model.SensorsCountString</span>
+<li id='@data.EncodedId' title='@data.Tooltip' data-jstree='@Model.ToJSTree()'>
+    <span class="@(Model.IsIgnoredState ? "ignored-state-text" : "")">@Html.Raw(data.Name.GetShortNodeName()) @Model.SensorsCountString</span>
 
-    @if (!data.IsEmpty)
+    @if (!data.IsEmpty && !Model.IsIgnoredState)
     {
         @if (data.TelegramSettings.Chats.Count > 0)
         {
-            <span>
-                <i id="@(data.EncodedId)_notifications" class="fa-solid fa-bell"></i>
-            </span>
-            
-            @if (Model.GroupState.IsAllIgnored)
+            @if (Model.IsAccountsEnable)
             {
-                <span class="d-none">
-                    <img id="@(data.EncodedId)_groupsIgnoredNotifications" src="~/dist/snooze.png" style="height: 1em;width: 1em;" alt="!"/>
+                <span>
+                    <img class="tree-png-icon" src="~/dist/user.png" alt="!"/>
                 </span>
             }
-            else if (!Model.GroupState.IsAnyEnabled)
+            else if (Model.AccountState.IsAllIgnored)
             {
-                <span class="d-none">
-                    <i id="@(data.EncodedId)_groupsDisabledNotifications" class="fa-solid fa-bell-slash"></i>
+                <span>
+                    <img class="tree-png-icon" src="~/dist/user-crossed.png" alt="!"/>
+                </span>
+            }
+        
+            @if (Model.IsGroupsEnable)
+            {
+                <span>
+                    <img class="tree-png-icon" src="~/dist/users.png" alt="!"/>
+                </span>
+            }
+            else if (Model.GroupState.IsAllIgnored)
+            {
+                <span>
+                    <img class="tree-png-icon" src="~/dist/users-crossed.png" alt="!"/>
                 </span>
             }
         }
         else
         {
-            @if (Model.GroupState.IsAllIgnored)
+            @if (Model.IsAccountsEnable && !Model.Parent.IsAccountsEnable)
             {
                 <span>
-                    <img id="@(data.EncodedId)_groupsIgnoredNotifications" src="~/dist/snooze.png" style="height: 1em;width: 1em;" alt="!"/>
+                    <img class="tree-png-icon" src="~/dist/user.png" alt="!"/>
                 </span>
             }
-            else if (!Model.GroupState.IsAnyEnabled)
+            else if (Model.AccountState.IsAllIgnored && !Model.Parent.AccountState.IsAllIgnored)
             {
                 <span>
-                    <i id="@(data.EncodedId)_groupsDisabledNotifications" class="fa-solid fa-bell-slash"></i>
+                    <img class="tree-png-icon" src="~/dist/user-crossed.png" alt="!"/>
                 </span>
             }
-        }
         
-        @if (Model.AccountState.IsAllIgnored)
-        {
-            <span class="d-none">
-                <img id="@(data.EncodedId)_accountsIgnoreNotifications" src="~/dist/user-crossed.png" style="height: 1em;width: 1em;" alt="!"/>
-            </span>
-        }
-        else if (Model.AccountState.IsAnyEnabled)
-        {
-            <span class="d-none">
-                <img id="@(data.EncodedId)_accountsNotifications" src="~/dist/user.png" style="height: 1em;width: 1em;" alt="!"/>
-            </span>
+            @if (Model.IsGroupsEnable && !Model.Parent.IsGroupsEnable)
+            {
+                <span>
+                    <img class="tree-png-icon" src="~/dist/users.png" alt="!"/>
+                </span>
+            }
+            else if (Model.GroupState.IsAllIgnored && !Model.Parent.GroupState.IsAllIgnored)
+            {
+                <span>
+                    <img class="tree-png-icon" src="~/dist/users-crossed.png" alt="!"/>
+                </span>
+            }
         }
     }
 

@@ -77,8 +77,8 @@
     box-shadow: none !important;
 }
 
-.blockedSensor-span {
-    text-decoration: line-through;
+.ignored-state-text{
+    color: grey;
 }
 
 .grid-container {
@@ -202,8 +202,13 @@
     min-width: 5rem;
     max-width: 10rem;
 }
+
+.tree-png-icon{
+    max-width: 1rem!important;
+    max-height: 1rem!important;
 }
 
-.jstree-node {
-    font-family: 'Titillium Web', sans-serif, Arial, sans-serif;
+img .tree-png-icon{
+    width: 1rem!important;
+    height: 1rem!important;
 }

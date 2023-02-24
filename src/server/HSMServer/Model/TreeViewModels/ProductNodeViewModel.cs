@@ -9,7 +9,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace HSMServer.Model.TreeViewModels
+namespace HSMServer.Model.TreeViewModel
 {
     public class ProductNodeViewModel : NodeViewModel
     {
@@ -33,7 +33,6 @@ namespace HSMServer.Model.TreeViewModels
 
         public ProductNodeViewModel(ProductModel model) : base(model.Id)
         {
-            Product = model.RootProductName;
             Path = $"{model.Path}{CommonConstants.SensorPathSeparator}";
             Notifications = model.Notifications;
             

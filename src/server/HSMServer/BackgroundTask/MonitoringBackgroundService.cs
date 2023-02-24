@@ -12,17 +12,16 @@ namespace HSMServer.BackgroundTask
     {
         private const int Delay = 60000; // 1 minute
 
-        private readonly ITreeValuesCache _treeValuesCache;
+        private readonly ITreeValuesCache _cache;
         private readonly IUserManager _userManager;
         private readonly TelegramBot _telegramBot;
 
 
-        public MonitoringBackgroundService(ITreeValuesCache treeValuesCache, IUserManager userManager,
-            INotificationsCenter notificationsCenter)
+        public MonitoringBackgroundService(ITreeValuesCache cache, IUserManager userManager, INotificationsCenter notifications)
         {
-            _treeValuesCache = treeValuesCache;
+            _cache = cache;
             _userManager = userManager;
-            _telegramBot = notificationsCenter.TelegramBot;
+            _telegramBot = notifications.TelegramBot;
         }
 
 
@@ -30,12 +29,13 @@ namespace HSMServer.BackgroundTask
         {
             while (!stoppingToken.IsCancellationRequested)
             {
-                if (_treeValuesCache.IsInitialized)
+                if (_cache.IsInitialized)
                 {
                     ValidateSensors();
                     UpdateAccessKeysState();
-                    RemoveOutdatedIgnoredSensors();
+                    RemoveOutdatedIgnoredNotifications();
                     RemoveExpiredInvitationTokens();
+                    UpdateIgnoreSensorsState();
                 }
 
                 await Task.Delay(Delay, stoppingToken);
@@ -44,35 +44,59 @@ namespace HSMServer.BackgroundTask
 
         private void ValidateSensors()
         {
-            foreach (var sensor in _treeValuesCache.GetSensors())
+            foreach (var sensor in _cache.GetSensors())
             {
                 var oldStatus = sensor.ValidationResult;
 
                 if (sensor.CheckExpectedUpdateInterval())
-                    _treeValuesCache.NotifyAboutChanges(sensor, oldStatus);
+                    _cache.NotifyAboutChanges(sensor, oldStatus);
             }
         }
 
         private void UpdateAccessKeysState()
         {
-            foreach (var key in _treeValuesCache.GetAccessKeys())
-                _treeValuesCache.CheckAccessKeyExpiration(key);
+            foreach (var key in _cache.GetAccessKeys())
+                _cache.CheckAccessKeyExpiration(key);
         }
 
-        private void RemoveOutdatedIgnoredSensors()
+        private void RemoveOutdatedIgnoredNotifications()
         {
             foreach (var user in _userManager.GetUsers())
             {
                 bool needUpdateUser = false;
 
                 foreach (var (sensorId, endOfIgnorePeriod) in user.Notifications.IgnoredSensors)
-                    if (DateTime.UtcNow >= endOfIgnorePeriod &&
-                        user.Notifications.IgnoredSensors.TryRemove(sensorId, out _))
+                    if (DateTime.UtcNow >= endOfIgnorePeriod)
+                    {
+                        user.Notifications.RemoveIgnore(sensorId);
                         needUpdateUser = true;
+                    }
 
                 if (needUpdateUser)
                     _userManager.UpdateUser(user);
             }
+
+            foreach (var product in _cache.GetProducts())
+            {
+                bool needUpdate = false;
+
+                foreach (var (sensorId, endOfIgnorePeriod) in product.Notifications.IgnoredSensors)
+                    if (DateTime.UtcNow >= endOfIgnorePeriod)
+                    {
+                        product.Notifications.RemoveIgnore(sensorId);
+                        needUpdate = true;
+                    }
+
+                if (needUpdate)
+                    _cache.UpdateProduct(product);
+            }
+        }
+
+        private void UpdateIgnoreSensorsState()
+        {
+            foreach (var sensor in _cache.GetSensors())
+                if (sensor.EndOfIgnore <= DateTime.UtcNow)
+                    _cache.UpdateIgnoreSensorState(sensor.Id);
         }
 
         private void RemoveExpiredInvitationTokens() => _telegramBot.RemoveOldInvitationTokens();

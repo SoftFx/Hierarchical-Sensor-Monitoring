@@ -10,7 +10,7 @@ using HSMServer.Core.SensorsUpdatesQueue;
 using HSMServer.Filters;
 using HSMServer.Middleware;
 using HSMServer.Model;
-using HSMServer.Model.TreeViewModels;
+using HSMServer.Model.TreeViewModel;
 using HSMServer.Notifications;
 using HSMServer.Settings;
 using Microsoft.AspNetCore.Builder;

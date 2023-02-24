@@ -1,14 +1,14 @@
 ﻿@using HSMServer.Model.ViewModel
-@using HSMServer.Model.TreeViewModels
+@using HSMServer.Model.TreeViewModel
 @using HSMServer.Model.Authentication
 @using HSMServer.Core.Model.UserFilters
 
-@model HSMServer.Model.TreeViewModels.ProductNodeViewModel
+@model ProductNodeViewModel
 
 @{
     var user = User as User;
     var nodeId = Model.EncodedId;
-    var productName = Model.Product ?? Model.Name;
+    var productName = Model.RootProduct.DisplayName;
 
     var visibleNodes = GetSortedNodes(Model.Nodes.Values);
     var visibleSensors = GetSortedNodes(Model.Sensors.Values);

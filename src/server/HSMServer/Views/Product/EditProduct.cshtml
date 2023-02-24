@@ -239,7 +239,7 @@
                                             </button>
                                             <ul class="dropdown-menu overflow-auto">
                                                 <li>
-                                                    <a class="dropdown-item" asp-controller="@ViewConstants.NotificationsController"
+                                                    <a class="dropdown-item text-decoration-none fw-normal" asp-controller="@ViewConstants.NotificationsController"
                                                        asp-action="@nameof(NotificationsController.SendTestTelegramMessage)"
                                                        asp-route-productId="@Model.EncodedProductId"
                                                        asp-route-chatId="@group.ChatId">
@@ -247,7 +247,7 @@
                                                     </a>
                                                 </li>
                                                 <li>
-                                                    <a class="dropdown-item" asp-controller="@ViewConstants.NotificationsController"
+                                                    <a class="dropdown-item text-decoration-none fw-normal" asp-controller="@ViewConstants.NotificationsController"
                                                        asp-action="@nameof(NotificationsController.RemoveTelegramAuthorization)"
                                                        asp-route-productId="@Model.EncodedProductId"
                                                        asp-route-chatId="@group.ChatId">

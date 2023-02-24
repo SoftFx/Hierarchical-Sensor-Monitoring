@@ -1,45 +1,40 @@
 ﻿@using HSMServer.Extensions
 @using HSMServer.Model.Authentication
+@using HSMServer.Model.UserTreeShallowCopy
 
-@model HSMServer.Model.TreeViewModels.SensorNodeViewModel
+@model SensorShallowModel
 
 @{
-    var userNotifications = (User as User).Notifications;
+    var data = Model.Data;
 }
 
 
-<li id='@Model.EncodedId' title='@Model.Tooltip' data-jstree='{"title" : "@Model.Title", "icon" : "@Model.Status.ToIcon()", "time" : "@Model.UpdateTime.ToDefaultFormat()"}'>
-    <span class="@Model.State.ToCssClass()">@Html.Raw(Model.Name.GetShortNodeName())</span>
+<li id='@data.EncodedId' title='@data.Tooltip' data-jstree='@Model.ToJSTree()'>
+    <span class="@data.State.ToCssClass()">@Html.Raw(data.Name.GetShortNodeName())</span>
 
-    @if (userNotifications.IsSensorIgnored(Model.Id))
-    {
-        <span class="d-none">
-            <img id="@(Model.EncodedId)_accountsIgnoreNotifications" src="~/dist/user-crossed.png" style="height: 1em;width: 1em;" alt=""/>
-        </span>
-    }
-    else if (userNotifications.IsSensorEnabled(Model.Id))
-    {
-        <span class="d-none">
-            <img id="@(Model.EncodedId)_accountsNotifications" src="~/dist/user.png" style="height: 1em;width: 1em;" alt=""/>
-        </span>
-    }
-
-    @if (Model.GroupNotifications.IsSensorIgnored(Model.Id))
+    @if (Model.IsAccountsEnable && !Model.Parent.IsAccountsEnable)
     {
         <span>
-            <img id="@(Model.EncodedId)_groupsIgnoredNotifications" src="~/dist/snooze.png" style="height: 1em;width: 1em;" alt="!"/>
+            <img class="tree-png-icon" src="~/dist/user.png" alt="!"/>
         </span>
     }
-    else if (Model.GroupNotifications.IsSensorEnabled(Model.Id))
-    {
-        <span class="d-none">
-            <img id="@(Model.EncodedId)_groupsNotifications" src="~/dist/users.png" style="height: 1em; width: 1em;" alt=""/>
-        </span>
-    }
-    else
+    else if (!Model.IsIgnoredState && Model.IsAccountIgnoreIconShow && !Model.Parent.AccountState.IsAllIgnored)
     {
         <span>
-            <i id="@(Model.EncodedId)_groupsDisabledNotifications" class="fa-solid fa-bell-slash"></i>
+            <img class="tree-png-icon" src="~/dist/user-crossed.png" alt="!"/>
+        </span>
+    }
+    
+    @if (Model.IsGroupsEnable && !Model.Parent.IsGroupsEnable)
+    {
+        <span>
+            <img class="tree-png-icon" src="~/dist/users.png" alt="!"/>
+        </span>
+    }
+    else if (!Model.IsIgnoredState && Model.IsGroupIgnoreIconShow && !Model.Parent.GroupState.IsAllIgnored)
+    {
+        <span>
+            <img class="tree-png-icon" src="~/dist/users-crossed.png" alt="!"/>
         </span>
     }
 </li>

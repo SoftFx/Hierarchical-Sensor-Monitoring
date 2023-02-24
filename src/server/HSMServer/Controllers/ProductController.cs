@@ -10,7 +10,7 @@ using HSMServer.Core.Registration;
 using HSMServer.Filters.ProductRoleFilters;
 using HSMServer.Helpers;
 using HSMServer.Model.Authentication;
-using HSMServer.Model.TreeViewModels;
+using HSMServer.Model.TreeViewModel;
 using HSMServer.Model.Validators;
 using HSMServer.Model.ViewModel;
 using Microsoft.AspNetCore.Authorization;

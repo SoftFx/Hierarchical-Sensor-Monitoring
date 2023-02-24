@@ -109,9 +109,9 @@ namespace HSMServer.Model.Authentication
 
         public bool IsProductAvailable(Guid productId) =>
             IsAdmin || (ProductsRoles?.Any(x => x.Item1.Equals(productId)) ?? false);
-
-        public List<Guid> GetManagerProducts() =>
-            ProductsRoles.Where(r => r.Item2 == ProductRoleEnum.ProductManager).Select(r => r.Item1).ToList();
+        
+        public bool IsManager(Guid productId) =>
+            IsAdmin || (ProductsRoles?.Any(x => x == (productId, ProductRoleEnum.ProductManager)) ?? false);
 
         internal UserEntity ToEntity() =>
             new()

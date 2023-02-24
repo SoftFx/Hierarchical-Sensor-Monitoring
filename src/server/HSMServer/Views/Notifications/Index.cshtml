@@ -54,13 +54,13 @@
                                     </button>
                                     <ul class="dropdown-menu overflow-auto">
                                         <li>
-                                            <a class="dropdown-item" asp-action="@nameof(NotificationsController.SendTestTelegramMessage)"
+                                            <a class="dropdown-item text-decoration-none fw-normal" asp-action="@nameof(NotificationsController.SendTestTelegramMessage)"
                                                asp-route-chatId="@chat.ChatId">
                                                 Send test message
                                             </a>
                                         </li>
                                         <li>
-                                            <a class="dropdown-item" asp-action="@nameof(NotificationsController.RemoveTelegramAuthorization)"
+                                            <a class="dropdown-item text-decoration-none fw-normal" asp-action="@nameof(NotificationsController.RemoveTelegramAuthorization)"
                                                asp-route-chatId="@chat.ChatId">
                                                 Remove authorization
                                             </a>
