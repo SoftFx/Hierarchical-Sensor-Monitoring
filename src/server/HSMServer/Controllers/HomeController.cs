@@ -216,13 +216,15 @@ namespace HSMServer.Controllers
 
         private void UpdateGroupNotificationSettings(Guid selectedNode, Action<NotificationSettings, Guid> updateSettings)
         {
-            var rootProductId = Guid.Empty;
+            ProductModel rootProduct = null;
             if (_treeViewModel.Nodes.TryGetValue(selectedNode, out var node))
-                rootProductId = node.RootProduct.Id;
+                rootProduct = node.RootProduct;
             else if (_treeViewModel.Sensors.TryGetValue(selectedNode, out var sensor))
-                rootProductId = sensor.RootProduct.Id;
+                rootProduct = sensor.RootProduct;
 
-            var rootProduct = _treeValuesCache.GetProduct(rootProductId);
+            if(rootProduct is null)
+                return;
+
             foreach (var sensorId in GetNodeSensors(selectedNode))
             {
                 updateSettings?.Invoke(rootProduct.Notifications, sensorId);
