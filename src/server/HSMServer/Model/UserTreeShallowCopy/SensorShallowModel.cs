@@ -11,10 +11,12 @@ namespace HSMServer.Model.UserTreeShallowCopy
 
         public override bool IsGroupsEnable { get; }
         
+
         public bool IsAccountIgnoreIconShow { get; }
         
         public bool IsGroupIgnoreIconShow { get; }
         
+
         internal SensorShallowModel(SensorNodeViewModel data, User user) : base(data, user)
         {
             IsAccountsEnable = user.Notifications.IsSensorEnabled(data.Id);

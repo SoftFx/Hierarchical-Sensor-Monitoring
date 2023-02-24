@@ -5,25 +5,28 @@ namespace HSMServer.Model.ViewModel
     public class UserFilterViewModel
     {
         public bool HasOkStatus { get; set; }
+
         public bool HasWarningStatus { get; set; }
+
         public bool HasErrorStatus { get; set; }
+
         public bool HasOffTimeStatus { get; set; }
 
+
         public bool IsEmptyHistory { get; set; }
+        
 
-        public bool HasTelegramNotifications { get; set; }
+        public bool IsGroupNotificationsEnabled { get; set; }
         
-        public bool IsEnabledGroupSensors { get; set; }
+        public bool IsAccountNotificationsEnabled { get; set; }
         
-        public bool IsEnabledAccountSensors { get; set; }
+        public bool IsGroupNotificationsIgnored { get; set; }
         
-        public bool IsIgnoredSensors { get; set; }
-        
-        public bool IsIgnoredGroupSensors { get; set; }
-        
-        public bool IsIgnoredAccountSensors { get; set; }
+        public bool IsAccountNotificationsIgnored { get; set; }
 
-        public bool IsIgnoredStateSensors { get; set; }
+
+        public bool IsIgnoreSensorsState { get; set; }
+
 
         public int TreeUpdateInterval { get; set; }
 
@@ -41,12 +44,12 @@ namespace HSMServer.Model.ViewModel
 
             IsEmptyHistory = filter.ByHistory.Empty.Value;
 
-            IsIgnoredAccountSensors = filter.ByNotifications.AccountIgnored.Value;
-            IsIgnoredGroupSensors = filter.ByNotifications.GroupIgnored.Value;
-            IsEnabledAccountSensors = filter.ByNotifications.AccountEnabled.Value;
-            IsEnabledGroupSensors = filter.ByNotifications.GroupEnabled.Value;
+            IsAccountNotificationsIgnored = filter.ByNotifications.AccountIgnored.Value;
+            IsGroupNotificationsIgnored = filter.ByNotifications.GroupIgnored.Value;
+            IsAccountNotificationsEnabled = filter.ByNotifications.AccountEnabled.Value;
+            IsGroupNotificationsEnabled = filter.ByNotifications.GroupEnabled.Value;
 
-            IsIgnoredStateSensors = filter.ByState.Ignored.Value;
+            IsIgnoreSensorsState = filter.ByState.Ignored.Value;
 
             TreeUpdateInterval = filter.TreeUpdateInterval;
             TreeSortType = (int)filter.TreeSortType;
@@ -68,12 +71,12 @@ namespace HSMServer.Model.ViewModel
 
             filter.ByHistory.Empty.Value = IsEmptyHistory;
 
-            filter.ByNotifications.AccountEnabled.Value = IsEnabledAccountSensors;
-            filter.ByNotifications.GroupEnabled.Value = IsEnabledGroupSensors;
-            filter.ByNotifications.AccountIgnored.Value = IsIgnoredAccountSensors;
-            filter.ByNotifications.GroupIgnored.Value = IsIgnoredGroupSensors;
+            filter.ByNotifications.AccountEnabled.Value = IsAccountNotificationsEnabled;
+            filter.ByNotifications.GroupEnabled.Value = IsGroupNotificationsEnabled;
+            filter.ByNotifications.AccountIgnored.Value = IsAccountNotificationsIgnored;
+            filter.ByNotifications.GroupIgnored.Value = IsGroupNotificationsIgnored;
 
-            filter.ByState.Ignored.Value = IsIgnoredStateSensors;
+            filter.ByState.Ignored.Value = IsIgnoreSensorsState;
 
             return filter;
         }

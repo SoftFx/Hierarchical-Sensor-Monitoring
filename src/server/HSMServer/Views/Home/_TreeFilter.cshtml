@@ -64,15 +64,15 @@
     Enabled for
     <div class="form-check">
         <div class="form-check">
-            <input type="checkbox" class="form-check-input" id="enabledGroup" asp-for="IsEnabledGroupSensors"/>
+            <input type="checkbox" class="form-check-input" id="enabledGroup" asp-for="IsGroupNotificationsEnabled" />
             <label class="form-check-label" for="enabledGroup" title="Ignored sensors">
-                Group <img class="tree-png-icon" src="~/dist/users.png" alt="!" />
+                Groups <img class="tree-png-icon" src="~/dist/users.png" alt="!" />
             </label>
         </div>
         <div class="form-check">
-            <input type="checkbox" class="form-check-input" id="enabledAccount" asp-for="IsEnabledAccountSensors"/>
+            <input type="checkbox" class="form-check-input" id="enabledAccount" asp-for="IsAccountNotificationsEnabled" />
             <label class="form-check-label" for="enabledAccount" title="Ignored sensors">
-                Account <img class="tree-png-icon" src="~/dist/user.png" alt="!" />
+                Accounts <img class="tree-png-icon" src="~/dist/user.png" alt="!" />
             </label>
         </div>
     </div>
@@ -80,15 +80,15 @@
     Ignored for
     <div class="form-check">
         <div class="form-check">
-            <input type="checkbox" class="form-check-input" id="ignoredGroup" asp-for="IsIgnoredGroupSensors"/>
+            <input type="checkbox" class="form-check-input" id="ignoredGroup" asp-for="IsGroupNotificationsIgnored" />
             <label class="form-check-label" for="ignoredGroup" title="Ignored sensors">
-                Group <img class="tree-png-icon" src="~/dist/users-crossed.png" alt="!" />
+                Groups <img class="tree-png-icon" src="~/dist/users-crossed.png" alt="!" />
             </label>
         </div>
         <div class="form-check">
-            <input type="checkbox" class="form-check-input" id="ignoredAccount" asp-for="IsIgnoredAccountSensors"/>
+            <input type="checkbox" class="form-check-input" id="ignoredAccount" asp-for="IsAccountNotificationsIgnored" />
             <label class="form-check-label" for="ignoredAccount" title="Ignored sensors">
-                Account <img class="tree-png-icon" src="~/dist/user-crossed.png" alt="!" />
+                Accounts <img class="tree-png-icon" src="~/dist/user-crossed.png" alt="!" />
             </label>
         </div>
     </div>
@@ -97,7 +97,7 @@
 
     <h6 class="dropdown-header">Sensor state</h6>
     <div class="form-check">
-        <input type="checkbox" class="form-check-input" id="blocked" asp-for="IsIgnoredStateSensors"/>
+        <input type="checkbox" class="form-check-input" id="blocked" asp-for="IsIgnoreSensorsState" />
         <label class="form-check-label ignored-state-text" for="blocked" title="Ignored sensors">
             Ignored sensors
         </label>
