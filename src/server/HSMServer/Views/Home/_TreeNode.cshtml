@@ -13,30 +13,61 @@
 
     @if (!data.IsEmpty && !Model.IsIgnoredState)
     {
-        @if (Model.IsAccountsEnable && !Model.Parent.IsAccountsEnable)
+        @if (data.TelegramSettings.Chats.Count > 0)
         {
-            <span>
-                <img class="tree-png-icon" src="~/dist/user.png" alt="!"/>
-            </span>
-        }
-        else if (Model.AccountState.IsAllIgnored && !Model.Parent.AccountState.IsAllIgnored)
-        {
-            <span>
-                <img class="tree-png-icon" src="~/dist/user-crossed.png" alt="!"/>
-            </span>
-        }
+            @if (Model.IsAccountsEnable)
+            {
+                <span>
+                    <img class="tree-png-icon" src="~/dist/user.png" alt="!"/>
+                </span>
+            }
+            else if (Model.AccountState.IsAllIgnored)
+            {
+                <span>
+                    <img class="tree-png-icon" src="~/dist/user-crossed.png" alt="!"/>
+                </span>
+            }
         
-        @if (Model.IsGroupsEnable && !Model.Parent.IsGroupsEnable)
-        {
-            <span>
-                <img class="tree-png-icon" src="~/dist/users.png" alt="!"/>
-            </span>
+            @if (Model.IsGroupsEnable)
+            {
+                <span>
+                    <img class="tree-png-icon" src="~/dist/users.png" alt="!"/>
+                </span>
+            }
+            else if (Model.GroupState.IsAllIgnored)
+            {
+                <span>
+                    <img class="tree-png-icon" src="~/dist/users-crossed.png" alt="!"/>
+                </span>
+            }
         }
-        else if (Model.GroupState.IsAllIgnored && !Model.Parent.GroupState.IsAllIgnored)
+        else
         {
-            <span>
-                <img class="tree-png-icon" src="~/dist/users-crossed.png" alt="!"/>
-            </span>
+            @if (Model.IsAccountsEnable && !Model.Parent.IsAccountsEnable)
+            {
+                <span>
+                    <img class="tree-png-icon" src="~/dist/user.png" alt="!"/>
+                </span>
+            }
+            else if (Model.AccountState.IsAllIgnored && !Model.Parent.AccountState.IsAllIgnored)
+            {
+                <span>
+                    <img class="tree-png-icon" src="~/dist/user-crossed.png" alt="!"/>
+                </span>
+            }
+        
+            @if (Model.IsGroupsEnable && !Model.Parent.IsGroupsEnable)
+            {
+                <span>
+                    <img class="tree-png-icon" src="~/dist/users.png" alt="!"/>
+                </span>
+            }
+            else if (Model.GroupState.IsAllIgnored && !Model.Parent.GroupState.IsAllIgnored)
+            {
+                <span>
+                    <img class="tree-png-icon" src="~/dist/users-crossed.png" alt="!"/>
+                </span>
+            }
         }
     }
 
