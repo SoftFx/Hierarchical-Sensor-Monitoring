@@ -9,8 +9,6 @@ namespace HSMServer.Model.UserTreeShallowCopy
         public override bool IsAccountsEnable { get; }
 
         public override bool IsGroupsEnable { get; }
-
-        public override bool IsIgnoredState { get; set; }
         
         internal SensorShallowModel(SensorNodeViewModel data, User user) : base(data, user)
         {

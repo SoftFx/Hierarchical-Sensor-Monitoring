@@ -35,10 +35,10 @@ namespace HSMServer.Model.UserTreeShallowCopy
 
         public override bool IsGroupsEnable => GroupState.IsAllEnabled;
 
-        public override bool IsIgnoredState { get; set; } = true;
 
         internal NodeShallowModel(ProductNodeViewModel data, User user) : base(data, user)
         {
+            IsIgnoredState = true;
         }
 
 
@@ -74,7 +74,6 @@ namespace HSMServer.Model.UserTreeShallowCopy
             }
             
             IsIgnoredState &= node.IsIgnoredState;
-
             VisibleSensorsCount += node.VisibleSensorsCount;
 
             if (node.VisibleSensorsCount > 0 || user.IsEmptyProductVisible(node.Data))

@@ -32,15 +32,8 @@
                     </div>
 
                     <div class="modal-body">
-                        @if (Model.IsOffTimeModal)
-                        {
-                            <p>Please, select how long you would like to ignore @Model.TreeElement</p>
-                        }
-                        else
-                        {
-                            <p>Please, select how long you would like to ignore notifications</p>
-                        }
-
+                        <p>Please, select how long you would like to ignore @(Model.IsOffTimeModal ? Model.TreeElement : "notifications")</p>
+                        
                         <partial name="_TimeIntervalSelect" for="IgnorePeriod"/>
 
                         <div class="row" id="interval_inputs">
