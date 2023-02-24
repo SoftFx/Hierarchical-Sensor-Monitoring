@@ -6,7 +6,6 @@
 
 @{
     var data = Model.Data;
-    var userNotifications = (User as User)?.Notifications;
 }
 
 
@@ -19,7 +18,7 @@
             <img class="tree-png-icon" src="~/dist/user.png" alt="!"/>
         </span>
     }
-    else if (!Model.IsIgnoredState && userNotifications.IgnoredSensors.TryGetValue(data.Id, out var time) && time != DateTime.MaxValue && !Model.Parent.AccountState.IsAllIgnored)
+    else if (!Model.IsIgnoredState && Model.IsAccountIgnoreIconShow && !Model.Parent.AccountState.IsAllIgnored)
     {
         <span>
             <img class="tree-png-icon" src="~/dist/user-crossed.png" alt="!"/>
@@ -32,7 +31,7 @@
             <img class="tree-png-icon" src="~/dist/users.png" alt="!"/>
         </span>
     }
-    else if (!Model.IsIgnoredState && data.RootProduct.Notifications.IgnoredSensors.TryGetValue(data.Id, out var time) && time != DateTime.MaxValue && !Model.Parent.GroupState.IsAllIgnored)
+    else if (!Model.IsIgnoredState && Model.IsGroupIgnoreIconShow && !Model.Parent.GroupState.IsAllIgnored)
     {
         <span>
             <img class="tree-png-icon" src="~/dist/users-crossed.png" alt="!"/>
