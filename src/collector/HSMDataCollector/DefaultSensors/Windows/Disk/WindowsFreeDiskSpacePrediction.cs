@@ -13,8 +13,10 @@ namespace HSMDataCollector.DefaultSensors.Windows
 
         private DateTime _startTime;
         private long _startAvailableSpace;
-        private int _currentRequest;
+        private int _requestsCount;
 
+
+        private bool IsCalibration => _requestsCount <= _calibrationRequests;
 
         protected override string SensorName => $"Free space on disk {_driveName} prediction";
 
@@ -29,19 +31,17 @@ namespace HSMDataCollector.DefaultSensors.Windows
         }
 
 
-        protected override string GetComment() => _currentRequest <= _calibrationRequests
-            ? $"Calibration request ({_currentRequest}/{_calibrationRequests})"
+        protected override string GetComment() => IsCalibration
+            ? $"Calibration request ({_requestsCount}/{_calibrationRequests})"
             : base.GetComment();
 
-        protected override SensorStatus GetStatus() => _currentRequest <= _calibrationRequests
-            ? SensorStatus.OffTime
-            : base.GetStatus();
+        protected override SensorStatus GetStatus() => IsCalibration ? SensorStatus.OffTime : base.GetStatus();
 
 
         protected override TimeSpan GetValue()
         {
-            if (_currentRequest <= _calibrationRequests)
-                _currentRequest++;
+            if (IsCalibration)
+                _requestsCount++;
 
             var currentAvailableSpace = _driveInfo.AvailableFreeSpace;
             var deltaSpace = _startAvailableSpace - currentAvailableSpace;

@@ -2,6 +2,6 @@
 {
     internal static class NumberExtensions
     {
-        internal static double ToPercent(this double value) => value * 100;
+        internal static double ToPercent(this double value) => value * 100.0;
     }
 }
