@@ -1,5 +1,6 @@
 ﻿using HSMCommon.Constants;
 using HSMDataCollector.Core;
+using HSMDataCollector.Options;
 using HSMDataCollector.PublicInterface;
 using HSMServer.Core.Cache;
 using System;
@@ -39,6 +40,11 @@ namespace HSM.Core.Monitoring
             _dataCollector = new DataCollector(GetSelfMonitoringKey(cache), "https://localhost");
             _dataCollector.Initialize(true);
             _dataCollector.InitializeProcessMonitoring(true, true, true);
+
+            var diskOpt = new DiskSensorOptions() { PostDataPeriod = TimeSpan.FromSeconds(30), CalibrationRequests = 10, };
+            _dataCollector.Windows.AddDiskMonitoringSensors(diskOpt);
+
+            _dataCollector.Start();
 
             InitializeSensors();
         }
