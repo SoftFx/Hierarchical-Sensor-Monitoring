@@ -1,6 +1,6 @@
 ﻿using HSMServer.Model.AccessKeysViewModels;
 using HSMServer.Model.Authentication;
-using HSMServer.Model.TreeViewModels;
+using HSMServer.Model.TreeViewModel;
 using System;
 using System.Collections.Generic;
 using System.Linq;

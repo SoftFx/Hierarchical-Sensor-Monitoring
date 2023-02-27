@@ -77,8 +77,8 @@
     box-shadow: none !important;
 }
 
-.blockedSensor-span {
-    text-decoration: line-through;
+.ignored-state-text{
+    color: grey;
 }
 
 .grid-container {
@@ -196,4 +196,19 @@
     color: grey;
     line-height: 1rem;
     white-space: pre-line;
+}
+
+.independentSizeButton{
+    min-width: 5rem;
+    max-width: 10rem;
+}
+
+.tree-png-icon{
+    max-width: 1rem!important;
+    max-height: 1rem!important;
+}
+
+img .tree-png-icon{
+    width: 1rem!important;
+    height: 1rem!important;
 }

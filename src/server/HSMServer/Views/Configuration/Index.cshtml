@@ -155,7 +155,6 @@
     $('[id^=ok_]').on("click", function() {
         name = this.id.substring("ok_".length);
 
-        console.log(name);
         let value = $('#value_' + name).val();
         let data = createData(name, value, false);
 

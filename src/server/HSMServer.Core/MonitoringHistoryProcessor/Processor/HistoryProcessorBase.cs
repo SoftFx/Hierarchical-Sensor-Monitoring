@@ -7,19 +7,16 @@ namespace HSMServer.Core.MonitoringHistoryProcessor.Processor
 {
     internal abstract class HistoryProcessorBase : IHistoryProcessor
     {
-        private const int ExpectedBarCount = 30;
-
-
         public abstract string GetCsvHistory(List<BaseValue> originalData);
 
-        public List<BaseValue> ProcessingAndCompression(List<BaseValue> values)
+        public List<BaseValue> ProcessingAndCompression(List<BaseValue> values, int compressedValuesCount)
         {
             values = values.OrderBy(v => v.Time).ThenBy(v => v.ReceivingTime).ToList();
 
-            if (values.Count < 2)
+            if (values.Count < compressedValuesCount)
                 return values;
 
-            var interval = CountInterval(values);
+            var interval = CountInterval(values, compressedValuesCount);
             if (interval == TimeSpan.Zero)
                 return values;
 
@@ -28,11 +25,11 @@ namespace HSMServer.Core.MonitoringHistoryProcessor.Processor
 
         protected virtual List<BaseValue> Compress(List<BaseValue> history, TimeSpan compressionInterval) => history;
 
-        private static TimeSpan CountInterval(List<BaseValue> values)
+        private static TimeSpan CountInterval(List<BaseValue> values, int compressedValuesCount)
         {
             var fullTime = values.Last().Time - values.First().Time;
             var fullMilliseconds = fullTime.TotalMilliseconds;
-            var intervalMilliseconds = fullMilliseconds / ExpectedBarCount;
+            var intervalMilliseconds = fullMilliseconds / compressedValuesCount;
 
             return TimeSpan.FromMilliseconds(intervalMilliseconds);
         }

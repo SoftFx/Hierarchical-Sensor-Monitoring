@@ -1,9 +1,11 @@
-﻿@using HSMServer.Model.TreeViewModels
+﻿@using HSMServer.Model.UserTreeShallowCopy
 
-@model List<TreeNodeStateViewModel>
+@model List<NodeShallowModel>
 
 
 <ul>
     @foreach (var product in Model)
+    {
         @await Html.PartialAsync("_TreeNode", product)
+    }
 </ul>

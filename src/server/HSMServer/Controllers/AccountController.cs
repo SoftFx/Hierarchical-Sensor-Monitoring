@@ -8,7 +8,7 @@ using HSMServer.Core.Encryption;
 using HSMServer.Core.Registration;
 using HSMServer.Filters;
 using HSMServer.Model.Authentication;
-using HSMServer.Model.TreeViewModels;
+using HSMServer.Model.TreeViewModel;
 using HSMServer.Model.Validators;
 using HSMServer.Model.ViewModel;
 using Microsoft.AspNetCore.Authentication;

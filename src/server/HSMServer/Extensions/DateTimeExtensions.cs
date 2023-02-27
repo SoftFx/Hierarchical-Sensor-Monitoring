@@ -36,5 +36,7 @@ namespace HSMServer.Extensions
             
             return time.TotalSeconds < 60 ? "< 1 minute ago" : "no info";
         }
+
+        internal static DateTime ToUtc(this DateTime dateTime) => DateTime.SpecifyKind(dateTime, DateTimeKind.Utc);
     }
 }

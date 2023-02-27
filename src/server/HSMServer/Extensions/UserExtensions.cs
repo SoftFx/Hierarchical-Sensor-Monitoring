@@ -1,7 +1,7 @@
 ﻿using HSMServer.Core.Model;
 using HSMServer.Core.Model.UserFilters;
 using HSMServer.Model.Authentication;
-using HSMServer.Model.TreeViewModels;
+using HSMServer.Model.TreeViewModel;
 
 namespace HSMServer.Extensions
 {
@@ -22,8 +22,10 @@ namespace HSMServer.Extensions
             {
                 var filteredSensor = new FilteredSensor()
                 {
-                    IsNotificationsEnabled = user.Notifications.IsSensorEnabled(sensor.Id),
-                    IsNotificationsIgnored = user.Notifications.IsSensorIgnored(sensor.Id),
+                    IsAccountNotificationsEnabled = user.Notifications.IsSensorEnabled(sensor.Id),
+                    IsGroupNotificationsEnabled = sensor.RootProduct.Notifications.IsSensorEnabled(sensor.Id),
+                    IsAccountNotificationsIgnored = user.Notifications.IsSensorIgnored(sensor.Id),
+                    IsGroupNotificationsIgnored = sensor.RootProduct.Notifications.IsSensorIgnored(sensor.Id),
                     HasData = sensor.HasData,
                     Status = sensor.Status.ToCore(),
                     State = sensor.State,
@@ -71,9 +73,10 @@ namespace HSMServer.Extensions
         {
             var sensorStateMask = DefaultNodeMask;
 
-            if (user.Notifications.IsSensorEnabled(sensor.Id) || user.Notifications.IsSensorIgnored(sensor.Id))
+            if (user.Notifications.IsSensorEnabled(sensor.Id) || user.Notifications.IsSensorIgnored(sensor.Id) ||
+                sensor.RootProduct.Notifications.IsSensorEnabled(sensor.Id) || sensor.RootProduct.Notifications.IsSensorIgnored(sensor.Id))
                 sensorStateMask |= FilterGroupType.ByNotifications;
-            if (sensor.State == SensorState.Blocked)
+            if (sensor.State == SensorState.Ignored)
                 sensorStateMask |= FilterGroupType.ByState;
 
             return sensorStateMask;

@@ -1,22 +1,10 @@
 ﻿@using HSMServer.Core.Model
 @using HSMServer.Extensions
+@using HSMServer.Model.TreeViewModel
 
-@model HSMServer.Model.TreeViewModels.SensorNodeViewModel
+@model SensorNodeViewModel
 
 @{
-    const string hourPeriod = "hour";
-    const string hourShortPeriod = "1H";
-    const string dayPeriod = "day";
-    const string dayShortPeriod = "1D";
-    const string threeDaysPeriod = "three_days";
-    const string threeDaysShortPeriod = "3D";
-    const string weekPeriod = "week";
-    const string weekShortPeriod = "1W";
-    const string monthPeriod = "month";
-    const string monthShortPeriod = "1M";
-    const string allPeriod = "all";
-    const string allShortPeriod = "All";
-
     var sensorId = Model.EncodedId;
 
     var graphElementId = $"graph_{sensorId}";
@@ -110,32 +98,21 @@
                     <div>
                         <div class="d-flex justify-content-between">
                             <div>
-                                <div class="d-inline me-2">History period:</div>
+                                <label class="me-1" for="from_@sensorId">From:</label>
+                                <input class="me-2" type="datetime-local" id="from_@sensorId" name="from">
 
-                                <div class='form-check form-check-inline'>
-                                    <input class='form-check-input' type='radio' name='group_@sensorId' id='radio_@(hourPeriod)_@(sensorId)' checked/>
-                                    <label class='form-check-label' for='@(hourPeriod)_radio_@(sensorId)'>@hourShortPeriod</label>
-                                </div>
-                                <div class='form-check form-check-inline'>
-                                    <input class='form-check-input' type='radio' name='group_@sensorId' id='radio_@(dayPeriod)_@(sensorId)'/>
-                                    <label class='form-check-label' for='@(dayPeriod)_radio_@(sensorId)'>@dayShortPeriod</label>
-                                </div>
-                                <div class='form-check form-check-inline'>
-                                    <input class='form-check-input' type='radio' name='group_@sensorId' id='radio_@(threeDaysPeriod)_@(sensorId)'/>
-                                    <label class='form-check-label' for='@(threeDaysPeriod)_radio_@(sensorId)'>@threeDaysShortPeriod</label>
-                                </div>
-                                <div class='form-check form-check-inline'>
-                                    <input class='form-check-input' type='radio' name='group_@sensorId' id='radio_@(weekPeriod)_@(sensorId)'/>
-                                    <label class='form-check-label' for='@(weekPeriod)_radio_@(sensorId)'>@weekShortPeriod</label>
-                                </div>
-                                <div class='form-check form-check-inline'>
-                                    <input class='form-check-input' type='radio' name='group_@sensorId' id='radio_@(monthPeriod)_@(sensorId)'/>
-                                    <label class='form-check-label' for='@(monthPeriod)_radio_@(sensorId)'>@monthShortPeriod</label>
-                                </div>
-                                <div class='form-check form-check-inline'>
-                                    <input class='form-check-input' type='radio' name='group_@sensorId' id='radio_@(allPeriod)_@(sensorId)'/>
-                                    <label class='form-check-label' for='@(allPeriod)_radio_@(sensorId)'>@allShortPeriod</label>
-                                </div>
+                                <label class="me-1" for="to_@sensorId">To:</label>
+                                <input class="me-2" type="datetime-local" id="to_@sensorId" name="to">
+
+                                @if (Model.SensorType == SensorType.IntegerBar || Model.SensorType == SensorType.DoubleBar)
+                                {
+                                    <label class="me-1" for="barsCount_@sensorId" id="labelBarsCount_@sensorId">Bars count:</label>
+                                    <input class="me-2" style="width:70px" type="number" id="barsCount_@sensorId" name="barsCount" min="1" max="1000">
+                                }
+
+                                <button onclick="searchHistory('@sensorId')" type="button" class="btn btn-secondary">
+                                    <i type="button" class="fas fa-search"></i>
+                                </button>
                             </div>
 
                             <div class='btn-group'>

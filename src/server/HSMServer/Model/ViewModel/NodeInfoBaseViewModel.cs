@@ -1,4 +1,4 @@
-﻿using HSMServer.Model.TreeViewModels;
+﻿using HSMServer.Model.TreeViewModel;
 using System.Collections.Generic;
 
 namespace HSMServer.Model.ViewModel
@@ -34,7 +34,7 @@ namespace HSMServer.Model.ViewModel
         internal NodeInfoBaseViewModel(NodeViewModel model)
         {
             Path = model.Path;
-            ProductName = model.Product;
+            ProductName = model.RootProduct.DisplayName;
             EncodedId = model.EncodedId;
 
             ExpectedUpdateInterval = new(model.ExpectedUpdateInterval.ToModel(), _predefinedIntervals);

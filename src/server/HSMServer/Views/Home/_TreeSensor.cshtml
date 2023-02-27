@@ -1,26 +1,40 @@
 ﻿@using HSMServer.Extensions
 @using HSMServer.Model.Authentication
+@using HSMServer.Model.UserTreeShallowCopy
 
-@model HSMServer.Model.TreeViewModels.SensorNodeViewModel
+@model SensorShallowModel
 
 @{
-    var userNotifications = (User as User).Notifications;
+    var data = Model.Data;
 }
 
 
-<li id='@Model.EncodedId' title='@Model.Tooltip' data-jstree='{"title" : "@Model.Title", "icon" : "@Model.Status.ToIcon()", "time" : "@Model.UpdateTime.ToDefaultFormat()"}'>
-    <span class="@Model.State.ToCssClass()">@Html.Raw(Model.Name.GetShortNodeName())</span>
+<li id='@data.EncodedId' title='@data.Tooltip' data-jstree='@Model.ToJSTree()'>
+    <span class="@data.State.ToCssClass()">@Html.Raw(data.Name.GetShortNodeName())</span>
 
-    @if (userNotifications.IsSensorIgnored(Model.Id))
+    @if (Model.IsAccountsEnable && !Model.Parent.IsAccountsEnable)
     {
         <span>
-            <i id="@(Model.EncodedId)_ignoreNotifications" class="fa-solid fa-bell-slash fa-xs"></i>
+            <img class="tree-png-icon" src="~/dist/user.png" alt="!"/>
         </span>
     }
-    else if (userNotifications.IsSensorEnabled(Model.Id))
+    else if (!Model.IsIgnoredState && Model.IsAccountIgnoreIconShow && !Model.Parent.AccountState.IsAllIgnored)
     {
         <span>
-            <i id="@(Model.EncodedId)_notifications" class="fab fa-telegram fa-xs"></i>
+            <img class="tree-png-icon" src="~/dist/user-crossed.png" alt="!"/>
+        </span>
+    }
+    
+    @if (Model.IsGroupsEnable && !Model.Parent.IsGroupsEnable)
+    {
+        <span>
+            <img class="tree-png-icon" src="~/dist/users.png" alt="!"/>
+        </span>
+    }
+    else if (!Model.IsIgnoredState && Model.IsGroupIgnoreIconShow && !Model.Parent.GroupState.IsAllIgnored)
+    {
+        <span>
+            <img class="tree-png-icon" src="~/dist/users-crossed.png" alt="!"/>
         </span>
     }
 </li>

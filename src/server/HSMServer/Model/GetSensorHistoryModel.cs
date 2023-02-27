@@ -1,4 +1,7 @@
-﻿using System;
+﻿using HSMServer.Controllers;
+using HSMServer.Extensions;
+using System;
+using System.Text.Json.Serialization;
 
 namespace HSMServer.Model
 {
@@ -11,5 +14,17 @@ namespace HSMServer.Model
         public DateTime From { get; set; } = DateTime.MinValue;
 
         public int Type { get; set; }
+
+        public int BarsCount { get; set; }
+
+
+        [JsonIgnore]
+        internal int Count { get; set; } = HomeController.MaxHistoryCount;
+
+        [JsonIgnore]
+        internal DateTime ToUtc => To.ToUtc();
+
+        [JsonIgnore]
+        internal DateTime FromUtc => From.ToUtc();
     }
 }

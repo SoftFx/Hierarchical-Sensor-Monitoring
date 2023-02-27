@@ -12,6 +12,7 @@ using Telegram.Bot.Exceptions;
 using Telegram.Bot.Polling;
 using Telegram.Bot.Types;
 using User = HSMServer.Model.Authentication.User;
+using Telegram.Bot.Types.Enums;
 
 namespace HSMServer.Notifications
 {
@@ -91,7 +92,7 @@ namespace HSMServer.Notifications
         internal void SendTestMessage(long chatId, string message)
         {
             if (IsBotRunning)
-                SendMessageAsync(chatId, message);
+                _bot?.SendTextMessageAsync(chatId, message, cancellationToken: _tokenSource.Token);
         }
 
         internal async Task<string> StartBot()
@@ -166,7 +167,7 @@ namespace HSMServer.Notifications
             var newStatus = sensor.ValidationResult;
             var minWebStatus = entity.Notifications.Telegram.MessagesMinStatus.ToClient();
 
-            return entity.AreNotificationsEnabled(sensor) &&
+            return entity.NotificationsEnabled(sensor) &&
                    newStatus != oldStatus &&
                    (newStatus.Result.ToClient() >= minWebStatus || oldStatus.Result.ToClient() >= minWebStatus);
         }
@@ -182,7 +183,7 @@ namespace HSMServer.Notifications
                             if (entity.Notifications.Telegram.MessagesDelay > 0)
                                 chat.MessageBuilder.AddMessage(sensor);
                             else
-                                SendMessageAsync(chat.ChatId, MessageBuilder.GetSingleMessage(sensor));
+                                SendMarkdownMessageAsync(chat.ChatId, MessageBuilder.GetSingleMessage(sensor));
                         }
                 }
         }
@@ -200,7 +201,7 @@ namespace HSMServer.Notifications
                         {
                             var message = chat.MessageBuilder.GetAggregateMessage();
                             if (!string.IsNullOrEmpty(message))
-                                SendMessageAsync(chat.ChatId, message);
+                                SendMarkdownMessageAsync(chat.ChatId, message);
                         }
                 }
 
@@ -215,8 +216,8 @@ namespace HSMServer.Notifications
             }
         }
 
-        private void SendMessageAsync(ChatId chat, string message) =>
-            _bot?.SendTextMessageAsync(chat, message, cancellationToken: _tokenSource.Token);
+        private void SendMarkdownMessageAsync(ChatId chat, string message) =>
+            _bot?.SendTextMessageAsync(chat, message, ParseMode.MarkdownV2, cancellationToken: _tokenSource.Token);
 
         private void RemoveUserEventHandler(User user) => _addressBook.RemoveAllChats(user);
 
