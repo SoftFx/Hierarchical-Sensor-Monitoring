@@ -21,6 +21,8 @@ namespace HSMDataCollector.Options
     public sealed class DiskSensorOptions : SensorOptions
     {
         public string TargetPath { get; set; } = @"C:\";
+
+        public int CalibrationRequests { get; set; } = 6;
     }
 
 

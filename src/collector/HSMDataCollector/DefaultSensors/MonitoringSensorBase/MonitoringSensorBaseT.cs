@@ -38,7 +38,7 @@ namespace HSMDataCollector.DefaultSensors
             {
                 var value = SensorValuesFactory.BuildValue(GetValue());
 
-                return value.Complete(SensorPath, GetComment());
+                return value.Complete(SensorPath, GetComment(), GetStatus());
             }
             catch (Exception ex)
             {

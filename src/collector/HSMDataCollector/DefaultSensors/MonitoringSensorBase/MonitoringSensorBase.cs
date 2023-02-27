@@ -1,4 +1,5 @@
 ﻿using HSMDataCollector.Options;
+using HSMSensorDataObjects;
 using HSMSensorDataObjects.SensorValueRequests;
 using System;
 using System.Threading;
@@ -63,6 +64,8 @@ namespace HSMDataCollector.DefaultSensors
         protected abstract void OnTimerTick(object _ = null);
 
         protected virtual string GetComment() => null;
+
+        protected virtual SensorStatus GetStatus() => SensorStatus.Ok;
 
         protected void SendCollectedValue(SensorValueBase value) => ReceiveSensorValue?.Invoke(value);
     }
