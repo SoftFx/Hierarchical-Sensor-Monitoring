@@ -27,9 +27,7 @@ namespace HSMServer.Core.Model
 
         string INotificatable.Name => DisplayName;
 
-        NotificationSettings INotificatable.Notifications => Notifications;
-        
-        
+
         public ProductModel()
         {
             AccessKeys = new ConcurrentDictionary<Guid, AccessKeyModel>();
