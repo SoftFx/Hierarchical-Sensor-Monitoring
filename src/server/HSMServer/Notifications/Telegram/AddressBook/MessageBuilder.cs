@@ -1,57 +1,71 @@
 ﻿using HSMServer.Core.Model;
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 
 namespace HSMServer.Notifications
 {
-    internal sealed class CQueue : ConcurrentQueue<string>
+    internal sealed class CHash
     {
         private const int MaxSensorsCount = 10;
 
-        internal long TotalCount { get; private set; }
+        private readonly HashSet<string> _hash = new();
+        private readonly object _lock = new();
 
 
-        internal void Push(string message)
+        internal void Push(string sensor)
         {
-            TotalCount++;
-
-            while (Count > MaxSensorsCount)
-                TryDequeue(out _);
-
-            Enqueue(message);
+            lock (_lock)
+            {
+                _hash.Add(sensor);
+            }
         }
 
-
-        internal new void Clear()
+        internal void RemoveSensor(string sensor)
         {
-            base.Clear();
+            lock (_lock)
+            {
+                _hash.Remove(sensor);
+            }
+        }
 
-            TotalCount = 0L;
+        internal void Clear()
+        {
+            lock (_lock)
+            {
+                _hash.Clear();
+            }
         }
 
         internal string GenerateOutputSensors(int nodeSensorsCount)
         {
-            var sensors = string.Join(", ", this);
-            if (TotalCount > MaxSensorsCount)
-                sensors = $"{sensors} ... ({TotalCount}/{nodeSensorsCount})";
+            lock (_lock)
+            {
+                var sensors = string.Join(", ", _hash.TakeLast(MaxSensorsCount));
 
-            Clear();
+                if (_hash.Count > MaxSensorsCount)
+                    sensors = $"{sensors} ... ({_hash.Count}/{nodeSensorsCount})";
 
-            return sensors;
+                Clear();
+
+                return sensors;
+            }
         }
     }
 
-    internal sealed class CDict<T> : ConcurrentDictionary<string, T> where T : class, new()
+
+    internal abstract class CDictBase<T, U> : ConcurrentDictionary<T, U> where U : class, new()
     {
-        public new T this[string key] => GetOrAdd(key);
+        public new U this[T key] => GetOrAdd(key);
 
 
-        internal T GetOrAdd(string key)
+        internal U GetOrAdd(T key)
         {
-            if (!TryGetValue(key, out T value))
+            if (!TryGetValue(key, out U value))
             {
-                base[key] = new T();
+                base[key] = new U();
 
                 return base[key];
             }
@@ -60,11 +74,19 @@ namespace HSMServer.Notifications
         }
     }
 
+
+    internal sealed class CDict<T> : CDictBase<string, T> where T : class, new() { }
+
+
+    internal sealed class CTupleDict<T> : CDictBase<(string, string), T> where T : class, new() { }
+
+
     internal sealed class MessageBuilder
     {
-        private readonly CDict<CDict<CDict<CDict<CQueue>>>> _messageTree = new();
+        private readonly CDict<CDict<CTupleDict<CHash>>> _messageTree = new();
+        private readonly ConcurrentDictionary<string, int> _nodeSensorsCount = new();
+        private readonly ConcurrentDictionary<Guid, (string statusPath, string message)> _oldStatusPaths = new();
 
-        private readonly ConcurrentDictionary<string, int> NodeSensorsCount = new();
 
         internal DateTime LastSentTime { get; private set; } = DateTime.UtcNow;
 
@@ -73,15 +95,21 @@ namespace HSMServer.Notifications
         {
             var product = sensor.RootProductName;
             var nodePath = sensor?.ParentProduct?.Path ?? string.Empty;
+            var message = sensor.ValidationResult.Message;
+            var statusIcon = $"{sensor.ValidationResult.Result}";
 
             var pathDict = _messageTree[product][nodePath];
 
-            NodeSensorsCount[nodePath] = sensor.ParentProduct?.Sensors?.Count ?? 0;
+            if (_oldStatusPaths.TryGetValue(sensor.Id, out var oldStatusPath))
+            {
+                pathDict[oldStatusPath].RemoveSensor(sensor.DisplayName);
+                statusIcon = $"{oldStatusPath.statusPath}->{statusIcon}";
+            }
 
-            var messages = sensor.ValidationResult.Message;
-            var result = $"{sensor.ValidationResult.Result}";
+            _nodeSensorsCount[nodePath] = sensor.ParentProduct?.Sensors?.Count ?? 0;
+            _oldStatusPaths[sensor.Id] = (statusIcon, message);
 
-            pathDict[result][messages].Push(sensor.DisplayName);
+            pathDict[(statusIcon, message)].Push(sensor.DisplayName);
         }
 
         internal string GetAggregateMessage()
@@ -90,14 +118,11 @@ namespace HSMServer.Notifications
 
             foreach (var (productName, nodes) in _messageTree)
             {
-                foreach (var (nodePath, results) in nodes)
+                foreach (var (nodePath, changePath) in nodes)
                 {
-                    foreach (var (result, messages) in results)
+                    foreach (var ((statusPath, message), sensors) in changePath)
                     {
-                        foreach (var (message, sensors) in messages)
-                        {
-                            BuildMessage(builder, productName, result, message, sensors.GenerateOutputSensors(NodeSensorsCount[nodePath]), nodePath);
-                        }
+                        BuildMessage(builder, productName, statusPath, message, sensors.GenerateOutputSensors(_nodeSensorsCount[nodePath]), nodePath);
                     }
 
                     builder.AppendLine();
@@ -110,7 +135,7 @@ namespace HSMServer.Notifications
 
             LastSentTime = DateTime.UtcNow;
 
-            NodeSensorsCount.Clear();
+            _nodeSensorsCount.Clear();
 
             return builder.ToString();
         }
@@ -129,19 +154,19 @@ namespace HSMServer.Notifications
             return builder.ToString();
         }
 
-        private static void BuildMessage(StringBuilder builder, string productName, string result, string message, string sensors, string nodePath)
+        private static void BuildMessage(StringBuilder builder, string productName, string statusPath, string message, string sensors, string nodePath)
         {
-            productName = productName.EscapeMarkdownV2();
-            result = result.EscapeMarkdownV2();
-            sensors = $"-> {sensors}".EscapeMarkdownV2();
+            productName = $"[{productName}]".EscapeMarkdownV2();
+            statusPath = statusPath.EscapeMarkdownV2();
+            sensors = $"[{sensors}]".EscapeMarkdownV2();
 
             if (!string.IsNullOrEmpty(nodePath))
-                nodePath = $" at {nodePath}".EscapeMarkdownV2();
+                nodePath = $" {nodePath}".EscapeMarkdownV2();
 
             if (!string.IsNullOrEmpty(message))
-                message = $" ({message})".EscapeMarkdownV2();
+                message = $" = {message}".EscapeMarkdownV2();
 
-            builder.AppendLine($"{productName}: *{result}{message}* {sensors}{nodePath}");
+            builder.AppendLine($"{statusPath} {productName}{nodePath}{sensors}{message}");
         }
     }
 }
