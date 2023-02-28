@@ -19,7 +19,6 @@ namespace HSMServer.Notifications
     public sealed class TelegramBot : IAsyncDisposable
     {
         private const string ConfigurationsError = "Invalid Bot configurations.";
-        private const int OneTickSecond = 10000000;
 
         private readonly AddressBook _addressBook = new();
         private readonly ReceiverOptions _options = new()
