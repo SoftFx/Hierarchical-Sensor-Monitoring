@@ -25,6 +25,13 @@ function Data(to, from, type, encodedId) {
         initializeInfoLinks();
     }
 
+    window.searchHistory = function(encodedId) {
+        let type = getTypeForSensor(encodedId);
+        const { from, to } = getFromAndTo(encodedId);
+
+        requestHistory(encodedId, historyAction, rawHistoryAction, type, Data(to, from, type, encodedId));
+    }
+
     function initializeSensorAccordion() {
         $('[id^="collapse"]').off('show.bs.collapse', accordionClicked)
         $('[id^="collapse"]').on('show.bs.collapse', accordionClicked);
@@ -95,13 +102,6 @@ function Data(to, from, type, encodedId) {
 
     function InitializePeriodRequests() {
         $('[id^="button_export_csv_"]').off("click").on("click", exportCsv);
-    }
-
-    function searchHistory(encodedId) {
-        let type = getTypeForSensor(encodedId);
-        const { from, to } = getFromAndTo(encodedId);
-
-        requestHistory(encodedId, historyAction, rawHistoryAction, type, Data(to, from, type, encodedId));
     }
 }
 
