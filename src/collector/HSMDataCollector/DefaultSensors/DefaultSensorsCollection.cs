@@ -159,6 +159,25 @@ namespace HSMDataCollector.DefaultSensors
         }
 
 
+        IUnixCollection IUnixCollection.AddFreeDiskSpace(DiskSensorOptions options)
+        {
+            return ToUnix(new UnixFreeDiskSpace(_defaultOptions.DiskMonitoring.Get(options)));
+        }
+
+        IUnixCollection IUnixCollection.AddFreeDiskSpacePrediction(DiskSensorOptions options)
+        {
+            return ToUnix(new UnixFreeDiskSpacePrediction(_defaultOptions.DiskMonitoring.Get(options)));
+        }
+
+        IUnixCollection IUnixCollection.AddDiskMonitoringSensors(DiskSensorOptions options)
+        {
+            options = _defaultOptions.DiskMonitoring.GetAndFill(options);
+
+            return (this as IUnixCollection).AddFreeDiskSpace(options)
+                                            .AddFreeDiskSpacePrediction(options);
+        }
+
+
         IUnixCollection IUnixCollection.AddCollectorAlive(SensorOptions options)
         {
             return Register(new CollectorAlive(_defaultOptions.CollectorAliveMonitoring.Get(options)));

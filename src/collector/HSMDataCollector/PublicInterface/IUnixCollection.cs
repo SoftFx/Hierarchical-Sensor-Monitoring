@@ -13,6 +13,13 @@ namespace HSMDataCollector.PublicInterface
         IUnixCollection AddProcessMonitoringSensors(BarSensorOptions options = null);
 
 
+        IUnixCollection AddFreeDiskSpace(DiskSensorOptions options = null);
+
+        IUnixCollection AddFreeDiskSpacePrediction(DiskSensorOptions options = null);
+
+        IUnixCollection AddDiskMonitoringSensors(DiskSensorOptions options = null);
+
+
         IUnixCollection AddCollectorAlive(SensorOptions options = null);
     }
 }
