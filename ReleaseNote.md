@@ -28,6 +28,11 @@
 
 * New sensor state 'Ignore' has been added
 
+## Telegram
+
+* Changing statuses aggregation has been added
+* Statuses in notification are displaying like icons ✅ (OK), ⚠️ (Warning), ❌ (Error), ⏸ (OffTime)
+
 ## Rest API
 
 * New endpoint **/timpsan** for TimeSpan sensor data has been added
