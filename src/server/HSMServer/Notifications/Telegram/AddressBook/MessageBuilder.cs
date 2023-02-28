@@ -149,7 +149,7 @@ namespace HSMServer.Notifications
             var product = sensor.RootProductName;
             var nodePath = sensor?.ParentProduct?.Path ?? string.Empty;
             var message = sensor.ValidationResult.Message;
-            var result = $"{sensor.ValidationResult.Result}";
+            var result = sensor.ValidationResult.Result.ToStatusIcon();
 
             BuildMessage(builder, product, result, message, sensor.DisplayName, nodePath);
 
