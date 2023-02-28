@@ -40,11 +40,9 @@
     color: grey;
 }
 
-.scrollableBlock {
-    display: block;
-    width: 400px;
-    max-height: 75vh;
-    overflow: auto;
+.tree-height-weight-parameters {
+    max-width: 25vw;
+    min-width: 10vw;
 }
 
 .button-link {
