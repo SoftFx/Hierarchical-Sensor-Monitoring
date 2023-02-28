@@ -32,7 +32,7 @@ namespace HSMServer.Extensions
                 Server.SensorStatus.Warning => "⚠️",
                 Server.SensorStatus.Error => "❌",
                 Server.SensorStatus.OffTime => "⏸",
-                _ => string.Empty
+                _ => "❓"
             };
     }
 }
