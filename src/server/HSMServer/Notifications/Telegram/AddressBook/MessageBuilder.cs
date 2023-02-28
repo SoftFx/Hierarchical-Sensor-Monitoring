@@ -110,7 +110,7 @@ namespace HSMServer.Notifications
             }
 
             ExpectedSendingTime = GetNextNotificationTime(notificationMessageDelay);
-            
+
             NodeSensorsCount.Clear();
 
             return builder.ToString();
@@ -149,9 +149,8 @@ namespace HSMServer.Notifications
         {
             var ticks = DateTime.MinValue.AddSeconds(notificationsDelay).Ticks;
             var start = DateTime.UtcNow.Ticks / ticks * ticks;
-            var end = start + ticks;
 
-            return new DateTime(end);
+            return new DateTime(start + ticks);
         }
     }
 }
