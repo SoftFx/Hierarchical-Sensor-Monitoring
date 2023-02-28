@@ -233,7 +233,7 @@ namespace HSMServer.Notifications
         private static void SetNextNotificationTime(out DateTime expectedNotificationTime, long notificationsDelay)
         {
             notificationsDelay *= 10_000_000;
-            var start = DateTime.UtcNow.Ticks / notificationsDelay * notificationsDelay ;
+            var start = DateTime.UtcNow.Ticks / notificationsDelay * notificationsDelay;
             var end = start + notificationsDelay;
 
             expectedNotificationTime = new DateTime(end);
