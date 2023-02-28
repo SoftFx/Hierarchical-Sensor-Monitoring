@@ -16,6 +16,9 @@ namespace HSMServer.Notifications
         private readonly object _lock = new();
 
 
+        internal bool IsEmpty => _hash.Count == 0;
+
+
         internal void Push(string sensor)
         {
             lock (_lock)
@@ -124,10 +127,11 @@ namespace HSMServer.Notifications
                 {
                     foreach (var ((statusPath, message), sensors) in changePath)
                     {
-                        BuildMessage(builder, productName, statusPath, message, sensors.GenerateOutputSensors(_nodeSensorsCount[nodePath]), nodePath);
+                        if (!sensors.IsEmpty)
+                            BuildMessage(builder, productName, statusPath, message, sensors.GenerateOutputSensors(_nodeSensorsCount[nodePath]), nodePath);
                     }
 
-                    builder.AppendLine();
+                    changePath.Clear();
                 }
 
                 nodes.Clear();
@@ -137,6 +141,7 @@ namespace HSMServer.Notifications
 
             ExpectedSendingTime = GetNextNotificationTime(notificationMessageDelay);
 
+            _oldStatusPaths.Clear();
             _nodeSensorsCount.Clear();
 
             return builder.ToString();
@@ -160,17 +165,17 @@ namespace HSMServer.Notifications
         {
             productName = $"[{productName}]".EscapeMarkdownV2();
             statusPath = statusPath.EscapeMarkdownV2();
-            sensors = $"[{sensors}]".EscapeMarkdownV2();
+            sensors = $"/[{sensors}]".EscapeMarkdownV2();
 
             if (!string.IsNullOrEmpty(nodePath))
-                nodePath = $" {nodePath}".EscapeMarkdownV2();
+                nodePath = $"{nodePath}".EscapeMarkdownV2();
 
             if (!string.IsNullOrEmpty(message))
                 message = $" = {message}".EscapeMarkdownV2();
 
             builder.AppendLine($"{statusPath} {productName}{nodePath}{sensors}{message}");
         }
-        
+
         private static DateTime GetNextNotificationTime(int notificationsDelay)
         {
             var ticks = DateTime.MinValue.AddSeconds(notificationsDelay).Ticks;

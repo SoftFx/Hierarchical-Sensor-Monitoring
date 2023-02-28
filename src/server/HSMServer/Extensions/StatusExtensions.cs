@@ -25,7 +25,7 @@ namespace HSMServer.Extensions
                 _ => Server.SensorStatus.Ok,
             };
 
-        internal static string ToStatusIcon(this HSMServer.Core.Model.SensorStatus status) =>
+        internal static string ToStatusIcon(this Server.SensorStatus status) =>
             status switch
             {
                 Server.SensorStatus.Ok => "✅",
