@@ -41,8 +41,11 @@
 }
 
 .tree-height-weight-parameters {
-    max-width: 25vw;
+    max-width: 100%;
     min-width: 10vw;
+    height: 100vh;
+    overflow-y: auto;
+    overflow-x: hidden;
 }
 
 .button-link {
