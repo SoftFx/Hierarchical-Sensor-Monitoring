@@ -195,14 +195,14 @@ namespace HSMServer.Notifications
             {
                 foreach (var (entity, chats) in _addressBook.ServerBook)
                 {
-                    var notificationsDelay = entity.Notifications.Telegram.MessagesDelay;
-
                     foreach (var (_, chat) in chats)
-                        if (DateTime.UtcNow.Ticks / OneTickSecond % notificationsDelay == 0)
+                        if (chat.MessageBuilder.ExpectedSendingTime <= DateTime.UtcNow)
                         {
                             var message = chat.MessageBuilder.GetAggregateMessage();
                             if (!string.IsNullOrEmpty(message))
                                 SendMarkdownMessageAsync(chat.ChatId, message);
+                            
+                            SetNextNotificationTime(out chat.MessageBuilder.ExpectedSendingTime, entity.Notifications.Telegram.MessagesDelay);
                         }
                 }
 
@@ -230,5 +230,14 @@ namespace HSMServer.Notifications
 
         private bool IsValidBotConfigurations() =>
             !string.IsNullOrEmpty(BotName) && !string.IsNullOrEmpty(BotToken);
+        
+        private static void SetNextNotificationTime(out DateTime expectedNotificationTime, long notificationsDelay)
+        {
+            notificationsDelay *= 10_000_000;
+            var start = DateTime.UtcNow.Ticks / notificationsDelay * notificationsDelay ;
+            var end = start + notificationsDelay;
+
+            expectedNotificationTime = new DateTime(end);
+        }
     }
 }

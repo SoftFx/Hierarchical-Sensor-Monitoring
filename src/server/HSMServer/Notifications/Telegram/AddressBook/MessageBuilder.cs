@@ -65,8 +65,9 @@ namespace HSMServer.Notifications
         private readonly CDict<CDict<CDict<CDict<CQueue>>>> _messageTree = new();
 
         private readonly ConcurrentDictionary<string, int> NodeSensorsCount = new();
+        
 
-        internal DateTime LastSentTime { get; private set; } = DateTime.UtcNow;
+        internal DateTime ExpectedSendingTime = DateTime.UtcNow;
 
 
         internal void AddMessage(BaseSensorModel sensor)
@@ -107,8 +108,6 @@ namespace HSMServer.Notifications
 
                 builder.AppendLine();
             }
-
-            LastSentTime = DateTime.UtcNow;
 
             NodeSensorsCount.Clear();
 
