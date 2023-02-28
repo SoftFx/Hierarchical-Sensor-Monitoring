@@ -43,26 +43,26 @@
         }
         else
         {
-            @if (Model.IsAccountsEnable && !Model.Parent.IsAccountsEnable)
+            @if (Model.IsAccountsEnable && !(Model.Parent?.IsAccountsEnable ?? false))
             {
                 <span>
                     <img class="tree-png-icon" src="~/dist/user.png" alt="!"/>
                 </span>
             }
-            else if (Model.AccountState.IsAllIgnored && !Model.Parent.AccountState.IsAllIgnored)
+            else if (Model.AccountState.IsAllIgnored && !(Model.Parent?.AccountState.IsAllIgnored ?? false))
             {
                 <span>
                     <img class="tree-png-icon" src="~/dist/user-crossed.png" alt="!"/>
                 </span>
             }
         
-            @if (Model.IsGroupsEnable && !Model.Parent.IsGroupsEnable)
+            @if (Model.IsGroupsEnable && !(Model.Parent?.IsGroupsEnable ?? false))
             {
                 <span>
                     <img class="tree-png-icon" src="~/dist/users.png" alt="!"/>
                 </span>
             }
-            else if (Model.GroupState.IsAllIgnored && !Model.Parent.GroupState.IsAllIgnored)
+            else if (Model.GroupState.IsAllIgnored && !(Model.Parent?.GroupState.IsAllIgnored ?? false))
             {
                 <span>
                     <img class="tree-png-icon" src="~/dist/users-crossed.png" alt="!"/>

@@ -66,7 +66,8 @@ namespace HSMServer.Notifications
 
         private readonly ConcurrentDictionary<string, int> NodeSensorsCount = new();
 
-        internal DateTime LastSentTime { get; private set; } = DateTime.UtcNow;
+
+        internal DateTime ExpectedSendingTime { get; private set; } = DateTime.UtcNow;
 
 
         internal void AddMessage(BaseSensorModel sensor)
@@ -84,7 +85,7 @@ namespace HSMServer.Notifications
             pathDict[result][messages].Push(sensor.DisplayName);
         }
 
-        internal string GetAggregateMessage()
+        internal string GetAggregateMessage(int notificationMessageDelay)
         {
             var builder = new StringBuilder(1 << 8);
 
@@ -108,7 +109,7 @@ namespace HSMServer.Notifications
                 builder.AppendLine();
             }
 
-            LastSentTime = DateTime.UtcNow;
+            ExpectedSendingTime = GetNextNotificationTime(notificationMessageDelay);
 
             NodeSensorsCount.Clear();
 
@@ -142,6 +143,14 @@ namespace HSMServer.Notifications
                 message = $" ({message})".EscapeMarkdownV2();
 
             builder.AppendLine($"{productName}: *{result}{message}* {sensors}{nodePath}");
+        }
+        
+        private static DateTime GetNextNotificationTime(int notificationsDelay)
+        {
+            var ticks = DateTime.MinValue.AddSeconds(notificationsDelay).Ticks;
+            var start = DateTime.UtcNow.Ticks / ticks * ticks;
+
+            return new DateTime(start + ticks);
         }
     }
 }

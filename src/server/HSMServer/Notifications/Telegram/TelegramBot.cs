@@ -194,12 +194,10 @@ namespace HSMServer.Notifications
             {
                 foreach (var (entity, chats) in _addressBook.ServerBook)
                 {
-                    var notificationsDelay = entity.Notifications.Telegram.MessagesDelay;
-
                     foreach (var (_, chat) in chats)
-                        if (DateTime.UtcNow >= chat.MessageBuilder.LastSentTime.AddSeconds(notificationsDelay))
+                        if (chat.MessageBuilder.ExpectedSendingTime <= DateTime.UtcNow)
                         {
-                            var message = chat.MessageBuilder.GetAggregateMessage();
+                            var message = chat.MessageBuilder.GetAggregateMessage(entity.Notifications.Telegram.MessagesDelay);
                             if (!string.IsNullOrEmpty(message))
                                 SendMarkdownMessageAsync(chat.ChatId, message);
                         }

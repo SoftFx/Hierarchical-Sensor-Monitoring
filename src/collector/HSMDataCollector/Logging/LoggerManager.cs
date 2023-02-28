@@ -8,6 +8,8 @@ namespace HSMDataCollector.Logging
 {
     internal sealed class LoggerManager
     {
+        internal const string DefaultConfigPath = "collector.nlog.config";
+
         private static readonly LoggerOptions _defaultOptions = new LoggerOptions().FillConfigPath();
 
 
@@ -32,10 +34,8 @@ namespace HSMDataCollector.Logging
     {
         internal static LoggerOptions FillConfigPath(this LoggerOptions options)
         {
-            const string DefaultConfigPath = "collector.nlog.config";
-
             if (string.IsNullOrEmpty(options.ConfigPath))
-                options.ConfigPath = Path.Combine(AppContext.BaseDirectory, DefaultConfigPath);
+                options.ConfigPath = Path.Combine(AppContext.BaseDirectory, LoggerManager.DefaultConfigPath);
 
             return options;
         }
