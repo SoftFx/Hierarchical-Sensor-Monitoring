@@ -5,11 +5,10 @@ namespace HSMServer.Model.UserTreeShallowCopy
 {
     public sealed class UserNotificationsState
     {
-        public bool IsAnyEnabled { get; private set; }
-
         public bool IsAllEnabled { get; private set; } = true;
 
         public bool IsAllIgnored { get; private set; } = true;
+
 
         public void CalculateState(NotificationSettings settings, Guid sensorId)
         {
@@ -19,15 +18,12 @@ namespace HSMServer.Model.UserTreeShallowCopy
 
         public void CalculateState(UserNotificationsState state)
         {
-            ChangeEnableState(state.IsAnyEnabled);
+            ChangeEnableState(state.IsAllEnabled);
             ChangeIgnoreState(state.IsAllIgnored);
         }
 
-        private void ChangeEnableState(bool isEnabled)
-        {
-            IsAnyEnabled |= isEnabled;
+        private void ChangeEnableState(bool isEnabled) =>
             IsAllEnabled &= isEnabled;
-        }
 
         private void ChangeIgnoreState(bool isIgnored) =>
             IsAllIgnored &= isIgnored;
