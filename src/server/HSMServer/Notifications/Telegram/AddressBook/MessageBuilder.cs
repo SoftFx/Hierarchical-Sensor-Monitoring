@@ -4,6 +4,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using HSMServer.Extensions;
 
 namespace HSMServer.Notifications
 {
@@ -97,7 +98,7 @@ namespace HSMServer.Notifications
             var product = sensor.RootProductName;
             var nodePath = sensor?.ParentProduct?.Path ?? string.Empty;
             var message = sensor.ValidationResult.Message;
-            var statusIcon = $"{sensor.ValidationResult.Result}";
+            var statusIcon = sensor.ValidationResult.Result.ToStatusIcon();
 
             var pathDict = _messageTree[product][nodePath];
 
