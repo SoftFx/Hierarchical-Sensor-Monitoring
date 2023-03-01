@@ -29,7 +29,7 @@
 </div>
 @if (isProductCrudAllowed)
 {
-    <div class="container row my-1">
+    <div class="container row mt-1">
         <div class="col-4 p-0">
             <input id="createName" placeholder="New product name" type='text' class='form-control'/>
             <span class="d-none" id='new_product_name_span'></span>
@@ -41,7 +41,7 @@
         </div>
     </div>
 }
-<div class="col-12-xxl">
+<div class="col-12-xxl mt-2">
     <div class="w-100" id="productTable">
         <form id="formSearch" asp-controller="Product" asp-action="Index">
             <table id="formProductTable" class="table table-striped">

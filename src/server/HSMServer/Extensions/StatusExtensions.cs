@@ -24,5 +24,15 @@ namespace HSMServer.Extensions
                 Client.SensorStatus.OffTime => Server.SensorStatus.OffTime,
                 _ => Server.SensorStatus.Ok,
             };
+
+        internal static string ToStatusIcon(this Server.SensorStatus status) =>
+            status switch
+            {
+                Server.SensorStatus.Ok => "✅",
+                Server.SensorStatus.Warning => "⚠️",
+                Server.SensorStatus.Error => "❌",
+                Server.SensorStatus.OffTime => "⏸",
+                _ => "❓"
+            };
     }
 }
