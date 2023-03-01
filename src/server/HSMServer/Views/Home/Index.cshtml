@@ -99,8 +99,8 @@
                 <div class="ms-2 mb-1"> @await Html.PartialAsync("_TreeFilter.cshtml", new UserFilterViewModel(user.TreeFilter)) </div>
 
                 <div class="row justify-content-start mw-100 me-1">
-                    <div class="tree-height-weight-parameters col-auto ms-2 mb-1">
-                        <div class="col-md-auto pb-3">
+                    <div class="tree-height-weight-parameters col-auto ms-2">
+                        <div class="col-md-auto">
                             <div id="jstree">@await Html.PartialAsync("_Tree", Model.GetUserTree(user))</div>
                         </div>
                     </div>
