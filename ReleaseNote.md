@@ -4,9 +4,9 @@
 
 * Toasts for Copy and Remove logic have been added
 * Tree filters has been updated
-* New context menu item 'Ignore product/node/sensor' has been added
+* New context menu item *Ignore product/node/sensor* has been added
 * Enable/Ignore group notifications has been added
-* 'Copy name' context menu item has been added for product in tree
+* *Copy name* context menu item has been added for product in tree
 
 ### Tree
 
@@ -21,12 +21,13 @@
 
 * Product table has been refactored
 * Last update column has been added
-* Filters by Name and Managers have been added
+* Filters by *Name* and *Managers* have been added
 * Sorting by Last update has been added
 
 ## Core
 
-* New sensor state 'Ignore' has been added
+* New sensor state **Ignore** has been added
+* New sensor type **Timespan** has been added
 
 ## Telegram
 
@@ -40,9 +41,9 @@
 ## Kestrel
 
 * Bulder has been moved to minimal builder architecture (.Net 6+)
-* Appsettings.json has been added for server configuration. The file mounted in Config folder
+* **Appsettings.json** has been added for server configuration. The file mounted in Config folder
 * Port settings and Certificate settings have been moved to Appsettings.json
-* Config.xml file has been removed
+* **Config.xml** file has been removed
 
 ## Project:
 
@@ -58,7 +59,7 @@
 # HSM DataObjects
 
 * Nuget package has been updated to v.3.0.1
-* New sensor type Timespan has been added
+* New sensor type **Timespan** has been added
 
 # HSM Datacollector
 
