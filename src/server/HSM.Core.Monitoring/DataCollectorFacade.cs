@@ -37,12 +37,17 @@ namespace HSM.Core.Monitoring
 
         public DataCollectorFacade(ITreeValuesCache cache)
         {
-            _dataCollector = new DataCollector(GetSelfMonitoringKey(cache), "https://localhost");
-            _dataCollector.Initialize(true);
-            _dataCollector.InitializeProcessMonitoring(true, true, true);
+            var collectorOptions = new CollectorOptions()
+            {
+                AccessKey = GetSelfMonitoringKey(cache),
+                ServerAddress = "https://localhost",
+            };
 
-            var diskOpt = new DiskSensorOptions() { PostDataPeriod = TimeSpan.FromSeconds(30), CalibrationRequests = 10, };
-            _dataCollector.Windows.AddDiskMonitoringSensors(diskOpt);
+            _dataCollector = new DataCollector(collectorOptions);
+
+            _dataCollector.AddNLog();
+            _dataCollector.Unix.AddProcessMonitoringSensors()
+                               .AddDiskMonitoringSensors();
 
             _dataCollector.Start();
 
