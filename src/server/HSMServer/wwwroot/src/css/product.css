@@ -6,13 +6,13 @@
 
 #productTable .form-control{
     border: 0;
-    padding-bottom: 0;
     padding-left: 0;
     border-bottom: solid;
     border-bottom-color: grey;
     border-bottom-width: thin;
     border-bottom-left-radius: 0;
     border-bottom-right-radius: 0;
+    height: 2.3rem;
 }
 
 #productTable .form-control:focus {
@@ -24,7 +24,7 @@
 #productTable .form-floating>label{
     display: flex;
     align-items: flex-end;
-    transform-origin: 0 -4rem;
+    transform-origin: 0 -3rem;
     padding: 0;
 }
 
