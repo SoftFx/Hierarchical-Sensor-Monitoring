@@ -1,6 +1,5 @@
 ﻿using HSMCommon.Constants;
 using HSMDataCollector.Core;
-using HSMDataCollector.Options;
 using HSMDataCollector.PublicInterface;
 using HSMServer.Core.Cache;
 using System;
@@ -43,15 +42,24 @@ namespace HSM.Core.Monitoring
                 ServerAddress = "https://localhost",
             };
 
-            _dataCollector = new DataCollector(collectorOptions);
+            _dataCollector = new DataCollector(collectorOptions).AddNLog();
 
-            _dataCollector.AddNLog();
-            _dataCollector.Unix.AddProcessMonitoringSensors()
-                               .AddDiskMonitoringSensors();
-
-            _dataCollector.Start();
+            if (OperatingSystem.IsWindows())
+            {
+                _dataCollector.Windows.AddProcessMonitoringSensors()
+                                      .AddDiskMonitoringSensors()
+                                      .AddSystemMonitoringSensors()
+                                      .AddWindowsInfoMonitoringSensors();
+            }
+            else
+            {
+                _dataCollector.Unix.AddProcessMonitoringSensors()
+                                   .AddDiskMonitoringSensors();
+            }
 
             InitializeSensors();
+
+            _dataCollector.Start();
         }
 
 
