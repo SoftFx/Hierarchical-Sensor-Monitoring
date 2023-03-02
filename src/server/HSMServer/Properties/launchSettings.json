@@ -18,10 +18,10 @@
       },
       "applicationUrl": "https://localhost:44333"
     },
-    "WSL 2": {
-      "commandName": "WSL2",
+    "WSL": {
+      "commandName": "WSL",
       "launchBrowser": true,
-      "launchUrl": "https://localhost:44330/api/swagger",
+      "launchUrl": "https://localhost:44333",
       "environmentVariables": {
         "ASPNETCORE_URLS": "https://localhost:44330;https://localhost:44333",
         "ASPNETCORE_ENVIRONMENT": "Development"
