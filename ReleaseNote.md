@@ -64,7 +64,7 @@
 
 # HSM Datacollector
 
-* Nuget package has been updated to v.3.0.3
+* Nuget package has been updated to v.3.0.4
 * Now datacollector skips bars with Count equals 0
 * Own datacollector logger config has been added
 * New fluent style interface for initializing datacollector has been added. [Example here](https://github.com/SoftFx/Hierarchical-Sensor-Monitoring/wiki/How-to-use-Datacollector)

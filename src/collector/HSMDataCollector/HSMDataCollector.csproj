@@ -5,7 +5,7 @@
 		<OutputType>Library</OutputType>
 		<GenerateBindingRedirectsOutputType>true</GenerateBindingRedirectsOutputType>
 		<GenerateAssemblyInfo>false</GenerateAssemblyInfo>
-		<Version>3.0.3</Version>
+		<Version>3.0.4</Version>
 		<Authors>HSM team</Authors>
 		<Company>Soft-FX</Company>
 		<PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
@@ -17,10 +17,10 @@
 		<RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
 	</PropertyGroup>
 	<ItemGroup>
-	    <Content Include="collector.nlog.config">
-	        <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-		    <PackageCopyToOutput>true</PackageCopyToOutput>
-	    </Content>
+		<Content Include="collector.nlog.config">
+			<CopyToOutputDirectory>Always</CopyToOutputDirectory>
+			<PackageCopyToOutput>true</PackageCopyToOutput>
+		</Content>
 	</ItemGroup>
 	<ItemGroup>
 		<PackageReference Include="HSMDataCollector.HSMSensorDataObjects" Version="3.0.1" />
