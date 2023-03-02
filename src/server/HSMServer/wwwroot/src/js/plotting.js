@@ -4,16 +4,34 @@
     //console.log('converted graph data:', convertedData);
     let zoomData = getPreviousZoomData(graphElementId);
     var config = { responsive: true }
-    if(graphType === "7"){
+    if (graphType === "7") {
         let layout = getTimeSpanLayout(convertedData[0].y)
         layout.autosize = true;
         Plotly.newPlot(graphElementId, convertedData, layout, config);
-    }else{
+    }
+    else {
         if (zoomData === undefined || zoomData === null) {
-            let layout = { autosize: true };
+            let layout = { autosize: true};
+            if (graphType === "0")
+                layout.yaxis = { 
+                    tickmode: 'auto',
+                    tick0: 0,
+                    dtick: 1, 
+                    nticks: 2
+                };
+            
             Plotly.newPlot(graphElementId, convertedData, layout, config);
-        } else {
+        }
+        else {
             let layout = createLayoutFromZoomData(zoomData);
+            if (graphType === "0")
+                layout.yaxis = {
+                    tickmode: 'auto',
+                    tick0: 0,
+                    dtick: 1,
+                    nticks: 2
+                };
+            
             Plotly.newPlot(graphElementId, convertedData, layout, config);
         }
     }
@@ -54,7 +72,7 @@ function convertToGraphData(graphData, graphType, graphName) {
             uniqueData = getUniqueData(escapedData)
             data = getBoolData(uniqueData);
             timeList = getTimeList(uniqueData);
-            return getSimpleGraphData(timeList, data, "bar");
+            return getBoolGraphData(timeList, data);
         case "1":
             data = getNumbersData(escapedData);
             timeList = getTimeList(escapedData);
@@ -71,7 +89,7 @@ function convertToGraphData(graphData, graphType, graphName) {
             uniqueData = getUniqueData(escapedData)
             escapedData.forEach(x => {
                 uniqueData.forEach(y => {
-                    if(x.time === y.time && ((new Date(x.receivingTime)) > (new Date(y.receivingTime)))){
+                    if (x.time === y.time && ((new Date(x.receivingTime)) > (new Date(y.receivingTime)))) {
                         y.comment = x.comment;
                         y.receivingTime = x.receivingTime;
                         y.status = x.status;
@@ -86,10 +104,11 @@ function convertToGraphData(graphData, graphType, graphName) {
                 let time = i.value.split(':');
                 let temp = time[0].split('.')
                 let days, hours, minutes,seconds;
-                if(temp.length > 1){
+                if (temp.length > 1) {
                     days = Number(temp[0]);
                     hours = Number(temp[1]);
-                }else{
+                }
+                else {
                     hours = Number(time[0]);
                     days = 0;
                 }
@@ -121,8 +140,32 @@ function convertToGraphData(graphData, graphType, graphName) {
     }
 }
 
-//Simple plots: integer and double
+//Simple plots: integer, double and bool
 {
+    function getBoolGraphData(timeList, dataList){
+        return [
+            {
+                x: timeList,
+                y: dataList.map((i) => {
+                    return i === 1 ? 1 : 0;
+                }),
+                type: 'scatter',
+                mode: 'markers',
+                marker: {
+                    color: dataList.map((i) => {
+                        return i === 1 ? 'rgb(0,0,255)' : 'rgb(255,0,0)';
+                    }),
+                    size: 10
+                },
+                customdata: dataList.map((i) => {
+                    return i === 1;
+                }),
+                hovertemplate: "%{x}, %{customdata}" +
+                               "<extra></extra>"
+            }
+        ];
+    }
+    
     function getSimpleGraphData(timeList, dataList, chartType) {
         let data = [
             {
