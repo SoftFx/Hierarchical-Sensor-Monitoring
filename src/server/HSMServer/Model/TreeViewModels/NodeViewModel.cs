@@ -30,6 +30,8 @@ namespace HSMServer.Model.TreeViewModel
         
         public string Path { get; protected set; }
         
+        public string Description { get; protected set; }
+        
         public bool IsOwnExpectedUpdateInterval { get; protected set; }
 
         public DateTime UpdateTime { get; protected set; }

@@ -8,8 +8,6 @@ namespace HSMServer.Model.ViewModel
     {
         public SensorType SensorType { get; }
 
-        public string Description { get; set; }
-
         public string Unit { get; set; }
 
 

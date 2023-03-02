@@ -25,6 +25,8 @@ namespace HSMServer.Model.ViewModel
         public bool IsOwnExpectedUpdateInterval { get; }
 
         public string EncodedId { get; set; }
+        
+        public string Description { get; set; }
 
         public TimeIntervalViewModel ExpectedUpdateInterval { get; set; }
 

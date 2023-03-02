@@ -12,7 +12,7 @@
 
 
 <form id="editProductMetaInfo_form" method="post" asp-action="@nameof(HomeController.UpdateProductInfo)">
-    <input id="productMetaInfo_encodedId" style='display: none' asp-for="EncodedId" value="@Model.EncodedId" />
+    <input id="productMetaInfo_encodedId" style='display: none' asp-for="EncodedId" value="@Model.EncodedId"/>
 
     <table class='table table-borderless'>
         <tbody>
@@ -48,27 +48,35 @@
                 <td>
                     <div class="input-group row">
                         <div id="productExpectedUpdateInterval_@(Model.EncodedId)" class="col-5">
-                            <partial name="_TimeIntervalSelect" for="ExpectedUpdateInterval" />
+                            <partial name="_TimeIntervalSelect" for="ExpectedUpdateInterval"/>
                         </div>
-                        <div class="col-auto">
-                            <button type='button' class='btn btn-secondary' onclick="editProductInfoButtonClick()"
-                                    data-bs-toggle='tooltip' title='edit meta info'>
-                                <i class='fas fa-edit'></i>
-                            </button>
-                            <button id='saveInfo_@Model.EncodedId' type='submit' class='btn btn-secondary'
-                                    data-bs-toggle='tooltip' title='save meta info' disabled>
-                                <i class='fas fa-check'></i>
-                            </button>
-                            <button id='revertInfo_@Model.EncodedId' type='button' class='btn btn-secondary' onclick="revertProductInfoClick()"
-                                    data-bs-toggle='tooltip' title='revert changes' disabled>
-                                <i class='fas fa-times'></i>
-                            </button>
+                    </div>
+                </td>
+            </tr>
+            <tr>
+                <td class="w-25">
+                    Description
+                </td>
+                <td>
+                    <div class="input-group row">
+                        <div id="productDescription_@(Model.EncodedId)" class="col">
+                            <textarea id='description_@(Model.EncodedId)' type='text' class='form-control' asp-for="Description" value='@Model.Description' disabled></textarea>
                         </div>
                     </div>
                 </td>
             </tr>
         </tbody>
     </table>
+    <div class="d-flex justify-content-end m-3 gap-2">
+        <button id='saveInfo_@Model.EncodedId' type='submit' class='btn btn-secondary px-2 independentSizeButton'
+                data-bs-toggle='tooltip' title='save meta info' hidden disabled>
+            <i class='fas fa-check'></i>
+        </button>
+        <button id='revertInfo_@Model.EncodedId' type='button' class='btn btn-secondary px-2 independentSizeButton' onclick="revertProductInfoClick()"
+                data-bs-toggle='tooltip' title='revert changes' hidden disabled>
+            <i class='fas fa-times'></i>
+        </button>
+    </div>
 </form>
 
 
@@ -97,8 +105,9 @@
     function editProductInfoButtonClick() {
         let productId = $('#productMetaInfo_encodedId').val();
 
-        $('#saveInfo_' + productId).removeAttr("disabled");
-        $('#revertInfo_' + productId).removeAttr("disabled");
+        $('#saveInfo_' + productId).removeAttr("disabled").removeAttr("hidden");
+        $('#revertInfo_' + productId).removeAttr("disabled").removeAttr("hidden");
+        $('#description_' + productId).removeAttr("disabled");
 
         $('#productExpectedUpdateInterval_' + productId + ' :input').each(function () {
             this.removeAttribute('disabled');

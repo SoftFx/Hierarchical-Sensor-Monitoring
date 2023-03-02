@@ -12,8 +12,6 @@ namespace HSMServer.Model.TreeViewModel
 
         public SensorType SensorType { get; private set; }
 
-        public string Description { get; private set; }
-
         public SensorState State { get; private set; }
 
         public string ShortStringValue { get; private set; }
