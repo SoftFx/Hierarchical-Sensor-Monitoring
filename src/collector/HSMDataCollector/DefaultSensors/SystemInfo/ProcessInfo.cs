@@ -4,7 +4,7 @@ namespace HSMDataCollector.DefaultSensors
 {
     internal static class ProcessInfo
     {
-        internal static Process CurrentProcess { get; } = Process.GetCurrentProcess();
+        internal static Process CurrentProcess => Process.GetCurrentProcess();
 
         internal static string CurrentProcessName => CurrentProcess.ProcessName;
 
