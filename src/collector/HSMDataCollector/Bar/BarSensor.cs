@@ -8,23 +8,24 @@ using System.Linq;
 
 namespace HSMDataCollector.Bar
 {
-    internal class BarSensor<T> : BarSensorBase, IBarSensor<T> where T : struct
+    internal sealed class BarSensor<T> : BarSensorBase, IBarSensor<T> where T : struct
     {
         private readonly SensorType _type;
         private readonly List<T> _valuesList;
-        public BarSensor(string path, string productKey, IValuesQueue queue, SensorType type, int barTimerPeriod, int smallTimerPeriod,
+
+
+        public BarSensor(string path, IValuesQueue queue, SensorType type, int barTimerPeriod, int smallTimerPeriod,
             string description = "", int precision = 2)
-            : base(path, productKey, queue, barTimerPeriod, smallTimerPeriod, description, precision)
+            : base(path, queue, barTimerPeriod, smallTimerPeriod, description, precision)
         {
             _valuesList = new List<T>();
             _type = type;
         }
-        public BarSensor(string path, string productKey, IValuesQueue queue, SensorType type, int barTimerPeriod = 300000,
-            int smallTimerPeriod = 15000, int precision = 2, string description = "")
-            : this(path, productKey, queue, type, barTimerPeriod, smallTimerPeriod, description, precision)
-        {
 
-        }
+        public BarSensor(string path, IValuesQueue queue, SensorType type, int barTimerPeriod = 300000,
+            int smallTimerPeriod = 15000, int precision = 2, string description = "")
+            : this(path, queue, type, barTimerPeriod, smallTimerPeriod, description, precision) { }
+
 
         public void AddValue(T value)
         {
@@ -33,10 +34,33 @@ namespace HSMDataCollector.Bar
                 _valuesList.Add(value);
             }
         }
+
+        public override SensorValueBase GetLastValue()
+        {
+            try
+            {
+                List<T> collected;
+                DateTime startTime;
+
+                lock (_syncObject)
+                {
+                    collected = new List<T>(_valuesList);
+                    startTime = barStart;
+                }
+
+                return GetSensorValueFromGenericList(collected, startTime);
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
         protected override void SendDataTimer(object state)
         {
             List<T> collected;
             DateTime startTime;
+
             lock (_syncObject)
             {
                 collected = new List<T>(_valuesList);
@@ -53,6 +77,7 @@ namespace HSMDataCollector.Bar
         {
             List<T> collected;
             DateTime startTime;
+
             lock (_syncObject)
             {
                 collected = new List<T>(_valuesList);
@@ -62,27 +87,6 @@ namespace HSMDataCollector.Bar
             var dataObject = GetSensorValueFromGenericList(collected, startTime);
             EnqueueValue(dataObject);
         }
-
-        public override SensorValueBase GetLastValue()
-        {
-            try
-            {
-                List<T> collected;
-                DateTime startTime;
-                lock (_syncObject)
-                {
-                    collected = new List<T>(_valuesList);
-                    startTime = barStart;
-                }
-
-                return GetSensorValueFromGenericList(collected, startTime);
-            }
-            catch
-            {
-                return null;
-            }
-        }
-
 
         private BarSensorValueBase GetSensorValueFromGenericList(List<T> values, DateTime barStart)
         {
@@ -107,11 +111,11 @@ namespace HSMDataCollector.Bar
 
         private void FillCommonData(SensorValueBase valueBase, DateTime time)
         {
-            valueBase.Key = ProductKey;
             valueBase.Path = Path;
             valueBase.Time = time.ToUniversalTime();
             valueBase.Status = SensorStatus.Ok;
         }
+
         #region Double methods
 
         private DoubleBarSensorValue GetDoubleDataObject(List<double> values, DateTime barStartTime, DateTime barEndTime)
@@ -130,7 +134,7 @@ namespace HSMDataCollector.Bar
 
         private void FillNumericData(DoubleBarSensorValue data, List<double> values)
         {
-            if (values.Any())
+            if (values.Count != 0)
             {
                 values.Sort();
                 data.Max = GetRoundedNumber(values.Last());
@@ -140,6 +144,7 @@ namespace HSMDataCollector.Bar
                 data.Percentiles.Add(0.25, GetRoundedNumber(GetPercentile(values, 0.25)));
                 data.Percentiles.Add(0.5, GetRoundedNumber(GetPercentile(values, 0.5)));
                 data.Percentiles.Add(0.75, GetRoundedNumber(GetPercentile(values, 0.75)));
+
                 return;
             }
 
@@ -153,12 +158,13 @@ namespace HSMDataCollector.Bar
         {
             double sum = values.Sum();
             double mean = 0.0;
+
             try
             {
                 mean = sum / values.Count;
             }
-            catch
-            { }
+            catch { }
+
             return mean;
         }
 
@@ -187,7 +193,7 @@ namespace HSMDataCollector.Bar
 
         private void FillNumericData(IntBarSensorValue data, List<int> values)
         {
-            if (values.Any())
+            if (values.Count != 0)
             {
                 values.Sort();
                 data.Max = values.Last();
@@ -197,6 +203,7 @@ namespace HSMDataCollector.Bar
                 data.Percentiles.Add(0.25, GetPercentile(values, 0.25));
                 data.Percentiles.Add(0.5, GetPercentile(values, 0.5));
                 data.Percentiles.Add(0.75, GetPercentile(values, 0.75));
+
                 return;
             }
 
@@ -208,15 +215,14 @@ namespace HSMDataCollector.Bar
 
         private static int CountMean(List<int> values)
         {
-            //long sum = values.Sum();
             decimal sum = CountSum(values);
             int mean = 0;
+
             try
             {
                 mean = (int)(sum / values.Count);
             }
-            catch
-            { }
+            catch { }
 
             return mean;
         }
@@ -224,12 +230,13 @@ namespace HSMDataCollector.Bar
         private static decimal CountSum(List<int> values)
         {
             decimal result = decimal.Zero;
+
             foreach (var number in values)
-            {
                 result += number;
-            }
+
             return result;
         }
+
         #endregion
     }
 }

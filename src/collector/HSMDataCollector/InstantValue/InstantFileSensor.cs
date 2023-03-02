@@ -17,8 +17,8 @@ namespace HSMDataCollector.InstantValue
         public override bool HasLastValue => false;
 
 
-        public InstantFileSensor(string path, string productKey, string fileName, string extension, IValuesQueue queue, string description = "")
-            : base(path, productKey, queue, description)
+        public InstantFileSensor(string path, string fileName, string extension, IValuesQueue queue, string description = "")
+            : base(path, queue, description)
         {
             _fileName = fileName;
             _fileExtension = extension;
@@ -44,7 +44,6 @@ namespace HSMDataCollector.InstantValue
         private FileSensorValue CreateFile(string value, string comment = null, SensorStatus status = SensorStatus.Ok) =>
             new FileSensorValue()
             {
-                Key = ProductKey,
                 Path = Path,
                 Status = status,
                 Time = DateTime.Now,

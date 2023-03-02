@@ -5,23 +5,26 @@ namespace HSMDataCollector.Base
 {
     public abstract class SensorBase : ISensor
     {
-        protected readonly string ProductKey;
-        protected readonly string Description;
         private readonly IValuesQueue _queue;
+
+        protected string Description { get; }
 
         internal string Path { get; }
 
+        public abstract bool HasLastValue { get; }
 
-        protected SensorBase(string path, string productKey, IValuesQueue queue, string description)
+
+        protected SensorBase(string path, IValuesQueue queue, string description)
         {
             _queue = queue;
             Path = path;
-            ProductKey = productKey;
             Description = description;
         }
-        public abstract bool HasLastValue { get; }
-        public abstract SensorValueBase GetLastValue();
+
+
         public abstract void Dispose();
+
+        public abstract SensorValueBase GetLastValue();
 
         protected void EnqueueValue(SensorValueBase value)
         {

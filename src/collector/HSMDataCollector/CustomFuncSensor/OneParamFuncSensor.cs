@@ -1,35 +1,58 @@
 ﻿using HSMDataCollector.Core;
 using HSMDataCollector.PublicInterface;
-using HSMSensorDataObjects;
 using HSMSensorDataObjects.SensorValueRequests;
+using NLog;
 using System;
 using System.Collections.Generic;
-using Logger = HSMDataCollector.Logging.Logger;
 
 namespace HSMDataCollector.CustomFuncSensor
 {
-    internal class OneParamFuncSensor<T, U> : CustomFuncSensorBase, IParamsFuncSensor<T, U>
+    internal sealed class OneParamFuncSensor<T, U> : CustomFuncSensorBase, IParamsFuncSensor<T, U>
     {
         private readonly Func<List<U>, T> _funcToInvoke;
         private readonly List<U> _paramsList;
         private readonly object _lockObj;
-        private readonly NLog.Logger _logger;
-        public OneParamFuncSensor(string path, string productKey, IValuesQueue queue, string description, TimeSpan timerSpan, SensorType type,
-            Func<List<U>, T> funcToInvoke, bool isLogging) : base(path, productKey, queue, description, timerSpan, type)
+        private readonly Logger _logger;
+
+
+        public OneParamFuncSensor(string path, IValuesQueue queue, string description, TimeSpan timerSpan, Func<List<U>, T> funcToInvoke, Logger logger)
+            : base(path, queue, description, timerSpan)
         {
             _funcToInvoke = funcToInvoke;
             _paramsList = new List<U>();
             _lockObj = new object();
-            if (isLogging)
+            _logger = logger;
+        }
+
+
+        public void AddValue(U value)
+        {
+            lock (_lockObj)
             {
-                _logger = Logger.Create(nameof(OneParamFuncSensor<T, U>));
+                _paramsList.Add(value);
             }
+        }
+
+        public Func<List<U>, T> GetFunc()
+        {
+            return _funcToInvoke;
+        }
+
+        public TimeSpan GetInterval()
+        {
+            return _timerSpan;
+        }
+
+        public void RestartTimer(TimeSpan timeSpan)
+        {
+            RestartTimerInternal(timeSpan);
         }
 
         public override SensorValueBase GetLastValue()
         {
             return GetValueInternal();
         }
+
         protected override SensorValueBase GetInvokeResult()
         {
             return GetValueInternal();
@@ -54,29 +77,6 @@ namespace HSMDataCollector.CustomFuncSensor
                 _logger?.Error(e);
                 return CreateErrorDataObject(default(T), e);
             }
-        }
-
-        public void AddValue(U value)
-        {
-            lock (_lockObj)
-            {
-                _paramsList.Add(value);
-            }
-        }
-
-        public Func<List<U>, T> GetFunc()
-        {
-            return _funcToInvoke;
-        }
-
-        public TimeSpan GetInterval()
-        {
-            return _timerSpan;
-        }
-
-        public void RestartTimer(TimeSpan timeSpan)
-        {
-            RestartTimerInternal(timeSpan);
         }
     }
 }

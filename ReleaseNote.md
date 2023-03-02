@@ -4,9 +4,10 @@
 
 * Toasts for Copy and Remove logic have been added
 * Tree filters has been updated
-* New context menu item 'Ignore product/node/sensor' has been added
+* New context menu item *Ignore product/node/sensor* has been added
 * Enable/Ignore group notifications has been added
-* 'Copy name' context menu item has been added for product in tree
+* *Copy name* context menu item has been added for product in tree
+* Bool chart has been changed to scatter plot
 
 ### Tree
 
@@ -21,12 +22,13 @@
 
 * Product table has been refactored
 * Last update column has been added
-* Filters by Name and Managers have been added
+* Filters by *Name* and *Managers* have been added
 * Sorting by Last update has been added
 
 ## Core
 
-* New sensor state 'Ignore' has been added
+* New sensor state **Ignore** has been added
+* New sensor type **Timespan** has been added
 
 ## Telegram
 
@@ -40,9 +42,9 @@
 ## Kestrel
 
 * Bulder has been moved to minimal builder architecture (.Net 6+)
-* Appsettings.json has been added for server configuration. The file mounted in Config folder
+* **Appsettings.json** has been added for server configuration. The file mounted in Config folder
 * Port settings and Certificate settings have been moved to Appsettings.json
-* Config.xml file has been removed
+* **Config.xml** file has been removed
 
 ## Project:
 
@@ -58,12 +60,20 @@
 # HSM DataObjects
 
 * Nuget package has been updated to v.3.0.1
-* New sensor type Timespan has been added
+* New sensor type **Timespan** has been added
 
 # HSM Datacollector
 
-* Nuget package has been updated to v.3.0.1
+* Nuget package has been updated to v.3.0.4
 * Now datacollector skips bars with Count equals 0
+* Own datacollector logger config has been added
+* New fluent style interface for initializing datacollector has been added. [Example here](https://github.com/SoftFx/Hierarchical-Sensor-Monitoring/wiki/How-to-use-Datacollector)
+* All default sensors are storing now in Windows and Unix collections. [Example here](https://github.com/SoftFx/Hierarchical-Sensor-Monitoring/wiki/Default-sensors-collection)
+* New default sensors **Free space on disk** and **Free space on disk prediction** have been added for Windows and Unix OS
+* New Windows default sensors **Last update** and **Last restart** have been added
+* **Free memory MB** sensor has been renamed to **Free RAM memory MB**
+* All old methods for initializing datacollector and default sensors have been remarked as obsolete
+* Bugfixing & optimization
 
 # Docker
 

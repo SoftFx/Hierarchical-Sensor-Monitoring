@@ -2,7 +2,6 @@
 {
     public class InvalidSensorPathException : System.Exception
     {
-        public InvalidSensorPathException(string message) : base(message)
-        { }
+        public InvalidSensorPathException(string message) : base(message) { }
     }
 }
