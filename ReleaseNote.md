@@ -7,6 +7,7 @@
 * New context menu item *Ignore product/node/sensor* has been added
 * Enable/Ignore group notifications has been added
 * *Copy name* context menu item has been added for product in tree
+* Bool chart has been changed to scatter plot
 
 ### Tree
 
