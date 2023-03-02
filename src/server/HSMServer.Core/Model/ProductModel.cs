@@ -1,6 +1,7 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities;
 using System;
 using System.Collections.Concurrent;
+using HSMServer.Core.Cache.UpdateEntities;
 
 namespace HSMServer.Core.Model
 {
@@ -88,6 +89,11 @@ namespace HSMServer.Core.Model
                 Policies = GetPolicyIds(),
             };
 
+        internal ProductModel Update(ProductUpdate updatedProduct)
+        {
+            Description = updatedProduct.Description;
+            return this;
+        }
 
         internal override void BuildProductNameAndPath()
         {

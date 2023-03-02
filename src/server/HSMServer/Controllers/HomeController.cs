@@ -457,6 +457,7 @@ namespace HSMServer.Controllers
             {
                 Id = product.Id,
                 ExpectedUpdateInterval = updatedModel.ExpectedUpdateInterval.ToModel(),
+                Description = updatedModel.Description
             };
 
             _treeValuesCache.UpdateProduct(productUpdate);

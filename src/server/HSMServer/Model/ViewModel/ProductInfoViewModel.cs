@@ -23,6 +23,7 @@ namespace HSMServer.Model.ViewModel
         internal ProductInfoViewModel Update(ProductUpdate updatedModel)
         {
             ExpectedUpdateInterval = new(updatedModel.ExpectedUpdateInterval, _predefinedIntervals);
+            Description = updatedModel.Description;
 
             return this;
         }

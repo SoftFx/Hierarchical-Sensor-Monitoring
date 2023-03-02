@@ -52,13 +52,13 @@
             <tr>
                 <td>Description</td>
                 <td>
-                    <textarea id='description_@(Model.EncodedId)' type='text' class='form-control' asp-for="Description" value='@Model.Description' disabled></textarea>
+                    <textarea id='description_@(Model.EncodedId)' type='text' class='form-control naked-text' asp-for="Description" value='@Model.Description' disabled ></textarea>
                 </td>
             </tr>
             <tr>
                 <td>Unit</td>
                 <td>
-                    <input id='unit_@(Model.EncodedId)' type='text' class='form-control' asp-for="Unit" value='@Model.Unit' disabled>
+                    <input id='unit_@(Model.EncodedId)' type='text' class='form-control naked-text' asp-for="Unit" value='@Model.Unit' disabled>
                 </td>
             </tr>
         </tbody>
