@@ -60,6 +60,7 @@ namespace HSMServer.Model.TreeViewModel
         protected void Update(NodeBaseModel model)
         {
             Name = model.DisplayName;
+            Description = model.Description;
 
             ExpectedUpdateInterval.Update(model.UsedExpectedUpdateInterval?.ToTimeInterval());
             IsOwnExpectedUpdateInterval = model.ExpectedUpdateInterval != null || model.ParentProduct == null;
