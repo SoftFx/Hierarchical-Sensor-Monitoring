@@ -14,7 +14,7 @@
 <form id="editProductMetaInfo_form" method="post" asp-action="@nameof(HomeController.UpdateProductInfo)">
     <input id="productMetaInfo_encodedId" style='display: none' asp-for="EncodedId" value="@Model.EncodedId"/>
 
-    <table class='table table-borderless'>
+    <table class='table table-bordered'>
         <tbody>
             <tr>
                 <td class="w-25">Product</td>
@@ -58,29 +58,21 @@
                     Description
                 </td>
                 <td>
-                    <div class="input-group row">
-                        <div id="productDescription_@(Model.EncodedId)" class="col pe-3">
-                            <textarea id='description_@(Model.EncodedId)' type='text' class='form-control' asp-for="Description" value='@Model.Description' disabled></textarea>
-                        </div>
-                    </div>
+                    <textarea id='description_@(Model.EncodedId)' type='text' class='form-control naked-text' asp-for="Description" value='@Model.Description' disabled></textarea>
                 </td>
             </tr>
-            <tr>
-                <td></td>
-                <td class="d-flex justify-content-end mx-3 gap-2 pe-3">
-                    <button id='saveInfo_@Model.EncodedId' type='submit' class='btn btn-secondary px-2 independentSizeButton'
-                            data-bs-toggle='tooltip' title='save meta info' hidden disabled>
-                        <span>Save</span>
-                    </button>
-                    <button id='revertInfo_@Model.EncodedId' type='button' class='btn btn-secondary px-2 independentSizeButton' onclick="revertProductInfoClick()"
-                            data-bs-toggle='tooltip' title='revert changes' hidden disabled>
-                        <span>Cancel</span>
-                    </button>
-                </td>
-            </tr>
-
         </tbody>
     </table>
+    <div class="d-flex justify-content-end m-3 gap-2">
+        <button id='saveInfo_@Model.EncodedId' type='submit' class='btn btn-secondary px-2 independentSizeButton'
+                data-bs-toggle='tooltip' title='save meta info' hidden disabled>
+            <span>Save</span>
+        </button>
+        <button id='revertInfo_@Model.EncodedId' type='button' class='btn btn-secondary px-2 independentSizeButton' onclick="revertProductInfoClick()"
+                data-bs-toggle='tooltip' title='revert changes' hidden disabled>
+            <span>Cancel</span>
+        </button>
+    </div>
 </form>
 
 
@@ -112,12 +104,14 @@
 
         $('#saveInfo_' + productId).removeAttr("disabled").removeAttr("hidden");
         $('#revertInfo_' + productId).removeAttr("disabled").removeAttr("hidden");
-        $('#description_' + productId).removeAttr("disabled");
+        $('#description_' + productId).removeAttr("disabled").removeClass("naked-text");
         $('#editProductButton').attr('hidden', true);
         
         $('#productExpectedUpdateInterval_' + productId + ' :input').each(function () {
             this.removeAttribute('disabled');
         });
+        
+        $('#timeIntervalSelect').removeClass('naked-text');      
     }
 
     function revertProductInfoClick() {
