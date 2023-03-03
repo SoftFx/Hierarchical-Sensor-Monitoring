@@ -18,21 +18,29 @@
 
     ViewBag.ParentId = nodeId;
 
-    List<NodeViewModel> GetSortedNodes<T>(IEnumerable<T> nodes) where T: NodeViewModel
+    List<NodeViewModel> GetSortedNodes<T>(IEnumerable<T> nodes) where T : NodeViewModel
     {
         var visibleNodes = nodes.Where(n => n.HasData);
         var sortedNodes = user.TreeFilter.TreeSortType == TreeSortType.ByName
             ? visibleNodes.OrderBy(n => n.Name)
             : visibleNodes.OrderByDescending(n => n.UpdateTime);
-            
+
         return sortedNodes.Cast<NodeViewModel>().ToList();
     }
 }
 
 
 <div>
-    <h5>@(productName)@(Model.Path)</h5>
-
+    <div class='row justify-content-start'>
+        <div class='d-flex col-md-auto' style="align-items: center">
+            <h5 class="m-2">@(productName)@(Model.Path)</h5>
+            <button id="editProductButton" type='button' class='btn btn-secondary' onclick="editProductInfoButtonClick()"
+                    data-bs-toggle='tooltip' title='edit meta info'>
+                <i class='fas fa-edit'></i>
+            </button>
+        </div>
+    </div>
+    
     <div id='product_info_@Model.EncodedId'>
         @await Html.PartialAsync("_ProductMetaInfo", new ProductInfoViewModel(Model))
     </div>

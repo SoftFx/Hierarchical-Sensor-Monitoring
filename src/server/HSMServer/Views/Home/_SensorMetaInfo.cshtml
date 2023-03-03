@@ -1,4 +1,5 @@
 ﻿@using HSMServer.Controllers
+@using HSMServer.Core.Extensions
 @using HSMServer.Model.ViewModel
 
 @model SensorInfoViewModel
@@ -8,16 +9,16 @@
 
 <form asp-action="@nameof(HomeController.UpdateSensorInfo)"
       method="post" id="editSensorMetaInfo_form">
-    <input id="sensorMetaInfo_encodedId" style='display: none' asp-for="EncodedId" value="@Model.EncodedId" />
+    <input id="sensorMetaInfo_encodedId" style='display: none' asp-for="EncodedId" value="@Model.EncodedId"/>
 
     <div class="m-1">
         <div class='row justify-content-start'>
             <div class='d-flex col-md-auto' style="align-items: center">
                 <h5 class="m-2">@(Model.ProductName)@(Model.Path)</h5>
                 <button id="editButtonMetaInfo" type='button' class='btn btn-secondary mx-2' onclick="editInfoButtonClick()"
-                            data-bs-toggle='tooltip' title='edit meta info'>
-                        <i class='fas fa-edit'></i>
-                    </button>
+                        data-bs-toggle='tooltip' title='edit meta info'>
+                    <i class='fas fa-edit'></i>
+                </button>
             </div>
         </div>
     </div>
@@ -46,24 +47,27 @@
                     <i class='fas fa-question-circle' title='Time format: dd.hh:mm:ss min value 00:01:00'></i>
                 </td>
                 <td id="expectedUpdateInterval_@(Model.EncodedId)">
-                    <partial name="_TimeIntervalSelect" for="ExpectedUpdateInterval" />
+                    <label id="labelInterval" class="form-control naked-text">@Model.ExpectedUpdateInterval.TimeInterval.GetDisplayName()</label>
+                    <div id="partialIntervalSelect" class="d-none">
+                        <partial name="_TimeIntervalSelect" for="ExpectedUpdateInterval"/>
+                    </div>
                 </td>
             </tr>
             <tr>
                 <td>Description</td>
                 <td>
-                    <textarea id='description_@(Model.EncodedId)' type='text' class='form-control' asp-for="Description" value='@Model.Description' disabled></textarea>
+                    <textarea id='description_@(Model.EncodedId)' type='text' class='form-control naked-text' asp-for="Description" value='@Model.Description' disabled ></textarea>
                 </td>
             </tr>
             <tr>
                 <td>Unit</td>
                 <td>
-                    <input id='unit_@(Model.EncodedId)' type='text' class='form-control' asp-for="Unit" value='@Model.Unit' disabled>
+                    <input id='unit_@(Model.EncodedId)' type='text' class='form-control naked-text' asp-for="Unit" value='@Model.Unit' disabled>
                 </td>
             </tr>
         </tbody>
     </table>
-    <div class="d-flex justify-content-end m-3 gap-2">
+    <div class="d-flex justify-content-end m-3 gap-2 me-0">
         <button id='saveInfo_@(Model.EncodedId)' type='submit' class='btn btn-secondary px-2 independentSizeButton'
                 data-bs-toggle='tooltip' title='save meta info' hidden disabled>
             <span>Save</span>
