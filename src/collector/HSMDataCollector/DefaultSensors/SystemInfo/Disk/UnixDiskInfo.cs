@@ -10,5 +10,7 @@ namespace HSMDataCollector.DefaultSensors.SystemInfo
         public string Name { get; }
 
         public long FreeSpace => long.TryParse(AvailableSpaceCommand.BashExecute(), out var availableSpace) ? availableSpace : 0L;
+
+        public long FreeSpaceMb => FreeSpace.KilobytesToMegabytes();
     }
 }

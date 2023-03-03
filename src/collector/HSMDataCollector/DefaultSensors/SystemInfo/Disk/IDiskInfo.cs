@@ -5,5 +5,7 @@
         string Name { get; }
 
         long FreeSpace { get; }
+
+        long FreeSpaceMb { get; }
     }
 }
