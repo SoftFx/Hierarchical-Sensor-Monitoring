@@ -1,4 +1,5 @@
-﻿using System.IO;
+﻿using HSMDataCollector.Extensions;
+using System.IO;
 
 namespace HSMDataCollector.DefaultSensors.SystemInfo
 {
@@ -10,6 +11,8 @@ namespace HSMDataCollector.DefaultSensors.SystemInfo
         public string Name { get; }
 
         public long FreeSpace => _driveInfo.AvailableFreeSpace;
+
+        public long FreeSpaceMb => FreeSpace.BytesToMegabytes();
 
 
         internal WindowsDiskInfo(string targetPath)

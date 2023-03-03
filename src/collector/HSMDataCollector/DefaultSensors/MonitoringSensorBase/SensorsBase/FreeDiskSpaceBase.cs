@@ -1,5 +1,4 @@
 ﻿using HSMDataCollector.DefaultSensors.SystemInfo;
-using HSMDataCollector.Extensions;
 using HSMDataCollector.Options;
 
 namespace HSMDataCollector.DefaultSensors
@@ -18,6 +17,6 @@ namespace HSMDataCollector.DefaultSensors
         }
 
 
-        protected sealed override double GetValue() => _diskInfo.FreeSpace.ToMegabytes();
+        protected sealed override double GetValue() => _diskInfo.FreeSpaceMb;
     }
 }
