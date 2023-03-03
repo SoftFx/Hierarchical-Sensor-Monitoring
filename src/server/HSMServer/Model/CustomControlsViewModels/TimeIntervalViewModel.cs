@@ -49,8 +49,6 @@ namespace HSMServer.Model
 
         public bool CanCustomInputBeVisible { get; init; } = true;
 
-        public bool IsMetaInfoInput { get; set; }
-
         public TimeInterval TimeInterval { get; set; }
 
         public string CustomTimeInterval { get; set; }
@@ -66,7 +64,6 @@ namespace HSMServer.Model
 
         internal TimeIntervalViewModel(TimeIntervalModel model, List<TimeInterval> intervals) : this(intervals)
         {
-            IsMetaInfoInput = true;
             Update(model);
         }
 

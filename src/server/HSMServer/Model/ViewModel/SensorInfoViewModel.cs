@@ -1,5 +1,4 @@
-﻿using HSMServer.Core.Cache.UpdateEntities;
-using HSMServer.Core.Model;
+﻿using HSMServer.Core.Model;
 using HSMServer.Model.TreeViewModel;
 
 namespace HSMServer.Model.ViewModel
@@ -18,15 +17,6 @@ namespace HSMServer.Model.ViewModel
         {
             SensorType = sensor.SensorType;
             Unit = sensor.Unit;
-        }
-
-
-        internal SensorInfoViewModel Update(SensorUpdate updatedModel)
-        {
-            ExpectedUpdateInterval = new(updatedModel.ExpectedUpdateInterval, _predefinedIntervals);
-            Unit = updatedModel.Unit;
-
-            return this;
         }
     }
 }

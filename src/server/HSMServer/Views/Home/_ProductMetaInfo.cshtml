@@ -1,7 +1,7 @@
 ﻿@using HSMServer.Controllers
 @using HSMServer.Constants
+@using HSMServer.Core.Extensions
 @using HSMServer.Model.ViewModel
-
 @model ProductInfoViewModel
 
 @{
@@ -48,7 +48,10 @@
                 <td>
                     <div class="input-group row">
                         <div id="productExpectedUpdateInterval_@(Model.EncodedId)" class="col-5">
-                            <partial name="_TimeIntervalSelect" for="ExpectedUpdateInterval"/>
+                            <label id="labelInterval" class="form-control naked-text">@Model.ExpectedUpdateInterval.TimeInterval.GetDisplayName()</label>
+                            <div id="partialIntervalSelect" class="d-none">
+                                <partial name="_TimeIntervalSelect" for="ExpectedUpdateInterval"/>
+                            </div>
                         </div>
                     </div>
                 </td>
@@ -105,13 +108,14 @@
         $('#saveInfo_' + productId).removeAttr("disabled").removeAttr("hidden");
         $('#revertInfo_' + productId).removeAttr("disabled").removeAttr("hidden");
         $('#description_' + productId).removeAttr("disabled").removeClass("naked-text");
+        
         $('#editProductButton').attr('hidden', true);
+        $('#partialIntervalSelect').removeClass('d-none');
+        $('#labelInterval').addClass('d-none');
         
         $('#productExpectedUpdateInterval_' + productId + ' :input').each(function () {
             this.removeAttribute('disabled');
         });
-        
-        $('#timeIntervalSelect').removeClass('naked-text');      
     }
 
     function revertProductInfoClick() {

@@ -11,7 +11,9 @@ window.editInfoButtonClick = function () {
     $('#saveInfo_' + sensorId).removeAttr("disabled").removeAttr("hidden");
     $('#revertInfo_' + sensorId).removeAttr("disabled").removeAttr("hidden");
     $('#editButtonMetaInfo').attr('hidden', true);
-    $('#timeIntervalSelect').removeClass('naked-text');
+    
+    $('#partialIntervalSelect').removeClass('d-none');
+    $('#labelInterval').addClass('d-none');
 
     $('#expectedUpdateInterval_' + sensorId + ' :input').each(function () {
         this.removeAttribute('disabled');
