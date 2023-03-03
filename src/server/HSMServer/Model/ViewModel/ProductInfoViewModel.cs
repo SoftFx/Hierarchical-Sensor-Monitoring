@@ -16,7 +16,6 @@ namespace HSMServer.Model.ViewModel
         {
             Name = product.Name;
             Parent = product.Parent;
-            Description = product.Description;
         }
 
 

@@ -40,7 +40,6 @@ namespace HSMServer.Model.TreeViewModel
             base.Update(model);
 
             SensorType = model.Type;
-            Description = model.Description;
             State = model.State;
             UpdateTime = model.LastUpdateTime;
             Status = model.ValidationResult.Result.ToClient();

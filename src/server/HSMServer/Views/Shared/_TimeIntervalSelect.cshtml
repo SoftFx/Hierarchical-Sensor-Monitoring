@@ -7,7 +7,7 @@
 
 <form>
     <div class="d-grid">
-        <select id="timeIntervalSelect" class="form-select naked-text" asp-for="TimeInterval" asp-items="@Model.IntervalItems"></select>
+        <select id="timeIntervalSelect" class="form-select" asp-for="TimeInterval" asp-items="@Model.IntervalItems"></select>
         <input class="customTimeInterval form-control" placeholder="@TimeIntervalViewModel.CustomTemplate" style="display:none;" asp-for="CustomTimeInterval" />
     </div>
 </form>
@@ -32,4 +32,7 @@
             $('.customTimeInterval').hide();
         }
     }
+    
+    if ('@Model.IsMetaInfoInput' === 'True')
+        $('#timeIntervalSelect').addClass('naked-text');
 </script>
