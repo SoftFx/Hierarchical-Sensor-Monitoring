@@ -91,7 +91,7 @@ namespace HSMServer.Core.Model
 
         internal ProductModel Update(ProductUpdate updatedProduct)
         {
-            Description = updatedProduct.Description;
+            Description = updatedProduct.Description ?? Description;
             return this;
         }
 

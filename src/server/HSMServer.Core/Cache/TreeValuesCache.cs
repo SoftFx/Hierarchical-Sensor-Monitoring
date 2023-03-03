@@ -100,8 +100,8 @@ namespace HSMServer.Core.Cache
             var sensorsOldStatuses = new Dictionary<Guid, ValidationResult>();
             GetProductSensorsStatuses(product, sensorsOldStatuses);
             UpdateIntervalPolicy(updatedProduct.ExpectedUpdateInterval, product);
+            _databaseCore.UpdateProduct(product.Update(updatedProduct).ToProductEntity());
 
-            UpdateProduct(product.Update(updatedProduct));
             NotifyAllProductChildrenAboutUpdate(product, sensorsOldStatuses);
         }
 
