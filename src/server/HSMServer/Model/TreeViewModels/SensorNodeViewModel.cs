@@ -46,7 +46,7 @@ namespace HSMServer.Model.TreeViewModel
             State = model.State;
             UpdateTime = model.LastUpdateTime;
             Status = model.ValidationResult.Result.ToClient();
-            ValidationError = State == SensorState.Ignored ? GetIgnoredErrorTooltip(model.EndOfIgnore) : model.ValidationResult.Message;
+            ValidationError = State == SensorState.Muted ? GetMutedErrorTooltip(model.EndOfMuting) : model.ValidationResult.Message;
             Path = model.Path;
             Unit = model.Unit;
 
@@ -85,9 +85,9 @@ namespace HSMServer.Model.TreeViewModel
             return string.Empty;
         }
 
-        private static string GetIgnoredErrorTooltip(DateTime? endOfIgnore) =>
-            endOfIgnore is not null && endOfIgnore != DateTime.MaxValue
-                ? $"Ignore until {endOfIgnore.Value.ToDefaultFormat()}"
-                : $"Ignored forever";
+        private static string GetMutedErrorTooltip(DateTime? endOfMuting) =>
+            endOfMuting is not null && endOfMuting != DateTime.MaxValue
+                ? $"Muted until {endOfMuting.Value.ToDefaultFormat()}"
+                : $"Muted forever";
     }
 }

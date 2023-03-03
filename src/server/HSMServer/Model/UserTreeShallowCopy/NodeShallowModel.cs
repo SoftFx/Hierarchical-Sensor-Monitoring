@@ -38,7 +38,7 @@ namespace HSMServer.Model.UserTreeShallowCopy
 
         internal NodeShallowModel(ProductNodeViewModel data, User user) : base(data, user)
         {
-            IsIgnoredState = true;
+            IsMutedState = true;
         }
 
 
@@ -48,13 +48,13 @@ namespace HSMServer.Model.UserTreeShallowCopy
             
             var sensor = shallowSensor.Data;
 
-            if (sensor.State != SensorState.Ignored)
+            if (sensor.State != SensorState.Muted)
             {
                 AccountState.CalculateState(user.Notifications, sensor.Id);
                 GroupState.CalculateState(sensor.RootProduct.Notifications, sensor.Id);
             }
             
-            IsIgnoredState &= sensor.State == SensorState.Ignored;
+            IsMutedState &= sensor.State == SensorState.Muted;
 
             if (user.IsSensorVisible(sensor))
             {
@@ -67,13 +67,13 @@ namespace HSMServer.Model.UserTreeShallowCopy
         {
             node.Parent = this;
             
-            if (!node.IsIgnoredState)
+            if (!node.IsMutedState)
             {
                 AccountState.CalculateState(node.AccountState);
                 GroupState.CalculateState(node.GroupState);
             }
             
-            IsIgnoredState &= node.IsIgnoredState;
+            IsMutedState &= node.IsMutedState;
             VisibleSensorsCount += node.VisibleSensorsCount;
 
             if (node.VisibleSensorsCount > 0 || user.IsEmptyProductVisible(node.Data))

@@ -24,6 +24,6 @@ namespace HSMDatabase.AccessManager.DatabaseEntities
 
         public List<string> Policies { get; init; }
 
-        public long EndOfIgnore { get; init; }
+        public long EndOfMuting { get; init; }
     }
 }

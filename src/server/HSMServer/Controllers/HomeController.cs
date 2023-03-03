@@ -89,22 +89,20 @@ namespace HSMServer.Controllers
         }
 
         [HttpPost]
-        public void SetIgnoreStateToSensorFromModal(IgnoreNotificationsViewModel model)
+        public void SetMutedStateToSensorFromModal(IgnoreNotificationsViewModel model)
         {
             var decodedId = SensorPathHelper.DecodeGuid(model.EncodedId);
-            var newIgnorePeriod = model.EndOfIgnorePeriod;
+            var newMutingPeriod = model.EndOfIgnorePeriod;
             
             if (_treeViewModel.Nodes.TryGetValue(decodedId, out _))
             {
                 foreach (var sensorId in GetNodeSensors(decodedId))
-                {
-                    _treeValuesCache.UpdateIgnoreSensorState(sensorId, newIgnorePeriod);
-                }
+                    _treeValuesCache.UpdateMutedSensorState(sensorId, newMutingPeriod);
             }
             else
             {
                 if (_treeViewModel.Sensors.TryGetValue(decodedId, out var sensor))
-                    _treeValuesCache.UpdateIgnoreSensorState(sensor.Id, newIgnorePeriod);
+                    _treeValuesCache.UpdateMutedSensorState(sensor.Id, newMutingPeriod);
             }
             
             UpdateUserNotificationSettings(decodedId, (s, g) => s.Ignore(g, model.EndOfIgnorePeriod));
@@ -112,21 +110,19 @@ namespace HSMServer.Controllers
         }
 
         [HttpPost]
-        public void RemoveIgnoreStateToSensor([FromQuery] string selectedId)
+        public void RemoveMutedStateToSensor([FromQuery] string selectedId)
         {
             var decodedId = SensorPathHelper.DecodeGuid(selectedId);
 
             if (_treeViewModel.Nodes.TryGetValue(decodedId, out _))
             {
                 foreach (var sensorId in GetNodeSensors(decodedId))
-                {
-                    _treeValuesCache.UpdateIgnoreSensorState(sensorId);
-                }
+                    _treeValuesCache.UpdateMutedSensorState(sensorId);
             }
             else
             {
                 if (_treeViewModel.Sensors.TryGetValue(decodedId, out var sensor))
-                    _treeValuesCache.UpdateIgnoreSensorState(sensor.Id);
+                    _treeValuesCache.UpdateMutedSensorState(sensor.Id);
             }
 
             UpdateUserNotificationSettings(decodedId, (s, g) => s.RemoveIgnore(g));

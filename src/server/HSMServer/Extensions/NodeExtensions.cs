@@ -23,7 +23,7 @@ namespace HSMServer.Extensions
         internal static string ToCssClass(this Core.Model.SensorState state) =>
             state switch
             {
-                Core.Model.SensorState.Ignored => "ignored-state-text",
+                Core.Model.SensorState.Muted => "muted-state-text",
                 _ => string.Empty,
             };
 

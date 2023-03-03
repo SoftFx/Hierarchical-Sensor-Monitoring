@@ -4,7 +4,7 @@
 
 * Toasts for Copy and Remove logic have been added
 * Tree filters has been updated
-* New context menu item *Ignore product/node/sensor* has been added
+* New context menu item *Mute product/node/sensor* has been added
 * Enable/Ignore group notifications has been added
 * *Copy name* context menu item has been added for product in tree
 * Bool chart has been changed to scatter plot
@@ -27,7 +27,7 @@
 
 ## Core
 
-* New sensor state **Ignore** has been added
+* New sensor state **Muted** has been added
 * New sensor type **Timespan** has been added
 
 ## Telegram

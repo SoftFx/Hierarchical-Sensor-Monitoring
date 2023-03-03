@@ -159,21 +159,21 @@ function buildContextMenu(node) {
     }
 
     if (isManager) {
-        let isIgnoredState = node.data.jstree.isIgnoredState === "True";
-        if (!isIgnoredState){
-            contextMenu["Ignore"] = {
-                "label": `Ignore ${getKeyByValue(curType)}`,
+        let isMutedState = node.data.jstree.isMutedState === "True";
+        if (!isMutedState){
+            contextMenu["Mute"] = {
+                "label": `Mute ${getKeyByValue(curType)}`,
                 "separator_after": true,
                 "separator_before": true,
                 "action": _ => ignoreNotificationsRequest(node, TelegramTarget.Groups, 'true')
             }
         }
         else {
-            contextMenu["Ignore"] = {
-                "label": `Enable ${getKeyByValue(curType)}`,
+            contextMenu["Mute"] = {
+                "label": `Unmute ${getKeyByValue(curType)}`,
                 "separator_after": true,
                 "separator_before": true,
-                "action": _ => removeIgnoreStateRequest(node)
+                "action": _ => unmuteRequest(node)
             }
         }
         
@@ -304,8 +304,8 @@ function enableNotificationsRequest(node, target) {
     return $.ajax(`${enableNotificationsAction}?selectedId=${node.id}&target=${target}`, AjaxPost).done(updateTreeTimer);
 }
 
-function removeIgnoreStateRequest(node){
-    return $.ajax(`${removeIgnoreStateAction}?selectedId=${node.id}`, AjaxPost).done(() => { 
+function unmuteRequest(node){
+    return $.ajax(`${unmuteAction}?selectedId=${node.id}`, AjaxPost).done(() => { 
         updateSelectedNodeData();
         updateTreeTimer();
     });
