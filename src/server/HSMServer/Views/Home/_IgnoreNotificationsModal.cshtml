@@ -9,7 +9,7 @@
 
 @if (Model != null)
 {
-    <form id="ignoreNotifications_form" asp-action="@(Model.IsOffTimeModal ? nameof(HomeController.SetIgnoreStateToSensorFromModal) : nameof(HomeController.IgnoreNotifications))" method="post">
+    <form id="ignoreNotifications_form" asp-action="@(Model.IsOffTimeModal ? nameof(HomeController.SetMutedStateToSensorFromModal) : nameof(HomeController.IgnoreNotifications))" method="post">
         <input class="d-none" asp-for="EncodedId" />
         <input class="d-none" asp-for="DateTimeNow" />
         <input class="d-none" asp-for="NotificationsTarget" />
@@ -21,7 +21,7 @@
                         <div>
                             @if (Model.IsOffTimeModal)
                             {
-                                <h5 class="modal-title">Ignore @Model.TreeElement</h5>
+                                <h5 class="modal-title">Mute @Model.TreeElement</h5>
                             }
                             else
                             {
@@ -32,7 +32,7 @@
                     </div>
 
                     <div class="modal-body">
-                        <p>Please, select how long you would like to ignore @(Model.IsOffTimeModal ? Model.TreeElement : "notifications")</p>
+                        <p>Please, select how long you would like to @(Model.IsOffTimeModal ? $"mute {Model.TreeElement}" : "ignore notifications")</p>
                         
                         <partial name="_TimeIntervalSelect" for="IgnorePeriod"/>
 
@@ -141,12 +141,11 @@
     }
 
     function updateNote() {
-        let firstNotePart = `Note: @(Model?.TreeElement)`;
-        let action = `@(Model?.IsOffTimeModal)` === 'True' ? 'disabled ' : 'ignored ';
-        let secondNotePart = '';
+        let action = `@(Model?.IsOffTimeModal)` === 'True' ? 'muted' : 'ignored';
+        let until = '';
 
         if ($('option:selected', $('#timeIntervalSelect')).text() == '@TimeInterval.Forever') {
-            action = 'disabled ';
+            action = 'disabled';
             $('#interval_inputs').hide();
         }
         else {
@@ -155,14 +154,12 @@
                                                .add($('#ignoreNotifications_hours').val(), 'h')
                                                .add($('#ignoreNotifications_days').val(), 'd');
 
-            secondNotePart += ` until ${endOfIgnorePeriod.format('DD/MM/YYYY HH:mm')}`;
+            until = ` until ${endOfIgnorePeriod.format('DD/MM/YYYY HH:mm')}`;
             $('#interval_inputs').show();
         }
         
-        let note = firstNotePart + ' notifications will be ' + action + secondNotePart;
-        if (`@(Model?.IsOffTimeModal)` === 'True'){
-            note = note.replace("notifications ", "");
-        }
+        let entity = `@(Model?.IsOffTimeModal)` === 'True' ? '' : 'notifications ';
+        let note = `Note: @(Model?.TreeElement) ${entity}will be ${action}${until}`;
         
         $('#ignoreNotifications_note').html(note);
     }

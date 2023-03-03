@@ -65,13 +65,13 @@
     <div class="form-check">
         <div class="form-check">
             <input type="checkbox" class="form-check-input" id="enabledGroup" asp-for="IsGroupNotificationsEnabled" />
-            <label class="form-check-label" for="enabledGroup" title="Ignored sensors">
+            <label class="form-check-label" for="enabledGroup" title="Enabled sensors">
                 Groups <img class="tree-png-icon" src="~/dist/users.png" alt="!" />
             </label>
         </div>
         <div class="form-check">
             <input type="checkbox" class="form-check-input" id="enabledAccount" asp-for="IsAccountNotificationsEnabled" />
-            <label class="form-check-label" for="enabledAccount" title="Ignored sensors">
+            <label class="form-check-label" for="enabledAccount" title="Enabled sensors">
                 Accounts <img class="tree-png-icon" src="~/dist/user.png" alt="!" />
             </label>
         </div>
@@ -97,9 +97,9 @@
 
     <h6 class="dropdown-header">Sensor state</h6>
     <div class="form-check">
-        <input type="checkbox" class="form-check-input" id="blocked" asp-for="IsIgnoreSensorsState" />
-        <label class="form-check-label ignored-state-text" for="blocked" title="Ignored sensors">
-            Ignored sensors
+        <input type="checkbox" class="form-check-input" id="blocked" asp-for="IsMutedSensorsState" />
+        <label class="form-check-label muted-state-text" for="blocked" title="Muted sensors">
+            Muted sensors
         </label>
     </div>
     <div class="dropdown-divider"></div>

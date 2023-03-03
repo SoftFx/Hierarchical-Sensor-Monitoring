@@ -8,7 +8,7 @@ namespace HSMServer.Core.Model
     public enum SensorState : byte
     {
         Available,
-        Ignored,
+        Muted,
         Blocked = byte.MaxValue,
     }
 
@@ -21,7 +21,7 @@ namespace HSMServer.Core.Model
 
     public abstract class BaseSensorModel : NodeBaseModel
     {
-        private readonly ValidationResult _ignoreStatus = new("Ignored", SensorStatus.OffTime);
+        private readonly ValidationResult _muteStatus = new("Muted", SensorStatus.OffTime);
 
         protected ValidationResult _internalValidationResult;
 
@@ -36,9 +36,9 @@ namespace HSMServer.Core.Model
         public string Unit { get; private set; }
 
 
-        public DateTime? EndOfIgnore { get; private set; }
+        public DateTime? EndOfMuting { get; private set; }
 
-        public ValidationResult ValidationResult => State == SensorState.Ignored ? _ignoreStatus : _internalValidationResult;
+        public ValidationResult ValidationResult => State == SensorState.Muted ? _muteStatus : _internalValidationResult;
 
 
         public BaseValue LastValue => Storage.LastValue;
@@ -80,10 +80,10 @@ namespace HSMServer.Core.Model
             Description = update.Description ?? Description;
             Unit = update.Unit ?? Unit;
             State = update?.State ?? State;
-            EndOfIgnore = update?.EndOfIgnorePeriod ?? EndOfIgnore;
+            EndOfMuting = update?.EndOfMutingPeriod ?? EndOfMuting;
 
             if (State == SensorState.Available)
-                EndOfIgnore = null;
+                EndOfMuting = null;
         }
 
         internal BaseSensorModel ApplyEntity(SensorEntity entity)
@@ -99,7 +99,7 @@ namespace HSMServer.Core.Model
             Description = entity.Description;
             State = (SensorState)entity.State;
             Unit = entity.Unit;
-            EndOfIgnore = entity.EndOfIgnore == 0L ? null : new DateTime(entity.EndOfIgnore);
+            EndOfMuting = entity.EndOfMuting == 0L ? null : new DateTime(entity.EndOfMuting);
 
             _internalValidationResult = ValidationResult.Ok;
 
@@ -119,7 +119,7 @@ namespace HSMServer.Core.Model
                 Type = (byte)Type,
                 State = (byte)State,
                 Policies = GetPolicyIds(),
-                EndOfIgnore = EndOfIgnore?.Ticks ?? 0L,
+                EndOfMuting = EndOfMuting?.Ticks ?? 0L,
             };
 
 

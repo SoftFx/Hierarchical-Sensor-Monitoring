@@ -18,6 +18,6 @@ namespace HSMServer.Core.Cache.UpdateEntities
 
         public SensorState? State { get; init; }
 
-        public DateTime? EndOfIgnorePeriod { get; init; }
+        public DateTime? EndOfMutingPeriod { get; init; }
     }
 }

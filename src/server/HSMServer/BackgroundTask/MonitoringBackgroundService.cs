@@ -35,7 +35,7 @@ namespace HSMServer.BackgroundTask
                     UpdateAccessKeysState();
                     RemoveOutdatedIgnoredNotifications();
                     RemoveExpiredInvitationTokens();
-                    UpdateIgnoreSensorsState();
+                    UpdateMutedSensorsState();
                 }
 
                 await Task.Delay(Delay, stoppingToken);
@@ -92,11 +92,11 @@ namespace HSMServer.BackgroundTask
             }
         }
 
-        private void UpdateIgnoreSensorsState()
+        private void UpdateMutedSensorsState()
         {
             foreach (var sensor in _cache.GetSensors())
-                if (sensor.EndOfIgnore <= DateTime.UtcNow)
-                    _cache.UpdateIgnoreSensorState(sensor.Id);
+                if (sensor.EndOfMuting <= DateTime.UtcNow)
+                    _cache.UpdateMutedSensorState(sensor.Id);
         }
 
         private void RemoveExpiredInvitationTokens() => _telegramBot.RemoveOldInvitationTokens();

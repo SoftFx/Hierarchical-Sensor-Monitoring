@@ -14,18 +14,18 @@ namespace HSMServer.Model.ViewModel
 
 
         public bool IsEmptyHistory { get; set; }
-        
+
 
         public bool IsGroupNotificationsEnabled { get; set; }
-        
+
         public bool IsAccountNotificationsEnabled { get; set; }
-        
+
         public bool IsGroupNotificationsIgnored { get; set; }
-        
+
         public bool IsAccountNotificationsIgnored { get; set; }
 
 
-        public bool IsIgnoreSensorsState { get; set; }
+        public bool IsMutedSensorsState { get; set; }
 
 
         public int TreeUpdateInterval { get; set; }
@@ -49,7 +49,7 @@ namespace HSMServer.Model.ViewModel
             IsAccountNotificationsEnabled = filter.ByNotifications.AccountEnabled.Value;
             IsGroupNotificationsEnabled = filter.ByNotifications.GroupEnabled.Value;
 
-            IsIgnoreSensorsState = filter.ByState.Ignored.Value;
+            IsMutedSensorsState = filter.ByState.Muted.Value;
 
             TreeUpdateInterval = filter.TreeUpdateInterval;
             TreeSortType = (int)filter.TreeSortType;
@@ -76,7 +76,7 @@ namespace HSMServer.Model.ViewModel
             filter.ByNotifications.AccountIgnored.Value = IsAccountNotificationsIgnored;
             filter.ByNotifications.GroupIgnored.Value = IsGroupNotificationsIgnored;
 
-            filter.ByState.Ignored.Value = IsIgnoreSensorsState;
+            filter.ByState.Muted.Value = IsMutedSensorsState;
 
             return filter;
         }

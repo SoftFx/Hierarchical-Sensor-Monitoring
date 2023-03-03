@@ -273,17 +273,17 @@ namespace HSMServer.Core.Cache
             ChangeSensorEvent?.Invoke(sensor, TransactionType.Delete);
         }
 
-        public void UpdateIgnoreSensorState(Guid sensorId, DateTime? endOfIgnore)
+        public void UpdateMutedSensorState(Guid sensorId, DateTime? endOfMuting)
         {
             if (!_sensors.TryGetValue(sensorId, out var sensor) || sensor.State == SensorState.Blocked)
                 return;
 
-            if (sensor.EndOfIgnore != endOfIgnore)
+            if (sensor.EndOfMuting != endOfMuting)
                 UpdateSensor(new SensorUpdate
                 {
                     Id = sensorId,
-                    State = endOfIgnore is null ? SensorState.Available : SensorState.Ignored,
-                    EndOfIgnorePeriod = endOfIgnore,
+                    State = endOfMuting is null ? SensorState.Available : SensorState.Muted,
+                    EndOfMutingPeriod = endOfMuting,
                 });
         }
 
