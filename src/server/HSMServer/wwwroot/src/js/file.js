@@ -23,7 +23,7 @@ window.openFileInBrowser = function(path, fileName, viewFileAction) {
             
             if (fileType === 'application/csv'){
                 let data = [];
-                response.split('\n\r').forEach( el => {
+                response.split('\n').forEach( el => {
                     data.push(el.split(','))
                 });
                 
