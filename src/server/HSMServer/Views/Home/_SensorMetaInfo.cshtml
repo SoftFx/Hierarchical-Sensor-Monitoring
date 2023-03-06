@@ -14,7 +14,7 @@
     <div class="m-1">
         <div class='row justify-content-start'>
             <div class='d-flex col-md-auto' style="align-items: center">
-                <h5 class="m-2">@(Model.ProductName)@(Model.Path)</h5>
+                <h5 class="m-2">@Html.Raw(Model.ProductName + Model.Path)</h5>
                 <button id="editButtonMetaInfo" type='button' class='btn btn-secondary mx-2' onclick="editInfoButtonClick()"
                         data-bs-toggle='tooltip' title='edit meta info'>
                     <i class='fas fa-edit'></i>
@@ -27,11 +27,11 @@
         <tbody>
             <tr>
                 <td>Product</td>
-                <td>@Model.ProductName</td>
+                <td>@Html.Raw(@Model.ProductName)</td>
             </tr>
             <tr>
                 <td>Path</td>
-                <td>@Model.Path</td>
+                <td>@Html.Raw(@Model.Path)</td>
             </tr>
             <tr>
                 <td>Sensor type</td>
