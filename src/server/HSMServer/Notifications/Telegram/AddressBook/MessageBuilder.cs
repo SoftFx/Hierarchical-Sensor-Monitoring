@@ -179,6 +179,10 @@ namespace HSMServer.Notifications
         private static DateTime GetNextNotificationTime(int notificationsDelay)
         {
             var ticks = DateTime.MinValue.AddSeconds(notificationsDelay).Ticks;
+
+            if (ticks == 0L)
+                return DateTime.UtcNow;
+
             var start = DateTime.UtcNow.Ticks / ticks * ticks;
 
             return new DateTime(start + ticks);
