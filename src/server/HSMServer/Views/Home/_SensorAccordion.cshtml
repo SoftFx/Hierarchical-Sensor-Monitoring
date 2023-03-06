@@ -61,6 +61,8 @@
                     }
                 </div>
             </div>
+            <div id="preview">
+            </div>
         }
         else
         {
@@ -160,3 +162,36 @@
         }
     </div>
 </div>
+
+<script>
+$.fn.dataTable.ext.errMode = 'none';
+$(document).ready(function() {
+    let dataSet = [];
+    $.ajax({
+            type: 'POST',
+            url: viewFileAction + "?Selected=" + '@Model.EncodedId',
+            cache: false,
+            contentType: "application/json",
+            success: function (response) {  
+                response.split('\n').forEach( el => {
+                   dataSet.push(el.split(','))
+                });
+                console.log(dataSet)
+                let columns = [];
+                  
+                dataSet[0].forEach(el => {
+                   columns.push({"title" : el}) 
+                });
+
+                $('#preview').html( '<table class="display" id="example"></table>' );
+             
+                $('#example').dataTable( {
+                    "data": dataSet.splice(1),
+                    "columns": columns
+                });    
+            }
+        });
+    
+   
+});
+</script>

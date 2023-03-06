@@ -27,7 +27,8 @@ import '@kktsvetkov/heiho';
 import '@fortawesome/fontawesome-free/js/all.min.js';
 import '@fortawesome/fontawesome-free/css/all.min.css';
 import '@kktsvetkov/heiho/heiho.css';
-
+import 'datatables';
+import 'datatables/media/css/jquery.dataTables.min.css'
 
 import './js/accessKey.js';
 import './js/deletionConfirmation.js';
@@ -42,3 +43,4 @@ import './css/site.css';
 import './css/accessKey.css';
 import './css/home.css';
 import './css/product.css';
+import {da} from "plotly.js/src/traces/carpet/attributes";

@@ -26,6 +26,7 @@ window.openFileInBrowser = function(path, fileName, viewFileAction) {
                 response.split('\n').forEach( el => {
                     data.push(el.split(','))
                 });
+                console.log(response)
                 
                 Heiho(data, {
                     header: null,
