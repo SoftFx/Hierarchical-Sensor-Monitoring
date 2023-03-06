@@ -2,20 +2,11 @@
 const mimeTypesMap = new Map();
 mimeTypesMap.set('html', 'text/html');
 mimeTypesMap.set('pdf', 'application/pdf');
+mimeTypesMap.set('csv', 'application/csv');
 
 window.openFileInBrowser = function(path, fileName, viewFileAction) {
     let fileType = getMimeType(fileName);
-    //var xhr = new XMLHttpRequest();
-    //xhr.open('POST', viewFileAction, true);
-    //xhr.responseType = 'blob';
-    //xhr.onload = function () {
-    //    let blob = new Blob([this.response], { type: fileType });
-    //    console.log(blob);
-    //    let url = window.URL.createObjectURL(blob);
-    //    window.open(url);
-    //}
-    //xhr.send(JSON.stringify(fileData(product, path)));
-
+    
     $("#spinner").css("display", "block");
     $("#mainContainer").css("display", "none");
     $("#navbar").css("display", "none");
@@ -29,11 +20,24 @@ window.openFileInBrowser = function(path, fileName, viewFileAction) {
             if (fileType === undefined) {
                 fileType = "text/html";
             }
-
-            let blob = new Blob([response], { type: fileType });
-            let url = window.URL.createObjectURL(blob);
-            window.open(url);
-
+            
+            if (fileType === 'application/csv'){
+                let data = [];
+                response.split('\n\r').forEach( el => {
+                    data.push(el.split(','))
+                });
+                
+                Heiho(data, {
+                    header: null,
+                    max: 5000
+                });
+            }
+            else {
+                let blob = new Blob([response], { type: fileType });
+                let url = window.URL.createObjectURL(blob);
+                window.open(url);
+            }
+            
             $("#spinner").css("display", "none");
             $("#mainContainer").css("display", "block");
             $("#navbar").css("display", "block");

@@ -20,8 +20,13 @@ window.Plotly = Plotly;
 import * as TimeSpan from 'timespan'
 window.TimeSpan = TimeSpan
 
+import * as Heiho from '@kktsvetkov/heiho'
+window.Heiho = Heiho
+
+import '@kktsvetkov/heiho';
 import '@fortawesome/fontawesome-free/js/all.min.js';
 import '@fortawesome/fontawesome-free/css/all.min.css';
+import '@kktsvetkov/heiho/heiho.css';
 
 
 import './js/accessKey.js';
