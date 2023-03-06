@@ -429,7 +429,7 @@ namespace HSMServer.Controllers
 
             _treeValuesCache.UpdateSensor(sensorUpdate);
 
-            return PartialView("_SensorMetaInfo", new SensorInfoViewModel(sensor).Update(sensorUpdate));
+            return PartialView("_SensorMetaInfo", new SensorInfoViewModel(sensor));
         }
 
         #endregion
@@ -453,11 +453,12 @@ namespace HSMServer.Controllers
             {
                 Id = product.Id,
                 ExpectedUpdateInterval = updatedModel.ExpectedUpdateInterval.ToModel(),
+                Description = updatedModel.Description
             };
 
             _treeValuesCache.UpdateProduct(productUpdate);
 
-            return PartialView("_ProductMetaInfo", new ProductInfoViewModel(product).Update(productUpdate));
+            return PartialView("_ProductMetaInfo", new ProductInfoViewModel(product));
         }
 
         private (string productName, string path) GetSensorProductAndPath(string encodedId)

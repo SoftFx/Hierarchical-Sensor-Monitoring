@@ -1,7 +1,7 @@
 ﻿@using HSMServer.Controllers
 @using HSMServer.Constants
+@using HSMServer.Core.Extensions
 @using HSMServer.Model.ViewModel
-
 @model ProductInfoViewModel
 
 @{
@@ -12,9 +12,9 @@
 
 
 <form id="editProductMetaInfo_form" method="post" asp-action="@nameof(HomeController.UpdateProductInfo)">
-    <input id="productMetaInfo_encodedId" style='display: none' asp-for="EncodedId" value="@Model.EncodedId" />
+    <input id="productMetaInfo_encodedId" style='display: none' asp-for="EncodedId" value="@Model.EncodedId"/>
 
-    <table class='table table-borderless'>
+    <table class='table table-bordered'>
         <tbody>
             <tr>
                 <td class="w-25">Product</td>
@@ -33,7 +33,7 @@
             {
                 <tr>
                     <td class="w-25">Path</td>
-                    <td>@Model.Path</td>
+                    <td>@Html.Raw(@Model.Path)</td>
                 </tr>
             }
             <tr>
@@ -48,27 +48,34 @@
                 <td>
                     <div class="input-group row">
                         <div id="productExpectedUpdateInterval_@(Model.EncodedId)" class="col-5">
-                            <partial name="_TimeIntervalSelect" for="ExpectedUpdateInterval" />
-                        </div>
-                        <div class="col-auto">
-                            <button type='button' class='btn btn-secondary' onclick="editProductInfoButtonClick()"
-                                    data-bs-toggle='tooltip' title='edit meta info'>
-                                <i class='fas fa-edit'></i>
-                            </button>
-                            <button id='saveInfo_@Model.EncodedId' type='submit' class='btn btn-secondary'
-                                    data-bs-toggle='tooltip' title='save meta info' disabled>
-                                <i class='fas fa-check'></i>
-                            </button>
-                            <button id='revertInfo_@Model.EncodedId' type='button' class='btn btn-secondary' onclick="revertProductInfoClick()"
-                                    data-bs-toggle='tooltip' title='revert changes' disabled>
-                                <i class='fas fa-times'></i>
-                            </button>
+                            <label id="labelInterval" class="form-control naked-text">@Model.ExpectedUpdateInterval.TimeInterval.GetDisplayName()</label>
+                            <div id="partialIntervalSelect" class="d-none">
+                                <partial name="_TimeIntervalSelect" for="ExpectedUpdateInterval"/>
+                            </div>
                         </div>
                     </div>
                 </td>
             </tr>
+            <tr>
+                <td class="w-25">
+                    Description
+                </td>
+                <td>
+                    <textarea id='description_@(Model.EncodedId)' type='text' class='form-control naked-text' asp-for="Description" value='@Model.Description' disabled></textarea>
+                </td>
+            </tr>
         </tbody>
     </table>
+    <div class="d-flex justify-content-end mt-3 gap-2 me-0">
+        <button id='saveInfo_@Model.EncodedId' type='submit' class='btn btn-secondary px-2 independentSizeButton'
+                data-bs-toggle='tooltip' title='save meta info' hidden disabled>
+            <span>Save</span>
+        </button>
+        <button id='revertInfo_@Model.EncodedId' type='button' class='btn btn-secondary px-2 independentSizeButton' onclick="revertProductInfoClick()"
+                data-bs-toggle='tooltip' title='revert changes' hidden disabled>
+            <span>Cancel</span>
+        </button>
+    </div>
 </form>
 
 
@@ -89,6 +96,7 @@
             cache: false,
             async: true,
             success: function (viewData) {
+                $('#editProductButton').attr('hidden', false);
                 $('#product_info_' + $('#productMetaInfo_encodedId').val()).html(viewData);
             }
         });
@@ -97,9 +105,14 @@
     function editProductInfoButtonClick() {
         let productId = $('#productMetaInfo_encodedId').val();
 
-        $('#saveInfo_' + productId).removeAttr("disabled");
-        $('#revertInfo_' + productId).removeAttr("disabled");
-
+        $('#saveInfo_' + productId).removeAttr("disabled").removeAttr("hidden");
+        $('#revertInfo_' + productId).removeAttr("disabled").removeAttr("hidden");
+        $('#description_' + productId).removeAttr("disabled").removeClass("naked-text");
+        
+        $('#editProductButton').attr('hidden', true);
+        $('#partialIntervalSelect').removeClass('d-none');
+        $('#labelInterval').addClass('d-none');
+        
         $('#productExpectedUpdateInterval_' + productId + ' :input').each(function () {
             this.removeAttribute('disabled');
         });
@@ -117,7 +130,8 @@
             async: true
         }).done(function (viewData) {
             $('#product_info_' + id).html(viewData);
-
+            $('#editProductButton').attr('hidden', false);
+            
             disableProductExpectedUpdateInterval();
         });
     }

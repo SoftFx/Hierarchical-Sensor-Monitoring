@@ -49,7 +49,6 @@ namespace HSMServer.Model
 
         public bool CanCustomInputBeVisible { get; init; } = true;
 
-
         public TimeInterval TimeInterval { get; set; }
 
         public string CustomTimeInterval { get; set; }

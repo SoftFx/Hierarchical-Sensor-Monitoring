@@ -6,11 +6,14 @@ window.editInfoButtonClick = function () {
     let sensorId = $('#sensorMetaInfo_encodedId').val();
 
     $('#interval_' + sensorId).removeAttr("disabled");
-    $('#description_' + sensorId).removeAttr("disabled");
-    $('#unit_' + sensorId).removeAttr("disabled");
+    $('#description_' + sensorId).removeAttr("disabled").removeClass("naked-text");
+    $('#unit_' + sensorId).removeAttr("disabled").removeClass("naked-text");
     $('#saveInfo_' + sensorId).removeAttr("disabled").removeAttr("hidden");
     $('#revertInfo_' + sensorId).removeAttr("disabled").removeAttr("hidden");
     $('#editButtonMetaInfo').attr('hidden', true);
+    
+    $('#partialIntervalSelect').removeClass('d-none');
+    $('#labelInterval').addClass('d-none');
 
     $('#expectedUpdateInterval_' + sensorId + ' :input').each(function () {
         this.removeAttribute('disabled');

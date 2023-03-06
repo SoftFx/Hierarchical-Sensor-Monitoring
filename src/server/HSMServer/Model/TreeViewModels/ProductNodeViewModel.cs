@@ -35,7 +35,7 @@ namespace HSMServer.Model.TreeViewModel
         {
             Path = $"{model.Path}{CommonConstants.SensorPathSeparator}";
             Notifications = model.Notifications;
-            
+
             Update(model);
         }
 

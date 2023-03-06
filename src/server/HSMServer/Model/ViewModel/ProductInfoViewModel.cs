@@ -1,5 +1,4 @@
-﻿using HSMServer.Core.Cache.UpdateEntities;
-using HSMServer.Model.TreeViewModel;
+﻿using HSMServer.Model.TreeViewModel;
 
 namespace HSMServer.Model.ViewModel
 {
@@ -16,14 +15,6 @@ namespace HSMServer.Model.ViewModel
         {
             Name = product.Name;
             Parent = product.Parent;
-        }
-
-
-        internal ProductInfoViewModel Update(ProductUpdate updatedModel)
-        {
-            ExpectedUpdateInterval = new(updatedModel.ExpectedUpdateInterval, _predefinedIntervals);
-
-            return this;
         }
     }
 }
