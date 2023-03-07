@@ -67,7 +67,7 @@ namespace HSMServer.Notifications.Telegram.AddressBook.MessageBuilder
                 _templatePath[_groupedIndex] = $"[{group}]";
             }
 
-            return string.Join(Separator, _templatePath);
+            return  $"{Separator}{string.Join(Separator, _templatePath)}";
         }
     }
 }

@@ -84,7 +84,7 @@ namespace HSMServer.Notifications
         {
             productName = $"[{productName}]".EscapeMarkdownV2();
             statusPath = statusPath.EscapeMarkdownV2();
-            path = $"/{path}".EscapeMarkdownV2();
+            path = $"{path}".EscapeMarkdownV2();
 
             if (!string.IsNullOrEmpty(comment))
                 comment = $" = {comment}".EscapeMarkdownV2();
