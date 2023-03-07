@@ -45,14 +45,10 @@
                     }
                     <i class='fas fa-question-circle' title='Time format: dd.hh:mm:ss min value 00:01:00'></i>
                 </td>
-                <td>
-                    <div class="input-group row">
-                        <div id="productExpectedUpdateInterval_@(Model.EncodedId)" class="col-5">
-                            <label id="labelInterval" class="form-control naked-text">@Model.ExpectedUpdateInterval.TimeInterval.GetDisplayName()</label>
-                            <div id="partialIntervalSelect" class="d-none">
-                                <partial name="_TimeIntervalSelect" for="ExpectedUpdateInterval"/>
-                            </div>
-                        </div>
+                <td id="productExpectedUpdateInterval_@(Model.EncodedId)">
+                    <label id="labelInterval" class="form-control naked-text">@Model.ExpectedUpdateInterval.DisplayInterval</label>
+                    <div id="partialIntervalSelect" class="d-none">
+                        <partial name="_TimeIntervalSelect" for="ExpectedUpdateInterval"/>
                     </div>
                 </td>
             </tr>
@@ -141,6 +137,6 @@
 
         $('#productExpectedUpdateInterval_' + productId + ' :input').each(function () {
             this.setAttribute('disabled', true);
-        } );
+        });
     }
 </script>
