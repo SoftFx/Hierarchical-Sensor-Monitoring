@@ -33,7 +33,7 @@
 <div>
     <div class='row justify-content-start'>
         <div class='d-flex col-md-auto' style="align-items: center">
-            <h5 class="m-2">@Html.Raw(productName + Model.Path)</h5>
+            <h5 class="m-2">@Html.Raw($"{productName}{Model.Path}")</h5>
             <button id="editProductButton" type='button' class='btn btn-secondary' onclick="editProductInfoButtonClick()"
                     data-bs-toggle='tooltip' title='edit meta info'>
                 <i class='fas fa-edit'></i>

@@ -14,7 +14,7 @@
     <div class="m-1">
         <div class='row justify-content-start'>
             <div class='d-flex col-md-auto' style="align-items: center">
-                <h5 class="m-2">@Html.Raw(Model.ProductName + Model.Path)</h5>
+                <h5 class="m-2">@Html.Raw($"{Model.ProductName}{Model.Path}")</h5>
                 <button id="editButtonMetaInfo" type='button' class='btn btn-secondary mx-2' onclick="editInfoButtonClick()"
                         data-bs-toggle='tooltip' title='edit meta info'>
                     <i class='fas fa-edit'></i>
@@ -47,7 +47,7 @@
                     <i class='fas fa-question-circle' title='Time format: dd.hh:mm:ss min value 00:01:00'></i>
                 </td>
                 <td id="expectedUpdateInterval_@(Model.EncodedId)">
-                    <label id="labelInterval" class="form-control naked-text">@Model.ExpectedUpdateInterval.TimeInterval.GetDisplayName()</label>
+                    <label id="labelInterval" class="form-control naked-text">@Model.ExpectedUpdateInterval.DisplayInterval</label>
                     <div id="partialIntervalSelect" class="d-none">
                         <partial name="_TimeIntervalSelect" for="ExpectedUpdateInterval"/>
                     </div>
