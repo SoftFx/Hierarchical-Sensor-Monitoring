@@ -13,7 +13,6 @@ namespace HSMDatabase.LevelDB
         private const string REGISTRATION_TICKET_PREFIX = "RegistrationTicket";
 
         internal const string JOB_SENSOR_PREFIX = "JobSensorValue";
-        internal const string PRODUCT_INFO_PREFIX = "ProductInfo";
         internal const string FIRST_LOGIN_PREFIX = "FirstLogin";
 
 

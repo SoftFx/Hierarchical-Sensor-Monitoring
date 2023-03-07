@@ -10,10 +10,13 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
 {
     internal class EnvironmentDatabaseWorker : IEnvironmentDatabase
     {
+        private const string GroupIdsPrefix = "GroupIds";
+
         private readonly LevelDBDatabaseAdapter _database;
         private readonly Logger _logger;
 
         private readonly byte[] _accessKeyListKey = Encoding.UTF8.GetBytes(PrefixConstants.GetAccessKeyListKey());
+        private readonly byte[] _groupIdsKey = Encoding.UTF8.GetBytes(GroupIdsPrefix);
         private readonly byte[] _productListKey = Encoding.UTF8.GetBytes(PrefixConstants.GetProductsListKey());
         private readonly byte[] _sensorIdsKey = Encoding.UTF8.GetBytes(PrefixConstants.GetSensorIdsKey());
         private readonly byte[] _policyIdsKey = Encoding.UTF8.GetBytes(PrefixConstants.GetPolicyIdsKey());
@@ -25,6 +28,99 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             _logger = LogManager.GetCurrentClassLogger();
         }
 
+
+        #region Groups
+
+        public void PutGroup(GroupEntity group)
+        {
+            try
+            {
+                _database.Put(Encoding.UTF8.GetBytes(group.Id), JsonSerializer.SerializeToUtf8Bytes(group));
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, $"Failed to put group info for {group.Id}");
+            }
+        }
+
+        public void RemoveGroup(string groupId)
+        {
+            try
+            {
+                _database.Delete(Encoding.UTF8.GetBytes(groupId));
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, $"Failed to remove info for group {groupId}");
+            }
+        }
+
+        public void AddGroupToList(string groupId)
+        {
+            try
+            {
+                var currentList = GetGroupsList();
+
+                if (!currentList.Contains(groupId))
+                    currentList.Add(groupId);
+
+                _database.Put(_groupIdsKey, JsonSerializer.SerializeToUtf8Bytes(currentList));
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, $"Failed to add group {groupId} to list");
+            }
+        }
+
+        public void RemoveGroupFromList(string groupId)
+        {
+            try
+            {
+                var currentList = GetGroupsList();
+
+                currentList.Remove(groupId);
+
+                _database.Put(_groupIdsKey, JsonSerializer.SerializeToUtf8Bytes(currentList));
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, $"Failed to remove group {groupId} from list");
+            }
+        }
+
+        public GroupEntity GetGroup(string id)
+        {
+            try
+            {
+                return _database.TryRead(Encoding.UTF8.GetBytes(id), out byte[] value)
+                    ? JsonSerializer.Deserialize<GroupEntity>(Encoding.UTF8.GetString(value))
+                    : null;
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, $"Failed to read info for group {id}");
+            }
+
+            return null;
+        }
+
+        public List<string> GetGroupsList()
+        {
+            try
+            {
+                return _database.TryRead(_groupIdsKey, out byte[] value) ?
+                    JsonSerializer.Deserialize<List<string>>(Encoding.UTF8.GetString(value))
+                    : new();
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, "Failed to get groups ids list");
+            }
+
+            return new();
+        }
+
+        #endregion
 
         #region Products
 
@@ -43,7 +139,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             }
             catch (Exception e)
             {
-                _logger.Error(e, "Failed to add prodct to list");
+                _logger.Error(e, "Failed to add product to list");
             }
         }
 
@@ -123,7 +219,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             }
             catch (Exception e)
             {
-                _logger.Error(e, $"Failed to remove prodct {productId} from list");
+                _logger.Error(e, $"Failed to remove product {productId} from list");
             }
         }
 
