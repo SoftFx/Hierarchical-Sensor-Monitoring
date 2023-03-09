@@ -10,16 +10,14 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
 {
     internal class EnvironmentDatabaseWorker : IEnvironmentDatabase
     {
-        private const string GroupIdsPrefix = "GroupIds";
+        private readonly byte[] _productListKey = "ProductsNames"u8.ToArray();
+        private readonly byte[] _accessKeyListKey = "AccessKeys"u8.ToArray();
+        private readonly byte[] _sensorIdsKey = "SensorIds"u8.ToArray();
+        private readonly byte[] _policyIdsKey = "PolicyIds"u8.ToArray();
+        private readonly byte[] _groupIdsKey = "GroupIds"u8.ToArray();
 
         private readonly LevelDBDatabaseAdapter _database;
         private readonly Logger _logger;
-
-        private readonly byte[] _accessKeyListKey = Encoding.UTF8.GetBytes(PrefixConstants.GetAccessKeyListKey());
-        private readonly byte[] _groupIdsKey = Encoding.UTF8.GetBytes(GroupIdsPrefix);
-        private readonly byte[] _productListKey = Encoding.UTF8.GetBytes(PrefixConstants.GetProductsListKey());
-        private readonly byte[] _sensorIdsKey = Encoding.UTF8.GetBytes(PrefixConstants.GetSensorIdsKey());
-        private readonly byte[] _policyIdsKey = Encoding.UTF8.GetBytes(PrefixConstants.GetPolicyIdsKey());
 
 
         public EnvironmentDatabaseWorker(string name)
@@ -93,7 +91,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             try
             {
                 return _database.TryRead(Encoding.UTF8.GetBytes(id), out byte[] value)
-                    ? JsonSerializer.Deserialize<GroupEntity>(Encoding.UTF8.GetString(value))
+                    ? JsonSerializer.Deserialize<GroupEntity>(value)
                     : null;
             }
             catch (Exception e)
@@ -109,7 +107,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             try
             {
                 return _database.TryRead(_groupIdsKey, out byte[] value) ?
-                    JsonSerializer.Deserialize<List<string>>(Encoding.UTF8.GetString(value))
+                    JsonSerializer.Deserialize<List<string>>(value)
                     : new();
             }
             catch (Exception e)

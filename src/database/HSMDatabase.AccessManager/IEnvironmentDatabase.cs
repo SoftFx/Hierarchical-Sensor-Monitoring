@@ -10,8 +10,8 @@ namespace HSMDatabase.AccessManager
 
         void PutGroup(GroupEntity group);
         void RemoveGroup(string id);
-        void AddGroupToList(string groupName);
-        void RemoveGroupFromList(string groupName);
+        void AddGroupToList(string groupId);
+        void RemoveGroupFromList(string groupId);
         GroupEntity GetGroup(string id);
         List<string> GetGroupsList();
 
