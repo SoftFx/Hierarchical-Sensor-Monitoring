@@ -65,6 +65,14 @@
             <div class="container d-none mx-2" id="preview">
                 
             </div>
+            
+            <div id="bigFilePreview" class="card text-center d-none">
+                <div class="card-body">
+                    <h5 class="card-title">Oops, something went wrong</h5>
+                    <p class="card-text">The file that you are trying to preview is too big(> 5MB)</p>
+                    <a href="#" class="btn btn-primary">Start download</a>
+                </div>
+            </div>
         }
         else
         {
@@ -188,13 +196,21 @@ $(document).ready(function() {
                     console.log(blob.size)
                     console.log(blob.type)
                     if (blob.size > 5_242_880) {
-                        //display too big file to preview > 5mb
+                        $('#bigFilePreview').removeClass('d-none');
                     }
                     else {
                         blob.text().then((text) => {
                                
                         text.split('\n').forEach( el => {
-                                           dataSet.push(el.split(','))
+                              let splitted = el.split(',');
+                              
+                              let isEmpty = splitted.every(x => {
+                                  return x !== '';
+                              })
+                              
+                              if (isEmpty){
+                                  dataSet.push(el.split(','))
+                              }
                         });
 
                         let columns = [];
