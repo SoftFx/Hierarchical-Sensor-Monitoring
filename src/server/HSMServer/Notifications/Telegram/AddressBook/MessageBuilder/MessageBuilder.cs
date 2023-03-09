@@ -22,7 +22,7 @@ namespace HSMServer.Notifications
             var id = sensor.Id;
             var branch = _messageTree[sensor.RootProductName];
 
-            if (_compressor.GetOrAdd(sensor, out var key))
+            if (_compressor.TryGetOrAdd(sensor, out var key))
             {
                 newStatus = $"{key.oldStatus}->{newStatus}";
 

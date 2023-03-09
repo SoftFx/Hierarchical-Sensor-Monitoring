@@ -11,7 +11,7 @@ namespace HSMServer.Notifications.Telegram.AddressBook.MessageBuilder
         private readonly List<GroupedPath> _groups = new();
 
 
-        internal bool GetOrAdd(BaseSensorModel sensor, out (string oldStatus, string) key)
+        internal bool TryGetOrAdd(BaseSensorModel sensor, out (string oldStatus, string) key)
         {
             var id = sensor.Id;
 
@@ -43,7 +43,7 @@ namespace HSMServer.Notifications.Telegram.AddressBook.MessageBuilder
 
         private void ApplyToGroups(string strPath)
         {
-            var path = strPath.Split('/', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            var path = strPath.Split(GroupedPath.Separator, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
             foreach (var group in _groups)
                 if (group.Apply(path))
