@@ -32,6 +32,7 @@
         public const string EditProductAction = "EditProduct";
         public const string GetFileAction = "GetFile";
         public const string GetFileStreamAction = "GetFileStream";
+        public const string GetFileInfo = "GetFileInfo";
         public const string ProductsAction = "Products";
         public const string UsersAction = "Users";
         public const string CreateUserAction = "CreateUser";

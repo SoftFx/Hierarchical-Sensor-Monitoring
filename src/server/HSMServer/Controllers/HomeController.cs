@@ -397,6 +397,25 @@ namespace HSMServer.Controllers
             return File(fileContentsStream, fileName.GetContentType(), fileName);
         }
 
+        [HttpGet]
+        public IActionResult GetFileInfo([FromQuery(Name = "Selected")] string encodedId)
+        {
+            var value = GetFileSensorValue(encodedId);
+            if (value == null)
+                return _emptyResult;
+
+            var (_, path) = GetSensorProductAndPath(encodedId);
+
+            var fileContentsStream = new MemoryStream(value.Value);
+            var fileName = $"{path.Replace('/', '_')}.{value.Extension}";
+            
+            return Json(new
+            {
+                FileName = fileName,
+                Size = fileContentsStream.Length
+            });
+        }
+
         private FileValue GetFileSensorValue(string encodedId) =>
             _treeValuesCache.GetSensor(SensorPathHelper.DecodeGuid(encodedId)).LastValue as FileValue;
 

@@ -179,56 +179,108 @@ $.fn.dataTable.ext.errMode = 'none';
 $(document).ready(function() {
     let dataSet = [];
     $.ajax({
-            type: 'POST',
-            url: viewFileAction + "?Selected=" + '@Model.EncodedId',
-            cache: false,
-            contentType: "application/json",
-            success: function (response) {  
-                let fileType = document.getElementById('fileType_' + '@Model.EncodedId').value;
-                fileType = fileType.split('.')[1];
-                //console.log(fileType)
-                //console.log(response)
-                if (fileType === 'txt'){
-                    $('#preview').removeClass('d-none').html(response);
-                }
-                else {
-                    let blob = new Blob([response]);
-                    console.log(blob.size)
-                    console.log(blob.type)
-                    if (blob.size > 5_242_880) {
-                        $('#bigFilePreview').removeClass('d-none');
-                    }
-                    else {
-                        blob.text().then((text) => {
-                               
-                        text.split('\n').forEach( el => {
-                              let splitted = el.split(',');
+        type: 'GET',
+        url: getFileInfo + "?Selected=" + '@Model.EncodedId',
+        cache: false,
+        contentType: "application/json",
+        success: function (response){
+            if (response.size < 5_242_880) {
+                $.ajax({
+                    type: 'POST',
+                    url: viewFileAction + "?Selected=" + '@Model.EncodedId',
+                    cache: false,
+                    contentType: "application/json",
+                    success: function (file) {
+                        if (response.fileName.split('.')[1] === 'txt'){
+                            $('#preview').removeClass('d-none').html(file);
+                        }
+                        else {
+                            file.split('\n').forEach( el => {
+                                let splitted = el.split(',');
+                                  
+                                let isEmpty = splitted.every(x => {
+                                    return x !== '';
+                                })
                               
-                              let isEmpty = splitted.every(x => {
-                                  return x !== '';
-                              })
-                              
-                              if (isEmpty){
-                                  dataSet.push(el.split(','))
-                              }
-                        });
+                                if (isEmpty){
+                                    dataSet.push(el.split(','))
+                                }
+                            });
 
-                        let columns = [];
-                  
-                        dataSet[0].forEach(el => {
-                               columns.push({"title" : el}) 
-                        });
-
-                        $('#preview').removeClass('d-none container').html( '<table class="display" id="example"></table>' );
-             
-                        $('#example').dataTable( {
-                                  "data": dataSet.splice(1),
-                                  "columns": columns
-                        });    
-                        });
-                    }
-                }    
+                            
+                            let columns = [];
+                      
+                            dataSet[0].forEach(el => {
+                                   columns.push({"title" : el}) 
+                            });
+    
+                            $('#preview').removeClass('d-none container').html( '<table class="display" id="example"></table>' );
+                 
+                            $('#example').dataTable( {
+                                      "data": dataSet.splice(1),
+                                      "columns": columns
+                            });  
+                        }
+                     } 
+                })   
             }
-    });
+            else {
+                 $('#bigFilePreview').removeClass('d-none');
+            }     
+        }
+    })
+    
+    // $.ajax({
+    //         type: 'POST',
+    //         url: viewFileAction + "?Selected=" + '@Model.EncodedId',
+    //         cache: false,
+    //         contentType: "application/json",
+    //         success: function (response) {  
+    //             let fileType = document.getElementById('fileType_' + '@Model.EncodedId').value;
+    //             fileType = fileType.split('.')[1];
+    //             //console.log(fileType)
+    //             //console.log(response)
+    //             if (fileType === 'txt'){
+    //                 $('#preview').removeClass('d-none').html(response);
+    //             }
+    //             else {
+    //                 let blob = new Blob([response]);
+    //                 console.log(blob.size)
+    //                 console.log(blob.type)
+    //                 if (blob.size > 5_242_880) {
+    //                     $('#bigFilePreview').removeClass('d-none');
+    //                 }
+    //                 else {
+    //                     blob.text().then((text) => {
+    //                           
+    //                     text.split('\n').forEach( el => {
+    //                           let splitted = el.split(',');
+    //                          
+    //                           let isEmpty = splitted.every(x => {
+    //                               return x !== '';
+    //                           })
+    //                          
+    //                           if (isEmpty){
+    //                               dataSet.push(el.split(','))
+    //                           }
+    //                     });
+    //
+    //                     let columns = [];
+    //              
+    //                     dataSet[0].forEach(el => {
+    //                            columns.push({"title" : el}) 
+    //                     });
+    //
+    //                     $('#preview').removeClass('d-none container').html( '<table class="display" id="example"></table>' );
+    //         
+    //                     $('#example').dataTable( {
+    //                               "data": dataSet.splice(1),
+    //                               "columns": columns
+    //                     });    
+    //                     });
+    //                 }
+    //             }    
+    //         }
+    // });
 });
 </script>
