@@ -3,6 +3,7 @@ using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Core.Model;
 using HSMServer.Model.Authentication;
 using System;
+using System.Drawing;
 
 namespace HSMServer.Core.Tests.Infrastructure
 {
@@ -48,28 +49,45 @@ namespace HSMServer.Core.Tests.Infrastructure
             };
 
 
-        internal static UserEntity BuildUser() => new()
-        {
-            UserName = RandomGenerator.GetRandomString(),
-            Password = HashComputer.ComputePasswordHash(RandomGenerator.GetRandomString()),
-            IsAdmin = false,
-            ProductsRoles = new(),
-        };
+        internal static UserEntity BuildUser() =>
+            new()
+            {
+                Id = Guid.NewGuid(),
+                UserName = RandomGenerator.GetRandomString(),
+                Password = HashComputer.ComputePasswordHash(RandomGenerator.GetRandomString()),
+                IsAdmin = false,
+                ProductsRoles = new(),
+            };
 
 
-        internal static RegistrationTicket BuildTicket() => new()
-        {
-            Role = nameof(ProductRoleEnum.ProductManager),
-            ExpirationDate = DateTime.UtcNow.AddMinutes(30),
-            ProductKey = Guid.NewGuid().ToString()
-        };
+        internal static GroupEntity BuildGroupEntity() =>
+            new()
+            {
+                Id = Guid.NewGuid().ToString(),
+                AuthorId = Guid.NewGuid().ToString(),
+                CreationDate = DateTime.UtcNow.Ticks,
+                DisplayName = RandomGenerator.GetRandomString(),
+                Description = RandomGenerator.GetRandomString(),
+                Color = Color.Red.ToArgb(),
+                UserRoles = new(),
+            };
 
 
-        internal static ConfigurationObject BuildConfiguration(string name) => new()
-        {
-            Name = name,
-            Value = RandomGenerator.GetRandomString(),
-            Description = RandomGenerator.GetRandomString()
-        };
+        internal static RegistrationTicket BuildTicket() =>
+            new()
+            {
+                Role = nameof(ProductRoleEnum.ProductManager),
+                ExpirationDate = DateTime.UtcNow.AddMinutes(30),
+                ProductKey = Guid.NewGuid().ToString()
+            };
+
+
+        internal static ConfigurationObject BuildConfiguration(string name) =>
+            new()
+            {
+                Name = name,
+                Value = RandomGenerator.GetRandomString(),
+                Description = RandomGenerator.GetRandomString()
+            };
     }
 }
