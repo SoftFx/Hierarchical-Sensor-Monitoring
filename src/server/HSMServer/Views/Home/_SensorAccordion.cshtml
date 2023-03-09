@@ -61,7 +61,9 @@
                     }
                 </div>
             </div>
-            <div id="preview">
+            
+            <div class="container d-none mx-2" id="preview">
+                
             </div>
         }
         else
@@ -165,6 +167,7 @@
 
 <script>
 $.fn.dataTable.ext.errMode = 'none';
+
 $(document).ready(function() {
     let dataSet = [];
     $.ajax({
@@ -173,25 +176,43 @@ $(document).ready(function() {
             cache: false,
             contentType: "application/json",
             success: function (response) {  
-                response.split('\n').forEach( el => {
-                   dataSet.push(el.split(','))
-                });
-                console.log(dataSet)
-                let columns = [];
-                  
-                dataSet[0].forEach(el => {
-                   columns.push({"title" : el}) 
-                });
+                let fileType = document.getElementById('fileType_' + '@Model.EncodedId').value;
+                fileType = fileType.split('.')[1];
+                //console.log(fileType)
+                //console.log(response)
+                if (fileType === 'txt'){
+                    $('#preview').removeClass('d-none').html(response);
+                }
+                else {
+                    let blob = new Blob([response]);
+                    console.log(blob.size)
+                    console.log(blob.type)
+                    if (blob.size > 5_242_880) {
+                        //display too big file to preview > 5mb
+                    }
+                    else {
+                        blob.text().then((text) => {
+                               
+                        text.split('\n').forEach( el => {
+                                           dataSet.push(el.split(','))
+                        });
 
-                $('#preview').html( '<table class="display" id="example"></table>' );
+                        let columns = [];
+                  
+                        dataSet[0].forEach(el => {
+                               columns.push({"title" : el}) 
+                        });
+
+                        $('#preview').removeClass('d-none container').html( '<table class="display" id="example"></table>' );
              
-                $('#example').dataTable( {
-                    "data": dataSet.splice(1),
-                    "columns": columns
-                });    
+                        $('#example').dataTable( {
+                                  "data": dataSet.splice(1),
+                                  "columns": columns
+                        });    
+                        });
+                    }
+                }    
             }
-        });
-    
-   
+    });
 });
 </script>

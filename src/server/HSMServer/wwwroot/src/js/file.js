@@ -26,11 +26,11 @@ window.openFileInBrowser = function(path, fileName, viewFileAction) {
                 response.split('\n').forEach( el => {
                     data.push(el.split(','))
                 });
-                console.log(response)
-                
+                //console.log(response)
+                //console.log(data)
                 Heiho(data, {
                     header: null,
-                    max: 5000
+                    max: 25000
                 });
             }
             else {
