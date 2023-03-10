@@ -62,7 +62,7 @@ namespace HSMServer.Core.Model
 
         private bool TryValidate(BaseValue value, out T typedValue)
         {
-            _internalValidationResult = ValidationResult.Ok;
+            _dataResult = ValidationResult.Ok;
 
             if (value is T valueT)
             {
@@ -73,7 +73,7 @@ namespace HSMServer.Core.Model
             }
 
             typedValue = default;
-            _internalValidationResult += _badValueType;
+            _dataResult += _badValueType;
 
             return false;
         }
@@ -83,11 +83,11 @@ namespace HSMServer.Core.Model
             if (value.Status != SensorStatus.Ok)
             {
                 var message = string.IsNullOrEmpty(value.Comment) ? $"User data has {value.Status} status" : value.Comment;
-                _internalValidationResult = new(message, value.Status);
+                _dataResult = new(message, value.Status);
             }
 
             foreach (var policy in _dataPolicies)
-                _internalValidationResult += policy.Validate(value);
+                _dataResult += policy.Validate(value);
         }
     }
 }

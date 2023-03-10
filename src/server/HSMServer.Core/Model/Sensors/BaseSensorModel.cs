@@ -22,10 +22,10 @@ namespace HSMServer.Core.Model
 
     public abstract class BaseSensorModel : NodeBaseModel
     {
-        private readonly ValidationResult _muteStatus = new("Muted", SensorStatus.OffTime);
+        private static readonly ValidationResult _muteResult = new("Muted", SensorStatus.OffTime);
 
-        protected ValidationResult _internalValidationResult = ValidationResult.Ok;
-
+        private  ValidationResult _serverResult = ValidationResult.Ok;
+        protected ValidationResult _dataResult = ValidationResult.Ok;
 
         protected abstract ValuesStorage Storage { get; }
 
@@ -39,7 +39,7 @@ namespace HSMServer.Core.Model
 
         public DateTime? EndOfMuting { get; private set; }
 
-        public ValidationResult ValidationResult => State == SensorState.Muted ? _muteStatus : _internalValidationResult;
+        public ValidationResult ValidationResult => State == SensorState.Muted ? _muteResult : _serverResult + _dataResult;
 
 
         public BaseValue LastValue => Storage.LastValue;
@@ -59,21 +59,17 @@ namespace HSMServer.Core.Model
 
         internal override bool HasServerValidationChange()
         {
-            //_internalValidationResult -= ExpectedUpdateIntervalPolicy.OutdatedSensor;
+            _serverResult = ValidationResult.Ok;
 
             if (!HasData)
                 return false;
 
-            var oldValidationResult = _internalValidationResult;
+            var oldResult = _serverResult;
 
-            _internalValidationResult += ServerPolicy.ExpectedUpdate.Policy.Validate(LastValue.ReceivingTime);
+            _serverResult += ServerPolicy.ExpectedUpdate.Policy.Validate(LastValue.ReceivingTime);
+            _serverResult += ServerPolicy.CheckRestorePolicies(DateTime.UtcNow);
 
-            _internalValidationResult += ServerPolicy.RestoreOffTimeStatus.Policy.Validate(DateTime.UtcNow);
-            _internalValidationResult += ServerPolicy.RestoreWarningStatus.Policy.Validate(DateTime.UtcNow);
-            _internalValidationResult += ServerPolicy.RestoreErrorStatus.Policy.Validate(DateTime.UtcNow);
-
-
-            return _internalValidationResult != oldValidationResult;
+            return _serverResult != oldResult;
         }
 
 
@@ -115,8 +111,10 @@ namespace HSMServer.Core.Model
 
         internal void ClearValues()
         {
+            _serverResult = ValidationResult.Ok;
+            _dataResult = ValidationResult.Ok;
+
             Storage.Clear();
-            _internalValidationResult = ValidationResult.Ok;
         }
     }
 }

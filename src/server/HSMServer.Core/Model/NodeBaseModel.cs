@@ -1,5 +1,4 @@
-﻿using HSMCommon.Constants;
-using HSMDatabase.AccessManager.DatabaseEntities;
+﻿using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Model.Policies;
 using System;
@@ -27,12 +26,13 @@ namespace HSMServer.Core.Model
 
         public string Description { get; private set; }
 
-        public string Path { get; private set; }
 
+
+        public string RootProductName => ParentProduct?.RootProductName ?? DisplayName;
 
         public Guid RootProductId => ParentProduct?.RootProductId ?? Id;
 
-        public string RootProductName => ParentProduct?.RootProductName ?? DisplayName;
+        public string Path => ParentProduct is null ? string.Empty : $"{ParentProduct.Path}/{DisplayName}";
 
 
         protected NodeBaseModel()
@@ -61,6 +61,7 @@ namespace HSMServer.Core.Model
         protected internal NodeBaseModel AddParent(ProductModel parent)
         {
             ParentProduct = parent;
+
             ServerPolicy.ApplyParentPolicies(parent.ServerPolicy);
 
             return this;
@@ -71,14 +72,8 @@ namespace HSMServer.Core.Model
             Description = upadate.Description ?? Description;
         }
 
-        internal virtual void BuildProductNameAndPath()
-        {
-            Path = $"{ParentProduct.Path}{CommonConstants.SensorPathSeparator}{DisplayName}";
-        }
-
 
         internal abstract bool HasServerValidationChange();
-
 
         internal void ApplyPolicies(List<string> policyIds, Dictionary<string, Policy> allPolicies)
         {

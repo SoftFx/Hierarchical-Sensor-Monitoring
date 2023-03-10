@@ -50,6 +50,12 @@ namespace HSMServer.Core.Model
             Sensors.TryAdd(sensor.Id, (BaseSensorModel)sensor.AddParent(this));
         }
 
+        internal ProductModel Update(ProductUpdate update)
+        {
+            base.Update(update);
+            return this;
+        }
+
         internal ProductEntity ToProductEntity() =>
             new()
             {
@@ -64,49 +70,18 @@ namespace HSMServer.Core.Model
                 Policies = GetPolicyIds().Select(u => $"{u}").ToList(),
             };
 
-        internal ProductModel Update(ProductUpdate update)
-        {
-            base.Update(update);
-            return this;
-        }
-
-        internal override void BuildProductNameAndPath()
-        {
-            if (ParentProduct != null)
-                base.BuildProductNameAndPath();
-
-            foreach (var (_, sensor) in Sensors)
-                sensor.BuildProductNameAndPath();
-
-            foreach (var (_, subProduct) in SubProducts)
-                subProduct.BuildProductNameAndPath();
-        }
-
 
         internal override bool HasServerValidationChange()
         {
             var result = false;
 
             foreach (var (_, sensor) in Sensors)
-                //if (sensor.ServerPolicy.ExpectedUpdate.Policy == null)
-                    result |= sensor.HasServerValidationChange();
+                result |= sensor.HasServerValidationChange();
 
             foreach (var (_, subProduct) in SubProducts)
-                //if (subProduct.ServerPolicy.ExpectedUpdate.Policy == null)
                 result |= subProduct.HasServerValidationChange();
 
             return result;
         }
-
-        //private static void UpdateChildSensorsValidationResult(ProductModel product)
-        //{
-        //    foreach (var (_, sensor) in product.Sensors)
-        //        if (sensor.ServerPolicy.ExpectedUpdate.Policy == null)
-        //            sensor.CallServerPolicy();
-
-        //    foreach (var (_, subProduct) in product.SubProducts)
-        //        if (subProduct.ServerPolicy.ExpectedUpdate.Policy == null)
-        //            UpdateChildSensorsValidationResult(subProduct);
-        //}
     }
 }

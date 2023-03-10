@@ -610,7 +610,6 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         {
             var clonedSensor = SensorModelFactory.Build(sensor.ToEntity());
             clonedSensor.AddParent(_valuesCache.GetProduct(sensor.ParentProduct.Id));
-            clonedSensor.BuildProductNameAndPath();
 
             clonedSensor.TryAddValue(sensor.LastValue, out _);
 

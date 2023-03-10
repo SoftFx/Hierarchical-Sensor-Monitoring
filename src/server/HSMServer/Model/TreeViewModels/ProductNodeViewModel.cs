@@ -13,20 +13,23 @@ namespace HSMServer.Model.TreeViewModel
 {
     public class ProductNodeViewModel : NodeViewModel, INotificatable
     {
-        public override bool HasData =>
-            Sensors.Values.Any(s => s.HasData) || Nodes.Values.Any(n => n.HasData);
-
         public ConcurrentDictionary<Guid, ProductNodeViewModel> Nodes { get; } = new();
 
         public ConcurrentDictionary<Guid, SensorNodeViewModel> Sensors { get; } = new();
 
         public ConcurrentDictionary<Guid, AccessKeyViewModel> AccessKeys { get; } = new();
 
+
         public TelegramSettingsViewModel TelegramSettings { get; } = new();
-        
+
         public NotificationSettings Notifications { get; }
 
+
         public int AllSensorsCount { get; private set; }
+
+
+        public override bool HasData =>
+    Sensors.Values.Any(s => s.HasData) || Nodes.Values.Any(n => n.HasData);
 
         public bool IsEmpty => AllSensorsCount == 0;
 
@@ -86,7 +89,7 @@ namespace HSMServer.Model.TreeViewModel
 
             ModifyUpdateTime();
             ModifyStatus();
-            
+
             return this;
         }
 
@@ -100,10 +103,10 @@ namespace HSMServer.Model.TreeViewModel
 
         private void ModifyStatus()
         {
-            var statusFromSensors = Sensors.Values.MaxOrDefault(s => s.Status);
-            var statusFromNodes = Nodes.Values.MaxOrDefault(n => n.Status);
+            var nodesStatus = Sensors.Values.MaxOrDefault(s => s.Status);
+            var sensorStatus = Nodes.Values.MaxOrDefault(n => n.Status);
 
-            Status = statusFromNodes > statusFromSensors ? statusFromNodes : statusFromSensors;
+            Status = sensorStatus > nodesStatus ? sensorStatus : nodesStatus;
         }
     }
 }

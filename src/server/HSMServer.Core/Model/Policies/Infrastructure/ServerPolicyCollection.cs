@@ -42,15 +42,16 @@ namespace HSMServer.Core.Model.Policies
                 property.ParentProperty = parentCollection._properties[policyType];
         }
 
-        private CollectionProperty<T> Register<T>() where T : ServerPolicy
+        internal ValidationResult CheckRestorePolicies(DateTime date)
         {
-            var property = new CollectionProperty<T>();
+            var result = ValidationResult.Ok;
 
-            _properties[typeof(T)] = property;
+            result += RestoreOffTimeStatus.Policy.Validate(date);
+            result += RestoreWarningStatus.Policy.Validate(date);
+            result += RestoreErrorStatus.Policy.Validate(date);
 
-            return property;
+            return result;
         }
-
 
         public IEnumerator<Guid> GetEnumerator()
         {
@@ -60,5 +61,15 @@ namespace HSMServer.Core.Model.Policies
         }
 
         IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
+
+
+        private CollectionProperty<T> Register<T>() where T : ServerPolicy
+        {
+            var property = new CollectionProperty<T>();
+
+            _properties[typeof(T)] = property;
+
+            return property;
+        }
     }
 }

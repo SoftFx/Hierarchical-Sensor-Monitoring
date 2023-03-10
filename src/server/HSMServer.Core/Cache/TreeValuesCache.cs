@@ -18,27 +18,27 @@ namespace HSMServer.Core.Cache
 {
     public sealed class TreeValuesCache : ITreeValuesCache, IDisposable
     {
-        private const string ErrorKeyNotFound = "Key doesn't exist.";
         private const string NotInitializedCacheError = "Cache is not initialized yet.";
         private const string NotExistingSensor = "Sensor with your path does not exist.";
+        private const string ErrorKeyNotFound = "Key doesn't exist.";
 
         public const int MaxHistoryCount = 50000;
 
-        private static readonly Logger _logger = LogManager.GetLogger(CommonConstants.InfrastructureLoggerName);
+        private readonly ConcurrentDictionary<Guid, BaseSensorModel> _sensors = new();
+        private readonly ConcurrentDictionary<Guid, AccessKeyModel> _keys = new();
+        private readonly ConcurrentDictionary<Guid, ProductModel> _tree = new();
+
+        private readonly Logger _logger = LogManager.GetLogger(CommonConstants.InfrastructureLoggerName);
 
         private readonly IDatabaseCore _databaseCore;
         private readonly IUpdatesQueue _updatesQueue;
 
-        private readonly ConcurrentDictionary<Guid, ProductModel> _tree;
-        private readonly ConcurrentDictionary<Guid, BaseSensorModel> _sensors;
-        private readonly ConcurrentDictionary<Guid, AccessKeyModel> _keys;
 
+        public bool IsInitialized { get; }
 
-        public bool IsInitialized { get; private set; }
-
-        public event Action<ProductModel, TransactionType> ChangeProductEvent;
-        public event Action<BaseSensorModel, TransactionType> ChangeSensorEvent;
         public event Action<AccessKeyModel, TransactionType> ChangeAccessKeyEvent;
+        public event Action<BaseSensorModel, TransactionType> ChangeSensorEvent;
+        public event Action<ProductModel, TransactionType> ChangeProductEvent;
 
         public event Action<BaseSensorModel, ValidationResult> NotifyAboutChangesEvent;
 
@@ -50,11 +50,9 @@ namespace HSMServer.Core.Cache
             _updatesQueue = updatesQueue;
             _updatesQueue.NewItemsEvent += UpdatesQueueNewItemsHandler;
 
-            _tree = new ConcurrentDictionary<Guid, ProductModel>();
-            _sensors = new ConcurrentDictionary<Guid, BaseSensorModel>();
-            _keys = new ConcurrentDictionary<Guid, AccessKeyModel>();
-
             Initialize();
+
+            IsInitialized = true;
         }
 
 
@@ -77,10 +75,7 @@ namespace HSMServer.Core.Cache
 
         public List<AccessKeyModel> GetAccessKeys() => _keys.Values.ToList();
 
-        public ProductModel AddProduct(string productName)
-        {
-            return AddProduct(new ProductModel(productName));
-        }
+        public ProductModel AddProduct(string productName) => AddProduct(new ProductModel(productName));
 
         public void UpdateProduct(ProductModel product)
         {
@@ -471,8 +466,6 @@ namespace HSMServer.Core.Cache
 
             ApplySensors(productEntities, RequestSensors(), policies);
 
-            BuildNodesProductNameAndPath();
-
             _logger.Info($"{nameof(IDatabaseCore.GetAccessKeys)} is requesting");
             var accessKeysEntities = _databaseCore.GetAccessKeys();
             _logger.Info($"{nameof(IDatabaseCore.GetAccessKeys)} requested");
@@ -481,20 +474,7 @@ namespace HSMServer.Core.Cache
             ApplyAccessKeys(accessKeysEntities.ToList());
             _logger.Info($"{nameof(accessKeysEntities)} applied");
 
-            IsInitialized = true;
-
             _logger.Info($"{nameof(TreeValuesCache)} initialized");
-        }
-
-        private void BuildNodesProductNameAndPath()
-        {
-            _logger.Info("Path and ProductName properties are building for nodes");
-
-            foreach (var (_, product) in _tree)
-                if (product.ParentProduct == null)
-                    product.BuildProductNameAndPath();
-
-            _logger.Info("Path and ProductName properties are built for nodes");
         }
 
         private List<ProductEntity> RequestProducts()
@@ -629,8 +609,6 @@ namespace HSMServer.Core.Cache
 
         private ProductModel AddProduct(ProductModel product)
         {
-            product.BuildProductNameAndPath();
-
             if (_tree.TryAdd(product.Id, product))
             {
                 _databaseCore.AddProduct(product.ToProductEntity());
@@ -649,8 +627,6 @@ namespace HSMServer.Core.Cache
 
         private void AddSensor(BaseSensorModel sensor)
         {
-            sensor.BuildProductNameAndPath();
-
             if (sensor is StringSensorModel)
                 AddStringValueLengthPolicy(sensor);
 
