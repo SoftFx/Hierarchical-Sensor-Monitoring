@@ -160,9 +160,9 @@ namespace HSMServer.Controllers
         }
         
         [HttpPost]
-        public void RemoveUser([FromBody] UserViewModel model)
+        public async Task RemoveUser([FromBody] UserViewModel model)
         {
-            _userManager.RemoveUser(model.Username);
+            await _userManager.RemoveUser(model.Username);
         }
 
         [HttpPost]

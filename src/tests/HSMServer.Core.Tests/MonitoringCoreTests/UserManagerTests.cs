@@ -133,11 +133,11 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
             foreach (var user in BuildAddAndGetRandomUsers(count - 1)) // there is default user in db
                 updatedUsers.Add(BuildUpdatedUser(user));
 
-            _userManager.UpdateUserEvent += UpdateUserEvent;
+            _userManager.UpdateEvent += UpdateUserEvent;
 
             updatedUsers.ForEach(_userManager.UpdateUser);
 
-            _userManager.UpdateUserEvent -= UpdateUserEvent;
+            _userManager.UpdateEvent -= UpdateUserEvent;
 
             Assert.Equal(updatedUsers.Count, actualUpdatedUsers.Count);
             await FullTestUpdatedUserAsync(updatedUsers,
@@ -164,7 +164,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         {
             var defaultUserFromDB = await GetDefaultUserFromDB();
 
-            _userManager.RemoveUser(defaultUserFromDB.UserName);
+            await _userManager.RemoveUser(defaultUserFromDB.UserName);
 
             await FullTestRemovedDefaultUserAsync(new() { defaultUserFromDB },
                                                   _userManager.GetCopyUser,
@@ -174,9 +174,9 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
 
         [Fact]
         [Trait("Category", "Remove user(s), Negative")]
-        public void RemoveUserByIncorrectNameTest()
+        public async Task RemoveUserByIncorrectNameTest()
         {
-            _userManager.RemoveUser(RandomGenerator.GetRandomString());
+            await _userManager.RemoveUser(RandomGenerator.GetRandomString());
 
             var expected = new List<User>(1) { TestUsersManager.DefaultUser };
             var actual = _userManager.GetUsers();
@@ -186,9 +186,9 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
 
         [Fact]
         [Trait("Category", "Remove user(s), Negative")]
-        public void RemoveUserByEmptyNameTest()
+        public async Task RemoveUserByEmptyNameTest()
         {
-            _userManager.RemoveUser(string.Empty);
+            await _userManager.RemoveUser(string.Empty);
 
             var expected = new List<User>(1) { TestUsersManager.DefaultUser };
             var actual = _userManager.GetUsers();
@@ -206,7 +206,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         {
             var users = BuildAddAndGetRandomUsers(count);
 
-            users.ForEach(u => _userManager.RemoveUser(u.UserName));
+            users.ForEach(u => _userManager.RemoveUser(u.UserName)); // TODO how to await removeuser??
 
             await FullTestRemovedDefaultUserAsync(users,
                                                   _userManager.GetCopyUser,

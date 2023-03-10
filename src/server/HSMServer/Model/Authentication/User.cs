@@ -1,4 +1,5 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities;
+using HSMServer.ConcurrentStorage;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.UserFilters;
 using HSMServer.Model.Authentication.History;
@@ -10,7 +11,7 @@ using System.Text.Json;
 
 namespace HSMServer.Model.Authentication
 {
-    public class User : ClaimsPrincipal, INotificatable
+    public class User : ClaimsPrincipal, IServerModel<UserEntity, UserUpdate>, INotificatable
     {
         public Guid Id { get; set; }
 
@@ -31,6 +32,8 @@ namespace HSMServer.Model.Authentication
 
 
         string INotificatable.Name => UserName;
+
+        string IServerModel<UserEntity, UserUpdate>.DisplayName => UserName;
 
 
         public User(string userName) : this()
@@ -83,26 +86,9 @@ namespace HSMServer.Model.Authentication
                 : JsonSerializer.Deserialize<TreeUserFilter>(((JsonElement)entity.TreeFilter).GetRawText())?.RestoreFilterNames();
         }
 
-        /// <summary>
-        /// Update works as HTTP PUT: all the fields will be updated
-        /// </summary>
-        /// <param name="user"></param>
-        public void Update(User user)
+        public void Update(UserUpdate update)
         {
-            Password = user.Password;
-            IsAdmin = user.IsAdmin;
-            ProductsRoles = user.ProductsRoles != null ? new(user.ProductsRoles) : new();
-            Notifications = new(user.Notifications.ToEntity());
-            TreeFilter = user.TreeFilter;
-        }
-
-        public User Copy()
-        {
-            var copy = this.MemberwiseClone() as User;
-            copy.ProductsRoles = new List<(Guid, ProductRoleEnum)>(ProductsRoles);
-            copy.Notifications = new(Notifications.ToEntity());
-            copy.TreeFilter = TreeFilter;
-            return copy;
+            IsAdmin = update.IsAdmin ?? IsAdmin;
         }
 
         public bool IsProductAvailable(Guid productId) =>
@@ -111,7 +97,7 @@ namespace HSMServer.Model.Authentication
         public bool IsManager(Guid productId) =>
             IsAdmin || (ProductsRoles?.Any(x => x == (productId, ProductRoleEnum.ProductManager)) ?? false);
 
-        internal UserEntity ToEntity() =>
+        public UserEntity ToEntity() =>
             new()
             {
                 UserName = UserName,

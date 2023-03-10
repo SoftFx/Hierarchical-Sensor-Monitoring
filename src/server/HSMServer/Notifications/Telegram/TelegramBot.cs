@@ -48,7 +48,7 @@ namespace HSMServer.Notifications
             IConfigurationProvider configurationProvider)
         {
             _userManager = userManager;
-            _userManager.RemoveUserEvent += RemoveUserEventHandler;
+            _userManager.RemoveEvent += RemoveUserEventHandler;
 
             _cache = cache;
             _cache.ChangeProductEvent += RemoveProductEventHandler;
@@ -63,7 +63,7 @@ namespace HSMServer.Notifications
 
         public async ValueTask DisposeAsync()
         {
-            _userManager.RemoveUserEvent -= RemoveUserEventHandler;
+            _userManager.RemoveEvent -= RemoveUserEventHandler;
 
             await StopBot();
         }

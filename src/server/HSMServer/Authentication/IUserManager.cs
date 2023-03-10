@@ -1,13 +1,15 @@
 ﻿using HSMServer.Model.Authentication;
 using System;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 
 namespace HSMServer.Authentication
 {
     public interface IUserManager
     {
-        public event Action<User> UpdateUserEvent;
-        public event Action<User> RemoveUserEvent;
+        public event Action<User> AddEvent;
+        public event Action<User> UpdateEvent;
+        public event Action<User> RemoveEvent;
 
         /// <summary>
         /// Add new user with the specified parameters
@@ -17,6 +19,7 @@ namespace HSMServer.Authentication
         void AddUser(string userName, string passwordHash, bool isAdmin, List<(Guid, ProductRoleEnum)> productRoles = null);
         public void AddUser(User user);
 
+        Task<bool> TryAdd(User user);
         /// <summary>
         /// New user object
         /// </summary>
@@ -27,7 +30,7 @@ namespace HSMServer.Authentication
         /// Remove user with the specified userName
         /// </summary>
         /// <param name="userName">Name of the user to remove.</param>
-        void RemoveUser(string userName);
+        Task RemoveUser(string userName);
 
         User Authenticate(string login, string password);
 

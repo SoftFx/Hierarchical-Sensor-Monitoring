@@ -1,5 +1,7 @@
 ﻿using HSMCommon;
 using HSMCommon.Constants;
+using HSMDatabase.AccessManager.DatabaseEntities;
+using HSMServer.ConcurrentStorage;
 using HSMServer.Core.Cache;
 using HSMServer.Core.DataLayer;
 using HSMServer.Core.Model;
@@ -8,27 +10,24 @@ using HSMServer.Helpers;
 using HSMServer.Model.Authentication;
 using Microsoft.Extensions.Logging;
 using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading.Tasks;
 
 namespace HSMServer.Authentication
 {
-    public partial class UserManager : IUserManager
+    public sealed class UserManager : ConcurrentStorage<User, UserEntity, UserUpdate>, IUserManager
     {
-        private readonly ConcurrentDictionary<Guid, User> _users;
-        private readonly ConcurrentDictionary<string, Guid> _userNames;
-
         private readonly IDatabaseCore _databaseCore;
         private readonly ITreeValuesCache _treeValuesCache;
         private readonly ILogger<UserManager> _logger;
 
-        private readonly AddUserActionHandler _addUserActionHandler;
-        private readonly RemoveUserActionHandler _removeUserActionHandler;
-        private readonly UpdateUserActionHandler _updateUserActionHandler;
 
-        public event Action<User> UpdateUserEvent;
-        public event Action<User> RemoveUserEvent;
+        protected override Action<UserEntity> AddToDb => _databaseCore.AddUser;
+
+        protected override Action<UserEntity> UpdateInDb => _databaseCore.UpdateUser;
+
+        protected override Action<User> RemoveFromDb => user => _databaseCore.RemoveUser(user.ToEntity());
 
 
         public UserManager(IDatabaseCore databaseCore, ITreeValuesCache cache, ILogger<UserManager> logger)
@@ -40,14 +39,7 @@ namespace HSMServer.Authentication
             _treeValuesCache.ChangeProductEvent += ChangeProductEventHandler;
             _treeValuesCache.ChangeSensorEvent += ChangeSensorEventHandler;
 
-            _users = new ConcurrentDictionary<Guid, User>();
-            _userNames = new ConcurrentDictionary<string, Guid>();
-
-            _addUserActionHandler = new AddUserActionHandler(this);
-            _removeUserActionHandler = new RemoveUserActionHandler(this);
-            _updateUserActionHandler = new UpdateUserActionHandler(this);
-
-            InitializeUsers();
+            _ = InitializeUsers(); // TODO call this after initialization (with await)
 
             _logger.LogInformation("UserManager initialized");
         }
@@ -66,24 +58,22 @@ namespace HSMServer.Authentication
             AddUser(user);
         }
 
-        // TODO: wait for async Task
-        public async void AddUser(User user) =>
-            await _addUserActionHandler.Apply(user);
+        public void AddUser(User user) => TryAdd(user);
 
         // TODO: wait for async Task
-        public async void UpdateUser(User user)
+        public void UpdateUser(User user)
         {
-            if (_users.ContainsKey(user.Id))
-                await _updateUserActionHandler.Apply(user);
+            if (ContainsKey(user.Id))
+                Update(user);
             else
                 AddUser(user);
         }
 
         // TODO: wait for async Task
-        public async void RemoveUser(string userName)
+        public async Task RemoveUser(string userName)
         {
-            if (_userNames.TryGetValue(userName, out var userId) && _users.TryGetValue(userId, out var user))
-                await _removeUserActionHandler.Apply(user);
+            if (TryGet(userName, out var user))
+                await TryRemove(user);
             else
                 _logger.LogWarning($"There are no users with name={userName} to remove");
         }
@@ -98,29 +88,26 @@ namespace HSMServer.Authentication
                 return user.UserName.Equals(login) && !string.IsNullOrEmpty(user.Password) && user.Password.Equals(passwordHash);
             }
 
-            var existingUser = _users.SingleOrDefault(IsAskedUser);
+            var existingUser = this.SingleOrDefault(IsAskedUser);
 
             return existingUser.Value?.WithoutPassword();
         }
 
         // TODO remove copy object
-        public User GetCopyUser(Guid id) => new(_users.GetValueOrDefault(id));
+        public User GetCopyUser(Guid id) => new(this.GetValueOrDefault(id));
 
-        public User GetUser(Guid id) => _users.GetValueOrDefault(id);
+        public User GetUser(Guid id) => this.GetValueOrDefault(id);
 
-        public User GetUserByUserName(string userName) =>
-            !string.IsNullOrEmpty(userName) && _userNames.TryGetValue(userName, out var userId) && _users.TryGetValue(userId, out var user)
-                ? new User(user)
-                : null;
+        public User GetUserByUserName(string userName) => base[userName];
 
         public List<User> GetViewers(Guid productId)
         {
             var result = new List<User>(1 << 2);
 
-            if (_users.IsEmpty)
+            if (IsEmpty)
                 return result;
 
-            foreach (var user in _users)
+            foreach (var user in this)
             {
                 var pair = user.Value.ProductsRoles?.FirstOrDefault(r => r.Item1.Equals(productId));
                 if (pair != null && pair.Value.Item1 != Guid.Empty)
@@ -134,24 +121,19 @@ namespace HSMServer.Authentication
         {
             var result = new List<User>(1 << 2);
 
-            if (_users.IsEmpty)
+            if (IsEmpty)
                 return result;
 
-            foreach (var user in _users)
+            foreach (var user in this)
                 if (ProductRoleHelper.IsManager(productId, user.Value.ProductsRoles))
                     result.Add(user.Value);
 
             return result;
         }
 
-        public IEnumerable<User> GetUsers(Func<User, bool> filter = null)
-        {
-            var users = _users.Values;
+        public IEnumerable<User> GetUsers(Func<User, bool> filter = null) => filter != null ? Values.Where(filter) : Values;
 
-            return filter != null ? users.Where(filter) : users;
-        }
-
-        private async void InitializeUsers()
+        private async Task InitializeUsers()
         {
             var userEntities = _databaseCore.GetUsers();
 
@@ -162,9 +144,9 @@ namespace HSMServer.Authentication
             }
 
             foreach (var entity in userEntities)
-                await _addUserActionHandler.Apply(new(entity), false);
+                await TryAdd(new(entity));
 
-            _logger.LogInformation($"Read users from database, users count = {_users.Count}.");
+            _logger.LogInformation($"Read users from database, users count = {Count}.");
         }
 
         private void AddDefaultUser() =>
@@ -178,7 +160,7 @@ namespace HSMServer.Authentication
             {
                 var updatedUsers = new List<User>(1 << 2);
 
-                foreach (var user in _users)
+                foreach (var user in this)
                 {
                     var removedRolesCount = user.Value.ProductsRoles.RemoveAll(role => role.Item1 == product.Id);
                     if (removedRolesCount == 0)
@@ -196,7 +178,7 @@ namespace HSMServer.Authentication
         {
             if (transaction == TransactionType.Delete)
             {
-                foreach (var (_, user) in _users)
+                foreach (var (_, user) in this)
                 {
                     if (!user.Notifications.RemoveSensor(sensor.Id))
                         continue;
