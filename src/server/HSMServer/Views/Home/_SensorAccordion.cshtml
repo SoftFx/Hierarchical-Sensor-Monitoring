@@ -46,14 +46,14 @@
                     @if (Model.LastValue != null)
                     {
                         <div class='row'>
-                            <div class='col-md-auto'>
-                                <button id='button_view_@sensorId' class='button-view-file-sensor btn btn-secondary' title='View'>
+                            <div class='col-md-auto px-1'>
+                                <button id='button_view_@sensorId' class='btn btn-secondary m-0 mt-2' title='View' style="width: 3rem;">
                                     <i class='fas fa-eye'></i>
                                 </button>
                             </div>
-                            <div class='col'>
+                            <div class='col-md-auto px-1'>
                                 <input style='display: none;' id='fileType_@sensorId' value='@Model.FileNameString'/>
-                                <button id='button_download_@sensorId' class='button-download-file-sensor-value btn btn-secondary' title='Download'>
+                                <button id='button_download_@sensorId' class='btn btn-secondary m-0 mt-2' title='Download' style="width: 3rem;">
                                     <i class='fas fa-file-download'></i>
                                 </button>
                             </div>
@@ -191,7 +191,7 @@ $(document).ready(function() {
                     cache: false,
                     contentType: "application/json",
                     success: function (file) {
-                        if (response.fileName.split('.')[1] === 'txt'){
+                        if (response.fileName.split('.')[1] === 'txt') {
                             $('#preview').removeClass('d-none').html(file);
                         }
                         else {
@@ -229,58 +229,5 @@ $(document).ready(function() {
             }     
         }
     })
-    
-    // $.ajax({
-    //         type: 'POST',
-    //         url: viewFileAction + "?Selected=" + '@Model.EncodedId',
-    //         cache: false,
-    //         contentType: "application/json",
-    //         success: function (response) {  
-    //             let fileType = document.getElementById('fileType_' + '@Model.EncodedId').value;
-    //             fileType = fileType.split('.')[1];
-    //             //console.log(fileType)
-    //             //console.log(response)
-    //             if (fileType === 'txt'){
-    //                 $('#preview').removeClass('d-none').html(response);
-    //             }
-    //             else {
-    //                 let blob = new Blob([response]);
-    //                 console.log(blob.size)
-    //                 console.log(blob.type)
-    //                 if (blob.size > 5_242_880) {
-    //                     $('#bigFilePreview').removeClass('d-none');
-    //                 }
-    //                 else {
-    //                     blob.text().then((text) => {
-    //                           
-    //                     text.split('\n').forEach( el => {
-    //                           let splitted = el.split(',');
-    //                          
-    //                           let isEmpty = splitted.every(x => {
-    //                               return x !== '';
-    //                           })
-    //                          
-    //                           if (isEmpty){
-    //                               dataSet.push(el.split(','))
-    //                           }
-    //                     });
-    //
-    //                     let columns = [];
-    //              
-    //                     dataSet[0].forEach(el => {
-    //                            columns.push({"title" : el}) 
-    //                     });
-    //
-    //                     $('#preview').removeClass('d-none container').html( '<table class="display" id="example"></table>' );
-    //         
-    //                     $('#example').dataTable( {
-    //                               "data": dataSet.splice(1),
-    //                               "columns": columns
-    //                     });    
-    //                     });
-    //                 }
-    //             }    
-    //         }
-    // });
 });
 </script>
