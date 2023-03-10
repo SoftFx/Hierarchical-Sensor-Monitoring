@@ -64,7 +64,7 @@ namespace HSMServer.Authentication
         public void UpdateUser(User user)
         {
             if (ContainsKey(user.Id))
-                Update(user);
+                TryUpdate(user);
             else
                 AddUser(user);
         }
@@ -72,7 +72,7 @@ namespace HSMServer.Authentication
         // TODO: wait for async Task
         public async Task RemoveUser(string userName)
         {
-            if (TryGet(userName, out var user))
+            if (TryGetByName(userName, out var user))
                 await TryRemove(user);
             else
                 _logger.LogWarning($"There are no users with name={userName} to remove");

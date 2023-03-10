@@ -206,7 +206,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         {
             var users = BuildAddAndGetRandomUsers(count);
 
-            users.ForEach(u => _userManager.RemoveUser(u.UserName)); // TODO how to await removeuser??
+            await Task.WhenAll(users.Select(u => _userManager.RemoveUser(u.UserName)));
 
             await FullTestRemovedDefaultUserAsync(users,
                                                   _userManager.GetCopyUser,
@@ -480,7 +480,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
                 foreach (var productRole in expected.ProductsRoles)
                 {
                     var actualRole = actual.ProductsRoles.FirstOrDefault(r => r.Item1 == productRole.Item1);
-                    
+
                     Assert.Equal(productRole, actualRole);
                 }
         }

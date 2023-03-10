@@ -158,11 +158,11 @@ namespace HSMServer.Controllers
             var users = _userManager.GetUsers().OrderBy(x => x.UserName);
             return View(users.Select(x => new UserViewModel(x)).ToList());
         }
-        
+
         [HttpPost]
-        public async Task RemoveUser([FromBody] UserViewModel model)
+        public Task RemoveUser([FromBody] UserViewModel model)
         {
-            await _userManager.RemoveUser(model.Username);
+            return _userManager.RemoveUser(model.Username);
         }
 
         [HttpPost]

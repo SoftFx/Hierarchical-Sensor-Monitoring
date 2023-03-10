@@ -24,7 +24,7 @@ namespace HSMServer.ConcurrentStorage
 
 
         internal ModelType this[string name] =>
-            !string.IsNullOrEmpty(name) && _modelNames.TryGetValue(name, out var id) && TryGetValue(id, out var model) ? model : null;
+            !string.IsNullOrEmpty(name) && TryGetByName(name, out var model) ? model : null;
 
 
         public Task<bool> TryAdd(ModelType value)
@@ -53,26 +53,33 @@ namespace HSMServer.ConcurrentStorage
             return Task.FromResult(result);
         }
 
-        internal Task<bool> TryUpdate(UpdateType update)
+        internal async Task<bool> TryUpdate(UpdateType update)
         {
             var result = TryGetValue(update.Id, out var model);
 
             if (result)
             {
                 model.Update(update);
-                Update(model);
+                result &= await TryUpdate(model);
+            }
+
+            return result;
+        }
+
+        internal Task<bool> TryUpdate(ModelType value)
+        {
+            var result = TryGetValue(value.Id, out var model);
+
+            if (result)
+            {
+                UpdateInDb(value.ToEntity());
+                UpdateEvent?.Invoke(value);
             }
 
             return Task.FromResult(result);
         }
 
-        internal void Update(ModelType value)
-        {
-            UpdateInDb(value.ToEntity());
-            UpdateEvent?.Invoke(value);
-        }
-
-        internal bool TryGet(string name, out ModelType model)
+        internal bool TryGetByName(string name, out ModelType model)
         {
             model = null;
 
