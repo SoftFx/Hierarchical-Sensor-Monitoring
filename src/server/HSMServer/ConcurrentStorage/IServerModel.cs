@@ -6,7 +6,7 @@ namespace HSMServer.ConcurrentStorage
     {
         Guid Id { get; }
 
-        string DisplayName { get; }
+        string Name { get; }
 
 
         EntityType ToEntity();

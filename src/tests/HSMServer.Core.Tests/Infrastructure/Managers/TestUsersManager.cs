@@ -41,7 +41,7 @@ namespace HSMServer.Core.Tests.Infrastructure
         {
             return new User()
             {
-                UserName = string.Empty,
+                Name = string.Empty,
                 Password = string.Empty
             };
         }

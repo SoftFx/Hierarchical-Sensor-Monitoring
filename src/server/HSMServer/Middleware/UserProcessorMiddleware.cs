@@ -23,7 +23,7 @@ namespace HSMServer.Middleware
             if (port == ConfigurationConstants.SitePort)
             {
                 var currentUser = context.User;
-                var correspondingUser = _userManager.GetUserByUserName(currentUser?.Identity?.Name);
+                var correspondingUser = _userManager.GetUserByName(currentUser?.Identity?.Name);
                 context.User = correspondingUser;
             }
 

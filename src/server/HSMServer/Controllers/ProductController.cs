@@ -105,7 +105,7 @@ namespace HSMServer.Controllers
             var pairs = new List<(User, ProductRoleEnum)>(1 << 6);
 
             var productNodeId = productNode?.Id;
-            foreach (var user in users.OrderBy(x => x.UserName))
+            foreach (var user in users.OrderBy(x => x.Name))
             {
                 pairs.Add((user, user.ProductsRoles.First(x => x.Item1.Equals(productNodeId)).Item2));
             }

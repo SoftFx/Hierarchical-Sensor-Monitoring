@@ -258,7 +258,7 @@ namespace HSMServer.Model.TreeViewModel
             {
                 var user = _userManager.GetUser(key.AuthorId.Value);
                 if (user != null)
-                    return user.UserName;
+                    return user.Name;
             }
 
             return key.AuthorId?.ToString();

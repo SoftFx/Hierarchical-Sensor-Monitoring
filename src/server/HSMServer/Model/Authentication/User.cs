@@ -17,7 +17,7 @@ namespace HSMServer.Model.Authentication
 
         public bool IsAdmin { get; set; }
 
-        public string UserName { get; set; }
+        public string Name { get; set; }
 
         public string Password { get; set; }
 
@@ -31,14 +31,9 @@ namespace HSMServer.Model.Authentication
         public HistoryValuesViewModel Pagination { get; set; }
 
 
-        string INotificatable.Name => UserName;
-
-        string IServerModel<UserEntity, UserUpdate>.DisplayName => UserName;
-
-
         public User(string userName) : this()
         {
-            UserName = userName;
+            Name = userName;
         }
 
         public User()
@@ -55,7 +50,7 @@ namespace HSMServer.Model.Authentication
             if (user == null) return;
 
             Id = user.Id;
-            UserName = user.UserName;
+            Name = user.Name;
             Password = user.Password;
             IsAdmin = user.IsAdmin;
             ProductsRoles = user.ProductsRoles != null ? new(user.ProductsRoles) : new();
@@ -68,7 +63,7 @@ namespace HSMServer.Model.Authentication
             if (entity == null) return;
 
             Id = entity.Id;
-            UserName = entity.UserName;
+            Name = entity.UserName;
             Password = entity.Password;
             IsAdmin = entity.IsAdmin;
 
@@ -100,7 +95,7 @@ namespace HSMServer.Model.Authentication
         public UserEntity ToEntity() =>
             new()
             {
-                UserName = UserName,
+                UserName = Name,
                 Password = Password,
                 Id = Id,
                 IsAdmin = IsAdmin,

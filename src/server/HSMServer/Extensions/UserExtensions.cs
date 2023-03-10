@@ -61,7 +61,7 @@ namespace HSMServer.Extensions
         public static User WithoutPassword(this User user) =>
             new()
             {
-                UserName = user.UserName,
+                Name = user.Name,
                 Password = null,
                 IsAdmin = user.IsAdmin,
                 ProductsRoles = user.ProductsRoles,

@@ -32,7 +32,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
 
             Assert.Single(usersFromDB);
             TestUser(_defaultUser, new(usersFromDB[0]));
-            TestUserByName(_defaultUser, _userManager.GetUserByUserName);
+            TestUserByName(_defaultUser, _userManager.GetUserByName);
         }
 
         [Theory]
@@ -45,10 +45,10 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         {
             var users = BuildRandomUsers(count);
 
-            users.ForEach(u => _userManager.AddUser(u.UserName, u.Password, u.IsAdmin, u.ProductsRoles));
+            users.ForEach(u => _userManager.AddUser(u.Name, u.Password, u.IsAdmin, u.ProductsRoles));
 
             await FullTestUserAsync(users,
-                                    _userManager.GetUserByUserName,
+                                    _userManager.GetUserByName,
                                     _databaseCoreManager.DatabaseCore.GetUsers);
         }
 
@@ -90,7 +90,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
             await FullTestUpdatedUserAsync(new() { updatedUser },
                                            new() { defaultUserFromDB },
                                            _userManager.GetCopyUser,
-                                           _userManager.GetUserByUserName,
+                                           _userManager.GetUserByName,
                                            _databaseCoreManager.DatabaseCore.GetUsers);
         }
 
@@ -113,7 +113,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
             await FullTestUpdatedUserAsync(updatedUsers,
                                            users,
                                            _userManager.GetCopyUser,
-                                           _userManager.GetUserByUserName,
+                                           _userManager.GetUserByName,
                                            _databaseCoreManager.DatabaseCore.GetUsers);
         }
 
@@ -133,17 +133,17 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
             foreach (var user in BuildAddAndGetRandomUsers(count - 1)) // there is default user in db
                 updatedUsers.Add(BuildUpdatedUser(user));
 
-            _userManager.UpdateEvent += UpdateUserEvent;
+            _userManager.Updated += UpdateUserEvent;
 
             updatedUsers.ForEach(_userManager.UpdateUser);
 
-            _userManager.UpdateEvent -= UpdateUserEvent;
+            _userManager.Updated -= UpdateUserEvent;
 
             Assert.Equal(updatedUsers.Count, actualUpdatedUsers.Count);
             await FullTestUpdatedUserAsync(updatedUsers,
                                            actualUpdatedUsers,
                                            _userManager.GetCopyUser,
-                                           _userManager.GetUserByUserName,
+                                           _userManager.GetUserByName,
                                            _databaseCoreManager.DatabaseCore.GetUsers);
         }
 
@@ -154,7 +154,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
             _userManager.UpdateUser(_testUser);
 
             await FullTestUserAsync(new() { _testUser },
-                                    _userManager.GetUserByUserName,
+                                    _userManager.GetUserByName,
                                     _databaseCoreManager.DatabaseCore.GetUsers);
         }
 
@@ -164,11 +164,11 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         {
             var defaultUserFromDB = await GetDefaultUserFromDB();
 
-            await _userManager.RemoveUser(defaultUserFromDB.UserName);
+            await _userManager.RemoveUser(defaultUserFromDB.Name);
 
             await FullTestRemovedDefaultUserAsync(new() { defaultUserFromDB },
                                                   _userManager.GetCopyUser,
-                                                  _userManager.GetUserByUserName,
+                                                  _userManager.GetUserByName,
                                                   _databaseCoreManager.DatabaseCore.GetUsers);
         }
 
@@ -206,11 +206,11 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         {
             var users = BuildAddAndGetRandomUsers(count);
 
-            await Task.WhenAll(users.Select(u => _userManager.RemoveUser(u.UserName)));
+            await Task.WhenAll(users.Select(u => _userManager.RemoveUser(u.Name)));
 
             await FullTestRemovedDefaultUserAsync(users,
                                                   _userManager.GetCopyUser,
-                                                  _userManager.GetUserByUserName,
+                                                  _userManager.GetUserByName,
                                                   _databaseCoreManager.DatabaseCore.GetUsers);
         }
 
@@ -220,7 +220,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         {
             var defaultUserFromDB = await GetDefaultUserFromDB();
 
-            var actual = _userManager.Authenticate(defaultUserFromDB.UserName, defaultUserFromDB.UserName);
+            var actual = _userManager.Authenticate(defaultUserFromDB.Name, defaultUserFromDB.Name);
 
             TestAuthenticateUser(defaultUserFromDB, actual);
         }
@@ -229,9 +229,9 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         [Trait("Category", "Authenticate, Negative")]
         public void AuthenticateUnregisteredUserTest()
         {
-            var unregisteredUser = new User() { UserName = RandomGenerator.GetRandomString(), Password = RandomGenerator.GetRandomString() };
+            var unregisteredUser = new User() { Name = RandomGenerator.GetRandomString(), Password = RandomGenerator.GetRandomString() };
 
-            var actual = _userManager.Authenticate(unregisteredUser.UserName, unregisteredUser.Password);
+            var actual = _userManager.Authenticate(unregisteredUser.Name, unregisteredUser.Password);
 
             Assert.Null(actual);
         }
@@ -240,9 +240,9 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         [Trait("Category", "Authenticate, Negative")]
         public void AuthenticateEmptyUserTest()
         {
-            var unregisteredUser = new User() { UserName = string.Empty, Password = string.Empty };
+            var unregisteredUser = new User() { Name = string.Empty, Password = string.Empty };
 
-            var actual = _userManager.Authenticate(unregisteredUser.UserName, unregisteredUser.Password);
+            var actual = _userManager.Authenticate(unregisteredUser.Name, unregisteredUser.Password);
 
             Assert.Null(actual);
         }
@@ -351,7 +351,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         [Trait("Category", "Get users")]
         public void GetUsersWithNameTest()
         {
-            bool IsProductRole(User user) => user.UserName == TestUsersManager.TestUserViewer.UserName;
+            bool IsProductRole(User user) => user.Name == TestUsersManager.TestUserViewer.Name;
 
 
             AddUsers(TestUsersManager.TestUserViewer, TestUsersManager.TestUserManager);
@@ -390,10 +390,10 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         }
 
         private static void TestUserByName(User expected, GetUserByUserName getUserByName) =>
-            TestUser(expected, getUserByName(expected.UserName));
+            TestUser(expected, getUserByName(expected.Name));
 
         private static void TestUserFromDB(User expected, GetAllUsersFromDB getUsersFromDB) =>
-            TestUser(expected, new(getUsersFromDB().FirstOrDefault(u => u.UserName == expected.UserName)));
+            TestUser(expected, new(getUsersFromDB().FirstOrDefault(u => u.UserName == expected.Name)));
 
         private static async Task FullTestUpdatedUserAsync(List<User> expectedUsers, List<User> usersBeforeUpdate,
             GetUser getUser, GetUserByUserName getUserByName, GetAllUsersFromDB getUsersFromDB)
@@ -410,7 +410,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
 
         private static void TestUserByName(User expected, User userBeforeUpdate, GetUserByUserName getUserByName)
         {
-            var userByName = getUserByName(userBeforeUpdate.UserName);
+            var userByName = getUserByName(userBeforeUpdate.Name);
 
             TestChangeableUserSettings(expected, userByName);
             TestNotChangeableUserSettings(userBeforeUpdate, userByName);
@@ -448,7 +448,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         }
 
         private static void TestRemovedUser(User removedUser, GetUserByUserName getUserByName) =>
-            Assert.Null(getUserByName(removedUser.UserName));
+            Assert.Null(getUserByName(removedUser.Name));
 
         private static void TestRemovedUser(User removedUser, GetUser getUser) =>
             TestUser(new User((User)null), getUser(removedUser.Id));
@@ -487,13 +487,13 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
 
         private static void TestNotChangeableUserSettings(User expected, User actual)
         {
-            Assert.Equal(expected.UserName, actual.UserName);
+            Assert.Equal(expected.Name, actual.Name);
         }
 
         private static void CompareUserLists(IEnumerable<User> expectedInput, IEnumerable<User> actualInput)
         {
-            var expected = expectedInput.OrderBy(e => e.UserName).ToList();
-            var actual = actualInput.OrderBy(e => e.UserName).ToList();
+            var expected = expectedInput.OrderBy(e => e.Name).ToList();
+            var actual = actualInput.OrderBy(e => e.Name).ToList();
 
             Assert.Equal(expected.Count, actual.Count);
 
@@ -548,7 +548,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
             return new()
             {
                 Id = source.Id,
-                UserName = GetUpdatedProperty(source.UserName),
+                Name = GetUpdatedProperty(source.Name),
                 IsAdmin = !source.IsAdmin,
                 Password = GetUpdatedProperty(source.Password),
                 ProductsRoles = productRoles,

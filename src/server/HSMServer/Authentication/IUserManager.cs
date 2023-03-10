@@ -7,9 +7,9 @@ namespace HSMServer.Authentication
 {
     public interface IUserManager
     {
-        public event Action<User> AddEvent;
-        public event Action<User> UpdateEvent;
-        public event Action<User> RemoveEvent;
+        public event Action<User> Added;
+        public event Action<User> Updated;
+        public event Action<User> Removed;
 
         /// <summary>
         /// Add new user with the specified parameters
@@ -36,7 +36,7 @@ namespace HSMServer.Authentication
 
         User GetCopyUser(Guid id);
         User GetUser(Guid id);
-        User GetUserByUserName(string username);
+        User GetUserByName(string username);
 
         List<User> GetViewers(Guid productId);
         List<User> GetManagers(Guid productId);

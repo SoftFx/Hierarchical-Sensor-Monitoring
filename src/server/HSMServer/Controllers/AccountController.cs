@@ -155,7 +155,7 @@ namespace HSMServer.Controllers
             TempData[TextConstants.TempDataProductsText] =
                 _treeViewModel.Nodes.Values.ToDictionary(product => product.Id, product => product.Name);
 
-            var users = _userManager.GetUsers().OrderBy(x => x.UserName);
+            var users = _userManager.GetUsers().OrderBy(x => x.Name);
             return View(users.Select(x => new UserViewModel(x)).ToList());
         }
 
@@ -181,7 +181,7 @@ namespace HSMServer.Controllers
         [HttpPost]
         public void UpdateUser([FromBody] UserViewModel userViewModel)
         {
-            var currentUser = _userManager.GetUserByUserName(userViewModel.Username);
+            var currentUser = _userManager.GetUserByName(userViewModel.Username);
             userViewModel.Password = currentUser.Password;
             userViewModel.UserId = currentUser.Id.ToString();
 

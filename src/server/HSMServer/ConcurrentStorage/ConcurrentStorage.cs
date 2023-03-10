@@ -18,9 +18,9 @@ namespace HSMServer.ConcurrentStorage
         protected abstract Action<ModelType> RemoveFromDb { get; }
 
 
-        public event Action<ModelType> AddEvent;
-        public event Action<ModelType> UpdateEvent;
-        public event Action<ModelType> RemoveEvent;
+        public event Action<ModelType> Added;
+        public event Action<ModelType> Updated;
+        public event Action<ModelType> Removed;
 
 
         internal ModelType this[string name] =>
@@ -29,12 +29,12 @@ namespace HSMServer.ConcurrentStorage
 
         public Task<bool> TryAdd(ModelType value)
         {
-            var result = TryAdd(value.Id, value) && _modelNames.TryAdd(value.DisplayName, value.Id);
+            var result = TryAdd(value.Id, value) && _modelNames.TryAdd(value.Name, value.Id);
 
             if (result)
             {
                 AddToDb(value.ToEntity());
-                AddEvent?.Invoke(value);
+                Added?.Invoke(value);
             }
 
             return Task.FromResult(result);
@@ -42,12 +42,12 @@ namespace HSMServer.ConcurrentStorage
 
         internal Task<bool> TryRemove(ModelType value)
         {
-            var result = TryRemove(value.Id, out _) && _modelNames.TryRemove(value.DisplayName, out _);
+            var result = TryRemove(value.Id, out _) && _modelNames.TryRemove(value.Name, out _);
 
             if (result)
             {
                 RemoveFromDb(value);
-                RemoveEvent?.Invoke(value);
+                Removed?.Invoke(value);
             }
 
             return Task.FromResult(result);
@@ -73,7 +73,7 @@ namespace HSMServer.ConcurrentStorage
             if (result)
             {
                 UpdateInDb(value.ToEntity());
-                UpdateEvent?.Invoke(value);
+                Updated?.Invoke(value);
             }
 
             return Task.FromResult(result);

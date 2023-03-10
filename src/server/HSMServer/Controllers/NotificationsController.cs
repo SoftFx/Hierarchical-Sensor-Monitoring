@@ -65,7 +65,7 @@ namespace HSMServer.Controllers
 
         public IActionResult SendTestTelegramMessage(long chatId, string productId)
         {
-            var testMessage = $"Test message for {(HttpContext.User as User).UserName}.";
+            var testMessage = $"Test message for {(HttpContext.User as User).Name}.";
             if (GetEntity(productId) is ProductModel product)
                 testMessage = $"{testMessage} (Product {product.DisplayName})";
 

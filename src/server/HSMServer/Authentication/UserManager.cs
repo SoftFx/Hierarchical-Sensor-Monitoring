@@ -85,7 +85,7 @@ namespace HSMServer.Authentication
             bool IsAskedUser(KeyValuePair<Guid, User> userPair)
             {
                 var user = userPair.Value;
-                return user.UserName.Equals(login) && !string.IsNullOrEmpty(user.Password) && user.Password.Equals(passwordHash);
+                return user.Name.Equals(login) && !string.IsNullOrEmpty(user.Password) && user.Password.Equals(passwordHash);
             }
 
             var existingUser = this.SingleOrDefault(IsAskedUser);
@@ -98,7 +98,7 @@ namespace HSMServer.Authentication
 
         public User GetUser(Guid id) => this.GetValueOrDefault(id);
 
-        public User GetUserByUserName(string userName) => base[userName];
+        public User GetUserByName(string userName) => base[userName];
 
         public List<User> GetViewers(Guid productId)
         {
