@@ -11,14 +11,16 @@ using Telegram.Bot;
 using Telegram.Bot.Exceptions;
 using Telegram.Bot.Polling;
 using Telegram.Bot.Types;
-using User = HSMServer.Model.Authentication.User;
 using Telegram.Bot.Types.Enums;
+using User = HSMServer.Model.Authentication.User;
 
 namespace HSMServer.Notifications
 {
     public sealed class TelegramBot : IAsyncDisposable
     {
         private const string ConfigurationsError = "Invalid Bot configurations.";
+
+        private readonly NLog.Logger _logger = NLog.LogManager.GetCurrentClassLogger();
 
         private readonly AddressBook _addressBook = new();
         private readonly ReceiverOptions _options = new()
@@ -65,9 +67,9 @@ namespace HSMServer.Notifications
 
             await StopBot();
         }
-        
+
         internal string BotName => _configurationProvider.ReadOrDefault(ConfigurationConstants.BotName).Value;
-        
+
         internal string GetInvitationLink(User user) =>
             $"https://t.me/{BotName}?start={_addressBook.BuildInvitationToken(user)}";
 
@@ -80,7 +82,7 @@ namespace HSMServer.Notifications
 
             return link.InviteLink;
         }
-        
+
         internal void RemoveOldInvitationTokens() => _addressBook.RemoveOldTokens();
 
         internal void RemoveChat(INotificatable entity, long chatId)
@@ -174,43 +176,53 @@ namespace HSMServer.Notifications
 
         private void SendMessage(BaseSensorModel sensor, ValidationResult oldStatus)
         {
-            if (IsBotRunning && AreBotMessagesEnabled)
-                foreach (var (entity, chats) in _addressBook.ServerBook)
-                {
-                    if (WhetherSendMessage(entity, sensor, oldStatus))
-                        foreach (var (_, chat) in chats)
-                        {
-                            if (entity.Notifications.Telegram.MessagesDelay > 0)
-                                chat.MessageBuilder.AddMessage(sensor);
-                            else
-                                SendMarkdownMessageAsync(chat.ChatId, MessageBuilder.GetSingleMessage(sensor));
-                        }
-                }
+            try
+            {
+                if (IsBotRunning && AreBotMessagesEnabled)
+                    foreach (var (entity, chats) in _addressBook.ServerBook)
+                    {
+                        if (WhetherSendMessage(entity, sensor, oldStatus))
+                            foreach (var (_, chat) in chats)
+                            {
+                                if (entity.Notifications.Telegram.MessagesDelay > 0)
+                                    chat.MessageBuilder.AddMessage(sensor);
+                                else
+                                    SendMarkdownMessageAsync(chat.ChatId, MessageBuilder.GetSingleMessage(sensor));
+                            }
+                    }
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex.Message);
+            }
         }
 
         private async Task MessageReceiver()
         {
             while (IsBotRunning)
             {
-                foreach (var (entity, chats) in _addressBook.ServerBook)
-                {
-                    foreach (var (_, chat) in chats)
-                        if (chat.MessageBuilder.ExpectedSendingTime <= DateTime.UtcNow)
-                        {
-                            var message = chat.MessageBuilder.GetAggregateMessage(entity.Notifications.Telegram.MessagesDelay);
-                            if (!string.IsNullOrEmpty(message))
-                                SendMarkdownMessageAsync(chat.ChatId, message);
-                        }
-                }
-
-                if (_tokenSource.IsCancellationRequested)
-                    break;
-
                 try
                 {
+                    foreach (var (entity, chats) in _addressBook.ServerBook)
+                    {
+                        foreach (var (_, chat) in chats)
+                            if (chat.MessageBuilder.ExpectedSendingTime <= DateTime.UtcNow)
+                            {
+                                var message = chat.MessageBuilder.GetAggregateMessage(entity.Notifications.Telegram.MessagesDelay);
+                                if (!string.IsNullOrEmpty(message))
+                                    SendMarkdownMessageAsync(chat.ChatId, message);
+                            }
+                    }
+
+                    if (_tokenSource.IsCancellationRequested)
+                        break;
+
                     await Task.Delay(500, _tokenSource.Token);
                 }
-                catch { }
+                catch (Exception ex)
+                {
+                    _logger.Error(ex.Message);
+                }
             }
         }
 
