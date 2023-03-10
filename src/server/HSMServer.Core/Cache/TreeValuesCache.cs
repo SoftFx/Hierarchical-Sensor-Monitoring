@@ -337,7 +337,14 @@ namespace HSMServer.Core.Cache
             var sensorId = GetSensor(request).Id;
             var from = request.From;
             var to = request.To ?? DateTime.UtcNow.AddDays(1);
-            var count = request.Count > 0 ? request.Count.Value : MaxHistoryCount;
+            var count = request.Count > 0 ? Math.Min(request.Count.Value, MaxHistoryCount) : MaxHistoryCount;
+
+            if (request.Count < 0)
+            {
+                from = DateTime.MinValue;
+                to = request.From;
+                count = Math.Max(request.Count.Value, -MaxHistoryCount);
+            }
 
             return GetSensorValuesPage(sensorId, from, to, count);
         }
