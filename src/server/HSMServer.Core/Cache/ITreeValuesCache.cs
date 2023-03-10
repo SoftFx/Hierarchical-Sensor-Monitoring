@@ -1,5 +1,6 @@
 ﻿using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Model;
+using HSMServer.Core.Model.Policies;
 using HSMServer.Core.Model.Requests;
 using System;
 using System.Collections.Generic;
@@ -45,7 +46,6 @@ namespace HSMServer.Core.Cache
         AccessKeyModel RemoveAccessKey(Guid id);
         AccessKeyModel UpdateAccessKey(AccessKeyUpdate key);
         AccessKeyModel UpdateAccessKeyState(Guid id, KeyState state);
-        AccessKeyModel CheckAccessKeyExpiration(AccessKeyModel key);
         AccessKeyModel GetAccessKey(Guid id);
 
         void UpdateSensor(SensorUpdate updatedSensor);
@@ -61,5 +61,7 @@ namespace HSMServer.Core.Cache
         IAsyncEnumerable<List<BaseValue>> GetSensorValuesPage(Guid sensorId, DateTime from, DateTime to, int count);
 
         void UpdatePolicy(TransactionType type, Policy policy);
+
+        void UpdateCacheState();
     }
 }

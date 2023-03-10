@@ -2,16 +2,16 @@ using HSM.Core.Monitoring;
 using HSMDatabase.DatabaseWorkCore;
 using HSMServer.Authentication;
 using HSMServer.BackgroundTask;
+using HSMServer.Configuration;
 using HSMServer.Core.Cache;
-using HSMServer.Core.Configuration;
 using HSMServer.Core.DataLayer;
-using HSMServer.Core.Registration;
 using HSMServer.Core.SensorsUpdatesQueue;
 using HSMServer.Filters;
 using HSMServer.Middleware;
 using HSMServer.Model;
 using HSMServer.Model.TreeViewModel;
 using HSMServer.Notifications;
+using HSMServer.Registration;
 using HSMServer.Settings;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -36,7 +36,7 @@ public static class ApplicationServiceExtensions
         services.AddSingleton<IConfigurationProvider, ConfigurationProvider>();
         services.AddSingleton<IUpdatesQueue, UpdatesQueue>();
         services.AddSingleton<ITreeValuesCache, TreeValuesCache>();
-        services.AddSingleton<INotificationsCenter, NotificationsCenter>();
+        services.AddSingleton<NotificationsCenter>();
         services.AddSingleton<IDataCollectorFacade, DataCollectorFacade>();
         services.AddSingleton<TreeViewModel>();
 

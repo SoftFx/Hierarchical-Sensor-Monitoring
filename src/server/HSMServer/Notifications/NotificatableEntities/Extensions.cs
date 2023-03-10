@@ -2,6 +2,7 @@
 using HSMServer.Core.Cache;
 using HSMServer.Core.Model;
 using HSMServer.Model.Authentication;
+using HSMServer.Model.TreeViewModel;
 
 namespace HSMServer.Notifications
 {
@@ -38,15 +39,15 @@ namespace HSMServer.Notifications
         {
             if (entity is User user)
                 userManager.UpdateUser(user);
-            else if (entity is ProductModel product)
-                cache.UpdateProduct(product);
+            else if (entity is ProductNodeViewModel product)
+                cache.UpdateProduct(cache.GetProduct(product.Id));
         }
 
         internal static string BuildGreetings(this INotificatable entity) =>
             entity switch
             {
                 User user => $"Hi, {user.UserName}. ",
-                ProductModel => $"Hi. ",
+                ProductNodeViewModel => $"Hi. ",
                 _ => string.Empty,
             };
 
@@ -54,7 +55,7 @@ namespace HSMServer.Notifications
             entity switch
             {
                 User => "You are succesfully authorized.",
-                ProductModel product => $"Product '{product.DisplayName}' is successfully added to group.",
+                ProductNodeViewModel product => $"Product '{product.Name}' is successfully added to group.",
                 _ => string.Empty,
             };
     }

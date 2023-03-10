@@ -61,7 +61,7 @@ namespace HSMServer.Model
         public IgnoreNotificationsViewModel(NodeViewModel node, NotificationsTarget target, bool isOffTimeModal)
         {
             EncodedId = node.EncodedId;
-            Path = $"{node.RootProduct.DisplayName}{node.Path}";
+            Path = $"{node.RootProduct.Name}{node.Path}";
             TreeElement = node is SensorNodeViewModel ? SensorTreeElement : NodeTreeElement;
 
             if (node.Id == node.RootProduct.Id)

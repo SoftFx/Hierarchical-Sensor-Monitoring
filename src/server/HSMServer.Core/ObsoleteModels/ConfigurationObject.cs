@@ -1,6 +1,6 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities;
 
-namespace HSMServer.Core.Model
+namespace HSMServer.Core.Configuration
 {
     public class ConfigurationObject
     {
@@ -18,7 +18,7 @@ namespace HSMServer.Core.Model
             };
         }
 
-        public ConfigurationObject(){}
+        public ConfigurationObject() { }
         public ConfigurationObject(ConfigurationEntity entity)
         {
             if (entity == null) return;

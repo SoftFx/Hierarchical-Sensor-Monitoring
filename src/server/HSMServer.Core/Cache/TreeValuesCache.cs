@@ -4,6 +4,7 @@ using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Converters;
 using HSMServer.Core.DataLayer;
 using HSMServer.Core.Model;
+using HSMServer.Core.Model.Policies;
 using HSMServer.Core.Model.Requests;
 using HSMServer.Core.SensorsUpdatesQueue;
 using NLog;
@@ -78,11 +79,7 @@ namespace HSMServer.Core.Cache
 
         public ProductModel AddProduct(string productName)
         {
-            var product = new ProductModel(productName);
-
-            AddProduct(product);
-
-            return product;
+            return AddProduct(new ProductModel(productName));
         }
 
         public void UpdateProduct(ProductModel product)
@@ -98,8 +95,10 @@ namespace HSMServer.Core.Cache
                 return;
 
             var sensorsOldStatuses = new Dictionary<Guid, ValidationResult>();
+
             GetProductSensorsStatuses(product, sensorsOldStatuses);
             UpdateIntervalPolicy(updatedProduct.ExpectedUpdateInterval, product);
+
             _databaseCore.UpdateProduct(product.Update(updatedProduct).ToProductEntity());
 
             NotifyAllProductChildrenAboutUpdate(product, sensorsOldStatuses);
@@ -227,14 +226,6 @@ namespace HSMServer.Core.Cache
             return key;
         }
 
-        public AccessKeyModel CheckAccessKeyExpiration(AccessKeyModel key)
-        {
-            if (key.IsExpired && key.State < KeyState.Expired)
-                UpdateAccessKeyState(key.Id, KeyState.Expired);
-
-            return key;
-        }
-
         public AccessKeyModel UpdateAccessKeyState(Guid id, KeyState updatedState)
         {
             if (!_keys.TryGetValue(id, out var key))
@@ -272,7 +263,7 @@ namespace HSMServer.Core.Cache
             ChangeSensorEvent?.Invoke(sensor, TransactionType.Delete);
         }
 
-        public void UpdateMutedSensorState(Guid sensorId, DateTime? endOfMuting)
+        public void UpdateMutedSensorState(Guid sensorId, DateTime? endOfMuting = null)
         {
             if (!_sensors.TryGetValue(sensorId, out var sensor) || sensor.State == SensorState.Blocked)
                 return;
@@ -422,12 +413,12 @@ namespace HSMServer.Core.Cache
             if (newInterval == null)
                 return;
 
-            var oldPolicy = node.ExpectedUpdateInterval;
+            var oldPolicy = node.ServerPolicy.ExpectedUpdate.Policy;
 
             if (oldPolicy == null && !newInterval.IsEmpty)
             {
-                var newPolicy = new ExpectedUpdateIntervalPolicy(newInterval.CustomPeriod, newInterval.TimeInterval);
-                node.ExpectedUpdateInterval = newPolicy;
+                var newPolicy = new ExpectedUpdateIntervalPolicy(newInterval);
+                node.ServerPolicy.ExpectedUpdate.SetPolicy(newPolicy);
 
                 UpdatePolicy(TransactionType.Add, newPolicy);
             }
@@ -435,7 +426,7 @@ namespace HSMServer.Core.Cache
             {
                 if (newInterval.IsEmpty)
                 {
-                    node.ExpectedUpdateInterval = null;
+                    node.ServerPolicy.ExpectedUpdate.SetPolicy(null);
 
                     UpdatePolicy(TransactionType.Delete, oldPolicy);
                 }
@@ -447,7 +438,7 @@ namespace HSMServer.Core.Cache
                 }
             }
 
-            node.RefreshOutdatedError();
+            node.HasServerValidationChange();
         }
 
         private void NotifyAllProductChildrenAboutUpdate(ProductModel product,
@@ -533,7 +524,7 @@ namespace HSMServer.Core.Cache
             return policyEntities;
         }
 
-        private void ApplyProducts(List<ProductEntity> productEntities, Dictionary<Guid, Policy> policies)
+        private void ApplyProducts(List<ProductEntity> productEntities, Dictionary<string, Policy> policies)
         {
             _logger.Info($"{nameof(productEntities)} are applying");
             foreach (var productEntity in productEntities)
@@ -560,7 +551,7 @@ namespace HSMServer.Core.Cache
         }
 
         private void ApplySensors(List<ProductEntity> productEntities, List<SensorEntity> sensorEntities,
-            Dictionary<Guid, Policy> policies)
+            Dictionary<string, Policy> policies)
         {
             _logger.Info($"{nameof(sensorEntities)} are applying");
             ApplySensors(sensorEntities, policies);
@@ -583,7 +574,7 @@ namespace HSMServer.Core.Cache
             _logger.Info($"{nameof(TreeValuesCache.FillSensorsData)} is finished");
         }
 
-        private void ApplySensors(List<SensorEntity> entities, Dictionary<Guid, Policy> policies)
+        private void ApplySensors(List<SensorEntity> entities, Dictionary<string, Policy> policies)
         {
             foreach (var entity in entities)
             {
@@ -636,7 +627,7 @@ namespace HSMServer.Core.Cache
             return parentProduct;
         }
 
-        private void AddProduct(ProductModel product)
+        private ProductModel AddProduct(ProductModel product)
         {
             product.BuildProductNameAndPath();
 
@@ -652,6 +643,8 @@ namespace HSMServer.Core.Cache
                 if (product.AccessKeys.IsEmpty)
                     AddAccessKey(AccessKeyModel.BuildDefault(product));
             }
+
+            return product;
         }
 
         private void AddSensor(BaseSensorModel sensor)
@@ -681,7 +674,7 @@ namespace HSMServer.Core.Cache
 
             if (isSuccess && _tree.TryGetValue(key.ProductId, out var product))
             {
-                isSuccess &= product.AddAccessKey(key);
+                isSuccess &= product.AccessKeys.TryAdd(key.Id, key);
                 ChangeProductEvent?.Invoke(product, TransactionType.Update);
             }
 
@@ -788,9 +781,9 @@ namespace HSMServer.Core.Cache
                     sensor.AddValue(value);
         }
 
-        private static Dictionary<Guid, Policy> GetPolicyModels(List<byte[]> policyEntities)
+        private static Dictionary<string, Policy> GetPolicyModels(List<byte[]> policyEntities)
         {
-            Dictionary<Guid, Policy> policies = new(policyEntities.Count);
+            Dictionary<string, Policy> policies = new(policyEntities.Count);
 
             var serializeOptions = new JsonSerializerOptions();
             serializeOptions.Converters.Add(new PolicyDeserializationConverter());
@@ -798,10 +791,29 @@ namespace HSMServer.Core.Cache
             foreach (var entity in policyEntities)
             {
                 var policy = JsonSerializer.Deserialize<Policy>(entity, serializeOptions);
-                policies.Add(policy.Id, policy);
+                policies.Add(policy.Id.ToString(), policy);
             }
 
             return policies;
+        }
+
+        public void UpdateCacheState()
+        {
+            foreach (var sensor in GetSensors())
+            {
+                var oldStatus = sensor.ValidationResult;
+
+                if (sensor.HasServerValidationChange())
+                    NotifyAboutChanges(sensor, oldStatus);
+            }
+
+            foreach (var key in GetAccessKeys())
+                if (key.IsExpired && key.State < KeyState.Expired)
+                    UpdateAccessKeyState(key.Id, KeyState.Expired);
+
+            foreach (var sensor in GetSensors())
+                if (sensor.EndOfMuting <= DateTime.UtcNow)
+                    UpdateMutedSensorState(sensor.Id);
         }
     }
 }

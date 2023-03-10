@@ -2,6 +2,7 @@
 using HSMServer.Core.Cache.UpdateEntities;
 using System;
 using System.Collections.Concurrent;
+using System.Linq;
 
 namespace HSMServer.Core.Model
 {
@@ -13,7 +14,7 @@ namespace HSMServer.Core.Model
     }
 
 
-    public sealed class ProductModel : NodeBaseModel, INotificatable
+    public sealed class ProductModel : NodeBaseModel
     {
         public ConcurrentDictionary<Guid, AccessKeyModel> AccessKeys { get; } = new();
 
@@ -22,49 +23,31 @@ namespace HSMServer.Core.Model
         public ConcurrentDictionary<Guid, BaseSensorModel> Sensors { get; } = new();
 
 
-        public NotificationSettings Notifications { get; } = new();
+        public NotificationSettingsEntity NotificationsSettings { get; }
 
         public ProductState State { get; }
 
-        string INotificatable.Name => DisplayName;
 
-
-        public ProductModel() { }
-
-        public ProductModel(ProductEntity entity) : this()
+        public ProductModel(string name) : base(name.Trim())
         {
-            Id = Guid.TryParse(entity.Id, out var entityId) ? entityId : Guid.NewGuid(); // TODO: remove Guid.NewGuid() after removing prosuctId string -> Guid migration
-            AuthorId = Guid.TryParse(entity.AuthorId, out var authorId) ? authorId : null;
-            State = (ProductState)entity.State;
-            DisplayName = entity.DisplayName;
-            Description = entity.Description;
-            CreationDate = new DateTime(entity.CreationDate);
-            Notifications = new(entity.NotificationSettings);
-        }
-
-        public ProductModel(string name) : this()
-        {
-            Id = Guid.NewGuid();
             State = ProductState.FullAccess;
-            DisplayName = name.Trim();
-            CreationDate = DateTime.UtcNow;
         }
 
+        public ProductModel(ProductEntity entity) : base(entity)
+        {
+            State = (ProductState)entity.State;
+            NotificationsSettings = entity.NotificationSettings;
+        }
 
-        internal bool AddAccessKey(AccessKeyModel key) => AccessKeys.TryAdd(key.Id, key);
 
         internal void AddSubProduct(ProductModel product)
         {
-            product.ParentProduct = this;
-
-            SubProducts.TryAdd(product.Id, product);
+            SubProducts.TryAdd(product.Id, (ProductModel)product.AddParent(this));
         }
 
         internal void AddSensor(BaseSensorModel sensor)
         {
-            sensor.ParentProduct = this;
-
-            Sensors.TryAdd(sensor.Id, sensor);
+            Sensors.TryAdd(sensor.Id, (BaseSensorModel)sensor.AddParent(this));
         }
 
         internal ProductEntity ToProductEntity() =>
@@ -77,24 +60,19 @@ namespace HSMServer.Core.Model
                 DisplayName = DisplayName,
                 Description = Description,
                 CreationDate = CreationDate.Ticks,
-                NotificationSettings = Notifications.ToEntity(),
-                Policies = GetPolicyIds(),
+                NotificationSettings = NotificationsSettings,
+                Policies = GetPolicyIds().Select(u => $"{u}").ToList(),
             };
 
-        internal ProductModel Update(ProductUpdate updatedProduct)
+        internal ProductModel Update(ProductUpdate update)
         {
-            Description = updatedProduct.Description ?? Description;
+            base.Update(update);
             return this;
         }
 
         internal override void BuildProductNameAndPath()
         {
-            if (ParentProduct == null)
-            {
-                RootProductId = Id;
-                RootProductName = DisplayName;
-            }
-            else
+            if (ParentProduct != null)
                 base.BuildProductNameAndPath();
 
             foreach (var (_, sensor) in Sensors)
@@ -105,18 +83,30 @@ namespace HSMServer.Core.Model
         }
 
 
-        internal override void RefreshOutdatedError() =>
-            UpdateChildSensorsValidationResult(this);
-
-        private static void UpdateChildSensorsValidationResult(ProductModel product)
+        internal override bool HasServerValidationChange()
         {
-            foreach (var (_, sensor) in product.Sensors)
-                if (sensor.ExpectedUpdateInterval == null)
-                    sensor.RefreshOutdatedError();
+            var result = false;
 
-            foreach (var (_, subProduct) in product.SubProducts)
-                if (subProduct.ExpectedUpdateInterval == null)
-                    UpdateChildSensorsValidationResult(subProduct);
+            foreach (var (_, sensor) in Sensors)
+                //if (sensor.ServerPolicy.ExpectedUpdate.Policy == null)
+                    result |= sensor.HasServerValidationChange();
+
+            foreach (var (_, subProduct) in SubProducts)
+                //if (subProduct.ServerPolicy.ExpectedUpdate.Policy == null)
+                result |= subProduct.HasServerValidationChange();
+
+            return result;
         }
+
+        //private static void UpdateChildSensorsValidationResult(ProductModel product)
+        //{
+        //    foreach (var (_, sensor) in product.Sensors)
+        //        if (sensor.ServerPolicy.ExpectedUpdate.Policy == null)
+        //            sensor.CallServerPolicy();
+
+        //    foreach (var (_, subProduct) in product.SubProducts)
+        //        if (subProduct.ServerPolicy.ExpectedUpdate.Policy == null)
+        //            UpdateChildSensorsValidationResult(subProduct);
+        //}
     }
 }

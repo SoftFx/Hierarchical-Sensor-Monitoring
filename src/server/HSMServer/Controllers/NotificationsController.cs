@@ -5,6 +5,7 @@ using HSMServer.Core.Model;
 using HSMServer.Helpers;
 using HSMServer.Model;
 using HSMServer.Model.Authentication;
+using HSMServer.Model.TreeViewModel;
 using HSMServer.Notifications;
 using Microsoft.AspNetCore.Mvc;
 using System.Threading.Tasks;
@@ -17,14 +18,16 @@ namespace HSMServer.Controllers
     {
         private readonly IUserManager _userManager;
         private readonly ITreeValuesCache _cache;
+        private readonly TreeViewModel _tree;
         private readonly TelegramBot _telegramBot;
 
 
-        public NotificationsController(IUserManager userManager, ITreeValuesCache cache, INotificationsCenter notificationsCenter)
+        public NotificationsController(IUserManager userManager, TreeViewModel tree, ITreeValuesCache cache, NotificationsCenter notifications)
         {
             _userManager = userManager;
             _cache = cache;
-            _telegramBot = notificationsCenter.TelegramBot;
+            _tree = tree;
+            _telegramBot = notifications.TelegramBot;
         }
 
 
@@ -45,7 +48,7 @@ namespace HSMServer.Controllers
         }
 
         [HttpGet]
-        public string UpdateViewStatusLevelHelper([FromQuery]SensorStatus newSensorStatus) => 
+        public string UpdateViewStatusLevelHelper([FromQuery] SensorStatus newSensorStatus) =>
             TelegramSettingsViewModel.GetStatusPairs(newSensorStatus);
 
         public RedirectResult OpenInvitationLink() =>
@@ -58,7 +61,8 @@ namespace HSMServer.Controllers
         public string CopyStartCommandForGroup([FromQuery(Name = "ProductId")] string encodedProductId)
         {
             var productId = SensorPathHelper.DecodeGuid(encodedProductId);
-            var product = _cache.GetProduct(productId);
+
+            _tree.Nodes.TryGetValue(productId, out var product);
 
             return _telegramBot.GetStartCommandForGroup(product);
         }
@@ -66,8 +70,8 @@ namespace HSMServer.Controllers
         public IActionResult SendTestTelegramMessage(long chatId, string productId)
         {
             var testMessage = $"Test message for {(HttpContext.User as User).UserName}.";
-            if (GetEntity(productId) is ProductModel product)
-                testMessage = $"{testMessage} (Product {product.DisplayName})";
+            if (GetEntity(productId) is ProductNodeViewModel product)
+                testMessage = $"{testMessage} (Product {product.Name})";
 
             _telegramBot.SendTestMessage(chatId, testMessage);
 
@@ -83,7 +87,7 @@ namespace HSMServer.Controllers
 
         private INotificatable GetEntity(string productId) =>
             !string.IsNullOrEmpty(productId)
-                ? _cache.GetProduct(SensorPathHelper.DecodeGuid(productId))
+                ? _tree.Nodes[SensorPathHelper.DecodeGuid(productId)]
                 : GetCurrentUser();
 
         private User GetCurrentUser() => _userManager.GetUser((HttpContext.User as User).Id);

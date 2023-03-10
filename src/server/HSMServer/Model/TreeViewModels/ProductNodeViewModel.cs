@@ -11,7 +11,7 @@ using System.Linq;
 
 namespace HSMServer.Model.TreeViewModel
 {
-    public class ProductNodeViewModel : NodeViewModel
+    public class ProductNodeViewModel : NodeViewModel, INotificatable
     {
         public override bool HasData =>
             Sensors.Values.Any(s => s.HasData) || Nodes.Values.Any(n => n.HasData);
@@ -34,7 +34,7 @@ namespace HSMServer.Model.TreeViewModel
         public ProductNodeViewModel(ProductModel model) : base(model.Id)
         {
             Path = $"{model.Path}{CommonConstants.SensorPathSeparator}";
-            Notifications = model.Notifications;
+            Notifications = new(model.NotificationsSettings);
 
             Update(model);
         }
@@ -48,7 +48,7 @@ namespace HSMServer.Model.TreeViewModel
         {
             base.Update(model);
 
-            TelegramSettings.Update(model.Notifications.Telegram);
+            TelegramSettings.Update(Notifications.Telegram);
         }
 
         internal void AddSubNode(ProductNodeViewModel node)

@@ -2,6 +2,7 @@
 using HSMServer.Core.Cache.UpdateEntities;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace HSMServer.Core.Model
 {
@@ -23,7 +24,7 @@ namespace HSMServer.Core.Model
     {
         private readonly ValidationResult _muteStatus = new("Muted", SensorStatus.OffTime);
 
-        protected ValidationResult _internalValidationResult;
+        protected ValidationResult _internalValidationResult = ValidationResult.Ok;
 
 
         protected abstract ValuesStorage Storage { get; }
@@ -33,7 +34,7 @@ namespace HSMServer.Core.Model
 
         public SensorState State { get; private set; }
 
-        public string Unit { get; private set; }
+        public string Unit { get; private set; } //TODO remove
 
 
         public DateTime? EndOfMuting { get; private set; }
@@ -48,36 +49,38 @@ namespace HSMServer.Core.Model
         public bool HasData => Storage.HasData;
 
 
-        public BaseSensorModel()
+        public BaseSensorModel(SensorEntity entity) : base(entity)
         {
-            Id = Guid.NewGuid();
-            CreationDate = DateTime.UtcNow;
+            State = (SensorState)entity.State;
+            Unit = entity.Unit;
+            EndOfMuting = entity.EndOfMuting == 0L ? null : new DateTime(entity.EndOfMuting);
         }
 
 
-        public bool CheckExpectedUpdateInterval()
+        internal override bool HasServerValidationChange()
         {
-            if (UsedExpectedUpdateInterval == null || !HasData)
+            //_internalValidationResult -= ExpectedUpdateIntervalPolicy.OutdatedSensor;
+
+            if (!HasData)
                 return false;
 
             var oldValidationResult = _internalValidationResult;
 
-            _internalValidationResult += UsedExpectedUpdateInterval.Validate(LastValue);
+            _internalValidationResult += ServerPolicy.ExpectedUpdate.Policy.Validate(LastValue.ReceivingTime);
+
+            _internalValidationResult += ServerPolicy.RestoreOffTimeStatus.Policy.Validate(DateTime.UtcNow);
+            _internalValidationResult += ServerPolicy.RestoreWarningStatus.Policy.Validate(DateTime.UtcNow);
+            _internalValidationResult += ServerPolicy.RestoreErrorStatus.Policy.Validate(DateTime.UtcNow);
+
 
             return _internalValidationResult != oldValidationResult;
-        }
-
-        internal override void RefreshOutdatedError()
-        {
-            _internalValidationResult -= ExpectedUpdateIntervalPolicy.OutdatedSensor;
-
-            CheckExpectedUpdateInterval();
         }
 
 
         internal void Update(SensorUpdate update)
         {
-            Description = update.Description ?? Description;
+            base.Update(update);
+
             Unit = update.Unit ?? Unit;
             State = update?.State ?? State;
             EndOfMuting = update?.EndOfMutingPeriod ?? EndOfMuting;
@@ -86,25 +89,6 @@ namespace HSMServer.Core.Model
                 EndOfMuting = null;
         }
 
-        internal BaseSensorModel ApplyEntity(SensorEntity entity)
-        {
-            if (!string.IsNullOrEmpty(entity.Id) && Guid.TryParse(entity.Id, out var entityId))
-                Id = entityId;
-
-            if (entity.CreationDate != DateTime.MinValue.Ticks)
-                CreationDate = new DateTime(entity.CreationDate);
-
-            AuthorId = Guid.TryParse(entity.AuthorId, out var authorId) ? authorId : null;
-            DisplayName = entity.DisplayName;
-            Description = entity.Description;
-            State = (SensorState)entity.State;
-            Unit = entity.Unit;
-            EndOfMuting = entity.EndOfMuting == 0L ? null : new DateTime(entity.EndOfMuting);
-
-            _internalValidationResult = ValidationResult.Ok;
-
-            return this;
-        }
 
         internal SensorEntity ToEntity() =>
             new()
@@ -118,7 +102,7 @@ namespace HSMServer.Core.Model
                 CreationDate = CreationDate.Ticks,
                 Type = (byte)Type,
                 State = (byte)State,
-                Policies = GetPolicyIds(),
+                Policies = GetPolicyIds().Select(u => $"{u}").ToList(),
                 EndOfMuting = EndOfMuting?.Ticks ?? 0L,
             };
 

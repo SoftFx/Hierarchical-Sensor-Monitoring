@@ -186,9 +186,9 @@ namespace HSMServer.Controllers
             var decodedId = SensorPathHelper.DecodeGuid(selectedId);
 
             if (_treeViewModel.Nodes.TryGetValue(decodedId, out var node))
-                return isFullPath ? $"{node.RootProduct.DisplayName}{node.Path}" : node.Path;
+                return isFullPath ? $"{node.RootProduct.Name}{node.Path}" : node.Path;
             else if (_treeViewModel.Sensors.TryGetValue(decodedId, out var sensor))
-                return isFullPath ? $"{sensor.RootProduct.DisplayName}{sensor.Path}" : sensor.Path;
+                return isFullPath ? $"{sensor.RootProduct.Name}{sensor.Path}" : sensor.Path;
 
             return string.Empty;
         }
@@ -212,7 +212,7 @@ namespace HSMServer.Controllers
 
         private void UpdateGroupNotificationSettings(Guid selectedNode, Action<NotificationSettings, Guid> updateSettings)
         {
-            ProductModel rootProduct = null;
+            ProductNodeViewModel rootProduct = null;
             if (_treeViewModel.Nodes.TryGetValue(selectedNode, out var node))
                 rootProduct = node.RootProduct;
             else if (_treeViewModel.Sensors.TryGetValue(selectedNode, out var sensor))
@@ -226,7 +226,7 @@ namespace HSMServer.Controllers
                 updateSettings?.Invoke(rootProduct.Notifications, sensorId);
             }
             
-            _treeValuesCache.UpdateProduct(rootProduct);
+            _treeValuesCache.UpdateProduct(_treeValuesCache.GetProduct(rootProduct.Id));
         }
 
         private List<Guid> GetNodeSensors(Guid id) => _treeViewModel.GetNodeAllSensors(id);
@@ -467,7 +467,7 @@ namespace HSMServer.Controllers
 
             _treeViewModel.Sensors.TryGetValue(decodedId, out var sensor);
 
-            return (sensor?.RootProduct.DisplayName, sensor?.Path);
+            return (sensor?.RootProduct.Name, sensor?.Path);
         }
 
         private BarBaseValue GetLocalLastValue(string encodedId, DateTime from, DateTime to)

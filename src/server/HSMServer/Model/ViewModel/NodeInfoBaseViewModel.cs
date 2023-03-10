@@ -36,7 +36,7 @@ namespace HSMServer.Model.ViewModel
         internal NodeInfoBaseViewModel(NodeViewModel model)
         {
             Path = model.Path;
-            ProductName = model.RootProduct.DisplayName;
+            ProductName = model.RootProduct.Name;
             EncodedId = model.EncodedId;
             Description = model.Description;
 

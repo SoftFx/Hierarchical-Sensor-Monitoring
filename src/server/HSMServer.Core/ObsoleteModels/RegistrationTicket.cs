@@ -1,7 +1,7 @@
 ﻿using System;
 using HSMDatabase.AccessManager.DatabaseEntities;
 
-namespace HSMServer.Core.Model
+namespace HSMServer.Core.Registration
 {
     public class RegistrationTicket
     {

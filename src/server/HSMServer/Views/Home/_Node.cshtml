@@ -8,7 +8,7 @@
 @{
     var user = User as User;
     var nodeId = Model.EncodedId;
-    var productName = Model.RootProduct.DisplayName;
+    var productName = Model.RootProduct.Name;
 
     var visibleNodes = GetSortedNodes(Model.Nodes.Values);
     var visibleSensors = GetSortedNodes(Model.Sensors.Values);

@@ -1,10 +1,25 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities;
+using Newtonsoft.Json;
 using System;
 
-namespace HSMServer.Core.Model
+namespace HSMServer.Core.Model.Policies
 {
     public abstract class Policy
     {
+        protected readonly ValidationResult _validationFail;
+
+        [JsonIgnore]
+        protected static ValidationResult Ok => ValidationResult.Ok;
+
+
+        [JsonIgnore]
+        protected abstract SensorStatus FailStatus { get; }
+
+        [JsonIgnore]
+        protected abstract string FailMessage { get; }
+
+
+
         public Guid Id { get; init; }
 
         public string Type { get; init; }
@@ -12,6 +27,8 @@ namespace HSMServer.Core.Model
 
         protected Policy()
         {
+            _validationFail = new(FailMessage, FailStatus);
+
             Id = Guid.NewGuid();
             Type = GetType().Name;
         }
@@ -26,8 +43,34 @@ namespace HSMServer.Core.Model
     }
 
 
-    public abstract class Policy<T> : Policy where T : BaseValue
+    public abstract class DataPolicy<T> : Policy where T : BaseValue
     {
         internal abstract ValidationResult Validate(T value);
+    }
+
+
+    public abstract class ServerPolicy : Policy
+    {
+        public TimeIntervalModel TimeInterval { get; set; }
+
+
+        public ServerPolicy() { }
+
+        protected ServerPolicy(TimeIntervalModel interval)
+        {
+            TimeInterval = interval;
+        }
+
+
+        internal virtual void Update(TimeIntervalModel interval)
+        {
+            TimeInterval = interval;
+        }
+
+
+        internal virtual ValidationResult Validate(DateTime time)
+        {
+            return TimeInterval.TimeIsUp(time) ? _validationFail : ValidationResult.Ok;
+        }
     }
 }

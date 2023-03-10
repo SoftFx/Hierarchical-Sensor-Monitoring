@@ -4,6 +4,7 @@ using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.DataLayer;
 using HSMServer.Core.Helpers;
 using HSMServer.Core.Model;
+using HSMServer.Core.Model.Policies;
 using HSMServer.Core.SensorsUpdatesQueue;
 using System;
 using System.Collections.Generic;
@@ -202,7 +203,7 @@ namespace HSMServer.Core.Tests.Infrastructure
             TestImmutableSensorData(expected, actual);
 
             Assert.Equal(expected.Description, actual.Description);
-            Assert.Equal(expected.ExpectedUpdateInterval, actual.ExpectedUpdateInterval);
+            Assert.Equal(expected.ServerPolicy.ExpectedUpdate.Policy, actual.ServerPolicy.ExpectedUpdate.Policy);
             Assert.Equal(expected.Unit, actual.Unit);
         }
 

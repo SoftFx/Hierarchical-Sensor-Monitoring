@@ -3,6 +3,7 @@ using HSMServer.Core.Cache;
 using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Converters;
 using HSMServer.Core.Model;
+using HSMServer.Core.Model.Policies;
 using HSMServer.Core.SensorsUpdatesQueue;
 using HSMServer.Core.Tests.Infrastructure;
 using HSMServer.Core.Tests.MonitoringCoreTests;
@@ -582,10 +583,10 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             ModelsTester.TestSensorModelWithoutUpdatedMetadata(actualSensorFromCache, sensor);
             ModelsTester.TestSensorModelWithoutUpdatedMetadata(actualSensorFromDb, sensor);
 
-            var actualExpectedUpdateIntervalPolicy = GetPolicyByIdFromDb(actualSensorFromCache.ExpectedUpdateInterval.Id);
+            var actualExpectedUpdateIntervalPolicy = GetPolicyByIdFromDb(actualSensorFromCache.ServerPolicy.ExpectedUpdate.Policy.Id);
 
             ModelsTester.TestExpectedUpdateIntervalPolicy(sensorUpdate, actualExpectedUpdateIntervalPolicy);
-            ModelsTester.AssertModels(actualSensorFromCache.ExpectedUpdateInterval, actualExpectedUpdateIntervalPolicy);
+            ModelsTester.AssertModels(actualSensorFromCache.ServerPolicy.ExpectedUpdate.Policy, actualExpectedUpdateIntervalPolicy);
         }
 
         private Policy GetPolicyByIdFromDb(Guid id)
@@ -608,7 +609,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         private BaseSensorModel GetClonedSensorModel(BaseSensorModel sensor)
         {
             var clonedSensor = SensorModelFactory.Build(sensor.ToEntity());
-            clonedSensor.ParentProduct = _valuesCache.GetProduct(sensor.ParentProduct.Id);
+            clonedSensor.AddParent(_valuesCache.GetProduct(sensor.ParentProduct.Id));
             clonedSensor.BuildProductNameAndPath();
 
             clonedSensor.TryAddValue(sensor.LastValue, out _);

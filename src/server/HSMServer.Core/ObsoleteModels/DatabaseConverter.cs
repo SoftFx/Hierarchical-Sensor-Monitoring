@@ -1,5 +1,6 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities;
-using HSMServer.Core.Model;
+using HSMServer.Core.Configuration;
+using HSMServer.Core.Registration;
 
 namespace HSMServer.Core.Converters
 {

@@ -1,7 +1,7 @@
-﻿using System.Collections.Generic;
-using HSMServer.Core.Model;
+﻿using HSMServer.Core.Configuration;
+using System.Collections.Generic;
 
-namespace HSMServer.Core.Configuration
+namespace HSMServer.Configuration
 {
     public interface IConfigurationProvider
     {

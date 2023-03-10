@@ -34,6 +34,23 @@
             than a specified parameter value are deleted
             </summary>
         </member>
+        <member name="M:HSMServer.Configuration.ConfigurationProvider.ReadOrDefault(System.String)">
+            Use 'name' from ConfigurationConstants! 
+        </member>
+        <member name="M:HSMServer.Configuration.IConfigurationProvider.ReadOrDefault(System.String)">
+            <summary>
+            Try reading the configuration object from the database. Return the obtained value if exists, default value otherwise.
+            </summary>
+            <param name="name">The parameter name, which MUST be a member of <see cref="!:ConfigurationConstants"/> class.</param>
+            <returns>A <see cref="T:HSMServer.Core.Configuration.ConfigurationObject"/> entity, containing the parameter value.</returns>
+        </member>
+        <member name="M:HSMServer.Configuration.IConfigurationProvider.GetAllConfigurationObjects">
+            <summary>
+            Get list of all configuration objects, which names are specified in <see cref="!:ConfigurationConstants"/> class.
+            Method <see cref="M:HSMServer.Configuration.IConfigurationProvider.ReadOrDefault(System.String)"/> is used to retrieve values.
+            </summary>
+            <returns>List of <see cref="T:HSMServer.Core.Configuration.ConfigurationObject"/>.</returns>
+        </member>
         <member name="T:HSMServer.Controllers.SensorsController">
             <summary>
             Controller for receiving sensors data via https protocol. There is a default product for testing swagger methods.
@@ -129,6 +146,11 @@
             Update works as HTTP PUT: all the fields will be updated
             </summary>
             <param name="user"></param>
+        </member>
+        <member name="M:HSMServer.Registration.RegistrationTicketManager.GetTicket(System.Guid)">
+            <summary>
+            This method MUST be called when update from 2.1.4 or lower to 2.1.5 or higher
+            </summary>
         </member>
     </members>
 </doc>

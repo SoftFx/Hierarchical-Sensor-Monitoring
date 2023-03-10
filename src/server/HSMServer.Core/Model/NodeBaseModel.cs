@@ -1,4 +1,7 @@
 ﻿using HSMCommon.Constants;
+using HSMDatabase.AccessManager.DatabaseEntities;
+using HSMServer.Core.Cache.UpdateEntities;
+using HSMServer.Core.Model.Policies;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -7,67 +10,85 @@ namespace HSMServer.Core.Model
 {
     public abstract class NodeBaseModel
     {
-        public Guid Id { get; protected set; }
-
-        public Guid? AuthorId { get; protected set; }
-
-        public string DisplayName { get; protected set; }
-
-        public string Description { get; protected set; }
-
-        public DateTime CreationDate { get; protected set; }
-
-        public ProductModel ParentProduct { get; internal set; }
+        public ServerPolicyCollection ServerPolicy { get; } = new();
 
 
-        /// <summary>
-        /// Product ID that is parent for this node and doesn't have parent product (top level product)
-        /// </summary>
-        public Guid RootProductId { get; protected set; }
+        public Guid Id { get; }
 
-        public string RootProductName { get; protected set; }
+        public Guid? AuthorId { get; }
 
-        public string Path { get; protected set; }
+        public DateTime CreationDate { get; }
 
 
-        public ExpectedUpdateIntervalPolicy UsedExpectedUpdateInterval =>
-            ExpectedUpdateInterval ?? ParentProduct?.UsedExpectedUpdateInterval;
+        public ProductModel ParentProduct { get; private set; }
 
-        public ExpectedUpdateIntervalPolicy ExpectedUpdateInterval { get; internal set; }
 
+        public string DisplayName { get; private set; }
+
+        public string Description { get; private set; }
+
+        public string Path { get; private set; }
+
+
+        public Guid RootProductId => ParentProduct?.RootProductId ?? Id;
+
+        public string RootProductName => ParentProduct?.RootProductName ?? DisplayName;
+
+
+        protected NodeBaseModel()
+        {
+            Id = Guid.NewGuid();
+            AuthorId = Guid.Empty;
+            CreationDate = DateTime.UtcNow;
+        }
+
+        protected NodeBaseModel(string name) : this()
+        {
+            DisplayName = name;
+        }
+
+        protected NodeBaseModel(BaseNodeEntity entity)
+        {
+            Id = Guid.Parse(entity.Id);
+            AuthorId = Guid.TryParse(entity.AuthorId, out var authorId) ? authorId : null;
+            CreationDate = new DateTime(entity.CreationDate);
+
+            DisplayName = entity.DisplayName;
+            Description = entity.Description;
+        }
+
+
+        protected internal NodeBaseModel AddParent(ProductModel parent)
+        {
+            ParentProduct = parent;
+            ServerPolicy.ApplyParentPolicies(parent.ServerPolicy);
+
+            return this;
+        }
+
+        protected internal void Update(BaseNodeUpdate upadate)
+        {
+            Description = upadate.Description ?? Description;
+        }
 
         internal virtual void BuildProductNameAndPath()
         {
-            RootProductId = ParentProduct.RootProductId;
-            RootProductName = ParentProduct.RootProductName;
             Path = $"{ParentProduct.Path}{CommonConstants.SensorPathSeparator}{DisplayName}";
         }
 
 
-        internal abstract void RefreshOutdatedError();
+        internal abstract bool HasServerValidationChange();
 
 
-        internal void ApplyPolicies(List<string> entityPolicies, Dictionary<Guid, Policy> allPolicies)
+        internal void ApplyPolicies(List<string> policyIds, Dictionary<string, Policy> allPolicies)
         {
-            if (entityPolicies != null)
-                foreach (var (_, policy) in allPolicies.IntersectBy(entityPolicies, k => k.Key.ToString()))
+            foreach (var id in policyIds ?? Enumerable.Empty<string>())
+                if (allPolicies.TryGetValue(id, out var policy))
                     AddPolicy(policy);
         }
 
-        internal virtual void AddPolicy(Policy policy)
-        {
-            if (policy is ExpectedUpdateIntervalPolicy expectedUpdateIntervalPolicy)
-                ExpectedUpdateInterval = expectedUpdateIntervalPolicy;
-        }
+        internal virtual void AddPolicy(Policy policy) => ServerPolicy.ApplyPolicy((ServerPolicy)policy);
 
-        protected virtual List<string> GetPolicyIds()
-        {
-            var policies = new List<string>(1 << 2);
-
-            if (ExpectedUpdateInterval != null)
-                policies.Add(ExpectedUpdateInterval.Id.ToString());
-
-            return policies;
-        }
+        protected virtual List<Guid> GetPolicyIds() => ServerPolicy.ToList();
     }
 }

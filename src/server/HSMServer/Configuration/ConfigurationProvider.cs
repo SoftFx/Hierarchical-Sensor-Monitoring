@@ -1,12 +1,12 @@
 ﻿using HSMCommon.Constants;
+using HSMServer.Core.Configuration;
 using HSMServer.Core.DataLayer;
-using HSMServer.Core.Model;
 using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
 using System.IO;
 
-namespace HSMServer.Core.Configuration
+namespace HSMServer.Configuration
 {
     public class ConfigurationProvider : IConfigurationProvider
     {

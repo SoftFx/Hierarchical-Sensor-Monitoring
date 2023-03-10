@@ -1,7 +1,7 @@
-﻿using System;
-using HSMServer.Core.Model;
+﻿using HSMServer.Core.Registration;
+using System;
 
-namespace HSMServer.Core.Registration
+namespace HSMServer.Registration
 {
     public interface IRegistrationTicketManager
     {

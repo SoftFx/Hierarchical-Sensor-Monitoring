@@ -1,5 +1,5 @@
-﻿using HSMServer.Core.Extensions;
-using HSMServer.Core.Model;
+﻿using HSMServer.Core.Model;
+using HSMServer.Extensions;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;

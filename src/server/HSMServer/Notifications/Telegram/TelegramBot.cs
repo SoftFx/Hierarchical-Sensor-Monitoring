@@ -1,9 +1,10 @@
 ﻿using HSMCommon.Constants;
 using HSMServer.Authentication;
+using HSMServer.Configuration;
 using HSMServer.Core.Cache;
-using HSMServer.Core.Configuration;
 using HSMServer.Core.Model;
 using HSMServer.Extensions;
+using HSMServer.Model.TreeViewModel;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
@@ -28,10 +29,11 @@ namespace HSMServer.Notifications
             AllowedUpdates = { }, // receive all update types
         };
 
-        private readonly IUserManager _userManager;
-        private readonly ITreeValuesCache _cache;
         private readonly IConfigurationProvider _configurationProvider;
         private readonly TelegramUpdateHandler _updateHandler;
+        private readonly IUserManager _userManager;
+        private readonly ITreeValuesCache _cache;
+        private readonly TreeViewModel _tree;
 
         private CancellationTokenSource _tokenSource = new();
         private TelegramBotClient _bot;
@@ -44,13 +46,14 @@ namespace HSMServer.Notifications
             ConfigurationConstants.AreBotMessagesEnabled).Value, out var result) && result;
 
 
-        internal TelegramBot(IUserManager userManager, ITreeValuesCache cache,
+        internal TelegramBot(IUserManager userManager, ITreeValuesCache cache, TreeViewModel tree,
             IConfigurationProvider configurationProvider)
         {
             _userManager = userManager;
             _userManager.RemoveUserEvent += RemoveUserEventHandler;
 
             _cache = cache;
+            _tree = tree;
             _cache.ChangeProductEvent += RemoveProductEventHandler;
             _cache.NotifyAboutChangesEvent += SendMessage;
 
@@ -73,7 +76,7 @@ namespace HSMServer.Notifications
         internal string GetInvitationLink(User user) =>
             $"https://t.me/{BotName}?start={_addressBook.BuildInvitationToken(user)}";
 
-        internal string GetStartCommandForGroup(ProductModel product) =>
+        internal string GetStartCommandForGroup(ProductNodeViewModel product) =>
             $"{TelegramBotCommands.Start}@{BotName} {_addressBook.BuildInvitationToken(product)}";
 
         internal async Task<string> GetChatLink(long chatId)
@@ -159,7 +162,7 @@ namespace HSMServer.Notifications
                 foreach (var (_, chat) in user.Notifications.Telegram.Chats)
                     _addressBook.RegisterChat(user, chat);
 
-            foreach (var product in _cache.GetProducts())
+            foreach (var product in _tree.GetRootProducts())
                 foreach (var (_, chat) in product.Notifications.Telegram.Chats)
                     _addressBook.RegisterChat(product, chat);
         }
@@ -231,9 +234,9 @@ namespace HSMServer.Notifications
 
         private void RemoveUserEventHandler(User user) => _addressBook.RemoveAllChats(user);
 
-        private void RemoveProductEventHandler(ProductModel product, TransactionType transaction)
+        private void RemoveProductEventHandler(ProductModel model, TransactionType transaction)
         {
-            if (transaction == TransactionType.Delete)
+            if (transaction == TransactionType.Delete && _tree.Nodes.TryGetValue(model.Id, out var product))
                 _addressBook.RemoveAllChats(product);
         }
 

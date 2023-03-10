@@ -2,7 +2,7 @@
 using System.Security.Cryptography;
 using System.Text;
 
-namespace HSMServer.Core.Encryption
+namespace HSMServer.Encryption
 {
     public static class AESCypher
     {

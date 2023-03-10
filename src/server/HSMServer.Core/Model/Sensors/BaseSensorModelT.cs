@@ -1,4 +1,7 @@
-﻿using HSMServer.Core.DataLayer;
+﻿using HSMDatabase.AccessManager.DatabaseEntities;
+using HSMServer.Core.DataLayer;
+using HSMServer.Core.Model.Policies;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -9,7 +12,10 @@ namespace HSMServer.Core.Model
         private readonly ValidationResult _badValueType =
             new($"Sensor value type is not {typeof(T).Name}", SensorStatus.Error);
 
-        private readonly List<Policy<T>> _policies = new();
+        private readonly List<DataPolicy<T>> _dataPolicies = new();
+
+
+        protected BaseSensorModel(SensorEntity entity) : base(entity) { }
 
 
         protected override ValuesStorage<T> Storage { get; }
@@ -38,17 +44,17 @@ namespace HSMServer.Core.Model
 
         internal override void AddPolicy(Policy policy)
         {
-            if (policy is Policy<T> policyT)
-                _policies.Add(policyT);
+            if (policy is DataPolicy<T> policyT)
+                _dataPolicies.Add(policyT);
             else
                 base.AddPolicy(policy);
         }
 
-        protected override List<string> GetPolicyIds()
+        protected override List<Guid> GetPolicyIds()
         {
             var policies = base.GetPolicyIds();
 
-            policies.AddRange(_policies.Select(p => p.Id.ToString()));
+            policies.AddRange(_dataPolicies.Select(u => u.Id));
 
             return policies;
         }
@@ -80,7 +86,7 @@ namespace HSMServer.Core.Model
                 _internalValidationResult = new(message, value.Status);
             }
 
-            foreach (var policy in _policies)
+            foreach (var policy in _dataPolicies)
                 _internalValidationResult += policy.Validate(value);
         }
     }

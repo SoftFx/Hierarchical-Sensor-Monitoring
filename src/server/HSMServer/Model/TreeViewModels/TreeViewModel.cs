@@ -14,8 +14,8 @@ namespace HSMServer.Model.TreeViewModel
 {
     public class TreeViewModel
     {
-        private readonly ITreeValuesCache _treeValuesCache;
         private readonly IUserManager _userManager;
+        private readonly ITreeValuesCache _cache;
 
 
         public ConcurrentDictionary<Guid, ProductNodeViewModel> Nodes { get; } = new();
@@ -25,12 +25,12 @@ namespace HSMServer.Model.TreeViewModel
         public ConcurrentDictionary<Guid, AccessKeyViewModel> AccessKeys { get; } = new();
 
 
-        public TreeViewModel(ITreeValuesCache valuesCache, IUserManager userManager)
+        public TreeViewModel(ITreeValuesCache cache, IUserManager userManager)
         {
-            _treeValuesCache = valuesCache;
-            _treeValuesCache.ChangeProductEvent += ChangeProductHandler;
-            _treeValuesCache.ChangeSensorEvent += ChangeSensorHandler;
-            _treeValuesCache.ChangeAccessKeyEvent += ChangeAccessKeyHandler;
+            _cache = cache;
+            _cache.ChangeProductEvent += ChangeProductHandler;
+            _cache.ChangeSensorEvent += ChangeSensorHandler;
+            _cache.ChangeAccessKeyEvent += ChangeAccessKeyHandler;
 
             _userManager = userManager;
 
@@ -69,7 +69,7 @@ namespace HSMServer.Model.TreeViewModel
 
         public List<ProductNodeViewModel> GetUserProducts(User user)
         {
-            var products = GetRootProducts();
+            var products = GetRootProductsWithRecalculation();
 
             if (user == null || user.IsAdmin)
                 return products.ToList();
@@ -82,13 +82,15 @@ namespace HSMServer.Model.TreeViewModel
 
         internal void RecalculateNodesCharacteristics()
         {
-            foreach (var node in GetRootProducts())
+            foreach (var node in GetRootProductsWithRecalculation())
                 node.RecalculateCharacteristics();
         }
 
-        private IEnumerable<ProductNodeViewModel> GetRootProducts()
+        internal IEnumerable<ProductNodeViewModel> GetRootProducts() => Nodes.Where(x => x.Value.Parent is null).Select(x => x.Value);
+
+        private IEnumerable<ProductNodeViewModel> GetRootProductsWithRecalculation()
         {
-            return Nodes.Where(x => x.Value.Parent is null).Select(x => x.Value.RecalculateCharacteristics());
+            return GetRootProducts().Select(x => x.RecalculateCharacteristics());
         }
 
         internal List<Guid> GetNodeAllSensors(Guid selectedNode)
@@ -119,7 +121,7 @@ namespace HSMServer.Model.TreeViewModel
 
         private void BuildTree()
         {
-            var products = _treeValuesCache.GetTree();
+            var products = _cache.GetTree();
 
             foreach (var product in products)
                 AddNewProductViewModel(product);
@@ -219,9 +221,9 @@ namespace HSMServer.Model.TreeViewModel
         {
             var node = new ProductNodeViewModel(product)
             {
-                RootProduct = _treeValuesCache.GetProduct(product.RootProductId)
+                RootProduct = Nodes[product.RootProductId]
             };
-            
+
             foreach (var (_, sensor) in product.Sensors)
                 AddNewSensorViewModel(sensor, node);
 
@@ -237,7 +239,7 @@ namespace HSMServer.Model.TreeViewModel
         {
             var viewModel = new SensorNodeViewModel(sensor)
             {
-                RootProduct = _treeValuesCache.GetProduct(sensor.RootProductId)
+                RootProduct = parent.RootProduct
             };
 
             parent.AddSensor(viewModel);

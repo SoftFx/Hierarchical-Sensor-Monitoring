@@ -124,7 +124,7 @@ namespace HSMServer.Core.Model
         }
 
         public static bool operator ==(ValidationResult result1, ValidationResult result2) =>
-            result1.Message == result2.Message && result1.Result == result2.Result;
+            (result1.Result, result1.Message) == (result2.Result, result2.Message);
 
         public static bool operator !=(ValidationResult result1, ValidationResult result2)
             => !(result1 == result2);

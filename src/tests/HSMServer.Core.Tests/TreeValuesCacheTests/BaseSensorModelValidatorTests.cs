@@ -1,5 +1,6 @@
 using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Core.Model;
+using HSMServer.Core.Model.Policies;
 using HSMServer.Core.SensorsUpdatesQueue;
 using HSMServer.Core.Tests.Infrastructure;
 using HSMServer.Core.Tests.MonitoringCoreTests;
@@ -134,13 +135,13 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             foreach (var sensorType in Enum.GetValues<SensorType>())
             {
                 var sensor = BuildSensorModel(sensorType);
-                sensor.AddPolicy(new ExpectedUpdateIntervalPolicy(ticks));
+                sensor.AddPolicy(new ExpectedUpdateIntervalPolicy(new TimeIntervalModel(ticks)));
 
                 var baseValue = SensorValuesFactory.BuildSensorValue(sensorType) with
                 { ReceivingTime = new DateTime(DateTime.UtcNow.Ticks - ticks) };
 
                 Assert.True(sensor.TryAddValue(baseValue, out _));
-                Assert.True(sensor.CheckExpectedUpdateInterval());
+                Assert.True(sensor.HasServerValidationChange());
                 Assert.True(sensor.ValidationResult.IsWarning);
                 Assert.Equal(SensorStatus.Warning, sensor.ValidationResult.Result);
                 Assert.Equal(SensorValueOutdated, sensor.ValidationResult.Message);
@@ -181,7 +182,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             foreach (var sensorType in Enum.GetValues<SensorType>())
             {
                 var sensor = BuildSensorModel(sensorType);
-                sensor.AddPolicy(new ExpectedUpdateIntervalPolicy(TestTicks));
+                sensor.AddPolicy(new ExpectedUpdateIntervalPolicy(new TimeIntervalModel(TestTicks)));
 
                 var baseValue = SensorValuesFactory.BuildSensorValue(sensorType) with
                 {
@@ -190,7 +191,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
                 };
 
                 Assert.True(sensor.TryAddValue(baseValue, out _));
-                Assert.True(sensor.CheckExpectedUpdateInterval());
+                Assert.True(sensor.HasServerValidationChange());
                 Assert.True(sensor.ValidationResult.IsWarning);
                 Assert.Equal(GetFinalStatus(status, SensorStatus.Warning), sensor.ValidationResult.Result);
 
