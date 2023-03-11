@@ -2,7 +2,7 @@
 using HSMServer.Authentication;
 using HSMServer.Configuration;
 using HSMServer.Core.Cache;
-using HSMServer.Core.Configuration;
+using HSMServer.Notification.Settings;
 using NLog;
 using System;
 using System.Reflection;

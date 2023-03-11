@@ -1,7 +1,7 @@
 ﻿using HSMServer.Authentication;
 using HSMServer.Core.Cache;
-using HSMServer.Core.Model;
 using HSMServer.Model.TreeViewModel;
+using HSMServer.Notification.Settings;
 using HSMServer.Notifications;
 using Microsoft.Extensions.Hosting;
 using System;

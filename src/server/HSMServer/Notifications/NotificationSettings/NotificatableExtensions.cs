@@ -1,10 +1,9 @@
 ﻿using HSMServer.Authentication;
 using HSMServer.Core.Cache;
-using HSMServer.Core.Model;
 using HSMServer.Model.Authentication;
 using HSMServer.Model.TreeViewModel;
 
-namespace HSMServer.Notifications
+namespace HSMServer.Notification.Settings
 {
     internal static class NotificatableExtensions
     {
@@ -12,13 +11,13 @@ namespace HSMServer.Notifications
             {"_", "[", "]", "(", ")", "~", "`", ">", "#", "+", "-", "=", "|", "{", "}", ".", "!", "*"};
 
         private static string[] _escapedSymbols;
-        
-        
+
+
         static NotificatableExtensions()
         {
             BuildEscapedSymbols();
         }
-        
+
         private static void BuildEscapedSymbols()
         {
             _escapedSymbols = new string[_specialSymbolsMarkdownV2.Length];
@@ -26,7 +25,7 @@ namespace HSMServer.Notifications
             for (int i = 0; i < _escapedSymbols.Length; i++)
                 _escapedSymbols[i] = $"\\{_specialSymbolsMarkdownV2[i]}";
         }
-        
+
         public static string EscapeMarkdownV2(this string message)
         {
             for (int i = 0; i < _escapedSymbols.Length; i++)
@@ -34,7 +33,7 @@ namespace HSMServer.Notifications
 
             return message;
         }
-        
+
         internal static void UpdateEntity(this INotificatable entity, IUserManager userManager, ITreeValuesCache cache)
         {
             if (entity is User user)

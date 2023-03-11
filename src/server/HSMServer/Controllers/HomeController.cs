@@ -10,6 +10,7 @@ using HSMServer.Model.Authentication;
 using HSMServer.Model.Authentication.History;
 using HSMServer.Model.TreeViewModel;
 using HSMServer.Model.ViewModel;
+using HSMServer.Notification.Settings;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System;

@@ -1,9 +1,11 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities;
+using HSMServer.Core.Model;
+using HSMServer.Notifications.Telegram;
 using System.Collections.Concurrent;
 using System.Linq;
 using Telegram.Bot.Types;
 
-namespace HSMServer.Core.Model
+namespace HSMServer.Notification.Settings
 {
     public sealed class TelegramSettings
     {

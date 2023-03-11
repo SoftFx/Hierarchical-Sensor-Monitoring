@@ -5,6 +5,7 @@ using HSMServer.Core.Cache;
 using HSMServer.Core.Model;
 using HSMServer.Extensions;
 using HSMServer.Model.TreeViewModel;
+using HSMServer.Notification.Settings;
 using System;
 using System.Threading;
 using System.Threading.Tasks;

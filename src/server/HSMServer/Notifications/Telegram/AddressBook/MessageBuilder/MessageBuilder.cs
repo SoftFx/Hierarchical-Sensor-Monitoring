@@ -1,5 +1,6 @@
 ﻿using HSMServer.Core.Model;
 using HSMServer.Extensions;
+using HSMServer.Notification.Settings;
 using HSMServer.Notifications.Telegram.AddressBook.MessageBuilder;
 using System;
 using System.Text;

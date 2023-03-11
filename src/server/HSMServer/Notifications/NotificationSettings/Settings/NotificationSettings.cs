@@ -4,7 +4,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace HSMServer.Core.Model
+namespace HSMServer.Notification.Settings
 {
     public class NotificationSettings
     {

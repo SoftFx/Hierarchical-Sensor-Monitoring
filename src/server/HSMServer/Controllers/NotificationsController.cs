@@ -6,6 +6,7 @@ using HSMServer.Helpers;
 using HSMServer.Model;
 using HSMServer.Model.Authentication;
 using HSMServer.Model.TreeViewModel;
+using HSMServer.Notification.Settings;
 using HSMServer.Notifications;
 using Microsoft.AspNetCore.Mvc;
 using System.Threading.Tasks;

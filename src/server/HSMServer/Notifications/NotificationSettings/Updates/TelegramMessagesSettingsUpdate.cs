@@ -1,4 +1,6 @@
-﻿namespace HSMServer.Core.Model
+﻿using HSMServer.Core.Model;
+
+namespace HSMServer.Notification.Settings
 {
     public readonly struct TelegramMessagesSettingsUpdate
     {

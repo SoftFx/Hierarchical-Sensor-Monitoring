@@ -2,7 +2,7 @@
 using System;
 using Telegram.Bot.Types;
 
-namespace HSMServer.Core.Model
+namespace HSMServer.Notifications.Telegram
 {
     public sealed class TelegramChat
     {
