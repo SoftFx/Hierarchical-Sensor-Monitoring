@@ -12,11 +12,15 @@ namespace HSMServer.Core.Model.Policies
         //[JsonIgnore] //need to remove
         //public TimeIntervalModel TimeInterval { get; private set; }
 
-        public TimeInterval ExpectedUpdatePeriod { get; private set; } //??? unnessesary
+
+        public TimeInterval ExpectedUpdatePeriod { get; set; } //??? unnessesary
+
 
         [JsonPropertyName("ExpectedUpdateInterval")]
-        public long CustomPeriod { get; private set; } // ??? unnessesary
+        public long CustomPeriod { get; set; } // ??? unnessesary
 
+
+        public ExpectedUpdateIntervalPolicy() : base() { }
 
         public ExpectedUpdateIntervalPolicy(TimeIntervalModel time) : base(time)
         {

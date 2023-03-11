@@ -152,6 +152,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         private List<SensorModelInfo> BuildSensorModelInfos(int sensorsCount, SensorType type)
         {
             var sensors = new List<SensorModelInfo>(sensorsCount);
+
             for (int i = 0; i < sensorsCount; ++i)
             {
                 var sensorEntity = EntitiesFactory.BuildSensorEntity(parent: TestProductsManager.TestProduct.Id, type: (byte)type);
@@ -161,6 +162,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
 
                 var info = new SensorModelInfo()
                 {
+                    Id = sensor.Id,
                     Path = sensor.Path,
                     Type = sensor.Type,
                 };
@@ -174,11 +176,12 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
 
         private sealed class SensorModelInfo
         {
-            public Guid Id { get; set; }
-
             public string Path { get; init; }
 
             public SensorType Type { get; init; }
+
+
+            public Guid Id { get; set; } = Guid.NewGuid();
         }
     }
 }

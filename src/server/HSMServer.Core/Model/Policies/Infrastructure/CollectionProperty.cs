@@ -10,8 +10,10 @@ namespace HSMServer.Core.Model.Policies
 
         public abstract bool IsEmpty { get; }
 
+        public abstract bool IsSet { get; }
 
-        internal abstract void SetPolicy(ServerPolicy policy);
+
+        internal abstract void SetPolicy(Policy policy);
     }
 
 
@@ -22,7 +24,9 @@ namespace HSMServer.Core.Model.Policies
 
         public override Guid PolicyGuid => _policy?.Id ?? Guid.Empty;
 
-        public override bool IsEmpty => _policy == null;
+        public override bool IsEmpty => Policy == null;
+
+        public override bool IsSet => _policy == null;
 
 
         public T Policy => _policy ?? ((CollectionProperty<T>)ParentProperty)?.Policy;
@@ -31,7 +35,7 @@ namespace HSMServer.Core.Model.Policies
         public Action Updated; // TODO remove?
 
 
-        internal override void SetPolicy(ServerPolicy policy)
+        internal override void SetPolicy(Policy policy)
         {
             _policy = (T)policy;
 

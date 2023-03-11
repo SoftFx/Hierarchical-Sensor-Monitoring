@@ -56,20 +56,6 @@ namespace HSMServer.Core.Model
             return this;
         }
 
-        internal ProductEntity ToProductEntity() =>
-            new()
-            {
-                Id = Id.ToString(),
-                AuthorId = AuthorId.ToString(),
-                ParentProductId = ParentProduct?.Id.ToString(),
-                State = (int)State,
-                DisplayName = DisplayName,
-                Description = Description,
-                CreationDate = CreationDate.Ticks,
-                NotificationSettings = NotificationsSettings,
-                Policies = GetPolicyIds().Select(u => $"{u}").ToList(),
-            };
-
 
         internal override bool HasServerValidationChange()
         {
@@ -83,5 +69,19 @@ namespace HSMServer.Core.Model
 
             return result;
         }
+
+        internal ProductEntity ToProductEntity() =>
+            new()
+            {
+                Id = Id.ToString(),
+                AuthorId = AuthorId.ToString(),
+                ParentProductId = ParentProduct?.Id.ToString(),
+                State = (int)State,
+                DisplayName = DisplayName,
+                Description = Description,
+                CreationDate = CreationDate.Ticks,
+                NotificationSettings = NotificationsSettings,
+                Policies = GetPolicyIds().Select(u => $"{u}").ToList(),
+            };
     }
 }

@@ -62,8 +62,12 @@ namespace HSMServer.Model.TreeViewModel
             Name = model.DisplayName;
             Description = model.Description;
 
-            ExpectedUpdateInterval.Update(model.ServerPolicy.ExpectedUpdate?.Policy.TimeInterval);
-            IsOwnExpectedUpdateInterval = model.ServerPolicy.ExpectedUpdate.IsEmpty;
+            var updatePolicy = model.ServerPolicy.ExpectedUpdate;
+
+            IsOwnExpectedUpdateInterval = updatePolicy.IsSet;
+
+            if (!updatePolicy.IsEmpty)
+                ExpectedUpdateInterval.Update(updatePolicy.Policy.TimeInterval);
         }
     }
 }

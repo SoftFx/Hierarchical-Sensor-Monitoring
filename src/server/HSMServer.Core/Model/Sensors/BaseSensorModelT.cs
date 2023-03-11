@@ -42,7 +42,7 @@ namespace HSMServer.Core.Model
             valuesBytes.Select(v => v.ConvertToSensorValue<T>()).ToList();
 
 
-        internal override void AddPolicy(Policy policy)
+        internal override void AddPolicy<U>(U policy)
         {
             if (policy is DataPolicy<T> policyT)
                 _dataPolicies.Add(policyT);

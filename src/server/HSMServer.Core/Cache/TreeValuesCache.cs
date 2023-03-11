@@ -303,7 +303,7 @@ namespace HSMServer.Core.Cache
             if (!_sensors.TryGetValue(sensorId, out var sensor))
                 return;
 
-            sensor.ClearValues();
+            sensor.ResetSensor();
             _databaseCore.ClearSensorValues(sensor.Id.ToString());
 
             ChangeSensorEvent?.Invoke(sensor, TransactionType.Update);
@@ -382,6 +382,7 @@ namespace HSMServer.Core.Cache
             {
                 SensorEntity entity = new()
                 {
+                    Id = Guid.NewGuid().ToString(),
                     DisplayName = sensorName,
                     Type = (byte)value.Type,
                 };

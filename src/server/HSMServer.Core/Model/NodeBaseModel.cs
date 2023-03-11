@@ -75,15 +75,15 @@ namespace HSMServer.Core.Model
 
         internal abstract bool HasServerValidationChange();
 
+        internal virtual void AddPolicy<T>(T policy) where T: Policy => ServerPolicy.ApplyPolicy(policy);
+
+        protected virtual List<Guid> GetPolicyIds() => ServerPolicy.ToList();
+
         internal void ApplyPolicies(List<string> policyIds, Dictionary<string, Policy> allPolicies)
         {
             foreach (var id in policyIds ?? Enumerable.Empty<string>())
                 if (allPolicies.TryGetValue(id, out var policy))
                     AddPolicy(policy);
         }
-
-        internal virtual void AddPolicy(Policy policy) => ServerPolicy.ApplyPolicy((ServerPolicy)policy);
-
-        protected virtual List<Guid> GetPolicyIds() => ServerPolicy.ToList();
     }
 }

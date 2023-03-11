@@ -47,6 +47,7 @@ namespace HSMServer.Core.Tests.Infrastructure
                 Description = RandomGenerator.GetRandomString(),
                 Type = type ?? RandomGenerator.GetRandomByte(),
                 Unit = RandomGenerator.GetRandomString(),
+                CreationDate = DateTime.UtcNow.Ticks,
             };
 
 

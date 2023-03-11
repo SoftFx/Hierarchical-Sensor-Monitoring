@@ -221,7 +221,7 @@ namespace HSMServer.Model.TreeViewModel
         {
             var node = new ProductNodeViewModel(product)
             {
-                RootProduct = Nodes[product.RootProductId]
+                RootProduct = Nodes.GetValueOrDefault(product.RootProductId)
             };
 
             foreach (var (_, sensor) in product.Sensors)

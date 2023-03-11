@@ -24,7 +24,7 @@ namespace HSMServer.Core.Model
     {
         private static readonly ValidationResult _muteResult = new("Muted", SensorStatus.OffTime);
 
-        private  ValidationResult _serverResult = ValidationResult.Ok;
+        private ValidationResult _serverResult = ValidationResult.Ok;
         protected ValidationResult _dataResult = ValidationResult.Ok;
 
         protected abstract ValuesStorage Storage { get; }
@@ -53,7 +53,7 @@ namespace HSMServer.Core.Model
         {
             State = (SensorState)entity.State;
             Unit = entity.Unit;
-            EndOfMuting = entity.EndOfMuting == 0L ? null : new DateTime(entity.EndOfMuting);
+            EndOfMuting = entity.EndOfMuting > 0L ? new DateTime(entity.EndOfMuting) : null;
         }
 
 
@@ -86,35 +86,34 @@ namespace HSMServer.Core.Model
         }
 
 
-        internal SensorEntity ToEntity() =>
-            new()
-            {
-                Id = Id.ToString(),
-                AuthorId = AuthorId.ToString(),
-                ProductId = ParentProduct.Id.ToString(),
-                DisplayName = DisplayName,
-                Description = Description,
-                Unit = Unit,
-                CreationDate = CreationDate.Ticks,
-                Type = (byte)Type,
-                State = (byte)State,
-                Policies = GetPolicyIds().Select(u => $"{u}").ToList(),
-                EndOfMuting = EndOfMuting?.Ticks ?? 0L,
-            };
-
-
         internal abstract bool TryAddValue(BaseValue value, out BaseValue cachedValue);
 
         internal abstract void AddValue(byte[] valueBytes);
 
         internal abstract List<BaseValue> ConvertValues(List<byte[]> valuesBytes);
 
-        internal void ClearValues()
+        internal void ResetSensor()
         {
             _serverResult = ValidationResult.Ok;
             _dataResult = ValidationResult.Ok;
 
             Storage.Clear();
         }
+
+
+        internal SensorEntity ToEntity() => new()
+        {
+            Id = Id.ToString(),
+            AuthorId = AuthorId.ToString(),
+            ProductId = ParentProduct.Id.ToString(),
+            DisplayName = DisplayName,
+            Description = Description,
+            Unit = Unit,
+            CreationDate = CreationDate.Ticks,
+            Type = (byte)Type,
+            State = (byte)State,
+            Policies = GetPolicyIds().Select(u => $"{u}").ToList(),
+            EndOfMuting = EndOfMuting?.Ticks ?? 0L,
+        };
     }
 }

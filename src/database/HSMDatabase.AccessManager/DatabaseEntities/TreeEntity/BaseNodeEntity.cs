@@ -7,7 +7,7 @@ namespace HSMDatabase.AccessManager.DatabaseEntities
         public List<string> Policies { get; init; }
 
 
-        public string Id { get; init; }
+        public required string Id { get; init; }
 
         public string AuthorId { get; init; }
 

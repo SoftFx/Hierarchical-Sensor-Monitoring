@@ -1,4 +1,5 @@
-﻿using System;
+﻿using Newtonsoft.Json;
+using System;
 
 namespace HSMServer.Core.Model
 {
@@ -19,8 +20,7 @@ namespace HSMServer.Core.Model
 
         public long CustomPeriod { get; init; }
 
-
-        internal bool IsEmpty => TimeInterval == TimeInterval.Custom && CustomPeriod == 0;
+        internal bool IsEmpty => TimeInterval == TimeInterval.Custom && CustomPeriod == 0; //should be internal or use JsonIgnore
 
 
         public TimeIntervalModel() { }

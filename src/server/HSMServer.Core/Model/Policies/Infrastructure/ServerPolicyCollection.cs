@@ -29,11 +29,10 @@ namespace HSMServer.Core.Model.Policies
         }
 
 
-        internal void ApplyPolicy(ServerPolicy serverPolicy)
+        internal void ApplyPolicy<T>(T serverPolicy) where T : Policy
         {
-            foreach (var type in _properties.Keys)
-                if (typeof(ServerPolicy).FullName == type.FullName)
-                    _properties[type].SetPolicy(serverPolicy);
+            if (_properties.TryGetValue(typeof(T), out var property))
+                property.SetPolicy(serverPolicy);
         }
 
         internal void ApplyParentPolicies(ServerPolicyCollection parentCollection)
@@ -46,9 +45,9 @@ namespace HSMServer.Core.Model.Policies
         {
             var result = ValidationResult.Ok;
 
-            result += RestoreOffTimeStatus.Policy.Validate(date);
-            result += RestoreWarningStatus.Policy.Validate(date);
-            result += RestoreErrorStatus.Policy.Validate(date);
+            result += RestoreOffTimeStatus.Policy?.Validate(date) ?? ValidationResult.Ok;
+            result += RestoreWarningStatus.Policy?.Validate(date) ?? ValidationResult.Ok;
+            result += RestoreErrorStatus.Policy?.Validate(date) ?? ValidationResult.Ok;
 
             return result;
         }
@@ -56,7 +55,7 @@ namespace HSMServer.Core.Model.Policies
         public IEnumerator<Guid> GetEnumerator()
         {
             foreach (var property in _properties.Values)
-                if (!property.IsEmpty)
+                if (!property.IsSet)
                     yield return property.PolicyGuid;
         }
 

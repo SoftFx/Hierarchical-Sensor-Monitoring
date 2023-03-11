@@ -8,7 +8,6 @@ namespace HSMServer.Core.Model.Policies
     {
         protected readonly ValidationResult _validationFail;
 
-        [JsonIgnore]
         protected static ValidationResult Ok => ValidationResult.Ok;
 
 
@@ -54,9 +53,9 @@ namespace HSMServer.Core.Model.Policies
         public TimeIntervalModel TimeInterval { get; set; }
 
 
-        public ServerPolicy() { }
+        public ServerPolicy() : base() { } //for serialization
 
-        protected ServerPolicy(TimeIntervalModel interval)
+        protected ServerPolicy(TimeIntervalModel interval) : base()
         {
             TimeInterval = interval;
         }
