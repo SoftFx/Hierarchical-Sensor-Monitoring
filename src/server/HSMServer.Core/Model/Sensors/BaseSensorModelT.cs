@@ -1,5 +1,6 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Core.DataLayer;
+using HSMServer.Core.Extensions;
 using HSMServer.Core.Model.Policies;
 using System;
 using System.Collections.Generic;
@@ -21,13 +22,14 @@ namespace HSMServer.Core.Model
         }
 
 
-        internal override bool TryAddValue(BaseValue value, out BaseValue cachedValue)
+        internal override bool TryAddValue(BaseValue value)
         {
-            var result = TryValidate(value, out var valueT);
+            var canStore = TryValidate(value, out var valueT);
 
-            cachedValue = result ? Storage.AddValue(valueT) : default;
+            if (canStore)
+                Storage.AddValue(valueT);
 
-            return result;
+            return canStore;
         }
 
         internal override void AddValue(byte[] valueBytes)
@@ -52,12 +54,9 @@ namespace HSMServer.Core.Model
 
         protected override List<Guid> GetPolicyIds()
         {
-            var policies = base.GetPolicyIds();
+            var dataPolicyIds = _dataPolicies.Where(u => u != _typePolicy).Select(u => u.Id);
 
-            policies.AddRange(_dataPolicies.Where(u => u != _typePolicy)
-                                           .Select(u => u.Id));
-
-            return policies;
+            return base.GetPolicyIds().AddRangeFluent(dataPolicyIds);
         }
 
 

@@ -398,8 +398,8 @@ namespace HSMServer.Core.Cache
 
             var oldStatus = sensor.ValidationResult;
 
-            if (sensor.TryAddValue(value, out var cachedValue) && cachedValue != null)
-                _databaseCore.AddSensorValue(cachedValue.ToEntity(sensor.Id));
+            if (sensor.TryAddValue(value) && sensor.LastDbValue != null)
+                _databaseCore.AddSensorValue(sensor.LastDbValue.ToEntity(sensor.Id));
 
             NotifyAboutChanges(sensor, oldStatus);
         }

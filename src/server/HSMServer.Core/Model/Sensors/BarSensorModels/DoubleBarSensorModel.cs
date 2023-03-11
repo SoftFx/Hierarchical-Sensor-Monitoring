@@ -8,7 +8,7 @@ namespace HSMServer.Core.Model
 
         public override SensorType Type { get; } = SensorType.DoubleBar;
 
-        BarBaseValue IBarSensor.LocalLastValue => Storage.LocalLastValue;
+        BarBaseValue IBarSensor.LocalLastValue => Storage.PartialLastValue;
 
 
         public DoubleBarSensorModel(SensorEntity entity) : base(entity) { }

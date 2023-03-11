@@ -44,6 +44,8 @@ namespace HSMServer.Core.Model
 
         public BaseValue LastValue => Storage.LastValue;
 
+        public BaseValue LastDbValue => Storage.LastDbValue;
+
         public DateTime LastUpdateTime => Storage.LastValue?.ReceivingTime ?? DateTime.MinValue;
 
         public bool HasData => Storage.HasData;
@@ -86,7 +88,7 @@ namespace HSMServer.Core.Model
         }
 
 
-        internal abstract bool TryAddValue(BaseValue value, out BaseValue cachedValue);
+        internal abstract bool TryAddValue(BaseValue value);
 
         internal abstract void AddValue(byte[] valueBytes);
 

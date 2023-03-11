@@ -9,7 +9,7 @@ namespace HSMServer.Core.Model
 
         protected override int CacheSize => 1;
 
-        internal override BaseValue LastValue => _lastValue;
+        internal override FileValue LastValue => _lastValue;
 
 
         internal override FileValue AddValueBase(FileValue value)
@@ -21,8 +21,9 @@ namespace HSMServer.Core.Model
             return base.AddValueBase(value);
         }
 
-        internal override FileValue AddValue(FileValue value) =>
+        internal override void AddValue(FileValue value) =>
             base.AddValue(value.CompressContent());
+
 
         internal override void Clear()
         {

@@ -7,16 +7,19 @@ namespace HSMServer.Core.Model
 {
     public abstract class ValuesStorage
     {
-        internal abstract bool HasData { get; }
-
         internal abstract BaseValue LastValue { get; }
 
+        internal abstract bool HasData { get; }
 
-        internal abstract void Clear();
+
+        internal virtual BaseValue LastDbValue => LastValue;
+
+
+        internal abstract List<BaseValue> GetValues(DateTime from, DateTime to);
 
         internal abstract List<BaseValue> GetValues(int count);
 
-        internal abstract List<BaseValue> GetValues(DateTime from, DateTime to);
+        internal abstract void Clear();
     }
 
 
@@ -29,7 +32,7 @@ namespace HSMServer.Core.Model
 
         internal override bool HasData => !_cachedValues.IsEmpty;
 
-        internal override BaseValue LastValue => _cachedValues.LastOrDefault();
+        internal override T LastValue => _cachedValues.LastOrDefault();
 
 
         internal virtual T AddValueBase(T value)
@@ -42,7 +45,7 @@ namespace HSMServer.Core.Model
             return value;
         }
 
-        internal virtual T AddValue(T value) => AddValueBase(value);
+        internal virtual void AddValue(T value) => AddValueBase(value);
 
         internal override void Clear() => _cachedValues.Clear();
 
