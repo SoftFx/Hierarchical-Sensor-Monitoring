@@ -1,8 +1,7 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities;
-using HSMServer.Core.Model;
-using HSMServer.Core.Model.UserFilters;
 using HSMServer.Model.Authentication.History;
 using HSMServer.Notification.Settings;
+using HSMServer.UserFilters;
 using System;
 using System.Collections.Generic;
 using System.Linq;

@@ -1,7 +1,7 @@
 ﻿using System.Linq;
 using System.Text.Json.Serialization;
 
-namespace HSMServer.Core.Model.UserFilters
+namespace HSMServer.UserFilters
 {
     public abstract class UserFilterGroupBase
     {
@@ -28,10 +28,11 @@ namespace HSMServer.Core.Model.UserFilters
 
     public sealed class FilterProperty
     {
+        [JsonIgnore]
+        public string Name { get; set; }
+
         public bool Value { get; set; }
 
-        [JsonIgnore] 
-        public string Name { get; set; }
 
         public FilterProperty() { }
 
@@ -39,6 +40,6 @@ namespace HSMServer.Core.Model.UserFilters
         {
             Name = name;
         }
-        
+
     }
 }

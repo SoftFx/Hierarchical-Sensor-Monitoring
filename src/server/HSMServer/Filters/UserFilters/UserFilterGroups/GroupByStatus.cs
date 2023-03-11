@@ -1,4 +1,6 @@
-﻿namespace HSMServer.Core.Model.UserFilters
+﻿using HSMServer.Core.Model;
+
+namespace HSMServer.UserFilters
 {
     public sealed class GroupByStatus : UserFilterGroupBase
     {

@@ -1,4 +1,4 @@
-﻿namespace HSMServer.Core.Model.UserFilters
+﻿namespace HSMServer.UserFilters
 {
     public class GroupByNotifications : UserFilterGroupBase
     {

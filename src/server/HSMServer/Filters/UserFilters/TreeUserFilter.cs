@@ -4,7 +4,7 @@ using System.Linq;
 using System.Text;
 using System.Text.Json.Serialization;
 
-namespace HSMServer.Core.Model.UserFilters
+namespace HSMServer.UserFilters
 {
     [Flags]
     public enum FilterGroupType
