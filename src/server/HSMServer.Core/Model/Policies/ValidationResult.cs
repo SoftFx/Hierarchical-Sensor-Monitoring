@@ -48,7 +48,7 @@ namespace HSMServer.Core.Model
         }
 
 
-        public bool IsSuccess => Result == SensorStatus.Ok;
+        public bool IsOk => Result == SensorStatus.Ok;
 
         public bool IsWarning => Warnings.Count > 0;
 
@@ -80,6 +80,15 @@ namespace HSMServer.Core.Model
             }
         }
 
+
+        internal static ValidationResult FromValue<T>(T value) where T : BaseValue
+        {
+            if (value.Status.IsOk())
+                return Ok;
+
+            var comment = string.IsNullOrEmpty(value.Comment) ? $"User data has {value.Status} status" : value.Comment;
+            return new(comment, value.Status);
+        }
 
         private static string JoinStrings(IEnumerable<string> items)
         {

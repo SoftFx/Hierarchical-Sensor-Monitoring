@@ -9,16 +9,15 @@ namespace HSMServer.Core.Model
 {
     public abstract class BaseSensorModel<T> : BaseSensorModel where T : BaseValue
     {
-        private readonly ValidationResult _badValueType =
-            new($"Sensor value type is not {typeof(T).Name}", SensorStatus.Error);
+        private readonly List<DataPolicy<T>> _dataPolicies = new()
+        {
+            new CorrectDataTypePolicy<T>()
+        };
 
-        private readonly List<DataPolicy<T>> _dataPolicies = new();
+        protected override ValuesStorage<T> Storage { get; }
 
 
         protected BaseSensorModel(SensorEntity entity) : base(entity) { }
-
-
-        protected override ValuesStorage<T> Storage { get; }
 
 
         internal override bool TryAddValue(BaseValue value, out BaseValue cachedValue)
@@ -60,34 +59,23 @@ namespace HSMServer.Core.Model
         }
 
 
-        private bool TryValidate(BaseValue value, out T typedValue)
+        private bool TryValidate(BaseValue value, out T valueT)
         {
             _dataResult = ValidationResult.Ok;
 
-            if (value is T valueT)
-            {
-                Validate(valueT);
-
-                typedValue = valueT;
-                return true;
-            }
-
-            typedValue = default;
-            _dataResult += _badValueType;
-
-            return false;
-        }
-
-        private void Validate(T value)
-        {
-            if (value.Status != SensorStatus.Ok)
-            {
-                var message = string.IsNullOrEmpty(value.Comment) ? $"User data has {value.Status} status" : value.Comment;
-                _dataResult = new(message, value.Status);
-            }
+            valueT = value as T;
 
             foreach (var policy in _dataPolicies)
-                _dataResult += policy.Validate(value);
+            {
+                if (_dataResult.IsOk)
+                    _dataResult += policy.Validate(valueT);
+                else
+                    return false;
+            }
+
+            _dataResult += ValidationResult.FromValue(valueT); //add user status
+
+            return true;
         }
     }
 }
