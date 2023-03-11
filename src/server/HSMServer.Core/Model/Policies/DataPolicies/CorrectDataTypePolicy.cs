@@ -1,6 +1,4 @@
-﻿using System;
-
-namespace HSMServer.Core.Model.Policies
+﻿namespace HSMServer.Core.Model.Policies
 {
     internal sealed class CorrectDataTypePolicy<T> : DataPolicy<T> where T : BaseValue
     {
@@ -9,13 +7,8 @@ namespace HSMServer.Core.Model.Policies
         protected override string FailMessage => $"Sensor value type is not {typeof(T).Name}";
 
 
-        public CorrectDataTypePolicy() { }
+        public CorrectDataTypePolicy() : base() { }
 
-
-        //internal ValidationResult Validate(BaseValue value)
-        //{
-        //    return value is T ? Ok : _validationFail;
-        //}
 
         internal override ValidationResult Validate(T value)
         {

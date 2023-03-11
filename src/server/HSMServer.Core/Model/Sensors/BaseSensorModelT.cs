@@ -9,15 +9,16 @@ namespace HSMServer.Core.Model
 {
     public abstract class BaseSensorModel<T> : BaseSensorModel where T : BaseValue
     {
-        private readonly List<DataPolicy<T>> _dataPolicies = new()
-        {
-            new CorrectDataTypePolicy<T>()
-        };
+        private readonly List<DataPolicy<T>> _dataPolicies = new();
+        private readonly CorrectDataTypePolicy<T> _typePolicy = new();
 
         protected override ValuesStorage<T> Storage { get; }
 
 
-        protected BaseSensorModel(SensorEntity entity) : base(entity) { }
+        protected BaseSensorModel(SensorEntity entity) : base(entity)
+        {
+            _dataPolicies.Add(_typePolicy);
+        }
 
 
         internal override bool TryAddValue(BaseValue value, out BaseValue cachedValue)
@@ -53,7 +54,8 @@ namespace HSMServer.Core.Model
         {
             var policies = base.GetPolicyIds();
 
-            policies.AddRange(_dataPolicies.Select(u => u.Id));
+            policies.AddRange(_dataPolicies.Where(u => u != _typePolicy)
+                                           .Select(u => u.Id));
 
             return policies;
         }
@@ -67,9 +69,9 @@ namespace HSMServer.Core.Model
 
             foreach (var policy in _dataPolicies)
             {
-                if (_dataResult.IsOk)
-                    _dataResult += policy.Validate(valueT);
-                else
+                _dataResult += policy.Validate(valueT);
+
+                if (policy == _typePolicy && !_dataResult.IsOk)
                     return false;
             }
 
