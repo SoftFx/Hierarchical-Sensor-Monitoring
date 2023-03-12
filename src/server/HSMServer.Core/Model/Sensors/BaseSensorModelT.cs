@@ -31,10 +31,10 @@ namespace HSMServer.Core.Model
             return canStore;
         }
 
-        internal override void AddValue(byte[] bytes) => TryAddValue(bytes.ToValue<T>());
+        internal override bool TryAddValue(byte[] bytes) => TryAddValue(bytes.ToValue<T>());
 
-        internal override List<BaseValue> ConvertValues(List<byte[]> valuesBytes) =>
-            valuesBytes.Select(v => v.ToValue<T>()).ToList();
+        internal override List<BaseValue> ConvertValues(List<byte[]> bytesPages) =>
+            bytesPages.Select(v => v.ToValue<T>()).ToList();
 
 
         internal override void AddPolicy<U>(U policy)

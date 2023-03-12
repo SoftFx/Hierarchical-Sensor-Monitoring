@@ -69,7 +69,7 @@ namespace HSMServer.Model
             
             IgnorePeriod = new(_predefinedIntervals)
             {
-                CanCustomInputBeVisible = false,
+                CustomItemIsVisible = false,
             };
 
             var now = DateTime.UtcNow;

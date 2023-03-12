@@ -55,7 +55,7 @@ namespace HSMServer.Core.Model.Policies
         public IEnumerator<Guid> GetEnumerator()
         {
             foreach (var property in _properties.Values)
-                if (!property.IsSet)
+                if (property.IsSet)
                     yield return property.PolicyGuid;
         }
 

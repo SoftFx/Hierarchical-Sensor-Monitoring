@@ -49,7 +49,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         {
             var sensor = BuildSensorModel(type);
 
-            Assert.False(sensor.TryAddValue(null));
+            Assert.False(sensor.TryAddValue((BaseValue)null));
         }
 
         [Fact]
@@ -135,7 +135,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             foreach (var sensorType in Enum.GetValues<SensorType>())
             {
                 var sensor = BuildSensorModel(sensorType);
-                sensor.AddPolicy(new ExpectedUpdateIntervalPolicy(new TimeIntervalModel(ticks)));
+                sensor.AddPolicy(new ExpectedUpdateIntervalPolicy(ticks));
 
                 var baseValue = SensorValuesFactory.BuildSensorValue(sensorType) with
                 { ReceivingTime = new DateTime(DateTime.UtcNow.Ticks - ticks) };
@@ -182,7 +182,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             foreach (var sensorType in Enum.GetValues<SensorType>())
             {
                 var sensor = BuildSensorModel(sensorType);
-                sensor.AddPolicy(new ExpectedUpdateIntervalPolicy(new TimeIntervalModel(TestTicks)));
+                sensor.AddPolicy(new ExpectedUpdateIntervalPolicy(TestTicks));
 
                 var baseValue = SensorValuesFactory.BuildSensorValue(sensorType) with
                 {

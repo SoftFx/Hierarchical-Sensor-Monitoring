@@ -67,7 +67,7 @@ namespace HSMServer.Model.TreeViewModel
             IsOwnExpectedUpdateInterval = updatePolicy.IsSet;
 
             if (!updatePolicy.IsEmpty)
-                ExpectedUpdateInterval.Update(updatePolicy.Policy.TimeInterval);
+                ExpectedUpdateInterval.Update(updatePolicy.Policy.Interval);
         }
     }
 }

@@ -348,7 +348,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
         public void AddPolicy(PolicyEntity entity)
         {
             var bytesKey = Encoding.UTF8.GetBytes(entity.Id);
-            var bytesValue = JsonSerializer.SerializeToUtf8Bytes(entity.Policy);
+            var bytesValue = (byte[])entity.Policy;
 
             try
             {

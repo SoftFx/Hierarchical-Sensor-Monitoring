@@ -27,17 +27,18 @@ namespace HSMServer.Core.Model
         private PolicyResult _serverResult = PolicyResult.Ok;
         protected PolicyResult _dataResult = PolicyResult.Ok;
 
+
         protected abstract ValuesStorage Storage { get; }
 
         public abstract SensorType Type { get; }
 
 
+        public DateTime? EndOfMuting { get; private set; }
+
         public SensorState State { get; private set; }
 
         public string Unit { get; private set; } //TODO remove
 
-
-        public DateTime? EndOfMuting { get; private set; }
 
         public PolicyResult ValidationResult => State == SensorState.Muted ? _muteResult : _serverResult + _dataResult;
 
@@ -90,7 +91,7 @@ namespace HSMServer.Core.Model
 
         internal abstract bool TryAddValue(BaseValue value);
 
-        internal abstract void AddValue(byte[] valueBytes);
+        internal abstract bool TryAddValue(byte[] bytes);
 
         internal abstract List<BaseValue> ConvertValues(List<byte[]> valuesBytes);
 

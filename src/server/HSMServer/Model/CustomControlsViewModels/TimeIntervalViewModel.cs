@@ -3,6 +3,7 @@ using HSMServer.Extensions;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
+using System.Linq;
 using CoreTimeInterval = HSMServer.Core.Model.TimeInterval;
 
 namespace HSMServer.Model
@@ -47,15 +48,14 @@ namespace HSMServer.Model
 
         public List<SelectListItem> IntervalItems { get; }
 
-        public bool CanCustomInputBeVisible { get; init; } = true;
+        public bool CustomItemIsVisible { get; init; } = true;
+
 
         public TimeInterval TimeInterval { get; set; }
 
         public string CustomTimeInterval { get; set; }
 
-        public string DisplayInterval => TimeInterval == TimeInterval.Custom
-            ? CustomTimeInterval
-            : TimeInterval.GetDisplayName();
+        public string DisplayInterval => TimeInterval.IsCustom() ? CustomTimeInterval : TimeInterval.GetDisplayName();
 
 
         // public constructor without parameters for post actions
@@ -81,12 +81,8 @@ namespace HSMServer.Model
             CustomTimeInterval = TimeSpanValue.TicksToString(customPeriod);
         }
 
-        internal TimeIntervalModel ToModel() =>
-            new()
-            {
-                TimeInterval = GetIntervalOption(),
-                CustomPeriod = GetCustomIntervalTicks(),
-            };
+        internal TimeIntervalModel ToModel() => new(GetIntervalOption(), GetCustomIntervalTicks());
+
 
         private CoreTimeInterval GetIntervalOption() =>
             TimeInterval switch
@@ -96,19 +92,16 @@ namespace HSMServer.Model
                 TimeInterval.Day => CoreTimeInterval.Day,
                 TimeInterval.Week => CoreTimeInterval.Week,
                 TimeInterval.Month => CoreTimeInterval.Month,
-                TimeInterval.Custom => CoreTimeInterval.Custom,
                 _ => CoreTimeInterval.Custom,
             };
 
         private long GetCustomIntervalTicks()
         {
-            if (TimeInterval == TimeInterval.Custom && TimeSpanValue.TryParse(CustomTimeInterval, out var ticks))
-                return ticks;
-            
-            return 0L;
+            return TimeInterval.IsCustom() && TimeSpanValue.TryParse(CustomTimeInterval, out var ticks) ? ticks : 0L;
         }
 
-        private static TimeInterval SetTimeInterval(CoreTimeInterval interval, long customIntervalTicks) =>
+
+        private static TimeInterval SetTimeInterval(CoreTimeInterval interval, long customInterval) =>
             interval switch
             {
                 CoreTimeInterval.TenMinutes => TimeInterval.TenMinutes,
@@ -116,18 +109,13 @@ namespace HSMServer.Model
                 CoreTimeInterval.Day => TimeInterval.Day,
                 CoreTimeInterval.Week => TimeInterval.Week,
                 CoreTimeInterval.Month => TimeInterval.Month,
-                CoreTimeInterval.Custom => customIntervalTicks == 0L ? TimeInterval.None : TimeInterval.Custom,
+                CoreTimeInterval.Custom => customInterval == 0L ? TimeInterval.None : TimeInterval.Custom,
                 _ => TimeInterval.None,
             };
 
         private static List<SelectListItem> GetIntrevalItems(List<TimeInterval> intervals)
         {
-            var items = new List<SelectListItem>(intervals.Count);
-
-            foreach (var interval in intervals)
-                items.Add(new SelectListItem() { Text = interval.GetDisplayName(), Value = interval.ToString() });
-
-            return items;
+            return intervals.Select(u => new SelectListItem(u.GetDisplayName(), $"{u}")).ToList();
         }
     }
 }

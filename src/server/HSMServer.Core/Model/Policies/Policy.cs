@@ -1,8 +1,16 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities;
 using System;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace HSMServer.Core.Model.Policies
 {
+    [JsonPolymorphic(TypeDiscriminatorPropertyName = "$type")]
+    [JsonDerivedType(typeof(ExpectedUpdateIntervalPolicy), 1000)]
+    [JsonDerivedType(typeof(RestoreErrorPolicy), 1100)]
+    [JsonDerivedType(typeof(RestoreWarningPolicy), 1101)]
+    [JsonDerivedType(typeof(RestoreOffTimePolicy), 1102)]
+    [JsonDerivedType(typeof(StringValueLengthPolicy), 2000)]
     public abstract class Policy
     {
         protected readonly PolicyResult _validationFail;
@@ -15,18 +23,14 @@ namespace HSMServer.Core.Model.Policies
         protected abstract string FailMessage { get; }
 
 
-
         public Guid Id { get; init; }
 
-        public string Type { get; init; }
 
-
-        protected Policy() // add JsonConstructor
+        protected Policy()
         {
             _validationFail = new(FailStatus, FailMessage);
 
             Id = Guid.NewGuid();
-            Type = GetType().Name;
         }
 
 
@@ -34,7 +38,7 @@ namespace HSMServer.Core.Model.Policies
             new()
             {
                 Id = Id.ToString(),
-                Policy = this,
+                Policy = JsonSerializer.SerializeToUtf8Bytes(this),
             };
     }
 
@@ -47,26 +51,20 @@ namespace HSMServer.Core.Model.Policies
 
     public abstract class ServerPolicy : Policy
     {
-        public TimeIntervalModel TimeInterval { get; set; }
+        public TimeIntervalModel Interval { get; set; }
 
 
-        public ServerPolicy() : base() { } //for serialization
+        protected ServerPolicy() : base() { }
 
         protected ServerPolicy(TimeIntervalModel interval) : base()
         {
-            TimeInterval = interval;
+            Interval = interval;
         }
 
 
-        internal virtual void Update(TimeIntervalModel interval)
+        internal PolicyResult Validate(DateTime time)
         {
-            TimeInterval = interval;
-        }
-
-
-        internal virtual PolicyResult Validate(DateTime time)
-        {
-            return TimeInterval.TimeIsUp(time) ? _validationFail : Ok;
+            return Interval.TimeIsUp(time) ? _validationFail : Ok;
         }
     }
 }

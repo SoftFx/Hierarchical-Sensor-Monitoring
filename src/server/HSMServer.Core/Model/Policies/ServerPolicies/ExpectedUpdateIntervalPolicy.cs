@@ -9,35 +9,25 @@ namespace HSMServer.Core.Model.Policies
         protected override string FailMessage => "Timeout";
 
 
-        //[JsonIgnore] //need to remove
-        //public TimeIntervalModel TimeInterval { get; private set; }
-
-
-        public TimeInterval ExpectedUpdatePeriod { get; set; } //??? unnessesary
-
-
         [JsonPropertyName("ExpectedUpdateInterval")]
-        public long CustomPeriod { get; set; } // ??? unnessesary
+        public long CustomPeriod { get; set; } // TODO: remove after migration
+
+        public TimeInterval ExpectedUpdatePeriod { get; set; } // TODO: remove after migration
 
 
-        public ExpectedUpdateIntervalPolicy() : base() { }
-
-        public ExpectedUpdateIntervalPolicy(TimeIntervalModel time) : base(time)
+        [JsonConstructor] // TODO: remove after migration
+        public ExpectedUpdateIntervalPolicy(TimeInterval expectedUpdatePeriod, long customPeriod) : 
+            base(new TimeIntervalModel(expectedUpdatePeriod, customPeriod))
         {
-            ExpectedUpdatePeriod = time.TimeInterval;
-            CustomPeriod = time.CustomPeriod;
+            ExpectedUpdatePeriod = expectedUpdatePeriod;
+            CustomPeriod = customPeriod;
         }
 
+        //public ExpectedUpdateIntervalPolicy() : base() { }
 
-        internal override void Update(TimeIntervalModel interval)
-        {
-            base.Update(interval);
+        //[JsonConstructor] //TODO uncomment after migration and removed previos constructor
+        public ExpectedUpdateIntervalPolicy(TimeIntervalModel interval) : base(interval) { }
 
-            ExpectedUpdatePeriod = interval.TimeInterval;
-            CustomPeriod = interval.CustomPeriod;
-        }
-
-        internal bool IsEqual(TimeIntervalModel model) =>
-            ExpectedUpdatePeriod == model.TimeInterval && CustomPeriod == model.CustomPeriod;
+        public ExpectedUpdateIntervalPolicy(long period) : base(new TimeIntervalModel(period)) { }
     }
 }

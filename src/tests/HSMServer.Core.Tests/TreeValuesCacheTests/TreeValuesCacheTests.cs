@@ -13,6 +13,7 @@ using HSMServer.Model.TreeViewModel;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Xunit;
@@ -593,12 +594,11 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         {
             var policyEntities = _databaseCoreManager.DatabaseCore.GetAllPolicies();
 
-            var serializeOptions = new JsonSerializerOptions();
-            serializeOptions.Converters.Add(new PolicyDeserializationConverter());
-
             foreach (var entity in policyEntities)
             {
-                var policy = JsonSerializer.Deserialize<Policy>(entity, serializeOptions);
+                var str = Encoding.UTF8.GetString(entity);
+
+                var policy = JsonSerializer.Deserialize<Policy>(entity);
                 if (policy.Id == id)
                     return policy;
             }

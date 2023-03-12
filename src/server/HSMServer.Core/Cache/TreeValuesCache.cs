@@ -426,9 +426,9 @@ namespace HSMServer.Core.Cache
 
                     UpdatePolicy(TransactionType.Delete, oldPolicy);
                 }
-                else if (!oldPolicy.IsEqual(newInterval))
+                else if (!oldPolicy.Interval.Equals(newInterval))
                 {
-                    oldPolicy.Update(newInterval);
+                    oldPolicy.Interval = newInterval;
 
                     UpdatePolicy(TransactionType.Update, oldPolicy);
                 }
@@ -755,19 +755,16 @@ namespace HSMServer.Core.Cache
 
             foreach (var (sensorId, value) in sensorValues)
                 if (value is not null && _sensors.TryGetValue(sensorId, out var sensor))
-                    sensor.AddValue(value);
+                    sensor.TryAddValue(value);
         }
 
         private static Dictionary<string, Policy> GetPolicyModels(List<byte[]> policyEntities)
         {
             Dictionary<string, Policy> policies = new(policyEntities.Count);
 
-            var serializeOptions = new JsonSerializerOptions();
-            serializeOptions.Converters.Add(new PolicyDeserializationConverter());
-
             foreach (var entity in policyEntities)
             {
-                var policy = JsonSerializer.Deserialize<Policy>(entity, serializeOptions);
+                var policy = JsonSerializer.Deserialize<Policy>(entity);
                 policies.Add(policy.Id.ToString(), policy);
             }
 

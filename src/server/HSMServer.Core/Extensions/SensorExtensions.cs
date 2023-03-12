@@ -8,5 +8,11 @@ namespace HSMServer.Core
         {
             return status == SensorStatus.Ok;
         }
+
+
+        public static bool IsCustom(this TimeInterval interval)
+        {
+            return interval == TimeInterval.Custom;
+        }
     }
 }

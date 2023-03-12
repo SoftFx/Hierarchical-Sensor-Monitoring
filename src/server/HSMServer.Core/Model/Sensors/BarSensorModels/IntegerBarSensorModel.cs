@@ -8,6 +8,7 @@ namespace HSMServer.Core.Model
 
         public override SensorType Type { get; } = SensorType.IntegerBar;
 
+
         BarBaseValue IBarSensor.LocalLastValue => Storage.PartialLastValue;
 
 

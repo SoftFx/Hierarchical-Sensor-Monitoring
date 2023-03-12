@@ -1,4 +1,5 @@
-﻿using System;
+﻿using HSMServer.Model;
+using System;
 using System.ComponentModel.DataAnnotations;
 using System.Linq;
 using System.Reflection;
@@ -16,6 +17,12 @@ namespace HSMServer.Extensions
                             .First()
                             .GetCustomAttribute<DisplayAttribute>()
                             ?.Name ?? enumValueStr;
+        }
+
+
+        public static bool IsCustom(this TimeInterval interval)
+        {
+            return interval == TimeInterval.Custom;
         }
     }
 }

@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Text.Json.Serialization;
 
 namespace HSMServer.Core.Model
 {
@@ -15,14 +16,20 @@ namespace HSMServer.Core.Model
 
     public class TimeIntervalModel
     {
-        public TimeInterval TimeInterval { get; init; }
+        public TimeInterval TimeInterval { get; }
 
-        public long CustomPeriod { get; init; }
+        public long CustomPeriod { get; }
 
-        internal bool IsEmpty => TimeInterval == TimeInterval.Custom && CustomPeriod == 0; //should be internal or use JsonIgnore
+        [JsonIgnore]
+        public bool IsEmpty => TimeInterval.IsCustom() && CustomPeriod == 0;
 
 
-        public TimeIntervalModel() { }
+        [JsonConstructor]
+        public TimeIntervalModel(TimeInterval timeInterval, long customPeriod)
+        {
+            TimeInterval = timeInterval;
+            CustomPeriod = customPeriod;
+        }
 
         public TimeIntervalModel(long period)
         {
@@ -33,16 +40,26 @@ namespace HSMServer.Core.Model
 
         internal bool TimeIsUp(DateTime time)
         {
-            return TimeInterval switch
+            if (TimeInterval.IsCustom())
+                return (DateTime.UtcNow - time).Ticks > CustomPeriod;
+
+            return DateTime.UtcNow > TimeInterval switch
             {
-                TimeInterval.TenMinutes => DateTime.UtcNow > time.AddMinutes(10),
-                TimeInterval.Hour => DateTime.UtcNow > time.AddHours(1),
-                TimeInterval.Day => DateTime.UtcNow > time.AddDays(1),
-                TimeInterval.Week => DateTime.UtcNow > time.AddDays(7),
-                TimeInterval.Month => DateTime.UtcNow > time.AddMonths(1),
-                TimeInterval.Custom => (DateTime.UtcNow - time).Ticks > CustomPeriod,
+                TimeInterval.TenMinutes => time.AddMinutes(10),
+                TimeInterval.Hour => time.AddHours(1),
+                TimeInterval.Day => time.AddDays(1),
+                TimeInterval.Week => time.AddDays(7),
+                TimeInterval.Month => time.AddMonths(1),
                 _ => throw new NotImplementedException(),
             };
         }
+
+
+        public override bool Equals(object obj)
+        {
+            return obj is TimeIntervalModel model && (TimeInterval, CustomPeriod) == (model.TimeInterval, model.CustomPeriod);
+        }
+
+        public override int GetHashCode() => (TimeInterval, CustomPeriod).GetHashCode();
     }
 }
