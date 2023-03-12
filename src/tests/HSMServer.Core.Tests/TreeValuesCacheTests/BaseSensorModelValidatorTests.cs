@@ -65,8 +65,8 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             };
 
             Assert.True(sensor.TryAddValue(stringBase));
-            Assert.True(sensor.ValidationResult.IsWarning);
-            Assert.Equal(SensorStatus.Warning, sensor.ValidationResult.Result);
+            Assert.True(sensor.ValidationResult.HasWarning);
+            Assert.Equal(SensorStatus.Warning, sensor.ValidationResult.Status);
             Assert.Equal(sensor.ValidationResult.Message, SensorValueIsTooLong);
         }
 
@@ -90,8 +90,8 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
                     break;
 
                 Assert.False(sensor.TryAddValue(SensorValuesFactory.BuildSensorValue(invalidType)));
-                Assert.True(sensor.ValidationResult.IsError);
-                Assert.Equal(SensorStatus.Error, sensor.ValidationResult.Result);
+                Assert.True(sensor.ValidationResult.HasError);
+                Assert.Equal(SensorStatus.Error, sensor.ValidationResult.Status);
                 Assert.Equal(errorMessage, sensor.ValidationResult.Message);
             }
         }
@@ -112,13 +112,13 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
                     : baseValue.Comment;
 
                 Assert.True(sensor.TryAddValue(baseValue));
-                Assert.Equal(baseValue.Status, sensor.ValidationResult.Result);
+                Assert.Equal(baseValue.Status, sensor.ValidationResult.Status);
                 Assert.Equal(expectedMessage, sensor.ValidationResult.Message);
 
                 if (status == SensorStatus.Error)
-                    Assert.True(sensor.ValidationResult.IsError);
+                    Assert.True(sensor.ValidationResult.HasError);
                 else if (status == SensorStatus.Warning)
-                    Assert.True(sensor.ValidationResult.IsWarning);
+                    Assert.True(sensor.ValidationResult.HasWarning);
             }
         }
 
@@ -142,8 +142,8 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
 
                 Assert.True(sensor.TryAddValue(baseValue));
                 Assert.True(sensor.HasServerValidationChange());
-                Assert.True(sensor.ValidationResult.IsWarning);
-                Assert.Equal(SensorStatus.Warning, sensor.ValidationResult.Result);
+                Assert.True(sensor.ValidationResult.HasWarning);
+                Assert.Equal(SensorStatus.Warning, sensor.ValidationResult.Status);
                 Assert.Equal(SensorValueOutdated, sensor.ValidationResult.Message);
             }
         }
@@ -165,11 +165,11 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             };
 
             Assert.True(sensor.TryAddValue(stringBase));
-            Assert.True(sensor.ValidationResult.IsWarning);
-            Assert.Equal(GetFinalStatus(status, SensorStatus.Warning), sensor.ValidationResult.Result);
+            Assert.True(sensor.ValidationResult.HasWarning);
+            Assert.Equal(GetFinalStatus(status, SensorStatus.Warning), sensor.ValidationResult.Status);
 
             if (status == SensorStatus.Error)
-                Assert.True(sensor.ValidationResult.IsError);
+                Assert.True(sensor.ValidationResult.HasError);
         }
 
         [Theory]
@@ -192,11 +192,11 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
 
                 Assert.True(sensor.TryAddValue(baseValue));
                 Assert.True(sensor.HasServerValidationChange());
-                Assert.True(sensor.ValidationResult.IsWarning);
-                Assert.Equal(GetFinalStatus(status, SensorStatus.Warning), sensor.ValidationResult.Result);
+                Assert.True(sensor.ValidationResult.HasWarning);
+                Assert.Equal(GetFinalStatus(status, SensorStatus.Warning), sensor.ValidationResult.Status);
 
                 if (status == SensorStatus.Error)
-                    Assert.True(sensor.ValidationResult.IsError);
+                    Assert.True(sensor.ValidationResult.HasError);
             }
         }
 

@@ -17,7 +17,7 @@ namespace HSMServer.Notifications
 
         internal void AddMessage(BaseSensorModel sensor)
         {
-            var newStatus = sensor.ValidationResult.Result.ToStatusIcon();
+            var newStatus = sensor.ValidationResult.Status.ToStatusIcon();
             var comment = sensor.ValidationResult.Message;
 
             var id = sensor.Id;
@@ -72,7 +72,7 @@ namespace HSMServer.Notifications
             var builder = new StringBuilder(1 << 5);
 
             var comment = sensor.ValidationResult.Message;
-            var result = sensor.ValidationResult.Result.ToStatusIcon();
+            var result = sensor.ValidationResult.Status.ToStatusIcon();
             var product = sensor.RootProductName;
             var path = sensor.Path;
 

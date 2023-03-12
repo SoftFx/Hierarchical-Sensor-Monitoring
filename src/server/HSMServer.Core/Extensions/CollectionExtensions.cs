@@ -18,9 +18,9 @@ namespace HSMServer.Core.Extensions
         }
 
 
-        public static HashSet<T> UnionFluent<T>(this HashSet<T> first, HashSet<T> second)
+        public static SortedSet<T> UnionFluent<T>(this SortedSet<T> first, SortedSet<T> second)
         {
-            var result = new HashSet<T>(first);
+            var result = new SortedSet<T>(first);
 
             result.UnionWith(second);
 
@@ -28,9 +28,9 @@ namespace HSMServer.Core.Extensions
         }
 
 
-        public static HashSet<T> ExceptFluent<T>(this HashSet<T> first, HashSet<T> second)
+        public static SortedSet<T> ExceptFluent<T>(this SortedSet<T> first, SortedSet<T> second)
         {
-            var result = new HashSet<T>(first);
+            var result = new SortedSet<T>(first);
 
             result.ExceptWith(second);
 

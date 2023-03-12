@@ -175,7 +175,7 @@ namespace HSMServer.Notifications
 
             return entity.NotificationsEnabled(sensor) &&
                    newStatus != oldStatus &&
-                   (newStatus.Result.ToClient() >= minWebStatus || oldStatus.Result.ToClient() >= minWebStatus);
+                   (newStatus.Status.ToClient() >= minWebStatus || oldStatus.Status.ToClient() >= minWebStatus);
         }
 
         private void SendMessage(BaseSensorModel sensor, PolicyResult oldStatus)

@@ -7,74 +7,35 @@ namespace HSMServer.Core.Model
 {
     public readonly struct PolicyResult
     {
-        internal static PolicyResult Ok { get; } = new();
+        private readonly SortedSet<(SensorStatus status, string comment)> _results;
 
 
-        private HashSet<string> Comments { get; init; }
-
-        private HashSet<string> Warnings { get; init; }
-
-        private HashSet<string> Errors { get; init; }
+        internal static PolicyResult Ok { get; } = new(SensorStatus.Ok, string.Empty);
 
 
-        public SensorStatus Result
+        public SensorStatus Status => _results.Count > 0 ? _results.Max.status : SensorStatus.Ok;
+
+        public string Message => string.Join(Environment.NewLine, _results.Select(u => u.comment).Where(u => !string.IsNullOrEmpty(u)));
+
+
+        public bool HasOffTime => Status >= SensorStatus.OffTime;
+
+        public bool HasWarning => Status >= SensorStatus.Warning;
+
+        public bool HasError => Status >= SensorStatus.Error;
+
+
+        public bool IsOk => Status.IsOk();
+
+
+        private PolicyResult(SortedSet<(SensorStatus, string)> result)
         {
-            get
-            {
-                if (Comments.Count != 0)
-                    return SensorStatus.OffTime;
-                if (Errors.Count != 0)
-                    return SensorStatus.Error;
-                if (Warnings.Count != 0)
-                    return SensorStatus.Warning;
-
-                return SensorStatus.Ok;
-            }
+            _results = result;
         }
 
-
-        public string Message
+        internal PolicyResult(SensorStatus result, string comment)
         {
-            get
-            {
-                var messageParts = new List<string>(3)
-                {
-                    JoinStrings(Comments),
-                    JoinStrings(Warnings),
-                    JoinStrings(Errors),
-                };
-
-                return JoinStrings(messageParts);
-            }
-        }
-
-
-        public bool IsOk => Result == SensorStatus.Ok;
-
-        public bool IsWarning => Warnings.Count > 0;
-
-        public bool IsError => Errors.Count > 0;
-
-        public bool IsOffTime => Comments.Count > 0;
-
-
-        public PolicyResult()
-        {
-            Comments = new HashSet<string>();
-            Warnings = new HashSet<string>();
-            Errors = new HashSet<string>();
-        }
-
-        internal PolicyResult(SensorStatus result, string message) : this()
-        {
-            var targetHash = result switch
-            {
-                SensorStatus.Warning => Warnings,
-                SensorStatus.Error => Errors,
-                _ => Comments,
-            };
-
-            targetHash.Add(message);
+            _results = new() { (result, comment) };
         }
 
 
@@ -87,34 +48,26 @@ namespace HSMServer.Core.Model
             return new(value.Status, comment);
         }
 
-        private static string JoinStrings(IEnumerable<string> items)
+
+        public void Deconstruct(out SensorStatus status, out string message)
         {
-            return string.Join(Environment.NewLine, items.Where(u => !string.IsNullOrEmpty(u)));
+            status = Status;
+            message = Message;
         }
 
 
-        public static PolicyResult operator +(PolicyResult result1, PolicyResult result2)
+        public static PolicyResult operator +(PolicyResult first, PolicyResult second)
         {
-            return new()
-            {
-                Comments = result1.Comments.UnionFluent(result2.Comments),
-                Warnings = result1.Warnings.UnionFluent(result2.Warnings),
-                Errors = result1.Errors.UnionFluent(result2.Errors),
-            };
+            return new(first._results.UnionFluent(second._results));
         }
 
-        public static PolicyResult operator -(PolicyResult result1, PolicyResult result2)
+        public static PolicyResult operator -(PolicyResult first, PolicyResult second)
         {
-            return new()
-            {
-                Comments = result1.Comments.ExceptFluent(result2.Comments),
-                Warnings = result1.Warnings.ExceptFluent(result2.Warnings),
-                Errors = result1.Errors.ExceptFluent(result2.Errors),
-            };
+            return new(first._results.ExceptFluent(second._results));
         }
 
-        public static bool operator ==(PolicyResult result1, PolicyResult result2) =>
-            (result1.Result, result1.Message) == (result2.Result, result2.Message);
+        public static bool operator ==(PolicyResult first, PolicyResult second) =>
+            (first.Status, first.Message) == (second.Status, second.Message);
 
         public static bool operator !=(PolicyResult result1, PolicyResult result2)
             => !(result1 == result2);
