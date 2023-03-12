@@ -1,5 +1,4 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities;
-using HSMServer.Core.DataLayer;
 using HSMServer.Core.Extensions;
 using HSMServer.Core.Model.Policies;
 using System;
@@ -32,22 +31,16 @@ namespace HSMServer.Core.Model
             return canStore;
         }
 
-        internal override void AddValue(byte[] valueBytes)
-        {
-            var value = valueBytes.ConvertToSensorValue<T>();
-
-            if (TryValidate(value, out var valueT))
-                Storage.AddValueBase(valueT);
-        }
+        internal override void AddValue(byte[] bytes) => TryAddValue(bytes.ToValue<T>());
 
         internal override List<BaseValue> ConvertValues(List<byte[]> valuesBytes) =>
-            valuesBytes.Select(v => v.ConvertToSensorValue<T>()).ToList();
+            valuesBytes.Select(v => v.ToValue<T>()).ToList();
 
 
         internal override void AddPolicy<U>(U policy)
         {
-            if (policy is DataPolicy<T> policyT)
-                _dataPolicies.Add(policyT);
+            if (policy is DataPolicy<T> dataPolicy)
+                _dataPolicies.Add(dataPolicy);
             else
                 base.AddPolicy(policy);
         }

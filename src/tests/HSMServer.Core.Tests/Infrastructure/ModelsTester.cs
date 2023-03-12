@@ -1,7 +1,7 @@
 ﻿using HSMCommon.Constants;
 using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Core.Cache.UpdateEntities;
-using HSMServer.Core.DataLayer;
+using HSMServer.Core.Extensions;
 using HSMServer.Core.Helpers;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Policies;
@@ -281,13 +281,13 @@ namespace HSMServer.Core.Tests.Infrastructure
         {
             var value = type switch
             {
-                SensorType.Boolean => valueBytes.ConvertToSensorValue<BooleanValue>(),
-                SensorType.Integer => valueBytes.ConvertToSensorValue<IntegerValue>(),
-                SensorType.Double => valueBytes.ConvertToSensorValue<DoubleValue>(),
-                SensorType.String => valueBytes.ConvertToSensorValue<StringValue>(),
-                SensorType.File => valueBytes.ConvertToSensorValue<FileValue>(),
-                SensorType.IntegerBar => valueBytes.ConvertToSensorValue<IntegerBarValue>(),
-                SensorType.DoubleBar => valueBytes.ConvertToSensorValue<DoubleBarValue>(),
+                SensorType.Boolean => valueBytes.ToValue<BooleanValue>(),
+                SensorType.Integer => valueBytes.ToValue<IntegerValue>(),
+                SensorType.Double => valueBytes.ToValue<DoubleValue>(),
+                SensorType.String => valueBytes.ToValue<StringValue>(),
+                SensorType.File => valueBytes.ToValue<FileValue>(),
+                SensorType.IntegerBar => valueBytes.ToValue<IntegerBarValue>(),
+                SensorType.DoubleBar => valueBytes.ToValue<DoubleBarValue>(),
                 _ => null,
             };
 

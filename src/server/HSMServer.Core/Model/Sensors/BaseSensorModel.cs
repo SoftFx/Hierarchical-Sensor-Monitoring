@@ -42,13 +42,13 @@ namespace HSMServer.Core.Model
         public ValidationResult ValidationResult => State == SensorState.Muted ? _muteResult : _serverResult + _dataResult;
 
 
+        public bool HasData => Storage.HasData;
+
         public BaseValue LastValue => Storage.LastValue;
 
         public BaseValue LastDbValue => Storage.LastDbValue;
 
         public DateTime LastUpdateTime => Storage.LastValue?.ReceivingTime ?? DateTime.MinValue;
-
-        public bool HasData => Storage.HasData;
 
 
         public BaseSensorModel(SensorEntity entity) : base(entity)
@@ -114,7 +114,7 @@ namespace HSMServer.Core.Model
             CreationDate = CreationDate.Ticks,
             Type = (byte)Type,
             State = (byte)State,
-            Policies = GetPolicyIds().Select(u => $"{u}").ToList(),
+            Policies = GetPolicyIds().Select(u => u.ToString()).ToList(),
             EndOfMuting = EndOfMuting?.Ticks ?? 0L,
         };
     }

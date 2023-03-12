@@ -27,10 +27,9 @@ namespace HSMServer.Core.Model
         public string Description { get; private set; }
 
 
+        public Guid RootProductId => ParentProduct?.RootProductId ?? Id;
 
         public string RootProductName => ParentProduct?.RootProductName ?? DisplayName;
-
-        public Guid RootProductId => ParentProduct?.RootProductId ?? Id;
 
         public string Path => ParentProduct is null ? string.Empty : $"{ParentProduct.Path}/{DisplayName}";
 
@@ -75,7 +74,7 @@ namespace HSMServer.Core.Model
 
         internal abstract bool HasServerValidationChange();
 
-        internal virtual void AddPolicy<T>(T policy) where T: Policy => ServerPolicy.ApplyPolicy(policy);
+        internal virtual void AddPolicy<T>(T policy) where T : Policy => ServerPolicy.ApplyPolicy(policy);
 
         protected virtual List<Guid> GetPolicyIds() => ServerPolicy.ToList();
 

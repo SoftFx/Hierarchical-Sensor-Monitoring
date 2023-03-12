@@ -1,4 +1,5 @@
-﻿using System;
+﻿using HSMServer.Core.Extensions;
+using System;
 using System.Collections.Generic;
 
 namespace HSMServer.Core.Model
@@ -35,22 +36,15 @@ namespace HSMServer.Core.Model
 
         internal override List<BaseValue> GetValues(int count)
         {
-            if (PartialLastValue != null)
-            {
-                var values = base.GetValues(count - 1);
-                values.Add(PartialLastValue);
-
-                return values;
-            }
-
-            return base.GetValues(count);
+            return PartialLastValue != null ? base.GetValues(count - 1).AddFluent(PartialLastValue)
+                                            : base.GetValues(count);
         }
 
         internal override List<BaseValue> GetValues(DateTime from, DateTime to)
         {
             var values = base.GetValues(from, to);
 
-            if (PartialLastValue != null && PartialLastValue.ReceivingTime >= from && PartialLastValue.ReceivingTime <= to)
+            if (PartialLastValue?.InRange(from, to) ?? false)
                 values.Add(PartialLastValue);
 
             return values;
@@ -60,6 +54,7 @@ namespace HSMServer.Core.Model
         {
             base.Clear();
 
+            _prevValue = null;
             PartialLastValue = null;
         }
     }

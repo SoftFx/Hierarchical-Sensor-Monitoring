@@ -9,5 +9,12 @@ namespace HSMServer.Core.Extensions
             list.AddRange(newData);
             return list;
         }
+
+
+        public static List<T> AddFluent<T>(this List<T> list, T newData)
+        {
+            list.Add(newData);
+            return list;
+        }
     }
 }
