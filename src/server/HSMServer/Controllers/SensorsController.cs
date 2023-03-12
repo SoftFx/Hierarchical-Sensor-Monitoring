@@ -4,7 +4,6 @@ using HSMSensorDataObjects.HistoryRequests;
 using HSMSensorDataObjects.SensorValueRequests;
 using HSMServer.ApiObjectsConverters;
 using HSMServer.Core.Cache;
-using HSMServer.Core.Helpers;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Requests;
 using HSMServer.Core.SensorsUpdatesQueue;
@@ -160,7 +159,7 @@ namespace HSMServer.Controllers
                 return BadRequest(sensorValue);
             }
         }
-        
+
         /// <summary>
         /// Receives value of timespan sensor
         /// </summary>

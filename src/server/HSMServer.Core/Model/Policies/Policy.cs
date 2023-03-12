@@ -1,5 +1,4 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities;
-using Newtonsoft.Json;
 using System;
 
 namespace HSMServer.Core.Model.Policies
@@ -11,10 +10,8 @@ namespace HSMServer.Core.Model.Policies
         protected static ValidationResult Ok => ValidationResult.Ok;
 
 
-        [JsonIgnore]
         protected abstract SensorStatus FailStatus { get; }
 
-        [JsonIgnore]
         protected abstract string FailMessage { get; }
 
 
@@ -24,7 +21,7 @@ namespace HSMServer.Core.Model.Policies
         public string Type { get; init; }
 
 
-        protected Policy()
+        protected Policy() // add JsonConstructor
         {
             _validationFail = new(FailMessage, FailStatus);
 

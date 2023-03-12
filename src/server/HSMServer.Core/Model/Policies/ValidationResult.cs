@@ -86,7 +86,7 @@ namespace HSMServer.Core.Model
             if (value.Status.IsOk())
                 return Ok;
 
-            var comment = string.IsNullOrEmpty(value.Comment) ? $"User data has {value.Status} status" : value.Comment;
+            var comment = value.Comment ?? $"User data has {value.Status} status";
             return new(comment, value.Status);
         }
 
