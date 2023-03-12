@@ -5,23 +5,23 @@ using System.Linq;
 
 namespace HSMServer.Core.Model
 {
-    public readonly struct ValidationResult
+    public readonly struct PolicyResult
     {
-        internal static ValidationResult Ok { get; } = new();
+        internal static PolicyResult Ok { get; } = new();
 
 
-        private HashSet<string> Messages { get; init; } = new();
+        private HashSet<string> Comments { get; init; }
 
-        private HashSet<string> Warnings { get; init; } = new();
+        private HashSet<string> Warnings { get; init; }
 
-        private HashSet<string> Errors { get; init; } = new();
+        private HashSet<string> Errors { get; init; }
 
 
         public SensorStatus Result
         {
             get
             {
-                if (Messages.Count != 0)
+                if (Comments.Count != 0)
                     return SensorStatus.OffTime;
                 if (Errors.Count != 0)
                     return SensorStatus.Error;
@@ -39,7 +39,7 @@ namespace HSMServer.Core.Model
             {
                 var messageParts = new List<string>(3)
                 {
-                    JoinStrings(Messages),
+                    JoinStrings(Comments),
                     JoinStrings(Warnings),
                     JoinStrings(Errors),
                 };
@@ -55,40 +55,36 @@ namespace HSMServer.Core.Model
 
         public bool IsError => Errors.Count > 0;
 
-        public bool IsOffTime => Messages.Count > 0;
+        public bool IsOffTime => Comments.Count > 0;
 
 
-        public ValidationResult()
+        public PolicyResult()
         {
-            Messages = new HashSet<string>();
+            Comments = new HashSet<string>();
             Warnings = new HashSet<string>();
             Errors = new HashSet<string>();
         }
 
-        internal ValidationResult(string message, SensorStatus result) : this()
+        internal PolicyResult(SensorStatus result, string message) : this()
         {
-            switch (result)
+            var targetHash = result switch
             {
-                case SensorStatus.Warning:
-                    Warnings.Add(message);
-                    break;
-                case SensorStatus.Error:
-                    Errors.Add(message);
-                    break;
-                default:
-                    Messages.Add(message);
-                    break;
-            }
+                SensorStatus.Warning => Warnings,
+                SensorStatus.Error => Errors,
+                _ => Comments,
+            };
+
+            targetHash.Add(message);
         }
 
 
-        internal static ValidationResult FromValue<T>(T value) where T : BaseValue
+        internal static PolicyResult FromValue<T>(T value) where T : BaseValue
         {
             if (value.Status.IsOk())
                 return Ok;
 
             var comment = value.Comment ?? $"User data has {value.Status} status";
-            return new(comment, value.Status);
+            return new(value.Status, comment);
         }
 
         private static string JoinStrings(IEnumerable<string> items)
@@ -97,30 +93,30 @@ namespace HSMServer.Core.Model
         }
 
 
-        public static ValidationResult operator +(ValidationResult result1, ValidationResult result2)
+        public static PolicyResult operator +(PolicyResult result1, PolicyResult result2)
         {
             return new()
             {
-                Messages = result1.Messages.UnionFluent(result2.Messages),
+                Comments = result1.Comments.UnionFluent(result2.Comments),
                 Warnings = result1.Warnings.UnionFluent(result2.Warnings),
                 Errors = result1.Errors.UnionFluent(result2.Errors),
             };
         }
 
-        public static ValidationResult operator -(ValidationResult result1, ValidationResult result2)
+        public static PolicyResult operator -(PolicyResult result1, PolicyResult result2)
         {
             return new()
             {
-                Messages = result1.Messages.ExceptFluent(result2.Messages),
+                Comments = result1.Comments.ExceptFluent(result2.Comments),
                 Warnings = result1.Warnings.ExceptFluent(result2.Warnings),
                 Errors = result1.Errors.ExceptFluent(result2.Errors),
             };
         }
 
-        public static bool operator ==(ValidationResult result1, ValidationResult result2) =>
+        public static bool operator ==(PolicyResult result1, PolicyResult result2) =>
             (result1.Result, result1.Message) == (result2.Result, result2.Message);
 
-        public static bool operator !=(ValidationResult result1, ValidationResult result2)
+        public static bool operator !=(PolicyResult result1, PolicyResult result2)
             => !(result1 == result2);
     }
 }

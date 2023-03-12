@@ -10,7 +10,7 @@
         public CorrectDataTypePolicy() : base() { }
 
 
-        internal override ValidationResult Validate(T value)
+        internal override PolicyResult Validate(T value)
         {
             return value is not null ? Ok : _validationFail;
         }

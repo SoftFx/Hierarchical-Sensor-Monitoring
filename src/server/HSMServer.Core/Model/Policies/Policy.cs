@@ -5,9 +5,9 @@ namespace HSMServer.Core.Model.Policies
 {
     public abstract class Policy
     {
-        protected readonly ValidationResult _validationFail;
+        protected readonly PolicyResult _validationFail;
 
-        protected static ValidationResult Ok => ValidationResult.Ok;
+        protected static PolicyResult Ok => PolicyResult.Ok;
 
 
         protected abstract SensorStatus FailStatus { get; }
@@ -23,7 +23,7 @@ namespace HSMServer.Core.Model.Policies
 
         protected Policy() // add JsonConstructor
         {
-            _validationFail = new(FailMessage, FailStatus);
+            _validationFail = new(FailStatus, FailMessage);
 
             Id = Guid.NewGuid();
             Type = GetType().Name;
@@ -41,7 +41,7 @@ namespace HSMServer.Core.Model.Policies
 
     public abstract class DataPolicy<T> : Policy where T : BaseValue
     {
-        internal abstract ValidationResult Validate(T value);
+        internal abstract PolicyResult Validate(T value);
     }
 
 
@@ -64,7 +64,7 @@ namespace HSMServer.Core.Model.Policies
         }
 
 
-        internal virtual ValidationResult Validate(DateTime time)
+        internal virtual PolicyResult Validate(DateTime time)
         {
             return TimeInterval.TimeIsUp(time) ? _validationFail : Ok;
         }

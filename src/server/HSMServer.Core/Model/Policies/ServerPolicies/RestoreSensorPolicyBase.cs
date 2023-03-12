@@ -28,7 +28,7 @@
         protected abstract SensorStatus TargetStatus { get; }
 
 
-        internal ValidationResult Validate(BaseValue value)
+        internal PolicyResult Validate(BaseValue value)
         {
             return value.Status != TargetStatus ? Ok : base.Validate(value.ReceivingTime);
         }

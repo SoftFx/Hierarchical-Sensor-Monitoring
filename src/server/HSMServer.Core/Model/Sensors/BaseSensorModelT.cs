@@ -55,7 +55,7 @@ namespace HSMServer.Core.Model
 
         private bool TryValidate(BaseValue value, out T valueT)
         {
-            _dataResult = ValidationResult.Ok;
+            _dataResult = PolicyResult.Ok;
 
             valueT = value as T;
 
@@ -67,7 +67,7 @@ namespace HSMServer.Core.Model
                     return false;
             }
 
-            _dataResult += ValidationResult.FromValue(valueT); //add user status
+            _dataResult += PolicyResult.FromValue(valueT); //add user status
 
             return true;
         }

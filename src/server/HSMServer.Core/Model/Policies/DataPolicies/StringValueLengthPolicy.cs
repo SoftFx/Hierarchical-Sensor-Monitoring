@@ -14,7 +14,7 @@
         public StringValueLengthPolicy() { }
 
 
-        internal override ValidationResult Validate(StringValue value)
+        internal override PolicyResult Validate(StringValue value)
         {
             return value.Value?.Length > MaxStringLength ? _validationFail : Ok;
         }

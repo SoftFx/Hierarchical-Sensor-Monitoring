@@ -41,13 +41,13 @@ namespace HSMServer.Core.Model.Policies
                 property.ParentProperty = parentCollection._properties[policyType];
         }
 
-        internal ValidationResult CheckRestorePolicies(DateTime date)
+        internal PolicyResult CheckRestorePolicies(DateTime date)
         {
-            var result = ValidationResult.Ok;
+            var result = PolicyResult.Ok;
 
-            result += RestoreOffTimeStatus.Policy?.Validate(date) ?? ValidationResult.Ok;
-            result += RestoreWarningStatus.Policy?.Validate(date) ?? ValidationResult.Ok;
-            result += RestoreErrorStatus.Policy?.Validate(date) ?? ValidationResult.Ok;
+            result += RestoreOffTimeStatus.Policy?.Validate(date) ?? PolicyResult.Ok;
+            result += RestoreWarningStatus.Policy?.Validate(date) ?? PolicyResult.Ok;
+            result += RestoreErrorStatus.Policy?.Validate(date) ?? PolicyResult.Ok;
 
             return result;
         }

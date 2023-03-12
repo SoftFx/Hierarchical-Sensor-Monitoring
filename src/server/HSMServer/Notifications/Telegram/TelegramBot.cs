@@ -168,7 +168,7 @@ namespace HSMServer.Notifications
                     _addressBook.RegisterChat(product, chat);
         }
 
-        private static bool WhetherSendMessage(INotificatable entity, BaseSensorModel sensor, ValidationResult oldStatus)
+        private static bool WhetherSendMessage(INotificatable entity, BaseSensorModel sensor, PolicyResult oldStatus)
         {
             var newStatus = sensor.ValidationResult;
             var minWebStatus = entity.Notifications.Telegram.MessagesMinStatus.ToClient();
@@ -178,7 +178,7 @@ namespace HSMServer.Notifications
                    (newStatus.Result.ToClient() >= minWebStatus || oldStatus.Result.ToClient() >= minWebStatus);
         }
 
-        private void SendMessage(BaseSensorModel sensor, ValidationResult oldStatus)
+        private void SendMessage(BaseSensorModel sensor, PolicyResult oldStatus)
         {
             try
             {

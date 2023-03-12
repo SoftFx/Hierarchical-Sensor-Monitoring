@@ -40,7 +40,7 @@ namespace HSMServer.Core.Cache
         public event Action<BaseSensorModel, TransactionType> ChangeSensorEvent;
         public event Action<ProductModel, TransactionType> ChangeProductEvent;
 
-        public event Action<BaseSensorModel, ValidationResult> NotifyAboutChangesEvent;
+        public event Action<BaseSensorModel, PolicyResult> NotifyAboutChangesEvent;
 
 
         public TreeValuesCache(IDatabaseCore databaseCore, IUpdatesQueue updatesQueue)
@@ -89,7 +89,7 @@ namespace HSMServer.Core.Cache
             if (!_tree.TryGetValue(updatedProduct.Id, out var product))
                 return;
 
-            var sensorsOldStatuses = new Dictionary<Guid, ValidationResult>();
+            var sensorsOldStatuses = new Dictionary<Guid, PolicyResult>();
 
             GetProductSensorsStatuses(product, sensorsOldStatuses);
             UpdateIntervalPolicy(updatedProduct.ExpectedUpdateInterval, product);
@@ -311,7 +311,7 @@ namespace HSMServer.Core.Cache
 
         public BaseSensorModel GetSensor(Guid sensorId) => _sensors.GetValueOrDefault(sensorId);
 
-        public void NotifyAboutChanges(BaseSensorModel sensor, ValidationResult oldStatus)
+        public void NotifyAboutChanges(BaseSensorModel sensor, PolicyResult oldStatus)
         {
             NotifyAboutChangesEvent?.Invoke(sensor, oldStatus);
             ChangeSensorEvent?.Invoke(sensor, TransactionType.Update);
@@ -438,7 +438,7 @@ namespace HSMServer.Core.Cache
         }
 
         private void NotifyAllProductChildrenAboutUpdate(ProductModel product,
-            Dictionary<Guid, ValidationResult> sensorsOldStatuses)
+            Dictionary<Guid, PolicyResult> sensorsOldStatuses)
         {
             ChangeProductEvent(product, TransactionType.Update);
 
@@ -726,7 +726,7 @@ namespace HSMServer.Core.Cache
             return accessKey.IsHasPermissions(permissions, out message);
         }
 
-        private static void GetProductSensorsStatuses(ProductModel product, Dictionary<Guid, ValidationResult> sensorsStatuses)
+        private static void GetProductSensorsStatuses(ProductModel product, Dictionary<Guid, PolicyResult> sensorsStatuses)
         {
             foreach (var (sensorId, sensor) in product.Sensors)
                 sensorsStatuses.Add(sensorId, sensor.ValidationResult);

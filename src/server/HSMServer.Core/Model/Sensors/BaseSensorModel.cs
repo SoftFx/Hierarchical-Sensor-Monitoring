@@ -22,10 +22,10 @@ namespace HSMServer.Core.Model
 
     public abstract class BaseSensorModel : NodeBaseModel
     {
-        private static readonly ValidationResult _muteResult = new("Muted", SensorStatus.OffTime);
+        private static readonly PolicyResult _muteResult = new(SensorStatus.OffTime, "Muted");
 
-        private ValidationResult _serverResult = ValidationResult.Ok;
-        protected ValidationResult _dataResult = ValidationResult.Ok;
+        private PolicyResult _serverResult = PolicyResult.Ok;
+        protected PolicyResult _dataResult = PolicyResult.Ok;
 
         protected abstract ValuesStorage Storage { get; }
 
@@ -39,7 +39,7 @@ namespace HSMServer.Core.Model
 
         public DateTime? EndOfMuting { get; private set; }
 
-        public ValidationResult ValidationResult => State == SensorState.Muted ? _muteResult : _serverResult + _dataResult;
+        public PolicyResult ValidationResult => State == SensorState.Muted ? _muteResult : _serverResult + _dataResult;
 
 
         public bool HasData => Storage.HasData;
@@ -61,7 +61,7 @@ namespace HSMServer.Core.Model
 
         internal override bool HasServerValidationChange()
         {
-            _serverResult = ValidationResult.Ok;
+            _serverResult = PolicyResult.Ok;
 
             if (!HasData)
                 return false;
@@ -96,8 +96,8 @@ namespace HSMServer.Core.Model
 
         internal void ResetSensor()
         {
-            _serverResult = ValidationResult.Ok;
-            _dataResult = ValidationResult.Ok;
+            _serverResult = PolicyResult.Ok;
+            _dataResult = PolicyResult.Ok;
 
             Storage.Clear();
         }
