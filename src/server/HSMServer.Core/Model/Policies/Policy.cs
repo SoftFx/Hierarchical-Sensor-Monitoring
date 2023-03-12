@@ -66,7 +66,7 @@ namespace HSMServer.Core.Model.Policies
 
         internal virtual ValidationResult Validate(DateTime time)
         {
-            return TimeInterval.TimeIsUp(time) ? _validationFail : ValidationResult.Ok;
+            return TimeInterval.TimeIsUp(time) ? _validationFail : Ok;
         }
     }
 }

@@ -1,4 +1,5 @@
-﻿using System;
+﻿using HSMServer.Core.Extensions;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -98,37 +99,21 @@ namespace HSMServer.Core.Model
 
         public static ValidationResult operator +(ValidationResult result1, ValidationResult result2)
         {
-            static HashSet<string> GetUnionHash(HashSet<string> errors1, HashSet<string> errors2)
-            {
-                var errors = new HashSet<string>(errors1);
-                errors.UnionWith(errors2);
-
-                return errors;
-            }
-
             return new()
             {
-                Messages = GetUnionHash(result1.Messages, result2.Messages),
-                Warnings = GetUnionHash(result1.Warnings, result2.Warnings),
-                Errors = GetUnionHash(result1.Errors, result2.Errors),
+                Messages = result1.Messages.UnionFluent(result2.Messages),
+                Warnings = result1.Warnings.UnionFluent(result2.Warnings),
+                Errors = result1.Errors.UnionFluent(result2.Errors),
             };
         }
 
         public static ValidationResult operator -(ValidationResult result1, ValidationResult result2)
         {
-            static HashSet<string> GetExceptHash(HashSet<string> errors1, HashSet<string> errors2)
-            {
-                var errors = new HashSet<string>(errors1);
-                errors.ExceptWith(errors2);
-
-                return errors;
-            }
-
             return new()
             {
-                Warnings = GetExceptHash(result1.Warnings, result2.Warnings),
-                Errors = GetExceptHash(result1.Errors, result2.Errors),
-                Messages = GetExceptHash(result1.Messages, result2.Messages),
+                Messages = result1.Messages.ExceptFluent(result2.Messages),
+                Warnings = result1.Warnings.ExceptFluent(result2.Warnings),
+                Errors = result1.Errors.ExceptFluent(result2.Errors),
             };
         }
 
