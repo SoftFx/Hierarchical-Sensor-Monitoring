@@ -5,17 +5,20 @@ using System.Linq;
 
 namespace HSMServer.Core.Model
 {
-    public readonly struct PolicyResult
+    public readonly struct PolicyResult : IEquatable<PolicyResult>
     {
         private readonly SortedSet<(SensorStatus status, string comment)> _results;
 
 
         internal static PolicyResult Ok { get; } = new(SensorStatus.Ok, string.Empty);
 
+        internal (SensorStatus, string) ToTuple => (Status, Message);
+
 
         public SensorStatus Status => _results.Count > 0 ? _results.Max.status : SensorStatus.Ok;
 
-        public string Message => string.Join(Environment.NewLine, _results.Select(u => u.comment).Where(u => !string.IsNullOrEmpty(u)));
+        public string Message => string.Join(Environment.NewLine, _results.Select(u => u.comment)
+                                                                          .Where(u => !string.IsNullOrEmpty(u)));
 
 
         public bool HasOffTime => Status >= SensorStatus.OffTime;
@@ -49,27 +52,21 @@ namespace HSMServer.Core.Model
         }
 
 
-        public void Deconstruct(out SensorStatus status, out string message)
-        {
-            status = Status;
-            message = Message;
-        }
+        public static bool operator ==(PolicyResult first, PolicyResult second) => first.Equals(second);
+
+        public static bool operator !=(PolicyResult first, PolicyResult second) => !first.Equals(second);
+
+        public static PolicyResult operator +(PolicyResult first, PolicyResult second) =>
+            new(first._results.UnionFluent(second._results));
+
+        public static PolicyResult operator -(PolicyResult first, PolicyResult second) =>
+            new(first._results.ExceptFluent(second._results));
 
 
-        public static PolicyResult operator +(PolicyResult first, PolicyResult second)
-        {
-            return new(first._results.UnionFluent(second._results));
-        }
+        public override bool Equals(object obj) => obj is PolicyResult second && ToTuple == second.ToTuple;
 
-        public static PolicyResult operator -(PolicyResult first, PolicyResult second)
-        {
-            return new(first._results.ExceptFluent(second._results));
-        }
+        public override int GetHashCode() => ToTuple.GetHashCode();
 
-        public static bool operator ==(PolicyResult first, PolicyResult second) =>
-            (first.Status, first.Message) == (second.Status, second.Message);
-
-        public static bool operator !=(PolicyResult result1, PolicyResult result2)
-            => !(result1 == result2);
+        bool IEquatable<PolicyResult>.Equals(PolicyResult other) => Equals(other);
     }
 }
