@@ -19,7 +19,8 @@
         
         public const string RemoveProductAction = "RemoveProduct";
         public const string CreateProductAction = "CreateProduct";
-        
+        public const string EditProductAction = "EditProduct";
+
         public const string UsersAction = "Users";
         public const string CreateUserAction = "CreateUser";
         public const string RemoveUserAction = "RemoveUser";
