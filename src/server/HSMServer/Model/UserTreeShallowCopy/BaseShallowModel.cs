@@ -11,7 +11,7 @@ namespace HSMServer.Model.UserTreeShallowCopy
 
         public T Data { get; }
 
-        public bool? IsMutedState { get; protected set; }
+        public bool IsMutedState => MutedValue ?? false;
 
         public NodeShallowModel Parent { get; internal set; }
 
@@ -20,6 +20,7 @@ namespace HSMServer.Model.UserTreeShallowCopy
 
         public abstract bool IsGroupsEnable { get; }
 
+        protected bool? MutedValue { get; set; }
 
         protected BaseShallowModel(T data, User user)
         {
@@ -38,7 +39,8 @@ namespace HSMServer.Model.UserTreeShallowCopy
             "isManager": "{{_curUserIsManager}}",
             "isAccountsEnable": "{{IsAccountsEnable}}",
             "isGroupsEnable": "{{IsGroupsEnable}}",
-            "isMutedState": "{{IsMutedState}}"
+            "isMutedState": "{{IsMutedState}}",
+            "mutedValue": "{{MutedValue}}"
         }
         """;
     }

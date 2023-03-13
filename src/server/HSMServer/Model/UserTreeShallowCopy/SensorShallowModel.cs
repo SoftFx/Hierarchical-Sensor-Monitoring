@@ -21,7 +21,7 @@ namespace HSMServer.Model.UserTreeShallowCopy
         {
             IsAccountsEnable = user.Notifications.IsSensorEnabled(data.Id);
             IsGroupsEnable = data.RootProduct.Notifications.IsSensorEnabled(data.Id);
-            IsMutedState = data.State == SensorState.Muted;
+            MutedValue = data.State == SensorState.Muted;
 
             IsGroupIgnoreIconShow = data.RootProduct.Notifications.IgnoredSensors.TryGetValue(data.Id, out var accountTime) && accountTime != DateTime.MaxValue;
             IsAccountIgnoreIconShow = user.Notifications.IgnoredSensors.TryGetValue(data.Id, out var groupTime) && groupTime != DateTime.MaxValue;

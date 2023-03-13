@@ -51,10 +51,10 @@ namespace HSMServer.Model.UserTreeShallowCopy
                 GroupState.CalculateState(sensor.RootProduct.Notifications, sensor.Id);
             }
 
-            if (!IsMutedState.HasValue)
-                IsMutedState = sensor.State == SensorState.Muted;
+            if (!MutedValue.HasValue)
+                MutedValue = sensor.State == SensorState.Muted;
             else
-                IsMutedState &= sensor.State == SensorState.Muted;
+                MutedValue &= sensor.State == SensorState.Muted;
 
             if (user.IsSensorVisible(sensor))
             {
@@ -67,14 +67,14 @@ namespace HSMServer.Model.UserTreeShallowCopy
         {
             node.Parent = this;
             
-            if (node.IsMutedState.HasValue && !node.IsMutedState.Value)
+            if (node.MutedValue.HasValue && !node.MutedValue.Value)
             {
                 AccountState.CalculateState(node.AccountState);
                 GroupState.CalculateState(node.GroupState);
             }
 
-            if (node.IsMutedState.HasValue)
-                IsMutedState = IsMutedState is null ? node.IsMutedState : IsMutedState & node.IsMutedState;
+            if (node.MutedValue.HasValue)
+                MutedValue = MutedValue is null ? node.MutedValue : MutedValue & node.MutedValue;
             
             VisibleSensorsCount += node.VisibleSensorsCount;
 

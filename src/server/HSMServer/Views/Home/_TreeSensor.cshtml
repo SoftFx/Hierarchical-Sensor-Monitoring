@@ -1,5 +1,4 @@
 ﻿@using HSMServer.Extensions
-@using HSMServer.Model.Authentication
 @using HSMServer.Model.UserTreeShallowCopy
 
 @model SensorShallowModel
@@ -18,7 +17,7 @@
             <img class="tree-png-icon" src="~/dist/user.png" alt="!"/>
         </span>
     }
-    else if (Model.IsMutedState.HasValue && !Model.IsMutedState.Value && Model.IsAccountIgnoreIconShow && !Model.Parent.AccountState.IsAllIgnored)
+    else if (!Model.IsMutedState && Model.IsAccountIgnoreIconShow && !Model.Parent.AccountState.IsAllIgnored)
     {
         <span>
             <img class="tree-png-icon" src="~/dist/user-crossed.png" alt="!"/>
@@ -31,7 +30,7 @@
             <img class="tree-png-icon" src="~/dist/users.png" alt="!"/>
         </span>
     }
-    else if (Model.IsMutedState.HasValue && !Model.IsMutedState.Value && Model.IsGroupIgnoreIconShow && !Model.Parent.GroupState.IsAllIgnored)
+    else if (!Model.IsMutedState && Model.IsGroupIgnoreIconShow && !Model.Parent.GroupState.IsAllIgnored)
     {
         <span>
             <img class="tree-png-icon" src="~/dist/users-crossed.png" alt="!"/>
