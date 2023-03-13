@@ -5,6 +5,9 @@
 @model SensorNodeViewModel
 
 @{
+    var splitted = Model.FileNameString.Split('.');
+    var fileType = splitted.Length > 2 ? splitted[1] : string.Empty;
+    
     var sensorId = Model.EncodedId;
 
     var graphElementId = $"graph_{sensorId}";
@@ -63,9 +66,21 @@
 
             <div id="bigFilePreview" class="card text-center d-none">
                 <div class="card-body">
-                    <h5 class="card-title">Oops, something went wrong</h5>
-                    <p class="card-text">The file that you are trying to preview is too big(> 5MB)</p>
-                    <button id="button_download_@sensorId" href="#" class="btn btn-outline-primary">Start download</button>
+                    @switch (fileType)
+                    {
+                        case "csv":
+                            <h5 class="card-title">The file that you are trying to preview is too big (> 5MB)</h5>
+                            <button id="button_download_@(sensorId)" href="#" class="btn btn-outline-primary mt-2">Start download</button>
+                            break;
+                        case "txt":
+                            <h5 class="card-title">The file that you are trying to preview is too big (> 1MB)</h5>
+                            <button id="button_download_@(sensorId)" href="#" class="btn btn-outline-primary mt-2">Start download</button>
+                            break;
+                        default:
+                            <h5 class="card-title">Current file type is not available in preview mode</h5>
+                            <button id="button_download_@(sensorId)" href="#" class="btn btn-outline-primary mt-2">Start download</button>
+                            break;
+                    }
                 </div>
             </div>
         }
@@ -176,7 +191,8 @@ $(document).ready(function() {
         cache: false,
         contentType: "application/json",
         success: function (response){
-            if (response.originalSize < 5 * 1024 * 1024) { // 5MB
+            if ((response.originalSize < 5 * 1024 * 1024 && response.extension === 'csv') || // 5MB
+                (response.originalSize < 1024 * 1024 && response.extension === 'txt')) { // 1MB 
                 $.ajax({
                         type: 'POST',
                         url: `${viewFileAction}?Selected=@Model.EncodedId`,
@@ -208,11 +224,14 @@ $(document).ready(function() {
                      
                                 $('#example').dataTable( {
                                           "data": dataSet.splice(1),
-                                          "columns": columns
+                                          "columns": columns,
+                                          "lengthMenu": [ [5, 20, 50, 100], [5, 20, 50, 100] ],
+                                          "pageLength": 20
                                 });  
                             }
-                            else {
-                                $('#preview').removeClass('d-none').html(file);
+                            else if (response.extension === 'txt') {
+                                $('#preview').removeClass('d-none container');
+                                $('#preview-content').addClass('w-100 mw-100').html(file);
                             }
                          } 
                 })
