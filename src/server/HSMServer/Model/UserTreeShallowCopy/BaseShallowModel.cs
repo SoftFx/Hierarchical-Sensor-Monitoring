@@ -11,7 +11,7 @@ namespace HSMServer.Model.UserTreeShallowCopy
 
         public T Data { get; }
 
-        public bool IsMutedState { get; protected set; }
+        public bool? IsMutedState { get; protected set; }
 
         public NodeShallowModel Parent { get; internal set; }
 

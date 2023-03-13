@@ -36,10 +36,7 @@ namespace HSMServer.Model.UserTreeShallowCopy
         public override bool IsGroupsEnable => GroupState.IsAllEnabled;
 
 
-        internal NodeShallowModel(ProductNodeViewModel data, User user) : base(data, user)
-        {
-            IsMutedState = true;
-        }
+        internal NodeShallowModel(ProductNodeViewModel data, User user) : base(data, user) { }
 
 
         internal void AddChild(SensorShallowModel shallowSensor, User user)
@@ -53,8 +50,11 @@ namespace HSMServer.Model.UserTreeShallowCopy
                 AccountState.CalculateState(user.Notifications, sensor.Id);
                 GroupState.CalculateState(sensor.RootProduct.Notifications, sensor.Id);
             }
-            
-            IsMutedState &= sensor.State == SensorState.Muted;
+
+            if (!IsMutedState.HasValue)
+                IsMutedState = sensor.State == SensorState.Muted;
+            else
+                IsMutedState &= sensor.State == SensorState.Muted;
 
             if (user.IsSensorVisible(sensor))
             {
@@ -67,13 +67,15 @@ namespace HSMServer.Model.UserTreeShallowCopy
         {
             node.Parent = this;
             
-            if (!node.IsMutedState)
+            if (node.IsMutedState.HasValue && !node.IsMutedState.Value)
             {
                 AccountState.CalculateState(node.AccountState);
                 GroupState.CalculateState(node.GroupState);
             }
+
+            if (node.IsMutedState.HasValue)
+                IsMutedState = IsMutedState is null ? node.IsMutedState : IsMutedState & node.IsMutedState;
             
-            IsMutedState &= node.IsMutedState;
             VisibleSensorsCount += node.VisibleSensorsCount;
 
             if (node.VisibleSensorsCount > 0 || user.IsEmptyProductVisible(node.Data))
