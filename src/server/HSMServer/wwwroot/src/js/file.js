@@ -21,21 +21,20 @@ window.openFileInBrowser = function(path, fileName, viewFileAction) {
                 fileType = "text/html";
             }
             
+            let win = window.open('/Home/FilePreview','_blank');
+            
             if (fileType === 'application/csv'){
                 let data = [];
                 response.split('\n').forEach( el => {
                     data.push(el.split(','))
                 });
 
-                let win = window.open('/Home/FilePreview','_blank');
                 win.onload = (event) => {
                     win.document.getElementById('preview').innerHTML = response;
                     win.openHeihoCSV(data);
                 };
-                
             }
             else {
-                let win = window.open('/Home/FilePreview','_blank');
                 win.onload = (event) => {
                     win.document.getElementById('preview').innerHTML = response;
                 };
