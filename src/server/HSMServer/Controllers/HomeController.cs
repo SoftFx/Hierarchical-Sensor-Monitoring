@@ -407,6 +407,8 @@ namespace HSMServer.Controllers
             return value;
         }
 
+        public IActionResult FilePreview() => View("FilePreview");
+        
         private FileValue GetFileSensorValue(string encodedId) =>
             _treeValuesCache.GetSensor(SensorPathHelper.DecodeGuid(encodedId)).LastValue as FileValue;
 

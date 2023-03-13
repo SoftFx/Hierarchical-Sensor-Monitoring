@@ -26,16 +26,20 @@ window.openFileInBrowser = function(path, fileName, viewFileAction) {
                 response.split('\n').forEach( el => {
                     data.push(el.split(','))
                 });
+
+                let win = window.open('/Home/FilePreview','_blank');
+                win.onload = (event) => {
+                    win.document.getElementById('preview').innerHTML = response;
+                    win.openHeihoCSV(data);
+                };
                 
-                Heiho(data, {
-                    header: null,
-                    max: 25000
-                });
+                
             }
             else {
-                let blob = new Blob([response], { type: fileType });
-                let url = window.URL.createObjectURL(blob);
-                window.open(url);
+                let win = window.open('/Home/FilePreview','_blank');
+                win.onload = (event) => {
+                    win.document.getElementById('preview').innerHTML = response;
+                };
             }
             
             $("#spinner").css("display", "none");
