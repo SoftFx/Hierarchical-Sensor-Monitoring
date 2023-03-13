@@ -38,10 +38,6 @@ namespace HSMServer.Authentication
             _treeValuesCache = cache;
             _treeValuesCache.ChangeProductEvent += ChangeProductEventHandler;
             _treeValuesCache.ChangeSensorEvent += ChangeSensorEventHandler;
-
-            _ = InitializeUsers(); // TODO call this after initialization (with await)
-
-            _logger.LogInformation("UserManager initialized");
         }
 
 
@@ -68,7 +64,6 @@ namespace HSMServer.Authentication
                 TryAdd(user);
         }
 
-        // TODO: wait for async Task
         public async Task RemoveUser(string userName)
         {
             if (TryGetByName(userName, out var user))
@@ -132,7 +127,7 @@ namespace HSMServer.Authentication
 
         public IEnumerable<User> GetUsers(Func<User, bool> filter = null) => filter != null ? Values.Where(filter) : Values;
 
-        private async Task InitializeUsers()
+        public async Task InitializeUsers()
         {
             var userEntities = _databaseCore.GetUsers();
 

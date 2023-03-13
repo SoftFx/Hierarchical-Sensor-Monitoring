@@ -153,7 +153,7 @@ namespace HSMServer.Controllers
         public void EditUserRole([FromBody] UserRightViewModel model)
         {
             var user = _userManager.GetCopyUser(model.UserId);
-            var pair = ((model.ProductKey, (ProductRoleEnum)model.ProductRole));
+            var pair = (model.ProductKey, (ProductRoleEnum)model.ProductRole);
 
             var role = user.ProductsRoles.FirstOrDefault(ur => ur.Item1.Equals(model.ProductKey));
             //Skip empty corresponding pair
