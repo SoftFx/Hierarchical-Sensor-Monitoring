@@ -172,13 +172,13 @@ $(document).ready(function() {
     let dataSet = [];
     $.ajax({
         type: 'GET',
-        url: getFileInfo + "?Selected=" + '@Model.EncodedId',
+        url: `${getFileInfo}?Selected=@Model.EncodedId`,
         cache: false,
         contentType: "application/json",
         success: function (response){
             $.ajax({
                     type: 'POST',
-                    url: viewFileAction + "?Selected=" + '@Model.EncodedId',
+                    url: `${viewFileAction}?Selected=@Model.EncodedId`,
                     cache: false,
                     contentType: "application/json",
                     success: function (file) {

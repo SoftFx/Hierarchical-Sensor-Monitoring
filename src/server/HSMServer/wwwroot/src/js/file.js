@@ -13,7 +13,7 @@ window.openFileInBrowser = function(path, fileName, viewFileAction) {
 
     $.ajax({
         type: 'POST',
-        url: viewFileAction + "?Selected=" + path,
+        url: `${viewFileAction}?Selected=${path}`,
         cache: false,
         contentType: "application/json",
         success: function (response) {
@@ -32,7 +32,6 @@ window.openFileInBrowser = function(path, fileName, viewFileAction) {
                     win.document.getElementById('preview').innerHTML = response;
                     win.openHeihoCSV(data);
                 };
-                
                 
             }
             else {
