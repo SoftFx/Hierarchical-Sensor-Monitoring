@@ -16,14 +16,12 @@ namespace HSMServer.Core.Model.Policies
 
 
         [JsonConstructor] // TODO: remove after migration
-        public ExpectedUpdateIntervalPolicy(TimeInterval expectedUpdatePeriod, long customPeriod) : 
+        public ExpectedUpdateIntervalPolicy(TimeInterval expectedUpdatePeriod, long customPeriod) :
             base(new TimeIntervalModel(expectedUpdatePeriod, customPeriod))
         {
             ExpectedUpdatePeriod = expectedUpdatePeriod;
             CustomPeriod = customPeriod;
         }
-
-        //public ExpectedUpdateIntervalPolicy() : base() { }
 
         //[JsonConstructor] //TODO uncomment after migration and removed previos constructor
         public ExpectedUpdateIntervalPolicy(TimeIntervalModel interval) : base(interval) { }
