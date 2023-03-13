@@ -158,10 +158,10 @@ function buildContextMenu(node) {
         };
     }
     if (isManager) {
-        let mutedValue = node.data.jstree.mutedValue;
+        let isMutedState = node.data.jstree.isMutedState;
         
-        if (mutedValue !== '') {
-            if (!(mutedValue === "True")) {
+        if (isMutedState !== '') {
+            if (!(isMutedState === "True")) {
                 contextMenu["Mute"] = {
                     "label": `Mute ${getKeyByValue(curType)}`,
                     "separator_after": true,

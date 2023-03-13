@@ -9,7 +9,7 @@ namespace HSMServer.Model.UserTreeShallowCopy
         private readonly bool _curUserIsManager;
 
         
-        protected internal bool? _mutedValue;
+        protected bool? _mutedValue;
         
 
         public T Data { get; }
@@ -40,8 +40,7 @@ namespace HSMServer.Model.UserTreeShallowCopy
             "isManager": "{{_curUserIsManager}}",
             "isAccountsEnable": "{{IsAccountsEnable}}",
             "isGroupsEnable": "{{IsGroupsEnable}}",
-            "isMutedState": "{{IsMutedState}}",
-            "mutedValue": "{{_mutedValue}}"
+            "isMutedState": "{{_mutedValue}}"
         }
         """;
     }
