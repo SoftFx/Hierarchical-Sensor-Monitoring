@@ -45,7 +45,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         {
             var users = BuildRandomUsers(count);
 
-            users.ForEach(u => _userManager.AddUser(u.Name, u.Password, u.IsAdmin, u.ProductsRoles));
+            await Task.WhenAll(users.Select(u => _userManager.AddUser(u.Name, u.Password, u.IsAdmin, u.ProductsRoles)));
 
             await FullTestUserAsync(users,
                                     _userManager.GetUserByName,
@@ -54,9 +54,9 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
 
         [Fact]
         [Trait("Category", "Add user(s), Negative")]
-        public void AddEmptyUserTest()
+        public async Task AddEmptyUserTest()
         {
-            _userManager.AddUser(TestUsersManager.GetEmptyUser());
+            await _userManager.TryAdd(TestUsersManager.GetEmptyUser());
 
             var actual = _userManager.GetUsers();
             var expected = new List<User>(2) { TestUsersManager.DefaultUser, TestUsersManager.GetEmptyUser() };
@@ -66,9 +66,9 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
 
         [Fact]
         [Trait("Category", "Add user(s), Negative")]
-        public void AddSameUserTest()
+        public async Task AddSameUserTest()
         {
-            _userManager.AddUser(TestUsersManager.DefaultUser);
+            await _userManager.TryAdd(TestUsersManager.DefaultUser);
 
             var actual = _userManager.GetUsers();
             var expected = new List<User>(2) { TestUsersManager.DefaultUser, TestUsersManager.DefaultUser };
@@ -102,7 +102,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         [Trait("Category", "Update user(s)")]
         public async Task UpdateUsersTest(int count)
         {
-            var users = BuildAddAndGetRandomUsers(count - 1); // there is default user in db
+            var users = await BuildAddAndGetRandomUsers(count - 1); // there is default user in db
 
             var updatedUsers = new List<User>(count);
             foreach (var user in users)
@@ -130,7 +130,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
 
 
             var updatedUsers = new List<User>(count);
-            foreach (var user in BuildAddAndGetRandomUsers(count - 1)) // there is default user in db
+            foreach (var user in await BuildAddAndGetRandomUsers(count - 1)) // there is default user in db
                 updatedUsers.Add(BuildUpdatedUser(user));
 
             _userManager.Updated += UpdateUserEvent;
@@ -204,7 +204,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         [Trait("Category", "Remove user(s)")]
         public async Task RemoveUsersByNameTest(int count)
         {
-            var users = BuildAddAndGetRandomUsers(count);
+            var users = await BuildAddAndGetRandomUsers(count);
 
             await Task.WhenAll(users.Select(u => _userManager.RemoveUser(u.Name)));
 
@@ -249,9 +249,9 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
 
         [Fact]
         [Trait("Category", "Remove product from users")]
-        public void RemoveProductFromUsersTest()
+        public async Task RemoveProductFromUsersTest()
         {
-            AddUsers(TestUsersManager.TestUserViewer.Copy(), TestUsersManager.TestUserManager.Copy());
+            await AddUsers(TestUsersManager.TestUserViewer.Copy(), TestUsersManager.TestUserManager.Copy());
 
             _valuesCache.RemoveProduct(TestProductsManager.ProductId);
 
@@ -266,9 +266,9 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
 
         [Fact]
         [Trait("Category", "Get users")]
-        public void GetViewersTest()
+        public async Task GetViewersTest()
         {
-            AddUsers(TestUsersManager.TestUserViewer, TestUsersManager.TestUserManager);
+            await AddUsers(TestUsersManager.TestUserViewer, TestUsersManager.TestUserManager);
 
             var actual = _userManager.GetViewers(TestProductsManager.ProductId);
             var expected = new List<User>(2) { TestUsersManager.TestUserViewer, TestUsersManager.TestUserManager };
@@ -278,11 +278,12 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
 
         [Fact]
         [Trait("Category", "Get users, Negative")]
-        public void GetEmptyViewersTest()
+        public async Task GetEmptyViewersTest()
         {
             var emptyViewer = TestUsersManager.GetEmptyUser();
             emptyViewer.ProductsRoles = new(TestUsersManager.TestUserViewer.ProductsRoles);
-            _userManager.AddUser(emptyViewer);
+
+            await _userManager.TryAdd(emptyViewer);
 
             var actual = _userManager.GetViewers(TestProductsManager.ProductId);
             var expected = new List<User>(1) { emptyViewer };
@@ -292,9 +293,9 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
 
         [Fact]
         [Trait("Category", "Get users")]
-        public void GetManagersTest()
+        public async Task GetManagersTest()
         {
-            AddUsers(TestUsersManager.TestUserViewer, TestUsersManager.TestUserManager);
+            await AddUsers(TestUsersManager.TestUserViewer, TestUsersManager.TestUserManager);
 
             var actual = _userManager.GetManagers(TestProductsManager.ProductId);
             var expected = new List<User>(1) { TestUsersManager.TestUserManager };
@@ -304,12 +305,12 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
 
         [Fact]
         [Trait("Category", "Get users, Negative")]
-        public void GetEmptyManagersTest()
+        public async Task GetEmptyManagersTest()
         {
             var emptyManager = TestUsersManager.GetEmptyUser();
             emptyManager.ProductsRoles = new(TestUsersManager.TestUserManager.ProductsRoles);
 
-            _userManager.AddUser(emptyManager);
+            await _userManager.TryAdd(emptyManager);
 
             var actual = _userManager.GetManagers(TestProductsManager.ProductId);
             var expected = new List<User>(1) { emptyManager };
@@ -319,12 +320,12 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
 
         [Fact]
         [Trait("Category", "Get users")]
-        public void GetOnlyAdminUsersTest()
+        public async Task GetOnlyAdminUsersTest()
         {
-            bool IsAdmin(User user) => user.IsAdmin;
+            static bool IsAdmin(User user) => user.IsAdmin;
 
 
-            AddUsers(TestUsersManager.Admin, TestUsersManager.NotAdmin);
+            await AddUsers(TestUsersManager.Admin, TestUsersManager.NotAdmin);
 
             var actual = _userManager.GetUsers(IsAdmin);
             var expected = new List<User>(2) { TestUsersManager.DefaultUser, TestUsersManager.Admin };
@@ -334,12 +335,12 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
 
         [Fact]
         [Trait("Category", "Get users")]
-        public void GetUsersWithProductRoleTest()
+        public async Task GetUsersWithProductRoleTest()
         {
-            bool IsProductRole(User user) => user.ProductsRoles.Count > 0;
+            static bool IsProductRole(User user) => user.ProductsRoles.Count > 0;
 
 
-            AddUsers(TestUsersManager.TestUserViewer, TestUsersManager.TestUserManager);
+            await AddUsers(TestUsersManager.TestUserViewer, TestUsersManager.TestUserManager);
 
             var actual = _userManager.GetUsers(IsProductRole);
             var expected = new List<User>(2) { TestUsersManager.TestUserViewer, TestUsersManager.TestUserManager };
@@ -349,12 +350,12 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
 
         [Fact]
         [Trait("Category", "Get users")]
-        public void GetUsersWithNameTest()
+        public async Task GetUsersWithNameTest()
         {
-            bool IsProductRole(User user) => user.Name == TestUsersManager.TestUserViewer.Name;
+            static bool IsProductRole(User user) => user.Name == TestUsersManager.TestUserViewer.Name;
 
 
-            AddUsers(TestUsersManager.TestUserViewer, TestUsersManager.TestUserManager);
+            await AddUsers(TestUsersManager.TestUserViewer, TestUsersManager.TestUserManager);
 
             var actual = _userManager.GetUsers(IsProductRole);
             var expected = new List<User>(1) { TestUsersManager.TestUserViewer };
@@ -364,12 +365,12 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
 
         [Fact]
         [Trait("Category", "Get users")]
-        public void GetUsersOfProductTest()
+        public async Task GetUsersOfProductTest()
         {
-            bool IsProductRole(User user) => user.ProductsRoles.Any(e => e.Item1 == TestProductsManager.ProductId);
+            static bool IsProductRole(User user) => user.ProductsRoles.Any(e => e.Item1 == TestProductsManager.ProductId);
 
 
-            AddUsers(TestUsersManager.TestUserViewer, TestUsersManager.TestUserManager, TestUsersManager.Admin, TestUsersManager.NotAdmin);
+            await AddUsers(TestUsersManager.TestUserViewer, TestUsersManager.TestUserManager, TestUsersManager.Admin, TestUsersManager.NotAdmin);
 
             var actual = _userManager.GetUsers(IsProductRole);
             var expected = new List<User>(2) { TestUsersManager.TestUserViewer, TestUsersManager.TestUserManager };
@@ -515,17 +516,13 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
             return _databaseCoreManager.DatabaseCore.GetUsers();
         }
 
-        private void AddUsers(params User[] users)
-        {
-            foreach (var user in users)
-                _userManager.AddUser(user);
-        }
+        private Task AddUsers(params User[] users) => Task.WhenAll(users.Select(_userManager.TryAdd));
 
-        private List<User> BuildAddAndGetRandomUsers(int count)
+        private async Task<List<User>> BuildAddAndGetRandomUsers(int count)
         {
             var users = BuildRandomUsers(count);
 
-            users.ForEach(_userManager.AddUser);
+            await AddUsers(users.ToArray());
 
             return _userManager.GetUsers().ToList();
         }

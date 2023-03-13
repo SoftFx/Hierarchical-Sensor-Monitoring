@@ -44,7 +44,8 @@ namespace HSMServer.Authentication
             _logger.LogInformation("UserManager initialized");
         }
 
-        public void AddUser(string userName, string passwordHash, bool isAdmin, List<(Guid, ProductRoleEnum)> productRoles = null)
+
+        public Task<bool> AddUser(string userName, string passwordHash, bool isAdmin, List<(Guid, ProductRoleEnum)> productRoles = null)
         {
             User user = new(userName)
             {
@@ -55,10 +56,8 @@ namespace HSMServer.Authentication
             if (productRoles != null && productRoles.Count > 0)
                 user.ProductsRoles = productRoles;
 
-            AddUser(user);
+            return TryAdd(user);
         }
-
-        public void AddUser(User user) => TryAdd(user);
 
         // TODO: wait for async Task
         public void UpdateUser(User user)
@@ -66,7 +65,7 @@ namespace HSMServer.Authentication
             if (ContainsKey(user.Id))
                 TryUpdate(user);
             else
-                AddUser(user);
+                TryAdd(user);
         }
 
         // TODO: wait for async Task
@@ -139,7 +138,7 @@ namespace HSMServer.Authentication
 
             if (userEntities.Count == 0)
             {
-                AddDefaultUser();
+                await AddDefaultUser();
                 _logger.LogInformation("Default user has been added.");
             }
 
@@ -149,7 +148,7 @@ namespace HSMServer.Authentication
             _logger.LogInformation($"Read users from database, users count = {Count}.");
         }
 
-        private void AddDefaultUser() =>
+        private Task<bool> AddDefaultUser() =>
             AddUser(CommonConstants.DefaultUserUsername,
                     HashComputer.ComputePasswordHash(CommonConstants.DefaultUserUsername),
                     true);

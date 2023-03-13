@@ -135,7 +135,7 @@ namespace HSMServer.Controllers
                 };
             }
 
-            _userManager.AddUser(model.Username, HashComputer.ComputePasswordHash(model.Password), false, products);
+            await _userManager.AddUser(model.Username, HashComputer.ComputePasswordHash(model.Password), false, products);
             await Authenticate(model.Username, true);
 
             if (!string.IsNullOrEmpty(model.TicketId))
@@ -166,16 +166,15 @@ namespace HSMServer.Controllers
         }
 
         [HttpPost]
-        public void CreateUser([FromBody] UserViewModel model)
+        public async Task CreateUser([FromBody] UserViewModel model)
         {
             UserValidator validator = new UserValidator(_userManager);
             var results = validator.Validate(model);
+
             if (!results.IsValid)
                 TempData[TextConstants.TempDataErrorText] = ValidatorHelper.GetErrorString(results.Errors);
-
             else
-                _userManager.AddUser(model.Username.Trim(),
-                HashComputer.ComputePasswordHash(model.Password), model.IsAdmin);
+                await _userManager.AddUser(model.Username.Trim(), HashComputer.ComputePasswordHash(model.Password), model.IsAdmin);
         }
 
         [HttpPost]

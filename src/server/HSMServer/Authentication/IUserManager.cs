@@ -16,10 +16,10 @@ namespace HSMServer.Authentication
         /// </summary>
         /// <param name="userName">Login of the new user, must be unique and not empty</param>
         /// <param name="passwordHash">Password hash computed with HashComputer.ComputePasswordHash().</param>
-        void AddUser(string userName, string passwordHash, bool isAdmin, List<(Guid, ProductRoleEnum)> productRoles = null);
-        public void AddUser(User user);
+        Task<bool> AddUser(string userName, string passwordHash, bool isAdmin, List<(Guid, ProductRoleEnum)> productRoles = null);
 
         Task<bool> TryAdd(User user);
+
         /// <summary>
         /// New user object
         /// </summary>
