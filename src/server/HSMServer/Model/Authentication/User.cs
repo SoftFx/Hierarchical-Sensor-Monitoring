@@ -44,20 +44,6 @@ namespace HSMServer.Model.Authentication
             TreeFilter = new();
         }
 
-
-        public User(User user)
-        {
-            if (user == null) return;
-
-            Id = user.Id;
-            Name = user.Name;
-            Password = user.Password;
-            IsAdmin = user.IsAdmin;
-            ProductsRoles = user.ProductsRoles != null ? new(user.ProductsRoles) : new();
-            Notifications = new(user.Notifications.ToEntity());
-            TreeFilter = user.TreeFilter;
-        }
-
         public User(UserEntity entity)
         {
             if (entity == null) return;

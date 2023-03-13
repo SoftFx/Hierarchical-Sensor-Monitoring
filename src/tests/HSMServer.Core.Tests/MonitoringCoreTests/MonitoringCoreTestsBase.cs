@@ -36,6 +36,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
 
             var userManagerLogger = CommonMoqs.CreateNullLogger<UserManager>();
             _userManager = new UserManager(_databaseCoreManager.DatabaseCore, _valuesCache, userManagerLogger);
+            _userManager.InitializeUsers();
         }
     }
 }

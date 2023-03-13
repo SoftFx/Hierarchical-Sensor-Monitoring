@@ -187,7 +187,7 @@ namespace HSMServer.Controllers
             User user = GetModelFromViewModel(userViewModel);
             user.ProductsRoles = currentUser.ProductsRoles;
 
-            _userManager.UpdateUser(user);
+            _userManager.UpdateUser(user); // TODO: update by updaateEntity
         }
 
         #endregion

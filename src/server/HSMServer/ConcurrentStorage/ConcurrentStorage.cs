@@ -27,6 +27,15 @@ namespace HSMServer.ConcurrentStorage
             !string.IsNullOrEmpty(name) && TryGetByName(name, out var model) ? model : null;
 
 
+        protected abstract ModelType FromEntity(EntityType entity);
+
+        public bool TryAdd(EntityType entity)
+        {
+            var value = FromEntity(entity);
+
+            return TryAdd(value.Id, value) && _modelNames.TryAdd(value.Name, value.Id);
+        }
+
         public Task<bool> TryAdd(ModelType value)
         {
             var result = TryAdd(value.Id, value) && _modelNames.TryAdd(value.Name, value.Id);
@@ -40,7 +49,7 @@ namespace HSMServer.ConcurrentStorage
             return Task.FromResult(result);
         }
 
-        internal Task<bool> TryRemove(ModelType value)
+        public Task<bool> TryRemove(ModelType value)
         {
             var result = TryRemove(value.Id, out _) && _modelNames.TryRemove(value.Name, out _);
 
@@ -53,7 +62,7 @@ namespace HSMServer.ConcurrentStorage
             return Task.FromResult(result);
         }
 
-        internal async Task<bool> TryUpdate(UpdateType update)
+        public async Task<bool> TryUpdate(UpdateType update)
         {
             var result = TryGetValue(update.Id, out var model);
 
@@ -66,7 +75,7 @@ namespace HSMServer.ConcurrentStorage
             return result;
         }
 
-        internal Task<bool> TryUpdate(ModelType value)
+        public Task<bool> TryUpdate(ModelType value)
         {
             var result = TryGetValue(value.Id, out var model);
 
@@ -79,7 +88,7 @@ namespace HSMServer.ConcurrentStorage
             return Task.FromResult(result);
         }
 
-        internal bool TryGetByName(string name, out ModelType model)
+        public bool TryGetByName(string name, out ModelType model)
         {
             model = null;
 

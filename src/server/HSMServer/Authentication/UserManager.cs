@@ -55,14 +55,8 @@ namespace HSMServer.Authentication
             return TryAdd(user);
         }
 
-        // TODO: wait for async Task
-        public void UpdateUser(User user)
-        {
-            if (ContainsKey(user.Id))
-                TryUpdate(user);
-            else
-                TryAdd(user);
-        }
+        public Task<bool> UpdateUser(User user) =>
+            ContainsKey(user.Id) ? TryUpdate(user) : TryAdd(user);
 
         public async Task RemoveUser(string userName)
         {
@@ -86,9 +80,6 @@ namespace HSMServer.Authentication
 
             return existingUser.Value?.WithoutPassword();
         }
-
-        // TODO remove copy object
-        public User GetCopyUser(Guid id) => new(this.GetValueOrDefault(id));
 
         public User GetUser(Guid id) => this.GetValueOrDefault(id);
 
@@ -138,10 +129,12 @@ namespace HSMServer.Authentication
             }
 
             foreach (var entity in userEntities)
-                await TryAdd(new(entity));
+                TryAdd(entity);
 
             _logger.LogInformation($"Read users from database, users count = {Count}.");
         }
+
+        protected override User FromEntity(UserEntity entity) => new(entity);
 
         private Task<bool> AddDefaultUser() =>
             AddUser(CommonConstants.DefaultUserUsername,
@@ -163,8 +156,8 @@ namespace HSMServer.Authentication
                     updatedUsers.Add(user.Value);
                 }
 
-                foreach (var userToEdt in updatedUsers)
-                    _databaseCore.UpdateUser(userToEdt.ToEntity());
+                foreach (var userToEdit in updatedUsers)
+                    TryUpdate(userToEdit);
             }
         }
 
@@ -177,7 +170,7 @@ namespace HSMServer.Authentication
                     if (!user.Notifications.RemoveSensor(sensor.Id))
                         continue;
 
-                    _databaseCore.UpdateUser(user.ToEntity());
+                    TryUpdate(user);
                 }
             }
         }

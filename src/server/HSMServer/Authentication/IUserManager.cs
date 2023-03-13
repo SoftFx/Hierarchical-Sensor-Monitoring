@@ -24,7 +24,7 @@ namespace HSMServer.Authentication
         /// New user object
         /// </summary>
         /// <param name="user">User object (password field must be password hash).</param>
-        void UpdateUser(User user);
+        Task<bool> UpdateUser(User user);
 
         /// <summary>
         /// Remove user with the specified userName
@@ -34,7 +34,6 @@ namespace HSMServer.Authentication
 
         User Authenticate(string login, string password);
 
-        User GetCopyUser(Guid id);
         User GetUser(Guid id);
         User GetUserByName(string username);
 
