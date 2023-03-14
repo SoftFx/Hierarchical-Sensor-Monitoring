@@ -124,7 +124,7 @@ namespace HSMServer.Controllers
                 return;
             }
 
-            var user = _userManager.GetUser(model.UserId);
+            var user = _userManager[model.UserId];
             var pair = (model.ProductKey, (ProductRoleEnum)model.ProductRole);
 
             if (user.ProductsRoles == null || !user.ProductsRoles.Any())
@@ -138,7 +138,7 @@ namespace HSMServer.Controllers
         [HttpPost]
         public void RemoveUserRole([FromBody] UserRightViewModel model)
         {
-            var user = _userManager.GetUser(model.UserId);
+            var user = _userManager[model.UserId];
 
             var role = user.ProductsRoles.First(ur => ur.Item1.Equals(model.ProductKey));
             user.ProductsRoles.Remove(role);
@@ -152,7 +152,7 @@ namespace HSMServer.Controllers
         [HttpPost]
         public void EditUserRole([FromBody] UserRightViewModel model)
         {
-            var user = _userManager.GetUser(model.UserId);
+            var user = _userManager[model.UserId];
             var pair = (model.ProductKey, (ProductRoleEnum)model.ProductRole);
 
             var role = user.ProductsRoles.FirstOrDefault(ur => ur.Item1.Equals(model.ProductKey));

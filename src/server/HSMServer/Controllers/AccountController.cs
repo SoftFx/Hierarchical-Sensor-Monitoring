@@ -180,7 +180,7 @@ namespace HSMServer.Controllers
         [HttpPost]
         public void UpdateUser([FromBody] UserViewModel userViewModel)
         {
-            var currentUser = _userManager.GetUserByName(userViewModel.Username);
+            var currentUser = _userManager[userViewModel.Username];
             userViewModel.Password = currentUser.Password;
             userViewModel.UserId = currentUser.Id.ToString();
 

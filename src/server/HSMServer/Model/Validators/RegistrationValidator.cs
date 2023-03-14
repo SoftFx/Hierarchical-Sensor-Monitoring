@@ -38,11 +38,6 @@ namespace HSMServer.Model.Validators
 
         }
 
-        private bool IsUniqueUsername(string username)
-        {
-            return _userManager.GetUserByName(username) == null;
-        }
-
-
+        private bool IsUniqueUsername(string username) => _userManager[username] == null;
     }
 }

@@ -60,8 +60,8 @@ namespace HSMServer.Authentication
 
         public async Task RemoveUser(string userName)
         {
-            if (TryGetByName(userName, out var user))
-                await TryRemove(user);
+            if (TryGetIdByName(userName, out var userId))
+                await TryRemove(userId);
             else
                 _logger.LogWarning($"There are no users with name={userName} to remove");
         }
@@ -80,10 +80,6 @@ namespace HSMServer.Authentication
 
             return existingUser.Value?.WithoutPassword();
         }
-
-        public User GetUser(Guid id) => this.GetValueOrDefault(id);
-
-        public User GetUserByName(string userName) => base[userName];
 
         public List<User> GetViewers(Guid productId)
         {

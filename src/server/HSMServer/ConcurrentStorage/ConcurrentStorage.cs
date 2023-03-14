@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 
 namespace HSMServer.ConcurrentStorage
@@ -18,45 +19,34 @@ namespace HSMServer.ConcurrentStorage
         protected abstract Action<ModelType> RemoveFromDb { get; }
 
 
+        public new ModelType this[Guid id] => this.GetValueOrDefault(id);
+
+        public ModelType this[string name] =>
+            !string.IsNullOrEmpty(name) && TryGetIdByName(name, out var id) && TryGetValue(id, out var model) ? model : null;
+
+
         public event Action<ModelType> Added;
         public event Action<ModelType> Updated;
         public event Action<ModelType> Removed;
-
-
-        internal ModelType this[string name] =>
-            !string.IsNullOrEmpty(name) && TryGetByName(name, out var model) ? model : null;
 
 
         protected abstract ModelType FromEntity(EntityType entity);
 
         public bool TryAdd(EntityType entity)
         {
-            var value = FromEntity(entity);
+            var model = FromEntity(entity);
 
-            return TryAdd(value.Id, value) && _modelNames.TryAdd(value.Name, value.Id);
+            return TryAdd(model.Id, model) && _modelNames.TryAdd(model.Name, model.Id);
         }
 
-        public Task<bool> TryAdd(ModelType value)
+        public Task<bool> TryAdd(ModelType model)
         {
-            var result = TryAdd(value.Id, value) && _modelNames.TryAdd(value.Name, value.Id);
+            var result = TryAdd(model.Id, model) && _modelNames.TryAdd(model.Name, model.Id);
 
             if (result)
             {
-                AddToDb(value.ToEntity());
-                Added?.Invoke(value);
-            }
-
-            return Task.FromResult(result);
-        }
-
-        public Task<bool> TryRemove(ModelType value)
-        {
-            var result = TryRemove(value.Id, out _) && _modelNames.TryRemove(value.Name, out _);
-
-            if (result)
-            {
-                RemoveFromDb(value);
-                Removed?.Invoke(value);
+                AddToDb(model.ToEntity());
+                Added?.Invoke(model);
             }
 
             return Task.FromResult(result);
@@ -81,18 +71,26 @@ namespace HSMServer.ConcurrentStorage
 
             if (result)
             {
-                UpdateInDb(value.ToEntity());
-                Updated?.Invoke(value);
+                UpdateInDb(model.ToEntity());
+                Updated?.Invoke(model);
             }
 
             return Task.FromResult(result);
         }
 
-        public bool TryGetByName(string name, out ModelType model)
+        public Task<bool> TryRemove(Guid id)
         {
-            model = null;
+            var result = TryRemove(id, out var model) && _modelNames.TryRemove(model.Name, out _);
 
-            return _modelNames.TryGetValue(name, out var id) && TryGetValue(id, out model);
+            if (result)
+            {
+                RemoveFromDb(model);
+                Removed?.Invoke(model);
+            }
+
+            return Task.FromResult(result);
         }
+
+        public bool TryGetIdByName(string name, out Guid id) => _modelNames.TryGetValue(name, out id);
     }
 }

@@ -86,7 +86,7 @@ namespace HSMServer.Controllers
                 ? _cache.GetProduct(SensorPathHelper.DecodeGuid(productId))
                 : GetCurrentUser();
 
-        private User GetCurrentUser() => _userManager.GetUser((HttpContext.User as User).Id);
+        private User GetCurrentUser() => _userManager[(HttpContext.User as User).Id];
 
         private RedirectToActionResult GetResult(string productId) =>
             string.IsNullOrEmpty(productId)

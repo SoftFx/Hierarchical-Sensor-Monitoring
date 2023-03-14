@@ -31,7 +31,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
 
             Assert.Single(usersFromDB);
             TestUser(_defaultUser, new(usersFromDB[0]));
-            TestUserByName(_defaultUser, _userManager.GetUserByName);
+            TestUserByName(_defaultUser, GetUserByName);
         }
 
         [Theory]
@@ -47,7 +47,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
             await Task.WhenAll(users.Select(u => _userManager.AddUser(u.Name, u.Password, u.IsAdmin, u.ProductsRoles)));
 
             await FullTestUserAsync(users,
-                                    _userManager.GetUserByName,
+                                    GetUserByName,
                                     _databaseCoreManager.DatabaseCore.GetUsers);
         }
 
@@ -84,11 +84,11 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
             var updatedUser = BuildUpdatedUser(defaultUserFromDB);
             updatedUser.ProductsRoles = new List<(Guid, ProductRoleEnum)>(_testUser.ProductsRoles);
 
-            _userManager.UpdateUser(updatedUser);
+            await _userManager.UpdateUser(updatedUser);
 
             await FullTestUpdatedUserAsync(new() { updatedUser },
                                            new() { defaultUserFromDB },
-                                           _userManager.GetUserByName,
+                                           GetUserByName,
                                            _databaseCoreManager.DatabaseCore.GetUsers);
         }
 
@@ -110,7 +110,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
 
             await FullTestUpdatedUserAsync(updatedUsers,
                                            users,
-                                           _userManager.GetUserByName,
+                                           GetUserByName,
                                            _databaseCoreManager.DatabaseCore.GetUsers);
         }
 
@@ -139,7 +139,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
             Assert.Equal(updatedUsers.Count, actualUpdatedUsers.Count);
             await FullTestUpdatedUserAsync(updatedUsers,
                                            actualUpdatedUsers,
-                                           _userManager.GetUserByName,
+                                           GetUserByName,
                                            _databaseCoreManager.DatabaseCore.GetUsers);
         }
 
@@ -147,10 +147,10 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         [Trait("Category", "Update user(s)")]
         public async Task UpdateNonExistingUserTest()
         {
-            _userManager.UpdateUser(_testUser);
+            await _userManager.UpdateUser(_testUser);
 
             await FullTestUserAsync(new() { _testUser },
-                                    _userManager.GetUserByName,
+                                    GetUserByName,
                                     _databaseCoreManager.DatabaseCore.GetUsers);
         }
 
@@ -163,7 +163,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
             await _userManager.RemoveUser(defaultUserFromDB.Name);
 
             await FullTestRemovedDefaultUserAsync(new() { defaultUserFromDB },
-                                                  _userManager.GetUserByName,
+                                                  GetUserByName,
                                                   _databaseCoreManager.DatabaseCore.GetUsers);
         }
 
@@ -204,7 +204,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
             await Task.WhenAll(users.Select(u => _userManager.RemoveUser(u.Name)));
 
             await FullTestRemovedDefaultUserAsync(users,
-                                                  _userManager.GetUserByName,
+                                                  GetUserByName,
                                                   _databaseCoreManager.DatabaseCore.GetUsers);
         }
 
@@ -496,6 +496,8 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
 
             return _databaseCoreManager.DatabaseCore.GetUsers();
         }
+
+        private User GetUserByName(string userName) => _userManager[userName];
 
         private Task AddUsers(params User[] users) => Task.WhenAll(users.Select(_userManager.TryAdd));
 
