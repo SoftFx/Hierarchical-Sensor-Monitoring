@@ -61,6 +61,7 @@ namespace HSMServer.Notifications
                     TelegramBotCommands.Start => StartBot(parts, message, isUserChat),
                     TelegramBotCommands.Info => EntitiesInfo(message.Chat, isUserChat),
                     TelegramBotCommands.Status => ServerStatus(),
+                    TelegramBotCommands.Emotes => EmojiInfo(),
                     _ => null,
                 };
 
@@ -117,7 +118,11 @@ namespace HSMServer.Notifications
 
             response.AppendLine($"{(isUserChat ? "Authorized" : "Added")} {entityStr}(s) settings:");
 
-            foreach (var entity in _addressBook.GetAuthorizedEntities(chat))
+            var entities = _addressBook.GetAuthorizedEntities(chat);
+
+            if (entities is null) return "1";
+            
+            foreach (var entity in entities)
             {
                 var telegramSetting = entity.Notifications.Telegram;
 
@@ -129,6 +134,15 @@ namespace HSMServer.Notifications
 
             return response.ToString();
         }
+        
+        private string EmojiInfo() =>
+            """
+            ❌ - error
+            ⚠️- warning
+            ✅ - ok
+            ⏸ - offtime
+            ⌛️- timeout
+            """;
 
         private static string ServerStatus()
         {

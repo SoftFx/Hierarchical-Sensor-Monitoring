@@ -8,6 +8,7 @@ namespace HSMServer.Notifications
         internal const string Start = "/start";
         internal const string Info = "/info";
         internal const string Status = "/status";
+        internal const string Emotes = "/emotes";
 
 
         internal static List<BotCommand> Commands { get; } =
@@ -22,6 +23,11 @@ namespace HSMServer.Notifications
                 {
                     Command = Status,
                     Description = "get info about HSM server version and working status",
+                },
+                new BotCommand()
+                {
+                    Command = Emotes,
+                    Description = "get each emoji description"
                 }
             };
     }
