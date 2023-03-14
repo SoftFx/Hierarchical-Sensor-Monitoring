@@ -20,6 +20,6 @@ namespace HSMDataCollector.PublicInterface
         IUnixCollection AddDiskMonitoringSensors(DiskSensorOptions options = null);
 
 
-        IUnixCollection AddCollectorAlive(SensorOptions options = null);
+        IUnixCollection AddCollectorHeartbeat(SensorOptions options = null);
     }
 }

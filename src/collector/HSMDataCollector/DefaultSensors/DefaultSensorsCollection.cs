@@ -128,7 +128,7 @@ namespace HSMDataCollector.DefaultSensors
         }
 
 
-        IWindowsCollection IWindowsCollection.AddCollectorAlive(SensorOptions options)
+        IWindowsCollection IWindowsCollection.AddCollectorHeartbeat(SensorOptions options)
         {
             return Register(new CollectorAlive(_defaultOptions.CollectorAliveMonitoring.Get(options)));
         }
@@ -178,7 +178,7 @@ namespace HSMDataCollector.DefaultSensors
         }
 
 
-        IUnixCollection IUnixCollection.AddCollectorAlive(SensorOptions options)
+        IUnixCollection IUnixCollection.AddCollectorHeartbeat(SensorOptions options)
         {
             return Register(new CollectorAlive(_defaultOptions.CollectorAliveMonitoring.Get(options)));
         }

@@ -223,9 +223,9 @@ namespace HSMDataCollector.Core
             var options = _sensorsOptions.CollectorAliveMonitoring.GetAndFill(new SensorOptions() { NodePath = specificPath });
 
             if (_defaultSensors.IsUnixOS)
-                Unix.AddCollectorAlive(options);
+                Unix.AddCollectorHeartbeat(options);
             else
-                Windows.AddCollectorAlive(options);
+                Windows.AddCollectorHeartbeat(options);
 
             Start();
         }
