@@ -157,9 +157,10 @@ function buildContextMenu(node) {
             "action": _ => $.ajax(`${getNodePathAction}?selectedId=${node.id}`, AjaxPost).done(copyToClipboard),
         };
     }
+
+    let isMutedState = node.data.jstree.isMutedState;
+
     if (isManager) {
-        let isMutedState = node.data.jstree.isMutedState;
-        
         if (isMutedState !== '') {
             if (!(isMutedState === "True")) {
                 contextMenu["Mute"] = {
@@ -292,12 +293,13 @@ function buildContextMenu(node) {
             }
         }
     }
-
-    contextMenu["Notifications"] = {
-        "label": "Notifications",
-        "separator_before": true,
-        "submenu": notificationSubmenu,
-    };
+    
+    if (!(isMutedState === "True"))
+        contextMenu["Notifications"] = {
+            "label": "Notifications",
+            "separator_before": true,
+            "submenu": notificationSubmenu,
+        };
 
     return contextMenu;
 }
