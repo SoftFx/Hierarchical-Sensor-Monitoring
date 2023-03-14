@@ -99,7 +99,7 @@
                                         }
                                     </span>
                                 </div>
-                                @Model.Name
+                                @Html.Raw(@Model.Name)
                             </div>
                             <div class='col-md-auto'>
                                 <input id='sensor_type_@sensorId' value='@((int)Model.SensorType)' style='display: none'/>

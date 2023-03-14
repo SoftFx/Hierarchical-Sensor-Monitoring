@@ -157,24 +157,26 @@ function buildContextMenu(node) {
             "action": _ => $.ajax(`${getNodePathAction}?selectedId=${node.id}`, AjaxPost).done(copyToClipboard),
         };
     }
-
     if (isManager) {
-        let isMutedState = node.data.jstree.isMutedState === "True";
-        if (!isMutedState){
-            contextMenu["Mute"] = {
-                "label": `Mute ${getKeyByValue(curType)}`,
-                "separator_after": true,
-                "separator_before": true,
-                "action": _ => ignoreNotificationsRequest(node, TelegramTarget.Groups, 'true')
+        let isMutedState = node.data.jstree.isMutedState;
+        
+        if (isMutedState !== '') {
+            if (!(isMutedState === "True")) {
+                contextMenu["Mute"] = {
+                    "label": `Mute ${getKeyByValue(curType)}`,
+                    "separator_after": true,
+                    "separator_before": true,
+                    "action": _ => ignoreNotificationsRequest(node, TelegramTarget.Groups, 'true')
+                }
             }
-        }
-        else {
-            contextMenu["Mute"] = {
-                "label": `Unmute ${getKeyByValue(curType)}`,
-                "separator_after": true,
-                "separator_before": true,
-                "action": _ => unmuteRequest(node)
-            }
+            else {
+                contextMenu["Mute"] = {
+                    "label": `Unmute ${getKeyByValue(curType)}`,
+                    "separator_after": true,
+                    "separator_before": true,
+                    "action": _ => unmuteRequest(node)
+                }
+            } 
         }
         
         if (curType !== NodeType.Node) {

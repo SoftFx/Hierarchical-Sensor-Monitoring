@@ -32,8 +32,6 @@ namespace HSMServer.Model.Authentication
 
         string INotificatable.Name => UserName;
 
-        NotificationSettings INotificatable.Notifications => Notifications;
-        
 
         public User(string userName) : this()
         {
@@ -109,7 +107,7 @@ namespace HSMServer.Model.Authentication
 
         public bool IsProductAvailable(Guid productId) =>
             IsAdmin || (ProductsRoles?.Any(x => x.Item1.Equals(productId)) ?? false);
-        
+
         public bool IsManager(Guid productId) =>
             IsAdmin || (ProductsRoles?.Any(x => x == (productId, ProductRoleEnum.ProductManager)) ?? false);
 

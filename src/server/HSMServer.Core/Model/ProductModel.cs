@@ -1,4 +1,5 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities;
+using HSMServer.Core.Cache.UpdateEntities;
 using System;
 using System.Collections.Concurrent;
 
@@ -14,29 +15,21 @@ namespace HSMServer.Core.Model
 
     public sealed class ProductModel : NodeBaseModel, INotificatable
     {
+        public ConcurrentDictionary<Guid, AccessKeyModel> AccessKeys { get; } = new();
+
+        public ConcurrentDictionary<Guid, ProductModel> SubProducts { get; } = new();
+
+        public ConcurrentDictionary<Guid, BaseSensorModel> Sensors { get; } = new();
+
+
+        public NotificationSettings Notifications { get; } = new();
+
         public ProductState State { get; }
-
-        public ConcurrentDictionary<Guid, AccessKeyModel> AccessKeys { get; }
-
-        public ConcurrentDictionary<Guid, ProductModel> SubProducts { get; }
-
-        public ConcurrentDictionary<Guid, BaseSensorModel> Sensors { get; }
-
-        public NotificationSettings Notifications { get; }
-
 
         string INotificatable.Name => DisplayName;
 
-        NotificationSettings INotificatable.Notifications => Notifications;
-        
-        
-        public ProductModel()
-        {
-            AccessKeys = new ConcurrentDictionary<Guid, AccessKeyModel>();
-            SubProducts = new ConcurrentDictionary<Guid, ProductModel>();
-            Sensors = new ConcurrentDictionary<Guid, BaseSensorModel>();
-            Notifications = new();
-        }
+
+        public ProductModel() { }
 
         public ProductModel(ProductEntity entity) : this()
         {
@@ -88,6 +81,11 @@ namespace HSMServer.Core.Model
                 Policies = GetPolicyIds(),
             };
 
+        internal ProductModel Update(ProductUpdate updatedProduct)
+        {
+            Description = updatedProduct.Description ?? Description;
+            return this;
+        }
 
         internal override void BuildProductNameAndPath()
         {

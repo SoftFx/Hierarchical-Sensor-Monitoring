@@ -49,10 +49,13 @@ namespace HSMServer.Model
 
         public bool CanCustomInputBeVisible { get; init; } = true;
 
-
         public TimeInterval TimeInterval { get; set; }
 
         public string CustomTimeInterval { get; set; }
+
+        public string DisplayInterval => TimeInterval == TimeInterval.Custom
+            ? CustomTimeInterval
+            : TimeInterval.GetDisplayName();
 
 
         // public constructor without parameters for post actions

@@ -99,10 +99,9 @@ namespace HSMServer.Core.Cache
 
             var sensorsOldStatuses = new Dictionary<Guid, ValidationResult>();
             GetProductSensorsStatuses(product, sensorsOldStatuses);
-
             UpdateIntervalPolicy(updatedProduct.ExpectedUpdateInterval, product);
+            _databaseCore.UpdateProduct(product.Update(updatedProduct).ToProductEntity());
 
-            _databaseCore.UpdateProduct(product.ToProductEntity());
             NotifyAllProductChildrenAboutUpdate(product, sensorsOldStatuses);
         }
 
@@ -336,11 +335,16 @@ namespace HSMServer.Core.Cache
         public IAsyncEnumerable<List<BaseValue>> GetSensorValues(HistoryRequestModel request)
         {
             var sensorId = GetSensor(request).Id;
-            var from = request.From;
-            var to = request.To ?? DateTime.UtcNow.AddDays(1);
-            var count = request.Count > 0 ? request.Count.Value : MaxHistoryCount;
+            var count = request.Count switch
+            {
+                > 0 => Math.Min(request.Count.Value, MaxHistoryCount),
+                < 0 => Math.Max(request.Count.Value, -MaxHistoryCount),
+                _ => MaxHistoryCount
+            };
 
-            return GetSensorValuesPage(sensorId, from, to, count);
+            return count > 0
+                ? GetSensorValuesPage(sensorId, request.From, request.To ?? DateTime.UtcNow.AddDays(1), count)
+                : GetSensorValuesPage(sensorId, DateTime.MinValue, request.From, count);
         }
 
         public async IAsyncEnumerable<List<BaseValue>> GetSensorValuesPage(Guid sensorId, DateTime from, DateTime to, int count)
