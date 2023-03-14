@@ -61,7 +61,7 @@ namespace HSMServer.Notifications
                     TelegramBotCommands.Start => StartBot(parts, message, isUserChat),
                     TelegramBotCommands.Info => EntitiesInfo(message.Chat, isUserChat),
                     TelegramBotCommands.Status => ServerStatus(),
-                    TelegramBotCommands.Emotes => EmojiInfo(),
+                    TelegramBotCommands.Icons => IconsInfo(),
                     _ => null,
                 };
 
@@ -131,13 +131,14 @@ namespace HSMServer.Notifications
             return response.ToString();
         }
         
-        private string EmojiInfo() =>
+        private string IconsInfo() =>
             """
-            ❌ - error
-            ⚠️- warning
-            ✅ - ok
+            ⚠️- received Warning status
+            ✅ - received Ok status
+            ❌ - received Error status  
             ⏸ - offtime
-            ⌛️- timeout
+            ⌛️- sensor timeout
+            ❓ - unknown status
             """;
 
         private static string ServerStatus()
