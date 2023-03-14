@@ -27,12 +27,6 @@
                                     <li id='status_@sensorId' class='@Model.Status.ToIcon() sensor-icon-with-margin'
                                         title='Status: @Model.Status'>
                                     </li>
-                                    <span id='validation_@sensorId'>
-                                        @if (Model.IsValidationErrorVisible)
-                                        {
-                                            <li id='errorIcon_@sensorId' class='fas fa-exclamation-triangle' style='margin-right:5px' title='@Model.ValidationError'></li>
-                                        }
-                                    </span>
                                 </div>
                                 @Model.Name
                             </div>
@@ -41,6 +35,15 @@
                         </div>
                         <div id="value_@sensorId" class="text-break">
                             @Model.ShortStringValue
+                        </div>
+                        <div class="text-break">
+                            <span id='validation_@sensorId'>
+                                @if (Model.IsValidationErrorVisible)
+                                {
+                                    <li id='errorIcon_@sensorId' class='fas fa-exclamation-triangle me-1'></li>
+                                    @Model.ValidationError
+                                }
+                            </span>
                         </div>
                     </div>
                     @if (Model.LastValue != null)
@@ -72,12 +75,6 @@
                             <div class='row col-md-auto'>
                                 <div class='col-md-auto sensor-icon-without-padding'>
                                     <li id='status_@sensorId' class='@Model.Status.ToIcon() sensor-icon-with-margin' title='Status: @Model.Status'></li>
-                                    <span id='validation_@sensorId'>
-                                        @if (Model.IsValidationErrorVisible)
-                                        {
-                                            <li id='errorIcon_@sensorId' class='fas fa-exclamation-triangle' style='margin-right:5px' title='@Model.ValidationError'></li>
-                                        }
-                                    </span>
                                 </div>
                                 @Html.Raw(@Model.Name)
                             </div>
@@ -88,6 +85,15 @@
                         </div>
                         <div class="text-break" id='value_@sensorId'>
                             @Model.ShortStringValue
+                        </div>
+                        <div class="text-break">
+                            <span id='validation_@sensorId'>
+                                @if (Model.IsValidationErrorVisible)
+                                {
+                                    <li id='errorIcon_@sensorId' class='fas fa-exclamation-triangle me-1'></li>
+                                    @Model.ValidationError
+                                }
+                            </span>
                         </div>
                     </div>
                 </button>
