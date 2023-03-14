@@ -57,7 +57,7 @@ namespace HSMServer.Controllers
         //[ValidateAntiForgeryToken]
         public async Task<IActionResult> Authenticate([FromForm] LoginViewModel model)
         {
-            LoginValidator validator = new LoginValidator(_userManager);
+            LoginValidator validator = new(_userManager);
             var results = validator.Validate(model);
             if (!results.IsValid)
             {
@@ -118,7 +118,7 @@ namespace HSMServer.Controllers
         [Consumes("application/x-www-form-urlencoded")]
         public async Task<IActionResult> Registrate([FromForm] RegistrationViewModel model)
         {
-            RegistrationValidator validator = new RegistrationValidator(_userManager);
+            RegistrationValidator validator = new(_userManager);
             var results = validator.Validate(model);
             if (!results.IsValid)
             {
@@ -168,7 +168,7 @@ namespace HSMServer.Controllers
         [HttpPost]
         public async Task CreateUser([FromBody] UserViewModel model)
         {
-            UserValidator validator = new UserValidator(_userManager);
+            UserValidator validator = new(_userManager);
             var results = validator.Validate(model);
 
             if (!results.IsValid)
@@ -178,16 +178,18 @@ namespace HSMServer.Controllers
         }
 
         [HttpPost]
-        public void UpdateUser([FromBody] UserViewModel userViewModel)
+        public async Task UpdateUser([FromBody] UserViewModel userViewModel)
         {
-            var currentUser = _userManager[userViewModel.Username];
-            userViewModel.Password = currentUser.Password;
-            userViewModel.UserId = currentUser.Id.ToString();
+            if (_userManager.TryGetIdByName(userViewModel.Username, out var userId))
+            {
+                var updateUser = new UserUpdate
+                {
+                    Id = userId,
+                    IsAdmin = userViewModel.IsAdmin,
+                };
 
-            User user = GetModelFromViewModel(userViewModel);
-            user.ProductsRoles = currentUser.ProductsRoles;
-
-            _userManager.UpdateUser(user); // TODO: update by updaateEntity
+                await _userManager.TryUpdate(updateUser);
+            }
         }
 
         #endregion
@@ -204,25 +206,11 @@ namespace HSMServer.Controllers
         private async Task Authenticate(string login, bool keepLoggedIn)
         {
             var claims = new List<Claim> { new Claim(ClaimsIdentity.DefaultNameClaimType, login) };
-            ClaimsIdentity id = new ClaimsIdentity(claims, "ApplicationCookie",
+            ClaimsIdentity id = new(claims, "ApplicationCookie",
                 ClaimsIdentity.DefaultNameClaimType, ClaimsIdentity.DefaultRoleClaimType);
 
-            AuthenticationProperties properties = new AuthenticationProperties();
-            properties.IsPersistent = keepLoggedIn;
-            await HttpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, new ClaimsPrincipal(id),
-                properties);
-
-        }
-
-        private User GetModelFromViewModel(UserViewModel userViewModel)
-        {
-            User user = new User(userViewModel.Username)
-            {
-                Password = userViewModel.Password,
-                IsAdmin = userViewModel.IsAdmin
-            };
-            user.Id = Guid.Parse(userViewModel.UserId);
-            return user;
+            AuthenticationProperties properties = new() { IsPersistent = keepLoggedIn };
+            await HttpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, new ClaimsPrincipal(id), properties);
         }
     }
 }

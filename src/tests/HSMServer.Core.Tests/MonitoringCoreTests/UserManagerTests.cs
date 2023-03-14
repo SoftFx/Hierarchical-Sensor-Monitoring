@@ -528,9 +528,9 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
 
             return new()
             {
-                Id = source.Id,
+                //Id = source.Id,
                 Name = GetUpdatedProperty(source.Name),
-                IsAdmin = !source.IsAdmin,
+                //IsAdmin = !source.IsAdmin,
                 Password = GetUpdatedProperty(source.Password),
                 ProductsRoles = productRoles,
             };

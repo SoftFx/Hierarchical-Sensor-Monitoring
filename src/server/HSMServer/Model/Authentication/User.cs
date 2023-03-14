@@ -13,17 +13,17 @@ namespace HSMServer.Model.Authentication
 {
     public class User : ClaimsPrincipal, IServerModel<UserEntity, UserUpdate>, INotificatable
     {
-        public Guid Id { get; set; }
+        public Guid Id { get; }
 
         public bool IsAdmin { get; set; }
 
-        public string Name { get; set; }
+        public string Name { get; init; }
 
-        public string Password { get; set; }
+        public string Password { get; init; }
+
+        public NotificationSettings Notifications { get; init; }
 
         public List<(Guid, ProductRoleEnum)> ProductsRoles { get; set; }
-
-        public NotificationSettings Notifications { get; set; }
 
         public TreeUserFilter TreeFilter { get; set; }
 
@@ -88,6 +88,17 @@ namespace HSMServer.Model.Authentication
                 ProductsRoles = ProductsRoles?.Select(r => new KeyValuePair<string, byte>(r.Item1.ToString(), (byte)r.Item2))?.ToList(),
                 NotificationSettings = Notifications.ToEntity(),
                 TreeFilter = TreeFilter,
+            };
+
+        internal User WithoutPassword() =>
+            new()
+            {
+                Name = Name,
+                Password = null,
+                IsAdmin = IsAdmin,
+                ProductsRoles = ProductsRoles,
+                Notifications = new(Notifications.ToEntity()),
+                TreeFilter = TreeFilter
             };
     }
 }

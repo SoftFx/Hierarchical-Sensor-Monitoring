@@ -24,6 +24,8 @@ namespace HSMServer.Authentication
 
         Task<bool> TryAdd(User user);
 
+        Task<bool> TryUpdate(UserUpdate update);
+
         /// <summary>
         /// New user object
         /// </summary>
@@ -37,6 +39,8 @@ namespace HSMServer.Authentication
         Task RemoveUser(string userName);
 
         User Authenticate(string login, string password);
+
+        bool TryGetIdByName(string name, out Guid id);
 
         List<User> GetViewers(Guid productId);
         List<User> GetManagers(Guid productId);
