@@ -1,5 +1,9 @@
 # HSM Server
 
+## Site
+
+* On-site files preview and preview in new tab added for file sensors('.txt' and '.csv' extensions supported)
+
 ## Rest API
 
 * An ability to request the latest sensor history values has been added. You need to use a [from - count] request where count is negative
