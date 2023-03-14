@@ -20,6 +20,12 @@ namespace HSMServer.Notifications
             var newStatus = sensor.ValidationResult.Status.ToStatusIcon();
             var comment = sensor.ValidationResult.Message;
 
+            if (comment == "Timeout")
+            {
+                newStatus = "⌛";
+                comment = string.Empty;
+            }
+
             var id = sensor.Id;
             var branch = _messageTree[sensor.RootProductName];
 

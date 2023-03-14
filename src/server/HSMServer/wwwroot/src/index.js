@@ -2,11 +2,11 @@
 
 import * as bootstrap from 'bootstrap'
 window.bootstrap = bootstrap;
+bootstrap.Toast.Default.delay = 3000;
 
 import 'bootstrap/dist/css/bootstrap.min.css';
 
 window.ClipboardJS = require('clipboard');
-bootstrap.Toast.Default.delay = 3000;
 
 import * as moment from 'moment';
 window.moment = moment;
@@ -20,9 +20,15 @@ window.Plotly = Plotly;
 import * as TimeSpan from 'timespan'
 window.TimeSpan = TimeSpan
 
+import * as Heiho from '@kktsvetkov/heiho'
+window.Heiho = Heiho
+
+import '@kktsvetkov/heiho/heiho.css';
+
 import '@fortawesome/fontawesome-free/js/all.min.js';
 import '@fortawesome/fontawesome-free/css/all.min.css';
-
+import 'datatables';
+import 'datatables/media/css/jquery.dataTables.min.css'
 
 import './js/accessKey.js';
 import './js/deletionConfirmation.js';

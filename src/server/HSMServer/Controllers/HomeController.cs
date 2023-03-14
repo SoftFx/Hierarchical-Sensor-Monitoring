@@ -398,6 +398,18 @@ namespace HSMServer.Controllers
             return File(fileContentsStream, fileName.GetContentType(), fileName);
         }
 
+        [HttpGet]
+        public ActionResult<FileValue> GetFileInfo([FromQuery(Name = "Selected")] string encodedId)
+        {
+            var value = GetFileSensorValue(encodedId);
+            if (value == null)
+                return _emptyResult;
+
+            return value;
+        }
+
+        public IActionResult FilePreview() => View("FilePreview");
+        
         private FileValue GetFileSensorValue(string encodedId) =>
             _treeValuesCache.GetSensor(SensorPathHelper.DecodeGuid(encodedId)).LastValue as FileValue;
 

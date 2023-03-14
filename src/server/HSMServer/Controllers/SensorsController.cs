@@ -48,7 +48,11 @@ namespace HSMServer.Controllers
             _cache = cache;
         }
 
-
+        /// <summary>
+        /// Receives value of bool sensor
+        /// </summary>
+        /// <param name="sensorValue"></param>
+        /// <returns></returns>
         [HttpPost("bool")]
         [Consumes(MediaTypeNames.Application.Json)]
         [ProducesResponseType(StatusCodes.Status200OK)]

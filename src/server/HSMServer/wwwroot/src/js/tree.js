@@ -158,23 +158,26 @@ function buildContextMenu(node) {
         };
     }
 
+    let isMutedState = node.data.jstree.isMutedState;
+
     if (isManager) {
-        let isMutedState = node.data.jstree.isMutedState === "True";
-        if (!isMutedState){
-            contextMenu["Mute"] = {
-                "label": `Mute ${getKeyByValue(curType)}`,
-                "separator_after": true,
-                "separator_before": true,
-                "action": _ => ignoreNotificationsRequest(node, TelegramTarget.Groups, 'true')
+        if (isMutedState !== '') {
+            if (!(isMutedState === "True")) {
+                contextMenu["Mute"] = {
+                    "label": `Mute ${getKeyByValue(curType)}`,
+                    "separator_after": true,
+                    "separator_before": true,
+                    "action": _ => ignoreNotificationsRequest(node, TelegramTarget.Groups, 'true')
+                }
             }
-        }
-        else {
-            contextMenu["Mute"] = {
-                "label": `Unmute ${getKeyByValue(curType)}`,
-                "separator_after": true,
-                "separator_before": true,
-                "action": _ => unmuteRequest(node)
-            }
+            else {
+                contextMenu["Mute"] = {
+                    "label": `Unmute ${getKeyByValue(curType)}`,
+                    "separator_after": true,
+                    "separator_before": true,
+                    "action": _ => unmuteRequest(node)
+                }
+            } 
         }
         
         if (curType !== NodeType.Node) {
@@ -290,12 +293,13 @@ function buildContextMenu(node) {
             }
         }
     }
-
-    contextMenu["Notifications"] = {
-        "label": "Notifications",
-        "separator_before": true,
-        "submenu": notificationSubmenu,
-    };
+    
+    if (!(isMutedState === "True"))
+        contextMenu["Notifications"] = {
+            "label": "Notifications",
+            "separator_before": true,
+            "submenu": notificationSubmenu,
+        };
 
     return contextMenu;
 }
