@@ -5,6 +5,9 @@
 @model SensorNodeViewModel
 
 @{
+    var splitted = Model.FileNameString.Split('.');
+    var fileType = splitted.Length >= 2 ? splitted[1] : string.Empty;
+    
     var sensorId = Model.EncodedId;
 
     var graphElementId = $"graph_{sensorId}";
@@ -22,13 +25,24 @@
                 <div class='accordion-body'>
                     <div class="w-100">
                         <div class='row justify-content-between'>
-                            <div class='row col-md-auto'>
+                            <div class='row col-md-auto align-items-center'>
                                 <div class='col-md-auto sensor-icon-without-padding'>
                                     <li id='status_@sensorId' class='@Model.Status.ToIcon() sensor-icon-with-margin'
                                         title='Status: @Model.Status'>
                                     </li>
                                 </div>
                                 @Model.Name
+                                @if (Model.LastValue != null)
+                                {
+                                    <button id='button_view_@sensorId' class='btn btn-outline-secondary d-flex justify-content-center mx-1' title='Preview' style="width: 2rem; height: 2rem">
+                                        <i class='fas fa-eye'></i>
+                                    </button>
+
+                                    <input style='display: none;' id='fileType_@sensorId' value='@Model.FileNameString'/>
+                                    <button id='button_download_@sensorId' class='btn btn-outline-secondary d-flex justify-content-center mx-1' title='Download' style="width: 2rem; height: 2rem">
+                                        <i class='fas fa-file-download'></i>
+                                    </button>
+                                }
                             </div>
                             <input id='sensor_type_@sensorId' value='@((int)Model.SensorType)' style='display: none'/>
                             <div class='col-md-auto time-ago-div me-1' id='update_@sensorId'>updated @Model.UpdateTime.GetTimeAgo()</div>
@@ -45,23 +59,29 @@
                                 }
                             </span>
                         </div>
-                    </div>
-                    @if (Model.LastValue != null)
-                    {
-                        <div class='row'>
-                            <div class='col-md-auto'>
-                                <button id='button_view_@sensorId' class='button-view-file-sensor btn btn-secondary' title='View'>
-                                    <i class='fas fa-eye'></i>
-                                </button>
-                            </div>
-                            <div class='col'>
-                                <input style='display: none;' id='fileType_@sensorId' value='@Model.FileNameString'/>
-                                <button id='button_download_@sensorId' class='button-download-file-sensor-value btn btn-secondary' title='Download'>
-                                    <i class='fas fa-file-download'></i>
-                                </button>
-                            </div>
+                        <div class="container d-none pt-3" id="preview">
+                            <h5 id="preview-header">Content:</h5>
+                            <div id="preview-content"></div>
                         </div>
+                    </div>
+                </div>
+            </div>
+
+            <div id="bigFilePreview" class="card text-center d-none">
+                <div class="card-body">
+                    @switch (fileType)
+                    {
+                        case "csv":
+                            <h5 class="card-title">This file is too big to preview (>5MB)</h5>
+                            break;
+                        case "txt":
+                            <h5 class="card-title">This file is too big to preview (>1MB)</h5>
+                            break;
+                        default:
+                            <h5 class="card-title">Current file type is not available in preview mode</h5>
+                            break;
                     }
+                     <button id="button_download_@(sensorId)" href="#" class="btn btn-outline-primary mt-2">Start download</button>
                 </div>
             </div>
         }
@@ -166,3 +186,64 @@
         }
     </div>
 </div>
+
+<script>
+$(document).ready(function() {
+    $.ajax({
+        type: 'GET',
+        url: `${getFileInfo}?Selected=@Model.EncodedId`,
+        cache: false,
+        contentType: "application/json",
+        success: function (response){
+            if ((response.originalSize < 5 * 1024 * 1024 && response.extension === 'csv') || // 5MB
+                (response.originalSize < 1024 * 1024 && response.extension === 'txt')) { // 1MB 
+                $.ajax({
+                        type: 'POST',
+                        url: `${viewFileAction}?Selected=@Model.EncodedId`,
+                        cache: false,
+                        contentType: "application/json",
+                        success: function (file) {
+                            let dataSet = [];
+                            if (response.extension === 'csv') {
+                                file.split('\n').forEach( el => {
+                                    let splitted = el.split(',');
+                                      
+                                    let isEmpty = splitted.every(x => {
+                                        return x !== '';
+                                    })
+                                  
+                                    if (isEmpty){
+                                        dataSet.push(el.split(','))
+                                    }
+                                });
+    
+                                let columns = [];
+                          
+                                dataSet[0].forEach(el => {
+                                       columns.push({"title" : el}) 
+                                });
+        
+                                $('#preview').removeClass('d-none container');
+                                $('#preview-content').html( '<table class="display w-100" id="example"></table>' );
+                     
+                                $('#example').dataTable( {
+                                          "data": dataSet.splice(1),
+                                          "columns": columns,
+                                          "lengthMenu": [ [5, 20, 50, 100], [5, 20, 50, 100] ],
+                                          "pageLength": 20
+                                });  
+                            }
+                            else if (response.extension === 'txt') {
+                                $('#preview').removeClass('d-none container');
+                                $('#preview-content').addClass('w-100 mw-100').html(file);
+                            }
+                         } 
+                })
+            }
+            else {
+                $('#bigFilePreview').removeClass('d-none');
+            }
+        }
+    })
+});
+</script>
