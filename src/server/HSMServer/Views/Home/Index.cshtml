@@ -126,6 +126,10 @@
     initializeTree();
     initialize();
 
+     $(document).ready(() => {
+            $('#updateTime').empty().append('Update Time: ' + new Date().toUTCString());
+     })
+    
 
     var interval = $("#treeInterval").val() * 1000;
 
@@ -205,7 +209,7 @@
     var updateSelectedNodeDataTimeoutId;
     function updateSelectedNodeData() {
         clearTimeout(updateSelectedNodeDataTimeoutId);
-
+            
         var selectedNode = $('#jstree').jstree().get_selected(true)[0];
         var selectedNodeId = getSelectedNodeId(selectedNode);
         if (selectedNodeId != "")
