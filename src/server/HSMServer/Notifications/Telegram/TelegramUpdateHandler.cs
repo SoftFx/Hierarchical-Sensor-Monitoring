@@ -118,11 +118,7 @@ namespace HSMServer.Notifications
 
             response.AppendLine($"{(isUserChat ? "Authorized" : "Added")} {entityStr}(s) settings:");
 
-            var entities = _addressBook.GetAuthorizedEntities(chat);
-
-            if (entities is null) return "1";
-            
-            foreach (var entity in entities)
+            foreach (var entity in _addressBook.GetAuthorizedEntities(chat))
             {
                 var telegramSetting = entity.Notifications.Telegram;
 
