@@ -18,21 +18,14 @@ window.initializeTree = function () {
             let isTimeSort = sortingType.val() == "1";
 
             if (isTimeSort) {
-                nodeA = this.get_node(a);
-                nodeB = this.get_node(b);
-
-                format = "DD/MM/YYYY hh:mm:ss";
-                timeA = moment(nodeA.data.jstree.time, format);
-                timeB = moment(nodeB.data.jstree.time, format);
-
-                return timeB.diff(timeA);
+                a = this.get_node(a).data.jstree.time;
+                b = this.get_node(b).data.jstree.time;
             }
             else {
-                a = this.get_node(a).data.jstree.title.toLowerCase();
-                b = this.get_node(b).data.jstree.title.toLowerCase();
-
-                return a > b ? 1 : -1;
+                [a, b] = [this.get_node(b).data.jstree.title.toLowerCase(), this.get_node(a).data.jstree.title.toLowerCase()]
             }
+            
+            return a < b ? 1 : -1;
         }
     }).on("state_ready.jstree", function () {
         selectNodeAjax($(this).jstree('get_selected'));

@@ -136,8 +136,8 @@ namespace HSMServer.Notifications
             ⚠️ - received Warning status
             ✅ - received Ok status
             ❌ - received Error status  
-            ⏸ - offtime
-            ⌛️ - sensor timeout
+            ⏸ - received Offtime status 
+            ⌛️ - sensor update timeout
             ❓ - unknown status
             """;
 

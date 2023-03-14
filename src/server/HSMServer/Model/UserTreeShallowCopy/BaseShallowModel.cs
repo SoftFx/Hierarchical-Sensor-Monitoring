@@ -36,7 +36,7 @@ namespace HSMServer.Model.UserTreeShallowCopy
         {
             "title": "{{Data.Title}}",
             "icon": "{{Data.Status.ToIcon()}}",
-            "time": "{{Data.UpdateTime.ToDefaultFormat()}}",
+            "time": "{{Data.UpdateTime.Ticks}}",
             "isManager": "{{_curUserIsManager}}",
             "isAccountsEnable": "{{IsAccountsEnable}}",
             "isGroupsEnable": "{{IsGroupsEnable}}",
