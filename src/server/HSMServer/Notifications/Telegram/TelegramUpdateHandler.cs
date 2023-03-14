@@ -133,11 +133,11 @@ namespace HSMServer.Notifications
         
         private string IconsInfo() =>
             """
-            ⚠️- received Warning status
+            ⚠️ - received Warning status
             ✅ - received Ok status
             ❌ - received Error status  
             ⏸ - offtime
-            ⌛️- sensor timeout
+            ⌛️ - sensor timeout
             ❓ - unknown status
             """;
 
