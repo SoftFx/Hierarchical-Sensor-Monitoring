@@ -1,10 +1,9 @@
 ﻿using HSMCommon.Constants;
+using HSMDataCollector.Core;
+using HSMDataCollector.PublicInterface;
 using HSMServer.Core.Cache;
 using System;
 using System.Linq;
-using HSMDataCollector.Core;
-using HSMDataCollector.Options;
-using HSMDataCollector.PublicInterface;
 
 namespace HSM.Core.Monitoring
 {
@@ -51,15 +50,13 @@ namespace HSM.Core.Monitoring
                                       .AddDiskMonitoringSensors()
                                       .AddSystemMonitoringSensors()
                                       .AddWindowsInfoMonitoringSensors();
-
-                _dataCollector.Windows.AddProductInfo(new VersionSensorOptions() { Version = "1.1.1"});
             }
             else
             {
                 _dataCollector.Unix.AddProcessMonitoringSensors()
                                    .AddDiskMonitoringSensors();
             }
-            
+
             InitializeSensors();
 
             _dataCollector.Start();
