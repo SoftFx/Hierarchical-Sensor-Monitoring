@@ -40,7 +40,7 @@ namespace HSMServer.Core.Model
             AuthorId = Guid.Empty;
             CreationDate = DateTime.UtcNow;
 
-            ServerPolicy.ExpectedUpdate.Uploaded += (_, _) => RefreshUpdateTimeout();
+            ServerPolicy.ExpectedUpdate.Uploaded += (_, _) => HasUpdateTimeout();
         }
 
         protected NodeBaseModel(string name) : this()
@@ -68,13 +68,25 @@ namespace HSMServer.Core.Model
             return this;
         }
 
-        protected internal void Update(BaseNodeUpdate upadate)
+        protected internal void Update(BaseNodeUpdate update)
         {
-            Description = upadate.Description ?? Description;
+            Description = update.Description ?? Description;
+
+            if (update.ExpectedUpdateInterval != null)
+                ServerPolicy.ExpectedUpdate.SetPolicy(update.ExpectedUpdateInterval);
+
+            var restoreInterval = update.RestoreInterval;
+
+            if (restoreInterval != null)
+            {
+                ServerPolicy.RestoreError.SetPolicy(restoreInterval);
+                ServerPolicy.RestoreWarning.SetPolicy(restoreInterval);
+                ServerPolicy.RestoreOffTime.SetPolicy(restoreInterval);
+            }
         }
 
 
-        internal abstract bool RefreshUpdateTimeout();
+        internal abstract bool HasUpdateTimeout();
 
         internal virtual void AddPolicy<T>(T policy) where T : Policy => ServerPolicy.ApplyPolicy(policy);
 

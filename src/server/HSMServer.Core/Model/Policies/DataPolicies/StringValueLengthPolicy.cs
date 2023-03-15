@@ -19,7 +19,7 @@
 
         internal override PolicyResult Validate(StringValue value)
         {
-            return value.Value?.Length > MaxStringLength ? _validationFail : Ok;
+            return value.Value?.Length > MaxStringLength ? Fail : Ok;
         }
     }
 }

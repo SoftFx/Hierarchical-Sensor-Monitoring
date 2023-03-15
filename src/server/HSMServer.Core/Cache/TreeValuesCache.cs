@@ -92,9 +92,6 @@ namespace HSMServer.Core.Cache
 
             GetProductSensorsStatuses(product, sensorsOldStatuses);
 
-            if (update.ExpectedUpdateInterval != null)
-                product.ServerPolicy.ExpectedUpdate.SetPolicy(new ExpectedUpdateIntervalPolicy(update.ExpectedUpdateInterval));
-
             _databaseCore.UpdateProduct(product.Update(update).ToProductEntity());
 
             NotifyAllProductChildrenAboutUpdate(product, sensorsOldStatuses);
@@ -240,9 +237,6 @@ namespace HSMServer.Core.Cache
             var oldStatus = sensor.ValidationResult;
 
             sensor.Update(update);
-
-            if (update.ExpectedUpdateInterval != null)
-                sensor.ServerPolicy.ExpectedUpdate.SetPolicy(new ExpectedUpdateIntervalPolicy(update.ExpectedUpdateInterval));
 
             _databaseCore.UpdateSensor(sensor.ToEntity());
             NotifyAboutChanges(sensor, oldStatus);
@@ -748,7 +742,7 @@ namespace HSMServer.Core.Cache
             {
                 var oldStatus = sensor.ValidationResult;
 
-                if (sensor.RefreshUpdateTimeout())
+                if (sensor.HasUpdateTimeout())
                     NotifyAboutChanges(sensor, oldStatus);
             }
 

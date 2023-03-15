@@ -13,20 +13,20 @@ namespace HSMServer.Core.Model.Policies
         public CollectionProperty<ExpectedUpdateIntervalPolicy> ExpectedUpdate { get; }
 
 
-        public CollectionProperty<RestoreOffTimePolicy> RestoreOffTimeStatus { get; }
+        public CollectionProperty<RestoreOffTimePolicy> RestoreOffTime { get; }
 
-        public CollectionProperty<RestoreWarningPolicy> RestoreWarningStatus { get; }
+        public CollectionProperty<RestoreWarningPolicy> RestoreWarning { get; }
 
-        public CollectionProperty<RestoreErrorPolicy> RestoreErrorStatus { get; }
+        public CollectionProperty<RestoreErrorPolicy> RestoreError { get; }
 
 
         internal ServerPolicyCollection()
         {
             ExpectedUpdate = Register<ExpectedUpdateIntervalPolicy>();
 
-            RestoreOffTimeStatus = Register<RestoreOffTimePolicy>();
-            RestoreWarningStatus = Register<RestoreWarningPolicy>();
-            RestoreErrorStatus = Register<RestoreErrorPolicy>();
+            RestoreOffTime = Register<RestoreOffTimePolicy>();
+            RestoreWarning = Register<RestoreWarningPolicy>();
+            RestoreError = Register<RestoreErrorPolicy>();
         }
 
 
@@ -46,9 +46,9 @@ namespace HSMServer.Core.Model.Policies
         {
             var result = PolicyResult.Ok;
 
-            result += RestoreOffTimeStatus.Policy?.Validate(date) ?? PolicyResult.Ok;
-            result += RestoreWarningStatus.Policy?.Validate(date) ?? PolicyResult.Ok;
-            result += RestoreErrorStatus.Policy?.Validate(date) ?? PolicyResult.Ok;
+            result += RestoreOffTime.Policy.Validate(date);
+            result += RestoreWarning.Policy.Validate(date);
+            result += RestoreError.Policy.Validate(date);
 
             return result;
         }

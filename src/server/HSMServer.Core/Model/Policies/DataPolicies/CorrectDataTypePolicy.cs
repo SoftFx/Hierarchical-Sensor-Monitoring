@@ -12,7 +12,7 @@
 
         internal override PolicyResult Validate(T value)
         {
-            return value is not null ? Ok : _validationFail;
+            return value is not null ? Ok : Fail;
         }
     }
 }

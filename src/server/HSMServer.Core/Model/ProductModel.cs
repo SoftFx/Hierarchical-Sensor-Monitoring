@@ -57,15 +57,15 @@ namespace HSMServer.Core.Model
         }
 
 
-        internal override bool RefreshUpdateTimeout()
+        internal override bool HasUpdateTimeout()
         {
             var result = false;
 
             foreach (var (_, sensor) in Sensors)
-                result |= sensor.RefreshUpdateTimeout();
+                result |= sensor.HasUpdateTimeout();
 
             foreach (var (_, subProduct) in SubProducts)
-                result |= subProduct.RefreshUpdateTimeout();
+                result |= subProduct.HasUpdateTimeout();
 
             return result;
         }

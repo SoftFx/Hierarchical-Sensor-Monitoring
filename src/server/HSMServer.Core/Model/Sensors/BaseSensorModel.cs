@@ -69,17 +69,16 @@ namespace HSMServer.Core.Model
         internal virtual BaseSensorModel InitDataPolicy() => this;
 
 
-        internal override bool RefreshUpdateTimeout()
+        internal override bool HasUpdateTimeout()
         {
-            _serverResult = PolicyResult.Ok;
+            var oldResult = _serverResult;
+
+            _serverResult -= ServerPolicy.ExpectedUpdate.Policy.Fail;
 
             if (!HasData)
                 return false;
 
-            var oldResult = _serverResult;
-
             _serverResult += ServerPolicy.ExpectedUpdate.Policy.Validate(LastValue.ReceivingTime);
-            _serverResult += ServerPolicy.CheckRestorePolicies(DateTime.UtcNow);
 
             return _serverResult != oldResult;
         }

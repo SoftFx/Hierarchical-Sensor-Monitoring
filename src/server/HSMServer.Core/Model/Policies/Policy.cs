@@ -13,8 +13,6 @@ namespace HSMServer.Core.Model.Policies
     [JsonDerivedType(typeof(StringValueLengthPolicy), 2000)]
     public abstract class Policy
     {
-        protected readonly PolicyResult _validationFail;
-
         protected static PolicyResult Ok => PolicyResult.Ok;
 
 
@@ -23,12 +21,15 @@ namespace HSMServer.Core.Model.Policies
         protected abstract string FailMessage { get; }
 
 
+        internal PolicyResult Fail { get; }
+
+
         public Guid Id { get; init; }
 
 
         protected Policy()
         {
-            _validationFail = new(FailStatus, FailMessage);
+            Fail = new(FailStatus, FailMessage);
 
             Id = Guid.NewGuid();
         }
@@ -67,7 +68,7 @@ namespace HSMServer.Core.Model.Policies
 
         internal PolicyResult Validate(DateTime time)
         {
-            return Interval != null && Interval.TimeIsUp(time) ? _validationFail : Ok;
+            return Interval != null && Interval.TimeIsUp(time) ? Fail : Ok;
         }
     }
 }

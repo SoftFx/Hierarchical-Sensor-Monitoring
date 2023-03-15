@@ -64,5 +64,11 @@ namespace HSMServer.Core.Model.Policies
 
             Uploaded?.Invoke(action, policy);
         }
+
+        internal void SetPolicy(TimeIntervalModel interval) => 
+            SetPolicy(new T()
+            {
+                Interval = interval,
+            });
     }
 }
