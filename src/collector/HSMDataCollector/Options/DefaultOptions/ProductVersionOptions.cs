@@ -8,7 +8,7 @@ namespace HSMDataCollector.Options
 
         internal override VersionSensorOptions GetAndFill(VersionSensorOptions options)
         {
-            if (options.StartTime == DateTime.MinValue)
+            if (options.StartTime == default)
                 options.StartTime = DateTime.UtcNow;
             
             return base.GetAndFill(options);

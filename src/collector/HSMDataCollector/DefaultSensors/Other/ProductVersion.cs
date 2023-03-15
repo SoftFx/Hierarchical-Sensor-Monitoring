@@ -12,7 +12,6 @@ namespace HSMDataCollector.DefaultSensors.Other
 
         public ProductVersion(VersionSensorOptions options) : base(options)
         {
-            Console.WriteLine(options.NodePath + '/' + SensorName);
             _version = options.Version;
         }
         protected override string GetValue() => _version;
