@@ -4,9 +4,14 @@ namespace HSMServer.Core.Model.Policies
 {
     public sealed class ExpectedUpdateIntervalPolicy : ServerPolicy
     {
+        public const string PolicyIcon = "⌛";
+
+
         protected override SensorStatus FailStatus => SensorStatus.Warning;
 
-        protected override string FailMessage => "Timeout";
+        protected override string FailMessage => string.Empty;
+
+        protected override string FailIcon => PolicyIcon;
 
 
         [JsonPropertyName("ExpectedUpdateInterval")]

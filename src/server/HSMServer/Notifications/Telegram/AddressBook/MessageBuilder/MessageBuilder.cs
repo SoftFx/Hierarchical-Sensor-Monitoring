@@ -17,14 +17,8 @@ namespace HSMServer.Notifications
 
         internal void AddMessage(BaseSensorModel sensor)
         {
-            var newStatus = sensor.ValidationResult.Status.ToStatusIcon();
+            var newStatus = sensor.ValidationResult.Icon;
             var comment = sensor.ValidationResult.Message;
-
-            if (comment == "Timeout")
-            {
-                newStatus = "⌛";
-                comment = string.Empty;
-            }
 
             var id = sensor.Id;
             var branch = _messageTree[sensor.RootProductName];
@@ -78,7 +72,7 @@ namespace HSMServer.Notifications
             var builder = new StringBuilder(1 << 5);
 
             var comment = sensor.ValidationResult.Message;
-            var result = sensor.ValidationResult.Status.ToStatusIcon();
+            var result = sensor.ValidationResult.Icon;
             var product = sensor.RootProductName;
             var path = sensor.Path;
 

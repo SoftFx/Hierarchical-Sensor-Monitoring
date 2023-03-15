@@ -20,6 +20,8 @@ namespace HSMServer.Core.Model.Policies
 
         protected abstract string FailMessage { get; }
 
+        protected virtual string FailIcon => FailStatus.ToIcon();
+
 
         internal PolicyResult Fail { get; }
 
@@ -29,7 +31,7 @@ namespace HSMServer.Core.Model.Policies
 
         protected Policy()
         {
-            Fail = new(FailStatus, FailMessage);
+            Fail = new(FailStatus, FailMessage, FailIcon);
 
             Id = Guid.NewGuid();
         }

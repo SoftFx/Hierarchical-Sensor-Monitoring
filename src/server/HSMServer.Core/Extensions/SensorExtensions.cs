@@ -14,5 +14,14 @@ namespace HSMServer.Core
         {
             return interval == TimeInterval.Custom;
         }
+
+        public static string ToIcon(this SensorStatus status) => status switch
+        {
+            SensorStatus.Ok => "✅",
+            SensorStatus.Warning => "⚠️",
+            SensorStatus.Error => "❌",
+            SensorStatus.OffTime => "⏸",
+            _ => "❓"
+        };
     }
 }
