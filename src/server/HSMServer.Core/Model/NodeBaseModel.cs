@@ -39,6 +39,8 @@ namespace HSMServer.Core.Model
             Id = Guid.NewGuid();
             AuthorId = Guid.Empty;
             CreationDate = DateTime.UtcNow;
+
+            ServerPolicy.ExpectedUpdate.Uploaded += (_, _) => RefreshUpdateTimeout();
         }
 
         protected NodeBaseModel(string name) : this()
@@ -46,7 +48,7 @@ namespace HSMServer.Core.Model
             DisplayName = name;
         }
 
-        protected NodeBaseModel(BaseNodeEntity entity)
+        protected NodeBaseModel(BaseNodeEntity entity) : this()
         {
             Id = Guid.Parse(entity.Id);
             AuthorId = Guid.TryParse(entity.AuthorId, out var authorId) ? authorId : null;
@@ -72,11 +74,11 @@ namespace HSMServer.Core.Model
         }
 
 
-        internal abstract bool HasServerValidationChange();
+        internal abstract bool RefreshUpdateTimeout();
 
         internal virtual void AddPolicy<T>(T policy) where T : Policy => ServerPolicy.ApplyPolicy(policy);
 
-        protected virtual List<Guid> GetPolicyIds() => ServerPolicy.ToList();
+        protected virtual List<Guid> GetPolicyIds() => ServerPolicy.GetIds().ToList();
 
         internal void ApplyPolicies(List<string> policyIds, Dictionary<string, Policy> allPolicies)
         {

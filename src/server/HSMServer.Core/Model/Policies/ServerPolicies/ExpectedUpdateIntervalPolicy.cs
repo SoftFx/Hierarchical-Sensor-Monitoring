@@ -23,6 +23,9 @@ namespace HSMServer.Core.Model.Policies
             CustomPeriod = customPeriod;
         }
 
+
+        public ExpectedUpdateIntervalPolicy() : base() { }
+
         //[JsonConstructor] //TODO uncomment after migration and removed previos constructor
         public ExpectedUpdateIntervalPolicy(TimeIntervalModel interval) : base(interval) { }
 

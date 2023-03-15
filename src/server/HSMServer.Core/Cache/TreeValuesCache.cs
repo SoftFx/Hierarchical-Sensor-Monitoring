@@ -35,9 +35,9 @@ namespace HSMServer.Core.Cache
 
         public bool IsInitialized { get; }
 
-        public event Action<AccessKeyModel, TransactionType> ChangeAccessKeyEvent;
-        public event Action<BaseSensorModel, TransactionType> ChangeSensorEvent;
-        public event Action<ProductModel, TransactionType> ChangeProductEvent;
+        public event Action<AccessKeyModel, ActionType> ChangeAccessKeyEvent;
+        public event Action<BaseSensorModel, ActionType> ChangeSensorEvent;
+        public event Action<ProductModel, ActionType> ChangeProductEvent;
 
         public event Action<BaseSensorModel, PolicyResult> NotifyAboutChangesEvent;
 
@@ -80,20 +80,22 @@ namespace HSMServer.Core.Cache
         {
             _databaseCore.UpdateProduct(product.ToProductEntity());
 
-            ChangeProductEvent?.Invoke(product, TransactionType.Update);
+            ChangeProductEvent?.Invoke(product, ActionType.Update);
         }
 
-        public void UpdateProduct(ProductUpdate updatedProduct)
+        public void UpdateProduct(ProductUpdate update)
         {
-            if (!_tree.TryGetValue(updatedProduct.Id, out var product))
+            if (!_tree.TryGetValue(update.Id, out var product))
                 return;
 
             var sensorsOldStatuses = new Dictionary<Guid, PolicyResult>();
 
             GetProductSensorsStatuses(product, sensorsOldStatuses);
-            UpdateIntervalPolicy(updatedProduct.ExpectedUpdateInterval, product);
 
-            _databaseCore.UpdateProduct(product.Update(updatedProduct).ToProductEntity());
+            if (update.ExpectedUpdateInterval != null)
+                product.ServerPolicy.ExpectedUpdate.SetPolicy(new ExpectedUpdateIntervalPolicy(update.ExpectedUpdateInterval));
+
+            _databaseCore.UpdateProduct(product.Update(update).ToProductEntity());
 
             NotifyAllProductChildrenAboutUpdate(product, sensorsOldStatuses);
         }
@@ -117,7 +119,7 @@ namespace HSMServer.Core.Cache
                 foreach (var (id, _) in product.AccessKeys)
                     RemoveAccessKey(id);
 
-                ChangeProductEvent?.Invoke(product, TransactionType.Delete);
+                ChangeProductEvent?.Invoke(product, ActionType.Delete);
             }
 
             if (_tree.TryGetValue(productId, out var product))
@@ -181,7 +183,7 @@ namespace HSMServer.Core.Cache
             {
                 _databaseCore.AddAccessKey(key.ToAccessKeyEntity());
 
-                ChangeAccessKeyEvent?.Invoke(key, TransactionType.Add);
+                ChangeAccessKeyEvent?.Invoke(key, ActionType.Add);
 
                 return key;
             }
@@ -196,12 +198,12 @@ namespace HSMServer.Core.Cache
                 if (_tree.TryGetValue(key.ProductId, out var product))
                 {
                     product.AccessKeys.TryRemove(id, out _);
-                    ChangeProductEvent?.Invoke(product, TransactionType.Update);
+                    ChangeProductEvent?.Invoke(product, ActionType.Update);
                 }
 
                 _databaseCore.RemoveAccessKey(id);
 
-                ChangeAccessKeyEvent?.Invoke(key, TransactionType.Delete);
+                ChangeAccessKeyEvent?.Invoke(key, ActionType.Delete);
             }
 
             return key;
@@ -215,7 +217,7 @@ namespace HSMServer.Core.Cache
             key.Update(updatedKey);
             _databaseCore.UpdateAccessKey(key.ToAccessKeyEntity());
 
-            ChangeAccessKeyEvent?.Invoke(key, TransactionType.Update);
+            ChangeAccessKeyEvent?.Invoke(key, ActionType.Update);
 
             return key;
         }
@@ -230,15 +232,17 @@ namespace HSMServer.Core.Cache
 
         public AccessKeyModel GetAccessKey(Guid id) => _keys.GetValueOrDefault(id);
 
-        public void UpdateSensor(SensorUpdate updatedSensor)
+        public void UpdateSensor(SensorUpdate update)
         {
-            if (!_sensors.TryGetValue(updatedSensor.Id, out var sensor))
+            if (!_sensors.TryGetValue(update.Id, out var sensor))
                 return;
 
             var oldStatus = sensor.ValidationResult;
 
-            sensor.Update(updatedSensor);
-            UpdateIntervalPolicy(updatedSensor.ExpectedUpdateInterval, sensor);
+            sensor.Update(update);
+
+            if (update.ExpectedUpdateInterval != null)
+                sensor.ServerPolicy.ExpectedUpdate.SetPolicy(new ExpectedUpdateIntervalPolicy(update.ExpectedUpdateInterval));
 
             _databaseCore.UpdateSensor(sensor.ToEntity());
             NotifyAboutChanges(sensor, oldStatus);
@@ -254,7 +258,7 @@ namespace HSMServer.Core.Cache
 
             _databaseCore.RemoveSensorWithMetadata(sensorId.ToString());
 
-            ChangeSensorEvent?.Invoke(sensor, TransactionType.Delete);
+            ChangeSensorEvent?.Invoke(sensor, ActionType.Delete);
         }
 
         public void UpdateMutedSensorState(Guid sensorId, DateTime? endOfMuting = null)
@@ -305,7 +309,7 @@ namespace HSMServer.Core.Cache
             sensor.ResetSensor();
             _databaseCore.ClearSensorValues(sensor.Id.ToString());
 
-            ChangeSensorEvent?.Invoke(sensor, TransactionType.Update);
+            ChangeSensorEvent?.Invoke(sensor, ActionType.Update);
         }
 
         public BaseSensorModel GetSensor(Guid sensorId) => _sensors.GetValueOrDefault(sensorId);
@@ -313,7 +317,7 @@ namespace HSMServer.Core.Cache
         public void NotifyAboutChanges(BaseSensorModel sensor, PolicyResult oldStatus)
         {
             NotifyAboutChangesEvent?.Invoke(sensor, oldStatus);
-            ChangeSensorEvent?.Invoke(sensor, TransactionType.Update);
+            ChangeSensorEvent?.Invoke(sensor, ActionType.Update);
         }
 
 
@@ -343,22 +347,28 @@ namespace HSMServer.Core.Cache
             }
         }
 
-        public void UpdatePolicy(TransactionType type, Policy policy)
+        public void UpdatePolicy(ActionType type, Policy policy)
         {
             switch (type)
             {
-                case TransactionType.Add:
+                case ActionType.Add:
                     _databaseCore.AddPolicy(policy.ToEntity());
                     return;
-                case TransactionType.Update:
+                case ActionType.Update:
                     _databaseCore.UpdatePolicy(policy.ToEntity());
                     return;
-                case TransactionType.Delete:
+                case ActionType.Delete:
                     _databaseCore.RemovePolicy(policy.Id);
                     return;
             }
         }
 
+
+        private void SubscribeToPolicyUpdate(ServerPolicyCollection collection)
+        {
+            foreach (var serverPolicy in collection)
+                serverPolicy.Uploaded += UpdatePolicy;
+        }
 
         private void UpdatesQueueNewItemsHandler(IEnumerable<StoreInfo> storeInfos)
         {
@@ -403,49 +413,16 @@ namespace HSMServer.Core.Cache
             NotifyAboutChanges(sensor, oldStatus);
         }
 
-        private void UpdateIntervalPolicy(TimeIntervalModel newInterval, NodeBaseModel node)
-        {
-            if (newInterval == null)
-                return;
-
-            var oldPolicy = node.ServerPolicy.ExpectedUpdate.Policy;
-
-            if (oldPolicy == null && !newInterval.IsEmpty)
-            {
-                var newPolicy = new ExpectedUpdateIntervalPolicy(newInterval);
-                node.ServerPolicy.ExpectedUpdate.SetPolicy(newPolicy);
-
-                UpdatePolicy(TransactionType.Add, newPolicy);
-            }
-            else if (oldPolicy != null)
-            {
-                if (newInterval.IsEmpty)
-                {
-                    node.ServerPolicy.ExpectedUpdate.SetPolicy(null);
-
-                    UpdatePolicy(TransactionType.Delete, oldPolicy);
-                }
-                else if (!oldPolicy.Interval.Equals(newInterval))
-                {
-                    oldPolicy.Interval = newInterval;
-
-                    UpdatePolicy(TransactionType.Update, oldPolicy);
-                }
-            }
-
-            node.HasServerValidationChange();
-        }
-
         private void NotifyAllProductChildrenAboutUpdate(ProductModel product,
             Dictionary<Guid, PolicyResult> sensorsOldStatuses)
         {
-            ChangeProductEvent(product, TransactionType.Update);
+            ChangeProductEvent(product, ActionType.Update);
 
             foreach (var (_, sensor) in product.Sensors)
                 if (sensorsOldStatuses.TryGetValue(sensor.Id, out var oldStatus))
                     NotifyAboutChanges(sensor, oldStatus);
                 else
-                    ChangeSensorEvent(sensor, TransactionType.Update);
+                    ChangeSensorEvent(sensor, ActionType.Update);
 
             foreach (var (_, subProduct) in product.SubProducts)
                 NotifyAllProductChildrenAboutUpdate(subProduct, sensorsOldStatuses);
@@ -564,6 +541,8 @@ namespace HSMServer.Core.Cache
                     sensor.ApplyPolicies(entity.Policies, policies);
 
                     _sensors.TryAdd(sensor.Id, sensor);
+
+                    SubscribeToPolicyUpdate(sensor.ServerPolicy);
                 }
                 catch (Exception ex)
                 {
@@ -611,9 +590,11 @@ namespace HSMServer.Core.Cache
         {
             if (_tree.TryAdd(product.Id, product))
             {
+                SubscribeToPolicyUpdate(product.ServerPolicy);
+
                 _databaseCore.AddProduct(product.ToProductEntity());
 
-                ChangeProductEvent?.Invoke(product, TransactionType.Add);
+                ChangeProductEvent?.Invoke(product, ActionType.Add);
 
                 foreach (var (_, key) in product.AccessKeys)
                     AddAccessKey(key);
@@ -630,7 +611,9 @@ namespace HSMServer.Core.Cache
             _sensors.TryAdd(sensor.Id, sensor);
             _databaseCore.AddSensor(sensor.ToEntity());
 
-            ChangeSensorEvent?.Invoke(sensor, TransactionType.Add);
+            SubscribeToPolicyUpdate(sensor.ServerPolicy);
+
+            ChangeSensorEvent?.Invoke(sensor, ActionType.Add);
         }
 
         private bool AddKeyToTree(AccessKeyModel key)
@@ -640,7 +623,7 @@ namespace HSMServer.Core.Cache
             if (isSuccess && _tree.TryGetValue(key.ProductId, out var product))
             {
                 isSuccess &= product.AccessKeys.TryAdd(key.Id, key);
-                ChangeProductEvent?.Invoke(product, TransactionType.Update);
+                ChangeProductEvent?.Invoke(product, ActionType.Update);
             }
 
             return isSuccess;
@@ -765,7 +748,7 @@ namespace HSMServer.Core.Cache
             {
                 var oldStatus = sensor.ValidationResult;
 
-                if (sensor.HasServerValidationChange())
+                if (sensor.RefreshUpdateTimeout())
                     NotifyAboutChanges(sensor, oldStatus);
             }
 

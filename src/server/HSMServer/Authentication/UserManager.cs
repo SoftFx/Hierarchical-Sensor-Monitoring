@@ -172,9 +172,9 @@ namespace HSMServer.Authentication
                     HashComputer.ComputePasswordHash(CommonConstants.DefaultUserUsername),
                     true);
 
-        private void ChangeProductEventHandler(ProductModel product, TransactionType transaction)
+        private void ChangeProductEventHandler(ProductModel product, ActionType transaction)
         {
-            if (transaction == TransactionType.Delete)
+            if (transaction == ActionType.Delete)
             {
                 var updatedUsers = new List<User>(1 << 2);
 
@@ -192,9 +192,9 @@ namespace HSMServer.Authentication
             }
         }
 
-        private void ChangeSensorEventHandler(BaseSensorModel sensor, TransactionType transaction)
+        private void ChangeSensorEventHandler(BaseSensorModel sensor, ActionType transaction)
         {
-            if (transaction == TransactionType.Delete)
+            if (transaction == ActionType.Delete)
             {
                 foreach (var (_, user) in _users)
                 {

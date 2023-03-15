@@ -235,9 +235,9 @@ namespace HSMServer.Notifications
 
         private void RemoveUserEventHandler(User user) => _addressBook.RemoveAllChats(user);
 
-        private void RemoveProductEventHandler(ProductModel model, TransactionType transaction)
+        private void RemoveProductEventHandler(ProductModel model, ActionType transaction)
         {
-            if (transaction == TransactionType.Delete && _tree.Nodes.TryGetValue(model.Id, out var product))
+            if (transaction == ActionType.Delete && _tree.Nodes.TryGetValue(model.Id, out var product))
                 _addressBook.RemoveAllChats(product);
         }
 

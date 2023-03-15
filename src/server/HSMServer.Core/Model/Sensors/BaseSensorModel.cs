@@ -69,7 +69,7 @@ namespace HSMServer.Core.Model
         internal virtual BaseSensorModel InitDataPolicy() => this;
 
 
-        internal override bool HasServerValidationChange()
+        internal override bool RefreshUpdateTimeout()
         {
             _serverResult = PolicyResult.Ok;
 

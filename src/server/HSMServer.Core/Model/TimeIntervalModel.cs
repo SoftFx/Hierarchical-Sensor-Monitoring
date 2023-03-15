@@ -10,6 +10,7 @@ namespace HSMServer.Core.Model
         Day,
         Week,
         Month,
+        FromParent = byte.MaxValue - 1,
         Custom = byte.MaxValue,
     }
 

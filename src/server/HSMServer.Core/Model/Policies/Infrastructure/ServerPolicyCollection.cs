@@ -1,10 +1,11 @@
 ﻿using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace HSMServer.Core.Model.Policies
 {
-    public sealed class ServerPolicyCollection : IEnumerable<Guid>
+    public sealed class ServerPolicyCollection : IEnumerable<CollectionProperty>
     {
         private readonly Dictionary<Type, CollectionProperty> _properties = new();
 
@@ -52,17 +53,16 @@ namespace HSMServer.Core.Model.Policies
             return result;
         }
 
-        public IEnumerator<Guid> GetEnumerator()
-        {
-            foreach (var property in _properties.Values)
-                if (property.IsSet)
-                    yield return property.PolicyGuid;
-        }
 
         IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
 
+        public IEnumerator<CollectionProperty> GetEnumerator() => _properties.Values.GetEnumerator();
 
-        private CollectionProperty<T> Register<T>() where T : ServerPolicy
+        public IEnumerable<Guid> GetIds() => _properties.Values.Where(p => p.IsSet)
+                                                               .Select(p => p.PolicyGuid);
+
+
+        private CollectionProperty<T> Register<T>() where T : ServerPolicy, new()
         {
             var property = new CollectionProperty<T>();
 

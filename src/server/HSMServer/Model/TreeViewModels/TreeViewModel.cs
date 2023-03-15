@@ -134,11 +134,11 @@ namespace HSMServer.Model.TreeViewModel
                 key.UpdateNodePath();
         }
 
-        private void ChangeProductHandler(ProductModel model, TransactionType transaction)
+        private void ChangeProductHandler(ProductModel model, ActionType transaction)
         {
             switch (transaction)
             {
-                case TransactionType.Add:
+                case ActionType.Add:
                     var newProduct = AddNewProductViewModel(model);
 
                     if (model.ParentProduct != null && Nodes.TryGetValue(model.ParentProduct.Id, out var parent))
@@ -146,14 +146,14 @@ namespace HSMServer.Model.TreeViewModel
 
                     break;
 
-                case TransactionType.Update:
+                case ActionType.Update:
                     if (!Nodes.TryGetValue(model.Id, out var product))
                         return;
 
                     product.Update(model);
                     break;
 
-                case TransactionType.Delete:
+                case ActionType.Delete:
                     Nodes.TryRemove(model.Id, out _);
 
                     if (model.ParentProduct != null && Nodes.TryGetValue(model.ParentProduct.Id, out var parentProduct))
@@ -163,24 +163,24 @@ namespace HSMServer.Model.TreeViewModel
             }
         }
 
-        private void ChangeSensorHandler(BaseSensorModel model, TransactionType transaction)
+        private void ChangeSensorHandler(BaseSensorModel model, ActionType transaction)
         {
             switch (transaction)
             {
-                case TransactionType.Add:
+                case ActionType.Add:
                     if (Nodes.TryGetValue(model.ParentProduct.Id, out var parent))
                         AddNewSensorViewModel(model, parent);
 
                     break;
 
-                case TransactionType.Update:
+                case ActionType.Update:
                     if (!Sensors.TryGetValue(model.Id, out var sensor))
                         return;
 
                     sensor.Update(model);
                     break;
 
-                case TransactionType.Delete:
+                case ActionType.Delete:
                     Sensors.TryRemove(model.Id, out _);
 
                     if (Nodes.TryGetValue(model.ParentProduct.Id, out var parentProduct))
@@ -190,24 +190,24 @@ namespace HSMServer.Model.TreeViewModel
             }
         }
 
-        private void ChangeAccessKeyHandler(AccessKeyModel model, TransactionType transaction)
+        private void ChangeAccessKeyHandler(AccessKeyModel model, ActionType transaction)
         {
             switch (transaction)
             {
-                case TransactionType.Add:
+                case ActionType.Add:
                     if (Nodes.TryGetValue(model.ProductId, out var parent))
                         AddNewAccessKeyViewModel(model, parent);
 
                     break;
 
-                case TransactionType.Update:
+                case ActionType.Update:
                     if (!AccessKeys.TryGetValue(model.Id, out var accessKey))
                         return;
 
                     accessKey.Update(model);
                     break;
 
-                case TransactionType.Delete:
+                case ActionType.Delete:
                     AccessKeys.TryRemove(model.Id, out _);
 
                     if (Nodes.TryGetValue(model.ProductId, out var parentProduct))

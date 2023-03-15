@@ -1,4 +1,5 @@
-﻿using System;
+﻿using HSMServer.Core.Cache;
+using System;
 
 namespace HSMServer.Core.Model.Policies
 {
@@ -13,33 +14,55 @@ namespace HSMServer.Core.Model.Policies
         public abstract bool IsSet { get; }
 
 
+        public Action<ActionType, Policy> Uploaded;
+
+
         internal abstract void SetPolicy(Policy policy);
     }
 
 
-    public sealed class CollectionProperty<T> : CollectionProperty where T : ServerPolicy
+    public sealed class CollectionProperty<T> : CollectionProperty where T : ServerPolicy, new()
     {
-        private T _policy;
+        private readonly T _emptyPolicy = new();
+        private T _curPolicy;
 
 
-        public override Guid PolicyGuid => _policy?.Id ?? Guid.Empty;
+        public override Guid PolicyGuid => _curPolicy?.Id ?? Guid.Empty;
 
         public override bool IsEmpty => Policy == null;
 
-        public override bool IsSet => _policy == null;
+        public override bool IsSet => _curPolicy == null;
 
 
-        public T Policy => _policy ?? ((CollectionProperty<T>)ParentProperty)?.Policy;
-
-
-        public Action Updated; // TODO remove?
+        public T Policy => _curPolicy ?? ((CollectionProperty<T>)ParentProperty)?.Policy ?? _emptyPolicy;
 
 
         internal override void SetPolicy(Policy policy)
         {
-            _policy = (T)policy;
+            var newPolicy = (T)policy;
+            var action = ActionType.Add;
 
-            Updated?.Invoke();
+            policy = _curPolicy;
+
+            if (IsSet)
+            {
+                if (newPolicy.FromParent)
+                {
+                    _curPolicy = null;
+                    action = ActionType.Delete;
+                }
+                else
+                {
+                    _curPolicy.Interval = newPolicy.Interval;
+                    action = ActionType.Update;
+                }
+            }
+            else if (!newPolicy.FromParent)
+                _curPolicy = newPolicy;
+            else
+                return;
+
+            Uploaded?.Invoke(action, policy);
         }
     }
 }

@@ -133,9 +133,9 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
                     BaseValue = SensorValuesFactory.BuildSensorValue(sensorInfo.Type),
                 };
 
-                void ChangeSensorHandler(BaseSensorModel sensorModel, TransactionType type)
+                void ChangeSensorHandler(BaseSensorModel sensorModel, ActionType type)
                 {
-                    if (type == TransactionType.Add)
+                    if (type == ActionType.Add)
                         sensorInfo.Id = sensorModel.Id;
                 }
 

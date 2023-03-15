@@ -73,11 +73,11 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         {
             int addedProductsCount = 0;
             int updatedProductsCount = 0;
-            void AddProductEventHandle(ProductModel product, TransactionType type)
+            void AddProductEventHandle(ProductModel product, ActionType type)
             {
                 Assert.NotNull(product);
 
-                if (type == TransactionType.Add)
+                if (type == ActionType.Add)
                     addedProductsCount++;
                 else
                     updatedProductsCount++;
@@ -149,21 +149,21 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         {
             int updatedProductsCount = 0;
             int deletedProductsCount = 0;
-            void RemoveProductEventHandler(ProductModel product, TransactionType type)
+            void RemoveProductEventHandler(ProductModel product, ActionType type)
             {
                 Assert.NotNull(product);
 
-                if (type == TransactionType.Update)
+                if (type == ActionType.Update)
                     updatedProductsCount++;
                 else
                     deletedProductsCount++;
             }
 
             int deletedSensorsCount = 0;
-            void RemoveSensorEventHandler(BaseSensorModel sensor, TransactionType type)
+            void RemoveSensorEventHandler(BaseSensorModel sensor, ActionType type)
             {
                 Assert.NotNull(sensor);
-                Assert.Equal(TransactionType.Delete, type);
+                Assert.Equal(ActionType.Delete, type);
 
                 deletedSensorsCount++;
             }
@@ -272,10 +272,10 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             var sensorUpdate = SensorModelFactory.BuildSensorUpdate(sensor.Id);
 
             int updatedSensorsCount = 0;
-            void UpdateSensorEventHandler(BaseSensorModel updatedSensor, TransactionType type)
+            void UpdateSensorEventHandler(BaseSensorModel updatedSensor, ActionType type)
             {
                 Assert.NotNull(updatedSensor);
-                Assert.Equal(TransactionType.Update, type);
+                Assert.Equal(ActionType.Update, type);
 
                 ModelsTester.TestSensorModel(sensorUpdate, updatedSensor);
 
@@ -303,10 +303,10 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
                 sensorUpdates.Add((GetClonedSensorModel(sensor), SensorModelFactory.BuildSensorUpdate(sensor.Id)));
 
             int updatedSensorsCount = 0;
-            void UpdateSensorEventHandler(BaseSensorModel updatedSensor, TransactionType type)
+            void UpdateSensorEventHandler(BaseSensorModel updatedSensor, ActionType type)
             {
                 Assert.NotNull(updatedSensor);
-                Assert.Equal(TransactionType.Update, type);
+                Assert.Equal(ActionType.Update, type);
 
                 updatedSensorsCount++;
             }
@@ -330,10 +330,10 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             var allSensors = _valuesCache.GetSensors();
 
             int removedSensorsCount = 0;
-            void RemoveSensorEventHandler(BaseSensorModel removedSensor, TransactionType type)
+            void RemoveSensorEventHandler(BaseSensorModel removedSensor, ActionType type)
             {
                 Assert.NotNull(removedSensor);
-                Assert.Equal(TransactionType.Delete, type);
+                Assert.Equal(ActionType.Delete, type);
 
                 removedSensorsCount++;
             }
@@ -357,10 +357,10 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         public async Task RemoveSensorsDataTest()
         {
             int clearedSensorsCount = 0;
-            void UpdateSensorEventHandler(BaseSensorModel clearedSensor, TransactionType type)
+            void UpdateSensorEventHandler(BaseSensorModel clearedSensor, ActionType type)
             {
                 Assert.NotNull(clearedSensor);
-                Assert.Equal(TransactionType.Update, type);
+                Assert.Equal(ActionType.Update, type);
 
                 clearedSensorsCount++;
             }
@@ -405,25 +405,25 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         {
             int addedProductsCount = 0;
             int updatedProductsCount = 0;
-            void ChangeProductEventHandler(ProductModel product, TransactionType type)
+            void ChangeProductEventHandler(ProductModel product, ActionType type)
             {
                 Assert.NotNull(product);
 
-                if (type == TransactionType.Add)
+                if (type == ActionType.Add)
                     addedProductsCount++;
-                else if (type == TransactionType.Update)
+                else if (type == ActionType.Update)
                     updatedProductsCount++;
             }
 
             int addedSensorsCount = 0;
             int updatedSensorsCount = 0;
-            void ChangeSensorEventHandler(BaseSensorModel sensor, TransactionType type)
+            void ChangeSensorEventHandler(BaseSensorModel sensor, ActionType type)
             {
                 Assert.NotNull(sensor);
 
-                if (type == TransactionType.Add)
+                if (type == ActionType.Add)
                     addedSensorsCount++;
-                else if (type == TransactionType.Update)
+                else if (type == ActionType.Update)
                     updatedSensorsCount++;
             }
 
@@ -489,10 +489,10 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         public void AddNewSensorValue_UpdateData_Test(SensorType type)
         {
             int updatedSensorsCount = 0;
-            void ChangeSensorEventHandler(BaseSensorModel sensor, TransactionType type)
+            void ChangeSensorEventHandler(BaseSensorModel sensor, ActionType type)
             {
                 Assert.NotNull(sensor);
-                Assert.Equal(TransactionType.Update, type);
+                Assert.Equal(ActionType.Update, type);
 
                 updatedSensorsCount++;
             }

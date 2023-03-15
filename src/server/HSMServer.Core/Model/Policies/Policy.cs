@@ -54,6 +54,9 @@ namespace HSMServer.Core.Model.Policies
         public TimeIntervalModel Interval { get; set; }
 
 
+        internal bool FromParent => Interval?.TimeInterval == TimeInterval.FromParent;
+
+
         protected ServerPolicy() : base() { }
 
         protected ServerPolicy(TimeIntervalModel interval) : base()
@@ -64,7 +67,7 @@ namespace HSMServer.Core.Model.Policies
 
         internal PolicyResult Validate(DateTime time)
         {
-            return Interval.TimeIsUp(time) ? _validationFail : Ok;
+            return Interval != null && Interval.TimeIsUp(time) ? _validationFail : Ok;
         }
     }
 }

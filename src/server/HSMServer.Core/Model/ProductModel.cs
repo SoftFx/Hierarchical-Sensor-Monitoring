@@ -57,15 +57,15 @@ namespace HSMServer.Core.Model
         }
 
 
-        internal override bool HasServerValidationChange()
+        internal override bool RefreshUpdateTimeout()
         {
             var result = false;
 
             foreach (var (_, sensor) in Sensors)
-                result |= sensor.HasServerValidationChange();
+                result |= sensor.RefreshUpdateTimeout();
 
             foreach (var (_, subProduct) in SubProducts)
-                result |= subProduct.HasServerValidationChange();
+                result |= subProduct.RefreshUpdateTimeout();
 
             return result;
         }

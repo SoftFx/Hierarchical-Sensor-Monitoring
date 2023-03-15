@@ -151,22 +151,22 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             _product = null;
         }
 
-        private void EventHandler<T>(T model, TransactionType type)
+        private void EventHandler<T>(T model, ActionType type)
         {
-            static void CheckTransaction(TransactionType type,
+            static void CheckTransaction(ActionType type,
             ref (int add, int update, int delete) transactionCount)
             {
                 switch (type)
                 {
-                    case TransactionType.Add:
+                    case ActionType.Add:
                         transactionCount.add++;
                         break;
 
-                    case TransactionType.Update:
+                    case ActionType.Update:
                         transactionCount.update++;
                         break;
 
-                    case TransactionType.Delete:
+                    case ActionType.Delete:
                         transactionCount.delete++;
                         break;
                 }
