@@ -18,21 +18,14 @@ window.initializeTree = function () {
             let isTimeSort = sortingType.val() == "1";
 
             if (isTimeSort) {
-                nodeA = this.get_node(a);
-                nodeB = this.get_node(b);
-
-                format = "DD/MM/YYYY hh:mm:ss";
-                timeA = moment(nodeA.data.jstree.time, format);
-                timeB = moment(nodeB.data.jstree.time, format);
-
-                return timeB.diff(timeA);
+                a = this.get_node(a).data.jstree.time;
+                b = this.get_node(b).data.jstree.time;
             }
             else {
-                a = this.get_node(a).data.jstree.title.toLowerCase();
-                b = this.get_node(b).data.jstree.title.toLowerCase();
-
-                return a > b ? 1 : -1;
+                [a, b] = [this.get_node(b).data.jstree.title.toLowerCase(), this.get_node(a).data.jstree.title.toLowerCase()]
             }
+            
+            return a < b ? 1 : -1;
         }
     }).on("state_ready.jstree", function () {
         selectNodeAjax($(this).jstree('get_selected'));
@@ -158,23 +151,26 @@ function buildContextMenu(node) {
         };
     }
 
+    let isMutedState = node.data.jstree.isMutedState;
+
     if (isManager) {
-        let isMutedState = node.data.jstree.isMutedState === "True";
-        if (!isMutedState){
-            contextMenu["Mute"] = {
-                "label": `Mute ${getKeyByValue(curType)}`,
-                "separator_after": true,
-                "separator_before": true,
-                "action": _ => ignoreNotificationsRequest(node, TelegramTarget.Groups, 'true')
+        if (isMutedState !== '') {
+            if (!(isMutedState === "True")) {
+                contextMenu["Mute"] = {
+                    "label": `Mute ${getKeyByValue(curType)}`,
+                    "separator_after": true,
+                    "separator_before": true,
+                    "action": _ => ignoreNotificationsRequest(node, TelegramTarget.Groups, 'true')
+                }
             }
-        }
-        else {
-            contextMenu["Mute"] = {
-                "label": `Unmute ${getKeyByValue(curType)}`,
-                "separator_after": true,
-                "separator_before": true,
-                "action": _ => unmuteRequest(node)
-            }
+            else {
+                contextMenu["Mute"] = {
+                    "label": `Unmute ${getKeyByValue(curType)}`,
+                    "separator_after": true,
+                    "separator_before": true,
+                    "action": _ => unmuteRequest(node)
+                }
+            } 
         }
         
         if (curType !== NodeType.Node) {
@@ -290,12 +286,13 @@ function buildContextMenu(node) {
             }
         }
     }
-
-    contextMenu["Notifications"] = {
-        "label": "Notifications",
-        "separator_before": true,
-        "submenu": notificationSubmenu,
-    };
+    
+    if (!(isMutedState === "True"))
+        contextMenu["Notifications"] = {
+            "label": "Notifications",
+            "separator_before": true,
+            "submenu": notificationSubmenu,
+        };
 
     return contextMenu;
 }

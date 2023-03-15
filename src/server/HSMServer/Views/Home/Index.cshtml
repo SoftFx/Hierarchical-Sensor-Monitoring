@@ -15,25 +15,26 @@
 }
 
 <script>
-    var updateSelectedNode = "@Html.Raw(Url.Action(ViewConstants.UpdateSelectedNodeAction, ViewConstants.HomeController))";
-    var getFileAction = "@Html.Raw(Url.Action(ViewConstants.GetFileAction, ViewConstants.HomeController))";
-    var viewFileAction = "@Html.Raw(Url.Action(ViewConstants.GetFileStreamAction, ViewConstants.HomeController))";
+    var updateSelectedNode = "@Url.Action(nameof(HomeController.UpdateSelectedNode), ViewConstants.HomeController)";
+    var getFileAction = "@Url.Action(nameof(HomeController.GetFile), ViewConstants.HomeController)";
+    var viewFileAction = "@Url.Action(nameof(HomeController.GetFileStream), ViewConstants.HomeController)";
+    var getFileInfo = "@Url.Action(nameof(HomeController.GetFileInfo), ViewConstants.HomeController)";
     var selected = "";
 
-    var selectNode = "@Html.Raw(Url.Action(ViewConstants.SelectNodeAction, ViewConstants.HomeController))";
-    var refreshTree = "@Html.Raw(Url.Action(ViewConstants.RefreshTreeAction, ViewConstants.HomeController))";
+    var selectNode = "@Url.Action(nameof(HomeController.SelectNode), ViewConstants.HomeController)";
+    var refreshTree = "@Url.Action(nameof(HomeController.RefreshTree), ViewConstants.HomeController)";
 
-    var historyLatestAction = "@Html.Raw(Url.Action(nameof(HomeController.HistoryLatest), ViewConstants.HomeController))";
-    var historyAction = "@Html.Raw(Url.Action(ViewConstants.HistoryAction, ViewConstants.HomeController))";
-    var nextPageAction = "@Html.Raw(Url.Action(nameof(HomeController.GetNextPage), ViewConstants.HomeController))";
-    var prevPageAction = "@Html.Raw(Url.Action(nameof(HomeController.GetPreviousPage), ViewConstants.HomeController))";
+    var historyLatestAction = "@Url.Action(nameof(HomeController.HistoryLatest), ViewConstants.HomeController)";
+    var historyAction = "@Url.Action(nameof(HomeController.History), ViewConstants.HomeController)";
+    var nextPageAction = "@Url.Action(nameof(HomeController.GetNextPage), ViewConstants.HomeController)";
+    var prevPageAction = "@Url.Action(nameof(HomeController.GetPreviousPage), ViewConstants.HomeController)";
 
-    var rawHistoryLatestAction = "@Html.Raw(Url.Action(nameof(HomeController.RawHistoryLatest), ViewConstants.HomeController))";
-    var rawHistoryAction = "@Html.Raw(Url.Action(ViewConstants.RawHistoryAction, ViewConstants.HomeController))";
-    var exportHistoryAction = "@Html.Raw(Url.Action(ViewConstants.ExportHistoryAction, ViewConstants.HomeController))";
+    var rawHistoryLatestAction = "@Url.Action(nameof(HomeController.RawHistoryLatest), ViewConstants.HomeController)";
+    var rawHistoryAction = "@Url.Action(nameof(HomeController.RawHistory), ViewConstants.HomeController)";
+    var exportHistoryAction = "@Url.Action(nameof(HomeController.ExportHistory), ViewConstants.HomeController)";
 
-    var getSensorInfoAction = "@Html.Raw(Url.Action(ViewConstants.GetSensorInfoAction, ViewConstants.HomeController))";
-    var updateSensorInfoAction = "@Html.Raw(Url.Action(ViewConstants.UpdateSensorInfoAction, ViewConstants.HomeController))";
+    var getSensorInfoAction = "@Url.Action(nameof(HomeController.GetSensorInfo), ViewConstants.HomeController)";
+    var updateSensorInfoAction = "@Url.Action(nameof(HomeController.UpdateSensorInfo), ViewConstants.HomeController)";
 
     var getNodePathAction = "@Url.Action(nameof(HomeController.GetNodePath), ViewConstants.HomeController)";
     var editProductAction = "@Url.Action(nameof(ProductController.EditProduct), ViewConstants.ProductController)";
@@ -125,6 +126,10 @@
     initializeTree();
     initialize();
 
+     $(document).ready(() => {
+            $('#updateTime').empty().append('Update Time: ' + new Date().toUTCString());
+     })
+    
 
     var interval = $("#treeInterval").val() * 1000;
 
@@ -176,7 +181,8 @@
 
         $('#validation_' + id).empty();
         if (dataObject.isValidationErrorVisible) {
-            $('#validation_' + id).append(`<li id='errorIcon_${id}' class='fas fa-exclamation-triangle me-1' title='${dataObject.validationError}'></li>`);
+            $('#validation_' + id).append(`<li id='errorIcon_${id}' class='fas fa-exclamation-triangle me-1'></li>
+                                           <span>Status comment: ${dataObject.validationError}</span>`);
         }
     }
 
@@ -203,7 +209,7 @@
     var updateSelectedNodeDataTimeoutId;
     function updateSelectedNodeData() {
         clearTimeout(updateSelectedNodeDataTimeoutId);
-
+            
         var selectedNode = $('#jstree').jstree().get_selected(true)[0];
         var selectedNodeId = getSelectedNodeId(selectedNode);
         if (selectedNodeId != "")
