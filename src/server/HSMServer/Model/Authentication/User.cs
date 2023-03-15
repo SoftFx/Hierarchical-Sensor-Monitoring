@@ -89,16 +89,5 @@ namespace HSMServer.Model.Authentication
                 NotificationSettings = Notifications.ToEntity(),
                 TreeFilter = TreeFilter,
             };
-
-        internal User WithoutPassword() =>
-            new()
-            {
-                Name = Name,
-                Password = null,
-                IsAdmin = IsAdmin,
-                ProductsRoles = ProductsRoles,
-                Notifications = new(Notifications.ToEntity()),
-                TreeFilter = TreeFilter
-            };
     }
 }

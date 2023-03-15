@@ -38,7 +38,7 @@ namespace HSMServer.Authentication
         /// <param name="userName">Name of the user to remove.</param>
         Task RemoveUser(string userName);
 
-        User Authenticate(string login, string password);
+        bool TryAuthenticate(string login, string password);
 
         bool TryGetIdByName(string name, out Guid id);
 

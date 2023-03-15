@@ -66,7 +66,7 @@ namespace HSMServer.Authentication
                 _logger.LogWarning($"There are no users with name={userName} to remove");
         }
 
-        public User Authenticate(string login, string password) // TODO: return bool value??? TryAutheticate
+        public bool TryAuthenticate(string login, string password)
         {
             var passwordHash = HashComputer.ComputePasswordHash(password);
 
@@ -78,7 +78,7 @@ namespace HSMServer.Authentication
 
             var existingUser = this.SingleOrDefault(IsAskedUser);
 
-            return existingUser.Value?.WithoutPassword();
+            return existingUser.Value != null;
         }
 
         public List<User> GetViewers(Guid productId)

@@ -206,9 +206,9 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         {
             var defaultUserFromDB = await GetDefaultUserFromDB();
 
-            var actual = _userManager.Authenticate(defaultUserFromDB.Name, defaultUserFromDB.Name);
+            var tryAuthenticate = _userManager.TryAuthenticate(defaultUserFromDB.Name, defaultUserFromDB.Name);
 
-            TestAuthenticateUser(defaultUserFromDB, actual);
+            Assert.True(tryAuthenticate);
         }
 
         [Fact]
@@ -217,9 +217,9 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         {
             var unregisteredUser = new User() { Name = RandomGenerator.GetRandomString(), Password = RandomGenerator.GetRandomString() };
 
-            var actual = _userManager.Authenticate(unregisteredUser.Name, unregisteredUser.Password);
+            var tryAuthenticate = _userManager.TryAuthenticate(unregisteredUser.Name, unregisteredUser.Password);
 
-            Assert.Null(actual);
+            Assert.False(tryAuthenticate);
         }
 
         [Fact]
@@ -228,9 +228,9 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         {
             var unregisteredUser = new User() { Name = string.Empty, Password = string.Empty };
 
-            var actual = _userManager.Authenticate(unregisteredUser.Name, unregisteredUser.Password);
+            var tryAuthenticate = _userManager.TryAuthenticate(unregisteredUser.Name, unregisteredUser.Password);
 
-            Assert.Null(actual);
+            Assert.False(tryAuthenticate);
         }
 
         [Fact]
@@ -444,14 +444,6 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         private static void TestUser(User expected, User actual)
         {
             TestChangeableUserSettings(expected, actual);
-            TestNotChangeableUserSettings(expected, actual);
-        }
-
-        private static void TestAuthenticateUser(User expected, User actual)
-        {
-            Assert.Null(actual.Password);
-            Assert.Equal(expected.IsAdmin, actual.IsAdmin);
-            Assert.Equal(expected.ProductsRoles, actual.ProductsRoles);
             TestNotChangeableUserSettings(expected, actual);
         }
 
