@@ -34,10 +34,7 @@ namespace HSMDataCollector.Core
         private readonly DefaultSensorsCollection _defaultSensors;
         private readonly SensorsDefaultOptions _sensorsOptions;
         private readonly SensorsStorage _sensorsStorage;
-        private readonly IDataQueue _dataQueue;
-        private readonly HttpClient _client;
-        private readonly string _listSendingAddress;
-        private readonly string _fileSendingAddress;
+        private readonly HSMClient _hsmClient;
 
         private bool _isStopped;
 
@@ -45,9 +42,6 @@ namespace HSMDataCollector.Core
 
         public IUnixCollection Unix => _defaultSensors;
 
-
-        [Obsolete]
-        public event EventHandler ValuesQueueOverflow;
 
 
         /// <summary>
@@ -57,26 +51,14 @@ namespace HSMDataCollector.Core
         public DataCollector(CollectorOptions options)
         {
             _nameToSensor = new ConcurrentDictionary<string, ISensor>();
-            _listSendingAddress = options.ListEndpoint;
-            _fileSendingAddress = options.FileEndpoint;
-
-            HttpClientHandler handler = new HttpClientHandler
-            {
-                ServerCertificateCustomValidationCallback = (message, certificate2, arg3, arg4) => true
-            };
-            _client = new HttpClient(handler);
-            _client.DefaultRequestHeaders.Add(nameof(BaseRequest.Key), options.AccessKey);
+            _hsmClient = new HSMClient(options, _logManager);
 
             ServicePointManager.ServerCertificateValidationCallback = delegate { return true; };
             ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
 
-            _dataQueue = new DataQueue(options);
-            _dataQueue.QueueOverflow += DataQueue_QueueOverflow;
-            _dataQueue.FileReceving += DataQueue_FileReceving;
-            _dataQueue.SendValues += DataQueue_SendValues;
             _isStopped = false;
 
-            _sensorsStorage = new SensorsStorage(_dataQueue as IValuesQueue, _logManager);
+            _sensorsStorage = new SensorsStorage(_hsmClient.DataQueue as IValuesQueue, _logManager);
             _sensorsOptions = new SensorsDefaultOptions();
             _defaultSensors = new DefaultSensorsCollection(_sensorsStorage, _sensorsOptions);
         }
@@ -112,18 +94,18 @@ namespace HSMDataCollector.Core
                 AddNLog();
 
             _logManager.Logger?.Info("Initialize timer...");
-            _dataQueue.InitializeTimer();
+            _hsmClient.DataQueue.InitializeTimer();
         }
 
         [Obsolete("Use Initialize(bool, string, string)")]
         public void Initialize()
         {
-            _dataQueue.InitializeTimer();
+            _hsmClient.DataQueue.InitializeTimer();
         }
 
         public Task Start()
         {
-            _dataQueue.InitializeTimer();
+            _hsmClient.DataQueue.InitializeTimer();
 
             return _sensorsStorage.Start();
         }
@@ -138,10 +120,10 @@ namespace HSMDataCollector.Core
             _sensorsStorage.Dispose();
 
             var allData = new List<SensorValueBase>(1 << 3);
-            if (_dataQueue != null)
+            if (_hsmClient.DataQueue != null)
             {
-                allData.AddRange(_dataQueue.GetCollectedData());
-                _dataQueue.Stop();
+                allData.AddRange(_hsmClient.DataQueue.GetCollectedData());
+                _hsmClient.DataQueue.Stop();
             }
 
             Thread.Sleep(TimeSpan.FromSeconds(1));
@@ -154,9 +136,9 @@ namespace HSMDataCollector.Core
                 pair.Value.Dispose();
 
             if (allData.Count != 0)
-                SendMonitoringData(allData);
+                _hsmClient.SendMonitoringData(allData);
 
-            _client?.Dispose();
+            _hsmClient?.DisposeClient();
             _isStopped = true;
             _logManager.Logger?.Info("DataCollector successfully stopped.");
         }
@@ -284,7 +266,7 @@ namespace HSMDataCollector.Core
             if (existingSensor is IInstantValueSensor<string> instantValueSensor)
                 return instantValueSensor;
 
-            var sensor = new InstantFileSensor(path, fileName, extension, _dataQueue as IValuesQueue, description);
+            var sensor = new InstantFileSensor(path, fileName, extension, _hsmClient.DataQueue as IValuesQueue, description);
             AddNewSensor(sensor, path);
 
             return sensor;
@@ -316,7 +298,7 @@ namespace HSMDataCollector.Core
             if (existingSensor is IInstantValueSensor<T> instantValueSensor)
                 return instantValueSensor;
 
-            InstantValueSensor<T> sensor = new InstantValueSensor<T>(path, _dataQueue as IValuesQueue, description);
+            InstantValueSensor<T> sensor = new InstantValueSensor<T>(path, _hsmClient.DataQueue as IValuesQueue, description);
             AddNewSensor(sensor, path);
 
             return sensor;
@@ -329,7 +311,7 @@ namespace HSMDataCollector.Core
                 return lastValueSensor;
 
             DefaultValueSensor<T> sensor =
-                new DefaultValueSensor<T>(path, _dataQueue as IValuesQueue, defaultValue, description);
+                new DefaultValueSensor<T>(path, _hsmClient.DataQueue as IValuesQueue, defaultValue, description);
             AddNewSensor(sensor, path);
 
             return sensor;
@@ -349,7 +331,7 @@ namespace HSMDataCollector.Core
                 return intBarSensor;
             }
 
-            BarSensor<int> sensor = new BarSensor<int>(path, _dataQueue as IValuesQueue, SensorType.IntegerBarSensor,
+            BarSensor<int> sensor = new BarSensor<int>(path, _hsmClient.DataQueue as IValuesQueue, SensorType.IntegerBarSensor,
                 timeout, smallPeriod, description);
             AddNewSensor(sensor, path);
 
@@ -391,7 +373,7 @@ namespace HSMDataCollector.Core
                 return doubleBarSensor;
             }
 
-            BarSensor<double> sensor = new BarSensor<double>(path, _dataQueue as IValuesQueue,
+            BarSensor<double> sensor = new BarSensor<double>(path, _hsmClient.DataQueue as IValuesQueue,
                 SensorType.DoubleBarSensor, timeout, smallPeriod, precision, description);
             AddNewSensor(sensor, path);
 
@@ -474,7 +456,7 @@ namespace HSMDataCollector.Core
             if (existingSensor is IParamsFuncSensor<T, U> typedSensor)
                 return typedSensor;
 
-            OneParamFuncSensor<T, U> sensor = new OneParamFuncSensor<T, U>(path, _dataQueue as IValuesQueue, description, interval, function, _logManager.Logger);
+            OneParamFuncSensor<T, U> sensor = new OneParamFuncSensor<T, U>(path, _hsmClient.DataQueue as IValuesQueue, description, interval, function, _logManager.Logger);
             AddNewSensor(sensor, path);
 
             return sensor;
@@ -487,7 +469,7 @@ namespace HSMDataCollector.Core
             if (existingSensor is INoParamsFuncSensor<T> typedSensor)
                 return typedSensor;
 
-            NoParamsFuncSensor<T> sensor = new NoParamsFuncSensor<T>(path, _dataQueue as IValuesQueue, description, interval, function, _logManager.Logger);
+            NoParamsFuncSensor<T> sensor = new NoParamsFuncSensor<T>(path, _hsmClient.DataQueue as IValuesQueue, description, interval, function, _logManager.Logger);
             AddNewSensor(sensor, path);
 
             return sensor;
@@ -516,72 +498,6 @@ namespace HSMDataCollector.Core
             _nameToSensor[path] = sensor;
 
             _logManager.Logger?.Info($"Added new sensor {path}");
-        }
-
-        private void DataQueue_SendValues(object sender, List<SensorValueBase> e)
-        {
-            SendMonitoringData(e);
-        }
-
-        private void DataQueue_FileReceving(object _, FileSensorValue value)
-        {
-            try
-            {
-                string jsonString = JsonConvert.SerializeObject(value);
-
-                if (_logManager.WriteDebug)
-                    _logManager.Logger?.Debug($"{nameof(DataQueue_FileReceving)}: {jsonString}");
-
-                var data = new StringContent(jsonString, Encoding.UTF8, "application/json");
-                var res = _client.PostAsync(_fileSendingAddress, data).Result;
-
-                if (!res.IsSuccessStatusCode)
-                    _logManager.Logger?.Error($"Failed to send data. StatusCode={res.StatusCode}, Content={res.Content.ReadAsStringAsync().Result}");
-            }
-            catch (Exception e)
-            {
-                if (_dataQueue != null && !_dataQueue.Disposed)
-                    _dataQueue?.ReturnFile(value);
-
-                _logManager.Logger?.Error($"Failed to send: {e}");
-            }
-        }
-
-        private void SendMonitoringData(List<SensorValueBase> values)
-        {
-            try
-            {
-                if (values.Count == 0)
-                    return;
-
-                string jsonString = JsonConvert.SerializeObject(values.Cast<object>());
-
-                if (_logManager.WriteDebug)
-                    _logManager.Logger?.Debug($"{nameof(SendMonitoringData)}: {jsonString}");
-
-                var data = new StringContent(jsonString, Encoding.UTF8, "application/json");
-                var res = _client.PostAsync(_listSendingAddress, data).Result;
-
-                if (!res.IsSuccessStatusCode)
-                    _logManager.Logger?.Error($"Failed to send data. StatusCode={res.StatusCode}, Content={res.Content.ReadAsStringAsync().Result}");
-            }
-            catch (Exception e)
-            {
-                if (_dataQueue != null && !_dataQueue.Disposed)
-                    _dataQueue?.ReturnData(values);
-
-                _logManager.Logger?.Error($"Failed to send: {e}");
-            }
-        }
-
-        private void DataQueue_QueueOverflow(object sender, DateTime e)
-        {
-            OnValuesQueueOverflow();
-        }
-
-        private void OnValuesQueueOverflow()
-        {
-            ValuesQueueOverflow?.Invoke(this, EventArgs.Empty);
         }
     }
 }
