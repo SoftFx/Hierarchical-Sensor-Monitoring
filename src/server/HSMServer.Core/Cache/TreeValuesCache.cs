@@ -347,7 +347,7 @@ namespace HSMServer.Core.Cache
             }
         }
 
-        public void UpdatePolicy(ActionType type, Policy policy)
+        private void UpdatePolicy(ActionType type, Policy policy)
         {
             switch (type)
             {

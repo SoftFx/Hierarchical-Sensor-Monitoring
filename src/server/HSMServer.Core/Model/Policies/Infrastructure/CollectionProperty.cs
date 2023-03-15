@@ -31,7 +31,7 @@ namespace HSMServer.Core.Model.Policies
 
         public override bool IsEmpty => Policy == null;
 
-        public override bool IsSet => _curPolicy == null;
+        public override bool IsSet => _curPolicy != null;
 
 
         public T Policy => _curPolicy ?? ((CollectionProperty<T>)ParentProperty)?.Policy ?? _emptyPolicy;
@@ -42,10 +42,10 @@ namespace HSMServer.Core.Model.Policies
             var newPolicy = (T)policy;
             var action = ActionType.Add;
 
-            policy = _curPolicy;
-
             if (IsSet)
             {
+                policy = _curPolicy;
+
                 if (newPolicy.FromParent)
                 {
                     _curPolicy = null;
