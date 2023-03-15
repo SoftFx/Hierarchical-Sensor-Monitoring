@@ -2,8 +2,6 @@
 {
     public class CommonConstants
     {
-        public const string DefaultUserUsername = "default";
-        
         public const string ClientAppFolderName = "Client";
 
         public const string DefaultAccessKey = "DefaultKey";

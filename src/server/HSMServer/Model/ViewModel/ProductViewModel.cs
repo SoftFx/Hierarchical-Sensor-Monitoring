@@ -38,7 +38,7 @@ namespace HSMServer.Model.ViewModel
             Name = product.Name;
             LastUpdateDate = product.UpdateTime;
             ShortLastUpdateTime = LastUpdateDate.GetTimeAgo();
-            Managers = userManager.GetManagers(Id).Select(manager => manager.UserName).ToList();
+            Managers = userManager.GetManagers(Id).Select(manager => manager.Name).ToList();
             ProductUpdateIsExpired = (DateTime.UtcNow - LastUpdateDate).Ticks >= ProductExpiredTime.Ticks;
         }
     }

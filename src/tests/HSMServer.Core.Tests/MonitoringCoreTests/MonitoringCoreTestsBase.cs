@@ -4,12 +4,13 @@ using HSMServer.Core.SensorsUpdatesQueue;
 using HSMServer.Core.Tests.Infrastructure;
 using HSMServer.Core.Tests.MonitoringCoreTests.Fixture;
 using Moq;
+using System.Threading.Tasks;
 using Xunit;
 
 namespace HSMServer.Core.Tests.MonitoringCoreTests
 {
     [Collection("Database collection")]
-    public abstract class MonitoringCoreTestsBase<T> : IClassFixture<T> where T : DatabaseFixture
+    public abstract class MonitoringCoreTestsBase<T> : IAsyncLifetime, IClassFixture<T> where T : DatabaseFixture
     {
         protected const int MaxHistoryCount = -TreeValuesCache.MaxHistoryCount;
 
@@ -37,5 +38,10 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
             var userManagerLogger = CommonMoqs.CreateNullLogger<UserManager>();
             _userManager = new UserManager(_databaseCoreManager.DatabaseCore, _valuesCache, userManagerLogger);
         }
+
+
+        public Task InitializeAsync() => _userManager.Initialize();
+
+        public Task DisposeAsync() => Task.CompletedTask;
     }
 }

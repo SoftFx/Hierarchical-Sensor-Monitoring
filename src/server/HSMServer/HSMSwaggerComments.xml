@@ -124,11 +124,5 @@
             The attribute denies access to some actions for a user who is neither admin or has role from _roles
             </summary>
         </member>
-        <member name="M:HSMServer.Model.Authentication.User.Update(HSMServer.Model.Authentication.User)">
-            <summary>
-            Update works as HTTP PUT: all the fields will be updated
-            </summary>
-            <param name="user"></param>
-        </member>
     </members>
 </doc>
