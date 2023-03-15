@@ -178,7 +178,7 @@ namespace HSMServer.Controllers
         }
 
         [HttpPost]
-        public async Task UpdateUser([FromBody] UserViewModel userViewModel)
+        public Task UpdateUser([FromBody] UserViewModel userViewModel)
         {
             if (_userManager.TryGetIdByName(userViewModel.Username, out var userId))
             {
@@ -188,8 +188,10 @@ namespace HSMServer.Controllers
                     IsAdmin = userViewModel.IsAdmin,
                 };
 
-                await _userManager.TryUpdate(updateUser);
+                return _userManager.TryUpdate(updateUser);
             }
+
+            return Task.CompletedTask;
         }
 
         #endregion
@@ -203,14 +205,14 @@ namespace HSMServer.Controllers
         }
 
 
-        private async Task Authenticate(string login, bool keepLoggedIn)
+        private Task Authenticate(string login, bool keepLoggedIn)
         {
             var claims = new List<Claim> { new Claim(ClaimsIdentity.DefaultNameClaimType, login) };
             ClaimsIdentity id = new(claims, "ApplicationCookie",
                 ClaimsIdentity.DefaultNameClaimType, ClaimsIdentity.DefaultRoleClaimType);
 
             AuthenticationProperties properties = new() { IsPersistent = keepLoggedIn };
-            await HttpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, new ClaimsPrincipal(id), properties);
+            return HttpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, new ClaimsPrincipal(id), properties);
         }
     }
 }
