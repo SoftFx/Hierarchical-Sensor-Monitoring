@@ -1,16 +1,15 @@
-using System;
 using HSMDataCollector.Options;
 
 namespace HSMDataCollector.DefaultSensors.Other
 {
-    internal sealed class ProductVersion : MonitoringSensorBase<string>
+    internal sealed class ProductInfoSensor : MonitoringSensorBase<string>
     {
         private readonly string _version;
         
         
         protected override string SensorName => "Product Version";
 
-        public ProductVersion(VersionSensorOptions options) : base(options)
+        public ProductInfoSensor(VersionSensorOptions options) : base(options)
         {
             _version = options.Version;
         }

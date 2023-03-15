@@ -135,7 +135,7 @@ namespace HSMDataCollector.DefaultSensors
 
         IWindowsCollection IWindowsCollection.AddProductInfo(VersionSensorOptions options)
         {
-            return Register(new ProductVersion(_defaultOptions.ProductVersionMonitoring.GetAndFill(options)));
+            return Register(new ProductInfoSensor(_defaultOptions.ProductInfoMonitoring.GetAndFill(options)));
         }
 
 
@@ -187,7 +187,11 @@ namespace HSMDataCollector.DefaultSensors
         {
             return Register(new CollectorAlive(_defaultOptions.CollectorAliveMonitoring.Get(options)));
         }
-
+        
+        IUnixCollection IUnixCollection.AddProductInfo(VersionSensorOptions options)
+        {
+            return Register(new ProductInfoSensor(_defaultOptions.ProductInfoMonitoring.GetAndFill(options)));
+        }
 
         private DefaultSensorsCollection AddDisksMonitoring(DiskSensorOptions options, Func<DiskSensorOptions, MonitoringSensorBase> newSensorFunc)
         {

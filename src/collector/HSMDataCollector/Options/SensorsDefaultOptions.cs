@@ -12,6 +12,6 @@
 
         internal CollectorAliveOptions CollectorAliveMonitoring { get; } = new CollectorAliveOptions();
 
-        internal ProductVersionOptions ProductVersionMonitoring { get; } = new ProductVersionOptions();
+        internal ProductVersionOptions ProductInfoMonitoring { get; } = new ProductVersionOptions();
     }
 }
