@@ -1,4 +1,5 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities;
+using HSMServer.Core.Model.Policies;
 
 namespace HSMServer.Core.Model
 {
@@ -10,5 +11,13 @@ namespace HSMServer.Core.Model
 
 
         public StringSensorModel(SensorEntity entity) : base(entity) { }
+
+
+        internal override BaseSensorModel InitDataPolicy()
+        {
+            AddPolicy(new StringValueLengthPolicy());
+
+            return base.InitDataPolicy();
+        }
     }
 }

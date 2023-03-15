@@ -60,6 +60,15 @@ namespace HSMServer.Core.Model
         }
 
 
+        internal abstract bool TryAddValue(BaseValue value);
+
+        internal abstract bool TryAddValue(byte[] bytes);
+
+        internal abstract List<BaseValue> ConvertValues(List<byte[]> valuesBytes);
+
+        internal virtual BaseSensorModel InitDataPolicy() => this;
+
+
         internal override bool HasServerValidationChange()
         {
             _serverResult = PolicyResult.Ok;
@@ -88,13 +97,6 @@ namespace HSMServer.Core.Model
                 EndOfMuting = null;
         }
 
-
-        internal abstract bool TryAddValue(BaseValue value);
-
-        internal abstract bool TryAddValue(byte[] bytes);
-
-        internal abstract List<BaseValue> ConvertValues(List<byte[]> valuesBytes);
-
         internal void ResetSensor()
         {
             _serverResult = PolicyResult.Ok;
@@ -102,7 +104,6 @@ namespace HSMServer.Core.Model
 
             Storage.Clear();
         }
-
 
         internal SensorEntity ToEntity() => new()
         {

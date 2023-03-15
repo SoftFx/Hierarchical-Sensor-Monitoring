@@ -17,7 +17,7 @@ namespace HSMServer.Core.Model
 
         protected BaseSensorModel(SensorEntity entity) : base(entity)
         {
-            _dataPolicies.Add(_typePolicy);
+            _dataPolicies.Add(_typePolicy); //alwayes should be first in list
         }
 
 

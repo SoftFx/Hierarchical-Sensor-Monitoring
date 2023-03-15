@@ -30,7 +30,7 @@
 
         internal PolicyResult Validate(BaseValue value)
         {
-            return value.Status != TargetStatus ? Ok : base.Validate(value.ReceivingTime);
+            return value.Status != TargetStatus ? Ok : Validate(value.ReceivingTime);
         }
     }
 }

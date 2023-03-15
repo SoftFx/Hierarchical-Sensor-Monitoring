@@ -1,7 +1,6 @@
 ﻿using HSMCommon.Constants;
 using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Core.Cache.UpdateEntities;
-using HSMServer.Core.Converters;
 using HSMServer.Core.DataLayer;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Policies;
@@ -387,7 +386,7 @@ namespace HSMServer.Core.Cache
                     Type = (byte)value.Type,
                 };
 
-                sensor = SensorModelFactory.Build(entity);
+                sensor = SensorModelFactory.Build(entity).InitDataPolicy();
                 parentProduct.AddSensor(sensor);
 
                 AddSensor(sensor);
@@ -628,21 +627,10 @@ namespace HSMServer.Core.Cache
 
         private void AddSensor(BaseSensorModel sensor)
         {
-            if (sensor is StringSensorModel)
-                AddStringValueLengthPolicy(sensor);
-
             _sensors.TryAdd(sensor.Id, sensor);
             _databaseCore.AddSensor(sensor.ToEntity());
 
             ChangeSensorEvent?.Invoke(sensor, TransactionType.Add);
-        }
-
-        private void AddStringValueLengthPolicy(BaseSensorModel sensor)
-        {
-            var policy = new StringValueLengthPolicy();
-
-            sensor.AddPolicy(policy);
-            _databaseCore.AddPolicy(policy.ToEntity());
         }
 
         private bool AddKeyToTree(AccessKeyModel key)

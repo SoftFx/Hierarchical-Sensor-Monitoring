@@ -4,6 +4,6 @@
     {
         public string Id { get; init; }
 
-        public object Policy { get; init; }
+        public byte[] Policy { get; init; }
     }
 }
