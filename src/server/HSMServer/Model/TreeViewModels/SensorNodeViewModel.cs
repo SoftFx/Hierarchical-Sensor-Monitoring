@@ -42,8 +42,8 @@ namespace HSMServer.Model.TreeViewModel
             SensorType = model.Type;
             State = model.State;
             UpdateTime = model.LastUpdateTime;
-            Status = model.ValidationResult.Status.ToClient();
-            ValidationError = State == SensorState.Muted ? GetMutedErrorTooltip(model.EndOfMuting) : model.ValidationResult.Message;
+            Status = model.Status.Status.ToClient();
+            ValidationError = State == SensorState.Muted ? GetMutedErrorTooltip(model.EndOfMuting) : model.Status.Message;
             Path = model.Path;
             Unit = model.Unit;
 

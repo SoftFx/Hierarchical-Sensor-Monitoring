@@ -40,7 +40,7 @@ namespace HSMServer.Core.Model
         public string Unit { get; private set; } //TODO remove
 
 
-        public PolicyResult ValidationResult => State == SensorState.Muted ? _muteResult : _serverResult + _dataResult;
+        public PolicyResult Status => State == SensorState.Muted ? _muteResult : _serverResult + _dataResult;
 
 
         public bool HasData => Storage.HasData;

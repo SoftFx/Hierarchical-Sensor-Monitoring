@@ -159,11 +159,11 @@ namespace HSMServer.Core.Tests.Infrastructure
             Assert.True(actual.HasData);
             Assert.Equal(expectedSensorValue.ReceivingTime, actual.LastUpdateTime);
 
-            Assert.Equal(expectedSensorValue.Status, actual.ValidationResult.Status);
+            Assert.Equal(expectedSensorValue.Status, actual.Status.Status);
             if (expectedSensorValue.Status != SensorStatus.Ok)
-                Assert.False(string.IsNullOrEmpty(actual.ValidationResult.Message));
+                Assert.False(string.IsNullOrEmpty(actual.Status.Message));
             else
-                Assert.True(string.IsNullOrEmpty(actual.ValidationResult.Message));
+                Assert.True(string.IsNullOrEmpty(actual.Status.Message));
 
             TestSensorValue(expectedSensorValue, actualSensorValue, actual.Type);
         }
@@ -312,7 +312,7 @@ namespace HSMServer.Core.Tests.Infrastructure
             Assert.Equal(expected.RootProductName, actual.RootProductName);
             Assert.Equal(expected.Path, actual.Path);
             Assert.Equal(expected.Type, actual.Type);
-            AssertModels(expected.ValidationResult, actual.ValidationResult);
+            AssertModels(expected.Status, actual.Status);
         }
 
         private static void TestCollections<T>(List<T> expected, List<T> actual)

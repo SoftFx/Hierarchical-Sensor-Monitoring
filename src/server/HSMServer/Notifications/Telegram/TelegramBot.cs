@@ -170,7 +170,7 @@ namespace HSMServer.Notifications
 
         private static bool ShouldSendMessage(INotificatable entity, BaseSensorModel sensor, PolicyResult oldStatus)
         {
-            var newStatus = sensor.ValidationResult;
+            var newStatus = sensor.Status;
             var minWebStatus = entity.Notifications.Telegram.MessagesMinStatus.ToClient();
 
             return entity.CanSendData(sensor) && newStatus != oldStatus &&

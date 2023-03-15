@@ -234,7 +234,7 @@ namespace HSMServer.Core.Cache
             if (!_sensors.TryGetValue(update.Id, out var sensor))
                 return;
 
-            var oldStatus = sensor.ValidationResult;
+            var oldStatus = sensor.Status;
 
             sensor.Update(update);
 
@@ -399,7 +399,7 @@ namespace HSMServer.Core.Cache
             else if (sensor.State == SensorState.Blocked)
                 return;
 
-            var oldStatus = sensor.ValidationResult;
+            var oldStatus = sensor.Status;
 
             if (sensor.TryAddValue(value) && sensor.LastDbValue != null)
                 _databaseCore.AddSensorValue(sensor.LastDbValue.ToEntity(sensor.Id));
@@ -694,7 +694,7 @@ namespace HSMServer.Core.Cache
         private static void GetProductSensorsStatuses(ProductModel product, Dictionary<Guid, PolicyResult> sensorsStatuses)
         {
             foreach (var (sensorId, sensor) in product.Sensors)
-                sensorsStatuses.Add(sensorId, sensor.ValidationResult);
+                sensorsStatuses.Add(sensorId, sensor.Status);
 
             foreach (var (_, subProduct) in product.SubProducts)
                 GetProductSensorsStatuses(subProduct, sensorsStatuses);
@@ -740,7 +740,7 @@ namespace HSMServer.Core.Cache
         {
             foreach (var sensor in GetSensors())
             {
-                var oldStatus = sensor.ValidationResult;
+                var oldStatus = sensor.Status;
 
                 if (sensor.HasUpdateTimeout())
                     NotifyAboutChanges(sensor, oldStatus);

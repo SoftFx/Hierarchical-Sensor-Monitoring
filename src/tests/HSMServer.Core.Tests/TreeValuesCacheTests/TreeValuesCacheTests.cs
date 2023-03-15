@@ -261,7 +261,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             var clonedSensor = GetClonedSensorModel(sensor);
 
             ModelsTester.AssertModels(sensor, clonedSensor);
-            ModelsTester.AssertModels(sensor.ValidationResult, clonedSensor.ValidationResult);
+            ModelsTester.AssertModels(sensor.Status, clonedSensor.Status);
         }
 
         [Fact]
