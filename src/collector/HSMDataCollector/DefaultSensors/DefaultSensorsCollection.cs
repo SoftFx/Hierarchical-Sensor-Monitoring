@@ -133,9 +133,9 @@ namespace HSMDataCollector.DefaultSensors
             return Register(new CollectorAlive(_defaultOptions.CollectorAliveMonitoring.Get(options)));
         }
 
-        IWindowsCollection IWindowsCollection.AddProductVersion(VersionSensorOptions options)
+        IWindowsCollection IWindowsCollection.AddProductInfo(VersionSensorOptions options)
         {
-            return Register(new ProductVersion(_defaultOptions.ProductVersionMonitoring.Get(options)));
+            return Register(new ProductVersion(_defaultOptions.ProductVersionMonitoring.GetAndFill(options)));
         }
 
 

@@ -52,7 +52,7 @@ namespace HSM.Core.Monitoring
                                       .AddSystemMonitoringSensors()
                                       .AddWindowsInfoMonitoringSensors();
 
-                _dataCollector.Windows.AddProductVersion(new VersionSensorOptions() { Version = "1.1.1", StartTime = DateTime.UtcNow});
+                _dataCollector.Windows.AddProductInfo(new VersionSensorOptions() { Version = "1.1.1"});
             }
             else
             {
