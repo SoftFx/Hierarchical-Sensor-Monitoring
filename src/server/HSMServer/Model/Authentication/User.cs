@@ -13,7 +13,7 @@ namespace HSMServer.Model.Authentication
 {
     public class User : ClaimsPrincipal, IServerModel<UserEntity, UserUpdate>, INotificatable
     {
-        public Guid Id { get; }
+        public Guid Id { get; init; }
 
         public bool IsAdmin { get; set; }
 

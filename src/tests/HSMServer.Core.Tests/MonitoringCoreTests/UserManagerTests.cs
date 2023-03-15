@@ -2,7 +2,6 @@
 using HSMServer.Core.Tests.Infrastructure;
 using HSMServer.Core.Tests.MonitoringCoreTests.Fixture;
 using HSMServer.Model.Authentication;
-using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -78,13 +77,16 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         public async Task UpdateDefaultUserTest()
         {
             var defaultUserFromDB = await GetDefaultUserFromDB();
+            var existingUser = _userManager[defaultUserFromDB.Id];
 
-            var updatedUser = BuildUpdatedUser(defaultUserFromDB);
-            updatedUser.ProductsRoles = new List<(Guid, ProductRoleEnum)>(_testUser.ProductsRoles);
+            var updateEntity = BuildUpdatedUser(existingUser);
 
-            await _userManager.UpdateUser(updatedUser);
+            existingUser.ProductsRoles.Clear();
+            existingUser.ProductsRoles.AddRange(_testUser.ProductsRoles);
 
-            await FullTestUpdatedUserAsync(new() { updatedUser },
+            await _userManager.TryUpdate(updateEntity);
+
+            await FullTestUpdatedUserAsync(new() { existingUser },
                                            new() { defaultUserFromDB },
                                            _databaseCoreManager.DatabaseCore.GetUsers);
         }
@@ -99,14 +101,18 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         {
             var users = await BuildAddAndGetRandomUsers(count - 1); // there is default user in db
 
-            var updatedUsers = new List<User>(count);
+            var copiedUsers = new List<User>();
             foreach (var user in users)
-                updatedUsers.Add(BuildUpdatedUser(user));
+                copiedUsers.Add(user.Copy());
 
-            await Task.WhenAll(updatedUsers.Select(_userManager.UpdateUser));
+            var userUpdates = new List<UserUpdate>(count);
+            foreach (var user in users)
+                userUpdates.Add(BuildUpdatedUser(user));
 
-            await FullTestUpdatedUserAsync(updatedUsers,
-                                           users,
+            await Task.WhenAll(userUpdates.Select(_userManager.TryUpdate));
+
+            await FullTestUpdatedUserAsync(users,
+                                           copiedUsers,
                                            _databaseCoreManager.DatabaseCore.GetUsers);
         }
 
@@ -118,23 +124,29 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         [Trait("Category", "Update user(s)")]
         public async Task UpdateUserEventTest(int count)
         {
-            List<User> actualUpdatedUsers = new(count);
-            void UpdateUserEvent(User user) => actualUpdatedUsers.Add(user);
+            List<User> updatedUsers = new(count);
+            void UpdateUserEvent(User user) => updatedUsers.Add(user);
 
 
-            var updatedUsers = new List<User>(count);
-            foreach (var user in await BuildAddAndGetRandomUsers(count - 1)) // there is default user in db
-                updatedUsers.Add(BuildUpdatedUser(user));
+            var users = await BuildAddAndGetRandomUsers(count - 1); // there is default user in db
+
+            var copiedUsers = new List<User>();
+            foreach (var user in users)
+                copiedUsers.Add(user.Copy());
+
+            var userUpdates = new List<UserUpdate>(count);
+            foreach (var user in users) // there is default user in db
+                userUpdates.Add(BuildUpdatedUser(user));
 
             _userManager.Updated += UpdateUserEvent;
 
-            await Task.WhenAll(updatedUsers.Select(_userManager.UpdateUser));
+            await Task.WhenAll(userUpdates.Select(_userManager.TryUpdate));
 
             _userManager.Updated -= UpdateUserEvent;
 
-            Assert.Equal(updatedUsers.Count, actualUpdatedUsers.Count);
+            Assert.Equal(userUpdates.Count, updatedUsers.Count);
             await FullTestUpdatedUserAsync(updatedUsers,
-                                           actualUpdatedUsers,
+                                           copiedUsers,
                                            _databaseCoreManager.DatabaseCore.GetUsers);
         }
 
@@ -513,21 +525,11 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
             return users;
         }
 
-        private static User BuildUpdatedUser(User source)
-        {
-            var productRoles = new List<(Guid, ProductRoleEnum)>(source.ProductsRoles.Count);
-            productRoles.AddRange(source.ProductsRoles);
-
-            return new()
+        private static UserUpdate BuildUpdatedUser(User source) =>
+            new()
             {
-                //Id = source.Id,
-                Name = GetUpdatedProperty(source.Name),
-                //IsAdmin = !source.IsAdmin,
-                Password = GetUpdatedProperty(source.Password),
-                ProductsRoles = productRoles,
+                Id = source.Id,
+                IsAdmin = !source.IsAdmin,
             };
-        }
-
-        private static string GetUpdatedProperty(object property) => $"{property}-updated";
     }
 }
