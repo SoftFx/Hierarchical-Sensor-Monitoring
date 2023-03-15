@@ -1,5 +1,4 @@
 ﻿using HSMCommon;
-using HSMCommon.Constants;
 using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.ConcurrentStorage;
 using HSMServer.Core.Cache;
@@ -17,6 +16,8 @@ namespace HSMServer.Authentication
 {
     public sealed class UserManager : ConcurrentStorage<User, UserEntity, UserUpdate>, IUserManager
     {
+        private const string DefaultUserUsername = "default";
+
         private readonly IDatabaseCore _databaseCore;
         private readonly ITreeValuesCache _treeValuesCache;
         private readonly ILogger<UserManager> _logger;
@@ -131,8 +132,8 @@ namespace HSMServer.Authentication
         protected override User FromEntity(UserEntity entity) => new(entity);
 
         private Task<bool> AddDefaultUser() =>
-            AddUser(CommonConstants.DefaultUserUsername,
-                    HashComputer.ComputePasswordHash(CommonConstants.DefaultUserUsername),
+            AddUser(DefaultUserUsername,
+                    HashComputer.ComputePasswordHash(DefaultUserUsername),
                     true);
 
         private void ChangeProductEventHandler(ProductModel product, TransactionType transaction)

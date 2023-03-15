@@ -23,8 +23,8 @@ namespace HSMServer.ConcurrentStorage
 
         public new ModelType this[Guid id] => this.GetValueOrDefault(id);
 
-        public ModelType this[string name] =>
-            !string.IsNullOrEmpty(name) && TryGetIdByName(name, out var id) && TryGetValue(id, out var model) ? model : null;
+        public ModelType this[string name] => !string.IsNullOrEmpty(name) &&
+            TryGetIdByName(name, out var id) && TryGetValue(id, out var model) ? model : null;
 
 
         public event Action<ModelType> Added;
