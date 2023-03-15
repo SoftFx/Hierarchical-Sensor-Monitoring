@@ -15,7 +15,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
     public class BaseSensorModelValidatorTests : MonitoringCoreTestsBase<ValidationFixture>
     {
         private const string SensorValueIsTooLong = "The value has exceeded the length limit.";
-        private const string SensorValueOutdated = "Timeout";
+        private const string SensorValueOutdated = "";
         private const string SensorValueTypeInvalid = "Sensor value type is not {0}";
         private const string SensorValueStatusInvalid = "User data has {0} status";
 

@@ -1,4 +1,6 @@
-﻿namespace HSMServer.Core.Model.Policies
+﻿using System;
+
+namespace HSMServer.Core.Model.Policies
 {
     public class RestoreErrorPolicy : RestoreSensorPolicyBase
     {
@@ -28,9 +30,9 @@
         protected abstract SensorStatus TargetStatus { get; }
 
 
-        internal PolicyResult Validate(BaseValue value)
+        internal PolicyResult Validate(SensorStatus status, DateTime lastUpdate)
         {
-            return value.Status != TargetStatus ? Ok : Validate(value.ReceivingTime);
+            return status != TargetStatus ? Ok : Validate(lastUpdate);
         }
     }
 }

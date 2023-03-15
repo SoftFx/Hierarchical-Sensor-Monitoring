@@ -42,13 +42,13 @@ namespace HSMServer.Core.Model.Policies
                 property.ParentProperty = parentCollection._properties[policyType];
         }
 
-        internal PolicyResult CheckRestorePolicies(DateTime date)
+        public PolicyResult CheckRestorePolicies(SensorStatus status, DateTime lastUpdate)
         {
             var result = PolicyResult.Ok;
 
-            result += RestoreOffTime.Policy.Validate(date);
-            result += RestoreWarning.Policy.Validate(date);
-            result += RestoreError.Policy.Validate(date);
+            result += RestoreOffTime.Policy.Validate(status, lastUpdate);
+            result += RestoreWarning.Policy.Validate(status, lastUpdate);
+            result += RestoreError.Policy.Validate(status, lastUpdate);
 
             return result;
         }
