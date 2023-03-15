@@ -40,6 +40,8 @@ namespace HSMServer.Core.Model
         public string Unit { get; private set; } //TODO remove
 
 
+        public bool IsRestored => ServerPolicy.CheckRestorePolicies(Status.Status, LastUpdateTime).IsOk;
+
         public PolicyResult Status => State == SensorState.Muted ? _muteResult : _serverResult + _dataResult;
 
 

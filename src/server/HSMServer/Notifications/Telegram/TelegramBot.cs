@@ -174,8 +174,7 @@ namespace HSMServer.Notifications
             var minWebStatus = entity.Notifications.Telegram.MessagesMinStatus.ToClient();
 
             return entity.CanSendData(sensor) && newStatus != oldStatus &&
-                   (newStatus.Status.ToClient() >= minWebStatus || oldStatus.Status.ToClient() >= minWebStatus) &&
-                   !sensor.ServerPolicy.CheckRestorePolicies(newStatus.Status, sensor.LastUpdateTime).IsOk;
+                   (newStatus.Status.ToClient() >= minWebStatus || oldStatus.Status.ToClient() >= minWebStatus);
         }
 
         private void SendMessage(BaseSensorModel sensor, PolicyResult oldStatus)
