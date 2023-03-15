@@ -9,7 +9,7 @@ namespace HSMDataCollector.DefaultSensors.Other
         
         protected override string SensorName => "Product Version";
 
-        public ProductInfoSensor(VersionSensorOptions options) : base(options)
+        public ProductInfoSensor(ProductInfoOptions options) : base(options)
         {
             _version = options.Version;
         }

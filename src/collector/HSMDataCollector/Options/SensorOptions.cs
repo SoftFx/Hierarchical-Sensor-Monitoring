@@ -31,7 +31,7 @@ namespace HSMDataCollector.Options
         public TimeSpan AcceptableUpdateInterval { get; set; } = TimeSpan.FromDays(30);
     }
 
-    public sealed class VersionSensorOptions : SensorOptions
+    public sealed class ProductInfoOptions : SensorOptions
     {
         public string Version { get; set; }
         

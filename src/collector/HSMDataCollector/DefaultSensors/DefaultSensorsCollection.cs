@@ -133,7 +133,7 @@ namespace HSMDataCollector.DefaultSensors
             return Register(new CollectorAlive(_defaultOptions.CollectorAliveMonitoring.Get(options)));
         }
 
-        IWindowsCollection IWindowsCollection.AddProductInfo(VersionSensorOptions options)
+        IWindowsCollection IWindowsCollection.AddProductInfo(ProductInfoOptions options)
         {
             return Register(new ProductInfoSensor(_defaultOptions.ProductInfoMonitoring.GetAndFill(options)));
         }
@@ -188,7 +188,7 @@ namespace HSMDataCollector.DefaultSensors
             return Register(new CollectorAlive(_defaultOptions.CollectorAliveMonitoring.Get(options)));
         }
         
-        IUnixCollection IUnixCollection.AddProductInfo(VersionSensorOptions options)
+        IUnixCollection IUnixCollection.AddProductInfo(ProductInfoOptions options)
         {
             return Register(new ProductInfoSensor(_defaultOptions.ProductInfoMonitoring.GetAndFill(options)));
         }

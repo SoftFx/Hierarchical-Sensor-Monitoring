@@ -22,6 +22,6 @@ namespace HSMDataCollector.PublicInterface
 
         IUnixCollection AddCollectorHeartbeat(SensorOptions options = null);
         
-        IUnixCollection AddProductInfo(VersionSensorOptions options = null);
+        IUnixCollection AddProductInfo(ProductInfoOptions options = null);
     }
 }
