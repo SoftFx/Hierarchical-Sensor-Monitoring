@@ -18,6 +18,8 @@ namespace HSMServer.ConcurrentStorage
 
         protected abstract Action<ModelType> RemoveFromDb { get; }
 
+        protected abstract Func<List<EntityType>> GetFromDb { get; }
+
 
         public new ModelType this[Guid id] => this.GetValueOrDefault(id);
 
@@ -92,5 +94,13 @@ namespace HSMServer.ConcurrentStorage
         }
 
         public bool TryGetIdByName(string name, out Guid id) => _modelNames.TryGetValue(name, out id);
+
+        public virtual Task Initialize()
+        {
+            foreach (var entity in GetFromDb())
+                TryAdd(entity);
+
+            return Task.CompletedTask;
+        }
     }
 }

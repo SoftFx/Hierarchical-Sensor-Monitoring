@@ -5,7 +5,6 @@ using HSMServer.ConcurrentStorage;
 using HSMServer.Core.Cache;
 using HSMServer.Core.DataLayer;
 using HSMServer.Core.Model;
-using HSMServer.Extensions;
 using HSMServer.Helpers;
 using HSMServer.Model.Authentication;
 using Microsoft.Extensions.Logging;
@@ -28,6 +27,8 @@ namespace HSMServer.Authentication
         protected override Action<UserEntity> UpdateInDb => _databaseCore.UpdateUser;
 
         protected override Action<User> RemoveFromDb => user => _databaseCore.RemoveUser(user.ToEntity());
+
+        protected override Func<List<UserEntity>> GetFromDb => _databaseCore.GetUsers;
 
 
         public UserManager(IDatabaseCore databaseCore, ITreeValuesCache cache, ILogger<UserManager> logger)
@@ -114,18 +115,15 @@ namespace HSMServer.Authentication
 
         public IEnumerable<User> GetUsers(Func<User, bool> filter = null) => filter != null ? Values.Where(filter) : Values;
 
-        public async Task InitializeUsers()
+        public override async Task Initialize()
         {
-            var userEntities = _databaseCore.GetUsers();
+            await base.Initialize();
 
-            if (userEntities.Count == 0)
+            if (Count == 0)
             {
                 await AddDefaultUser();
                 _logger.LogInformation("Default user has been added.");
             }
-
-            foreach (var entity in userEntities)
-                TryAdd(entity);
 
             _logger.LogInformation($"Read users from database, users count = {Count}.");
         }

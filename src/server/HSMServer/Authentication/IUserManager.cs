@@ -46,6 +46,6 @@ namespace HSMServer.Authentication
         List<User> GetManagers(Guid productId);
         IEnumerable<User> GetUsers(Func<User, bool> filter = null);
 
-        Task InitializeUsers();
+        Task Initialize();
     }
 }

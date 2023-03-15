@@ -62,7 +62,7 @@ try
 {
     var app = builder.Build();
 
-    await app.Services.GetRequiredService<IUserManager>().InitializeUsers();
+    await app.Services.GetRequiredService<IUserManager>().Initialize();
 
     app.ConfigureMiddleware(app.Environment.IsDevelopment());
 
