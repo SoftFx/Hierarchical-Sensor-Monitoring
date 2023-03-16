@@ -59,31 +59,33 @@
                                 }
                             </span>
                         </div>
-                        <div class="container d-none pt-3" id="preview">
+                        <div class="d-grid d-none pt-3" id="preview">
                             <h5 id="preview-header">Content:</h5>
-                            <div id="preview-content"></div>
+                            <div style="overflow-x: auto" id="preview-content"></div>
                         </div>
                     </div>
                 </div>
             </div>
-
-            <div id="bigFilePreview" class="card text-center d-none">
-                <div class="card-body">
-                    @switch (fileType)
-                    {
-                        case "csv":
-                            <h5 class="card-title">This file is too big to preview (>5MB)</h5>
-                            break;
-                        case "txt":
-                            <h5 class="card-title">This file is too big to preview (>1MB)</h5>
-                            break;
-                        default:
-                            <h5 class="card-title">Current file type is not available in preview mode</h5>
-                            break;
-                    }
-                     <button id="button_download_@(sensorId)" href="#" class="btn btn-outline-primary mt-2">Start download</button>
+            @if (Model.HasData)
+            {
+                <div id="bigFilePreview" class="card text-center d-none">
+                    <div class="card-body">
+                        @switch (fileType)
+                        {
+                            case "csv":
+                                <h5 class="card-title">This file is too big to preview (>5MB)</h5>
+                                break;
+                            case "txt":
+                                <h5 class="card-title">This file is too big to preview (>1MB)</h5>
+                                break;
+                            default:
+                                <h5 class="card-title">Current file type is not available in preview mode</h5>
+                                break;
+                        }
+                        <button id="button_download_@(sensorId)" href="#" class="btn btn-outline-primary mt-2">Start download</button>
+                    </div>
                 </div>
-            </div>
+            }
         }
         else
         {
