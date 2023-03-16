@@ -190,6 +190,8 @@
 </div>
 
 <script>
+var previousReceivedTime = undefined;
+
 $(document).ready(function() {
     setContentPreview('@Model.EncodedId');
 });
@@ -201,6 +203,9 @@ function setContentPreview(encodedId){
         cache: false,
         contentType: "application/json",
         success: function (response){
+            if (previousReceivedTime === response.time) 
+                return;
+            
             if ((response.originalSize < 5 * 1024 * 1024 && response.extension === 'csv') || // 5MB
                 (response.originalSize < 1024 * 1024 && response.extension === 'txt')) { // 1MB 
                 $.ajax({
@@ -249,6 +254,8 @@ function setContentPreview(encodedId){
             else {
                 $('#bigFilePreview').removeClass('d-none');
             }
+            
+            previousReceivedTime = response.time;
         }
     })    
 }
