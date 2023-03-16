@@ -32,6 +32,8 @@ namespace HSMServer.Notifications.Telegram.AddressBook.MessageBuilder
 
             foreach (var group in _groups)
                 yield return group.ToString();
+
+            _groups.Clear();
         }
 
         internal new void Clear()
