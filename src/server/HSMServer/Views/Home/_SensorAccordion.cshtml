@@ -246,7 +246,7 @@ function setContentPreview(encodedId){
                             }
                             else if (response.extension === 'txt') {
                                 $('#preview').removeClass('d-none container');
-                                $('#preview-content').addClass('w-100 mw-100').html(file);
+                                $('#preview-content').addClass('w-100 mw-100 text-break').html(file);
                             }
                          } 
                 })
