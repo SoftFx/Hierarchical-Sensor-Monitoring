@@ -39,6 +39,13 @@
             Controller for receiving sensors data via https protocol. There is a default product for testing swagger methods.
             </summary>
         </member>
+        <member name="M:HSMServer.Controllers.SensorsController.Post(HSMSensorDataObjects.SensorValueRequests.BoolSensorValue)">
+            <summary>
+            Receives value of bool sensor
+            </summary>
+            <param name="sensorValue"></param>
+            <returns></returns>
+        </member>
         <member name="M:HSMServer.Controllers.SensorsController.Post(HSMSensorDataObjects.SensorValueRequests.IntSensorValue)">
             <summary>
             Receives value of int sensor

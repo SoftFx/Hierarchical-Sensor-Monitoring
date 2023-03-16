@@ -2,16 +2,6 @@
     margin: 10px;
 }
 
-.button-view-file-sensor {
-    margin-left: 0px;
-    margin-top: 10px
-}
-
-.button-download-file-sensor-value {
-    margin-top: 10px;
-    margin-left: -20px;
-}
-
 .tree-icon-offTime {
     color: gray;
 }

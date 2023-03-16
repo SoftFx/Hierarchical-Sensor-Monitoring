@@ -53,6 +53,10 @@ namespace HSMServer.Model
 
         public string CustomTimeInterval { get; set; }
 
+        public string DisplayInterval => TimeInterval == TimeInterval.Custom
+            ? CustomTimeInterval
+            : TimeInterval.GetDisplayName();
+
 
         // public constructor without parameters for post actions
         public TimeIntervalViewModel() { }
