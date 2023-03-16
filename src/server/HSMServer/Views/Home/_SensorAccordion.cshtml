@@ -191,9 +191,13 @@
 
 <script>
 $(document).ready(function() {
+    setContentPreview('@Model.EncodedId');
+});
+
+function setContentPreview(encodedId){
     $.ajax({
         type: 'GET',
-        url: `${getFileInfo}?Selected=@Model.EncodedId`,
+        url: `${getFileInfo}?Selected=${encodedId}`,
         cache: false,
         contentType: "application/json",
         success: function (response){
@@ -201,7 +205,7 @@ $(document).ready(function() {
                 (response.originalSize < 1024 * 1024 && response.extension === 'txt')) { // 1MB 
                 $.ajax({
                         type: 'POST',
-                        url: `${viewFileAction}?Selected=@Model.EncodedId`,
+                        url: `${viewFileAction}?Selected=${encodedId}`,
                         cache: false,
                         contentType: "application/json",
                         success: function (file) {
@@ -246,6 +250,6 @@ $(document).ready(function() {
                 $('#bigFilePreview').removeClass('d-none');
             }
         }
-    })
-});
+    })    
+}
 </script>
