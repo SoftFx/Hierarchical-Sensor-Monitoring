@@ -184,6 +184,8 @@
             $('#validation_' + id).append(`<li id='errorIcon_${id}' class='fas fa-exclamation-triangle me-1'></li>
                                            <span>Status comment: ${dataObject.validationError}</span>`);
         }
+        
+        setContentPreview(id);
     }
 
     var refreshTreeTimeoutId;
