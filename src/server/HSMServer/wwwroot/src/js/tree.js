@@ -286,8 +286,8 @@ function buildContextMenu(node) {
             }
         }
     }
-    
-    if (!(isMutedState === "True"))
+  
+    if (isMutedState !== '')
         contextMenu["Notifications"] = {
             "label": "Notifications",
             "separator_before": true,

@@ -15,7 +15,7 @@ namespace HSMServer.Notifications
         internal ConcurrentDictionary<INotificatable, ConcurrentDictionary<ChatId, ChatSettings>> ServerBook { get; } = new(new NotificatableComparator());
 
 
-        internal HashSet<INotificatable> GetAuthorizedEntities(ChatId chat) => _telegramBook.GetValueOrDefault(chat);
+        internal HashSet<INotificatable> GetAuthorizedEntities(ChatId chat) => _telegramBook.GetValueOrDefault(chat) ?? new();
 
         internal Guid BuildInvitationToken(INotificatable entity)
         {
