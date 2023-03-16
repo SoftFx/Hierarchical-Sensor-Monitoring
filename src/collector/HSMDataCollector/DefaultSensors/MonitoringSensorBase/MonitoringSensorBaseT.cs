@@ -12,7 +12,7 @@ namespace HSMDataCollector.DefaultSensors
         protected bool NeedSendValue { get; set; } = true;
 
 
-        protected MonitoringSensorBase(SensorOptions options) : base(options) { }
+        protected MonitoringSensorBase(MonitoringSensorOptions options) : base(options) { }
 
 
         internal override void Stop()

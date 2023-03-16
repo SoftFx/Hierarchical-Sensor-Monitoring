@@ -128,7 +128,7 @@ namespace HSMDataCollector.DefaultSensors
         }
 
 
-        IWindowsCollection IWindowsCollection.AddCollectorHeartbeat(SensorOptions options)
+        IWindowsCollection IWindowsCollection.AddCollectorHeartbeat(MonitoringSensorOptions options)
         {
             return Register(new CollectorAlive(_defaultOptions.CollectorAliveMonitoring.Get(options)));
         }
@@ -183,7 +183,7 @@ namespace HSMDataCollector.DefaultSensors
         }
 
 
-        IUnixCollection IUnixCollection.AddCollectorHeartbeat(SensorOptions options)
+        IUnixCollection IUnixCollection.AddCollectorHeartbeat(MonitoringSensorOptions options)
         {
             return Register(new CollectorAlive(_defaultOptions.CollectorAliveMonitoring.Get(options)));
         }
@@ -201,17 +201,17 @@ namespace HSMDataCollector.DefaultSensors
             return this;
         }
 
-        private DefaultSensorsCollection ToWindows(MonitoringSensorBase sensor)
+        private DefaultSensorsCollection ToWindows(SensorBase sensor)
         {
             return !IsUnixOS ? Register(sensor) : throw _notSupportedException;
         }
 
-        private DefaultSensorsCollection ToUnix(MonitoringSensorBase sensor)
+        private DefaultSensorsCollection ToUnix(SensorBase sensor)
         {
             return IsUnixOS ? Register(sensor) : throw _notSupportedException;
         }
 
-        private DefaultSensorsCollection Register(MonitoringSensorBase sensor)
+        private DefaultSensorsCollection Register(SensorBase sensor)
         {
             _storage.Register(sensor.SensorPath, sensor);
 

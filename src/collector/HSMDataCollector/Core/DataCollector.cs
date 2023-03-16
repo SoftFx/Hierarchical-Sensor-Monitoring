@@ -20,6 +20,7 @@ using System.Net.Http;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
+using SensorBase = HSMDataCollector.Base.SensorBase;
 
 namespace HSMDataCollector.Core
 {
@@ -106,7 +107,7 @@ namespace HSMDataCollector.Core
         public Task Start()
         {
             _hsmClient.DataQueue.InitializeTimer();
-
+            
             return _sensorsStorage.Start();
         }
 
@@ -202,7 +203,7 @@ namespace HSMDataCollector.Core
         [Obsolete("Use method AddCollectorAlive(options) in Windows or Unix collections")]
         public void MonitorServiceAlive(string specificPath = null)
         {
-            var options = _sensorsOptions.CollectorAliveMonitoring.GetAndFill(new SensorOptions() { NodePath = specificPath });
+            var options = _sensorsOptions.CollectorAliveMonitoring.GetAndFill(new MonitoringSensorOptions() { NodePath = specificPath });
 
             if (_defaultSensors.IsUnixOS)
                 Unix.AddCollectorHeartbeat(options);
