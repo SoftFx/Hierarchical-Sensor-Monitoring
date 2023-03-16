@@ -36,7 +36,10 @@ window.openFileInBrowser = function(path, fileName, viewFileAction) {
             }
             else {
                 win.onload = (event) => {
-                    win.document.getElementById('preview').innerHTML = response;
+                    let iframedoc = win.document.getElementById('preview').contentWindow.document
+                    iframedoc.open()
+                    iframedoc.write(response)
+                    iframedoc.close()
                 };
             }
             
