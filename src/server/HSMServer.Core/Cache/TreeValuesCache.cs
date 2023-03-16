@@ -12,6 +12,8 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
+using System.Text.Json.Nodes;
+using System.Text.Json.Serialization.Metadata;
 
 namespace HSMServer.Core.Cache
 {
@@ -723,14 +725,39 @@ namespace HSMServer.Core.Cache
                     sensor.TryAddValue(value);
         }
 
-        private static Dictionary<string, Policy> GetPolicyModels(List<byte[]> policyEntities)
+        private Dictionary<string, Policy> GetPolicyModels(List<byte[]> policyEntities)
         {
             Dictionary<string, Policy> policies = new(policyEntities.Count);
 
-            foreach (var entity in policyEntities)
+            foreach (var entity in policyEntities) //TODO: remove migration
             {
-                var policy = JsonSerializer.Deserialize<Policy>(entity);
+                var obj = JsonSerializer.Deserialize<JsonObject>(entity);
+                var isOldObj = obj["Type"] != null;
+
+                if (isOldObj)
+                {
+                    var newObj = new JsonObject();
+
+                    var value = obj["Type"].AsValue().ToString();
+
+                    newObj["$type"] = value switch
+                    {
+                        "ExpectedUpdateIntervalPolicy" => 1000,
+                        "StringValueLengthPolicy" => 2000,
+                    };
+
+                    foreach (var node in obj)
+                        if (node.Key != "Type")
+                            newObj[node.Key] = JsonNode.Parse(node.Value.ToJsonString());
+
+                    obj = newObj;
+                }
+
+                var policy = JsonSerializer.Deserialize<Policy>(obj);
                 policies.Add(policy.Id.ToString(), policy);
+
+                if (isOldObj)
+                    UpdatePolicy(ActionType.Update, policy);
             }
 
             return policies;
