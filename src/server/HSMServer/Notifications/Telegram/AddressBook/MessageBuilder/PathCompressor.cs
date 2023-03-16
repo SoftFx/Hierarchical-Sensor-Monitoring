@@ -19,6 +19,8 @@ namespace HSMServer.Notifications.Telegram.AddressBook.MessageBuilder
                 return true;
 
             _sensors[id] = sensor;
+            this[id] = key;
+
             return false;
         }
 
