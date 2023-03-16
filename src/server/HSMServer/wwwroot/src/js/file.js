@@ -32,6 +32,7 @@ window.openFileInBrowser = function(path, fileName, viewFileAction) {
                 win.onload = (event) => {
                     win.document.getElementById('preview').innerHTML = response;
                     win.openHeihoCSV(data);
+                    win.document.getElementById('heiho-view-close').remove();
                 };
             }
             else {
