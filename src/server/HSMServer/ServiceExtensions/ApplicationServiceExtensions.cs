@@ -8,6 +8,7 @@ using HSMServer.Core.DataLayer;
 using HSMServer.Core.Registration;
 using HSMServer.Core.SensorsUpdatesQueue;
 using HSMServer.Filters;
+using HSMServer.Groups;
 using HSMServer.Middleware;
 using HSMServer.Model;
 using HSMServer.Model.TreeViewModel;
@@ -38,6 +39,7 @@ public static class ApplicationServiceExtensions
         services.AddSingleton<IConfigurationProvider, ConfigurationProvider>();
         services.AddSingleton<INotificationsCenter, NotificationsCenter>();
         services.AddSingleton<IDataCollectorFacade, DataCollectorFacade>();
+        services.AddSingleton<IGroupManager, GroupManager>();
         services.AddSingleton<TreeViewModel>();
 
         services.AddHostedService<OutdatedSensorService>();

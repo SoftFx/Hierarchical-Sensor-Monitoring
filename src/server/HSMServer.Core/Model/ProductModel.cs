@@ -29,9 +29,7 @@ namespace HSMServer.Core.Model
         string INotificatable.Name => DisplayName;
 
 
-        public ProductModel() { }
-
-        public ProductModel(ProductEntity entity) : this()
+        public ProductModel(ProductEntity entity)
         {
             Id = Guid.TryParse(entity.Id, out var entityId) ? entityId : Guid.NewGuid(); // TODO: remove Guid.NewGuid() after removing prosuctId string -> Guid migration
             AuthorId = Guid.TryParse(entity.AuthorId, out var authorId) ? authorId : null;
@@ -42,7 +40,7 @@ namespace HSMServer.Core.Model
             Notifications = new(entity.NotificationSettings);
         }
 
-        public ProductModel(string name) : this()
+        public ProductModel(string name)
         {
             Id = Guid.NewGuid();
             State = ProductState.FullAccess;
