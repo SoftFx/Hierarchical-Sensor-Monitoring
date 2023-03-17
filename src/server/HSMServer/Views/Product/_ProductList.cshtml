@@ -1,6 +1,7 @@
 @using HSMServer.Helpers
 @using HSMServer.Model.Authentication
 @using HSMServer.Constants
+@using HSMServer.Controllers
 @using HSMServer.Extensions
 @using HSMServer.Model.ViewModel
 @model List<ProductViewModel>
@@ -40,6 +41,8 @@
             </button>
         </div>
     </div>
+
+    <a href="@Url.Action(nameof(GroupsController.EditGroup), ViewConstants.GroupsController)">Add group</a>
 }
 <div class="col-12-xxl mt-2">
     <div class="w-100" id="productTable">

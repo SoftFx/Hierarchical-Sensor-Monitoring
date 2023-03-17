@@ -1,0 +1,36 @@
+﻿@using HSMServer.Model.Groups;
+
+@model GroupViewModel
+
+@{
+    var isAdd = Model.Id == null;
+}
+
+@addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
+
+
+<div class="container">
+    <div class="row justify-content-center">
+        @if (isAdd)
+        {
+            <h4 class="my-3 text-break">Add group</h4>
+        }
+        else
+        {
+            <h4 class="my-3 text-break">Edit group '@Model.Name'</h4>
+        }
+
+        <form method="post">
+            <input id="productKey" asp-for="@Model.Id" value="@Model.Id" style="display: none" />
+
+            <div class="form-group row">
+                <label class="col-2 col-form-label" asp-for="Name"></label>
+                <div class="col-auto p-0">
+                    <input class="form-control form-control-sm" asp-for="Name">
+                </div>
+            </div>
+
+            <button type="submit" class="btn btn-secondary my-1">Save</button>
+        </form>
+    </div>
+</div>

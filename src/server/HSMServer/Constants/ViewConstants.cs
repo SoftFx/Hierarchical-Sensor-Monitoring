@@ -8,6 +8,7 @@
         public const string HomeController = "Home";
         public const string AccountController = "Account";
         public const string ProductController = "Product";
+        public const string GroupsController = "Groups";
         public const string ConfigurationController = "Configuration";
         public const string AccessKeysController = "AccessKeys";
         public const string NotificationsController = "Notifications";
