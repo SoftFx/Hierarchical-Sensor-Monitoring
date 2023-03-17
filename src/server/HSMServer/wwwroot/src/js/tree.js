@@ -157,7 +157,7 @@ function buildContextMenu(node) {
         if (isMutedState !== '') {
             if (!(isMutedState === "True")) {
                 contextMenu["Mute"] = {
-                    "label": `Mute ${getKeyByValue(curType)}`,
+                    "label": `Mute ${getKeyByValue(curType)} for...`,
                     "separator_after": true,
                     "separator_before": true,
                     "action": _ => ignoreNotificationsRequest(node, TelegramTarget.Groups, 'true')
@@ -262,7 +262,7 @@ function buildContextMenu(node) {
     }
     else {
         notificationSubmenu["Accounts enable"] = {
-            "label": "Enable for accounts",
+            "label": "Enable for accounts...",
             "icon": "fab fa-telegram",
             "action": _ => enableNotificationsRequest(node, TelegramTarget.Accounts),
         }
@@ -280,7 +280,7 @@ function buildContextMenu(node) {
         }
         else {
             notificationSubmenu["Groups enable"] = {
-                "label": "Enable for groups",
+                "label": "Enable for groups...",
                 "icon": "fab fa-telegram",
                 "action": _ => enableNotificationsRequest(node, TelegramTarget.Groups),
             }
