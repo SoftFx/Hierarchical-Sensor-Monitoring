@@ -105,7 +105,7 @@ namespace HSMServer.Controllers
             var pairs = new List<(User, ProductRoleEnum)>(1 << 6);
 
             var productNodeId = productNode?.Id;
-            foreach (var user in users.OrderBy(x => x.UserName))
+            foreach (var user in users.OrderBy(x => x.Name))
             {
                 pairs.Add((user, user.ProductsRoles.First(x => x.Item1.Equals(productNodeId)).Item2));
             }
@@ -124,7 +124,7 @@ namespace HSMServer.Controllers
                 return;
             }
 
-            var user = _userManager.GetCopyUser(model.UserId);
+            var user = _userManager[model.UserId];
             var pair = (model.ProductKey, (ProductRoleEnum)model.ProductRole);
 
             if (user.ProductsRoles == null || !user.ProductsRoles.Any())
@@ -138,7 +138,7 @@ namespace HSMServer.Controllers
         [HttpPost]
         public void RemoveUserRole([FromBody] UserRightViewModel model)
         {
-            var user = _userManager.GetCopyUser(model.UserId);
+            var user = _userManager[model.UserId];
 
             var role = user.ProductsRoles.First(ur => ur.Item1.Equals(model.ProductKey));
             user.ProductsRoles.Remove(role);
@@ -152,8 +152,8 @@ namespace HSMServer.Controllers
         [HttpPost]
         public void EditUserRole([FromBody] UserRightViewModel model)
         {
-            var user = _userManager.GetCopyUser(model.UserId);
-            var pair = ((model.ProductKey, (ProductRoleEnum)model.ProductRole));
+            var user = _userManager[model.UserId];
+            var pair = (model.ProductKey, (ProductRoleEnum)model.ProductRole);
 
             var role = user.ProductsRoles.FirstOrDefault(ur => ur.Item1.Equals(model.ProductKey));
             //Skip empty corresponding pair

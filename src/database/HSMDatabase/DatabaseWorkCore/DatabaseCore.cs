@@ -266,6 +266,43 @@ namespace HSMDatabase.DatabaseWorkCore
 
         #endregion
 
+        #region Groups
+
+        public void AddGroup(GroupEntity entity)
+        {
+            _environmentDatabase.AddGroupToList(entity.Id);
+            _environmentDatabase.PutGroup(entity);
+        }
+
+        public void UpdateGroup(GroupEntity entity) =>
+            _environmentDatabase.PutGroup(entity);
+
+        public void RemoveGroup(string id)
+        {
+            _environmentDatabase.RemoveGroup(id);
+            _environmentDatabase.RemoveGroupFromList(id);
+        }
+
+        public GroupEntity GetGroup(string id) =>
+            _environmentDatabase.GetGroup(id);
+
+        public List<GroupEntity> GetAllGroups()
+        {
+            var keys = _environmentDatabase.GetGroupsList();
+
+            var groupsEntities = new List<GroupEntity>(keys.Count);
+            foreach (var key in keys)
+            {
+                var group = _environmentDatabase.GetGroup(key);
+                if (group != null)
+                    groupsEntities.Add(group);
+            }
+
+            return groupsEntities;
+        }
+
+        #endregion
+
         #region Environment database : Product
 
         public void AddProduct(ProductEntity entity)

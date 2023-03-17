@@ -1,6 +1,6 @@
-﻿using System;
-using HSMCommon;
+﻿using HSMCommon;
 using HSMServer.Model.Authentication;
+using System;
 using System.Collections.Generic;
 
 namespace HSMServer.Core.Tests.Infrastructure
@@ -41,7 +41,7 @@ namespace HSMServer.Core.Tests.Infrastructure
         {
             return new User()
             {
-                UserName = string.Empty,
+                Name = string.Empty,
                 Password = string.Empty
             };
         }

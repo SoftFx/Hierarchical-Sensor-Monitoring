@@ -58,17 +58,6 @@ namespace HSMServer.Extensions
             return false;
         }
 
-        public static User WithoutPassword(this User user) =>
-            new()
-            {
-                UserName = user.UserName,
-                Password = null,
-                IsAdmin = user.IsAdmin,
-                ProductsRoles = user.ProductsRoles,
-                Notifications = new(user.Notifications.ToEntity()),
-                TreeFilter = user.TreeFilter
-            };
-
         private static FilterGroupType GetStateMask(this SensorNodeViewModel sensor, User user)
         {
             var sensorStateMask = DefaultNodeMask;

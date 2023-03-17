@@ -29,9 +29,6 @@ namespace HSMServer.Model.Validators
                 .WithMessage(ErrorConstants.PasswordMinLength);
         }
 
-        private bool IsUniqueUsername(string username)
-        {
-            return _userManager.GetUserByUserName(username) == null;
-        }
+        private bool IsUniqueUsername(string username) => _userManager[username] == null;
     }
 }

@@ -31,11 +31,11 @@ public static class ApplicationServiceExtensions
     public static IServiceCollection AddApplicationServices(this IServiceCollection services)
     {
         services.AddSingleton<IDatabaseCore, DatabaseCore>();
+        services.AddSingleton<IUpdatesQueue, UpdatesQueue>();
+        services.AddSingleton<ITreeValuesCache, TreeValuesCache>();
         services.AddSingleton<IUserManager, UserManager>();
         services.AddSingleton<IRegistrationTicketManager, RegistrationTicketManager>();
         services.AddSingleton<IConfigurationProvider, ConfigurationProvider>();
-        services.AddSingleton<IUpdatesQueue, UpdatesQueue>();
-        services.AddSingleton<ITreeValuesCache, TreeValuesCache>();
         services.AddSingleton<NotificationsCenter>();
         services.AddSingleton<IDataCollectorFacade, DataCollectorFacade>();
         services.AddSingleton<TreeViewModel>();

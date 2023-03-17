@@ -21,7 +21,7 @@ namespace HSMServer.Model.ViewModel
         public UserViewModel(User user)
         {
             UserId = user.Id.ToString();
-            Username = user.UserName;
+            Username = user.Name;
             Password = user.Password;
             IsAdmin = user.IsAdmin;
             ProductsRoles = user.ProductsRoles;

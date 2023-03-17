@@ -17,6 +17,16 @@ namespace HSMServer.Core.DataLayer
 
         #endregion
 
+        #region Groups
+
+        public void AddGroup(GroupEntity entity);
+        public void UpdateGroup(GroupEntity entity);
+        public void RemoveGroup(string id);
+        public GroupEntity GetGroup(string id);
+        public List<GroupEntity> GetAllGroups();
+
+        #endregion
+
         #region Product
 
         void AddProduct(ProductEntity entity);

@@ -45,7 +45,7 @@ namespace HSMServer.Notification.Settings
         internal static string BuildGreetings(this INotificatable entity) =>
             entity switch
             {
-                User user => $"Hi, {user.UserName}. ",
+                User user => $"Hi, {user.Name}. ",
                 ProductNodeViewModel => $"Hi. ",
                 _ => string.Empty,
             };

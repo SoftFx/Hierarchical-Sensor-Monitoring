@@ -16,18 +16,18 @@ namespace HSMServer.Middleware
             _userManager = userManager;
         }
 
-        public async Task InvokeAsync(HttpContext context)
+        public Task InvokeAsync(HttpContext context)
         {
             var port = context.Connection.LocalPort;
 
             if (port == ConfigurationConstants.SitePort)
             {
                 var currentUser = context.User;
-                var correspondingUser = _userManager.GetUserByUserName(currentUser?.Identity?.Name);
+                var correspondingUser = _userManager[currentUser?.Identity?.Name];
                 context.User = correspondingUser;
             }
 
-            await _next.Invoke(context);
+            return _next.Invoke(context);
         }
     }
 }
