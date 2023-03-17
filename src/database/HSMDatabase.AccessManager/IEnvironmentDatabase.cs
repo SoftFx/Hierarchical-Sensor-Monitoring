@@ -6,6 +6,17 @@ namespace HSMDatabase.AccessManager
 {
     public interface IEnvironmentDatabase : IDisposable
     {
+        #region Groups
+
+        void PutGroup(GroupEntity group);
+        void RemoveGroup(string id);
+        void AddGroupToList(string groupId);
+        void RemoveGroupFromList(string groupId);
+        GroupEntity GetGroup(string id);
+        List<string> GetGroupsList();
+
+        #endregion
+
         #region Products
 
         void AddProductToList(string productName);
