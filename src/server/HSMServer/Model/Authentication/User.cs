@@ -1,4 +1,5 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities;
+using HSMServer.ConcurrentStorage;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.UserFilters;
 using HSMServer.Model.Authentication.History;
@@ -10,19 +11,19 @@ using System.Text.Json;
 
 namespace HSMServer.Model.Authentication
 {
-    public class User : ClaimsPrincipal, INotificatable
+    public class User : ClaimsPrincipal, IServerModel<UserEntity, UserUpdate>, INotificatable
     {
-        public Guid Id { get; set; }
+        public Guid Id { get; init; }
 
         public bool IsAdmin { get; set; }
 
-        public string UserName { get; set; }
+        public string Name { get; init; }
 
-        public string Password { get; set; }
+        public string Password { get; init; }
+
+        public NotificationSettings Notifications { get; init; }
 
         public List<(Guid, ProductRoleEnum)> ProductsRoles { get; set; }
-
-        public NotificationSettings Notifications { get; set; }
 
         public TreeUserFilter TreeFilter { get; set; }
 
@@ -30,12 +31,9 @@ namespace HSMServer.Model.Authentication
         public HistoryValuesViewModel Pagination { get; set; }
 
 
-        string INotificatable.Name => UserName;
-
-
         public User(string userName) : this()
         {
-            UserName = userName;
+            Name = userName;
         }
 
         public User()
@@ -46,26 +44,12 @@ namespace HSMServer.Model.Authentication
             TreeFilter = new();
         }
 
-
-        public User(User user)
-        {
-            if (user == null) return;
-
-            Id = user.Id;
-            UserName = user.UserName;
-            Password = user.Password;
-            IsAdmin = user.IsAdmin;
-            ProductsRoles = user.ProductsRoles != null ? new(user.ProductsRoles) : new();
-            Notifications = new(user.Notifications.ToEntity());
-            TreeFilter = user.TreeFilter;
-        }
-
         public User(UserEntity entity)
         {
             if (entity == null) return;
 
             Id = entity.Id;
-            UserName = entity.UserName;
+            Name = entity.UserName;
             Password = entity.Password;
             IsAdmin = entity.IsAdmin;
 
@@ -83,26 +67,9 @@ namespace HSMServer.Model.Authentication
                 : JsonSerializer.Deserialize<TreeUserFilter>(((JsonElement)entity.TreeFilter).GetRawText())?.RestoreFilterNames();
         }
 
-        /// <summary>
-        /// Update works as HTTP PUT: all the fields will be updated
-        /// </summary>
-        /// <param name="user"></param>
-        public void Update(User user)
+        public void Update(UserUpdate update)
         {
-            Password = user.Password;
-            IsAdmin = user.IsAdmin;
-            ProductsRoles = user.ProductsRoles != null ? new(user.ProductsRoles) : new();
-            Notifications = new(user.Notifications.ToEntity());
-            TreeFilter = user.TreeFilter;
-        }
-
-        public User Copy()
-        {
-            var copy = this.MemberwiseClone() as User;
-            copy.ProductsRoles = new List<(Guid, ProductRoleEnum)>(ProductsRoles);
-            copy.Notifications = new(Notifications.ToEntity());
-            copy.TreeFilter = TreeFilter;
-            return copy;
+            IsAdmin = update.IsAdmin ?? IsAdmin;
         }
 
         public bool IsProductAvailable(Guid productId) =>
@@ -111,10 +78,10 @@ namespace HSMServer.Model.Authentication
         public bool IsManager(Guid productId) =>
             IsAdmin || (ProductsRoles?.Any(x => x == (productId, ProductRoleEnum.ProductManager)) ?? false);
 
-        internal UserEntity ToEntity() =>
+        public UserEntity ToEntity() =>
             new()
             {
-                UserName = UserName,
+                UserName = Name,
                 Password = Password,
                 Id = Id,
                 IsAdmin = IsAdmin,

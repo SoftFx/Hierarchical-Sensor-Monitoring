@@ -22,7 +22,7 @@ namespace HSMServer.Model.Validators
                 && !string.IsNullOrEmpty(x.Password), () =>
             {
                 RuleFor(x => x)
-                .Must(x => _userManager.Authenticate(x.Username, x.Password) != null)
+                .Must(x => _userManager.TryAuthenticate(x.Username, x.Password))
                 .WithMessage(ErrorConstants.UsernameOrPassword);
             });
         }

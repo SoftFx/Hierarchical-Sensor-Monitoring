@@ -201,7 +201,7 @@ namespace HSMServer.Controllers
 
         private void UpdateUserNotificationSettings(Guid selectedNode, Action<NotificationSettings, Guid> updateSettings)
         {
-            var user = _userManager.GetUser((HttpContext.User as User).Id);
+            var user = _userManager[(HttpContext.User as User).Id];
             foreach (var sensorId in GetNodeSensors(selectedNode))
             {
                 updateSettings?.Invoke(user.Notifications, sensorId);
@@ -278,7 +278,7 @@ namespace HSMServer.Controllers
             var enumerator = _treeValuesCache.GetSensorValuesPage(SensorPathHelper.DecodeGuid(model.EncodedId), model.FromUtc, model.ToUtc, model.Count);
             var viewModel = await new HistoryValuesViewModel(model.EncodedId, model.Type, enumerator, GetLocalLastValue(model.EncodedId, model.FromUtc, model.ToUtc)).Initialize();
 
-            _userManager.GetUser((HttpContext.User as User).Id).Pagination = viewModel;
+            _userManager[(HttpContext.User as User).Id].Pagination = viewModel;
 
             return GetHistoryTable(viewModel);
         }
@@ -286,13 +286,13 @@ namespace HSMServer.Controllers
         [HttpGet]
         public IActionResult GetPreviousPage()
         {
-            return GetHistoryTable(_userManager.GetUser((HttpContext.User as User).Id).Pagination?.ToPreviousPage());
+            return GetHistoryTable(_userManager[(HttpContext.User as User).Id].Pagination?.ToPreviousPage());
         }
 
         [HttpGet]
         public async Task<IActionResult> GetNextPage()
         {
-            return GetHistoryTable(await (_userManager.GetUser((HttpContext.User as User).Id).Pagination?.ToNextPage()));
+            return GetHistoryTable(await (_userManager[(HttpContext.User as User).Id].Pagination?.ToNextPage()));
         }
 
 

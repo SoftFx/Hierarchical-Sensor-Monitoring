@@ -318,6 +318,79 @@ namespace HSMServer.Core.Tests
 
         #endregion
 
+        #region [ Group Tests ]
+
+        [Theory]
+        [InlineData(1)]
+        [InlineData(3)]
+        [InlineData(10)]
+        [InlineData(50)]
+        [InlineData(100)]
+        [InlineData(500)]
+        [InlineData(1000)]
+        [Trait("Category", "AddGroup(s)")]
+        public void AddGroupsTest(int count)
+        {
+            for (int i = 0; i < count; i++)
+            {
+                var group = EntitiesFactory.BuildGroupEntity();
+                _databaseCore.AddGroup(group);
+
+                FullGroupTest(group, _databaseCore.GetGroup(group.Id));
+            }
+        }
+
+        [Theory]
+        [InlineData(1)]
+        [InlineData(3)]
+        [InlineData(10)]
+        [InlineData(50)]
+        [InlineData(100)]
+        [InlineData(500)]
+        [InlineData(1000)]
+        [Trait("Category", "RemoveGroup(s)")]
+        public void RemoveGroupsTest(int count)
+        {
+            for (int i = 0; i < count; i++)
+            {
+                var group = EntitiesFactory.BuildGroupEntity();
+
+                _databaseCore.AddGroup(group);
+                _databaseCore.RemoveGroup(group.Id);
+
+                Assert.Null(_databaseCore.GetGroup(group.Id));
+            }
+
+            Assert.Empty(_databaseCore.GetAllGroups());
+        }
+
+        [Theory]
+        [InlineData(1)]
+        [InlineData(3)]
+        [InlineData(10)]
+        [InlineData(50)]
+        [InlineData(100)]
+        [Trait("Category", "GroupUserRoles")]
+        public void AddUserRolesToGroupTest(int count)
+        {
+            var group = EntitiesFactory.BuildGroupEntity();
+            _databaseCore.AddGroup(group);
+
+            for (int i = 0; i < count; i++)
+            {
+                var user = EntitiesFactory.BuildUser();
+
+                var role = i % 2 == 0 ? ProductRoleEnum.ProductManager : ProductRoleEnum.ProductViewer;
+                group.UserRoles.Add(user.Id.ToString(), (byte)role);
+            }
+
+            _databaseCore.UpdateGroup(group);
+
+            FullGroupTest(group, _databaseCore.GetGroup(group.Id));
+        }
+
+        #endregion
+
         #region [ Registration Ticket ]
 
         [Fact]
@@ -522,6 +595,19 @@ namespace HSMServer.Core.Tests
                     Assert.Equal(expectedRole.Value, actualRole.Value);
                 }
             }
+        }
+
+        private static void FullGroupTest(GroupEntity expectedGroup, GroupEntity actualGroup)
+        {
+            Assert.NotNull(actualGroup);
+            Assert.Equal(expectedGroup.Id, actualGroup.Id);
+            Assert.Equal(expectedGroup.AuthorId, actualGroup.AuthorId);
+            Assert.Equal(expectedGroup.DisplayName, actualGroup.DisplayName);
+            Assert.Equal(expectedGroup.Description, actualGroup.Description);
+            Assert.Equal(expectedGroup.CreationDate, actualGroup.CreationDate);
+            Assert.Equal(expectedGroup.Color, actualGroup.Color);
+            Assert.Equal(expectedGroup.ProductIds, actualGroup.ProductIds);
+            Assert.Equal(expectedGroup.UserRoles, actualGroup.UserRoles);
         }
 
         private static void FullTicketTest(RegistrationTicket expectedTicket, RegistrationTicket actualTicket)
