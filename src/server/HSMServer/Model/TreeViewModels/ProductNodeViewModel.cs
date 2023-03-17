@@ -34,9 +34,8 @@ namespace HSMServer.Model.TreeViewModel
         public bool IsEmpty => AllSensorsCount == 0;
 
 
-        public ProductNodeViewModel(ProductModel model) : base(model.Id)
+        public ProductNodeViewModel(ProductModel model) : base(model)
         {
-            Path = $"{model.Path}/";
             Notifications = new(model.NotificationsSettings);
 
             Update(model);

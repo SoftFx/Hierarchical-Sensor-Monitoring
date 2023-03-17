@@ -34,9 +34,23 @@ namespace HSMServer.Model.TreeViewModel
             _cache.ChangeSensorEvent += ChangeSensorHandler;
             _cache.ChangeAccessKeyEvent += ChangeAccessKeyHandler;
 
-            BuildTree();
+            foreach (var product in _cache.GetProducts())
+                AddNewProductViewModel(product);
         }
 
+
+        public List<ProductNodeViewModel> GetUserProducts(User user)
+        {
+            var products = GetRootProducts().Select(x => x.RecalculateCharacteristics());
+
+            if (user == null || user.IsAdmin)
+                return products.ToList();
+
+            if (user.ProductsRoles == null || user.ProductsRoles.Count == 0)
+                return new List<ProductNodeViewModel>();
+
+            return products.Where(p => user.IsProductAvailable(p.Id)).ToList();
+        }
 
         public List<NodeShallowModel> GetUserTree(User user)
         {
@@ -56,42 +70,19 @@ namespace HSMServer.Model.TreeViewModel
 
             var tree = new List<NodeShallowModel>(1 << 4);
 
-            foreach (var (_, product) in Nodes)
-                if (product.Parent == null && user.IsProductAvailable(product.Id))
-                {
-                    var node = FilterNodes(product);
-                    if (node.VisibleSensorsCount > 0 || user.IsEmptyProductVisible(product))
-                        tree.Add(node);
-                }
+            foreach (var product in GetUserProducts(user))
+            {
+                var node = FilterNodes(product);
+
+                if (node.VisibleSensorsCount > 0 || user.IsEmptyProductVisible(product))
+                    tree.Add(node);
+            }
 
             return tree;
         }
 
-        public List<ProductNodeViewModel> GetUserProducts(User user)
-        {
-            var products = GetRootProductsWithRecalculation();
-
-            if (user == null || user.IsAdmin)
-                return products.ToList();
-
-            if (user.ProductsRoles == null || user.ProductsRoles.Count == 0)
-                return new List<ProductNodeViewModel>();
-
-            return products.Where(p => user.IsProductAvailable(p.Id)).ToList();
-        }
-
-        internal void RecalculateNodesCharacteristics()
-        {
-            foreach (var node in GetRootProductsWithRecalculation())
-                node.RecalculateCharacteristics();
-        }
 
         internal IEnumerable<ProductNodeViewModel> GetRootProducts() => Nodes.Where(x => x.Value.Parent is null).Select(x => x.Value);
-
-        private IEnumerable<ProductNodeViewModel> GetRootProductsWithRecalculation()
-        {
-            return GetRootProducts().Select(x => x.RecalculateCharacteristics());
-        }
 
         internal List<Guid> GetNodeAllSensors(Guid selectedNode)
         {
@@ -119,91 +110,6 @@ namespace HSMServer.Model.TreeViewModel
             return sensors;
         }
 
-        private void BuildTree()
-        {
-            foreach (var product in _cache.GetProducts())
-                AddNewProductViewModel(product);
-
-            foreach (var (_, key) in AccessKeys) //??? TODO Remove UpdateNodePath
-                key.UpdateNodePath();
-        }
-
-        private void ChangeProductHandler(ProductModel model, ActionType transaction)
-        {
-            switch (transaction)
-            {
-                case ActionType.Add:
-                    AddNewProductViewModel(model);
-                    break;
-
-                case ActionType.Update:
-                    if (Nodes.TryGetValue(model.Id, out var product))
-                        product.Update(model);
-                    break;
-
-                case ActionType.Delete:
-                    Nodes.TryRemove(model.Id, out _);
-
-                    if (model.Parent != null && Nodes.TryGetValue(model.Parent.Id, out var parentProduct))
-                        parentProduct.Nodes.TryRemove(model.Id, out var _);
-
-                    break;
-            }
-        }
-
-        private void ChangeSensorHandler(BaseSensorModel model, ActionType transaction)
-        {
-            switch (transaction)
-            {
-                case ActionType.Add:
-                    if (Nodes.TryGetValue(model.Parent.Id, out var parent))
-                        AddNewSensorViewModel(model, parent);
-
-                    break;
-
-                case ActionType.Update:
-                    if (!Sensors.TryGetValue(model.Id, out var sensor))
-                        return;
-
-                    sensor.Update(model);
-                    break;
-
-                case ActionType.Delete:
-                    Sensors.TryRemove(model.Id, out _);
-
-                    if (Nodes.TryGetValue(model.Parent.Id, out var parentProduct))
-                        parentProduct.Sensors.TryRemove(model.Id, out var _);
-
-                    break;
-            }
-        }
-
-        private void ChangeAccessKeyHandler(AccessKeyModel model, ActionType transaction)
-        {
-            switch (transaction)
-            {
-                case ActionType.Add:
-                    if (Nodes.TryGetValue(model.ProductId, out var parent))
-                        AddNewAccessKeyViewModel(model, parent);
-
-                    break;
-
-                case ActionType.Update:
-                    if (!AccessKeys.TryGetValue(model.Id, out var accessKey))
-                        return;
-
-                    accessKey.Update(model);
-                    break;
-
-                case ActionType.Delete:
-                    AccessKeys.TryRemove(model.Id, out _);
-
-                    if (Nodes.TryGetValue(model.ProductId, out var parentProduct))
-                        parentProduct.AccessKeys.TryRemove(model.Id, out var _);
-
-                    break;
-            }
-        }
 
         private ProductNodeViewModel AddNewProductViewModel(ProductModel product)
         {
@@ -236,22 +142,74 @@ namespace HSMServer.Model.TreeViewModel
 
         private void AddNewAccessKeyViewModel(AccessKeyModel key, ProductNodeViewModel parent)
         {
-            var viewModel = new AccessKeyViewModel(key, parent, GetAccessKeyAuthorName(key));
+            var author = key.AuthorId.HasValue ? (_userManager[key.AuthorId.Value]?.Name ?? key.AuthorId.ToString()) : key.AuthorId?.ToString();
+            var viewModel = new AccessKeyViewModel(key, parent, author);
 
             parent.AddAccessKey(viewModel);
             AccessKeys.TryAdd(key.Id, viewModel);
         }
 
-        private string GetAccessKeyAuthorName(AccessKeyModel key)
-        {
-            if (key.AuthorId.HasValue)
-            {
-                var user = _userManager[key.AuthorId.Value];
-                if (user != null)
-                    return user.Name;
-            }
 
-            return key.AuthorId?.ToString();
+        private void ChangeProductHandler(ProductModel model, ActionType action)
+        {
+            switch (action)
+            {
+                case ActionType.Add:
+                    AddNewProductViewModel(model);
+                    break;
+
+                case ActionType.Update:
+                    if (Nodes.TryGetValue(model.Id, out var product))
+                        product.Update(model);
+                    break;
+
+                case ActionType.Delete:
+                    if (Nodes.TryRemove(model.Id, out _) && model.Parent != null && Nodes.TryGetValue(model.Parent.Id, out var parentProduct))
+                        parentProduct.Nodes.TryRemove(model.Id, out var _);
+                    break;
+            }
+        }
+
+        private void ChangeSensorHandler(BaseSensorModel model, ActionType action)
+        {
+            switch (action)
+            {
+                case ActionType.Add:
+                    if (Nodes.TryGetValue(model.Parent.Id, out var parent))
+                        AddNewSensorViewModel(model, parent);
+                    break;
+
+                case ActionType.Update:
+                    if (Sensors.TryGetValue(model.Id, out var sensor))
+                        sensor.Update(model);
+                    break;
+
+                case ActionType.Delete:
+                    if (Sensors.TryRemove(model.Id, out _) && Nodes.TryGetValue(model.Parent.Id, out var parentProduct))
+                        parentProduct.Sensors.TryRemove(model.Id, out var _);
+                    break;
+            }
+        }
+
+        private void ChangeAccessKeyHandler(AccessKeyModel model, ActionType action)
+        {
+            switch (action)
+            {
+                case ActionType.Add:
+                    if (Nodes.TryGetValue(model.ProductId, out var parent))
+                        AddNewAccessKeyViewModel(model, parent);
+                    break;
+
+                case ActionType.Update:
+                    if (AccessKeys.TryGetValue(model.Id, out var accessKey))
+                        accessKey.Update(model);
+                    break;
+
+                case ActionType.Delete:
+                    if (AccessKeys.TryRemove(model.Id, out _) && Nodes.TryGetValue(model.ProductId, out var parentProduct))
+                        parentProduct.AccessKeys.TryRemove(model.Id, out var _);
+                    break;
+            }
         }
     }
 }

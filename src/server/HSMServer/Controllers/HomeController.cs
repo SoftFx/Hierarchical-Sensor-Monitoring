@@ -48,8 +48,6 @@ namespace HSMServer.Controllers
 
         public IActionResult Index()
         {
-            _treeViewModel.RecalculateNodesCharacteristics();
-
             return View(_treeViewModel);
         }
 
@@ -74,8 +72,6 @@ namespace HSMServer.Controllers
         [HttpPost]
         public IActionResult RefreshTree()
         {
-            _treeViewModel.RecalculateNodesCharacteristics();
-
             return PartialView("_Tree", _treeViewModel.GetUserTree(HttpContext.User as User));
         }
 

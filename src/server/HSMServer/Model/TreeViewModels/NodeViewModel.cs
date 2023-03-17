@@ -26,9 +26,9 @@ namespace HSMServer.Model.TreeViewModel
         public ProductNodeViewModel RootProduct => Parent?.RootProduct ?? (ProductNodeViewModel)this;
 
 
-        public string Name { get; protected set; }
+        public string Name { get; private set; }
 
-        public string Path { get; protected set; }
+        public string Path { get; private set; }
 
         public string FullPath => $"{RootProduct?.Name}/{Path}";
 
@@ -53,16 +53,19 @@ namespace HSMServer.Model.TreeViewModel
         public string Title => Name?.Replace('\\', ' ') ?? string.Empty;
 
 
-        internal NodeViewModel(Guid id)
+        internal NodeViewModel(BaseNodeModel model)
         {
-            Id = id;
-            EncodedId = SensorPathHelper.EncodeGuid(id);
+            Id = model.Id;
+            Path = model.Path;
+
+            EncodedId = SensorPathHelper.EncodeGuid(model.Id);
         }
 
 
         protected void Update(BaseNodeModel model)
         {
             Name = model.DisplayName;
+            Path = model.Path;
             Description = model.Description;
 
             var updatePolicy = model.ServerPolicy.ExpectedUpdate;
