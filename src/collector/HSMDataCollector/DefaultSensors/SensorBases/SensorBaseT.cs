@@ -5,7 +5,7 @@ using HSMDataCollector.SensorsFactory;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.SensorValueRequests;
 
-namespace HSMDataCollector.DefaultSensors
+namespace HSMDataCollector.DefaultSensors.SensorBases
 {
     public abstract class SensorBase<T> : SensorBase 
     {

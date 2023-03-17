@@ -1,3 +1,4 @@
+using HSMDataCollector.DefaultSensors.SensorBases;
 using HSMDataCollector.Options;
 
 namespace HSMDataCollector.DefaultSensors.Other

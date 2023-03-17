@@ -4,11 +4,11 @@ using HSMDataCollector.Options;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.SensorValueRequests;
 
-namespace HSMDataCollector.DefaultSensors
+namespace HSMDataCollector.DefaultSensors.SensorBases
 {
     public abstract class SensorBase
     {
-        private string _nodePath;
+        private readonly string _nodePath;
         
 
         protected abstract string SensorName { get; }

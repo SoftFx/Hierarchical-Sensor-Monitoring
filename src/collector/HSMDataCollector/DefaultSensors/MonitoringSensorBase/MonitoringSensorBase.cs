@@ -2,6 +2,7 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
+using HSMDataCollector.DefaultSensors.SensorBases;
 
 namespace HSMDataCollector.DefaultSensors
 {

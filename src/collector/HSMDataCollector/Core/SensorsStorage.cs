@@ -1,9 +1,9 @@
-﻿using HSMDataCollector.DefaultSensors;
-using HSMDataCollector.Logging;
+﻿using HSMDataCollector.Logging;
 using System;
 using System.Collections.Concurrent;
 using System.Linq;
 using System.Threading.Tasks;
+using HSMDataCollector.DefaultSensors.SensorBases;
 
 namespace HSMDataCollector.Core
 {
