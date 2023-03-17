@@ -262,7 +262,7 @@ function buildContextMenu(node) {
     }
     else {
         notificationSubmenu["Accounts enable"] = {
-            "label": "Enable for accounts",
+            "label": "Enable for accounts...",
             "icon": "fab fa-telegram",
             "action": _ => enableNotificationsRequest(node, TelegramTarget.Accounts),
         }
@@ -280,7 +280,7 @@ function buildContextMenu(node) {
         }
         else {
             notificationSubmenu["Groups enable"] = {
-                "label": "Enable for groups",
+                "label": "Enable for groups...",
                 "icon": "fab fa-telegram",
                 "action": _ => enableNotificationsRequest(node, TelegramTarget.Groups),
             }
