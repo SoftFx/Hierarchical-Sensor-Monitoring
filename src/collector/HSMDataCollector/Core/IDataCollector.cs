@@ -399,5 +399,11 @@ namespace HSMDataCollector.Core
         IParamsFuncSensor<T, U> Create5MinParamsFuncSensor<T, U>(string path, string description, Func<List<U>, T> function);
 
         #endregion
+        
+        /// <summary>
+        /// The event is fired after the values queue (current capacity is 100000 items) overflows
+        /// </summary>
+        [Obsolete("Will never be called")]
+        event EventHandler ValuesQueueOverflow;
     }
 }

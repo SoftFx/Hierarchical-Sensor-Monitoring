@@ -7,6 +7,7 @@ namespace HSMDataCollector.Options
         public string NodePath { get; set; }
     }
     
+    
     public class MonitoringSensorOptions : SensorOptions
     {
         public TimeSpan PostDataPeriod { get; set; } = TimeSpan.FromSeconds(15);
@@ -34,6 +35,7 @@ namespace HSMDataCollector.Options
         public TimeSpan AcceptableUpdateInterval { get; set; } = TimeSpan.FromDays(30);
     }
 
+    
     public sealed class ProductInfoOptions : SensorOptions
     {
         public string Version { get; set; }

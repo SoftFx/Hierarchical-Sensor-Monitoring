@@ -22,7 +22,7 @@ namespace HSMDataCollector.Core
         /// <summary>
         /// The event is fired after the values queue (current capacity is 100000 items) overflows
         /// </summary>
-        [Obsolete]
+        [Obsolete("Will never be called")]
         private event EventHandler ValuesQueueOverflow;
         
         

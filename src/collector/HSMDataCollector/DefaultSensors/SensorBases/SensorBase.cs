@@ -6,7 +6,7 @@ using HSMSensorDataObjects.SensorValueRequests;
 
 namespace HSMDataCollector.DefaultSensors.SensorBases
 {
-    public abstract class SensorBase
+    public abstract class SensorBase : IDisposable
     {
         private readonly string _nodePath;
         
@@ -15,9 +15,6 @@ namespace HSMDataCollector.DefaultSensors.SensorBases
         
         protected internal string SensorPath => $"{_nodePath}/{SensorName}";
         
-        protected virtual string GetComment() => null;
-        
-        protected virtual SensorStatus GetStatus() => SensorStatus.Ok;
         
         internal event Action<SensorValueBase> ReceiveSensorValue;
          
@@ -26,23 +23,28 @@ namespace HSMDataCollector.DefaultSensors.SensorBases
         {
             _nodePath = options.NodePath;
         }
+        
 
+        protected virtual string GetComment() => null;
+        
+        protected virtual SensorStatus GetStatus() => SensorStatus.Ok;
+
+        protected virtual void SendValue(){}
+        
+        protected void SendCollectedValue(SensorValueBase value) => ReceiveSensorValue?.Invoke(value);
+        
         internal virtual Task<bool> Start()
         {
             SendValue();
             return Task.FromResult(true);
         }
         
-        internal virtual void Stop() { }
+        internal virtual Task Stop() => Task.CompletedTask;
+
         
         public void Dispose()
         {
             Stop();
         }
-
-        protected virtual void SendValue(){}
-        
-        protected void SendCollectedValue(SensorValueBase value) => ReceiveSensorValue?.Invoke(value);
-
     }
 }

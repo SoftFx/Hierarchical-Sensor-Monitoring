@@ -40,6 +40,8 @@ namespace HSMDataCollector.Core
         public IUnixCollection Unix => _defaultSensors;
 
 
+        [Obsolete]
+        public event EventHandler ValuesQueueOverflow;
 
         /// <summary>
         /// Creates new instance of <see cref="DataCollector"/> class, initializing main parameters
