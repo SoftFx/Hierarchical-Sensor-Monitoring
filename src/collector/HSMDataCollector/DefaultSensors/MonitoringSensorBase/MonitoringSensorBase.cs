@@ -1,5 +1,4 @@
 ﻿using HSMDataCollector.Options;
-using HSMSensorDataObjects.SensorValueRequests;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
@@ -23,12 +22,6 @@ namespace HSMDataCollector.DefaultSensors
             _receiveDataPeriod = options.PostDataPeriod;
 
             _sendTimer = new Timer(OnTimerTick, null, Timeout.Infinite, Timeout.Infinite);
-        }
-
-
-        public void Dispose()
-        {
-            Stop();
         }
 
         internal override Task<bool> Start()

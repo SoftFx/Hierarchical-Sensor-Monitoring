@@ -28,18 +28,18 @@ namespace HSMDataCollector.DefaultSensors
 
         internal virtual Task<bool> Start()
         {
+            SendValue();
             return Task.FromResult(true);
         }
         
-        internal virtual void Stop()
-        {
-            
-        }
+        internal virtual void Stop() { }
         
         public void Dispose()
         {
             Stop();
         }
+
+        protected virtual void SendValue(){}
         
         protected void SendCollectedValue(SensorValueBase value) => ReceiveSensorValue?.Invoke(value);
 
