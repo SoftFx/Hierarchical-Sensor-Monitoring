@@ -19,6 +19,8 @@ namespace HSMServer.Notifications.Telegram.AddressBook.MessageBuilder
                 return true;
 
             _sensors[id] = sensor;
+            this[id] = key;
+
             return false;
         }
 
@@ -30,6 +32,8 @@ namespace HSMServer.Notifications.Telegram.AddressBook.MessageBuilder
 
             foreach (var group in _groups)
                 yield return group.ToString();
+
+            _groups.Clear();
         }
 
         internal new void Clear()
