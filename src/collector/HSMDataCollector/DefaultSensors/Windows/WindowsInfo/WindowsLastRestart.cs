@@ -1,6 +1,7 @@
 ﻿using HSMDataCollector.Options;
 using System;
 using System.Diagnostics;
+using System.Threading.Tasks;
 
 namespace HSMDataCollector.DefaultSensors.Windows
 {
@@ -24,11 +25,13 @@ namespace HSMDataCollector.DefaultSensors.Windows
 
         protected override TimeSpan GetValue() => TimeSpan.FromSeconds(_performanceCounter.NextValue());
 
-        internal override void Stop()
+        internal override Task Stop()
         {
             base.Stop();
 
             _performanceCounter?.Dispose();
+            
+            return Task.CompletedTask;
         }
     }
 }

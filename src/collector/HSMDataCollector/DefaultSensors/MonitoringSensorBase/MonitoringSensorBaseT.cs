@@ -4,6 +4,7 @@ using HSMDataCollector.SensorsFactory;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.SensorValueRequests;
 using System;
+using System.Threading.Tasks;
 
 namespace HSMDataCollector.DefaultSensors
 {
@@ -15,11 +16,13 @@ namespace HSMDataCollector.DefaultSensors
         protected MonitoringSensorBase(MonitoringSensorOptions options) : base(options) { }
 
 
-        internal override void Stop()
+        internal override Task Stop()
         {
             base.Stop();
 
             OnTimerTick();
+            
+            return Task.CompletedTask;
         }
 
         protected sealed override void OnTimerTick(object _ = null)

@@ -37,11 +37,12 @@ namespace HSMDataCollector.DefaultSensors
             return Task.FromResult(_isStarted);
         }
 
-        internal override void Stop()
+        internal override Task Stop()
         {
             _sendTimer?.Dispose();
 
             _isStarted = false;
+            return Task.CompletedTask;
         }
 
 

@@ -40,11 +40,13 @@ namespace HSMDataCollector.DefaultSensors
             return isStarted;
         }
 
-        internal override void Stop()
+        internal override Task Stop()
         {
             _collectTimer?.Dispose();
 
             base.Stop();
+            
+            return Task.CompletedTask;
         }
 
 
