@@ -403,7 +403,7 @@ namespace HSMServer.Controllers
             var value = GetFileSensorValue(encodedId);
             if (value == null)
                 return _emptyResult;
-            Console.WriteLine(value.Time);
+            
             return value;
         }
 
