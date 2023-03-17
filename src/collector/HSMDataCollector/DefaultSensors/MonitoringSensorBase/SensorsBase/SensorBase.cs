@@ -8,7 +8,8 @@ namespace HSMDataCollector.DefaultSensors
 {
     public abstract class SensorBase
     {
-        private protected string _nodePath;
+        private string _nodePath;
+        
 
         protected abstract string SensorName { get; }
         

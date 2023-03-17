@@ -14,6 +14,7 @@ namespace HSMDataCollector.DefaultSensors
 
         protected sealed override void SendValue() => SendCollectedValue(BuildValue());
         
+        
         protected abstract T GetValue();
 
         private SensorValueBase BuildValue()
