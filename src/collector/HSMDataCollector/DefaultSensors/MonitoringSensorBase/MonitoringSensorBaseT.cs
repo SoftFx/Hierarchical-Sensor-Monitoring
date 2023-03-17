@@ -1,14 +1,10 @@
-﻿using HSMDataCollector.Extensions;
-using HSMDataCollector.Options;
-using HSMDataCollector.SensorsFactory;
-using HSMSensorDataObjects;
-using HSMSensorDataObjects.SensorValueRequests;
-using System;
+﻿using HSMDataCollector.Options;
 using System.Threading.Tasks;
+using HSMDataCollector.DefaultSensors.SensorBases;
 
 namespace HSMDataCollector.DefaultSensors
 {
-    public abstract class MonitoringSensorBase<T> : MonitoringSensorBase
+    public abstract class MonitoringSensorBase<T> : SensorBase<T>
     {
         protected bool NeedSendValue { get; set; } = true;
 
@@ -18,37 +14,15 @@ namespace HSMDataCollector.DefaultSensors
 
         internal override Task Stop()
         {
-            base.Stop();
-
             OnTimerTick();
             
-            return Task.CompletedTask;
+            return base.Stop();;
         }
 
-        protected sealed override void OnTimerTick(object _ = null)
+        protected void OnTimerTick(object _ = null)
         {
-            var value = BuildValue();
-
             if (NeedSendValue)
-                SendCollectedValue(value);
-        }
-
-        protected abstract T GetValue();
-
-        private SensorValueBase BuildValue()
-        {
-            try
-            {
-                var value = SensorValuesFactory.BuildValue(GetValue());
-
-                return value.Complete(SensorPath, GetComment(), GetStatus());
-            }
-            catch (Exception ex)
-            {
-                var value = SensorValuesFactory.BuildValue(default(T));
-
-                return value.Complete(SensorPath, ex.Message, SensorStatus.Error);
-            }
+                SendValue(BuildSensorValue());
         }
     }
 }

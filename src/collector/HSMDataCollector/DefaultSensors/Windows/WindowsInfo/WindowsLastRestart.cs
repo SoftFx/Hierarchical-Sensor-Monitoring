@@ -27,11 +27,9 @@ namespace HSMDataCollector.DefaultSensors.Windows
 
         internal override Task Stop()
         {
-            base.Stop();
-
             _performanceCounter?.Dispose();
             
-            return Task.CompletedTask;
+            return base.Stop();
         }
     }
 }

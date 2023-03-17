@@ -13,7 +13,7 @@ namespace HSMDataCollector.DefaultSensors.SensorBases
 
         protected abstract string SensorName { get; }
         
-        protected internal string SensorPath => $"{_nodePath}/{SensorName}";
+        public string SensorPath => $"{_nodePath}/{SensorName}";
         
         
         internal event Action<SensorValueBase> ReceiveSensorValue;
@@ -29,13 +29,15 @@ namespace HSMDataCollector.DefaultSensors.SensorBases
         
         protected virtual SensorStatus GetStatus() => SensorStatus.Ok;
 
-        protected virtual void SendValue(){}
+        protected virtual void SendValue(SensorValueBase value)
+        {
+            ReceiveSensorValue?.Invoke(value);
+        }
         
         protected void SendCollectedValue(SensorValueBase value) => ReceiveSensorValue?.Invoke(value);
         
         internal virtual Task<bool> Start()
         {
-            SendValue();
             return Task.FromResult(true);
         }
         

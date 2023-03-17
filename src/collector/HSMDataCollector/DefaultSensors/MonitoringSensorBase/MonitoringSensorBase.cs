@@ -6,7 +6,7 @@ using HSMDataCollector.DefaultSensors.SensorBases;
 
 namespace HSMDataCollector.DefaultSensors
 {
-    public abstract class MonitoringSensorBase : SensorBase,  IDisposable
+    public abstract class MonitoringSensorBase : SensorBase
     {
         private readonly Timer _sendTimer;
 

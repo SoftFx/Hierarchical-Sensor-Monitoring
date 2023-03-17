@@ -10,14 +10,17 @@ namespace HSMDataCollector.DefaultSensors.SensorBases
     public abstract class SensorBase<T> : SensorBase 
     {
         protected SensorBase(SensorOptions options) : base(options) { }
-
-
-        protected sealed override void SendValue() => SendCollectedValue(BuildValue());
         
+
+        protected void SendValue<T>()
+        {
+            base.SendValue(BuildSensorValue());
+        }
         
         protected abstract T GetValue();
 
-        private SensorValueBase BuildValue()
+
+        protected SensorValueBase BuildSensorValue()
         {
             try
             {

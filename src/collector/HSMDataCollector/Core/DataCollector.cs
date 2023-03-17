@@ -27,10 +27,11 @@ namespace HSMDataCollector.Core
     {
         private readonly LoggerManager _logManager = new LoggerManager();
 
-        private readonly ConcurrentDictionary<string, ISensor> _nameToSensor;
+        private readonly ConcurrentDictionary<string, ISensor> _nameToSensor = new ConcurrentDictionary<string, ISensor>();
         private readonly DefaultSensorsCollection _defaultSensors;
         private readonly SensorsDefaultOptions _sensorsOptions;
         private readonly SensorsStorage _sensorsStorage;
+        private readonly IDataQueue _dataQueue;
         private readonly HSMClient _hsmClient;
 
         private bool _isStopped;
@@ -49,15 +50,10 @@ namespace HSMDataCollector.Core
         /// <param name="options">Common options for datacollector</param>
         public DataCollector(CollectorOptions options)
         {
-            _nameToSensor = new ConcurrentDictionary<string, ISensor>();
-            _hsmClient = new HSMClient(options, _logManager);
-
-            ServicePointManager.ServerCertificateValidationCallback = delegate { return true; };
-            ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
-
-            _isStopped = false;
-
-            _sensorsStorage = new SensorsStorage(_hsmClient.DataQueue as IValuesQueue, _logManager);
+            _dataQueue = new DataQueue(options);
+            _hsmClient = new HSMClient(options, _dataQueue, _logManager);
+            _sensorsStorage = new SensorsStorage(_dataQueue as IValuesQueue, _logManager);
+            
             _sensorsOptions = new SensorsDefaultOptions();
             _defaultSensors = new DefaultSensorsCollection(_sensorsStorage, _sensorsOptions);
         }
@@ -93,18 +89,18 @@ namespace HSMDataCollector.Core
                 AddNLog();
 
             _logManager.Logger?.Info("Initialize timer...");
-            _hsmClient.DataQueue.InitializeTimer();
+            _dataQueue.InitializeTimer();
         }
 
         [Obsolete("Use Initialize(bool, string, string)")]
         public void Initialize()
         {
-            _hsmClient.DataQueue.InitializeTimer();
+            _dataQueue.InitializeTimer();
         }
 
         public Task Start()
         {
-            _hsmClient.DataQueue.InitializeTimer();
+            _dataQueue.InitializeTimer();
             
             return _sensorsStorage.Start();
         }
@@ -119,10 +115,10 @@ namespace HSMDataCollector.Core
             _sensorsStorage.Dispose();
 
             var allData = new List<SensorValueBase>(1 << 3);
-            if (_hsmClient.DataQueue != null)
+            if (_dataQueue != null)
             {
-                allData.AddRange(_hsmClient.DataQueue.GetCollectedData());
-                _hsmClient.DataQueue.Stop();
+                allData.AddRange(_dataQueue.GetCollectedData());
+                _dataQueue.Stop();
             }
 
             Thread.Sleep(TimeSpan.FromSeconds(1));
@@ -137,7 +133,7 @@ namespace HSMDataCollector.Core
             if (allData.Count != 0)
                 _hsmClient.SendMonitoringData(allData);
 
-            _hsmClient?.DisposeClient();
+            _hsmClient?.Dispose();
             _isStopped = true;
             _logManager.Logger?.Info("DataCollector successfully stopped.");
         }
@@ -265,7 +261,7 @@ namespace HSMDataCollector.Core
             if (existingSensor is IInstantValueSensor<string> instantValueSensor)
                 return instantValueSensor;
 
-            var sensor = new InstantFileSensor(path, fileName, extension, _hsmClient.DataQueue as IValuesQueue, description);
+            var sensor = new InstantFileSensor(path, fileName, extension, _dataQueue as IValuesQueue, description);
             AddNewSensor(sensor, path);
 
             return sensor;
@@ -297,7 +293,7 @@ namespace HSMDataCollector.Core
             if (existingSensor is IInstantValueSensor<T> instantValueSensor)
                 return instantValueSensor;
 
-            InstantValueSensor<T> sensor = new InstantValueSensor<T>(path, _hsmClient.DataQueue as IValuesQueue, description);
+            InstantValueSensor<T> sensor = new InstantValueSensor<T>(path, _dataQueue as IValuesQueue, description);
             AddNewSensor(sensor, path);
 
             return sensor;
@@ -310,7 +306,7 @@ namespace HSMDataCollector.Core
                 return lastValueSensor;
 
             DefaultValueSensor<T> sensor =
-                new DefaultValueSensor<T>(path, _hsmClient.DataQueue as IValuesQueue, defaultValue, description);
+                new DefaultValueSensor<T>(path, _dataQueue as IValuesQueue, defaultValue, description);
             AddNewSensor(sensor, path);
 
             return sensor;
@@ -330,7 +326,7 @@ namespace HSMDataCollector.Core
                 return intBarSensor;
             }
 
-            BarSensor<int> sensor = new BarSensor<int>(path, _hsmClient.DataQueue as IValuesQueue, SensorType.IntegerBarSensor,
+            BarSensor<int> sensor = new BarSensor<int>(path, _dataQueue as IValuesQueue, SensorType.IntegerBarSensor,
                 timeout, smallPeriod, description);
             AddNewSensor(sensor, path);
 
@@ -372,7 +368,7 @@ namespace HSMDataCollector.Core
                 return doubleBarSensor;
             }
 
-            BarSensor<double> sensor = new BarSensor<double>(path, _hsmClient.DataQueue as IValuesQueue,
+            BarSensor<double> sensor = new BarSensor<double>(path, _dataQueue as IValuesQueue,
                 SensorType.DoubleBarSensor, timeout, smallPeriod, precision, description);
             AddNewSensor(sensor, path);
 
@@ -455,7 +451,7 @@ namespace HSMDataCollector.Core
             if (existingSensor is IParamsFuncSensor<T, U> typedSensor)
                 return typedSensor;
 
-            OneParamFuncSensor<T, U> sensor = new OneParamFuncSensor<T, U>(path, _hsmClient.DataQueue as IValuesQueue, description, interval, function, _logManager.Logger);
+            OneParamFuncSensor<T, U> sensor = new OneParamFuncSensor<T, U>(path, _dataQueue as IValuesQueue, description, interval, function, _logManager.Logger);
             AddNewSensor(sensor, path);
 
             return sensor;
@@ -468,7 +464,7 @@ namespace HSMDataCollector.Core
             if (existingSensor is INoParamsFuncSensor<T> typedSensor)
                 return typedSensor;
 
-            NoParamsFuncSensor<T> sensor = new NoParamsFuncSensor<T>(path, _hsmClient.DataQueue as IValuesQueue, description, interval, function, _logManager.Logger);
+            NoParamsFuncSensor<T> sensor = new NoParamsFuncSensor<T>(path, _dataQueue as IValuesQueue, description, interval, function, _logManager.Logger);
             AddNewSensor(sensor, path);
 
             return sensor;
