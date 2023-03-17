@@ -19,7 +19,7 @@ namespace HSMServer.Core.Model
         public DateTime CreationDate { get; }
 
 
-        public ProductModel ParentProduct { get; private set; }
+        public ProductModel Parent { get; private set; }
 
 
         public string DisplayName { get; private set; }
@@ -27,11 +27,11 @@ namespace HSMServer.Core.Model
         public string Description { get; private set; }
 
 
-        public Guid RootProductId => ParentProduct?.RootProductId ?? Id;
+        public Guid? RootProductId => Parent?.RootProductId;
 
-        public string RootProductName => ParentProduct?.RootProductName ?? DisplayName;
+        public string RootProductName => Parent?.RootProductName ?? DisplayName;
 
-        public string Path => ParentProduct is null ? string.Empty : $"{ParentProduct.Path}/{DisplayName}";
+        public string Path => Parent is null ? string.Empty : $"{Parent.Path}/{DisplayName}";
 
 
         protected NodeBaseModel()
@@ -61,7 +61,7 @@ namespace HSMServer.Core.Model
 
         protected internal NodeBaseModel AddParent(ProductModel parent)
         {
-            ParentProduct = parent;
+            Parent = parent;
 
             ServerPolicy.ApplyParentPolicies(parent.ServerPolicy);
 

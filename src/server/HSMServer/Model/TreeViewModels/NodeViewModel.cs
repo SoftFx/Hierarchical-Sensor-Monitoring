@@ -23,7 +23,7 @@ namespace HSMServer.Model.TreeViewModel
         public TimeIntervalViewModel ExpectedUpdateInterval { get; } = new();
 
 
-        public required ProductNodeViewModel RootProduct { get; init; }
+        public ProductNodeViewModel RootProduct => Parent?.RootProduct ?? (ProductNodeViewModel)this;
 
 
         public string Name { get; protected set; }
@@ -45,8 +45,7 @@ namespace HSMServer.Model.TreeViewModel
         public NodeViewModel Parent { get; internal set; }
 
 
-        public string Tooltip =>
-            $"{Name}{Environment.NewLine}{(UpdateTime != DateTime.MinValue ? UpdateTime.ToDefaultFormat() : "no data")}";
+        public string Tooltip => $"{Name}{Environment.NewLine}{(UpdateTime != DateTime.MinValue ? UpdateTime.ToDefaultFormat() : "no data")}";
 
         public string Title => Name?.Replace('\\', ' ') ?? string.Empty;
 
@@ -56,6 +55,7 @@ namespace HSMServer.Model.TreeViewModel
             Id = id;
             EncodedId = SensorPathHelper.EncodeGuid(id);
         }
+
 
         protected void Update(NodeBaseModel model)
         {

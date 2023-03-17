@@ -44,7 +44,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             await Task.Delay(1000);
 
             var expectedProducts = _databaseCoreManager.DatabaseCore.GetAllProducts();
-            var actualProducts = _valuesCache.GetTree();
+            var actualProducts = _valuesCache.GetNodes();
 
             ModelsTester.TestProducts(expectedProducts, actualProducts);
         }
@@ -172,7 +172,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             await Task.Delay(100);
 
             var product = GetProductByName("subProduct0_product0");
-            var parentProduct = product.ParentProduct;
+            var parentProduct = product.Parent;
 
             var expectedDeletedProductIds = GetAllProductIdsInBranch(product);
             var expectedDeletedSensorIds = GetAllSensorIdsInBranch(product);
@@ -543,7 +543,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         }
 
         private ProductModel GetProductByName(string name) =>
-            _valuesCache.GetTree().FirstOrDefault(p => p.DisplayName == name);
+            _valuesCache.GetNodes().FirstOrDefault(p => p.DisplayName == name);
 
         private BaseSensorModel GetSensorByNameFromCache(string name) =>
             _valuesCache.GetSensors().FirstOrDefault(s => s.DisplayName == name);
@@ -609,7 +609,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         private BaseSensorModel GetClonedSensorModel(BaseSensorModel sensor)
         {
             var clonedSensor = SensorModelFactory.Build(sensor.ToEntity());
-            clonedSensor.AddParent(_valuesCache.GetProduct(sensor.ParentProduct.Id));
+            clonedSensor.AddParent(_valuesCache.GetProduct(sensor.Parent.Id));
 
             clonedSensor.TryAddValue(sensor.LastValue);
 

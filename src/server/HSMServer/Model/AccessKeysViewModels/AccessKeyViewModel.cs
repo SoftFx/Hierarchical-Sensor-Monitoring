@@ -7,7 +7,7 @@ using HSMServer.Extensions;
 
 namespace HSMServer.Model.AccessKeysViewModels
 {
-    public class AccessKeyViewModel
+    public sealed class AccessKeyViewModel
     {
         public Guid Id { get; }
 

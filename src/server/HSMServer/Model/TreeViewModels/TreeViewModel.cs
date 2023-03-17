@@ -12,27 +12,27 @@ using System.Linq;
 
 namespace HSMServer.Model.TreeViewModel
 {
-    public class TreeViewModel
+    public sealed class TreeViewModel
     {
         private readonly IUserManager _userManager;
         private readonly ITreeValuesCache _cache;
 
 
-        public ConcurrentDictionary<Guid, ProductNodeViewModel> Nodes { get; } = new();
+        public ConcurrentDictionary<Guid, AccessKeyViewModel> AccessKeys { get; } = new();
 
         public ConcurrentDictionary<Guid, SensorNodeViewModel> Sensors { get; } = new();
 
-        public ConcurrentDictionary<Guid, AccessKeyViewModel> AccessKeys { get; } = new();
+        public ConcurrentDictionary<Guid, ProductNodeViewModel> Nodes { get; } = new();
 
 
         public TreeViewModel(ITreeValuesCache cache, IUserManager userManager)
         {
+            _userManager = userManager;
             _cache = cache;
+
             _cache.ChangeProductEvent += ChangeProductHandler;
             _cache.ChangeSensorEvent += ChangeSensorHandler;
             _cache.ChangeAccessKeyEvent += ChangeAccessKeyHandler;
-
-            _userManager = userManager;
 
             BuildTree();
         }
@@ -121,16 +121,10 @@ namespace HSMServer.Model.TreeViewModel
 
         private void BuildTree()
         {
-            var products = _cache.GetTree();
-
-            foreach (var product in products)
+            foreach (var product in _cache.GetProducts())
                 AddNewProductViewModel(product);
 
-            foreach (var product in products)
-                foreach (var (_, subProduct) in product.SubProducts)
-                    Nodes[product.Id].AddSubNode(Nodes[subProduct.Id]);
-
-            foreach (var (_, key) in AccessKeys)
+            foreach (var (_, key) in AccessKeys) //??? TODO Remove UpdateNodePath
                 key.UpdateNodePath();
         }
 
@@ -139,24 +133,18 @@ namespace HSMServer.Model.TreeViewModel
             switch (transaction)
             {
                 case ActionType.Add:
-                    var newProduct = AddNewProductViewModel(model);
-
-                    if (model.ParentProduct != null && Nodes.TryGetValue(model.ParentProduct.Id, out var parent))
-                        parent.AddSubNode(newProduct);
-
+                    AddNewProductViewModel(model);
                     break;
 
                 case ActionType.Update:
-                    if (!Nodes.TryGetValue(model.Id, out var product))
-                        return;
-
-                    product.Update(model);
+                    if (Nodes.TryGetValue(model.Id, out var product))
+                        product.Update(model);
                     break;
 
                 case ActionType.Delete:
                     Nodes.TryRemove(model.Id, out _);
 
-                    if (model.ParentProduct != null && Nodes.TryGetValue(model.ParentProduct.Id, out var parentProduct))
+                    if (model.Parent != null && Nodes.TryGetValue(model.Parent.Id, out var parentProduct))
                         parentProduct.Nodes.TryRemove(model.Id, out var _);
 
                     break;
@@ -168,7 +156,7 @@ namespace HSMServer.Model.TreeViewModel
             switch (transaction)
             {
                 case ActionType.Add:
-                    if (Nodes.TryGetValue(model.ParentProduct.Id, out var parent))
+                    if (Nodes.TryGetValue(model.Parent.Id, out var parent))
                         AddNewSensorViewModel(model, parent);
 
                     break;
@@ -183,7 +171,7 @@ namespace HSMServer.Model.TreeViewModel
                 case ActionType.Delete:
                     Sensors.TryRemove(model.Id, out _);
 
-                    if (Nodes.TryGetValue(model.ParentProduct.Id, out var parentProduct))
+                    if (Nodes.TryGetValue(model.Parent.Id, out var parentProduct))
                         parentProduct.Sensors.TryRemove(model.Id, out var _);
 
                     break;
@@ -219,10 +207,15 @@ namespace HSMServer.Model.TreeViewModel
 
         private ProductNodeViewModel AddNewProductViewModel(ProductModel product)
         {
-            var node = new ProductNodeViewModel(product)
-            {
-                RootProduct = Nodes.GetValueOrDefault(product.RootProductId)
-            };
+            var node = new ProductNodeViewModel(product);
+
+            Nodes.TryAdd(node.Id, node);
+
+            if (product.Parent != null && Nodes.TryGetValue(product.Parent.Id, out var parent))
+                parent.AddSubNode(node);
+
+            foreach (var (_, child) in product.SubProducts)
+                AddNewProductViewModel(child);
 
             foreach (var (_, sensor) in product.Sensors)
                 AddNewSensorViewModel(sensor, node);
@@ -230,17 +223,12 @@ namespace HSMServer.Model.TreeViewModel
             foreach (var (_, key) in product.AccessKeys)
                 AddNewAccessKeyViewModel(key, node);
 
-            Nodes.TryAdd(node.Id, node);
-
             return node;
         }
 
         private void AddNewSensorViewModel(BaseSensorModel sensor, ProductNodeViewModel parent)
         {
-            var viewModel = new SensorNodeViewModel(sensor)
-            {
-                RootProduct = parent.RootProduct
-            };
+            var viewModel = new SensorNodeViewModel(sensor);
 
             parent.AddSensor(viewModel);
             Sensors.TryAdd(viewModel.Id, viewModel);

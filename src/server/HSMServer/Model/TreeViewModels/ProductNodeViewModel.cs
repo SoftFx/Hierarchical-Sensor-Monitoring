@@ -57,18 +57,17 @@ namespace HSMServer.Model.TreeViewModel
 
         internal void AddSubNode(ProductNodeViewModel node)
         {
-            Nodes.TryAdd(node.Id, node);
             node.Parent = this;
+            Nodes.TryAdd(node.Id, node);
         }
 
         internal void AddSensor(SensorNodeViewModel sensor)
         {
-            Sensors.TryAdd(sensor.Id, sensor);
             sensor.Parent = this;
+            Sensors.TryAdd(sensor.Id, sensor);
         }
 
-        internal void AddAccessKey(AccessKeyViewModel key) =>
-            AccessKeys.TryAdd(key.Id, key);
+        internal void AddAccessKey(AccessKeyViewModel key) => AccessKeys.TryAdd(key.Id, key);
 
         internal List<AccessKeyViewModel> GetAccessKeys() => AccessKeys.Values.ToList();
 

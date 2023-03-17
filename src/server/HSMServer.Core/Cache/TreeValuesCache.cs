@@ -13,7 +13,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Nodes;
-using System.Text.Json.Serialization.Metadata;
 
 namespace HSMServer.Core.Cache
 {
@@ -70,7 +69,7 @@ namespace HSMServer.Core.Cache
         }
 
 
-        public List<ProductModel> GetTree() => _tree.Values.ToList();
+        public List<ProductModel> GetNodes() => _tree.Values.ToList();
 
         public List<BaseSensorModel> GetSensors() => _sensors.Values.ToList();
 
@@ -112,7 +111,7 @@ namespace HSMServer.Core.Cache
                 foreach (var (sensorId, _) in product.Sensors)
                     RemoveSensor(sensorId);
 
-                product.ParentProduct?.SubProducts.TryRemove(productId, out _);
+                product.Parent?.SubProducts.TryRemove(productId, out _);
                 _databaseCore.RemoveProduct(product.Id.ToString());
 
                 foreach (var (id, _) in product.AccessKeys)
@@ -125,8 +124,8 @@ namespace HSMServer.Core.Cache
             {
                 RemoveProduct(productId);
 
-                if (product.ParentProduct != null)
-                    UpdateProduct(product.ParentProduct);
+                if (product.Parent != null)
+                    UpdateProduct(product.Parent);
             }
         }
 
@@ -134,13 +133,12 @@ namespace HSMServer.Core.Cache
 
         /// <returns>product (without parent) with name = name</returns>
         public ProductModel GetProductByName(string name) =>
-            _tree.FirstOrDefault(p => p.Value.ParentProduct == null && p.Value.DisplayName == name).Value;
+            _tree.FirstOrDefault(p => p.Value.Parent == null && p.Value.DisplayName == name).Value;
 
         public string GetProductNameById(Guid id) => GetProduct(id)?.DisplayName;
 
         /// <returns>list of root products (without parent)</returns>
-        public List<ProductModel> GetProducts() =>
-            _tree.Values.Where(p => p.ParentProduct == null).ToList();
+        public List<ProductModel> GetProducts() => _tree.Values.Where(p => p.Parent == null).ToList();
 
         public bool TryCheckKeyWritePermissions(BaseRequestModel request, out string message)
         {
@@ -149,7 +147,7 @@ namespace HSMServer.Core.Cache
                 return false;
 
             // TODO: remove after refactoring sensors data storing
-            if (product.ParentProduct is not null)
+            if (product.Parent is not null)
             {
                 message = "Temporarily unavailable feature. Please select a product without a parent";
                 return false;
@@ -249,7 +247,7 @@ namespace HSMServer.Core.Cache
             if (!_sensors.TryRemove(sensorId, out var sensor))
                 return;
 
-            if (_tree.TryGetValue(sensor.ParentProduct.Id, out var parent))
+            if (_tree.TryGetValue(sensor.Parent.Id, out var parent))
                 parent.Sensors.TryRemove(sensorId, out _);
 
             _databaseCore.RemoveSensorWithMetadata(sensorId.ToString());

@@ -75,7 +75,7 @@ namespace HSMServer.Core.Model
             {
                 Id = Id.ToString(),
                 AuthorId = AuthorId.ToString(),
-                ParentProductId = ParentProduct?.Id.ToString(),
+                ParentProductId = Parent?.Id.ToString(),
                 State = (int)State,
                 DisplayName = DisplayName,
                 Description = Description,
