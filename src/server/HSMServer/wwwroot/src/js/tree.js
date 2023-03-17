@@ -157,7 +157,7 @@ function buildContextMenu(node) {
         if (isMutedState !== '') {
             if (!(isMutedState === "True")) {
                 contextMenu["Mute"] = {
-                    "label": `Mute ${getKeyByValue(curType)}`,
+                    "label": `Mute ${getKeyByValue(curType)} for...`,
                     "separator_after": true,
                     "separator_before": true,
                     "action": _ => ignoreNotificationsRequest(node, TelegramTarget.Groups, 'true')
