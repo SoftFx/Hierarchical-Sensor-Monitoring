@@ -20,7 +20,7 @@ namespace HSMServer.Core.Model
     }
 
 
-    public abstract class BaseSensorModel : NodeBaseModel
+    public abstract class BaseSensorModel : BaseNodeModel
     {
         private static readonly PolicyResult _muteResult = new(SensorStatus.OffTime, "Muted");
 

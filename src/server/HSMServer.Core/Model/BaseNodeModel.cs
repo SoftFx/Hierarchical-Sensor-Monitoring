@@ -7,7 +7,7 @@ using System.Linq;
 
 namespace HSMServer.Core.Model
 {
-    public abstract class NodeBaseModel
+    public abstract class BaseNodeModel
     {
         public ServerPolicyCollection ServerPolicy { get; } = new();
 
@@ -27,14 +27,12 @@ namespace HSMServer.Core.Model
         public string Description { get; private set; }
 
 
-        public Guid? RootProductId => Parent?.RootProductId;
-
         public string RootProductName => Parent?.RootProductName ?? DisplayName;
 
         public string Path => Parent is null ? string.Empty : $"{Parent.Path}/{DisplayName}";
 
 
-        protected NodeBaseModel()
+        protected BaseNodeModel()
         {
             Id = Guid.NewGuid();
             AuthorId = Guid.Empty;
@@ -43,12 +41,12 @@ namespace HSMServer.Core.Model
             ServerPolicy.ExpectedUpdate.Uploaded += (_, _) => HasUpdateTimeout();
         }
 
-        protected NodeBaseModel(string name) : this()
+        protected BaseNodeModel(string name) : this()
         {
             DisplayName = name;
         }
 
-        protected NodeBaseModel(BaseNodeEntity entity) : this()
+        protected BaseNodeModel(BaseNodeEntity entity) : this()
         {
             Id = Guid.Parse(entity.Id);
             AuthorId = Guid.TryParse(entity.AuthorId, out var authorId) ? authorId : null;
@@ -59,7 +57,7 @@ namespace HSMServer.Core.Model
         }
 
 
-        protected internal NodeBaseModel AddParent(ProductModel parent)
+        protected internal BaseNodeModel AddParent(ProductModel parent)
         {
             Parent = parent;
 

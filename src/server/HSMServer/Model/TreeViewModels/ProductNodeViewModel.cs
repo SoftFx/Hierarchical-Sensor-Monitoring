@@ -1,5 +1,4 @@
-﻿using HSMCommon.Constants;
-using HSMCommon.Extensions;
+﻿using HSMCommon.Extensions;
 using HSMServer.Core.Model;
 using HSMServer.Helpers;
 using HSMServer.Model.AccessKeysViewModels;
@@ -37,7 +36,7 @@ namespace HSMServer.Model.TreeViewModel
 
         public ProductNodeViewModel(ProductModel model) : base(model.Id)
         {
-            Path = $"{model.Path}{CommonConstants.SensorPathSeparator}";
+            Path = $"{model.Path}/";
             Notifications = new(model.NotificationsSettings);
 
             Update(model);

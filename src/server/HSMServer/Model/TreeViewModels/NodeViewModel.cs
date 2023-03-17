@@ -30,6 +30,9 @@ namespace HSMServer.Model.TreeViewModel
 
         public string Path { get; protected set; }
 
+        public string FullPath => $"{RootProduct?.Name}/{Path}";
+
+
         public string Description { get; protected set; }
 
         public bool IsOwnExpectedUpdateInterval { get; protected set; }
@@ -57,7 +60,7 @@ namespace HSMServer.Model.TreeViewModel
         }
 
 
-        protected void Update(NodeBaseModel model)
+        protected void Update(BaseNodeModel model)
         {
             Name = model.DisplayName;
             Description = model.Description;

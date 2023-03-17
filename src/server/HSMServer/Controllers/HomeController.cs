@@ -187,9 +187,9 @@ namespace HSMServer.Controllers
             var decodedId = SensorPathHelper.DecodeGuid(selectedId);
 
             if (_treeViewModel.Nodes.TryGetValue(decodedId, out var node))
-                return isFullPath ? $"{node.RootProduct.Name}{node.Path}" : node.Path;
+                return isFullPath ? node.FullPath : node.Path;
             else if (_treeViewModel.Sensors.TryGetValue(decodedId, out var sensor))
-                return isFullPath ? $"{sensor.RootProduct.Name}{sensor.Path}" : sensor.Path;
+                return isFullPath ? node.FullPath : sensor.Path;
 
             return string.Empty;
         }

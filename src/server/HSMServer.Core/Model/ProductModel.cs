@@ -14,7 +14,7 @@ namespace HSMServer.Core.Model
     }
 
 
-    public sealed class ProductModel : NodeBaseModel
+    public sealed class ProductModel : BaseNodeModel
     {
         public ConcurrentDictionary<Guid, AccessKeyModel> AccessKeys { get; } = new();
 
