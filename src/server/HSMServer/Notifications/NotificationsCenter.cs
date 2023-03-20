@@ -14,7 +14,7 @@ namespace HSMServer.Notifications
         public NotificationsCenter(IUserManager userManager, ITreeValuesCache cache, IConfigurationProvider config)
         {
             TelegramBot = new(userManager, cache, config);
-            //TelegramBot.StartBot();
+            TelegramBot.StartBot();
         }
 
         public async ValueTask DisposeAsync()
