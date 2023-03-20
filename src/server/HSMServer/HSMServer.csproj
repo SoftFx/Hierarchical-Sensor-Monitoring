@@ -5,11 +5,11 @@
         <DocumentationFile>HSMSwaggerComments.xml</DocumentationFile>
         <NoWarn>$(NoWarn);1591</NoWarn>
         <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
-        <Version>3.16.0</Version>
+        <Version>3.16.1</Version>
         <Authors>HSM team</Authors>
         <Company>Soft-FX</Company>
         <PackageLicenseExpression>MIT</PackageLicenseExpression>
-        <Copyright>Copyright © 2022</Copyright>
+        <Copyright>Copyright © 2023</Copyright>
         <ContainerImageName>hsmonitoring/hierarchical_sensor_monitoring</ContainerImageName>
     </PropertyGroup>
 
