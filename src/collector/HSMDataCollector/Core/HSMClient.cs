@@ -13,8 +13,8 @@ namespace HSMDataCollector.Core
 {
     internal sealed class HSMClient : IDisposable
     {
-        private readonly IDataQueue _dataQueue;
         private readonly HttpClient _client;
+        private readonly IDataQueue _dataQueue;
         private readonly LoggerManager _logManager;
         private readonly string _listSendingAddress;
         private readonly string _fileSendingAddress;

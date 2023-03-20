@@ -29,16 +29,10 @@ namespace HSMDataCollector.DefaultSensors.SensorBases
         
         protected virtual SensorStatus GetStatus() => SensorStatus.Ok;
 
-        protected virtual void SendValue(SensorValueBase value)
-        {
-            ReceiveSensorValue?.Invoke(value);
-        }
-
+        protected void SendValue(SensorValueBase value) => ReceiveSensorValue?.Invoke(value);
         
-        internal virtual Task<bool> Start()
-        {
-            return Task.FromResult(true);
-        }
+        
+        internal virtual Task<bool> Start() => Task.FromResult(true);
         
         internal virtual Task Stop() => Task.CompletedTask;
 
