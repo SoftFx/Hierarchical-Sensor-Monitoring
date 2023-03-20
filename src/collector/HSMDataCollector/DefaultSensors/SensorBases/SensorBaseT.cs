@@ -11,19 +11,7 @@ namespace HSMDataCollector.DefaultSensors.SensorBases
     {
         protected SensorBase(SensorOptions options) : base(options) { }
         
-
-        protected void SendValue<T>()
-        {
-            base.SendValue(BuildSensorValue());
-        }
-        
         protected abstract T GetValue();
-
-
-        protected static SensorValueBase BuildSensorValue(string comment = default, SensorStatus status = SensorStatus.Ok )
-        {
-            return BuildSensorValue();
-        }
         
         protected SensorValueBase BuildSensorValue()
         {

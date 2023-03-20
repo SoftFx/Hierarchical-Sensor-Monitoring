@@ -1,4 +1,5 @@
 using System;
+using System.Threading.Tasks;
 using HSMDataCollector.DefaultSensors.SensorBases;
 using HSMDataCollector.Options;
 
@@ -18,5 +19,12 @@ namespace HSMDataCollector.DefaultSensors.Other
             _startTime = options.StartTime;
         }
         protected override string GetValue() => $"Version: {_version}, Start: {_startTime}";
+        
+        internal override Task<bool> Start()
+        {
+            SendValue(BuildSensorValue());
+            return base.Start();
+        }
+
     }
 }

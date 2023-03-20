@@ -33,8 +33,7 @@ namespace HSMDataCollector.DefaultSensors.SensorBases
         {
             ReceiveSensorValue?.Invoke(value);
         }
-        
-        protected void SendCollectedValue(SensorValueBase value) => ReceiveSensorValue?.Invoke(value);
+
         
         internal virtual Task<bool> Start()
         {
