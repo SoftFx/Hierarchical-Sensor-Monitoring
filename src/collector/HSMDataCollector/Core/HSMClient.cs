@@ -15,15 +15,9 @@ namespace HSMDataCollector.Core
     {
         private readonly IDataQueue _dataQueue;
         private readonly HttpClient _client;
+        private readonly LoggerManager _logManager;
         private readonly string _listSendingAddress;
         private readonly string _fileSendingAddress;
-        private readonly LoggerManager _logManager;
-
-        /// <summary>
-        /// The event is fired after the values queue (current capacity is 100000 items) overflows
-        /// </summary>
-        [Obsolete("Will never be called")]
-        private event EventHandler ValuesQueueOverflow;
         
         
         internal HSMClient(CollectorOptions options, IDataQueue dataQueue, LoggerManager logger)
@@ -46,14 +40,12 @@ namespace HSMDataCollector.Core
             _client = new HttpClient(handler);
             _client.DefaultRequestHeaders.Add(nameof(BaseRequest.Key), options.AccessKey);
             
-            _dataQueue.QueueOverflow += DataQueueOverflow;
             _dataQueue.FileReceving += DataQueueFileReceiving;
             _dataQueue.SendValues += DataQueueSendValues;
         }
 
         public void Dispose()
         {
-            _dataQueue.QueueOverflow -= DataQueueOverflow;
             _dataQueue.FileReceving -= DataQueueFileReceiving;
             _dataQueue.SendValues -= DataQueueSendValues;
             
@@ -110,11 +102,7 @@ namespace HSMDataCollector.Core
                 _logManager.Logger?.Error($"Failed to send: {e}");
             }
         }
-
-        private void DataQueueOverflow(object sender, DateTime e) => OnValuesQueueOverflow();
-
-        private void OnValuesQueueOverflow() => ValuesQueueOverflow?.Invoke(this, EventArgs.Empty);
-
+        
         private void DataQueueSendValues(object sender, List<SensorValueBase> e) => SendMonitoringData(e);
     }
 }
