@@ -1,8 +1,10 @@
-﻿using HSMDataCollector.Core;
+﻿using System;
+using HSMDataCollector.Core;
 using HSMSensorDataObjects.SensorValueRequests;
 
 namespace HSMDataCollector.Base
 {
+    [Obsolete("Will be replaced by ./SensorBases/SensorBase.cs")]
     public abstract class SensorBase : ISensor
     {
         private readonly IValuesQueue _queue;

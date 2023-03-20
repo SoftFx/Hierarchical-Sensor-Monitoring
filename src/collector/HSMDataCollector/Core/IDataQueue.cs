@@ -11,7 +11,7 @@ namespace HSMDataCollector.Core
 
         event EventHandler<List<SensorValueBase>> SendValues;
         event EventHandler<DateTime> QueueOverflow;
-        event EventHandler<FileSensorValue> FileReceving;
+        event EventHandler<FileSensorValue> FileReceiving;
 
 
         void ReturnData(List<SensorValueBase> values);

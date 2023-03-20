@@ -40,13 +40,13 @@ namespace HSMDataCollector.Core
             _client = new HttpClient(handler);
             _client.DefaultRequestHeaders.Add(nameof(BaseRequest.Key), options.AccessKey);
             
-            _dataQueue.FileReceving += DataQueueFileReceiving;
+            _dataQueue.FileReceiving += DataQueueFileReceiving;
             _dataQueue.SendValues += DataQueueSendValues;
         }
 
         public void Dispose()
         {
-            _dataQueue.FileReceving -= DataQueueFileReceiving;
+            _dataQueue.FileReceiving -= DataQueueFileReceiving;
             _dataQueue.SendValues -= DataQueueSendValues;
             
             _client.Dispose();
