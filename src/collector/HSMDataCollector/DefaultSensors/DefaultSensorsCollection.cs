@@ -194,7 +194,7 @@ namespace HSMDataCollector.DefaultSensors
             return Register(new ProductInfoSensor(_defaultOptions.ProductInfoMonitoring.GetAndFill(options)));
         }
 
-        private DefaultSensorsCollection AddDisksMonitoring(DiskSensorOptions options, Func<DiskSensorOptions, MonitoringSensorBase> newSensorFunc)
+        private DefaultSensorsCollection AddDisksMonitoring(DiskSensorOptions options, Func<DiskSensorOptions, SensorBase> newSensorFunc)
         {
             foreach (var diskOptions in _defaultOptions.DiskMonitoring.GetAllDisksOptions(options))
                 ToWindows(newSensorFunc(diskOptions));

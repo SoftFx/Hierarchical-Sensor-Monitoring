@@ -51,8 +51,8 @@ namespace HSMDataCollector.Core
         public DataCollector(CollectorOptions options)
         {
             _dataQueue = new DataQueue(options);
-            _hsmClient = new HSMClient(options, _dataQueue, _logManager);
             _sensorsStorage = new SensorsStorage(_dataQueue as IValuesQueue, _logManager);
+            _hsmClient = new HSMClient(options, _dataQueue, _logManager);
             
             _sensorsOptions = new SensorsDefaultOptions();
             _defaultSensors = new DefaultSensorsCollection(_sensorsStorage, _sensorsOptions);

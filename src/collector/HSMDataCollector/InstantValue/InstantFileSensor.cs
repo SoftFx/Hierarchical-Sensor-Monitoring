@@ -23,7 +23,7 @@ namespace HSMDataCollector.InstantValue
             _fileName = fileName;
             _fileExtension = extension;
         }
-
+  
 
         public override void Dispose() { }
 

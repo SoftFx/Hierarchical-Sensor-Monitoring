@@ -20,6 +20,11 @@ namespace HSMDataCollector.DefaultSensors.SensorBases
         protected abstract T GetValue();
 
 
+        protected static SensorValueBase BuildSensorValue(string comment = default, SensorStatus status = SensorStatus.Ok )
+        {
+            return BuildSensorValue();
+        }
+        
         protected SensorValueBase BuildSensorValue()
         {
             try
