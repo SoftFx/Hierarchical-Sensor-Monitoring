@@ -39,10 +39,6 @@
             <tr>
                 <td class="w-25">
                     Expected update interval
-                    @if (!Model.IsOwnExpectedUpdateInterval)
-                    {
-                        <span>(from parent)</span>
-                    }
                     <i class='fas fa-question-circle' title='Time format: dd.hh:mm:ss min value 00:01:00'></i>
                 </td>
                 <td id="expectedUpdateInterval_@(Model.EncodedId)">

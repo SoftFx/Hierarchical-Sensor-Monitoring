@@ -41,7 +41,7 @@ namespace HSMServer.Core.Model
 
         internal bool TimeIsUp(DateTime time)
         {
-            if (TimeInterval.IsCustom())
+            if (TimeInterval.IsCustom() && CustomPeriod > 0L)
                 return (DateTime.UtcNow - time).Ticks > CustomPeriod;
 
             return DateTime.UtcNow > TimeInterval switch
@@ -51,6 +51,7 @@ namespace HSMServer.Core.Model
                 TimeInterval.Day => time.AddDays(1),
                 TimeInterval.Week => time.AddDays(7),
                 TimeInterval.Month => time.AddMonths(1),
+                TimeInterval.Custom => DateTime.MaxValue, //for Never 
                 _ => throw new NotImplementedException(),
             };
         }

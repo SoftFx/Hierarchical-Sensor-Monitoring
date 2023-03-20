@@ -49,15 +49,15 @@ namespace HSMServer.BackgroundTask
         private void RemoveOutdatedIgnoredNotifications()
         {
             foreach (var user in _userManager.GetUsers())
-                if (CheckResaveNotificationsState(user))
+                if (ShouldRemoveIgnoreStatus(user))
                     _userManager.UpdateUser(user);
 
             foreach (var product in _tree.GetRootProducts())
-                if (CheckResaveNotificationsState(product))
+                if (ShouldRemoveIgnoreStatus(product))
                     _cache.UpdateProduct(_cache.GetProduct(product.Id));
         }
 
-        private static bool CheckResaveNotificationsState(INotificatable entity)
+        private static bool ShouldRemoveIgnoreStatus(INotificatable entity)
         {
             bool needResave = false;
 

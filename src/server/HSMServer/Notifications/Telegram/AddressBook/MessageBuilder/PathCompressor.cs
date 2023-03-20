@@ -27,7 +27,7 @@ namespace HSMServer.Notifications.Telegram.AddressBook.MessageBuilder
         internal IEnumerable<string> GetGroupedPaths(CHash hash)
         {
             foreach (var id in hash)
-                if (_sensors.TryGetValue(id, out var sensor) && !sensor.IsRestored)
+                if (_sensors.TryGetValue(id, out var sensor)) //&& !sensor.IsRestored should be fixed early
                     ApplyToGroups(sensor.Path);
 
             foreach (var group in _groups)

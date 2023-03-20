@@ -36,6 +36,8 @@ namespace HSMServer.Model
         Week,
         [Display(Name = "1 month")]
         Month,
+        [Display(Name = "From parent")]
+        FromParent,
         Forever,
         Custom,
     }
@@ -74,7 +76,7 @@ namespace HSMServer.Model
 
         internal void Update(TimeIntervalModel model)
         {
-            var interval = model?.TimeInterval ?? CoreTimeInterval.Custom;
+            var interval = model?.TimeInterval ?? CoreTimeInterval.FromParent;
             var customPeriod = model?.CustomPeriod ?? 0L;
 
             TimeInterval = SetTimeInterval(interval, customPeriod);
@@ -92,6 +94,7 @@ namespace HSMServer.Model
                 TimeInterval.Day => CoreTimeInterval.Day,
                 TimeInterval.Week => CoreTimeInterval.Week,
                 TimeInterval.Month => CoreTimeInterval.Month,
+                TimeInterval.FromParent => CoreTimeInterval.FromParent,
                 _ => CoreTimeInterval.Custom,
             };
 
@@ -101,7 +104,7 @@ namespace HSMServer.Model
         }
 
 
-        private static TimeInterval SetTimeInterval(CoreTimeInterval interval, long customInterval) =>
+        private static TimeInterval SetTimeInterval(CoreTimeInterval interval, long ticks) =>
             interval switch
             {
                 CoreTimeInterval.TenMinutes => TimeInterval.TenMinutes,
@@ -109,7 +112,8 @@ namespace HSMServer.Model
                 CoreTimeInterval.Day => TimeInterval.Day,
                 CoreTimeInterval.Week => TimeInterval.Week,
                 CoreTimeInterval.Month => TimeInterval.Month,
-                CoreTimeInterval.Custom => customInterval == 0L ? TimeInterval.None : TimeInterval.Custom,
+                CoreTimeInterval.FromParent => TimeInterval.FromParent,
+                CoreTimeInterval.Custom => ticks == 0L ? TimeInterval.None : TimeInterval.Custom,
                 _ => TimeInterval.None,
             };
 

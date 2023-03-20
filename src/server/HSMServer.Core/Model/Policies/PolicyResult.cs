@@ -40,7 +40,7 @@ namespace HSMServer.Core.Model
 
         internal PolicyResult(SensorStatus result, string comment, string icon = null)
         {
-            _results = new() { (result, icon, comment) };
+            _results = new() { (result, icon ?? result.ToIcon(), comment) };
         }
 
 

@@ -8,6 +8,7 @@ namespace HSMServer.Model.ViewModel
         protected static readonly List<TimeInterval> _predefinedIntervals =
             new()
             {
+                TimeInterval.FromParent,
                 TimeInterval.None,
                 TimeInterval.TenMinutes,
                 TimeInterval.Hour,
@@ -21,8 +22,6 @@ namespace HSMServer.Model.ViewModel
         public string Path { get; }
 
         public string ProductName { get; }
-
-        public bool IsOwnExpectedUpdateInterval { get; }
 
         public string EncodedId { get; set; }
         
@@ -41,7 +40,6 @@ namespace HSMServer.Model.ViewModel
             Description = model.Description;
 
             ExpectedUpdateInterval = new(model.ExpectedUpdateInterval.ToModel(), _predefinedIntervals);
-            IsOwnExpectedUpdateInterval = model.IsOwnExpectedUpdateInterval;
         }
     }
 }
