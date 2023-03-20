@@ -1,0 +1,41 @@
+﻿@using HSMServer.Model.Groups;
+
+@model GroupViewModel
+
+@addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
+
+
+<form method="post">
+    <div class="form-group row mt-2">
+        <label class="col-2 col-form-label" asp-for="Name"></label>
+        <label class="col-auto col-form-label px-0" asp-for="Name">@Model.Name</label>
+    </div>
+
+    <div class="form-group row mt-2">
+        <label class="col-2 col-form-label" asp-for="Description"></label>
+        <div class="col-10 p-0">
+            <textarea type='text' class='form-control form-control-textarea' asp-for="Description" value='@Model.Description'></textarea>
+        </div>
+    </div>
+
+    <div class="form-group row mt-2">
+        <label class="col-2 col-form-label" asp-for="Color"></label>
+        <div class="col-auto p-0">
+            <input class="form-control form-control-color" type="color" asp-for="Color">
+        </div>
+    </div>
+
+    <div class="form-group row mt-2">
+        <label class="col-2 col-form-label" asp-for="Author"></label>
+        <label class="col-auto col-form-label px-0" asp-for="Author">@Model.Author</label>
+    </div>
+
+    <div class="form-group row mt-2">
+        <label class="col-2 col-form-label" asp-for="CreationDate"></label>
+        <label class="col-auto col-form-label px-0" asp-for="CreationDate">@Model.CreationDate</label>
+    </div>
+
+    <div class="d-flex justify-content-end my-1">
+        <button type="submit" class="btn btn-secondary independentSizeButton">Save</button>
+    </div>
+</form>

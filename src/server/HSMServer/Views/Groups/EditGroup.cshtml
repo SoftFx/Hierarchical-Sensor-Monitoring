@@ -1,36 +1,60 @@
 ﻿@using HSMServer.Model.Groups;
+@using HSMServer.Controllers;
 
 @model GroupViewModel
 
 @{
     var isAdd = Model.Id == null;
+    var disabledTab = isAdd ? "disabled" : string.Empty;
 }
 
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
 
 
 <div class="container">
-    <div class="row justify-content-center">
-        @if (isAdd)
-        {
-            <h4 class="my-3 text-break">Add group</h4>
-        }
-        else
-        {
-            <h4 class="my-3 text-break">Edit group '@Model.Name'</h4>
-        }
+    <div class="row w-100 justify-content-center">
+        <h4 class="my-3 text-break">@(isAdd ? "Add group" : $"Edit group '{@Model.Name}'")</h4>
 
-        <form method="post">
-            <input id="productKey" asp-for="@Model.Id" value="@Model.Id" style="display: none" />
+        <ul class="nav nav-tabs" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="general-tab" data-bs-toggle="tab" data-bs-target="#general" type="button" role="tab" aria-controls="general" aria-selected="true">General</button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link @disabledTab" id="sensors-tab" data-bs-toggle="tab" data-bs-target="#sensors" type="button" role="tab" aria-controls="sensors" aria-selected="false">Sensors settings</button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link @disabledTab" id="notifications-tab" data-bs-toggle="tab" data-bs-target="#notifications" type="button" role="tab" aria-controls="notifications" aria-selected="false">Notifications</button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link @disabledTab" id="products-tab" data-bs-toggle="tab" data-bs-target="#products" type="button" role="tab" aria-controls="products" aria-selected="false">Products</button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link @disabledTab" id="members-tab" data-bs-toggle="tab" data-bs-target="#members" type="button" role="tab" aria-controls="members" aria-selected="false">Members</button>
+            </li>
+        </ul>
+        <div class="tab-content w-100" id="myTabContent">
+            <div class="tab-pane fade show active" id="general" role="tabpanel" aria-labelledby="general-tab">
+                <form method="post">
+                    <input id="productKey" asp-for="@Model.Id" value="@Model.Id" style="display: none" />
 
-            <div class="form-group row">
-                <label class="col-2 col-form-label" asp-for="Name"></label>
-                <div class="col-auto p-0">
-                    <input class="form-control form-control-sm" asp-for="Name">
-                </div>
+                    @if (isAdd)
+                    {
+                        @await Html.PartialAsync("_AddGeneralSettings", Model)
+                    }
+                    else
+                    {
+                        @await Html.PartialAsync("_EditGeneralSettings", Model)
+                    }
+                </form>
             </div>
 
-            <button type="submit" class="btn btn-secondary my-1">Save</button>
-        </form>
+            <div class="tab-pane fade" id="sensors" role="tabpanel" aria-labelledby="sensors-tab">...</div>
+
+            <div class="tab-pane fade" id="notifications" role="tabpanel" aria-labelledby="notifications-tab">...</div>
+
+            <div class="tab-pane fade" id="products" role="tabpanel" aria-labelledby="products-tab">...</div>
+
+            <div class="tab-pane fade" id="members" role="tabpanel" aria-labelledby="members-tab">...</div>
+        </div>
     </div>
 </div>

@@ -1,4 +1,5 @@
-﻿using HSMServer.Groups;
+﻿using HSMServer.Extensions;
+using HSMServer.Groups;
 using HSMServer.Model.Groups;
 using Microsoft.AspNetCore.Mvc;
 using System;
@@ -25,7 +26,7 @@ namespace HSMServer.Controllers
         [HttpPost]
         public IActionResult EditGroup(GroupViewModel group)
         {
-            return View(new GroupViewModel() { Id = Guid.NewGuid(), Name = group.Name });
+            return View(new GroupViewModel() { Id = Guid.NewGuid(), Name = group.Name, Description = group.Description, Color = group.Color, Author = "PalinaSh", CreationDate = DateTime.UtcNow.ToDefaultFormat() });
         }
     }
 }
