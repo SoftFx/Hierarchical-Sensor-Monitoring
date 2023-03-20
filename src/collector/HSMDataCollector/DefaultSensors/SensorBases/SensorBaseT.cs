@@ -12,21 +12,13 @@ namespace HSMDataCollector.DefaultSensors.SensorBases
         protected SensorBase(SensorOptions options) : base(options) { }
         
         protected abstract T GetValue();
-        
-        protected SensorValueBase BuildSensorValue()
+
+
+        protected void SendValue(T value, string comment = "", SensorStatus status = SensorStatus.Ok)
         {
-            try
-            {
-                var value = SensorValuesFactory.BuildValue(GetValue());
-
-                return value.Complete(SensorPath, GetComment(), GetStatus());
-            }
-            catch (Exception ex)
-            {
-                var value = SensorValuesFactory.BuildValue(default(T));
-
-                return value.Complete(SensorPath, ex.Message, SensorStatus.Error);
-            }
+            SendValue(GetSensorValue(value).Complete(SensorPath, comment, status));
         }
+
+        protected static SensorValueBase GetSensorValue(T value) => SensorValuesFactory.BuildValue(value);
     }
 }

@@ -51,7 +51,7 @@ namespace HSMDataCollector.DefaultSensors
         protected void OnTimerTick(object _ = null)
         {
             if (NeedSendValue)
-                SendValue(BuildSensorValue());
+                SendValue(GetValue());
         }
     }
 }

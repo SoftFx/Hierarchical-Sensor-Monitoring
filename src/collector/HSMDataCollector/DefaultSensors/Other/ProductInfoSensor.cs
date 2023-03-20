@@ -22,7 +22,7 @@ namespace HSMDataCollector.DefaultSensors.Other
         
         internal override Task<bool> Start()
         {
-            SendValue(BuildSensorValue());
+            SendValue(GetValue());
             return base.Start();
         }
 
