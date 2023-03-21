@@ -60,7 +60,6 @@ namespace HSMServer.Notifications
 
             ExpectedSendingTime = GetNextNotificationTime(notificationsDelay);
 
-            _compressor.Clear();
             _messageTree.Clear();
 
             return builder.ToString();

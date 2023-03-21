@@ -27,8 +27,8 @@ namespace HSMServer.Notifications.Telegram.AddressBook.MessageBuilder
         internal IEnumerable<string> GetGroupedPaths(CHash hash)
         {
             foreach (var id in hash)
-                if (_sensors.TryGetValue(id, out var sensor)) //&& !sensor.IsRestored should be fixed early
-                    ApplyToGroups(sensor.Path);
+                if (_sensors.TryGetValue(id, out var sensor) && sensor.IsRestored)
+                    ApplyToGroups(sensor);
 
             foreach (var group in _groups)
                 yield return group.ToString();
@@ -36,18 +36,13 @@ namespace HSMServer.Notifications.Telegram.AddressBook.MessageBuilder
             _groups.Clear();
         }
 
-        internal new void Clear()
+
+        private void ApplyToGroups(BaseSensorModel sensor)
         {
-            _sensors.Clear();
-            _groups.Clear();
+            _sensors.Remove(sensor.Id, out _);
+            this.Remove(sensor.Id, out _);
 
-            base.Clear();
-        }
-
-
-        private void ApplyToGroups(string strPath)
-        {
-            var path = strPath.Split(GroupedPath.Separator, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            var path = sensor.Path.Split(GroupedPath.Separator, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
             foreach (var group in _groups)
                 if (group.Apply(path))
