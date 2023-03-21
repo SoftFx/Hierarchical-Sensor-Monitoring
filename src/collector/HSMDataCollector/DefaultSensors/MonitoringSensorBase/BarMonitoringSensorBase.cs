@@ -44,9 +44,7 @@ namespace HSMDataCollector.DefaultSensors
         {
             _collectTimer?.Dispose();
 
-            base.Stop();
-            
-            return Task.CompletedTask;
+            return base.Stop();
         }
 
 

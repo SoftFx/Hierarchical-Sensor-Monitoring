@@ -9,9 +9,8 @@ namespace HSMDataCollector.Core
         bool Disposed { get; }
 
 
-        event EventHandler<List<SensorValueBase>> SendValues;
-        event EventHandler<DateTime> QueueOverflow;
-        event EventHandler<FileSensorValue> FileReceiving;
+        event Action<List<SensorValueBase>> SendValues;
+        event Action<FileSensorValue> FileReceiving;
 
 
         void ReturnData(List<SensorValueBase> values);

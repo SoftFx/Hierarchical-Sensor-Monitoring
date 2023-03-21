@@ -24,9 +24,9 @@ namespace HSMDataCollector.Core
         public bool Disposed { get; private set; }
 
 
-        public event EventHandler<List<SensorValueBase>> SendValues;
-        public event EventHandler<DateTime> QueueOverflow;
-        public event EventHandler<FileSensorValue> FileReceiving;
+        public event Action<List<SensorValueBase>> SendValues;
+        public event Action<DateTime> QueueOverflow;
+        public event Action<FileSensorValue> FileReceiving;
 
 
         public DataQueue(CollectorOptions options)
@@ -146,7 +146,7 @@ namespace HSMDataCollector.Core
                         switch (failedValue)
                         {
                             case FileSensorValue fileValue:
-                                FileReceiving?.Invoke(this, fileValue);
+                                FileReceiving?.Invoke(fileValue);
                                 break;
 
                             case BarSensorValueBase barSensor when barSensor.Count == 0:
@@ -173,7 +173,7 @@ namespace HSMDataCollector.Core
                     switch (value)
                     {
                         case FileSensorValue fileValue:
-                            FileReceiving?.Invoke(this, fileValue);
+                            FileReceiving?.Invoke(fileValue);
                             break;
 
                         case BarSensorValueBase barSensor when barSensor.Count == 0:
@@ -192,8 +192,8 @@ namespace HSMDataCollector.Core
             return dataList;
         }
 
-        private void OnQueueOverflow() => QueueOverflow?.Invoke(this, DateTime.Now);
+        private void OnQueueOverflow() => QueueOverflow?.Invoke(DateTime.Now);
 
-        private void OnSendValues(List<SensorValueBase> values) => SendValues?.Invoke(this, values);
+        private void OnSendValues(List<SensorValueBase> values) => SendValues?.Invoke(values);
     }
 }

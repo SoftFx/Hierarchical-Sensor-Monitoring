@@ -30,7 +30,7 @@ namespace HSMDataCollector.Core
             _fileSendingAddress = options.FileEndpoint;
 
             ServicePointManager.ServerCertificateValidationCallback += (sender, cert, chain, error) => true;
-            ServicePointManager.SecurityProtocol |= SecurityProtocolType.Tls11 | SecurityProtocolType.Tls12;
+            ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls11 | SecurityProtocolType.Tls12;
             
             HttpClientHandler handler = new HttpClientHandler
             {
@@ -79,7 +79,7 @@ namespace HSMDataCollector.Core
             }
         }
         
-        internal void DataQueueFileReceiving(object _, FileSensorValue value)
+        internal void DataQueueFileReceiving(FileSensorValue value)
         {
             try
             {
@@ -103,6 +103,6 @@ namespace HSMDataCollector.Core
             }
         }
         
-        private void DataQueueSendValues(object sender, List<SensorValueBase> e) => SendMonitoringData(e);
+        private void DataQueueSendValues(List<SensorValueBase> e) => SendMonitoringData(e);
     }
 }

@@ -1,10 +1,9 @@
 using System;
 using System.Threading.Tasks;
 using HSMDataCollector.Options;
-using HSMSensorDataObjects;
 using HSMSensorDataObjects.SensorValueRequests;
 
-namespace HSMDataCollector.DefaultSensors.SensorBases
+namespace HSMDataCollector.DefaultSensors
 {
     public abstract class SensorBase : IDisposable
     {
@@ -23,12 +22,8 @@ namespace HSMDataCollector.DefaultSensors.SensorBases
         {
             _nodePath = options.NodePath;
         }
-        
 
-        protected virtual string GetComment() => null;
         
-        protected virtual SensorStatus GetStatus() => SensorStatus.Ok;
-
         protected void SendValue(SensorValueBase value) => ReceiveSensorValue?.Invoke(value);
         
         
