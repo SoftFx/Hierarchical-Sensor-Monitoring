@@ -228,7 +228,7 @@ function buildContextMenu(node) {
                 $('#modalDeleteBody').empty();
 
                 $.when(getFullPathAction(node.id)).done((path) => {
-                    $('#modalDeleteBody').append(`Do you really want to clean history for ${path} ?`);
+                    $('#modalDeleteBody').append(`Do you really want to clean history for ${path}?`);
                     modal.show();
                 })
 
