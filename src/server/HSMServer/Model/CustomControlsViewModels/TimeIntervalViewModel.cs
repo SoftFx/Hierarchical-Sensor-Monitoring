@@ -47,8 +47,13 @@ namespace HSMServer.Model
     {
         public const string CustomTemplate = "dd.HH:mm:ss";
 
+        private static long _id = 0L;
+
 
         public List<SelectListItem> IntervalItems { get; }
+
+        public string Id { get; } = $"{_id++}";
+
 
         public bool CustomItemIsVisible { get; init; } = true;
 

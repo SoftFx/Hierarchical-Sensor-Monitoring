@@ -23,11 +23,15 @@ namespace HSMServer.Model.ViewModel
 
         public string ProductName { get; }
 
-        public string EncodedId { get; set; }
-        
-        public string Description { get; set; }
 
         public TimeIntervalViewModel ExpectedUpdateInterval { get; set; }
+
+        public TimeIntervalViewModel SensorRestorePolicy { get; set; }
+
+
+        public string EncodedId { get; set; }
+
+        public string Description { get; set; }
 
 
         public NodeInfoBaseViewModel() { }
@@ -40,6 +44,7 @@ namespace HSMServer.Model.ViewModel
             Description = model.Description;
 
             ExpectedUpdateInterval = new(model.ExpectedUpdateInterval.ToModel(), _predefinedIntervals);
+            SensorRestorePolicy = new(model.SensorRestorePolicy.ToModel(), _predefinedIntervals);
         }
     }
 }

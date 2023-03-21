@@ -17,7 +17,6 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
 
@@ -90,7 +89,7 @@ namespace HSMServer.Controllers
         {
             var decodedId = SensorPathHelper.DecodeGuid(model.EncodedId);
             var newMutingPeriod = model.EndOfIgnorePeriod;
-            
+
             if (_treeViewModel.Nodes.TryGetValue(decodedId, out _))
             {
                 foreach (var sensorId in GetNodeSensors(decodedId))
@@ -101,7 +100,7 @@ namespace HSMServer.Controllers
                 if (_treeViewModel.Sensors.TryGetValue(decodedId, out var sensor))
                     _treeValuesCache.UpdateMutedSensorState(sensor.Id, newMutingPeriod);
             }
-            
+
             UpdateUserNotificationSettings(decodedId, (s, g) => s.Ignore(g, model.EndOfIgnorePeriod));
             UpdateGroupNotificationSettings(decodedId, (s, g) => s.Ignore(g, model.EndOfIgnorePeriod));
         }
@@ -166,7 +165,7 @@ namespace HSMServer.Controllers
         [HttpPost]
         public void EnableNotifications([FromQuery] string selectedId, [FromQuery] NotificationsTarget target) =>
             GetHandler(target)(SensorPathHelper.DecodeGuid(selectedId), (s, g) => s.Enable(g));
-        
+
         [HttpPost]
         public void IgnoreNotifications(IgnoreNotificationsViewModel model) =>
             GetHandler(model.NotificationsTarget)(SensorPathHelper.DecodeGuid(model.EncodedId), (s, g) =>
@@ -222,7 +221,7 @@ namespace HSMServer.Controllers
             {
                 updateSettings?.Invoke(rootProduct.Notifications, sensorId);
             }
-            
+
             _treeValuesCache.UpdateProduct(_treeValuesCache.GetProduct(rootProduct.Id));
         }
 
@@ -405,7 +404,7 @@ namespace HSMServer.Controllers
         }
 
         public IActionResult FilePreview() => View("FilePreview");
-        
+
         private FileValue GetFileSensorValue(string encodedId) =>
             _treeValuesCache.GetSensor(SensorPathHelper.DecodeGuid(encodedId)).LastValue as FileValue;
 
@@ -423,20 +422,21 @@ namespace HSMServer.Controllers
         }
 
         [HttpPost]
-        public IActionResult UpdateSensorInfo(SensorInfoViewModel updatedModel)
+        public IActionResult UpdateSensorInfo(SensorInfoViewModel newModel)
         {
-            if (!_treeViewModel.Sensors.TryGetValue(SensorPathHelper.DecodeGuid(updatedModel.EncodedId), out var sensor))
+            if (!_treeViewModel.Sensors.TryGetValue(SensorPathHelper.DecodeGuid(newModel.EncodedId), out var sensor))
                 return _emptyResult;
 
-            var sensorUpdate = new SensorUpdate
+            var update = new SensorUpdate
             {
                 Id = sensor.Id,
-                Description = updatedModel.Description ?? string.Empty,
-                Unit = updatedModel.Unit ?? string.Empty,
-                ExpectedUpdateInterval = updatedModel.ExpectedUpdateInterval.ToModel(),
+                Description = newModel.Description ?? string.Empty,
+                Unit = newModel.Unit ?? string.Empty,
+                ExpectedUpdateInterval = newModel.ExpectedUpdateInterval.ToModel(),
+                RestoreInterval = newModel.SensorRestorePolicy.ToModel(),
             };
 
-            _treeValuesCache.UpdateSensor(sensorUpdate);
+            _treeValuesCache.UpdateSensor(update);
 
             return PartialView("_SensorMetaInfo", new SensorInfoViewModel(sensor));
         }
@@ -453,19 +453,20 @@ namespace HSMServer.Controllers
         }
 
         [HttpPost]
-        public IActionResult UpdateProductInfo(ProductInfoViewModel updatedModel)
+        public IActionResult UpdateProductInfo(ProductInfoViewModel newModel)
         {
-            if (!_treeViewModel.Nodes.TryGetValue(SensorPathHelper.DecodeGuid(updatedModel.EncodedId), out var product))
+            if (!_treeViewModel.Nodes.TryGetValue(SensorPathHelper.DecodeGuid(newModel.EncodedId), out var product))
                 return _emptyResult;
 
-            var productUpdate = new ProductUpdate
+            var update = new ProductUpdate
             {
                 Id = product.Id,
-                ExpectedUpdateInterval = updatedModel.ExpectedUpdateInterval.ToModel(),
-                Description = updatedModel.Description
+                ExpectedUpdateInterval = newModel.ExpectedUpdateInterval.ToModel(),
+                RestoreInterval = newModel.SensorRestorePolicy.ToModel(),
+                Description = newModel.Description
             };
 
-            _treeValuesCache.UpdateProduct(productUpdate);
+            _treeValuesCache.UpdateProduct(update);
 
             return PartialView("_ProductMetaInfo", new ProductInfoViewModel(product));
         }

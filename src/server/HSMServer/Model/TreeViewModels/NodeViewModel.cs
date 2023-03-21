@@ -1,4 +1,5 @@
 ﻿using HSMServer.Core.Model;
+using HSMServer.Core.Model.Policies;
 using HSMServer.Extensions;
 using HSMServer.Helpers;
 using System;
@@ -16,12 +17,17 @@ namespace HSMServer.Model.TreeViewModel
 
     public abstract class NodeViewModel
     {
+        public TimeIntervalViewModel ExpectedUpdateInterval { get; } = new();
+
+        public TimeIntervalViewModel SensorRestorePolicy { get; } = new();
+
+
         public Guid Id { get; }
 
         public string EncodedId { get; }
 
-        public TimeIntervalViewModel ExpectedUpdateInterval { get; } = new();
 
+        public string FullPath => $"{RootProduct?.Name}{Path}";
 
         public ProductNodeViewModel RootProduct => Parent?.RootProduct ?? (ProductNodeViewModel)this;
 
@@ -30,12 +36,9 @@ namespace HSMServer.Model.TreeViewModel
 
         public string Path { get; private set; }
 
-        public string FullPath => $"{RootProduct?.Name}{Path}";
 
 
         public string Description { get; protected set; }
-
-        public bool IsOwnExpectedUpdateInterval { get; protected set; }
 
         public DateTime UpdateTime { get; protected set; }
 
@@ -68,12 +71,15 @@ namespace HSMServer.Model.TreeViewModel
             Path = model.Path;
             Description = model.Description;
 
-            var updatePolicy = model.ServerPolicy.ExpectedUpdate;
+            UpdatePolicyView(model.ServerPolicy.ExpectedUpdate, ExpectedUpdateInterval);
+            UpdatePolicyView(model.ServerPolicy.RestoreError, SensorRestorePolicy);
+        }
 
-            IsOwnExpectedUpdateInterval = updatePolicy.IsSet;
 
-            if (!updatePolicy.IsEmpty)
-                ExpectedUpdateInterval.Update(updatePolicy.Policy.Interval);
+        private static void UpdatePolicyView<T>(CollectionProperty<T> property, TimeIntervalViewModel targetView) where T : ServerPolicy, new()
+        {
+            if (!property.IsEmpty)
+                targetView.Update(property.Policy.Interval);
         }
     }
 }
