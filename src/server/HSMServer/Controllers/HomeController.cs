@@ -185,7 +185,7 @@ namespace HSMServer.Controllers
             if (_treeViewModel.Nodes.TryGetValue(decodedId, out var node))
                 return isFullPath ? node.FullPath : node.Path;
             else if (_treeViewModel.Sensors.TryGetValue(decodedId, out var sensor))
-                return isFullPath ? node.FullPath : sensor.Path;
+                return isFullPath ? sensor.FullPath : sensor.Path;
 
             return string.Empty;
         }

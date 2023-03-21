@@ -30,7 +30,7 @@ namespace HSMServer.Model.TreeViewModel
 
         public string Path { get; private set; }
 
-        public string FullPath => $"{RootProduct?.Name}/{Path}";
+        public string FullPath => $"{RootProduct?.Name}{Path}";
 
 
         public string Description { get; protected set; }
