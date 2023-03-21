@@ -8,15 +8,15 @@
 <form method="post">
     <div class="form-group row mt-2">
         <label class="col-2 col-form-label" asp-for="Name"></label>
-        <div class="col-5 p-0">
-            <input class="form-control" asp-for="Name">
+        <div class="col p-0">
+            <input class="form-control mx-auto" asp-for="Name">
         </div>
     </div>
 
     <div class="form-group row mt-2">
         <label class="col-2 col-form-label" asp-for="Description"></label>
-        <div class="col-10 p-0">
-            <textarea type='text' class='form-control form-control-textarea' asp-for="Description" value='@Model.Description'></textarea>
+        <div class="col p-0">
+            <textarea type='text' class='form-control' asp-for="Description" value='@Model.Description'></textarea>
         </div>
     </div>
 
@@ -27,7 +27,10 @@
         </div>
     </div>
 
-    <div class="d-flex justify-content-end my-1">
+    <label class="col-form-label">Products</label>
+    <select class="selectpicker" asp-for="Products" asp-items="@Model.AllProducts" data-live-search="true" data-width="100%" title="Choose products to add" multiple></select>
+
+    <div class="d-flex justify-content-end my-2">
         <button type="submit" class="btn btn-secondary independentSizeButton">Save</button>
     </div>
 </form>

@@ -1,4 +1,6 @@
-﻿using System;
+﻿using Microsoft.AspNetCore.Mvc.Rendering;
+using System;
+using System.Collections.Generic;
 using System.Drawing;
 
 namespace HSMServer.Model.Groups
@@ -9,6 +11,8 @@ namespace HSMServer.Model.Groups
 
         public string CreationDate { get; init; }
 
+        public List<SelectListItem> AllProducts { get; init; }
+
 
         public Guid? Id { get; set; }
 
@@ -17,6 +21,8 @@ namespace HSMServer.Model.Groups
         public string Description { get; set; }
 
         public Color Color { get; set; }
+
+        public List<string> Products { get; set; }
 
 
         public GroupViewModel() { }

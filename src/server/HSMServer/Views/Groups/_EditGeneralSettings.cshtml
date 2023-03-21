@@ -35,6 +35,9 @@
         <label class="col-auto col-form-label px-0" asp-for="CreationDate">@Model.CreationDate</label>
     </div>
 
+    <label class="col-form-label">Products</label>
+    <select class="selectpicker" asp-for="Products" asp-items="@Model.AllProducts" data-live-search="true" data-width="100%" title="Choose products to add" multiple></select>
+
     <div class="d-flex justify-content-end my-1">
         <button type="submit" class="btn btn-secondary independentSizeButton">Save</button>
     </div>
