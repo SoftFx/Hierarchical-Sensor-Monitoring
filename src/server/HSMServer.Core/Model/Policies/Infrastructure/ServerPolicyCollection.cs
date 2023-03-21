@@ -32,7 +32,7 @@ namespace HSMServer.Core.Model.Policies
 
         internal void ApplyPolicy<T>(T serverPolicy) where T : Policy
         {
-            if (_properties.TryGetValue(typeof(T), out var property))
+            if (_properties.TryGetValue(serverPolicy.GetType(), out var property))
                 property.SetPolicy(serverPolicy);
         }
 

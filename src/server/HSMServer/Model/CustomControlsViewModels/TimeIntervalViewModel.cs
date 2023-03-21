@@ -10,6 +10,8 @@ namespace HSMServer.Model
 {
     public enum TimeInterval
     {
+        [Display(Name = "From parent")]
+        FromParent,
         [Display(Name = "Never")]
         None,
         [Display(Name = "5 minutes")]
@@ -36,8 +38,6 @@ namespace HSMServer.Model
         Week,
         [Display(Name = "1 month")]
         Month,
-        [Display(Name = "From parent")]
-        FromParent,
         Forever,
         Custom,
     }

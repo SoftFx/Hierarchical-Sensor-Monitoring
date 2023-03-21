@@ -78,7 +78,7 @@ namespace HSMServer.Model.TreeViewModel
 
         private static void UpdatePolicyView<T>(CollectionProperty<T> property, TimeIntervalViewModel targetView) where T : ServerPolicy, new()
         {
-            if (!property.IsEmpty)
+            if (property.IsSet)
                 targetView.Update(property.Policy.Interval);
         }
     }
