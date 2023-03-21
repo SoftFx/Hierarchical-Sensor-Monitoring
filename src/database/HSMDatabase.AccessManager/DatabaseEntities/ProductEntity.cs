@@ -7,6 +7,7 @@ namespace HSMDatabase.AccessManager.DatabaseEntities
         public string Id { get; init; }
         public string AuthorId { get; init; }
         public string ParentProductId { get; init; }
+        public string GroupId { get; init; }
         public int State { get; init; }
         public string DisplayName { get; init; }
         public string Description { get; init; }

@@ -27,6 +27,12 @@ namespace HSMServer.Model.Groups
         public Dictionary<Guid, ProductRoleEnum> UserRoles { get; init; }
 
 
+        public GroupModel()
+        {
+            Id = Guid.NewGuid();
+            CreationDate = DateTime.UtcNow;
+        }
+
         public GroupModel(GroupEntity entity)
         {
             Id = Guid.Parse(entity.Id);
@@ -35,8 +41,8 @@ namespace HSMServer.Model.Groups
             Description = entity.Description;
             CreationDate = new DateTime(entity.CreationDate);
             Color = Color.FromArgb(entity.Color);
-            ProductIds = entity.ProductIds.Select(Guid.Parse).ToList();
-            UserRoles = entity.UserRoles.ToDictionary(r => Guid.Parse(r.Key), r => (ProductRoleEnum)r.Value);
+            ProductIds = entity.ProductIds?.Select(Guid.Parse).ToList();
+            UserRoles = entity.UserRoles?.ToDictionary(r => Guid.Parse(r.Key), r => (ProductRoleEnum)r.Value);
         }
 
 

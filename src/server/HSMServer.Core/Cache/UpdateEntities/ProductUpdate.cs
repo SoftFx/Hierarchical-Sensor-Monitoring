@@ -5,10 +5,12 @@ namespace HSMServer.Core.Cache.UpdateEntities
 {
     public sealed class ProductUpdate
     {
-        public Guid Id { get; init; }
-        
+        public required Guid Id { get; init; }
+
         public string Description { get; init; }
 
         public TimeIntervalModel ExpectedUpdateInterval { get; init; }
+
+        public Guid? GroupId { get; init; }
     }
 }

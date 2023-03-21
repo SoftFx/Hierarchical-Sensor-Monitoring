@@ -31,7 +31,7 @@
         </ul>
         <div class="tab-content w-100" id="myTabContent">
             <div class="tab-pane fade show active" id="general" role="tabpanel" aria-labelledby="general-tab">
-                <form method="post">
+                <form method="post" asp-action="@(isAdd ? nameof(GroupsController.AddGroup) : nameof(GroupsController.EditGroup))">
                     <input id="productKey" asp-for="@Model.Id" value="@Model.Id" style="display: none" />
 
                     @if (isAdd)

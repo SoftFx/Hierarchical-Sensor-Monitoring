@@ -26,6 +26,8 @@ namespace HSMServer.Core.Model
 
         public ProductState State { get; }
 
+        public Guid? GroupId { get; private set; }
+
         string INotificatable.Name => DisplayName;
 
 
@@ -33,6 +35,7 @@ namespace HSMServer.Core.Model
         {
             Id = Guid.TryParse(entity.Id, out var entityId) ? entityId : Guid.NewGuid(); // TODO: remove Guid.NewGuid() after removing prosuctId string -> Guid migration
             AuthorId = Guid.TryParse(entity.AuthorId, out var authorId) ? authorId : null;
+            GroupId = Guid.TryParse(entity.GroupId, out var groupId) ? groupId : null;
             State = (ProductState)entity.State;
             DisplayName = entity.DisplayName;
             Description = entity.Description;
@@ -71,6 +74,7 @@ namespace HSMServer.Core.Model
                 Id = Id.ToString(),
                 AuthorId = AuthorId.ToString(),
                 ParentProductId = ParentProduct?.Id.ToString(),
+                GroupId = GroupId?.ToString(),
                 State = (int)State,
                 DisplayName = DisplayName,
                 Description = Description,
@@ -82,6 +86,8 @@ namespace HSMServer.Core.Model
         internal ProductModel Update(ProductUpdate updatedProduct)
         {
             Description = updatedProduct.Description ?? Description;
+            GroupId = updatedProduct.GroupId ?? GroupId;
+
             return this;
         }
 
