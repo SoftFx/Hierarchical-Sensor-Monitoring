@@ -9,7 +9,6 @@ namespace HSMDataCollector.Core
     internal sealed class DataQueue : IDataQueue, IValuesQueue
     {
         private readonly TimeSpan _packageSendingPeriod;
-        private readonly int _maxQueueSize;
         private readonly int _maxValuesInPackage;
 
         private readonly Queue<SensorValueBase> _valuesQueue;
@@ -25,13 +24,11 @@ namespace HSMDataCollector.Core
 
 
         public event Action<List<SensorValueBase>> SendValues;
-        public event Action<DateTime> QueueOverflow;
         public event Action<FileSensorValue> FileReceiving;
 
 
         public DataQueue(CollectorOptions options)
         {
-            _maxQueueSize = options.MaxQueueSize;
             _maxValuesInPackage = options.MaxValuesInPackage;
             _packageSendingPeriod = options.PackageSendingPeriod;
 
@@ -101,8 +98,6 @@ namespace HSMDataCollector.Core
             }
 
             ++_internalCount;
-            if (_internalCount == _maxQueueSize)
-                OnQueueOverflow();
         }
 
         public void EnqueueData(SensorValueBase value)
@@ -191,8 +186,6 @@ namespace HSMDataCollector.Core
 
             return dataList;
         }
-
-        private void OnQueueOverflow() => QueueOverflow?.Invoke(DateTime.Now);
 
         private void OnSendValues(List<SensorValueBase> values) => SendValues?.Invoke(values);
     }
