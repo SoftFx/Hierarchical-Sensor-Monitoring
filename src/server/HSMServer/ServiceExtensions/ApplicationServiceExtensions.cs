@@ -17,7 +17,6 @@ using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.PlatformAbstractions;
 using Microsoft.OpenApi.Any;
 using Microsoft.OpenApi.Models;
 using System;
@@ -59,8 +58,7 @@ public static class ApplicationServiceExtensions
                 Example = new OpenApiString("00.00:00:00")
             });
 
-            var basePath = PlatformServices.Default.Application.ApplicationBasePath;
-            var xmlPath = Path.Combine(basePath, "HSMSwaggerComments.xml");
+            var xmlPath = Path.Combine(Environment.CurrentDirectory, "HSMSwaggerComments.xml");
             o.IncludeXmlComments(xmlPath, true);
         });
 
