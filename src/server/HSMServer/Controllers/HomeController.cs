@@ -407,6 +407,20 @@ namespace HSMServer.Controllers
             return value;
         }
 
+        [HttpGet]
+        public async Task<IActionResult> GetRecentFilesView([FromQuery] string fileId)
+        {
+            var enumerator = _treeValuesCache.GetSensorValuesPage(SensorPathHelper.DecodeGuid(fileId),DateTime.MinValue, DateTime.MaxValue, 50);
+            var viewModel = await new HistoryValuesViewModel(fileId,6 , enumerator, GetLocalLastValue(fileId,DateTime.MinValue, DateTime.MaxValue)).Initialize();
+
+            _userManager[(HttpContext.User as User).Id].Pagination = viewModel;
+            var test = GetFileTable(viewModel);
+            
+            return test;
+        }
+        private PartialViewResult GetFileTable(HistoryValuesViewModel viewModel) =>
+            PartialView("FileAccorditions", viewModel);
+
         public IActionResult FilePreview() => View("FilePreview");
         
         private FileValue GetFileSensorValue(string encodedId) =>
