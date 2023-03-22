@@ -9,10 +9,8 @@ namespace HSMDataCollector.Extensions
         private const int MaxSensorValueCommentLength = 1024;
 
 
-        internal static SensorValueBase Complete(this SensorValueBase sensor,
-            string path, string comment = null, SensorStatus status = SensorStatus.Ok)
+        internal static SensorValueBase Complete(this SensorValueBase sensor, string comment = null, SensorStatus status = SensorStatus.Ok)
         {
-            sensor.Path = path;
             sensor.Time = DateTime.UtcNow;
             sensor.Status = status;
             sensor.Comment = comment;

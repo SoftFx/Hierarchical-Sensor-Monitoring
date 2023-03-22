@@ -11,11 +11,13 @@ namespace HSMDataCollector.DefaultSensors
 {
     public abstract class MonitoringSensorBase<T> : SensorBase<T>
     {
-        private bool _isStarted;
         private readonly Timer _sendTimer;
         
-        
         protected readonly TimeSpan _receiveDataPeriod;
+        
+        
+        private bool _isStarted;
+        
         
         protected virtual TimeSpan TimerDueTime => _receiveDataPeriod;
         
@@ -66,8 +68,10 @@ namespace HSMDataCollector.DefaultSensors
         
         protected void OnTimerTick(object _ = null)
         {
+            var value = BuildSensorValue();
+            
             if (NeedSendValue)
-                base.SendValue(BuildSensorValue());
+                base.SendValue(value, SensorPath);
         }
         
         protected SensorValueBase BuildSensorValue()
@@ -76,13 +80,13 @@ namespace HSMDataCollector.DefaultSensors
             {
                 var value = SensorValuesFactory.BuildValue(GetValue());
 
-                return value.Complete(SensorPath, GetComment(), GetStatus());
+                return value.Complete(GetComment(), GetStatus());
             }
             catch (Exception ex)
             {
                 var value = SensorValuesFactory.BuildValue(default(T));
 
-                return value.Complete(SensorPath, ex.Message, SensorStatus.Error);
+                return value.Complete(ex.Message, SensorStatus.Error);
             }
         }
     }

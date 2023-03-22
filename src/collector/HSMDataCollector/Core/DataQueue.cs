@@ -1,6 +1,7 @@
 ﻿using HSMDataCollector.Extensions;
 using HSMSensorDataObjects.SensorValueRequests;
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Threading;
 
@@ -9,12 +10,11 @@ namespace HSMDataCollector.Core
     internal sealed class DataQueue : IDataQueue, IValuesQueue
     {
         private readonly TimeSpan _packageSendingPeriod;
+        private readonly int _maxQueueSize;
         private readonly int _maxValuesInPackage;
 
-        private readonly Queue<SensorValueBase> _valuesQueue;
-        private readonly List<SensorValueBase> _failedList;
-        private readonly object _lockObj;
-        private readonly object _listLock;
+        private readonly ConcurrentQueue<SensorValueBase> _valuesQueue;
+        private readonly ConcurrentQueue<SensorValueBase> _failedList;
 
         private Timer _sendTimer;
         private int _internalCount = 0;
@@ -29,13 +29,12 @@ namespace HSMDataCollector.Core
 
         public DataQueue(CollectorOptions options)
         {
+            _maxQueueSize = options.MaxQueueSize;
             _maxValuesInPackage = options.MaxValuesInPackage;
             _packageSendingPeriod = options.PackageSendingPeriod;
 
-            _valuesQueue = new Queue<SensorValueBase>();
-            _failedList = new List<SensorValueBase>();
-            _lockObj = new object();
-            _listLock = new object();
+            _valuesQueue = new ConcurrentQueue<SensorValueBase>();
+            _failedList = new ConcurrentQueue<SensorValueBase>();
 
             Disposed = false;
         }
@@ -43,20 +42,15 @@ namespace HSMDataCollector.Core
 
         public void ReturnData(List<SensorValueBase> values)
         {
-            lock (_listLock)
-            {
-                _failedList.AddRange(values);
-            }
+            foreach (var sensorValueBase in values)
+                _failedList.Enqueue(sensorValueBase);
 
             _hasFailedData = true;
         }
 
         public void ReturnFile(FileSensorValue file)
         {
-            lock (_listLock)
-            {
-                _failedList.Add(file);
-            }
+            _failedList.Enqueue(file);
 
             _hasFailedData = true;
         }
@@ -85,19 +79,13 @@ namespace HSMDataCollector.Core
             Disposed = true;
         }
 
-        public void Clear()
-        {
-            ClearData();
-        }
-
         private void Enqueue(SensorValueBase value)
         {
-            lock (_lockObj)
-            {
-                _valuesQueue.Enqueue(value);
-            }
+            _valuesQueue.Enqueue(value);
 
             ++_internalCount;
+            if (_internalCount == _maxQueueSize)
+                DequeueData();
         }
 
         public void EnqueueData(SensorValueBase value)
@@ -112,60 +100,15 @@ namespace HSMDataCollector.Core
             OnSendValues(data);
         }
 
-        private void ClearData()
-        {
-            if (_hasFailedData)
-            {
-                lock (_listLock)
-                {
-                    _failedList.Clear();
-                }
-            }
-
-            lock (_lockObj)
-            {
-                _valuesQueue.Clear();
-            }
-        }
-
         private List<SensorValueBase> DequeueData()
         {
             var dataList = new List<SensorValueBase>(1 << 3);
 
             if (_hasFailedData)
             {
-                lock (_listLock)
+                while (_failedList.TryDequeue(out var failedValue))
                 {
-                    foreach (var failedValue in _failedList)
-                    {
-                        switch (failedValue)
-                        {
-                            case FileSensorValue fileValue:
-                                FileReceiving?.Invoke(fileValue);
-                                break;
-
-                            case BarSensorValueBase barSensor when barSensor.Count == 0:
-                                break;
-
-                            default:
-                                dataList.Add(failedValue);
-                                break;
-                        }
-                    }
-
-                    _failedList.Clear();
-                }
-
-                _hasFailedData = false;
-            }
-
-            int count = 0;
-            lock (_lockObj)
-            {
-                while (count < _maxValuesInPackage && _internalCount > 0)
-                {
-                    var value = _valuesQueue.Dequeue();
-                    switch (value)
+                    switch (failedValue)
                     {
                         case FileSensorValue fileValue:
                             FileReceiving?.Invoke(fileValue);
@@ -175,13 +118,35 @@ namespace HSMDataCollector.Core
                             break;
 
                         default:
-                            dataList.Add(value);
-                            ++count;
+                            dataList.Add(failedValue);
                             break;
-                    }
-
-                    --_internalCount;
+                    }   
                 }
+            }
+
+            _hasFailedData = false;
+
+
+            int count = 0;
+            while (count < _maxValuesInPackage && _internalCount > 0)
+            {
+                _valuesQueue.TryDequeue(out var value);
+                switch (value)
+                {
+                    case FileSensorValue fileValue:
+                        FileReceiving?.Invoke(fileValue);
+                        break;
+
+                    case BarSensorValueBase barSensor when barSensor.Count == 0:
+                        break;
+
+                    default:
+                        dataList.Add(value);
+                        ++count;
+                        break;
+                }
+
+                --_internalCount;
             }
 
             return dataList;

@@ -41,13 +41,13 @@ namespace HSMDataCollector.Core
             _client.DefaultRequestHeaders.Add(nameof(BaseRequest.Key), options.AccessKey);
             
             _dataQueue.FileReceiving += DataQueueFileReceiving;
-            _dataQueue.SendValues += DataQueueSendValues;
+            _dataQueue.SendValues += SendMonitoringData;
         }
 
         public void Dispose()
         {
             _dataQueue.FileReceiving -= DataQueueFileReceiving;
-            _dataQueue.SendValues -= DataQueueSendValues;
+            _dataQueue.SendValues -= SendMonitoringData;
             
             _client.Dispose();
         }
@@ -102,7 +102,5 @@ namespace HSMDataCollector.Core
                 _logManager.Logger?.Error($"Failed to send: {e}");
             }
         }
-        
-        private void DataQueueSendValues(List<SensorValueBase> e) => SendMonitoringData(e);
     }
 }
