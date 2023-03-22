@@ -71,22 +71,18 @@ namespace HSMDataCollector.DefaultSensors
             var value = BuildSensorValue();
             
             if (NeedSendValue)
-                base.SendValue(value, SensorPath);
+                SendValue(value);
         }
         
         protected SensorValueBase BuildSensorValue()
         {
             try
             {
-                var value = SensorValuesFactory.BuildValue(GetValue());
-
-                return value.Complete(GetComment(), GetStatus());
+                return GetSensorValue(GetValue()).Complete(GetComment(), GetStatus());
             }
             catch (Exception ex)
             {
-                var value = SensorValuesFactory.BuildValue(default(T));
-
-                return value.Complete(ex.Message, SensorStatus.Error);
+                return GetSensorValue(default).Complete(ex.Message, SensorStatus.Error);
             }
         }
     }

@@ -4,6 +4,7 @@ using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Text;
+using System.Threading.Tasks;
 using HSMDataCollector.Logging;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.SensorValueRequests;
@@ -51,8 +52,14 @@ namespace HSMDataCollector.Core
             
             _client.Dispose();
         }
+
         
-        internal void SendMonitoringData(List<SensorValueBase> values)
+        internal void SendMonitoringData(List<SensorValueBase> values) => SendMonitoringDataAsync(values).Start();
+        
+        internal void DataQueueFileReceiving(FileSensorValue value) => DataQueueFileReceivingAsync(value).Start();
+        
+        
+        private async Task SendMonitoringDataAsync(List<SensorValueBase> values)
         {
             try
             {
@@ -62,10 +69,10 @@ namespace HSMDataCollector.Core
                 string jsonString = JsonConvert.SerializeObject(values.Cast<object>());
 
                 if (_logManager.WriteDebug)
-                    _logManager.Logger?.Debug($"{nameof(SendMonitoringData)}: {jsonString}");
+                    _logManager.Logger?.Debug($"{nameof(SendMonitoringDataAsync)}: {jsonString}");
 
                 var data = new StringContent(jsonString, Encoding.UTF8, "application/json");
-                var res = _client.PostAsync(_listSendingAddress, data).Result;
+                var res = await _client.PostAsync(_listSendingAddress, data);
 
                 if (!res.IsSuccessStatusCode)
                     _logManager.Logger?.Error($"Failed to send data. StatusCode={res.StatusCode}, Content={res.Content.ReadAsStringAsync().Result}");
@@ -78,18 +85,18 @@ namespace HSMDataCollector.Core
                 _logManager.Logger?.Error($"Failed to send: {e}");
             }
         }
-        
-        internal void DataQueueFileReceiving(FileSensorValue value)
+
+        private async Task DataQueueFileReceivingAsync(FileSensorValue value)
         {
             try
             {
                 string jsonString = JsonConvert.SerializeObject(value);
 
                 if (_logManager.WriteDebug)
-                    _logManager.Logger?.Debug($"{nameof(DataQueueFileReceiving)}: {jsonString}");
+                    _logManager.Logger?.Debug($"{nameof(DataQueueFileReceivingAsync)}: {jsonString}");
 
                 var data = new StringContent(jsonString, Encoding.UTF8, "application/json");
-                var res = _client.PostAsync(_fileSendingAddress, data).Result;
+                var res = await _client.PostAsync(_fileSendingAddress, data);
 
                 if (!res.IsSuccessStatusCode)
                     _logManager.Logger?.Error($"Failed to send data. StatusCode={res.StatusCode}, Content={res.Content.ReadAsStringAsync().Result}");

@@ -9,19 +9,20 @@ namespace HSMDataCollector.Core
 {
     internal sealed class DataQueue : IDataQueue, IValuesQueue
     {
+        private readonly ConcurrentQueue<SensorValueBase> _valuesQueue = new ConcurrentQueue<SensorValueBase>();
+        private readonly ConcurrentQueue<SensorValueBase> _failedQueue = new ConcurrentQueue<SensorValueBase>();
+
         private readonly TimeSpan _packageSendingPeriod;
         private readonly int _maxQueueSize;
         private readonly int _maxValuesInPackage;
-
-        private readonly ConcurrentQueue<SensorValueBase> _valuesQueue;
-        private readonly ConcurrentQueue<SensorValueBase> _failedList;
-
+        
         private Timer _sendTimer;
-        private int _internalCount = 0;
-        private bool _hasFailedData;
-
+        
+        private bool HasFailedData => _failedQueue.Count > 0;
+        
+        
         public bool Disposed { get; private set; }
-
+        
 
         public event Action<List<SensorValueBase>> SendValues;
         public event Action<FileSensorValue> FileReceiving;
@@ -33,9 +34,6 @@ namespace HSMDataCollector.Core
             _maxValuesInPackage = options.MaxValuesInPackage;
             _packageSendingPeriod = options.PackageSendingPeriod;
 
-            _valuesQueue = new ConcurrentQueue<SensorValueBase>();
-            _failedList = new ConcurrentQueue<SensorValueBase>();
-
             Disposed = false;
         }
 
@@ -43,23 +41,19 @@ namespace HSMDataCollector.Core
         public void ReturnData(List<SensorValueBase> values)
         {
             foreach (var sensorValueBase in values)
-                _failedList.Enqueue(sensorValueBase);
-
-            _hasFailedData = true;
+                _failedQueue.Enqueue(sensorValueBase);
         }
 
         public void ReturnFile(FileSensorValue file)
         {
-            _failedList.Enqueue(file);
-
-            _hasFailedData = true;
+            _failedQueue.Enqueue(file);
         }
 
         public List<SensorValueBase> GetCollectedData()
         {
             var values = new List<SensorValueBase>(1 << 3);
 
-            if (_hasFailedData)
+            if (HasFailedData)
                 values.AddRange(DequeueData());
 
             values.AddRange(DequeueData());
@@ -83,9 +77,10 @@ namespace HSMDataCollector.Core
         {
             _valuesQueue.Enqueue(value);
 
-            ++_internalCount;
-            if (_internalCount == _maxQueueSize)
-                DequeueData();
+            if (_valuesQueue.Count == _maxQueueSize)
+                while (_valuesQueue.Count > _maxQueueSize)
+                    if (!_valuesQueue.TryDequeue(out var item))
+                        break;
         }
 
         public void EnqueueData(SensorValueBase value)
@@ -104,9 +99,9 @@ namespace HSMDataCollector.Core
         {
             var dataList = new List<SensorValueBase>(1 << 3);
 
-            if (_hasFailedData)
+            if (HasFailedData)
             {
-                while (_failedList.TryDequeue(out var failedValue))
+                while (_failedQueue.TryDequeue(out var failedValue))
                 {
                     switch (failedValue)
                     {
@@ -123,12 +118,9 @@ namespace HSMDataCollector.Core
                     }   
                 }
             }
-
-            _hasFailedData = false;
-
-
-            int count = 0;
-            while (count < _maxValuesInPackage && _internalCount > 0)
+            
+            
+            while (dataList.Count < _maxValuesInPackage && _valuesQueue.Count > 0)
             {
                 _valuesQueue.TryDequeue(out var value);
                 switch (value)
@@ -142,11 +134,8 @@ namespace HSMDataCollector.Core
 
                     default:
                         dataList.Add(value);
-                        ++count;
                         break;
                 }
-
-                --_internalCount;
             }
 
             return dataList;

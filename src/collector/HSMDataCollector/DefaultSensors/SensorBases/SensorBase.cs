@@ -24,9 +24,9 @@ namespace HSMDataCollector.DefaultSensors
         }
 
         
-        public void SendValue(SensorValueBase value, string path)
+        public void SendValue(SensorValueBase value)
         {
-            value.Path = path;
+            value.Path = SensorPath;
             ReceiveSensorValue?.Invoke(value);
         }
 

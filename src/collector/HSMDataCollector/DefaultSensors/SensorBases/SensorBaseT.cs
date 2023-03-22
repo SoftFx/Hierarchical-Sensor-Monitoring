@@ -13,7 +13,7 @@ namespace HSMDataCollector.DefaultSensors
 
         public void SendValue(T value, SensorStatus status = SensorStatus.Ok, string comment = "")
         {
-            SendValue(GetSensorValue(value).Complete(comment, status), SensorPath);
+            SendValue(GetSensorValue(value).Complete(comment, status));
         }
 
         protected static SensorValueBase GetSensorValue(T value) => SensorValuesFactory.BuildValue(value);
