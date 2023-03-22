@@ -94,7 +94,7 @@
      </div>
     
    
-    <div id="recentValues">123</div>
+    <div id="recentValues_">123</div>
 }
 else
 {
@@ -271,14 +271,13 @@ function setContentPreview(encodedId){
 }
 var getFilesInfo = '@Url.Action(nameof(HomeController.GetRecentFilesView), "Home")';
 function loadFiles(){
-    console.log(123)
     $.ajax({
             type: 'GET',
             url: `${getFilesInfo}?fileId=@Model.EncodedId`,
             cache: false,
             contentType: "application/json",
             success: function (response){
-               $('#recentValues').html(response);
+               $('#recentValues_').html(response).attr("id", 'recentValues_@sensorId');
             }
         })
 }
