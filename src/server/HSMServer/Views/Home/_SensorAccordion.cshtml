@@ -7,7 +7,7 @@
 @{
     var splitted = Model.FileNameString.Split('.');
     var fileType = splitted.Length >= 2 ? splitted[1] : string.Empty;
-    
+
     var sensorId = Model.EncodedId;
 
     var graphElementId = $"graph_{sensorId}";
@@ -18,175 +18,181 @@
 
 
 <div class='accordion' id='sensorData_@sensorId'>
-    <div class='accordion-item'>
-        @if (Model.SensorType == SensorType.File)
-        {
-            <div id='collapse_@sensorId' class='accordion-collapse' data-bs-parent='#sensorData_@sensorId'>
-                <div class='accordion-body'>
-                    <div class="w-100">
-                        <div class='row justify-content-between'>
-                            <div class='row col-md-auto align-items-center'>
-                                <div class='col-md-auto sensor-icon-without-padding'>
-                                    <li id='status_@sensorId' class='@Model.Status.ToIcon() sensor-icon-with-margin'
-                                        title='Status: @Model.Status'>
-                                    </li>
-                                </div>
-                                @Model.Name
-                                @if (Model.LastValue != null)
-                                {
-                                    <button id='button_view_@sensorId' class='btn btn-outline-secondary d-flex justify-content-center mx-1' title='Preview' style="width: 2rem; height: 2rem">
-                                        <i class='fas fa-eye'></i>
-                                    </button>
-
-                                    <input style='display: none;' id='fileType_@sensorId' value='@Model.FileNameString'/>
-                                    <button id='button_download_@sensorId' class='btn btn-outline-secondary d-flex justify-content-center mx-1' title='Download' style="width: 2rem; height: 2rem">
-                                        <i class='fas fa-file-download'></i>
-                                    </button>
-                                }
-                            </div>
-                            <input id='sensor_type_@sensorId' value='@((int)Model.SensorType)' style='display: none'/>
-                            <div class='col-md-auto time-ago-div me-1' id='update_@sensorId'>updated @Model.UpdateTime.GetTimeAgo()</div>
+<div class='accordion-item'>
+@if (Model.SensorType == SensorType.File)
+{
+    <h2 class='accordion-header' id='heading_@sensorId'>
+        <button id='accordion_@sensorId' class='accordion-button collapsed' type='button' data-bs-toggle='collapse'
+                data-bs-target='#collapse_@sensorId' aria-expanded='false' aria-controls='collapse_@sensorId'>
+            <div class="w-100">
+                <div class='row justify-content-between'>
+                    <div class='row col-md-auto align-items-center'>
+                        <div class='col-md-auto sensor-icon-without-padding'>
+                            <li id='status_@sensorId' class='@Model.Status.ToIcon() sensor-icon-with-margin'
+                                title='Status: @Model.Status'>
+                            </li>
                         </div>
-                        <div id="value_@sensorId" class="text-break">
-                            @Model.ShortStringValue
-                        </div>
-                        <div class="text-break">
-                            <span id='validation_@sensorId'>
-                                @if (Model.IsValidationErrorVisible)
-                                {
-                                    <li id='errorIcon_@sensorId' class='fas fa-exclamation-triangle me-1'></li>
-                                    <span>Status comment: @Model.ValidationError</span>
-                                }
-                            </span>
-                        </div>
-                        <div class="d-grid d-none pt-3" id="preview">
-                            <h5 id="preview-header">Content:</h5>
-                            <div style="overflow-x: auto" id="preview-content"></div>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            @if (Model.HasData)
-            {
-                <div id="bigFilePreview" class="card text-center d-none">
-                    <div class="card-body">
-                        @switch (fileType)
+                        @Model.Name
+                        @if (Model.LastValue != null)
                         {
-                            case "csv":
-                                <h5 class="card-title">This file is too big to preview (>5MB)</h5>
-                                break;
-                            case "txt":
-                                <h5 class="card-title">This file is too big to preview (>1MB)</h5>
-                                break;
-                            default:
-                                <h5 class="card-title">Current file type is not available in preview mode</h5>
-                                break;
+                            <a id='button_view_@sensorId' class='btn btn-outline-secondary d-flex justify-content-center mx-1' title='Preview' style="width: 2rem; height: 2rem">
+                                <i class='fas fa-eye'></i>
+                            </a>
+
+                            <input style='display: none;' id='fileType_@sensorId' value='@Model.FileNameString'/>
+                            <a id='button_download_@sensorId' class='btn btn-outline-secondary d-flex justify-content-center mx-1' title='Download' style="width: 2rem; height: 2rem">
+                                <i class='fas fa-file-download'></i>
+                            </a>
                         }
-                        <button id="button_download_@(sensorId)" href="#" class="btn btn-outline-primary mt-2">Start download</button>
+                    </div>
+                    <input id='sensor_type_@sensorId' value='@((int)Model.SensorType)' style='display: none'/>
+                    <div class='col-md-auto time-ago-div me-1' id='update_@sensorId'>updated @Model.UpdateTime.GetTimeAgo()</div>
+                </div>
+                <div id="value_@sensorId" class="text-break">
+                    @Model.ShortStringValue
+                </div>
+                <div class="text-break">
+                    <span id='validation_@sensorId'>
+                        @if (Model.IsValidationErrorVisible)
+                        {
+                            <li id='errorIcon_@sensorId' class='fas fa-exclamation-triangle me-1'></li>
+                            <span>Status comment: @Model.ValidationError</span>
+                        }
+                    </span>
+                </div>
+            </div>
+        </button>
+    </h2>
+    <div id='collapse_@sensorId' class='accordion-collapse collapse text-break' aria-labelledby='heading_@sensorId' data-bs-parent='#sensorData_@sensorId'>
+        <div class='accordion-body p-3'>
+            <div class="d-grid d-none pt-3" id="preview">
+                    <h5 id="preview-header">Content:</h5>
+                    <div style="overflow-x: auto" id="preview-content"></div>
+                </div>
+        </div>
+     </div>
+    
+    @if (Model.HasData)
+    {
+        <div id="bigFilePreview" class="card text-center d-none">
+            <div class="card-body">
+                @switch (fileType)
+                {
+                    case "csv":
+                        <h5 class="card-title">This file is too big to preview (>5MB)</h5>
+                        break;
+                    case "txt":
+                        <h5 class="card-title">This file is too big to preview (>1MB)</h5>
+                        break;
+                    default:
+                        <h5 class="card-title">Current file type is not available in preview mode</h5>
+                        break;
+                }
+                <button id="button_download_@(sensorId)" href="#" class="btn btn-outline-primary mt-2">Start download</button>
+            </div>
+        </div>
+    }
+}
+else
+{
+    <h2 class='accordion-header' id='heading_@sensorId'>
+        <button id='accordion_@sensorId' class='accordion-button collapsed' type='button' data-bs-toggle='collapse'
+                data-bs-target='#collapse_@sensorId' aria-expanded='false' aria-controls='collapse_@sensorId'>
+            <div class="w-100">
+                <div class='row justify-content-between'>
+                    <div class='row col-md-auto'>
+                        <div class='col-md-auto sensor-icon-without-padding'>
+                            <li id='status_@sensorId' class='@Model.Status.ToIcon() sensor-icon-with-margin' title='Status: @Model.Status'></li>
+                        </div>
+                        @Html.Raw(@Model.Name)
+                    </div>
+                    <div class='col-md-auto'>
+                        <input id='sensor_type_@sensorId' value='@((int)Model.SensorType)' style='display: none'/>
+                        <div id='update_@sensorId' class='time-ago-div me-1'>updated @Model.UpdateTime.GetTimeAgo()</div>
                     </div>
                 </div>
-            }
-        }
-        else
-        {
-            <h2 class='accordion-header' id='heading_@sensorId'>
-                <button id='accordion_@sensorId' class='accordion-button collapsed' type='button' data-bs-toggle='collapse'
-                        data-bs-target='#collapse_@sensorId' aria-expanded='false' aria-controls='collapse_@sensorId'>
-                    <div class="w-100">
-                        <div class='row justify-content-between'>
-                            <div class='row col-md-auto'>
-                                <div class='col-md-auto sensor-icon-without-padding'>
-                                    <li id='status_@sensorId' class='@Model.Status.ToIcon() sensor-icon-with-margin' title='Status: @Model.Status'></li>
-                                </div>
-                                @Html.Raw(@Model.Name)
-                            </div>
-                            <div class='col-md-auto'>
-                                <input id='sensor_type_@sensorId' value='@((int)Model.SensorType)' style='display: none'/>
-                                <div id='update_@sensorId' class='time-ago-div me-1'>updated @Model.UpdateTime.GetTimeAgo()</div>
-                            </div>
-                        </div>
-                        <div class="text-break" id='value_@sensorId'>
-                            @Model.ShortStringValue
-                        </div>
-                        <div class="text-break">
-                            <span id='validation_@sensorId'>
-                                @if (Model.IsValidationErrorVisible)
-                                {
-                                    <li id='errorIcon_@sensorId' class='fas fa-exclamation-triangle me-1'></li>
-                                    <span>Status comment: @Model.ValidationError</span>
-                                }
-                            </span>
-                        </div>
-                    </div>
-                </button>
-            </h2>
+                <div class="text-break" id='value_@sensorId'>
+                    @Model.ShortStringValue
+                </div>
+                <div class="text-break">
+                    <span id='validation_@sensorId'>
+                        @if (Model.IsValidationErrorVisible)
+                        {
+                            <li id='errorIcon_@sensorId' class='fas fa-exclamation-triangle me-1'></li>
+                            <span>Status comment: @Model.ValidationError</span>
+                        }
+                    </span>
+                </div>
+            </div>
+        </button>
+    </h2>
 
-            <div id='collapse_@sensorId' class='accordion-collapse collapse text-break' aria-labelledby='heading_@sensorId' data-bs-parent='#sensorData_@sensorId'>
-                <div class='accordion-body p-3'>
+    <div id='collapse_@sensorId' class='accordion-collapse collapse text-break' aria-labelledby='heading_@sensorId' data-bs-parent='#sensorData_@sensorId'>
+        <div class='accordion-body p-3'>
+            <div>
+                <div class="d-flex justify-content-between">
                     <div>
-                        <div class="d-flex justify-content-between">
-                            <div>
-                                <label class="me-1" for="from_@sensorId">From:</label>
-                                <input class="me-2" type="datetime-local" id="from_@sensorId" name="from">
+                        <label class="me-1" for="from_@sensorId">From:</label>
+                        <input class="me-2" type="datetime-local" id="from_@sensorId" name="from">
 
-                                <label class="me-1" for="to_@sensorId">To:</label>
-                                <input class="me-2" type="datetime-local" id="to_@sensorId" name="to">
+                        <label class="me-1" for="to_@sensorId">To:</label>
+                        <input class="me-2" type="datetime-local" id="to_@sensorId" name="to">
 
-                                @if (Model.SensorType == SensorType.IntegerBar || Model.SensorType == SensorType.DoubleBar)
-                                {
-                                    <label class="me-1" for="barsCount_@sensorId" id="labelBarsCount_@sensorId">Bars count:</label>
-                                    <input class="me-2" style="width:70px" type="number" id="barsCount_@sensorId" name="barsCount" min="1" max="1000">
-                                }
+                        @if (Model.SensorType == SensorType.IntegerBar || Model.SensorType == SensorType.DoubleBar)
+                        {
+                            <label class="me-1" for="barsCount_@sensorId" id="labelBarsCount_@sensorId">Bars count:</label>
+                            <input class="me-2" style="width:70px" type="number" id="barsCount_@sensorId" name="barsCount" min="1" max="1000">
+                        }
 
-                                <button onclick="searchHistory('@sensorId')" type="button" class="btn btn-secondary">
-                                    <i type="button" class="fas fa-search"></i>
-                                </button>
-                            </div>
+                        <button onclick="searchHistory('@sensorId')" type="button" class="btn btn-secondary">
+                            <i type="button" class="fas fa-search"></i>
+                        </button>
+                    </div>
 
-                            <div class='btn-group'>
-                                <button class='btn btn-secondary btn-sm dropdown-toggle' type='button' data-bs-toggle='dropdown'>Actions</button>
-                                <ul class='dropdown-menu'>
-                                    <li>
-                                        <a class='dropdown-item' href='#' id='button_export_csv_@sensorId'>Export to CSV</a>
-                                    </li>
-                                </ul>
+                    <div class='btn-group'>
+                        <button class='btn btn-secondary btn-sm dropdown-toggle' type='button' data-bs-toggle='dropdown'>Actions</button>
+                        <ul class='dropdown-menu'>
+                            <li>
+                                <a class='dropdown-item' href='#' id='button_export_csv_@sensorId'>Export to CSV</a>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+                <div class="mt-2">
+                    <div id='no_data_@sensorId' style='display: none'>
+                        <p>No data for the specified period</p>
+                    </div>
+                    <div id='history_@sensorId'>
+                        @if (Model.IsPlottingSupported)
+                        {
+                            <ul class='nav nav-tabs'>
+                                <li class='nav-item'>
+                                    <a id='link_graph_@sensorId' class='nav-link active' data-bs-toggle='tab' href='#@graphParentDivId'>Graph</a>
+                                </li>
+                                <li class='nav-item'>
+                                    <a id='link_table_@sensorId' class='nav-link' data-bs-toggle='tab' href='#@valuesParentDivId'>Table</a>
+                                </li>
+                            </ul>
+                            <div class='tab-content'>
+                                <div class='tab-pane fade show active' id=@graphParentDivId>
+                                    <div id='@graphElementId'></div>
+                                </div>
+                                <div class='tab-pane fade' id=@valuesParentDivId>
+                                    <div id='@valuesElementId'></div>
+                                </div>
                             </div>
-                        </div>
-                        <div class="mt-2">
-                            <div id='no_data_@sensorId' style='display: none'>
-                                <p>No data for the specified period</p>
-                            </div>
-                            <div id='history_@sensorId'>
-                                @if (Model.IsPlottingSupported)
-                                {
-                                    <ul class='nav nav-tabs'>
-                                        <li class='nav-item'>
-                                            <a id='link_graph_@sensorId' class='nav-link active' data-bs-toggle='tab' href='#@graphParentDivId'>Graph</a>
-                                        </li>
-                                        <li class='nav-item'>
-                                            <a id='link_table_@sensorId' class='nav-link' data-bs-toggle='tab' href='#@valuesParentDivId'>Table</a>
-                                        </li>
-                                    </ul>
-                                    <div class='tab-content'>
-                                        <div class='tab-pane fade show active' id=@graphParentDivId>
-                                            <div id='@graphElementId'></div>
-                                        </div>
-                                        <div class='tab-pane fade' id=@valuesParentDivId>
-                                            <div id='@valuesElementId'></div>
-                                        </div>
-                                    </div>
-                                }
-                                else
-                                {
-                                    <div id='values_@sensorId'></div>
-                                }
-                            </div>
-                        </div>
+                        }
+                        else
+                        {
+                            <div id='values_@sensorId'></div>
+                        }
                     </div>
                 </div>
             </div>
-        }
+        </div>
     </div>
+}
+</div>
 </div>
 
 <script>
