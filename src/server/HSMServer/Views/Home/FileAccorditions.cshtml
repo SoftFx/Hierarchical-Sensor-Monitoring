@@ -4,69 +4,70 @@
 
 @model HistoryValuesViewModel
 
+@{
+    var firstPage = Model.Pages[0];
+}
 
-@foreach (var model in Model.Pages)
+@for (var i = 1; i < firstPage.Count; i++)
 {
-    foreach (FileValue value in model)
-    {
-        <h2 class='accordion-header' id='heading_'>
+    var value = (FileValue)firstPage[i];
+    
+    <h2 class='accordion-header' id='heading_@i'>
         <button id='file_accordion_' class='accordion-button collapsed' type='button' data-bs-toggle='collapse'
-                data-bs-target='#collapse_' aria-expanded='false' aria-controls='collapse_'>
+                data-bs-target='#collapse_@i' aria-expanded='false' aria-controls='collapse_@i'>
             <div class="w-100">
                 <div class='row justify-content-between'>
                     <div class='row col-md-auto align-items-center'>
-                        
+
                         @value.Name
                         @if (value.Value != null)
                         {
-                            <a id='button_view_' class='btn btn-outline-secondary d-flex justify-content-center mx-1' title='Preview' style="width: 2rem; height: 2rem">
+                            <a id='button_view_@i' class='btn btn-outline-secondary d-flex justify-content-center mx-1' title='Preview' style="width: 2rem; height: 2rem">
                                 <i class='fas fa-eye'></i>
                             </a>
 
                             <input style='display: none;' id='fileType_' value='@value.Name'/>
-                            <a id='button_download_' class='btn btn-outline-secondary d-flex justify-content-center mx-1' title='Download' style="width: 2rem; height: 2rem">
+                            <a id='button_download_@i' class='btn btn-outline-secondary d-flex justify-content-center mx-1' title='Download' style="width: 2rem; height: 2rem">
                                 <i class='fas fa-file-download'></i>
                             </a>
                         }
                     </div>
-                    
-                    <div class='col-md-auto time-ago-div me-1' id='update_'>updated @value.Time.GetTimeAgo()</div>
+
+                    <div class='col-md-auto time-ago-div me-1' id='update_@i'>updated @value.Time.GetTimeAgo()</div>
                 </div>
-                <div id="value_" class="text-break">
+                <div id="value_@i" class="text-break">
                     @value.ShortInfo
                 </div>
                 <div class="text-break">
-                    
+
                 </div>
             </div>
         </button>
     </h2>
-    <div id='collapse_' class='accordion-collapse collapse text-break' aria-labelledby='heading_' data-bs-parent='#sensorData_'>
+    <div id='collapse_@i' class='accordion-collapse collapse text-break' aria-labelledby='heading_@i' data-bs-parent='#sensorData_@i'>
         <div class='accordion-body p-3'>
             <div class="d-grid d-none pt-3" id="preview">
-                    <h5 id="preview-header">Content:</h5>
-                    <div style="overflow-x: auto" id="preview-content"></div>
-                </div>
-        </div>
-     </div>
-    
-        <div id="bigFilePreview" class="card text-center d-none">
-            <div class="card-body">
-                @switch (value.Extension)
-                {
-                    case "csv":
-                        <h5 class="card-title">This file is too big to preview (>5MB)</h5>
-                        break;
-                    case "txt":
-                        <h5 class="card-title">This file is too big to preview (>1MB)</h5>
-                        break;
-                    default:
-                        <h5 class="card-title">Current file type is not available in preview mode</h5>
-                        break;
-                }
-                <button id="button_download_" href="#" class="btn btn-outline-primary mt-2">Start download</button>
+                <h5 id="preview-header">Content:</h5>
+                <div style="overflow-x: auto" id="preview-content"></div>
             </div>
         </div>
-    
-    }
+    </div>
+
+    <div id="bigFilePreview" class="card text-center d-none">
+        <div class="card-body">
+            @switch (value.Extension)
+            {
+                case "csv":
+                    <h5 class="card-title">This file is too big to preview (>5MB)</h5>
+                    break;
+                case "txt":
+                    <h5 class="card-title">This file is too big to preview (>1MB)</h5>
+                    break;
+                default:
+                    <h5 class="card-title">Current file type is not available in preview mode</h5>
+                    break;
+            }
+            <button id="button_download_" href="#" class="btn btn-outline-primary mt-2">Start download</button>
+        </div>
+    </div>
 }
