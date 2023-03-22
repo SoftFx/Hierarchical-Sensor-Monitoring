@@ -8,6 +8,7 @@ using HSMServer.Core.Encryption;
 using HSMServer.Core.Model;
 using HSMServer.Core.Registration;
 using HSMServer.Filters.ProductRoleFilters;
+using HSMServer.Groups;
 using HSMServer.Helpers;
 using HSMServer.Model.Authentication;
 using HSMServer.Model.TreeViewModel;
@@ -32,17 +33,19 @@ namespace HSMServer.Controllers
         private readonly IConfigurationProvider _configurationProvider;
         private readonly IRegistrationTicketManager _ticketManager;
         private readonly ITreeValuesCache _treeValuesCache;
+        private readonly IGroupManager _groupManager;
         private readonly TreeViewModel _treeViewModel;
         private readonly ILogger<ProductController> _logger;
 
         public ProductController(IUserManager userManager, IConfigurationProvider configurationProvider,
-            IRegistrationTicketManager ticketManager, ITreeValuesCache treeValuesCache,
+            IRegistrationTicketManager ticketManager, ITreeValuesCache treeValuesCache, IGroupManager groupManager,
             TreeViewModel treeViewModel, ILogger<ProductController> logger)
         {
             _userManager = userManager;
             _ticketManager = ticketManager;
             _configurationProvider = configurationProvider;
             _treeValuesCache = treeValuesCache;
+            _groupManager = groupManager;
             _treeViewModel = treeViewModel;
             _logger = logger;
         }
@@ -53,7 +56,8 @@ namespace HSMServer.Controllers
         {
             ViewBag.ProductName = searchProductName;
             ViewBag.ProductManager = searchProductManager;
-        
+            ViewBag.Groups = _groupManager.GetGroups();
+
             var user = HttpContext.User as User;
             
             var result = _treeViewModel.GetUserProducts(user)

@@ -69,7 +69,6 @@ namespace HSMServer.Core.Tests.Infrastructure
                 DisplayName = RandomGenerator.GetRandomString(),
                 Description = RandomGenerator.GetRandomString(),
                 Color = Color.Red.ToArgb(),
-                UserRoles = new(),
             };
 
 

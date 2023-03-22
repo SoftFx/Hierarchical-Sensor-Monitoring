@@ -1,13 +1,13 @@
 ﻿using HSMServer.Core.Cache;
 using HSMServer.Core.Cache.UpdateEntities;
+using HSMServer.Core.Model;
 using HSMServer.Groups;
 using HSMServer.Model.Authentication;
 using HSMServer.Model.Groups;
 using HSMServer.Model.TreeViewModel;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Mvc.Rendering;
 using System;
-using System.Linq;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 
 namespace HSMServer.Controllers
@@ -30,27 +30,30 @@ namespace HSMServer.Controllers
         [HttpGet]
         public IActionResult EditGroup(Guid? groupId)
         {
-            return View(new GroupViewModel() { AllProducts = _treeViewModel.GetUserProducts(HttpContext.User as User).Select(p => new SelectListItem() { Text = p.Name, Value = p.Id.ToString() }).ToList() });
+            return groupId == null
+                ? View(new EditGroupViewModel(GetUserProducts()))
+                : View(new EditGroupViewModel(_groupManager[groupId.Value], GetUserProducts()));
         }
 
         [HttpPost]
-        public async Task<IActionResult> AddGroup(GroupViewModel group)
+        public async Task<IActionResult> AddGroup(EditGroupViewModel group)
         {
-            var addedProducts = group.Products.Select(Guid.Parse).ToList();
-            var newGroup = new GroupModel()
-            {
-                AuthorId = (HttpContext.User as User).Id,
-                Name = group.Name,
-                Color = group.Color,
-                Description = group.Description,
-                ProductIds = addedProducts,
-            };
+            var addedProducts = new List<ProductModel>();
+            foreach (var productId in group.Products)
+                if (Guid.TryParse(productId, out var id))
+                    addedProducts.Add(_cache.GetProduct(id));
+
+            var newGroup = new GroupModel(group.ToEntity((HttpContext.User as User).Id));
+            newGroup.Products.AddRange(addedProducts);
 
             if (await _groupManager.TryAdd(newGroup))
-                foreach (var productId in addedProducts)
-                    _cache.UpdateProduct(new ProductUpdate() { Id = productId, GroupId = newGroup.Id });
+                foreach (var product in addedProducts)
+                    _cache.UpdateProduct(new ProductUpdate() { Id = product.Id, GroupId = newGroup.Id });
 
-            return View(nameof(EditGroup), new GroupViewModel(_groupManager[newGroup.Id]));
+            return View(nameof(EditGroup), new EditGroupViewModel(_groupManager[newGroup.Id], GetUserProducts()));
         }
+
+
+        private List<ProductNodeViewModel> GetUserProducts() => _treeViewModel.GetUserProducts(HttpContext.User as User);
     }
 }

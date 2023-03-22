@@ -364,31 +364,6 @@ namespace HSMServer.Core.Tests
             Assert.Empty(_databaseCore.GetAllGroups());
         }
 
-        [Theory]
-        [InlineData(1)]
-        [InlineData(3)]
-        [InlineData(10)]
-        [InlineData(50)]
-        [InlineData(100)]
-        [Trait("Category", "GroupUserRoles")]
-        public void AddUserRolesToGroupTest(int count)
-        {
-            var group = EntitiesFactory.BuildGroupEntity();
-            _databaseCore.AddGroup(group);
-
-            for (int i = 0; i < count; i++)
-            {
-                var user = EntitiesFactory.BuildUser();
-
-                var role = i % 2 == 0 ? ProductRoleEnum.ProductManager : ProductRoleEnum.ProductViewer;
-                group.UserRoles.Add(user.Id.ToString(), (byte)role);
-            }
-
-            _databaseCore.UpdateGroup(group);
-
-            FullGroupTest(group, _databaseCore.GetGroup(group.Id));
-        }
-
         #endregion
 
         #region [ Registration Ticket ]
@@ -606,8 +581,6 @@ namespace HSMServer.Core.Tests
             Assert.Equal(expectedGroup.Description, actualGroup.Description);
             Assert.Equal(expectedGroup.CreationDate, actualGroup.CreationDate);
             Assert.Equal(expectedGroup.Color, actualGroup.Color);
-            Assert.Equal(expectedGroup.ProductIds, actualGroup.ProductIds);
-            Assert.Equal(expectedGroup.UserRoles, actualGroup.UserRoles);
         }
 
         private static void FullTicketTest(RegistrationTicket expectedTicket, RegistrationTicket actualTicket)

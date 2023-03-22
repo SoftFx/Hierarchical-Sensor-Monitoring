@@ -4,6 +4,7 @@
 @using HSMServer.Controllers
 @using HSMServer.Extensions
 @using HSMServer.Model.ViewModel
+@using HSMServer.Model.Groups
 @model List<ProductViewModel>
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
 
@@ -43,6 +44,28 @@
     </div>
 
     <a href="@Url.Action(nameof(GroupsController.EditGroup), ViewConstants.GroupsController)">Add group</a>
+
+    <table>
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Description</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var group in ViewBag.Groups as List<GroupModel>)
+            {
+                <tr>
+                    <th>
+                        <a class="productName_anchor" asp-controller="Groups" asp-action="EditGroup" asp-route-groupId="@group.Id">
+                            @Html.Raw(group.Name)
+                        </a>
+                    </th>
+                    <th>@group.Description</th>
+                </tr>
+            }
+        </tbody>
+    </table>
 }
 <div class="col-12-xxl mt-2">
     <div class="w-100" id="productTable">

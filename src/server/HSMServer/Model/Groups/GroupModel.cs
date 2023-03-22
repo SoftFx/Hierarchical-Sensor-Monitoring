@@ -1,30 +1,33 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.ConcurrentStorage;
+using HSMServer.Core.Model;
 using HSMServer.Model.Authentication;
 using System;
 using System.Collections.Generic;
 using System.Drawing;
-using System.Linq;
 
 namespace HSMServer.Model.Groups
 {
     public class GroupModel : IServerModel<GroupEntity, GroupUpdate>
     {
-        public Guid Id { get; init; }
+        public Dictionary<Guid, ProductRoleEnum> UserRoles { get; } = new();
 
-        public string Name { get; init; }
+        public List<ProductModel> Products { get; } = new();
 
-        public Guid AuthorId { get; init; }
+        public Guid Id { get; }
 
-        public DateTime CreationDate { get; init; }
+        public string Name { get; }
 
-        public string Description { get; init; }
+        public Guid AuthorId { get; }
 
-        public Color Color { get; init; }
+        public DateTime CreationDate { get; }
 
-        public List<Guid> ProductIds { get; init; }
+        public string Description { get; private set; }
 
-        public Dictionary<Guid, ProductRoleEnum> UserRoles { get; init; }
+        public Color Color { get; private set; }
+
+
+        public string Author { get; set; }
 
 
         public GroupModel()
@@ -41,8 +44,6 @@ namespace HSMServer.Model.Groups
             Description = entity.Description;
             CreationDate = new DateTime(entity.CreationDate);
             Color = Color.FromArgb(entity.Color);
-            ProductIds = entity.ProductIds?.Select(Guid.Parse).ToList();
-            UserRoles = entity.UserRoles?.ToDictionary(r => Guid.Parse(r.Key), r => (ProductRoleEnum)r.Value);
         }
 
 
@@ -55,8 +56,6 @@ namespace HSMServer.Model.Groups
                 CreationDate = CreationDate.Ticks,
                 Description = Description,
                 Color = Color.ToArgb(),
-                ProductIds = ProductIds?.Select(p => p.ToString())?.ToList(),
-                UserRoles = UserRoles?.ToDictionary(r => r.Key.ToString(), r => (byte)r.Value),
             };
 
         public void Update(GroupUpdate update)

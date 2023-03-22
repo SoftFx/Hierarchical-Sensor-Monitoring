@@ -41,6 +41,7 @@ namespace HSMServer.Authentication
         bool TryAuthenticate(string login, string password);
 
         bool TryGetIdByName(string name, out Guid id);
+        bool TryGetValue(Guid id, out User user);
 
         List<User> GetViewers(Guid productId);
         List<User> GetManagers(Guid productId);

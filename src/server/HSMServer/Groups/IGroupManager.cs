@@ -1,5 +1,6 @@
 ﻿using HSMServer.Model.Groups;
 using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 
 namespace HSMServer.Groups
@@ -10,6 +11,8 @@ namespace HSMServer.Groups
 
 
         Task<bool> TryAdd(GroupModel group);
+
+        List<GroupModel> GetGroups();
 
         Task Initialize();
     }
