@@ -194,13 +194,12 @@ else
 }
 </div>
 </div>
-<div id="recentValues_"></div>
+<div id="recentValues_@sensorId"></div>
 
 <script>
 var previousReceivedTime = undefined;
 
 $(document).ready(function() {
-    loadFiles();
     setContentPreview('@Model.EncodedId');
 });
 
@@ -214,6 +213,7 @@ function setContentPreview(encodedId){
             if (previousReceivedTime === response.time) 
                 return;
             
+            loadFiles();
             if ((response.originalSize < 5 * 1024 * 1024 && response.extension === 'csv') || // 5MB
                 (response.originalSize < 1024 * 1024 && response.extension === 'txt')) { // 1MB 
                 $.ajax({
@@ -274,9 +274,8 @@ function loadFiles(){
             url: `${getFilesInfo}?fileId=@Model.EncodedId`,
             cache: false,
             contentType: "application/json",
-            success: function (response){
-               
-               $('#recentValues_').html(response).attr("id", 'recentValues_@sensorId');
+            success: function (response){         
+               $('#recentValues_@Model.EncodedId').html(response);
             }
         })
 }

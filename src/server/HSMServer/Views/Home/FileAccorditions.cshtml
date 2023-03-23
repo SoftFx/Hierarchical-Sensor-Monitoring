@@ -20,7 +20,7 @@
         <div class='accordion-item'>
             <h2 class='accordion-header' id='heading_@i'>
                 <button id='file_accordion_' class='accordion-button collapsed' type='button' data-bs-toggle='collapse'
-                        data-bs-target='#collapse_@i' aria-expanded='false' aria-controls='collapse_@i' onclick="previewButtonClick('@value.Time.Ticks', @i)" @(!isEnabledPreview ? "disabled" : "")> 
+                        data-bs-target='#collapse_@i' aria-expanded='false' aria-controls='collapse_@i' onclick="previewButtonClick('@value.Time.Ticks', @i, '@value.Extension')" @(!isEnabledPreview ? "disabled" : "")> 
                     <div class="w-100">
                         <div class='row justify-content-between'>
                             <div class='row col-md-auto align-items-center'>
@@ -82,10 +82,13 @@
 }
 
 <script>
-    function previewButtonClick(time, currentId){
+    function previewButtonClick(time, currentId, extension){
         let encodedId = ($('[id^=recentValues_]')).attr('id').substring("recentValues_".length);
-        console.log(encodedId)
-        console.log(time)
+        // console.log(encodedId)
+        // console.log(time)
+        // console.log(extension)
+        
+        if ($(`#preview-content_${currentId}`)[0].innerHTML !== '') return;
         
         $.ajax({
             type: 'POST',
@@ -93,11 +96,41 @@
             cache: false,
             contentType: 'application/json',
             success: function (file){
-                $(`#preview_${currentId}`).removeClass('d-none container');
-                $(`#preview-content_${currentId}`).addClass('w-100 mw-100 text-break').html(file);      
+                let dataSet = []
+                if (extension === 'csv') {
+                    file.split('\n').forEach( el =>{
+                        let splitted = el.split(',');
+                        
+                        let isEmpty = splitted.every(x => {
+                            return x !== '';
+                        })
+                        
+                        if (isEmpty) {
+                            dataSet.push(el.split(','))
+                        }
+                    })
+                    
+                    let columns = [];
+                    
+                    dataSet[0].forEach(el => {
+                        columns.push({"tittle" : el})
+                    });
+                    
+                     $(`#preview_${currentId}`).removeClass('d-none container');
+                     $(`#preview-content_${currentId}`).html( `<table class="display w-100" id="example_${currentId}"></table>` );
+                                         
+                     $(`#example_${currentId}`).dataTable( {
+                        "data": dataSet.splice(1),
+                        "columns": columns,
+                        "lengthMenu": [ [5, 20, 50, 100], [5, 20, 50, 100] ],
+                        "pageLength": 20
+                     });  
+                }
+                else if (extension === 'txt') {
+                    $(`#preview_${currentId}`).removeClass('d-none container');
+                    $(`#preview-content_${currentId}`).addClass('w-100 mw-100 text-break').html(file); 
+                }
             }
         })
-        
-        
     }
 </script>
