@@ -16,7 +16,6 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
 
@@ -387,6 +386,7 @@ namespace HSMServer.Controllers
         {
             var (_, path) = GetSensorProductAndPath(encodedId);
             FileValue value = null;
+            
             if (dateTime != default)
             {
                 var enumerator = _treeValuesCache.GetSensorValuesPage(SensorPathHelper.DecodeGuid(encodedId),DateTime.MinValue, DateTime.MaxValue, 50);

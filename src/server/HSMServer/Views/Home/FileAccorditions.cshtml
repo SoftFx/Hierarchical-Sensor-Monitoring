@@ -16,18 +16,18 @@
     bool isEnabledPreview = (value.Extension == "csv" && value.OriginalSize < 5 * 1024 * 1024) ||
                              (value.Extension == "txt" && value.OriginalSize < 1024 * 1024);
     
-    <div class='accordion' id='sensorData_@i'>
+    <div class='accordion my-1' id='sensorData_@i'>
         <div class='accordion-item'>
             <h2 class='accordion-header' id='heading_@i'>
                 <button id='file_accordion_' class='accordion-button collapsed' type='button' data-bs-toggle='collapse'
                         data-bs-target='#collapse_@i' aria-expanded='false' aria-controls='collapse_@i' onclick="previewButtonClick('@value.Time.Ticks', @i, '@value.Extension')" @(!isEnabledPreview ? "disabled" : "")> 
                     <div class="w-100">
                         <div class='row justify-content-between'>
-                            <div class='row col-md-auto align-items-center'>
+                            <div class='row col-md-auto align-items-center ms-3'>
                                 @value.Name
                                 @if (value.Value != null)
                                 {
-                                    <a id='button_view_@i' onclick="previewButtonClick('@value.Time.Ticks', @i)" class='btn btn-outline-secondary d-flex justify-content-center mx-1' title='Preview' style="width: 2rem; height: 2rem">
+                                    <a id='button_view_@i' class='btn btn-outline-secondary d-flex justify-content-center mx-1' title='Preview' style="width: 2rem; height: 2rem">
                                         <i class='fas fa-eye'></i>
                                     </a>
 
