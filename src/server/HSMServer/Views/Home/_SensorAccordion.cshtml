@@ -213,7 +213,6 @@ function setContentPreview(encodedId){
             if (previousReceivedTime === response.time) 
                 return;
             
-            loadFiles();
             if ((response.originalSize < 5 * 1024 * 1024 && response.extension === 'csv') || // 5MB
                 (response.originalSize < 1024 * 1024 && response.extension === 'txt')) { // 1MB 
                 $.ajax({
@@ -263,6 +262,7 @@ function setContentPreview(encodedId){
                 $('#bigFilePreview').removeClass('d-none');
             }
             
+            loadFiles();
             previousReceivedTime = response.time;
         }
     })    

@@ -84,11 +84,9 @@
 <script>
     function previewButtonClick(time, currentId, extension){
         let encodedId = ($('[id^=recentValues_]')).attr('id').substring("recentValues_".length);
-        // console.log(encodedId)
-        // console.log(time)
-        // console.log(extension)
         
-        if ($(`#preview-content_${currentId}`)[0].innerHTML !== '') return;
+        if ($(`#preview-content_${currentId}`)[0].innerHTML !== '')
+            return;
         
         $.ajax({
             type: 'POST',
