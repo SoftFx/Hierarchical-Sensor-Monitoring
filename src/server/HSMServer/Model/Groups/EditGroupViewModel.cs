@@ -11,11 +11,13 @@ namespace HSMServer.Model.Groups
 {
     public class EditGroupViewModel
     {
-        public List<SelectListItem> AllProducts { get; init; }
+        public List<SelectListItem> AllProducts { get; }
 
-        public string CreationDate { get; init; }
+        public List<ProductNodeViewModel> SelectedProducts { get; }
 
-        public string Author { get; init; }
+        public string CreationDate { get; }
+
+        public string Author { get; }
 
 
         public Guid? Id { get; set; }
@@ -44,7 +46,7 @@ namespace HSMServer.Model.Groups
             Name = group.Name;
             Description = group.Description;
             Color = group.Color;
-            Products = group.Products.Select(p => p.DisplayName).ToList();
+            SelectedProducts = group.Products.Select(p => new ProductNodeViewModel(p) { RootProduct = null }).ToList(); // TODO selectedProducts should get products from _treeViewModel.Nodes
         }
 
 

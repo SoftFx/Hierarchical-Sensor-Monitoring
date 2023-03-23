@@ -1,4 +1,8 @@
-﻿@using HSMServer.Model.Groups;
+﻿@using HSMServer.Model.Groups
+@using HSMServer.Model.Authentication
+@using HSMServer.Helpers
+@using HSMServer.Extensions
+@using HSMCommon.Constants
 
 @model EditGroupViewModel
 
@@ -35,10 +39,71 @@
         <label class="col-auto col-form-label px-0" asp-for="CreationDate">@Model.CreationDate</label>
     </div>
 
-    <label class="col-form-label">Products</label>
-    <select class="selectpicker" asp-for="Products" asp-items="@Model.AllProducts" data-live-search="true" data-width="100%" title="Choose products to add" multiple></select>
+    <hr />
+
+    <div class="d-flex justify-content-end p-0">
+        <button type="button" class="col-auto btn btn-link px-0" onclick="addProducts()">Add product(s)</button>
+    </div>
+    <div id="productsSelect" class="selectpicker d-none">
+        <select class="selectpicker" asp-for="Products" asp-items="@Model.AllProducts" data-live-search="true" data-width="100%" title="Choose products to add" multiple></select>
+    </div>
+
+    <table class="table table-striped">
+        <thead>
+            <tr>
+                <th>Product name</th>
+                <th>
+                    <a class="btn sortSubmit" onclick="sortTable(this, sorting)" type="submit">
+                        Last sensor update
+                        <i id="sortIcon" class="fa-solid fa-sort"></i>
+                    </a>
+                </th>
+                <th class="text-center">Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var product in Model.SelectedProducts)
+            {
+                <tr>
+                    <td class="text-break">@Html.Raw(product.Name)</td>
+                    <td>
+                        <span title="@product.UpdateTime.ToDefaultFormat()" time="@product.UpdateTime">
+                            @product.UpdateTime.GetTimeAgo()
+                        </span>
+                        @if ((DateTime.UtcNow - product.UpdateTime).Ticks >= ConfigurationConstants.DefaultExpirationTime.Ticks)
+                        {
+                            <span>
+                                <img title="Product sensor(s) haven't been updated for @ConfigurationConstants.DefaultExpirationTime.ToToolTip()" src="~/dist/warning.svg" alt="warning icon" />
+                            </span>
+                        }
+                    </td>
+                    <td nowrap class="text-center">
+                        <div class='btn-group'>
+                            <button class="btn" data-bs-toggle="dropdown" data-bs-auto-close="true" aria-haspopup="true" aria-expanded="false">
+                                <i class="fa-solid fa-ellipsis-vertical" style="cursor: pointer"></i>
+                            </button>
+                            <ul class='dropdown-menu overflow-auto' aria-labelledby="dropdownMenuButton">
+                                <li>
+                                    <a id='exclude_@product.Id' class='dropdown-item text-decoration-none fw-normal' style="cursor: pointer;">
+                                        Exclude from folder
+                                    </a>
+                                </li>
+                            </ul>
+                        </div>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
 
     <div class="d-flex justify-content-end my-1">
         <button type="submit" class="btn btn-secondary independentSizeButton">Save</button>
     </div>
 </form>
+
+
+<script>
+    function addProducts() {
+        $("#productsSelect").removeClass("d-none");
+    }
+</script>

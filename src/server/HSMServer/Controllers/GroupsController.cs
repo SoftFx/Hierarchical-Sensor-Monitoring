@@ -14,9 +14,9 @@ namespace HSMServer.Controllers
 {
     public class GroupsController : Controller
     {
-        private IGroupManager _groupManager;
-        private ITreeValuesCache _cache;
-        private TreeViewModel _treeViewModel;
+        private readonly IGroupManager _groupManager;
+        private readonly ITreeValuesCache _cache;
+        private readonly TreeViewModel _treeViewModel;
 
 
         public GroupsController(IGroupManager groupManager, ITreeValuesCache cache, TreeViewModel treeViewModel)
