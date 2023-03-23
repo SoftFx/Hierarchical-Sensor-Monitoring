@@ -426,16 +426,11 @@ namespace HSMServer.Controllers
         {
             var enumerator = _treeValuesCache.GetSensorValuesPage(SensorPathHelper.DecodeGuid(fileId),DateTime.MinValue, DateTime.MaxValue, 50);
             var viewModel = await new HistoryValuesViewModel(fileId,6 , enumerator, GetLocalLastValue(fileId,DateTime.MinValue, DateTime.MaxValue)).Initialize();
-            Console.WriteLine(viewModel.Pages[0].Count);
-            foreach (FileValue value in viewModel.Pages[0])
-            {
-                Console.WriteLine(value.Time.Ticks);
-            }
-            _userManager[(HttpContext.User as User).Id].Pagination = viewModel;
-            var test = GetFileTable(viewModel);
             
-            return test;
+            _userManager[(HttpContext.User as User).Id].Pagination = viewModel;
+            return GetFileTable(viewModel);;
         }
+        
         private PartialViewResult GetFileTable(HistoryValuesViewModel viewModel) =>
             PartialView("FileAccorditions", viewModel);
 
