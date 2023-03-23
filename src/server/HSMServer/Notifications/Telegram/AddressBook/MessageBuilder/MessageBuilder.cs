@@ -27,9 +27,7 @@ namespace HSMServer.Notifications
                 newStatus = $"{key.oldStatus}->{newStatus}";
 
                 branch[key].Remove(id);
-
-                if (branch[key].IsEmpty)
-                    branch.TryRemove(key, out _);
+                branch.RemoveEmptyBranch(key);
             }
 
             var newKey = (newStatus, comment);
@@ -44,23 +42,24 @@ namespace HSMServer.Notifications
 
             foreach (var (product, changePaths) in _messageTree)
             {
-                foreach (((var status, var comment), var sensors) in changePaths)
+                foreach ((var changeStatusPath, var sensors) in changePaths)
                 {
+                    (var status, var comment) = changeStatusPath;
+
                     foreach (var path in _compressor.GetGroupedPaths(sensors))
                     {
                         BuildMessage(builder, product, status, comment, path);
                     }
 
-                    sensors.Clear();
+                    changePaths.RemoveEmptyBranch(changeStatusPath);
                 }
 
-                changePaths.Clear();
                 builder.AppendLine();
+
+                _messageTree.RemoveEmptyBranch(product);
             }
 
             ExpectedSendingTime = GetNextNotificationTime(notificationsDelay);
-
-            _messageTree.Clear();
 
             return builder.ToString();
         }
