@@ -92,9 +92,6 @@
                 }
         </div>
      </div>
-    
-   
-    <div id="recentValues_">123</div>
 }
 else
 {
@@ -197,6 +194,7 @@ else
 }
 </div>
 </div>
+<div id="recentValues_"></div>
 
 <script>
 var previousReceivedTime = undefined;
@@ -277,6 +275,7 @@ function loadFiles(){
             cache: false,
             contentType: "application/json",
             success: function (response){
+               
                $('#recentValues_').html(response).attr("id", 'recentValues_@sensorId');
             }
         })

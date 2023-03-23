@@ -383,13 +383,27 @@ namespace HSMServer.Controllers
         }
 
         [HttpPost]
-        public IActionResult GetFileStream([FromQuery(Name = "Selected")] string encodedId)
+        public async Task<IActionResult> GetFileStream([FromQuery(Name = "Selected")] string encodedId, [FromQuery] long dateTime = default)
         {
-            var value = GetFileSensorValue(encodedId);
+            var (_, path) = GetSensorProductAndPath(encodedId);
+            FileValue value = null;
+            if (dateTime != default)
+            {
+                var enumerator = _treeValuesCache.GetSensorValuesPage(SensorPathHelper.DecodeGuid(encodedId),DateTime.MinValue, DateTime.MaxValue, 50);
+                var viewModel = await new HistoryValuesViewModel(encodedId,6 , enumerator, GetLocalLastValue(encodedId,DateTime.MinValue, DateTime.MaxValue)).Initialize();
+                foreach (FileValue file in viewModel.Pages[0])
+                {
+                    if (file.Time.Ticks == dateTime)
+                    {
+                        value = file;
+                        break;
+                    }
+                }
+            }
+            else value = GetFileSensorValue(encodedId);
+            
             if (value == null)
                 return _emptyResult;
-
-            var (_, path) = GetSensorProductAndPath(encodedId);
 
             var fileContentsStream = new MemoryStream(value.Value);
             var fileName = $"{path.Replace('/', '_')}.{value.Extension}";
@@ -412,7 +426,11 @@ namespace HSMServer.Controllers
         {
             var enumerator = _treeValuesCache.GetSensorValuesPage(SensorPathHelper.DecodeGuid(fileId),DateTime.MinValue, DateTime.MaxValue, 50);
             var viewModel = await new HistoryValuesViewModel(fileId,6 , enumerator, GetLocalLastValue(fileId,DateTime.MinValue, DateTime.MaxValue)).Initialize();
-
+            Console.WriteLine(viewModel.Pages[0].Count);
+            foreach (FileValue value in viewModel.Pages[0])
+            {
+                Console.WriteLine(value.Time.Ticks);
+            }
             _userManager[(HttpContext.User as User).Id].Pagination = viewModel;
             var test = GetFileTable(viewModel);
             
