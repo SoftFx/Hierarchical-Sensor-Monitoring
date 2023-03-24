@@ -1,9 +1,9 @@
-﻿using HSMCommon.Extensions;
+﻿using HSMCommon.Constants;
+using HSMCommon.Extensions;
 using HSMServer.Core.Model;
 using HSMServer.Helpers;
 using HSMServer.Model.AccessKeysViewModels;
 using HSMServer.Model.Authentication;
-using HSMServer.Notification.Settings;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -11,32 +11,30 @@ using System.Linq;
 
 namespace HSMServer.Model.TreeViewModel
 {
-    public class ProductNodeViewModel : NodeViewModel, INotificatable
+    public class ProductNodeViewModel : NodeViewModel
     {
+        public override bool HasData =>
+            Sensors.Values.Any(s => s.HasData) || Nodes.Values.Any(n => n.HasData);
+
         public ConcurrentDictionary<Guid, ProductNodeViewModel> Nodes { get; } = new();
 
         public ConcurrentDictionary<Guid, SensorNodeViewModel> Sensors { get; } = new();
 
         public ConcurrentDictionary<Guid, AccessKeyViewModel> AccessKeys { get; } = new();
 
-
         public TelegramSettingsViewModel TelegramSettings { get; } = new();
-
+        
         public NotificationSettings Notifications { get; }
 
-
         public int AllSensorsCount { get; private set; }
-
-
-        public override bool HasData =>
-    Sensors.Values.Any(s => s.HasData) || Nodes.Values.Any(n => n.HasData);
 
         public bool IsEmpty => AllSensorsCount == 0;
 
 
-        public ProductNodeViewModel(ProductModel model) : base(model)
+        public ProductNodeViewModel(ProductModel model) : base(model.Id)
         {
-            Notifications = new(model.NotificationsSettings);
+            Path = $"{model.Path}{CommonConstants.SensorPathSeparator}";
+            Notifications = model.Notifications;
 
             Update(model);
         }
@@ -50,22 +48,23 @@ namespace HSMServer.Model.TreeViewModel
         {
             base.Update(model);
 
-            TelegramSettings.Update(Notifications.Telegram);
+            TelegramSettings.Update(model.Notifications.Telegram);
         }
 
         internal void AddSubNode(ProductNodeViewModel node)
         {
-            node.Parent = this;
             Nodes.TryAdd(node.Id, node);
+            node.Parent = this;
         }
 
         internal void AddSensor(SensorNodeViewModel sensor)
         {
-            sensor.Parent = this;
             Sensors.TryAdd(sensor.Id, sensor);
+            sensor.Parent = this;
         }
 
-        internal void AddAccessKey(AccessKeyViewModel key) => AccessKeys.TryAdd(key.Id, key);
+        internal void AddAccessKey(AccessKeyViewModel key) =>
+            AccessKeys.TryAdd(key.Id, key);
 
         internal List<AccessKeyViewModel> GetAccessKeys() => AccessKeys.Values.ToList();
 
@@ -87,7 +86,7 @@ namespace HSMServer.Model.TreeViewModel
 
             ModifyUpdateTime();
             ModifyStatus();
-
+            
             return this;
         }
 
@@ -101,10 +100,10 @@ namespace HSMServer.Model.TreeViewModel
 
         private void ModifyStatus()
         {
-            var nodesStatus = Sensors.Values.MaxOrDefault(s => s.Status);
-            var sensorStatus = Nodes.Values.MaxOrDefault(n => n.Status);
+            var statusFromSensors = Sensors.Values.MaxOrDefault(s => s.Status);
+            var statusFromNodes = Nodes.Values.MaxOrDefault(n => n.Status);
 
-            Status = sensorStatus > nodesStatus ? sensorStatus : nodesStatus;
+            Status = statusFromNodes > statusFromSensors ? statusFromNodes : statusFromSensors;
         }
     }
 }

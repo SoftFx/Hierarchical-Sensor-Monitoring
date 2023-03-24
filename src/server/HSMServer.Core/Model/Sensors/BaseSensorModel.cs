@@ -2,7 +2,6 @@
 using HSMServer.Core.Cache.UpdateEntities;
 using System;
 using System.Collections.Generic;
-using System.Linq;
 
 namespace HSMServer.Core.Model
 {
@@ -20,12 +19,11 @@ namespace HSMServer.Core.Model
     }
 
 
-    public abstract class BaseSensorModel : BaseNodeModel
+    public abstract class BaseSensorModel : NodeBaseModel
     {
-        private static readonly PolicyResult _muteResult = new(SensorStatus.OffTime, "Muted");
+        private readonly ValidationResult _muteStatus = new("Muted", SensorStatus.OffTime);
 
-        private PolicyResult _serverResult = PolicyResult.Ok;
-        protected PolicyResult _dataResult = PolicyResult.Ok;
+        protected ValidationResult _internalValidationResult;
 
 
         protected abstract ValuesStorage Storage { get; }
@@ -33,63 +31,53 @@ namespace HSMServer.Core.Model
         public abstract SensorType Type { get; }
 
 
-        public DateTime? EndOfMuting { get; private set; }
-
         public SensorState State { get; private set; }
 
-        public string Unit { get; private set; } //TODO remove
+        public string Unit { get; private set; }
 
 
-        public bool IsWaitRestore=> !ServerPolicy.CheckRestorePolicies(Status.Status, LastUpdateTime).IsOk;
+        public DateTime? EndOfMuting { get; private set; }
 
-        public PolicyResult Status => State == SensorState.Muted ? _muteResult : _serverResult + _dataResult;
+        public ValidationResult ValidationResult => State == SensorState.Muted ? _muteStatus : _internalValidationResult;
 
-
-        public bool HasData => Storage.HasData;
 
         public BaseValue LastValue => Storage.LastValue;
 
-        public BaseValue LastDbValue => Storage.LastDbValue;
-
         public DateTime LastUpdateTime => Storage.LastValue?.ReceivingTime ?? DateTime.MinValue;
 
+        public bool HasData => Storage.HasData;
 
-        public BaseSensorModel(SensorEntity entity) : base(entity)
+
+        public BaseSensorModel()
         {
-            State = (SensorState)entity.State;
-            Unit = entity.Unit;
-            EndOfMuting = entity.EndOfMuting > 0L ? new DateTime(entity.EndOfMuting) : null;
+            Id = Guid.NewGuid();
+            CreationDate = DateTime.UtcNow;
         }
 
 
-        internal abstract bool TryAddValue(BaseValue value);
-
-        internal abstract bool TryAddValue(byte[] bytes);
-
-        internal abstract List<BaseValue> ConvertValues(List<byte[]> valuesBytes);
-
-        internal virtual BaseSensorModel InitDataPolicy() => this;
-
-
-        internal override bool HasUpdateTimeout()
+        public bool CheckExpectedUpdateInterval()
         {
-            var oldResult = _serverResult;
-
-            _serverResult -= ServerPolicy.ExpectedUpdate.Policy.Fail;
-
-            if (!HasData)
+            if (UsedExpectedUpdateInterval == null || !HasData)
                 return false;
 
-            _serverResult += ServerPolicy.ExpectedUpdate.Policy.Validate(LastValue.ReceivingTime);
+            var oldValidationResult = _internalValidationResult;
 
-            return _serverResult != oldResult;
+            _internalValidationResult += UsedExpectedUpdateInterval.Validate(LastValue);
+
+            return _internalValidationResult != oldValidationResult;
+        }
+
+        internal override void RefreshOutdatedError()
+        {
+            _internalValidationResult -= ExpectedUpdateIntervalPolicy.OutdatedSensor;
+
+            CheckExpectedUpdateInterval();
         }
 
 
         internal void Update(SensorUpdate update)
         {
-            base.Update(update);
-
+            Description = update.Description ?? Description;
             Unit = update.Unit ?? Unit;
             State = update?.State ?? State;
             EndOfMuting = update?.EndOfMutingPeriod ?? EndOfMuting;
@@ -98,27 +86,53 @@ namespace HSMServer.Core.Model
                 EndOfMuting = null;
         }
 
-        internal void ResetSensor()
+        internal BaseSensorModel ApplyEntity(SensorEntity entity)
         {
-            _serverResult = PolicyResult.Ok;
-            _dataResult = PolicyResult.Ok;
+            if (!string.IsNullOrEmpty(entity.Id) && Guid.TryParse(entity.Id, out var entityId))
+                Id = entityId;
 
-            Storage.Clear();
+            if (entity.CreationDate != DateTime.MinValue.Ticks)
+                CreationDate = new DateTime(entity.CreationDate);
+
+            AuthorId = Guid.TryParse(entity.AuthorId, out var authorId) ? authorId : null;
+            DisplayName = entity.DisplayName;
+            Description = entity.Description;
+            State = (SensorState)entity.State;
+            Unit = entity.Unit;
+            EndOfMuting = entity.EndOfMuting == 0L ? null : new DateTime(entity.EndOfMuting);
+
+            _internalValidationResult = ValidationResult.Ok;
+
+            return this;
         }
 
-        internal SensorEntity ToEntity() => new()
+        internal SensorEntity ToEntity() =>
+            new()
+            {
+                Id = Id.ToString(),
+                AuthorId = AuthorId.ToString(),
+                ProductId = ParentProduct.Id.ToString(),
+                DisplayName = DisplayName,
+                Description = Description,
+                Unit = Unit,
+                CreationDate = CreationDate.Ticks,
+                Type = (byte)Type,
+                State = (byte)State,
+                Policies = GetPolicyIds(),
+                EndOfMuting = EndOfMuting?.Ticks ?? 0L,
+            };
+
+
+        internal abstract bool TryAddValue(BaseValue value, out BaseValue cachedValue);
+
+        internal abstract void AddValue(byte[] valueBytes);
+
+        internal abstract List<BaseValue> ConvertValues(List<byte[]> valuesBytes);
+
+        internal void ClearValues()
         {
-            Id = Id.ToString(),
-            AuthorId = AuthorId.ToString(),
-            ProductId = Parent.Id.ToString(),
-            DisplayName = DisplayName,
-            Description = Description,
-            Unit = Unit,
-            CreationDate = CreationDate.Ticks,
-            Type = (byte)Type,
-            State = (byte)State,
-            Policies = GetPolicyIds().Select(u => u.ToString()).ToList(),
-            EndOfMuting = EndOfMuting?.Ticks ?? 0L,
-        };
+            Storage.Clear();
+            _internalValidationResult = ValidationResult.Ok;
+        }
     }
 }

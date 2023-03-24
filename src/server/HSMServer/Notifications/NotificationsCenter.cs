@@ -1,30 +1,25 @@
 ﻿using HSMServer.Authentication;
-using HSMServer.Configuration;
 using HSMServer.Core.Cache;
-using HSMServer.Model.TreeViewModel;
+using HSMServer.Core.Configuration;
 using System;
 using System.Threading.Tasks;
 
 namespace HSMServer.Notifications
 {
-    public sealed class NotificationsCenter : IAsyncDisposable
+    public sealed class NotificationsCenter : INotificationsCenter, IAsyncDisposable
     {
         public TelegramBot TelegramBot { get; }
 
 
-        public NotificationsCenter(IUserManager userManager, TreeViewModel tree, ITreeValuesCache cache, IConfigurationProvider config)
+        public NotificationsCenter(IUserManager userManager, ITreeValuesCache cache, IConfigurationProvider config)
         {
-            TelegramBot = new(userManager, cache, tree, config);
-
-            _ = TelegramBot.StartBot();
+            TelegramBot = new(userManager, cache, config);
+            TelegramBot.StartBot();
         }
 
-
-        public ValueTask DisposeAsync() => TelegramBot.DisposeAsync();
-
-        internal void CheckNotificationCenterState()
+        public async ValueTask DisposeAsync()
         {
-            TelegramBot.RemoveOldInvitationTokens();
+            await TelegramBot.DisposeAsync();
         }
     }
 }

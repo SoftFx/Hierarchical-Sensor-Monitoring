@@ -1,5 +1,4 @@
-﻿using HSMServer.Core.Extensions;
-using System;
+﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
@@ -8,52 +7,49 @@ namespace HSMServer.Core.Model
 {
     public abstract class ValuesStorage
     {
-        protected virtual int CacheSize => 100;
-
+        internal abstract bool HasData { get; }
 
         internal abstract BaseValue LastValue { get; }
 
-        internal abstract bool HasData { get; }
 
-
-        internal virtual BaseValue LastDbValue => LastValue;
-
-
-        internal abstract List<BaseValue> GetValues(DateTime from, DateTime to);
+        internal abstract void Clear();
 
         internal abstract List<BaseValue> GetValues(int count);
 
-        internal abstract void Clear();
+        internal abstract List<BaseValue> GetValues(DateTime from, DateTime to);
     }
 
 
     public abstract class ValuesStorage<T> : ValuesStorage where T : BaseValue
     {
-        private readonly ConcurrentQueue<T> _cache = new();
+        private readonly ConcurrentQueue<T> _cachedValues = new();
 
 
-        internal override bool HasData => !_cache.IsEmpty;
+        protected virtual int CacheSize => 100;
 
-        internal override T LastValue => _cache.LastOrDefault();
+        internal override bool HasData => !_cachedValues.IsEmpty;
+
+        internal override BaseValue LastValue => _cachedValues.LastOrDefault();
 
 
-        internal virtual void AddValue(T value) => AddValueBase(value);
-
-        internal virtual void AddValueBase(T value)
+        internal virtual T AddValueBase(T value)
         {
-            _cache.Enqueue(value);
+            _cachedValues.Enqueue(value);
 
-            if (_cache.Count > CacheSize)
-                _cache.TryDequeue(out _);
+            if (_cachedValues.Count > CacheSize)
+                _cachedValues.TryDequeue(out _);
+
+            return value;
         }
 
+        internal virtual T AddValue(T value) => AddValueBase(value);
+
+        internal override void Clear() => _cachedValues.Clear();
 
         internal override List<BaseValue> GetValues(int count) =>
-            _cache.Take(count).Select(v => (BaseValue)v).ToList();
+            _cachedValues.Take(count).Select(v => (BaseValue)v).ToList();
 
         internal override List<BaseValue> GetValues(DateTime from, DateTime to) =>
-            _cache.Where(v => v.InRange(from, to)).Select(u => (BaseValue)u).ToList();
-
-        internal override void Clear() => _cache.Clear();
+            _cachedValues.Where(v => v.ReceivingTime >= from && v.ReceivingTime <= to).Select(v => (BaseValue)v).ToList();
     }
 }

@@ -7,7 +7,7 @@ using HSMServer.Extensions;
 
 namespace HSMServer.Model.AccessKeysViewModels
 {
-    public sealed class AccessKeyViewModel
+    public class AccessKeyViewModel
     {
         public Guid Id { get; }
 
@@ -24,7 +24,7 @@ namespace HSMServer.Model.AccessKeysViewModels
 
         public string Permissions { get; private set; }
 
-        public string NodePath => ParentProduct.FullPath;
+        public string NodePath { get; private set; }
 
         public string StatusTitle { get; private set; }
 
@@ -37,6 +37,7 @@ namespace HSMServer.Model.AccessKeysViewModels
             ExpirationDate = BuildExpiration(accessKey.ExpirationTime);
 
             Update(accessKey);
+            UpdateNodePath();
         }
 
         internal void Update(AccessKeyModel accessKey)
@@ -45,6 +46,22 @@ namespace HSMServer.Model.AccessKeysViewModels
             Permissions = BuildPermissions(accessKey.Permissions);
             State = accessKey.State;
             StatusTitle = $"Status : {State}{Environment.NewLine}Expiration date : {ExpirationDate}";
+        }
+
+        internal void UpdateNodePath()
+        {
+            var nodePathParts = new List<string>();
+            NodeViewModel parent = ParentProduct;
+
+            while (parent != null)
+            {
+                nodePathParts.Add(parent.Name);
+                parent = parent.Parent;
+            }
+
+            nodePathParts.Reverse();
+
+            NodePath = string.Join(CommonConstants.SensorPathSeparator, nodePathParts);
         }
 
         internal static string BuildExpiration(DateTime expirationTime) =>

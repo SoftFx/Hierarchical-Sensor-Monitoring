@@ -3,7 +3,6 @@ using HSMServer.Core.Cache;
 using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Converters;
 using HSMServer.Core.Model;
-using HSMServer.Core.Model.Policies;
 using HSMServer.Core.SensorsUpdatesQueue;
 using HSMServer.Core.Tests.Infrastructure;
 using HSMServer.Core.Tests.MonitoringCoreTests;
@@ -13,7 +12,6 @@ using HSMServer.Model.TreeViewModel;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Xunit;
@@ -44,7 +42,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             await Task.Delay(1000);
 
             var expectedProducts = _databaseCoreManager.DatabaseCore.GetAllProducts();
-            var actualProducts = _valuesCache.GetNodes();
+            var actualProducts = _valuesCache.GetTree();
 
             ModelsTester.TestProducts(expectedProducts, actualProducts);
         }
@@ -73,11 +71,11 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         {
             int addedProductsCount = 0;
             int updatedProductsCount = 0;
-            void AddProductEventHandle(ProductModel product, ActionType type)
+            void AddProductEventHandle(ProductModel product, TransactionType type)
             {
                 Assert.NotNull(product);
 
-                if (type == ActionType.Add)
+                if (type == TransactionType.Add)
                     addedProductsCount++;
                 else
                     updatedProductsCount++;
@@ -149,21 +147,21 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         {
             int updatedProductsCount = 0;
             int deletedProductsCount = 0;
-            void RemoveProductEventHandler(ProductModel product, ActionType type)
+            void RemoveProductEventHandler(ProductModel product, TransactionType type)
             {
                 Assert.NotNull(product);
 
-                if (type == ActionType.Update)
+                if (type == TransactionType.Update)
                     updatedProductsCount++;
                 else
                     deletedProductsCount++;
             }
 
             int deletedSensorsCount = 0;
-            void RemoveSensorEventHandler(BaseSensorModel sensor, ActionType type)
+            void RemoveSensorEventHandler(BaseSensorModel sensor, TransactionType type)
             {
                 Assert.NotNull(sensor);
-                Assert.Equal(ActionType.Delete, type);
+                Assert.Equal(TransactionType.Delete, type);
 
                 deletedSensorsCount++;
             }
@@ -172,7 +170,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             await Task.Delay(100);
 
             var product = GetProductByName("subProduct0_product0");
-            var parentProduct = product.Parent;
+            var parentProduct = product.ParentProduct;
 
             var expectedDeletedProductIds = GetAllProductIdsInBranch(product);
             var expectedDeletedSensorIds = GetAllSensorIdsInBranch(product);
@@ -261,7 +259,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             var clonedSensor = GetClonedSensorModel(sensor);
 
             ModelsTester.AssertModels(sensor, clonedSensor);
-            ModelsTester.AssertModels(sensor.Status, clonedSensor.Status);
+            ModelsTester.AssertModels(sensor.ValidationResult, clonedSensor.ValidationResult);
         }
 
         [Fact]
@@ -272,10 +270,10 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             var sensorUpdate = SensorModelFactory.BuildSensorUpdate(sensor.Id);
 
             int updatedSensorsCount = 0;
-            void UpdateSensorEventHandler(BaseSensorModel updatedSensor, ActionType type)
+            void UpdateSensorEventHandler(BaseSensorModel updatedSensor, TransactionType type)
             {
                 Assert.NotNull(updatedSensor);
-                Assert.Equal(ActionType.Update, type);
+                Assert.Equal(TransactionType.Update, type);
 
                 ModelsTester.TestSensorModel(sensorUpdate, updatedSensor);
 
@@ -303,10 +301,10 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
                 sensorUpdates.Add((GetClonedSensorModel(sensor), SensorModelFactory.BuildSensorUpdate(sensor.Id)));
 
             int updatedSensorsCount = 0;
-            void UpdateSensorEventHandler(BaseSensorModel updatedSensor, ActionType type)
+            void UpdateSensorEventHandler(BaseSensorModel updatedSensor, TransactionType type)
             {
                 Assert.NotNull(updatedSensor);
-                Assert.Equal(ActionType.Update, type);
+                Assert.Equal(TransactionType.Update, type);
 
                 updatedSensorsCount++;
             }
@@ -330,10 +328,10 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             var allSensors = _valuesCache.GetSensors();
 
             int removedSensorsCount = 0;
-            void RemoveSensorEventHandler(BaseSensorModel removedSensor, ActionType type)
+            void RemoveSensorEventHandler(BaseSensorModel removedSensor, TransactionType type)
             {
                 Assert.NotNull(removedSensor);
-                Assert.Equal(ActionType.Delete, type);
+                Assert.Equal(TransactionType.Delete, type);
 
                 removedSensorsCount++;
             }
@@ -357,10 +355,10 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         public async Task RemoveSensorsDataTest()
         {
             int clearedSensorsCount = 0;
-            void UpdateSensorEventHandler(BaseSensorModel clearedSensor, ActionType type)
+            void UpdateSensorEventHandler(BaseSensorModel clearedSensor, TransactionType type)
             {
                 Assert.NotNull(clearedSensor);
-                Assert.Equal(ActionType.Update, type);
+                Assert.Equal(TransactionType.Update, type);
 
                 clearedSensorsCount++;
             }
@@ -405,25 +403,25 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         {
             int addedProductsCount = 0;
             int updatedProductsCount = 0;
-            void ChangeProductEventHandler(ProductModel product, ActionType type)
+            void ChangeProductEventHandler(ProductModel product, TransactionType type)
             {
                 Assert.NotNull(product);
 
-                if (type == ActionType.Add)
+                if (type == TransactionType.Add)
                     addedProductsCount++;
-                else if (type == ActionType.Update)
+                else if (type == TransactionType.Update)
                     updatedProductsCount++;
             }
 
             int addedSensorsCount = 0;
             int updatedSensorsCount = 0;
-            void ChangeSensorEventHandler(BaseSensorModel sensor, ActionType type)
+            void ChangeSensorEventHandler(BaseSensorModel sensor, TransactionType type)
             {
                 Assert.NotNull(sensor);
 
-                if (type == ActionType.Add)
+                if (type == TransactionType.Add)
                     addedSensorsCount++;
-                else if (type == ActionType.Update)
+                else if (type == TransactionType.Update)
                     updatedSensorsCount++;
             }
 
@@ -489,10 +487,10 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         public void AddNewSensorValue_UpdateData_Test(SensorType type)
         {
             int updatedSensorsCount = 0;
-            void ChangeSensorEventHandler(BaseSensorModel sensor, ActionType type)
+            void ChangeSensorEventHandler(BaseSensorModel sensor, TransactionType type)
             {
                 Assert.NotNull(sensor);
-                Assert.Equal(ActionType.Update, type);
+                Assert.Equal(TransactionType.Update, type);
 
                 updatedSensorsCount++;
             }
@@ -543,7 +541,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         }
 
         private ProductModel GetProductByName(string name) =>
-            _valuesCache.GetNodes().FirstOrDefault(p => p.DisplayName == name);
+            _valuesCache.GetTree().FirstOrDefault(p => p.DisplayName == name);
 
         private BaseSensorModel GetSensorByNameFromCache(string name) =>
             _valuesCache.GetSensors().FirstOrDefault(s => s.DisplayName == name);
@@ -584,21 +582,22 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             ModelsTester.TestSensorModelWithoutUpdatedMetadata(actualSensorFromCache, sensor);
             ModelsTester.TestSensorModelWithoutUpdatedMetadata(actualSensorFromDb, sensor);
 
-            var actualExpectedUpdateIntervalPolicy = GetPolicyByIdFromDb(actualSensorFromCache.ServerPolicy.ExpectedUpdate.Policy.Id);
+            var actualExpectedUpdateIntervalPolicy = GetPolicyByIdFromDb(actualSensorFromCache.ExpectedUpdateInterval.Id);
 
             ModelsTester.TestExpectedUpdateIntervalPolicy(sensorUpdate, actualExpectedUpdateIntervalPolicy);
-            ModelsTester.AssertModels(actualSensorFromCache.ServerPolicy.ExpectedUpdate.Policy, actualExpectedUpdateIntervalPolicy);
+            ModelsTester.AssertModels(actualSensorFromCache.ExpectedUpdateInterval, actualExpectedUpdateIntervalPolicy);
         }
 
         private Policy GetPolicyByIdFromDb(Guid id)
         {
             var policyEntities = _databaseCoreManager.DatabaseCore.GetAllPolicies();
 
+            var serializeOptions = new JsonSerializerOptions();
+            serializeOptions.Converters.Add(new PolicyDeserializationConverter());
+
             foreach (var entity in policyEntities)
             {
-                var str = Encoding.UTF8.GetString(entity);
-
-                var policy = JsonSerializer.Deserialize<Policy>(entity);
+                var policy = JsonSerializer.Deserialize<Policy>(entity, serializeOptions);
                 if (policy.Id == id)
                     return policy;
             }
@@ -609,9 +608,10 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         private BaseSensorModel GetClonedSensorModel(BaseSensorModel sensor)
         {
             var clonedSensor = SensorModelFactory.Build(sensor.ToEntity());
-            clonedSensor.AddParent(_valuesCache.GetProduct(sensor.Parent.Id));
+            clonedSensor.ParentProduct = _valuesCache.GetProduct(sensor.ParentProduct.Id);
+            clonedSensor.BuildProductNameAndPath();
 
-            clonedSensor.TryAddValue(sensor.LastValue);
+            clonedSensor.TryAddValue(sensor.LastValue, out _);
 
             return clonedSensor;
         }

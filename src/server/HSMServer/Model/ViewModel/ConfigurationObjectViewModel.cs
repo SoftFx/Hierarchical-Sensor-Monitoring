@@ -1,4 +1,4 @@
-﻿using HSMServer.Core.Configuration;
+﻿using HSMServer.Core.Model;
 
 namespace HSMServer.Model.ViewModel
 {

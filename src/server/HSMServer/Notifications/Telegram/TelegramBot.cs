@@ -1,11 +1,9 @@
 ﻿using HSMCommon.Constants;
 using HSMServer.Authentication;
-using HSMServer.Configuration;
 using HSMServer.Core.Cache;
+using HSMServer.Core.Configuration;
 using HSMServer.Core.Model;
 using HSMServer.Extensions;
-using HSMServer.Model.TreeViewModel;
-using HSMServer.Notification.Settings;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
@@ -30,11 +28,10 @@ namespace HSMServer.Notifications
             AllowedUpdates = { }, // receive all update types
         };
 
-        private readonly IConfigurationProvider _configurationProvider;
-        private readonly TelegramUpdateHandler _updateHandler;
         private readonly IUserManager _userManager;
         private readonly ITreeValuesCache _cache;
-        private readonly TreeViewModel _tree;
+        private readonly IConfigurationProvider _configurationProvider;
+        private readonly TelegramUpdateHandler _updateHandler;
 
         private CancellationTokenSource _tokenSource = new();
         private TelegramBotClient _bot;
@@ -47,14 +44,13 @@ namespace HSMServer.Notifications
             ConfigurationConstants.AreBotMessagesEnabled).Value, out var result) && result;
 
 
-        internal TelegramBot(IUserManager userManager, ITreeValuesCache cache, TreeViewModel tree,
+        internal TelegramBot(IUserManager userManager, ITreeValuesCache cache,
             IConfigurationProvider configurationProvider)
         {
             _userManager = userManager;
             _userManager.Removed += RemoveUserEventHandler;
 
             _cache = cache;
-            _tree = tree;
             _cache.ChangeProductEvent += RemoveProductEventHandler;
             _cache.NotifyAboutChangesEvent += SendMessage;
 
@@ -77,7 +73,7 @@ namespace HSMServer.Notifications
         internal string GetInvitationLink(User user) =>
             $"https://t.me/{BotName}?start={_addressBook.BuildInvitationToken(user)}";
 
-        internal string GetStartCommandForGroup(ProductNodeViewModel product) =>
+        internal string GetStartCommandForGroup(ProductModel product) =>
             $"{TelegramBotCommands.Start}@{BotName} {_addressBook.BuildInvitationToken(product)}";
 
         internal async Task<string> GetChatLink(long chatId)
@@ -163,28 +159,29 @@ namespace HSMServer.Notifications
                 foreach (var (_, chat) in user.Notifications.Telegram.Chats)
                     _addressBook.RegisterChat(user, chat);
 
-            foreach (var product in _tree.GetRootProducts())
+            foreach (var product in _cache.GetProducts())
                 foreach (var (_, chat) in product.Notifications.Telegram.Chats)
                     _addressBook.RegisterChat(product, chat);
         }
 
-        private static bool ShouldSendMessage(INotificatable entity, BaseSensorModel sensor, PolicyResult oldStatus)
+        private static bool WhetherSendMessage(INotificatable entity, BaseSensorModel sensor, ValidationResult oldStatus)
         {
-            var newStatus = sensor.Status;
+            var newStatus = sensor.ValidationResult;
             var minWebStatus = entity.Notifications.Telegram.MessagesMinStatus.ToClient();
 
-            return entity.CanSendData(sensor) && newStatus != oldStatus &&
-                   (newStatus.Status.ToClient() >= minWebStatus || oldStatus.Status.ToClient() >= minWebStatus);
+            return entity.NotificationsEnabled(sensor) &&
+                   newStatus != oldStatus &&
+                   (newStatus.Result.ToClient() >= minWebStatus || oldStatus.Result.ToClient() >= minWebStatus);
         }
 
-        private void SendMessage(BaseSensorModel sensor, PolicyResult oldStatus)
+        private void SendMessage(BaseSensorModel sensor, ValidationResult oldStatus)
         {
             try
             {
                 if (IsBotRunning && AreBotMessagesEnabled)
                     foreach (var (entity, chats) in _addressBook.ServerBook)
                     {
-                        if (ShouldSendMessage(entity, sensor, oldStatus))
+                        if (WhetherSendMessage(entity, sensor, oldStatus))
                             foreach (var (_, chat) in chats)
                             {
                                 if (entity.Notifications.Telegram.MessagesDelay > 0)
@@ -234,9 +231,9 @@ namespace HSMServer.Notifications
 
         private void RemoveUserEventHandler(User user) => _addressBook.RemoveAllChats(user);
 
-        private void RemoveProductEventHandler(ProductModel model, ActionType transaction)
+        private void RemoveProductEventHandler(ProductModel product, TransactionType transaction)
         {
-            if (transaction == ActionType.Delete && _tree.Nodes.TryGetValue(model.Id, out var product))
+            if (transaction == TransactionType.Delete)
                 _addressBook.RemoveAllChats(product);
         }
 

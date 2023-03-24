@@ -31,12 +31,12 @@ namespace HSMServer.Core.Model
     {
         public override SensorType Type => SensorType.TimeSpan;
 
-
+        
         public static bool TryParse(string interval, out long ticks)
         {
             var ddString = interval.Split(".");
             var hmsString = ddString[^1].Split(":");
-
+            
             if (ddString.Length == 2 &&
                 hmsString.Length == 3 &&
                 int.TryParse(ddString[0], out var days) &&
@@ -59,7 +59,7 @@ namespace HSMServer.Core.Model
         }
     }
 
-
+    
     public record FileValue : BaseValue<byte[]>
     {
         private const double SizeDenominator = 1024.0;
@@ -70,7 +70,6 @@ namespace HSMServer.Core.Model
         public string Extension { get; init; }
 
         public long OriginalSize { get; init; }
-
 
         public override SensorType Type => SensorType.File;
 

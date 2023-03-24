@@ -2,21 +2,22 @@ using HSM.Core.Monitoring;
 using HSMDatabase.DatabaseWorkCore;
 using HSMServer.Authentication;
 using HSMServer.BackgroundTask;
-using HSMServer.Configuration;
 using HSMServer.Core.Cache;
+using HSMServer.Core.Configuration;
 using HSMServer.Core.DataLayer;
+using HSMServer.Core.Registration;
 using HSMServer.Core.SensorsUpdatesQueue;
 using HSMServer.Filters;
 using HSMServer.Middleware;
 using HSMServer.Model;
 using HSMServer.Model.TreeViewModel;
 using HSMServer.Notifications;
-using HSMServer.Registration;
 using HSMServer.Settings;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.PlatformAbstractions;
 using Microsoft.OpenApi.Any;
 using Microsoft.OpenApi.Models;
 using System;
@@ -35,7 +36,7 @@ public static class ApplicationServiceExtensions
         services.AddSingleton<IUserManager, UserManager>();
         services.AddSingleton<IRegistrationTicketManager, RegistrationTicketManager>();
         services.AddSingleton<IConfigurationProvider, ConfigurationProvider>();
-        services.AddSingleton<NotificationsCenter>();
+        services.AddSingleton<INotificationsCenter, NotificationsCenter>();
         services.AddSingleton<IDataCollectorFacade, DataCollectorFacade>();
         services.AddSingleton<TreeViewModel>();
 
@@ -58,7 +59,8 @@ public static class ApplicationServiceExtensions
                 Example = new OpenApiString("00.00:00:00")
             });
 
-            var xmlPath = Path.Combine(Environment.CurrentDirectory, "HSMSwaggerComments.xml");
+            var basePath = PlatformServices.Default.Application.ApplicationBasePath;
+            var xmlPath = Path.Combine(basePath, "HSMSwaggerComments.xml");
             o.IncludeXmlComments(xmlPath, true);
         });
 

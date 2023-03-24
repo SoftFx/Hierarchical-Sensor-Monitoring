@@ -2,7 +2,6 @@
 using HSMServer.Core.Cache.UpdateEntities;
 using System;
 using System.Collections.Concurrent;
-using System.Linq;
 
 namespace HSMServer.Core.Model
 {
@@ -14,7 +13,7 @@ namespace HSMServer.Core.Model
     }
 
 
-    public sealed class ProductModel : BaseNodeModel
+    public sealed class ProductModel : NodeBaseModel, INotificatable
     {
         public ConcurrentDictionary<Guid, AccessKeyModel> AccessKeys { get; } = new();
 
@@ -23,51 +22,49 @@ namespace HSMServer.Core.Model
         public ConcurrentDictionary<Guid, BaseSensorModel> Sensors { get; } = new();
 
 
-        public NotificationSettingsEntity NotificationsSettings { get; }
+        public NotificationSettings Notifications { get; } = new();
 
         public ProductState State { get; }
 
+        string INotificatable.Name => DisplayName;
 
-        public ProductModel(string name) : base(name.Trim())
-        {
-            State = ProductState.FullAccess;
-        }
 
-        public ProductModel(ProductEntity entity) : base(entity)
+        public ProductModel() { }
+
+        public ProductModel(ProductEntity entity) : this()
         {
+            Id = Guid.TryParse(entity.Id, out var entityId) ? entityId : Guid.NewGuid(); // TODO: remove Guid.NewGuid() after removing prosuctId string -> Guid migration
+            AuthorId = Guid.TryParse(entity.AuthorId, out var authorId) ? authorId : null;
             State = (ProductState)entity.State;
-            NotificationsSettings = entity.NotificationSettings;
+            DisplayName = entity.DisplayName;
+            Description = entity.Description;
+            CreationDate = new DateTime(entity.CreationDate);
+            Notifications = new(entity.NotificationSettings);
         }
 
+        public ProductModel(string name) : this()
+        {
+            Id = Guid.NewGuid();
+            State = ProductState.FullAccess;
+            DisplayName = name.Trim();
+            CreationDate = DateTime.UtcNow;
+        }
+
+
+        internal bool AddAccessKey(AccessKeyModel key) => AccessKeys.TryAdd(key.Id, key);
 
         internal void AddSubProduct(ProductModel product)
         {
-            SubProducts.TryAdd(product.Id, (ProductModel)product.AddParent(this));
+            product.ParentProduct = this;
+
+            SubProducts.TryAdd(product.Id, product);
         }
 
         internal void AddSensor(BaseSensorModel sensor)
         {
-            Sensors.TryAdd(sensor.Id, (BaseSensorModel)sensor.AddParent(this));
-        }
+            sensor.ParentProduct = this;
 
-        internal ProductModel Update(ProductUpdate update)
-        {
-            base.Update(update);
-            return this;
-        }
-
-
-        internal override bool HasUpdateTimeout()
-        {
-            var result = false;
-
-            foreach (var (_, sensor) in Sensors)
-                result |= sensor.HasUpdateTimeout();
-
-            foreach (var (_, subProduct) in SubProducts)
-                result |= subProduct.HasUpdateTimeout();
-
-            return result;
+            Sensors.TryAdd(sensor.Id, sensor);
         }
 
         internal ProductEntity ToProductEntity() =>
@@ -75,13 +72,51 @@ namespace HSMServer.Core.Model
             {
                 Id = Id.ToString(),
                 AuthorId = AuthorId.ToString(),
-                ParentProductId = Parent?.Id.ToString(),
+                ParentProductId = ParentProduct?.Id.ToString(),
                 State = (int)State,
                 DisplayName = DisplayName,
                 Description = Description,
                 CreationDate = CreationDate.Ticks,
-                NotificationSettings = NotificationsSettings,
-                Policies = GetPolicyIds().Select(u => $"{u}").ToList(),
+                NotificationSettings = Notifications.ToEntity(),
+                Policies = GetPolicyIds(),
             };
+
+        internal ProductModel Update(ProductUpdate updatedProduct)
+        {
+            Description = updatedProduct.Description ?? Description;
+            return this;
+        }
+
+        internal override void BuildProductNameAndPath()
+        {
+            if (ParentProduct == null)
+            {
+                RootProductId = Id;
+                RootProductName = DisplayName;
+            }
+            else
+                base.BuildProductNameAndPath();
+
+            foreach (var (_, sensor) in Sensors)
+                sensor.BuildProductNameAndPath();
+
+            foreach (var (_, subProduct) in SubProducts)
+                subProduct.BuildProductNameAndPath();
+        }
+
+
+        internal override void RefreshOutdatedError() =>
+            UpdateChildSensorsValidationResult(this);
+
+        private static void UpdateChildSensorsValidationResult(ProductModel product)
+        {
+            foreach (var (_, sensor) in product.Sensors)
+                if (sensor.ExpectedUpdateInterval == null)
+                    sensor.RefreshOutdatedError();
+
+            foreach (var (_, subProduct) in product.SubProducts)
+                if (subProduct.ExpectedUpdateInterval == null)
+                    UpdateChildSensorsValidationResult(subProduct);
+        }
     }
 }

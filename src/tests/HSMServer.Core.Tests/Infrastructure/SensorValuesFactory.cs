@@ -94,7 +94,7 @@ namespace HSMServer.Core.Tests.Infrastructure
                 Max = RandomGenerator.GetRandomDouble(),
                 Mean = RandomGenerator.GetRandomDouble(),
                 LastValue = RandomGenerator.GetRandomDouble(),
-                Percentiles = GetPercentileValues(RandomGenerator.GetRandomDouble),
+                Percentiles = GetPercentileValues(() => RandomGenerator.GetRandomDouble()),
             };
 
         internal static FileValue BuildFileValue()

@@ -13,13 +13,11 @@ window.editInfoButtonClick = function () {
     $('#editButtonMetaInfo').attr('hidden', true);
     
     $('#partialIntervalSelect').removeClass('d-none');
-    $('#partialRestoreSelect').removeClass('d-none');
-
     $('#labelInterval').addClass('d-none');
-    $('#labelRestoreInterval').addClass('d-none');
 
-    $(`#expectedUpdateInterval_${sensorId}:input`).each(() => this.removeAttribute('disabled'));
-    $(`#restorePolicy_${sensorId}:input`).each(() => this.removeAttribute('disabled'));
+    $('#expectedUpdateInterval_' + sensorId + ' :input').each(function () {
+        this.removeAttribute('disabled');
+    });
 }
 
 window.revertInfoClick = function () {
@@ -70,6 +68,7 @@ function setLinkText(sensorId, text) {
 function disableExpectedUpdateIntervalControl() {
     let sensorId = $('#sensorMetaInfo_encodedId').val();
 
-    $(`#expectedUpdateInterval_${sensorId}:input`).each(() => this.setAttribute('disabled', true));
-    $(`#restorePolicy_${sensorId}:input`).each(() => this.setAttribute('disabled', true));
+    $('#expectedUpdateInterval_' + sensorId + ' :input').each(function () {
+        this.setAttribute('disabled', true);
+    });
 }

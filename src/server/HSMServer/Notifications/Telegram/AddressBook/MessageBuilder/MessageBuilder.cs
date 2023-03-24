@@ -1,5 +1,5 @@
 ﻿using HSMServer.Core.Model;
-using HSMServer.Notification.Settings;
+using HSMServer.Extensions;
 using HSMServer.Notifications.Telegram.AddressBook.MessageBuilder;
 using System;
 using System.Text;
@@ -16,8 +16,14 @@ namespace HSMServer.Notifications
 
         internal void AddMessage(BaseSensorModel sensor)
         {
-            var newStatus = sensor.Status.Icon;
-            var comment = sensor.Status.Message;
+            var newStatus = sensor.ValidationResult.Result.ToStatusIcon();
+            var comment = sensor.ValidationResult.Message;
+
+            if (comment == "Timeout")
+            {
+                newStatus = "⌛";
+                comment = string.Empty;
+            }
 
             var id = sensor.Id;
             var branch = _messageTree[sensor.RootProductName];
@@ -27,7 +33,9 @@ namespace HSMServer.Notifications
                 newStatus = $"{key.oldStatus}->{newStatus}";
 
                 branch[key].Remove(id);
-                branch.RemoveEmptyBranch(key);
+
+                if (branch[key].IsEmpty)
+                    branch.TryRemove(key, out _);
             }
 
             var newKey = (newStatus, comment);
@@ -42,24 +50,24 @@ namespace HSMServer.Notifications
 
             foreach (var (product, changePaths) in _messageTree)
             {
-                foreach ((var changeStatusPath, var sensors) in changePaths)
+                foreach (((var status, var comment), var sensors) in changePaths)
                 {
-                    (var status, var comment) = changeStatusPath;
-
                     foreach (var path in _compressor.GetGroupedPaths(sensors))
                     {
                         BuildMessage(builder, product, status, comment, path);
                     }
 
-                    changePaths.RemoveEmptyBranch(changeStatusPath);
+                    sensors.Clear();
                 }
 
+                changePaths.Clear();
                 builder.AppendLine();
-
-                _messageTree.RemoveEmptyBranch(product);
             }
 
             ExpectedSendingTime = GetNextNotificationTime(notificationsDelay);
+
+            _compressor.Clear();
+            _messageTree.Clear();
 
             return builder.ToString();
         }
@@ -68,8 +76,8 @@ namespace HSMServer.Notifications
         {
             var builder = new StringBuilder(1 << 5);
 
-            var comment = sensor.Status.Message;
-            var result = sensor.Status.Icon;
+            var comment = sensor.ValidationResult.Message;
+            var result = sensor.ValidationResult.Result.ToStatusIcon();
             var product = sensor.RootProductName;
             var path = sensor.Path;
 

@@ -1,5 +1,4 @@
-﻿using HSMServer.Notification.Settings;
-using HSMServer.Notifications.Telegram;
+﻿using HSMServer.Core.Model;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;

@@ -6,9 +6,9 @@ namespace HSMServer.Core.Model.Requests
 {
     public abstract class BaseRequestModel
     {
-        private const string ErrorTooLongPath = "Path for the sensor is too long.";
-        private const string ErrorInvalidPath = "Path has an invalid format.";
         private const string ErrorPathKey = "Path or key is empty.";
+        private const string ErrorInvalidPath = "Path has an invalid format.";
+        private const string ErrorTooLongPath = "Path for the sensor is too long.";
 
 
         public string Key { get; }

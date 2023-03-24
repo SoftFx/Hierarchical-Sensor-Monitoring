@@ -1,7 +1,5 @@
 ﻿using HSMServer.Core.Model;
 using HSMServer.Extensions;
-using HSMServer.Notification.Settings;
-using HSMServer.Notifications.Telegram;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;

@@ -1,5 +1,6 @@
 ﻿@using HSMServer.Controllers
 @using HSMServer.Constants
+@using HSMServer.Core.Extensions
 @using HSMServer.Model.ViewModel
 @model ProductInfoViewModel
 
@@ -11,7 +12,7 @@
 
 
 <form id="editProductMetaInfo_form" method="post" asp-action="@nameof(HomeController.UpdateProductInfo)">
-    <input id="productMetaInfo_encodedId" style='display: none' asp-for="EncodedId" value="@Model.EncodedId" />
+    <input id="productMetaInfo_encodedId" style='display: none' asp-for="EncodedId" value="@Model.EncodedId"/>
 
     <table class='table table-bordered'>
         <tbody>
@@ -37,34 +38,26 @@
             }
             <tr>
                 <td class="w-25">
-                    Description
-                </td>
-                <td>
-                    <textarea id='description_@(Model.EncodedId)' type='text' class='form-control naked-text' asp-for="Description" value='@Model.Description' disabled></textarea>
-                </td>
-            </tr>
-            <tr>
-                <td class="w-25">
                     Expected update interval
+                    @if (!Model.IsOwnExpectedUpdateInterval)
+                    {
+                        <span>(from parent)</span>
+                    }
                     <i class='fas fa-question-circle' title='Time format: dd.hh:mm:ss min value 00:01:00'></i>
                 </td>
                 <td id="productExpectedUpdateInterval_@(Model.EncodedId)">
                     <label id="labelInterval" class="form-control naked-text">@Model.ExpectedUpdateInterval.DisplayInterval</label>
                     <div id="partialIntervalSelect" class="d-none">
-                        <partial name="_TimeIntervalSelect" for="ExpectedUpdateInterval" />
+                        <partial name="_TimeIntervalSelect" for="ExpectedUpdateInterval"/>
                     </div>
                 </td>
             </tr>
             <tr>
                 <td class="w-25">
-                    Not Ok interval
-                    <i class='fas fa-question-circle' title='Time format: dd.hh:mm:ss min value 00:01:00'></i>
+                    Description
                 </td>
-                <td id="productRestorePolicy_@(Model.EncodedId)">
-                    <label id="labelRestoreInterval" class="form-control naked-text">@Model.SensorRestorePolicy.DisplayInterval</label>
-                    <div id="partialRestoreSelect" class="d-none">
-                        <partial name="_TimeIntervalSelect" for="SensorRestorePolicy" />
-                    </div>
+                <td>
+                    <textarea id='description_@(Model.EncodedId)' type='text' class='form-control naked-text' asp-for="Description" value='@Model.Description' disabled></textarea>
                 </td>
             </tr>
         </tbody>
@@ -111,17 +104,14 @@
         $('#saveInfo_' + productId).removeAttr("disabled").removeAttr("hidden");
         $('#revertInfo_' + productId).removeAttr("disabled").removeAttr("hidden");
         $('#description_' + productId).removeAttr("disabled").removeClass("naked-text");
-
+        
         $('#editProductButton').attr('hidden', true);
-
         $('#partialIntervalSelect').removeClass('d-none');
-        $('#partialRestoreSelect').removeClass('d-none');
-
         $('#labelInterval').addClass('d-none');
-        $('#labelRestoreInterval').addClass('d-none');
-
-        $(`#productExpectedUpdateInterval_${productId}:input`).each(() => this.removeAttribute('disabled'));
-        $(`#productRestorePolicy_${productId}:input`).each(() => this.removeAttribute('disabled'));
+        
+        $('#productExpectedUpdateInterval_' + productId + ' :input').each(function () {
+            this.removeAttribute('disabled');
+        });
     }
 
     function revertProductInfoClick() {
@@ -137,7 +127,7 @@
         }).done(function (viewData) {
             $('#product_info_' + id).html(viewData);
             $('#editProductButton').attr('hidden', false);
-
+            
             disableProductExpectedUpdateInterval();
         });
     }
@@ -145,7 +135,8 @@
     function disableProductExpectedUpdateInterval() {
         let productId = $('#productMetaInfo_encodedId').val();
 
-        $(`#productExpectedUpdateInterval_${productId}:input`).each(() => this.setAttribute('disabled', true));
-        $(`#productRestorePolicy_${productId}:input`).each(() => this.setAttribute('disabled', true));
+        $('#productExpectedUpdateInterval_' + productId + ' :input').each(function () {
+            this.setAttribute('disabled', true);
+        });
     }
 </script>

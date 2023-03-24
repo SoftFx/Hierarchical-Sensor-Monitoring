@@ -1,4 +1,4 @@
-﻿using HSMServer.Notification.Settings;
+﻿using HSMServer.Core.Model;
 using System;
 
 namespace HSMServer.Notifications

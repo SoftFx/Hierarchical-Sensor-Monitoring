@@ -1,10 +1,9 @@
 ﻿using HSMCommon.Constants;
 using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Core.Cache.UpdateEntities;
-using HSMServer.Core.Extensions;
+using HSMServer.Core.DataLayer;
 using HSMServer.Core.Helpers;
 using HSMServer.Core.Model;
-using HSMServer.Core.Model.Policies;
 using HSMServer.Core.SensorsUpdatesQueue;
 using System;
 using System.Collections.Generic;
@@ -20,7 +19,7 @@ namespace HSMServer.Core.Tests.Infrastructure
         {
             Assert.NotNull(actual);
             Assert.Equal(expected.Id, actual.Id.ToString());
-            Assert.Equal(expected.ParentProductId, actual.Parent?.Id.ToString());
+            Assert.Equal(expected.ParentProductId, actual.ParentProduct?.Id.ToString());
             Assert.Equal(expected.DisplayName, actual.DisplayName);
             Assert.Equal(expected.State, (int)actual.State);
             Assert.Equal(expected.Description, actual.Description);
@@ -30,7 +29,7 @@ namespace HSMServer.Core.Tests.Infrastructure
         internal static void TestProductModel(ProductModel expected, ProductModel actual)
         {
             Assert.Equal(expected.Id, actual.Id);
-            Assert.Equal(expected.Parent?.Id, actual.Parent?.Id);
+            Assert.Equal(expected.ParentProduct?.Id, actual.ParentProduct?.Id);
             Assert.Equal(expected.DisplayName, actual.DisplayName);
             Assert.Equal(expected.State, actual.State);
             Assert.Equal(expected.Description, actual.Description);
@@ -61,7 +60,7 @@ namespace HSMServer.Core.Tests.Infrastructure
             Assert.NotEqual(DateTime.MinValue, actual.CreationDate);
             Assert.NotEqual(Guid.Empty, actual.Id);
             Assert.True(string.IsNullOrEmpty(actual.Description));
-            Assert.Equal(parentProduct, actual.Parent);
+            Assert.Equal(parentProduct, actual.ParentProduct);
 
             if (subProducts == null)
                 Assert.Empty(actual.SubProducts);
@@ -143,7 +142,7 @@ namespace HSMServer.Core.Tests.Infrastructure
         internal static void TestSensorModelWithoutUpdatedMetadata(SensorEntity expected, BaseSensorModel actual)
         {
             Assert.Equal(expected.Id, actual.Id.ToString());
-            Assert.Equal(expected.ProductId, actual.Parent?.Id.ToString());
+            Assert.Equal(expected.ProductId, actual.ParentProduct?.Id.ToString());
             Assert.Equal(expected.DisplayName, actual.DisplayName);
             Assert.Equal(expected.Type, (int)actual.Type);
         }
@@ -159,11 +158,11 @@ namespace HSMServer.Core.Tests.Infrastructure
             Assert.True(actual.HasData);
             Assert.Equal(expectedSensorValue.ReceivingTime, actual.LastUpdateTime);
 
-            Assert.Equal(expectedSensorValue.Status, actual.Status.Status);
+            Assert.Equal(expectedSensorValue.Status, actual.ValidationResult.Result);
             if (expectedSensorValue.Status != SensorStatus.Ok)
-                Assert.False(string.IsNullOrEmpty(actual.Status.Message));
+                Assert.False(string.IsNullOrEmpty(actual.ValidationResult.Message));
             else
-                Assert.True(string.IsNullOrEmpty(actual.Status.Message));
+                Assert.True(string.IsNullOrEmpty(actual.ValidationResult.Message));
 
             TestSensorValue(expectedSensorValue, actualSensorValue, actual.Type);
         }
@@ -203,7 +202,7 @@ namespace HSMServer.Core.Tests.Infrastructure
             TestImmutableSensorData(expected, actual);
 
             Assert.Equal(expected.Description, actual.Description);
-            Assert.Equal(expected.ServerPolicy.ExpectedUpdate.Policy, actual.ServerPolicy.ExpectedUpdate.Policy);
+            Assert.Equal(expected.ExpectedUpdateInterval, actual.ExpectedUpdateInterval);
             Assert.Equal(expected.Unit, actual.Unit);
         }
 
@@ -216,11 +215,11 @@ namespace HSMServer.Core.Tests.Infrastructure
 
             if (parentProduct == null)
             {
-                Assert.Null(actual.Parent);
+                Assert.Null(actual.ParentProduct);
                 Assert.Null(actual.RootProductName);
             }
             else
-                Assert.Equal(parentProduct.Id, actual.Parent.Id);
+                Assert.Equal(parentProduct.Id, actual.ParentProduct.Id);
 
             AssertModels(expected.BaseValue, actual.LastValue);
         }
@@ -241,8 +240,8 @@ namespace HSMServer.Core.Tests.Infrastructure
 
         internal static void TestExpectedUpdateIntervalPolicy(SensorUpdate expected, Policy actual)
         {
-            Assert.Equal(expected.ExpectedUpdateInterval.CustomPeriod, (actual as ExpectedUpdateIntervalPolicy).Interval.CustomPeriod);
-            Assert.Equal(expected.ExpectedUpdateInterval.TimeInterval, (actual as ExpectedUpdateIntervalPolicy).Interval.TimeInterval);
+            Assert.Equal(expected.ExpectedUpdateInterval.CustomPeriod, (actual as ExpectedUpdateIntervalPolicy).CustomPeriod);
+            Assert.Equal(expected.ExpectedUpdateInterval.TimeInterval, (actual as ExpectedUpdateIntervalPolicy).ExpectedUpdatePeriod);
         }
 
 
@@ -281,13 +280,13 @@ namespace HSMServer.Core.Tests.Infrastructure
         {
             var value = type switch
             {
-                SensorType.Boolean => valueBytes.ToValue<BooleanValue>(),
-                SensorType.Integer => valueBytes.ToValue<IntegerValue>(),
-                SensorType.Double => valueBytes.ToValue<DoubleValue>(),
-                SensorType.String => valueBytes.ToValue<StringValue>(),
-                SensorType.File => valueBytes.ToValue<FileValue>(),
-                SensorType.IntegerBar => valueBytes.ToValue<IntegerBarValue>(),
-                SensorType.DoubleBar => valueBytes.ToValue<DoubleBarValue>(),
+                SensorType.Boolean => valueBytes.ConvertToSensorValue<BooleanValue>(),
+                SensorType.Integer => valueBytes.ConvertToSensorValue<IntegerValue>(),
+                SensorType.Double => valueBytes.ConvertToSensorValue<DoubleValue>(),
+                SensorType.String => valueBytes.ConvertToSensorValue<StringValue>(),
+                SensorType.File => valueBytes.ConvertToSensorValue<FileValue>(),
+                SensorType.IntegerBar => valueBytes.ConvertToSensorValue<IntegerBarValue>(),
+                SensorType.DoubleBar => valueBytes.ConvertToSensorValue<DoubleBarValue>(),
                 _ => null,
             };
 
@@ -305,14 +304,14 @@ namespace HSMServer.Core.Tests.Infrastructure
             Assert.NotNull(expected.Path);
 
             Assert.Equal(expected.Id, actual.Id);
-            Assert.Equal(expected.Parent.Id, actual.Parent.Id);
+            Assert.Equal(expected.ParentProduct.Id, actual.ParentProduct.Id);
             Assert.Equal(expected.AuthorId, actual.AuthorId);
             Assert.Equal(expected.CreationDate, actual.CreationDate);
             Assert.Equal(expected.DisplayName, actual.DisplayName);
             Assert.Equal(expected.RootProductName, actual.RootProductName);
             Assert.Equal(expected.Path, actual.Path);
             Assert.Equal(expected.Type, actual.Type);
-            AssertModels(expected.Status, actual.Status);
+            AssertModels(expected.ValidationResult, actual.ValidationResult);
         }
 
         private static void TestCollections<T>(List<T> expected, List<T> actual)

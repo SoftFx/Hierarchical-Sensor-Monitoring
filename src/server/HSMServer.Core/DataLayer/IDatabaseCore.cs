@@ -1,7 +1,5 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities;
-using HSMServer.Core.Configuration;
 using HSMServer.Core.Model;
-using HSMServer.Core.Registration;
 using System;
 using System.Collections.Generic;
 

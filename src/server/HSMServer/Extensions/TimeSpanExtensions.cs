@@ -4,19 +4,18 @@ namespace HSMServer.Extensions;
 
 public static class TimeSpanExtensions
 {
-    public static string ToToolTip(this TimeSpan time)
+    public static string ToToolTip(this TimeSpan configurationExpiredTime)
     {
         var tooltip = new StringBuilder(1 << 4);
 
-        if (time.Days != 0)
-            tooltip.Append($"{time.Days}d ");
-
-        return tooltip.Append($"{time.Hours}h ")
-                      .Append($"{time.Minutes}m ")
-                      .Append($"{time.Seconds}s")
-                      .ToString();
+        if (configurationExpiredTime.Days != 0) tooltip.Append($"{configurationExpiredTime.Days}d ");
+        tooltip.Append($"{configurationExpiredTime.Hours}h ");
+        tooltip.Append($"{configurationExpiredTime.Minutes}m ");
+        tooltip.Append($"{configurationExpiredTime.Seconds}s");
+            
+        return tooltip.ToString();
     }
 
-    public static string ToTableView(this string timeSpanStr) =>
-        TimeSpan.TryParse(timeSpanStr, out var timeSpan) ? timeSpan.ToToolTip() : string.Empty;
+    public static string ToTableView(this string timeSpanRepresentation) =>
+        TimeSpan.TryParse(timeSpanRepresentation, out var timeSpan) ? timeSpan.ToToolTip() : string.Empty;
 }

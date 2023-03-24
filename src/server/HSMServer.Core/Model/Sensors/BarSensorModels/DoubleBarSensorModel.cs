@@ -1,6 +1,4 @@
-﻿using HSMDatabase.AccessManager.DatabaseEntities;
-
-namespace HSMServer.Core.Model
+﻿namespace HSMServer.Core.Model
 {
     public sealed class DoubleBarSensorModel : BaseSensorModel<DoubleBarValue>, IBarSensor
     {
@@ -8,10 +6,6 @@ namespace HSMServer.Core.Model
 
         public override SensorType Type { get; } = SensorType.DoubleBar;
 
-
-        BarBaseValue IBarSensor.LocalLastValue => Storage.PartialLastValue;
-
-
-        public DoubleBarSensorModel(SensorEntity entity) : base(entity) { }
+        BarBaseValue IBarSensor.LocalLastValue => Storage.LocalLastValue;
     }
 }

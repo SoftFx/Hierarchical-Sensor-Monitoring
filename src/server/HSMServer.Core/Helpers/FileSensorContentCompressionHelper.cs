@@ -24,7 +24,6 @@ namespace HSMServer.Core.Helpers
             };
         }
 
-
         public static FileValue DecompressContent(this FileValue value)
         {
             if (value.Value.Length == value.OriginalSize)
@@ -37,10 +36,7 @@ namespace HSMServer.Core.Helpers
                 dstream.CopyTo(output);
             }
 
-            return value with
-            {
-                Value = output.ToArray()
-            };
+            return value with { Value = output.ToArray() };
         }
     }
 }

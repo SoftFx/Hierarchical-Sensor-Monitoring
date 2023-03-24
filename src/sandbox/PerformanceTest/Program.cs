@@ -23,7 +23,7 @@ namespace PerformanceTest
         [ThreadStatic]
         private static string _key;
 
-        private static void Main(string[] args)
+        private static async Task Main(string[] args)
         {
             _key = args.Length > 0 ? args[0] : "6f4da85f-f40c-42b5-8f8c-2c2ddb164fd4";
 
