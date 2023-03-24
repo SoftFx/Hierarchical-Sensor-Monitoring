@@ -16,34 +16,42 @@ namespace HSMServer.Model.Folders
 
         public Guid Id { get; }
 
-        public string Name { get; }
-
         public Guid AuthorId { get; }
 
         public DateTime CreationDate { get; }
 
-        public string Description { get; private set; }
+
+        public string Name { get; }
 
         public Color Color { get; private set; }
+
+        public string Description { get; private set; }
 
 
         public string Author { get; set; }
 
 
-        public FolderModel()
-        {
-            Id = Guid.NewGuid();
-            CreationDate = DateTime.UtcNow;
-        }
-
         public FolderModel(FolderEntity entity)
         {
             Id = Guid.Parse(entity.Id);
-            AuthorId = Guid.Parse(entity.AuthorId);
             Name = entity.DisplayName;
             Description = entity.Description;
-            CreationDate = new DateTime(entity.CreationDate);
             Color = Color.FromArgb(entity.Color);
+            AuthorId = Guid.Parse(entity.AuthorId);
+            CreationDate = new DateTime(entity.CreationDate);
+        }
+
+        internal FolderModel(FolderAdd addModel)
+        {
+            Id = Guid.NewGuid();
+            CreationDate = DateTime.UtcNow;
+
+            Name = addModel.Name;
+            Color = addModel.Color;
+            Author = addModel.Author;
+            AuthorId = addModel.AuthorId;
+            Products = addModel.Products;
+            Description = addModel.Description;
         }
 
 

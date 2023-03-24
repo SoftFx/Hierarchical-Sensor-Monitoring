@@ -3,10 +3,11 @@ using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Folders;
 using HSMServer.Model.Authentication;
 using HSMServer.Model.Folders;
+using HSMServer.Model.Folders.ViewModels;
 using HSMServer.Model.TreeViewModel;
 using Microsoft.AspNetCore.Mvc;
 using System;
-using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 
 namespace HSMServer.Controllers
@@ -30,29 +31,27 @@ namespace HSMServer.Controllers
         public IActionResult EditFolder(Guid? folderId)
         {
             return folderId == null
-                ? View(new EditFolderViewModel(GetUserProducts()))
-                : View(new EditFolderViewModel(_folderManager[folderId.Value], GetUserProducts()));
+                ? View(new EditFolderViewModel(BuildFolderProducts()))
+                : View(new EditFolderViewModel(_folderManager[folderId.Value], BuildFolderProducts()));
         }
 
         [HttpPost]
         public async Task<IActionResult> AddFolder(EditFolderViewModel folder)
         {
-            var addedProducts = new List<ProductNodeViewModel>();
-            foreach (var productId in folder.Products)
-                if (Guid.TryParse(productId, out var id) && _treeViewModel.Nodes.TryGetValue(id, out var product))
-                    addedProducts.Add(product);
-
-            var newFolder = new FolderModel(folder.ToEntity((HttpContext.User as User).Id));
-            newFolder.Products.AddRange(addedProducts);
+            var newFolder = new FolderModel(folder.ToFolderAdd(HttpContext.User as User, _treeViewModel));
 
             if (await _folderManager.TryAdd(newFolder))
-                foreach (var product in addedProducts)
+                foreach (var product in newFolder.Products)
                     _cache.UpdateProduct(new ProductUpdate() { Id = product.Id, FolderId = newFolder.Id });
 
-            return View(nameof(EditFolder), new EditFolderViewModel(_folderManager[newFolder.Id], GetUserProducts()));
+            return View(nameof(EditFolder), new EditFolderViewModel(_folderManager[newFolder.Id], BuildFolderProducts()));
         }
 
 
-        private List<ProductNodeViewModel> GetUserProducts() => _treeViewModel.GetUserProducts(HttpContext.User as User);
+        private FolderProductsViewModel BuildFolderProducts() =>
+            new()
+            {
+                AvailableProducts = _treeViewModel.GetUserProducts(HttpContext.User as User).Where(p => p.FolderId is null).ToList()
+            };
     }
 }

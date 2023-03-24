@@ -1,53 +1,36 @@
-﻿@using HSMServer.Model.Folders
-@using HSMServer.Model.Authentication
+﻿@using HSMServer.Model.Folders.ViewModels
 @using HSMServer.Helpers
 @using HSMServer.Extensions
 @using HSMCommon.Constants
 
-@model EditFolderViewModel
+@model FolderProductsViewModel
 
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
 
+@{
+    var noProducts = Model.Products.Count == 0;
+}
 
-<form method="post">
-    <div class="form-group row mt-2">
-        <label class="col-2 col-form-label" asp-for="Name"></label>
-        <label class="col-auto col-form-label px-0" asp-for="Name">@Model.Name</label>
-    </div>
 
-    <div class="form-group row mt-2">
-        <label class="col-2 col-form-label" asp-for="Description"></label>
-        <div class="col-10 p-0">
-            <textarea type='text' class='form-control form-control-textarea' asp-for="Description" value='@Model.Description'></textarea>
-        </div>
-    </div>
+<hr />
 
-    <div class="form-group row mt-2">
-        <label class="col-2 col-form-label" asp-for="Color"></label>
-        <div class="col-auto p-0">
-            <input class="form-control form-control-color" type="color" asp-for="Color" value="#@(Model.Color.Name[2..])">
-        </div>
-    </div>
-
-    <div class="form-group row mt-2">
-        <label class="col-2 col-form-label" asp-for="Author"></label>
-        <label class="col-auto col-form-label px-0" asp-for="Author">@Model.Author</label>
-    </div>
-
-    <div class="form-group row mt-2">
-        <label class="col-2 col-form-label" asp-for="CreationDate"></label>
-        <label class="col-auto col-form-label px-0" asp-for="CreationDate">@Model.CreationDate</label>
-    </div>
-
-    <hr />
-
+@if (noProducts)
+{
+    <label class="col-form-label">Products</label>
+}
+else
+{
     <div class="d-flex justify-content-end p-0">
         <button type="button" class="col-auto btn btn-link px-0" onclick="addProducts()">Add product(s)</button>
     </div>
-    <div id="productsSelect" class="selectpicker d-none">
-        <select class="selectpicker" asp-for="Products" asp-items="@Model.AllProducts" data-live-search="true" data-width="100%" title="Choose products to add" multiple></select>
-    </div>
+}
 
+<div id="productsSelect" class="selectpicker @(noProducts ? "" : "d-none")">
+    <select class="selectpicker" asp-for="SelectedProducts" asp-items="@Model.AvailableProductsItems" data-live-search="true" data-width="100%" title="Choose products to add" multiple></select>
+</div>
+
+@if (!noProducts)
+{
     <table class="table table-striped">
         <thead>
             <tr>
@@ -62,7 +45,7 @@
             </tr>
         </thead>
         <tbody>
-            @foreach (var product in Model.SelectedProducts)
+            @foreach (var product in Model.Products)
             {
                 <tr>
                     <td class="text-break">@Html.Raw(product.Name)</td>
@@ -95,11 +78,7 @@
             }
         </tbody>
     </table>
-
-    <div class="d-flex justify-content-end my-1">
-        <button type="submit" class="btn btn-secondary independentSizeButton">Save</button>
-    </div>
-</form>
+}
 
 
 <script>

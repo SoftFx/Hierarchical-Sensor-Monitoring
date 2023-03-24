@@ -1,4 +1,4 @@
-﻿@using HSMServer.Model.Folders;
+﻿@using HSMServer.Model.Folders.ViewModels;
 @using HSMServer.Controllers;
 
 @model EditFolderViewModel
@@ -32,16 +32,7 @@
         <div class="tab-content w-100" id="myTabContent">
             <div class="tab-pane fade show active" id="general" role="tabpanel" aria-labelledby="general-tab">
                 <form method="post" asp-action="@(isAdd ? nameof(FoldersController.AddFolder) : nameof(FoldersController.EditFolder))">
-                    <input id="productKey" asp-for="@Model.Id" value="@Model.Id" style="display: none" />
-
-                    @if (isAdd)
-                    {
-                        @await Html.PartialAsync("_AddGeneralSettings", Model)
-                    }
-                    else
-                    {
-                        @await Html.PartialAsync("_EditGeneralSettings", Model)
-                    }
+                    @await Html.PartialAsync("_General", Model)
                 </form>
             </div>
 
