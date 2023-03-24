@@ -63,7 +63,7 @@ namespace HSMServer.Core.Tests.Infrastructure
             };
 
 
-        internal static GroupEntity BuildGroupEntity() =>
+        internal static FolderEntity BuildFolderEntity() =>
             new()
             {
                 Id = Guid.NewGuid().ToString(),

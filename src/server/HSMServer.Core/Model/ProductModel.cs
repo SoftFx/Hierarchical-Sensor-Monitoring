@@ -27,7 +27,7 @@ namespace HSMServer.Core.Model
 
         public ProductState State { get; }
 
-        public Guid? GroupId { get; private set; }
+        public Guid? FolderId { get; private set; }
 
 
         public ProductModel(string name) : base(name.Trim())
@@ -39,7 +39,7 @@ namespace HSMServer.Core.Model
         {
             State = (ProductState)entity.State;
             NotificationsSettings = entity.NotificationSettings;
-            GroupId = Guid.TryParse(entity.GroupId, out var groupId) ? groupId : null;
+            FolderId = Guid.TryParse(entity.FolderId, out var folderId) ? folderId : null;
         }
 
 
@@ -57,7 +57,7 @@ namespace HSMServer.Core.Model
         {
             base.Update(update);
 
-            GroupId = update.GroupId ?? GroupId;
+            FolderId = update.FolderId ?? FolderId;
 
             return this;
         }
@@ -82,7 +82,7 @@ namespace HSMServer.Core.Model
                 Id = Id.ToString(),
                 AuthorId = AuthorId.ToString(),
                 ParentProductId = Parent?.Id.ToString(),
-                GroupId = GroupId?.ToString(),
+                FolderId = FolderId?.ToString(),
                 State = (int)State,
                 DisplayName = DisplayName,
                 Description = Description,

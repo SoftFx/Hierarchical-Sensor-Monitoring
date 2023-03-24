@@ -1,6 +1,6 @@
 ﻿namespace HSMDatabase.AccessManager.DatabaseEntities
 {
-    public sealed class GroupEntity
+    public sealed class FolderEntity
     {
         public string Id { get; init; }
 

@@ -1,7 +1,7 @@
-﻿@using HSMServer.Model.Groups;
+﻿@using HSMServer.Model.Folders;
 @using HSMServer.Controllers;
 
-@model EditGroupViewModel
+@model EditFolderViewModel
 
 @{
     var isAdd = Model.Id == null;
@@ -31,7 +31,7 @@
         </ul>
         <div class="tab-content w-100" id="myTabContent">
             <div class="tab-pane fade show active" id="general" role="tabpanel" aria-labelledby="general-tab">
-                <form method="post" asp-action="@(isAdd ? nameof(GroupsController.AddGroup) : nameof(GroupsController.EditGroup))">
+                <form method="post" asp-action="@(isAdd ? nameof(FoldersController.AddFolder) : nameof(FoldersController.EditFolder))">
                     <input id="productKey" asp-for="@Model.Id" value="@Model.Id" style="display: none" />
 
                     @if (isAdd)

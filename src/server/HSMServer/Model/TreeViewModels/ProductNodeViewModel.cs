@@ -24,7 +24,7 @@ namespace HSMServer.Model.TreeViewModel
 
         public NotificationSettings Notifications { get; }
 
-        public Guid? GroupId { get; private set; }
+        public Guid? FolderId { get; private set; }
 
         public int AllSensorsCount { get; private set; }
 
@@ -50,7 +50,7 @@ namespace HSMServer.Model.TreeViewModel
         {
             base.Update(model);
 
-            GroupId = model.GroupId;
+            FolderId = model.FolderId;
             TelegramSettings.Update(Notifications.Telegram);
         }
 

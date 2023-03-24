@@ -6,9 +6,9 @@ using System;
 using System.Collections.Generic;
 using System.Drawing;
 
-namespace HSMServer.Model.Groups
+namespace HSMServer.Model.Folders
 {
-    public class GroupModel : IServerModel<GroupEntity, GroupUpdate>
+    public class FolderModel : IServerModel<FolderEntity, FolderUpdate>
     {
         public Dictionary<Guid, ProductRoleEnum> UserRoles { get; } = new();
 
@@ -30,13 +30,13 @@ namespace HSMServer.Model.Groups
         public string Author { get; set; }
 
 
-        public GroupModel()
+        public FolderModel()
         {
             Id = Guid.NewGuid();
             CreationDate = DateTime.UtcNow;
         }
 
-        public GroupModel(GroupEntity entity)
+        public FolderModel(FolderEntity entity)
         {
             Id = Guid.Parse(entity.Id);
             AuthorId = Guid.Parse(entity.AuthorId);
@@ -47,7 +47,7 @@ namespace HSMServer.Model.Groups
         }
 
 
-        public GroupEntity ToEntity() =>
+        public FolderEntity ToEntity() =>
             new()
             {
                 Id = Id.ToString(),
@@ -58,7 +58,7 @@ namespace HSMServer.Model.Groups
                 Color = Color.ToArgb(),
             };
 
-        public void Update(GroupUpdate update)
+        public void Update(FolderUpdate update)
         {
             throw new NotImplementedException();
         }

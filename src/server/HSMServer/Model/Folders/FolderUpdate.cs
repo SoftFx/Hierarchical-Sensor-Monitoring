@@ -1,9 +1,9 @@
 ﻿using HSMServer.ConcurrentStorage;
 using System;
 
-namespace HSMServer.Model.Groups
+namespace HSMServer.Model.Folders
 {
-    public class GroupUpdate : IUpdateModel
+    public class FolderUpdate : IUpdateModel
     {
         public required Guid Id { get; init; }
     }

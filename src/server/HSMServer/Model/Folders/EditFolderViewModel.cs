@@ -7,9 +7,9 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.Linq;
 
-namespace HSMServer.Model.Groups
+namespace HSMServer.Model.Folders
 {
-    public class EditGroupViewModel
+    public class EditFolderViewModel
     {
         public List<SelectListItem> AllProducts { get; }
 
@@ -31,26 +31,26 @@ namespace HSMServer.Model.Groups
         public List<string> Products { get; set; } = new();
 
 
-        public EditGroupViewModel() { }
+        public EditFolderViewModel() { }
 
-        public EditGroupViewModel(List<ProductNodeViewModel> userProducts)
+        public EditFolderViewModel(List<ProductNodeViewModel> userProducts)
         {
             AllProducts = userProducts.Select(p => new SelectListItem() { Text = p.Name, Value = p.Id.ToString() }).ToList();
         }
 
-        internal EditGroupViewModel(GroupModel group, List<ProductNodeViewModel> userProducts) : this(userProducts)
+        internal EditFolderViewModel(FolderModel folder, List<ProductNodeViewModel> userProducts) : this(userProducts)
         {
-            CreationDate = group.CreationDate.ToDefaultFormat();
-            Author = group.Author;
-            Id = group.Id;
-            Name = group.Name;
-            Description = group.Description;
-            Color = group.Color;
-            SelectedProducts = group.Products;
+            CreationDate = folder.CreationDate.ToDefaultFormat();
+            Author = folder.Author;
+            Id = folder.Id;
+            Name = folder.Name;
+            Description = folder.Description;
+            Color = folder.Color;
+            SelectedProducts = folder.Products;
         }
 
 
-        internal GroupEntity ToEntity(Guid authorId) =>
+        internal FolderEntity ToEntity(Guid authorId) =>
             new()
             {
                 AuthorId = authorId.ToString(),

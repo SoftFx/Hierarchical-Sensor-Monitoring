@@ -4,7 +4,7 @@
 @using HSMServer.Controllers
 @using HSMServer.Extensions
 @using HSMServer.Model.ViewModel
-@using HSMServer.Model.Groups
+@using HSMServer.Model.Folders
 @model List<ProductViewModel>
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
 
@@ -43,7 +43,7 @@
         </div>
     </div>
 
-    <a href="@Url.Action(nameof(GroupsController.EditGroup), ViewConstants.GroupsController)">Add folder</a>
+    <a href="@Url.Action(nameof(FoldersController.EditFolder), ViewConstants.FoldersController)">Add folder</a>
 
     <table>
         <thead>
@@ -53,15 +53,15 @@
             </tr>
         </thead>
         <tbody>
-            @foreach (var group in ViewBag.Groups as List<GroupModel>)
+            @foreach (var folder in ViewBag.Folders as List<FolderModel>)
             {
                 <tr>
                     <th>
-                        <a class="productName_anchor" asp-controller="Groups" asp-action="EditGroup" asp-route-groupId="@group.Id">
-                            @Html.Raw(group.Name)
+                        <a class="productName_anchor" asp-controller="Folders" asp-action="EditFolder" asp-route-folderId="@folder.Id">
+                            @Html.Raw(folder.Name)
                         </a>
                     </th>
-                    <th>@group.Description</th>
+                    <th>@folder.Description</th>
                 </tr>
             }
         </tbody>

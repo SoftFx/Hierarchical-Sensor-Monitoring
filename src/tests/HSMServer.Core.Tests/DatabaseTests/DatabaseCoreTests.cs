@@ -319,7 +319,7 @@ namespace HSMServer.Core.Tests
 
         #endregion
 
-        #region [ Group Tests ]
+        #region [ Folder Tests ]
 
         [Theory]
         [InlineData(1)]
@@ -329,15 +329,15 @@ namespace HSMServer.Core.Tests
         [InlineData(100)]
         [InlineData(500)]
         [InlineData(1000)]
-        [Trait("Category", "AddGroup(s)")]
-        public void AddGroupsTest(int count)
+        [Trait("Category", "AddFolder(s)")]
+        public void AddFoldersTest(int count)
         {
             for (int i = 0; i < count; i++)
             {
-                var group = EntitiesFactory.BuildGroupEntity();
-                _databaseCore.AddGroup(group);
+                var folder = EntitiesFactory.BuildFolderEntity();
+                _databaseCore.AddFolder(folder);
 
-                FullGroupTest(group, _databaseCore.GetGroup(group.Id));
+                FullFolderTest(folder, _databaseCore.GetFolder(folder.Id));
             }
         }
 
@@ -349,20 +349,20 @@ namespace HSMServer.Core.Tests
         [InlineData(100)]
         [InlineData(500)]
         [InlineData(1000)]
-        [Trait("Category", "RemoveGroup(s)")]
-        public void RemoveGroupsTest(int count)
+        [Trait("Category", "RemoveFolder(s)")]
+        public void RemoveFoldersTest(int count)
         {
             for (int i = 0; i < count; i++)
             {
-                var group = EntitiesFactory.BuildGroupEntity();
+                var folder = EntitiesFactory.BuildFolderEntity();
 
-                _databaseCore.AddGroup(group);
-                _databaseCore.RemoveGroup(group.Id);
+                _databaseCore.AddFolder(folder);
+                _databaseCore.RemoveFolder(folder.Id);
 
-                Assert.Null(_databaseCore.GetGroup(group.Id));
+                Assert.Null(_databaseCore.GetFolder(folder.Id));
             }
 
-            Assert.Empty(_databaseCore.GetAllGroups());
+            Assert.Empty(_databaseCore.GetAllFolders());
         }
 
         #endregion
@@ -573,15 +573,15 @@ namespace HSMServer.Core.Tests
             }
         }
 
-        private static void FullGroupTest(GroupEntity expectedGroup, GroupEntity actualGroup)
+        private static void FullFolderTest(FolderEntity expectedFolder, FolderEntity actualFolder)
         {
-            Assert.NotNull(actualGroup);
-            Assert.Equal(expectedGroup.Id, actualGroup.Id);
-            Assert.Equal(expectedGroup.AuthorId, actualGroup.AuthorId);
-            Assert.Equal(expectedGroup.DisplayName, actualGroup.DisplayName);
-            Assert.Equal(expectedGroup.Description, actualGroup.Description);
-            Assert.Equal(expectedGroup.CreationDate, actualGroup.CreationDate);
-            Assert.Equal(expectedGroup.Color, actualGroup.Color);
+            Assert.NotNull(actualFolder);
+            Assert.Equal(expectedFolder.Id, actualFolder.Id);
+            Assert.Equal(expectedFolder.AuthorId, actualFolder.AuthorId);
+            Assert.Equal(expectedFolder.DisplayName, actualFolder.DisplayName);
+            Assert.Equal(expectedFolder.Description, actualFolder.Description);
+            Assert.Equal(expectedFolder.CreationDate, actualFolder.CreationDate);
+            Assert.Equal(expectedFolder.Color, actualFolder.Color);
         }
 
         private static void FullTicketTest(RegistrationTicket expectedTicket, RegistrationTicket actualTicket)
