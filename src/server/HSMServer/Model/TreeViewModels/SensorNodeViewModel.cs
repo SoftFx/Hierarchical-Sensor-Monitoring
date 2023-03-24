@@ -29,7 +29,7 @@ namespace HSMServer.Model.TreeViewModel
         public bool IsValidationErrorVisible => !string.IsNullOrEmpty(ValidationError);
 
 
-        public SensorNodeViewModel(BaseSensorModel model) : base(model.Id)
+        public SensorNodeViewModel(BaseSensorModel model) : base(model)
         {
             Update(model);
         }
@@ -42,9 +42,8 @@ namespace HSMServer.Model.TreeViewModel
             SensorType = model.Type;
             State = model.State;
             UpdateTime = model.LastUpdateTime;
-            Status = model.ValidationResult.Result.ToClient();
-            ValidationError = State == SensorState.Muted ? GetMutedErrorTooltip(model.EndOfMuting) : model.ValidationResult.Message;
-            Path = model.Path;
+            Status = model.Status.Status.ToClient();
+            ValidationError = State == SensorState.Muted ? GetMutedErrorTooltip(model.EndOfMuting) : model.Status.Message;
             Unit = model.Unit;
 
             LastValue = model.LastValue;

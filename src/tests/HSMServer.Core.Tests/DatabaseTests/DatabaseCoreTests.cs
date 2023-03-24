@@ -1,6 +1,7 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities;
+using HSMServer.Core.Configuration;
 using HSMServer.Core.DataLayer;
-using HSMServer.Core.Model;
+using HSMServer.Core.Registration;
 using HSMServer.Core.Tests.DatabaseTests;
 using HSMServer.Core.Tests.DatabaseTests.Fixture;
 using HSMServer.Core.Tests.Infrastructure;

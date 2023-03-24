@@ -1,6 +1,8 @@
 ﻿using HSMCommon;
 using HSMDatabase.AccessManager.DatabaseEntities;
+using HSMServer.Core.Configuration;
 using HSMServer.Core.Model;
+using HSMServer.Core.Registration;
 using HSMServer.Model.Authentication;
 using System;
 using System.Drawing;
@@ -46,6 +48,7 @@ namespace HSMServer.Core.Tests.Infrastructure
                 Description = RandomGenerator.GetRandomString(),
                 Type = type ?? RandomGenerator.GetRandomByte(),
                 Unit = RandomGenerator.GetRandomString(),
+                CreationDate = DateTime.UtcNow.Ticks,
             };
 
 

@@ -37,19 +37,11 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests.ModelTests
 
             var sensorValue = SensorValuesFactory.BuildSensorValue(type);
 
-            sensor.TryAddValue(sensorValue, out var cachedValue);
+            sensor.TryAddValue(sensorValue);
 
             Assert.True(sensor.HasData);
             Assert.NotEqual(DateTime.MinValue, sensor.LastUpdateTime);
             ModelsTester.AssertModels(sensorValue, sensor.LastValue);
-
-            if (sensor is IBarSensor barSensor)
-            {
-                Assert.Null(cachedValue);
-                ModelsTester.AssertModels(sensorValue, barSensor.LocalLastValue);
-            }
-            else
-                ModelsTester.AssertModels(sensorValue, cachedValue);
         }
 
         [Fact]
