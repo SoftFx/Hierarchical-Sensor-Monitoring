@@ -1,6 +1,6 @@
+using HSMServer.Core.Model;
 using System.Collections.Generic;
 using System.Text;
-using HSMServer.Core.Model;
 
 namespace HSMServer.Core.MonitoringHistoryProcessor.Processor;
 

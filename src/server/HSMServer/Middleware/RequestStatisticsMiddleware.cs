@@ -4,10 +4,10 @@ using System.Threading.Tasks;
 
 namespace HSMServer.Middleware
 {
-    internal class RequestStatisticsMiddleware
+    internal sealed class RequestStatisticsMiddleware
     {
-        private readonly RequestDelegate _next;
         private readonly IDataCollectorFacade _dataCollector;
+        private readonly RequestDelegate _next;
 
         public RequestStatisticsMiddleware(RequestDelegate next, IDataCollectorFacade dataCollector)
         {
@@ -15,7 +15,7 @@ namespace HSMServer.Middleware
             _dataCollector = dataCollector;
         }
 
-        public async Task InvokeAsync(HttpContext context)
+        public Task InvokeAsync(HttpContext context)
         {
             _dataCollector.IncreaseRequestsCount();
 
@@ -28,7 +28,7 @@ namespace HSMServer.Middleware
                 return Task.CompletedTask;
             });
 
-            await _next(context);
+            return _next(context);
         }
     }
 }

@@ -1,7 +1,9 @@
 ﻿using HSMCommon.Constants;
 using HSMServer.Authentication;
+using HSMServer.Configuration;
 using HSMServer.Core.Cache;
-using HSMServer.Core.Configuration;
+using HSMServer.Core;
+using HSMServer.Notification.Settings;
 using NLog;
 using System;
 using System.Reflection;
@@ -12,9 +14,14 @@ using Telegram.Bot;
 using Telegram.Bot.Polling;
 using Telegram.Bot.Types;
 using Telegram.Bot.Types.Enums;
+using HSMServer.Core.Model.Policies;
+using HSMServer.Model;
 
 namespace HSMServer.Notifications
 {
+    using Core = Core.Model.SensorStatus;
+
+
     public sealed class TelegramUpdateHandler : IUpdateHandler
     {
         private readonly Logger _logger = LogManager.GetCurrentClassLogger();
@@ -130,22 +137,17 @@ namespace HSMServer.Notifications
 
             return response.ToString();
         }
-        
-        private string IconsInfo() =>
-            """
-            ⚠️ - received Warning status
-            ✅ - received Ok status
-            ❌ - received Error status  
-            ⏸ - received Offtime status 
-            ⌛️ - sensor update timeout
+
+        private static string IconsInfo() =>
+            $"""
+            {Core.OffTime.ToIcon()} - received Offtime status
+            {Core.Ok.ToIcon()} - received Ok status
+            {Core.Warning.ToIcon()} - received Warning status
+            {Core.Error.ToIcon()} - received Error status
+            {ExpectedUpdateIntervalPolicy.PolicyIcon} - sensor update timeout
             ❓ - unknown status
             """;
 
-        private static string ServerStatus()
-        {
-            var version = Assembly.GetExecutingAssembly().GetName().Version;
-
-            return $"HSM server {version.Major}.{version.Minor}.{version.Build} is alive";
-        }
+        private static string ServerStatus() => $"HSM server {ServerConfig.Version} is alive";
     }
 }

@@ -56,10 +56,10 @@ namespace HSMServer.Filters.ProductRoleFilters
             if (productId != null && context.Controller is AccessKeysController keysController)
             {
                 var product = keysController.TreeValuesCache.GetProduct(productId.Value);
-                while (product?.ParentProduct != null)
+                while (product?.Parent != null)
                 {
-                    productId = product.ParentProduct.Id;
-                    product = product.ParentProduct;
+                    productId = product.Parent.Id;
+                    product = product.Parent;
                 }
             }
 

@@ -2,11 +2,10 @@
 using HSMServer.Authentication;
 using HSMServer.Constants;
 using HSMServer.Core.Cache;
-using HSMServer.Core.Configuration;
-using HSMServer.Core.Email;
-using HSMServer.Core.Encryption;
-using HSMServer.Core.Model;
-using HSMServer.Core.Registration;
+using HSMServer.Configuration;
+using HSMServer.Registration;
+using HSMServer.Email;
+using HSMServer.Encryption;
 using HSMServer.Filters.ProductRoleFilters;
 using HSMServer.Groups;
 using HSMServer.Helpers;
@@ -22,6 +21,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Threading.Tasks;
+using HSMServer.Core.Registration;
 
 namespace HSMServer.Controllers
 {
@@ -59,17 +59,17 @@ namespace HSMServer.Controllers
             ViewBag.Groups = _groupManager.GetGroups();
 
             var user = HttpContext.User as User;
-            
+
             var result = _treeViewModel.GetUserProducts(user)
                 .OrderBy(x => x.Name)
                 .Select(x => new ProductViewModel(x, _userManager));
 
             if (!string.IsNullOrEmpty(searchProductName))
                 result = result.Where(x => x.Name.Contains(searchProductName, StringComparison.CurrentCultureIgnoreCase));
-            
+
             if (!string.IsNullOrEmpty(searchProductManager))
                 result = result.Where(x => x.Managers.Any(y => y.Contains(searchProductManager, StringComparison.CurrentCultureIgnoreCase)));
-            
+
             return View(result.ToList());
         }
 

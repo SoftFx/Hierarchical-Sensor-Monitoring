@@ -1,5 +1,6 @@
 using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Core.Model;
+using HSMServer.Core.Model.Policies;
 using HSMServer.Core.SensorsUpdatesQueue;
 using HSMServer.Core.Tests.Infrastructure;
 using HSMServer.Core.Tests.MonitoringCoreTests;
@@ -14,7 +15,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
     public class BaseSensorModelValidatorTests : MonitoringCoreTestsBase<ValidationFixture>
     {
         private const string SensorValueIsTooLong = "The value has exceeded the length limit.";
-        private const string SensorValueOutdated = "Timeout";
+        private const string SensorValueOutdated = "";
         private const string SensorValueTypeInvalid = "Sensor value type is not {0}";
         private const string SensorValueStatusInvalid = "User data has {0} status";
 
@@ -48,7 +49,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         {
             var sensor = BuildSensorModel(type);
 
-            Assert.False(sensor.TryAddValue(null, out _));
+            Assert.False(sensor.TryAddValue((BaseValue)null));
         }
 
         [Fact]
@@ -63,10 +64,10 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
                 Value = RandomGenerator.GetRandomString(DefaultMaxStringLength + 1)
             };
 
-            Assert.True(sensor.TryAddValue(stringBase, out _));
-            Assert.True(sensor.ValidationResult.IsWarning);
-            Assert.Equal(SensorStatus.Warning, sensor.ValidationResult.Result);
-            Assert.Equal(sensor.ValidationResult.Message, SensorValueIsTooLong);
+            Assert.True(sensor.TryAddValue(stringBase));
+            Assert.True(sensor.Status.HasWarning);
+            Assert.Equal(SensorStatus.Warning, sensor.Status.Status);
+            Assert.Equal(sensor.Status.Message, SensorValueIsTooLong);
         }
 
         [Theory]
@@ -88,10 +89,10 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
                 if (invalidType == sensorType)
                     break;
 
-                Assert.False(sensor.TryAddValue(SensorValuesFactory.BuildSensorValue(invalidType), out _));
-                Assert.True(sensor.ValidationResult.IsError);
-                Assert.Equal(SensorStatus.Error, sensor.ValidationResult.Result);
-                Assert.Equal(errorMessage, sensor.ValidationResult.Message);
+                Assert.False(sensor.TryAddValue(SensorValuesFactory.BuildSensorValue(invalidType)));
+                Assert.True(sensor.Status.HasError);
+                Assert.Equal(SensorStatus.Error, sensor.Status.Status);
+                Assert.Equal(errorMessage, sensor.Status.Message);
             }
         }
 
@@ -110,14 +111,14 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
                     ? string.Format(SensorValueStatusInvalid, status)
                     : baseValue.Comment;
 
-                Assert.True(sensor.TryAddValue(baseValue, out _));
-                Assert.Equal(baseValue.Status, sensor.ValidationResult.Result);
-                Assert.Equal(expectedMessage, sensor.ValidationResult.Message);
+                Assert.True(sensor.TryAddValue(baseValue));
+                Assert.Equal(baseValue.Status, sensor.Status.Status);
+                Assert.Equal(expectedMessage, sensor.Status.Message);
 
                 if (status == SensorStatus.Error)
-                    Assert.True(sensor.ValidationResult.IsError);
+                    Assert.True(sensor.Status.HasError);
                 else if (status == SensorStatus.Warning)
-                    Assert.True(sensor.ValidationResult.IsWarning);
+                    Assert.True(sensor.Status.HasWarning);
             }
         }
 
@@ -139,11 +140,11 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
                 var baseValue = SensorValuesFactory.BuildSensorValue(sensorType) with
                 { ReceivingTime = new DateTime(DateTime.UtcNow.Ticks - ticks) };
 
-                Assert.True(sensor.TryAddValue(baseValue, out _));
-                Assert.True(sensor.CheckExpectedUpdateInterval());
-                Assert.True(sensor.ValidationResult.IsWarning);
-                Assert.Equal(SensorStatus.Warning, sensor.ValidationResult.Result);
-                Assert.Equal(SensorValueOutdated, sensor.ValidationResult.Message);
+                Assert.True(sensor.TryAddValue(baseValue));
+                Assert.True(sensor.HasUpdateTimeout());
+                Assert.True(sensor.Status.HasWarning);
+                Assert.Equal(SensorStatus.Warning, sensor.Status.Status);
+                Assert.Equal(SensorValueOutdated, sensor.Status.Message);
             }
         }
 
@@ -163,12 +164,12 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
                 Status = status
             };
 
-            Assert.True(sensor.TryAddValue(stringBase, out _));
-            Assert.True(sensor.ValidationResult.IsWarning);
-            Assert.Equal(GetFinalStatus(status, SensorStatus.Warning), sensor.ValidationResult.Result);
+            Assert.True(sensor.TryAddValue(stringBase));
+            Assert.True(sensor.Status.HasWarning);
+            Assert.Equal(GetFinalStatus(status, SensorStatus.Warning), sensor.Status.Status);
 
             if (status == SensorStatus.Error)
-                Assert.True(sensor.ValidationResult.IsError);
+                Assert.True(sensor.Status.HasError);
         }
 
         [Theory]
@@ -189,13 +190,13 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
                     Status = status
                 };
 
-                Assert.True(sensor.TryAddValue(baseValue, out _));
-                Assert.True(sensor.CheckExpectedUpdateInterval());
-                Assert.True(sensor.ValidationResult.IsWarning);
-                Assert.Equal(GetFinalStatus(status, SensorStatus.Warning), sensor.ValidationResult.Result);
+                Assert.True(sensor.TryAddValue(baseValue));
+                Assert.True(sensor.HasUpdateTimeout());
+                Assert.True(sensor.Status.HasWarning);
+                Assert.Equal(GetFinalStatus(status, SensorStatus.Warning), sensor.Status.Status);
 
                 if (status == SensorStatus.Error)
-                    Assert.True(sensor.ValidationResult.IsError);
+                    Assert.True(sensor.Status.HasError);
             }
         }
 

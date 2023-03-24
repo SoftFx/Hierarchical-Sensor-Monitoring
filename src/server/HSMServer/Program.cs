@@ -1,4 +1,4 @@
-using FluentValidation.AspNetCore;
+﻿using FluentValidation.AspNetCore;
 using HSMCommon.Constants;
 using HSMServer.Authentication;
 using HSMServer.Groups;
@@ -55,7 +55,7 @@ builder.Services.AddMvc();
 builder.Services.AddFluentValidationAutoValidation()
                 .AddFluentValidationClientsideAdapters();
 
-builder.Services.AddHttpsRedirection(configureOptions => configureOptions.HttpsPort = serverConfig.Kestrel.SitePort);
+builder.Services.AddHttpsRedirection(с => с.HttpsPort = serverConfig.Kestrel.SitePort);
 
 builder.Services.AddApplicationServices();
 
