@@ -116,7 +116,7 @@ namespace HSMDataCollector.Core
             var allData = new List<SensorValueBase>(1 << 3);
             if (_dataQueue != null)
             {
-                allData.AddRange(_dataQueue.GetCollectedData());
+                allData.AddRange(_dataQueue.DequeueData());
                 _dataQueue.Stop();
             }
 

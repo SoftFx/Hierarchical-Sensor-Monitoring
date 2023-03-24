@@ -1,5 +1,6 @@
 ﻿using System;
 using HSMDataCollector.Core;
+using HSMDataCollector.Extensions;
 using HSMSensorDataObjects.SensorValueRequests;
 
 namespace HSMDataCollector.Base
@@ -30,7 +31,7 @@ namespace HSMDataCollector.Base
 
         protected void EnqueueValue(SensorValueBase value)
         {
-            _queue.EnqueueData(value);
+            _queue.Enqueue(value.TrimLongComment());
         }
     }
 }

@@ -15,9 +15,9 @@ namespace HSMDataCollector.Core
 
         void ReturnData(List<SensorValueBase> values);
 
-        void ReturnFile(FileSensorValue file);
+        void ReturnSensorValue(SensorValueBase file);
 
-        List<SensorValueBase> GetCollectedData();
+        List<SensorValueBase> DequeueData();
 
         void InitializeTimer();
 

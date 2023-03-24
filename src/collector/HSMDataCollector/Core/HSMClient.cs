@@ -104,7 +104,7 @@ namespace HSMDataCollector.Core
             catch (Exception e)
             {
                 if (_dataQueue != null && !_dataQueue.Disposed)
-                    _dataQueue?.ReturnFile(value);
+                    _dataQueue?.ReturnSensorValue(value);
 
                 _logManager.Logger?.Error($"Failed to send: {e}");
             }
