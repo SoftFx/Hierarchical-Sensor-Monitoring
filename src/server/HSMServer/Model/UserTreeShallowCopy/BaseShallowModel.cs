@@ -25,7 +25,7 @@ namespace HSMServer.Model.UserTreeShallowCopy
         
         protected BaseShallowModel(T data, User user)
         {
-            _curUserIsManager = user.IsManager(data.RootProduct.Id);
+            _curUserIsManager = user.IsManager(data.Parent?.Id ?? data.Id);
 
             Data = data;
         }
