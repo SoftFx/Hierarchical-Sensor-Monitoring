@@ -38,5 +38,7 @@ namespace HSMServer.Extensions
         }
 
         internal static DateTime ToUtc(this DateTime dateTime) => DateTime.SpecifyKind(dateTime, DateTimeKind.Utc);
+
+        internal static DateTime RoundToMin(this DateTime time) => time.AddSeconds(-time.Second).AddMicroseconds(-time.Millisecond);
     }
 }
