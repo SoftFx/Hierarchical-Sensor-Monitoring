@@ -1,5 +1,4 @@
-﻿using HSMServer.Extensions;
-using HSMServer.Model.TreeViewModel;
+﻿using HSMServer.Model.TreeViewModel;
 using System;
 using System.Collections.Generic;
 
@@ -50,7 +49,7 @@ namespace HSMServer.Model
 
         public DateTime DateTimeNow { get; set; }
 
-        public DateTime EndOfIgnorePeriod => IgnorePeriod.TimeInterval == TimeInterval.Forever ?
+        public DateTime EndOfIgnorePeriod => IgnorePeriod.TimeInterval == TimeInterval.Forever ? 
                                              DateTime.MaxValue : DateTimeNow.AddDays(Days).AddHours(Hours).AddMinutes(Minutes);
 
         public bool IsOffTimeModal { get; set; }
@@ -67,13 +66,16 @@ namespace HSMServer.Model
 
             if (node.Id == node.RootProduct.Id)
                 TreeElement = ProductTreeElement;
-
+            
             IgnorePeriod = new(_predefinedIntervals)
             {
                 CustomItemIsVisible = false,
             };
 
-            DateTimeNow = DateTime.UtcNow.RoundToMin();
+            var now = DateTime.UtcNow;
+            DateTimeNow = now.AddSeconds(-now.Second)
+                             .AddMilliseconds(-now.Millisecond);
+            
             NotificationsTarget = target;
             IsOffTimeModal = isOffTimeModal;
         }

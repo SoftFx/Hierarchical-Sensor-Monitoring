@@ -29,11 +29,9 @@ namespace HSMServer.BackgroundTask
         }
 
 
-        protected override async Task ExecuteAsync(CancellationToken cToken)
+        protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
-            await Task.Delay((60 - DateTime.UtcNow.Second + 1) * 1000, cToken); //task start time alignment
-
-            while (!cToken.IsCancellationRequested)
+            while (!stoppingToken.IsCancellationRequested)
             {
                 if (_cache.IsInitialized)
                 {
@@ -43,7 +41,7 @@ namespace HSMServer.BackgroundTask
                     RemoveOutdatedIgnoredNotifications();
                 }
 
-                await Task.Delay(Delay, cToken);
+                await Task.Delay(Delay, stoppingToken);
             }
         }
 
