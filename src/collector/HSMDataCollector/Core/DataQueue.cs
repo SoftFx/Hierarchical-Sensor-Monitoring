@@ -79,7 +79,7 @@ namespace HSMDataCollector.Core
 
         private void Dequeue(ConcurrentQueue<SensorValueBase> queue, List<SensorValueBase> dataList)
         {
-            while (dataList.Count <= _maxValuesInPackage && queue.TryDequeue(out var value))
+            while (dataList.Count < _maxValuesInPackage && queue.TryDequeue(out var value))
                 switch (value)
                 {
                     case FileSensorValue fileValue:
