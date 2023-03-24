@@ -7,7 +7,7 @@
 @using Microsoft.AspNetCore.Mvc.TagHelpers
 @model EditProductViewModel
 
-@inject INotificationsCenter NotificationsCenter
+@inject NotificationsCenter NotificationsCenter
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
 
 @{ ViewData["Title"] = $"Product {Model.ProductName}"; }

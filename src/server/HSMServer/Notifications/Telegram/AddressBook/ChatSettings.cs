@@ -1,4 +1,4 @@
-﻿using HSMServer.Core.Model;
+﻿using HSMServer.Notifications.Telegram;
 using Telegram.Bot.Types;
 
 namespace HSMServer.Notifications
