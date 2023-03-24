@@ -50,7 +50,7 @@ namespace HSMServer.Model.Folders.ViewModels
                 Description = Description,
                 AuthorId = author.Id,
                 Author = author.Name,
-                Products = Products.GetAddedProducts(treeViewModel)
+                Products = Products?.GetAddedProducts(treeViewModel) ?? new(),
             };
     }
 }

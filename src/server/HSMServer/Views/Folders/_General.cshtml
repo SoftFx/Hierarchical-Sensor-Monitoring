@@ -11,44 +11,44 @@
 
 <input asp-for="@Model.Id" value="@Model.Id" style="display: none" />
 
-<div class="form-group row mt-2">
+<div class="row mt-2">
     <label class="col-2 col-form-label" asp-for="Name"></label>
     @if (isAdd)
     {
-        <div class="col-5 p-0">
-            <input class="form-control mx-auto" asp-for="Name">
+        <div class="col-5">
+            <input class="form-control" asp-for="Name">
         </div>
     }
     else
     {
-        <label class="col-auto col-form-label px-0" asp-for="Name">@Model.Name</label>
+        <label class="col-auto col-form-label" asp-for="Name">@Model.Name</label>
     }
 </div>
 
-<div class="form-group row mt-2">
+<div class="row mt-2">
     <label class="col-2 col-form-label" asp-for="Description"></label>
-    <div class="col p-0">
+    <div class="col">
         <textarea type='text' class='form-control' asp-for="Description" value='@Model.Description'></textarea>
     </div>
 </div>
 
-<div class="form-group row mt-2">
+<div class="row mt-2">
     <label class="col-2 col-form-label" asp-for="Color"></label>
-    <div class="col-auto p-0">
+    <div class="col-auto">
         <input class="form-control form-control-color" type="color" asp-for="Color">
     </div>
 </div>
 
 @if (!isAdd)
 {
-    <div class="form-group row mt-2">
+    <div class="row mt-2">
         <label class="col-2 col-form-label" asp-for="Author"></label>
-        <label class="col-auto col-form-label px-0" asp-for="Author">@Model.Author</label>
+        <label class="col-auto col-form-label" asp-for="Author">@Model.Author</label>
     </div>
 
-    <div class="form-group row mt-2">
+    <div class="row mt-2">
         <label class="col-2 col-form-label" asp-for="CreationDate"></label>
-        <label class="col-auto col-form-label px-0" asp-for="CreationDate">@Model.CreationDate</label>
+        <label class="col-auto col-form-label" asp-for="CreationDate">@Model.CreationDate</label>
     </div>
 }
 
