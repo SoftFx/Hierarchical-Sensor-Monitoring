@@ -1,7 +1,7 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.ConcurrentStorage;
-using HSMServer.Core.Model;
 using HSMServer.Model.Authentication;
+using HSMServer.Model.TreeViewModel;
 using System;
 using System.Collections.Generic;
 using System.Drawing;
@@ -12,7 +12,7 @@ namespace HSMServer.Model.Groups
     {
         public Dictionary<Guid, ProductRoleEnum> UserRoles { get; } = new();
 
-        public List<ProductModel> Products { get; } = new();
+        public List<ProductNodeViewModel> Products { get; } = new();
 
         public Guid Id { get; }
 

@@ -1,6 +1,5 @@
 ﻿using HSMServer.Core.Cache;
 using HSMServer.Core.Cache.UpdateEntities;
-using HSMServer.Core.Model;
 using HSMServer.Groups;
 using HSMServer.Model.Authentication;
 using HSMServer.Model.Groups;
@@ -38,10 +37,10 @@ namespace HSMServer.Controllers
         [HttpPost]
         public async Task<IActionResult> AddGroup(EditGroupViewModel group)
         {
-            var addedProducts = new List<ProductModel>();
+            var addedProducts = new List<ProductNodeViewModel>();
             foreach (var productId in group.Products)
-                if (Guid.TryParse(productId, out var id))
-                    addedProducts.Add(_cache.GetProduct(id));
+                if (Guid.TryParse(productId, out var id) && _treeViewModel.Nodes.TryGetValue(id, out var product))
+                    addedProducts.Add(product);
 
             var newGroup = new GroupModel(group.ToEntity((HttpContext.User as User).Id));
             newGroup.Products.AddRange(addedProducts);

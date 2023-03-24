@@ -1,9 +1,9 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Authentication;
 using HSMServer.ConcurrentStorage;
-using HSMServer.Core.Cache;
 using HSMServer.Core.DataLayer;
 using HSMServer.Model.Groups;
+using HSMServer.Model.TreeViewModel;
 using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
@@ -14,9 +14,9 @@ namespace HSMServer.Groups
 {
     public sealed class GroupManager : ConcurrentStorage<GroupModel, GroupEntity, GroupUpdate>, IGroupManager
     {
-        private readonly IDatabaseCore _databaseCore;
         private readonly IUserManager _userManager;
-        private readonly ITreeValuesCache _cache;
+        private readonly IDatabaseCore _databaseCore;
+        private readonly TreeViewModel _treeViewModel;
         private readonly ILogger<GroupManager> _logger;
 
 
@@ -29,11 +29,12 @@ namespace HSMServer.Groups
         protected override Func<List<GroupEntity>> GetFromDb => _databaseCore.GetAllGroups;
 
 
-        public GroupManager(IDatabaseCore databaseCore, IUserManager userManager, ITreeValuesCache cache, ILogger<GroupManager> logger)
+        public GroupManager(IDatabaseCore databaseCore, IUserManager userManager,
+            TreeViewModel treeViewModel, ILogger<GroupManager> logger)
         {
             _databaseCore = databaseCore;
             _userManager = userManager;
-            _cache = cache;
+            _treeViewModel = treeViewModel;
             _logger = logger;
         }
 
@@ -48,9 +49,9 @@ namespace HSMServer.Groups
                 if (_userManager.TryGetValue(group.AuthorId, out var author))
                     group.Author = author.Name;
 
-            foreach (var product in _cache.GetProducts())
-                if (product.GroupId.HasValue && TryGetValue(product.GroupId.Value, out var group))
-                    group.Products.Add(product);
+            foreach (var (_, node) in _treeViewModel.Nodes)
+                if (node.Parent is null && node.GroupId.HasValue && TryGetValue(node.GroupId.Value, out var group))
+                    group.Products.Add(node);
         }
 
         protected override GroupModel FromEntity(GroupEntity entity) => new(entity);

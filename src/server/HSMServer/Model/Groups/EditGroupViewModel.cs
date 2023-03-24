@@ -46,7 +46,7 @@ namespace HSMServer.Model.Groups
             Name = group.Name;
             Description = group.Description;
             Color = group.Color;
-            SelectedProducts = group.Products.Select(p => new ProductNodeViewModel(p) { RootProduct = null }).ToList(); // TODO selectedProducts should get products from _treeViewModel.Nodes
+            SelectedProducts = group.Products;
         }
 
 

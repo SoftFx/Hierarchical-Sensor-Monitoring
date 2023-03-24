@@ -23,8 +23,10 @@ namespace HSMServer.Model.TreeViewModel
         public ConcurrentDictionary<Guid, AccessKeyViewModel> AccessKeys { get; } = new();
 
         public TelegramSettingsViewModel TelegramSettings { get; } = new();
-        
+
         public NotificationSettings Notifications { get; }
+
+        public Guid? GroupId { get; private set; }
 
         public int AllSensorsCount { get; private set; }
 
@@ -48,6 +50,7 @@ namespace HSMServer.Model.TreeViewModel
         {
             base.Update(model);
 
+            GroupId = model.GroupId;
             TelegramSettings.Update(model.Notifications.Telegram);
         }
 
@@ -86,7 +89,7 @@ namespace HSMServer.Model.TreeViewModel
 
             ModifyUpdateTime();
             ModifyStatus();
-            
+
             return this;
         }
 

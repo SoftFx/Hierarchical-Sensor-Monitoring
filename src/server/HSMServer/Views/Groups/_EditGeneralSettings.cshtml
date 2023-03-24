@@ -73,7 +73,7 @@
                         @if ((DateTime.UtcNow - product.UpdateTime).Ticks >= ConfigurationConstants.DefaultExpirationTime.Ticks)
                         {
                             <span>
-                                <img title="Product sensor(s) haven't been updated for @ConfigurationConstants.DefaultExpirationTime.ToToolTip()" src="~/dist/warning.svg" alt="warning icon" />
+                                <img title="Product sensor(s) haven't been updated for @ConfigurationConstants.DefaultExpirationTime.ToToolTip()" src="~/dist/warning.svg" id="svg_exclamation" alt="warning icon" />
                             </span>
                         }
                     </td>
