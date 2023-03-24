@@ -6,7 +6,7 @@ using System.Collections.Generic;
 
 namespace HSMServer.Core.Cache
 {
-    public enum TransactionType
+    public enum ActionType
     {
         Add,
         Update,
@@ -18,14 +18,14 @@ namespace HSMServer.Core.Cache
     {
         bool IsInitialized { get; }
 
-        event Action<ProductModel, TransactionType> ChangeProductEvent;
-        event Action<BaseSensorModel, TransactionType> ChangeSensorEvent;
-        event Action<AccessKeyModel, TransactionType> ChangeAccessKeyEvent;
+        event Action<ProductModel, ActionType> ChangeProductEvent;
+        event Action<BaseSensorModel, ActionType> ChangeSensorEvent;
+        event Action<AccessKeyModel, ActionType> ChangeAccessKeyEvent;
 
-        event Action<BaseSensorModel, ValidationResult> NotifyAboutChangesEvent;
+        event Action<BaseSensorModel, PolicyResult> NotifyAboutChangesEvent;
 
 
-        List<ProductModel> GetTree();
+        List<ProductModel> GetNodes();
         List<BaseSensorModel> GetSensors();
         List<AccessKeyModel> GetAccessKeys();
 
@@ -45,7 +45,6 @@ namespace HSMServer.Core.Cache
         AccessKeyModel RemoveAccessKey(Guid id);
         AccessKeyModel UpdateAccessKey(AccessKeyUpdate key);
         AccessKeyModel UpdateAccessKeyState(Guid id, KeyState state);
-        AccessKeyModel CheckAccessKeyExpiration(AccessKeyModel key);
         AccessKeyModel GetAccessKey(Guid id);
 
         void UpdateSensor(SensorUpdate updatedSensor);
@@ -55,11 +54,11 @@ namespace HSMServer.Core.Cache
         void ClearSensorHistory(Guid sensorId);
         void ClearNodeHistory(Guid productId);
         BaseSensorModel GetSensor(Guid sensorId);
-        void NotifyAboutChanges(BaseSensorModel model, ValidationResult oldStatus);
+        void NotifyAboutChanges(BaseSensorModel model, PolicyResult oldStatus);
 
         IAsyncEnumerable<List<BaseValue>> GetSensorValues(HistoryRequestModel request);
         IAsyncEnumerable<List<BaseValue>> GetSensorValuesPage(Guid sensorId, DateTime from, DateTime to, int count);
 
-        void UpdatePolicy(TransactionType type, Policy policy);
+        void UpdateCacheState();
     }
 }
