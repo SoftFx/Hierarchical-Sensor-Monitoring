@@ -3,6 +3,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Threading;
+using HSMDataCollector.Extensions;
 
 namespace HSMDataCollector.Core
 {
@@ -49,9 +50,15 @@ namespace HSMDataCollector.Core
             return dataList;
         }
 
-        public void ReturnSensorValue(SensorValueBase file) => Enqueue(_failedQueue, file);
+        public void ReturnSensorValue(SensorValueBase value) => Enqueue(_failedQueue, value);
         
-        public void Enqueue(SensorValueBase value) => Enqueue(_valuesQueue, value);
+        public void Enqueue(SensorValueBase value) => Enqueue(_valuesQueue, value.TrimLongComment());
+        
+        public void InitializeTimer()
+        {
+            if (_sendTimer == null)
+                _sendTimer = new Timer(OnTimerTick, null, _packageSendingPeriod, _packageSendingPeriod);
+        }
         
         public void Stop()
         {
@@ -59,27 +66,20 @@ namespace HSMDataCollector.Core
             Disposed = true;
         }
 
-        public void InitializeTimer()
-        {
-            if (_sendTimer == null)
-                _sendTimer = new Timer(OnTimerTick, null, _packageSendingPeriod, _packageSendingPeriod);
-        }
 
-     
         private void OnTimerTick(object state) => SendValues?.Invoke(DequeueData());
         
         private void Enqueue(ConcurrentQueue<SensorValueBase> queue, SensorValueBase value)
         {
             queue.Enqueue(value);
 
-            if (queue.Count <= _maxQueueSize)
+            while (queue.Count > _maxQueueSize)
                 queue.TryDequeue(out _);
         }
 
         private void Dequeue(ConcurrentQueue<SensorValueBase> queue, List<SensorValueBase> dataList)
         {
-            while (queue.TryDequeue(out var value) && dataList.Count <= _maxValuesInPackage)
-            {
+            while (dataList.Count <= _maxValuesInPackage && queue.TryDequeue(out var value))
                 switch (value)
                 {
                     case FileSensorValue fileValue:
@@ -92,8 +92,7 @@ namespace HSMDataCollector.Core
                     default:
                         dataList.Add(value);
                         break;
-                }   
-            }
+                }
         }
     }
 }
