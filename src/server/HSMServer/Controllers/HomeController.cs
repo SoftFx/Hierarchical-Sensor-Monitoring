@@ -382,7 +382,9 @@ namespace HSMServer.Controllers
                         break;
                     }
                 }
-            }else value = GetFileSensorValue(encodedId);
+            }
+            else 
+                value = GetFileSensorValue(encodedId);
             
             if (value == null)
                 return _emptyResult;
@@ -404,14 +406,15 @@ namespace HSMServer.Controllers
                 var viewModel = await new HistoryValuesViewModel(encodedId,6 , enumerator, GetLocalLastValue(encodedId,DateTime.MinValue, DateTime.MaxValue)).Initialize();
                 foreach (FileValue file in viewModel.Pages[0])
                 {
-                    if (file.Time.Ticks == dateTime)
+                    if (file.ReceivingTime.Ticks == dateTime)
                     {
                         value = file;
                         break;
                     }
                 }
             }
-            else value = GetFileSensorValue(encodedId);
+            else 
+                value = GetFileSensorValue(encodedId);
             
             if (value == null)
                 return _emptyResult;
