@@ -24,7 +24,7 @@
         {
             <h2 class='accordion-header' id='heading_@sensorId'>
                 <button id='file_accordion_@sensorId' class='accordion-button collapsed' type='button' data-bs-toggle='collapse'
-                        data-bs-target='#collapse_@sensorId' aria-expanded='false' aria-controls='collapse_@sensorId'>
+                        data-bs-target='#file_collapse_@sensorId' aria-expanded='false' aria-controls='file_collapse_@sensorId'>
                     <div class="w-100">
                         <div class='row justify-content-between'>
                             <div class='row col-md-auto align-items-center align-self-baseline'>
@@ -74,7 +74,7 @@
                     </div>
                 </button>
             </h2>
-            <div id='collapse_@sensorId' class='accordion-collapse collapse text-break' aria-labelledby='heading_@sensorId' data-bs-parent='#sensorData_@sensorId'>
+            <div id='file_collapse_@sensorId' class='accordion-collapse collapse text-break' aria-labelledby='heading_@sensorId' data-bs-parent='#sensorData_@sensorId'>
                 <div class='accordion-body p-3'>
                     @if (Model.LastValue != null)
                     {
