@@ -43,7 +43,17 @@
                                         title='Status: @value.Status'>
                                     </li>
                                     @value.Name
-                                    <span class="d-flex text-break">Comment: @value.Comment</span>
+                                    <div class="d-flex text-break pt-2">
+                                        @if (value.Status is not SensorStatus.Ok)
+                                        {
+                                            <li id='errorIcon_@i' class='fas fa-exclamation-triangle me-1'></li>
+                                            <span>Status comment: @value.Comment</span>
+                                        }
+                                        else if (!string.IsNullOrEmpty(value.Comment))
+                                        {
+                                            <span class="d-flex text-break">Comment: @value.Comment</span>
+                                        }
+                                    </div>
                                     @* <div class="text-break"> *@
                                     @*     <span id='validation_@i'> *@
                                     @*         <li id='errorIcon_@i' class='fas fa-exclamation-triangle me-1'></li> *@

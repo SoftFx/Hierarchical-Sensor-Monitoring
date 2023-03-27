@@ -39,13 +39,17 @@
                             @if (Model.HasData)
                             {
                                 @file.Name
-                                <span class="d-flex text-break">Comment: @Model.LastValue.Comment</span>
-                                <div class="text-break">
+                               
+                                <div class="text-break pt-2">
                                     <span id='validation_@sensorId'>
                                         @if (Model.IsValidationErrorVisible)
                                         {
                                             <li id='errorIcon_@sensorId' class='fas fa-exclamation-triangle me-1'></li>
                                             <span>Status comment: @Model.ValidationError</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="d-flex text-break">Comment: @Model.LastValue.Comment</span>
                                         }
                                     </span>
                                 </div>
