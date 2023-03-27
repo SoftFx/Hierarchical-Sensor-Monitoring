@@ -74,7 +74,7 @@
                                     Size: @file?.FileSizeToNormalString()
                                 </span>
                                 <span>
-                                    Time: @file?.ReceivingTime.ToDefaultFormat()
+                                    @file?.ReceivingTime.ToDefaultFormat()
                                 </span>
                             }
                         </div>
@@ -89,18 +89,18 @@
             @if (Model.LastValue != null)
             {
                 <div class="row justify-content-end">
-                    <div class="d-flex col-6 flex-row-reverse">
-                        <div class="col-4">
+                    <div class="d-flex col-xxl-4 col-xl-8 col-lg-6 flex-row-reverse">
+                        <div class="col-xxl-5 col-xl-3 col-lg-6">
                             <input style='display: none;' id='fileType_@sensorId' value='@Model.FileNameString'/>
-                            <a id='button_download_@sensorId' class='btn btn-outline-secondary d-flex justify-content-center mx-1' title='Download'>
-                                <i class='fas fa-file-download pt-1 pe-1' style="width: 1rem;height: 1rem"></i>
-                                Download
+                            <a id='button_download_@sensorId' class='btn btn-outline-secondary d-flex justify-content-center align-items-center mx-1' title='Download'>
+                                <i class='fas fa-file-download pe-1' style="width: 1rem;height: 1rem"></i>
+                                <span style="font-size: smaller">Download</span>
                             </a>
                         </div>
-                        <div class="col-4">
-                            <a id='button_view_@sensorId' class='btn btn-outline-secondary d-flex justify-content-center mx-1' title='Preview'>
-                                <i class='fas fa-eye pt-1 pe-1' style="width: 1rem;height: 1rem"></i>
-                                Preview
+                        <div class="col-xxl-5 col-xl-3 col-lg-6">
+                            <a id='button_view_@sensorId' class='btn btn-outline-secondary d-flex justify-content-center align-items-center mx-1' title='Preview'>
+                                <i class='fas fa-eye pe-1' style="width: 1rem;height: 1rem"></i>
+                                <span style="font-size: smaller"> Preview</span>
                             </a>
                         </div>
                     </div>

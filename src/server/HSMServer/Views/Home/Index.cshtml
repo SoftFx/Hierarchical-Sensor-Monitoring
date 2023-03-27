@@ -193,7 +193,7 @@
         if (dataObject.sensorType === 6 && dataObject.receivingTime !== null){
             $('#side_info_' + id).empty().append(`<span class="pb-3" style="font-size: medium">${dataObject.updatedTimeStr}</span>
                                                   <span>Size: ${dataObject.size}</span>
-                                                  <span>Time: ${dataObject.receivingTime}</span>`);
+                                                  <span>${dataObject.receivingTime}</span>`);
         }
         
         setContentPreview(id);
