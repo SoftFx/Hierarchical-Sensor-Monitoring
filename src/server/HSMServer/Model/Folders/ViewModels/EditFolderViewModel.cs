@@ -1,21 +1,26 @@
-﻿using HSMServer.Extensions;
+﻿using HSMServer.Attributes;
+using HSMServer.Extensions;
 using HSMServer.Model.Authentication;
 using System;
+using System.ComponentModel.DataAnnotations;
 using System.Drawing;
 
 namespace HSMServer.Model.Folders.ViewModels
 {
     public class EditFolderViewModel
     {
-        public FolderProductsViewModel Products { get; set; }
-
         public string CreationDate { get; }
 
         public string Author { get; }
 
 
+        public FolderProductsViewModel Products { get; set; }
+
         public Guid? Id { get; set; }
 
+        [Required(ErrorMessage = "{0} is required.")]
+        [StringLength(10, ErrorMessage = "{0} length should be less than {1}.")]
+        [UniqueFolderValidation(ErrorMessage = "Folder name must be unique.")]
         public string Name { get; set; }
 
         public string Description { get; set; }

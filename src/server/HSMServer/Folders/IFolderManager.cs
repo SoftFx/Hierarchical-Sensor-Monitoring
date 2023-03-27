@@ -9,6 +9,8 @@ namespace HSMServer.Folders
     {
         FolderModel this[Guid id] { get; }
 
+        FolderModel this[string name] { get; }
+
 
         Task<bool> TryAdd(FolderModel folder);
 

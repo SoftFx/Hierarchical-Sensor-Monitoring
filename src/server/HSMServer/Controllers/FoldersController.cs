@@ -7,6 +7,7 @@ using HSMServer.Model.Folders.ViewModels;
 using HSMServer.Model.TreeViewModel;
 using Microsoft.AspNetCore.Mvc;
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 
@@ -38,6 +39,13 @@ namespace HSMServer.Controllers
         [HttpPost]
         public async Task<IActionResult> AddFolder(EditFolderViewModel folder)
         {
+            if (!ModelState.IsValid)
+            {
+                folder.Products = BuildFolderProducts(folder.Products?.SelectedProducts);
+
+                return View(nameof(EditFolder), folder);
+            }
+
             var newFolder = new FolderModel(folder.ToFolderAdd(HttpContext.User as User, _treeViewModel));
 
             if (await _folderManager.TryAdd(newFolder))
@@ -48,10 +56,11 @@ namespace HSMServer.Controllers
         }
 
 
-        private FolderProductsViewModel BuildFolderProducts() =>
+        private FolderProductsViewModel BuildFolderProducts(List<string> selectedProducts = null) =>
             new()
             {
-                AvailableProducts = _treeViewModel.GetUserProducts(HttpContext.User as User).Where(p => p.FolderId is null).ToList()
+                AvailableProducts = _treeViewModel.GetUserProducts(HttpContext.User as User).Where(p => p.FolderId is null).ToList(),
+                SelectedProducts = selectedProducts,
             };
     }
 }
