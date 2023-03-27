@@ -8,7 +8,11 @@
 @{
     var splitted = Model.FileNameString.Split('.');
     var fileType = splitted.Length >= 2 ? splitted[1] : string.Empty;
-    var file = (FileValue)Model.LastValue;
+
+    FileValue file = null;
+    if (Model.SensorType is SensorType.File)
+        file = (FileValue)Model.LastValue;
+    
     var sensorId = Model.EncodedId;
 
     var graphElementId = $"graph_{sensorId}";
