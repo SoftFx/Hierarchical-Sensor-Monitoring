@@ -42,7 +42,11 @@
                                 @Model.FileNameString
                                 <div class="text-break pt-2">
                                     <span id='validation_@sensorId'>
-                                        <span class="d-flex text-break">Comment: @Model.LastValue.Comment</span>
+                                        @if (!string.IsNullOrEmpty(Model.LastValue.Comment))
+                                        {
+                                            <span class="d-flex text-break">Comment: @Model.LastValue.Comment</span>
+                                        }
+                                        
                                         @if (Model.IsValidationErrorVisible)
                                         {
                                             <li id='errorIcon_@sensorId' class='fas fa-exclamation-triangle me-1'></li>
