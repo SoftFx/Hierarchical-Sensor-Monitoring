@@ -185,8 +185,8 @@
                                            <span>Status comment: ${dataObject.validationError}</span>`);
         }
         
-        if (dataObject.sensorType === 6){
-            $('#side_info_' + id).empty().append(`<span>${dataObject.updatedTimeStr}</span>
+        if (dataObject.sensorType === 6 && dataObject.receivingTime !== null){
+            $('#side_info_' + id).empty().append(`<span class="pb-3" style="font-size: medium">${dataObject.updatedTimeStr}</span>
                                                   <span>Full name: ${dataObject.fileNameString}</span>
                                                   <span>Size = ${dataObject.size}</span>
                                                   <span>Sending time: ${dataObject.sendingTime}</span>

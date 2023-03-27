@@ -63,11 +63,13 @@ namespace HSMServer.Model.TreeViewModel
             {
                 FileNameString = sensor.FileNameString;
                 var file = (FileValue)sensor.LastValue;
+                if (file is not null)
+                {
+                    SendingTime = file.Time.ToUniversalTime().ToDefaultFormat();
+                    ReceivingTime = file.ReceivingTime.ToDefaultFormat();
 
-                SendingTime = file.Time.ToUniversalTime().ToDefaultFormat();
-                ReceivingTime = file.ReceivingTime.ToDefaultFormat();
-
-                Size = file.FileSizeToNormalString();
+                    Size = file.FileSizeToNormalString();
+                }
             }
         }
     }

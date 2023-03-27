@@ -19,7 +19,7 @@
     <div class='accordion my-1' id='sensorData_@i'>
         <div class='accordion-item'>
             <h2 class='accordion-header' id='heading_@i'>
-                <button id='file_accordion_' class='accordion-button collapsed' type='button' data-bs-toggle='collapse'
+                <button id='file_accordion_' class='accordion-button collapsed pt-2' type='button' data-bs-toggle='collapse'
                         data-bs-target='#collapse_@i' aria-expanded='false' aria-controls='collapse_@i' onclick="previewButtonClick('@value.ReceivingTime.Ticks', @i, '@value.Extension')" @(!isEnabledPreview ? "disabled" : "")>
                     <div class="w-100">
                         <div class='row justify-content-between'>
@@ -52,7 +52,7 @@
                                     @* </div> *@
                                 </div>
                             </div>
-                            <div class='col-md-auto time-ago-div me-1' id='update_@i'>
+                            <div class='col-md-auto time-ago-div me-3' id='update_@i'>
                                 <div id="side_info_@i" class="d-flex flex-md-column align-items-end" style="font-size: smaller">
                                     <span>
                                         Full name: @value.Name.@value.Extension
