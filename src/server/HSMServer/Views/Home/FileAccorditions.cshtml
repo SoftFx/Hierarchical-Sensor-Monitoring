@@ -23,58 +23,27 @@
                         data-bs-target='#collapse_@i' aria-expanded='false' aria-controls='collapse_@i' onclick="previewButtonClick('@value.ReceivingTime.Ticks', @i, '@value.Extension')" @(!isEnabledPreview ? "disabled" : "")>
                     <div class="w-100">
                         <div class='row justify-content-between'>
-                            @* <div class='row col-md-auto align-items-center ms-3'> *@
-                            @*     @value.Name *@
-                            @*     @if (value.Value != null) *@
-                            @*     { *@
-                            @*         <a id='button_view_@i' class='btn btn-outline-secondary d-flex justify-content-center mx-1' title='Preview' style="width: 2rem; height: 2rem"> *@
-                            @*             <i class='fas fa-eye'></i> *@
-                            @*         </a> *@
-                            @* *@
-                            @*         <input style='display: none;' id='fileType_' value='@value.Name'/> *@
-                            @*         <a id='button_download_@i' class='btn btn-outline-secondary d-flex justify-content-center mx-1' title='Download' style="width: 2rem; height: 2rem"> *@
-                            @*             <i class='fas fa-file-download'></i> *@
-                            @*         </a> *@
-                            @*     } *@
-                            @* </div> *@
                             <div class='row col-md-auto align-items-center align-self-baseline'>
                                 <div class='col-md-auto sensor-icon-without-padding'>
                                     <li id='status_@i' class='@value.Status.ToClient().ToIcon() sensor-icon-with-margin'
                                         title='Status: @value.Status'>
                                     </li>
-                                    @value.Name
+                                    @value.Name.@value.Extension
                                     <div class="d-flex text-break pt-2">
-                                        @if (value.Status is not SensorStatus.Ok)
-                                        {
-                                            <li id='errorIcon_@i' class='fas fa-exclamation-triangle me-1'></li>
-                                            <span>Status comment: @value.Comment</span>
-                                        }
-                                        else if (!string.IsNullOrEmpty(value.Comment))
+                                        @if (!string.IsNullOrEmpty(value.Comment))
                                         {
                                             <span class="d-flex text-break">Comment: @value.Comment</span>
                                         }
                                     </div>
-                                    @* <div class="text-break"> *@
-                                    @*     <span id='validation_@i'> *@
-                                    @*         <li id='errorIcon_@i' class='fas fa-exclamation-triangle me-1'></li> *@
-                                    @*             <span>Status comment: @value.</span> *@
-                                    @*     </span> *@
-                                    @* </div> *@
                                 </div>
                             </div>
                             <div class='col-md-auto time-ago-div me-3' id='update_@i'>
                                 <div id="side_info_@i" class="d-flex flex-md-column align-items-end" style="font-size: smaller">
                                     <span>
-                                        Full name: @value.Name.@value.Extension
-                                    </span>
-                                    <span>
                                         Size: @value.FileSizeToNormalString()
                                     </span>
                                     <span>
-                                        Sending time: @value.Time.ToUniversalTime().ToDefaultFormat()
-                                    </span>
-                                    <span>
-                                        ReceivingTime: @value.ReceivingTime.ToDefaultFormat()
+                                        Time: @value.ReceivingTime.ToDefaultFormat()
                                     </span>
                                 </div>
                             </div>
@@ -84,40 +53,28 @@
             </h2>
             <div id='collapse_@i' class='accordion-collapse collapse text-break' aria-labelledby='heading_@i' data-bs-parent='#sensorData_@i'>
                 <div class='accordion-body p-3'>
-                    <div class="d-flex">
-                        <a id='button_view_@i' onclick="fileNewTabView('@value.ReceivingTime.Ticks', '@value.Extension')" class='btn btn-outline-secondary d-flex justify-content-center mx-1' title='Preview' style="width: 2rem; height: 2rem">
-                            <i class='fas fa-eye'></i>
-                        </a>
-
-                        <input style='display: none;' id='fileType_@i' value='@value.Name.@value.Extension'/>
-                        <a id='button_download_@i' onclick="fileDownload('@value.ReceivingTime.Ticks')" class='btn btn-outline-secondary d-flex justify-content-center mx-1' title='Download' style="width: 2rem; height: 2rem">
-                            <i class='fas fa-file-download'></i>
-                        </a>
+                    <div class="row justify-content-end">
+                        <div class="d-flex col-6 flex-row-reverse">
+                            <div class="col-4">
+                                <input style='display: none;' id='fileType_@i' value='@value.Name.@value.Extension'/>
+                                <a id='button_download_@i' onclick="fileDownload('@value.ReceivingTime.Ticks')" class='btn btn-outline-secondary d-flex justify-content-center mx-1' title='Download'>
+                                    <i class='fas fa-file-download pt-1 pe-1' style="width: 1rem;height: 1rem"></i>
+                                    Download
+                                </a>
+                            </div>
+                            <div class="col-4">
+                                <a id='button_view_@i' onclick="fileNewTabView('@value.ReceivingTime.Ticks', '@value.Extension')" class='btn btn-outline-secondary d-flex justify-content-center mx-1' title='Preview'>
+                                    <i class='fas fa-eye pt-1 pe-1' style="width: 1rem;height: 1rem"></i>
+                                    Preview
+                                </a>
+                            </div>
+                        </div>
                     </div>
+
                     <div class="d-grid d-none pt-3" id="preview_@i">
                         <h5 id="preview-header">Content:</h5>
                         <div style="overflow-x: auto" id="preview-content_@i"></div>
                     </div>
-                    @* @if (!isEnabledPreview) *@
-                    @* { *@
-                    @*     <div id="bigFilePreview" class="card text-center"> *@
-                    @*         <div class="card-body"> *@
-                    @*             @switch (value.Extension) *@
-                    @*             { *@
-                    @*                 case "csv": *@
-                    @*                     <h5 class="card-title">This file is too big to preview (>5MB)</h5> *@
-                    @*                     break; *@
-                    @*                 case "txt": *@
-                    @*                     <h5 class="card-title">This file is too big to preview (>1MB)</h5> *@
-                    @*                     break; *@
-                    @*                 default: *@
-                    @*                     <h5 class="card-title">Current file type is not available in preview mode</h5> *@
-                    @*                     break; *@
-                    @*             } *@
-                    @*             <button id="button_download_@i" href="#" class="btn btn-outline-primary mt-2">Start download</button> *@
-                    @*         </div> *@
-                    @*     </div> *@
-                    @* } *@
                 </div>
             </div>
         </div>

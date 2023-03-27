@@ -12,7 +12,7 @@
     FileValue file = null;
     if (Model.SensorType is SensorType.File)
         file = (FileValue)Model.LastValue;
-    
+
     var sensorId = Model.EncodedId;
 
     var graphElementId = $"graph_{sensorId}";
@@ -36,20 +36,17 @@
                             <li id='status_@sensorId' class='@Model.Status.ToIcon() sensor-icon-with-margin'
                                 title='Status: @Model.Status'>
                             </li>
+
                             @if (Model.HasData)
                             {
-                                @file.Name
-                               
+                                @Model.FileNameString
                                 <div class="text-break pt-2">
                                     <span id='validation_@sensorId'>
+                                        <span class="d-flex text-break">Comment: @Model.LastValue.Comment</span>
                                         @if (Model.IsValidationErrorVisible)
                                         {
                                             <li id='errorIcon_@sensorId' class='fas fa-exclamation-triangle me-1'></li>
-                                            <span>Status comment: @Model.ValidationError</span>
-                                        }
-                                        else
-                                        {
-                                            <span class="d-flex text-break">Comment: @Model.LastValue.Comment</span>
+                                            <span>Alert comment: @Model.ValidationError</span>
                                         }
                                     </span>
                                 </div>
@@ -70,16 +67,10 @@
                             @if (Model.HasData)
                             {
                                 <span>
-                                    Full name: @Model.FileNameString
-                                </span>
-                                <span>
                                     Size: @file?.FileSizeToNormalString()
                                 </span>
                                 <span>
-                                    Sending time: @file?.Time.ToUniversalTime().ToDefaultFormat()
-                                </span>
-                                <span>
-                                    ReceivingTime: @file?.ReceivingTime.ToDefaultFormat()
+                                    Time: @file?.ReceivingTime.ToDefaultFormat()
                                 </span>
                             }
                         </div>
@@ -93,42 +84,28 @@
         <div class='accordion-body p-3'>
             @if (Model.LastValue != null)
             {
-                <div class="d-flex">
-                    <a id='button_view_@sensorId' class='btn btn-outline-secondary d-flex justify-content-center mx-1' title='Preview' style="width: 2rem; height: 2rem">
-                        <i class='fas fa-eye'></i>
-                    </a>
-
-                    <input style='display: none;' id='fileType_@sensorId' value='@Model.FileNameString'/>
-                    <a id='button_download_@sensorId' class='btn btn-outline-secondary d-flex justify-content-center mx-1' title='Download' style="width: 2rem; height: 2rem">
-                        <i class='fas fa-file-download'></i>
-                    </a>
+                <div class="row justify-content-end">
+                    <div class="d-flex col-6 flex-row-reverse">
+                        <div class="col-4">
+                            <input style='display: none;' id='fileType_@sensorId' value='@Model.FileNameString'/>
+                            <a id='button_download_@sensorId' class='btn btn-outline-secondary d-flex justify-content-center mx-1' title='Download'>
+                                <i class='fas fa-file-download pt-1 pe-1' style="width: 1rem;height: 1rem"></i>
+                                Download
+                            </a>
+                        </div>
+                        <div class="col-4">
+                            <a id='button_view_@sensorId' class='btn btn-outline-secondary d-flex justify-content-center mx-1' title='Preview'>
+                                <i class='fas fa-eye pt-1 pe-1' style="width: 1rem;height: 1rem"></i>
+                                Preview
+                            </a>
+                        </div>
+                    </div>
                 </div>
             }
             <div class="d-grid d-none pt-3" id="preview">
                 <h5 id="preview-header">Content:</h5>
                 <div style="overflow-x: auto" id="preview-content"></div>
             </div>
-
-            @* @if (Model.HasData) *@
-            @* { *@
-            @*     <div id="bigFilePreview" class="card text-center d-none"> *@
-            @*         <div class="card-body"> *@
-            @*             @switch (fileType) *@
-            @*             { *@
-            @*                 case "csv": *@
-            @*                     <h5 class="card-title">This file is too big to preview (>5MB)</h5> *@
-            @*                     break; *@
-            @*                 case "txt": *@
-            @*                     <h5 class="card-title">This file is too big to preview (>1MB)</h5> *@
-            @*                     break; *@
-            @*                 default: *@
-            @*                     <h5 class="card-title">Current file type is not available in preview mode</h5> *@
-            @*                     break; *@
-            @*             } *@
-            @*             <button id="button_download_@(sensorId)" href="#" class="btn btn-outline-primary mt-2">Start download</button> *@
-            @*         </div> *@
-            @*     </div> *@
-            @* } *@
         </div>
     </div>
 }

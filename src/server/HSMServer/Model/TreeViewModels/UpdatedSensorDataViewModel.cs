@@ -50,6 +50,7 @@ namespace HSMServer.Model.TreeViewModel
         
         public string ReceivingTime { get; }
         
+        public string Comment { get; }
 
         public UpdatedSensorDataViewModel(SensorNodeViewModel sensor) : base(sensor)
         {
@@ -67,7 +68,7 @@ namespace HSMServer.Model.TreeViewModel
                 {
                     SendingTime = file.Time.ToUniversalTime().ToDefaultFormat();
                     ReceivingTime = file.ReceivingTime.ToDefaultFormat();
-
+                    Comment = file.Comment;
                     Size = file.FileSizeToNormalString();
                 }
             }

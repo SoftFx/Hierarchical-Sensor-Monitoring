@@ -180,17 +180,20 @@
         $('#value_' + id).empty().append(dataObject.value);
 
         $('#validation_' + id).empty();
+        
+        if (dataObject.sensorType === 6 && dataObject.comment !== null){
+                     $('#validation_' + id).append(`<span class="d-flex text-break">Comment: ${dataObject.comment}</span>`);
+        }
+        
         if (dataObject.isValidationErrorVisible) {
             $('#validation_' + id).append(`<li id='errorIcon_${id}' class='fas fa-exclamation-triangle me-1'></li>
-                                           <span>Status comment: ${dataObject.validationError}</span>`);
+                                           <span>Alert comment: ${dataObject.validationError}</span>`);
         }
         
         if (dataObject.sensorType === 6 && dataObject.receivingTime !== null){
             $('#side_info_' + id).empty().append(`<span class="pb-3" style="font-size: medium">${dataObject.updatedTimeStr}</span>
-                                                  <span>Full name: ${dataObject.fileNameString}</span>
                                                   <span>Size: ${dataObject.size}</span>
-                                                  <span>Sending time: ${dataObject.sendingTime}</span>
-                                                  <span>ReceivingTime: ${dataObject.receivingTime}</span>`);
+                                                  <span>Time: ${dataObject.receivingTime}</span>`);
         }
         
         setContentPreview(id);
