@@ -31,12 +31,12 @@
                         <div class='col-md-auto sensor-icon-without-padding'>
                             <li id='status_@sensorId' class='@Model.Status.ToIcon() sensor-icon-with-margin'
                                 title='Status: @Model.Status'>
-                                @Model.Name
                             </li>
-                            @Model.Name
+                            @{
+                                var file = (FileValue)Model.LastValue;
+                            }
+                            @file.Name
                             <span class="d-flex text-break">Comment: @Model.LastValue.Comment</span>
-                            <span class="d-flex text-break">ShortInfo: @Model.LastValue.ShortInfo</span>
-                            <span class="d-flex text-break">Model Description: @Model.Description</span>
                             <div class="text-break">
                                 <span id='validation_@sensorId'>
                                     @if (Model.IsValidationErrorVisible)
@@ -51,28 +51,22 @@
                     </div>
                     <input id='sensor_type_@sensorId' value='@((int) Model.SensorType)' style='display: none'/>
                     <div class='col-md-auto time-ago-div me-1' id='update_@sensorId'>
-                        <div class="d-flex flex-md-column align-items-end">
+                        <div id="side_info_@sensorId" class="d-flex flex-md-column align-items-end" style="font-size: smaller">
                             <span>
                                 updated @Model.UpdateTime.GetTimeAgo()
                             </span>
                             <span>
                                 Full name: @Model.FileNameString
                             </span>
-                            @{
-                                var vl = (FileValue) Model.LastValue;
-                            }
                             <span>
-                                Size = @vl.FileSizeToNormalString()
+                                Size = @file.FileSizeToNormalString()
                             </span>
                             <span>
-                                Sending time: @vl.Time.ToUniversalTime().ToDefaultFormat()
+                                Sending time: @file.Time.ToUniversalTime().ToDefaultFormat()
                             </span>
                             <span>
-                                ReceivingTime: @vl.ReceivingTime.ToDefaultFormat()
+                                ReceivingTime: @file.ReceivingTime.ToDefaultFormat()
                             </span>
-                            @* <div id="value_@sensorId" class="text-break"> *@
-                            @*                         @Model.ShortStringValue *@
-                            @*                     </div> *@
                         </div>
                     </div>
                 </div>

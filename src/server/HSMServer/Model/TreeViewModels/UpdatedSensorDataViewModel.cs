@@ -1,4 +1,5 @@
-﻿using HSMServer.Extensions;
+﻿using HSMServer.Core.Model;
+using HSMServer.Extensions;
 
 namespace HSMServer.Model.TreeViewModel
 {
@@ -31,17 +32,43 @@ namespace HSMServer.Model.TreeViewModel
 
     public record UpdatedSensorDataViewModel : UpdatedNodeDataViewModel
     {
+        public SensorType SensorType { get; }
+        
+        
         public string Value { get; }
 
         public string ValidationError { get; }
 
         public bool IsValidationErrorVisible { get; }
+        
+        
+        public string FileNameString { get; }
+        
+        public string Size { get; }
+        
+        public string SendingTime { get; }
+        
+        public string ReceivingTime { get; }
+        
 
         public UpdatedSensorDataViewModel(SensorNodeViewModel sensor) : base(sensor)
         {
+            SensorType = sensor.SensorType;
+            
             Value = sensor.ShortStringValue;
             ValidationError = sensor.ValidationError;
             IsValidationErrorVisible = sensor.IsValidationErrorVisible;
+
+            if (sensor.SensorType is SensorType.File)
+            {
+                FileNameString = sensor.FileNameString;
+                var file = (FileValue)sensor.LastValue;
+
+                SendingTime = file.Time.ToUniversalTime().ToDefaultFormat();
+                ReceivingTime = file.ReceivingTime.ToDefaultFormat();
+
+                Size = file.FileSizeToNormalString();
+            }
         }
     }
 }
