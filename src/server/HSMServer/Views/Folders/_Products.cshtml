@@ -8,7 +8,7 @@
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
 
 @{
-    var noProducts = Model.Products.Count == 0;
+    var noProducts = Model.DisplayProducts.Count == 0;
 }
 
 
@@ -31,6 +31,15 @@ else
 
 @if (!noProducts)
 {
+    <div style="display:none">
+        @for (int i = 0; i < Model.Products.Count; i++)
+        {
+            <div>
+                <input asp-for="Products[i]" value="@Model.Products[i]"/>
+            </div>
+        }
+    </div>
+
     <table class="table table-striped">
         <thead>
             <tr>
@@ -45,7 +54,7 @@ else
             </tr>
         </thead>
         <tbody>
-            @foreach (var product in Model.Products)
+            @foreach (var product in Model.DisplayProducts)
             {
                 <tr>
                     <td class="text-break">@Html.Raw(product.Name)</td>

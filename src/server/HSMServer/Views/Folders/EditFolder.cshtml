@@ -4,7 +4,7 @@
 @model EditFolderViewModel
 
 @{
-    var isAdd = Model.Id == null;
+    var isAdd = Model.Id == default;
     var disabledTab = isAdd ? "disabled" : string.Empty;
 }
 

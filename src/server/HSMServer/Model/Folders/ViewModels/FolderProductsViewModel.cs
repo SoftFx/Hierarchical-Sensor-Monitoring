@@ -8,13 +8,15 @@ namespace HSMServer.Model.Folders.ViewModels
 {
     public class FolderProductsViewModel
     {
-        public List<ProductNodeViewModel> Products { get; } = new();
+        public List<ProductNodeViewModel> DisplayProducts { get; } = new();
+
+        public List<Guid> Products { get; set; }
 
 
         public required List<ProductNodeViewModel> AvailableProducts { get; init; }
 
         public List<SelectListItem> AvailableProductsItems =>
-            AvailableProducts?.Select(p => new SelectListItem() { Text = p.Name, Value = p.Id.ToString() }).ToList();
+            AvailableProducts?.Select(p => new SelectListItem() { Text = p.Name, Value = p.Id.ToString() }).OrderBy(p => p.Text).ToList();
 
         public List<string> SelectedProducts { get; set; } = new();
 
@@ -22,15 +24,21 @@ namespace HSMServer.Model.Folders.ViewModels
         public FolderProductsViewModel() { }
 
 
-        internal List<ProductNodeViewModel> GetAddedProducts(TreeViewModel.TreeViewModel treeViewModel)
+        internal void FillFolderProducts(List<ProductNodeViewModel> folderProducts)
         {
-            var selectedProducts = new List<ProductNodeViewModel>();
+            DisplayProducts.AddRange(folderProducts);
+            Products = DisplayProducts.Select(p => p.Id).ToList();
+        }
 
-            foreach (var productId in SelectedProducts)
-                if (Guid.TryParse(productId, out var id) && treeViewModel.Nodes.TryGetValue(id, out var product))
-                    selectedProducts.Add(product);
+        internal List<ProductNodeViewModel> GetFolderProducts(TreeViewModel.TreeViewModel treeViewModel)
+        {
+            var folderProducts = new List<ProductNodeViewModel>();
 
-            return selectedProducts;
+            foreach (var productId in Products.Union(SelectedProducts.Select(Guid.Parse)))
+                if (treeViewModel.Nodes.TryGetValue(productId, out var product))
+                    folderProducts.Add(product);
+
+            return folderProducts;
         }
     }
 }

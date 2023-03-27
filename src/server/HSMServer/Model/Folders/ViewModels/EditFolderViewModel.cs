@@ -1,7 +1,9 @@
 ﻿using HSMServer.Attributes;
 using HSMServer.Extensions;
 using HSMServer.Model.Authentication;
+using HSMServer.Model.TreeViewModel;
 using System;
+using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.Drawing;
 
@@ -16,10 +18,10 @@ namespace HSMServer.Model.Folders.ViewModels
 
         public FolderProductsViewModel Products { get; set; }
 
-        public Guid? Id { get; set; }
+        public Guid Id { get; set; }
 
         [Required(ErrorMessage = "{0} is required.")]
-        [StringLength(10, ErrorMessage = "{0} length should be less than {1}.")]
+        [StringLength(60, ErrorMessage = "{0} length should be less than {1}.")]
         [UniqueFolderValidation(ErrorMessage = "Folder name must be unique.")]
         public string Name { get; set; }
 
@@ -43,9 +45,12 @@ namespace HSMServer.Model.Folders.ViewModels
             Name = folder.Name;
             Description = folder.Description;
             Color = folder.Color;
-            Products.Products.AddRange(folder.Products);
+            Products.FillFolderProducts(folder.Products);
         }
 
+
+        internal List<ProductNodeViewModel> GetFolderProducts(TreeViewModel.TreeViewModel treeViewModel) =>
+            Products?.GetFolderProducts(treeViewModel) ?? new();
 
         internal FolderAdd ToFolderAdd(User author, TreeViewModel.TreeViewModel treeViewModel) =>
             new()
@@ -55,7 +60,15 @@ namespace HSMServer.Model.Folders.ViewModels
                 Description = Description,
                 AuthorId = author.Id,
                 Author = author.Name,
-                Products = Products?.GetAddedProducts(treeViewModel) ?? new(),
+                Products = GetFolderProducts(treeViewModel),
+            };
+
+        internal FolderUpdate ToFolderUpdate() =>
+            new()
+            {
+                Id = Id,
+                Description = Description is null ? string.Empty : Description,
+                Color = Color,
             };
     }
 }

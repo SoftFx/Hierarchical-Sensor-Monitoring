@@ -14,6 +14,8 @@ namespace HSMServer.Folders
 
         Task<bool> TryAdd(FolderModel folder);
 
+        Task<bool> TryUpdate(FolderUpdate update);
+
         List<FolderModel> GetFolders();
 
         Task Initialize();

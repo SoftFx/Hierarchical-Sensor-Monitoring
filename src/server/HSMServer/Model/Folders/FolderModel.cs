@@ -68,7 +68,8 @@ namespace HSMServer.Model.Folders
 
         public void Update(FolderUpdate update)
         {
-            throw new NotImplementedException();
+            Description = update.Description ?? Description;
+            Color = update.Color ?? Color;
         }
     }
 }

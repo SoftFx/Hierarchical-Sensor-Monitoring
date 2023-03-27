@@ -37,6 +37,26 @@ namespace HSMServer.Controllers
         }
 
         [HttpPost]
+        public async Task<IActionResult> EditFolder(EditFolderViewModel folder)
+        {
+            var existingFolder = _folderManager[folder.Id];
+            var oldFolderProducts = existingFolder.Products.ToList();
+
+            existingFolder.Products.Clear();
+            existingFolder.Products.AddRange(folder.GetFolderProducts(_treeViewModel));
+
+            if (await _folderManager.TryUpdate(folder.ToFolderUpdate()))
+            {
+                foreach (var product in oldFolderProducts.Except(existingFolder.Products))
+                    _cache.UpdateProduct(new ProductUpdate() { Id = product.Id, FolderId = Guid.Empty });
+                foreach (var product in existingFolder.Products.Except(oldFolderProducts))
+                    _cache.UpdateProduct(new ProductUpdate() { Id = product.Id, FolderId = existingFolder.Id });
+            }
+
+            return View(nameof(EditFolder), new EditFolderViewModel(_folderManager[existingFolder.Id], BuildFolderProducts()));
+        }
+
+        [HttpPost]
         public async Task<IActionResult> AddFolder(EditFolderViewModel folder)
         {
             if (!ModelState.IsValid)

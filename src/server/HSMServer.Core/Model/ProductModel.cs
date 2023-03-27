@@ -57,7 +57,9 @@ namespace HSMServer.Core.Model
         {
             base.Update(update);
 
-            FolderId = update.FolderId ?? FolderId;
+            FolderId = update.FolderId.HasValue
+                ? update.FolderId != Guid.Empty ? update.FolderId : null
+                : FolderId;
 
             return this;
         }
