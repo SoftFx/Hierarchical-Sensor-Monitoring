@@ -365,13 +365,27 @@ namespace HSMServer.Controllers
         #region File
 
         [HttpGet]
-        public IActionResult GetFile([FromQuery(Name = "Selected")] string encodedId)
+        public async Task<IActionResult> GetFile([FromQuery(Name = "Selected")] string encodedId, [FromQuery] long dateTime = default)
         {
-            var value = GetFileSensorValue(encodedId);
+            var (_, path) = GetSensorProductAndPath(encodedId);
+            FileValue value = null;
+        
+            if (dateTime != default)
+            {
+                var enumerator = _treeValuesCache.GetSensorValuesPage(SensorPathHelper.DecodeGuid(encodedId),DateTime.MinValue, DateTime.MaxValue, 50);
+                var viewModel = await new HistoryValuesViewModel(encodedId,6 , enumerator, GetLocalLastValue(encodedId,DateTime.MinValue, DateTime.MaxValue)).Initialize();
+                foreach (FileValue file in viewModel.Pages[0])
+                {
+                    if (file.ReceivingTime.Ticks == dateTime)
+                    {
+                        value = file;
+                        break;
+                    }
+                }
+            }else value = GetFileSensorValue(encodedId);
+            
             if (value == null)
                 return _emptyResult;
-
-            var (_, path) = GetSensorProductAndPath(encodedId);
 
             var fileName = $"{path.Replace('/', '_')}.{value.Extension}";
 
