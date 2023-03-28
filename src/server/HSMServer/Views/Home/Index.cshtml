@@ -93,6 +93,9 @@
                 {
                     <span class="enabled-filters-message text-break">@user.TreeFilter.EnabledFiltersMessage</span>
                 }
+                <div class="d-flex flex-grow-1 m-0 px-2">
+                    <a onclick="collapseTree()" class="link-secondary" style="cursor: pointer">Collapse Tree</a>
+                </div>
             </div>
         </div>
         <div class="d-flex justify-content-center">
@@ -241,6 +244,10 @@
         $('#updateTime').append('Update Time: ' + new Date().toUTCString());
     }
 
+    function collapseTree(){
+        $('#jstree').jstree('close_all');
+    }
+    
     var clipboard = new ClipboardJS('[id^="copy_"]', {
         container: document.getElementById('accessKeys_modal')
     });
