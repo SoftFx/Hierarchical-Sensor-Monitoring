@@ -129,7 +129,7 @@ namespace HSMServer.Controllers
             }
 
             var user = _userManager[model.UserId];
-            var pair = (model.ProductKey, (ProductRoleEnum)model.ProductRole);
+            var pair = (model.EntityId, (ProductRoleEnum)model.ProductRole);
 
             if (user.ProductsRoles == null || !user.ProductsRoles.Any())
                 user.ProductsRoles = new List<(Guid, ProductRoleEnum)> { pair };
@@ -144,10 +144,10 @@ namespace HSMServer.Controllers
         {
             var user = _userManager[model.UserId];
 
-            var role = user.ProductsRoles.First(ur => ur.Item1.Equals(model.ProductKey));
+            var role = user.ProductsRoles.First(ur => ur.Item1.Equals(model.EntityId));
             user.ProductsRoles.Remove(role);
 
-            foreach (var sensorId in _treeViewModel.GetNodeAllSensors(model.ProductKey))
+            foreach (var sensorId in _treeViewModel.GetNodeAllSensors(model.EntityId))
                 user.Notifications.RemoveSensor(sensorId);
 
             _userManager.UpdateUser(user);
@@ -157,9 +157,9 @@ namespace HSMServer.Controllers
         public void EditUserRole([FromBody] UserRightViewModel model)
         {
             var user = _userManager[model.UserId];
-            var pair = (model.ProductKey, (ProductRoleEnum)model.ProductRole);
+            var pair = (model.EntityId, (ProductRoleEnum)model.ProductRole);
 
-            var role = user.ProductsRoles.FirstOrDefault(ur => ur.Item1.Equals(model.ProductKey));
+            var role = user.ProductsRoles.FirstOrDefault(ur => ur.Item1.Equals(model.EntityId));
             //Skip empty corresponding pair
             if (role.Item1 == Guid.Empty && role.Item2 == 0)
                 return;

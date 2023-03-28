@@ -10,7 +10,7 @@ namespace HSMServer.Model.Folders
 {
     public class FolderModel : IServerModel<FolderEntity, FolderUpdate>
     {
-        public Dictionary<Guid, ProductRoleEnum> UserRoles { get; } = new();
+        public Dictionary<User, ProductRoleEnum> UserRoles { get; } = new();
 
         public List<ProductNodeViewModel> Products { get; } = new();
 

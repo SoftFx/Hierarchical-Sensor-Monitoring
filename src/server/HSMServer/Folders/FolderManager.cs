@@ -52,6 +52,11 @@ namespace HSMServer.Folders
             foreach (var (_, node) in _treeViewModel.Nodes)
                 if (node.Parent is null && node.FolderId.HasValue && TryGetValue(node.FolderId.Value, out var folder))
                     folder.Products.Add(node);
+
+            foreach (var user in _userManager.GetUsers())
+                foreach (var (folderId, role) in user.FoldersRoles)
+                    if (TryGetValue(folderId, out var folder))
+                        folder.UserRoles.Add(user, role);
         }
 
         protected override FolderModel FromEntity(FolderEntity entity) => new(entity);

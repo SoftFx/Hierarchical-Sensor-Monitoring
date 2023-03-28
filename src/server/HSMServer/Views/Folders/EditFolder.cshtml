@@ -20,13 +20,13 @@
                 <button class="nav-link active" id="general-tab" data-bs-toggle="tab" data-bs-target="#general" type="button" role="tab" aria-controls="general" aria-selected="true">General</button>
             </li>
             <li class="nav-item" role="presentation">
-                <button class="nav-link @disabledTab" id="sensors-tab" data-bs-toggle="tab" data-bs-target="#sensors" type="button" role="tab" aria-controls="sensors" aria-selected="false">Sensors settings</button>
+                <button class="nav-link @disabledTab" id="alerts-tab" data-bs-toggle="tab" data-bs-target="#alerts" type="button" role="tab" aria-controls="alerts" aria-selected="false">Alerts</button>
             </li>
             <li class="nav-item" role="presentation">
                 <button class="nav-link @disabledTab" id="notifications-tab" data-bs-toggle="tab" data-bs-target="#notifications" type="button" role="tab" aria-controls="notifications" aria-selected="false">Notifications</button>
             </li>
             <li class="nav-item" role="presentation">
-                <button class="nav-link @disabledTab" id="members-tab" data-bs-toggle="tab" data-bs-target="#members" type="button" role="tab" aria-controls="members" aria-selected="false">Members</button>
+                <button class="nav-link @disabledTab" id="users-tab" data-bs-toggle="tab" data-bs-target="#users" type="button" role="tab" aria-controls="users" aria-selected="false">Users</button>
             </li>
         </ul>
         <div class="tab-content w-100" id="myTabContent">
@@ -36,11 +36,15 @@
                 </form>
             </div>
 
-            <div class="tab-pane fade" id="sensors" role="tabpanel" aria-labelledby="sensors-tab">...</div>
+            <div class="tab-pane fade" id="alerts" role="tabpanel" aria-labelledby="alerts-tab">...</div>
 
             <div class="tab-pane fade" id="notifications" role="tabpanel" aria-labelledby="notifications-tab">...</div>
 
-            <div class="tab-pane fade" id="members" role="tabpanel" aria-labelledby="members-tab">...</div>
+            <div class="tab-pane fade" id="users" role="tabpanel" aria-labelledby="users-tab">
+                <div id="folderUsers">
+                    @await Html.PartialAsync("_Users", Model.Users)
+                </div>
+            </div>
         </div>
     </div>
 </div>

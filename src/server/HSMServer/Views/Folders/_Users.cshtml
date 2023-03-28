@@ -1,0 +1,169 @@
+﻿@using HSMServer.Model.Authentication
+@using HSMServer.Model.Folders.ViewModels
+@using HSMServer.Controllers
+@using HSMServer.Constants
+
+@model FolderUsersViewModel
+
+
+@if (Model != null)
+{
+    <table class='table table-striped'>
+        <thead>
+            <tr>
+                <th scope='col'>User</th>
+                <th scope='col'>Role</th>
+                <th scope='col' class="text-center">Action</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr>
+                <th>
+                    <select class='form-select' id='userIdToAdd' @(Model.NotAdminUsers.Count == 0 ? "disabled" : string.Empty)>
+                        @foreach (var user in Model.NotAdminUsers)
+                        {
+                            <option value='@user.Id'>@user.Name</option>
+                        }
+                    </select>
+                </th>
+                <th>
+                    <select class='form-select' id='userRoleToAdd'>
+                        @foreach (ProductRoleEnum role in Enum.GetValues<ProductRoleEnum>())
+                        {
+                            <option value='@((int)role)'>@role</option>
+                        }
+                    </select>
+                </th>
+                <th class="text-center">
+                    <button type='button' class='btn btn-secondary ms-1' title='add user role' onclick="addUserRole()">
+                        <i class='fas fa-plus'></i>
+                    </button>
+                </th>
+            </tr>
+            @foreach (var (user, userRole) in Model.Users.OrderBy(u => u.Key.Name))
+            {
+                <tr>
+                    <td class="text-break">
+                        @user.Name
+                        <input id="userName_@user.Id" value="@user.Name" class="d-none"/>
+                    </td>
+                    <td>
+                        <select class='form-select' disabled id='role_@user.Id'>
+                            @foreach (ProductRoleEnum role in Enum.GetValues<ProductRoleEnum>())
+                            {
+                                <option value='@((int)role)' @(role == userRole ? "selected" : string.Empty)>@role</option>
+                            }
+                        </select>
+                    </td>
+                    <td nowrap class="text-center">
+                        <div id="actions_@user.Id" class='btn-group'>
+                            <button id="actionButton" class="btn" data-bs-toggle="dropdown" data-bs-auto-close="true" aria-haspopup="true" aria-expanded="false">
+                                <i class="fa-solid fa-ellipsis-vertical" style="cursor: pointer"></i>
+                            </button>
+                            <ul class='dropdown-menu overflow-auto' aria-labelledby="dropdownMenuButton">
+                                <li>
+                                    <a id='edit_@user.Id' class='dropdown-item text-decoration-none fw-normal' style="cursor: pointer;">
+                                        Edit
+                                    </a>
+                                </li>
+                                <li>
+                                    <a id='delete_@user.Id' class='dropdown-item text-decoration-none fw-normal' style="cursor: pointer;">
+                                        Delete
+                                    </a>
+                                </li>
+                            </ul>
+                        </div>
+                        <div id="editActions_@user.Id" class="d-inline-flex d-none">
+                            <button id='ok_@user.Id' type='button' class='btn btn-secondary ms-1' title='ok'>
+                                <i class='fas fa-check'></i>
+                            </button>
+                            <button id='cancel_@user.Id' type='button' class='btn btn-secondary ms-1' title='cancel'>
+                                <i class='fas fa-times'></i>
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+
+    @await Html.PartialAsync("~/Views/Shared/_DeletionConfirmationModal.cshtml")
+}
+
+
+<script>
+    function createUserRightData(userId, role) {
+        let folderId = $('#folderIdToEdit').val();
+
+        return { "EntityId": folderId, "UserId": userId, "ProductRole": role }
+    }
+
+    function addUserRole() {
+        let userId = $('#userIdToAdd').val();
+        let role = $('#userRoleToAdd').val();
+
+        changeUsers('@Url.Action(nameof(FoldersController.AddUserRole), ViewConstants.FoldersController)', createUserRightData(userId, role));
+    };
+
+    $('[id^=edit_]').on('click', function () {
+        let userId = this.id.substring('edit_'.length, this.id.length);
+
+        $('[id^=role_]').attr('disabled', true);
+        $('[id^=actions_]').removeClass("d-none");
+        $('[id^=editActions_]').addClass("d-none");
+
+        $(`#role_${userId}`).removeAttr("disabled");
+        $(`#editActions_${userId}`).removeClass("d-none");
+        $(`#actions_${userId}`).addClass("d-none");
+    });
+
+    $('[id^=ok_]').on('click', function () {
+        let userId = this.id.substring('ok_'.length, this.id.length);
+        let role = $(`#role_${userId}`).val();
+
+        changeUsers('@Url.Action(nameof(FoldersController.EditUserRole), ViewConstants.FoldersController)', createUserRightData(userId, role));
+    });
+
+    $('[id^=cancel_]').on('click', function () {
+        let folderId = $('#folderIdToEdit').val();
+
+        $.ajax({
+            type: 'GET',
+            url: `@Url.Action(nameof(FoldersController.ResetUsers), ViewConstants.FoldersController)?FolderId=${folderId}`,
+            dataType: 'html',
+            contentType: 'application/json',
+            cache: false,
+            async: true,
+            success: function (viewData) {
+                $("#folderUsers").html(viewData);
+            }
+        });
+    });
+
+    $('[id^=delete_]').on('click', function () {
+        let userId = this.id.substring('delete_'.length, this.id.length);
+        let userName = $(`#userName_${userId}`).val();
+
+        showDeletionConfirmationModal(
+            `Removing user '${userName}' role`,
+            `Do you really want to remove user '${userName}' role?`,
+            function() {
+                changeUsers('@Url.Action(nameof(FoldersController.RemoveUserRole), ViewConstants.FoldersController)', createUserRightData(userId, 0));
+            }
+        );
+    });
+
+    function changeUsers(action, data) {
+        $.ajax({
+            type: 'POST',
+            url: action,
+            data: JSON.stringify(data),
+            contentType: 'application/json',
+            cache: false,
+            async: true,
+            success: function (viewData) {
+                $("#folderUsers").html(viewData);
+            }
+        });
+    }
+</script>

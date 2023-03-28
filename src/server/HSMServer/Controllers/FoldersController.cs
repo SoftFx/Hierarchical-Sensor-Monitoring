@@ -1,10 +1,12 @@
-﻿using HSMServer.Core.Cache;
+﻿using HSMServer.Authentication;
+using HSMServer.Core.Cache;
 using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Folders;
 using HSMServer.Model.Authentication;
 using HSMServer.Model.Folders;
 using HSMServer.Model.Folders.ViewModels;
 using HSMServer.Model.TreeViewModel;
+using HSMServer.Model.ViewModel;
 using Microsoft.AspNetCore.Mvc;
 using System;
 using System.Collections.Generic;
@@ -15,16 +17,21 @@ namespace HSMServer.Controllers
 {
     public class FoldersController : Controller
     {
-        private readonly IFolderManager _folderManager;
+        private static readonly EmptyResult _emptyResult = new();
+
         private readonly ITreeValuesCache _cache;
+        private readonly IUserManager _userManager;
         private readonly TreeViewModel _treeViewModel;
+        private readonly IFolderManager _folderManager;
 
 
-        public FoldersController(IFolderManager folderManager, ITreeValuesCache cache, TreeViewModel treeViewModel)
+        public FoldersController(IFolderManager folderManager, ITreeValuesCache cache,
+            IUserManager userManager, TreeViewModel treeViewModel)
         {
-            _folderManager = folderManager;
             _cache = cache;
+            _userManager = userManager;
             _treeViewModel = treeViewModel;
+            _folderManager = folderManager;
         }
 
 
@@ -33,7 +40,7 @@ namespace HSMServer.Controllers
         {
             return folderId == null
                 ? View(new EditFolderViewModel(BuildFolderProducts()))
-                : View(new EditFolderViewModel(_folderManager[folderId.Value], BuildFolderProducts()));
+                : View(BuildEditFolder(folderId.Value));
         }
 
         [HttpPost]
@@ -53,7 +60,7 @@ namespace HSMServer.Controllers
                     _cache.UpdateProduct(new ProductUpdate() { Id = product.Id, FolderId = existingFolder.Id });
             }
 
-            return View(nameof(EditFolder), new EditFolderViewModel(_folderManager[existingFolder.Id], BuildFolderProducts()));
+            return View(nameof(EditFolder), BuildEditFolder(existingFolder.Id));
         }
 
         [HttpPost]
@@ -72,9 +79,67 @@ namespace HSMServer.Controllers
                 foreach (var product in newFolder.Products)
                     _cache.UpdateProduct(new ProductUpdate() { Id = product.Id, FolderId = newFolder.Id });
 
-            return View(nameof(EditFolder), new EditFolderViewModel(_folderManager[newFolder.Id], BuildFolderProducts()));
+            return View(nameof(EditFolder), BuildEditFolder(newFolder.Id));
         }
 
+
+        [HttpGet]
+        public IActionResult ResetUsers(Guid folderId) => GetUsersPartialView(_folderManager[folderId]);
+
+        [HttpPost]
+        public async Task<IActionResult> AddUserRole([FromBody] UserRightViewModel model)
+        {
+            var user = _userManager[model.UserId];
+            var folder = _folderManager[model.EntityId];
+
+            user.FoldersRoles.Add(folder.Id, model.Role);
+
+            if (await _userManager.UpdateUser(user))
+                folder.UserRoles.Add(user, model.Role);
+
+            return GetUsersPartialView(folder);
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> EditUserRole([FromBody] UserRightViewModel model)
+        {
+            var user = _userManager[model.UserId];
+            var folder = _folderManager[model.EntityId];
+
+            if (user.FoldersRoles.ContainsKey(folder.Id))
+            {
+                user.FoldersRoles[folder.Id] = model.Role;
+
+                if (await _userManager.UpdateUser(user))
+                    folder.UserRoles[user] = model.Role;
+            }
+
+            return GetUsersPartialView(folder);
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> RemoveUserRole([FromBody] UserRightViewModel model)
+        {
+            var user = _userManager[model.UserId];
+            var folder = _folderManager[model.EntityId];
+
+            if (user.FoldersRoles.Remove(folder.Id) && await _userManager.UpdateUser(user))
+                folder.UserRoles.Remove(user);
+
+            // TODO: also call user.Notifications.RemoveSensor for sensors that are not available for user 
+
+            return GetUsersPartialView(folder);
+        }
+
+        private IActionResult GetUsersPartialView(FolderModel folder) => PartialView("_Users", BuildFolderUsers(folder));
+
+
+        private EditFolderViewModel BuildEditFolder(Guid folderId)
+        {
+            var folder = _folderManager[folderId];
+
+            return new(folder, BuildFolderProducts(), BuildFolderUsers(folder));
+        }
 
         private FolderProductsViewModel BuildFolderProducts(List<string> selectedProducts = null) =>
             new()
@@ -82,5 +147,8 @@ namespace HSMServer.Controllers
                 AvailableProducts = _treeViewModel.GetUserProducts(HttpContext.User as User).Where(p => p.FolderId is null).ToList(),
                 SelectedProducts = selectedProducts,
             };
+
+        private FolderUsersViewModel BuildFolderUsers(FolderModel folder) =>
+            new(folder.UserRoles, _userManager.GetUsers(u => !u.IsAdmin));
     }
 }

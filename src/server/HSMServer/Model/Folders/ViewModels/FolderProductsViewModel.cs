@@ -6,7 +6,7 @@ using System.Linq;
 
 namespace HSMServer.Model.Folders.ViewModels
 {
-    public class FolderProductsViewModel
+    public sealed class FolderProductsViewModel
     {
         public List<ProductNodeViewModel> DisplayProducts { get; } = new();
 

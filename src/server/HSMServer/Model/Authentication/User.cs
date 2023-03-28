@@ -25,6 +25,8 @@ namespace HSMServer.Model.Authentication
 
         public List<(Guid, ProductRoleEnum)> ProductsRoles { get; set; }
 
+        public Dictionary<Guid, ProductRoleEnum> FoldersRoles { get; } = new();
+
         public TreeUserFilter TreeFilter { get; set; }
 
 
@@ -39,7 +41,7 @@ namespace HSMServer.Model.Authentication
         public User()
         {
             Id = Guid.NewGuid();
-            ProductsRoles = new List<(Guid, ProductRoleEnum)>();
+            ProductsRoles = new();
             Notifications = new();
             TreeFilter = new();
         }
@@ -59,6 +61,10 @@ namespace HSMServer.Model.Authentication
                 ProductsRoles.AddRange(entity.ProductsRoles.Select(
                     r => (Guid.Parse(r.Key), (ProductRoleEnum)r.Value)));
             }
+
+            if (entity.FolderRoles != null)
+                foreach (var (folderId, role) in entity.FolderRoles)
+                    FoldersRoles.Add(Guid.Parse(folderId), (ProductRoleEnum)role);
 
             Notifications = new(entity.NotificationSettings);
 
@@ -85,6 +91,7 @@ namespace HSMServer.Model.Authentication
                 Password = Password,
                 Id = Id,
                 IsAdmin = IsAdmin,
+                FolderRoles = FoldersRoles.ToDictionary(f => f.Key.ToString(), f => (byte)f.Value),
                 ProductsRoles = ProductsRoles?.Select(r => new KeyValuePair<string, byte>(r.Item1.ToString(), (byte)r.Item2))?.ToList(),
                 NotificationSettings = Notifications.ToEntity(),
                 TreeFilter = TreeFilter,

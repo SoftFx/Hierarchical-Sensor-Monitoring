@@ -9,8 +9,10 @@ using System.Drawing;
 
 namespace HSMServer.Model.Folders.ViewModels
 {
-    public class EditFolderViewModel
+    public sealed class EditFolderViewModel
     {
+        public FolderUsersViewModel Users { get; }
+
         public string CreationDate { get; }
 
         public string Author { get; }
@@ -22,7 +24,7 @@ namespace HSMServer.Model.Folders.ViewModels
 
         [Required(ErrorMessage = "{0} is required.")]
         [StringLength(60, ErrorMessage = "{0} length should be less than {1}.")]
-        [UniqueFolderValidation(ErrorMessage = "Folder name must be unique.")]
+        [UniqueFolderValidation(ErrorMessage = "Folder with the same name already exists.")]
         public string Name { get; set; }
 
         public string Description { get; set; }
@@ -37,7 +39,8 @@ namespace HSMServer.Model.Folders.ViewModels
             Products = products;
         }
 
-        internal EditFolderViewModel(FolderModel folder, FolderProductsViewModel products) : this(products)
+        internal EditFolderViewModel(FolderModel folder, FolderProductsViewModel products,
+            FolderUsersViewModel users) : this(products)
         {
             CreationDate = folder.CreationDate.ToDefaultFormat();
             Author = folder.Author;
@@ -46,6 +49,8 @@ namespace HSMServer.Model.Folders.ViewModels
             Description = folder.Description;
             Color = folder.Color;
             Products.FillFolderProducts(folder.Products);
+
+            Users = users;
         }
 
 
