@@ -6,29 +6,27 @@
 
 
 <div class="d-grid">
-    <select id="timeIntervalSelect_@Model.Id" class="form-select" asp-for="TimeInterval" asp-items="@Model.IntervalItems"></select>
-    <input id="customTimeInterval_@Model.Id" class="customTimeInterval form-control" placeholder="@TimeIntervalViewModel.CustomTemplate" style="display:none;" asp-for="CustomTimeInterval" />
+    <select id="timeIntervalSelect_@Model.Id" class="timeIntervalSelect form-select" asp-for="TimeInterval" asp-items="@Model.IntervalItems"></select>
+    <input id="input_timeIntervalSelect_@Model.Id" class="customTimeInterval form-control" placeholder="@TimeIntervalViewModel.CustomTemplate" style="display:none" asp-for="CustomTimeInterval" />
 </div>
 
 <script>
-    displaySelectedOption();
+    var interval_id = '#timeIntervalSelect_' + '@Model.Id';
 
-    var id = '@Model.Id';
-    var interval_id = `#timeIntervalSelect_${id}`;
-    var custom_val_id = `#customTimeInterval_${id}`;
-
-    $(interval_id).change(displaySelectedOption);
-
-    function displaySelectedOption() {
-        if ('@Model.CustomItemIsVisible' === "False") {
+    $(interval_id).change(function (select_obj) {
+        if ('@Model.CustomItemIsVisible' === "False")
             return;
-        }
 
-        if ($('option:selected', $(interval_id)).text() == '@TimeInterval.Custom') {
-            $(custom_val_id).show();
+        var select = select_obj.currentTarget;
+        var custom_input_id = `#input_${select.id}`;
+
+        if (select.options[select.selectedIndex].text == '@TimeInterval.Custom') {
+            $(custom_input_id).show();
         }
         else {
-            $(custom_val_id).hide();
+            $(custom_input_id).hide();
         }
-    }
+    });
+
+    $(interval_id).trigger("change");
 </script>
