@@ -368,14 +368,10 @@ namespace HSMServer.Controllers
         public async Task<IActionResult> GetFile([FromQuery(Name = "Selected")] string encodedId, [FromQuery] long dateTime = default)
         {
             var (_, path) = GetSensorProductAndPath(encodedId);
-            FileValue value = null;
-        
-            if (dateTime != default)
-                value = await GetFileByReceivingTimeTime(encodedId, dateTime);
-            else 
-                value = GetFileSensorValue(encodedId);
-            
-            if (value == null)
+
+            var value = await GetFileByReceivingTimeOrDefault(encodedId, dateTime);
+
+            if (value is null)
                 return _emptyResult;
 
             var fileName = $"{path.Replace('/', '_')}.{value.Extension}";
@@ -387,14 +383,10 @@ namespace HSMServer.Controllers
         public async Task<IActionResult> GetFileStream([FromQuery(Name = "Selected")] string encodedId, [FromQuery] long dateTime = default)
         {
             var (_, path) = GetSensorProductAndPath(encodedId);
-            FileValue value = null;
 
-            if (dateTime != default)
-                value = await GetFileByReceivingTimeTime(encodedId, dateTime);
-            else 
-                value = GetFileSensorValue(encodedId);
-            
-            if (value == null)
+            var value = await GetFileByReceivingTimeOrDefault(encodedId, dateTime);
+
+            if (value is null)
                 return _emptyResult;
 
             var fileContentsStream = new MemoryStream(value.Value);
@@ -416,13 +408,13 @@ namespace HSMServer.Controllers
         [HttpGet]
         public async Task<IActionResult> GetRecentFilesView([FromQuery] string fileId)
         {
-            var enumerator = _treeValuesCache.GetSensorValuesPage(SensorPathHelper.DecodeGuid(fileId),DateTime.MinValue, DateTime.MaxValue, 50);
-            var viewModel = await new HistoryValuesViewModel(fileId,6 , enumerator, GetLocalLastValue(fileId,DateTime.MinValue, DateTime.MaxValue)).Initialize();
-            
+            var enumerator = _treeValuesCache.GetSensorValuesPage(SensorPathHelper.DecodeGuid(fileId), DateTime.MinValue, DateTime.MaxValue, 20);
+            var viewModel = await new HistoryValuesViewModel(fileId, 6, enumerator, GetLocalLastValue(fileId, DateTime.MinValue, DateTime.MaxValue)).Initialize();
+
             _userManager[(HttpContext.User as User).Id].Pagination = viewModel;
-            return GetFileTable(viewModel);;
+            return GetFileTable(viewModel);
         }
-        
+
         private PartialViewResult GetFileTable(HistoryValuesViewModel viewModel) =>
             PartialView("FileAccorditions", viewModel);
 
@@ -431,11 +423,14 @@ namespace HSMServer.Controllers
         private FileValue GetFileSensorValue(string encodedId) =>
             _treeValuesCache.GetSensor(SensorPathHelper.DecodeGuid(encodedId)).LastValue as FileValue;
 
-        private async Task<FileValue> GetFileByReceivingTimeTime(string  encodedId ,long ticks)
+        private async Task<FileValue> GetFileByReceivingTimeOrDefault(string encodedId, long ticks = default)
         {
-            var enumerator = _treeValuesCache.GetSensorValuesPage(SensorPathHelper.DecodeGuid(encodedId),DateTime.MinValue, DateTime.MaxValue, 50);
-            var viewModel = await new HistoryValuesViewModel(encodedId,6 , enumerator, GetLocalLastValue(encodedId,DateTime.MinValue, DateTime.MaxValue)).Initialize();
-            
+            if (ticks == default)
+                return GetFileSensorValue(encodedId);
+
+            var enumerator = _treeValuesCache.GetSensorValuesPage(SensorPathHelper.DecodeGuid(encodedId), DateTime.MinValue, DateTime.MaxValue, 50);
+            var viewModel = await new HistoryValuesViewModel(encodedId, 6, enumerator, GetLocalLastValue(encodedId, DateTime.MinValue, DateTime.MaxValue)).Initialize();
+
             return viewModel.Pages[0].Cast<FileValue>().FirstOrDefault(file => file.ReceivingTime.Ticks == ticks);
         }
 
