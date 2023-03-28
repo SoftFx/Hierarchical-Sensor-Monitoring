@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc.Rendering;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.Linq;
+using HSMServer.Model.TreeViewModel;
 using CoreTimeInterval = HSMServer.Core.Model.TimeInterval;
 
 namespace HSMServer.Model
@@ -70,7 +71,7 @@ namespace HSMServer.Model
         // public constructor without parameters for post actions
         public TimeIntervalViewModel() { }
 
-        internal TimeIntervalViewModel(List<TimeInterval> intervals, string parentInterval = "")
+        internal TimeIntervalViewModel(List<TimeInterval> intervals, NodeViewModel node, string parentInterval = "")
         {
             IntervalItems = GetIntrevalItems(intervals);
             if (parentInterval is null)
@@ -84,7 +85,7 @@ namespace HSMServer.Model
             }
         }
 
-        internal TimeIntervalViewModel(TimeIntervalModel model, List<TimeInterval> intervals, string parentInterval = "") : this(intervals, parentInterval)
+        internal TimeIntervalViewModel(TimeIntervalModel model, List<TimeInterval> intervals,NodeViewModel node, string parentInterval = "") : this(intervals, node, parentInterval)
         {
             Update(model, parentInterval);
         }
