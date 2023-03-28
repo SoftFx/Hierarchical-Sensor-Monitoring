@@ -64,28 +64,49 @@ namespace HSMServer.Model
 
         public string DisplayInterval => TimeInterval.IsCustom() ? CustomTimeInterval : TimeInterval.GetDisplayName();
 
+        public string DisplayParentInterval = null;
 
+        
         // public constructor without parameters for post actions
         public TimeIntervalViewModel() { }
 
-        internal TimeIntervalViewModel(List<TimeInterval> intervals)
+        internal TimeIntervalViewModel(List<TimeInterval> intervals, string parentInterval = "")
         {
             IntervalItems = GetIntrevalItems(intervals);
+            if (parentInterval is null)
+            {
+                IntervalItems.RemoveAt(0);
+            }
+            else
+            {
+                IntervalItems[0].Text = $"From parent ({parentInterval})";
+                IntervalItems[0].Value = $"From parent ({parentInterval})";
+            }
         }
 
-        internal TimeIntervalViewModel(TimeIntervalModel model, List<TimeInterval> intervals) : this(intervals)
+        internal TimeIntervalViewModel(TimeIntervalModel model, List<TimeInterval> intervals, string parentInterval = "") : this(intervals, parentInterval)
         {
-            Update(model);
+            Update(model, parentInterval);
         }
 
 
-        internal void Update(TimeIntervalModel model)
+
+        internal void Update(TimeIntervalModel model, string parentInterval = "")
         {
             var interval = model?.TimeInterval ?? CoreTimeInterval.FromParent;
             var customPeriod = model?.CustomPeriod ?? 0L;
 
             TimeInterval = SetTimeInterval(interval, customPeriod);
             CustomTimeInterval = TimeSpanValue.TicksToString(customPeriod);
+            
+            if (DisplayInterval == TimeInterval.FromParent.GetDisplayName())
+            {
+                if (parentInterval is null)
+                    DisplayParentInterval = TimeInterval.None.GetDisplayName();
+                
+                if (parentInterval is not null and not "")
+                    DisplayParentInterval = $"From parent ({parentInterval})";
+            }
         }
 
         internal TimeIntervalModel ToModel() => new(GetIntervalOption(), GetCustomIntervalTicks());
