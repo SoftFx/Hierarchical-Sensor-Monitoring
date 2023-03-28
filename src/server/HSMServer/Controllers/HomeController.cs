@@ -408,10 +408,9 @@ namespace HSMServer.Controllers
         [HttpGet]
         public async Task<IActionResult> GetRecentFilesView([FromQuery] string fileId)
         {
-            var enumerator = _treeValuesCache.GetSensorValuesPage(SensorPathHelper.DecodeGuid(fileId), DateTime.MinValue, DateTime.MaxValue, 20);
-            var viewModel = await new HistoryValuesViewModel(fileId, 6, enumerator, GetLocalLastValue(fileId, DateTime.MinValue, DateTime.MaxValue)).Initialize();
-
+            var viewModel = await GetFileHistory(fileId);
             _userManager[(HttpContext.User as User).Id].Pagination = viewModel;
+            
             return GetFileTable(viewModel);
         }
 
@@ -423,15 +422,14 @@ namespace HSMServer.Controllers
         private FileValue GetFileSensorValue(string encodedId) =>
             _treeValuesCache.GetSensor(SensorPathHelper.DecodeGuid(encodedId)).LastValue as FileValue;
 
-        private async Task<FileValue> GetFileByReceivingTimeOrDefault(string encodedId, long ticks = default)
+        private async Task<FileValue> GetFileByReceivingTimeOrDefault(string encodedId, long ticks = default) => ticks == default 
+            ? GetFileSensorValue(encodedId) 
+            : (await GetFileHistory(encodedId)).Pages[0].Cast<FileValue>().FirstOrDefault(file => file.ReceivingTime.Ticks == ticks);
+
+        private async Task<HistoryValuesViewModel> GetFileHistory(string encodedId)
         {
-            if (ticks == default)
-                return GetFileSensorValue(encodedId);
-
-            var enumerator = _treeValuesCache.GetSensorValuesPage(SensorPathHelper.DecodeGuid(encodedId), DateTime.MinValue, DateTime.MaxValue, 50);
-            var viewModel = await new HistoryValuesViewModel(encodedId, 6, enumerator, GetLocalLastValue(encodedId, DateTime.MinValue, DateTime.MaxValue)).Initialize();
-
-            return viewModel.Pages[0].Cast<FileValue>().FirstOrDefault(file => file.ReceivingTime.Ticks == ticks);
+            var enumerator = _treeValuesCache.GetSensorValuesPage(SensorPathHelper.DecodeGuid(encodedId), DateTime.MinValue, DateTime.MaxValue, 20);
+            return await new HistoryValuesViewModel(encodedId, 6, enumerator, GetLocalLastValue(encodedId, DateTime.MinValue, DateTime.MaxValue)).Initialize();
         }
 
         #endregion
