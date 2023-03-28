@@ -10,7 +10,7 @@ namespace HSMServer.Model.Folders.ViewModels
     {
         public List<ProductNodeViewModel> DisplayProducts { get; } = new();
 
-        public List<Guid> Products { get; set; }
+        public List<Guid> Products { get; set; } = new();
 
 
         public required List<ProductNodeViewModel> AvailableProducts { get; init; }
