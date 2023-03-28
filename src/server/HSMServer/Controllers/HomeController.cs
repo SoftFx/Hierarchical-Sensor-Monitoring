@@ -415,7 +415,7 @@ namespace HSMServer.Controllers
         }
 
         private PartialViewResult GetFileTable(HistoryValuesViewModel viewModel) =>
-            PartialView("FileAccorditions", viewModel);
+            PartialView("_FileAccordions", viewModel);
 
         public IActionResult FilePreview() => View("FilePreview");
 

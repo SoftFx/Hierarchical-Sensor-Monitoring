@@ -43,7 +43,7 @@
                                         Size: @value.FileSizeToNormalString()
                                     </span>
                                     <span>
-                                        Time: @value.ReceivingTime.ToDefaultFormat()
+                                        @value.ReceivingTime.ToDefaultFormat()
                                     </span>
                                 </div>
                             </div>
@@ -53,22 +53,32 @@
             </h2>
             <div id='collapse_@i' class='accordion-collapse collapse text-break' aria-labelledby='heading_@i' data-bs-parent='#sensorData_@i'>
                 <div class='accordion-body p-3'>
-                    <div class="row justify-content-end">
-                        <div class="d-flex flex-row-reverse">
-                            <input style='display: none;' id='fileType_@i' value='@value.Name.@value.Extension'/>
-                                <a id='button_download_@i' onclick="fileDownload('@value.ReceivingTime.Ticks')" class='btn btn-outline-secondary d-flex justify-content-center align-items-center mx-1' style="max-width: 8rem; width: 7rem;" title='Download'>
-                                    <i class='fas fa-file-download pt-1 pe-1' style="width: 1rem;height: 1rem"></i>
-                                    <span style="font-size: smaller">Download</span>
-                                </a>
-                                <a id='button_view_@i' onclick="fileNewTabView('@value.ReceivingTime.Ticks', '@value.Extension')" class='btn btn-outline-secondary d-flex justify-content-center align-items-center mx-1' style="max-width: 8rem; width: 7rem;" title='Preview'>
-                                    <i class='fas fa-eye pt-1 pe-1' style="width: 1rem;height: 1rem"></i>
-                                    <span style="font-size: smaller"> Preview</span>
-                                </a>
+                    <div class="row">
+                        <div class="d-flex col-6">
+                            <div class="align-self-center text-end">
+                                @if (isEnabledPreview)
+                                {
+                                    <h5 class="mb-0" id="preview-header">Content:</h5>
+                                }
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="row justify-content-end">
+                                <div class="d-flex flex-row-reverse">
+                                    <input style='display: none;' id='fileType_@i' value='@value.Name.@value.Extension'/>
+                                    <a id='button_download_@i' onclick="fileDownload('@value.ReceivingTime.Ticks')" class='btn btn-outline-secondary d-flex justify-content-center align-items-center mx-1' style="max-width: 8rem; width: 7rem;" title='Download'>
+                                        <i class='fas fa-file-download pe-1' style="width: 1rem;height: 1rem"></i>
+                                        <span style="font-size: smaller">Download</span>
+                                    </a>
+                                    <a id='button_view_@i' onclick="fileNewTabView('@value.ReceivingTime.Ticks', '@value.Extension')" class='btn btn-outline-secondary d-flex justify-content-center align-items-center mx-1' style="max-width: 8rem; width: 7rem;" title='Preview'>
+                                        <i class='fas fa-eye pe-1' style="width: 1rem;height: 1rem"></i>
+                                        <span style="font-size: smaller"> Preview</span>
+                                    </a>
+                                </div>
+                            </div>
                         </div>
                     </div>
-
                     <div class="d-grid d-none pt-3" id="preview_@i">
-                        <h5 id="preview-header">Content:</h5>
                         <div style="overflow-x: auto" id="preview-content_@i"></div>
                     </div>
                 </div>
