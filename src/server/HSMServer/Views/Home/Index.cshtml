@@ -74,7 +74,7 @@
 <div id="mainContainer" class="container mw-100 d-inline-flex flex-wrap flex-lg-nowrap mt-1 hidden_element ms-0 ps-0">
     <div>
         <div class="d-flex my-1">
-            <div class="d-flex me-auto">
+            <div class="d-flex flex-fill me-auto">
                 <button id="show" type="button" class="btn btn-sm btn-outline-primary ms-4 position-relative" style="height: 2.5rem">
                     <i class="fa-solid fa-filter"></i>
                     Filters
@@ -93,6 +93,9 @@
                 {
                     <span class="enabled-filters-message text-break">@user.TreeFilter.EnabledFiltersMessage</span>
                 }
+                <div class="flex-fill pe-3 align-self-center text-end">
+                    <i onclick="collapseTree()" class="fa-regular fa-square-minus" style="color: #0b5fef; cursor: pointer" title="Collapse Tree"></i>
+                </div>
             </div>
         </div>
         <div class="d-flex justify-content-center">
@@ -241,6 +244,10 @@
         $('#updateTime').append('Update Time: ' + new Date().toUTCString());
     }
 
+    function collapseTree(){
+        $('#jstree').jstree('close_all');
+    }
+    
     var clipboard = new ClipboardJS('[id^="copy_"]', {
         container: document.getElementById('accessKeys_modal')
     });
