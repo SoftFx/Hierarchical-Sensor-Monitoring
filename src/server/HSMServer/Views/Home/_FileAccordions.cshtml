@@ -117,7 +117,7 @@
             success: function (file){
                 let dataSet = []
                 if (extension === 'csv') {
-                    file.split('\n').forEach( el =>{
+                    file.split('\n').forEach( el => {
                         let splitted = el.split(',');
                         
                         let isEmpty = splitted.every(x => {
@@ -132,18 +132,18 @@
                     let columns = [];
                     
                     dataSet[0].forEach(el => {
-                        columns.push({"tittle" : el})
+                        columns.push({"title" : el})
                     });
                     
-                     $(`#preview_${currentId}`).removeClass('d-none container');
-                     $(`#preview-content_${currentId}`).html( `<table class="display w-100" id="example_${currentId}"></table>` );
+                    $(`#preview_${currentId}`).removeClass('d-none container');
+                    $(`#preview-content_${currentId}`).html( `<table class="display w-100" id='example_${currentId}'></table>` );
                                          
-                     $(`#example_${currentId}`).dataTable( {
-                        "data": dataSet.splice(1),
-                        "columns": columns,
-                        "lengthMenu": [ [5, 20, 50, 100], [5, 20, 50, 100] ],
-                        "pageLength": 20
-                     });  
+                    $(`#example_${currentId}`).dataTable( {
+                       "data": dataSet.splice(1),
+                       "columns": columns,
+                       "lengthMenu": [ [5, 20, 50, 100], [5, 20, 50, 100] ],
+                       "pageLength": 20
+                    });  
                 }
                 else if (extension === 'txt') {
                     $(`#preview_${currentId}`).removeClass('d-none container');
