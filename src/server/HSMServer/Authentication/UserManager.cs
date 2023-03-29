@@ -90,11 +90,11 @@ namespace HSMServer.Authentication
             if (IsEmpty)
                 return result;
 
-            foreach (var user in this)
+            foreach (var (_, user) in this)
             {
-                var pair = user.Value.ProductsRoles?.FirstOrDefault(r => r.Item1.Equals(productId));
+                var pair = user.ProductsRoles?.FirstOrDefault(r => r.Item1.Equals(productId));
                 if (pair != null && pair.Value.Item1 != Guid.Empty)
-                    result.Add(user.Value);
+                    result.Add(user);
             }
 
             return result;
@@ -107,9 +107,9 @@ namespace HSMServer.Authentication
             if (IsEmpty)
                 return result;
 
-            foreach (var user in this)
-                if (ProductRoleHelper.IsManager(productId, user.Value.ProductsRoles))
-                    result.Add(user.Value);
+            foreach (var (_, user) in this)
+                if (ProductRoleHelper.IsManager(productId, user.ProductsRoles))
+                    result.Add(user);
 
             return result;
         }
@@ -142,13 +142,13 @@ namespace HSMServer.Authentication
             {
                 var updatedUsers = new List<User>(1 << 2);
 
-                foreach (var user in this)
+                foreach (var (_, user) in this)
                 {
-                    var removedRolesCount = user.Value.ProductsRoles.RemoveAll(role => role.Item1 == product.Id);
+                    var removedRolesCount = user.ProductsRoles.RemoveAll(role => role.Item1 == product.Id);
                     if (removedRolesCount == 0)
                         continue;
 
-                    updatedUsers.Add(user.Value);
+                    updatedUsers.Add(user);
                 }
 
                 foreach (var userToEdit in updatedUsers)

@@ -5,18 +5,18 @@ using System.Drawing;
 
 namespace HSMServer.Model.Folders
 {
-    internal record FolderAdd
+    public record FolderAdd
     {
-        internal List<ProductNodeViewModel> Products { get; init; }
+        public List<ProductNodeViewModel> Products { get; init; }
 
-        internal string Name { get; init; }
+        public string Name { get; init; }
 
-        internal Guid AuthorId { get; init; }
+        public Guid AuthorId { get; init; }
 
-        internal string Description { get; init; }
+        public string Description { get; init; }
 
-        internal Color Color { get; init; }
+        public Color Color { get; init; }
 
-        internal string Author { get; init; }
+        public string Author { get; init; }
     }
 }

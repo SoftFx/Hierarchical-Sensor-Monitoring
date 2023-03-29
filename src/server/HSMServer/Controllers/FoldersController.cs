@@ -1,6 +1,5 @@
 ﻿using HSMServer.Authentication;
 using HSMServer.Core.Cache;
-using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Folders;
 using HSMServer.Model.Authentication;
 using HSMServer.Model.Folders;
@@ -55,9 +54,9 @@ namespace HSMServer.Controllers
             if (await _folderManager.TryUpdate(folder.ToFolderUpdate()))
             {
                 foreach (var product in oldFolderProducts.Except(existingFolder.Products))
-                    _cache.UpdateProduct(new ProductUpdate() { Id = product.Id, FolderId = Guid.Empty });
+                    _cache.RemoveProductFolder(product.Id);
                 foreach (var product in existingFolder.Products.Except(oldFolderProducts))
-                    _cache.UpdateProduct(new ProductUpdate() { Id = product.Id, FolderId = existingFolder.Id });
+                    _cache.UpdateProductFolder(product.Id, existingFolder.Id);
             }
 
             return View(nameof(EditFolder), BuildEditFolder(existingFolder.Id));
@@ -73,14 +72,13 @@ namespace HSMServer.Controllers
                 return View(nameof(EditFolder), folder);
             }
 
-            var newFolder = new FolderModel(folder.ToFolderAdd(HttpContext.User as User, _treeViewModel));
-
-            if (await _folderManager.TryAdd(newFolder))
-                foreach (var product in newFolder.Products)
-                    _cache.UpdateProduct(new ProductUpdate() { Id = product.Id, FolderId = newFolder.Id });
+            var newFolder = await _folderManager.TryAddFolder(folder.ToFolderAdd(HttpContext.User as User, _treeViewModel));
 
             return View(nameof(EditFolder), BuildEditFolder(newFolder.Id));
         }
+
+        [HttpPost]
+        public Task RemoveFolder(Guid folderId) => _folderManager.TryRemoveFolder(folderId);
 
 
         [HttpGet]

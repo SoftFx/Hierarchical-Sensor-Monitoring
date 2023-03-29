@@ -12,9 +12,11 @@ namespace HSMServer.Folders
         FolderModel this[string name] { get; }
 
 
-        Task<bool> TryAdd(FolderModel folder);
+        Task<FolderModel> TryAddFolder(FolderAdd folderAdd);
 
         Task<bool> TryUpdate(FolderUpdate update);
+
+        Task<bool> TryRemoveFolder(Guid folderId);
 
         List<FolderModel> GetFolders();
 
