@@ -45,7 +45,7 @@
                 <td class="w-25">
                     Expected update interval
                     <i class='fas fa-question-circle' title='Time format: dd.hh:mm:ss min value 00:01:00.
-If the sensor doesn`t receive new data within the specified time interval, a notification will be sent'></i>
+If the sensor doesn`t receive new data within the specified time interval, a notification sends'></i>
                 </td>
                 <td id="expectedUpdateInterval_@(Model.EncodedId)">
                     <label id="labelInterval" class="form-control naked-text">@Model.ExpectedUpdateInterval.DisplayInterval</label>
@@ -58,7 +58,7 @@ If the sensor doesn`t receive new data within the specified time interval, a not
                 <td class="w-25">
                     Sensitivity interval
                     <i class='fas fa-question-circle' title='Time format: dd.hh:mm:ss min value 00:01:00.
-If after the specified time inverval the sensor doesn`t return to Ok status, a notification will be sent'></i>
+If the sensor doesn`t return to Ok status after the specified time inverval, a notification sends'></i>
                 </td>
                 <td id="restorePolicy_@(Model.EncodedId)">
                     <label id="labelRestoreInterval" class="form-control naked-text">@Model.SensorRestorePolicy.DisplayInterval</label>
