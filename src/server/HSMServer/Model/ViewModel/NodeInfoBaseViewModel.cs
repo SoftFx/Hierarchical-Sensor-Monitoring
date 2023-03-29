@@ -44,14 +44,14 @@ namespace HSMServer.Model.ViewModel
             EncodedId = model.EncodedId;
             Description = model.Description;
 
-            ExpectedUpdateInterval = new(model.ExpectedUpdateInterval.ToModel(), model.Parent is null ? _predefinedIntervals.GetRange(1, _predefinedIntervals.Count - 1) : _predefinedIntervals, () =>
+            ExpectedUpdateInterval = new(model.ExpectedUpdateInterval.ToModel(), _predefinedIntervals, () =>
             {
                 while (model.Parent?.ExpectedUpdateInterval?.TimeInterval is TimeInterval.FromParent)
                     model= model.Parent;
                 
                 return model.Parent?.ExpectedUpdateInterval;
             });
-            SensorRestorePolicy = new(model.SensorRestorePolicy.ToModel(), model.Parent is null ? _predefinedIntervals.GetRange(1, _predefinedIntervals.Count - 1) : _predefinedIntervals, () =>
+            SensorRestorePolicy = new(model.SensorRestorePolicy.ToModel(), _predefinedIntervals, () =>
             {
                 while (model.Parent?.SensorRestorePolicy?.TimeInterval is TimeInterval.FromParent)
                     model= model.Parent;

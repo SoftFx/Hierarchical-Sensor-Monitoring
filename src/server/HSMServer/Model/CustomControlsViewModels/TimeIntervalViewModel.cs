@@ -47,6 +47,13 @@ namespace HSMServer.Model
     public record TimeIntervalViewModel
     {
         public const string CustomTemplate = "dd.HH:mm:ss";
+        
+        
+        private readonly Func<TimeIntervalViewModel> _getParentInterval;
+
+        private TimeIntervalViewModel _parentIntervalValue => _getParentInterval?.Invoke();
+
+        private string _parentInterval => _parentIntervalValue?.DisplayInterval ?? string.Empty;
 
         private static long _id = 0L;
 
@@ -55,35 +62,31 @@ namespace HSMServer.Model
 
         public string Id { get; } = $"{_id++}";
 
-
         public bool CustomItemIsVisible { get; init; } = true;
 
-
         public TimeInterval TimeInterval { get; set; }
-
-        private Func<TimeIntervalViewModel> ParentInterval { get; set; }
         
         public string CustomTimeInterval { get; set; }
 
-        public string DisplayInterval => TimeInterval.IsCustom() ? CustomTimeInterval : TimeInterval.GetDisplayName();
-
-        public string DisplayParentInterval = null;
+        public string DisplayInterval => TimeInterval.IsCustom() ? CustomTimeInterval : _parentIntervalValue is not null ? _parentInterval : TimeInterval.GetDisplayName();
 
         
         // public constructor without parameters for post actions
         public TimeIntervalViewModel() { }
 
-        internal TimeIntervalViewModel(List<TimeInterval> intervals, Func<TimeIntervalViewModel> parentInterval = null)
+        internal TimeIntervalViewModel(List<TimeInterval> intervals)
         {
             IntervalItems = GetIntrevalItems(intervals);
-            ParentInterval = parentInterval;
         }
 
-        internal TimeIntervalViewModel(TimeIntervalModel model, List<TimeInterval> intervals, Func<TimeIntervalViewModel> parentInterval) : this(intervals, parentInterval)
+        internal TimeIntervalViewModel(TimeIntervalModel model, List<TimeInterval> intervals, Func<TimeIntervalViewModel> getParentInterval) : this(intervals)
         {
+            _getParentInterval = getParentInterval;
+            if (_parentIntervalValue is null)
+                IntervalItems.RemoveAt(0);
+
             Update(model);
         }
-
 
 
         internal void Update(TimeIntervalModel model)
@@ -93,18 +96,6 @@ namespace HSMServer.Model
 
             TimeInterval = SetTimeInterval(interval, customPeriod);
             CustomTimeInterval = TimeSpanValue.TicksToString(customPeriod);
-
-            var parentInterval = ParentInterval?.Invoke();
-
-            if (parentInterval is not null && TimeInterval == TimeInterval.FromParent)
-            {
-                DisplayParentInterval = $"From parent({parentInterval.DisplayInterval})";
-                IntervalItems[0].Text = DisplayParentInterval;
-                IntervalItems[0].Value = DisplayParentInterval;
-            }
-
-            if (parentInterval is null && TimeInterval == TimeInterval.FromParent)
-                TimeInterval = TimeInterval.None;
         }
 
         internal TimeIntervalModel ToModel() => new(GetIntervalOption(), GetCustomIntervalTicks());
