@@ -26,7 +26,7 @@ namespace HSMServer.Model.Folders.ViewModels
 
         internal void FillFolderProducts(List<ProductNodeViewModel> folderProducts)
         {
-            DisplayProducts.AddRange(folderProducts);
+            DisplayProducts.AddRange(folderProducts.OrderBy(p => p.Name));
             Products = DisplayProducts.Select(p => p.Id).ToList();
         }
 

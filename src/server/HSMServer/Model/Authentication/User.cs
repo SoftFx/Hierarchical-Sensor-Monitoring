@@ -23,7 +23,7 @@ namespace HSMServer.Model.Authentication
 
         public NotificationSettings Notifications { get; init; }
 
-        public List<(Guid, ProductRoleEnum)> ProductsRoles { get; set; }
+        public List<(Guid, ProductRoleEnum)> ProductsRoles { get; set; } = new();
 
         public Dictionary<Guid, ProductRoleEnum> FoldersRoles { get; } = new();
 
@@ -41,7 +41,6 @@ namespace HSMServer.Model.Authentication
         public User()
         {
             Id = Guid.NewGuid();
-            ProductsRoles = new();
             Notifications = new();
             TreeFilter = new();
         }
@@ -55,12 +54,8 @@ namespace HSMServer.Model.Authentication
             Password = entity.Password;
             IsAdmin = entity.IsAdmin;
 
-            ProductsRoles = new List<(Guid, ProductRoleEnum)>();
             if (entity.ProductsRoles != null && entity.ProductsRoles.Any())
-            {
-                ProductsRoles.AddRange(entity.ProductsRoles.Select(
-                    r => (Guid.Parse(r.Key), (ProductRoleEnum)r.Value)));
-            }
+                ProductsRoles.AddRange(entity.ProductsRoles.Select(r => (Guid.Parse(r.Key), (ProductRoleEnum)r.Value)));
 
             if (entity.FolderRoles != null)
                 foreach (var (folderId, role) in entity.FolderRoles)
@@ -79,10 +74,10 @@ namespace HSMServer.Model.Authentication
         }
 
         public bool IsProductAvailable(Guid productId) =>
-            IsAdmin || (ProductsRoles?.Any(x => x.Item1.Equals(productId)) ?? false);
+            IsAdmin || ProductsRoles.Any(x => x.Item1.Equals(productId));
 
         public bool IsManager(Guid productId) =>
-            IsAdmin || (ProductsRoles?.Any(x => x == (productId, ProductRoleEnum.ProductManager)) ?? false);
+            IsAdmin || ProductsRoles.Any(x => x == (productId, ProductRoleEnum.ProductManager));
 
         public UserEntity ToEntity() =>
             new()
@@ -92,7 +87,7 @@ namespace HSMServer.Model.Authentication
                 Id = Id,
                 IsAdmin = IsAdmin,
                 FolderRoles = FoldersRoles.ToDictionary(f => f.Key.ToString(), f => (byte)f.Value),
-                ProductsRoles = ProductsRoles?.Select(r => new KeyValuePair<string, byte>(r.Item1.ToString(), (byte)r.Item2))?.ToList(),
+                ProductsRoles = ProductsRoles.Select(r => new KeyValuePair<string, byte>(r.Item1.ToString(), (byte)r.Item2)).ToList(),
                 NotificationSettings = Notifications.ToEntity(),
                 TreeFilter = TreeFilter,
             };

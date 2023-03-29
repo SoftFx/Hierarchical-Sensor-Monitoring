@@ -55,7 +55,7 @@ namespace HSMServer.Folders
 
             if (result)
                 foreach (var product in folder.Products)
-                    _cache.UpdateProductFolder(product.Id, folder.Id);
+                    _cache.AddProductFolder(product.Id, folder.Id);
 
             return result ? folder : null;
         }

@@ -98,10 +98,10 @@ namespace HSMServer.Core.Cache
             NotifyAllProductChildrenAboutUpdate(product, sensorsOldStatuses);
         }
 
-        public void UpdateProductFolder(Guid productId, Guid folderId) =>
+        public void AddProductFolder(Guid productId, Guid folderId) =>
             UpdateProduct(new ProductUpdate() { Id = productId, FolderId = folderId });
 
-        public void RemoveProductFolder(Guid productId) => UpdateProductFolder(productId, Guid.Empty);
+        public void RemoveProductFolder(Guid productId) => AddProductFolder(productId, Guid.Empty);
 
         public void RemoveProduct(Guid productId)
         {
