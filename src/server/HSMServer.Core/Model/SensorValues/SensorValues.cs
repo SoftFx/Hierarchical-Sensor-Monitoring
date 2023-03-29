@@ -85,7 +85,7 @@ namespace HSMServer.Core.Model
             return $"File size: {sizeString}. {fileNameString}";
         }
 
-        private string FileSizeToNormalString()
+        public string FileSizeToNormalString()
         {
             const int maxGBCounter = 3;
 
