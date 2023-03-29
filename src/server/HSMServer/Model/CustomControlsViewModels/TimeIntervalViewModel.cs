@@ -102,6 +102,9 @@ namespace HSMServer.Model
                 IntervalItems[0].Text = DisplayParentInterval;
                 IntervalItems[0].Value = DisplayParentInterval;
             }
+
+            if (parentInterval is null && TimeInterval == TimeInterval.FromParent)
+                TimeInterval = TimeInterval.None;
         }
 
         internal TimeIntervalModel ToModel() => new(GetIntervalOption(), GetCustomIntervalTicks());
