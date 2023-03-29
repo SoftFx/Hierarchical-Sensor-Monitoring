@@ -71,10 +71,11 @@ namespace HSMServer.Model
         // public constructor without parameters for post actions
         public TimeIntervalViewModel() { }
 
-        internal TimeIntervalViewModel(List<TimeInterval> intervals, NodeViewModel node, string parentInterval = "")
+        internal TimeIntervalViewModel(List<TimeInterval> intervals, NodeViewModel node = null, string parentInterval = "")
         {
             IntervalItems = GetIntrevalItems(intervals);
-            if (parentInterval is null)
+
+            if (node.Parent is null)
             {
                 IntervalItems.RemoveAt(0);
             }
