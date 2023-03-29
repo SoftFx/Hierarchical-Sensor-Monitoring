@@ -399,10 +399,8 @@ namespace HSMServer.Controllers
         public ActionResult<FileValue> GetFileInfo([FromQuery(Name = "Selected")] string encodedId)
         {
             var value = GetFileSensorValue(encodedId);
-            if (value == null)
-                return _emptyResult;
 
-            return value;
+            return value is null ? _emptyResult : value;
         }
 
         [HttpGet]
