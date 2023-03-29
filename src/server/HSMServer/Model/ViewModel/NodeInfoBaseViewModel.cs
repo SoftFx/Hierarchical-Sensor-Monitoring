@@ -1,6 +1,5 @@
 ﻿using HSMServer.Model.TreeViewModel;
 using System.Collections.Generic;
-using HSMServer.Core.Model.Policies;
 
 
 namespace HSMServer.Model.ViewModel
@@ -45,32 +44,20 @@ namespace HSMServer.Model.ViewModel
             EncodedId = model.EncodedId;
             Description = model.Description;
 
-            ExpectedUpdateInterval = new(model.ExpectedUpdateInterval.ToModel(), _predefinedIntervals,model, model.GetParentInterval(nameof(ExpectedUpdateIntervalPolicy)));
-            SensorRestorePolicy = new(model.SensorRestorePolicy.ToModel(), _predefinedIntervals,model ,model.GetParentInterval(nameof(RestoreSensorPolicyBase)));
-        }
-    }
-
-    public static class TimeIntervalExtension
-    {
-        public static string GetParentInterval(this NodeViewModel model, string policy)
-        {
-            while (true)
+            ExpectedUpdateInterval = new(model.ExpectedUpdateInterval.ToModel(), model.Parent is null ? _predefinedIntervals.GetRange(1, _predefinedIntervals.Count - 1) : _predefinedIntervals, () =>
             {
-                if (model.Parent is null) 
-                    return null;
-
-                switch (policy)
-                {
-                    case nameof(RestoreSensorPolicyBase):
-                        if (model.Parent.SensorRestorePolicy.TimeInterval is not TimeInterval.FromParent) return model.Parent.SensorRestorePolicy.DisplayInterval;
-                        break;
-                    case nameof(ExpectedUpdateIntervalPolicy):
-                        if (model.Parent.ExpectedUpdateInterval.TimeInterval is not TimeInterval.FromParent) return model.Parent.ExpectedUpdateInterval.DisplayInterval;
-                        break;
-                }
-
-                model = model.Parent;
-            }
+                while (model.Parent?.ExpectedUpdateInterval?.TimeInterval is TimeInterval.FromParent)
+                    model= model.Parent;
+                
+                return model.Parent?.ExpectedUpdateInterval;
+            });
+            SensorRestorePolicy = new(model.SensorRestorePolicy.ToModel(), model.Parent is null ? _predefinedIntervals.GetRange(1, _predefinedIntervals.Count - 1) : _predefinedIntervals, () =>
+            {
+                while (model.Parent?.SensorRestorePolicy?.TimeInterval is TimeInterval.FromParent)
+                    model= model.Parent;
+                
+                return model.Parent?.SensorRestorePolicy;
+            });
         }
     }
 }

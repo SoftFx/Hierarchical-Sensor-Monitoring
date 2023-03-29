@@ -1,10 +1,10 @@
-﻿using HSMServer.Core.Model;
+﻿using System;
+using HSMServer.Core.Model;
 using HSMServer.Extensions;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.Linq;
-using HSMServer.Model.TreeViewModel;
 using CoreTimeInterval = HSMServer.Core.Model.TimeInterval;
 
 namespace HSMServer.Model
@@ -61,7 +61,7 @@ namespace HSMServer.Model
 
         public TimeInterval TimeInterval { get; set; }
 
-        private NodeViewModel Parent { get; set; }
+        private Func<TimeIntervalViewModel> ParentInterval { get; set; }
         
         public string CustomTimeInterval { get; set; }
 
@@ -73,60 +73,35 @@ namespace HSMServer.Model
         // public constructor without parameters for post actions
         public TimeIntervalViewModel() { }
 
-        internal TimeIntervalViewModel(List<TimeInterval> intervals, NodeViewModel node = null, string parentInterval = "")
+        internal TimeIntervalViewModel(List<TimeInterval> intervals, Func<TimeIntervalViewModel> parentInterval = null)
         {
             IntervalItems = GetIntrevalItems(intervals);
-            Parent = node;
-           
-            // else
-            // {
-            //     IntervalItems[0].Text = $"From parent ({parentInterval})";
-            //     IntervalItems[0].Value = $"From parent ({parentInterval})";
-            // }
+            ParentInterval = parentInterval;
         }
 
-        internal TimeIntervalViewModel(TimeIntervalModel model, List<TimeInterval> intervals,NodeViewModel node, string parentInterval = "") : this(intervals, node, parentInterval)
+        internal TimeIntervalViewModel(TimeIntervalModel model, List<TimeInterval> intervals, Func<TimeIntervalViewModel> parentInterval) : this(intervals, parentInterval)
         {
-            Update(model, parentInterval);
+            Update(model);
         }
 
 
 
-        internal void Update(TimeIntervalModel model, string parentInterval = "")
+        internal void Update(TimeIntervalModel model)
         {
             var interval = model?.TimeInterval ?? CoreTimeInterval.FromParent;
             var customPeriod = model?.CustomPeriod ?? 0L;
 
             TimeInterval = SetTimeInterval(interval, customPeriod);
             CustomTimeInterval = TimeSpanValue.TicksToString(customPeriod);
-            
-            if (Parent?.Parent is null)
-            {
-                if (IntervalItems?.Count > 0)
-                    IntervalItems.RemoveAt(0);
-                DisplayParentInterval = TimeInterval == TimeInterval.FromParent ? TimeInterval.None.GetDisplayName() : TimeInterval.GetDisplayName();
-            }
-            else
-            {
-                if (string.IsNullOrEmpty(parentInterval))
-                    parentInterval = "Never";
-                
-                if (TimeInterval == TimeInterval.FromParent)
-                {
-                    DisplayParentInterval = $"From parent ({parentInterval})";
-                }
 
-                IntervalItems[0].Text = $"From parent ({parentInterval})";
-                IntervalItems[0].Value = $"From parent ({parentInterval})";
+            var parentInterval = ParentInterval?.Invoke();
+
+            if (parentInterval is not null && TimeInterval == TimeInterval.FromParent)
+            {
+                DisplayParentInterval = $"From parent({parentInterval.DisplayInterval})";
+                IntervalItems[0].Text = DisplayParentInterval;
+                IntervalItems[0].Value = DisplayParentInterval;
             }
-            // if (DisplayInterval == TimeInterval.FromParent.GetDisplayName())
-            // {
-            //     if (parentInterval is null)
-            //         DisplayParentInterval = TimeInterval.None.GetDisplayName();
-            //     
-            //     if (parentInterval is not null and not "")
-            //         DisplayParentInterval = $"From parent ({parentInterval})";
-            // }
         }
 
         internal TimeIntervalModel ToModel() => new(GetIntervalOption(), GetCustomIntervalTicks());
