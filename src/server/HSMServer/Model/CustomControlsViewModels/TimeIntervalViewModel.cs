@@ -54,7 +54,6 @@ namespace HSMServer.Model
 
         private bool HasIntervalValue => _getParentInterval?.Invoke() is null;
 
-        private string ParentInterval => HasIntervalValue ? _getParentInterval?.Invoke().DisplayInterval : string.Empty;
 
         private static long _id = 0L;
 
@@ -72,7 +71,7 @@ namespace HSMServer.Model
         public string DisplayInterval => TimeInterval.IsCustom() switch
         {
             true => CustomTimeInterval,
-            false => HasIntervalValue ? ParentInterval : TimeInterval.GetDisplayName()
+            false => HasIntervalValue ? _getParentInterval?.Invoke().DisplayInterval : TimeInterval.GetDisplayName()
         };
 
         
