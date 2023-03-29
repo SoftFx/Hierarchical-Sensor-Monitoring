@@ -61,6 +61,8 @@ namespace HSMServer.Model
 
         public TimeInterval TimeInterval { get; set; }
 
+        private NodeViewModel Parent { get; set; }
+        
         public string CustomTimeInterval { get; set; }
 
         public string DisplayInterval => TimeInterval.IsCustom() ? CustomTimeInterval : TimeInterval.GetDisplayName();
@@ -74,16 +76,13 @@ namespace HSMServer.Model
         internal TimeIntervalViewModel(List<TimeInterval> intervals, NodeViewModel node = null, string parentInterval = "")
         {
             IntervalItems = GetIntrevalItems(intervals);
-
-            if (node.Parent is null)
-            {
-                IntervalItems.RemoveAt(0);
-            }
-            else
-            {
-                IntervalItems[0].Text = $"From parent ({parentInterval})";
-                IntervalItems[0].Value = $"From parent ({parentInterval})";
-            }
+            Parent = node;
+           
+            // else
+            // {
+            //     IntervalItems[0].Text = $"From parent ({parentInterval})";
+            //     IntervalItems[0].Value = $"From parent ({parentInterval})";
+            // }
         }
 
         internal TimeIntervalViewModel(TimeIntervalModel model, List<TimeInterval> intervals,NodeViewModel node, string parentInterval = "") : this(intervals, node, parentInterval)
@@ -101,14 +100,33 @@ namespace HSMServer.Model
             TimeInterval = SetTimeInterval(interval, customPeriod);
             CustomTimeInterval = TimeSpanValue.TicksToString(customPeriod);
             
-            if (DisplayInterval == TimeInterval.FromParent.GetDisplayName())
+            if (Parent?.Parent is null)
             {
-                if (parentInterval is null)
-                    DisplayParentInterval = TimeInterval.None.GetDisplayName();
-                
-                if (parentInterval is not null and not "")
-                    DisplayParentInterval = $"From parent ({parentInterval})";
+                if (IntervalItems?.Count > 0)
+                    IntervalItems.RemoveAt(0);
+                DisplayParentInterval = TimeInterval == TimeInterval.FromParent ? TimeInterval.None.GetDisplayName() : TimeInterval.GetDisplayName();
             }
+            else
+            {
+                if (string.IsNullOrEmpty(parentInterval))
+                    parentInterval = "Never";
+                
+                if (TimeInterval == TimeInterval.FromParent)
+                {
+                    DisplayParentInterval = $"From parent ({parentInterval})";
+                }
+
+                IntervalItems[0].Text = $"From parent ({parentInterval})";
+                IntervalItems[0].Value = $"From parent ({parentInterval})";
+            }
+            // if (DisplayInterval == TimeInterval.FromParent.GetDisplayName())
+            // {
+            //     if (parentInterval is null)
+            //         DisplayParentInterval = TimeInterval.None.GetDisplayName();
+            //     
+            //     if (parentInterval is not null and not "")
+            //         DisplayParentInterval = $"From parent ({parentInterval})";
+            // }
         }
 
         internal TimeIntervalModel ToModel() => new(GetIntervalOption(), GetCustomIntervalTicks());
