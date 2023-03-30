@@ -1,0 +1,82 @@
+﻿@using HSMServer.Constants
+@using HSMServer.Controllers
+@using HSMServer.Extensions
+@using HSMServer.Helpers
+@using HSMServer.Model.Folders.ViewModels
+@using HSMServer.Model.Authentication
+
+@model List<FolderViewModel>
+
+@addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
+
+
+<div class="m-2">
+    <div class="row" justify-content-start>
+        @if (TempData[TextConstants.TempDataErrorText] != null)
+        {
+            <span style="color: red;font-size: large;font-weight:normal">@TempData[TextConstants.TempDataErrorText].ToString()</span>
+        }
+
+        <div class="d-flex justify-content-between my-2">
+            <h5>Products</h5>
+
+            @if (UserRoleHelper.IsUserCRUDAllowed(Context.User as User))
+            {
+                <div class='d-flex col-md-auto'>
+                    <a class="mx-2" href="@Url.Action(nameof(FoldersController.EditFolder), ViewConstants.FoldersController)">Add product</a>
+                    <a href="@Url.Action(nameof(FoldersController.EditFolder), ViewConstants.FoldersController)">Add folder</a>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+@*@if (UserRoleHelper.IsUserCRUDAllowed(Context.User as User))
+{
+    <div class="container row mt-1">
+        <div class="col-4 p-0">
+            <input id="createName" placeholder="New product name" type='text' class='form-control' />
+        </div>
+        <div class="col">
+            <button id='createButton' type='button' class='btn btn-secondary ms-1' title='Add new product'>
+                <i class='fas fa-plus'></i>
+            </button>
+        </div>
+    </div>
+}*@
+
+@foreach (var folder in Model)
+{
+    <div class='accordion my-1' id='folderData_@folder.Id'>
+        <div class='accordion-item' style="border-color:@folder.BackgroundColor.ToRGB();">
+            <h2 class='accordion-header' id='heading_@folder.Id'>
+                <button id='accordion_@folder.Id' class='accordion-button' type='button' data-bs-toggle='collapse'
+                        data-bs-target='#collapse_@folder.Id' aria-expanded='true' aria-controls='collapse_@folder.Id'
+                        style="background-color:@folder.Background; color:@folder.Foreground">
+                    <div class="w-100">
+                        <div class='d-flex col-md-auto'>
+                            <div style="font-weight: bold;">@Html.Raw(folder.Name)</div>
+                            @if (folder.Id.HasValue)
+                            {
+                                <a asp-controller="@ViewConstants.FoldersController" asp-action="@nameof(FoldersController.EditFolder)" asp-route-folderId="@folder.Id"
+                                   class="ms-2" style="color:@folder.Foreground">
+                                    <i class='fas fa-edit'></i>
+                                </a>
+                                <a asp-controller="@ViewConstants.FoldersController" asp-action="@nameof(FoldersController.RemoveFolder)" asp-route-folderId="@folder.Id"
+                                   class="ms-2" style="color:@folder.Foreground">
+                                    <i class='fas fa-trash-alt'></i>
+                                </a>
+                            }
+                        </div>
+                        <div>@folder.Description</div>
+                    </div>
+                </button>
+            </h2>
+            <div id='collapse_@folder.Id' class='accordion-collapse collapse show text-break' aria-labelledby='heading_@folder.Id' data-bs-parent='#folderData_@folder.Id'>
+                <div class='accordion-body p-3'>
+                    @await Html.PartialAsync("_ProductList", folder)
+                </div>
+            </div>
+        </div>
+    </div>
+}

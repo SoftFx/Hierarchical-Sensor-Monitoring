@@ -9,6 +9,7 @@
 
 @{
     var noProducts = Model.DisplayProducts.Count == 0;
+    var tableId = 0;
 }
 
 
@@ -31,12 +32,12 @@ else
 
 @if (!noProducts)
 {
-    <table class="table table-striped">
+    <table id="folderProductsTable_@tableId" class="table table-striped">
         <thead>
             <tr>
                 <th>Product name</th>
                 <th>
-                    <a class="btn sortSubmit" onclick="sortTable(this, sorting)" type="submit">
+                    <a class="btn sortSubmit" onclick="sortTable(this, 1, '@tableId')" type="submit">
                         Last sensor update
                         <i id="sortIcon" class="fa-solid fa-sort"></i>
                     </a>

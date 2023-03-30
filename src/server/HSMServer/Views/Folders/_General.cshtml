@@ -1,4 +1,5 @@
 ﻿@using HSMServer.Model.Folders.ViewModels;
+@using HSMServer.Extensions
 
 @model EditFolderViewModel
 
@@ -36,7 +37,7 @@
 <div class="row mt-2">
     <label class="col-2 col-form-label" asp-for="Color"></label>
     <div class="col-auto">
-        <input class="form-control form-control-color" type="color" asp-for="Color" value="@(isAdd ? string.Empty : $"#{Model.Color.Name[2..]}")">
+        <input class="form-control form-control-color" type="color" asp-for="Color" value="@(isAdd ? string.Empty : Model.Color.ToRGB())">
     </div>
 </div>
 

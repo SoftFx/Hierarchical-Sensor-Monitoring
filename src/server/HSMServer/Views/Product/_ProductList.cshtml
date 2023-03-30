@@ -1,11 +1,11 @@
 @using HSMServer.Helpers
 @using HSMServer.Model.Authentication
-@using HSMServer.Constants
-@using HSMServer.Controllers
 @using HSMServer.Extensions
+@using HSMServer.Model.Folders.ViewModels
 @using HSMServer.Model.ViewModel
-@using HSMServer.Model.Folders
-@model List<ProductViewModel>
+
+@model FolderViewModel
+
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
 
 @{
@@ -13,223 +13,115 @@
     bool isProductCrudAllowed = UserRoleHelper.IsUserCRUDAllowed(user);
     bool isProductActionAllowed = ProductRoleHelper.IsProductActionAllowed(user?.ProductsRoles);
 }
+ 
 
-<script>
-    var sorting = undefined;
-</script>
-
-<div class="m-2">
-    <div class="row" justify-content-start>
-        @if (TempData[TextConstants.TempDataErrorText] != null)
-        {
-            <span style="color: red;font-size: large;font-weight:normal">@TempData[TextConstants.TempDataErrorText].ToString()</span>
-        }
-        <div class="col-2">
-            <h5 class="my-2">Products</h5>
-        </div>
-    </div>
-</div>
-@if (isProductCrudAllowed)
-{
-    <div class="container row mt-1">
-        <div class="col-4 p-0">
-            <input id="createName" placeholder="New product name" type='text' class='form-control'/>
-            <span class="d-none" id='new_product_name_span'></span>
-        </div>
-        <div class="col">
-            <button id='createButton' type='button' class='btn btn-secondary ms-1' title='Add new product'>
-                <i class='fas fa-plus'></i>
-            </button>
-        </div>
-    </div>
-
-    <a href="@Url.Action(nameof(FoldersController.EditFolder), ViewConstants.FoldersController)">Add folder</a>
-
-    <table>
-        <thead>
-            <tr>
-                <th>Name</th>
-                <th>Description</th>
-            </tr>
-        </thead>
-        <tbody>
-            @foreach (var folder in ViewBag.Folders as List<FolderModel>)
-            {
+<div class="w-100" id="productTable">
+    <form id="formSearch" asp-controller="Product" asp-action="Index">
+        <table id="folderProductsTable_@Model.Id" class="table table-striped">
+            <thead>
                 <tr>
                     <th>
-                        <a class="productName_anchor" asp-controller="Folders" asp-action="EditFolder" asp-route-folderId="@folder.Id">
-                            @Html.Raw(folder.Name)
+                        <div class="form-floating m-0 p-0">
+                            <input placeholder="Name" id='searchProduct' type='text' class='form-control' name='searchProductName' value="@ViewBag.ProductName"/>
+                            <label for="searchProduct">Name</label>
+                        </div>
+                    </th>
+                    <th>
+                        <div class="form-floating m-0 p-0">
+                            <input id="searchManager" class='form-control' type='text' name="searchProductManager" placeholder="Manager" value="@ViewBag.ProductManager"/>
+                            <label for="searchManager">Managers</label>
+                        </div>
+                    </th>
+                    <button class="d-none"></button>
+                    <th>
+                        <a class="btn sortSubmit" onclick="sortTable(this, 2, '@Model.Id')" type="submit">
+                            Last update
+                            <i id="sortIcon" class="fa-solid fa-sort"></i>
                         </a>
                     </th>
-                    <th>@folder.Description</th>
-                </tr>
-            }
-        </tbody>
-    </table>
-}
-<div class="col-12-xxl mt-2">
-    <div class="w-100" id="productTable">
-        <form id="formSearch" asp-controller="Product" asp-action="Index">
-            <table id="formProductTable" class="table table-striped">
-                <thead>
-                    <tr>
-                        <th>
-                            <div class="form-floating m-0 p-0">
-                                <input placeholder="Name" id='searchProduct' type='text' class='form-control' name='searchProductName' value="@ViewBag.ProductName"/>
-                                <label for="searchProduct">Name</label>
-                            </div>
-                        </th>
-                        <th>
-                            <div class="form-floating m-0 p-0">
-                                <input id="searchManager" class='form-control' type='text' name="searchProductManager" placeholder="Manager" value="@ViewBag.ProductManager"/>
-                                <label for="searchManager">Managers</label>
-                            </div>
-                        </th>
-                        <button class="d-none"></button>
-                        <th>
-                            <a class="btn sortSubmit" onclick="sortTable(this, sorting)" type="submit">
-                                Last update
-                                <i id="sortIcon" class="fa-solid fa-sort"></i>
-                            </a>
-                        </th>
-                        @if (isProductCrudAllowed || isProductActionAllowed)
-                        {
-                            <th class="text-center">Actions</th>
-                        }
-                    </tr>
-                </thead>
-                <tbody>
-                    @for (var i = 0; i < Model.Count; i++)
+                    @if (isProductCrudAllowed || isProductActionAllowed)
                     {
-                        var product = Model[i];
-                        <tr>
-                            <td class="text-break">
-                                @if (user.IsManager(product.Id))
-                                {
-                                    <a class="productName_anchor" id="inputName_@product.Id" asp-controller="Product" asp-action="EditProduct" asp-route-Product="@product.EncodedId">
-                                        @Html.Raw(product.Name)
-                                    </a>
-                                }
-                                else
-                                {
+                        <th class="text-center">Actions</th>
+                    }
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var product in Model.Products)
+                {
+                    <tr>
+                        <td class="text-break">
+                            @if (user.IsManager(product.Id))
+                            {
+                                <a class="productName_anchor" id="inputName_@product.Id" asp-controller="Product" asp-action="EditProduct" asp-route-Product="@product.EncodedId">
                                     @Html.Raw(product.Name)
-                                }
-                            </td>
-                            <td class="text-break">
-                                @if (product.Managers.Count == 0)
+                                </a>
+                            }
+                            else
+                            {
+                                @Html.Raw(product.Name)
+                            }
+                        </td>
+                        <td class="text-break">
+                            @if (product.Managers.Count == 0)
+                            {
+                                <span>---</span>
+                            }
+                            else
+                            {
+                                var managers = string.Join(", ", product.Managers);
+                                <span>@Html.Raw(managers)</span>
+                            }
+                        </td>
+                        <td>
+                            <span title="@product.LastUpdateDate.ToDefaultFormat()" time="@product.LastUpdateDate">
+                                @product.ShortLastUpdateTime
+                            </span>
+                            @if (product.ProductUpdateIsExpired)
+                            {
+                                <span>
+                                    <img title="Product sensor(s) haven't been updated for @ProductViewModel.ProductExpiredTime.ToToolTip()" src="~/dist/warning.svg" id="svg_exclamation" alt="warning icon"/>
+                                </span>
+                            }
+                        </td>
+                        <td nowrap class="text-center">
+                            <div class='btn-group'>
+                                @if (isProductCrudAllowed || ProductRoleHelper.IsManager(product.Id, user?.ProductsRoles))
                                 {
-                                    <span>---</span>
+                                    <button id="actionButton" class="btn" data-bs-toggle="dropdown" data-bs-auto-close="true" aria-haspopup="true" aria-expanded="false">
+                                        <i class="fa-solid fa-ellipsis-vertical" style="cursor: pointer"></i>
+                                    </button>
                                 }
                                 else
                                 {
-                                    var managers = string.Join(", ", product.Managers);
-                                    <span>@Html.Raw(managers)</span>
+                                    <i class="fa fa-ellipsis-vertical disabled" style="color: darkgrey" data-bs-toggle="dropdown"></i>
                                 }
-                            </td>
-                            <td>
-                                <span title="@product.LastUpdateDate.ToDefaultFormat()" time="@product.LastUpdateDate">
-                                    @product.ShortLastUpdateTime
-                                </span>
-                                @if (product.ProductUpdateIsExpired)
-                                {
-                                    <span>
-                                        <img title="Product sensor(s) haven't been updated for @ProductViewModel.ProductExpiredTime.ToToolTip()" src="~/dist/warning.svg" id="svg_exclamation" alt="warning icon"/>
-                                    </span>
-                                }
-                            </td>
-                            <td nowrap class="text-center">
-                                <div class='btn-group'>
-                                    @if (isProductCrudAllowed || ProductRoleHelper.IsManager(product.Id, user?.ProductsRoles))
+                                <ul class='dropdown-menu overflow-auto' aria-labelledby="dropdownMenuButton">
+                                    <li>
+                                        <a id='change_@product.EncodedId' class='dropdown-item text-decoration-none fw-normal' style="cursor: pointer;">
+                                            Edit
+                                        </a>
+                                    </li>
+                                    @if (isProductCrudAllowed)
                                     {
-                                        <button id="actionButton" class="btn" data-bs-toggle="dropdown" data-bs-auto-close="true" aria-haspopup="true" aria-expanded="false">
-                                            <i class="fa-solid fa-ellipsis-vertical" style="cursor: pointer"></i>
-                                        </button>
-                                    }
-                                    else
-                                    {
-                                        <i class="fa fa-ellipsis-vertical disabled" style="color: darkgrey" data-bs-toggle="dropdown"></i>
-                                    }
-                                    <ul class='dropdown-menu overflow-auto' aria-labelledby="dropdownMenuButton">
                                         <li>
-
-                                            <a id='change_@product.EncodedId' class='dropdown-item text-decoration-none fw-normal' style="cursor: pointer;">
-                                                Edit
+                                            <a id='delete_@product.Id' class='dropdown-item text-decoration-none fw-normal' style="cursor: pointer;">
+                                                Delete
                                             </a>
                                         </li>
-                                        @if (isProductCrudAllowed)
-                                        {
-                                            <li>
-                                                <a id='delete_@product.Id' class='dropdown-item text-decoration-none fw-normal' style="cursor: pointer;">
-                                                    Delete
-                                                </a>
-                                            </li>
-                                        }
-                                    </ul>
-                                </div>
-                            </td>
-                        </tr>
-                    }
-                </tbody>
-            </table>
-        </form>
-    </div>
+                                    }
+                                </ul>
+                            </div>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </form>
 </div>
 
+
 <script>
-     if (window.history.replaceState) {
-            window.history.replaceState( null, null, window.location.href );
-        }
-     
-     function sortTable(test, asc) {
-        var table, rows, switching, i, x, y, shouldSwitch;
-        table = document.getElementById("formProductTable");
-        switching = true;
-       
-        while (switching) {
-        
-          switching = false;
-          rows = table.rows;
-         
-          for (i = 1; i < (rows.length - 1); i++) {
-          
-            shouldSwitch = false;
-          
-            x = rows[i].getElementsByTagName("TD")[2];
-            y = rows[i + 1].getElementsByTagName("TD")[2];
-            
-            let xdate = (new Date(x.getElementsByTagName('span')[0].attributes[1].value)).getTime()
-            let ydate =(new Date(y.getElementsByTagName('span')[0].attributes[1].value)).getTime()
-        
-            if (asc === true){
-                 if (xdate > ydate) {
-                    shouldSwitch = true;
-                    break;
-                 }
-            }
-            else{
-                if (xdate < ydate) {
-                   shouldSwitch = true;
-                   break;
-                }
-            }
-          }
-          if (shouldSwitch) {
-            rows[i].parentNode.insertBefore(rows[i + 1], rows[i]);
-            switching = true;
-          }
-       }
-       if (sorting === undefined){
-           sorting = false
-       }
-       sorting = !sorting;
-       
-       var icon = test.querySelector("svg");
-       
-       if (sorting)
-           icon.classList.toggle('fa-sort-up');
-       else 
-           icon.classList.toggle('fa-sort-down');
-       
-    
-     }
+    if (window.history.replaceState) {
+        window.history.replaceState(null, null, window.location.href );
+    }
 </script>

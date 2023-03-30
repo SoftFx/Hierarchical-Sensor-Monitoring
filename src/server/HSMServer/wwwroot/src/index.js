@@ -41,6 +41,7 @@ import './js/file.js';
 import './js/history.js';
 import './js/plotting.js';
 import './js/sensorInfo.js';
+import './js/products.js';
 import './js/tree.js';
 import './js/site.js';
 

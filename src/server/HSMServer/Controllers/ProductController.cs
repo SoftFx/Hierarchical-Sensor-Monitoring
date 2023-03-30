@@ -1,18 +1,20 @@
 ﻿using HSMCommon.Constants;
 using HSMServer.Authentication;
+using HSMServer.Configuration;
 using HSMServer.Constants;
 using HSMServer.Core.Cache;
-using HSMServer.Configuration;
-using HSMServer.Registration;
+using HSMServer.Core.Registration;
 using HSMServer.Email;
 using HSMServer.Encryption;
 using HSMServer.Filters.ProductRoleFilters;
 using HSMServer.Folders;
 using HSMServer.Helpers;
 using HSMServer.Model.Authentication;
+using HSMServer.Model.Folders.ViewModels;
 using HSMServer.Model.TreeViewModel;
 using HSMServer.Model.Validators;
 using HSMServer.Model.ViewModel;
+using HSMServer.Registration;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
@@ -21,7 +23,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Threading.Tasks;
-using HSMServer.Core.Registration;
 
 namespace HSMServer.Controllers
 {
@@ -56,21 +57,44 @@ namespace HSMServer.Controllers
         {
             ViewBag.ProductName = searchProductName;
             ViewBag.ProductManager = searchProductManager;
-            ViewBag.Folders = _folderManager.GetFolders();
 
-            var user = HttpContext.User as User;
+            var userProducts = _treeViewModel.GetUserProducts(HttpContext.User as User);
+            var folderProducts = new Dictionary<Guid, List<ProductViewModel>>();
+            var productsWithoutFolder = new List<ProductViewModel>();
 
-            var result = _treeViewModel.GetUserProducts(user)
-                .OrderBy(x => x.Name)
-                .Select(x => new ProductViewModel(x, _userManager));
+            foreach (var product in userProducts)
+            {
+                var productViewModel = new ProductViewModel(product, _userManager);
 
-            if (!string.IsNullOrEmpty(searchProductName))
-                result = result.Where(x => x.Name.Contains(searchProductName, StringComparison.CurrentCultureIgnoreCase));
+                if (product.FolderId.HasValue)
+                {
+                    var folderId = product.FolderId.Value;
 
-            if (!string.IsNullOrEmpty(searchProductManager))
-                result = result.Where(x => x.Managers.Any(y => y.Contains(searchProductManager, StringComparison.CurrentCultureIgnoreCase)));
+                    if (!folderProducts.ContainsKey(folderId))
+                        folderProducts[folderId] = new();
 
-            return View(result.ToList());
+                    folderProducts[folderId].Add(productViewModel);
+                }
+                else
+                    productsWithoutFolder.Add(productViewModel);
+            }
+
+            var folders = new List<FolderViewModel>();
+            foreach (var (folderId, products) in folderProducts)
+                folders.Add(new FolderViewModel(_folderManager[folderId], products));
+
+            folders = folders.OrderBy(f => f.Name).ToList();
+            folders.Add(new FolderViewModel(productsWithoutFolder));
+
+            return View(folders);
+
+            //if (!string.IsNullOrEmpty(searchProductName))
+            //    userProducts = userProducts.Where(x => x.Name.Contains(searchProductName, StringComparison.CurrentCultureIgnoreCase));
+
+            //if (!string.IsNullOrEmpty(searchProductManager))
+            //    userProducts = userProducts.Where(x => x.Managers.Any(y => y.Contains(searchProductManager, StringComparison.CurrentCultureIgnoreCase)));
+
+            //return View(userProducts.ToList());
         }
 
         public void CreateProduct([FromQuery(Name = "Product")] string productName)
