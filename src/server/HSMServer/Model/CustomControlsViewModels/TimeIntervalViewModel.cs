@@ -67,7 +67,7 @@ namespace HSMServer.Model
 
         private string UsedInterval => TimeInterval switch
         {
-            TimeInterval.Custom => CustomTimeInterval,
+            TimeInterval.Custom => CustomTimeInterval.ToTableView(),
             TimeInterval.FromParent => HasIntervalValue ? _getParentValue?.Invoke().UsedInterval : TimeInterval.GetDisplayName(),
             _ => TimeInterval.GetDisplayName()
         };

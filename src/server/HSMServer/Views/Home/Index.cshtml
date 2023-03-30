@@ -188,21 +188,26 @@
                      $('#validation_' + id).append(`<span class="d-flex text-break">Comment: ${dataObject.comment}</span>`);
         }
         
-        let isFile = dataObject.sensorType === 6;
         
         if (dataObject.isValidationErrorVisible) {
             $('#validation_' + id).append(`<li id='errorIcon_${id}' class='fas fa-exclamation-triangle me-1'></li>
                                            <span>Alert comment: ${dataObject.validationError}</span>`);
         }
         
-        if (isFile && dataObject.receivingTime !== null){
-            $('#side_info_' + id).empty().append(`<span class="pb-3" style="font-size: medium">${dataObject.updatedTimeStr}</span>
-                                                  <span>Size: ${dataObject.size}</span>
-                                                  <span>${dataObject.receivingTime}</span>`);
-        }
+        let accordionLoaded = $('[id^="sensorData"]');
+        let isFile = dataObject.sensorType === 6;
         
-        if (isFile)
-            setContentPreview(id);
+        if (accordionLoaded.length !== 0){
+              if (isFile && dataObject.receivingTime !== null){
+                 $('#side_info_' + id).empty().append(`<span class="pb-3" style="font-size: medium">${dataObject.updatedTimeStr}</span>
+                                                       <span>Size: ${dataObject.size}</span>
+                                                       <span>${dataObject.receivingTime}</span>`);
+              }
+                    
+              if (isFile)
+                setContentPreview(id);
+        }
+     
     }
 
     var refreshTreeTimeoutId;
