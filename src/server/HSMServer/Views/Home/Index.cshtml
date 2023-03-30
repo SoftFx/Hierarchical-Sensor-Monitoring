@@ -94,7 +94,7 @@
                     <span class="enabled-filters-message text-break">@user.TreeFilter.EnabledFiltersMessage</span>
                 }
                 <div class="flex-fill pe-3 align-self-center text-end">
-                    <i onclick="collapseTree()" class="fa-regular fa-square-minus" style="color: #0b5fef; cursor: pointer" title="Collapse tree"></i>
+                    <i id="collapseIcon" onclick="collapseTree()" class="fa-regular fa-square-minus" style="color: #0b5fef; cursor: pointer" title="Collapse tree"></i>
                 </div>
             </div>
         </div>
@@ -262,9 +262,23 @@
         $('#updateTime').empty();
         $('#updateTime').append('Update Time: ' + new Date().toUTCString());
     }
-
+    
+    var isTreeCollapsed = false;
     function collapseTree(){
-        $('#jstree').jstree('close_all');
+        console.log(isTreeCollapsed);
+        if (!isTreeCollapsed){
+            isTreeCollapsed = true;
+            $('#jstree').jstree('save_state');
+            $('#jstree').jstree('close_all');
+            
+            $('#collapseIcon').removeClass('fa-regular fa-square-minus').addClass('fa-regular fa-square-plus')
+        }
+        else {
+            isTreeCollapsed = false;
+            $('#jstree').jstree('restore_state', state);
+            
+            $('#collapseIcon').removeClass('fa-regular fa-square-plus').addClass('fa-regular fa-square-minus');
+        }
     }
     
     var clipboard = new ClipboardJS('[id^="copy_"]', {
