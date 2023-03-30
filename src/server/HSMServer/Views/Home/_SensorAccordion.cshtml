@@ -152,7 +152,7 @@
                                 @if (Model.IsValidationErrorVisible)
                                 {
                                     <li id='errorIcon_@sensorId' class='fas fa-exclamation-triangle me-1'></li>
-                                    <span>Status comment: @Model.ValidationError</span>
+                                    <span>Alert comment: @Html.Raw(@Model.ValidationError)</span>
                                 }
                             </span>
                         </div>
