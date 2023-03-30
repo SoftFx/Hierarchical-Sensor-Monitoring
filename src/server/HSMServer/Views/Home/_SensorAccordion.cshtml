@@ -10,8 +10,14 @@
     var fileType = splitted.Length >= 2 ? splitted[1] : string.Empty;
 
     FileValue file = null;
+    bool isEnabledPreview = false;
     if (Model.SensorType is SensorType.File)
+    {
         file = (FileValue)Model.LastValue;
+        isEnabledPreview = (file.Extension == "csv" && file.OriginalSize < 5 * 1024 * 1024) ||
+                           (file.Extension == "txt" && file.OriginalSize < 1024 * 1024);
+    }
+       
 
     var sensorId = Model.EncodedId;
 
@@ -91,7 +97,10 @@
                         <div class="row">
                             <div class="d-flex col-6">
                                 <div class="align-self-center text-end">
-                                    <h5 class="mb-0" id="preview-header">Content:</h5>
+                                    @if (isEnabledPreview)
+                                    {
+                                        <h5 class="mb-0" id="preview-header">Content:</h5>
+                                    }
                                 </div>
                             </div>
                             <div class="col-6">
