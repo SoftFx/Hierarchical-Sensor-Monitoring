@@ -1,5 +1,6 @@
 ﻿@using HSMServer.Controllers
 @using HSMServer.Constants
+@using HSMServer.Model
 @using HSMServer.Model.ViewModel
 @model ProductInfoViewModel
 
@@ -50,7 +51,7 @@
 If the sensor doesn`t receive new data within the specified time interval, a notification sends'></i>
                 </td>
                 <td id="productExpectedUpdateInterval_@(Model.EncodedId)">
-                    <label id="labelInterval" class="form-control naked-text">@Model.ExpectedUpdateInterval.DisplayInterval</label>
+                    <label id="labelInterval" class="form-control naked-text">@(Model.ExpectedUpdateInterval.TimeInterval == TimeInterval.FromParent ? $"From parent ({Model.ExpectedUpdateInterval.DisplayInterval})" : Model.ExpectedUpdateInterval.DisplayInterval)</label>
                     <div id="partialIntervalSelect" class="d-none">
                         <partial name="_TimeIntervalSelect" for="ExpectedUpdateInterval" />
                     </div>
@@ -63,7 +64,7 @@ If the sensor doesn`t receive new data within the specified time interval, a not
 If the sensor doesn`t return to Ok status after the specified time inverval, a notification sends'></i>
                 </td>
                 <td id="productRestorePolicy_@(Model.EncodedId)">
-                    <label id="labelRestoreInterval" class="form-control naked-text">@Model.SensorRestorePolicy.DisplayInterval</label>
+                    <label id="labelRestoreInterval" class="form-control naked-text">@(Model.SensorRestorePolicy.TimeInterval == TimeInterval.FromParent ? $"From parent ({Model.SensorRestorePolicy.DisplayInterval})" : Model.SensorRestorePolicy.DisplayInterval)</label>
                     <div id="partialRestoreSelect" class="d-none">
                         <partial name="_TimeIntervalSelect" for="SensorRestorePolicy" />
                     </div>

@@ -5,13 +5,13 @@ namespace HSMServer.Core.Model
 {
     public enum TimeInterval : byte
     {
-        OneMinute,
-        FiveMinutes,
         TenMinutes,
         Hour,
         Day,
         Week,
         Month,
+        OneMinute,
+        FiveMinutes,
         FromParent = byte.MaxValue - 1,
         Custom = byte.MaxValue,
     }
