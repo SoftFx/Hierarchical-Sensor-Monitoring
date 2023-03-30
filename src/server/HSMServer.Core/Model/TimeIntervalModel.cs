@@ -10,6 +10,8 @@ namespace HSMServer.Core.Model
         Day,
         Week,
         Month,
+        OneMinute,
+        FiveMinutes,
         FromParent = byte.MaxValue - 1,
         Custom = byte.MaxValue,
     }
@@ -17,7 +19,7 @@ namespace HSMServer.Core.Model
 
     public class TimeIntervalModel
     {
-        public TimeInterval TimeInterval { get; }
+        public TimeInterval TimeInterval { get; } = TimeInterval.FromParent;
 
         public long CustomPeriod { get; }
 
@@ -46,6 +48,8 @@ namespace HSMServer.Core.Model
 
             return DateTime.UtcNow > TimeInterval switch
             {
+                TimeInterval.OneMinute => time.AddMinutes(1),
+                TimeInterval.FiveMinutes => time.AddMinutes(5),
                 TimeInterval.TenMinutes => time.AddMinutes(10),
                 TimeInterval.Hour => time.AddHours(1),
                 TimeInterval.Day => time.AddDays(1),

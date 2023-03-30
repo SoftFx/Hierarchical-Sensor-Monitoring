@@ -15,14 +15,19 @@ namespace HSMServer.Extensions
             return enumValue.GetType()
                             .GetMember(enumValueStr)
                             .First()
-                            .GetCustomAttribute<DisplayAttribute>()
-                            ?.Name ?? enumValueStr;
+                            .GetCustomAttribute<DisplayAttribute>()?.Name ?? enumValueStr;
         }
 
 
         public static bool IsCustom(this TimeInterval interval)
         {
             return interval == TimeInterval.Custom;
+        }
+
+
+        public static bool IsParent(this TimeInterval interval)
+        {
+            return interval == TimeInterval.FromParent;
         }
     }
 }

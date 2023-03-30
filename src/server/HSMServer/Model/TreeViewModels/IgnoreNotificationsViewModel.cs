@@ -68,10 +68,7 @@ namespace HSMServer.Model
             if (node.Id == node.RootProduct.Id)
                 TreeElement = ProductTreeElement;
 
-            IgnorePeriod = new(_predefinedIntervals)
-            {
-                CustomItemIsVisible = false,
-            };
+            IgnorePeriod = new(_predefinedIntervals, false);
 
             DateTimeNow = DateTime.UtcNow.RoundToMin();
             NotificationsTarget = target;

@@ -4,7 +4,7 @@
 @using HSMServer.Model
 @using HSMServer.Model.ViewModel
 @using HSMServer.Model.TreeViewModel
-@using HSMServer.UserFilters;
+@using HSMServer.UserFilters
 
 @model TreeViewModel
 
@@ -94,7 +94,7 @@
                     <span class="enabled-filters-message text-break">@user.TreeFilter.EnabledFiltersMessage</span>
                 }
                 <div class="flex-fill pe-3 align-self-center text-end">
-                    <i onclick="collapseTree()" class="fa-regular fa-square-minus" style="color: #0b5fef; cursor: pointer" title="Collapse Tree"></i>
+                    <i onclick="collapseTree()" class="fa-regular fa-square-minus" style="color: #0b5fef; cursor: pointer" title="Collapse tree"></i>
                 </div>
             </div>
         </div>
@@ -171,7 +171,8 @@
     function updateNodeData(dataObject) {
         var id = dataObject.id;
 
-        $('#update_' + id).empty().append(dataObject.updatedTimeStr);
+        if (dataObject.sensorType !== 6)
+            $('#update_' + id).empty().append(dataObject.updatedTimeStr);
         $('#status_' + id).removeClass('tree-icon-offTime tree-icon-ok tree-icon-warning tree-icon-error');
         $('#status_' + id).addClass(dataObject.statusIconColorClass);
         $('#status_' + id).prop('title', `Status: ${dataObject.status}`);
@@ -179,16 +180,34 @@
 
     function updateSpecificSensorData(dataObject) {
         var id = dataObject.id;
-
         $('#value_' + id).empty().append(dataObject.value);
 
         $('#validation_' + id).empty();
-        if (dataObject.isValidationErrorVisible) {
-            $('#validation_' + id).append(`<li id='errorIcon_${id}' class='fas fa-exclamation-triangle me-1'></li>
-                                           <span>Status comment: ${dataObject.validationError}</span>`);
+        
+        if (dataObject.sensorType === 6 && dataObject.comment !== null){
+                     $('#validation_' + id).append(`<span class="d-flex text-break">Comment: ${dataObject.comment}</span>`);
         }
         
-        setContentPreview(id);
+        
+        if (dataObject.isValidationErrorVisible) {
+            $('#validation_' + id).append(`<li id='errorIcon_${id}' class='fas fa-exclamation-triangle me-1'></li>
+                                           <span>Alert comment: ${dataObject.validationError}</span>`);
+        }
+        
+        let accordionLoaded = $('[id^="sensorData"]');
+        let isFile = dataObject.sensorType === 6;
+        
+        if (accordionLoaded.length !== 0){
+              if (isFile && dataObject.receivingTime !== null){
+                 $('#side_info_' + id).empty().append(`<span class="pb-3" style="font-size: medium">${dataObject.updatedTimeStr}</span>
+                                                       <span>Size: ${dataObject.size}</span>
+                                                       <span>${dataObject.receivingTime}</span>`);
+              }
+                    
+              if (isFile)
+                setContentPreview(id);
+        }
+     
     }
 
     var refreshTreeTimeoutId;
