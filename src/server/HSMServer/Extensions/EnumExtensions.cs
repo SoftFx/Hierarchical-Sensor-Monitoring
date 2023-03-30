@@ -24,5 +24,11 @@ namespace HSMServer.Extensions
         {
             return interval == TimeInterval.Custom;
         }
+
+
+        public static bool IsParent(this TimeInterval interval)
+        {
+            return interval == TimeInterval.FromParent;
+        }
     }
 }

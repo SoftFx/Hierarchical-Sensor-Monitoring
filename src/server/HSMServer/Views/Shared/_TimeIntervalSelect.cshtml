@@ -14,7 +14,7 @@
     var interval_id = '#timeIntervalSelect_' + '@Model.Id';
 
     $(interval_id).change(function (select_obj) {
-        if ('@Model.CustomItemIsVisible' === "False")
+        if ('@Model.UseCustomInputTemplate' === "False")
             return;
 
         var select = select_obj.currentTarget;

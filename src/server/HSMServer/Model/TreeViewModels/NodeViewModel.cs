@@ -56,7 +56,7 @@ namespace HSMServer.Model.TreeViewModel
         public string Title => Name?.Replace('\\', ' ') ?? string.Empty;
 
 
-        internal NodeViewModel(BaseNodeModel model)
+        protected NodeViewModel(BaseNodeModel model)
         {
             Id = model.Id;
             Path = model.Path;

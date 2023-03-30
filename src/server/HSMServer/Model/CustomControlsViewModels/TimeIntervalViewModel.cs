@@ -1,7 +1,7 @@
-﻿using System;
-using HSMServer.Core.Model;
+﻿using HSMServer.Core.Model;
 using HSMServer.Extensions;
 using Microsoft.AspNetCore.Mvc.Rendering;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.Linq;
@@ -49,47 +49,50 @@ namespace HSMServer.Model
     public record TimeIntervalViewModel
     {
         public const string CustomTemplate = "dd.HH:mm:ss";
-        
-        
-        private readonly Func<TimeIntervalViewModel> _getParentInterval;
-        
-        
+
+
+        private readonly Func<TimeIntervalViewModel> _getParentValue;
+
         private static long _id = 0L;
 
-        
-        private bool HasIntervalValue => _getParentInterval?.Invoke() is not null;
-        
-        
+
         public List<SelectListItem> IntervalItems { get; }
-        
+
         public string Id { get; } = $"{_id++}";
 
-        public bool CustomItemIsVisible { get; init; } = true;
+        public bool UseCustomInputTemplate { get; }
 
-        public TimeInterval TimeInterval { get; set; }
-        
-        public string CustomTimeInterval { get; set; }
 
-        public string DisplayInterval => TimeInterval == TimeInterval.FromParent ? $"From parent ({UsedInterval})" : UsedInterval;
-        
-        public string UsedInterval => TimeInterval switch
+        private bool HasIntervalValue => _getParentValue?.Invoke() is not null;
+
+        private string UsedInterval => TimeInterval switch
         {
             TimeInterval.Custom => CustomTimeInterval,
-            TimeInterval.FromParent => HasIntervalValue ? _getParentInterval?.Invoke().UsedInterval : TimeInterval.GetDisplayName(),
+            TimeInterval.FromParent => HasIntervalValue ? _getParentValue?.Invoke().UsedInterval : TimeInterval.GetDisplayName(),
             _ => TimeInterval.GetDisplayName()
         };
-        
+
+        public string DisplayInterval => TimeInterval.IsParent() ? $"From parent ({UsedInterval})" : UsedInterval;
+
+
+        public TimeInterval TimeInterval { get; set; }
+
+        public string CustomTimeInterval { get; set; }
+
+
         // public constructor without parameters for post actions
         public TimeIntervalViewModel() { }
 
-        internal TimeIntervalViewModel(List<TimeInterval> intervals)
+        internal TimeIntervalViewModel(List<TimeInterval> intervals, bool useCutomTemplate = true)
         {
             IntervalItems = GetIntrevalItems(intervals);
+            UseCustomInputTemplate = useCutomTemplate;
         }
 
-        internal TimeIntervalViewModel(TimeIntervalModel model, List<TimeInterval> intervals, Func<TimeIntervalViewModel> getParentInterval) : this(intervals)
+        internal TimeIntervalViewModel(TimeIntervalModel model, List<TimeInterval> intervals, Func<TimeIntervalViewModel> getParentValue) : this(intervals)
         {
-            _getParentInterval = getParentInterval;
+            _getParentValue = getParentValue;
+
             if (!HasIntervalValue)
                 IntervalItems.RemoveAt(0);
 
