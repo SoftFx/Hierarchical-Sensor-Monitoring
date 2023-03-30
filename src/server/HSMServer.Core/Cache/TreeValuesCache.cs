@@ -75,7 +75,17 @@ namespace HSMServer.Core.Cache
 
         public List<AccessKeyModel> GetAccessKeys() => _keys.Values.ToList();
 
-        public ProductModel AddProduct(string productName) => AddProduct(new ProductModel(productName));
+        public ProductModel AddProduct(string productName)
+        {
+            var product = new ProductModel(productName);
+
+            AddProduct(product);
+            ResetServerPolicyForRootProduct(product);
+
+            ChangeProductEvent?.Invoke(product, ActionType.Update);
+
+            return product;
+        }
 
         public void UpdateProduct(ProductModel product)
         {
@@ -364,6 +374,26 @@ namespace HSMServer.Core.Cache
                 serverPolicy.Uploaded += UpdatePolicy;
         }
 
+        private static void ResetServerPolicyForRootProduct(ProductModel product)
+        {
+            if (product.Parent != null)
+                return;
+
+            if (product.ServerPolicy.ExpectedUpdate.Policy.FromParent)
+                product.Update(new ProductUpdate
+                {
+                    Id = product.Id,
+                    ExpectedUpdateInterval = new TimeIntervalModel(0L),
+                });
+
+            if (product.ServerPolicy.RestoreError.Policy.FromParent)
+                product.Update(new ProductUpdate
+                {
+                    Id = product.Id,
+                    RestoreInterval = new TimeIntervalModel(0L),
+                });
+        }
+
         private void UpdatesQueueNewItemsHandler(IEnumerable<StoreInfo> storeInfos)
         {
             foreach (var store in storeInfos)
@@ -478,6 +508,7 @@ namespace HSMServer.Core.Cache
         private void ApplyProducts(List<ProductEntity> productEntities, Dictionary<string, Policy> policies)
         {
             _logger.Info($"{nameof(productEntities)} are applying");
+
             foreach (var productEntity in productEntities)
             {
                 var product = new ProductModel(productEntity);
@@ -491,6 +522,7 @@ namespace HSMServer.Core.Cache
             _logger.Info($"{nameof(productEntities)} applied");
 
             _logger.Info("Links between products are building");
+
             foreach (var productEntity in productEntities)
                 if (!string.IsNullOrEmpty(productEntity.ParentProductId))
                 {
@@ -499,7 +531,10 @@ namespace HSMServer.Core.Cache
 
                     if (_tree.TryGetValue(parentId, out var parent) && _tree.TryGetValue(productId, out var product))
                         parent.AddSubProduct(product);
-                };
+                }
+
+            foreach (var product in GetProducts()) //TODO remove after migration
+                ResetServerPolicyForRootProduct(product);
 
             _logger.Info("Links between products are built");
         }

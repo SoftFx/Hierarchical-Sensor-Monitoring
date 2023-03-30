@@ -57,7 +57,7 @@ namespace HSMServer.Core.Model.Policies
         public TimeIntervalModel Interval { get; set; }
 
 
-        internal bool FromParent => Interval?.TimeInterval == TimeInterval.FromParent;
+        internal bool FromParent => Interval == null || Interval?.TimeInterval == TimeInterval.FromParent;
 
 
         protected ServerPolicy() : base() { }

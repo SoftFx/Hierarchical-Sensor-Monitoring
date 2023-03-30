@@ -19,7 +19,7 @@ namespace HSMServer.Core.Model
 
     public class TimeIntervalModel
     {
-        public TimeInterval TimeInterval { get; }
+        public TimeInterval TimeInterval { get; } = TimeInterval.FromParent;
 
         public long CustomPeriod { get; }
 
