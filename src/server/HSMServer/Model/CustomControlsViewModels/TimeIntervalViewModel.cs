@@ -52,7 +52,7 @@ namespace HSMServer.Model
         private readonly Func<TimeIntervalViewModel> _getParentInterval;
 
 
-        private bool HasIntervalValue => _getParentInterval?.Invoke() is null;
+        private bool HasIntervalValue => _getParentInterval?.Invoke() is not null;
 
 
         private static long _id = 0L;
@@ -86,7 +86,7 @@ namespace HSMServer.Model
         internal TimeIntervalViewModel(TimeIntervalModel model, List<TimeInterval> intervals, Func<TimeIntervalViewModel> getParentInterval) : this(intervals)
         {
             _getParentInterval = getParentInterval;
-            if (HasIntervalValue)
+            if (!HasIntervalValue)
                 IntervalItems.RemoveAt(0);
 
             Update(model);
