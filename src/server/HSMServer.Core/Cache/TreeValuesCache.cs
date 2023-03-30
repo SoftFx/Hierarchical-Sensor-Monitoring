@@ -483,6 +483,8 @@ namespace HSMServer.Core.Cache
                 var product = new ProductModel(productEntity);
                 product.ApplyPolicies(productEntity.Policies, policies);
 
+                SubscribeToPolicyUpdate(product.ServerPolicy);
+
                 _tree.TryAdd(product.Id, product);
             }
 
@@ -497,7 +499,8 @@ namespace HSMServer.Core.Cache
 
                     if (_tree.TryGetValue(parentId, out var parent) && _tree.TryGetValue(productId, out var product))
                         parent.AddSubProduct(product);
-                }
+                };
+
             _logger.Info("Links between products are built");
         }
 

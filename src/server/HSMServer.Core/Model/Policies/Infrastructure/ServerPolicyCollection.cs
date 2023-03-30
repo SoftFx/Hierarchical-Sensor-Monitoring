@@ -46,7 +46,7 @@ namespace HSMServer.Core.Model.Policies
         {
             var result = PolicyResult.Ok;
 
-            result += RestoreOffTime.Policy.Validate(status, lastUpdate);
+            //result += RestoreOffTime.Policy.Validate(status, lastUpdate); //TODO uncomment after separate configucation
             result += RestoreWarning.Policy.Validate(status, lastUpdate);
             result += RestoreError.Policy.Validate(status, lastUpdate);
 
