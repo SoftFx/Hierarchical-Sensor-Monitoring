@@ -94,7 +94,7 @@
         $('#ignoreNotificatios_partial').empty();
     });
 
-    $('#timeIntervalSelect').change(function () {
+    $('[id^="timeIntervalSelect"]').change(function () {
         calculateInputs();
         updateNote();
     });
@@ -111,7 +111,7 @@
     function calculateInputs() {
         clearInputs();
 
-        let selectedOptionText = $('option:selected', $('#timeIntervalSelect')).text();
+        let selectedOptionText = $('option:selected', $('[id^="timeIntervalSelect"]')[0]).text();
         let periods = selectedOptionText.split(' ');
 
         if (periods.length % 2 != 0) {
