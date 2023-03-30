@@ -15,8 +15,7 @@ namespace HSMServer.Extensions
             return enumValue.GetType()
                             .GetMember(enumValueStr)
                             .First()
-                            .GetCustomAttribute<DisplayAttribute>()
-                            ?.Name ?? enumValueStr;
+                            .GetCustomAttribute<DisplayAttribute>()?.Name ?? enumValueStr;
         }
 
 

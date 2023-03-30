@@ -17,9 +17,9 @@ namespace HSMServer.Model.TreeViewModel
 
     public abstract class NodeViewModel
     {
-        public TimeIntervalViewModel ExpectedUpdateInterval { get; } = new();
+        public TimeIntervalViewModel ExpectedUpdateInterval { get; }
 
-        public TimeIntervalViewModel SensorRestorePolicy { get; } = new();
+        public TimeIntervalViewModel SensorRestorePolicy { get; }
 
 
         public Guid Id { get; }
@@ -62,6 +62,9 @@ namespace HSMServer.Model.TreeViewModel
             Path = model.Path;
 
             EncodedId = SensorPathHelper.EncodeGuid(model.Id);
+
+            ExpectedUpdateInterval = new(model.ServerPolicy.ExpectedUpdate.Policy.Interval, () => Parent?.ExpectedUpdateInterval);
+            SensorRestorePolicy = new(model.ServerPolicy.RestoreError.Policy.Interval, () => Parent?.SensorRestorePolicy);
         }
 
 
@@ -78,8 +81,7 @@ namespace HSMServer.Model.TreeViewModel
 
         private static void UpdatePolicyView<T>(CollectionProperty<T> property, TimeIntervalViewModel targetView) where T : ServerPolicy, new()
         {
-            if (property.IsSet)
-                targetView.Update(property.Policy.Interval);
+            targetView.Update(property.IsSet ? property.Policy.Interval : null);
         }
     }
 }

@@ -57,8 +57,8 @@ namespace HSMServer.Model.ViewModel
             EncodedId = model.EncodedId;
             Description = model.Description;
 
-            ExpectedUpdateInterval = new(model.ExpectedUpdateInterval.ToModel(), _predefinedExpectedIntervals, () => model.Parent?.ExpectedUpdateInterval);
-            SensorRestorePolicy = new(model.SensorRestorePolicy.ToModel(), _predefinedRestoreIntervals, () => model.Parent?.SensorRestorePolicy);
+            ExpectedUpdateInterval = new(model.ExpectedUpdateInterval, _predefinedExpectedIntervals);
+            SensorRestorePolicy = new(model.SensorRestorePolicy, _predefinedRestoreIntervals);
         }
     }
 }

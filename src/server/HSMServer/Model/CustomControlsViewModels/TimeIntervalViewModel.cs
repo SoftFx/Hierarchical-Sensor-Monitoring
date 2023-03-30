@@ -83,20 +83,28 @@ namespace HSMServer.Model
         // public constructor without parameters for post actions
         public TimeIntervalViewModel() { }
 
+        internal TimeIntervalViewModel(TimeIntervalModel model, Func<TimeIntervalViewModel> getParentValue)
+        {
+            _getParentValue = getParentValue;
+
+            Update(model);
+        }
+
         internal TimeIntervalViewModel(List<TimeInterval> intervals, bool useCutomTemplate = true)
         {
             IntervalItems = GetIntrevalItems(intervals);
             UseCustomInputTemplate = useCutomTemplate;
         }
 
-        internal TimeIntervalViewModel(TimeIntervalModel model, List<TimeInterval> intervals, Func<TimeIntervalViewModel> getParentValue) : this(intervals)
+        internal TimeIntervalViewModel(TimeIntervalViewModel model, List<TimeInterval> intervals) : this(intervals)
         {
-            _getParentValue = getParentValue;
+            _getParentValue = model._getParentValue;
+
+            TimeInterval = model.TimeInterval;
+            CustomTimeInterval = model.CustomTimeInterval;
 
             if (!HasIntervalValue)
                 IntervalItems.RemoveAt(0);
-
-            Update(model);
         }
 
 
