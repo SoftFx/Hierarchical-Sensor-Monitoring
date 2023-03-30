@@ -264,19 +264,19 @@
     }
     
     var isTreeCollapsed = false;
+    var state;
     function collapseTree(){
-        console.log(isTreeCollapsed);
         if (!isTreeCollapsed){
             isTreeCollapsed = true;
-            $('#jstree').jstree('save_state');
-            $('#jstree').jstree('close_all');
+            state = $('#jstree').jstree('get_state');
+            $('#jstree').jstree('save_state').jstree('close_all');
             
             $('#collapseIcon').removeClass('fa-regular fa-square-minus').addClass('fa-regular fa-square-plus')
         }
         else {
             isTreeCollapsed = false;
-            $('#jstree').jstree('restore_state', state);
-            
+            $('#jstree').jstree('restore_state');
+            $('#jstree').jstree('set_state', state);
             $('#collapseIcon').removeClass('fa-regular fa-square-plus').addClass('fa-regular fa-square-minus');
         }
     }
