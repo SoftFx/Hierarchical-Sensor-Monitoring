@@ -1,5 +1,7 @@
 ﻿@using HSMServer.Controllers
+@using HSMServer.Core.Model
 @using HSMServer.Model.ViewModel
+@using TimeInterval = HSMServer.Model.TimeInterval
 
 @model SensorInfoViewModel
 
@@ -50,7 +52,7 @@ If the sensor doesn`t receive new data within the specified time interval, a not
                 <td id="expectedUpdateInterval_@(Model.EncodedId)">
                     <label id="labelInterval" class="form-control naked-text">@Model.ExpectedUpdateInterval.DisplayInterval</label>
                     <div id="partialIntervalSelect" class="d-none">
-                        <partial name="_TimeIntervalSelect" for="ExpectedUpdateInterval" />
+                        <partial name="_TimeIntervalSelect" for="ExpectedUpdateInterval"/>
                     </div>
                 </td>
             </tr>

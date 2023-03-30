@@ -1,11 +1,12 @@
 ﻿using HSMServer.Model.TreeViewModel;
 using System.Collections.Generic;
 
+
 namespace HSMServer.Model.ViewModel
 {
     public abstract class NodeInfoBaseViewModel
     {
-        protected static readonly List<TimeInterval> _predefinedIntervals =
+        private static readonly List<TimeInterval> _predefinedExpectedIntervals =
             new()
             {
                 TimeInterval.FromParent,
@@ -15,6 +16,19 @@ namespace HSMServer.Model.ViewModel
                 TimeInterval.Day,
                 TimeInterval.Week,
                 TimeInterval.Month,
+                TimeInterval.Custom
+            };
+        
+        private static readonly List<TimeInterval> _predefinedRestoreIntervals =
+            new()
+            {
+                TimeInterval.FromParent,
+                TimeInterval.None,
+                TimeInterval.OneMinute,
+                TimeInterval.FiveMinutes,
+                TimeInterval.TenMinutes,
+                TimeInterval.Hour,
+                TimeInterval.Day,
                 TimeInterval.Custom
             };
 
@@ -43,8 +57,8 @@ namespace HSMServer.Model.ViewModel
             EncodedId = model.EncodedId;
             Description = model.Description;
 
-            ExpectedUpdateInterval = new(model.ExpectedUpdateInterval.ToModel(), _predefinedIntervals);
-            SensorRestorePolicy = new(model.SensorRestorePolicy.ToModel(), _predefinedIntervals);
+            ExpectedUpdateInterval = new(model.ExpectedUpdateInterval.ToModel(), _predefinedExpectedIntervals, () => model.Parent?.ExpectedUpdateInterval);
+            SensorRestorePolicy = new(model.SensorRestorePolicy.ToModel(), _predefinedRestoreIntervals, () => model.Parent?.SensorRestorePolicy);
         }
     }
 }

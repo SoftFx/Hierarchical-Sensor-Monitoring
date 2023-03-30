@@ -1,4 +1,5 @@
-﻿using HSMServer.Core.Model;
+﻿using System;
+using HSMServer.Core.Model;
 using HSMServer.Extensions;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using System.Collections.Generic;
@@ -14,6 +15,8 @@ namespace HSMServer.Model
         FromParent,
         [Display(Name = "Never")]
         None,
+        [Display(Name = "1 minute")]
+        OneMinute,
         [Display(Name = "5 minutes")]
         FiveMinutes,
         [Display(Name = "10 minutes")]
@@ -46,25 +49,36 @@ namespace HSMServer.Model
     public record TimeIntervalViewModel
     {
         public const string CustomTemplate = "dd.HH:mm:ss";
-
+        
+        
+        private readonly Func<TimeIntervalViewModel> _getParentInterval;
+        
+        
         private static long _id = 0L;
 
-
+        
+        private bool HasIntervalValue => _getParentInterval?.Invoke() is not null;
+        
+        
         public List<SelectListItem> IntervalItems { get; }
-
+        
         public string Id { get; } = $"{_id++}";
-
 
         public bool CustomItemIsVisible { get; init; } = true;
 
-
         public TimeInterval TimeInterval { get; set; }
-
+        
         public string CustomTimeInterval { get; set; }
 
-        public string DisplayInterval => TimeInterval.IsCustom() ? CustomTimeInterval : TimeInterval.GetDisplayName();
-
-
+        public string DisplayInterval => TimeInterval == TimeInterval.FromParent ? $"From parent ({UsedInterval})" : UsedInterval;
+        
+        public string UsedInterval => TimeInterval switch
+        {
+            TimeInterval.Custom => CustomTimeInterval,
+            TimeInterval.FromParent => HasIntervalValue ? _getParentInterval?.Invoke().UsedInterval : TimeInterval.GetDisplayName(),
+            _ => TimeInterval.GetDisplayName()
+        };
+        
         // public constructor without parameters for post actions
         public TimeIntervalViewModel() { }
 
@@ -73,8 +87,12 @@ namespace HSMServer.Model
             IntervalItems = GetIntrevalItems(intervals);
         }
 
-        internal TimeIntervalViewModel(TimeIntervalModel model, List<TimeInterval> intervals) : this(intervals)
+        internal TimeIntervalViewModel(TimeIntervalModel model, List<TimeInterval> intervals, Func<TimeIntervalViewModel> getParentInterval) : this(intervals)
         {
+            _getParentInterval = getParentInterval;
+            if (!HasIntervalValue)
+                IntervalItems.RemoveAt(0);
+
             Update(model);
         }
 
@@ -94,6 +112,8 @@ namespace HSMServer.Model
         private CoreTimeInterval GetIntervalOption() =>
             TimeInterval switch
             {
+                TimeInterval.OneMinute => CoreTimeInterval.OneMinute,
+                TimeInterval.FiveMinutes => CoreTimeInterval.FiveMinutes,
                 TimeInterval.TenMinutes => CoreTimeInterval.TenMinutes,
                 TimeInterval.Hour => CoreTimeInterval.Hour,
                 TimeInterval.Day => CoreTimeInterval.Day,
@@ -112,6 +132,8 @@ namespace HSMServer.Model
         private static TimeInterval SetTimeInterval(CoreTimeInterval interval, long ticks) =>
             interval switch
             {
+                CoreTimeInterval.OneMinute => TimeInterval.OneMinute,
+                CoreTimeInterval.FiveMinutes => TimeInterval.FiveMinutes,
                 CoreTimeInterval.TenMinutes => TimeInterval.TenMinutes,
                 CoreTimeInterval.Hour => TimeInterval.Hour,
                 CoreTimeInterval.Day => TimeInterval.Day,
