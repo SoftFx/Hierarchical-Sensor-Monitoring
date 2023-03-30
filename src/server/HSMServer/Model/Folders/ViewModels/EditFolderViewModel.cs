@@ -54,6 +54,16 @@ namespace HSMServer.Model.Folders.ViewModels
         }
 
 
+        public string GenerateRandomColor()
+        {
+            const int maxHex = 16777215; // FFFFFF number
+
+            var random = new Random();
+            var randomHex = $"{(int)Math.Floor(random.NextDouble() * maxHex):x}";
+
+            return $"#{randomHex.PadLeft(6, '0')}";
+        }
+
         internal List<ProductNodeViewModel> GetFolderProducts(TreeViewModel.TreeViewModel treeViewModel) =>
             Products?.GetFolderProducts(treeViewModel) ?? new();
 
