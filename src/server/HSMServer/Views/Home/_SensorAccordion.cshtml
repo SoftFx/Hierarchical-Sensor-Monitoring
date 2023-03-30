@@ -224,7 +224,7 @@
 var previousReceivedTime = undefined;
 
 $(document).ready(function() {
-    if (@(Model.SensorType is SensorType.File) === 'True'){
+    if ('@(Model.SensorType is SensorType.File)'=== 'True'){
         setContentPreview('@Model.EncodedId');
     }
 });
