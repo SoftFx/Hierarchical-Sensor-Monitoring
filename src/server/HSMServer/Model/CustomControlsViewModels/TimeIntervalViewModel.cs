@@ -70,13 +70,14 @@ namespace HSMServer.Model
         
         public string CustomTimeInterval { get; set; }
 
-        public string DisplayInterval => TimeInterval switch
+        public string DisplayInterval => TimeInterval == TimeInterval.FromParent ? $"From parent ({UsedInterval})" : UsedInterval;
+        
+        public string UsedInterval => TimeInterval switch
         {
             TimeInterval.Custom => CustomTimeInterval,
-            TimeInterval.FromParent => HasIntervalValue ? _getParentInterval?.Invoke().DisplayInterval : TimeInterval.GetDisplayName(),
+            TimeInterval.FromParent => HasIntervalValue ? _getParentInterval?.Invoke().UsedInterval : TimeInterval.GetDisplayName(),
             _ => TimeInterval.GetDisplayName()
         };
-
         
         // public constructor without parameters for post actions
         public TimeIntervalViewModel() { }
