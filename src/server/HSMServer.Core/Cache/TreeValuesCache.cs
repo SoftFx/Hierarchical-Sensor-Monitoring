@@ -75,17 +75,7 @@ namespace HSMServer.Core.Cache
 
         public List<AccessKeyModel> GetAccessKeys() => _keys.Values.ToList();
 
-        public ProductModel AddProduct(string productName)
-        {
-            var product = new ProductModel(productName);
-
-            AddProduct(product);
-            ResetServerPolicyForRootProduct(product);
-
-            ChangeProductEvent?.Invoke(product, ActionType.Update);
-
-            return product;
-        }
+        public ProductModel AddProduct(string productName) => AddProduct(new ProductModel(productName));
 
         public void UpdateProduct(ProductModel product)
         {
@@ -623,6 +613,9 @@ namespace HSMServer.Core.Cache
             if (_tree.TryAdd(product.Id, product))
             {
                 SubscribeToPolicyUpdate(product.ServerPolicy);
+
+                if (product.Parent == null)
+                    ResetServerPolicyForRootProduct(product);
 
                 _databaseCore.AddProduct(product.ToProductEntity());
 
