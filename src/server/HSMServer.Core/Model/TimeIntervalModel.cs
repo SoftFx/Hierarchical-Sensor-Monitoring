@@ -5,6 +5,8 @@ namespace HSMServer.Core.Model
 {
     public enum TimeInterval : byte
     {
+        OneMinute,
+        FiveMinutes,
         TenMinutes,
         Hour,
         Day,
@@ -46,6 +48,8 @@ namespace HSMServer.Core.Model
 
             return DateTime.UtcNow > TimeInterval switch
             {
+                TimeInterval.OneMinute => time.AddMinutes(1),
+                TimeInterval.FiveMinutes => time.AddMinutes(5),
                 TimeInterval.TenMinutes => time.AddMinutes(10),
                 TimeInterval.Hour => time.AddHours(1),
                 TimeInterval.Day => time.AddDays(1),

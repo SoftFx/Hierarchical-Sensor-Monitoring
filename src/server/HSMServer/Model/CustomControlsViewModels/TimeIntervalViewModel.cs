@@ -15,6 +15,8 @@ namespace HSMServer.Model
         FromParent,
         [Display(Name = "Never")]
         None,
+        [Display(Name = "1 minute")]
+        OneMinute,
         [Display(Name = "5 minutes")]
         FiveMinutes,
         [Display(Name = "10 minutes")]
@@ -50,16 +52,16 @@ namespace HSMServer.Model
         
         
         private readonly Func<TimeIntervalViewModel> _getParentInterval;
-
-
-        private bool HasIntervalValue => _getParentInterval?.Invoke() is not null;
-
-
+        
+        
         private static long _id = 0L;
 
-
+        
+        private bool HasIntervalValue => _getParentInterval?.Invoke() is not null;
+        
+        
         public List<SelectListItem> IntervalItems { get; }
-
+        
         public string Id { get; } = $"{_id++}";
 
         public bool CustomItemIsVisible { get; init; } = true;
@@ -68,10 +70,11 @@ namespace HSMServer.Model
         
         public string CustomTimeInterval { get; set; }
 
-        public string DisplayInterval => TimeInterval.IsCustom() switch
+        public string DisplayInterval => TimeInterval switch
         {
-            true => CustomTimeInterval,
-            false => HasIntervalValue ? _getParentInterval?.Invoke().DisplayInterval : TimeInterval.GetDisplayName()
+            TimeInterval.Custom => CustomTimeInterval,
+            TimeInterval.FromParent => HasIntervalValue ? _getParentInterval?.Invoke().DisplayInterval : TimeInterval.GetDisplayName(),
+            _ => TimeInterval.GetDisplayName()
         };
 
         
@@ -108,6 +111,8 @@ namespace HSMServer.Model
         private CoreTimeInterval GetIntervalOption() =>
             TimeInterval switch
             {
+                TimeInterval.OneMinute => CoreTimeInterval.OneMinute,
+                TimeInterval.FiveMinutes => CoreTimeInterval.FiveMinutes,
                 TimeInterval.TenMinutes => CoreTimeInterval.TenMinutes,
                 TimeInterval.Hour => CoreTimeInterval.Hour,
                 TimeInterval.Day => CoreTimeInterval.Day,
@@ -126,6 +131,8 @@ namespace HSMServer.Model
         private static TimeInterval SetTimeInterval(CoreTimeInterval interval, long ticks) =>
             interval switch
             {
+                CoreTimeInterval.OneMinute => TimeInterval.OneMinute,
+                CoreTimeInterval.FiveMinutes => TimeInterval.FiveMinutes,
                 CoreTimeInterval.TenMinutes => TimeInterval.TenMinutes,
                 CoreTimeInterval.Hour => TimeInterval.Hour,
                 CoreTimeInterval.Day => TimeInterval.Day,
