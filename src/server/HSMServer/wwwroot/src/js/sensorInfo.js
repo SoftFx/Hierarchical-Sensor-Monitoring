@@ -15,6 +15,8 @@ window.editInfoButtonClick = function () {
     $('#editSensorMetaInfo_form').children('div').each(function () {
         $(this).removeClass('d-none');
     });
+    $('[id^="span_description_"]').addClass('d-none')
+    $('[id^="description_"]').removeClass('d-none')
     
     let collapse = '#sensor_info_collapse';
     if ($(collapse).attr('aria-expanded') === 'false'){

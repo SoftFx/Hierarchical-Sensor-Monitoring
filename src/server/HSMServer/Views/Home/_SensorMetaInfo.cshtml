@@ -21,52 +21,64 @@
     </div>
     <form class="mb-0" asp-action="@nameof(HomeController.UpdateSensorInfo)" id="editSensorMetaInfo_form">
         <input id="sensorMetaInfo_encodedId" style='display: none' asp-for="EncodedId" value="@Model.EncodedId"/>
-        <div class="d-none d-flex">
-            <div class="d-flex form-control" style="max-width: 15rem;">
-                Description
+        <div class="d-none">
+            <div class="form-control border-0" style="max-width: 15rem;">
+                Description:
             </div>
-            <div class="d-flex w-100">
-                <textarea id='description_@(Model.EncodedId)' type='text' class='form-control' asp-for="Description" value='@Model.Description' disabled></textarea>
+            <div class="w-100">
+                <span class="naked-text w-100 ms-1 ps-2" id='span_description_@(Model.EncodedId)'>@Model.Description</span>
+                <textarea id='description_@(Model.EncodedId)' class="form-control naked-text w-100 ms-1 ps-2 d-none"  type='text' asp-for="Description" value='@Model.Description' disabled></textarea>
             </div>
         </div>
 
         <div class="collapse" id="multiCollapseExample1">
+            <div class="d-flex justify-content-start">
+                <div class="d-flex ps-2 ms-1 text-nowrap">
+                    <span>Sensor Type:</span>
+                </div>
+                <div class="d-flex w-100 ps-2">
+                    <span>@Model.SensorType</span>
+                </div>
+            </div>
+            <div class="d-flex justify-content-start">
+                <div class="d-flex ps-2 ms-1 text-nowrap">
+                    <span>Sensor Status:</span>
+                </div>
+                <div class="d-flex w-100 ps-2">
+                    <span>Ok</span>
+                </div>
+            </div>
 
-
-            <div class="d-flex">
-                <div class="d-flex form-control" style="max-width: 15rem;">
-                    Sensor Type
-                </div>
-                <div class="d-flex w-100">
-                    <span class='form-control'>@Model.SensorType</span>
-                </div>
-            </div>
-            <div class="d-flex">
-                <div class="d-flex form-control" style="max-width: 15rem;">
-                    Expected update interval
-                    <i class='fas fa-question-circle' title='Time format: dd.hh:mm:ss min value 00:01:00.
-                If the sensor doesn`t receive new data within the specified time interval, a notification sends'></i>
-                </div>
-                <div id="expectedUpdateInterval_@(Model.EncodedId)" class="d-flex w-100 class='form-control' ">
-                    <label id="labelInterval" class="form-control">@Model.ExpectedUpdateInterval.DisplayInterval</label>
-                    <div id="partialIntervalSelect" class="d-none form-control">
-                        <partial name="_TimeIntervalSelect" for="ExpectedUpdateInterval"/>
-                    </div>
-                </div>
-            </div>
-            <div class="d-flex">
-                <div class="d-flex form-control" style="max-width: 15rem;">
-                    Sensitivity interval
-                    <i class='fas fa-question-circle' title='Time format: dd.hh:mm:ss min value 00:01:00.
-                  If the sensor doesn`t return to Ok status after the specified time inverval, a notification sends'></i>
-                </div>
-                <div id="restorePolicy_@(Model.EncodedId)" class="d-flex w-100 class='form-control' ">
-                    <label id="labelRestoreInterval" class="form-control">@Model.SensorRestorePolicy.DisplayInterval</label>
-                    <div id="partialRestoreSelect" class="d-none form-control">
-                        <partial name="_TimeIntervalSelect" for="SensorRestorePolicy"/>
-                    </div>
-                </div>
-            </div>
+            <table class='table table-bordered'>
+                <tbody>
+                <tr>
+                    <td class="w-25">
+                        Expected sensor(s) update interval
+                        <i class='fas fa-question-circle' title='Time format: dd.hh:mm:ss min value 00:01:00.
+                    If the sensor doesn`t receive new data within the specified time interval, a notification sends'></i>
+                    </td>
+                    <td id="productExpectedUpdateInterval_@(Model.EncodedId)">
+                        <label id="labelInterval" class="form-control naked-text">@Model.ExpectedUpdateInterval.DisplayInterval</label>
+                        <div id="partialIntervalSelect" class="d-none">
+                            <partial name="_TimeIntervalSelect" for="ExpectedUpdateInterval"/>
+                        </div>
+                    </td>
+                </tr>
+                <tr>
+                    <td class="w-25">
+                        Sensitivity sensor(s) interval
+                        <i class='fas fa-question-circle' title='Time format: dd.hh:mm:ss min value 00:01:00.
+                 If the sensor doesn`t return to Ok status after the specified time inverval, a notification sends'></i>
+                    </td>
+                    <td id="productRestorePolicy_@(Model.EncodedId)">
+                        <label id="labelRestoreInterval" class="form-control naked-text">@Model.SensorRestorePolicy.DisplayInterval</label>
+                        <div id="partialRestoreSelect" class="d-none">
+                            <partial name="_TimeIntervalSelect" for="SensorRestorePolicy"/>
+                        </div>
+                    </td>
+                </tr>
+                </tbody>
+            </table>
         </div>
 
         <button class="btn btn-secondary mt-1 mb-0" id="sensor_info_collapse" type="button" data-bs-toggle="collapse" onclick="collapseChangeTextContent(this)" href="#multiCollapseExample1" role="button" aria-expanded="false" aria-controls="multiCollapseExample1" style="width: 12rem">Expand information</button>
