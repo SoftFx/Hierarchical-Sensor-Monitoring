@@ -81,7 +81,7 @@
             </table>
         </div>
 
-        <button class="btn btn-secondary mt-1 mb-0" id="sensor_info_collapse" type="button" data-bs-toggle="collapse" onclick="collapseChangeTextContent(this)" href="#multiCollapseExample1" role="button" aria-expanded="false" aria-controls="multiCollapseExample1" style="width: 12rem">Expand information</button>
+        <button class="btn btn-outline-secondary w-100" id="sensor_info_collapse" title="Shows additional info" type="button" data-bs-toggle="collapse" onclick="collapseChangeTextContent()" href="#multiCollapseExample1" role="button" aria-expanded="false" aria-controls="multiCollapseExample1" ><i id="collapse_icon" class="fa-solid fa-caret-down"></i></button>
 
         <div class="d-flex justify-content-end m-3 my-2 gap-2 me-0">
             <button id='saveInfo_@(Model.EncodedId)' type='submit' class='btn btn-secondary px-2 independentSizeButton'
@@ -126,9 +126,11 @@
         });
     });
     
-    function collapseChangeTextContent(event){
-        if (event.textContent.includes('Expand'))
-            event.textContent  = 'Collapse information'
-        else event.textContent = 'Expand information'
+    function collapseChangeTextContent(){
+        let icon = $('#collapse_icon')[0];
+        
+        if (icon.classList.contains('fa-caret-up'))
+            icon.classList.toggle('fa-caret-down')
+        else icon.classList.toggle('fa-caret-up')
     }
 </script>
