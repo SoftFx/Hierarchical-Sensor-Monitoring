@@ -4,7 +4,7 @@
 
 ### Tree
 * Context menu names have been uploaded
-* **Collapse tree** button has been added
+* **Save and close tree / Restore tree** button has been added
 
 ### Time intervals control
 * New value **From parent** has been added. If this value is selected, the parent setting is applied to current entity
