@@ -23,18 +23,9 @@ namespace HSMServer.Model.Folders.ViewModels
 
         public Color BackgroundColor { get; } = Color.White;
 
-        public Color FontColor
-        {
-            get
-            {
-                double luminance = (0.299 * BackgroundColor.R + 0.587 * BackgroundColor.G + 0.114 * BackgroundColor.B) / 255;
-                int d = luminance > 0.5 ? 0 : 255;
+        public Color FontColor => BackgroundColor.ToSuitableFont();
 
-                return Color.FromArgb(d, d, d);
-            }
-        }
-
-        public string Background => BackgroundColor.ToRGBA(0.7);
+        public string Background => BackgroundColor.ToRGBA();
 
         public string Foreground => FontColor.ToRGB();
 

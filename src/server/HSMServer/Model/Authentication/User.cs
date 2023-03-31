@@ -57,9 +57,8 @@ namespace HSMServer.Model.Authentication
             if (entity.ProductsRoles != null && entity.ProductsRoles.Any())
                 ProductsRoles.AddRange(entity.ProductsRoles.Select(r => (Guid.Parse(r.Key), (ProductRoleEnum)r.Value)));
 
-            if (entity.FolderRoles != null)
-                foreach (var (folderId, role) in entity.FolderRoles)
-                    FoldersRoles.Add(Guid.Parse(folderId), (ProductRoleEnum)role);
+            foreach (var (folderId, role) in entity.FolderRoles)
+                FoldersRoles.Add(Guid.Parse(folderId), (ProductRoleEnum)role);
 
             Notifications = new(entity.NotificationSettings);
 

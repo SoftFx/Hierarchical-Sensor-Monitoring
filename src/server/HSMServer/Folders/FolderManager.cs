@@ -15,7 +15,7 @@ using System.Threading.Tasks;
 
 namespace HSMServer.Folders
 {
-    public sealed class FolderManager : ConcurrentStorage<FolderModel, FolderEntity, FolderUpdate>, IFolderManager
+    public sealed class FolderManager : ConcurrentStorage<FolderModel, FolderEntity, FolderUpdate>, IFolderManager, IDisposable
     {
         private readonly ITreeValuesCache _cache;
         private readonly IUserManager _userManager;
@@ -47,6 +47,12 @@ namespace HSMServer.Folders
             _userManager.Removed += RemoveUserHandler;
         }
 
+
+        public void Dispose()
+        {
+            _cache.ChangeProductEvent -= ChangeProductHandler;
+            _userManager.Removed -= RemoveUserHandler;
+        }
 
         public async Task<FolderModel> TryAddFolder(FolderAdd folderAdd)
         {

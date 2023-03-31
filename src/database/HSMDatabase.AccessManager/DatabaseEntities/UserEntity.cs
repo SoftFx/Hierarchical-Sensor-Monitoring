@@ -13,7 +13,7 @@ namespace HSMDatabase.AccessManager.DatabaseEntities
 
         public string Password { get; set; }
 
-        public Dictionary<string, byte> FolderRoles { get; set; }
+        public Dictionary<string, byte> FolderRoles { get; set; } = new();
 
         public List<KeyValuePair<string, byte>> ProductsRoles { get; set; }
 

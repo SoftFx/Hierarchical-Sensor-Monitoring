@@ -1,20 +1,14 @@
-﻿using HSMServer.Model.Authentication;
+﻿using HSMDatabase.AccessManager.DatabaseEntities;
+using HSMServer.ConcurrentStorage;
+using HSMServer.Model.Authentication;
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
 namespace HSMServer.Authentication
 {
-    public interface IUserManager
+    public interface IUserManager : IConcurrentStorage<User, UserEntity, UserUpdate>
     {
-        User this[Guid id] { get; }
-
-        User this[string name] { get; }
-
-        event Action<User> Added;
-        event Action<User> Updated;
-        event Action<User> Removed;
-
         /// <summary>
         /// Add new user with the specified parameters
         /// </summary>
@@ -23,8 +17,6 @@ namespace HSMServer.Authentication
         Task<bool> AddUser(string userName, string passwordHash, bool isAdmin, List<(Guid, ProductRoleEnum)> productRoles = null);
 
         Task<bool> TryAdd(User user);
-
-        Task<bool> TryUpdate(UserUpdate update);
 
         /// <summary>
         /// New user object
@@ -46,7 +38,5 @@ namespace HSMServer.Authentication
         List<User> GetViewers(Guid productId);
         List<User> GetManagers(Guid productId);
         IEnumerable<User> GetUsers(Func<User, bool> filter = null);
-
-        Task Initialize();
     }
 }

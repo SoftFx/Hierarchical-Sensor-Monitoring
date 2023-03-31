@@ -1,25 +1,18 @@
-﻿using HSMServer.Model.Folders;
+﻿using HSMDatabase.AccessManager.DatabaseEntities;
+using HSMServer.ConcurrentStorage;
+using HSMServer.Model.Folders;
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
 namespace HSMServer.Folders
 {
-    public interface IFolderManager
+    public interface IFolderManager : IConcurrentStorage<FolderModel, FolderEntity, FolderUpdate>
     {
-        FolderModel this[Guid id] { get; }
-
-        FolderModel this[string name] { get; }
-
-
         Task<FolderModel> TryAddFolder(FolderAdd folderAdd);
-
-        Task<bool> TryUpdate(FolderUpdate update);
 
         Task<bool> TryRemoveFolder(Guid folderId);
 
         List<FolderModel> GetFolders();
-
-        Task Initialize();
     }
 }

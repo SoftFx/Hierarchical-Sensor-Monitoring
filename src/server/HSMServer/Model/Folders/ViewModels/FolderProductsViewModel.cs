@@ -16,7 +16,7 @@ namespace HSMServer.Model.Folders.ViewModels
         public required List<ProductNodeViewModel> AvailableProducts { get; init; }
 
         public List<SelectListItem> AvailableProductsItems =>
-            AvailableProducts?.Select(p => new SelectListItem() { Text = p.Name, Value = p.Id.ToString() }).OrderBy(p => p.Text).ToList();
+            AvailableProducts?.Select(p => new SelectListItem(p.Name, p.Id.ToString())).OrderBy(p => p.Text).ToList();
 
         public List<string> SelectedProducts { get; set; } = new();
 

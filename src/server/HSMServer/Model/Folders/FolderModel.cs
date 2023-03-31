@@ -55,6 +55,12 @@ namespace HSMServer.Model.Folders
         }
 
 
+        public void Update(FolderUpdate update)
+        {
+            Description = update.Description ?? Description;
+            Color = update.Color ?? Color;
+        }
+
         public FolderEntity ToEntity() =>
             new()
             {
@@ -65,11 +71,5 @@ namespace HSMServer.Model.Folders
                 Description = Description,
                 Color = Color.ToArgb(),
             };
-
-        public void Update(FolderUpdate update)
-        {
-            Description = update.Description ?? Description;
-            Color = update.Color ?? Color;
-        }
     }
 }

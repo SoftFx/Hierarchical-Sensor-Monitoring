@@ -11,12 +11,12 @@ namespace HSMServer.Model.Folders
 
         public string Name { get; init; }
 
-        public Guid AuthorId { get; init; }
-
-        public string Description { get; init; }
-
         public Color Color { get; init; }
 
+        public Guid AuthorId { get; init; }
+
         public string Author { get; init; }
+
+        public string Description { get; init; }
     }
 }
