@@ -1,10 +1,10 @@
 
-#productTable td{
+.productTable td{
     min-width: 10rem;
     max-width: 10rem;
 }
 
-#productTable .form-control{
+.productTable .form-control{
     border: 0;
     padding-left: 0;
     border-bottom: solid;
@@ -15,20 +15,20 @@
     height: 2.3rem;
 }
 
-#productTable .form-control:focus {
+.productTable .form-control:focus {
     border-color: inherit;
     -webkit-box-shadow: none!important;
     box-shadow: none!important;
 }
 
-#productTable .form-floating>label{
+.productTable .form-floating>label{
     display: flex;
     align-items: flex-end;
     transform-origin: 0 -3rem;
     padding: 0;
 }
 
-#productTable th{
+.productTable th{
     padding-top: 0;
 }
 

@@ -3,6 +3,8 @@
 @using HSMServer.Extensions
 @using HSMServer.Model.Folders.ViewModels
 @using HSMServer.Model.ViewModel
+@using HSMServer.Constants
+@using HSMServer.Controllers
 
 @model FolderViewModel
 
@@ -15,20 +17,21 @@
 }
  
 
-<div class="w-100" id="productTable">
-    <form id="formSearch" asp-controller="Product" asp-action="Index">
+<div class="w-100 productTable">
+    <form id="folderProductsForm_@Model.Id" asp-controller="@ViewConstants.ProductController" asp-action="@nameof(ProductController.FilterFolderProducts)">
+        <input class='d-none' name='folderId' value="@Model.Id" />
         <table id="folderProductsTable_@Model.Id" class="table table-striped">
             <thead>
                 <tr>
                     <th>
                         <div class="form-floating m-0 p-0">
-                            <input placeholder="Name" id='searchProduct' type='text' class='form-control' name='searchProductName' value="@ViewBag.ProductName"/>
+                            <input placeholder="Name" id='searchProduct' type='text' class='form-control' name='productName' value="@ViewBag.ProductName"/>
                             <label for="searchProduct">Name</label>
                         </div>
                     </th>
                     <th>
                         <div class="form-floating m-0 p-0">
-                            <input id="searchManager" class='form-control' type='text' name="searchProductManager" placeholder="Manager" value="@ViewBag.ProductManager"/>
+                            <input id="searchManager" class='form-control' type='text' name="productManager" placeholder="Manager" value="@ViewBag.ProductManager"/>
                             <label for="searchManager">Managers</label>
                         </div>
                     </th>
@@ -124,4 +127,22 @@
     if (window.history.replaceState) {
         window.history.replaceState(null, null, window.location.href );
     }
+
+    $(document).on("submit", "[id^=folderProductsForm_@Model.Id]", function (event) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+
+        let folderId = this.id.substring('folderProductsForm_'.length, this.id.length);
+
+        $.ajax({
+            url: $(`#folderProductsForm_${folderId}`).attr("action"),
+            type: 'POST',
+            data: $(`#folderProductsForm_${folderId}`).serialize(),
+            datatype: 'json',
+            async: true,
+            success: (viewData) => {
+                $(`#accordionBody_${folderId}`).html(viewData);
+            }
+        });
+    });
 </script>

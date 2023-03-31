@@ -73,7 +73,7 @@
                 </button>
             </h2>
             <div id='collapse_@folder.Id' class='accordion-collapse collapse show text-break' aria-labelledby='heading_@folder.Id' data-bs-parent='#folderData_@folder.Id'>
-                <div class='accordion-body p-3'>
+                <div id="accordionBody_@folder.Id" class='accordion-body p-3'>
                     @await Html.PartialAsync("_ProductList", folder)
                 </div>
             </div>

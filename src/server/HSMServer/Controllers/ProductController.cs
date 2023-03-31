@@ -53,11 +53,8 @@ namespace HSMServer.Controllers
 
         #region Products
 
-        public IActionResult Index(string searchProductName = "", string searchProductManager = "")
+        public IActionResult Index()
         {
-            ViewBag.ProductName = searchProductName;
-            ViewBag.ProductManager = searchProductManager;
-
             var userProducts = _treeViewModel.GetUserProducts(HttpContext.User as User);
             var folderProducts = new Dictionary<Guid, List<ProductViewModel>>();
             var productsWithoutFolder = new List<ProductViewModel>();
@@ -87,14 +84,32 @@ namespace HSMServer.Controllers
             folders.Add(new FolderViewModel(productsWithoutFolder));
 
             return View(folders);
+        }
 
-            //if (!string.IsNullOrEmpty(searchProductName))
-            //    userProducts = userProducts.Where(x => x.Name.Contains(searchProductName, StringComparison.CurrentCultureIgnoreCase));
+        [HttpPost]
+        public IActionResult FilterFolderProducts(Guid? folderId, string productName = "", string productManager = "")
+        {
+            ViewBag.ProductName = productName;
+            ViewBag.ProductManager = productManager;
 
-            //if (!string.IsNullOrEmpty(searchProductManager))
-            //    userProducts = userProducts.Where(x => x.Managers.Any(y => y.Contains(searchProductManager, StringComparison.CurrentCultureIgnoreCase)));
+            var userProducts = _treeViewModel.GetUserProducts(HttpContext.User as User);
+            var folderProducts = new List<ProductViewModel>();
 
-            //return View(userProducts.ToList());
+            foreach (var product in userProducts)
+                if (product.FolderId == folderId)
+                {
+                    var productVM = new ProductViewModel(product, _userManager);
+
+                    if ((string.IsNullOrEmpty(productName) || productVM.Name.Contains(productName, StringComparison.CurrentCultureIgnoreCase)) &&
+                        (string.IsNullOrEmpty(productManager) || productVM.Managers.Any(m => m.Contains(productManager, StringComparison.CurrentCultureIgnoreCase))))
+                        folderProducts.Add(productVM);
+                }
+
+            var folder = folderId.HasValue
+                ? new FolderViewModel(_folderManager[folderId.Value], folderProducts)
+                : new FolderViewModel(folderProducts);
+
+            return PartialView("_ProductList", folder);
         }
 
         public void CreateProduct([FromQuery(Name = "Product")] string productName)
