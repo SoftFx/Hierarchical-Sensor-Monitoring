@@ -6,16 +6,14 @@
 @model SensorNodeViewModel
 
 @{
-    var splitted = Model.FileNameString.Split('.');
-    var fileType = splitted.Length >= 2 ? splitted[1] : string.Empty;
-
     FileValue file = null;
     bool isEnabledPreview = false;
     if (Model.SensorType is SensorType.File)
     {
-        file = (FileValue)Model.LastValue;
-        isEnabledPreview = (file.Extension == "csv" && file.OriginalSize < 5 * 1024 * 1024) ||
-                           (file.Extension == "txt" && file.OriginalSize < 1024 * 1024);
+        file = Model.LastValue as FileValue;
+        if (Model.LastValue is FileValue fileValue)
+            isEnabledPreview = (fileValue.Extension == "csv" && fileValue.OriginalSize < 5 * 1024 * 1024) ||
+                               (fileValue.Extension == "txt" && fileValue.OriginalSize < 1024 * 1024);
     }
        
 
