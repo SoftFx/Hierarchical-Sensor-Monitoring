@@ -24,7 +24,7 @@ namespace HSMServer.Model.Folders.ViewModels
 
         [Required(ErrorMessage = "{0} is required.")]
         [StringLength(60, ErrorMessage = "{0} length should be less than {1}.")]
-        [UniqueFolderValidation(ErrorMessage = "Folder with the same name already exists.")]
+        [UniqueValidation(ErrorMessage = "Folder with the same name already exists.")]
         public string Name { get; set; }
 
         public string Description { get; set; }

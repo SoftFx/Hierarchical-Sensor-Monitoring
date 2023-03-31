@@ -112,18 +112,13 @@ namespace HSMServer.Controllers
             return PartialView("_ProductList", folder);
         }
 
-        public void CreateProduct([FromQuery(Name = "Product")] string productName)
+        [HttpPost]
+        public IActionResult CreateProduct(AddProductViewModel product)
         {
-            NewProductNameValidator validator = new NewProductNameValidator(_treeValuesCache);
-            var results = validator.Validate(productName);
-            if (!results.IsValid)
-            {
-                TempData[TextConstants.TempDataErrorText] = ValidatorHelper.GetErrorString(results.Errors);
-                return;
-            }
+            if (ModelState.IsValid)
+                _treeValuesCache.AddProduct(product.Name);
 
-            TempData.Remove(TextConstants.TempDataErrorText);
-            _treeValuesCache.AddProduct(productName);
+            return PartialView("_AddProduct", product);
         }
 
         public void RemoveProduct([FromQuery(Name = "Product")] Guid productId)

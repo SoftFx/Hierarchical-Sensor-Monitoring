@@ -1,5 +1,10 @@
-﻿@using HSMServer.Model.Folders.ViewModels
-@using HSMServer.Constants
+﻿@using HSMServer.Constants
+@using HSMServer.Controllers
+@using HSMServer.Helpers
+@using HSMServer.Extensions
+@using HSMServer.Model.Authentication
+@using HSMServer.Model.Folders.ViewModels
+@using HSMServer.Model.ViewModel
 
 @model List<FolderViewModel>
 
@@ -8,18 +13,66 @@
 
 <script>
     var deleteAction = "@Html.Raw(Url.Action(ViewConstants.RemoveProductAction, ViewConstants.ProductController))";
-    var createAction = "@Html.Raw(Url.Action(ViewConstants.CreateProductAction, ViewConstants.ProductController))";
     var editAction = "@Html.Raw(Url.Action(ViewConstants.EditProductAction, ViewConstants.ProductController))";
 </script>
 
 
 <div class="container">
     <div class="row w-100 justify-content-center">
-        @await Html.PartialAsync("_FolderAccordion", Model)
+        <div class="m-2">
+            <div class="d-flex justify-content-between my-2">
+                <h5>Products</h5>
+
+                @if (UserRoleHelper.IsUserCRUDAllowed(Context.User as User))
+                {
+                    <div class='d-flex col-md-auto'>
+                        <a class="mx-2" href="javascript:showAddProductModal();">Add product</a>
+                        <a href="@Url.Action(nameof(FoldersController.EditFolder), ViewConstants.FoldersController)">Add folder</a>
+                    </div>
+                }
+            </div>
+        </div>
+
+        @foreach (var folder in Model)
+        {
+            <div class='accordion my-1' id='folderData_@folder.Id'>
+                <div class='accordion-item' style="border-color:@folder.BackgroundColor.ToRGB();">
+                    <h2 class='accordion-header' id='heading_@folder.Id'>
+                        <button id='accordion_@folder.Id' class='accordion-button' type='button' data-bs-toggle='collapse'
+                                data-bs-target='#collapse_@folder.Id' aria-expanded='true' aria-controls='collapse_@folder.Id'
+                                style="background-color:@folder.Background; color:@folder.Foreground">
+                            <div class="w-100">
+                                <div class='d-flex col-md-auto'>
+                                    <div style="font-weight: bold;">@Html.Raw(folder.Name)</div>
+                                    @if (folder.Id.HasValue)
+                                    {
+                                        <a asp-controller="@ViewConstants.FoldersController" asp-action="@nameof(FoldersController.EditFolder)" asp-route-folderId="@folder.Id"
+                                           class="ms-2" style="color:@folder.Foreground">
+                                            <i class='fas fa-edit'></i>
+                                        </a>
+                                        <a asp-controller="@ViewConstants.FoldersController" asp-action="@nameof(FoldersController.RemoveFolder)" asp-route-folderId="@folder.Id"
+                                           class="ms-2" style="color:@folder.Foreground">
+                                            <i class='fas fa-trash-alt'></i>
+                                        </a>
+                                    }
+                                </div>
+                                <div>@folder.Description</div>
+                            </div>
+                        </button>
+                    </h2>
+                    <div id='collapse_@folder.Id' class='accordion-collapse collapse show text-break' aria-labelledby='heading_@folder.Id' data-bs-parent='#folderData_@folder.Id'>
+                        <div id="accordionBody_@folder.Id" class='accordion-body p-3'>
+                            @await Html.PartialAsync("_ProductList", folder)
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
     </div>
 </div>
 
 
+@await Html.PartialAsync("_AddProductModal", new AddProductViewModel())
 @await Html.PartialAsync("~/Views/Shared/_DeletionConfirmationModal.cshtml")
 
 <script>
@@ -48,22 +101,6 @@
                 }
             );
         });
-
-    //create button
-    $('#createButton').on('click', function () {
-        name = $('#createName').val();
-
-        name = encodeURIComponent(name);
-            $.ajax({
-            type: 'GET',
-            url: createAction + "?Product=" + name,
-            cache: false,
-            async: true,
-            success: function() {
-                document.location.reload();
-            }
-        });
-    });
 
     $('[id^=change_]').on('click', function () {
         key = this.id.substring("change_".length, this.id.length);

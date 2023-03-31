@@ -19,7 +19,6 @@
         public const string IndexAction = "Index";
         
         public const string RemoveProductAction = "RemoveProduct";
-        public const string CreateProductAction = "CreateProduct";
         public const string EditProductAction = "EditProduct";
 
         public const string UsersAction = "Users";
