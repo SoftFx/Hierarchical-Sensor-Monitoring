@@ -6,16 +6,12 @@
 @model SensorNodeViewModel
 
 @{
-    FileValue file = null;
+    var file = Model.LastValue as FileValue;
     bool isEnabledPreview = false;
-    if (Model.SensorType is SensorType.File)
-    {
-        file = Model.LastValue as FileValue;
-        if (Model.LastValue is FileValue fileValue)
-            isEnabledPreview = (fileValue.Extension == "csv" && fileValue.OriginalSize < 5 * 1024 * 1024) ||
-                               (fileValue.Extension == "txt" && fileValue.OriginalSize < 1024 * 1024);
-    }
-       
+    if (file is not null)
+        isEnabledPreview = (file.Extension == "csv" && file.OriginalSize < 5 * 1024 * 1024) ||
+                           (file.Extension == "txt" && file.OriginalSize < 1024 * 1024);
+
 
     var sensorId = Model.EncodedId;
 
