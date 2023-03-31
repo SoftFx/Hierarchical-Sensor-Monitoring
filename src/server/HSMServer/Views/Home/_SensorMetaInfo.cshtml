@@ -1,4 +1,5 @@
 ﻿@using HSMServer.Controllers
+@using HSMServer.Extensions
 @using HSMServer.Model.ViewModel
 
 @model SensorInfoViewModel
@@ -21,8 +22,8 @@
     </div>
     <form class="mb-0" asp-action="@nameof(HomeController.UpdateSensorInfo)" id="editSensorMetaInfo_form">
         <input id="sensorMetaInfo_encodedId" style='display: none' asp-for="EncodedId" value="@Model.EncodedId"/>
-        <div class="d-none">
-            <div class="form-control border-0" style="max-width: 15rem;">
+        <div class="d-none mb-1">
+            <div class="form-control border-0 fw-bold" style="max-width: 15rem;">
                 Description:
             </div>
             <div class="w-100">
@@ -32,6 +33,9 @@
         </div>
 
         <div class="collapse" id="multiCollapseExample1">
+            <div class="form-control border-0 fw-bold mb-1" style="max-width: 15rem;">
+                Main info:
+            </div>
             <div class="d-flex justify-content-start">
                 <div class="d-flex ps-2 ms-1 text-nowrap">
                     <span>Sensor Type:</span>
@@ -45,10 +49,13 @@
                     <span>Sensor Status:</span>
                 </div>
                 <div class="d-flex w-100 ps-2">
-                    <span>Ok</span>
+                    <i class="@Model.SensorStatus.ToIcon() align-self-center"></i>
+                    <span class="ps-1">@Model.SensorStatus</span>
                 </div>
             </div>
-
+            <div class="form-control border-0 fw-bold mb-1" style="max-width: 15rem;">
+                Alerts:
+            </div>
             <table class='table table-bordered'>
                 <tbody>
                 <tr>
@@ -81,7 +88,9 @@
             </table>
         </div>
 
-        <button class="btn btn-outline-secondary w-100" id="sensor_info_collapse" title="Shows additional info" type="button" data-bs-toggle="collapse" onclick="collapseChangeTextContent()" href="#multiCollapseExample1" role="button" aria-expanded="false" aria-controls="multiCollapseExample1" ><i id="collapse_icon" class="fa-solid fa-caret-down"></i></button>
+        <button class="btn btn-outline-secondary w-100 border-start-0 border-end-0 border-top-0 rounded-0 border-bottom-1" id="sensor_info_collapse" title="Shows additional info" type="button" data-bs-toggle="collapse" onclick="collapseChangeTextContent()" href="#multiCollapseExample1" role="button" aria-expanded="false" aria-controls="multiCollapseExample1" style="border-right-color: unset;">
+            <i id="collapse_icon" class="fa-solid fa-caret-down"></i>
+        </button>
 
         <div class="d-flex justify-content-end m-3 my-2 gap-2 me-0">
             <button id='saveInfo_@(Model.EncodedId)' type='submit' class='btn btn-secondary px-2 independentSizeButton'

@@ -1,11 +1,14 @@
 ﻿using HSMServer.Core.Model;
 using HSMServer.Model.TreeViewModel;
+using SensorStatus = HSMServer.Model.TreeViewModel.SensorStatus;
 
 namespace HSMServer.Model.ViewModel
 {
     public class SensorInfoViewModel : NodeInfoBaseViewModel
     {
         public SensorType SensorType { get; }
+        
+        public SensorStatus SensorStatus { get; }
 
         public string Unit { get; set; }
 
@@ -16,7 +19,9 @@ namespace HSMServer.Model.ViewModel
         internal SensorInfoViewModel(SensorNodeViewModel sensor) : base(sensor)
         {
             SensorType = sensor.SensorType;
+            SensorStatus = sensor.Status;
             Unit = sensor.Unit;
+            
         }
     }
 }
