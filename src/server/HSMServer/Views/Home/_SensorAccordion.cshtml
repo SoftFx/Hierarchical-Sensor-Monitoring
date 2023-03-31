@@ -2,6 +2,7 @@
 @using HSMServer.Core.Model
 @using HSMServer.Extensions
 @using HSMServer.Model.TreeViewModel
+@using HSMServer.Model.ViewModel
 
 @model SensorNodeViewModel
 
@@ -27,6 +28,7 @@
     var valuesParentDivId = $"values_parent_{sensorId}";
 }
 
+@await Html.PartialAsync("_SensorMetaInfo", new SensorInfoViewModel(Model))
 
 <div class='accordion' id='sensorData_@sensorId'>
     <div class='accordion-item'>

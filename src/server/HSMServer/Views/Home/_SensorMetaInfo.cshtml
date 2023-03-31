@@ -1,90 +1,107 @@
 ﻿@using HSMServer.Controllers
-@using HSMServer.Core.Model
 @using HSMServer.Model.ViewModel
-@using TimeInterval = HSMServer.Model.TimeInterval
 
 @model SensorInfoViewModel
 
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
 
 
-<form asp-action="@nameof(HomeController.UpdateSensorInfo)" id="editSensorMetaInfo_form">
-    <input id="sensorMetaInfo_encodedId" style='display: none' asp-for="EncodedId" value="@Model.EncodedId" />
-
-    <div class="m-1">
-        <div class='row justify-content-start'>
-            <div class='d-flex col-md-auto' style="align-items: center">
-                <h5 class="m-2">@Html.Raw($"{Model.ProductName}{Model.Path}")</h5>
-                <button id="editButtonMetaInfo" type='button' class='btn btn-secondary mx-2' onclick="editInfoButtonClick()"
-                        data-bs-toggle='tooltip' title='edit meta info'>
-                    <i class='fas fa-edit'></i>
-                </button>
-            </div>
+@* <div class="m-0 p-0" id='sensorInfo_parent_@Model.EncodedId'> *@
+@*     <a tabindex='0' class='link-primary button-link' id='sensorInfo_link_@Model.EncodedId'></a> *@
+@*     <div id='sensor_info_@Model.EncodedId'></div> *@
+@* </div> *@
+<div id='sensor_info_@Model.EncodedId'>
+    <div class="d-flex ms-1 mt-1 me-0 justify-content-between">
+        <div class='d-flex justify-content-start'>
+            <h5 >@Html.Raw($"{Model.ProductName}{Model.Path}")</h5>
+        </div>
+        <div class="d-flex justify-content-end">
+            <button id="editButtonMetaInfo" type='button' class='btn btn-secondary mx-0' onclick="editInfoButtonClick()"
+                    data-bs-toggle='tooltip' title='edit meta info'>
+                <i class='fas fa-edit'></i>
+                Edit
+            </button>
         </div>
     </div>
+    <form asp-action="@nameof(HomeController.UpdateSensorInfo)" id="editSensorMetaInfo_form">
+        <input id="sensorMetaInfo_encodedId" style='display: none' asp-for="EncodedId" value="@Model.EncodedId"/>
+        <div class="d-none d-flex">
+            <div class="d-flex form-control" style="max-width: 15rem;">
+                Description
+            </div>
+            <div class="d-flex w-100">
+                <textarea id='description_@(Model.EncodedId)' type='text' class='form-control' asp-for="Description" value='@Model.Description' disabled></textarea>
+            </div>
+        </div>
+        
+        <div class="collapse" id="multiCollapseExample1">
+                  
+                    
+        <div class="d-flex">
+            <div class="d-flex form-control" style="max-width: 15rem;">
+                Sensor Type
+            </div>
+            <div class="d-flex w-100">
+                <span class='form-control'>@Model.SensorType</span>
+            </div>
+        </div>
+        <div class="d-flex">
+            <div class="d-flex form-control" style="max-width: 15rem;">
+                Expected update interval
+                <i class='fas fa-question-circle' title='Time format: dd.hh:mm:ss min value 00:01:00.
+                If the sensor doesn`t receive new data within the specified time interval, a notification sends'></i>
+            </div>
+            <div id="expectedUpdateInterval_@(Model.EncodedId)" class="d-flex w-100 class='form-control' ">
+                <label id="labelInterval" class="form-control">@Model.ExpectedUpdateInterval.DisplayInterval</label>
+                <div id="partialIntervalSelect" class="d-none form-control">
+                    <partial name="_TimeIntervalSelect" for="ExpectedUpdateInterval"/>
+                </div>
+            </div>
+        </div>
+        <div class="d-flex">
+            <div class="d-flex form-control" style="max-width: 15rem;">
+                Sensitivity interval
+                <i class='fas fa-question-circle' title='Time format: dd.hh:mm:ss min value 00:01:00.
+                  If the sensor doesn`t return to Ok status after the specified time inverval, a notification sends'></i>
+            </div>
+            <div id="restorePolicy_@(Model.EncodedId)" class="d-flex w-100 class='form-control' ">
+                <label id="labelRestoreInterval" class="form-control">@Model.SensorRestorePolicy.DisplayInterval</label>
+                <div id="partialRestoreSelect" class="d-none form-control">
+                    <partial name="_TimeIntervalSelect" for="SensorRestorePolicy"/>
+                </div>
+            </div>
+        </div>
+        </div>
+        
+        <button class="btn btn-secondary" id="sensor_info_collapse" type="button" data-bs-toggle="collapse" href="#multiCollapseExample1" role="button" aria-expanded="false" aria-controls="multiCollapseExample1">Expand information</button>
 
-    <table class='table table-bordered mb-2'>
-        <tbody>
-            <tr>
-                <td>Product</td>
-                <td>@Html.Raw(@Model.ProductName)</td>
-            </tr>
-            <tr>
-                <td>Path</td>
-                <td>@Html.Raw(@Model.Path)</td>
-            </tr>
-            <tr>
-                <td>Sensor type</td>
-                <td>@Model.SensorType</td>
-            </tr>
-            <tr>
-                <td>Description</td>
-                <td>
-                    <textarea id='description_@(Model.EncodedId)' type='text' class='form-control naked-text' asp-for="Description" value='@Model.Description' disabled></textarea>
-                </td>
-            </tr>
-            <tr>
-                <td class="w-25">
-                    Expected update interval
-                    <i class='fas fa-question-circle' title='Time format: dd.hh:mm:ss min value 00:01:00.
-If the sensor doesn`t receive new data within the specified time interval, a notification sends'></i>
-                </td>
-                <td id="expectedUpdateInterval_@(Model.EncodedId)">
-                    <label id="labelInterval" class="form-control naked-text">@Model.ExpectedUpdateInterval.DisplayInterval</label>
-                    <div id="partialIntervalSelect" class="d-none">
-                        <partial name="_TimeIntervalSelect" for="ExpectedUpdateInterval"/>
-                    </div>
-                </td>
-            </tr>
-            <tr>
-                <td class="w-25">
-                    Sensitivity interval
-                    <i class='fas fa-question-circle' title='Time format: dd.hh:mm:ss min value 00:01:00.
-If the sensor doesn`t return to Ok status after the specified time inverval, a notification sends'></i>
-                </td>
-                <td id="restorePolicy_@(Model.EncodedId)">
-                    <label id="labelRestoreInterval" class="form-control naked-text">@Model.SensorRestorePolicy.DisplayInterval</label>
-                    <div id="partialRestoreSelect" class="d-none">
-                        <partial name="_TimeIntervalSelect" for="SensorRestorePolicy" />
-                    </div>
-                </td>
-            </tr>
-        </tbody>
-    </table>
-    <div class="d-flex justify-content-end m-3 gap-2 me-0">
-        <button id='saveInfo_@(Model.EncodedId)' type='submit' class='btn btn-secondary px-2 independentSizeButton'
-                data-bs-toggle='tooltip' title='save meta info' hidden disabled>
-            <span>Save</span>
-        </button>
-        <button id='revertInfo_@(Model.EncodedId)' type='button' class='btn btn-secondary px-2 independentSizeButton' onclick="revertInfoClick()"
-                data-bs-toggle='tooltip' title='revert changes' hidden disabled>
-            <span>Cancel</span>
-        </button>
-    </div>
-</form>
-
+        <div class="d-flex justify-content-end m-3 gap-2 me-0">
+            <button id='saveInfo_@(Model.EncodedId)' type='submit' class='btn btn-secondary px-2 independentSizeButton'
+                    data-bs-toggle='tooltip' title='save meta info' hidden disabled>
+                <span>Save</span>
+            </button>
+            <button id='revertInfo_@(Model.EncodedId)' type='button' class='btn btn-secondary px-2 independentSizeButton' onclick="revertInfoClick()"
+                    data-bs-toggle='tooltip' title='revert changes' hidden disabled>
+                <span>Cancel</span>
+            </button>
+        </div>
+    </form>
+</div>
 
 <script>
+    $(document).ready(() => {
+        let description = $('[id^="description_"]')[0].innerHTML;
+        
+        if (description !== '' && description !== undefined)
+            $('#editSensorMetaInfo_form').children('div').first().removeClass('d-none');
+        else {
+            let temp = $('#editSensorMetaInfo_form').children('div').first().clone().removeClass('d-none');
+             $('#editSensorMetaInfo_form').children('div').first().remove();
+            $('#multiCollapseExample1').prepend(temp);
+            console.log(temp);
+        }
+    });
+    
     $(document).on("submit", "#editSensorMetaInfo_form", function (event) {
         event.preventDefault();
         event.stopImmediatePropagation();
@@ -96,6 +113,7 @@ If the sensor doesn`t return to Ok status after the specified time inverval, a n
             datatype: 'json',
             async: true,
             success: (viewData) => {
+                console.log('succes')
                 displaySensorMetaInfo($('#sensorMetaInfo_encodedId').val(), viewData);
             }
         });
