@@ -27,7 +27,7 @@
                 Description:
             </div>
             <div class="w-100 ms-1">
-                <span class="naked-text w-100 ms-1 ps-2" id='span_description_@(Model.EncodedId)'>@Model.Description</span>
+                <div class="naked-text w-100 ms-1 ps-2" id='span_description_@(Model.EncodedId)'>@Model.Description</div>
                 <textarea id='description_@(Model.EncodedId)' class="form-control naked-text w-100 ms-1 ps-2 d-none"  type='text' asp-for="Description" value='@Model.Description' disabled></textarea>
             </div>
         </div>
@@ -125,6 +125,10 @@
             $('#editSensorMetaInfo_form').children('div').first().remove();
             $('#multiCollapseExample1').prepend(temp);
         }
+        
+        let span_description = $('[id^="span_description_"]');
+        let innerHtml = span_description[0].innerHTML;
+        span_description.empty().append(window.marked.marked(innerHtml));
     });
     
     $(document).on("submit", "#editSensorMetaInfo_form", function (event) {

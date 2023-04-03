@@ -23,6 +23,9 @@ window.TimeSpan = TimeSpan
 import * as Heiho from '@kktsvetkov/heiho'
 window.Heiho = Heiho
 
+import * as Marked from 'marked'
+window.marked = Marked;
+
 import '@kktsvetkov/heiho/heiho.css';
 
 import '@fortawesome/fontawesome-free/js/all.min.js';
