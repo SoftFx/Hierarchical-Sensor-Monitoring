@@ -1,5 +1,6 @@
-﻿@using HSMServer.Model.Folders.ViewModels
+﻿@using HSMServer.Constants
 @using HSMServer.Controllers
+@using HSMServer.Model.Folders.ViewModels
 
 @model EditFolderViewModel
 
@@ -13,7 +14,16 @@
 
 <div class="container">
     <div class="row w-100 justify-content-center">
-        <h4 class="my-3 text-break">@(isAdd ? "Add folder" : $"Edit folder '{@Model.Name}'")</h4>
+        <div class="d-flex justify-content-between my-3">
+            <h5 class="text-break">@(isAdd ? "Add folder" : $"Edit folder '{@Model.Name}'")</h5>
+
+            @if (!isAdd)
+            {
+                <a href="javascript:removeFolder();">
+                    <i class='fas fa-trash-alt'></i> Remove
+                </a>
+            }
+        </div>
 
         <ul class="nav nav-tabs" role="tablist">
             <li class="nav-item" role="presentation">
@@ -48,3 +58,26 @@
         </div>
     </div>
 </div>
+
+@await Html.PartialAsync("~/Views/Shared/_DeletionConfirmationModal.cshtml")
+
+
+<script>
+    function removeFolder() {
+        showDeletionConfirmationModal(
+            `Removing folder '@Model.Name'`,
+            `Do you really want to remove folder '@Model.Name'? All products from this folder will be moved to products without folder.`,
+            function () {
+                $.ajax({
+                    type: 'POST',
+                    url: `@Url.Action(nameof(FoldersController.RemoveFolder), ViewConstants.FoldersController)?FolderId=@Model.Id`,
+                    cache: false,
+                    async: true,
+                    success: function() {
+                        window.location.href = "@Url.Action(nameof(ProductController.Index), ViewConstants.ProductController)";
+                    }
+                });
+            }
+        );
+    }
+</script>
