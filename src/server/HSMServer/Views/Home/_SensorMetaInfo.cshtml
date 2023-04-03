@@ -8,13 +8,13 @@
 
 
 <div id='sensor_info_@Model.EncodedId'>
-    <div class="d-flex ms-1 mt-1 me-0 justify-content-between">
+    <div class="d-flex ms-1 mt-1 me-0 justify-content-between flex-grow-1" style="height: 2rem!important;">
         <div class='d-flex justify-content-start'>
-            <h5 class="my-1 align-self-center">@Html.Raw($"{Model.ProductName}{Model.Path}")</h5>
+            <h5 class="my-1 align-self-top">@Html.Raw($"{Model.ProductName}{Model.Path}")</h5>
         </div>
-        <div class="d-flex p-0">
-            <button id="editButtonMetaInfo" type='button' class='d-none btn btn-secondary m-0 py-1 px-2 align-items-stretch' onclick="editInfoButtonClick()"
-                    data-bs-toggle='tooltip' title='edit meta info' style="--bs-btn-font-size: 0.875rem">
+        <div class="d-flex ">
+            <button id="editButtonMetaInfo" type='button' class='d-none btn btn-secondary align-self-center' onclick="editInfoButtonClick()"
+                    data-bs-toggle='tooltip' title='edit meta info' style="--bs-btn-font-size: 0.875rem!important;">
                 <i class='fas fa-edit'></i>
                 Edit
             </button>
@@ -60,7 +60,7 @@
                         <span style="min-width: 8rem">Status comment:</span>
                     </div>
                     <div class="d-flex w-100 ps-2">
-                        <span>@Model.StatusComment</span>
+                        <span>@Html.Raw(Model.StatusComment)</span>
                     </div>
                 </div>
             }
