@@ -159,3 +159,11 @@ input.input-validation-error {
     text-decoration: underline;
     text-underline-offset: 0.3rem;
 }
+
+.w-10 {
+    width: 10%;
+}
+
+.w-20 {
+    width: 20%;
+}
