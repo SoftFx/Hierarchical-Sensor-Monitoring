@@ -8,6 +8,10 @@
 
 @if (Model != null)
 {
+    <div class="my-2" align="right">
+        <a href="javascript:showAddUserRoleModal();" class="btn btn-link p-0 @(Model.NotAdminUsers.Count == 0 ? "disabled" : string.Empty)">Add user role</a>
+    </div>
+
     <table class='table table-striped'>
         <thead>
             <tr>
@@ -17,29 +21,6 @@
             </tr>
         </thead>
         <tbody>
-            <tr>
-                <th>
-                    <select class='form-select' id='userIdToAdd' @(Model.NotAdminUsers.Count == 0 ? "disabled" : string.Empty)>
-                        @foreach (var user in Model.NotAdminUsers)
-                        {
-                            <option value='@user.Id'>@user.Name</option>
-                        }
-                    </select>
-                </th>
-                <th>
-                    <select class='form-select' id='userRoleToAdd'>
-                        @foreach (ProductRoleEnum role in Enum.GetValues<ProductRoleEnum>())
-                        {
-                            <option value='@((int)role)'>@role</option>
-                        }
-                    </select>
-                </th>
-                <th class="text-center">
-                    <button type='button' class='btn btn-secondary ms-1' title='add user role' onclick="addUserRole()">
-                        <i class='fas fa-plus'></i>
-                    </button>
-                </th>
-            </tr>
             @foreach (var (user, userRole) in Model.Users.OrderBy(u => u.Key.Name))
             {
                 <tr>
@@ -88,6 +69,8 @@
     </table>
 }
 
+@await Html.PartialAsync("_AddUserRoleModal")
+
 
 <script>
     function createUserRightData(userId, role) {
@@ -101,6 +84,7 @@
         let role = $('#userRoleToAdd').val();
 
         changeUsers('@Url.Action(nameof(FoldersController.AddUserRole), ViewConstants.FoldersController)', createUserRightData(userId, role));
+        hideAddUserRoleModal();
     };
 
     $('[id^=edit_]').on('click', function () {
@@ -150,6 +134,17 @@
             }
         );
     });
+
+    function showAddUserRoleModal() {
+        $(`#addUserRole_modal`).modal({
+            backdrop: 'static'
+        });
+        $(`#addUserRole_modal`).modal('show');
+    }
+
+    function hideAddUserRoleModal() {
+        $(`#addUserRole_modal`).modal('hide');
+    }
 
     function changeUsers(action, data) {
         $.ajax({

@@ -10,12 +10,15 @@ namespace HSMServer.Model.Folders.ViewModels
 
         public HashSet<User> NotAdminUsers { get; }
 
+        public string FolderName { get; }
+
 
         public FolderUsersViewModel() { }
 
-        public FolderUsersViewModel(Dictionary<User, ProductRoleEnum> folderUsers, IEnumerable<User> notAdminUsers)
+        public FolderUsersViewModel(FolderModel folder, IEnumerable<User> notAdminUsers)
         {
-            Users = folderUsers;
+            FolderName = folder.Name;
+            Users = folder.UserRoles;
 
             NotAdminUsers = notAdminUsers.OrderBy(u => u.Name).ToHashSet();
             NotAdminUsers.ExceptWith(Users.Keys);

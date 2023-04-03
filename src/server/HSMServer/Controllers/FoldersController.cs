@@ -178,6 +178,6 @@ namespace HSMServer.Controllers
             };
 
         private FolderUsersViewModel BuildFolderUsers(FolderModel folder) =>
-            new(folder.UserRoles, _userManager.GetUsers(u => !u.IsAdmin));
+            new(folder, _userManager.GetUsers(u => !u.IsAdmin));
     }
 }
