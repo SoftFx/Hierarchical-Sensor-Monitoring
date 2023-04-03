@@ -12,6 +12,8 @@ namespace HSMServer.Model.ViewModel
 
         public string Unit { get; set; }
 
+        public string StatusComment { get; set; }
+        
 
         // public constructor without parameters for action Home/UpdateSensorInfo
         public SensorInfoViewModel() : base() { }
@@ -21,7 +23,7 @@ namespace HSMServer.Model.ViewModel
             SensorType = sensor.SensorType;
             SensorStatus = sensor.Status;
             Unit = sensor.Unit;
-            
+            StatusComment = sensor.ValidationError;
         }
     }
 }

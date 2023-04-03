@@ -41,7 +41,8 @@ window.revertInfoClick = function () {
 
 window.displaySensorMetaInfo = function (sensorId, viewData) {
     $('#sensor_info_' + sensorId).html(viewData);
-    console.log(viewData)
+    $('#sensor_info_collapse').click();
+
     disableExpectedUpdateIntervalControl();
 }
 
