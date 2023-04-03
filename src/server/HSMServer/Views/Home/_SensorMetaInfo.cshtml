@@ -12,9 +12,9 @@
         <div class='d-flex justify-content-start'>
             <h5 class="my-1 align-self-center">@Html.Raw($"{Model.ProductName}{Model.Path}")</h5>
         </div>
-        <div class="d-flex">
-            <button id="editButtonMetaInfo" type='button' class='d-none btn btn-secondary mx-0 my-1' onclick="editInfoButtonClick()"
-                    data-bs-toggle='tooltip' title='edit meta info'>
+        <div class="d-flex p-0">
+            <button id="editButtonMetaInfo" type='button' class='d-none btn btn-secondary m-0 py-1 px-2 align-items-stretch' onclick="editInfoButtonClick()"
+                    data-bs-toggle='tooltip' title='edit meta info' style="--bs-btn-font-size: 0.875rem">
                 <i class='fas fa-edit'></i>
                 Edit
             </button>
