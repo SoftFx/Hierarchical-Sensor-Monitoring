@@ -26,6 +26,9 @@ window.Heiho = Heiho
 import * as Marked from 'marked'
 window.marked = Marked;
 
+import * as DOMPurify from 'dompurify';
+window.DOMPurify = DOMPurify;
+
 import '@kktsvetkov/heiho/heiho.css';
 
 import '@fortawesome/fontawesome-free/js/all.min.js';

@@ -133,7 +133,7 @@
         
         let span_description = $('[id^="span_description_"]');
         let innerHtml = span_description[0].innerHTML;
-        span_description.empty().append(window.marked.marked(innerHtml));
+        span_description.empty().append(markdownToHTML(innerHtml));
     });
     
     $(document).on("submit", "#editSensorMetaInfo_form", function (event) {

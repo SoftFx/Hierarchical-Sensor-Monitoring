@@ -22,6 +22,7 @@
     "bootstrap": "5.2.3",
     "clipboard": "2.0.11",
     "datatables": "1.10.18",
+    "dompurify": "3.0.1",
     "jquery": "3.6.3",
     "jstree": "3.3.12",
     "marked": "4.3.0",
