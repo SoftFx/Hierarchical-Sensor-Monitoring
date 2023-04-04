@@ -29,8 +29,12 @@
                 @if (UserRoleHelper.IsUserCRUDAllowed(Context.User as User))
                 {
                     <div class='d-flex col-md-auto'>
-                        <a class="mx-2" href="javascript:showAddProductModal();">Add product</a>
-                        <a href="@Url.Action(nameof(FoldersController.EditFolder), ViewConstants.FoldersController)">Add folder</a>
+                        <a class="mx-3" href="javascript:showAddProductModal();">
+                            <i class="fa-solid fa-plus"></i> Add product
+                        </a>
+                        <a href="@Url.Action(nameof(FoldersController.EditFolder), ViewConstants.FoldersController)">
+                            <i class="fa-solid fa-folder-plus"></i> Add folder
+                        </a>
                     </div>
                 }
             </div>
