@@ -13,16 +13,16 @@
             <h5 class="my-1 align-self-top">@Html.Raw($"{Model.ProductName}{Model.Path}")</h5>
         </div>
         <div class='d-flex my-1'>
-                                        <input id='sensor_type_@Model.EncodedId' value='@((int)Model.SensorType)' style='display: none'/>
-                                        <div id='update_@Model.EncodedId' class='time-ago-div me-1'>updated @Model.UpdateTime.GetTimeAgo()</div>
-                                    </div>
-        <div class="d-flex ">
-            <button id="editButtonMetaInfo" type='button' class='d-none btn btn-secondary align-self-center' onclick="editInfoButtonClick()"
-                    data-bs-toggle='tooltip' title='edit meta info' style="--bs-btn-font-size: 0.875rem!important;">
-                <i class='fas fa-edit'></i>
-                Edit
-            </button>
+            <input id='sensor_type_@Model.EncodedId' value='@((int)Model.SensorType)' style='display: none'/>
+            <div id='update_@Model.EncodedId' class='time-ago-div me-1'>updated @Model.UpdateTime.GetTimeAgo()</div>
         </div>
+    </div>
+    <div class="d-flex justify-content-end">
+        <button id="editButtonMetaInfo" type='button' class='d-none btn btn-secondary align-self-center' onclick="editInfoButtonClick()"
+                data-bs-toggle='tooltip' title='edit meta info' style="--bs-btn-font-size: 0.875rem!important;">
+            <i class='fas fa-edit'></i>
+            Edit
+        </button>
     </div>
     <form class="mb-0" asp-action="@nameof(HomeController.UpdateSensorInfo)" id="editSensorMetaInfo_form">
         <input id="sensorMetaInfo_encodedId" style='display: none' asp-for="EncodedId" value="@Model.EncodedId"/>
@@ -48,27 +48,27 @@
                     <span>@Model.SensorType</span>
                 </div>
             </div>
-            <div class="d-flex justify-content-start ms-1">
+            <div id="status_metainfo" class="d-flex justify-content-start ms-1">
                 <div class="d-flex ps-2 ms-1 text-nowrap">
                     <span style="min-width: 8rem">Sensor status:</span>
                 </div>
                 <div class="d-flex w-100 ps-2">
                     <span id="status_name_@Model.EncodedId">@Model.SensorStatus</span>
                     <li id='status_@Model.EncodedId' class='@Model.SensorStatus.ToIcon() sensor-icon-with-margin align-self-center ps-1' title='Status: @Model.SensorStatus'></li>
-                    @* <i class="@Model.SensorStatus.ToIcon() align-self-center ps-1"></i> *@
                 </div>
             </div>
-            @if (!string.IsNullOrEmpty(Model.StatusComment))
-            {
-                <div class="d-flex justify-content-start ms-1 mb-1">
+            <div id="validation_metainfo" class="d-flex justify-content-start ms-1 mb-1">
+                @if (!string.IsNullOrEmpty(Model.StatusComment))
+                {
                     <div class="d-flex ps-2 ms-1 text-nowrap">
                         <span style="min-width: 8rem">Status comment:</span>
                     </div>
                     <div class="d-flex w-100 ps-2">
+                        <li id='errorIcon_${id}' class='fas fa-exclamation-triangle me-1 align-self-center'></li>
                         <span>@Html.Raw(Model.StatusComment)</span>
                     </div>
-                </div>
-            }
+                }
+            </div>
             <div class="form-control border-0 fw-bold mb-1" style="max-width: 15rem;">
                 Alerts:
             </div>
@@ -111,7 +111,7 @@
                 <span>Cancel</span>
             </button>
         </div>
-        
+
         <button class="btn btn-outline-secondary w-100 
                        border-start-0 border-end-0 border-top-0 rounded-0 border-bottom-1" id="sensor_info_collapse" title="Show more info..." type="button" data-bs-toggle="collapse" onclick="collapseChangeTextContent()" href="#multiCollapseExample1" role="button" aria-expanded="false" aria-controls="multiCollapseExample1" style="border-right-color: unset;--bs-btn-hover-bg: #edf0f5">
             <i id="collapse_icon" class="fa-solid fa-caret-down"></i>
