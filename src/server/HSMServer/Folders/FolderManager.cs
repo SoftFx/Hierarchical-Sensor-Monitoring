@@ -86,7 +86,18 @@ namespace HSMServer.Folders
             return result;
         }
 
-        public List<FolderModel> GetFolders() => Values.ToList();
+        public List<FolderModel> GetUserFolders(User user)
+        {
+            var folders = Values.ToList();
+
+            if (user == null || user.IsAdmin)
+                return folders;
+
+            if (user.FoldersRoles.Count == 0)
+                return new();
+
+            return folders.Where(f => user.IsFolderAvailable(f.Id)).ToList();
+        }
 
         public override async Task Initialize()
         {

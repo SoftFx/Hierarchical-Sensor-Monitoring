@@ -14,126 +14,131 @@
     var user = Context.User as User;
     bool isProductCrudAllowed = UserRoleHelper.IsUserCRUDAllowed(user);
     bool isProductActionAllowed = ProductRoleHelper.IsProductActionAllowed(user?.ProductsRoles);
+
+    var productsCount = Model.Products?.Count ?? 0;
 }
 
 
-<div class="w-100 productTable">
-    <form id="folderProductsForm_@Model.Id" asp-controller="@ViewConstants.ProductController" asp-action="@nameof(ProductController.FilterFolderProducts)">
-        <input class='d-none' name='folderId' value="@Model.Id" />
-        <table id="folderProductsTable_@Model.Id" class="table table-striped">
-            <thead>
-                <tr>
-                    <th>
-                        <div class="form-floating m-0 p-0">
-                            <input placeholder="Name" id='searchProduct' type='text' class='form-control' name='productName' value="@ViewBag.ProductName"/>
-                            <label for="searchProduct">Name</label>
-                        </div>
-                    </th>
-                    <th>
-                        <div class="form-floating m-0 p-0">
-                            <input id="searchManager" class='form-control' type='text' name="productManager" placeholder="Manager" value="@ViewBag.ProductManager"/>
-                            <label for="searchManager">Managers</label>
-                        </div>
-                    </th>
-                    <button class="d-none"></button>
-                    <th>
-                        <a class="btn sortSubmit" onclick="sortTable(this, 2, '@Model.Id')" type="submit">
-                            Last update
-                            <i id="sortIcon" class="fa-solid fa-sort"></i>
-                        </a>
-                    </th>
-                    @if (isProductCrudAllowed || isProductActionAllowed)
-                    {
-                        <th class="text-center">Actions</th>
-                    }
-                </tr>
-            </thead>
-            <tbody>
-                @foreach (var product in Model.Products)
-                {
+@if (productsCount > 0)
+{
+    <div class="w-100 productTable">
+        <form id="folderProductsForm_@Model.Id" asp-controller="@ViewConstants.ProductController" asp-action="@nameof(ProductController.FilterFolderProducts)">
+            <input class='d-none' name='folderId' value="@Model.Id" />
+            <table id="folderProductsTable_@Model.Id" class="table table-striped">
+                <thead>
                     <tr>
-                        <td class="text-break">
-                            @if (user.IsManager(product.Id))
-                            {
-                                <a class="productName_anchor" id="inputName_@product.Id" asp-controller="Product" asp-action="EditProduct" asp-route-Product="@product.EncodedId">
-                                    @Html.Raw(product.Name)
-                                </a>
-                            }
-                            else
-                            {
-                                @Html.Raw(product.Name)
-                            }
-                        </td>
-                        <td class="text-break">
-                            @if (product.Managers.Count == 0)
-                            {
-                                <span>---</span>
-                            }
-                            else
-                            {
-                                var managers = string.Join(", ", product.Managers);
-                                <span>@Html.Raw(managers)</span>
-                            }
-                        </td>
-                        <td>
-                            <span title="@product.LastUpdateDate.ToDefaultFormat()" time="@product.LastUpdateDate">
-                                @product.ShortLastUpdateTime
-                            </span>
-                            @if (product.ProductUpdateIsExpired)
-                            {
-                                <span>
-                                    <img title="Product sensor(s) haven't been updated for @ProductViewModel.ProductExpiredTime.ToToolTip()" src="~/dist/warning.svg" id="svg_exclamation" alt="warning icon"/>
-                                </span>
-                            }
-                        </td>
-                        <td nowrap class="text-center w-10">
-                            <div class="dropdown">
-                                @if (isProductCrudAllowed || ProductRoleHelper.IsManager(product.Id, user?.ProductsRoles))
+                        <th>
+                            <div class="form-floating m-0 p-0">
+                                <input placeholder="Name" id='searchProduct' type='text' class='form-control' name='productName' value="@ViewBag.ProductName"/>
+                                <label for="searchProduct">Name</label>
+                            </div>
+                        </th>
+                        <th>
+                            <div class="form-floating m-0 p-0">
+                                <input id="searchManager" class='form-control' type='text' name="productManager" placeholder="Manager" value="@ViewBag.ProductManager"/>
+                                <label for="searchManager">Managers</label>
+                            </div>
+                        </th>
+                        <button class="d-none"></button>
+                        <th>
+                            <a class="btn sortSubmit" onclick="sortTable(this, 2, '@Model.Id')" type="submit">
+                                Last update
+                                <i id="sortIcon" class="fa-solid fa-sort"></i>
+                            </a>
+                        </th>
+                        @if (isProductCrudAllowed || isProductActionAllowed)
+                        {
+                            <th class="text-center">Actions</th>
+                        }
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var product in Model.Products)
+                    {
+                        <tr>
+                            <td class="text-break">
+                                @if (user.IsManager(product.Id))
                                 {
-                                    <button id="actionButton" class="btn" data-bs-toggle="dropdown" data-bs-auto-close="true" aria-haspopup="true" aria-expanded="false">
-                                        <i class="fa-solid fa-ellipsis-vertical button-link"></i>
-                                    </button>
+                                    <a class="productName_anchor" id="inputName_@product.Id" asp-controller="Product" asp-action="EditProduct" asp-route-Product="@product.EncodedId">
+                                        @Html.Raw(product.Name)
+                                    </a>
                                 }
                                 else
                                 {
-                                    <i class="fa fa-ellipsis-vertical disabled" style="color: darkgrey" data-bs-toggle="dropdown"></i>
+                                    @Html.Raw(product.Name)
                                 }
-                                <div class="dropdown-menu" aria-labelledby="actionButton">
-                                    <a id='change_@product.EncodedId' class="dropdown-item text-decoration-none fw-normal button-link">Edit</a>
-                                    @if (isProductCrudAllowed)
+                            </td>
+                            <td class="text-break">
+                                @if (product.Managers.Count == 0)
+                                {
+                                    <span>---</span>
+                                }
+                                else
+                                {
+                                    var managers = string.Join(", ", product.Managers);
+                                    <span>@Html.Raw(managers)</span>
+                                }
+                            </td>
+                            <td>
+                                <span title="@product.LastUpdateDate.ToDefaultFormat()" time="@product.LastUpdateDate">
+                                    @product.ShortLastUpdateTime
+                                </span>
+                                @if (product.ProductUpdateIsExpired)
+                                {
+                                    <span>
+                                        <img title="Product sensor(s) haven't been updated for @ProductViewModel.ProductExpiredTime.ToToolTip()" src="~/dist/warning.svg" id="svg_exclamation" alt="warning icon"/>
+                                    </span>
+                                }
+                            </td>
+                            <td nowrap class="text-center w-10">
+                                <div class="dropdown">
+                                    @if (isProductCrudAllowed || ProductRoleHelper.IsManager(product.Id, user?.ProductsRoles))
                                     {
-                                        <a id='delete_@product.Id' class="dropdown-item text-decoration-none fw-normal button-link">Delete</a>
+                                        <button id="actionButton" class="btn" data-bs-toggle="dropdown" data-bs-auto-close="true" aria-haspopup="true" aria-expanded="false">
+                                            <i class="fa-solid fa-ellipsis-vertical button-link"></i>
+                                        </button>
                                     }
-                                    @if (ViewBag.UserFolders is Dictionary<string, (string, string, string)> folders && folders.Count > 1)
+                                    else
                                     {
-                                        var currentFolderId = Model.Id?.ToString() ?? string.Empty;
+                                        <i class="fa fa-ellipsis-vertical disabled" style="color: darkgrey" data-bs-toggle="dropdown"></i>
+                                    }
+                                    <div class="dropdown-menu" aria-labelledby="actionButton">
+                                        <a id='change_@product.EncodedId' class="dropdown-item text-decoration-none fw-normal button-link">Edit</a>
+                                        @if (isProductCrudAllowed)
+                                        {
+                                            <a id='delete_@product.Id' class="dropdown-item text-decoration-none fw-normal button-link">Delete</a>
+                                        }
+                                        @if (ViewBag.UserFolders is Dictionary<string, (string, string, string)> folders && folders.Count > 1)
+                                        {
+                                            var currentFolderId = Model.Id?.ToString() ?? string.Empty;
 
-                                        <div class="dropdown dropend">
-                                            <a class="dropdown-item text-decoration-none fw-normal button-link" id="moveToAction" data-bs-toggle="dropdown" data-bs-auto-close="true" aria-haspopup="true" aria-expanded="false">Move to ...</a>
-                                            <div class="dropdown-menu" aria-labelledby="moveToAction">
-                                                @foreach (var (id, (name, background, foreground)) in folders)
-                                                {
-                                                    @if (id != currentFolderId)
+                                            <div class="dropdown dropend">
+                                                <a class="dropdown-item text-decoration-none fw-normal button-link" id="moveToAction" data-bs-toggle="dropdown" data-bs-auto-close="true" aria-haspopup="true" aria-expanded="false">Move to ...</a>
+                                                <div class="dropdown-menu" aria-labelledby="moveToAction">
+                                                    @foreach (var (id, (name, background, foreground)) in folders)
                                                     {
-                                                        <a id="moveTo_@id" class="dropdown-item text-decoration-none fw-normal button-link" style="background:@background; color:@foreground"
-                                                           asp-controller="@ViewConstants.ProductController" asp-action="@nameof(ProductController.MoveProduct)"
-                                                           asp-route-productId="@product.Id" asp-route-toFolderId="@id" asp-route-fromFolderId="@Model.Id">
-                                                            @name
-                                                        </a>
+                                                        @if (id != currentFolderId)
+                                                        {
+                                                            <a id="moveTo_@id" class="dropdown-item text-decoration-none fw-normal button-link" style="background:@background; color:@foreground"
+                                                               asp-controller="@ViewConstants.ProductController" asp-action="@nameof(ProductController.MoveProduct)"
+                                                               asp-route-productId="@product.Id" asp-route-toFolderId="@id" asp-route-fromFolderId="@Model.Id">
+                                                                @name
+                                                            </a>
+                                                        }
                                                     }
-                                                }
+                                                </div>
                                             </div>
-                                        </div>
-                                    }
+                                        }
+                                    </div>
                                 </div>
-                            </div>
-                        </td>
-                    </tr>
-                }
-            </tbody>
-        </table>
-    </form>
-</div>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </form>
+    </div>
+}
 
 
 <script>

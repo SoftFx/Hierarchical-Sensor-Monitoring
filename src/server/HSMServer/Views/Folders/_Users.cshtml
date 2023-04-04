@@ -15,62 +15,67 @@
         </a>
     </div>
 
-    <table class='table table-striped'>
-        <thead>
-            <tr>
-                <th scope='col'>User</th>
-                <th scope='col'>Role</th>
-                <th scope='col' class="text-center">Action</th>
-            </tr>
-        </thead>
-        <tbody>
-            @foreach (var (user, userRole) in Model.Users.OrderBy(u => u.Key.Name))
-            {
+    @if (Model.Users.Count > 0)
+    {
+        <table class='table table-striped'>
+            <thead>
                 <tr>
-                    <td class="text-break">
-                        @user.Name
-                        <input id="userName_@user.Id" value="@user.Name" class="d-none"/>
-                    </td>
-                    <td class="w-20">
-                        <label id="roleLabel_@user.Id">@userRole.GetDisplayName()</label>
-                        <select class='form-select d-none' id='role_@user.Id'>
-                            @foreach (ProductRoleEnum role in Enum.GetValues<ProductRoleEnum>())
-                            {
-                                <option value='@((int)role)' @(role == userRole ? "selected" : string.Empty)>@role.GetDisplayName()</option>
-                            }
-                        </select>
-                    </td>
-                    <td nowrap class="text-center w-10">
-                        <div id="actions_@user.Id" class='btn-group'>
-                            <button id="actionButton" class="btn" data-bs-toggle="dropdown" data-bs-auto-close="true" aria-haspopup="true" aria-expanded="false">
-                                <i class="fa-solid fa-ellipsis-vertical" style="cursor: pointer"></i>
-                            </button>
-                            <ul class='dropdown-menu overflow-auto' aria-labelledby="dropdownMenuButton">
-                                <li>
-                                    <a id='edit_@user.Id' class='dropdown-item text-decoration-none fw-normal' style="cursor: pointer;">
-                                        Edit
-                                    </a>
-                                </li>
-                                <li>
-                                    <a id='delete_@user.Id' class='dropdown-item text-decoration-none fw-normal' style="cursor: pointer;">
-                                        Delete
-                                    </a>
-                                </li>
-                            </ul>
-                        </div>
-                        <div id="editActions_@user.Id" class="d-inline-flex d-none">
-                            <button id='ok_@user.Id' type="button" class='btn btn-link px-0' title='ok'>
-                                <i class="fa-solid fa-check fa-xl" style="color: limegreen;"></i>
-                            </button>
-                            <button id='cancel_@user.Id' type='button' class='btn btn-link pe-0' title='cancel'>
-                                <i class="fa-solid fa-xmark fa-xl" style="color: red;"></i>
-                            </button>
-                        </div>
-                    </td>
+                    <th scope='col'>User</th>
+                    <th scope='col'>Role</th>
+                    <th scope='col' class="text-center">Action</th>
                 </tr>
-            }
-        </tbody>
-    </table>
+            </thead>
+            <tbody>
+                @foreach (var (user, userRole) in Model.Users.OrderBy(u => u.Key.Name))
+                {
+                    <tr>
+                        <td class="text-break">
+                            @user.Name
+                            <input id="userName_@user.Id" value="@user.Name" class="d-none"/>
+                        </td>
+                        <td class="w-20">
+                            <label id="roleLabel_@user.Id">@userRole.GetDisplayName()</label>
+                            <select class='form-select d-none' id='role_@user.Id'>
+                                @foreach (ProductRoleEnum role in Enum.GetValues<ProductRoleEnum>())
+                                {
+                                    <option value='@((int)role)' @(
+                               role == userRole ? "selected" : string.Empty
+                               )>@role.GetDisplayName()</option>
+                                }
+                            </select>
+                        </td>
+                        <td nowrap class="text-center w-10">
+                            <div id="actions_@user.Id" class='btn-group'>
+                                <button id="actionButton" class="btn" data-bs-toggle="dropdown" data-bs-auto-close="true" aria-haspopup="true" aria-expanded="false">
+                                    <i class="fa-solid fa-ellipsis-vertical" style="cursor: pointer"></i>
+                                </button>
+                                <ul class='dropdown-menu overflow-auto' aria-labelledby="dropdownMenuButton">
+                                    <li>
+                                        <a id='edit_@user.Id' class='dropdown-item text-decoration-none fw-normal' style="cursor: pointer;">
+                                            Edit
+                                        </a>
+                                    </li>
+                                    <li>
+                                        <a id='delete_@user.Id' class='dropdown-item text-decoration-none fw-normal' style="cursor: pointer;">
+                                            Delete
+                                        </a>
+                                    </li>
+                                </ul>
+                            </div>
+                            <div id="editActions_@user.Id" class="d-inline-flex d-none">
+                                <button id='ok_@user.Id' type="button" class='btn btn-link px-0' title='ok'>
+                                    <i class="fa-solid fa-check fa-xl" style="color: limegreen;"></i>
+                                </button>
+                                <button id='cancel_@user.Id' type='button' class='btn btn-link pe-0' title='cancel'>
+                                    <i class="fa-solid fa-xmark fa-xl" style="color: red;"></i>
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
 
     @await Html.PartialAsync("_AddUserRoleModal")
 }

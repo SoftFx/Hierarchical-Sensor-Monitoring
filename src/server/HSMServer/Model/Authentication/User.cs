@@ -72,9 +72,6 @@ namespace HSMServer.Model.Authentication
             IsAdmin = update.IsAdmin ?? IsAdmin;
         }
 
-        public bool IsProductAvailable(Guid productId) =>
-            IsAdmin || ProductsRoles.Any(x => x.Item1.Equals(productId));
-
         public bool IsManager(Guid productId) =>
             IsAdmin || ProductsRoles.Any(x => x == (productId, ProductRoleEnum.ProductManager));
 
@@ -90,5 +87,11 @@ namespace HSMServer.Model.Authentication
                 NotificationSettings = Notifications.ToEntity(),
                 TreeFilter = TreeFilter,
             };
+
+        internal bool IsProductAvailable(Guid productId) =>
+            IsAdmin || ProductsRoles.Any(x => x.Item1 == productId);
+
+        internal bool IsFolderAvailable(Guid folderId) =>
+            IsAdmin || FoldersRoles.Any(x => x.Key == folderId);
     }
 }

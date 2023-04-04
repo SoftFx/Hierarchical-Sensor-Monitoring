@@ -56,6 +56,8 @@ namespace HSMServer.Controllers
         public IActionResult Index()
         {
             var userProducts = _treeViewModel.GetUserProducts(HttpContext.User as User);
+            var userFolders = _folderManager.GetUserFolders(HttpContext.User as User);
+
             var folderProducts = new Dictionary<Guid, List<ProductViewModel>>();
             var productsWithoutFolder = new List<ProductViewModel>();
 
@@ -79,6 +81,10 @@ namespace HSMServer.Controllers
             var folders = new List<FolderViewModel>();
             foreach (var (folderId, products) in folderProducts)
                 folders.Add(new FolderViewModel(_folderManager[folderId], products));
+
+            foreach (var folder in userFolders)
+                if (!folderProducts.ContainsKey(folder.Id))
+                    folders.Add(new FolderViewModel(folder, new List<ProductViewModel>()));
 
             folders = folders.OrderBy(f => f.Name).ToList();
             folders.Add(new FolderViewModel(productsWithoutFolder));

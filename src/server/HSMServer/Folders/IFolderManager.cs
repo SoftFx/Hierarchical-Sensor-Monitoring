@@ -1,5 +1,6 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.ConcurrentStorage;
+using HSMServer.Model.Authentication;
 using HSMServer.Model.Folders;
 using System;
 using System.Collections.Generic;
@@ -13,6 +14,6 @@ namespace HSMServer.Folders
 
         Task<bool> TryRemoveFolder(Guid folderId);
 
-        List<FolderModel> GetFolders();
+        List<FolderModel> GetUserFolders(User user);
     }
 }
