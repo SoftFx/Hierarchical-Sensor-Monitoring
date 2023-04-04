@@ -22,7 +22,6 @@ function Data(to, from, type, encodedId) {
     window.initialize = function() {
         initializeSensorAccordion();
         initializeFileSensorEvents();
-        initializeInfoLinks();
     }
 
     window.searchHistory = function(encodedId) {

@@ -1,8 +1,4 @@
-﻿window.initializeInfoLinks = function() {
-    //$('[id^="sensorInfo_link_"]').off("click").on("click", metaInfoLinkClicked);
-}
-
-window.editInfoButtonClick = function () {
+﻿window.editInfoButtonClick = function () {
     let sensorId = $('#sensorMetaInfo_encodedId').val();
 
     $('#interval_' + sensorId).removeAttr("disabled");
@@ -46,15 +42,6 @@ window.displaySensorMetaInfo = function (sensorId, viewData) {
     disableExpectedUpdateIntervalControl();
 }
 
-function metaInfoLinkClicked() {
-    let sensorId = this.id.substring("sensorInfo_link_".length);
-    if ($('#sensor_info_' + sensorId).is(':empty')) {
-        showMetaInfo(sensorId);
-    } else {
-        hideMetaInfo(sensorId);
-    }
-}
-
 function showMetaInfo(id) {
     $.ajax({
         type: 'GET',
@@ -68,16 +55,6 @@ function showMetaInfo(id) {
         displaySensorMetaInfo(id, data);
         //setLinkText(id, "Hide meta info");
     });
-}
-
-function hideMetaInfo(sensorId) {
-    //$('#sensor_info_' + sensorId).empty();
-    //setLinkText(sensorId, "Show meta info");
-}
-
-function setLinkText(sensorId, text) {
-    //let link = document.getElementById('sensorInfo_link_' + sensorId);
-    //link.textContent = text;
 }
 
 function disableExpectedUpdateIntervalControl() {
