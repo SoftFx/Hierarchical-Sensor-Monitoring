@@ -31,12 +31,12 @@
                 Description:
             </div>
             <div class="w-100 ms-1">
-                <div class="naked-text w-100 ms-1 ps-2" id='span_description_@(Model.EncodedId)'>@Model.Description</div>
+                <div class="naked-text w-100 ms-1 ps-2" id='markdown_span_description_@(Model.EncodedId)'>@Model.Description</div>
                 <textarea id='description_@(Model.EncodedId)' class="form-control naked-text w-100 ms-1 ps-2 d-none"  type='text' asp-for="Description" value='@Model.Description' disabled></textarea>
             </div>
         </div>
 
-        <div class="collapse" id="multiCollapseExample1">
+        <div class="collapse" id="metaInfoCollapse">
             <div class="form-control border-0 fw-bold mb-1" style="max-width: 15rem;">
                 General info:
             </div>
@@ -65,7 +65,7 @@
                     </div>
                     <div class="d-flex w-100 ps-2">
                         <li id='errorIcon_${id}' class='fas fa-exclamation-triangle me-1 align-self-center'></li>
-                        <span>@Html.Raw(Model.StatusComment)</span>
+                        <span id="markdown_status_comment">@Html.Raw(Model.StatusComment)</span>
                     </div>
                 }
             </div>
@@ -113,7 +113,7 @@
         </div>
 
         <button class="btn btn-outline-secondary w-100 
-                       border-start-0 border-end-0 border-top-0 rounded-0 border-bottom-1" id="sensor_info_collapse" title="Show more info..." type="button" data-bs-toggle="collapse" onclick="collapseChangeTextContent()" href="#multiCollapseExample1" role="button" aria-expanded="false" aria-controls="multiCollapseExample1" style="border-right-color: unset;--bs-btn-hover-bg: #edf0f5">
+                       border-start-0 border-end-0 border-top-0 rounded-0 border-bottom-1" id="sensor_info_collapse" title="Show more info..." type="button" data-bs-toggle="collapse" onclick="collapseChangeTextContent()" href="#metaInfoCollapse" role="button" aria-expanded="false" aria-controls="metaInfoCollapse" style="border-right-color: unset;--bs-btn-hover-bg: #edf0f5">
             <i id="collapse_icon" class="fa-solid fa-caret-down"></i>
         </button>
     </form>
@@ -128,12 +128,10 @@
         else {
             let temp = $('#editSensorMetaInfo_form').children('div').first().clone().removeClass('d-none');
             $('#editSensorMetaInfo_form').children('div').first().remove();
-            $('#multiCollapseExample1').prepend(temp);
+            $('#metaInfoCollapse').prepend(temp);
         }
         
-        let span_description = $('[id^="span_description_"]');
-        let innerHtml = span_description[0].innerHTML;
-        span_description.empty().append(markdownToHTML(innerHtml));
+        replaceHTMLtoMarkdown();
     });
     
     $(document).on("submit", "#editSensorMetaInfo_form", function (event) {
@@ -151,6 +149,14 @@
             }
         });
     });
+    
+    function replaceHTMLtoMarkdown()
+    {
+       $('[id^="markdown_"]').each( function () {
+            let innerHtml = $(this)[0].innerHTML;
+            $(this).empty().append(markdownToHTML(innerHtml))
+       });
+    }
     
     function collapseChangeTextContent(){
         let icon = $('#collapse_icon')[0];
