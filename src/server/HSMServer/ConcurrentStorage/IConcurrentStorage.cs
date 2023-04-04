@@ -19,6 +19,8 @@ namespace HSMServer.ConcurrentStorage
 
         Task<bool> TryUpdate(UpdateType update);
 
+        bool TryGetValue(Guid id, out ModelType model);
+
         Task Initialize();
     }
 }

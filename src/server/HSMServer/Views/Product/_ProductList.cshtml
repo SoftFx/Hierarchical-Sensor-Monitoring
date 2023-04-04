@@ -15,7 +15,7 @@
     bool isProductCrudAllowed = UserRoleHelper.IsUserCRUDAllowed(user);
     bool isProductActionAllowed = ProductRoleHelper.IsProductActionAllowed(user?.ProductsRoles);
 }
- 
+
 
 <div class="w-100 productTable">
     <form id="folderProductsForm_@Model.Id" asp-controller="@ViewConstants.ProductController" asp-action="@nameof(ProductController.FilterFolderProducts)">
@@ -87,32 +87,45 @@
                             }
                         </td>
                         <td nowrap class="text-center w-10">
-                            <div class='btn-group'>
+                            <div class="dropdown">
                                 @if (isProductCrudAllowed || ProductRoleHelper.IsManager(product.Id, user?.ProductsRoles))
                                 {
                                     <button id="actionButton" class="btn" data-bs-toggle="dropdown" data-bs-auto-close="true" aria-haspopup="true" aria-expanded="false">
-                                        <i class="fa-solid fa-ellipsis-vertical" style="cursor: pointer"></i>
+                                        <i class="fa-solid fa-ellipsis-vertical button-link"></i>
                                     </button>
                                 }
                                 else
                                 {
                                     <i class="fa fa-ellipsis-vertical disabled" style="color: darkgrey" data-bs-toggle="dropdown"></i>
                                 }
-                                <ul class='dropdown-menu overflow-auto' aria-labelledby="dropdownMenuButton">
-                                    <li>
-                                        <a id='change_@product.EncodedId' class='dropdown-item text-decoration-none fw-normal' style="cursor: pointer;">
-                                            Edit
-                                        </a>
-                                    </li>
+                                <div class="dropdown-menu" aria-labelledby="actionButton">
+                                    <a id='change_@product.EncodedId' class="dropdown-item text-decoration-none fw-normal button-link">Edit</a>
                                     @if (isProductCrudAllowed)
                                     {
-                                        <li>
-                                            <a id='delete_@product.Id' class='dropdown-item text-decoration-none fw-normal' style="cursor: pointer;">
-                                                Delete
-                                            </a>
-                                        </li>
+                                        <a id='delete_@product.Id' class="dropdown-item text-decoration-none fw-normal button-link">Delete</a>
                                     }
-                                </ul>
+                                    @if (ViewBag.UserFolders is Dictionary<string, (string, string, string)> folders && folders.Count > 1)
+                                    {
+                                        var currentFolderId = Model.Id?.ToString() ?? string.Empty;
+
+                                        <div class="dropdown dropend">
+                                            <a class="dropdown-item text-decoration-none fw-normal button-link" id="moveToAction" data-bs-toggle="dropdown" data-bs-auto-close="true" aria-haspopup="true" aria-expanded="false">Move to ...</a>
+                                            <div class="dropdown-menu" aria-labelledby="moveToAction">
+                                                @foreach (var (id, (name, background, foreground)) in folders)
+                                                {
+                                                    @if (id != currentFolderId)
+                                                    {
+                                                        <a id="moveTo_@id" class="dropdown-item text-decoration-none fw-normal button-link" style="background:@background; color:@foreground"
+                                                           asp-controller="@ViewConstants.ProductController" asp-action="@nameof(ProductController.MoveProduct)"
+                                                           asp-route-productId="@product.Id" asp-route-toFolderId="@id" asp-route-fromFolderId="@Model.Id">
+                                                            @name
+                                                        </a>
+                                                    }
+                                                }
+                                            </div>
+                                        </div>
+                                    }
+                                </div>
                             </div>
                         </td>
                     </tr>
@@ -145,4 +158,30 @@
             }
         });
     });
+
+    (function ($bs) {
+        const CLASS_NAME = 'has-child-dropdown-show';
+        $bs.Dropdown.prototype.toggle = function (_orginal) {
+            return function () {
+                document.querySelectorAll('.' + CLASS_NAME).forEach(function (e) {
+                    e.classList.remove(CLASS_NAME);
+                });
+                let dd = this._element.closest('.dropdown').parentNode.closest('.dropdown');
+                for (; dd && dd !== document; dd = dd.parentNode.closest('.dropdown')) {
+                    dd.classList.add(CLASS_NAME);
+                }
+                return _orginal.call(this);
+            }
+        }($bs.Dropdown.prototype.toggle);
+
+        document.querySelectorAll('.dropdown').forEach(function (dd) {
+            dd.addEventListener('hide.bs.dropdown', function (e) {
+                if (this.classList.contains(CLASS_NAME)) {
+                    this.classList.remove(CLASS_NAME);
+                    e.preventDefault();
+                }
+                e.stopPropagation(); // do not need pop in multi level mode
+            });
+        });
+    })(bootstrap);
 </script>
