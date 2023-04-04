@@ -51,9 +51,7 @@ function showMetaInfo(id) {
         cache: false,
         async: true
     }).done(function (data) {
-        console.log('showmetainfo')
         displaySensorMetaInfo(id, data);
-        //setLinkText(id, "Hide meta info");
     });
 }
 
