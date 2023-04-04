@@ -197,8 +197,9 @@
                                                    <span style="min-width: 8rem">Status comment:</span>
                                               </div>
                                               <div class="d-flex w-100 ps-2">
-                                                    <span>${markdownToHTML(dataObject.validationError)}</span>
+                                                    <span id="markdown_status_comment">${markdownToHTML(dataObject.validationError)}</span>
                                               </div>`);
+            $('#markdown_status_comment').children().last().css('margin-bottom',0);
         }
         
         let accordionLoaded = $('[id^="sensorData"]');

@@ -170,6 +170,7 @@
        $('[id^="markdown_"]').each( function () {
             let innerHtml = $(this)[0].innerHTML;
             $(this).empty().append(markdownToHTML(innerHtml))
+            $(this).children().last().css('margin-bottom',0);
        });
     }
     
