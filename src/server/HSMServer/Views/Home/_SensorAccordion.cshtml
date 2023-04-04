@@ -24,10 +24,11 @@
 
 @await Html.PartialAsync("_SensorMetaInfo", new SensorInfoViewModel(Model))
 
-<div class='accordion' id='sensorData_@sensorId'>
-    <div class='accordion-item'>
+
         @if (Model.SensorType == SensorType.File)
         {
+            <div class='accordion' id='sensorData_@sensorId'>
+                <div class='accordion-item'>
             <h2 class='accordion-header' id='heading_@sensorId'>
                 <button id='file_accordion_@sensorId' class='accordion-button collapsed pt-2 pb-1' type='button' data-bs-toggle='collapse'
                         data-bs-target='#file_collapse_@sensorId' aria-expanded='false' aria-controls='file_collapse_@sensorId'>
@@ -86,46 +87,47 @@
                     </div>
                 </button>
             </h2>
-            <div id='file_collapse_@sensorId' class='accordion-collapse collapse text-break' aria-labelledby='heading_@sensorId' data-bs-parent='#sensorData_@sensorId'>
-                <div class='accordion-body p-3'>
-                    @if (Model.LastValue != null)
-                    {
-                        <div class="row">
-                            <div class="d-flex col-6">
-                                <div class="align-self-center text-end">
-                                    @if (isEnabledPreview)
-                                    {
-                                        <h5 class="mb-0" id="preview-header">Content:</h5>
-                                    }
-                                </div>
-                            </div>
-                            <div class="col-6">
-                                <div class="justify-content-end">
-                                    <div class="d-flex flex-row-reverse">
-                                        <input style='display: none;' id='fileType_@sensorId' value='@Model.FileNameString'/>
-                                        <a id='button_download_@sensorId' class='btn btn-outline-secondary d-flex justify-content-center align-items-center mx-1' style="max-width: 8rem; width: 7rem;" title='Download'>
-                                            <i class='fas fa-file-download pe-1' style="width: 1rem;height: 1rem"></i>
-                                            <span style="font-size: smaller">Download</span>
-                                        </a>
-                                        <a id='button_view_@sensorId' class='btn btn-outline-secondary d-flex justify-content-center align-items-center mx-1' style="max-width: 8rem; width: 7rem;" title='Preview'>
-                                            <i class='fas fa-eye pe-1' style="width: 1rem;height: 1rem"></i>
-                                            <span style="font-size: smaller"> Preview</span>
-                                        </a>
+                    <div id='file_collapse_@sensorId' class='accordion-collapse collapse text-break' aria-labelledby='heading_@sensorId' data-bs-parent='#sensorData_@sensorId'>
+                        <div class='accordion-body p-3'>
+                            @if (Model.LastValue != null)
+                            {
+                                <div class="row">
+                                    <div class="d-flex col-6">
+                                        <div class="align-self-center text-end">
+                                            @if (isEnabledPreview)
+                                            {
+                                                <h5 class="mb-0" id="preview-header">Content:</h5>
+                                            }
+                                        </div>
+                                    </div>
+                                    <div class="col-6">
+                                        <div class="justify-content-end">
+                                            <div class="d-flex flex-row-reverse">
+                                                <input style='display: none;' id='fileType_@sensorId' value='@Model.FileNameString'/>
+                                                <a id='button_download_@sensorId' class='btn btn-outline-secondary d-flex justify-content-center align-items-center mx-1' style="max-width: 8rem; width: 7rem;" title='Download'>
+                                                    <i class='fas fa-file-download pe-1' style="width: 1rem;height: 1rem"></i>
+                                                    <span style="font-size: smaller">Download</span>
+                                                </a>
+                                                <a id='button_view_@sensorId' class='btn btn-outline-secondary d-flex justify-content-center align-items-center mx-1' style="max-width: 8rem; width: 7rem;" title='Preview'>
+                                                    <i class='fas fa-eye pe-1' style="width: 1rem;height: 1rem"></i>
+                                                    <span style="font-size: smaller"> Preview</span>
+                                                </a>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
-                            </div>
+                                <div class="d-grid d-none pt-3" id="preview">
+                                    <div style="overflow-x: auto" id="preview-content"></div>
+                                </div>
+                            }
                         </div>
-                        <div class="d-grid d-none pt-3" id="preview">
-                            <div style="overflow-x: auto" id="preview-content"></div>
-                        </div>
-                    }
-                </div>
-            </div>
+                    </div>
+                    </div>
+                    </div>
         }
         else
         {
-            <h2 class='accordion-header' id='heading_@sensorId'>
-                <button id='accordion_@sensorId' class='accordion-button collapsed' type='button' data-bs-toggle='collapse'
+            <button id='accordion_@sensorId' class='accordion-button collapsed' type='button' data-bs-toggle='collapse'
                         data-bs-target='#collapse_@sensorId' aria-expanded='false' aria-controls='collapse_@sensorId'>
                     <div class="w-100">
                         <div class='row justify-content-between'>
@@ -140,24 +142,24 @@
                             @*     <div id='update_@sensorId' class='time-ago-div me-1'>updated @Model.UpdateTime.GetTimeAgo()</div> *@
                             @* </div> *@
                         </div>
-                        <div class="text-break" id='value_@sensorId'>
-                            @Model.ShortStringValue
-                        </div>
-                        <div class="text-break">
-                            <span id='validation_@sensorId'>
-                                @if (Model.IsValidationErrorVisible)
-                                {
-                                    <li id='errorIcon_@sensorId' class='fas fa-exclamation-triangle me-1'></li>
-                                    <span>Alert comment: @Html.Raw(@Model.ValidationError)</span>
-                                }
-                            </span>
-                        </div>
+                        @* <div class="text-break" id='value_@sensorId'> *@
+                        @*     @Model.ShortStringValue *@
+                        @* </div> *@
+                        @* <div class="text-break"> *@
+                        @*     <span id='validation_@sensorId'> *@
+                        @*         @if (Model.IsValidationErrorVisible) *@
+                        @*         { *@
+                        @*             <li id='errorIcon_@sensorId' class='fas fa-exclamation-triangle me-1'></li> *@
+                        @*             <span>Alert comment: @Html.Raw(@Model.ValidationError)</span> *@
+                        @*         } *@
+                        @*     </span> *@
+                        @* </div> *@
                     </div>
                 </button>
-            </h2>
+            
 
-            <div id='collapse_@sensorId' class='accordion-collapse collapse text-break' aria-labelledby='heading_@sensorId' data-bs-parent='#sensorData_@sensorId'>
-                <div class='accordion-body p-3'>
+            <div id='collapse_@sensorId' class='text-break'>
+                <div class='p-3'>
                     <div>
                         <div class="d-flex justify-content-between">
                             <div>
@@ -221,8 +223,7 @@
                 </div>
             </div>
         }
-    </div>
-</div>
+    
 <div id="recentValues_@sensorId"></div>
 
 <script>
