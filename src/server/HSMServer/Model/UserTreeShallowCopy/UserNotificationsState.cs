@@ -1,4 +1,5 @@
 ﻿using HSMServer.Core.Model;
+using HSMServer.Notification.Settings;
 using System;
 
 namespace HSMServer.Model.UserTreeShallowCopy

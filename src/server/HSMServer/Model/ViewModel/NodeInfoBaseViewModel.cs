@@ -1,13 +1,15 @@
 ﻿using HSMServer.Model.TreeViewModel;
 using System.Collections.Generic;
 
+
 namespace HSMServer.Model.ViewModel
 {
     public abstract class NodeInfoBaseViewModel
     {
-        protected static readonly List<TimeInterval> _predefinedIntervals =
+        private static readonly List<TimeInterval> _predefinedExpectedIntervals =
             new()
             {
+                TimeInterval.FromParent,
                 TimeInterval.None,
                 TimeInterval.TenMinutes,
                 TimeInterval.Hour,
@@ -16,19 +18,34 @@ namespace HSMServer.Model.ViewModel
                 TimeInterval.Month,
                 TimeInterval.Custom
             };
+        
+        private static readonly List<TimeInterval> _predefinedRestoreIntervals =
+            new()
+            {
+                TimeInterval.FromParent,
+                TimeInterval.None,
+                TimeInterval.OneMinute,
+                TimeInterval.FiveMinutes,
+                TimeInterval.TenMinutes,
+                TimeInterval.Hour,
+                TimeInterval.Day,
+                TimeInterval.Custom
+            };
 
 
         public string Path { get; }
 
         public string ProductName { get; }
 
-        public bool IsOwnExpectedUpdateInterval { get; }
-
-        public string EncodedId { get; set; }
-        
-        public string Description { get; set; }
 
         public TimeIntervalViewModel ExpectedUpdateInterval { get; set; }
+
+        public TimeIntervalViewModel SensorRestorePolicy { get; set; }
+
+
+        public string EncodedId { get; set; }
+
+        public string Description { get; set; }
 
 
         public NodeInfoBaseViewModel() { }
@@ -36,12 +53,12 @@ namespace HSMServer.Model.ViewModel
         internal NodeInfoBaseViewModel(NodeViewModel model)
         {
             Path = model.Path;
-            ProductName = model.RootProduct.DisplayName;
+            ProductName = model.RootProduct.Name;
             EncodedId = model.EncodedId;
             Description = model.Description;
 
-            ExpectedUpdateInterval = new(model.ExpectedUpdateInterval.ToModel(), _predefinedIntervals);
-            IsOwnExpectedUpdateInterval = model.IsOwnExpectedUpdateInterval;
+            ExpectedUpdateInterval = new(model.ExpectedUpdateInterval, _predefinedExpectedIntervals);
+            SensorRestorePolicy = new(model.SensorRestorePolicy, _predefinedRestoreIntervals);
         }
     }
 }

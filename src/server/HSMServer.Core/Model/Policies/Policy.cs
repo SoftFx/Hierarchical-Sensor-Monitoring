@@ -1,19 +1,39 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities;
 using System;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 
-namespace HSMServer.Core.Model
+namespace HSMServer.Core.Model.Policies
 {
+    [JsonPolymorphic(TypeDiscriminatorPropertyName = "$type")]
+    [JsonDerivedType(typeof(ExpectedUpdateIntervalPolicy), 1000)]
+    [JsonDerivedType(typeof(RestoreErrorPolicy), 1100)]
+    [JsonDerivedType(typeof(RestoreWarningPolicy), 1101)]
+    [JsonDerivedType(typeof(RestoreOffTimePolicy), 1102)]
+    [JsonDerivedType(typeof(StringValueLengthPolicy), 2000)]
     public abstract class Policy
     {
-        public Guid Id { get; init; }
+        protected static PolicyResult Ok => PolicyResult.Ok;
 
-        public string Type { get; init; }
+
+        protected abstract SensorStatus FailStatus { get; }
+
+        protected abstract string FailMessage { get; }
+
+        protected virtual string FailIcon => FailStatus.ToIcon();
+
+
+        internal PolicyResult Fail { get; }
+
+
+        public Guid Id { get; init; }
 
 
         protected Policy()
         {
+            Fail = new(FailStatus, FailMessage, FailIcon);
+
             Id = Guid.NewGuid();
-            Type = GetType().Name;
         }
 
 
@@ -21,13 +41,36 @@ namespace HSMServer.Core.Model
             new()
             {
                 Id = Id.ToString(),
-                Policy = this,
+                Policy = JsonSerializer.SerializeToUtf8Bytes(this),
             };
     }
 
 
-    public abstract class Policy<T> : Policy where T : BaseValue
+    public abstract class DataPolicy<T> : Policy where T : BaseValue
     {
-        internal abstract ValidationResult Validate(T value);
+        internal abstract PolicyResult Validate(T value);
+    }
+
+
+    public abstract class ServerPolicy : Policy
+    {
+        public TimeIntervalModel Interval { get; set; }
+
+
+        internal bool FromParent => Interval == null || Interval?.TimeInterval == TimeInterval.FromParent;
+
+
+        protected ServerPolicy() : base() { }
+
+        protected ServerPolicy(TimeIntervalModel interval) : base()
+        {
+            Interval = interval;
+        }
+
+
+        internal PolicyResult Validate(DateTime time)
+        {
+            return Interval != null && Interval.TimeIsUp(time) ? Fail : Ok;
+        }
     }
 }

@@ -65,9 +65,7 @@ function Data(to, from, type, encodedId) {
         let encodedId = this.id.substring("collapse_".length);
         let type = getTypeForSensor(encodedId);
         let date = new Date();
-        if (isFileSensor(type)) {
-            return;
-        }
+        
         if (isGraphAvailable(type)) {
             initializeGraph(encodedId, rawHistoryLatestAction, type, Data(date, date, type, encodedId), true);
         } else {

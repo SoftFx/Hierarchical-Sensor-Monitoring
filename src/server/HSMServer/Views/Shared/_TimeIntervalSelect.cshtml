@@ -5,31 +5,28 @@
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
 
 
-<form>
-    <div class="d-grid">
-        <select id="timeIntervalSelect" class="form-select" asp-for="TimeInterval" asp-items="@Model.IntervalItems"></select>
-        <input class="customTimeInterval form-control" placeholder="@TimeIntervalViewModel.CustomTemplate" style="display:none;" asp-for="CustomTimeInterval" />
-    </div>
-</form>
-
+<div class="d-grid">
+    <select id="timeIntervalSelect_@Model.Id" class="timeIntervalSelect form-select" asp-for="TimeInterval" asp-items="@Model.IntervalItems"></select>
+    <input id="input_timeIntervalSelect_@Model.Id" class="customTimeInterval form-control" placeholder="@TimeIntervalViewModel.CustomTemplate" style="display:none" asp-for="CustomTimeInterval" />
+</div>
 
 <script>
-    displaySelectedOption();
+    var interval_id = '#timeIntervalSelect_' + '@Model.Id';
 
-    $('#timeIntervalSelect').change(function () {
-        displaySelectedOption();
-    });
-
-    function displaySelectedOption() {
-        if ('@Model.CanCustomInputBeVisible' === "False") {
+    $(interval_id).change(function (select_obj) {
+        if ('@Model.UseCustomInputTemplate' === "False")
             return;
-        }
 
-        if ($('option:selected', $('#timeIntervalSelect')).text() == '@TimeInterval.Custom') {
-            $('.customTimeInterval').show();
+        var select = select_obj.currentTarget;
+        var custom_input_id = `#input_${select.id}`;
+
+        if (select.options[select.selectedIndex].text == '@TimeInterval.Custom') {
+            $(custom_input_id).show();
         }
         else {
-            $('.customTimeInterval').hide();
+            $(custom_input_id).hide();
         }
-    }
+    });
+
+    $(interval_id).trigger("change");
 </script>

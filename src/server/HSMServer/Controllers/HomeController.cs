@@ -10,15 +10,16 @@ using HSMServer.Model.Authentication;
 using HSMServer.Model.Authentication.History;
 using HSMServer.Model.TreeViewModel;
 using HSMServer.Model.ViewModel;
+using HSMServer.Notification.Settings;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
+using HSMServer.Core.Helpers;
 
 namespace HSMServer.Controllers
 {
@@ -47,8 +48,6 @@ namespace HSMServer.Controllers
 
         public IActionResult Index()
         {
-            _treeViewModel.RecalculateNodesCharacteristics();
-
             return View(_treeViewModel);
         }
 
@@ -73,8 +72,6 @@ namespace HSMServer.Controllers
         [HttpPost]
         public IActionResult RefreshTree()
         {
-            _treeViewModel.RecalculateNodesCharacteristics();
-
             return PartialView("_Tree", _treeViewModel.GetUserTree(HttpContext.User as User));
         }
 
@@ -93,7 +90,7 @@ namespace HSMServer.Controllers
         {
             var decodedId = SensorPathHelper.DecodeGuid(model.EncodedId);
             var newMutingPeriod = model.EndOfIgnorePeriod;
-            
+
             if (_treeViewModel.Nodes.TryGetValue(decodedId, out _))
             {
                 foreach (var sensorId in GetNodeSensors(decodedId))
@@ -104,7 +101,7 @@ namespace HSMServer.Controllers
                 if (_treeViewModel.Sensors.TryGetValue(decodedId, out var sensor))
                     _treeValuesCache.UpdateMutedSensorState(sensor.Id, newMutingPeriod);
             }
-            
+
             UpdateUserNotificationSettings(decodedId, (s, g) => s.Ignore(g, model.EndOfIgnorePeriod));
             UpdateGroupNotificationSettings(decodedId, (s, g) => s.Ignore(g, model.EndOfIgnorePeriod));
         }
@@ -169,7 +166,7 @@ namespace HSMServer.Controllers
         [HttpPost]
         public void EnableNotifications([FromQuery] string selectedId, [FromQuery] NotificationsTarget target) =>
             GetHandler(target)(SensorPathHelper.DecodeGuid(selectedId), (s, g) => s.Enable(g));
-        
+
         [HttpPost]
         public void IgnoreNotifications(IgnoreNotificationsViewModel model) =>
             GetHandler(model.NotificationsTarget)(SensorPathHelper.DecodeGuid(model.EncodedId), (s, g) =>
@@ -186,9 +183,9 @@ namespace HSMServer.Controllers
             var decodedId = SensorPathHelper.DecodeGuid(selectedId);
 
             if (_treeViewModel.Nodes.TryGetValue(decodedId, out var node))
-                return isFullPath ? $"{node.RootProduct.DisplayName}{node.Path}" : node.Path;
+                return isFullPath ? node.FullPath : node.Path;
             else if (_treeViewModel.Sensors.TryGetValue(decodedId, out var sensor))
-                return isFullPath ? $"{sensor.RootProduct.DisplayName}{sensor.Path}" : sensor.Path;
+                return isFullPath ? sensor.FullPath : sensor.Path;
 
             return string.Empty;
         }
@@ -212,7 +209,7 @@ namespace HSMServer.Controllers
 
         private void UpdateGroupNotificationSettings(Guid selectedNode, Action<NotificationSettings, Guid> updateSettings)
         {
-            ProductModel rootProduct = null;
+            ProductNodeViewModel rootProduct = null;
             if (_treeViewModel.Nodes.TryGetValue(selectedNode, out var node))
                 rootProduct = node.RootProduct;
             else if (_treeViewModel.Sensors.TryGetValue(selectedNode, out var sensor))
@@ -225,8 +222,8 @@ namespace HSMServer.Controllers
             {
                 updateSettings?.Invoke(rootProduct.Notifications, sensorId);
             }
-            
-            _treeValuesCache.UpdateProduct(rootProduct);
+
+            _treeValuesCache.UpdateProduct(_treeValuesCache.GetProduct(rootProduct.Id));
         }
 
         private List<Guid> GetNodeSensors(Guid id) => _treeViewModel.GetNodeAllSensors(id);
@@ -369,13 +366,14 @@ namespace HSMServer.Controllers
         #region File
 
         [HttpGet]
-        public IActionResult GetFile([FromQuery(Name = "Selected")] string encodedId)
+        public async Task<IActionResult> GetFile([FromQuery(Name = "Selected")] string encodedId, [FromQuery] long dateTime = default)
         {
-            var value = GetFileSensorValue(encodedId);
-            if (value == null)
-                return _emptyResult;
-
             var (_, path) = GetSensorProductAndPath(encodedId);
+
+            var value = await GetFileByReceivingTimeOrDefault(encodedId, dateTime);
+
+            if (value is null)
+                return _emptyResult;
 
             var fileName = $"{path.Replace('/', '_')}.{value.Extension}";
 
@@ -383,13 +381,14 @@ namespace HSMServer.Controllers
         }
 
         [HttpPost]
-        public IActionResult GetFileStream([FromQuery(Name = "Selected")] string encodedId)
+        public async Task<IActionResult> GetFileStream([FromQuery(Name = "Selected")] string encodedId, [FromQuery] long dateTime = default)
         {
-            var value = GetFileSensorValue(encodedId);
-            if (value == null)
-                return _emptyResult;
-
             var (_, path) = GetSensorProductAndPath(encodedId);
+
+            var value = await GetFileByReceivingTimeOrDefault(encodedId, dateTime);
+
+            if (value is null)
+                return _emptyResult;
 
             var fileContentsStream = new MemoryStream(value.Value);
             var fileName = $"{path.Replace('/', '_')}.{value.Extension}";
@@ -401,16 +400,37 @@ namespace HSMServer.Controllers
         public ActionResult<FileValue> GetFileInfo([FromQuery(Name = "Selected")] string encodedId)
         {
             var value = GetFileSensorValue(encodedId);
-            if (value == null)
-                return _emptyResult;
-            
-            return value;
+
+            return value is null ? _emptyResult : value;
         }
 
+        [HttpGet]
+        public async Task<IActionResult> GetRecentFilesView([FromQuery] string fileId)
+        {
+            var viewModel = await GetFileHistory(fileId);
+            _userManager[(HttpContext.User as User).Id].Pagination = viewModel;
+            
+            return GetFileTable(viewModel);
+        }
+
+        private PartialViewResult GetFileTable(HistoryValuesViewModel viewModel) =>
+            PartialView("_FileAccordions", viewModel);
+
         public IActionResult FilePreview() => View("FilePreview");
-        
+
         private FileValue GetFileSensorValue(string encodedId) =>
             _treeValuesCache.GetSensor(SensorPathHelper.DecodeGuid(encodedId)).LastValue as FileValue;
+
+        private async Task<FileValue> GetFileByReceivingTimeOrDefault(string encodedId, long ticks = default) => (ticks == default 
+            ? GetFileSensorValue(encodedId)
+            : (await GetFileHistory(encodedId)).Pages[0].Cast<FileValue>().FirstOrDefault(file => file.ReceivingTime.Ticks == ticks))
+            .DecompressContent();
+
+        private Task<HistoryValuesViewModel> GetFileHistory(string encodedId)
+        {
+            var enumerator = _treeValuesCache.GetSensorValuesPage(SensorPathHelper.DecodeGuid(encodedId), DateTime.MinValue, DateTime.MaxValue, 20);
+            return new HistoryValuesViewModel(encodedId, 6, enumerator, GetLocalLastValue(encodedId, DateTime.MinValue, DateTime.MaxValue)).Initialize();
+        }
 
         #endregion
 
@@ -426,20 +446,21 @@ namespace HSMServer.Controllers
         }
 
         [HttpPost]
-        public IActionResult UpdateSensorInfo(SensorInfoViewModel updatedModel)
+        public IActionResult UpdateSensorInfo(SensorInfoViewModel newModel)
         {
-            if (!_treeViewModel.Sensors.TryGetValue(SensorPathHelper.DecodeGuid(updatedModel.EncodedId), out var sensor))
+            if (!_treeViewModel.Sensors.TryGetValue(SensorPathHelper.DecodeGuid(newModel.EncodedId), out var sensor))
                 return _emptyResult;
 
-            var sensorUpdate = new SensorUpdate
+            var update = new SensorUpdate
             {
                 Id = sensor.Id,
-                Description = updatedModel.Description ?? string.Empty,
-                Unit = updatedModel.Unit ?? string.Empty,
-                ExpectedUpdateInterval = updatedModel.ExpectedUpdateInterval.ToModel(),
+                Description = newModel.Description ?? string.Empty,
+                Unit = newModel.Unit ?? string.Empty,
+                ExpectedUpdateInterval = newModel.ExpectedUpdateInterval.ToModel(),
+                RestoreInterval = newModel.SensorRestorePolicy.ToModel(),
             };
 
-            _treeValuesCache.UpdateSensor(sensorUpdate);
+            _treeValuesCache.UpdateSensor(update);
 
             return PartialView("_SensorMetaInfo", new SensorInfoViewModel(sensor));
         }
@@ -456,19 +477,20 @@ namespace HSMServer.Controllers
         }
 
         [HttpPost]
-        public IActionResult UpdateProductInfo(ProductInfoViewModel updatedModel)
+        public IActionResult UpdateProductInfo(ProductInfoViewModel newModel)
         {
-            if (!_treeViewModel.Nodes.TryGetValue(SensorPathHelper.DecodeGuid(updatedModel.EncodedId), out var product))
+            if (!_treeViewModel.Nodes.TryGetValue(SensorPathHelper.DecodeGuid(newModel.EncodedId), out var product))
                 return _emptyResult;
 
-            var productUpdate = new ProductUpdate
+            var update = new ProductUpdate
             {
                 Id = product.Id,
-                ExpectedUpdateInterval = updatedModel.ExpectedUpdateInterval.ToModel(),
-                Description = updatedModel.Description
+                ExpectedUpdateInterval = newModel.ExpectedUpdateInterval.ToModel(),
+                RestoreInterval = newModel.SensorRestorePolicy.ToModel(),
+                Description = newModel.Description
             };
 
-            _treeValuesCache.UpdateProduct(productUpdate);
+            _treeValuesCache.UpdateProduct(update);
 
             return PartialView("_ProductMetaInfo", new ProductInfoViewModel(product));
         }
@@ -479,7 +501,7 @@ namespace HSMServer.Controllers
 
             _treeViewModel.Sensors.TryGetValue(decodedId, out var sensor);
 
-            return (sensor?.RootProduct.DisplayName, sensor?.Path);
+            return (sensor?.RootProduct.Name, sensor?.Path);
         }
 
         private BarBaseValue GetLocalLastValue(string encodedId, DateTime from, DateTime to)

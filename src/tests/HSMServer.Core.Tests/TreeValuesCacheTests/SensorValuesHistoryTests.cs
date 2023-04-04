@@ -133,9 +133,9 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
                     BaseValue = SensorValuesFactory.BuildSensorValue(sensorInfo.Type),
                 };
 
-                void ChangeSensorHandler(BaseSensorModel sensorModel, TransactionType type)
+                void ChangeSensorHandler(BaseSensorModel sensorModel, ActionType type)
                 {
-                    if (type == TransactionType.Add)
+                    if (type == ActionType.Add)
                         sensorInfo.Id = sensorModel.Id;
                 }
 
@@ -152,16 +152,17 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         private List<SensorModelInfo> BuildSensorModelInfos(int sensorsCount, SensorType type)
         {
             var sensors = new List<SensorModelInfo>(sensorsCount);
+
             for (int i = 0; i < sensorsCount; ++i)
             {
                 var sensorEntity = EntitiesFactory.BuildSensorEntity(parent: TestProductsManager.TestProduct.Id, type: (byte)type);
 
                 var sensor = Infrastructure.SensorModelFactory.Build(sensorEntity);
-                sensor.ParentProduct = _valuesCache.GetProduct(Guid.Parse(sensorEntity.ProductId));
-                sensor.BuildProductNameAndPath();
+                sensor.AddParent(_valuesCache.GetProduct(Guid.Parse(sensorEntity.ProductId)));
 
                 var info = new SensorModelInfo()
                 {
+                    Id = sensor.Id,
                     Path = sensor.Path,
                     Type = sensor.Type,
                 };
@@ -175,11 +176,12 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
 
         private sealed class SensorModelInfo
         {
-            public Guid Id { get; set; }
-
             public string Path { get; init; }
 
             public SensorType Type { get; init; }
+
+
+            public Guid Id { get; set; } = Guid.NewGuid();
         }
     }
 }

@@ -1,15 +1,15 @@
 ﻿@using HSMServer.Controllers
-@using HSMServer.Core.Extensions
+@using HSMServer.Core.Model
 @using HSMServer.Model.ViewModel
+@using TimeInterval = HSMServer.Model.TimeInterval
 
 @model SensorInfoViewModel
 
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
 
 
-<form asp-action="@nameof(HomeController.UpdateSensorInfo)"
-      method="post" id="editSensorMetaInfo_form">
-    <input id="sensorMetaInfo_encodedId" style='display: none' asp-for="EncodedId" value="@Model.EncodedId"/>
+<form asp-action="@nameof(HomeController.UpdateSensorInfo)" id="editSensorMetaInfo_form">
+    <input id="sensorMetaInfo_encodedId" style='display: none' asp-for="EncodedId" value="@Model.EncodedId" />
 
     <div class="m-1">
         <div class='row justify-content-start'>
@@ -38,13 +38,16 @@
                 <td>@Model.SensorType</td>
             </tr>
             <tr>
+                <td>Description</td>
+                <td>
+                    <textarea id='description_@(Model.EncodedId)' type='text' class='form-control naked-text' asp-for="Description" value='@Model.Description' disabled></textarea>
+                </td>
+            </tr>
+            <tr>
                 <td class="w-25">
                     Expected update interval
-                    @if (!Model.IsOwnExpectedUpdateInterval)
-                    {
-                        <span>(from parent)</span>
-                    }
-                    <i class='fas fa-question-circle' title='Time format: dd.hh:mm:ss min value 00:01:00'></i>
+                    <i class='fas fa-question-circle' title='Time format: dd.hh:mm:ss min value 00:01:00.
+If the sensor doesn`t receive new data within the specified time interval, a notification sends'></i>
                 </td>
                 <td id="expectedUpdateInterval_@(Model.EncodedId)">
                     <label id="labelInterval" class="form-control naked-text">@Model.ExpectedUpdateInterval.DisplayInterval</label>
@@ -54,15 +57,16 @@
                 </td>
             </tr>
             <tr>
-                <td>Description</td>
-                <td>
-                    <textarea id='description_@(Model.EncodedId)' type='text' class='form-control naked-text' asp-for="Description" value='@Model.Description' disabled ></textarea>
+                <td class="w-25">
+                    Sensitivity interval
+                    <i class='fas fa-question-circle' title='Time format: dd.hh:mm:ss min value 00:01:00.
+If the sensor doesn`t return to Ok status after the specified time inverval, a notification sends'></i>
                 </td>
-            </tr>
-            <tr>
-                <td>Unit</td>
-                <td>
-                    <input id='unit_@(Model.EncodedId)' type='text' class='form-control naked-text' asp-for="Unit" value='@Model.Unit' disabled>
+                <td id="restorePolicy_@(Model.EncodedId)">
+                    <label id="labelRestoreInterval" class="form-control naked-text">@Model.SensorRestorePolicy.DisplayInterval</label>
+                    <div id="partialRestoreSelect" class="d-none">
+                        <partial name="_TimeIntervalSelect" for="SensorRestorePolicy" />
+                    </div>
                 </td>
             </tr>
         </tbody>
@@ -88,13 +92,10 @@
         $.ajax({
             url: $("#editSensorMetaInfo_form").attr("action"),
             type: 'POST',
-            data: new FormData(this),
-            datatype: 'html',
-            processData: false,
-            contentType: false,
-            cache: false,
+            data: $("#editSensorMetaInfo_form").serialize(),
+            datatype: 'json',
             async: true,
-            success: function (viewData) {
+            success: (viewData) => {
                 displaySensorMetaInfo($('#sensorMetaInfo_encodedId').val(), viewData);
             }
         });

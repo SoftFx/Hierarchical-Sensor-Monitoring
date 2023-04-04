@@ -157,7 +157,7 @@ function buildContextMenu(node) {
         if (isMutedState !== '') {
             if (!(isMutedState === "True")) {
                 contextMenu["Mute"] = {
-                    "label": `Mute ${getKeyByValue(curType)}`,
+                    "label": `Mute ${getKeyByValue(curType)} for...`,
                     "separator_after": true,
                     "separator_before": true,
                     "action": _ => ignoreNotificationsRequest(node, TelegramTarget.Groups, 'true')
@@ -197,7 +197,7 @@ function buildContextMenu(node) {
                 $('#modalDeleteBody').empty();
 
                 $.when(getFullPathAction(node.id)).done((path) => {
-                    $('#modalDeleteBody').append(`Do you really want to remove ${path} ?`);
+                    $('#modalDeleteBody').append(`Do you really want to remove ${path}?`);
                     modal.show();
                 })
 
@@ -209,37 +209,6 @@ function buildContextMenu(node) {
                         .done(() => {
                             updateTreeTimer();
                             showToast(`${getKeyByValue(curType)} has been removed`);
-
-                            $(`#${node.parents[0]}_anchor`).trigger('click');
-                        });
-                });
-
-                $('#closeDeleteButton').off('click').on('click', () => modal.hide());
-            }
-        }
-
-        contextMenu["CleanHistory"] = {
-            "label": "Clean history",
-            "action": _ => {
-                var modal = new bootstrap.Modal(document.getElementById('modalDelete'));
-                //modal
-                $('#modalDeleteLabel').empty();
-                $('#modalDeleteLabel').append(`Clean history for ${getKeyByValue(curType)}`);
-                $('#modalDeleteBody').empty();
-
-                $.when(getFullPathAction(node.id)).done((path) => {
-                    $('#modalDeleteBody').append(`Do you really want to clean history for ${path} ?`);
-                    modal.show();
-                })
-
-                //modal confirm
-                $('#confirmDeleteButton').off('click').on('click', () => {
-                    modal.hide();
-
-                    $.ajax(`${clearHistoryAction}?selectedId=${node.id}`, AjaxPost)
-                        .done(() => {
-                            updateTreeTimer();
-                            showToast(`${getKeyByValue(curType)} has been cleared`);
 
                             $(`#${node.parents[0]}_anchor`).trigger('click');
                         });
@@ -262,7 +231,7 @@ function buildContextMenu(node) {
     }
     else {
         notificationSubmenu["Accounts enable"] = {
-            "label": "Enable for accounts",
+            "label": "Enable for accounts...",
             "icon": "fab fa-telegram",
             "action": _ => enableNotificationsRequest(node, TelegramTarget.Accounts),
         }
@@ -280,7 +249,7 @@ function buildContextMenu(node) {
         }
         else {
             notificationSubmenu["Groups enable"] = {
-                "label": "Enable for groups",
+                "label": "Enable for groups...",
                 "icon": "fab fa-telegram",
                 "action": _ => enableNotificationsRequest(node, TelegramTarget.Groups),
             }

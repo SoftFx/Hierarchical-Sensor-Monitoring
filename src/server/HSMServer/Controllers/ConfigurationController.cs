@@ -1,6 +1,6 @@
 ﻿using HSMServer.Attributes;
+using HSMServer.Configuration;
 using HSMServer.Core.Configuration;
-using HSMServer.Core.Model;
 using HSMServer.Model.ViewModel;
 using HSMServer.Notifications;
 using Microsoft.AspNetCore.Authorization;
@@ -19,10 +19,10 @@ namespace HSMServer.Controllers
         private readonly TelegramBot _telegramBot;
 
 
-        public ConfigurationController(IConfigurationProvider configurationProvider, INotificationsCenter notificationsCenter)
+        public ConfigurationController(IConfigurationProvider configurationProvider, NotificationsCenter notifications)
         {
             _configurationProvider = configurationProvider;
-            _telegramBot = notificationsCenter.TelegramBot;
+            _telegramBot = notifications.TelegramBot;
         }
 
 

@@ -1,4 +1,5 @@
-﻿using HSMServer.Model.TreeViewModel;
+﻿using HSMServer.Extensions;
+using HSMServer.Model.TreeViewModel;
 using System;
 using System.Collections.Generic;
 
@@ -49,7 +50,7 @@ namespace HSMServer.Model
 
         public DateTime DateTimeNow { get; set; }
 
-        public DateTime EndOfIgnorePeriod => IgnorePeriod.TimeInterval == TimeInterval.Forever ? 
+        public DateTime EndOfIgnorePeriod => IgnorePeriod.TimeInterval == TimeInterval.Forever ?
                                              DateTime.MaxValue : DateTimeNow.AddDays(Days).AddHours(Hours).AddMinutes(Minutes);
 
         public bool IsOffTimeModal { get; set; }
@@ -61,21 +62,15 @@ namespace HSMServer.Model
         public IgnoreNotificationsViewModel(NodeViewModel node, NotificationsTarget target, bool isOffTimeModal)
         {
             EncodedId = node.EncodedId;
-            Path = $"{node.RootProduct.DisplayName}{node.Path}";
+            Path = node.FullPath;
             TreeElement = node is SensorNodeViewModel ? SensorTreeElement : NodeTreeElement;
 
             if (node.Id == node.RootProduct.Id)
                 TreeElement = ProductTreeElement;
-            
-            IgnorePeriod = new(_predefinedIntervals)
-            {
-                CanCustomInputBeVisible = false,
-            };
 
-            var now = DateTime.UtcNow;
-            DateTimeNow = now.AddSeconds(-now.Second)
-                             .AddMilliseconds(-now.Millisecond);
-            
+            IgnorePeriod = new(_predefinedIntervals, false);
+
+            DateTimeNow = DateTime.UtcNow.RoundToMin();
             NotificationsTarget = target;
             IsOffTimeModal = isOffTimeModal;
         }
