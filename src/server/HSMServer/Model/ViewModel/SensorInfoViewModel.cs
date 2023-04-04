@@ -17,6 +17,8 @@ namespace HSMServer.Model.ViewModel
         
         public DateTime UpdateTime { get; set; }
         
+        public string ShortLastValue { get; set; }
+        
 
         // public constructor without parameters for action Home/UpdateSensorInfo
         public SensorInfoViewModel() : base() { }
@@ -28,6 +30,7 @@ namespace HSMServer.Model.ViewModel
             Unit = sensor.Unit;
             StatusComment = sensor.ValidationError;
             UpdateTime = sensor.UpdateTime;
+            ShortLastValue = sensor.ShortStringValue;
         }
     }
 }
