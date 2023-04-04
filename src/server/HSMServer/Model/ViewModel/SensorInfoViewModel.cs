@@ -1,4 +1,5 @@
-﻿using HSMServer.Core.Model;
+﻿using System;
+using HSMServer.Core.Model;
 using HSMServer.Model.TreeViewModel;
 using SensorStatus = HSMServer.Model.TreeViewModel.SensorStatus;
 
@@ -14,6 +15,8 @@ namespace HSMServer.Model.ViewModel
 
         public string StatusComment { get; set; }
         
+        public DateTime UpdateTime { get; set; }
+        
 
         // public constructor without parameters for action Home/UpdateSensorInfo
         public SensorInfoViewModel() : base() { }
@@ -24,6 +27,7 @@ namespace HSMServer.Model.ViewModel
             SensorStatus = sensor.Status;
             Unit = sensor.Unit;
             StatusComment = sensor.ValidationError;
+            UpdateTime = sensor.UpdateTime;
         }
     }
 }

@@ -12,6 +12,10 @@
         <div class='d-flex justify-content-start'>
             <h5 class="my-1 align-self-top">@Html.Raw($"{Model.ProductName}{Model.Path}")</h5>
         </div>
+        <div class='d-flex my-1'>
+                                        <input id='sensor_type_@Model.EncodedId' value='@((int)Model.SensorType)' style='display: none'/>
+                                        <div id='update_@Model.EncodedId' class='time-ago-div me-1'>updated @Model.UpdateTime.GetTimeAgo()</div>
+                                    </div>
         <div class="d-flex ">
             <button id="editButtonMetaInfo" type='button' class='d-none btn btn-secondary align-self-center' onclick="editInfoButtonClick()"
                     data-bs-toggle='tooltip' title='edit meta info' style="--bs-btn-font-size: 0.875rem!important;">
@@ -49,8 +53,9 @@
                     <span style="min-width: 8rem">Sensor status:</span>
                 </div>
                 <div class="d-flex w-100 ps-2">
-                    <span>@Model.SensorStatus</span>
-                    <i class="@Model.SensorStatus.ToIcon() align-self-center ps-1"></i>
+                    <span id="status_name_@Model.EncodedId">@Model.SensorStatus</span>
+                    <li id='status_@Model.EncodedId' class='@Model.SensorStatus.ToIcon() sensor-icon-with-margin align-self-center ps-1' title='Status: @Model.SensorStatus'></li>
+                    @* <i class="@Model.SensorStatus.ToIcon() align-self-center ps-1"></i> *@
                 </div>
             </div>
             @if (!string.IsNullOrEmpty(Model.StatusComment))

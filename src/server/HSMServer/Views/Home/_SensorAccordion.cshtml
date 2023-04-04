@@ -130,15 +130,15 @@
                     <div class="w-100">
                         <div class='row justify-content-between'>
                             <div class='row col-md-auto'>
-                                <div class='col-md-auto sensor-icon-without-padding'>
-                                    <li id='status_@sensorId' class='@Model.Status.ToIcon() sensor-icon-with-margin' title='Status: @Model.Status'></li>
-                                </div>
+                                @* <div class='col-md-auto sensor-icon-without-padding'> *@
+                                @*     <li id='status_@sensorId' class='@Model.Status.ToIcon() sensor-icon-with-margin' title='Status: @Model.Status'></li> *@
+                                @* </div> *@
                                 @Html.Raw(@Model.Name)
                             </div>
-                            <div class='col-md-auto'>
-                                <input id='sensor_type_@sensorId' value='@((int)Model.SensorType)' style='display: none'/>
-                                <div id='update_@sensorId' class='time-ago-div me-1'>updated @Model.UpdateTime.GetTimeAgo()</div>
-                            </div>
+                            @* <div class='col-md-auto'> *@
+                            @*     <input id='sensor_type_@sensorId' value='@((int)Model.SensorType)' style='display: none'/> *@
+                            @*     <div id='update_@sensorId' class='time-ago-div me-1'>updated @Model.UpdateTime.GetTimeAgo()</div> *@
+                            @* </div> *@
                         </div>
                         <div class="text-break" id='value_@sensorId'>
                             @Model.ShortStringValue
