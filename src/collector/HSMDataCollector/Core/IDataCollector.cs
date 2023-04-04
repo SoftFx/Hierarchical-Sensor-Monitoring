@@ -3,6 +3,7 @@ using HSMDataCollector.PublicInterface;
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using HSMSensorDataObjects;
 
 namespace HSMDataCollector.Core
 {
@@ -141,6 +142,8 @@ namespace HSMDataCollector.Core
         /// <param name="description">Possible sensor description, empty by default</param>
         /// <returns>A new instance of <see cref="IInstantValueSensor{T}"/> where T is string</returns>
         IInstantValueSensor<string> CreateFileSensor(string path, string fileName, string extension = "txt", string description = "");
+
+        void SendFile(string path, string filePath, SensorStatus status = SensorStatus.Ok, string comment = "");
 
         /// <summary>
         /// Creates the instance of <see cref="ILastValueSensor{T}"/> where T is bool

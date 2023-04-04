@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Net;
 using System.Net.Http;
@@ -44,6 +45,19 @@ namespace HSMDataCollector.Core
             _dataQueue.FileReceiving += DataQueueFileReceiving;
             _dataQueue.SendValues += SendMonitoringData;
         }
+
+        internal void SendFileAsync(FileInfo fileInfo, string path, SensorStatus sensorStatus = SensorStatus.Ok, string comment = "") =>
+            DataQueueFileReceiving(new FileSensorValue()
+            {
+                Path = path,
+                Comment = comment,
+                Status = sensorStatus,
+                Extension = fileInfo.Extension.TrimStart('.'),
+                Name = fileInfo.Name,
+                Time = DateTime.Now,
+                Value = File.ReadAllBytes(fileInfo.FullName).ToList()
+            });
+
 
         public void Dispose()
         {

@@ -13,6 +13,7 @@ using HSMSensorDataObjects.SensorValueRequests;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using SensorBase = HSMDataCollector.Base.SensorBase;
@@ -262,9 +263,16 @@ namespace HSMDataCollector.Core
 
             var sensor = new InstantFileSensor(path, fileName, extension, _dataQueue as IValuesQueue, description);
             AddNewSensor(sensor, path);
-
+            
             return sensor;
         }
+
+        public void SendFile(string path, string filePath, SensorStatus status = SensorStatus.Ok, string comment = "")
+        {
+            var file = new FileInfo(filePath);
+            
+            _hsmClient.SendFileAsync(file, path, status, comment);
+        }   
 
         public ILastValueSensor<bool> CreateLastValueBoolSensor(string path, bool defaultValue, string description = "")
         {
