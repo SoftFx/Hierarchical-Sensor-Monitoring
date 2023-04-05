@@ -15,6 +15,8 @@ namespace HSMServer.Model.ViewModel
 
         public string StatusComment { get; set; }
         
+        public string Comment { get; set; }
+        
         public DateTime UpdateTime { get; set; }
         
         public string ShortLastValue { get; set; }
@@ -29,6 +31,7 @@ namespace HSMServer.Model.ViewModel
             SensorStatus = sensor.Status;
             Unit = sensor.Unit;
             StatusComment = sensor.ValidationError;
+            Comment = sensor.LastValue?.Comment;
             UpdateTime = sensor.UpdateTime;
             ShortLastValue = sensor.ShortStringValue;
         }

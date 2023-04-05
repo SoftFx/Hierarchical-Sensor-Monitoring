@@ -5,7 +5,7 @@
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
 
 
-<div class="d-grid">
+<div class="d-grid flex-grow-1">
     <select id="timeIntervalSelect_@Model.Id" class="timeIntervalSelect form-select" asp-for="TimeInterval" asp-items="@Model.IntervalItems"></select>
     <input id="input_timeIntervalSelect_@Model.Id" class="customTimeInterval form-control" placeholder="@TimeIntervalViewModel.CustomTemplate" style="display:none" asp-for="CustomTimeInterval" />
 </div>

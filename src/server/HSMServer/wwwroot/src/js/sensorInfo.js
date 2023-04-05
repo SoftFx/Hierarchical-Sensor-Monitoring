@@ -13,7 +13,7 @@
     });
     $('[id^="markdown_span_description_"]').addClass('d-none')
     $('[id^="description_"]').removeClass('d-none')
-    
+    $('#sensor_info_collapse').addClass('d-none')
     let collapse = '#sensor_info_collapse';
     if ($(collapse).attr('aria-expanded') === 'false'){
         $(collapse).click()
