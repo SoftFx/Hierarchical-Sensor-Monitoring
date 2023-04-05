@@ -6,7 +6,7 @@
     $('#unit_' + sensorId).removeAttr("disabled").removeClass("naked-text");
     $('#saveInfo_' + sensorId).removeAttr("disabled").removeAttr("hidden");
     $('#revertInfo_' + sensorId).removeAttr("disabled").removeAttr("hidden");
-    $('#editButtonMetaInfo').attr('hidden', true);
+    $('#editButtonMetaInfo').addClass('d-none');
 
     $('#editSensorMetaInfo_form').children('div').each(function () {
         $(this).removeClass('d-none');
