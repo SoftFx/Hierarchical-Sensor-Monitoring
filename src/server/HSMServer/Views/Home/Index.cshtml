@@ -182,7 +182,13 @@
     function updateSpecificSensorData(dataObject) {
         var id = dataObject.id;
         $('#value_' + id).empty().append(dataObject.value);
-
+        console.log(dataObject.value)
+        console.log(dataObject)
+        if (dataObject.value !== null){
+             $('#last_value').removeClass('d-none').children().last().empty().append(dataObject.value);
+             $('#description_separator').removeClass('d-none');      
+        }
+       
         $('#validation_' + id).empty();
         $('#validation_metainfo').empty();
         
@@ -199,6 +205,11 @@
                                               <div class="d-flex w-100 ps-2">
                                                     <span id="markdown_status_comment">${markdownToHTML(dataObject.validationError)}</span>
                                               </div>`);
+            $('#markdown_comment')[0].innerHTML = markdownToHTML(dataObject.validationError);
+            $('#markdown_comment').children().last().css('margin-bottom',0);
+            $('#description_separator').removeClass('d-none');
+            console.log($('#markdown_comment'))
+            
             $('#markdown_status_comment').children().last().css('margin-bottom',0);
         }
         

@@ -18,6 +18,7 @@
     if ($(collapse).attr('aria-expanded') === 'false'){
         $(collapse).click()
     }
+    $('#metainfo_separator').removeClass('d-none');
     
     $('#partialIntervalSelect').removeClass('d-none');
     $('#partialRestoreSelect').removeClass('d-none');

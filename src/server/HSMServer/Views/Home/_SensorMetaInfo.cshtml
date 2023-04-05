@@ -12,29 +12,41 @@
     <div class="d-flex ms-1 mt-1 me-0 justify-content-between flex-grow-1" style="height: 2rem!important;">
         <div class='d-flex justify-content-start'>
             <h5 class="my-1 align-self-top">@Html.Raw($"{Model.ProductName}{Model.Path}")</h5>
+            <li id='status_@Model.EncodedId' class='@Model.SensorStatus.ToIcon() my-1 ms-1 pt-1 align-self-center sensor-icon-with-margin'
+                                                    title='Status: @Model.SensorStatus'>
+            </li>
         </div>
         <div class='d-flex my-1'>
             <input id='sensor_type_@Model.EncodedId' value='@((int)Model.SensorType)' style='display: none'/>
             <div id='update_@Model.EncodedId' class='time-ago-div me-1'>updated @Model.UpdateTime.GetTimeAgo()</div>
         </div>
     </div>
-    @if (!string.IsNullOrEmpty(Model.ShortLastValue) && Model.SensorType is not SensorType.File)
-    {
-        <div class="d-flex">
-            <span class="mt-1 ms-1" style="color: #0366d6">Last value: @Model.ShortLastValue</span>
+    
+        <div id="last_value" class="d-flex mt-1" style="color: #0366d6">
+            <span class="ms-1" >Last value: </span>
+            <span class="ms-1">
+                @if (!string.IsNullOrEmpty(Model.ShortLastValue) && Model.SensorType is not SensorType.File)
+                    {
+                        @Model.ShortLastValue
+                    }
+            </span>
         </div>
-    }
-    @if (!string.IsNullOrEmpty(Model.Comment))
-    {
-        <div class="d-flex mt-1" style="color: #0366d6">
+    
+        <div id="comment" class="d-flex mt-1" style="color: #0366d6">
             <span class="ms-1">Comment: </span> 
-            <span class="ms-1" id="markdown_comment">@Model.Comment</span>
+            <span id="markdown_comment" class="ms-1">
+                @if (!string.IsNullOrEmpty(Model.Comment))
+                {
+                    @Model.Comment
+                }
+            </span>
         </div>
-    }
-
-
+    
     <form class="mb-0" asp-action="@nameof(HomeController.UpdateSensorInfo)" id="editSensorMetaInfo_form">
         <input id="sensorMetaInfo_encodedId" style='display: none' asp-for="EncodedId" value="@Model.EncodedId"/>
+         
+        <hr id="description_separator" class="d-none my-1"/>
+         
         <div id="headline_metainfo" class="d-none d-flex" style="height: 2rem;">
             <div id="description_sensor_metainfo" class="d-none form-control ps-0 ms-1 border-0 fw-bold" style="max-width: 15rem;">
                 Description:
@@ -43,7 +55,7 @@
                 <a id="editButtonMetaInfo" class="d-none d-flex px-2 pb-2" href="#" onclick="editInfoButtonClick()" title='edit meta info'><i class='fas fa-edit align-self-center'></i> Edit</a>
             </div>
         </div>
-
+       
         <div class="naked-text ms-1 w-100" id='markdown_span_description_@(Model.EncodedId)'>@Model.Description</div>
         <div class="d-none d-flex w-100 ms-1">
             <textarea id='description_@(Model.EncodedId)' class="form-control naked-text w-100 mx-1 px-2 d-none"  type='text' asp-for="Description" value='@Model.Description' disabled></textarea>
@@ -89,9 +101,9 @@
                 <span class="d-flex align-items-center" style="min-width: 18rem">
                     Expected sensor(s) update interval <i class='fas fa-question-circle ps-1' title='Time format: dd.hh:mm:ss min value 00:01:00. If the sensor doesn`t receive new data within the specified time interval, a notification sends'></i>
                 </span>
-                <div class="d-flex flex-grow-1">
-                    <label id="labelInterval" class="d-flex form-control naked-text">@Model.SensorRestorePolicy.DisplayInterval</label>
-                    <div id="partialIntervalSelect" class="d-flex flex-grow-1 d-none">
+                <div class="d-flex flex-grow-1 pb-0">
+                    <label id="labelInterval" class="d-flex form-control naked-text pb-0">@Model.SensorRestorePolicy.DisplayInterval</label>
+                    <div id="partialIntervalSelect" class="d-flex flex-grow-1 d-none" style="max-width: 15rem">
                         <partial name="_TimeIntervalSelect" for="ExpectedUpdateInterval"/>
                     </div>
                 </div>
@@ -100,9 +112,9 @@
                 <span class="d-flex align-items-center" style="min-width: 18rem">
                     Sensitivity sensor(s) interval <i class='fas fa-question-circle ps-1' title='Time format: dd.hh:mm:ss min value 00:01:00. If the sensor doesn`t receive new data within the specified time interval, a notification sends'></i>
                 </span>
-                <div class="d-flex flex-grow-1">
-                    <label id="labelRestoreInterval" class="d-flex form-control flex-grow-1 naked-text">@Model.SensorRestorePolicy.DisplayInterval</label>
-                    <div id="partialRestoreSelect" class="d-flex flex-grow-1 d-none">
+                <div class="d-flex flex-grow-1 pb-0">
+                    <label id="labelRestoreInterval" class="d-flex form-control flex-grow-1 naked-text pb-0">@Model.SensorRestorePolicy.DisplayInterval</label>
+                    <div id="partialRestoreSelect" class="d-flex flex-grow-1 d-none" style="max-width: 15rem">
                         <partial name="_TimeIntervalSelect" for="SensorRestorePolicy"/>
                     </div>
                 </div>
@@ -124,11 +136,30 @@
             <i id="collapse_icon" class="fa-solid fa-caret-down"></i>
         </button>
     </form>
+    
+    <hr id="metainfo_separator" class="d-none" />
+    
 </div>
 
 <script>
     $(document).ready(() => {
         replaceHTMLtoMarkdown();
+        
+        let lastValue = $('#last_value').children().last();
+        let markdownComment = $('#comment').children().last();
+        console.log(lastValue[0].innerText.length)
+        console.log(markdownComment[0].innerText.length)
+        
+        
+        if (lastValue[0].innerText !== '' || markdownComment[0].innerText !== '' ) {
+            $('#description_separator').removeClass('d-none');
+        }
+        
+        if (lastValue[0].innerText === '')
+           $('#last_value').addClass('d-none');
+        
+        if (markdownComment[0].innerText === '')
+           $('#comment').addClass('d-none');
     });
     
     $(document).on("submit", "#editSensorMetaInfo_form", function (event) {
@@ -166,6 +197,14 @@
             $('#description_sensor_metainfo').addClass('d-none');
             $('#headline_metainfo').addClass('d-none');
             $(`#markdown_span_description_${'@Model.EncodedId'}`).addClass('ms-1').removeClass('ms-2 ps-2');
+         
+            let lastValue = $('#last_value').children().last();
+            let markdownComment = $('#comment').children().last();
+            console.log(lastValue[0])
+            console.log(markdownComment[0])
+            if (lastValue[0].innerText.trim() === '' && markdownComment[0].innerText.trim() === '') {
+                $('#description_separator').addClass('d-none');
+            }
         }
         else {
             icon.classList.toggle('fa-caret-up')
@@ -174,6 +213,7 @@
             $('#description_sensor_metainfo').removeClass('d-none');
             $('#headline_metainfo').removeClass('d-none');
             $(`#markdown_span_description_${'@Model.EncodedId'}`).removeClass('ms-1').addClass('ms-2 ps-2');
+            $('#description_separator').removeClass('d-none');
         }
     }
 </script>
