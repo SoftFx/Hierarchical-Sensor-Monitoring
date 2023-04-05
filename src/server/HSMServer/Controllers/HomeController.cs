@@ -462,7 +462,7 @@ namespace HSMServer.Controllers
 
             _treeValuesCache.UpdateSensor(update);
 
-            return PartialView("_SensorMetaInfo", new SensorInfoViewModel(sensor));
+            return PartialView("_SensorMetaInfo", new SensorInfoViewModel(sensor){IsAfterEdit = true});
         }
 
         #endregion

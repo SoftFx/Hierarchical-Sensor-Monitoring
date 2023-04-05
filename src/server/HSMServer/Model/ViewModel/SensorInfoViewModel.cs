@@ -20,7 +20,8 @@ namespace HSMServer.Model.ViewModel
         public DateTime UpdateTime { get; set; }
         
         public string ShortLastValue { get; set; }
-        
+
+        public bool IsAfterEdit { get; set; } = false;
 
         // public constructor without parameters for action Home/UpdateSensorInfo
         public SensorInfoViewModel() : base() { }

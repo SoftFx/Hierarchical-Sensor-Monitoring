@@ -205,12 +205,17 @@
                                               <div class="d-flex w-100 ps-2">
                                                     <span id="markdown_status_comment">${markdownToHTML(dataObject.validationError)}</span>
                                               </div>`);
-            $('#markdown_comment')[0].innerHTML = markdownToHTML(dataObject.validationError);
-            $('#markdown_comment').children().last().css('margin-bottom',0);
-            $('#description_separator').removeClass('d-none');
+            
             console.log($('#markdown_comment'))
             
             $('#markdown_status_comment').children().last().css('margin-bottom',0);
+        }
+        
+        if (dataObject.comment !== null) {
+            $('#comment').removeClass('d-none');
+            $('#markdown_comment')[0].innerHTML = markdownToHTML(dataObject.comment);
+            $('#markdown_comment').children().last().css('margin-bottom',0);
+            $('#description_separator').removeClass('d-none');
         }
         
         let accordionLoaded = $('[id^="sensorData"]');

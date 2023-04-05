@@ -132,7 +132,7 @@
         </div>
 
         <button class="btn btn-outline-secondary w-100 
-                       border-start-0 border-end-0 border-top-0 rounded-0 border-bottom-1" id="sensor_info_collapse" title="Show more info..." type="button" data-bs-toggle="collapse" onclick="collapseChangeTextContent()" href="#metaInfoCollapse" role="button" aria-expanded="false" aria-controls="metaInfoCollapse" style="border-right-color: unset;--bs-btn-hover-bg: #edf0f5">
+                       border-start-0 border-end-0 border-top-0 rounded-0 border-bottom-1" id="sensor_info_collapse" title="Show more info..." type="button" data-bs-toggle="collapse" onclick="collapseChangeTextContent()" href="#metaInfoCollapse" role="button" aria-expanded=@(Model.IsAfterEdit ? "true" : "false") aria-controls="metaInfoCollapse" style="border-right-color: unset;--bs-btn-hover-bg: #edf0f5">
             <i id="collapse_icon" class="fa-solid fa-caret-down"></i>
         </button>
     </form>
