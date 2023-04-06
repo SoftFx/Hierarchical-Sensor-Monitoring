@@ -100,9 +100,9 @@
                 <span class="d-flex align-items-center" style="min-width: 18rem">
                     Expected sensor(s) update interval <i class='fas fa-question-circle ps-1' title='Time format: dd.hh:mm:ss min value 00:01:00. If the sensor doesn`t receive new data within the specified time interval, a notification sends'></i>
                 </span>
-                <div class="d-flex flex-grow-1 pb-0">
-                    <label id="labelInterval" class="d-flex form-control naked-text pb-0">@Model.ExpectedUpdateInterval.DisplayInterval</label>
-                    <div id="partialIntervalSelect" class="d-flex flex-grow-1 d-none" style="max-width: 15rem">
+                <div class="pb-0" style="width: 17rem;">
+                    <label id="labelInterval" class="form-control naked-text pb-0">@Model.ExpectedUpdateInterval.DisplayInterval</label>
+                    <div id="partialIntervalSelect" class="d-none" >
                         <partial name="_TimeIntervalSelect" for="ExpectedUpdateInterval"/>
                     </div>
                 </div>
@@ -111,9 +111,9 @@
                 <span class="d-flex align-items-center" style="min-width: 18rem">
                     Sensitivity sensor(s) interval <i class='fas fa-question-circle ps-1' title='Time format: dd.hh:mm:ss min value 00:01:00. If the sensor doesn`t return to Ok status after the specified time inverval, a notification sends'></i>
                 </span>
-                <div class="d-flex flex-grow-1 pb-0">
-                    <label id="labelRestoreInterval" class="d-flex form-control flex-grow-1 naked-text pb-0">@Model.SensorRestorePolicy.DisplayInterval</label>
-                    <div id="partialRestoreSelect" class="d-flex flex-grow-1 d-none" style="max-width: 15rem">
+                <div class="pb-0" style="width: 17rem;">
+                    <label id="labelRestoreInterval" class="form-control naked-text pb-0">@Model.SensorRestorePolicy.DisplayInterval</label>
+                    <div id="partialRestoreSelect" class="d-none" >
                         <partial name="_TimeIntervalSelect" for="SensorRestorePolicy"/>
                     </div>
                 </div>
