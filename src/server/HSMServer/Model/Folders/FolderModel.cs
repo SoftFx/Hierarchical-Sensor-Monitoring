@@ -10,9 +10,9 @@ namespace HSMServer.Model.Folders
 {
     public class FolderModel : BaseNodeViewModel, IServerModel<FolderEntity, FolderUpdate>
     {
-        public Dictionary<User, ProductRoleEnum> UserRoles { get; } = new();
+        public Dictionary<Guid, ProductNodeViewModel> Products { get; } = new();
 
-        public List<ProductNodeViewModel> Products { get; } = new();
+        public Dictionary<User, ProductRoleEnum> UserRoles { get; } = new();
 
         public DateTime CreationDate { get; }
 

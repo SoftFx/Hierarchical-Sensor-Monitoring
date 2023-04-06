@@ -6,6 +6,7 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.Drawing;
+using System.Linq;
 
 namespace HSMServer.Model.Folders.ViewModels
 {
@@ -68,7 +69,7 @@ namespace HSMServer.Model.Folders.ViewModels
                 Description = Description,
                 AuthorId = author.Id,
                 Author = author.Name,
-                Products = GetFolderProducts(treeViewModel),
+                Products = GetFolderProducts(treeViewModel).ToDictionary(f => f.Id),
             };
 
         internal FolderUpdate ToFolderUpdate() =>

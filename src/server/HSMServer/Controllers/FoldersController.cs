@@ -46,30 +46,31 @@ namespace HSMServer.Controllers
         public async Task<IActionResult> EditFolder(EditFolderViewModel editFolder)
         {
             var folder = _folderManager[editFolder.Id];
-            var oldProducts = folder.Products.ToList();
+            var oldProducts = new Dictionary<Guid, ProductNodeViewModel>(folder.Products);
 
             folder.Products.Clear();
-            folder.Products.AddRange(editFolder.GetFolderProducts(_treeViewModel));
+            foreach (var product in editFolder.GetFolderProducts(_treeViewModel))
+                folder.Products.Add(product.Id, product);
 
             if (await _folderManager.TryUpdate(editFolder.ToFolderUpdate()))
             {
-                foreach (var product in oldProducts.Except(folder.Products))
+                foreach (var (productId, _) in oldProducts.Except(folder.Products))
                 {
-                    _cache.RemoveProductFolder(product.Id);
+                    _cache.RemoveProductFolder(productId);
 
                     foreach (var (user, role) in folder.UserRoles)
-                        if (user.ProductsRoles.Remove((product.Id, role)))
+                        if (user.ProductsRoles.Remove((productId, role)))
                             await _userManager.UpdateUser(user);
                 }
 
-                foreach (var product in folder.Products.Except(oldProducts))
+                foreach (var (productId, _) in folder.Products.Except(oldProducts))
                 {
-                    _cache.AddProductFolder(product.Id, folder.Id);
+                    _cache.AddProductFolder(productId, folder.Id);
 
                     foreach (var (user, role) in folder.UserRoles)
-                        if (!user.IsUserProduct(product.Id))
+                        if (!user.IsUserProduct(productId))
                         {
-                            user.ProductsRoles.Add((product.Id, role));
+                            user.ProductsRoles.Add((productId, role));
                             await _userManager.UpdateUser(user);
                         }
                 }
@@ -115,9 +116,9 @@ namespace HSMServer.Controllers
 
             user.FoldersRoles.Add(folder.Id, model.Role);
 
-            foreach (var product in folder.Products)
-                if (!user.IsUserProduct(product.Id))
-                    user.ProductsRoles.Add((product.Id, model.Role));
+            foreach (var (productId, _) in folder.Products)
+                if (!user.IsUserProduct(productId))
+                    user.ProductsRoles.Add((productId, model.Role));
 
             if (await _userManager.UpdateUser(user))
                 folder.UserRoles.Add(user, model.Role);
@@ -135,9 +136,9 @@ namespace HSMServer.Controllers
             {
                 user.FoldersRoles[folder.Id] = model.Role;
 
-                foreach (var product in folder.Products)
-                    if (user.ProductsRoles.Remove((product.Id, oldUserRole)))
-                        user.ProductsRoles.Add((product.Id, model.Role));
+                foreach (var (productId, _) in folder.Products)
+                    if (user.ProductsRoles.Remove((productId, oldUserRole)))
+                        user.ProductsRoles.Add((productId, model.Role));
 
                 if (await _userManager.UpdateUser(user))
                     folder.UserRoles[user] = model.Role;
@@ -154,8 +155,8 @@ namespace HSMServer.Controllers
 
             user.FoldersRoles.Remove(folder.Id);
 
-            foreach (var product in folder.Products)
-                user.ProductsRoles.Remove((product.Id, model.Role));
+            foreach (var (productId, _) in folder.Products)
+                user.ProductsRoles.Remove((productId, model.Role));
 
             // TODO: also call user.Notifications.RemoveSensor for sensors that are not available for user 
 

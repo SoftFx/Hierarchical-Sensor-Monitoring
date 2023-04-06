@@ -68,7 +68,7 @@ namespace HSMServer.Model.TreeViewModel
 
         internal void AddFolder(FolderModel folder)
         {
-            folder.Products.Add(this);
+            folder.Products.Add(Id, this);
             UpdateFolder(folder);
         }
 

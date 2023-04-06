@@ -7,7 +7,7 @@ namespace HSMServer.Model.Folders
 {
     public record FolderAdd
     {
-        public List<ProductNodeViewModel> Products { get; init; }
+        public Dictionary<Guid, ProductNodeViewModel> Products { get; init; }
 
         public string Name { get; init; }
 

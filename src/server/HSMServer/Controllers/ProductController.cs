@@ -134,13 +134,13 @@ namespace HSMServer.Controllers
         public IActionResult MoveProduct(Guid productId, Guid? fromFolderId, Guid? toFolderId)
         {
             if (fromFolderId is not null && _folderManager.TryGetValue(fromFolderId.Value, out var fromFolder))
-                fromFolder.Products.RemoveAll(p => p.Id == productId);
+                fromFolder.Products.Remove(productId);
 
             if (toFolderId is not null)
             {
                 if (_folderManager.TryGetValue(toFolderId.Value, out var toFolder) && _treeViewModel.Nodes.TryGetValue(productId, out var product))
                 {
-                    toFolder.Products.Add(product);
+                    toFolder.Products.Add(productId, product);
                     _treeValuesCache.AddProductFolder(productId, toFolderId.Value);
                 }
             }

@@ -53,8 +53,8 @@ namespace HSMServer.Folders
             var result = await TryAdd(folder);
 
             if (result)
-                foreach (var product in folder.Products)
-                    _cache.AddProductFolder(product.Id, folder.Id);
+                foreach (var (productId, _) in folder.Products)
+                    _cache.AddProductFolder(productId, folder.Id);
 
             return result ? folder : default;
         }
@@ -65,8 +65,8 @@ namespace HSMServer.Folders
 
             if (result)
             {
-                foreach (var product in folder.Products)
-                    _cache.RemoveProductFolder(product.Id);
+                foreach (var (productId, _) in folder.Products)
+                    _cache.RemoveProductFolder(productId);
 
                 foreach (var (user, _) in folder.UserRoles)
                 {
@@ -119,7 +119,7 @@ namespace HSMServer.Folders
         private void ChangeProductHandler(ProductModel product, ActionType actionType)
         {
             if (actionType == ActionType.Delete && TryGetValueById(product.FolderId, out var folder))
-                folder.Products.RemoveAll(p => p.Id == product.Id);
+                folder.Products.Remove(product.Id);
         }
 
         private void RemoveUserHandler(User user)
