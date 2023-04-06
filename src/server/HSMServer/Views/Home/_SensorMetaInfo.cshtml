@@ -11,41 +11,41 @@
 <div id='sensor_info_@Model.EncodedId'>
     <div class="d-flex ms-1 mt-1 me-0 justify-content-between flex-grow-1">
         <div class='d-flex justify-content-start'>
-            <h5 class="d-flex my-1 align-self-top">@Html.Raw($"{Model.ProductName}{Model.Path}")</h5>
-            <li id='status_@Model.EncodedId' class='@Model.SensorStatus.ToIcon() my-1 ms-1 pt-1 align-self-center sensor-icon-with-margin' title='Status: @Model.SensorStatus'>
-            </li>
+            <li id='status_@Model.EncodedId' class='@Model.SensorStatus.ToIcon() my-1 pt-1 align-self-center sensor-icon-with-margin' title='Status: @Model.SensorStatus'></li>
+                <h5 class="d-flex my-1 align-self-top">@Html.Raw($"{Model.ProductName}{Model.Path}")</h5>
+            
         </div>
         <div class='d-flex my-1'>
             <input id='sensor_type_@Model.EncodedId' value='@((int)Model.SensorType)' style='display: none'/>
             <div id='update_@Model.EncodedId' class='time-ago-div me-1'>updated @Model.UpdateTime.GetTimeAgo()</div>
         </div>
     </div>
-    
-        <div id="last_value" class="d-flex mt-1" style="color: #0366d6">
-            <span class="d-flex ms-1">Last value: </span>
-            <span class="d-flex ms-1">
-                @if (!string.IsNullOrEmpty(Model.ShortLastValue) && Model.SensorType is not SensorType.File)
-                    {
-                        @Model.ShortLastValue
-                    }
-            </span>
-        </div>
-    
-        <div id="comment" class="d-flex mt-1" style="color: #0366d6">
-            <span class="ms-1">Comment: </span> 
-            <span id="markdown_comment" class="ms-1">
-                @if (!string.IsNullOrEmpty(Model.Comment))
-                {
-                    @Model.Comment
-                }
-            </span>
-        </div>
-    
+
+    <div id="last_value" class="d-flex mt-1" style="color: #0366d6">
+        @* <span class="d-flex ms-1">Last value: </span> *@
+        @* <span class="d-flex ms-1"> *@
+        @*     @if (!string.IsNullOrEmpty(Model.ShortLastValue) && Model.SensorType is not SensorType.File) *@
+        @*     { *@
+        @*         @Model.ShortLastValue *@
+        @*     } *@
+        @* </span> *@
+    </div>
+
+    <div id="comment" class="d-flex mt-1" style="color: #0366d6">
+        @* <span class="ms-1">Comment: </span> *@
+        @* <span id="markdown_comment" class="ms-1"> *@
+        @*     @if (!string.IsNullOrEmpty(Model.Comment)) *@
+        @*     { *@
+        @*         @Model.Comment *@
+        @*     } *@
+        @* </span> *@
+    </div>
+
     <form class="mb-0" asp-action="@nameof(HomeController.UpdateSensorInfo)" id="editSensorMetaInfo_form">
         <input id="sensorMetaInfo_encodedId" style='display: none' asp-for="EncodedId" value="@Model.EncodedId"/>
-         
+
         <hr id="description_separator" class="d-none my-1"/>
-         
+
         <div id="headline_metainfo" class="d-none d-flex" style="height: 2rem;">
             <div id="description_sensor_metainfo" class="d-none form-control ps-0 ms-1 border-0 fw-bold" style="max-width: 15rem;">
                 Description:
@@ -54,7 +54,7 @@
                 <a id="editButtonMetaInfo" class="d-none d-flex px-2 pb-2" href="#" onclick="editInfoButtonClick()" title='edit meta info'><i class='fas fa-edit align-self-center'></i> Edit</a>
             </div>
         </div>
-       
+
         <div class="naked-text ms-1 w-100" id='markdown_span_description_@(Model.EncodedId)'>@Model.Description</div>
         <div class="d-none d-flex w-100 ms-1">
             <textarea id='description_@(Model.EncodedId)' class="form-control naked-text w-100 mx-1 px-2 d-none"  type='text' asp-for="Description" value='@Model.Description' disabled></textarea>
@@ -78,8 +78,8 @@
                     <span style="min-width: 8rem">Sensor status:</span>
                 </div>
                 <div class="d-flex w-100 ps-2">
+                    <li id='metainfo_icon_status' class='@Model.SensorStatus.ToIcon() sensor-icon-with-margin align-self-center' title='Status: @Model.SensorStatus'></li>
                     <span id="status_name_@Model.EncodedId">@Model.SensorStatus</span>
-                    <li id='metainfo_icon_status' class='@Model.SensorStatus.ToIcon() sensor-icon-with-margin align-self-center ps-1' title='Status: @Model.SensorStatus'></li>
                 </div>
             </div>
             <div id="validation_metainfo" class="d-flex justify-content-start ms-1 mb-1">
@@ -102,7 +102,7 @@
                 </span>
                 <div class="pb-0" style="width: 17rem;">
                     <label id="labelInterval" class="form-control naked-text pb-0">@Model.ExpectedUpdateInterval.DisplayInterval</label>
-                    <div id="partialIntervalSelect" class="d-none" >
+                    <div id="partialIntervalSelect" class="d-none">
                         <partial name="_TimeIntervalSelect" for="ExpectedUpdateInterval"/>
                     </div>
                 </div>
@@ -113,7 +113,7 @@
                 </span>
                 <div class="pb-0" style="width: 17rem;">
                     <label id="labelRestoreInterval" class="form-control naked-text pb-0">@Model.SensorRestorePolicy.DisplayInterval</label>
-                    <div id="partialRestoreSelect" class="d-none" >
+                    <div id="partialRestoreSelect" class="d-none">
                         <partial name="_TimeIntervalSelect" for="SensorRestorePolicy"/>
                     </div>
                 </div>
@@ -135,9 +135,9 @@
             <i id="collapse_icon" class="fa-solid fa-caret-down"></i>
         </button>
     </form>
-    
-    <hr id="metainfo_separator" class="d-none" />
-    
+
+    <hr id="metainfo_separator" class="d-none"/>
+
 </div>
 
 <script>
@@ -193,15 +193,16 @@
             $('#editButtonMetaInfo').addClass('d-none');
             $('#description_sensor_metainfo').addClass('d-none');
             $('#headline_metainfo').addClass('d-none');
-            $(`#markdown_span_description_${'@Model.EncodedId'}`).addClass('ms-1').removeClass('ms-2 ps-2');
+            // $(`#markdown_span_description_${'@Model.EncodedId'}`).addClass('ms-1').removeClass('ms-2 ps-2');
          
-            let lastValue = $('#last_value').children().last();
-            let markdownComment = $('#comment').children().last();
-            let desc = $(`#markdown_span_description_${'@Model.EncodedId'}`)
-            
-            if ((lastValue[0].innerText.trim() === '' && markdownComment[0].innerText.trim() === '') || desc[0].innerText === '') {
-                $('#description_separator').addClass('d-none');
-            }
+            // let lastValue = $('#last_value').children().last();
+            // let markdownComment = $('#comment').children().last();
+            // let desc = $(`#markdown_span_description_${'@Model.EncodedId'}`)
+            //
+            // if ((lastValue[0].innerText.trim() === '' && markdownComment[0].innerText.trim() === '') || desc[0].innerText === '') {
+            //     $('#description_separator').addClass('d-none');
+            // }
+            $('#description_separator').addClass('d-none');
         }
         else {
             icon.classList.toggle('fa-caret-up')
@@ -209,7 +210,7 @@
             $('#editButtonMetaInfo').removeClass('d-none');
             $('#description_sensor_metainfo').removeClass('d-none');
             $('#headline_metainfo').removeClass('d-none');
-            $(`#markdown_span_description_${'@Model.EncodedId'}`).removeClass('ms-1').addClass('ms-2 ps-2');
+            // $(`#markdown_span_description_${'@Model.EncodedId'}`).removeClass('ms-1').addClass('ms-2 ps-2');
             $('#description_separator').removeClass('d-none');
         }
     }
