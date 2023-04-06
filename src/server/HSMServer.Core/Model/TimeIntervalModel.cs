@@ -24,7 +24,7 @@ namespace HSMServer.Core.Model
         public long CustomPeriod { get; }
 
         [JsonIgnore]
-        public bool IsEmpty => TimeInterval.IsCustom() && CustomPeriod == 0;
+        public bool IsNewer => TimeInterval.IsCustom() && CustomPeriod == 0;
 
 
         [JsonConstructor]
