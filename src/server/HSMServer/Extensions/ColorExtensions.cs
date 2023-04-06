@@ -22,8 +22,7 @@ namespace HSMServer.Extensions
         {
             const int maxHex = 16777215; // FFFFFF number
 
-            var random = new Random();
-            var randomHex = $"{(int)Math.Floor(random.NextDouble() * maxHex):x}";
+            var randomHex = $"{(int)Math.Floor(Random.Shared.NextDouble() * maxHex):x}";
 
             return $"#{randomHex.PadLeft(6, '0')}";
         }

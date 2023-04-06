@@ -43,31 +43,31 @@ namespace HSMServer.Controllers
         }
 
         [HttpPost]
-        public async Task<IActionResult> EditFolder(EditFolderViewModel folder)
+        public async Task<IActionResult> EditFolder(EditFolderViewModel editFolder)
         {
-            var existingFolder = _folderManager[folder.Id];
-            var oldFolderProducts = existingFolder.Products.ToList();
+            var folder = _folderManager[editFolder.Id];
+            var oldProducts = folder.Products.ToList();
 
-            existingFolder.Products.Clear();
-            existingFolder.Products.AddRange(folder.GetFolderProducts(_treeViewModel));
+            folder.Products.Clear();
+            folder.Products.AddRange(editFolder.GetFolderProducts(_treeViewModel));
 
-            if (await _folderManager.TryUpdate(folder.ToFolderUpdate()))
+            if (await _folderManager.TryUpdate(editFolder.ToFolderUpdate()))
             {
-                foreach (var product in oldFolderProducts.Except(existingFolder.Products))
+                foreach (var product in oldProducts.Except(folder.Products))
                 {
                     _cache.RemoveProductFolder(product.Id);
 
-                    foreach (var (user, role) in existingFolder.UserRoles)
+                    foreach (var (user, role) in folder.UserRoles)
                         if (user.ProductsRoles.Remove((product.Id, role)))
                             await _userManager.UpdateUser(user);
                 }
 
-                foreach (var product in existingFolder.Products.Except(oldFolderProducts))
+                foreach (var product in folder.Products.Except(oldProducts))
                 {
-                    _cache.AddProductFolder(product.Id, existingFolder.Id);
+                    _cache.AddProductFolder(product.Id, folder.Id);
 
-                    foreach (var (user, role) in existingFolder.UserRoles)
-                        if (!user.ProductsRoles.Any(x => x.Item1 == product.Id))
+                    foreach (var (user, role) in folder.UserRoles)
+                        if (!user.IsUserProduct(product.Id))
                         {
                             user.ProductsRoles.Add((product.Id, role));
                             await _userManager.UpdateUser(user);
@@ -75,7 +75,7 @@ namespace HSMServer.Controllers
                 }
             }
 
-            return View(nameof(EditFolder), BuildEditFolder(existingFolder.Id));
+            return View(nameof(EditFolder), BuildEditFolder(folder.Id));
         }
 
         [HttpPost]
@@ -116,7 +116,7 @@ namespace HSMServer.Controllers
             user.FoldersRoles.Add(folder.Id, model.Role);
 
             foreach (var product in folder.Products)
-                if (!user.ProductsRoles.Any(x => x.Item1 == product.Id))
+                if (!user.IsUserProduct(product.Id))
                     user.ProductsRoles.Add((product.Id, model.Role));
 
             if (await _userManager.UpdateUser(user))
@@ -131,10 +131,8 @@ namespace HSMServer.Controllers
             var user = _userManager[model.UserId];
             var folder = _folderManager[model.EntityId];
 
-            if (user.FoldersRoles.ContainsKey(folder.Id))
+            if (user.FoldersRoles.TryGetValue(folder.Id, out var oldUserRole))
             {
-                var oldUserRole = user.FoldersRoles[folder.Id];
-
                 user.FoldersRoles[folder.Id] = model.Role;
 
                 foreach (var product in folder.Products)
@@ -167,7 +165,7 @@ namespace HSMServer.Controllers
             return GetUsersPartialView(folder);
         }
 
-        private IActionResult GetUsersPartialView(FolderModel folder) => PartialView("_Users", BuildFolderUsers(folder));
+        private PartialViewResult GetUsersPartialView(FolderModel folder) => PartialView("_Users", BuildFolderUsers(folder));
 
 
         private EditFolderViewModel BuildEditFolder(Guid folderId)

@@ -32,7 +32,7 @@ namespace HSMServer.Model.Folders.ViewModels
 
         public FolderViewModel(IEnumerable<ProductViewModel> products)
         {
-            Products = products.OrderBy(p => p.Name).ToList();
+            Products = products?.OrderBy(p => p.Name).ToList() ?? new(1);
         }
 
         public FolderViewModel(FolderModel folder, IEnumerable<ProductViewModel> products) : this(products)

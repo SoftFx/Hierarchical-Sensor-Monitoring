@@ -14,12 +14,10 @@
     var user = Context.User as User;
     bool isProductCrudAllowed = UserRoleHelper.IsUserCRUDAllowed(user);
     bool isProductActionAllowed = ProductRoleHelper.IsProductActionAllowed(user?.ProductsRoles);
-
-    var productsCount = Model.Products?.Count ?? 0;
 }
 
 
-@if (productsCount > 0)
+@if (Model.Products.Count > 0 || !string.IsNullOrEmpty(ViewBag.ProductName) || !string.IsNullOrEmpty(ViewBag.ProductManager))
 {
     <div class="w-100 productTable">
         <form id="folderProductsForm_@Model.Id" asp-controller="@ViewConstants.ProductController" asp-action="@nameof(ProductController.FilterFolderProducts)">

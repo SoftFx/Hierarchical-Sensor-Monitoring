@@ -51,7 +51,7 @@ namespace HSMServer.Model.Folders.ViewModels
             Description = folder.Description;
             Color = folder.Color;
 
-            Products.FillFolderProducts(folder.Products);
+            Products.InitFolderProducts(folder.Products);
             Alerts = new FolderAlertsViewModel(folder);
             Users = users;
         }

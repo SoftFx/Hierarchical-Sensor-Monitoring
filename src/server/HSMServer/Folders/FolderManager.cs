@@ -56,7 +56,7 @@ namespace HSMServer.Folders
                 foreach (var product in folder.Products)
                     _cache.AddProductFolder(product.Id, folder.Id);
 
-            return result ? folder : null;
+            return result ? folder : default;
         }
 
         public async Task<bool> TryRemoveFolder(Guid folderId)
@@ -106,14 +106,20 @@ namespace HSMServer.Folders
                         folder.UserRoles.Add(user, role);
         }
 
+        public bool TryGetValueById(Guid? id, out FolderModel folder)
+        {
+            folder = null;
+
+            return id is not null && TryGetValue(id.Value, out folder);
+        }
+
         protected override FolderModel FromEntity(FolderEntity entity) => new(entity);
 
 
         private void ChangeProductHandler(ProductModel product, ActionType actionType)
         {
-            if (actionType == ActionType.Delete && product.FolderId.HasValue)
-                if (TryGetValue(product.FolderId.Value, out var folder))
-                    folder.Products.RemoveAll(p => p.Id == product.Id);
+            if (actionType == ActionType.Delete && TryGetValueById(product.FolderId, out var folder))
+                folder.Products.RemoveAll(p => p.Id == product.Id);
         }
 
         private void RemoveUserHandler(User user)

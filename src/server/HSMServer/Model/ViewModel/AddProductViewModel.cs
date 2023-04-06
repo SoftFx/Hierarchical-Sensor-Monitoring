@@ -12,8 +12,5 @@ namespace HSMServer.Model.ViewModel
         [RegularExpression(@"^[0-9a-zA-Z .,_\-=#:;%&*()]*$", ErrorMessage = "{0} contains forbidden characters.")]
         [DisplayName("New product name")]
         public string Name { get; set; }
-
-
-        public AddProductViewModel() { }
     }
 }

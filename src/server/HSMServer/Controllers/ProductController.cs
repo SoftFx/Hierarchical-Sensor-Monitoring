@@ -3,9 +3,11 @@ using HSMServer.Authentication;
 using HSMServer.Configuration;
 using HSMServer.Constants;
 using HSMServer.Core.Cache;
+using HSMServer.Core.Extensions;
 using HSMServer.Core.Registration;
 using HSMServer.Email;
 using HSMServer.Encryption;
+using HSMServer.Extensions;
 using HSMServer.Filters.ProductRoleFilters;
 using HSMServer.Folders;
 using HSMServer.Helpers;
@@ -55,11 +57,12 @@ namespace HSMServer.Controllers
 
         public IActionResult Index()
         {
-            var userProducts = _treeViewModel.GetUserProducts(HttpContext.User as User);
-            var userFolders = _folderManager.GetUserFolders(HttpContext.User as User);
+            var user = HttpContext.User as User;
+            var userProducts = _treeViewModel.GetUserProducts(user);
+            var userFolders = _folderManager.GetUserFolders(user);
 
-            var folderProducts = new Dictionary<Guid, List<ProductViewModel>>();
-            var productsWithoutFolder = new List<ProductViewModel>();
+            var folderProducts = new Dictionary<Guid, List<ProductViewModel>>(1 << 2);
+            var productsWithoutFolder = new List<ProductViewModel>(1 << 2);
 
             foreach (var product in userProducts)
             {
@@ -70,7 +73,7 @@ namespace HSMServer.Controllers
                     var folderId = product.FolderId.Value;
 
                     if (!folderProducts.ContainsKey(folderId))
-                        folderProducts[folderId] = new();
+                        folderProducts[folderId] = new(1 << 2);
 
                     folderProducts[folderId].Add(productViewModel);
                 }
@@ -78,16 +81,15 @@ namespace HSMServer.Controllers
                     productsWithoutFolder.Add(productViewModel);
             }
 
-            var folders = new List<FolderViewModel>();
+            var folders = new List<FolderViewModel>(folderProducts.Count);
             foreach (var (folderId, products) in folderProducts)
                 folders.Add(new FolderViewModel(_folderManager[folderId], products));
 
             foreach (var folder in userFolders)
                 if (!folderProducts.ContainsKey(folder.Id))
-                    folders.Add(new FolderViewModel(folder, new List<ProductViewModel>()));
+                    folders.Add(new FolderViewModel(folder, null));
 
-            folders = folders.OrderBy(f => f.Name).ToList();
-            folders.Add(new FolderViewModel(productsWithoutFolder));
+            folders = folders.OrderBy(f => f.Name).AddFluent(new FolderViewModel(productsWithoutFolder));
 
             return View(folders);
         }
@@ -99,15 +101,15 @@ namespace HSMServer.Controllers
             ViewBag.ProductManager = productManager;
 
             var userProducts = _treeViewModel.GetUserProducts(HttpContext.User as User);
-            var folderProducts = new List<ProductViewModel>();
+            var folderProducts = new List<ProductViewModel>(1 << 3);
 
             foreach (var product in userProducts)
                 if (product.FolderId == folderId)
                 {
                     var productVM = new ProductViewModel(product, _userManager);
 
-                    if ((string.IsNullOrEmpty(productName) || productVM.Name.Contains(productName, StringComparison.CurrentCultureIgnoreCase)) &&
-                        (string.IsNullOrEmpty(productManager) || productVM.Managers.Any(m => m.Contains(productManager, StringComparison.CurrentCultureIgnoreCase))))
+                    if ((string.IsNullOrEmpty(productName) || productVM.Name.IgnoreCaseContains(productName)) &&
+                        (string.IsNullOrEmpty(productManager) || productVM.Managers.Any(m => m.IgnoreCaseContains(productManager))))
                         folderProducts.Add(productVM);
                 }
 
@@ -127,10 +129,7 @@ namespace HSMServer.Controllers
             return PartialView("_AddProduct", product);
         }
 
-        public void RemoveProduct([FromQuery(Name = "Product")] Guid productId)
-        {
-            _treeValuesCache.RemoveProduct(productId);
-        }
+        public void RemoveProduct(Guid product) => _treeValuesCache.RemoveProduct(product);
 
         public IActionResult MoveProduct(Guid productId, Guid? fromFolderId, Guid? toFolderId)
         {

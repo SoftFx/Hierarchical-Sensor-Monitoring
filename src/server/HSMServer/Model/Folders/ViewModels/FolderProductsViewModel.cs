@@ -24,7 +24,7 @@ namespace HSMServer.Model.Folders.ViewModels
         public FolderProductsViewModel() { }
 
 
-        internal void FillFolderProducts(List<ProductNodeViewModel> folderProducts)
+        internal void InitFolderProducts(List<ProductNodeViewModel> folderProducts)
         {
             DisplayProducts.AddRange(folderProducts.OrderBy(p => p.Name));
             Products = DisplayProducts.Select(p => p.Id).ToList();
@@ -32,7 +32,7 @@ namespace HSMServer.Model.Folders.ViewModels
 
         internal List<ProductNodeViewModel> GetFolderProducts(TreeViewModel.TreeViewModel treeViewModel)
         {
-            var folderProducts = new List<ProductNodeViewModel>();
+            var folderProducts = new List<ProductNodeViewModel>(1 << 3);
 
             foreach (var productId in Products.Union(SelectedProducts.Select(Guid.Parse)))
                 if (treeViewModel.Nodes.TryGetValue(productId, out var product))

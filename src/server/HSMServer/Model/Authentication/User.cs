@@ -47,14 +47,15 @@ namespace HSMServer.Model.Authentication
 
         public User(UserEntity entity)
         {
-            if (entity == null) return;
+            if (entity == null)
+                return;
 
             Id = entity.Id;
             Name = entity.UserName;
             Password = entity.Password;
             IsAdmin = entity.IsAdmin;
 
-            if (entity.ProductsRoles != null && entity.ProductsRoles.Any())
+            if (entity.ProductsRoles != null && entity.ProductsRoles.Count > 0)
                 ProductsRoles.AddRange(entity.ProductsRoles.Select(r => (Guid.Parse(r.Key), (ProductRoleEnum)r.Value)));
 
             foreach (var (folderId, role) in entity.FolderRoles)
@@ -73,7 +74,7 @@ namespace HSMServer.Model.Authentication
         }
 
         public bool IsManager(Guid productId) =>
-            IsAdmin || ProductsRoles.Any(x => x == (productId, ProductRoleEnum.ProductManager));
+            IsAdmin || ProductsRoles.Contains((productId, ProductRoleEnum.ProductManager));
 
         public UserEntity ToEntity() =>
             new()
@@ -88,10 +89,10 @@ namespace HSMServer.Model.Authentication
                 TreeFilter = TreeFilter,
             };
 
-        internal bool IsProductAvailable(Guid productId) =>
-            IsAdmin || ProductsRoles.Any(x => x.Item1 == productId);
+        internal bool IsProductAvailable(Guid productId) => IsAdmin || IsUserProduct(productId);
 
-        internal bool IsFolderAvailable(Guid folderId) =>
-            IsAdmin || FoldersRoles.Any(x => x.Key == folderId);
+        internal bool IsFolderAvailable(Guid folderId) => IsAdmin || FoldersRoles.ContainsKey(folderId);
+
+        internal bool IsUserProduct(Guid productId) => ProductsRoles.Any(x => x.Item1 == productId);
     }
 }

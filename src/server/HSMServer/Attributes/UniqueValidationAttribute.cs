@@ -3,31 +3,26 @@ using HSMServer.Folders;
 using HSMServer.Model.Folders.ViewModels;
 using HSMServer.Model.ViewModel;
 using System.ComponentModel.DataAnnotations;
-using System.Linq;
 
 namespace HSMServer.Attributes
 {
     public class UniqueValidationAttribute : ValidationAttribute
     {
-        protected override ValidationResult IsValid(object value, ValidationContext validationContext)
+        protected override ValidationResult IsValid(object value, ValidationContext context)
         {
             var result = false;
 
             if (value is string name)
             {
-                if (validationContext.ObjectInstance is EditFolderViewModel)
+                var folderManager = (IFolderManager)context.GetService(typeof(IFolderManager));
+                var cache = (ITreeValuesCache)context.GetService(typeof(ITreeValuesCache));
+
+                result = context.ObjectInstance switch
                 {
-                    var folderManager = (IFolderManager)validationContext.GetService(typeof(IFolderManager));
-
-                    result = folderManager[name] == null;
-                }
-
-                if (validationContext.ObjectInstance is AddProductViewModel)
-                {
-                    var cache = (ITreeValuesCache)validationContext.GetService(typeof(ITreeValuesCache));
-
-                    result = !cache.GetProducts().Any(p => p.DisplayName == name);
-                }
+                    EditFolderViewModel => folderManager[name] == null,
+                    AddProductViewModel => cache.GetProductByName(name) == null,
+                    _ => false
+                };
             }
 
             return result ? ValidationResult.Success : new ValidationResult(ErrorMessage);

@@ -125,7 +125,7 @@ namespace HSMServer.Model.TreeViewModel
             if (product.Parent != null && Nodes.TryGetValue(product.Parent.Id, out var parent))
                 parent.AddSubNode(node);
 
-            if (product.FolderId != null && _folderManager.TryGetValue(product.FolderId.Value, out var folder))
+            if (_folderManager.TryGetValueById(product.FolderId, out var folder))
                 node.AddFolder(folder);
 
             foreach (var (_, child) in product.SubProducts)

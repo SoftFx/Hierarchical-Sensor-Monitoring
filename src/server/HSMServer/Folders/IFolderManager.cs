@@ -14,6 +14,8 @@ namespace HSMServer.Folders
 
         Task<bool> TryRemoveFolder(Guid folderId);
 
+        bool TryGetValueById(Guid? id, out FolderModel model);
+
         List<FolderModel> GetUserFolders(User user);
     }
 }
