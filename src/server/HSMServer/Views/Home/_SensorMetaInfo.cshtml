@@ -12,8 +12,7 @@
     <div class="d-flex ms-1 mt-1 me-0 justify-content-between flex-grow-1" style="height: 2rem!important;">
         <div class='d-flex justify-content-start'>
             <h5 class="my-1 align-self-top">@Html.Raw($"{Model.ProductName}{Model.Path}")</h5>
-            <li id='status_@Model.EncodedId' class='@Model.SensorStatus.ToIcon() my-1 ms-1 pt-1 align-self-center sensor-icon-with-margin'
-                                                    title='Status: @Model.SensorStatus'>
+            <li id='status_@Model.EncodedId' class='@Model.SensorStatus.ToIcon() my-1 ms-1 pt-1 align-self-center sensor-icon-with-margin' title='Status: @Model.SensorStatus'>
             </li>
         </div>
         <div class='d-flex my-1'>
@@ -80,7 +79,7 @@
                 </div>
                 <div class="d-flex w-100 ps-2">
                     <span id="status_name_@Model.EncodedId">@Model.SensorStatus</span>
-                    <li id='status_@Model.EncodedId' class='@Model.SensorStatus.ToIcon() sensor-icon-with-margin align-self-center ps-1' title='Status: @Model.SensorStatus'></li>
+                    <li id='metainfo_icon_status' class='@Model.SensorStatus.ToIcon() sensor-icon-with-margin align-self-center ps-1' title='Status: @Model.SensorStatus'></li>
                 </div>
             </div>
             <div id="validation_metainfo" class="d-flex justify-content-start ms-1 mb-1">
@@ -102,7 +101,7 @@
                     Expected sensor(s) update interval <i class='fas fa-question-circle ps-1' title='Time format: dd.hh:mm:ss min value 00:01:00. If the sensor doesn`t receive new data within the specified time interval, a notification sends'></i>
                 </span>
                 <div class="d-flex flex-grow-1 pb-0">
-                    <label id="labelInterval" class="d-flex form-control naked-text pb-0">@Model.SensorRestorePolicy.DisplayInterval</label>
+                    <label id="labelInterval" class="d-flex form-control naked-text pb-0">@Model.ExpectedUpdateInterval.DisplayInterval</label>
                     <div id="partialIntervalSelect" class="d-flex flex-grow-1 d-none" style="max-width: 15rem">
                         <partial name="_TimeIntervalSelect" for="ExpectedUpdateInterval"/>
                     </div>
@@ -110,7 +109,7 @@
             </div>
             <div class="d-flex mt-1 ps-2 ms-2 text-nowrap">
                 <span class="d-flex align-items-center" style="min-width: 18rem">
-                    Sensitivity sensor(s) interval <i class='fas fa-question-circle ps-1' title='Time format: dd.hh:mm:ss min value 00:01:00. If the sensor doesn`t receive new data within the specified time interval, a notification sends'></i>
+                    Sensitivity sensor(s) interval <i class='fas fa-question-circle ps-1' title='Time format: dd.hh:mm:ss min value 00:01:00. If the sensor doesn`t return to Ok status after the specified time inverval, a notification sends'></i>
                 </span>
                 <div class="d-flex flex-grow-1 pb-0">
                     <label id="labelRestoreInterval" class="d-flex form-control flex-grow-1 naked-text pb-0">@Model.SensorRestorePolicy.DisplayInterval</label>
@@ -132,7 +131,7 @@
         </div>
 
         <button class="btn btn-outline-secondary w-100 
-                       border-start-0 border-end-0 border-top-0 rounded-0 border-bottom-1" id="sensor_info_collapse" title="Show more info..." type="button" data-bs-toggle="collapse" onclick="collapseChangeTextContent()" href="#metaInfoCollapse" role="button" aria-expanded=@(Model.IsAfterEdit ? "true" : "false") aria-controls="metaInfoCollapse" style="border-right-color: unset;--bs-btn-hover-bg: #edf0f5">
+                       border-start-0 border-end-0 border-top-0 rounded-0 border-bottom-1" id="sensor_info_collapse" title="Show more info..." type="button" data-bs-toggle="collapse" onclick="collapseChangeTextContent()" href="#metaInfoCollapse" role="button" aria-expanded="false" aria-controls="metaInfoCollapse" style="border-right-color: unset;--bs-btn-hover-bg: #edf0f5">
             <i id="collapse_icon" class="fa-solid fa-caret-down"></i>
         </button>
     </form>
@@ -147,9 +146,6 @@
         
         let lastValue = $('#last_value').children().last();
         let markdownComment = $('#comment').children().last();
-        console.log(lastValue[0].innerText.length)
-        console.log(markdownComment[0].innerText.length)
-        
         
         if (lastValue[0].innerText !== '' || markdownComment[0].innerText !== '' ) {
             $('#description_separator').removeClass('d-none');
@@ -200,8 +196,7 @@
          
             let lastValue = $('#last_value').children().last();
             let markdownComment = $('#comment').children().last();
-            console.log(lastValue[0])
-            console.log(markdownComment[0])
+            
             if (lastValue[0].innerText.trim() === '' && markdownComment[0].innerText.trim() === '') {
                 $('#description_separator').addClass('d-none');
             }

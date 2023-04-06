@@ -173,17 +173,21 @@
 
         if (dataObject.sensorType !== 6)
             $('#update_' + id).empty().append(dataObject.updatedTimeStr);
-        $('#status_' + id).removeClass('tree-icon-offTime tree-icon-ok tree-icon-warning tree-icon-error');
-        $('#status_' + id).addClass(dataObject.statusIconColorClass);
-        $('#status_' + id).prop('title', `Status: ${dataObject.status}`);
+       
+        $('#status_' + id).removeClass('tree-icon-offTime tree-icon-ok tree-icon-warning tree-icon-error')
+                          .addClass(dataObject.statusIconColorClass)
+                          .prop('title', `Status: ${dataObject.status}`)
+        $('#metainfo_icon_status').removeClass('tree-icon-offTime tree-icon-ok tree-icon-warning tree-icon-error')
+                                  .addClass(dataObject.statusIconColorClass)
+                                  .prop('title', `Status: ${dataObject.status}`);
+        
         $('#status_name_' + id).empty().html(dataObject.status);
     }
 
     function updateSpecificSensorData(dataObject) {
         var id = dataObject.id;
         $('#value_' + id).empty().append(dataObject.value);
-        console.log(dataObject.value)
-        console.log(dataObject)
+        
         if (dataObject.value !== null){
              $('#last_value').removeClass('d-none').children().last().empty().append(dataObject.value);
              $('#description_separator').removeClass('d-none');      
@@ -205,8 +209,6 @@
                                               <div class="d-flex w-100 ps-2">
                                                     <span id="markdown_status_comment">${markdownToHTML(dataObject.validationError)}</span>
                                               </div>`);
-            
-            console.log($('#markdown_comment'))
             
             $('#markdown_status_comment').children().last().css('margin-bottom',0);
         }

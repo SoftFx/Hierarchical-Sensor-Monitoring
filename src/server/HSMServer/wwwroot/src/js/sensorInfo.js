@@ -14,10 +14,11 @@
     $('[id^="markdown_span_description_"]').addClass('d-none')
     $('[id^="description_"]').removeClass('d-none')
     $('#sensor_info_collapse').addClass('d-none')
-    // let collapse = '#sensor_info_collapse';
-    // if ($(collapse).attr('aria-expanded') === 'false'){
-    //     $(collapse).click()
-    // }
+    let collapse = '#sensor_info_collapse';
+    if ($(collapse).attr('aria-expanded') === 'false'){
+        $('.collapsing').css("-webkit-transition", "none!important").css("transition", "none!important").css("display", "none");
+        $(collapse).click() ;
+    }
     $('#metainfo_separator').removeClass('d-none');
     
     $('#partialIntervalSelect').removeClass('d-none');
