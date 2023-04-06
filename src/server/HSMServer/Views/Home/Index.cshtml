@@ -200,11 +200,11 @@
         // }
        
         $('#validation_' + id).empty();
-        $('#validation_metainfo').empty();
+       // $('#validation_metainfo').empty();
         
-        if (dataObject.sensorType === 6 && dataObject.comment !== null){
-            $('#validation_' + id).append(`<span class="d-flex text-break">Comment: ${dataObject.comment}</span>`);
-        }
+        // if (dataObject.sensorType === 6 && dataObject.comment !== null){
+        //     $('#validation_' + id).append(`<span class="d-flex text-break">Comment: ${dataObject.comment}</span>`);
+        // }
         
         if (dataObject.isValidationErrorVisible) {
             $('#validation_' + id).append(`<li id='errorIcon_${id}' class='fas fa-exclamation-triangle me-1'></li>
