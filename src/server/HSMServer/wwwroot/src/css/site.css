@@ -159,3 +159,9 @@ input.input-validation-error {
     text-decoration: underline;
     text-underline-offset: 0.3rem;
 }
+
+.no-transition {
+    transition: none!important;
+    -webkit-transition: none!important;
+    display: none;
+}

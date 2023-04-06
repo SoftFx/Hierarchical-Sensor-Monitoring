@@ -16,7 +16,7 @@ namespace HSMServer.Notifications
         {
             TelegramBot = new(userManager, cache, tree, config);
 
-            //_ = TelegramBot.StartBot();
+            _ = TelegramBot.StartBot();
         }
 
 

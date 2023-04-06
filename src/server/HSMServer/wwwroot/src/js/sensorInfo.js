@@ -14,11 +14,7 @@
     $('[id^="markdown_span_description_"]').addClass('d-none')
     $('[id^="description_"]').removeClass('d-none')
     $('#sensor_info_collapse').addClass('d-none')
-    let collapse = '#sensor_info_collapse';
-    if ($(collapse).attr('aria-expanded') === 'false'){
-        $('.collapsing').css("-webkit-transition", "none!important").css("transition", "none!important").css("display", "none");
-        $(collapse).click() ;
-    }
+   
     $('#metainfo_separator').removeClass('d-none');
     
     $('#partialIntervalSelect').removeClass('d-none');
@@ -39,7 +35,12 @@ window.revertInfoClick = function () {
 
 window.displaySensorMetaInfo = function (sensorId, viewData) {
     $('#sensor_info_' + sensorId).html(viewData);
+   
+    let metaInfo = $('#metaInfoCollapse');
+
+    metaInfo.addClass('no-transition').show();
     $('#sensor_info_collapse').click();
+    metaInfo.removeClass('no-transition');
 
     disableExpectedUpdateIntervalControl();
 }
