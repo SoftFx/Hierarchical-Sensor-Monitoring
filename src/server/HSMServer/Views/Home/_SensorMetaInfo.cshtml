@@ -146,8 +146,9 @@
         
         let lastValue = $('#last_value').children().last();
         let markdownComment = $('#comment').children().last();
-        
-        if (lastValue[0].innerText !== '' || markdownComment[0].innerText !== '' ) {
+        let desc = $(`#markdown_span_description_${'@Model.EncodedId'}`)
+
+        if ((lastValue[0].innerText !== '' || markdownComment[0].innerText !== '') && desc[0].innerText !== '') {
             $('#description_separator').removeClass('d-none');
         }
         
@@ -196,8 +197,9 @@
          
             let lastValue = $('#last_value').children().last();
             let markdownComment = $('#comment').children().last();
+            let desc = $(`#markdown_span_description_${'@Model.EncodedId'}`)
             
-            if (lastValue[0].innerText.trim() === '' && markdownComment[0].innerText.trim() === '') {
+            if ((lastValue[0].innerText.trim() === '' && markdownComment[0].innerText.trim() === '') || desc[0].innerText === '') {
                 $('#description_separator').addClass('d-none');
             }
         }
