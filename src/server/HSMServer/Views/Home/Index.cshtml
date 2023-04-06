@@ -186,10 +186,13 @@
 
     function updateSpecificSensorData(dataObject) {
         var id = dataObject.id;
+        let isFile = dataObject.sensorType === 6;
+        
         $('#value_' + id).empty().append(dataObject.value);
         
         if (dataObject.value !== null){
-             $('#last_value').removeClass('d-none').children().last().empty().append(dataObject.value);
+             if (!isFile)
+                $('#last_value').removeClass('d-none').children().last().empty().append(dataObject.value);
              $('#description_separator').removeClass('d-none');      
         }
        
@@ -221,7 +224,6 @@
         }
         
         let accordionLoaded = $('[id^="sensorData"]');
-        let isFile = dataObject.sensorType === 6;
         
         if (accordionLoaded.length !== 0){
               if (isFile && dataObject.receivingTime !== null){
