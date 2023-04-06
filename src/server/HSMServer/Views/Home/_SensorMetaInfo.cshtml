@@ -9,9 +9,9 @@
 
 
 <div id='sensor_info_@Model.EncodedId'>
-    <div class="d-flex ms-1 mt-1 me-0 justify-content-between flex-grow-1" style="height: 2rem!important;">
+    <div class="d-flex ms-1 mt-1 me-0 justify-content-between flex-grow-1">
         <div class='d-flex justify-content-start'>
-            <h5 class="my-1 align-self-top">@Html.Raw($"{Model.ProductName}{Model.Path}")</h5>
+            <h5 class="d-flex my-1 align-self-top">@Html.Raw($"{Model.ProductName}{Model.Path}")</h5>
             <li id='status_@Model.EncodedId' class='@Model.SensorStatus.ToIcon() my-1 ms-1 pt-1 align-self-center sensor-icon-with-margin' title='Status: @Model.SensorStatus'>
             </li>
         </div>
@@ -22,8 +22,8 @@
     </div>
     
         <div id="last_value" class="d-flex mt-1" style="color: #0366d6">
-            <span class="ms-1" >Last value: </span>
-            <span class="ms-1">
+            <span class="d-flex ms-1">Last value: </span>
+            <span class="d-flex ms-1">
                 @if (!string.IsNullOrEmpty(Model.ShortLastValue) && Model.SensorType is not SensorType.File)
                     {
                         @Model.ShortLastValue

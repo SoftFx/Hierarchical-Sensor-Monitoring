@@ -218,8 +218,8 @@
             
             $('#markdown_status_comment').children().last().css('margin-bottom',0);
         }
-      
-        if (dataObject.comment !== null) {
+     
+        if (dataObject.comment !== null && dataObject.comment !== '') {
             $('#comment').removeClass('d-none');
             $('#markdown_comment')[0].innerHTML = markdownToHTML(dataObject.comment);
             $('#markdown_comment').children().last().css('margin-bottom',0);
