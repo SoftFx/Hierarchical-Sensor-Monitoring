@@ -2,8 +2,10 @@
 using HSMServer.Core.Cache;
 using HSMServer.Core.Model;
 using HSMServer.Extensions;
+using HSMServer.Folders;
 using HSMServer.Model.AccessKeysViewModels;
 using HSMServer.Model.Authentication;
+using HSMServer.Model.Folders;
 using HSMServer.Model.UserTreeShallowCopy;
 using System;
 using System.Collections.Concurrent;
@@ -14,6 +16,7 @@ namespace HSMServer.Model.TreeViewModel
 {
     public sealed class TreeViewModel
     {
+        private readonly IFolderManager _folderManager;
         private readonly IUserManager _userManager;
         private readonly ITreeValuesCache _cache;
 
@@ -25,8 +28,9 @@ namespace HSMServer.Model.TreeViewModel
         public ConcurrentDictionary<Guid, ProductNodeViewModel> Nodes { get; } = new();
 
 
-        public TreeViewModel(ITreeValuesCache cache, IUserManager userManager)
+        public TreeViewModel(ITreeValuesCache cache, IUserManager userManager, IFolderManager folderManager)
         {
+            _folderManager = folderManager;
             _userManager = userManager;
             _cache = cache;
 
@@ -82,7 +86,8 @@ namespace HSMServer.Model.TreeViewModel
         }
 
 
-        internal IEnumerable<ProductNodeViewModel> GetRootProducts() => Nodes.Where(x => x.Value.Parent is null).Select(x => x.Value);
+        internal IEnumerable<ProductNodeViewModel> GetRootProducts() =>
+            Nodes.Where(x => x.Value.Parent is null or FolderModel).Select(x => x.Value);
 
         internal List<Guid> GetNodeAllSensors(Guid selectedNode)
         {
@@ -119,6 +124,9 @@ namespace HSMServer.Model.TreeViewModel
 
             if (product.Parent != null && Nodes.TryGetValue(product.Parent.Id, out var parent))
                 parent.AddSubNode(node);
+
+            if (product.FolderId != null && _folderManager.TryGetValue(product.FolderId.Value, out var folder))
+                node.AddFolder(folder);
 
             foreach (var (_, child) in product.SubProducts)
                 AddNewProductViewModel(child);
@@ -160,7 +168,12 @@ namespace HSMServer.Model.TreeViewModel
 
                 case ActionType.Update:
                     if (Nodes.TryGetValue(model.Id, out var product))
+                    {
                         product.Update(model);
+
+                        if (product.FolderId != model.FolderId)
+                            product.UpdateFolder(model.FolderId.HasValue ? _folderManager[model.FolderId.Value] : null);
+                    }
                     break;
 
                 case ActionType.Delete:

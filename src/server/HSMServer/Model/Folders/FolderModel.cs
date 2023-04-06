@@ -8,25 +8,18 @@ using System.Drawing;
 
 namespace HSMServer.Model.Folders
 {
-    public class FolderModel : IServerModel<FolderEntity, FolderUpdate>
+    public class FolderModel : BaseNodeViewModel, IServerModel<FolderEntity, FolderUpdate>
     {
         public Dictionary<User, ProductRoleEnum> UserRoles { get; } = new();
 
         public List<ProductNodeViewModel> Products { get; } = new();
 
-        public Guid Id { get; }
+        public DateTime CreationDate { get; }
 
         public Guid AuthorId { get; }
 
-        public DateTime CreationDate { get; }
-
-
-        public string Name { get; }
 
         public Color Color { get; private set; }
-
-        public string Description { get; private set; }
-
 
         public string Author { get; set; }
 
@@ -39,6 +32,15 @@ namespace HSMServer.Model.Folders
             Color = Color.FromArgb(entity.Color);
             AuthorId = Guid.Parse(entity.AuthorId);
             CreationDate = new DateTime(entity.CreationDate);
+
+            var policies = entity.ServerPolicies;
+
+            ExpectedUpdateInterval = policies.Count > 0
+                ? new TimeIntervalViewModel(policies[0], PredefinedTimeIntervals.ExpectedUpdatePolicy)
+                : GetDefaultExpectedUpdatePolicy();
+            SensorRestorePolicy = policies.Count > 1
+                ? new TimeIntervalViewModel(policies[1], PredefinedTimeIntervals.RestorePolicy)
+                : GetDefaultRestorePolicy();
         }
 
         internal FolderModel(FolderAdd addModel)
@@ -52,6 +54,9 @@ namespace HSMServer.Model.Folders
             AuthorId = addModel.AuthorId;
             Products = addModel.Products;
             Description = addModel.Description;
+
+            ExpectedUpdateInterval = GetDefaultExpectedUpdatePolicy();
+            SensorRestorePolicy = GetDefaultRestorePolicy();
         }
 
 
@@ -70,6 +75,28 @@ namespace HSMServer.Model.Folders
                 CreationDate = CreationDate.Ticks,
                 Description = Description,
                 Color = Color.ToArgb(),
+                ServerPolicies = GetPolicyEntities(),
             };
+
+
+        private List<TimeIntervalEntity> GetPolicyEntities()
+        {
+            var policies = new List<TimeIntervalEntity>();
+
+            if (ExpectedUpdateInterval != null)
+                policies.Add(ExpectedUpdateInterval.ToEntity());
+            if (SensorRestorePolicy != null)
+                policies.Add(SensorRestorePolicy.ToEntity());
+
+            return policies;
+        }
+
+        private static TimeIntervalViewModel GetDefaultExpectedUpdatePolicy() =>
+            new(GetDefaultPolicyEntity(), PredefinedTimeIntervals.ExpectedUpdatePolicy);
+
+        private static TimeIntervalViewModel GetDefaultRestorePolicy() =>
+            new(GetDefaultPolicyEntity(), PredefinedTimeIntervals.RestorePolicy);
+
+        private static TimeIntervalEntity GetDefaultPolicyEntity() => new((byte)TimeInterval.None, 0L);
     }
 }

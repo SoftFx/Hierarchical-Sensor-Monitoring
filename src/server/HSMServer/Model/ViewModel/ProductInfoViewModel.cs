@@ -6,7 +6,7 @@ namespace HSMServer.Model.ViewModel
     {
         public string Name { get; }
 
-        public NodeViewModel Parent { get; }
+        public BaseNodeViewModel Parent { get; }
 
 
         public ProductInfoViewModel() : base() { }

@@ -19,15 +19,6 @@ namespace HSMServer.Extensions
         }
 
 
-        public static bool IsCustom(this TimeInterval interval)
-        {
-            return interval == TimeInterval.Custom;
-        }
-
-
-        public static bool IsParent(this TimeInterval interval)
-        {
-            return interval == TimeInterval.FromParent;
-        }
+        public static bool IsParent(this TimeInterval interval) => interval == TimeInterval.FromParent;
     }
 }

@@ -1,4 +1,6 @@
-﻿namespace HSMDatabase.AccessManager.DatabaseEntities
+﻿using System.Collections.Generic;
+
+namespace HSMDatabase.AccessManager.DatabaseEntities
 {
     public sealed class FolderEntity
     {
@@ -14,5 +16,8 @@
         public string Description { get; init; }
 
         public int Color { get; init; }
+
+
+        public List<TimeIntervalEntity> ServerPolicies { get; init; } = new();
     }
 }

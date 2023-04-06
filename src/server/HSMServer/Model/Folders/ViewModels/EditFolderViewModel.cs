@@ -11,6 +11,8 @@ namespace HSMServer.Model.Folders.ViewModels
 {
     public sealed class EditFolderViewModel
     {
+        public FolderAlertsViewModel Alerts { get; }
+
         public FolderUsersViewModel Users { get; }
 
         public string CreationDate { get; }
@@ -48,8 +50,9 @@ namespace HSMServer.Model.Folders.ViewModels
             Name = folder.Name;
             Description = folder.Description;
             Color = folder.Color;
-            Products.FillFolderProducts(folder.Products);
 
+            Products.FillFolderProducts(folder.Products);
+            Alerts = new FolderAlertsViewModel(folder);
             Users = users;
         }
 

@@ -1,6 +1,7 @@
 using HSMServer.Authentication;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Cache.UpdateEntities;
+using HSMServer.Core.Helpers;
 using HSMServer.Core.Model;
 using HSMServer.Core.MonitoringHistoryProcessor.Factory;
 using HSMServer.Extensions;
@@ -8,6 +9,7 @@ using HSMServer.Helpers;
 using HSMServer.Model;
 using HSMServer.Model.Authentication;
 using HSMServer.Model.Authentication.History;
+using HSMServer.Model.Folders;
 using HSMServer.Model.TreeViewModel;
 using HSMServer.Model.ViewModel;
 using HSMServer.Notification.Settings;
@@ -19,7 +21,6 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using HSMServer.Core.Helpers;
 
 namespace HSMServer.Controllers
 {
@@ -409,7 +410,7 @@ namespace HSMServer.Controllers
         {
             var viewModel = await GetFileHistory(fileId);
             _userManager[(HttpContext.User as User).Id].Pagination = viewModel;
-            
+
             return GetFileTable(viewModel);
         }
 
@@ -421,7 +422,7 @@ namespace HSMServer.Controllers
         private FileValue GetFileSensorValue(string encodedId) =>
             _treeValuesCache.GetSensor(SensorPathHelper.DecodeGuid(encodedId)).LastValue as FileValue;
 
-        private async Task<FileValue> GetFileByReceivingTimeOrDefault(string encodedId, long ticks = default) => (ticks == default 
+        private async Task<FileValue> GetFileByReceivingTimeOrDefault(string encodedId, long ticks = default) => (ticks == default
             ? GetFileSensorValue(encodedId)
             : (await GetFileHistory(encodedId)).Pages[0].Cast<FileValue>().FirstOrDefault(file => file.ReceivingTime.Ticks == ticks))
             .DecompressContent();
@@ -485,8 +486,8 @@ namespace HSMServer.Controllers
             var update = new ProductUpdate
             {
                 Id = product.Id,
-                ExpectedUpdateInterval = newModel.ExpectedUpdateInterval.ToModel(),
-                RestoreInterval = newModel.SensorRestorePolicy.ToModel(),
+                ExpectedUpdateInterval = newModel.ExpectedUpdateInterval.ToModel((product.Parent as FolderModel)?.ExpectedUpdateInterval),
+                RestoreInterval = newModel.SensorRestorePolicy.ToModel((product.Parent as FolderModel)?.SensorRestorePolicy),
                 Description = newModel.Description
             };
 

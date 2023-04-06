@@ -6,8 +6,6 @@ using HSMServer.Core.DataLayer;
 using HSMServer.Core.Model;
 using HSMServer.Model.Authentication;
 using HSMServer.Model.Folders;
-using HSMServer.Model.TreeViewModel;
-using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -20,8 +18,6 @@ namespace HSMServer.Folders
         private readonly ITreeValuesCache _cache;
         private readonly IUserManager _userManager;
         private readonly IDatabaseCore _databaseCore;
-        private readonly TreeViewModel _treeViewModel;
-        private readonly ILogger<FolderManager> _logger;
 
 
         protected override Action<FolderEntity> AddToDb => _databaseCore.AddFolder;
@@ -33,12 +29,9 @@ namespace HSMServer.Folders
         protected override Func<List<FolderEntity>> GetFromDb => _databaseCore.GetAllFolders;
 
 
-        public FolderManager(IDatabaseCore databaseCore, ITreeValuesCache cache,
-            IUserManager userManager, TreeViewModel treeViewModel, ILogger<FolderManager> logger)
+        public FolderManager(IDatabaseCore databaseCore, ITreeValuesCache cache, IUserManager userManager)
         {
-            _treeViewModel = treeViewModel;
             _databaseCore = databaseCore;
-            _logger = logger;
 
             _cache = cache;
             _cache.ChangeProductEvent += ChangeProductHandler;
@@ -106,10 +99,6 @@ namespace HSMServer.Folders
             foreach (var (_, folder) in this)
                 if (_userManager.TryGetValue(folder.AuthorId, out var author))
                     folder.Author = author.Name;
-
-            foreach (var (_, node) in _treeViewModel.Nodes)
-                if (node.Parent is null && node.FolderId.HasValue && TryGetValue(node.FolderId.Value, out var folder))
-                    folder.Products.Add(node);
 
             foreach (var user in _userManager.GetUsers())
                 foreach (var (folderId, role) in user.FoldersRoles)

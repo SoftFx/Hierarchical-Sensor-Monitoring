@@ -97,6 +97,13 @@ namespace HSMServer.Controllers
         public Task RemoveFolder(Guid folderId) => _folderManager.TryRemoveFolder(folderId);
 
 
+        [HttpPost]
+        public void EditAlerts(FolderAlertsViewModel folderAlerts)
+        {
+
+        }
+
+
         [HttpGet]
         public IActionResult ResetUsers(Guid folderId) => GetUsersPartialView(_folderManager[folderId]);
 

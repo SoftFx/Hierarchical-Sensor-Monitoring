@@ -12,6 +12,7 @@ namespace HSMServer.Core.Model
         Month,
         OneMinute,
         FiveMinutes,
+        FromFolder = byte.MaxValue - 2,
         FromParent = byte.MaxValue - 1,
         Custom = byte.MaxValue,
     }
@@ -22,9 +23,6 @@ namespace HSMServer.Core.Model
         public TimeInterval TimeInterval { get; } = TimeInterval.FromParent;
 
         public long CustomPeriod { get; }
-
-        [JsonIgnore]
-        public bool IsEmpty => TimeInterval.IsCustom() && CustomPeriod == 0;
 
 
         [JsonConstructor]
@@ -43,7 +41,7 @@ namespace HSMServer.Core.Model
 
         internal bool TimeIsUp(DateTime time)
         {
-            if (TimeInterval.IsCustom() && CustomPeriod > 0L)
+            if (TimeInterval.UseCustomPeriod() && CustomPeriod > 0L)
                 return (DateTime.UtcNow - time).Ticks > CustomPeriod;
 
             return DateTime.UtcNow > TimeInterval switch

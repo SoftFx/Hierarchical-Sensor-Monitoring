@@ -1,4 +1,5 @@
-﻿using HSMServer.Core.Model;
+﻿using HSMDatabase.AccessManager.DatabaseEntities;
+using HSMServer.Core.Model;
 using HSMServer.Extensions;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using System;
@@ -50,8 +51,8 @@ namespace HSMServer.Model
     {
         public const string CustomTemplate = "dd.HH:mm:ss";
 
-
         private readonly Func<TimeIntervalViewModel> _getParentValue;
+        private readonly Func<bool> _hasFolder;
 
         private static long _id = 0L;
 
@@ -63,12 +64,14 @@ namespace HSMServer.Model
         public bool UseCustomInputTemplate { get; }
 
 
-        private bool HasIntervalValue => _getParentValue?.Invoke() is not null;
+        private bool HasParentValue => _getParentValue?.Invoke() is not null || HasFolder;
+
+        private bool HasFolder => _hasFolder?.Invoke() ?? false;
 
         private string UsedInterval => TimeInterval switch
         {
             TimeInterval.Custom => CustomTimeInterval.ToTableView(),
-            TimeInterval.FromParent => HasIntervalValue ? _getParentValue?.Invoke().UsedInterval : TimeInterval.GetDisplayName(),
+            TimeInterval.FromParent => HasParentValue ? _getParentValue?.Invoke().UsedInterval : TimeInterval.GetDisplayName(),
             _ => TimeInterval.GetDisplayName()
         };
 
@@ -83,9 +86,10 @@ namespace HSMServer.Model
         // public constructor without parameters for post actions
         public TimeIntervalViewModel() { }
 
-        internal TimeIntervalViewModel(TimeIntervalModel model, Func<TimeIntervalViewModel> getParentValue)
+        internal TimeIntervalViewModel(TimeIntervalModel model, Func<TimeIntervalViewModel> getParentValue, Func<bool> hasFolder)
         {
             _getParentValue = getParentValue;
+            _hasFolder = hasFolder;
 
             Update(model);
         }
@@ -99,11 +103,21 @@ namespace HSMServer.Model
         internal TimeIntervalViewModel(TimeIntervalViewModel model, List<TimeInterval> intervals) : this(intervals)
         {
             _getParentValue = model._getParentValue;
+            _hasFolder = model._hasFolder;
 
             TimeInterval = model.TimeInterval;
             CustomTimeInterval = model.CustomTimeInterval;
 
-            if (!HasIntervalValue)
+            if (!HasParentValue)
+                IntervalItems.RemoveAt(0);
+        }
+
+        internal TimeIntervalViewModel(TimeIntervalEntity entity, List<TimeInterval> intervals) : this(intervals)
+        {
+            TimeInterval = (TimeInterval)entity.Interval;
+            CustomTimeInterval = TimeSpanValue.TicksToString(entity.CustomPeriod);
+
+            if (!HasParentValue)
                 IntervalItems.RemoveAt(0);
         }
 
@@ -117,10 +131,13 @@ namespace HSMServer.Model
             CustomTimeInterval = TimeSpanValue.TicksToString(customPeriod);
         }
 
-        internal TimeIntervalModel ToModel() => new(GetIntervalOption(), GetCustomIntervalTicks());
+        internal TimeIntervalModel ToModel(TimeIntervalViewModel folderInterval = null) =>
+            new(GetInterval(folderInterval != null), GetCustomTicks(folderInterval));
+
+        internal TimeIntervalEntity ToEntity() => new((byte)GetInterval(), GetCustomTicks());
 
 
-        private CoreTimeInterval GetIntervalOption() =>
+        private CoreTimeInterval GetInterval(bool parentIsFolder = false) =>
             TimeInterval switch
             {
                 TimeInterval.OneMinute => CoreTimeInterval.OneMinute,
@@ -130,15 +147,35 @@ namespace HSMServer.Model
                 TimeInterval.Day => CoreTimeInterval.Day,
                 TimeInterval.Week => CoreTimeInterval.Week,
                 TimeInterval.Month => CoreTimeInterval.Month,
-                TimeInterval.FromParent => CoreTimeInterval.FromParent,
+                TimeInterval.FromParent => parentIsFolder ? CoreTimeInterval.FromFolder : CoreTimeInterval.FromParent,
                 _ => CoreTimeInterval.Custom,
             };
 
-        private long GetCustomIntervalTicks()
+        private long GetCustomTicks(TimeIntervalViewModel folderInterval = null)
         {
-            return TimeInterval.IsCustom() && TimeSpanValue.TryParse(CustomTimeInterval, out var ticks) ? ticks : 0L;
-        }
+            if (TimeInterval == TimeInterval.Custom && TimeSpanValue.TryParse(CustomTimeInterval, out var ticks))
+                return ticks;
 
+            if (TimeInterval == TimeInterval.FromParent && folderInterval != null)
+            {
+                var time = DateTime.MinValue;
+
+                return (folderInterval.TimeInterval switch
+                {
+                    TimeInterval.OneMinute => time.AddMinutes(1),
+                    TimeInterval.FiveMinutes => time.AddMinutes(5),
+                    TimeInterval.TenMinutes => time.AddMinutes(10),
+                    TimeInterval.Hour => time.AddHours(1),
+                    TimeInterval.Day => time.AddDays(1),
+                    TimeInterval.Week => time.AddDays(7),
+                    TimeInterval.Month => time.AddMonths(1),
+                    TimeInterval.Custom => new DateTime(folderInterval.GetCustomTicks()),
+                    _ => throw new NotImplementedException(),
+                }).Ticks;
+            }
+
+            return 0L;
+        }
 
         private static TimeInterval SetTimeInterval(CoreTimeInterval interval, long ticks) =>
             interval switch
@@ -150,7 +187,7 @@ namespace HSMServer.Model
                 CoreTimeInterval.Day => TimeInterval.Day,
                 CoreTimeInterval.Week => TimeInterval.Week,
                 CoreTimeInterval.Month => TimeInterval.Month,
-                CoreTimeInterval.FromParent => TimeInterval.FromParent,
+                CoreTimeInterval.FromFolder or CoreTimeInterval.FromParent => TimeInterval.FromParent,
                 CoreTimeInterval.Custom => ticks == 0L ? TimeInterval.None : TimeInterval.Custom,
                 _ => TimeInterval.None,
             };
@@ -159,5 +196,50 @@ namespace HSMServer.Model
         {
             return intervals.Select(u => new SelectListItem(u.GetDisplayName(), $"{u}")).ToList();
         }
+    }
+
+
+    public static class PredefinedTimeIntervals
+    {
+        public static List<TimeInterval> ExpectedUpdatePolicy { get; } =
+            new()
+            {
+                TimeInterval.FromParent,
+                TimeInterval.None,
+                TimeInterval.TenMinutes,
+                TimeInterval.Hour,
+                TimeInterval.Day,
+                TimeInterval.Week,
+                TimeInterval.Month,
+                TimeInterval.Custom
+            };
+
+        public static List<TimeInterval> RestorePolicy { get; } =
+            new()
+            {
+                TimeInterval.FromParent,
+                TimeInterval.None,
+                TimeInterval.OneMinute,
+                TimeInterval.FiveMinutes,
+                TimeInterval.TenMinutes,
+                TimeInterval.Hour,
+                TimeInterval.Day,
+                TimeInterval.Custom
+            };
+
+        public static List<TimeInterval> IgnoreNotifications { get; } =
+            new()
+            {
+                TimeInterval.FiveMinutes,
+                TimeInterval.TenMinutes,
+                TimeInterval.ThirtyMinutes,
+                TimeInterval.FourHours,
+                TimeInterval.EightHours,
+                TimeInterval.SixteenHours,
+                TimeInterval.ThirtySixHours,
+                TimeInterval.SixtyHours,
+                TimeInterval.Forever,
+                TimeInterval.Custom
+            };
     }
 }
