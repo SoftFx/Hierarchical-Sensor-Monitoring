@@ -38,7 +38,7 @@ window.displaySensorMetaInfo = function (sensorId, viewData) {
    
     let metaInfo = $('#metaInfoCollapse');
 
-    metaInfo.addClass('no-transition').show();
+    metaInfo.addClass('no-transition');
     $('#sensor_info_collapse').click();
     metaInfo.removeClass('no-transition');
 
