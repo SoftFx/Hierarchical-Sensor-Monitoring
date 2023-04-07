@@ -269,6 +269,9 @@ namespace HSMDataCollector.Core
 
         public void SendFile(string path, string filePath, SensorStatus status = SensorStatus.Ok, string comment = "")
         {
+            if (!File.Exists(filePath))
+                return;
+            
             var file = new FileInfo(filePath);
             
             _hsmClient.SendFileAsync(file, path, status, comment);

@@ -53,7 +53,7 @@ namespace HSMDataCollector.Core
                 Comment = comment,
                 Status = sensorStatus,
                 Extension = fileInfo.Extension.TrimStart('.'),
-                Name = fileInfo.Name,
+                Name = fileInfo.Name.Replace(fileInfo.Extension, string.Empty),
                 Time = DateTime.Now,
                 Value = File.ReadAllBytes(fileInfo.FullName).ToList()
             });
