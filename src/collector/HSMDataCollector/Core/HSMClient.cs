@@ -59,7 +59,7 @@ namespace HSMDataCollector.Core
                 Value = File.ReadAllBytes(fileInfo.FullName).ToList()
             };
             
-            DataQueueFileReceivingAsync(value);
+            DataQueueFileReceiving(value);
         }
 
 
@@ -72,9 +72,9 @@ namespace HSMDataCollector.Core
         }
 
         
-        internal void SendMonitoringData(List<SensorValueBase> values) => SendMonitoringDataAsync(values).Start();
+        internal void SendMonitoringData(List<SensorValueBase> values) => SendMonitoringDataAsync(values);
         
-        internal void DataQueueFileReceiving(FileSensorValue value) => DataQueueFileReceivingAsync(value).Start();
+        internal void DataQueueFileReceiving(FileSensorValue value) => DataQueueFileReceivingAsync(value);
         
         
         private async Task SendMonitoringDataAsync(List<SensorValueBase> values)
