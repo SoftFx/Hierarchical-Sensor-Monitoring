@@ -46,8 +46,9 @@ namespace HSMDataCollector.Core
             _dataQueue.SendValues += SendMonitoringData;
         }
 
-        internal void SendFileAsync(FileInfo fileInfo, string path, SensorStatus sensorStatus = SensorStatus.Ok, string comment = "") =>
-            DataQueueFileReceiving(new FileSensorValue()
+        internal void SendFileAsync(FileInfo fileInfo, string path, SensorStatus sensorStatus = SensorStatus.Ok, string comment = "")
+        {
+            var value = new FileSensorValue()
             {
                 Path = path,
                 Comment = comment,
@@ -56,7 +57,10 @@ namespace HSMDataCollector.Core
                 Name = fileInfo.Name.Replace(fileInfo.Extension, string.Empty),
                 Time = DateTime.Now,
                 Value = File.ReadAllBytes(fileInfo.FullName).ToList()
-            });
+            };
+            
+            DataQueueFileReceivingAsync(value);
+        }
 
 
         public void Dispose()
