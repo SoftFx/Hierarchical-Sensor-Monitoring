@@ -1,12 +1,13 @@
 ﻿using HSMCommon.Constants;
 using HSMServer.Authentication;
 using HSMServer.Configuration;
-using HSMServer.Core.Cache;
 using HSMServer.Core;
+using HSMServer.Core.Model.Policies;
+using HSMServer.Model;
+using HSMServer.Model.TreeViewModel;
 using HSMServer.Notification.Settings;
 using NLog;
 using System;
-using System.Reflection;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -14,8 +15,6 @@ using Telegram.Bot;
 using Telegram.Bot.Polling;
 using Telegram.Bot.Types;
 using Telegram.Bot.Types.Enums;
-using HSMServer.Core.Model.Policies;
-using HSMServer.Model;
 
 namespace HSMServer.Notifications
 {
@@ -27,18 +26,18 @@ namespace HSMServer.Notifications
         private readonly Logger _logger = LogManager.GetCurrentClassLogger();
         private readonly AddressBook _addressBook;
         private readonly IUserManager _userManager;
-        private readonly ITreeValuesCache _cache;
+        private readonly TreeViewModel _tree;
         private readonly IConfigurationProvider _config;
 
         private string BotName => $"@{_config.ReadOrDefault(ConfigurationConstants.BotName).Value.ToLower()}";
 
 
         internal TelegramUpdateHandler(AddressBook addressBook, IUserManager userManager,
-            ITreeValuesCache cache, IConfigurationProvider config)
+            TreeViewModel tree, IConfigurationProvider config)
         {
             _addressBook = addressBook;
             _userManager = userManager;
-            _cache = cache;
+            _tree = tree;
             _config = config;
         }
 
@@ -107,7 +106,7 @@ namespace HSMServer.Notifications
                 else
                 {
                     _addressBook.RegisterChat(message, token, isUserChat);
-                    token.Entity.UpdateEntity(_userManager, _cache);
+                    token.Entity.UpdateEntity(_userManager, _tree);
 
                     response.Append(token.Entity.BuildSuccessfullResponse());
                 }

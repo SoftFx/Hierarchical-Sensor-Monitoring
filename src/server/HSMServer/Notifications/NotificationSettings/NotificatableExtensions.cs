@@ -1,5 +1,4 @@
 ﻿using HSMServer.Authentication;
-using HSMServer.Core.Cache;
 using HSMServer.Model.Authentication;
 using HSMServer.Model.TreeViewModel;
 
@@ -34,12 +33,12 @@ namespace HSMServer.Notification.Settings
             return message;
         }
 
-        internal static void UpdateEntity(this INotificatable entity, IUserManager userManager, ITreeValuesCache cache)
+        internal static void UpdateEntity(this INotificatable entity, IUserManager userManager, TreeViewModel tree)
         {
             if (entity is User user)
                 userManager.UpdateUser(user);
             else if (entity is ProductNodeViewModel product)
-                cache.UpdateProduct(cache.GetProduct(product.Id));
+                tree.UpdateProductNotificationSettings(product);
         }
 
         internal static string BuildGreetings(this INotificatable entity) =>
