@@ -46,20 +46,26 @@ namespace HSMDataCollector.Core
             _dataQueue.SendValues += SendMonitoringData;
         }
 
-        internal void SendFileAsync(FileInfo fileInfo, string path, SensorStatus sensorStatus = SensorStatus.Ok, string comment = "")
+        internal async Task<Task> SendFileAsync(FileInfo fileInfo, string sensorPath, SensorStatus sensorStatus = SensorStatus.Ok, string comment = "")
         {
+            async Task<byte[]> GetFileBytes()
+            {
+                using (var stream = new StreamReader(fileInfo.FullName))
+                    return Encoding.UTF8.GetBytes(await stream.ReadToEndAsync());
+            }
+            
             var value = new FileSensorValue()
             {
-                Path = path,
+                Path = sensorPath,
                 Comment = comment,
                 Status = sensorStatus,
                 Extension = fileInfo.Extension.TrimStart('.'),
-                Name = fileInfo.Name.Replace(fileInfo.Extension, string.Empty),
+                Name = Path.GetFileNameWithoutExtension(fileInfo.FullName),
                 Time = DateTime.Now,
-                Value = File.ReadAllBytes(fileInfo.FullName).ToList()
+                Value = (await GetFileBytes()).ToList()
             };
             
-            DataQueueFileReceiving(value);
+            return DataQueueFileReceivingAsync(value);
         }
 
 
@@ -72,9 +78,9 @@ namespace HSMDataCollector.Core
         }
 
         
-        internal void SendMonitoringData(List<SensorValueBase> values) => SendMonitoringDataAsync(values);
+        internal void SendMonitoringData(List<SensorValueBase> values) => _ = SendMonitoringDataAsync(values);
         
-        internal void DataQueueFileReceiving(FileSensorValue value) => DataQueueFileReceivingAsync(value);
+        internal void DataQueueFileReceiving(FileSensorValue value) => _ = DataQueueFileReceivingAsync(value);
         
         
         private async Task SendMonitoringDataAsync(List<SensorValueBase> values)

@@ -267,14 +267,14 @@ namespace HSMDataCollector.Core
             return sensor;
         }
 
-        public void SendFile(string path, string filePath, SensorStatus status = SensorStatus.Ok, string comment = "")
+        public Task SendFileAsync(string sensorPath, string filePath, SensorStatus status = SensorStatus.Ok, string comment = "")
         {
             if (!File.Exists(filePath))
-                return;
+                return default;
             
             var file = new FileInfo(filePath);
             
-            _hsmClient.SendFileAsync(file, path, status, comment);
+            return _hsmClient.SendFileAsync(file, sensorPath, status, comment);
         }   
 
         public ILastValueSensor<bool> CreateLastValueBoolSensor(string path, bool defaultValue, string description = "")
