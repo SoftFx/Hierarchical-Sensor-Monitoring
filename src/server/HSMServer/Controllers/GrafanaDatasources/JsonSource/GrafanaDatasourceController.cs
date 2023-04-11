@@ -71,63 +71,63 @@ namespace HSMServer.Controllers.GrafanaDatasources.JsonSource
         {
             var responses = new List<object>();
 
-            //foreach (var target in request.Targets)
-            //    if (target.Payload.Sensors != null && target.Payload.Type != null)
-            //    {
-            //        foreach (var sensorId in target.Payload.Sensors)
-            //        {
-            //            var product = _storage.Products.FirstOrDefault(u => u.Id == target.Target);
+            foreach (var target in request.Targets)
+                if (target.Payload.IsFull)
+                {
+                    foreach (var sensorId in target.Payload.Sensors)
+                    {
+                        var product = _storage.Products.FirstOrDefault(u => u.Id == target.Target);
 
-            //            if (product != null)
-            //            {
-            //                var sensor = product.Sensors.FirstOrDefault(u => u.Id == sensorId);
+                        if (product != null)
+                        {
+                            var sensor = product.Sensors.FirstOrDefault(u => u.Id == sensorId);
 
-            //                if (sensor != null)
-            //                {
-            //                    if (target.Payload.Type == "Datapoints")
-            //                    {
-            //                        var response = new HistoryDatapointsResponse()
-            //                        {
-            //                            Target = sensorId,
-            //                            Datapoints = new List<long[]>(1 << 2),
-            //                        };
+                            if (sensor != null)
+                            {
+                                if (target.Payload.Type == "Datapoints")
+                                {
+                                    var response = new HistoryDatapointsResponse()
+                                    {
+                                        Target = sensorId,
+                                        Datapoints = new List<long[]>(1 << 2),
+                                    };
 
-            //                        foreach (var data in sensor.Data)
-            //                        {
-            //                            response.Datapoints.Add(new long[2]
-            //                            {
-            //                                data.Value,
-            //                                new DateTimeOffset(data.Date).ToUnixTimeMilliseconds()
-            //                            });
-            //                        }
+                                    foreach (var data in sensor.Data)
+                                    {
+                                        response.Datapoints.Add(new long[2]
+                                        {
+                                            data.Value,
+                                            new DateTimeOffset(data.Date).ToUnixTimeMilliseconds()
+                                        });
+                                    }
 
-            //                        responses.Add(response);
-            //                    }
+                                    responses.Add(response);
+                                }
 
-            //                    if (target.Payload.Type == "Table")
-            //                    {
-            //                        var response = new HistoryTableResponse()
-            //                        {
-            //                            Target = sensorId,
-            //                            Rows = new List<object[]>(1 << 2),
-            //                        };
+                                if (target.Payload.Type == "Table")
+                                {
+                                    var response = new HistoryTableResponse()
+                                    {
+                                        Target = sensorId,
+                                        Rows = new List<object[]>(1 << 2),
+                                    };
 
-            //                        foreach (var data in sensor.Data)
-            //                        {
-            //                            response.Rows.Add(new object[]
-            //                            {
-            //                                new DateTimeOffset(data.Date).ToUnixTimeMilliseconds(),
-            //                                data.Value,
-            //                                data.Comment,
-            //                            });
-            //                        }
+                                    foreach (var data in sensor.Data)
+                                    {
+                                        response.Rows.Add(new object[]
+                                        {
+                                            new DateTimeOffset(data.Date).ToUnixTimeMilliseconds(),
+                                            data.Value,
+                                            data.Comment,
+                                        });
+                                    }
 
-            //                        responses.Add(response);
-            //                    }
-            //                }
-            //            }
-            //        }
-            //    }
+                                    responses.Add(response);
+                                }
+                            }
+                        }
+                    }
+                }
 
             return JsonSerializer.Serialize(responses, _options);
         }
