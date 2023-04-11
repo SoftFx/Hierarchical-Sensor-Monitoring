@@ -21,7 +21,7 @@
     var valuesParentDivId = $"values_parent_{sensorId}";
 }
 
-
+<div class="container-fluid" style="overflow-y: auto;  height: calc(100vh - 5vh - 80px - 3rem)!important;">
 <div class='accordion' id='sensorData_@sensorId'>
     <div class='accordion-item'>
         @if (Model.SensorType == SensorType.File)
@@ -221,7 +221,9 @@
         }
     </div>
 </div>
-<div id="recentValues_@sensorId"></div>
+<div id="recentValues_@sensorId">
+</div>
+</div>
 
 <script>
 var previousReceivedTime = undefined;
