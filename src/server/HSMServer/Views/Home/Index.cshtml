@@ -203,7 +203,7 @@
         $('#validation_metainfo').empty();
         
         if (isFile && dataObject.comment !== null && dataObject.comment !== ''){
-            $('#validation_' + id).append(`<span class="d-flex text-break">Comment: ${dataObject.comment}</span>`);
+            $('#validation_' + id).append(`<span class="d-flex text-break">Comment: ${markdownToHTML(dataObject.comment)}</span>`);
         }
         
         if (dataObject.isValidationErrorVisible) {
