@@ -14,7 +14,7 @@ namespace HSMServer.Notifications
         internal DateTime ExpectedSendingTime { get; private set; } = DateTime.UtcNow;
 
 
-        internal void AddMessage(BaseSensorModel sensor)
+        internal void AddMessage(BaseSensorModel sensor, SensorStatus firstStatus)
         {
             var newStatus = sensor.Status.Icon;
             var comment = sensor.Status.Message;
@@ -22,7 +22,7 @@ namespace HSMServer.Notifications
             var id = sensor.Id;
             var branch = _messageTree[sensor.RootProductName];
 
-            if (_compressor.TryGetOrAdd(sensor, out var key))
+            if (_compressor.TryGetOrAdd(sensor, firstStatus, out var key))
             {
                 newStatus = $"{key.oldStatus}->{newStatus}";
 
