@@ -48,10 +48,10 @@ namespace HSMDataCollector.Core
 
         internal async Task<Task> SendFileAsync(FileInfo fileInfo, string sensorPath, SensorStatus sensorStatus = SensorStatus.Ok, string comment = "")
         {
-            async Task<byte[]> GetFileBytes()
+            async Task<List<byte>> GetFileBytes()
             {
                 using (var stream = new StreamReader(fileInfo.FullName))
-                    return Encoding.UTF8.GetBytes(await stream.ReadToEndAsync());
+                    return Encoding.UTF8.GetBytes(await stream.ReadToEndAsync()).ToList();
             }
             
             var value = new FileSensorValue()
@@ -62,7 +62,7 @@ namespace HSMDataCollector.Core
                 Extension = fileInfo.Extension.TrimStart('.'),
                 Name = Path.GetFileNameWithoutExtension(fileInfo.FullName),
                 Time = DateTime.Now,
-                Value = (await GetFileBytes()).ToList()
+                Value = await GetFileBytes()
             };
             
             return DataQueueFileReceivingAsync(value);
