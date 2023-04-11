@@ -10,9 +10,9 @@ namespace HSMServer.Folders
 {
     public interface IFolderManager : IConcurrentStorage<FolderModel, FolderEntity, FolderUpdate>
     {
-        Task<FolderModel> TryAddFolder(FolderAdd folderAdd);
+        Task<bool> TryAdd(FolderAdd folderAdd, out FolderModel folder);
 
-        Task<bool> TryRemoveFolder(Guid folderId);
+        Task<bool> TryRemove(Guid folderId);
 
         bool TryGetValueById(Guid? id, out FolderModel model);
 

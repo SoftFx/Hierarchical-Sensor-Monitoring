@@ -89,13 +89,13 @@ namespace HSMServer.Controllers
                 return View(nameof(EditFolder), folder);
             }
 
-            var newFolder = await _folderManager.TryAddFolder(folder.ToFolderAdd(HttpContext.User as User, _treeViewModel));
+            await _folderManager.TryAdd(folder.ToFolderAdd(HttpContext.User as User, _treeViewModel), out var newFolder);
 
             return View(nameof(EditFolder), BuildEditFolder(newFolder.Id));
         }
 
         [HttpPost]
-        public Task RemoveFolder(Guid folderId) => _folderManager.TryRemoveFolder(folderId);
+        public Task RemoveFolder(Guid folderId) => _folderManager.TryRemove(folderId);
 
 
         [HttpPost]

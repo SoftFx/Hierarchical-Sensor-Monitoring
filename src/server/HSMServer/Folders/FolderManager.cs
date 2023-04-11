@@ -47,21 +47,27 @@ namespace HSMServer.Folders
             _userManager.Removed -= RemoveUserHandler;
         }
 
-        public async Task<FolderModel> TryAddFolder(FolderAdd folderAdd)
+        public Task<bool> TryAdd(FolderAdd folderAdd, out FolderModel folder)
         {
-            var folder = new FolderModel(folderAdd);
-            var result = await TryAdd(folder);
+            folder = new FolderModel(folderAdd);
 
-            if (result)
-                foreach (var (productId, _) in folder.Products)
-                    _cache.AddProductFolder(productId, folder.Id);
-
-            return result ? folder : default;
+            return TryAdd(folder);
         }
 
-        public async Task<bool> TryRemoveFolder(Guid folderId)
+        public async override Task<bool> TryAdd(FolderModel model)
         {
-            var result = TryGetValue(folderId, out var folder) && await TryRemove(folderId);
+            var result = await base.TryAdd(model);
+
+            if (result)
+                foreach (var (productId, _) in model.Products)
+                    _cache.AddProductFolder(productId, model.Id);
+
+            return result;
+        }
+
+        public async override Task<bool> TryRemove(Guid folderId)
+        {
+            var result = TryGetValue(folderId, out var folder) && await base.TryRemove(folderId);
 
             if (result)
             {
