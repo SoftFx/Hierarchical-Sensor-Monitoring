@@ -223,7 +223,7 @@ namespace HSMServer.Controllers
                 updateSettings?.Invoke(rootProduct.Notifications, sensorId);
             }
 
-            _treeValuesCache.UpdateProduct(_treeValuesCache.GetProduct(rootProduct.Id));
+            _treeViewModel.UpdateProductNotificationSettings(rootProduct);
         }
 
         private List<Guid> GetNodeSensors(Guid id) => _treeViewModel.GetAllNodeSensors(id);

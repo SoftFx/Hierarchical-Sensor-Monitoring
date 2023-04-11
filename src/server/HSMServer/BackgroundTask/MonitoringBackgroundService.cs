@@ -56,7 +56,7 @@ namespace HSMServer.BackgroundTask
 
             foreach (var product in _tree.GetRootProducts())
                 if (ShouldRemoveIgnoreStatus(product))
-                    _cache.UpdateProduct(_cache.GetProduct(product.Id));
+                    _tree.UpdateProductNotificationSettings(product);
         }
 
         private static bool ShouldRemoveIgnoreStatus(INotificatable entity)
