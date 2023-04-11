@@ -1,10 +1,12 @@
 ﻿using HSMServer.Authentication;
 using HSMServer.Core.Cache;
+using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Model;
 using HSMServer.Extensions;
 using HSMServer.Model.AccessKeysViewModels;
 using HSMServer.Model.Authentication;
 using HSMServer.Model.UserTreeShallowCopy;
+using HSMServer.Notification.Settings;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -108,6 +110,17 @@ namespace HSMServer.Model.TreeViewModel
             }
 
             return sensors;
+        }
+
+        internal void UpdateProductNotificationSettings(ProductNodeViewModel product)
+        {
+            var update = new ProductUpdate
+            {
+                Id = product.Id,
+                NotificationSettings = product.Notifications.ToEntity(),
+            };
+
+            _cache.UpdateProduct(update);
         }
 
 
