@@ -30,7 +30,6 @@ namespace HSMServer.Core.Cache
         List<AccessKeyModel> GetAccessKeys();
 
         ProductModel AddProduct(string productName);
-        void UpdateProduct(ProductModel product);
         void UpdateProduct(ProductUpdate product);
         void AddProductFolder(Guid productId, Guid folderId);
         void RemoveProductFolder(Guid productId);

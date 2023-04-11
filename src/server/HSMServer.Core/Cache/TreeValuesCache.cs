@@ -77,7 +77,7 @@ namespace HSMServer.Core.Cache
 
         public ProductModel AddProduct(string productName) => AddProduct(new ProductModel(productName));
 
-        public void UpdateProduct(ProductModel product)
+        private void UpdateProduct(ProductModel product)
         {
             _databaseCore.UpdateProduct(product.ToProductEntity());
 

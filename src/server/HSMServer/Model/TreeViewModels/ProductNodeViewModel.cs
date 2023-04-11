@@ -21,8 +21,6 @@ namespace HSMServer.Model.TreeViewModel
         public ConcurrentDictionary<Guid, AccessKeyViewModel> AccessKeys { get; } = new();
 
 
-        public TelegramSettingsViewModel TelegramSettings { get; } = new();
-
         public NotificationSettings Notifications { get; }
 
         public int AllSensorsCount { get; private set; }
@@ -45,14 +43,6 @@ namespace HSMServer.Model.TreeViewModel
 
         public bool IsChangingAccessKeysAvailable(User user) =>
             user.IsAdmin || ProductRoleHelper.IsManager(Id, user.ProductsRoles);
-
-
-        internal void Update(ProductModel model)
-        {
-            base.Update(model);
-
-            TelegramSettings.Update(Notifications.Telegram);
-        }
 
         internal void AddSubNode(ProductNodeViewModel node)
         {

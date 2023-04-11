@@ -23,11 +23,12 @@ namespace HSMServer.Core.Model
         public ConcurrentDictionary<Guid, BaseSensorModel> Sensors { get; } = new();
 
 
-        public NotificationSettingsEntity NotificationsSettings { get; }
-
         public ProductState State { get; }
 
         public Guid? FolderId { get; private set; }
+
+
+        public NotificationSettingsEntity NotificationsSettings { get; private set; }
 
 
         public ProductModel(string name) : base(name.Trim())
@@ -60,6 +61,7 @@ namespace HSMServer.Core.Model
             FolderId = update.FolderId.HasValue
                 ? update.FolderId != Guid.Empty ? update.FolderId : null
                 : FolderId;
+            NotificationsSettings = update?.NotificationSettings ?? NotificationsSettings;
 
             return this;
         }
