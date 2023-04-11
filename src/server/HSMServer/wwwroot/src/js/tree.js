@@ -80,10 +80,6 @@ function selectNodeAjax(selectedId) {
         openAccordions('[id^="grid-accordion_"]');
         openAccordions('[id^="list-accordion_"]');
 
-        var selectedAccordionId = '#accordion_' + selectedId;
-        if ($(selectedAccordionId).attr('aria-expanded') == 'false')
-            $(selectedAccordionId).click();
-
         if (needToActivateListTab) {
             selectNodeInfoTab("list", selectedId);
 

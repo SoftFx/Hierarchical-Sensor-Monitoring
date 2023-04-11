@@ -32,9 +32,7 @@ function Data(to, from, type, encodedId) {
     }
 
     function initializeSensorAccordion() {
-        $('[id^="collapse"]').off('show.bs.collapse', accordionClicked)
-        $('[id^="collapse"]').on('show.bs.collapse', accordionClicked);
-
+        InitializeHistory();
         InitializePeriodRequests();
         initializeTabLinksRequests();
     }
@@ -60,10 +58,17 @@ function Data(to, from, type, encodedId) {
         openFileInBrowser(encodedId, fileType, viewFileAction);
     }
 
-    function accordionClicked() {
-        let encodedId = this.id.substring("collapse_".length);
+    function InitializeHistory() {
+        let info = ($('[id^=sensor_info_]')).attr('id');
+        if (info === undefined) 
+            return;
+        
+        let encodedId = info.substring("sensor_info_".length)
         let type = getTypeForSensor(encodedId);
         let date = new Date();
+        
+        if (isFileSensor(type)) 
+            return;
         
         if (isGraphAvailable(type)) {
             initializeGraph(encodedId, rawHistoryLatestAction, type, Data(date, date, type, encodedId), true);
@@ -265,7 +270,7 @@ function Data(to, from, type, encodedId) {
     }
 
     function getTypeForSensor(encodedId) {
-        return $('#sensor_type_' + encodedId).val();
+        return $('#sensor_type_' + encodedId).first().val();
     }    
 }
 
