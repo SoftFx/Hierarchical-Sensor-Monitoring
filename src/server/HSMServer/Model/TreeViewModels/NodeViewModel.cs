@@ -68,7 +68,7 @@ namespace HSMServer.Model.TreeViewModel
         }
 
 
-        protected void Update(BaseNodeModel model)
+        internal void Update(BaseNodeModel model)
         {
             Name = model.DisplayName;
             Path = model.Path;
