@@ -226,7 +226,7 @@ namespace HSMServer.Controllers
             _treeValuesCache.UpdateProduct(_treeValuesCache.GetProduct(rootProduct.Id));
         }
 
-        private List<Guid> GetNodeSensors(Guid id) => _treeViewModel.GetNodeAllSensors(id);
+        private List<Guid> GetNodeSensors(Guid id) => _treeViewModel.GetAllNodeSensors(id);
 
         #region Update
 

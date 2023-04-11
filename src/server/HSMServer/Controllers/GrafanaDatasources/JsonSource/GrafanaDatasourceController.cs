@@ -1,5 +1,9 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using HSMServer.Core.Cache;
+using HSMServer.Model.TreeViewModel;
+using Microsoft.AspNetCore.Mvc;
+using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text.Json;
 
 namespace HSMServer.Controllers.GrafanaDatasources.JsonSource
@@ -11,28 +15,30 @@ namespace HSMServer.Controllers.GrafanaDatasources.JsonSource
         private readonly JsonSerializerOptions _options = new()
         {
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-            WriteIndented = true
         };
+
+        private readonly ITreeValuesCache _cache;
+        private readonly TreeViewModel _tree;
+
+        public GrafanaDatasourceController(ITreeValuesCache cache, TreeViewModel tree)
+        {
+            _cache = cache;
+            _tree = tree;
+        }
 
 
         [HttpGet]
         [ActionName("")]
-        public string Index()
-        {
-            return "Ok";
-        }
+        public bool TestConnection() => true;
 
 
         [HttpPost]
         [ActionName("metrics")]
         public string GetMetrics(MetricsRequest _)
         {
-            //var payloads = _storage.Payloads.Values.ToArray();
+            var metrics = _tree.GetRootProducts().Select(u => new Metric(u.Name, u.Id));
 
-            //var list = _storage.Products.Select(p => new MainMetric(p.Name, p.Id).Init(payloads));
-
-
-            return JsonSerializer.Serialize(new Metric("Test", "1"), _options);
+            return JsonSerializer.Serialize(metrics, _options);
         }
 
 
@@ -40,14 +46,22 @@ namespace HSMServer.Controllers.GrafanaDatasources.JsonSource
         [ActionName("metric-payload-options")]
         public string GetOptions(MetricPayloadOptionsRequest request)
         {
-            var items = new List<PayloadOption>(1 << 2);
+            if (request.Name == Metric.SensorsPayloadName)
+            {
+                var sensors = _tree.GetAllNodeSensors(Guid.Parse(request.Metric));
 
-            //var product = _storage.Products.FirstOrDefault(u => u.Id == request.Metric);
+                var options = new List<PayloadOption>(1 << 5);
 
-            //if (product != null && request.Name == "Sensors")
-            //    items.AddRange(product.Sensors.Select(u => new PayloadItem(u.Path, u.Id)));
+                foreach (var sensorId in sensors)
+                    if (_tree.Sensors.TryGetValue(sensorId, out var sensor))
+                    {
+                        options.Add(new PayloadOption(sensor.Path, sensorId.ToString()));
+                    }
 
-            return JsonSerializer.Serialize(items, _options);
+                return JsonSerializer.Serialize(options, _options);
+            }
+
+            return string.Empty;
         }
 
 

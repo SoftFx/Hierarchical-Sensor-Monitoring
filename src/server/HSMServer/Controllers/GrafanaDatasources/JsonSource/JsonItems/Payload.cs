@@ -15,7 +15,7 @@ namespace HSMServer.Controllers.GrafanaDatasources.JsonSource
 
         public string Placeholder { get; set; }
 
-        public bool ReloadMetric { get; set; } = true;
+        public bool ReloadMetric { get; set; }
 
 
         public Payload() { }

@@ -1,11 +1,33 @@
-﻿using System.Collections.Generic;
-using System.Linq;
+﻿using System;
+using System.Collections.Generic;
 
 namespace HSMServer.Controllers.GrafanaDatasources.JsonSource
 {
     public class Metric
     {
-        public List<Payload> Payloads { get; set; } = new();
+        public const string SensorsPayloadName = "Sensors";
+        public const string TypePayloadName = "Type";
+
+        public static Payload[] BaseProductPayloads { get; } = new[]
+        {
+                new Payload(SensorsPayloadName)
+                {
+                    Type = "multi-select",
+                    Placeholder = "List of sensors open for Grafana"
+                },
+
+                new Payload(TypePayloadName)
+                {
+                    Options = new List<PayloadOption>(2)
+                    {
+                        new PayloadOption("Datapoints"),
+                        new PayloadOption("Table"),
+                    },
+                }
+        };
+
+
+        public Payload[] Payloads { get; set; } = BaseProductPayloads;
 
 
         public string Label { get; set; }
@@ -21,12 +43,6 @@ namespace HSMServer.Controllers.GrafanaDatasources.JsonSource
             Value = id;
         }
 
-
-        public Metric Init(params Payload[] payloads)
-        {
-            Payloads = payloads.ToList();
-
-            return this;
-        }
+        public Metric(string label, Guid id) : this(label, id.ToString()) { }
     }
 }
