@@ -47,6 +47,8 @@ namespace HSMServer.Model.AccessKeysViewModels
         public bool CanAddSensors { get; set; }
 
         public bool CanReadSensorData { get; set; }
+        
+        public bool CanUseGrafana { get; set; }
 
         [AccessKeyPermissionsValidation(ErrorMessage = "At least one permission should be selected.")]
         public KeyPermissions Permissions => BuildPermissions();
@@ -66,6 +68,7 @@ namespace HSMServer.Model.AccessKeysViewModels
             CanAddNodes = key.Permissions.HasFlag(KeyPermissions.CanAddNodes);
             CanAddSensors = key.Permissions.HasFlag(KeyPermissions.CanAddSensors);
             CanReadSensorData = key.Permissions.HasFlag(KeyPermissions.CanReadSensorData);
+            CanUseGrafana = key.Permissions.HasFlag(KeyPermissions.CanUseGrafana);
         }
 
 
@@ -99,6 +102,8 @@ namespace HSMServer.Model.AccessKeysViewModels
                 perm |= KeyPermissions.CanAddSensors;
             if (CanReadSensorData)
                 perm |= KeyPermissions.CanReadSensorData;
+            if (CanUseGrafana)
+                perm |= KeyPermissions.CanUseGrafana;
 
             return perm;
         }

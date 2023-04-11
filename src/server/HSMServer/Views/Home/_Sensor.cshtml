@@ -24,7 +24,7 @@
 
 @await Html.PartialAsync("_SensorMetaInfo", new SensorInfoViewModel(Model))
 
-
+<div class="container-fluid" style="overflow-y: auto;  height: calc(100vh - 5vh - 80px - 3rem)!important;">
 @if (Model.SensorType == SensorType.File)
 {
     @if (file is not null)
@@ -190,7 +190,7 @@ else
 }
 
 <div id="recentValues_@sensorId"></div>
-
+</div>
 <script>
 var previousReceivedTime = undefined;
 

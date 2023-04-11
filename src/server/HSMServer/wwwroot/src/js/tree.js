@@ -29,6 +29,9 @@ window.initializeTree = function () {
         }
     }).on("state_ready.jstree", function () {
         selectNodeAjax($(this).jstree('get_selected'));
+    }).on('open_node.jstree', function () {
+        isTreeCollapsed = false;
+        $('#collapseIcon').removeClass('fa-regular fa-square-plus').addClass('fa-regular fa-square-minus').attr('title','Save and close tree');
     });
 
     initializeActivateNodeTree();
