@@ -189,15 +189,6 @@
         let isFile = dataObject.sensorType === 6;
         
         $('#value_' + id).empty().append(dataObject.value);
-        
-        // if (dataObject.value !== null){
-        //      if (!isFile) {
-        //          $('#last_value').removeClass('d-none').children().last().empty().append(dataObject.value);
-        //      }
-        //     
-        //      if ($('[id^="markdown_span_description_"]')[0].innerText !== '')
-        //           $('#description_separator').removeClass('d-none');
-        // }
        
         $('#validation_' + id).empty();
         $('#validation_metainfo').empty();
@@ -218,15 +209,6 @@
 
             $('#markdown_status_comment').children().last().css('margin-bottom',0);
         }
-     
-        // if (dataObject.comment !== null && dataObject.comment !== '') {
-        //     $('#comment').removeClass('d-none');
-        //     $('#markdown_comment')[0].innerHTML = markdownToHTML(dataObject.comment);
-        //     $('#markdown_comment').children().last().css('margin-bottom',0);
-        //    
-        //    if ($('[id^="markdown_span_description_"]')[0].innerText !== '')
-        //         $('#description_separator').removeClass('d-none');
-        // }
         
         let accordionLoaded = $('[id^="sensorData"]');
         
