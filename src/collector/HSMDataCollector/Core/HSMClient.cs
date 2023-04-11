@@ -46,7 +46,7 @@ namespace HSMDataCollector.Core
             _dataQueue.SendValues += SendMonitoringData;
         }
 
-        internal async Task<Task> SendFileAsync(FileInfo fileInfo, string sensorPath, SensorStatus sensorStatus = SensorStatus.Ok, string comment = "")
+        internal async Task SendFileAsync(FileInfo fileInfo, string sensorPath, SensorStatus sensorStatus = SensorStatus.Ok, string comment = "")
         {
             async Task<List<byte>> GetFileBytes()
             {
@@ -64,8 +64,8 @@ namespace HSMDataCollector.Core
                 Time = DateTime.Now,
                 Value = await GetFileBytes()
             };
-            
-            return DataQueueFileReceivingAsync(value);
+
+            await DataQueueFileReceivingAsync(value);
         }
 
 
