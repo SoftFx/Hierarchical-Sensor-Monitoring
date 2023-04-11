@@ -6,18 +6,12 @@
 @model SensorNodeViewModel
 
 @{
-    var splitted = Model.FileNameString.Split('.');
-    var fileType = splitted.Length >= 2 ? splitted[1] : string.Empty;
-
-    FileValue file = null;
+    var file = Model.LastValue as FileValue;
     bool isEnabledPreview = false;
-    if (Model.SensorType is SensorType.File)
-    {
-        file = (FileValue)Model.LastValue;
+    if (file is not null)
         isEnabledPreview = (file.Extension == "csv" && file.OriginalSize < 5 * 1024 * 1024) ||
                            (file.Extension == "txt" && file.OriginalSize < 1024 * 1024);
-    }
-       
+
 
     var sensorId = Model.EncodedId;
 
@@ -27,7 +21,7 @@
     var valuesParentDivId = $"values_parent_{sensorId}";
 }
 
-
+<div class="container-fluid" style="overflow-y: auto;  height: calc(100vh - 5vh - 80px - 3rem)!important;">
 <div class='accordion' id='sensorData_@sensorId'>
     <div class='accordion-item'>
         @if (Model.SensorType == SensorType.File)
@@ -227,7 +221,9 @@
         }
     </div>
 </div>
-<div id="recentValues_@sensorId"></div>
+<div id="recentValues_@sensorId">
+</div>
+</div>
 
 <script>
 var previousReceivedTime = undefined;

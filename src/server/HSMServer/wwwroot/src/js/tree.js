@@ -29,6 +29,9 @@ window.initializeTree = function () {
         }
     }).on("state_ready.jstree", function () {
         selectNodeAjax($(this).jstree('get_selected'));
+    }).on('open_node.jstree', function () {
+        isTreeCollapsed = false;
+        $('#collapseIcon').removeClass('fa-regular fa-square-plus').addClass('fa-regular fa-square-minus').attr('title','Save and close tree');
     });
 
     initializeActivateNodeTree();
@@ -209,37 +212,6 @@ function buildContextMenu(node) {
                         .done(() => {
                             updateTreeTimer();
                             showToast(`${getKeyByValue(curType)} has been removed`);
-
-                            $(`#${node.parents[0]}_anchor`).trigger('click');
-                        });
-                });
-
-                $('#closeDeleteButton').off('click').on('click', () => modal.hide());
-            }
-        }
-
-        contextMenu["CleanHistory"] = {
-            "label": "Clean history",
-            "action": _ => {
-                var modal = new bootstrap.Modal(document.getElementById('modalDelete'));
-                //modal
-                $('#modalDeleteLabel').empty();
-                $('#modalDeleteLabel').append(`Clean history for ${getKeyByValue(curType)}`);
-                $('#modalDeleteBody').empty();
-
-                $.when(getFullPathAction(node.id)).done((path) => {
-                    $('#modalDeleteBody').append(`Do you really want to clean history for ${path}?`);
-                    modal.show();
-                })
-
-                //modal confirm
-                $('#confirmDeleteButton').off('click').on('click', () => {
-                    modal.hide();
-
-                    $.ajax(`${clearHistoryAction}?selectedId=${node.id}`, AjaxPost)
-                        .done(() => {
-                            updateTreeTimer();
-                            showToast(`${getKeyByValue(curType)} has been cleared`);
 
                             $(`#${node.parents[0]}_anchor`).trigger('click');
                         });
