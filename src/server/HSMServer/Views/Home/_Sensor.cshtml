@@ -22,9 +22,9 @@
     var valuesParentDivId = $"values_parent_{sensorId}";
 }
 
+<div class="container-fluid" style="overflow-y: auto;  height: calc(100vh - 5vh - 80px - 3rem)!important;">
 @await Html.PartialAsync("_SensorMetaInfo", new SensorInfoViewModel(Model))
 
-<div class="container-fluid" style="overflow-y: auto;  height: calc(100vh - 5vh - 80px - 3rem)!important;">
 @if (Model.SensorType == SensorType.File)
 {
     @if (file is not null)
@@ -55,7 +55,7 @@
                                                     @if (Model.IsValidationErrorVisible)
                                                     {
                                                         <li id='errorIcon_@sensorId' class='fas fa-exclamation-triangle me-1'></li>
-                                                        <span>Alert comment: @Model.ValidationError</span>
+                                                        <span>Status comment: @Model.ValidationError</span>
                                                     }
                                                 </span>
                                             </div>

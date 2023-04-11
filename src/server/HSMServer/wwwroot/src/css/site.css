@@ -65,7 +65,7 @@ html {
     bottom: 0;
     width: 100%;
     white-space: nowrap;
-    line-height: 5vh; /* Vertically center the text there */
+    height: 3rem;
 }
 
 .login-form-div {

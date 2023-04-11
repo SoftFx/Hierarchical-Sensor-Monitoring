@@ -33,9 +33,9 @@
 .tree-height-weight-parameters {
     max-width: 100%;
     min-width: 10vw;
-    height: calc(100vh - 5vh - 80px - 3rem)!important;
     overflow-y: auto;
     overflow-x: hidden;
+    height: 100%;
 }
 
 .button-link {
