@@ -6,6 +6,7 @@ using HSMServer.Core.DataLayer;
 using HSMServer.Core.Model;
 using HSMServer.Model.Authentication;
 using HSMServer.Model.Folders;
+using HSMServer.Model.TreeViewModel;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -83,6 +84,23 @@ namespace HSMServer.Folders
             }
 
             return result;
+        }
+
+        public void MoveProduct(ProductNodeViewModel product, Guid? fromFolderId, Guid? toFolderId)
+        {
+            if (TryGetValueById(fromFolderId, out var fromFolder))
+                fromFolder.Products.Remove(product.Id);
+
+            if (toFolderId is not null)
+            {
+                if (TryGetValueById(toFolderId, out var toFolder))
+                {
+                    toFolder.Products.Add(product.Id, product);
+                    _cache.AddProductFolder(product.Id, toFolderId.Value);
+                }
+            }
+            else
+                _cache.RemoveProductFolder(product.Id);
         }
 
         public List<FolderModel> GetUserFolders(User user)

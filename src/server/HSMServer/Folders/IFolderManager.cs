@@ -2,6 +2,7 @@
 using HSMServer.ConcurrentStorage;
 using HSMServer.Model.Authentication;
 using HSMServer.Model.Folders;
+using HSMServer.Model.TreeViewModel;
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
@@ -13,6 +14,8 @@ namespace HSMServer.Folders
         Task<bool> TryAdd(FolderAdd folderAdd, out FolderModel folder);
 
         Task<bool> TryRemove(Guid folderId);
+
+        void MoveProduct(ProductNodeViewModel product, Guid? fromFolderId, Guid? toFolderId);
 
         bool TryGetValueById(Guid? id, out FolderModel model);
 
