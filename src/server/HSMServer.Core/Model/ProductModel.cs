@@ -23,9 +23,10 @@ namespace HSMServer.Core.Model
         public ConcurrentDictionary<Guid, BaseSensorModel> Sensors { get; } = new();
 
 
-        public NotificationSettingsEntity NotificationsSettings { get; }
-
         public ProductState State { get; }
+
+
+        public NotificationSettingsEntity NotificationsSettings { get; private set; }
 
 
         public ProductModel(string name) : base(name.Trim())
@@ -53,6 +54,9 @@ namespace HSMServer.Core.Model
         internal ProductModel Update(ProductUpdate update)
         {
             base.Update(update);
+
+            NotificationsSettings = update?.NotificationSettings ?? NotificationsSettings;
+
             return this;
         }
 

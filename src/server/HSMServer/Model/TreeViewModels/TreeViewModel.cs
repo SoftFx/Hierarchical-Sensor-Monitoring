@@ -6,6 +6,7 @@ using HSMServer.Extensions;
 using HSMServer.Model.AccessKeysViewModels;
 using HSMServer.Model.Authentication;
 using HSMServer.Model.UserTreeShallowCopy;
+using HSMServer.Notification.Settings;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -115,7 +116,8 @@ namespace HSMServer.Model.TreeViewModel
         {
             var update = new ProductUpdate
             {
-                Id = product.Id
+                Id = product.Id,
+                NotificationSettings = product.Notifications.ToEntity(),
             };
 
             _cache.UpdateProduct(update);
