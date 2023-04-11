@@ -1,5 +1,4 @@
-﻿using HSMServer.Core.Model;
-using HSMServer.Extensions;
+﻿using HSMServer.Extensions;
 using HSMServer.Notification.Settings;
 using HSMServer.Notifications.Telegram;
 using System;
@@ -15,11 +14,11 @@ namespace HSMServer.Model
         [Display(Name = "Enable messages")]
         public bool EnableMessages { get; set; }
 
-        [Display(Name = "Min status level")] 
+        [Display(Name = "Min status level")]
         public SensorStatus MinStatusLevel { get; set; } = SensorStatus.Warning;
-        
+
         public string MinStatusLevelHelper { get; set; }
-        
+
         [Display(Name = "Messages delay")]
         public int MessagesDelay { get; set; }
 
@@ -33,7 +32,7 @@ namespace HSMServer.Model
         {
             Update(settings);
         }
-        
+
         internal void Update(TelegramSettings settings)
         {
             EnableMessages = settings.MessagesAreEnabled;
@@ -52,7 +51,7 @@ namespace HSMServer.Model
                 Enabled = EnableMessages,
                 Delay = MessagesDelay,
             };
-        
+
         public static string GetStatusPairs(SensorStatus newStatus)
         {
             var length = Enum.GetValues<SensorStatus>().Length;
@@ -60,9 +59,9 @@ namespace HSMServer.Model
             var builder = new StringBuilder(1 << 4);
 
             for (int i = 0; i < length; i++)
-            for (int j = 0; j < length; j++)
-                if (i != j && (i >= (int)newStatus || j >= (int)newStatus))
-                    builder.Append($"{(SensorStatus)i} -> {(SensorStatus)j}, ");
+                for (int j = 0; j < length; j++)
+                    if (i != j && (i >= (int)newStatus || j >= (int)newStatus))
+                        builder.Append($"{(SensorStatus)i} -> {(SensorStatus)j}, ");
 
             var response = builder.ToString();
             return string.IsNullOrEmpty(response) ? response : response[..^2];

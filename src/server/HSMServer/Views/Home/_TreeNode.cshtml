@@ -13,7 +13,7 @@
 
     @if (!data.IsEmpty && !Model.IsMutedState)
     {
-        @if (data.TelegramSettings.Chats.Count > 0)
+        @if (data.Notifications.Telegram.Chats.Count > 0)
         {
             @if (Model.IsAccountsEnable)
             {

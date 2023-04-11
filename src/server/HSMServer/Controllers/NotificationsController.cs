@@ -1,7 +1,6 @@
 ﻿using HSMServer.Authentication;
 using HSMServer.Constants;
 using HSMServer.Core.Cache;
-using HSMServer.Core.Model;
 using HSMServer.Helpers;
 using HSMServer.Model;
 using HSMServer.Model.Authentication;
@@ -18,7 +17,6 @@ namespace HSMServer.Controllers
     public class NotificationsController : Controller
     {
         private readonly IUserManager _userManager;
-        private readonly ITreeValuesCache _cache;
         private readonly TreeViewModel _tree;
         private readonly TelegramBot _telegramBot;
 
@@ -26,8 +24,8 @@ namespace HSMServer.Controllers
         public NotificationsController(IUserManager userManager, TreeViewModel tree, ITreeValuesCache cache, NotificationsCenter notifications)
         {
             _userManager = userManager;
-            _cache = cache;
             _tree = tree;
+
             _telegramBot = notifications.TelegramBot;
         }
 
@@ -43,7 +41,7 @@ namespace HSMServer.Controllers
             var entity = GetEntity(productId);
             entity.Notifications.Telegram.Update(telegramSettings.GetUpdateModel());
 
-            entity.UpdateEntity(_userManager, _cache);
+            entity.UpdateEntity(_userManager, _tree);
 
             return GetResult(productId);
         }
