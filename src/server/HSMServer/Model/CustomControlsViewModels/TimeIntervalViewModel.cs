@@ -114,28 +114,30 @@ namespace HSMServer.Model
 
         internal TimeIntervalViewModel(TimeIntervalEntity entity, List<TimeInterval> intervals) : this(intervals)
         {
-            TimeInterval = (TimeInterval)entity.Interval;
-            CustomTimeInterval = TimeSpanValue.TicksToString(entity.CustomPeriod);
+            SetInterval((CoreTimeInterval)entity.Interval, entity.CustomPeriod);
 
             if (!HasParentValue)
                 IntervalItems.RemoveAt(0);
         }
 
 
-        internal void Update(TimeIntervalModel model)
-        {
-            var interval = model?.TimeInterval ?? CoreTimeInterval.FromParent;
-            var customPeriod = model?.CustomPeriod ?? 0L;
-
-            TimeInterval = SetTimeInterval(interval, customPeriod);
-            CustomTimeInterval = TimeSpanValue.TicksToString(customPeriod);
-        }
+        internal void Update(TimeIntervalModel model) =>
+            SetInterval(model?.TimeInterval ?? CoreTimeInterval.FromParent, model?.CustomPeriod ?? 0L);
 
         internal TimeIntervalModel ToModel(TimeIntervalViewModel folderInterval = null) =>
             new(GetInterval(folderInterval != null), GetCustomTicks(folderInterval));
 
         internal TimeIntervalEntity ToEntity() => new((byte)GetInterval(), GetCustomTicks());
 
+        internal TimeIntervalModel ToFolderModel() =>
+            new(CoreTimeInterval.FromFolder, TimeInterval.ToCustomTicks(CustomTimeInterval));
+
+
+        private void SetInterval(CoreTimeInterval interval, long customPeriod)
+        {
+            TimeInterval = SetTimeInterval(interval, customPeriod);
+            CustomTimeInterval = TimeSpanValue.TicksToString(customPeriod);
+        }
 
         private CoreTimeInterval GetInterval(bool parentIsFolder = false) =>
             TimeInterval switch
@@ -157,22 +159,7 @@ namespace HSMServer.Model
                 return ticks;
 
             if (TimeInterval == TimeInterval.FromParent && folderInterval != null)
-            {
-                var time = DateTime.MinValue;
-
-                return (folderInterval.TimeInterval switch
-                {
-                    TimeInterval.OneMinute => time.AddMinutes(1),
-                    TimeInterval.FiveMinutes => time.AddMinutes(5),
-                    TimeInterval.TenMinutes => time.AddMinutes(10),
-                    TimeInterval.Hour => time.AddHours(1),
-                    TimeInterval.Day => time.AddDays(1),
-                    TimeInterval.Week => time.AddDays(7),
-                    TimeInterval.Month => time.AddMonths(1),
-                    TimeInterval.Custom => new DateTime(folderInterval.GetCustomTicks()),
-                    _ => throw new NotImplementedException(),
-                }).Ticks;
-            }
+                return folderInterval.TimeInterval.ToCustomTicks(folderInterval.CustomTimeInterval);
 
             return 0L;
         }

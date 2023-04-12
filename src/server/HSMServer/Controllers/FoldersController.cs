@@ -1,5 +1,4 @@
 ﻿using HSMServer.Authentication;
-using HSMServer.Core.Cache;
 using HSMServer.Folders;
 using HSMServer.Model.Authentication;
 using HSMServer.Model.Folders;
@@ -18,16 +17,13 @@ namespace HSMServer.Controllers
     {
         private static readonly EmptyResult _emptyResult = new();
 
-        private readonly ITreeValuesCache _cache;
         private readonly IUserManager _userManager;
         private readonly TreeViewModel _treeViewModel;
         private readonly IFolderManager _folderManager;
 
 
-        public FoldersController(IFolderManager folderManager, ITreeValuesCache cache,
-            IUserManager userManager, TreeViewModel treeViewModel)
+        public FoldersController(IFolderManager folderManager, IUserManager userManager, TreeViewModel treeViewModel)
         {
-            _cache = cache;
             _userManager = userManager;
             _treeViewModel = treeViewModel;
             _folderManager = folderManager;
@@ -56,7 +52,7 @@ namespace HSMServer.Controllers
             {
                 foreach (var (productId, _) in oldProducts.Except(folder.Products))
                 {
-                    _cache.RemoveProductFolder(productId);
+                    _folderManager.RemoveProductFromFolder(productId);
 
                     foreach (var (user, role) in folder.UserRoles)
                         if (user.ProductsRoles.Remove((productId, role)))
@@ -65,7 +61,7 @@ namespace HSMServer.Controllers
 
                 foreach (var (productId, _) in folder.Products.Except(oldProducts))
                 {
-                    _cache.AddProductFolder(productId, folder.Id);
+                    _folderManager.AddProductToFolder(productId, folder.Id);
 
                     foreach (var (user, role) in folder.UserRoles)
                         if (!user.IsUserProduct(productId))
@@ -99,9 +95,20 @@ namespace HSMServer.Controllers
 
 
         [HttpPost]
-        public void EditAlerts(FolderAlertsViewModel folderAlerts)
+        public async Task<IActionResult> EditAlerts(FolderAlertsViewModel folderAlerts)
         {
+            var update = new FolderUpdate()
+            {
+                Id = folderAlerts.Id,
+                ExpectedUpdateInterval = folderAlerts.ExpectedUpdateInterval,
+                RestoreInterval = folderAlerts.SensorRestorePolicy
+            };
 
+            if (_folderManager.TryGetValue(update.Id, out var folder) && await _folderManager.TryUpdate(update))
+                foreach (var (productId, _) in folder.Products)
+                    _folderManager.UpdateProductInFolder(productId, folder);
+
+            return PartialView("_Alerts", new FolderAlertsViewModel(folder));
         }
 
 

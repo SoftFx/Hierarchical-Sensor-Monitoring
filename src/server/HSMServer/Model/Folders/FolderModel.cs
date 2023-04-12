@@ -64,6 +64,11 @@ namespace HSMServer.Model.Folders
         {
             Description = update.Description ?? Description;
             Color = update.Color ?? Color;
+
+            if (update.ExpectedUpdateInterval != null)
+                ExpectedUpdateInterval = new TimeIntervalViewModel(update.ExpectedUpdateInterval, PredefinedTimeIntervals.ExpectedUpdatePolicy);
+            if (update.RestoreInterval != null)
+                SensorRestorePolicy = new TimeIntervalViewModel(update.RestoreInterval, PredefinedTimeIntervals.RestorePolicy);
         }
 
         public FolderEntity ToEntity() =>

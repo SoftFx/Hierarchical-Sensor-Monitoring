@@ -17,6 +17,12 @@ namespace HSMServer.Folders
 
         void MoveProduct(ProductNodeViewModel product, Guid? fromFolderId, Guid? toFolderId);
 
+        void AddProductToFolder(Guid productId, Guid folderId);
+
+        void UpdateProductInFolder(Guid productId, FolderModel folder);
+
+        void RemoveProductFromFolder(Guid productId);
+
         bool TryGetValueById(Guid? id, out FolderModel model);
 
         List<FolderModel> GetUserFolders(User user);

@@ -56,7 +56,7 @@ namespace HSMServer.Core.Model
                 TimeInterval.Day => time.AddDays(1),
                 TimeInterval.Week => time.AddDays(7),
                 TimeInterval.Month => time.AddMonths(1),
-                TimeInterval.Custom => DateTime.MaxValue, //for Never 
+                TimeInterval.Custom or TimeInterval.FromFolder => DateTime.MaxValue, //for Never 
                 _ => throw new NotImplementedException(),
             };
         }

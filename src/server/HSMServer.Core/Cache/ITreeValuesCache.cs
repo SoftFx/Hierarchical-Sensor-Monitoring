@@ -31,8 +31,6 @@ namespace HSMServer.Core.Cache
 
         ProductModel AddProduct(string productName);
         void UpdateProduct(ProductUpdate product);
-        void AddProductFolder(Guid productId, Guid folderId);
-        void RemoveProductFolder(Guid productId);
         void RemoveProduct(Guid id);
         ProductModel GetProduct(Guid id);
         ProductModel GetProductByName(string name);

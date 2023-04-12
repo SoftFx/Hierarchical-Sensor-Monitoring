@@ -2,6 +2,7 @@
 using HSMServer.Authentication;
 using HSMServer.ConcurrentStorage;
 using HSMServer.Core.Cache;
+using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.DataLayer;
 using HSMServer.Core.Model;
 using HSMServer.Model.Authentication;
@@ -61,7 +62,7 @@ namespace HSMServer.Folders
 
             if (result)
                 foreach (var (productId, _) in model.Products)
-                    _cache.AddProductFolder(productId, model.Id);
+                    AddProductToFolder(productId, model.Id);
 
             return result;
         }
@@ -73,7 +74,7 @@ namespace HSMServer.Folders
             if (result)
             {
                 foreach (var (productId, _) in folder.Products)
-                    _cache.RemoveProductFolder(productId);
+                    RemoveProductFromFolder(productId);
 
                 foreach (var (user, _) in folder.UserRoles)
                 {
@@ -96,11 +97,45 @@ namespace HSMServer.Folders
                 if (TryGetValueById(toFolderId, out var toFolder))
                 {
                     toFolder.Products.Add(product.Id, product);
-                    _cache.AddProductFolder(product.Id, toFolderId.Value);
+                    AddProductToFolder(product.Id, toFolderId.Value);
                 }
             }
             else
-                _cache.RemoveProductFolder(product.Id);
+                RemoveProductFromFolder(product.Id);
+        }
+
+        public void AddProductToFolder(Guid productId, Guid folderId)
+        {
+            if (TryGetValue(folderId, out var folder))
+                UpdateProductInFolder(productId, folder);
+        }
+
+        public void RemoveProductFromFolder(Guid productId) =>
+            UpdateProductInFolder(productId, null);
+
+        public void UpdateProductInFolder(Guid productId, FolderModel folder)
+        {
+            var product = _cache.GetProduct(productId);
+
+            if (product is not null)
+            {
+                var expectedUpdateInterval = product.ServerPolicy.ExpectedUpdate.Policy.Interval;
+                var restoreInterval = product.ServerPolicy.RestoreError.Policy.Interval;
+
+                var update = new ProductUpdate()
+                {
+                    Id = productId,
+                    FolderId = folder?.Id ?? Guid.Empty,
+                    ExpectedUpdateInterval = expectedUpdateInterval.TimeInterval is TimeInterval.FromFolder
+                        ? folder?.ExpectedUpdateInterval.ToFolderModel() ?? new TimeIntervalModel(expectedUpdateInterval.CustomPeriod)
+                        : null,
+                    RestoreInterval = restoreInterval.TimeInterval is TimeInterval.FromFolder
+                        ? folder?.SensorRestorePolicy.ToFolderModel() ?? new TimeIntervalModel(restoreInterval.CustomPeriod)
+                        : null,
+                };
+
+                _cache.UpdateProduct(update);
+            }
         }
 
         public List<FolderModel> GetUserFolders(User user)

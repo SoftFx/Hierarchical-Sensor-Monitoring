@@ -47,7 +47,7 @@
             </div>
 
             <div class="tab-pane fade" id="alerts" role="tabpanel" aria-labelledby="alerts-tab">
-                <form method="post" asp-action="@nameof(FoldersController.EditAlerts)">
+                <form id="folderAlerts_form" method="post" asp-action="@nameof(FoldersController.EditAlerts)">
                     @await Html.PartialAsync("_Alerts", Model.Alerts)
                 </form>
             </div>
