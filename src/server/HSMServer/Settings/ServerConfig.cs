@@ -50,8 +50,7 @@ namespace HSMServer.Model
             Name = assembly.Name;
             ExecutableDirectory = Path.GetDirectoryName(Assembly.GetEntryAssembly().Location);
 
-            if (assembly.Version is not null)
-                Version = assembly.GetVersion();
+            Version = assembly.GetVersion();
 
             if (!Directory.Exists(ConfigPath))
                 FileManager.SafeCreateDirectory(ConfigPath);

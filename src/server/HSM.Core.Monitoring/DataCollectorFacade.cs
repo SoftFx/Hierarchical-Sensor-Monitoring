@@ -45,6 +45,11 @@ namespace HSM.Core.Monitoring
                 ServerAddress = "https://localhost",
             };
 
+            var productInfoOptions = new ProductInfoOptions()
+            {
+                Version = Assembly.GetEntryAssembly()?.GetName().GetVersion()
+            };
+            
             _dataCollector = new DataCollector(collectorOptions).AddNLog();
 
             if (OperatingSystem.IsWindows())
@@ -53,13 +58,15 @@ namespace HSM.Core.Monitoring
                                       .AddDiskMonitoringSensors()
                                       .AddSystemMonitoringSensors()
                                       .AddWindowsInfoMonitoringSensors()
-                                      .AddProductInfo(new ProductInfoOptions(){Version = Assembly.GetEntryAssembly()?.GetName().GetVersion()})
+                                      .AddProductInfo(productInfoOptions)
                                       .AddCollectorHeartbeat();
             }
             else
             {
                 _dataCollector.Unix.AddProcessMonitoringSensors()
-                                   .AddDiskMonitoringSensors();
+                                   .AddDiskMonitoringSensors()
+                                   .AddProductInfo(productInfoOptions)
+                                   .AddCollectorHeartbeat();
             }
 
             InitializeSensors();
