@@ -2,7 +2,7 @@
 
 namespace HSMServer.Controllers.GrafanaDatasources.JsonSource
 {
-    public class HistoryPayload
+    public class SelectedPayload
     {
         public List<string> Sensors { get; set; }
 

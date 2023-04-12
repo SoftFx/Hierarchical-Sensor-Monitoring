@@ -6,6 +6,6 @@
 
         public string Name { get; set; }
 
-        public Payload Payload { get; set; } = new();
+        public SelectedPayload Payload { get; set; } = new();
     }
 }

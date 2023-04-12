@@ -4,6 +4,6 @@
     {
         public string Metric { get; set; }
 
-        public Payload Payload { get; set; } = new();
+        public SelectedPayload Payload { get; set; } = new();
     }
 }
