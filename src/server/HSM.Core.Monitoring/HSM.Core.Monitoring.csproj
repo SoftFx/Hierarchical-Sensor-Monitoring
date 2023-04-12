@@ -6,12 +6,11 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="HSMDataCollector.HSMDataCollector" Version="3.0.5" />
-  </ItemGroup>
-
-  <ItemGroup>
     <ProjectReference Include="..\HSMCommon\HSMCommon.csproj" />
     <ProjectReference Include="..\HSMServer.Core\HSMServer.Core.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\..\collector\HSMDataCollector\HSMDataCollector.csproj"></ProjectReference>
+  </ItemGroup>
 </Project>

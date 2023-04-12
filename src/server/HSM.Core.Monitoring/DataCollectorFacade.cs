@@ -1,6 +1,7 @@
 ﻿using HSMCommon.Constants;
 using HSMDataCollector.Core;
 using HSMDataCollector.PublicInterface;
+using HSMDataCollector.Options;
 using HSMServer.Core.Cache;
 using System;
 using System.Linq;
@@ -49,7 +50,9 @@ namespace HSM.Core.Monitoring
                 _dataCollector.Windows.AddProcessMonitoringSensors()
                                       .AddDiskMonitoringSensors()
                                       .AddSystemMonitoringSensors()
-                                      .AddWindowsInfoMonitoringSensors();
+                                      .AddWindowsInfoMonitoringSensors()
+                                      .AddProductInfo(new ProductInfoOptions(){Version = "Test version"})
+                                      .AddCollectorHeartbeat();
             }
             else
             {
