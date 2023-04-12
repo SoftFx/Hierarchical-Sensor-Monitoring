@@ -6,6 +6,7 @@ using System.IO;
 using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using HSMCommon.Extensions;
 
 namespace HSMServer.Model
 {
@@ -45,13 +46,12 @@ namespace HSMServer.Model
         static ServerConfig()
         {
             var assembly = Assembly.GetExecutingAssembly().GetName();
-            var version = assembly.Version;
 
             Name = assembly.Name;
             ExecutableDirectory = Path.GetDirectoryName(Assembly.GetEntryAssembly().Location);
 
-            if (version is not null)
-                Version = $"{version.Major}.{version.Minor}.{version.Build}";
+            if (assembly.Version is not null)
+                Version = assembly.GetVersion();
 
             if (!Directory.Exists(ConfigPath))
                 FileManager.SafeCreateDirectory(ConfigPath);

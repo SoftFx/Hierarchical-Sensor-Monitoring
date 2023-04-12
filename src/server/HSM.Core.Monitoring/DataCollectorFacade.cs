@@ -5,6 +5,8 @@ using HSMDataCollector.Options;
 using HSMServer.Core.Cache;
 using System;
 using System.Linq;
+using System.Reflection;
+using HSMCommon.Extensions;
 
 namespace HSM.Core.Monitoring
 {
@@ -51,7 +53,7 @@ namespace HSM.Core.Monitoring
                                       .AddDiskMonitoringSensors()
                                       .AddSystemMonitoringSensors()
                                       .AddWindowsInfoMonitoringSensors()
-                                      .AddProductInfo(new ProductInfoOptions(){Version = "Test version"})
+                                      .AddProductInfo(new ProductInfoOptions(){Version = Assembly.GetEntryAssembly()?.GetName().GetVersion()})
                                       .AddCollectorHeartbeat();
             }
             else
