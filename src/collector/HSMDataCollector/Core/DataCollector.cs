@@ -10,16 +10,13 @@ using HSMDataCollector.Options;
 using HSMDataCollector.PublicInterface;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.SensorValueRequests;
-using Newtonsoft.Json;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Linq;
-using System.Net;
-using System.Net.Http;
-using System.Text;
+using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
+using SensorBase = HSMDataCollector.Base.SensorBase;
 
 namespace HSMDataCollector.Core
 {
@@ -30,14 +27,12 @@ namespace HSMDataCollector.Core
     {
         private readonly LoggerManager _logManager = new LoggerManager();
 
-        private readonly ConcurrentDictionary<string, ISensor> _nameToSensor;
+        private readonly ConcurrentDictionary<string, ISensor> _nameToSensor = new ConcurrentDictionary<string, ISensor>();
         private readonly DefaultSensorsCollection _defaultSensors;
         private readonly SensorsDefaultOptions _sensorsOptions;
         private readonly SensorsStorage _sensorsStorage;
         private readonly IDataQueue _dataQueue;
-        private readonly HttpClient _client;
-        private readonly string _listSendingAddress;
-        private readonly string _fileSendingAddress;
+        private readonly HSMClient _hsmClient;
 
         private bool _isStopped;
 
@@ -49,34 +44,16 @@ namespace HSMDataCollector.Core
         [Obsolete]
         public event EventHandler ValuesQueueOverflow;
 
-
         /// <summary>
         /// Creates new instance of <see cref="DataCollector"/> class, initializing main parameters
         /// </summary>
         /// <param name="options">Common options for datacollector</param>
         public DataCollector(CollectorOptions options)
         {
-            _nameToSensor = new ConcurrentDictionary<string, ISensor>();
-            _listSendingAddress = options.ListEndpoint;
-            _fileSendingAddress = options.FileEndpoint;
-
-            HttpClientHandler handler = new HttpClientHandler
-            {
-                ServerCertificateCustomValidationCallback = (message, certificate2, arg3, arg4) => true
-            };
-            _client = new HttpClient(handler);
-            _client.DefaultRequestHeaders.Add(nameof(BaseRequest.Key), options.AccessKey);
-
-            ServicePointManager.ServerCertificateValidationCallback = delegate { return true; };
-            ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls12;
-
             _dataQueue = new DataQueue(options);
-            _dataQueue.QueueOverflow += DataQueue_QueueOverflow;
-            _dataQueue.FileReceving += DataQueue_FileReceving;
-            _dataQueue.SendValues += DataQueue_SendValues;
-            _isStopped = false;
-
             _sensorsStorage = new SensorsStorage(_dataQueue as IValuesQueue, _logManager);
+            _hsmClient = new HSMClient(options, _dataQueue, _logManager);
+            
             _sensorsOptions = new SensorsDefaultOptions();
             _defaultSensors = new DefaultSensorsCollection(_sensorsStorage, _sensorsOptions);
         }
@@ -124,7 +101,7 @@ namespace HSMDataCollector.Core
         public Task Start()
         {
             _dataQueue.InitializeTimer();
-
+            
             return _sensorsStorage.Start();
         }
 
@@ -140,7 +117,7 @@ namespace HSMDataCollector.Core
             var allData = new List<SensorValueBase>(1 << 3);
             if (_dataQueue != null)
             {
-                allData.AddRange(_dataQueue.GetCollectedData());
+                allData.AddRange(_dataQueue.DequeueData());
                 _dataQueue.Stop();
             }
 
@@ -154,9 +131,9 @@ namespace HSMDataCollector.Core
                 pair.Value.Dispose();
 
             if (allData.Count != 0)
-                SendMonitoringData(allData);
+                _hsmClient.SendMonitoringData(allData);
 
-            _client?.Dispose();
+            _hsmClient?.Dispose();
             _isStopped = true;
             _logManager.Logger?.Info("DataCollector successfully stopped.");
         }
@@ -220,12 +197,12 @@ namespace HSMDataCollector.Core
         [Obsolete("Use method AddCollectorAlive(options) in Windows or Unix collections")]
         public void MonitorServiceAlive(string specificPath = null)
         {
-            var options = _sensorsOptions.CollectorAliveMonitoring.GetAndFill(new SensorOptions() { NodePath = specificPath });
+            var options = _sensorsOptions.CollectorAliveMonitoring.GetAndFill(new MonitoringSensorOptions() { NodePath = specificPath });
 
             if (_defaultSensors.IsUnixOS)
-                Unix.AddCollectorAlive(options);
+                Unix.AddCollectorHeartbeat(options);
             else
-                Windows.AddCollectorAlive(options);
+                Windows.AddCollectorHeartbeat(options);
 
             Start();
         }
@@ -286,9 +263,19 @@ namespace HSMDataCollector.Core
 
             var sensor = new InstantFileSensor(path, fileName, extension, _dataQueue as IValuesQueue, description);
             AddNewSensor(sensor, path);
-
+            
             return sensor;
         }
+
+        public Task SendFileAsync(string sensorPath, string filePath, SensorStatus status = SensorStatus.Ok, string comment = "")
+        {
+            if (!File.Exists(filePath))
+                return default;
+            
+            var file = new FileInfo(filePath);
+            
+            return _hsmClient.SendFileAsync(file, sensorPath, status, comment);
+        }   
 
         public ILastValueSensor<bool> CreateLastValueBoolSensor(string path, bool defaultValue, string description = "")
         {
@@ -516,72 +503,6 @@ namespace HSMDataCollector.Core
             _nameToSensor[path] = sensor;
 
             _logManager.Logger?.Info($"Added new sensor {path}");
-        }
-
-        private void DataQueue_SendValues(object sender, List<SensorValueBase> e)
-        {
-            SendMonitoringData(e);
-        }
-
-        private void DataQueue_FileReceving(object _, FileSensorValue value)
-        {
-            try
-            {
-                string jsonString = JsonConvert.SerializeObject(value);
-
-                if (_logManager.WriteDebug)
-                    _logManager.Logger?.Debug($"{nameof(DataQueue_FileReceving)}: {jsonString}");
-
-                var data = new StringContent(jsonString, Encoding.UTF8, "application/json");
-                var res = _client.PostAsync(_fileSendingAddress, data).Result;
-
-                if (!res.IsSuccessStatusCode)
-                    _logManager.Logger?.Error($"Failed to send data. StatusCode={res.StatusCode}, Content={res.Content.ReadAsStringAsync().Result}");
-            }
-            catch (Exception e)
-            {
-                if (_dataQueue != null && !_dataQueue.Disposed)
-                    _dataQueue?.ReturnFile(value);
-
-                _logManager.Logger?.Error($"Failed to send: {e}");
-            }
-        }
-
-        private void SendMonitoringData(List<SensorValueBase> values)
-        {
-            try
-            {
-                if (values.Count == 0)
-                    return;
-
-                string jsonString = JsonConvert.SerializeObject(values.Cast<object>());
-
-                if (_logManager.WriteDebug)
-                    _logManager.Logger?.Debug($"{nameof(SendMonitoringData)}: {jsonString}");
-
-                var data = new StringContent(jsonString, Encoding.UTF8, "application/json");
-                var res = _client.PostAsync(_listSendingAddress, data).Result;
-
-                if (!res.IsSuccessStatusCode)
-                    _logManager.Logger?.Error($"Failed to send data. StatusCode={res.StatusCode}, Content={res.Content.ReadAsStringAsync().Result}");
-            }
-            catch (Exception e)
-            {
-                if (_dataQueue != null && !_dataQueue.Disposed)
-                    _dataQueue?.ReturnData(values);
-
-                _logManager.Logger?.Error($"Failed to send: {e}");
-            }
-        }
-
-        private void DataQueue_QueueOverflow(object sender, DateTime e)
-        {
-            OnValuesQueueOverflow();
-        }
-
-        private void OnValuesQueueOverflow()
-        {
-            ValuesQueueOverflow?.Invoke(this, EventArgs.Empty);
         }
     }
 }

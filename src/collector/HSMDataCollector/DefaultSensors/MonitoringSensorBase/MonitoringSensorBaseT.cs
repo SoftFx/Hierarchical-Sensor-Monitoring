@@ -1,50 +1,88 @@
-﻿using HSMDataCollector.Extensions;
+﻿using System;
+using System.Threading;
 using HSMDataCollector.Options;
+using System.Threading.Tasks;
+using HSMDataCollector.Extensions;
 using HSMDataCollector.SensorsFactory;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.SensorValueRequests;
-using System;
 
 namespace HSMDataCollector.DefaultSensors
 {
-    public abstract class MonitoringSensorBase<T> : MonitoringSensorBase
+    public abstract class MonitoringSensorBase<T> : SensorBase<T>
     {
+        private readonly Timer _sendTimer;
+        
+        protected readonly TimeSpan _receiveDataPeriod;
+        
+        
+        private bool _isStarted;
+        
+        
+        protected virtual TimeSpan TimerDueTime => _receiveDataPeriod;
+        
         protected bool NeedSendValue { get; set; } = true;
 
-
-        protected MonitoringSensorBase(SensorOptions options) : base(options) { }
-
-
-        internal override void Stop()
+        
+        protected MonitoringSensorBase(MonitoringSensorOptions options) : base(options)
         {
-            base.Stop();
+            _receiveDataPeriod = options.PostDataPeriod;
 
+            _sendTimer = new Timer(OnTimerTick, null, Timeout.Infinite, Timeout.Infinite);
+        }
+
+
+        internal override Task<bool> Start()
+        {
+            if (_isStarted)
+                return Task.FromResult(false);
+
+            _sendTimer.Change(TimerDueTime, _receiveDataPeriod);
+
+            _isStarted = true;
+
+            return Task.FromResult(_isStarted);
+        }
+
+        internal override Task Stop()
+        {
+            if (!_isStarted)
+                return Task.FromResult(false);
+
+            _sendTimer?.Dispose();
+
+            _isStarted = false;
+            
             OnTimerTick();
+            
+            return Task.CompletedTask;
         }
-
-        protected sealed override void OnTimerTick(object _ = null)
-        {
-            var value = BuildValue();
-
-            if (NeedSendValue)
-                SendCollectedValue(value);
-        }
-
+        
+        
         protected abstract T GetValue();
-
-        private SensorValueBase BuildValue()
+        
+        protected virtual string GetComment() => null;
+        
+        protected virtual SensorStatus GetStatus() => SensorStatus.Ok;
+        
+        
+        protected void OnTimerTick(object _ = null)
+        {
+            var value = BuildSensorValue();
+            
+            if (NeedSendValue)
+                SendValue(value);
+        }
+        
+        protected SensorValueBase BuildSensorValue()
         {
             try
             {
-                var value = SensorValuesFactory.BuildValue(GetValue());
-
-                return value.Complete(SensorPath, GetComment(), GetStatus());
+                return GetSensorValue(GetValue()).Complete(GetComment(), GetStatus());
             }
             catch (Exception ex)
             {
-                var value = SensorValuesFactory.BuildValue(default(T));
-
-                return value.Complete(SensorPath, ex.Message, SensorStatus.Error);
+                return GetSensorValue(default).Complete(ex.Message, SensorStatus.Error);
             }
         }
     }

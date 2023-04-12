@@ -11,7 +11,7 @@ namespace HSMDataCollector.DefaultSensors
         protected override string SensorName => $"Free space on disk{_diskInfo.Name} MB";
 
 
-        internal FreeDiskSpaceBase(SensorOptions options, IDiskInfo diskInfo) : base(options)
+        internal FreeDiskSpaceBase(MonitoringSensorOptions options, IDiskInfo diskInfo) : base(options)
         {
             _diskInfo = diskInfo;
         }

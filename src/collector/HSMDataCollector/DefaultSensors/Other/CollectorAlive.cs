@@ -7,7 +7,7 @@ namespace HSMDataCollector.DefaultSensors.Other
         protected override string SensorName => "Service alive";
 
 
-        public CollectorAlive(SensorOptions options) : base(options) { }
+        public CollectorAlive(MonitoringSensorOptions options) : base(options) { }
 
 
         protected override bool GetValue() => true;
