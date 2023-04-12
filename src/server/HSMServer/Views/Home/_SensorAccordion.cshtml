@@ -24,7 +24,7 @@
 <div class="container-fluid" style="overflow-y: auto;  height: calc(100vh - 5vh - 80px - 3rem)!important;">
 <div class='accordion' id='sensorData_@sensorId'>
     <div class='accordion-item'>
-        @if (Model.SensorType == SensorType.File)
+        @if (Model.Type == SensorType.File)
         {
             <h2 class='accordion-header' id='heading_@sensorId'>
                 <button id='file_accordion_@sensorId' class='accordion-button collapsed pt-2 pb-1' type='button' data-bs-toggle='collapse'
@@ -62,7 +62,7 @@
                                 </div>
 
                             </div>
-                            <input id='sensor_type_@sensorId' value='@((int)Model.SensorType)' style='display: none'/>
+                            <input id='sensor_type_@sensorId' value='@((int)Model.Type)' style='display: none'/>
                             <div class='col-md-auto time-ago-div me-3' id='update_@sensorId'>
                                 <div id="side_info_@sensorId" class="d-flex flex-md-column align-items-end" style="font-size: smaller">
                                     <span class="pb-3" style="font-size: medium">
@@ -134,7 +134,7 @@
                                 @Html.Raw(@Model.Name)
                             </div>
                             <div class='col-md-auto'>
-                                <input id='sensor_type_@sensorId' value='@((int)Model.SensorType)' style='display: none'/>
+                                <input id='sensor_type_@sensorId' value='@((int)Model.Type)' style='display: none'/>
                                 <div id='update_@sensorId' class='time-ago-div me-1'>updated @Model.UpdateTime.GetTimeAgo()</div>
                             </div>
                         </div>
@@ -165,7 +165,7 @@
                                 <label class="me-1" for="to_@sensorId">To:</label>
                                 <input class="me-2" type="datetime-local" id="to_@sensorId" name="to">
 
-                                @if (Model.SensorType == SensorType.IntegerBar || Model.SensorType == SensorType.DoubleBar)
+                                @if (Model.Type == SensorType.IntegerBar || Model.Type == SensorType.DoubleBar)
                                 {
                                     <label class="me-1" for="barsCount_@sensorId" id="labelBarsCount_@sensorId">Bars count:</label>
                                     <input class="me-2" style="width:70px" type="number" id="barsCount_@sensorId" name="barsCount" min="1" max="1000">
@@ -190,7 +190,7 @@
                                 <p>No data for the specified period</p>
                             </div>
                             <div id='history_@sensorId'>
-                                @if (Model.IsPlottingSupported)
+                                @if (Model.IsChartSupported)
                                 {
                                     <ul class='nav nav-tabs'>
                                         <li class='nav-item'>
@@ -229,7 +229,7 @@
 var previousReceivedTime = undefined;
 
 $(document).ready(function() {
-    if ('@(Model.SensorType is SensorType.File)'=== 'True'){
+    if ('@(Model.Type is SensorType.File)'=== 'True'){
         setContentPreview('@Model.EncodedId');
     }
 });

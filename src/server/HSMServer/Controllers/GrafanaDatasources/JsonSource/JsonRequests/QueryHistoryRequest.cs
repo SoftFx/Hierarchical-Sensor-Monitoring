@@ -13,6 +13,6 @@ namespace HSMServer.Controllers.GrafanaDatasources.JsonSource
 
         public long IntervalMs { get; set; }
 
-        public long MaxDataPoints { get; set; }
+        public int MaxDataPoints { get; set; }
     }
 }

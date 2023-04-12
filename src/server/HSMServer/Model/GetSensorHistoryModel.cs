@@ -22,9 +22,9 @@ namespace HSMServer.Model
         internal int Count { get; set; } = HomeController.MaxHistoryCount;
 
         [JsonIgnore]
-        internal DateTime ToUtc => To.ToUtc();
+        internal DateTime ToUtc => To.ToUtcKind();
 
         [JsonIgnore]
-        internal DateTime FromUtc => From.ToUtc();
+        internal DateTime FromUtc => From.ToUtcKind();
     }
 }

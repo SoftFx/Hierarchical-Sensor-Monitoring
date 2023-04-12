@@ -15,7 +15,7 @@ namespace HSMServer.Model.ViewModel
 
         internal SensorInfoViewModel(SensorNodeViewModel sensor) : base(sensor)
         {
-            SensorType = sensor.SensorType;
+            SensorType = sensor.Type;
             Unit = sensor.Unit;
         }
     }

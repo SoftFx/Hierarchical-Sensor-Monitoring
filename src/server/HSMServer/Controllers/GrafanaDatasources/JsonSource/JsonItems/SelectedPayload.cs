@@ -4,11 +4,11 @@ namespace HSMServer.Controllers.GrafanaDatasources.JsonSource
 {
     public class SelectedPayload
     {
-        public List<string> Sensors { get; set; }
+        public string Sensor { get; set; }
 
         public string Type { get; set; }
 
 
-        public bool IsFull => Sensors != null && !string.IsNullOrEmpty(Type);
+        public bool IsFull => Sensor != null && !string.IsNullOrEmpty(Type);
     }
 }

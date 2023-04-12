@@ -4,18 +4,20 @@ namespace HSMServer.Controllers.GrafanaDatasources.JsonSource
 {
     public class Metric
     {
-        public const string SensorsPayloadName = nameof(SelectedPayload.Sensors);
+        public const string SensorsPayloadName = nameof(SelectedPayload.Sensor);
         public const string TypePayloadName = nameof(SelectedPayload.Type);
 
         public static Payload[] BaseProductPayloads { get; } = new[]
         {
                 new Payload(SensorsPayloadName)
                 {
-                    //Type = "multi-select",
                     Placeholder = "List of sensors open for Grafana",
                 },
 
-                new Payload(TypePayloadName),
+                new Payload(TypePayloadName)
+                {
+                    Placeholder = "Available data format for the sensor",
+                },
         };
 
 

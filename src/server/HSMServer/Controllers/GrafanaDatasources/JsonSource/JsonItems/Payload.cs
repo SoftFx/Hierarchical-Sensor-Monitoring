@@ -11,7 +11,7 @@ namespace HSMServer.Controllers.GrafanaDatasources.JsonSource
 
         public string Label { get; set; }
 
-        public string Type { get; set; } = "select";
+        public string Type { get; set; } = "select"; //available values "select" "multi-select"
 
         public string Placeholder { get; set; }
 

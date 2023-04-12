@@ -1,10 +1,13 @@
 ﻿using HSMServer.Core.Cache;
+using HSMServer.Core.Model;
+using HSMServer.Extensions;
 using HSMServer.Model.TreeViewModel;
 using Microsoft.AspNetCore.Mvc;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
+using System.Threading.Tasks;
 
 namespace HSMServer.Controllers.GrafanaDatasources.JsonSource
 {
@@ -46,82 +49,90 @@ namespace HSMServer.Controllers.GrafanaDatasources.JsonSource
         [ActionName("metric-payload-options")]
         public string GetOptions(MetricPayloadOptionsRequest request)
         {
-            if (request.Name == Metric.SensorsPayloadName)
+            var options = request.Name switch
             {
-                var sensors = _tree.GetAllNodeSensors(Guid.Parse(request.Metric));
+                Metric.SensorsPayloadName => GetSensorsOptions(Guid.Parse(request.Metric)),
+                Metric.TypePayloadName => GetDataTypeOptions(request.Payload.Sensor),
+                _ => throw new Exception($"Usupported option {request.Name}")
+            };
 
-                var options = new List<PayloadOption>(1 << 5);
-
-                foreach (var sensorId in sensors)
-                    if (_tree.Sensors.TryGetValue(sensorId, out var sensor))
-                    {
-                        options.Add(new PayloadOption(sensor.Path, sensorId.ToString()));
-                    }
-
-                return JsonSerializer.Serialize(options, _options);
-            }
-
-            return string.Empty;
+            return JsonSerializer.Serialize(options, _options);
         }
 
 
         [HttpPost]
         [ActionName("query")]
-        public string ReadHistory(QueryHistoryRequest request)
+        public async Task<string> ReadHistory(QueryHistoryRequest request)
         {
-            var responses = new List<object>();
+            var historyResponse = new List<object>(1 << 2);
 
             foreach (var target in request.Targets)
-                if (target.Payload.IsFull && target.TryGetTargetAsId(out var productId) && _tree.Nodes.TryGetValue(productId, out var product))
+            {
+                var sensorId = target.Payload.Sensor;
+
+                if (target.Payload.IsFull && TryGetSensor(sensorId, out var sensor))
                 {
-                    foreach (var sensorIdRaw in target.Payload.Sensors)
-                        if (Guid.TryParse(sensorIdRaw, out var sensorId) && _tree.Sensors.TryGetValue(sensorId, out var sensor))
-                        {
+                    var sensorData = await _cache.GetSensorValuesPage(sensor.Id, request.Range.FromUtc, request.Range.ToUtc, request.MaxDataPoints).Flatten();
 
-                            //if (target.Payload.Type == "Datapoints")
-                            //{
-                            //    var response = new HistoryDatapointsResponse()
-                            //    {
-                            //        Target = sensorId,
-                            //        Datapoints = new List<long[]>(1 << 2),
-                            //    };
+                    object sensorHistory = target.Payload.Type switch
+                    {
+                        PayloadOption.PointsDataTypeLabel => DataToResponse<HistoryDatapointsResponse>(sensorData, sensorId),
+                        PayloadOption.TableDataTypeLabel => DataToResponse<HistoryTableResponse>(sensorData, sensorId),
+                        _ => null,
+                    };
 
-                            //    foreach (var data in sensor.Data)
-                            //    {
-                            //        response.Datapoints.Add(new long[2]
-                            //        {
-                            //                data.Value,
-                            //                new DateTimeOffset(data.Date).ToUnixTimeMilliseconds()
-                            //        });
-                            //    }
-
-                            //    responses.Add(response);
-                            //}
-
-                            //if (target.Payload.Type == "Table")
-                            //{
-                            //    var response = new HistoryTableResponse()
-                            //    {
-                            //        Target = sensorId,
-                            //        Rows = new List<object[]>(1 << 2),
-                            //    };
-
-                            //    foreach (var data in sensor.Data)
-                            //    {
-                            //        response.Rows.Add(new object[]
-                            //        {
-                            //                new DateTimeOffset(data.Date).ToUnixTimeMilliseconds(),
-                            //                data.Value,
-                            //                data.Comment,
-                            //        });
-                            //    }
-
-                            //    responses.Add(response);
-                            //}
-                        }
+                    if (sensorHistory != null)
+                        historyResponse.Add(sensorHistory);
                 }
+            }
 
-            return JsonSerializer.Serialize(responses, _options);
+            return JsonSerializer.Serialize(historyResponse, _options);
+        }
+
+
+        private static T DataToResponse<T>(List<BaseValue> rawData, string target) where T : BaseHistoryResponse, new()
+        {
+            var response = new T()
+            {
+                Target = target,
+            };
+
+            return (T)response.FillRows(rawData);
+        }
+
+        private List<PayloadOption> GetSensorsOptions(Guid productId)
+        {
+            var sensors = _tree.GetAllNodeSensors(productId);
+            var options = new List<PayloadOption>(sensors.Count);
+
+            foreach (var sensorId in sensors)
+                if (_tree.Sensors.TryGetValue(sensorId, out var sensor))
+                    options.Add(new PayloadOption(sensor.Path, sensorId.ToString()));
+
+            return options;
+        }
+
+        private List<PayloadOption> GetDataTypeOptions(string sensorRawId)
+        {
+            var options = new List<PayloadOption>(2);
+
+            if (TryGetSensor(sensorRawId, out var sensor))
+            {
+                if (sensor.IsDatapointFormatSupported)
+                    options.Add(new PayloadOption(PayloadOption.PointsDataTypeLabel));
+
+                if (sensor.IsTableFormatSupported)
+                    options.Add(new PayloadOption(PayloadOption.TableDataTypeLabel));
+            }
+
+            return options;
+        }
+
+        private bool TryGetSensor(string rawId, out SensorNodeViewModel sensor)
+        {
+            sensor = default;
+
+            return Guid.TryParse(rawId, out var sensorId) && _tree.Sensors.TryGetValue(sensorId, out sensor);
         }
     }
 }

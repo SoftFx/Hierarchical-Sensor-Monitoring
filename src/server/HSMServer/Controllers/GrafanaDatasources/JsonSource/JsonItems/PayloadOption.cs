@@ -2,6 +2,9 @@
 {
     public class PayloadOption
     {
+        public const string TableDataTypeLabel = "Table";
+        public const string PointsDataTypeLabel = "Datapoints";
+
         public string Label { get; set; }
 
         public string Value { get; set; }
