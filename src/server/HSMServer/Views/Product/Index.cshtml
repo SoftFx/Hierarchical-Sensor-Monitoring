@@ -81,5 +81,28 @@
     $('[id^=change_]').on('click', function () {
         key = this.id.substring("change_".length, this.id.length);
         window.location.href = editAction + "?Product=" + key;
-    }); 
+    });
+
+    $('[id^=moveTo_]').on('click', function () {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+
+        $.ajax({
+            type: 'GET',
+            url: this.href,
+            cache: false,
+            async: true
+        }).done(function () {
+            sessionStorage.setItem("productMoving", "true");
+            document.location.reload();
+        });
+    });
+
+    window.onload = function () {
+        var productWasMoved = sessionStorage.getItem("productMoving");
+        if (productWasMoved) {
+            sessionStorage.removeItem("productMoving");
+            showToast("Product has been succesfully moved!");
+        }
+    }
 </script>
