@@ -71,8 +71,8 @@
 
 <div id="mainSpinner" class="spinner-border big_spinner text-secondary center_spinner" role="status"></div>
 
-<div id="mainContainer" class="container mw-100 d-inline-flex flex-wrap flex-lg-nowrap mt-1 hidden_element ms-0 ps-0" style="height: 100%">
-    <div style="height: calc(100% - 3rem)">
+<div id="mainContainer" class="container mw-100 d-inline-flex flex-wrap flex-lg-nowrap mt-1 hidden_element ms-0 ps-0" style="height: calc(100% - 3rem)">
+    <div>
         <div class="d-flex my-1">
             <div class="d-flex flex-fill me-auto">
                 <button id="show" type="button" class="btn btn-sm btn-outline-primary ms-3 position-relative" style="height: 2.5rem">
@@ -98,7 +98,7 @@
                 </div>
             </div>
         </div>
-        <div class="d-flex justify-content-center"style="overflow: auto;height: 100%" >
+        <div class="d-flex justify-content-center"style="overflow: auto;height: calc(100% - 3rem)" >
             <div class="d-flex me-auto">
                 <div class="ms-2 mb-1"> @await Html.PartialAsync("_TreeFilter.cshtml", new UserFilterViewModel(user.TreeFilter)) </div>
 
