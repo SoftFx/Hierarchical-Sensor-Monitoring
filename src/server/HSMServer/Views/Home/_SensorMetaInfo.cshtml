@@ -23,8 +23,6 @@
     <form class="mb-0" asp-action="@nameof(HomeController.UpdateSensorInfo)" id="editSensorMetaInfo_form">
         <input id="sensorMetaInfo_encodedId" style='display: none' asp-for="EncodedId" value="@Model.EncodedId"/>
 
-        <hr id="description_separator" class="d-none my-1"/>
-
         <div id="headline_metainfo" class="d-none d-flex" style="height: 2rem;">
             <div id="description_sensor_metainfo" class="d-none form-control ps-0 ms-1 border-0 fw-bold" style="max-width: 15rem;">
                 Description:
@@ -122,12 +120,6 @@
 <script>
     $(document).ready(() => {
         replaceHTMLtoMarkdown();
-
-        let desc = $(`#markdown_span_description_${'@Model.EncodedId'}`)
-        
-        if (desc[0].innerText !== '') {
-            $('#description_separator').removeClass('d-none');
-        }
     });
     
     $(document).on("submit", "#editSensorMetaInfo_form", function (event) {
@@ -164,12 +156,6 @@
             $('#editButtonMetaInfo').addClass('d-none');
             $('#description_sensor_metainfo').addClass('d-none');
             $('#headline_metainfo').addClass('d-none');
-           
-            let desc = $(`#markdown_span_description_${'@Model.EncodedId'}`)
-          
-            if (desc[0].innerText === '') {
-                $('#description_separator').addClass('d-none');
-            }
         }
         else {
             icon.classList.toggle('fa-caret-up')
@@ -177,7 +163,6 @@
             $('#editButtonMetaInfo').removeClass('d-none');
             $('#description_sensor_metainfo').removeClass('d-none');
             $('#headline_metainfo').removeClass('d-none');
-            $('#description_separator').removeClass('d-none');
         }
     }
 </script>
