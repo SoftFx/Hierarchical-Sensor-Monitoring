@@ -211,9 +211,12 @@ img .tree-png-icon{
 }
 
 .reserved-scroll-y{
+    scrollbar-gutter: stable
+}
+
+.overflow-y-auto{
     overflow-y: auto;
     overflow-x: hidden;
-    scrollbar-gutter: stable
 }
 
 .tree-collapse-button{
@@ -228,4 +231,13 @@ img .tree-png-icon{
 
 .tree-wrapper{
    height: calc(100% - var(--header-height)); 
+}
+
+.button-width-static{
+    max-width: 8rem; 
+    width: 7rem;
+}
+.button-width-static > i, svg{
+    width: 1rem!important;
+    height: 1rem!important;
 }
