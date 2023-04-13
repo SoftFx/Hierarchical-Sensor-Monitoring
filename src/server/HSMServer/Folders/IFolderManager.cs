@@ -13,8 +13,6 @@ namespace HSMServer.Folders
     {
         Task<bool> TryAdd(FolderAdd folderAdd, out FolderModel folder);
 
-        Task<bool> TryRemove(Guid folderId);
-
         void MoveProduct(ProductNodeViewModel product, Guid? fromFolderId, Guid? toFolderId);
 
         void AddProductToFolder(Guid productId, Guid folderId);
@@ -22,8 +20,6 @@ namespace HSMServer.Folders
         void UpdateProductInFolder(Guid productId, FolderModel folder);
 
         void RemoveProductFromFolder(Guid productId);
-
-        bool TryGetValueById(Guid? id, out FolderModel model);
 
         List<FolderModel> GetUserFolders(User user);
     }

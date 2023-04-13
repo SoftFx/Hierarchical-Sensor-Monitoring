@@ -17,15 +17,15 @@ namespace HSMServer.Controllers
     {
         private static readonly EmptyResult _emptyResult = new();
 
+        private readonly TreeViewModel _tree;
         private readonly IUserManager _userManager;
-        private readonly TreeViewModel _treeViewModel;
         private readonly IFolderManager _folderManager;
 
 
         public FoldersController(IFolderManager folderManager, IUserManager userManager, TreeViewModel treeViewModel)
         {
+            _tree = treeViewModel;
             _userManager = userManager;
-            _treeViewModel = treeViewModel;
             _folderManager = folderManager;
         }
 
@@ -45,7 +45,7 @@ namespace HSMServer.Controllers
             var oldProducts = new Dictionary<Guid, ProductNodeViewModel>(folder.Products);
 
             folder.Products.Clear();
-            foreach (var product in editFolder.GetFolderProducts(_treeViewModel))
+            foreach (var product in editFolder.GetFolderProducts(_tree))
                 folder.Products.Add(product.Id, product);
 
             if (await _folderManager.TryUpdate(editFolder.ToFolderUpdate()))
@@ -85,7 +85,7 @@ namespace HSMServer.Controllers
                 return View(nameof(EditFolder), folder);
             }
 
-            await _folderManager.TryAdd(folder.ToFolderAdd(HttpContext.User as User, _treeViewModel), out var newFolder);
+            await _folderManager.TryAdd(folder.ToFolderAdd(HttpContext.User as User, _tree), out var newFolder);
 
             return View(nameof(EditFolder), BuildEditFolder(newFolder.Id));
         }
@@ -105,7 +105,7 @@ namespace HSMServer.Controllers
             };
 
             if (_folderManager.TryGetValue(update.Id, out var folder) && await _folderManager.TryUpdate(update))
-                foreach (var (productId, _) in folder.Products)
+                foreach (var productId in folder.Products.Keys)
                     _folderManager.UpdateProductInFolder(productId, folder);
 
             return PartialView("_Alerts", new FolderAlertsViewModel(folder));
@@ -123,7 +123,7 @@ namespace HSMServer.Controllers
 
             user.FoldersRoles.Add(folder.Id, model.Role);
 
-            foreach (var (productId, _) in folder.Products)
+            foreach (var productId in folder.Products.Keys)
                 if (!user.IsUserProduct(productId))
                     user.ProductsRoles.Add((productId, model.Role));
 
@@ -143,7 +143,7 @@ namespace HSMServer.Controllers
             {
                 user.FoldersRoles[folder.Id] = model.Role;
 
-                foreach (var (productId, _) in folder.Products)
+                foreach (var productId in folder.Products.Keys)
                     if (user.ProductsRoles.Remove((productId, oldUserRole)))
                         user.ProductsRoles.Add((productId, model.Role));
 
@@ -162,7 +162,7 @@ namespace HSMServer.Controllers
 
             user.FoldersRoles.Remove(folder.Id);
 
-            foreach (var (productId, _) in folder.Products)
+            foreach (var productId in folder.Products.Keys)
                 user.ProductsRoles.Remove((productId, model.Role));
 
             // TODO: also call user.Notifications.RemoveSensor for sensors that are not available for user 
@@ -183,12 +183,13 @@ namespace HSMServer.Controllers
             return new(folder, BuildFolderProducts(), BuildFolderUsers(folder));
         }
 
-        private FolderProductsViewModel BuildFolderProducts(List<string> selectedProducts = null) =>
-            new()
-            {
-                AvailableProducts = _treeViewModel.GetUserProducts(HttpContext.User as User).Where(p => p.FolderId is null).ToList(),
-                SelectedProducts = selectedProducts,
-            };
+        private FolderProductsViewModel BuildFolderProducts(List<string> selectedProducts = null)
+        {
+            var user = HttpContext.User as User;
+            var availableProducts = _tree.GetUserProducts(user).Where(p => p.FolderId is null).ToList();
+
+            return new(availableProducts, selectedProducts);
+        }
 
         private FolderUsersViewModel BuildFolderUsers(FolderModel folder) =>
             new(folder, _userManager.GetUsers(u => !u.IsAdmin));

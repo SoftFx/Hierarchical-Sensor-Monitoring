@@ -8,7 +8,6 @@ using HSMServer.Model.AccessKeysViewModels;
 using HSMServer.Model.Authentication;
 using HSMServer.Model.Folders;
 using HSMServer.Model.UserTreeShallowCopy;
-using HSMServer.Notification.Settings;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -185,7 +184,7 @@ namespace HSMServer.Model.TreeViewModel
                         product.Update(model);
 
                         if (product.FolderId != model.FolderId)
-                            product.UpdateFolder(model.FolderId.HasValue ? _folderManager[model.FolderId.Value] : null);
+                            product.UpdateFolder(_folderManager[model.FolderId]);
                     }
                     break;
 

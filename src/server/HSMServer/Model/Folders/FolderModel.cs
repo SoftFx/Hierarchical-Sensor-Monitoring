@@ -35,12 +35,8 @@ namespace HSMServer.Model.Folders
 
             var policies = entity.ServerPolicies;
 
-            ExpectedUpdateInterval = policies.Count > 0
-                ? new TimeIntervalViewModel(policies[0], PredefinedTimeIntervals.ExpectedUpdatePolicy)
-                : GetDefaultExpectedUpdatePolicy();
-            SensorRestorePolicy = policies.Count > 1
-                ? new TimeIntervalViewModel(policies[1], PredefinedTimeIntervals.RestorePolicy)
-                : GetDefaultRestorePolicy();
+            ExpectedUpdateInterval = GetPolicy(policies, 0, PredefinedIntervals.ForTimeout);
+            SensorRestorePolicy = GetPolicy(policies, 1, PredefinedIntervals.ForRestore);
         }
 
         internal FolderModel(FolderAdd addModel)
@@ -55,8 +51,8 @@ namespace HSMServer.Model.Folders
             Products = addModel.Products;
             Description = addModel.Description;
 
-            ExpectedUpdateInterval = GetDefaultExpectedUpdatePolicy();
-            SensorRestorePolicy = GetDefaultRestorePolicy();
+            ExpectedUpdateInterval = GetDefaultPolicy(PredefinedIntervals.ForTimeout);
+            SensorRestorePolicy = GetDefaultPolicy(PredefinedIntervals.ForRestore);
         }
 
 
@@ -66,9 +62,9 @@ namespace HSMServer.Model.Folders
             Color = update.Color ?? Color;
 
             if (update.ExpectedUpdateInterval != null)
-                ExpectedUpdateInterval = new TimeIntervalViewModel(update.ExpectedUpdateInterval, PredefinedTimeIntervals.ExpectedUpdatePolicy);
+                ExpectedUpdateInterval = new TimeIntervalViewModel(update.ExpectedUpdateInterval, PredefinedIntervals.ForTimeout);
             if (update.RestoreInterval != null)
-                SensorRestorePolicy = new TimeIntervalViewModel(update.RestoreInterval, PredefinedTimeIntervals.RestorePolicy);
+                SensorRestorePolicy = new TimeIntervalViewModel(update.RestoreInterval, PredefinedIntervals.ForRestore);
         }
 
         public FolderEntity ToEntity() =>
@@ -86,7 +82,7 @@ namespace HSMServer.Model.Folders
 
         private List<TimeIntervalEntity> GetPolicyEntities()
         {
-            var policies = new List<TimeIntervalEntity>();
+            var policies = new List<TimeIntervalEntity>(1 << 1);
 
             if (ExpectedUpdateInterval != null)
                 policies.Add(ExpectedUpdateInterval.ToEntity());
@@ -96,12 +92,14 @@ namespace HSMServer.Model.Folders
             return policies;
         }
 
-        private static TimeIntervalViewModel GetDefaultExpectedUpdatePolicy() =>
-            new(GetDefaultPolicyEntity(), PredefinedTimeIntervals.ExpectedUpdatePolicy);
+        private static TimeIntervalViewModel GetPolicy(List<TimeIntervalEntity> entities, int index, List<TimeInterval> predefinedIntervals) =>
+            entities.Count > index
+                ? new TimeIntervalViewModel(entities[index], predefinedIntervals)
+                : GetDefaultPolicy(predefinedIntervals);
 
-        private static TimeIntervalViewModel GetDefaultRestorePolicy() =>
-            new(GetDefaultPolicyEntity(), PredefinedTimeIntervals.RestorePolicy);
+        private static TimeIntervalViewModel GetDefaultPolicy(List<TimeInterval> predefinedIntervals) =>
+            new(GetDefaultPolicyEntity(), predefinedIntervals);
 
-        private static TimeIntervalEntity GetDefaultPolicyEntity() => new((byte)TimeInterval.None, 0L);
+        private static TimeIntervalEntity GetDefaultPolicyEntity() => new((byte)Core.Model.TimeInterval.Custom, 0L);
     }
 }

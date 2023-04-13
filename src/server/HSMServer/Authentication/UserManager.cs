@@ -43,6 +43,12 @@ namespace HSMServer.Authentication
         }
 
 
+        public void Dispose()
+        {
+            _treeValuesCache.ChangeProductEvent -= ChangeProductEventHandler;
+            _treeValuesCache.ChangeSensorEvent -= ChangeSensorEventHandler;
+        }
+
         public Task<bool> AddUser(string userName, string passwordHash, bool isAdmin, List<(Guid, ProductRoleEnum)> productRoles = null)
         {
             User user = new(userName)

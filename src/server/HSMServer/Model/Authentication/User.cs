@@ -54,27 +54,24 @@ namespace HSMServer.Model.Authentication
             Name = entity.UserName;
             Password = entity.Password;
             IsAdmin = entity.IsAdmin;
+            Notifications = new(entity.NotificationSettings);
 
-            if (entity.ProductsRoles != null && entity.ProductsRoles.Count > 0)
+            if (entity.ProductsRoles != null)
                 ProductsRoles.AddRange(entity.ProductsRoles.Select(r => (Guid.Parse(r.Key), (ProductRoleEnum)r.Value)));
 
             foreach (var (folderId, role) in entity.FolderRoles)
                 FoldersRoles.Add(Guid.Parse(folderId), (ProductRoleEnum)role);
-
-            Notifications = new(entity.NotificationSettings);
 
             TreeFilter = entity.TreeFilter is null
                 ? new TreeUserFilter()
                 : JsonSerializer.Deserialize<TreeUserFilter>(((JsonElement)entity.TreeFilter).GetRawText())?.RestoreFilterNames();
         }
 
+
         public void Update(UserUpdate update)
         {
             IsAdmin = update.IsAdmin ?? IsAdmin;
         }
-
-        public bool IsManager(Guid productId) =>
-            IsAdmin || ProductsRoles.Contains((productId, ProductRoleEnum.ProductManager));
 
         public UserEntity ToEntity() =>
             new()
@@ -88,6 +85,10 @@ namespace HSMServer.Model.Authentication
                 NotificationSettings = Notifications.ToEntity(),
                 TreeFilter = TreeFilter,
             };
+
+
+        internal bool IsManager(Guid productId) =>
+            IsAdmin || ProductsRoles.Contains((productId, ProductRoleEnum.ProductManager));
 
         internal bool IsProductAvailable(Guid productId) => IsAdmin || IsUserProduct(productId);
 

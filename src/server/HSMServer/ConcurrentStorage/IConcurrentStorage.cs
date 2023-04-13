@@ -3,11 +3,13 @@ using System.Threading.Tasks;
 
 namespace HSMServer.ConcurrentStorage
 {
-    public interface IConcurrentStorage<ModelType, EntityType, UpdateType>
+    public interface IConcurrentStorage<ModelType, EntityType, UpdateType> : IDisposable
         where ModelType : class, IServerModel<EntityType, UpdateType>
         where UpdateType : IUpdateModel
     {
         ModelType this[Guid id] { get; }
+
+        ModelType this[Guid? id] { get; }
 
         ModelType this[string name] { get; }
 
@@ -19,7 +21,11 @@ namespace HSMServer.ConcurrentStorage
 
         Task<bool> TryUpdate(UpdateType update);
 
+        Task<bool> TryRemove(Guid folderId);
+
         bool TryGetValue(Guid id, out ModelType model);
+
+        bool TryGetValueById(Guid? id, out ModelType model);
 
         Task Initialize();
     }

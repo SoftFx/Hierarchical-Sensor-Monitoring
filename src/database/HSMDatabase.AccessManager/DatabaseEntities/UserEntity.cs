@@ -15,7 +15,7 @@ namespace HSMDatabase.AccessManager.DatabaseEntities
 
         public Dictionary<string, byte> FolderRoles { get; set; } = new();
 
-        public List<KeyValuePair<string, byte>> ProductsRoles { get; set; }
+        public List<KeyValuePair<string, byte>> ProductsRoles { get; set; } = new();
 
         public NotificationSettingsEntity NotificationSettings { get; set; }
 

@@ -53,7 +53,7 @@ namespace HSMServer.Model
             if (node.Id == node.RootProduct.Id)
                 TreeElement = ProductTreeElement;
 
-            IgnorePeriod = new(PredefinedTimeIntervals.IgnoreNotifications, false);
+            IgnorePeriod = new(PredefinedIntervals.ForIgnore, false);
 
             DateTimeNow = DateTime.UtcNow.RoundToMin();
             NotificationsTarget = target;

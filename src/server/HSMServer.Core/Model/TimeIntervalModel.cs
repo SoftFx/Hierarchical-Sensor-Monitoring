@@ -27,6 +27,9 @@ namespace HSMServer.Core.Model
         [JsonIgnore]
         public bool IsNever => TimeInterval.IsCustom() && CustomPeriod == 0;
 
+        [JsonIgnore]
+        public bool IsFromFolder => TimeInterval == TimeInterval.FromFolder;
+
 
         [JsonConstructor]
         public TimeIntervalModel(TimeInterval timeInterval, long customPeriod)

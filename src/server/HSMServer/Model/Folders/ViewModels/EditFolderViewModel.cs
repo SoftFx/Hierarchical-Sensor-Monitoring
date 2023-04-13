@@ -59,7 +59,7 @@ namespace HSMServer.Model.Folders.ViewModels
 
 
         internal List<ProductNodeViewModel> GetFolderProducts(TreeViewModel.TreeViewModel treeViewModel) =>
-            Products?.GetFolderProducts(treeViewModel) ?? new();
+            Products?.GetProducts(treeViewModel) ?? new();
 
         internal FolderAdd ToFolderAdd(User author, TreeViewModel.TreeViewModel treeViewModel) =>
             new()

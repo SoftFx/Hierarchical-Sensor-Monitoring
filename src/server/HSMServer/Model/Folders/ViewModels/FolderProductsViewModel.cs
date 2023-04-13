@@ -10,18 +10,20 @@ namespace HSMServer.Model.Folders.ViewModels
     {
         public List<ProductNodeViewModel> DisplayProducts { get; } = new();
 
-        public List<Guid> Products { get; set; } = new();
-
-
-        public required List<ProductNodeViewModel> AvailableProducts { get; init; }
-
-        public List<SelectListItem> AvailableProductsItems =>
-            AvailableProducts?.Select(p => new SelectListItem(p.Name, p.Id.ToString())).OrderBy(p => p.Text).ToList();
+        public List<SelectListItem> AvailableProducts { get; }
 
         public List<string> SelectedProducts { get; set; } = new();
 
+        public List<Guid> Products { get; set; } = new();
+
 
         public FolderProductsViewModel() { }
+
+        internal FolderProductsViewModel(List<ProductNodeViewModel> availableProducts, List<string> selectedProducts)
+        {
+            AvailableProducts = availableProducts?.Select(p => new SelectListItem(p.Name, p.Id.ToString())).OrderBy(p => p.Text).ToList();
+            SelectedProducts = selectedProducts;
+        }
 
 
         internal void InitFolderProducts(Dictionary<Guid, ProductNodeViewModel> folderProducts)
@@ -30,7 +32,7 @@ namespace HSMServer.Model.Folders.ViewModels
             Products = DisplayProducts.Select(p => p.Id).ToList();
         }
 
-        internal List<ProductNodeViewModel> GetFolderProducts(TreeViewModel.TreeViewModel treeViewModel)
+        internal List<ProductNodeViewModel> GetProducts(TreeViewModel.TreeViewModel treeViewModel)
         {
             var folderProducts = new List<ProductNodeViewModel>(1 << 3);
 

@@ -5,6 +5,7 @@ using HSMServer.Core.Cache;
 using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.DataLayer;
 using HSMServer.Core.Model;
+using HSMServer.Model;
 using HSMServer.Model.Authentication;
 using HSMServer.Model.Folders;
 using HSMServer.Model.TreeViewModel;
@@ -15,7 +16,7 @@ using System.Threading.Tasks;
 
 namespace HSMServer.Folders
 {
-    public sealed class FolderManager : ConcurrentStorage<FolderModel, FolderEntity, FolderUpdate>, IFolderManager, IDisposable
+    public sealed class FolderManager : ConcurrentStorage<FolderModel, FolderEntity, FolderUpdate>, IFolderManager
     {
         private readonly ITreeValuesCache _cache;
         private readonly IUserManager _userManager;
@@ -61,7 +62,7 @@ namespace HSMServer.Folders
             var result = await base.TryAdd(model);
 
             if (result)
-                foreach (var (productId, _) in model.Products)
+                foreach (var productId in model.Products.Keys)
                     AddProductToFolder(productId, model.Id);
 
             return result;
@@ -73,10 +74,10 @@ namespace HSMServer.Folders
 
             if (result)
             {
-                foreach (var (productId, _) in folder.Products)
+                foreach (var productId in folder.Products.Keys)
                     RemoveProductFromFolder(productId);
 
-                foreach (var (user, _) in folder.UserRoles)
+                foreach (var user in folder.UserRoles.Keys)
                 {
                     user.FoldersRoles.Remove(folderId);
 
@@ -87,18 +88,29 @@ namespace HSMServer.Folders
             return result;
         }
 
+        public override async Task Initialize()
+        {
+            await base.Initialize();
+
+            foreach (var (_, folder) in this)
+                if (_userManager.TryGetValue(folder.AuthorId, out var author))
+                    folder.Author = author.Name;
+
+            foreach (var user in _userManager.GetUsers())
+                foreach (var (folderId, role) in user.FoldersRoles)
+                    if (TryGetValue(folderId, out var folder))
+                        folder.UserRoles.Add(user, role);
+        }
+
         public void MoveProduct(ProductNodeViewModel product, Guid? fromFolderId, Guid? toFolderId)
         {
             if (TryGetValueById(fromFolderId, out var fromFolder))
                 fromFolder.Products.Remove(product.Id);
 
-            if (toFolderId is not null)
+            if (TryGetValueById(toFolderId, out var toFolder))
             {
-                if (TryGetValueById(toFolderId, out var toFolder))
-                {
-                    toFolder.Products.Add(product.Id, product);
-                    AddProductToFolder(product.Id, toFolderId.Value);
-                }
+                toFolder.Products.Add(product.Id, product);
+                AddProductToFolder(product.Id, toFolderId.Value);
             }
             else
                 RemoveProductFromFolder(product.Id);
@@ -126,17 +138,14 @@ namespace HSMServer.Folders
                 {
                     Id = productId,
                     FolderId = folder?.Id ?? Guid.Empty,
-                    ExpectedUpdateInterval = expectedUpdateInterval.TimeInterval is TimeInterval.FromFolder
-                        ? folder?.ExpectedUpdateInterval.ToFolderModel() ?? new TimeIntervalModel(expectedUpdateInterval.CustomPeriod)
-                        : null,
-                    RestoreInterval = restoreInterval.TimeInterval is TimeInterval.FromFolder
-                        ? folder?.SensorRestorePolicy.ToFolderModel() ?? new TimeIntervalModel(restoreInterval.CustomPeriod)
-                        : null,
+                    ExpectedUpdateInterval = GetCorePolicy(expectedUpdateInterval, folder?.ExpectedUpdateInterval),
+                    RestoreInterval = GetCorePolicy(restoreInterval, folder?.SensorRestorePolicy),
                 };
 
                 _cache.UpdateProduct(update);
             }
         }
+
 
         public List<FolderModel> GetUserFolders(User user)
         {
@@ -151,26 +160,6 @@ namespace HSMServer.Folders
             return folders.Where(f => user.IsFolderAvailable(f.Id)).ToList();
         }
 
-        public override async Task Initialize()
-        {
-            await base.Initialize();
-
-            foreach (var (_, folder) in this)
-                if (_userManager.TryGetValue(folder.AuthorId, out var author))
-                    folder.Author = author.Name;
-
-            foreach (var user in _userManager.GetUsers())
-                foreach (var (folderId, role) in user.FoldersRoles)
-                    if (TryGetValue(folderId, out var folder))
-                        folder.UserRoles.Add(user, role);
-        }
-
-        public bool TryGetValueById(Guid? id, out FolderModel folder)
-        {
-            folder = null;
-
-            return id is not null && TryGetValue(id.Value, out folder);
-        }
 
         protected override FolderModel FromEntity(FolderEntity entity) => new(entity);
 
@@ -183,9 +172,16 @@ namespace HSMServer.Folders
 
         private void RemoveUserHandler(User user)
         {
-            foreach (var (folderId, _) in user.FoldersRoles)
+            foreach (var folderId in user.FoldersRoles.Keys)
                 if (TryGetValue(folderId, out var folder))
                     folder.UserRoles.Remove(user);
+        }
+
+        private static TimeIntervalModel GetCorePolicy(TimeIntervalModel coreInterval, TimeIntervalViewModel folderInterval)
+        {
+            return coreInterval.IsFromFolder
+                ? folderInterval?.ToFolderModel() ?? new TimeIntervalModel(coreInterval.CustomPeriod)
+                : null;
         }
     }
 }

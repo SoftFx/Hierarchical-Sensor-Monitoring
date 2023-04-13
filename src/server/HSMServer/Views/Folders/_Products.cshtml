@@ -29,7 +29,7 @@ else
 }
 
 <div id="productsSelect" class="selectpicker @(noProducts ? "" : "d-none")">
-    <select class="selectpicker" asp-for="SelectedProducts" asp-items="@Model.AvailableProductsItems" data-live-search="true" data-width="100%" title="Choose products to add" multiple></select>
+    <select class="selectpicker" asp-for="SelectedProducts" asp-items="@Model.AvailableProducts" data-live-search="true" data-width="100%" title="Choose products to add" multiple></select>
 </div>
 
 @if (!noProducts)
