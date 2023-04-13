@@ -22,7 +22,7 @@
     var valuesParentDivId = $"values_parent_{sensorId}";
 }
 
-<div class="container-fluid pe-0" style="overflow-y: auto;">
+<div class="container-fluid pe-0" style="overflow-y: auto;overflow-x:hidden">
 @await Html.PartialAsync("_SensorMetaInfo", new SensorInfoViewModel(Model))
 
 @if (Model.SensorType == SensorType.File)
