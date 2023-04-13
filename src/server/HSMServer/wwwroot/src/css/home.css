@@ -237,7 +237,8 @@ img .tree-png-icon{
     max-width: 8rem; 
     width: 7rem;
 }
-.button-width-static > i, svg{
-    width: 1rem!important;
-    height: 1rem!important;
+
+.small-icon{
+    width: 1rem;
+    height: 1rem;
 }
