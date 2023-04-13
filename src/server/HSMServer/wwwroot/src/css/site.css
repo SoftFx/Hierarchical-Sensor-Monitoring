@@ -1,6 +1,11 @@
 ﻿/* Please see documentation at https://docs.microsoft.com/aspnet/core/client-side/bundling-and-minification
 for details on configuring this project to bundle and minify static web assets. */
 
+:root{
+    --footer-height: 3rem;
+    --header-height: 3rem;
+}
+
 a.navbar-brand {
     white-space: normal;
     text-align: center;
@@ -72,7 +77,7 @@ html {
 }
 
 .header{
-    height: 3rem;
+    height: var(--header-height);
 }
 
 .footer {
@@ -80,7 +85,7 @@ html {
     bottom: 0;
     width: 100%;
     white-space: nowrap;
-    height: 3rem;
+    height: var(--footer-height);
 }
 
 .login-form-div {
@@ -179,4 +184,17 @@ input.input-validation-error {
     transition: none!important;
     -webkit-transition: none!important;
     display: none;
+}
+
+/* Wrappers
+-------------------------------------------------- */
+
+.body-content-wrapper{
+    width: 100%;
+    min-height: 100vh; 
+    position: relative
+}
+
+.body-content{
+    padding-bottom: var(--footer-height)
 }

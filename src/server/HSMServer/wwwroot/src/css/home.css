@@ -33,8 +33,7 @@
 .tree-height-weight-parameters {
     max-width: 100%;
     min-width: 10vw;
-    overflow-y: auto;
-    overflow-x: hidden;
+    overflow: inherit;
 }
 
 .button-link {
@@ -209,4 +208,24 @@ img .tree-png-icon{
     cursor: text;
     padding-top: 0;
     padding-left: 0;
+}
+
+.reserved-scroll-y{
+    overflow-y: auto;
+    overflow-x: hidden;
+    scrollbar-gutter: stable
+}
+
+.tree-collapse-button{
+    color: #0b5fef; 
+    cursor: pointer; 
+    padding-right: 2px
+}
+
+.tree-main-container{
+    height: calc(100vh - var(--header-height ) - var(--footer-height) - 1.5rem)
+}
+
+.tree-wrapper{
+   height: calc(100% - var(--header-height)); 
 }

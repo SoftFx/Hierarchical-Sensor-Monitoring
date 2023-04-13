@@ -14,8 +14,8 @@
         <script src="~/dist/main.bundle.js"></script>
     </head>
     <body>
-        <div style="width: 100%;min-height: 100vh; position: relative">
-            <div style="padding-bottom: 3rem">
+        <div class="body-content-wrapper">
+            <div class="body-content">
                 <header>
                     <div id="navbar">
                         @if (Context.User is User)
@@ -144,34 +144,30 @@
                                 </div>
                             </nav>
                         }
-
                     </div>
-
                 </header>
-
                 <div id="spinner" class="text-center" style="display: none">
                     <button class="btn btn-primary" type="button" disabled>
                         <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
                         Loading...
                     </button>
                 </div>
-
                 <main>
                     @RenderBody()
                 </main>
             </div>
             <footer class="border-top footer text-muted">
-                <div class="d-flex justify-content-between align-items-center mx-3" style="height: 3rem">
+                <div class="d-flex justify-content-between align-items-center mx-3" style="height: var(--footer-height)">
                     <div>
                         &copy; 2023 - Soft-FX Current version: @ServerConfig.Version
                     </div>
-
                     <div>
                         <div id="updateTime"></div>
                     </div>
                 </div>
             </footer>
         </div>
+        
         @RenderSection("Scripts", required: false)
     </body>
 </html>
