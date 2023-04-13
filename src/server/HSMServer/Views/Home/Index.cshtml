@@ -180,12 +180,16 @@
 
     function updateSpecificSensorData(dataObject) {
         var id = dataObject.id;
-        $('#value_' + id).empty().append(dataObject.value);
+        let isFile = dataObject.sensorType === 6;
 
+        $('#value_' + id).empty().append(dataObject.value);
         $('#validation_' + id).empty();
         
-        if (dataObject.sensorType === 6 && dataObject.comment !== null){
-                     $('#validation_' + id).append(`<span class="d-flex text-break">Comment: ${dataObject.comment}</span>`);
+        if (isFile) {
+            $(`#last_file_name_${id}`).empty().append(dataObject.fileNameString);
+
+            if (dataObject.comment !== null)
+                $('#validation_' + id).append(`<span class="d-flex text-break">Comment: ${dataObject.comment}</span>`);
         }
         
         
@@ -195,7 +199,6 @@
         }
         
         let accordionLoaded = $('[id^="sensorData"]');
-        let isFile = dataObject.sensorType === 6;
         
         if (accordionLoaded.length !== 0){
               if (isFile && dataObject.receivingTime !== null){
@@ -207,7 +210,6 @@
               if (isFile)
                 setContentPreview(id);
         }
-     
     }
 
     var refreshTreeTimeoutId;
