@@ -75,7 +75,7 @@ html {
     height: 3rem;
 }
 
-footer {
+.footer {
     position: absolute;
     bottom: 0;
     width: 100%;
