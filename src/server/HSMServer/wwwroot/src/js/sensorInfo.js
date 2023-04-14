@@ -1,8 +1,4 @@
-﻿window.initializeInfoLinks = function() {
-    $('[id^="sensorInfo_link_"]').off("click").on("click", metaInfoLinkClicked);
-}
-
-window.editInfoButtonClick = function () {
+﻿window.editInfoButtonClick = function () {
     let sensorId = $('#sensorMetaInfo_encodedId').val();
 
     $('#interval_' + sensorId).removeAttr("disabled");
@@ -10,7 +6,16 @@ window.editInfoButtonClick = function () {
     $('#unit_' + sensorId).removeAttr("disabled").removeClass("naked-text");
     $('#saveInfo_' + sensorId).removeAttr("disabled").removeAttr("hidden");
     $('#revertInfo_' + sensorId).removeAttr("disabled").removeAttr("hidden");
-    $('#editButtonMetaInfo').attr('hidden', true);
+    $('#editButtonMetaInfo').addClass('d-none');
+
+    $('#editSensorMetaInfo_form').children('div').each(function () {
+        $(this).removeClass('d-none');
+    });
+    $('[id^="markdown_span_description_"]').addClass('d-none')
+    $('[id^="description_"]').removeClass('d-none')
+    $('#sensor_info_collapse').addClass('d-none')
+   
+    $('#metainfo_separator').removeClass('d-none');
     
     $('#partialIntervalSelect').removeClass('d-none');
     $('#partialRestoreSelect').removeClass('d-none');
@@ -30,17 +35,14 @@ window.revertInfoClick = function () {
 
 window.displaySensorMetaInfo = function (sensorId, viewData) {
     $('#sensor_info_' + sensorId).html(viewData);
+   
+    let metaInfo = $('#metaInfoCollapse');
+
+    metaInfo.addClass('no-transition');
+    $('#sensor_info_collapse').click();
+    metaInfo.removeClass('no-transition');
 
     disableExpectedUpdateIntervalControl();
-}
-
-function metaInfoLinkClicked() {
-    let sensorId = this.id.substring("sensorInfo_link_".length);
-    if ($('#sensor_info_' + sensorId).is(':empty')) {
-        showMetaInfo(sensorId);
-    } else {
-        hideMetaInfo(sensorId);
-    }
 }
 
 function showMetaInfo(id) {
@@ -53,18 +55,7 @@ function showMetaInfo(id) {
         async: true
     }).done(function (data) {
         displaySensorMetaInfo(id, data);
-        setLinkText(id, "Hide meta info");
     });
-}
-
-function hideMetaInfo(sensorId) {
-    $('#sensor_info_' + sensorId).empty();
-    setLinkText(sensorId, "Show meta info");
-}
-
-function setLinkText(sensorId, text) {
-    let link = document.getElementById('sensorInfo_link_' + sensorId);
-    link.textContent = text;
 }
 
 function disableExpectedUpdateIntervalControl() {

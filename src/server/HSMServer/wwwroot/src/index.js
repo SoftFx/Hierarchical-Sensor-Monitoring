@@ -26,6 +26,12 @@ window.TimeSpan = TimeSpan;
 import * as Heiho from '@kktsvetkov/heiho';
 window.Heiho = Heiho;
 
+import * as Marked from 'marked'
+window.marked = Marked;
+
+import * as DOMPurify from 'dompurify';
+window.DOMPurify = DOMPurify;
+
 import '@kktsvetkov/heiho/heiho.css';
 
 import 'datatables';
