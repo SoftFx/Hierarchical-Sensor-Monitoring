@@ -22,7 +22,7 @@
     var valuesParentDivId = $"values_parent_{sensorId}";
 }
 
-<div class="container-fluid pe-0 overflow-y-auto">
+<div>
     @await Html.PartialAsync("_SensorMetaInfo", new SensorInfoViewModel(Model))
 
     @if (Model.SensorType == SensorType.File)
@@ -67,7 +67,7 @@
                                         </div>
 
                                     </div>
-                                    <input id='sensor_type_@sensorId' value='@((int)Model.SensorType)' style='display: none'/>
+                                    <input id='sensor_type_@sensorId' value='@((int)Model.SensorType)' style='display: none' />
                                     <div class='col-md-auto time-ago-div me-3' id='update_@sensorId'>
                                         <div id="side_info_@sensorId" class="d-flex flex-md-column align-items-end" style="font-size: smaller">
                                             @if (Model.HasData)
@@ -102,7 +102,7 @@
                                     <div class="col-6">
                                         <div class="justify-content-end">
                                             <div class="d-flex flex-row-reverse">
-                                                <input style='display: none;' id='fileType_@sensorId' value='@Model.FileNameString'/>
+                                                <input style='display: none;' id='fileType_@sensorId' value='@Model.FileNameString' />
                                                 <a id='button_download_@sensorId' class='btn btn-outline-secondary d-flex justify-content-center align-items-center mx-1 button-width-static' title='Download'>
                                                     <i class='fas fa-file-download small-icon pe-1'></i>
                                                     <span style="font-size: smaller">Download</span>
@@ -193,87 +193,87 @@
 </div>
 <script>
     var previousReceivedTime = undefined;
-    
-    $(document).ready(function() {
-        if ('@(Model.SensorType is SensorType.File)'=== 'True'){
+
+    $(document).ready(function () {
+        if ('@(Model.SensorType is SensorType.File)' === 'True') {
             setContentPreview('@Model.EncodedId');
         }
     });
-    
-    function setContentPreview(encodedId){
+
+    function setContentPreview(encodedId) {
         $.ajax({
             type: 'GET',
             url: `${getFileInfo}?Selected=${encodedId}`,
             cache: false,
             contentType: "application/json",
-            success: function (response){
-                if (previousReceivedTime === response.time) 
+            success: function (response) {
+                if (previousReceivedTime === response.time)
                     return;
-                
+
                 if ((response.originalSize < 5 * 1024 * 1024 && response.extension === 'csv') || // 5MB
-                    (response.originalSize < 1024 * 1024 && response.extension === 'txt')) { // 1MB 
+                    (response.originalSize < 1024 * 1024 && response.extension === 'txt')) { // 1MB
                     $.ajax({
-                            type: 'POST',
-                            url: `${viewFileAction}?Selected=${encodedId}`,
-                            cache: false,
-                            contentType: "application/json",
-                            success: function (file) {
-                                let dataSet = [];
-                                if (response.extension === 'csv') {
-                                    file.split('\n').forEach( el => {
-                                        let splitted = el.split(',');
-                                          
-                                        let isEmpty = splitted.every(x => {
-                                            return x !== '';
-                                        })
-                                      
-                                        if (isEmpty){
-                                            dataSet.push(el.split(','))
-                                        }
-                                    });
-        
-                                    let columns = [];
-                              
-                                    dataSet[0].forEach(el => {
-                                           columns.push({"title" : el}) 
-                                    });
-            
-                                    $('#preview').removeClass('d-none container');
-                                    $('#preview-content').html( '<table class="display w-100" id="example"></table>' );
-                         
-                                    $('#example').dataTable( {
-                                              "data": dataSet.splice(1),
-                                              "columns": columns,
-                                              "lengthMenu": [ [5, 20, 50, 100], [5, 20, 50, 100] ],
-                                              "pageLength": 20
-                                    });  
-                                }
-                                else if (response.extension === 'txt') {
-                                    $('#preview').removeClass('d-none container');
-                                    $('#preview-content').addClass('w-100 mw-100 text-break').html(file);
-                                }
-                             } 
+                        type: 'POST',
+                        url: `${viewFileAction}?Selected=${encodedId}`,
+                        cache: false,
+                        contentType: "application/json",
+                        success: function (file) {
+                            let dataSet = [];
+                            if (response.extension === 'csv') {
+                                file.split('\n').forEach(el => {
+                                    let splitted = el.split(',');
+
+                                    let isEmpty = splitted.every(x => {
+                                        return x !== '';
+                                    })
+
+                                    if (isEmpty) {
+                                        dataSet.push(el.split(','))
+                                    }
+                                });
+
+                                let columns = [];
+
+                                dataSet[0].forEach(el => {
+                                    columns.push({ "title": el })
+                                });
+
+                                $('#preview').removeClass('d-none container');
+                                $('#preview-content').html('<table class="display w-100" id="example"></table>');
+
+                                $('#example').dataTable({
+                                    "data": dataSet.splice(1),
+                                    "columns": columns,
+                                    "lengthMenu": [[5, 20, 50, 100], [5, 20, 50, 100]],
+                                    "pageLength": 20
+                                });
+                            }
+                            else if (response.extension === 'txt') {
+                                $('#preview').removeClass('d-none container');
+                                $('#preview-content').addClass('w-100 mw-100 text-break').html(file);
+                            }
+                        }
                     })
                 }
                 else {
                     $('#bigFilePreview').removeClass('d-none');
                 }
-                
+
                 loadFiles();
                 previousReceivedTime = response.time;
             }
-        })    
+        })
     }
     var getFilesInfo = '@Url.Action(nameof(HomeController.GetRecentFilesView), "Home")';
-    function loadFiles(){
+    function loadFiles() {
         $.ajax({
-                type: 'GET',
-                url: `${getFilesInfo}?fileId=@Model.EncodedId`,
-                cache: false,
-                contentType: "application/json",
-                success: function (response){         
-                   $('#recentValues_@Model.EncodedId').html(response);
-                }
-            })
+            type: 'GET',
+            url: `${getFilesInfo}?fileId=@Model.EncodedId`,
+            cache: false,
+            contentType: "application/json",
+            success: function (response) {
+                $('#recentValues_@Model.EncodedId').html(response);
+            }
+        })
     }
 </script>
