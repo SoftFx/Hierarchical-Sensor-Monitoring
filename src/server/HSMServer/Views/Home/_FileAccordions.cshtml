@@ -65,12 +65,12 @@
                             <div class="row justify-content-end">
                                 <div class="d-flex flex-row-reverse">
                                     <input style='display: none;' id='fileType_@i' value='@value.Name.@value.Extension'/>
-                                    <a id='button_download_@i' onclick="fileDownload('@value.ReceivingTime.Ticks')" class='btn btn-outline-secondary d-flex justify-content-center align-items-center mx-1' style="max-width: 8rem; width: 7rem;" title='Download'>
-                                        <i class='fas fa-file-download pe-1' style="width: 1rem;height: 1rem"></i>
+                                    <a id='button_download_@i' onclick="fileDownload('@value.ReceivingTime.Ticks')" class='btn btn-outline-secondary d-flex justify-content-center align-items-center button-width-static mx-1' title='Download'>
+                                        <i class='fas fa-file-download small-icon pe-1'></i>
                                         <span style="font-size: smaller">Download</span>
                                     </a>
-                                    <a id='button_view_@i' onclick="fileNewTabView('@value.ReceivingTime.Ticks', '@value.Extension')" class='btn btn-outline-secondary d-flex justify-content-center align-items-center mx-1' style="max-width: 8rem; width: 7rem;" title='Preview'>
-                                        <i class='fas fa-eye pe-1' style="width: 1rem;height: 1rem"></i>
+                                    <a id='button_view_@i' onclick="fileNewTabView('@value.ReceivingTime.Ticks', '@value.Extension')" class='btn btn-outline-secondary d-flex justify-content-center align-items-center button-width-static mx-1' title='Preview'>
+                                        <i class='fas fa-eye small-icon pe-1'></i>
                                         <span style="font-size: smaller"> Preview</span>
                                     </a>
                                 </div>

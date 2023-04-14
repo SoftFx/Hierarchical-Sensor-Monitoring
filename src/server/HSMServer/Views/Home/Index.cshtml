@@ -71,9 +71,9 @@
 
 <div id="mainSpinner" class="spinner-border big_spinner text-secondary center_spinner" role="status"></div>
 
-<div id="mainContainer" class="container mw-100 d-inline-flex flex-wrap flex-lg-nowrap mt-1 hidden_element ms-0 ps-0">
+<div id="mainContainer" class="container tree-main-container mw-100 d-inline-flex flex-nowrap hidden_element m-0 p-0">
     <div>
-        <div class="d-flex my-1">
+        <div class="d-flex pt-3 pb-1">
             <div class="d-flex flex-fill me-auto">
                 <button id="show" type="button" class="btn btn-sm btn-outline-primary ms-3 position-relative" style="height: 2.5rem">
                     <i class="fa-solid fa-filter"></i>
@@ -93,17 +93,17 @@
                 {
                     <span class="enabled-filters-message text-break">@user.TreeFilter.EnabledFiltersMessage</span>
                 }
-                <div class="flex-fill pe-3 align-self-center text-end">
-                    <i id="collapseIcon" onclick="collapseTree()" class="fa-regular fa-square-minus" style="color: #0b5fef; cursor: pointer" title="Save and close tree"></i>
+                <div class="flex-fill align-self-center text-end">
+                    <i id="collapseIcon" onclick="collapseTree()" class="fa-regular fa-square-minus tree-collapse-button" title="Save and close tree"></i>
                 </div>
             </div>
         </div>
-        <div class="d-flex justify-content-center">
+        <div class="d-flex justify-content-center tree-wrapper reserved-scroll-y overflow-y-auto" >
             <div class="d-flex me-auto">
                 <div class="ms-2 mb-1"> @await Html.PartialAsync("_TreeFilter.cshtml", new UserFilterViewModel(user.TreeFilter)) </div>
 
                 <div class="row justify-content-start mw-100 me-1">
-                    <div class="tree-height-weight-parameters col-auto ms-2">
+                    <div class="tree-height-weight-parameters col-auto ms-2 pe-0">
                         <div class="col-md-auto">
                             <div id="jstree">@await Html.PartialAsync("_Tree", Model.GetUserTree(user))</div>
                         </div>
@@ -113,14 +113,14 @@
         </div>
     </div>
 
-    <div class="flex-grow-1 my-1 me-1">
+    <div class="flex-grow-1 reserved-scroll-y overflow-y-auto">
         <div class="d-none" id="nodeDataSpinner">
             <div class="d-flex justify-content-center align-items-center center_relative_spinner">
                 <div class="spinner-border normal_spinner text-secondary" role="status"></div>
             </div>
         </div>
 
-        <div id="nodeDataPanel" class="hidden_element">"@await Html.PartialAsync("_NodeDataPanel", (NodeViewModel)null)</div>
+        <div id="nodeDataPanel" class="hidden_element">@await Html.PartialAsync("_NodeDataPanel", (NodeViewModel)null)</div>
     </div>
 </div>
 
@@ -129,10 +129,16 @@
     initializeTree();
     initialize();
 
-     $(document).ready(() => {
-            $('#updateTime').empty().append('Update Time: ' + new Date().toUTCString());
-     })
-    
+    $(document).ready(() => {
+           $('#updateTime').empty().append('Update Time: ' + new Date().toUTCString());
+    })
+     
+    $(window).on('load' ,function (){
+                   $('body').css('overflow', 'hidden');
+             })
+             .on('unload', function (){
+                   $('body').css('overflow', 'auto');   
+             });
 
     var interval = $("#treeInterval").val() * 1000;
 
@@ -173,9 +179,15 @@
 
         if (dataObject.sensorType !== 6)
             $('#update_' + id).empty().append(dataObject.updatedTimeStr);
-        $('#status_' + id).removeClass('tree-icon-offTime tree-icon-ok tree-icon-warning tree-icon-error');
-        $('#status_' + id).addClass(dataObject.statusIconColorClass);
-        $('#status_' + id).prop('title', `Status: ${dataObject.status}`);
+       
+        $('#status_' + id).removeClass('tree-icon-offTime tree-icon-ok tree-icon-warning tree-icon-error')
+                          .addClass(dataObject.statusIconColorClass)
+                          .prop('title', `Status: ${dataObject.status}`)
+        $('#metainfo_icon_status').removeClass('tree-icon-offTime tree-icon-ok tree-icon-warning tree-icon-error')
+                                  .addClass(dataObject.statusIconColorClass)
+                                  .prop('title', `Status: ${dataObject.status}`);
+        
+        $('#status_name_' + id).empty().html(dataObject.status);
     }
 
     function updateSpecificSensorData(dataObject) {
@@ -184,6 +196,7 @@
 
         $('#value_' + id).empty().append(dataObject.value);
         $('#validation_' + id).empty();
+        $('#validation_metainfo').empty();
         
         if (isFile) {
             $(`#last_file_name_${id}`).empty().append(dataObject.fileNameString);
@@ -192,18 +205,24 @@
                 $('#validation_' + id).append(`<span class="d-flex text-break">Comment: ${dataObject.comment}</span>`);
         }
         
-        
         if (dataObject.isValidationErrorVisible) {
             $('#validation_' + id).append(`<li id='errorIcon_${id}' class='fas fa-exclamation-triangle me-1'></li>
-                                           <span>Alert comment: ${dataObject.validationError}</span>`);
+                                           <span>Status comment: ${dataObject.validationError}</span>`);
+            $('#validation_metainfo').append(`<div class="d-flex ps-2 ms-1 text-nowrap">
+                                                   <span style="min-width: 8rem">Status comment:</span>
+                                              </div>
+                                              <div class="d-flex w-100 ps-2">
+                                                    <span id="markdown_status_comment">${markdownToHTML(dataObject.validationError)}</span>
+                                              </div>`);
+
+            $('#markdown_status_comment').children().last().css('margin-bottom',0);
         }
         
         let accordionLoaded = $('[id^="sensorData"]');
         
         if (accordionLoaded.length !== 0){
               if (isFile && dataObject.receivingTime !== null){
-                 $('#side_info_' + id).empty().append(`<span class="pb-3" style="font-size: medium">${dataObject.updatedTimeStr}</span>
-                                                       <span>Size: ${dataObject.size}</span>
+                 $('#side_info_' + id).empty().append(`<span>Size: ${dataObject.size}</span>
                                                        <span>${dataObject.receivingTime}</span>`);
               }
                     
