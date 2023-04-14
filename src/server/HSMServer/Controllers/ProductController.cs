@@ -30,7 +30,7 @@ namespace HSMServer.Controllers
 {
     [Authorize]
     [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
-    public class ProductController : Controller
+    public class ProductController : BaseController
     {
         private readonly IUserManager _userManager;
         private readonly IConfigurationProvider _configurationProvider;
@@ -57,9 +57,8 @@ namespace HSMServer.Controllers
 
         public IActionResult Index()
         {
-            var user = HttpContext.User as User;
-            var userProducts = _treeViewModel.GetUserProducts(user);
-            var userFolders = _folderManager.GetUserFolders(user);
+            var userProducts = _treeViewModel.GetUserProducts(CurrentUser);
+            var userFolders = _folderManager.GetUserFolders(CurrentUser);
 
             var folderProducts = new Dictionary<Guid, List<ProductViewModel>>(1 << 2);
             var productsWithoutFolder = new List<ProductViewModel>(1 << 2);
@@ -100,7 +99,7 @@ namespace HSMServer.Controllers
             ViewBag.ProductName = productName;
             ViewBag.ProductManager = productManager;
 
-            var userProducts = _treeViewModel.GetUserProducts(HttpContext.User as User);
+            var userProducts = _treeViewModel.GetUserProducts(CurrentUser);
             var folderProducts = new List<ProductViewModel>(1 << 3);
 
             foreach (var product in userProducts)

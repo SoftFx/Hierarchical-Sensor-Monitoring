@@ -1,6 +1,5 @@
 ﻿using HSMServer.Authentication;
 using HSMServer.Folders;
-using HSMServer.Model.Authentication;
 using HSMServer.Model.Folders;
 using HSMServer.Model.Folders.ViewModels;
 using HSMServer.Model.TreeViewModel;
@@ -13,7 +12,7 @@ using System.Threading.Tasks;
 
 namespace HSMServer.Controllers
 {
-    public class FoldersController : Controller
+    public class FoldersController : BaseController
     {
         private static readonly EmptyResult _emptyResult = new();
 
@@ -85,7 +84,7 @@ namespace HSMServer.Controllers
                 return View(nameof(EditFolder), folder);
             }
 
-            await _folderManager.TryAdd(folder.ToFolderAdd(HttpContext.User as User, _tree), out var newFolder);
+            await _folderManager.TryAdd(folder.ToFolderAdd(CurrentUser, _tree), out var newFolder);
 
             return View(nameof(EditFolder), BuildEditFolder(newFolder.Id));
         }
@@ -185,8 +184,7 @@ namespace HSMServer.Controllers
 
         private FolderProductsViewModel BuildFolderProducts(List<string> selectedProducts = null)
         {
-            var user = HttpContext.User as User;
-            var availableProducts = _tree.GetUserProducts(user).Where(p => p.FolderId is null).ToList();
+            var availableProducts = _tree.GetUserProducts(CurrentUser).Where(p => p.FolderId is null).ToList();
 
             return new(availableProducts, selectedProducts);
         }
