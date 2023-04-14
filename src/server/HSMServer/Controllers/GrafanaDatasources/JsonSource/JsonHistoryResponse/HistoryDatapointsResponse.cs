@@ -7,7 +7,7 @@ namespace HSMServer.Controllers.GrafanaDatasources.JsonSource
 {
     public class HistoryDatapointsResponse : BaseHistoryResponse
     {
-        public List<string[]> Datapoints { get; set; } = new();
+        public List<object[]> Datapoints { get; set; } = new();
 
 
         public HistoryDatapointsResponse() { }
@@ -16,17 +16,17 @@ namespace HSMServer.Controllers.GrafanaDatasources.JsonSource
         public override BaseHistoryResponse FillRows(List<BaseValue> rawData)
         {
             foreach (var raw in rawData)
-                AddRow(raw.Time, raw.ShortInfo);
+                AddRow(raw.Time, raw.RawValue);
 
             return Datapoints.Count > 0 ? this : null;
         }
 
-        private void AddRow(DateTime time, string value)
+        private void AddRow(DateTime time, object value)
         {
-            Datapoints.Add(new string[]
+            Datapoints.Add(new object[]
             {
                 value,
-                $"{time.ToUnixMilliseconds()}"
+                time.ToUnixMilliseconds()
             });
         }
     }

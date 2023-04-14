@@ -1,5 +1,4 @@
-﻿using HSMServer.Extensions;
-using Newtonsoft.Json;
+﻿using Newtonsoft.Json;
 using System;
 
 namespace HSMServer.Controllers.GrafanaDatasources.JsonSource
@@ -12,9 +11,9 @@ namespace HSMServer.Controllers.GrafanaDatasources.JsonSource
 
 
         [JsonIgnore]
-        public DateTime FromUtc => DateTime.Parse(From).ToUtcKind();
+        public DateTime FromUtc => DateTime.Parse(From).ToUniversalTime();
 
         [JsonIgnore]
-        public DateTime ToUtc => DateTime.Parse(To).ToUtcKind();
+        public DateTime ToUtc => DateTime.Parse(To).ToUniversalTime();
     }
 }

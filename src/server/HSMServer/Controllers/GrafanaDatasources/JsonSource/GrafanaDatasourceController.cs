@@ -1,4 +1,5 @@
-﻿using HSMServer.Core.Cache;
+﻿using HSMServer.Controllers.GrafanaDatasources.JsonSource.JsonHistoryResponse;
+using HSMServer.Core.Cache;
 using HSMServer.Core.Model;
 using HSMServer.Extensions;
 using HSMServer.Model.TreeViewModel;
@@ -77,7 +78,11 @@ namespace HSMServer.Controllers.GrafanaDatasources.JsonSource
                     object sensorHistory = target.Payload.Type switch
                     {
                         PayloadOption.PointsDataTypeLabel => DataToResponse<HistoryDatapointsResponse>(sensorData, sensorId),
-                        PayloadOption.TableDataTypeLabel => DataToResponse<HistoryTableResponse>(sensorData, sensorId),
+                        PayloadOption.TableDataTypeLabel => sensor.Type switch
+                        {
+                            SensorType.IntegerBar or SensorType.DoubleBar => DataToResponse<BarHistoryTableResponse>(sensorData, sensorId),
+                            _ => DataToResponse<SimpleHistoryTableResponse>(sensorData, sensorId),
+                        },
                         _ => null,
                     };
 
