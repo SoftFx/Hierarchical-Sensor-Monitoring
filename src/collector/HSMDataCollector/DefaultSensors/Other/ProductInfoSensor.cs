@@ -9,7 +9,7 @@ namespace HSMDataCollector.DefaultSensors.Other
         private readonly string _version;
         private readonly DateTime _startTime;
 
-        protected override string SensorName => "Product Version";
+        protected override string SensorName => "Running versions";
 
 
         public ProductInfoSensor(ProductInfoOptions options) : base(options)

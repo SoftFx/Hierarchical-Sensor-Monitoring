@@ -4,7 +4,7 @@ namespace HSMDataCollector.Options
 {
     internal sealed class ProductVersionOptions : OptionsProperty<ProductInfoOptions>
     {
-        protected override string NodePath { get; } = "Product Info/Version Updates";
+        protected override string NodePath { get; } = "Product Info";
 
         internal override ProductInfoOptions GetAndFill(ProductInfoOptions options)
         {
