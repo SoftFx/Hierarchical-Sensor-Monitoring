@@ -187,7 +187,7 @@ namespace HSMServer.Notifications
                             foreach (var (_, chat) in chats)
                             {
                                 if (entity.Notifications.Telegram.MessagesDelay > 0)
-                                    chat.MessageBuilder.AddMessage(sensor);
+                                    chat.MessageBuilder.AddMessage(sensor, oldStatus.Status);
                                 else
                                     SendMarkdownMessageAsync(chat.ChatId, MessageBuilder.GetSingleMessage(sensor));
                             }

@@ -193,14 +193,16 @@
     function updateSpecificSensorData(dataObject) {
         var id = dataObject.id;
         let isFile = dataObject.sensorType === 6;
-        
+
         $('#value_' + id).empty().append(dataObject.value);
-       
         $('#validation_' + id).empty();
         $('#validation_metainfo').empty();
         
-        if (isFile && dataObject.comment !== null && dataObject.comment !== ''){
-            $('#validation_' + id).append(`<span class="d-flex text-break">Comment: ${markdownToHTML(dataObject.comment)}</span>`);
+        if (isFile) {
+            $(`#last_file_name_${id}`).empty().append(dataObject.fileNameString);
+
+            if (dataObject.comment !== null)
+                $('#validation_' + id).append(`<span class="d-flex text-break">Comment: ${dataObject.comment}</span>`);
         }
         
         if (dataObject.isValidationErrorVisible) {
