@@ -9,7 +9,7 @@
 
 
 <li id='@data.EncodedId' title='@data.Tooltip' data-jstree='@Model.ToJSTree()'>
-    <span class="@data.State.ToCssClass()">@Html.Raw(data.Name.GetShortNodeName())</span>
+    <span class="@data.State.ToCssClass()"> @Html.Raw(data.Name.GetShortNodeName())</span>
 
     @if (Model.IsAccountsEnable && !Model.Parent.IsAccountsEnable)
     {
