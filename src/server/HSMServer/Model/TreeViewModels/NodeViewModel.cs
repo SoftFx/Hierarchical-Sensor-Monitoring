@@ -1,9 +1,7 @@
 ﻿using HSMServer.Core.Model;
 using HSMServer.Core.Model.Policies;
-using HSMServer.Extensions;
 using HSMServer.Helpers;
 using HSMServer.Model.Folders;
-using System;
 
 namespace HSMServer.Model.TreeViewModel
 {
@@ -23,16 +21,13 @@ namespace HSMServer.Model.TreeViewModel
 
         public string Path { get; private set; }
 
-        public DateTime UpdateTime { get; protected set; }
-
-        public SensorStatus Status { get; protected set; }
-
         public virtual bool HasData { get; protected set; }
 
+        public BaseNodeViewModel Parent { get; internal set; }
 
-        public string Tooltip => $"{Name}{Environment.NewLine}{(UpdateTime != DateTime.MinValue ? UpdateTime.ToDefaultFormat() : "no data")}";
 
-        public string Title => Name?.Replace('\\', ' ') ?? string.Empty;
+        //TODO: should be changed to NodeViewModel when Sensor will have its own Telegram Settings
+        public ProductNodeViewModel RootProduct => Parent is null or FolderModel ? (ProductNodeViewModel)this : ((ProductNodeViewModel)Parent).RootProduct;
 
         public string FullPath => $"{RootProduct?.Name}{Path}";
 

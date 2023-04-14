@@ -94,6 +94,9 @@ namespace HSMServer.Model.Authentication
 
         internal bool IsFolderAvailable(Guid folderId) => IsAdmin || FoldersRoles.ContainsKey(folderId);
 
+        internal bool IsFolderManager(Guid folderId) => IsAdmin || 
+            (FoldersRoles.TryGetValue(folderId, out var role) && role == ProductRoleEnum.ProductManager);
+
         internal bool IsUserProduct(Guid productId) => ProductsRoles.Any(x => x.Item1 == productId);
     }
 }

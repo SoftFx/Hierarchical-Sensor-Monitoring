@@ -57,7 +57,7 @@ namespace HSMServer.Model.TreeViewModel
             return products.Where(p => user.IsProductAvailable(p.Id)).ToList();
         }
 
-        public List<NodeShallowModel> GetUserTree(User user)
+        public List<BaseShallowModel> GetUserTree(User user)
         {
             NodeShallowModel FilterNodes(ProductNodeViewModel product)
             {
@@ -72,16 +72,27 @@ namespace HSMServer.Model.TreeViewModel
                 return node;
             }
 
-
-            var tree = new List<NodeShallowModel>(1 << 4);
+            var folders = _folderManager.GetUserFolders(user).ToDictionary(k => k.Id, v => new FolderShallowModel(v, user));
+            var tree = new List<BaseShallowModel>(1 << 4);
 
             foreach (var product in GetUserProducts(user))
             {
                 var node = FilterNodes(product);
 
                 if (node.VisibleSensorsCount > 0 || user.IsEmptyProductVisible(product))
-                    tree.Add(node);
+                {
+                    var folderId = node.Data.FolderId;
+
+                    if (folderId.HasValue && folders.TryGetValue(folderId.Value, out var folder))
+                        folder.AddChild(node, user);
+                    else
+                        tree.Add(node);
+                }
             }
+
+            foreach (var folder in folders.Values)
+                if (folder.Nodes.Count > 0 || user.TreeFilter.ByHistory.Empty.Value)
+                    tree.Add(folder);
 
             return tree;
         }

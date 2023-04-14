@@ -1,4 +1,4 @@
-﻿using HSMServer.Model.Folders;
+﻿using HSMServer.Extensions;
 using System;
 
 namespace HSMServer.Model.TreeViewModel
@@ -16,9 +16,14 @@ namespace HSMServer.Model.TreeViewModel
 
         public string Description { get; protected set; }
 
-        public BaseNodeViewModel Parent { get; internal set; }
+
+        public SensorStatus Status { get; protected set; }
+
+        public DateTime UpdateTime { get; protected set; }
 
 
-        public ProductNodeViewModel RootProduct => Parent is null or FolderModel ? (ProductNodeViewModel)this : Parent.RootProduct;
+        public string Title => Name?.Replace('\\', ' ') ?? string.Empty; //TODO remove after rename bad products
+
+        public string Tooltip => $"{Name}{Environment.NewLine}{(UpdateTime != DateTime.MinValue ? UpdateTime.ToDefaultFormat() : "no data")}";
     }
 }
