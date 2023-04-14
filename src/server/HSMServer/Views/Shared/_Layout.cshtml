@@ -6,170 +6,159 @@
 
 <!DOCTYPE html>
 <html lang="en">
-    <head>
-        <meta charset="utf-8"/>
-        <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-        <title>@ViewData["Title"] - HSM</title>
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>@ViewData["Title"] - HSM</title>
 
-        <script src="~/dist/main.bundle.js"></script>
-    </head>
-    <body>
-        <div class="body-content-wrapper">
-            <div class="body-content">
-                <header>
-                    <div id="navbar">
-                        @if (Context.User is User)
-                        {
-                            <nav class="navbar navbar-expand-sm navbar-toggleable-sm navbar-light border-bottom box-shadow" style=" background-color: #edf0f5;">
-                                <div class="container-fluid">
-                                    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target=".navbar-collapse" aria-controls="navbarSupportedContent"
-                                            aria-expanded="false" aria-label="Toggle navigation">
-                                        <span class="navbar-toggler-icon"></span>
-                                    </button>
+    <script src="~/dist/main.bundle.js"></script>
+</head>
+<body>
+    <div class="body-content-wrapper">
+        <div class="body-content">
+            <header>
+                <div id="navbar">
+                    @if (Context.User is User)
+                    {
+                        <nav class="navbar navbar-expand-sm navbar-toggleable-sm navbar-light border-bottom box-shadow" style=" background-color: #edf0f5;">
+                            <div class="container-fluid">
+                                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target=".navbar-collapse" aria-controls="navbarSupportedContent"
+                                        aria-expanded="false" aria-label="Toggle navigation">
+                                    <span class="navbar-toggler-icon"></span>
+                                </button>
 
-                                    <div class="collapse navbar-collapse d-sm-inline-flex justify-content-between" id="nabarNav">
-                                        <ul class="navbar-nav flex-grow-1">
+                                <div class="collapse navbar-collapse d-sm-inline-flex justify-content-between" id="nabarNav">
+                                    <ul class="navbar-nav flex-grow-1">
+                                        <li class="nav-item">
+                                            <a class="nav-link" href="@Url.Action(ViewConstants.IndexAction, ViewConstants.HomeController)">
+                                                Tree
+                                            </a>
+                                        </li>
+
+                                        <li class="nav-item">
+                                            <a class="nav-link" href="@Url.Action(ViewConstants.IndexAction, ViewConstants.ProductController)">
+                                                Products
+                                            </a>
+                                        </li>
+
+                                        <li class="nav-item">
+                                            <a class="nav-link" href="@Url.Action(ViewConstants.IndexAction, ViewConstants.AccessKeysController)">
+                                                Access keys
+                                            </a>
+                                        </li>
+
+                                        @if (UserRoleHelper.IsUsersPageAllowed((User)Context.User))
+                                        {
                                             <li class="nav-item">
-                                                <a class="nav-link"
-                                                   href="@Url.Action(ViewConstants.IndexAction, ViewConstants.HomeController)">
-                                                    Tree
+                                                <a class="nav-link" href="@Url.Action(ViewConstants.UsersAction, ViewConstants.AccountController)">
+                                                    Users
                                                 </a>
                                             </li>
+                                        }
 
+                                        @if (UserRoleHelper.IsConfigurationPageAllowed((User)Context.User))
+                                        {
                                             <li class="nav-item">
-                                                <a class="nav-link"
-                                                   href="@Url.Action(ViewConstants.IndexAction, ViewConstants.ProductController)">
-                                                    Products
+                                                <a class="nav-link" href="@Url.Action(ViewConstants.IndexAction, ViewConstants.ConfigurationController)">
+                                                    Configuration
                                                 </a>
                                             </li>
+                                        }
 
-                                            <li class="nav-item">
-                                                <a class="nav-link"
-                                                   href="@Url.Action(ViewConstants.IndexAction, ViewConstants.AccessKeysController)">
-                                                    Access keys
-                                                </a>
-                                            </li>
+                                        <li class="nav-item">
+                                            <a class="nav-link" href="@Url.Action(nameof(NotificationsController.Index), ViewConstants.NotificationsController)">
+                                                Telegram
+                                            </a>
+                                        </li>
 
-                                            @if (UserRoleHelper.IsUsersPageAllowed((User)Context.User))
-                                            {
-                                                <li class="nav-item">
-                                                    <a class="nav-link"
-                                                       href="@Url.Action(ViewConstants.UsersAction, ViewConstants.AccountController)">
-                                                        Users
-                                                    </a>
-                                                </li>
-                                            }
+                                        <li class="nav-item">
+                                            <a class="nav-link" target="_blank" href="https://@(Context.Request.Host.Value.Replace("44333", "44330") + ViewConstants.ApiSwagger)">
+                                                API
+                                            </a>
+                                        </li>
+                                    </ul>
 
-                                            @if (UserRoleHelper.IsConfigurationPageAllowed((User)Context.User))
-                                            {
-                                                <li class="nav-item">
-                                                    <a class="nav-link"
-                                                       href="@Url.Action(ViewConstants.IndexAction, ViewConstants.ConfigurationController)">
-                                                        Configuration
-                                                    </a>
-                                                </li>
-                                            }
-
-                                            <li class="nav-item">
-                                                <a class="nav-link"
-                                                   href="@Url.Action(nameof(NotificationsController.Index), ViewConstants.NotificationsController)">
-                                                    Telegram
-                                                </a>
-                                            </li>
-
-                                            <li class="nav-item">
-                                                <a class="nav-link" target="_blank"
-                                                   href="https://@(Context.Request.Host.Value.Replace("44333", "44330") + ViewConstants.ApiSwagger)">
-                                                    API
-                                                </a>
-                                            </li>
-                                        </ul>
-
-                                        <ul class="navbar-nav">
-                                            <li class="nav-item">
-                                                <a class="nav-link" href="#">
-                                                    Hello, @(((User)Context.User).Name)
-                                                </a>
-                                            </li>
-                                            <li class="nav-item">
-                                                <a class="nav-link"
-                                                   href="@Url.Action(ViewConstants.LogoutAction, ViewConstants.AccountController)">
-                                                    Logout
-                                                    <i class="fas fa-sign-out-alt"></i>
-                                                </a>
-                                            </li>
-                                        </ul>
-                                    </div>
-
+                                    <ul class="navbar-nav">
+                                        <li class="nav-item">
+                                            <a class="nav-link" href="#">
+                                                Hello, @(((User)Context.User).Name)
+                                            </a>
+                                        </li>
+                                        <li class="nav-item">
+                                            <a class="nav-link" href="@Url.Action(ViewConstants.LogoutAction, ViewConstants.AccountController)">
+                                                Logout
+                                                <i class="fas fa-sign-out-alt"></i>
+                                            </a>
+                                        </li>
+                                    </ul>
                                 </div>
-                            </nav>
-                        }
-                        else
-                        {
-                            <nav class="navbar navbar-expand-sm navbar-toggleable-sm navbar-light border-bottom box-shadow mb-3" style="background-color: #edf0f5;">
-                                <div class="container-fluid">
-                                    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target=".navbar-collapse" aria-controls="navbarSupportedContent"
-                                            aria-expanded="false" aria-label="Toggle navigation">
-                                        <span class="navbar-toggler-icon"></span>
-                                    </button>
 
-                                    <div class="collapse navbar-collapse d-sm-inline-flex justify-content-between">
-                                        <ul class="navbar-nav flex-grow-1">
-                                            <li class="nav-item">
-                                                <a class="nav-link" target="_blank"
-                                                   href="https://@(Context.Request.Host.Value.Replace("44333", "44330") + ViewConstants.ApiSwagger)">
-                                                    API
-                                                </a>
-                                            </li>
-                                        </ul>
+                            </div>
+                        </nav>
+                    }
+                    else
+                    {
+                        <nav class="navbar navbar-expand-sm navbar-toggleable-sm navbar-light border-bottom box-shadow mb-3" style="background-color: #edf0f5;">
+                            <div class="container-fluid">
+                                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target=".navbar-collapse" aria-controls="navbarSupportedContent"
+                                        aria-expanded="false" aria-label="Toggle navigation">
+                                    <span class="navbar-toggler-icon"></span>
+                                </button>
 
-                                        <ul class="navbar-nav">
-                                            <li class="nav-item">
-                                                <a class="nav-link"
-                                                   href="@Url.Action(ViewConstants.RegistrationAction, ViewConstants.AccountController)">
-                                                    Registration
-                                                    <i class="fas fa-user-plus"></i>
-                                                </a>
-                                            </li>
-                                            <li class="nav-item">
-                                                <a class="nav-link"
-                                                   href="@Url.Action(ViewConstants.IndexAction, ViewConstants.AccountController)">
-                                                    Login
-                                                    <i class="fas fa-sign-in-alt"></i>
-                                                </a>
-                                            </li>
-                                        </ul>
-                                    </div>
+                                <div class="collapse navbar-collapse d-sm-inline-flex justify-content-between">
+                                    <ul class="navbar-nav flex-grow-1">
+                                        <li class="nav-item">
+                                            <a class="nav-link" target="_blank" href="https://@(Context.Request.Host.Value.Replace("44333", "44330") + ViewConstants.ApiSwagger)">
+                                                API
+                                            </a>
+                                        </li>
+                                    </ul>
 
+                                    <ul class="navbar-nav">
+                                        <li class="nav-item">
+                                            <a class="nav-link" href="@Url.Action(ViewConstants.RegistrationAction, ViewConstants.AccountController)">
+                                                Registration
+                                                <i class="fas fa-user-plus"></i>
+                                            </a>
+                                        </li>
+                                        <li class="nav-item">
+                                            <a class="nav-link" href="@Url.Action(ViewConstants.IndexAction, ViewConstants.AccountController)">
+                                                Login
+                                                <i class="fas fa-sign-in-alt"></i>
+                                            </a>
+                                        </li>
+                                    </ul>
                                 </div>
-                            </nav>
-                        }
-                    </div>
-                </header>
-                <div id="spinner" class="text-center" style="display: none">
-                    <button class="btn btn-primary" type="button" disabled>
-                        <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
-                        Loading...
-                    </button>
+
+                            </div>
+                        </nav>
+                    }
                 </div>
-                <main>
-                    @RenderBody()
-                </main>
+            </header>
+            <div id="spinner" class="text-center" style="display: none">
+                <button class="btn btn-primary" type="button" disabled>
+                    <span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span>
+                    Loading...
+                </button>
             </div>
-            <footer class="border-top footer text-muted">
-                <div class="d-flex justify-content-between align-items-center mx-3" style="height: var(--footer-height)">
-                    <div>
-                        &copy; 2023 - Soft-FX Current version: @ServerConfig.Version
-                    </div>
-                    <div>
-                        <div id="updateTime"></div>
-                    </div>
-                </div>
-            </footer>
+            <main>
+                @RenderBody()
+            </main>
         </div>
-        
-        @RenderSection("Scripts", required: false)
-    </body>
+        <footer class="border-top footer text-muted">
+            <div class="d-flex justify-content-between align-items-center mx-3">
+                <div>
+                    &copy; 2023 - Soft-FX Current version: @ServerConfig.Version
+                </div>
+                <div>
+                    <div id="updateTime"></div>
+                </div>
+            </div>
+        </footer>
+    </div>
+
+    @RenderSection("Scripts", required: false)
+</body>
 </html>
 
 @await Html.PartialAsync("_ToastTemplate")
