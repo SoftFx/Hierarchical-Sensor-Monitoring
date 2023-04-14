@@ -13,7 +13,7 @@
 
 ### Time intervals control
 * New value **From parent** has been added. If this value is selected, the parent setting is applied to current entity
-* Value **Newer** is redone. If this value is selected, the current setting is disabled for the entity.
+* Value **Never** is redone. If this value is selected, the current setting is disabled for the entity.
 * Control interface has been improved
 
 ### Alerts (Policies)
@@ -36,8 +36,8 @@
 * Base structure for **Simple sensor** (a sensor that sends data on user request, not on a timer) has been added
 
 ### Default sensors
-* **CollectorAlive** sensor has been renamed to **CollectorHearbeat**. Sensor name has been renamed from **Service alive** to **Service heartbeat**
-* New default sensor **Product info** has been added. How it contains Product Version with Version start time
+* **CollectorAlive** sensor has been renamed to **CollectorHeartbeat**. Sensor name has been renamed from **Service alive** to **Service heartbeat**
+* New default sensor **Product info** has been added. Now it contains Product Version with Version start time
 
 ### New methods
 * New method **SendFileAsync** has been added
