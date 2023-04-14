@@ -1,5 +1,6 @@
 ﻿using HSMDataCollector.Options;
 using System.Diagnostics;
+using System.Threading.Tasks;
 
 namespace HSMDataCollector.DefaultSensors.Windows
 {
@@ -23,11 +24,11 @@ namespace HSMDataCollector.DefaultSensors.Windows
         }
 
 
-        internal override void Stop()
+        internal override Task Stop()
         {
-            base.Stop();
-
             _performanceCounter?.Dispose();
+            
+            return base.Stop();
         }
 
         protected override double GetBarData() => _performanceCounter.NextValue();

@@ -1,6 +1,7 @@
 ﻿using HSMDataCollector.Options;
 using System;
 using System.Diagnostics;
+using System.Threading.Tasks;
 
 namespace HSMDataCollector.DefaultSensors.Windows
 {
@@ -15,7 +16,7 @@ namespace HSMDataCollector.DefaultSensors.Windows
         protected override string SensorName => "Last restart";
 
 
-        public WindowsLastRestart(SensorOptions options) : base(options)
+        public WindowsLastRestart(MonitoringSensorOptions options) : base(options)
         {
             _performanceCounter = new PerformanceCounter(CategoryName, CounterName);
             _performanceCounter.NextValue(); // the first value is always 0
@@ -24,11 +25,11 @@ namespace HSMDataCollector.DefaultSensors.Windows
 
         protected override TimeSpan GetValue() => TimeSpan.FromSeconds(_performanceCounter.NextValue());
 
-        internal override void Stop()
+        internal override Task Stop()
         {
-            base.Stop();
-
             _performanceCounter?.Dispose();
+            
+            return base.Stop();
         }
     }
 }

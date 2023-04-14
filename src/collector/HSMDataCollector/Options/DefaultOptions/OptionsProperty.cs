@@ -18,7 +18,7 @@
 
         internal T Get(T options) => options ?? DefaultOptions;
 
-        internal T GetAndFill(T options)
+        internal virtual T GetAndFill(T options)
         {
             options = Get(options);
 
