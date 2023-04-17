@@ -10,7 +10,7 @@ namespace HSMDataCollector.DefaultSensors.Windows
         protected override string SensorName => "Last update";
 
 
-        public WindowsLastUpdate(SensorOptions options) : base(options)
+        public WindowsLastUpdate(MonitoringSensorOptions options) : base(options)
         {
             _lastUpdateDate = RegistryInfo.GetInstallationDate();
         }

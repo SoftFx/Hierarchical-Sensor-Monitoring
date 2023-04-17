@@ -72,6 +72,10 @@ namespace HSMServer.Model.TreeViewModel
                     Size = file.FileSizeToNormalString();
                 }
             }
+            else
+            {
+                Comment = sensor.LastValue?.Comment;
+            }
         }
     }
 }

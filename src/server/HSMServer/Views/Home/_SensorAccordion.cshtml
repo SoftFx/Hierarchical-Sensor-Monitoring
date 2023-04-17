@@ -39,7 +39,9 @@
 
                                     @if (Model.HasData)
                                     {
-                                        @Model.FileNameString
+                                        <span id="last_file_name_@sensorId">
+                                            @Model.FileNameString
+                                        </span>
                                         <div class="text-break pt-2">
                                             <span id='validation_@sensorId'>
                                                 @if (!string.IsNullOrEmpty(Model.LastValue.Comment))
@@ -241,9 +243,9 @@ function setContentPreview(encodedId){
         cache: false,
         contentType: "application/json",
         success: function (response){
-            if (previousReceivedTime === response.time) 
+            if (previousReceivedTime === response.receivingTime)
                 return;
-            
+
             if ((response.originalSize < 5 * 1024 * 1024 && response.extension === 'csv') || // 5MB
                 (response.originalSize < 1024 * 1024 && response.extension === 'txt')) { // 1MB 
                 $.ajax({
@@ -294,7 +296,7 @@ function setContentPreview(encodedId){
             }
             
             loadFiles();
-            previousReceivedTime = response.time;
+                previousReceivedTime = response.receivingTime;
         }
     })    
 }
