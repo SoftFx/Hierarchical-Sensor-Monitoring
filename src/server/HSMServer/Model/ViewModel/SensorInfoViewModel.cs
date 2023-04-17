@@ -9,16 +9,14 @@ namespace HSMServer.Model.ViewModel
     {
         public SensorType SensorType { get; }
         
-        public SensorStatus SensorStatus { get; }
+       
 
         public string Unit { get; set; }
 
         public string StatusComment { get; set; }
         
         public string Comment { get; set; }
-        
-        public DateTime UpdateTime { get; set; }
-        
+
         public string ShortLastValue { get; set; }
 
         
@@ -28,7 +26,7 @@ namespace HSMServer.Model.ViewModel
         internal SensorInfoViewModel(SensorNodeViewModel sensor) : base(sensor)
         {
             SensorType = sensor.SensorType;
-            SensorStatus = sensor.Status;
+            Status = sensor.Status;
             Unit = sensor.Unit;
             StatusComment = sensor.ValidationError;
             Comment = sensor.LastValue?.Comment;

@@ -1,99 +1,20 @@
 ﻿@using HSMServer.Controllers
 @using HSMServer.Constants
-@using HSMServer.Model
 @using HSMServer.Model.ViewModel
 @model ProductInfoViewModel
 
-@{
-    var productName = Model.ProductName ?? Model.Name;
-}
-
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
 
-
-<form id="editProductMetaInfo_form" method="post" asp-action="@nameof(HomeController.UpdateProductInfo)">
-    <input id="productMetaInfo_encodedId" style='display: none' asp-for="EncodedId" value="@Model.EncodedId" />
-
-    <table class='table table-bordered'>
-        <tbody>
-            <tr>
-                <td class="w-25">Product</td>
-                <td>
-                    @if (productName.Length >= 100)
-                    {
-                        @Html.Raw(productName[..100])
-                    }
-                    else
-                    {
-                        @Html.Raw(productName)
-                    }
-                </td>
-            </tr>
-            @if (Model.Parent != null)
-            {
-                <tr>
-                    <td class="w-25">Path</td>
-                    <td>@Html.Raw(@Model.Path)</td>
-                </tr>
-            }
-            <tr>
-                <td class="w-25">
-                    Description
-                </td>
-                <td>
-                    <textarea id='description_@(Model.EncodedId)' type='text' class='form-control naked-text' asp-for="Description" value='@Model.Description' disabled></textarea>
-                </td>
-            </tr>
-            <tr>
-                <td class="w-25">
-                    Expected sensor(s) update interval
-                    <i class='fas fa-question-circle' title='Time format: dd.hh:mm:ss min value 00:01:00.
-If the sensor doesn`t receive new data within the specified time interval, a notification sends'></i>
-                </td>
-                <td id="productExpectedUpdateInterval_@(Model.EncodedId)">
-                    <label id="labelInterval" class="form-control naked-text">@Model.ExpectedUpdateInterval.DisplayInterval</label>
-                    <div id="partialIntervalSelect" class="d-none">
-                        <partial name="_TimeIntervalSelect" for="ExpectedUpdateInterval" />
-                    </div>
-                </td>
-            </tr>
-            <tr>
-                <td class="w-25">
-                    Sensitivity sensor(s) interval
-                    <i class='fas fa-question-circle' title='Time format: dd.hh:mm:ss min value 00:01:00.
-If the sensor doesn`t return to Ok status after the specified time inverval, a notification sends'></i>
-                </td>
-                <td id="productRestorePolicy_@(Model.EncodedId)">
-                    <label id="labelRestoreInterval" class="form-control naked-text">@Model.SensorRestorePolicy.DisplayInterval</label>
-                    <div id="partialRestoreSelect" class="d-none">
-                        <partial name="_TimeIntervalSelect" for="SensorRestorePolicy" />
-                    </div>
-                </td>
-            </tr>
-        </tbody>
-    </table>
-    <div class="d-flex justify-content-end mt-3 gap-2 me-0">
-        <button id='saveInfo_@Model.EncodedId' type='submit' class='btn btn-secondary px-2 independentSizeButton'
-                data-bs-toggle='tooltip' title='save meta info' hidden disabled>
-            <span>Save</span>
-        </button>
-        <button id='revertInfo_@Model.EncodedId' type='button' class='btn btn-secondary px-2 independentSizeButton' onclick="revertProductInfoClick()"
-                data-bs-toggle='tooltip' title='revert changes' hidden disabled>
-            <span>Cancel</span>
-        </button>
-    </div>
-</form>
-
-
+@await  Html.PartialAsync("_MetaInfo", Model)
 <script>
     disableProductExpectedUpdateInterval();
 
-    $(document).on("submit", "#editProductMetaInfo_form", function (event) {
+    $(document).on("submit", "#editMetaInfo_form", function (event) {
         event.preventDefault();
         event.stopImmediatePropagation();
 
         $.ajax({
-            url: $("#editProductMetaInfo_form").attr("action"),
+            url: $("#editMetaInfo_form").attr("action"),
             type: 'POST',
             data: new FormData(this),
             datatype: 'html',
@@ -102,20 +23,38 @@ If the sensor doesn`t return to Ok status after the specified time inverval, a n
             cache: false,
             async: true,
             success: function (viewData) {
-                $('#editProductButton').attr('hidden', false);
-                $('#product_info_' + $('#productMetaInfo_encodedId').val()).html(viewData);
+                $('#editButtonMetaInfo').attr('hidden', false);
+                $('#meta_info_' + $('#metaInfo_encodedId').val()).html(viewData);
+                let metaInfo = $('#metaInfoCollapse');
+                
+                metaInfo.addClass('no-transition');
+                $('#meta_info_collapse').click();
+                metaInfo.removeClass('no-transition');
             }
         });
     });
 
     function editProductInfoButtonClick() {
-        let productId = $('#productMetaInfo_encodedId').val();
+        let productId = $('#metaInfo_encodedId').val();
 
+        //new functionality
+        
+        $('#editButtonMetaInfo').addClass('d-none');
+        $('#editMetaInfo_form').children('div').each(function () {
+                $(this).removeClass('d-none');
+        });
+        
+        $('#meta_info_collapse').addClass('d-none');
+        $('[id^="markdown_span_description_"]').addClass('d-none')
+        $('[id^="description_"]').removeClass('d-none')
+        //end
+        
+        
         $('#saveInfo_' + productId).removeAttr("disabled").removeAttr("hidden");
         $('#revertInfo_' + productId).removeAttr("disabled").removeAttr("hidden");
         $('#description_' + productId).removeAttr("disabled").removeClass("naked-text");
 
-        $('#editProductButton').attr('hidden', true);
+        $('#meta_info_collapse').attr('hidden', true);
 
         $('#partialIntervalSelect').removeClass('d-none');
         $('#partialRestoreSelect').removeClass('d-none');
@@ -128,7 +67,7 @@ If the sensor doesn`t return to Ok status after the specified time inverval, a n
     }
 
     function revertProductInfoClick() {
-        let id = $('#productMetaInfo_encodedId').val();
+        let id = $('#metaInfo_encodedId').val();
 
         $.ajax({
             type: 'GET',
@@ -142,13 +81,39 @@ If the sensor doesn`t return to Ok status after the specified time inverval, a n
             $('#editProductButton').attr('hidden', false);
 
             disableProductExpectedUpdateInterval();
+             let metaInfo = $('#metaInfoCollapse');
+                            
+             metaInfo.addClass('no-transition');
+             $('#meta_info_collapse').click();
+             metaInfo.removeClass('no-transition');
         });
     }
 
     function disableProductExpectedUpdateInterval() {
-        let productId = $('#productMetaInfo_encodedId').val();
+        let productId = $('#metaInfo_encodedId').val();
 
         $(`#productExpectedUpdateInterval_${productId}:input`).each(() => this.setAttribute('disabled', true));
         $(`#productRestorePolicy_${productId}:input`).each(() => this.setAttribute('disabled', true));
     }
+    
+    function collapseChangeTextContent() {
+            let icon = $('#collapse_icon')[0];
+    
+            if (icon.classList.contains('fa-caret-up')) {
+                icon.classList.toggle('fa-caret-down')
+                $('#product_info_collapse').attr('title', 'Show more info...');
+                $('#editButtonMetaInfo').addClass('d-none');
+                $('#description_title').addClass('d-none');
+                $('#headline_metainfo').addClass('d-none');
+                $('[id^="markdown_span_description_"]').removeClass('ms-3');
+            }
+            else {
+                icon.classList.toggle('fa-caret-up')
+                $('#product_info_collapse').attr('title', 'Hide info...');
+                $('#editButtonMetaInfo').removeClass('d-none');
+                $('#description_title').removeClass('d-none');
+                $('#headline_metainfo').removeClass('d-none');
+                $('[id^="markdown_span_description_"]').addClass('ms-3');
+            }
+        }
 </script>

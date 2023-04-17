@@ -1,4 +1,5 @@
-﻿@using HSMServer.Model.ViewModel
+﻿@using HSMServer.Extensions
+@using HSMServer.Model.ViewModel
 @using HSMServer.Model.TreeViewModel
 @using HSMServer.Model.Authentication
 @using HSMServer.UserFilters;
@@ -31,15 +32,16 @@
 
 
 <div>
-    <div class='row justify-content-start'>
-        <div class='d-flex col-md-auto' style="align-items: center">
-            <h5 class="m-2">@Html.Raw(Model.FullPath)</h5>
-            <button id="editProductButton" type='button' class='btn btn-secondary' onclick="editProductInfoButtonClick()"
-                    data-bs-toggle='tooltip' title='edit meta info'>
-                <i class='fas fa-edit'></i>
-            </button>
-        </div>
-    </div>
+    @* <div class='row justify-content-start'> *@
+    @*     <div class='d-flex col-md-auto' style="align-items: center"> *@
+    @*         <i class="@Model.Status.ToIcon() my-2 align-self-center" title='Status: @Model.Status'></i> *@
+    @*         <h5 class="my-2 me-2 ps-1">@Html.Raw(Model.FullPath)</h5> *@
+    @*         <button id="editProductButton" type='button' class='btn btn-secondary' onclick="editProductInfoButtonClick()" *@
+    @*                 data-bs-toggle='tooltip' title='edit meta info'> *@
+    @*             <i class='fas fa-edit'></i> *@
+    @*         </button> *@
+    @*     </div> *@
+    @* </div> *@
     
     <div id='product_info_@Model.EncodedId'>
         @await Html.PartialAsync("_ProductMetaInfo", new ProductInfoViewModel(Model))
