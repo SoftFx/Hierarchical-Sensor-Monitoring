@@ -3,7 +3,7 @@ using HSMServer.Core.Model;
 using HSMServer.Extensions;
 using System.Collections.Generic;
 
-namespace HSMServer.Controllers.GrafanaDatasources.JsonSource.JsonHistoryResponse
+namespace HSMServer.Controllers.GrafanaDatasources.JsonSource
 {
     public class BarHistoryTableResponse : BaseHistoryTableResponse
     {

@@ -1,5 +1,4 @@
-﻿using HSMServer.Controllers.GrafanaDatasources.JsonSource.JsonHistoryResponse;
-using HSMServer.Core.Cache;
+﻿using HSMServer.Core.Cache;
 using HSMServer.Core.Model;
 using HSMServer.Extensions;
 using HSMServer.Model.TreeViewModel;
@@ -13,8 +12,9 @@ using System.Threading.Tasks;
 namespace HSMServer.Controllers.GrafanaDatasources.JsonSource
 {
     [ApiController]
-    [Route("api/[controller]/[action]")]
-    public class GrafanaDatasourceController : ControllerBase
+    [ApiExplorerSettings(GroupName = "Grafana (JSON)")]
+    [Route("grafana/[controller]/[action]")]
+    public class JsonDatasourceController : ControllerBase
     {
         private readonly JsonSerializerOptions _options = new()
         {
@@ -24,18 +24,24 @@ namespace HSMServer.Controllers.GrafanaDatasources.JsonSource
         private readonly ITreeValuesCache _cache;
         private readonly TreeViewModel _tree;
 
-        public GrafanaDatasourceController(ITreeValuesCache cache, TreeViewModel tree)
+        public JsonDatasourceController(ITreeValuesCache cache, TreeViewModel tree)
         {
             _cache = cache;
             _tree = tree;
         }
 
 
+        /// <summary>
+        /// with 200 status code response. Used for "Test connection" on the datasource config page.
+        /// </summary>
         [HttpGet]
         [ActionName("")]
         public bool TestConnection() => true;
 
 
+        /// <summary>
+        /// to return available Products
+        /// </summary>
         [HttpPost]
         [ActionName("metrics")]
         public string GetMetrics(MetricsRequest _)
@@ -46,6 +52,9 @@ namespace HSMServer.Controllers.GrafanaDatasources.JsonSource
         }
 
 
+        /// <summary>
+        /// to return a list of metric payload options (Sensors paths and data formats).
+        /// </summary>
         [HttpPost]
         [ActionName("metric-payload-options")]
         public string GetOptions(MetricPayloadOptionsRequest request)
@@ -61,6 +70,9 @@ namespace HSMServer.Controllers.GrafanaDatasources.JsonSource
         }
 
 
+        /// <summary>
+        /// to return panel data or annotations
+        /// </summary>
         [HttpPost]
         [ActionName("query")]
         public async Task<string> ReadHistory(QueryHistoryRequest request)
