@@ -164,7 +164,6 @@ function buildContextMenu(node) {
     }
 
     let isMutedState = node.data.jstree.isMutedState;
-    console.log(isMutedState);
 
     if (isManager) {
         if (isMutedState !== undefined && isMutedState !== '') {
@@ -190,6 +189,9 @@ function buildContextMenu(node) {
             contextMenu["Edit"] = {
                 "label": `Edit ${getKeyByValue(curType)}`,
                 "action": _ => {
+                    if (curType === NodeType.Folder)
+                        window.location.href = `${editFolderAction}?folderId=${node.id}`;
+
                     if (curType === NodeType.Product)
                         window.location.href = `${editProductAction}?Product=${node.id}`;
 
@@ -199,35 +201,37 @@ function buildContextMenu(node) {
             };
         }
 
-        contextMenu["RemoveNode"] = {
-            "label": `Remove ${getKeyByValue(curType)}`,
-            "action": _ => {
-                var modal = new bootstrap.Modal(document.getElementById('modalDelete'));
+        if (curType != NodeType.Folder) {
+            contextMenu["RemoveNode"] = {
+                "label": `Remove ${getKeyByValue(curType)}`,
+                "action": _ => {
+                    var modal = new bootstrap.Modal(document.getElementById('modalDelete'));
 
-                //modal
-                $('#modalDeleteLabel').empty();
-                $('#modalDeleteLabel').append(`Remove ${getKeyByValue(curType)}`);
-                $('#modalDeleteBody').empty();
+                    //modal
+                    $('#modalDeleteLabel').empty();
+                    $('#modalDeleteLabel').append(`Remove ${getKeyByValue(curType)}`);
+                    $('#modalDeleteBody').empty();
 
-                $.when(getFullPathAction(node.id)).done((path) => {
-                    $('#modalDeleteBody').append(`Do you really want to remove ${path}?`);
-                    modal.show();
-                })
+                    $.when(getFullPathAction(node.id)).done((path) => {
+                        $('#modalDeleteBody').append(`Do you really want to remove ${path}?`);
+                        modal.show();
+                    })
 
-                //modal confirm
-                $('#confirmDeleteButton').off('click').on('click', () => {
-                    modal.hide();
+                    //modal confirm
+                    $('#confirmDeleteButton').off('click').on('click', () => {
+                        modal.hide();
 
-                    $.ajax(`${removeNodeAction}?selectedId=${node.id}`, AjaxPost)
-                        .done(() => {
-                            updateTreeTimer();
-                            showToast(`${getKeyByValue(curType)} has been removed`);
+                        $.ajax(`${removeNodeAction}?selectedId=${node.id}`, AjaxPost)
+                            .done(() => {
+                                updateTreeTimer();
+                                showToast(`${getKeyByValue(curType)} has been removed`);
 
-                            $(`#${node.parents[0]}_anchor`).trigger('click');
-                        });
-                });
+                                $(`#${node.parents[0]}_anchor`).trigger('click');
+                            });
+                    });
 
-                $('#closeDeleteButton').off('click').on('click', () => modal.hide());
+                    $('#closeDeleteButton').off('click').on('click', () => modal.hide());
+                }
             }
         }
     }
