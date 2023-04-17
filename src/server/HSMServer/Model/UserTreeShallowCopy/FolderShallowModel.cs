@@ -44,7 +44,7 @@ namespace HSMServer.Model.UserTreeShallowCopy
         $$"""
         {
             "title": "{{Data.Title}}",
-            "icon": "fa-solid fa-folder",
+            "icon": "fa-regular fa-folder",
             "time": "{{Data.UpdateTime.Ticks}}",
             "isManager": "{{CurUserIsManager}}",
             "isAccountsEnable": "{{IsAccountsEnable}}",

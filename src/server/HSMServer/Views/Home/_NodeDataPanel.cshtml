@@ -1,6 +1,7 @@
 ﻿@using HSMServer.Model.TreeViewModel
+@using HSMServer.Model.Folders
 
-@model NodeViewModel
+@model BaseNodeViewModel
 
 <div id='list' class='container-fluid ps-3 pe-2 pt-2 overflow-y-auto'>
     @if (Model == null)
@@ -11,6 +12,8 @@
             </ul>
         </div>
     }
+    else if (Model is FolderModel folder)
+        @await Html.PartialAsync("_Folder", folder)
     else if (Model is ProductNodeViewModel productVM)
         @await Html.PartialAsync("_Node", productVM)
     else if (Model is SensorNodeViewModel sensorVM)

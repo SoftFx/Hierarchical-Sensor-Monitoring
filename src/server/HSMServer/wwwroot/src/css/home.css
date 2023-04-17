@@ -175,18 +175,6 @@
     margin: 3px 2px 3px 0px;
 }
 
-.jstree-default > .jstree-container-ul > .jstree-node.folder-node {
-    margin-left: 0;
-    margin-right: 0;
-    outline-width: 1px;
-    outline-color: red;
-    margin-top: 3px;
-}
-
-.jstree-default > .jstree-container-ul > .jstree-node.folder-node > .jstree-wholerow {
-    background-color: antiquewhite;
-}
-
 .enabled-filters-message{
     font-size: small;
     font-weight: 500;

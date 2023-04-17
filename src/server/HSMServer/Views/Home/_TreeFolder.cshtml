@@ -8,7 +8,7 @@
 }
 
 
-<li id='@data.Id' title='@data.Tooltip' data-jstree='@Model.ToJSTree()' class="folder-node">
+<li id='@data.Id' title='@data.Tooltip' data-jstree='@Model.ToJSTree()'>
     <span> @Html.Raw(data.Name.GetShortNodeName())</span>
 
     @if (Model.IsAccountsEnable)

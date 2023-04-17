@@ -17,12 +17,21 @@ window.initializeTree = function () {
         "sort": function (a, b) {
             let isTimeSort = sortingType.val() == "1";
 
+            let nodeA = this.get_node(a).data.jstree;
+            let nodeB = this.get_node(b).data.jstree;
+
+            let aIsFolder = isFolder(nodeA);
+            let bIsFolder = isFolder(nodeB);
+
+            if (aIsFolder ^ bIsFolder) {
+                return aIsFolder ? -1 : 1;
+            }
+
             if (isTimeSort) {
-                a = this.get_node(a).data.jstree.time;
-                b = this.get_node(b).data.jstree.time;
+                [a, b] = [nodeA.time, nodeB.time];
             }
             else {
-                [a, b] = [this.get_node(b).data.jstree.title.toLowerCase(), this.get_node(a).data.jstree.title.toLowerCase()]
+                [a, b] = [nodeB.title.toLowerCase(), nodeA.title.toLowerCase()];
             }
             
             return a < b ? 1 : -1;
@@ -45,6 +54,10 @@ window.activateNode = function (currentNodeId, nodeIdToActivate) {
     if (currentSelectedNodeId != nodeIdToActivate) {
         selectNodeAjax(nodeIdToActivate);
     }
+}
+
+function isFolder(node) {
+    return node.icon.includes("fa-folder");
 }
 
 function initializeActivateNodeTree() {
@@ -115,7 +128,7 @@ function selectNodeInfoTab(tab, selectedId) {
 }
 
 const TelegramTarget = { Groups: 0, Accounts: 1 };
-const NodeType = { Product: 0, Node: 1, Sensor: 2 };
+const NodeType = { Folder: 0, Product: 1, Node: 2, Sensor: 3 };
 
 const AjaxPost = {
     type: 'POST',
@@ -142,7 +155,7 @@ function buildContextMenu(node) {
             "action": _ => copyToClipboard(node.data.jstree.title),
         };
     }
-    else {
+    else if (curType !== NodeType.Folder) {
         contextMenu["CopyPath"] = {
             "label": "Copy path",
             "separator_after": true,
@@ -151,9 +164,10 @@ function buildContextMenu(node) {
     }
 
     let isMutedState = node.data.jstree.isMutedState;
+    console.log(isMutedState);
 
     if (isManager) {
-        if (isMutedState !== '') {
+        if (isMutedState !== undefined && isMutedState !== '') {
             if (!(isMutedState === "True")) {
                 contextMenu["Mute"] = {
                     "label": `Mute ${getKeyByValue(curType)} for...`,
@@ -288,7 +302,11 @@ function getFullPathAction(nodeId) {
 }
 
 function getCurrentElementType(node) {
-    if (node.parents.length === 1)
+    if (node.parents.length === 1 && isFolder(node))
+        return NodeType.Folder;
+
+    if ((node.parents.length === 1 && !isFolder(node)) ||
+        (node.parents.length === 2 && isFolder($('#jstree').jstree().get_node(node.parents[0]))))
         return NodeType.Product;
     
     if (node.children.length === 0)

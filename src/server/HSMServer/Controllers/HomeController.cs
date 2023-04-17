@@ -5,6 +5,7 @@ using HSMServer.Core.Helpers;
 using HSMServer.Core.Model;
 using HSMServer.Core.MonitoringHistoryProcessor.Factory;
 using HSMServer.Extensions;
+using HSMServer.Folders;
 using HSMServer.Helpers;
 using HSMServer.Model;
 using HSMServer.Model.Authentication.History;
@@ -34,14 +35,17 @@ namespace HSMServer.Controllers
         private static readonly EmptyResult _emptyResult = new();
 
         private readonly ITreeValuesCache _treeValuesCache;
+        private readonly IFolderManager _folderManager;
         private readonly TreeViewModel _treeViewModel;
         private readonly IUserManager _userManager;
 
 
-        public HomeController(ITreeValuesCache treeValuesCache, TreeViewModel treeViewModel, IUserManager userManager)
+        public HomeController(ITreeValuesCache treeValuesCache, IFolderManager folderManager,
+            TreeViewModel treeViewModel, IUserManager userManager)
         {
             _treeValuesCache = treeValuesCache;
             _treeViewModel = treeViewModel;
+            _folderManager = folderManager;
             _userManager = userManager;
         }
 
@@ -54,16 +58,21 @@ namespace HSMServer.Controllers
         [HttpPost]
         public IActionResult SelectNode([FromQuery(Name = "Selected")] string selectedId)
         {
-            NodeViewModel viewModel = null;
+            BaseNodeViewModel viewModel = null;
 
             if (!string.IsNullOrEmpty(selectedId))
             {
-                var decodedId = SensorPathHelper.DecodeGuid(selectedId);
+                if (Guid.TryParse(selectedId, out var folderId) && _folderManager.TryGetValue(folderId, out var folder))
+                    viewModel = folder;
+                else
+                {
+                    var decodedId = SensorPathHelper.DecodeGuid(selectedId);
 
-                if (_treeViewModel.Nodes.TryGetValue(decodedId, out var node))
-                    viewModel = node;
-                else if (_treeViewModel.Sensors.TryGetValue(decodedId, out var sensor))
-                    viewModel = sensor;
+                    if (_treeViewModel.Nodes.TryGetValue(decodedId, out var node))
+                        viewModel = node;
+                    else if (_treeViewModel.Sensors.TryGetValue(decodedId, out var sensor))
+                        viewModel = sensor;
+                }
             }
 
             return PartialView("_NodeDataPanel", viewModel);

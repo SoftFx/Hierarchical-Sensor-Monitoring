@@ -1,4 +1,5 @@
 ﻿@using HSMServer.Model.TreeViewModel
+@using HSMServer.Model.Folders
 
 @model List<NodeViewModel>
 
@@ -6,7 +7,9 @@
 <div class="accordion">
     @if (Model.Count > 0)
     {
-        var title = Model.FirstOrDefault() is ProductNodeViewModel ? "Nodes" : "Sensors";
+        var title = Model.FirstOrDefault() is ProductNodeViewModel product
+            ? product.Parent is FolderModel ? "Products" : "Nodes"
+            : "Sensors";
         var accordionId = $"list{title}";
 
         <div class="accordion-item custom-accordion-item">
