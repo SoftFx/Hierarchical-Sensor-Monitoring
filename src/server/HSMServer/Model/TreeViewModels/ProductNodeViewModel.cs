@@ -20,6 +20,8 @@ namespace HSMServer.Model.TreeViewModel
         public ConcurrentDictionary<Guid, AccessKeyViewModel> AccessKeys { get; } = new();
 
         public Dictionary<SensorType, int> TotalSensorsByType { get; set; } = new();
+        
+        public Dictionary<SensorStatus, int> TotalSensorsByStatuses { get; set; } = new();
 
 
         public NotificationSettings Notifications { get; }
@@ -64,7 +66,8 @@ namespace HSMServer.Model.TreeViewModel
         internal ProductNodeViewModel RecalculateCharacteristics()
         {
             int allSensorsCount = 0;
-            var temp = new Dictionary<SensorType, int>();
+            var types = new Dictionary<SensorType, int>();
+            var statuses = new Dictionary<SensorStatus, int>();
             
             if (Nodes != null && !Nodes.IsEmpty)
             {
@@ -74,23 +77,31 @@ namespace HSMServer.Model.TreeViewModel
                     allSensorsCount += node.AllSensorsCount;
                     foreach (var (_, sensor) in node.Sensors)
                     {
-                        if (temp.TryGetValue(sensor.SensorType, out var _))
-                            temp[sensor.SensorType]++;
-                        else temp.TryAdd(sensor.SensorType, 1);
+                        if (types.TryGetValue(sensor.SensorType, out var _))
+                            types[sensor.SensorType]++;
+                        else types.TryAdd(sensor.SensorType, 1);
+                        
+                        if (statuses.TryGetValue(sensor.Status, out var _))
+                            statuses[sensor.Status]++;
+                        else statuses.TryAdd(sensor.Status, 1);
                     }
                 }
             }
             
             foreach (var (_, sensor) in Sensors)
             {
-                if (temp.TryGetValue(sensor.SensorType, out var _))
-                {
-                    temp[sensor.SensorType]++;
-                }
-                else temp.TryAdd(sensor.SensorType, 1);
+                if (types.TryGetValue(sensor.SensorType, out var _))
+                    types[sensor.SensorType]++;
+                else types.TryAdd(sensor.SensorType, 1);
+                
+                if (statuses.TryGetValue(sensor.Status, out var _))
+                    statuses[sensor.Status]++;
+                else statuses.TryAdd(sensor.Status, 1);
             }
 
-            TotalSensorsByType = temp;
+            TotalSensorsByType = types;
+            TotalSensorsByStatuses = statuses;
+            
             AllSensorsCount = allSensorsCount + Sensors.Count;
             
             ModifyUpdateTime();

@@ -1,5 +1,6 @@
 ﻿using System.Collections.Generic;
 using System.Linq;
+using HSMServer.Extensions;
 using HSMServer.Model.TreeViewModel;
 
 namespace HSMServer.Model.ViewModel
@@ -15,6 +16,8 @@ namespace HSMServer.Model.ViewModel
         public string TotalNodesMessage { get; set; }
         
         public string TotalSensorsMessage { get; set; }
+        
+        public string TotalSensorsStatusesMessage { get; set; }
         
         public int TotalSensors { get; set; }
 
@@ -34,6 +37,9 @@ namespace HSMServer.Model.ViewModel
             GenerateTotalNodesMessage(product.Nodes.Values);
             
             TotalSensorsMessage =  string.Join("\n", product.TotalSensorsByType.Select(x => $"{x.Value} {x.Key}").ToArray());
+
+            TotalSensorsStatusesMessage = string.Join(", ",
+                product.TotalSensorsByStatuses.Select(x => $"{x.Value} - <i class='{x.Key.ToIcon()} ps-1 align-self-center'></i>").ToArray());
         }
 
         private void GenerateTotalNodesMessage(ICollection<ProductNodeViewModel> productNodeViewModels)
@@ -49,7 +55,7 @@ namespace HSMServer.Model.ViewModel
                 else statuses.TryAdd(node.Status, 1);
             }
             
-            TotalNodesMessage = string.Join("\n", statuses.Select(x => $"{x.Value} {x.Key}").ToArray());
+            TotalNodesMessage = string.Join(", ", statuses.Select(x => $"{x.Value} - <i class='{x.Key.ToIcon()} ps-1 align-self-center'></i>").ToArray());
         }
     }
 }
