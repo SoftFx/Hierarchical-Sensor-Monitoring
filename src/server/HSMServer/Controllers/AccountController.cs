@@ -168,7 +168,7 @@ namespace HSMServer.Controllers
         [HttpPost]
         public async Task CreateUser([FromBody] UserViewModel model)
         {
-            UserValidator validator = new(_userManager);
+            NewUserValidator validator = new(_userManager);
             var results = validator.Validate(model);
 
             if (!results.IsValid)
