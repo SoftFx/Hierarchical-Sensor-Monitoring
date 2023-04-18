@@ -33,7 +33,7 @@
 
 <div>
     <div id='product_info_@Model.EncodedId'>
-        @await Html.PartialAsync("_ProductMetaInfo", new ProductInfoViewModel(Model))
+        @await Html.PartialAsync("_MetaInfo", new ProductInfoViewModel(Model))
     </div>
     
     <ul class='nav nav-tabs' role="tablist">

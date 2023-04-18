@@ -1,3 +1,4 @@
+@using HSMServer.Constants
 @using HSMServer.Controllers
 @using HSMServer.Extensions
 @using HSMServer.Model.ViewModel
@@ -127,12 +128,7 @@
         
         replaceHTMLtoMarkdown();
         $('#editButtonMetaInfo').on('click', function (){
-              if (!isNode) {
-                  editInfoButtonClick();
-              } 
-              else {
-                  editProductInfoButtonClick();    
-              }
+            editInfoButtonClick();
         });
         
         $('[id^="revertInfo_"]').on('click', function (){
@@ -183,6 +179,27 @@
                 });
             }
     });
+    function revertProductInfoClick() {
+        let id = $('#metaInfo_encodedId').val();
+        
+        $.ajax({
+            type: 'GET',
+            url: `@Html.Raw(Url.Action(nameof(HomeController.GetProductInfo), ViewConstants.HomeController))?Id=${id}`,
+            dataType: 'html',
+            contentType: 'application/json',
+            cache: false,
+            async: true
+        }).done(function (viewData) {
+                $('#product_info_' + id).html(viewData);
+                $('#editProductButton').attr('hidden', false);
+                      
+                let metaInfo = $('#metaInfoCollapse');
+                                            
+                metaInfo.addClass('no-transition');
+                $('#meta_info_collapse').click();
+                metaInfo.removeClass('no-transition');
+            });
+    }
     
     function replaceHTMLtoMarkdown() {
          $('[id^="markdown_"]').each(function () {
