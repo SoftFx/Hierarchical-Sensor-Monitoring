@@ -52,6 +52,22 @@ namespace HSMServer.Core.Model
         public bool IsExpired => DateTime.UtcNow >= ExpirationTime;
 
 
+        protected AccessKeyModel()
+        {
+            Id = Guid.NewGuid();
+            CreationTime = DateTime.UtcNow;
+        }
+
+        private AccessKeyModel(ProductModel product) : this()
+        {
+            AuthorId = product.AuthorId;
+            ProductId = product.Id;
+            State = KeyState.Active;
+            Permissions = FullPermissions;
+            DisplayName = CommonConstants.DefaultAccessKey;
+            ExpirationTime = DateTime.MaxValue;
+        }
+
         public AccessKeyModel(AccessKeyEntity entity)
         {
             Id = Guid.Parse(entity.Id);
@@ -68,22 +84,6 @@ namespace HSMServer.Core.Model
         {
             AuthorId = authorId;
             ProductId = productId;
-        }
-
-        protected AccessKeyModel()
-        {
-            Id = Guid.NewGuid();
-            CreationTime = DateTime.UtcNow;
-        }
-
-        private AccessKeyModel(ProductModel product) : this()
-        {
-            AuthorId = product.AuthorId;
-            ProductId = product.Id;
-            State = KeyState.Active;
-            Permissions = FullPermissions;
-            DisplayName = CommonConstants.DefaultAccessKey;
-            ExpirationTime = DateTime.MaxValue;
         }
 
 
@@ -114,7 +114,7 @@ namespace HSMServer.Core.Model
                 ExpirationTime = ExpirationTime.Ticks
             };
 
-        internal static AccessKeyModel BuildDefault(ProductModel product) => new AccessKeyModel(product);
+        internal static AccessKeyModel BuildDefault(ProductModel product) => new(product);
 
         internal bool IsHasPermissions(KeyPermissions expectedPermissions, out string message)
         {
