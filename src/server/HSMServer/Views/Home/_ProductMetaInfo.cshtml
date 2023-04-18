@@ -5,10 +5,9 @@
 
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
 
-@await  Html.PartialAsync("_MetaInfo", Model)
-<script>
-    disableProductExpectedUpdateInterval();
+@await Html.PartialAsync("_MetaInfo", Model)
 
+<script>
     $(document).on("submit", "#editMetaInfo_form", function (event) {
         event.preventDefault();
         event.stopImmediatePropagation();
@@ -87,12 +86,5 @@
              $('#meta_info_collapse').click();
              metaInfo.removeClass('no-transition');
         });
-    }
-
-    function disableProductExpectedUpdateInterval() {
-        let productId = $('#metaInfo_encodedId').val();
-
-        $(`#productExpectedUpdateInterval_${productId}:input`).each(() => this.setAttribute('disabled', true));
-        $(`#productRestorePolicy_${productId}:input`).each(() => this.setAttribute('disabled', true));
     }
 </script>

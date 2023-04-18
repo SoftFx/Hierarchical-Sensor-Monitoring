@@ -24,7 +24,10 @@
             <h5 class="d-flex my-1 align-self-top">@Html.Raw($"{Model.ProductName}{Model.Path}")</h5>
         </div>
         <div class='d-flex my-1'>
-            @* <input id='sensor_type_@Model.EncodedId' value='@((int)Model.SensorType)' style='display: none'/> *@
+            @if (Model is SensorInfoViewModel sensor)
+            {
+                <input id='sensor_type_@Model.EncodedId' value='@((int)sensor.SensorType)' style='display: none'/>
+            }
             <div id='update_@Model.EncodedId' class='time-ago-div me-1'>updated @Model.UpdateTime.GetTimeAgo()</div>
         </div>
     </div>

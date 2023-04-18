@@ -41,8 +41,6 @@ window.displaySensorMetaInfo = function (sensorId, viewData) {
     metaInfo.addClass('no-transition');
     $('#meta_info_collapse').click();
     metaInfo.removeClass('no-transition');
-
-    disableExpectedUpdateIntervalControl();
 }
 
 function showMetaInfo(id) {
@@ -56,11 +54,4 @@ function showMetaInfo(id) {
     }).done(function (data) {
         displaySensorMetaInfo(id, data);
     });
-}
-
-function disableExpectedUpdateIntervalControl() {
-    let sensorId = $('#metaInfo_encodedId').val();
-
-    $(`#expectedUpdateInterval_${sensorId}:input`).each(() => this.setAttribute('disabled', true));
-    $(`#restorePolicy_${sensorId}:input`).each(() => this.setAttribute('disabled', true));
 }
