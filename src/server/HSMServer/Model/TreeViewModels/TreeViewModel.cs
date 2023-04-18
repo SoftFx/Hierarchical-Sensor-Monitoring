@@ -86,7 +86,7 @@ namespace HSMServer.Model.TreeViewModel
 
         internal IEnumerable<ProductNodeViewModel> GetRootProducts() => Nodes.Where(x => x.Value.Parent is null).Select(x => x.Value);
 
-        internal List<Guid> GetNodeAllSensors(Guid selectedNode)
+        internal List<Guid> GetAllNodeSensors(Guid selectedNode)
         {
             var sensors = new List<Guid>(1 << 3);
 

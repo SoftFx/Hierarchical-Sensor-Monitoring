@@ -226,7 +226,7 @@ namespace HSMServer.Controllers
             _treeViewModel.UpdateProductNotificationSettings(rootProduct);
         }
 
-        private List<Guid> GetNodeSensors(Guid id) => _treeViewModel.GetNodeAllSensors(id);
+        private List<Guid> GetNodeSensors(Guid id) => _treeViewModel.GetAllNodeSensors(id);
 
         #region Update
 
@@ -325,7 +325,7 @@ namespace HSMServer.Controllers
             string fileName = $"{productName}_{path.Replace('/', '_')}_from_{from:s}_to{to:s}.csv";
             Response.Headers.Add("Content-Disposition", $"attachment;filename={fileName}");
 
-            var values = await GetSensorValues(encodedId, from.ToUtc(), to.ToUtc(), MaxHistoryCount);
+            var values = await GetSensorValues(encodedId, from.ToUtcKind(), to.ToUtcKind(), MaxHistoryCount);
 
             return GetExportHistory(values, type, fileName);
         }
