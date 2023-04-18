@@ -9,7 +9,7 @@
 
 @{
     var isProduct = Model is ProductInfoViewModel;
-    
+
     var action = string.Empty;
     if (isProduct)
         action = nameof(HomeController.UpdateProductInfo);
@@ -45,19 +45,18 @@
         </div>
 
         <div class="collapse" id="metaInfoCollapse">
-
-            @if (Model is ProductInfoViewModel)
+            <div class="form-control border-0 fw-bold mb-1 px-0 ms-1" style="max-width: 15rem;">
+                General info:
+            </div>
+            @if (Model is ProductInfoViewModel product)
             {
-                <div class="form-control border-0 fw-bold mb-1 px-0 ms-1" style="max-width: 15rem;">
-                    General info:
-                </div>
                 <div class="d-flex justify-content-start ms-1">
                     <div class="d-flex ps-2 ms-1 text-nowrap">
                         <span style="min-width: 8rem">Total nodes:</span>
                     </div>
                     <div class="d-flex w-100 ps-2">
-                        <span>@Html.Raw($"{((ProductInfoViewModel)Model).TotalNodes} ({((ProductInfoViewModel)Model).TotalNodesMessage})")</span>
-                        <i class='fas fa-question-circle ps-1 align-self-center' title='@Html.Raw(((ProductInfoViewModel)Model).TotalNodesMessage)'></i>
+                        <span>@Html.Raw($"{product.TotalNodes} ({product.TotalNodesMessage})")</span>
+                        <i class='fas fa-question-circle ps-1 align-self-center' title='@Html.Raw(product.TotalNodesMessage)'></i>
                     </div>
                 </div>
                 <div class="d-flex justify-content-start ms-1">
@@ -65,24 +64,21 @@
                         <span style="min-width: 8rem">Total sensors</span>
                     </div>
                     <div class="d-flex w-100 ps-2">
-                        <span>@Html.Raw($"{((ProductInfoViewModel)Model).TotalSensors} ({((ProductInfoViewModel)Model).TotalSensorsMessage})")</span>
-                        <i class='fas fa-question-circle ps-1 align-self-center' title='@Html.Raw(((ProductInfoViewModel)Model).TotalSensorsMessage)'></i>
+                        <span>@Html.Raw($"{product.TotalSensors} ({product.TotalSensorsMessage})")</span>
+                        <i class='fas fa-question-circle ps-1 align-self-center' title='@Html.Raw(product.TotalSensorsMessage)'></i>
                     </div>
                 </div>
-                
-                @await Html.PartialAsync("_Alerts", ((ProductInfoViewModel)Model))
+
+                @await Html.PartialAsync("_Alerts", product)
             }
-            else
+            else if (Model is SensorInfoViewModel sensor)
             {
-                <div class="form-control border-0 fw-bold px-0" style="max-width: 15rem;">
-                    General info:
-                </div>
                 <div class="d-flex justify-content-start">
                     <div class="d-flex ms-3 text-nowrap">
                         <span style="min-width: 8rem">Sensor type:</span>
                     </div>
                     <div class="d-flex w-100">
-                        <span>@(((SensorInfoViewModel)Model).SensorType)</span>
+                        <span>@(sensor.SensorType)</span>
                     </div>
                 </div>
                 <div id="status_metainfo" class="d-flex justify-content-start">
@@ -95,17 +91,17 @@
                     </div>
                 </div>
                 <div id="validation_metainfo" class="d-flex justify-content-start">
-                    @if (!string.IsNullOrEmpty(((SensorInfoViewModel)Model).StatusComment))
+                    @if (!string.IsNullOrEmpty(sensor.StatusComment))
                     {
                         <div class="d-flex ms-3 text-nowrap">
                             <span style="min-width: 8rem">Status comment:</span>
                         </div>
                         <div class="d-flex w-100">
-                            <span id="markdown_status_comment">@Html.Raw(((SensorInfoViewModel)Model).StatusComment)</span>
+                            <span id="markdown_status_comment">@Html.Raw(sensor.StatusComment)</span>
                         </div>
                     }
                 </div>
-                @await Html.PartialAsync("_Alerts", ((SensorInfoViewModel)Model))
+                @await Html.PartialAsync("_Alerts", sensor)
             }
         </div>
         <button class="btn btn-outline-secondary w-100
@@ -127,7 +123,6 @@
 
 <script>
     $(document).ready(() => {
-        console.log('@isProduct')
          $('#editButtonMetaInfo').on('click', function (){
                if ('@isProduct' === 'False') {
                    editInfoButtonClick();
