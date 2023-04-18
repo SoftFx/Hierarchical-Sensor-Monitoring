@@ -2,6 +2,7 @@
 using HSMServer.Model.Authentication;
 using HSMServer.Model.Folders;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace HSMServer.Model.UserTreeShallowCopy
 {
@@ -21,6 +22,9 @@ namespace HSMServer.Model.UserTreeShallowCopy
         public override bool IsAccountsEnable => AccountState.IsAllEnabled;
 
         public override bool IsGroupsEnable => GroupState.IsAllEnabled;
+
+
+        public bool IsEmpty => Nodes.All(n => n.Data.IsEmpty);
 
 
         public FolderShallowModel(FolderModel data, User user) : base(data)

@@ -1,4 +1,5 @@
-﻿using HSMDatabase.AccessManager.DatabaseEntities;
+﻿using HSMCommon.Extensions;
+using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.ConcurrentStorage;
 using HSMServer.Model.Authentication;
 using HSMServer.Model.TreeViewModel;
@@ -78,6 +79,13 @@ namespace HSMServer.Model.Folders
                 Color = Color.ToArgb(),
                 ServerPolicies = GetPolicyEntities(),
             };
+
+        internal FolderModel RecalculateState()
+        {
+            UpdateTime = Products.Values.MaxOrDefault(x => x.UpdateTime);
+
+            return this;
+        }
 
 
         private List<TimeIntervalEntity> GetPolicyEntities()
