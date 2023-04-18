@@ -1,5 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 
 namespace HSMDatabase.AccessManager.DatabaseEntities
 {
@@ -8,10 +7,10 @@ namespace HSMDatabase.AccessManager.DatabaseEntities
         public TelegramSettingsEntity TelegramSettings { get; init; }
 
         public Dictionary<string, long> IgnoredSensors { get; init; }
-        
+
         public List<string> EnabledSensors { get; init; }
     }
-    
+
 
     public sealed class TelegramSettingsEntity
     {
@@ -22,9 +21,6 @@ namespace HSMDatabase.AccessManager.DatabaseEntities
         public int MessagesDelay { get; init; }
 
         public List<TelegramChatEntity> Chats { get; init; }
-
-        [Obsolete]
-        public long ChatIdentifier { get; init; }
     }
 
 

@@ -36,17 +36,6 @@ namespace HSMServer.Notification.Settings
             if (entity.Chats != null)
                 foreach (var chat in entity.Chats)
                     Chats.TryAdd(new(chat.Id), new TelegramChat(chat));
-
-            if (entity.ChatIdentifier != 0) //TODO: migration logic should be removed
-            {
-                var chatId = new ChatId(entity.ChatIdentifier);
-                Chats.TryAdd(chatId, new TelegramChat()
-                {
-                    Id = chatId,
-                    Name = string.Empty,
-                    IsUserChat = true,
-                });
-            }
         }
 
 
