@@ -24,8 +24,6 @@ namespace HSMServer.Model.ViewModel
         public NodeViewModel Parent { get; }
 
 
-        public ProductInfoViewModel() : base() { }
-
         internal ProductInfoViewModel(ProductNodeViewModel product) : base(product)
         {
             Name = product.Name;
@@ -38,7 +36,7 @@ namespace HSMServer.Model.ViewModel
             GenerateTotalNodesMessage(product.Nodes.Values);
             
             TotalSensorsMessage =  string.Join("\n", product.TotalSensorsByType.Select(x => $"{x.Value} {x.Key}").ToArray());
-            TotalSensorsStatusesMessage = string.Join(", ", product.TotalSensorsByStatuses.OrderBy(x => x.Key).Select(x => $"{x.Value} - <i class='{x.Key.ToIcon()} ps-1 align-self-center'></i>").ToArray());
+            TotalSensorsStatusesMessage = string.Join(", ", product.TotalSensorsByStatuses.OrderBy(x => x.Key).Select(x => $"<i class='{x.Key.ToIcon()} pe-1 align-self-center'></i> - {x.Value}").ToArray());
         }
 
         private void GenerateTotalNodesMessage(ICollection<ProductNodeViewModel> productNodeViewModels)
@@ -54,7 +52,7 @@ namespace HSMServer.Model.ViewModel
                 else statuses.TryAdd(node.Status, 1);
             }
             
-            TotalNodesMessage = string.Join(", ", statuses.OrderBy(x => x.Key).Select(x => $"{x.Value} - <i class='{x.Key.ToIcon()} ps-1 align-self-center'></i>").ToArray());
+            TotalNodesMessage = string.Join(", ", statuses.OrderBy(x => x.Key).Select(x => $"<i class='{x.Key.ToIcon()} pe-1 align-self-center'></i> - {x.Value} ").ToArray());
         }
     }
 }
