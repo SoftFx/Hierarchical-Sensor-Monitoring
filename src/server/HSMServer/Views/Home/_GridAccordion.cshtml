@@ -8,9 +8,7 @@
 <div class="accordion">
     @if (Model.Count > 0)
     {
-        var title = Model.FirstOrDefault() is ProductNodeViewModel product
-            ? product.Parent is FolderModel ? "Products" : "Nodes"
-            : "Sensors";
+        var title = Model.FirstOrDefault().GetChildrenAccordionTitle();
         var accordionId = $"grid{title}";
 
         <div class="accordion-item custom-accordion-item">
