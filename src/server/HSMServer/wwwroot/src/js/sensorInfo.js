@@ -22,9 +22,6 @@
 
     $('#labelInterval').addClass('d-none');
     $('#labelRestoreInterval').addClass('d-none');
-    //
-    // $(`#expectedUpdateInterval_${sensorId}:input`).each(() => this.removeAttribute('disabled'));
-    // $(`#restorePolicy_${sensorId}:input`).each(() => this.removeAttribute('disabled'));
 }
 
 window.revertInfoClick = function () {

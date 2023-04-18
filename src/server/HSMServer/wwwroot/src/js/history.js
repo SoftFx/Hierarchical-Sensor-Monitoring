@@ -32,7 +32,6 @@ function Data(to, from, type, encodedId) {
     }
 
     function initializeSensorAccordion() {
-        console.log(123)
         InitializeHistory();
         InitializePeriodRequests();
         initializeTabLinksRequests();
