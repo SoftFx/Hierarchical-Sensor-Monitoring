@@ -13,6 +13,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using System.Xml.Linq;
 
 namespace HSMServer.Folders
 {
@@ -149,7 +150,7 @@ namespace HSMServer.Folders
 
         public List<FolderModel> GetUserFolders(User user)
         {
-            var folders = Values.ToList();
+            var folders = Values.Select(f => f.RecalculateState()).ToList();
 
             if (user == null || user.IsAdmin)
                 return folders;
