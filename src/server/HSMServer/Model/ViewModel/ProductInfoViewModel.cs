@@ -8,18 +8,18 @@ namespace HSMServer.Model.ViewModel
     public class ProductInfoViewModel : NodeInfoBaseViewModel
     {
         public string Name { get; }
-
         
         
         public int TotalNodes { get; set; }
+        
+        public int TotalSensors { get; set; }
         
         public string TotalNodesMessage { get; set; }
         
         public string TotalSensorsMessage { get; set; }
         
         public string TotalSensorsStatusesMessage { get; set; }
-        
-        public int TotalSensors { get; set; }
+
 
         public NodeViewModel Parent { get; }
 
@@ -32,12 +32,12 @@ namespace HSMServer.Model.ViewModel
             Parent = product.Parent;
             Status = product.Status;
             UpdateTime = product.UpdateTime;
+            
             TotalNodes = product.Nodes.Count;
             TotalSensors = product.AllSensorsCount;
             GenerateTotalNodesMessage(product.Nodes.Values);
             
             TotalSensorsMessage =  string.Join("\n", product.TotalSensorsByType.Select(x => $"{x.Value} {x.Key}").ToArray());
-
             TotalSensorsStatusesMessage = string.Join(", ", product.TotalSensorsByStatuses.OrderBy(x => x.Key).Select(x => $"{x.Value} - <i class='{x.Key.ToIcon()} ps-1 align-self-center'></i>").ToArray());
         }
 
