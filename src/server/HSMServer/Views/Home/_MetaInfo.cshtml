@@ -13,7 +13,6 @@
     action = isProduct ? nameof(HomeController.UpdateProductInfo) : nameof(HomeController.UpdateSensorInfo);
 }
 
-
 <div id="meta_info_@Model.EncodedId">
     <div class="d-flex ms-1 mt-1 me-0 justify-content-between flex-grow-1">
         <div class='d-flex justify-content-start'>
@@ -124,9 +123,11 @@
 
 <script>
     $(document).ready(() => {
+        let isNode = '@isProduct' === 'True';
+        
         replaceHTMLtoMarkdown();
         $('#editButtonMetaInfo').on('click', function (){
-              if ('@isProduct' === 'False') {
+              if (!isNode) {
                   editInfoButtonClick();
               } 
               else {
@@ -135,7 +136,7 @@
         });
         
         $('[id^="revertInfo_"]').on('click', function (){
-            if ('@isProduct' === 'False') {
+            if (!isNode) {
                revertInfoClick();
             } 
             else {
@@ -143,6 +144,45 @@
             }
         });
     })
+    
+    $(document).on("submit", "#editMetaInfo_form", function (event) {
+            event.preventDefault();
+            event.stopImmediatePropagation();
+            
+            if ('@isProduct' === 'True'){
+                $.ajax({
+                    url: $("#editMetaInfo_form").attr("action"),
+                    type: 'POST',
+                    data: new FormData(this),
+                    datatype: 'html',
+                    processData: false,
+                    contentType: false,
+                    cache: false,
+                    async: true,
+                        success: function (viewData) {
+                            $('#editButtonMetaInfo').attr('hidden', false);
+                            $('#meta_info_' + $('#metaInfo_encodedId').val()).html(viewData);
+                            let metaInfo = $('#metaInfoCollapse');
+                                
+                            metaInfo.addClass('no-transition');
+                            $('#meta_info_collapse').click();
+                            metaInfo.removeClass('no-transition');
+                        }
+                });
+            }
+            else {
+                $.ajax({
+                    url: $("#editMetaInfo_form").attr("action"),
+                    type: 'POST',
+                    data: $("#editMetaInfo_form").serialize(),
+                    datatype: 'json',
+                    async: true,
+                    success: (viewData) => {
+                        displaySensorMetaInfo($('#metaInfo_encodedId').val(), viewData);
+                    }
+                });
+            }
+    });
     
     function replaceHTMLtoMarkdown() {
          $('[id^="markdown_"]').each(function () {

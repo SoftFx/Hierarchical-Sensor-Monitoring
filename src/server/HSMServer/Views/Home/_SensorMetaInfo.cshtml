@@ -6,21 +6,3 @@
 
 
 @await Html.PartialAsync("_MetaInfo", Model)
-
-<script>
-    $(document).on("submit", "#editMetaInfo_form", function (event) {
-        event.preventDefault();
-        event.stopImmediatePropagation();
-
-        $.ajax({
-            url: $("#editMetaInfo_form").attr("action"),
-            type: 'POST',
-            data: $("#editMetaInfo_form").serialize(),
-            datatype: 'json',
-            async: true,
-            success: (viewData) => {
-                displaySensorMetaInfo($('#metaInfo_encodedId').val(), viewData);
-            }
-        });
-    });
-</script>

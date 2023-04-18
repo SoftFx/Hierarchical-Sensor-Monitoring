@@ -8,31 +8,6 @@
 @await Html.PartialAsync("_MetaInfo", Model)
 
 <script>
-    $(document).on("submit", "#editMetaInfo_form", function (event) {
-        event.preventDefault();
-        event.stopImmediatePropagation();
-
-        $.ajax({
-            url: $("#editMetaInfo_form").attr("action"),
-            type: 'POST',
-            data: new FormData(this),
-            datatype: 'html',
-            processData: false,
-            contentType: false,
-            cache: false,
-            async: true,
-            success: function (viewData) {
-                $('#editButtonMetaInfo').attr('hidden', false);
-                $('#meta_info_' + $('#metaInfo_encodedId').val()).html(viewData);
-                let metaInfo = $('#metaInfoCollapse');
-                
-                metaInfo.addClass('no-transition');
-                $('#meta_info_collapse').click();
-                metaInfo.removeClass('no-transition');
-            }
-        });
-    });
-
     function editProductInfoButtonClick() {
         let productId = $('#metaInfo_encodedId').val();
 
