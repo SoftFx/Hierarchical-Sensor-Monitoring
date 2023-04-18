@@ -62,17 +62,14 @@ namespace HSMServer.Controllers
 
             if (!string.IsNullOrEmpty(selectedId))
             {
-                if (Guid.TryParse(selectedId, out var folderId) && _folderManager.TryGetValue(folderId, out var folder))
-                    viewModel = folder;
-                else
-                {
-                    var decodedId = SensorPathHelper.DecodeGuid(selectedId);
+                var decodedId = SensorPathHelper.DecodeGuid(selectedId);
 
-                    if (_treeViewModel.Nodes.TryGetValue(decodedId, out var node))
-                        viewModel = node;
-                    else if (_treeViewModel.Sensors.TryGetValue(decodedId, out var sensor))
-                        viewModel = sensor;
-                }
+                if (_folderManager.TryGetValue(decodedId, out var folder))
+                    viewModel = folder;
+                else if (_treeViewModel.Nodes.TryGetValue(decodedId, out var node))
+                    viewModel = node;
+                else if (_treeViewModel.Sensors.TryGetValue(decodedId, out var sensor))
+                    viewModel = sensor;
             }
 
             return PartialView("_NodeDataPanel", viewModel);
@@ -247,6 +244,7 @@ namespace HSMServer.Controllers
             var decodedId = SensorPathHelper.DecodeGuid(selectedId);
             var updatedSensorsData = new List<object>();
 
+            // TODO: implement update selected folder tree item
             if (_treeViewModel.Nodes.TryGetValue(decodedId, out var node))
             {
                 foreach (var (_, childNode) in node.Nodes)
