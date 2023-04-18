@@ -1,6 +1,5 @@
 @using HSMServer.Controllers
 @using HSMServer.Extensions
-@using HSMServer.Model.TreeViewModel
 @using HSMServer.Model.ViewModel
 @using Microsoft.AspNetCore.Mvc.TagHelpers
 @model HSMServer.Model.ViewModel.NodeInfoBaseViewModel
@@ -11,9 +10,7 @@
     var isProduct = Model is ProductInfoViewModel;
 
     var action = string.Empty;
-    if (isProduct)
-        action = nameof(HomeController.UpdateProductInfo);
-    else action = nameof(HomeController.UpdateSensorInfo);
+    action = isProduct ? nameof(HomeController.UpdateProductInfo) : nameof(HomeController.UpdateSensorInfo);
 }
 
 

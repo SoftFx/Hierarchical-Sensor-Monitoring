@@ -55,12 +55,6 @@ namespace HSMServer.Model.TreeViewModel
         {
             sensor.Parent = this;
             Sensors.TryAdd(sensor.Id, sensor);
-            
-            if (TotalSensorsByType.TryGetValue(sensor.SensorType, out var _))
-            {
-                TotalSensorsByType[sensor.SensorType]++;
-            }
-            else TotalSensorsByType.TryAdd(sensor.SensorType, 1);
         }
 
         internal void AddAccessKey(AccessKeyViewModel key) => AccessKeys.TryAdd(key.Id, key);
@@ -70,16 +64,33 @@ namespace HSMServer.Model.TreeViewModel
         internal ProductNodeViewModel RecalculateCharacteristics()
         {
             int allSensorsCount = 0;
-
+            var temp = new Dictionary<SensorType, int>();
+            
             if (Nodes != null && !Nodes.IsEmpty)
             {
                 foreach (var (_, node) in Nodes)
                 {
                     node.RecalculateCharacteristics();
                     allSensorsCount += node.AllSensorsCount;
+                    foreach (var (_, sensor) in node.Sensors)
+                    {
+                        if (temp.TryGetValue(sensor.SensorType, out var _))
+                            temp[sensor.SensorType]++;
+                        else temp.TryAdd(sensor.SensorType, 1);
+                    }
                 }
             }
             
+            foreach (var (_, sensor) in Sensors)
+            {
+                if (temp.TryGetValue(sensor.SensorType, out var _))
+                {
+                    temp[sensor.SensorType]++;
+                }
+                else temp.TryAdd(sensor.SensorType, 1);
+            }
+
+            TotalSensorsByType = temp;
             AllSensorsCount = allSensorsCount + Sensors.Count;
             
             ModifyUpdateTime();
@@ -102,18 +113,6 @@ namespace HSMServer.Model.TreeViewModel
             var sensorStatus = Nodes.Values.MaxOrDefault(n => n.Status);
 
             Status = sensorStatus > nodesStatus ? sensorStatus : nodesStatus;
-        }
-
-        private void ModifyTotalSensorsByType()
-        {
-            foreach (var (_, sensor) in Sensors)
-            {
-                if (TotalSensorsByType.TryGetValue(sensor.SensorType, out var _))
-                {
-                    TotalSensorsByType[sensor.SensorType]++;
-                }
-                else TotalSensorsByType.TryAdd(sensor.SensorType, 1);
-            }
         }
     }
 }
