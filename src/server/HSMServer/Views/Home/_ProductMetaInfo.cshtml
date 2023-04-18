@@ -95,25 +95,4 @@
         $(`#productExpectedUpdateInterval_${productId}:input`).each(() => this.setAttribute('disabled', true));
         $(`#productRestorePolicy_${productId}:input`).each(() => this.setAttribute('disabled', true));
     }
-    
-    function collapseChangeTextContent() {
-            let icon = $('#collapse_icon')[0];
-    
-            if (icon.classList.contains('fa-caret-up')) {
-                icon.classList.toggle('fa-caret-down')
-                $('#product_info_collapse').attr('title', 'Show more info...');
-                $('#editButtonMetaInfo').addClass('d-none');
-                $('#description_title').addClass('d-none');
-                $('#headline_metainfo').addClass('d-none');
-                $('[id^="markdown_span_description_"]').removeClass('ms-3');
-            }
-            else {
-                icon.classList.toggle('fa-caret-up')
-                $('#product_info_collapse').attr('title', 'Hide info...');
-                $('#editButtonMetaInfo').removeClass('d-none');
-                $('#description_title').removeClass('d-none');
-                $('#headline_metainfo').removeClass('d-none');
-                $('[id^="markdown_span_description_"]').addClass('ms-3');
-            }
-        }
 </script>

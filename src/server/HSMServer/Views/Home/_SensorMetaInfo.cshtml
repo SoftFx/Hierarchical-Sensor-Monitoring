@@ -8,10 +8,6 @@
 @await Html.PartialAsync("_MetaInfo", Model)
 
 <script>
-    $(document).ready(() => {
-        replaceHTMLtoMarkdown();
-    });
-
     $(document).on("submit", "#editMetaInfo_form", function (event) {
         event.preventDefault();
         event.stopImmediatePropagation();
@@ -28,32 +24,4 @@
         });
     });
 
-    function replaceHTMLtoMarkdown() {
-        $('[id^="markdown_"]').each(function () {
-            let innerHtml = $(this)[0].innerHTML;
-            $(this).empty().append(markdownToHTML(innerHtml))
-            $(this).children().last().css('margin-bottom', 0);
-        });
-    }
-
-    function collapseChangeTextContent() {
-        let icon = $('#collapse_icon')[0];
-
-        if (icon.classList.contains('fa-caret-up')) {
-            icon.classList.toggle('fa-caret-down')
-            $('#meta_info_collapse').attr('title', 'Show more info...');
-            $('#editButtonMetaInfo').addClass('d-none');
-            $('#description_title').addClass('d-none');
-            $('#headline_metainfo').addClass('d-none');
-            $('[id^="markdown_span_description_"]').removeClass('ms-3');
-        }
-        else {
-            icon.classList.toggle('fa-caret-up')
-            $('#meta_info_collapse').attr('title', 'Hide info...');
-            $('#editButtonMetaInfo').removeClass('d-none');
-            $('#description_title').removeClass('d-none');
-            $('#headline_metainfo').removeClass('d-none');
-            $('[id^="markdown_span_description_"]').addClass('ms-3');
-        }
-    }
 </script>

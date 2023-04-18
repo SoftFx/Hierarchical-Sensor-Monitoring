@@ -32,6 +32,7 @@ function Data(to, from, type, encodedId) {
     }
 
     function initializeSensorAccordion() {
+        console.log(123)
         InitializeHistory();
         InitializePeriodRequests();
         initializeTabLinksRequests();
@@ -59,11 +60,11 @@ function Data(to, from, type, encodedId) {
     }
 
     function InitializeHistory() {
-        let info = ($('[id^=sensor_info_]')).attr('id');
+        let info = ($('[id^=meta_info_]')).attr('id');
         if (info === undefined) 
             return;
         
-        let encodedId = info.substring("sensor_info_".length)
+        let encodedId = info.substring("meta_info_".length)
         let type = getTypeForSensor(encodedId);
         let date = new Date();
         
@@ -87,7 +88,7 @@ function Data(to, from, type, encodedId) {
         let type = getTypeForSensor(encodedId);
         const { from, to } = getFromAndTo(encodedId);
         let body = Data(to, from, type, encodedId);
-
+       
         showBarsCount(encodedId);
         initializeGraph(encodedId, rawHistoryAction, type, body);
     }
