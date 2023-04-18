@@ -50,10 +50,10 @@ namespace HSMServer.Controllers.GrafanaDatasources.JsonSource
                     else if (bar is DoubleBarValue doubleBar)
                     {
                         historyRow.AddFluent(doubleBar.Min)
-                                .AddFluent(doubleBar.Max)
-                                .AddFluent(doubleBar.Mean)
-                                .AddFluent(doubleBar.Count)
-                                .AddFluent(doubleBar.LastValue);
+                                  .AddFluent(doubleBar.Max)
+                                  .AddFluent(doubleBar.Mean)
+                                  .AddFluent(doubleBar.Count)
+                                  .AddFluent(doubleBar.LastValue);
                     }
 
                     Rows.Add(historyRow.AddFluent($"{bar.Status}")
