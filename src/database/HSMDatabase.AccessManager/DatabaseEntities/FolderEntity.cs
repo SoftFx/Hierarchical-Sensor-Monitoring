@@ -19,5 +19,7 @@ namespace HSMDatabase.AccessManager.DatabaseEntities
 
 
         public List<TimeIntervalEntity> ServerPolicies { get; init; } = new();
+
+        public NotificationSettingsEntity Notifications { get; init; }
     }
 }

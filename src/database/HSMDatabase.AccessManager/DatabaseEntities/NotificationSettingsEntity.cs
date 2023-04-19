@@ -14,13 +14,15 @@ namespace HSMDatabase.AccessManager.DatabaseEntities
 
     public sealed class TelegramSettingsEntity
     {
+        public List<TelegramChatEntity> Chats { get; init; }
+
         public byte MessagesMinStatus { get; init; }
 
         public bool MessagesAreEnabled { get; init; }
 
         public int MessagesDelay { get; init; }
 
-        public List<TelegramChatEntity> Chats { get; init; }
+        public byte Inheritance { get; init; }
     }
 
 

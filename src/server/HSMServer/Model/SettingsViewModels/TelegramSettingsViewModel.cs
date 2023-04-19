@@ -37,7 +37,7 @@ namespace HSMServer.Model
         {
             EnableMessages = settings.MessagesAreEnabled;
             MinStatusLevel = settings.MessagesMinStatus.ToClient();
-            MessagesDelay = settings.MessagesDelay;
+            MessagesDelay = settings.MessagesDelaySec;
 
             Chats.Clear();
             foreach (var (_, chat) in settings.Chats)

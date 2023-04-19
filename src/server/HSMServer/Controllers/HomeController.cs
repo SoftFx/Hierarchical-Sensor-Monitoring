@@ -195,13 +195,13 @@ namespace HSMServer.Controllers
             return string.Empty;
         }
 
-        private Action<Guid, Action<NotificationSettings, Guid>> GetHandler(NotificationsTarget actionType) => actionType switch
+        private Action<Guid, Action<ClientNotifications, Guid>> GetHandler(NotificationsTarget actionType) => actionType switch
         {
             NotificationsTarget.Groups => UpdateGroupNotificationSettings,
             NotificationsTarget.Accounts => UpdateUserNotificationSettings
         };
 
-        private void UpdateUserNotificationSettings(Guid selectedNode, Action<NotificationSettings, Guid> updateSettings)
+        private void UpdateUserNotificationSettings(Guid selectedNode, Action<ClientNotifications, Guid> updateSettings)
         {
             var user = _userManager[CurrentUser.Id];
             foreach (var sensorId in GetNodeSensors(selectedNode))
@@ -212,7 +212,7 @@ namespace HSMServer.Controllers
             _userManager.UpdateUser(user);
         }
 
-        private void UpdateGroupNotificationSettings(Guid selectedNode, Action<NotificationSettings, Guid> updateSettings)
+        private void UpdateGroupNotificationSettings(Guid selectedNode, Action<ClientNotifications, Guid> updateSettings)
         {
             ProductNodeViewModel rootProduct = null;
             if (_treeViewModel.Nodes.TryGetValue(selectedNode, out var node))

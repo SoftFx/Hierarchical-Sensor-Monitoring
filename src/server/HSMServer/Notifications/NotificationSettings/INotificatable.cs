@@ -13,7 +13,7 @@ namespace HSMServer.Notification.Settings
 
         public string Name { get; }
 
-        public NotificationSettings Notifications { get; }
+        public ClientNotifications Notifications { get; }
 
         public ConcurrentDictionary<Telegram.Bot.Types.ChatId, TelegramChat> Chats =>
             Notifications?.Telegram.Chats ?? new();

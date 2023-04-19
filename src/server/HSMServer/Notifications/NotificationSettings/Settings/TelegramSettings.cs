@@ -7,19 +7,27 @@ using Telegram.Bot.Types;
 
 namespace HSMServer.Notification.Settings
 {
+    public enum InheritedSettings : byte
+    {
+        Custom,
+        FromParent
+    }
+
     public sealed class TelegramSettings
     {
-        private const int DefaultMinDelay = 10;
-        private const bool DefaultEnableState = true;
+        public ConcurrentDictionary<ChatId, TelegramChat> Chats { get; } = new();
 
 
         public SensorStatus MessagesMinStatus { get; private set; } = SensorStatus.Warning;
 
-        public bool MessagesAreEnabled { get; private set; } = DefaultEnableState;
+        public bool MessagesAreEnabled { get; private set; } = true;
 
-        public int MessagesDelay { get; private set; } = DefaultMinDelay;
+        public int MessagesDelaySec { get; private set; } = 60;
 
-        public ConcurrentDictionary<ChatId, TelegramChat> Chats { get; } = new();
+
+        public InheritedSettings Inheritance { get; private set; } = InheritedSettings.Custom;
+
+        internal bool IsCustom => Inheritance == InheritedSettings.Custom;
 
 
         public TelegramSettings() { }
@@ -31,7 +39,8 @@ namespace HSMServer.Notification.Settings
 
             MessagesMinStatus = (SensorStatus)entity.MessagesMinStatus;
             MessagesAreEnabled = entity.MessagesAreEnabled;
-            MessagesDelay = entity.MessagesDelay;
+            MessagesDelaySec = entity.MessagesDelay;
+            Inheritance = (InheritedSettings)entity.Inheritance;
 
             if (entity.Chats != null)
                 foreach (var chat in entity.Chats)
@@ -43,7 +52,8 @@ namespace HSMServer.Notification.Settings
         {
             MessagesMinStatus = settingsUpdate.MinStatus;
             MessagesAreEnabled = settingsUpdate.Enabled;
-            MessagesDelay = settingsUpdate.Delay;
+            MessagesDelaySec = settingsUpdate.Delay;
+            Inheritance = settingsUpdate.Inheritance;
         }
 
         internal TelegramSettingsEntity ToEntity() =>
@@ -51,7 +61,8 @@ namespace HSMServer.Notification.Settings
             {
                 MessagesMinStatus = (byte)MessagesMinStatus,
                 MessagesAreEnabled = MessagesAreEnabled,
-                MessagesDelay = MessagesDelay,
+                MessagesDelay = MessagesDelaySec,
+                Inheritance = (byte)Inheritance,
                 Chats = Chats.Select(ch => ch.Value.ToEntity()).ToList(),
             };
     }

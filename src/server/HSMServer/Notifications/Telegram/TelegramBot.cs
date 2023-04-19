@@ -186,7 +186,7 @@ namespace HSMServer.Notifications
                         if (ShouldSendMessage(entity, sensor, oldStatus))
                             foreach (var (_, chat) in chats)
                             {
-                                if (entity.Notifications.Telegram.MessagesDelay > 0)
+                                if (entity.Notifications.Telegram.MessagesDelaySec > 0)
                                     chat.MessageBuilder.AddMessage(sensor, oldStatus.Status);
                                 else
                                     SendMarkdownMessageAsync(chat.ChatId, MessageBuilder.GetSingleMessage(sensor));
@@ -210,7 +210,7 @@ namespace HSMServer.Notifications
                         foreach (var (_, chat) in chats)
                             if (chat.MessageBuilder.ExpectedSendingTime <= DateTime.UtcNow)
                             {
-                                var message = chat.MessageBuilder.GetAggregateMessage(entity.Notifications.Telegram.MessagesDelay);
+                                var message = chat.MessageBuilder.GetAggregateMessage(entity.Notifications.Telegram.MessagesDelaySec);
                                 if (!string.IsNullOrEmpty(message))
                                     SendMarkdownMessageAsync(chat.ChatId, message);
                             }

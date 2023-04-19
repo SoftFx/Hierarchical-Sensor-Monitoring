@@ -129,7 +129,7 @@ namespace HSMServer.Notifications
                 var telegramSetting = entity.Notifications.Telegram;
 
                 response.AppendLine($"{entityStr} '{entity.Name}'");
-                response.AppendLine($"    Messages delay: {telegramSetting.MessagesDelay}");
+                response.AppendLine($"    Messages delay: {telegramSetting.MessagesDelaySec}");
                 response.AppendLine($"    Min status level: {telegramSetting.MessagesMinStatus}");
                 response.AppendLine($"    Messages are enabled: {telegramSetting.MessagesAreEnabled}");
             }
