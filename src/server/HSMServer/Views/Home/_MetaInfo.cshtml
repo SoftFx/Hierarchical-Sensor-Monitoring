@@ -61,9 +61,9 @@
                             
                             @for (int i = 0; i < product.NodeStatuses.Count; i++)
                             {
-                                <i class='@product.NodeStatuses[i].Key.ToIcon() pe-1 align-self-center'></i>
+                                <i class='@product.NodeStatuses[i].Status.ToIcon() pe-1 align-self-center'></i>
                                 <span>
-                                    - @product.NodeStatuses[i].Value
+                                    - @product.NodeStatuses[i].Count
                                 </span>
                                 @if (i != product.NodeStatuses.Count - 1)
                                 {
@@ -90,13 +90,13 @@
                         {
                             @Html.Raw($"{product.TotalSensors} (")
                             
-                            @for (int i = 0; i < product.SensorStatuses.Count; i++)
+                            @for (int i = 0; i < product.SensorsStatuses.Count; i++)
                             {
-                                <i class='@product.SensorStatuses[i].Key.ToIcon() pe-1 align-self-center'></i>
+                                <i class='@product.SensorsStatuses[i].Status.ToIcon() pe-1 align-self-center'></i>
                                 <span>
-                                    - @product.SensorStatuses[i].Value
+                                    - @product.SensorsStatuses[i].Count
                                 </span>
-                                @if (i != product.SensorStatuses.Count - 1)
+                                @if (i != product.SensorsStatuses.Count - 1)
                                 {
                                     <span>, </span>
                                 }

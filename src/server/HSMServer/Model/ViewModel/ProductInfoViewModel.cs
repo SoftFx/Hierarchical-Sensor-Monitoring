@@ -1,5 +1,6 @@
 ﻿using System.Collections.Generic;
 using System.Linq;
+using HSMServer.Core.Model;
 using HSMServer.Model.TreeViewModel;
 using SensorStatus = HSMServer.Model.TreeViewModel.SensorStatus;
 
@@ -7,9 +8,11 @@ namespace HSMServer.Model.ViewModel
 {
     public class ProductInfoViewModel : NodeInfoBaseViewModel
     {
-        public List<(SensorStatus Key, int Value)> NodeStatuses { get; set; } = new();
+        public List<(SensorStatus Status, int Count)> NodeStatuses { get; set; } = new();
 
-        public List<KeyValuePair<SensorStatus, int>> SensorStatuses { get; set; } = new();
+        public List<(SensorStatus Status, int Count)> SensorsStatuses { get; set; } = new();
+        
+        public List<(SensorType Type, int Count)> SensorsTypes { get; set; } = new();
         
         
         public NodeViewModel Parent { get; }
@@ -32,11 +35,13 @@ namespace HSMServer.Model.ViewModel
             LastUpdateTime = product.UpdateTime;
             
             TotalNodes = product.Nodes.Count;
-            TotalSensors = product.AllSensorsCount;
+            TotalSensors = product.Sensors.Count;
 
-            NodeStatuses = product.Nodes.Values.GroupBy(x => x.Status).Select(s => (s.Key, s.Count())).ToList();
-            SensorStatuses = product.TotalSensorsByStatuses.OrderBy(x => x.Key).ToList();
-            TotalSensorTypesMessage =  string.Join("\n", product.TotalSensorsByType.Select(x => $"{x.Value} {x.Key}").ToArray());
+            NodeStatuses = product.Nodes.Values.GroupBy(x => x.Status).OrderBy(x => x.Key).Select(s => (s.Key, s.Count())).ToList();
+            
+            SensorsStatuses = product.Sensors.GroupBy(x => x.Value.Status).OrderBy(x => x.Key).Select(x => (x.Key, x.Count())).ToList();
+            SensorsTypes = product.Sensors.GroupBy(x => x.Value.Type).OrderBy(x => x.Key).Select(x => (x.Key, x.Count())).ToList();
+            TotalSensorTypesMessage = string.Join("\n", SensorsTypes.Select(x => $"{x.Type} {x.Count}").ToArray());
         }
     }
 }

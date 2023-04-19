@@ -19,10 +19,6 @@ namespace HSMServer.Model.TreeViewModel
 
         public ConcurrentDictionary<Guid, AccessKeyViewModel> AccessKeys { get; } = new();
 
-        public Dictionary<SensorType, int> TotalSensorsByType { get; set; } = new();
-        
-        public Dictionary<SensorStatus, int> TotalSensorsByStatuses { get; set; } = new();
-
 
         public NotificationSettings Notifications { get; }
 
@@ -75,37 +71,8 @@ namespace HSMServer.Model.TreeViewModel
                 {
                     node.RecalculateCharacteristics();
                     allSensorsCount += node.AllSensorsCount;
-
-                    foreach (var (type, sensor) in node.TotalSensorsByType)
-                    {
-                        if (types.TryGetValue(type, out var _))
-                            types[type] += sensor;
-                        else types.TryAdd(type, sensor);
-                    }
-                    
-                    foreach (var (status, sensor) in node.TotalSensorsByStatuses)
-                    {
-                        if (statuses.TryGetValue(status, out var _))
-                            statuses[status] += sensor;
-                        else statuses.TryAdd(status, sensor);
-                    }
-                    
                 }
             }
-            
-            foreach (var (_, sensor) in Sensors)
-            {
-                if (types.TryGetValue(sensor.Type, out var _))
-                    types[sensor.Type]++;
-                else types.TryAdd(sensor.Type, 1);
-                
-                if (statuses.TryGetValue(sensor.Status, out var _))
-                    statuses[sensor.Status]++;
-                else statuses.TryAdd(sensor.Status, 1);
-            }
-
-            TotalSensorsByType = types;
-            TotalSensorsByStatuses = statuses;
             
             AllSensorsCount = allSensorsCount + Sensors.Count;
             
