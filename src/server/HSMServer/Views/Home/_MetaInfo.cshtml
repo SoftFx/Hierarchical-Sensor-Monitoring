@@ -161,8 +161,9 @@
                 <span>Cancel</span>
             </button>
         </div>
-    </form >
-</div >
+    </form>
+</div>
+<hr id="metainfo_separator" class="d-none"/>
 
 <script>
     $(document).ready(() => {
@@ -180,6 +181,8 @@
             else {
                revertProductInfoClick();    
             }
+           
+            $('#metainfo_separator').addClass('d-none');
         });
     })
     

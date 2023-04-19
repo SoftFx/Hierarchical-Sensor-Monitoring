@@ -6,7 +6,7 @@ using SensorStatus = HSMServer.Model.TreeViewModel.SensorStatus;
 
 namespace HSMServer.Model.ViewModel
 {
-    public class ProductInfoViewModel : NodeInfoBaseViewModel
+    public sealed class ProductInfoViewModel : NodeInfoBaseViewModel
     {
         public List<(SensorStatus Status, int Count)> NodeStatuses { get; set; } = new();
 

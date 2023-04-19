@@ -3,12 +3,11 @@ using HSMServer.Model.TreeViewModel;
 
 namespace HSMServer.Model.ViewModel
 {
-    public class SensorInfoViewModel : NodeInfoBaseViewModel
+    public sealed class SensorInfoViewModel : NodeInfoBaseViewModel
     {
         public SensorType SensorType { get; }
-        
-       
 
+        
         public string Unit { get; set; }
 
         public string StatusComment { get; set; }
