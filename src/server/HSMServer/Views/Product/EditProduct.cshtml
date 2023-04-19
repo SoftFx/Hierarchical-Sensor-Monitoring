@@ -4,6 +4,7 @@
 @using HSMServer.Model.Authentication
 @using HSMServer.Model.AccessKeysViewModels
 @using Microsoft.AspNetCore.Mvc.TagHelpers
+@using HSMServer.Notification.Settings;
 
 @model EditProductViewModel
 
@@ -45,151 +46,164 @@
 
 <div class="container">
     <div class="row justify-content-center">
-            <h4 class="my-3 text-break">Edit product '@Model.ProductName'</h4>
+        <h4 class="my-3 text-break">Edit product '@Model.ProductName'</h4>
     
-            @*<div style="margin: 10px">
-                    <div class="row justify-content-start">
-                        <h5 style="margin: 10px 20px 10px">Invite Member</h5><br>
-                        <div style="margin-left: 0px">You can invite a new member to manage '@Model.ProductName'. Link is valid for 30 minutes.</div>
+        @*<div style="margin: 10px">
+                <div class="row justify-content-start">
+                    <h5 style="margin: 10px 20px 10px">Invite Member</h5><br>
+                    <div style="margin-left: 0px">You can invite a new member to manage '@Model.ProductName'. Link is valid for 30 minutes.</div>
     
     
-                        <div class="mb-3">
-                            <label for="email" class="form-label">Email address</label>
-                            <input style="width: 300px" type="email" class="form-control" id="email" placeholder="name@example.com">
-                        </div>
-    
-                        <div class="mb-3">
-                            <label for="productRole" class="form-label">Choose a role permission</label>
-                            @ViewHelper.CreateProductRoleSelect()
-                        </div>
-    
-                        <span id="new_invite_span" style="display: none"></span>
-    
-                        <div class="mb-3">
-                            <button style="width: 100px" id="inviteButton" type="submit" class="btn btn-secondary">
-                                <i class="fas fa-envelope"></i> Invite
-                            </button>
-                        </div>
+                    <div class="mb-3">
+                        <label for="email" class="form-label">Email address</label>
+                        <input style="width: 300px" type="email" class="form-control" id="email" placeholder="name@example.com">
                     </div>
-                </div>*@
     
-            <div class="my-1">
-                <div>
-                    <div class='row justify-content-start'>
-                        <h5 class='mt-1'>Members</h5>
+                    <div class="mb-3">
+                        <label for="productRole" class="form-label">Choose a role permission</label>
+                        @ViewHelper.CreateProductRoleSelect()
+                    </div>
+    
+                    <span id="new_invite_span" style="display: none"></span>
+    
+                    <div class="mb-3">
+                        <button style="width: 100px" id="inviteButton" type="submit" class="btn btn-secondary">
+                            <i class="fas fa-envelope"></i> Invite
+                        </button>
                     </div>
                 </div>
-                <div class='col-xxl'>
-                    <table class='table table-striped'>
-                        <thead>
-                        <tr>
-                            <th scope='col'>#</th>
-                            <th scope='col'>Account</th>
-                            <th scope='col'>Role</th>
-                            <th scope='col'>Action</th>
-                        </tr>
-                        </thead>
-                        <tbody>
-                        <tr>
-                            <th>0</th>
-                            <th>
-                                @if (Model.NotAdminUsers.Count != 0)
-                                {
-                                    <select class='form-select' id='createUser'>
-                                        @foreach (var user in Model.NotAdminUsers)
-                                        {
-                                            <option value='@user.UserId'>@user.Username</option>
-                                        }
-                                    </select>
-                                }
-                                else
-                                {
-                                    <select disabled class='form-select' id='createUser'></select>
-                                }
-                                <span class="d-none" id='new_user_span'></span>
-                            </th>
-                            <th>
-                                <select class='form-select' id='createProductRole'>
-                                    @foreach (ProductRoleEnum role in Enum.GetValues<ProductRoleEnum>())
+            </div>*@
+    
+        <div class="my-1">
+            <div>
+                <div class='row justify-content-start'>
+                    <h5 class='mt-1'>Members</h5>
+                </div>
+            </div>
+            <div class='col-xxl'>
+                <table class='table table-striped'>
+                    <thead>
+                    <tr>
+                        <th scope='col'>#</th>
+                        <th scope='col'>Account</th>
+                        <th scope='col'>Role</th>
+                        <th scope='col'>Action</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <tr>
+                        <th>0</th>
+                        <th>
+                            @if (Model.NotAdminUsers.Count != 0)
+                            {
+                                <select class='form-select' id='createUser'>
+                                    @foreach (var user in Model.NotAdminUsers)
                                     {
-                                        <option value='@((int)role)'>@role</option>
+                                        <option value='@user.UserId'>@user.Username</option>
                                     }
                                 </select>
-                            </th>
-                            <th>
-                                <button id='createButton' type='button' class='btn btn-secondary ms-1' title='create'>
-                                    <i class='fas fa-plus'></i>
-                                </button>
-                            </th>
-                        </tr>
-                        @for(var i = 0; i < Model.UsersRights.Count; i++)
-                            {
-                                var userRight = Model.UsersRights[i];
-                                <tr>
-                                    <th scope='row'>@(i + 1)</th>
-                                    <td class="text-break">
-                                        @userRight.Item1.Username
-                                        <input id='userId_@userRight.Item1.Username' class="d-none" value='@userRight.Item1.UserId'/>
-                                    </td>
-                                    <td>
-                                        <select class='form-select' disabled id='role_@userRight.Item1.Username'>
-                                            @foreach (ProductRoleEnum role in Enum.GetValues<ProductRoleEnum>())
-                                            {
-                                                if (role == userRight.Item2)
-                                                {
-                                                    <option selected value='@((int)role)'>@role</option>
-                                                }
-                                                else
-                                                {
-                                                    <option value='@((int)role)'>@role</option>
-                                                }
-                                            }
-                                        </select>
-                                    </td>
-                                    <td class="d-inline-flex">
-                                        <button id='change_@userRight.Item1.Username'
-                                                type='button' class='btn btn-secondary ms-1' title='edit'>
-                                            <i class='fas fa-edit'></i>
-                                        </button>
-    
-                                        <button id='delete_@userRight.Item1.Username'
-                                                type='button' class='btn btn-secondary ms-1' title='delete'>
-                                            <i class='fas fa-trash-alt'></i>
-                                        </button>
-    
-                                        <button disabled id='ok_@userRight.Item1.Username'
-                                                type='button' class='btn btn-secondary ms-1' title='ok'>
-                                            <i class='fas fa-check'></i>
-                                        </button>
-    
-                                        <button disabled id='cancel_@userRight.Item1.Username'
-                                                type='button' class='btn btn-secondary ms-1' title='cancel'>
-                                            <i class='fas fa-times'></i>
-                                        </button>
-                                    </td>
-                                </tr>
                             }
-                        </tbody>
-                    </table>
-                </div>
-            </div>
+                            else
+                            {
+                                <select disabled class='form-select' id='createUser'></select>
+                            }
+                            <span class="d-none" id='new_user_span'></span>
+                        </th>
+                        <th>
+                            <select class='form-select' id='createProductRole'>
+                                @foreach (ProductRoleEnum role in Enum.GetValues<ProductRoleEnum>())
+                                {
+                                    <option value='@((int)role)'>@role</option>
+                                }
+                            </select>
+                        </th>
+                        <th>
+                            <button id='createButton' type='button' class='btn btn-secondary ms-1' title='create'>
+                                <i class='fas fa-plus'></i>
+                            </button>
+                        </th>
+                    </tr>
+                    @for(var i = 0; i < Model.UsersRights.Count; i++)
+                        {
+                            var userRight = Model.UsersRights[i];
+                            <tr>
+                                <th scope='row'>@(i + 1)</th>
+                                <td class="text-break">
+                                    @userRight.Item1.Username
+                                    <input id='userId_@userRight.Item1.Username' class="d-none" value='@userRight.Item1.UserId'/>
+                                </td>
+                                <td>
+                                    <select class='form-select' disabled id='role_@userRight.Item1.Username'>
+                                        @foreach (ProductRoleEnum role in Enum.GetValues<ProductRoleEnum>())
+                                        {
+                                            if (role == userRight.Item2)
+                                            {
+                                                <option selected value='@((int)role)'>@role</option>
+                                            }
+                                            else
+                                            {
+                                                <option value='@((int)role)'>@role</option>
+                                            }
+                                        }
+                                    </select>
+                                </td>
+                                <td class="d-inline-flex">
+                                    <button id='change_@userRight.Item1.Username'
+                                            type='button' class='btn btn-secondary ms-1' title='edit'>
+                                        <i class='fas fa-edit'></i>
+                                    </button>
     
-            <div class="my-1">
-                <div class="row">
-                    <h5 class="col-auto mt-2">Access keys</h5>
-                    <button type='button' class='btn btn-secondary col-auto' title='add access key' onclick="addAccessKeyButtonClick()">
-                        <i class='fas fa-plus'></i>
-                    </button>
-                </div>
-                
-                @await Html.PartialAsync("~/Views/AccessKeys/_AllAccessKeys.cshtml",new AccessKeyTableViewModel(){Keys  = Model.AccessKeys})
-            </div>
+                                    <button id='delete_@userRight.Item1.Username'
+                                            type='button' class='btn btn-secondary ms-1' title='delete'>
+                                        <i class='fas fa-trash-alt'></i>
+                                    </button>
     
-            <div class="my-1">
-                <h5>Telegram groups <i class="fab fa-telegram"></i></h5>
-                @await Html.PartialAsync("~/Views/Notifications/_Telegram.cshtml", Model.Telegram)
+                                    <button disabled id='ok_@userRight.Item1.Username'
+                                            type='button' class='btn btn-secondary ms-1' title='ok'>
+                                        <i class='fas fa-check'></i>
+                                    </button>
+    
+                                    <button disabled id='cancel_@userRight.Item1.Username'
+                                            type='button' class='btn btn-secondary ms-1' title='cancel'>
+                                        <i class='fas fa-times'></i>
+                                    </button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
             </div>
         </div>
+    
+        <div class="my-1">
+            <div class="row">
+                <h5 class="col-auto mt-2">Access keys</h5>
+                <button type='button' class='btn btn-secondary col-auto' title='add access key' onclick="addAccessKeyButtonClick()">
+                    <i class='fas fa-plus'></i>
+                </button>
+            </div>
+                
+            @await Html.PartialAsync("~/Views/AccessKeys/_AllAccessKeys.cshtml",new AccessKeyTableViewModel(){Keys  = Model.AccessKeys})
+        </div>
+    
+        <div class="my-1">
+            <h5 class="col-auto my-1">Telegram <i class="fab fa-telegram"></i></h5>
+
+            <div class="d-flex flex-row bd-highlight mb-3">
+                <h6 class="fw-bold">Messages settings (From parent</h6>
+                <div class="form-check form-switch m-0 p-1">
+                    <input class="form-check-input m-0" type="checkbox" asp-for="IsNotificationsInherited">
+                </div>
+                <h6 class="fw-bold">)</h6>
+            </div>
+
+            <div class="mx-4 my-2">
+                @await Html.PartialAsync("~/Views/Notifications/_MessagesSettings.cshtml", Model.Telegram)
+            </div>
+
+            @await Html.PartialAsync("~/Views/Notifications/_Chats.cshtml", Model.Telegram.Chats)
+        </div>
+    </div>
 </div>
 
 @await Html.PartialAsync("~/Views/AccessKeys/_AccessKeysModal.cshtml")
@@ -360,4 +374,9 @@
     $('#accessKeys_modal').on('hidden.bs.modal', function(e) {
         document.location.reload();
     });
+</script>
+
+
+<script>
+
 </script>

@@ -7,6 +7,8 @@
 @{
     var isAdd = Model.Id == default;
     var disabledTab = isAdd ? "disabled" : string.Empty;
+
+    ViewBag.EntityId = Model.Id;
 }
 
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
@@ -52,7 +54,9 @@
                 </form>
             </div>
 
-            <div class="tab-pane fade" id="notifications" role="tabpanel" aria-labelledby="notifications-tab">...</div>
+            <div class="tab-pane fade" id="notifications" role="tabpanel" aria-labelledby="notifications-tab">
+                @await Html.PartialAsync("~/Views/Notifications/_MessagesSettings.cshtml", Model.Telegram)
+            </div>
 
             <div class="tab-pane fade" id="users" role="tabpanel" aria-labelledby="users-tab">
                 <div id="folderUsers">

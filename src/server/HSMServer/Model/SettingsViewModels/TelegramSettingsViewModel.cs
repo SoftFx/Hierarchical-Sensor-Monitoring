@@ -66,7 +66,6 @@ namespace HSMServer.Model
             var response = builder.ToString();
             return string.IsNullOrEmpty(response) ? response : response[..^2];
         }
-
     }
 
 
