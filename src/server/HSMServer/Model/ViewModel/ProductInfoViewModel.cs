@@ -26,7 +26,8 @@ namespace HSMServer.Model.ViewModel
 
         public string TotalSensorTypesMessage { get; set; }
         
-
+        public ProductInfoViewModel(){ }
+        
         internal ProductInfoViewModel(ProductNodeViewModel product) : base(product)
         {
             Name = product.Name;
