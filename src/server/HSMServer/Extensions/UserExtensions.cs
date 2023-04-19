@@ -64,7 +64,7 @@ namespace HSMServer.Extensions
 
             if (user.Notifications.IsSensorEnabled(sensor.Id) || user.Notifications.IsSensorIgnored(sensor.Id) ||
                 sensor.RootProduct.Notifications.IsSensorEnabled(sensor.Id) || sensor.RootProduct.Notifications.IsSensorIgnored(sensor.Id))
-                sensorStateMask |= FilterGroupType.ByNotifications;
+                sensorStateMask |= FilterGroupType.Notifications;
             if (sensor.State == SensorState.Muted)
                 sensorStateMask |= FilterGroupType.ByState;
 
