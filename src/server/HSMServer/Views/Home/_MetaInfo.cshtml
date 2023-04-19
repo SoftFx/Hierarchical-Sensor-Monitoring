@@ -52,7 +52,7 @@
             {
                 <div class="d-flex justify-content-start">
                     <div class="d-flex ms-3 text-nowrap">
-                        <span style="min-width: 8rem">Total nodes:</span>
+                        <span style="min-width: 8rem">Nodes:</span>
                     </div>
                     <div class="d-flex w-100 ps-2">
                         @if (product.TotalNodes > 0)
@@ -67,7 +67,7 @@
                                 </span>
                                 @if (i != product.NodeStatuses.Count - 1)
                                 {
-                                    <span>, </span>
+                                    <span>,&nbsp;</span>
                                 }
                                                                       
                             }
@@ -82,7 +82,7 @@
                 <div class="d-flex justify-content-start">
 
                     <div class="d-flex ms-3 text-nowrap">
-                        <span style="min-width: 8rem">Total sensors:</span>
+                        <span style="min-width: 8rem">Sensors:</span>
                     </div>
 
                     <div class="d-flex w-100 ps-2">
@@ -98,7 +98,7 @@
                                 </span>
                                 @if (i != product.SensorsStatuses.Count - 1)
                                 {
-                                    <span>, </span>
+                                    <span>,&nbsp;</span>
                                 }
                                                                       
                             }
