@@ -36,14 +36,14 @@ namespace HSMServer.Controllers
         }
 
         [HttpPost]
-        public IActionResult UpdateTelegramSettings(TelegramSettingsViewModel telegramSettings, string productId)
+        public IActionResult UpdateTelegramSettings(TelegramSettingsViewModel telegramSettings, string entityId)
         {
-            var entity = GetEntity(productId);
+            var entity = GetEntity(entityId);
             entity.Notifications.Telegram.Update(telegramSettings.GetUpdateModel());
 
             entity.UpdateEntity(_userManager, _tree);
 
-            return GetResult(productId);
+            return GetResult(entityId);
         }
 
         [HttpGet]
@@ -57,43 +57,43 @@ namespace HSMServer.Controllers
             Redirect(await _telegramBot.GetChatLink(chatId));
 
         [HttpGet]
-        public string CopyStartCommandForGroup([FromQuery(Name = "ProductId")] string encodedProductId)
+        public string CopyStartCommandForGroup(string entityId)
         {
-            var productId = SensorPathHelper.DecodeGuid(encodedProductId);
+            var id = SensorPathHelper.DecodeGuid(entityId);
 
-            _tree.Nodes.TryGetValue(productId, out var product);
+            _tree.Nodes.TryGetValue(id, out var product);
 
             return _telegramBot.GetStartCommandForGroup(product);
         }
 
-        public IActionResult SendTestTelegramMessage(long chatId, string productId)
+        public IActionResult SendTestTelegramMessage(long chatId, string entityId)
         {
             var testMessage = $"Test message for {CurrentUser.Name}.";
-            if (GetEntity(productId) is ProductNodeViewModel product)
+            if (GetEntity(entityId) is ProductNodeViewModel product)
                 testMessage = $"{testMessage} (Product {product.Name})";
 
             _telegramBot.SendTestMessage(chatId, testMessage);
 
-            return GetResult(productId);
+            return GetResult(entityId);
         }
 
-        public IActionResult RemoveTelegramAuthorization(long chatId, string productId)
+        public IActionResult RemoveTelegramAuthorization(long chatId, string entityId)
         {
-            _telegramBot.RemoveChat(GetEntity(productId), chatId);
+            _telegramBot.RemoveChat(GetEntity(entityId), chatId);
 
-            return GetResult(productId);
+            return GetResult(entityId);
         }
 
-        private INotificatable GetEntity(string productId) =>
-            !string.IsNullOrEmpty(productId)
-                ? _tree.Nodes[SensorPathHelper.DecodeGuid(productId)]
+        private INotificatable GetEntity(string entityId) =>
+            !string.IsNullOrEmpty(entityId)
+                ? _tree.Nodes[SensorPathHelper.DecodeGuid(entityId)]
                 : GetCurrentUser();
 
         private User GetCurrentUser() => _userManager[CurrentUser.Id];
 
-        private RedirectToActionResult GetResult(string productId) =>
-            string.IsNullOrEmpty(productId)
+        private RedirectToActionResult GetResult(string entityId) =>
+            string.IsNullOrEmpty(entityId)
                 ? RedirectToAction(nameof(Index))
-                : RedirectToAction(nameof(ProductController.EditProduct), ViewConstants.ProductController, new { Product = productId });
+                : RedirectToAction(nameof(ProductController.EditProduct), ViewConstants.ProductController, new { Product = entityId });
     }
 }
