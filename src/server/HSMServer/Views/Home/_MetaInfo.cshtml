@@ -15,7 +15,7 @@
 }
 
 <div id="meta_info_@Model.EncodedId">
-    <div class="d-flex ms-1 mt-1 me-0 justify-content-between flex-grow-1">
+    <div class="d-flex mt-1 me-0 justify-content-between flex-grow-1">
         <div class='d-flex justify-content-start'>
             <li id='status_@Model.EncodedId' class='@Model.Status.ToIcon() my-1 pt-1 align-self-center sensor-icon-with-margin' title='Status: @Model.Status'></li>
             <h5 class="d-flex my-1 align-self-top">@Html.Raw($"{Model.ProductName}{Model.Path}")</h5>
