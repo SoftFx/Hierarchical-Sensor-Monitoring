@@ -36,7 +36,7 @@ namespace HSMServer.Model.ViewModel
             GenerateTotalNodesMessage(product.Nodes.Values);
             
             TotalSensorsMessage =  string.Join("\n", product.TotalSensorsByType.Select(x => $"{x.Value} {x.Key}").ToArray());
-            TotalSensorsStatusesMessage = string.Join(", ", product.TotalSensorsByStatuses.OrderBy(x => x.Key).Select(x => $"<i class='{x.Key.ToIcon()} pe-1 align-self-center'></i> - {x.Value}").ToArray());
+            TotalSensorsStatusesMessage = string.Join(", ",product.TotalSensorsByStatuses.OrderBy(x => x.Key).Select(x => $"<i class='{x.Key.ToIcon()} pe-1 align-self-center'></i> - {x.Value}").ToArray());
         }
 
         private void GenerateTotalNodesMessage(ICollection<ProductNodeViewModel> productNodeViewModels)

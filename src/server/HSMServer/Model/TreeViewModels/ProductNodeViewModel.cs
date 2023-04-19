@@ -75,16 +75,21 @@ namespace HSMServer.Model.TreeViewModel
                 {
                     node.RecalculateCharacteristics();
                     allSensorsCount += node.AllSensorsCount;
-                    foreach (var (_, sensor) in node.Sensors)
+                    
+                    foreach (var (type, sensor) in node.TotalSensorsByType)
                     {
-                        if (types.TryGetValue(sensor.SensorType, out var _))
-                            types[sensor.SensorType]++;
-                        else types.TryAdd(sensor.SensorType, 1);
-                        
-                        if (statuses.TryGetValue(sensor.Status, out var _))
-                            statuses[sensor.Status]++;
-                        else statuses.TryAdd(sensor.Status, 1);
+                        if (types.TryGetValue(type, out var _))
+                            types[type] += sensor;
+                        else types.TryAdd(type, sensor);
                     }
+                    
+                    foreach (var (status, sensor) in node.TotalSensorsByStatuses)
+                    {
+                        if (statuses.TryGetValue(status, out var _))
+                            statuses[status] += sensor;
+                        else statuses.TryAdd(status, sensor);
+                    }
+                    
                 }
             }
             
