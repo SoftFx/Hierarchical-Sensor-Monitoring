@@ -9,11 +9,11 @@ namespace HSMServer.Model.ViewModel
 {
     public sealed class ProductInfoViewModel : NodeInfoBaseViewModel
     {
-        public List<(SensorStatus Status, int Count)> NodeStatuses { get; set; } = new();
+        public List<(SensorStatus Status, int Count)> NodeStatuses { get; } = new();
 
-        public List<(SensorStatus Status, int Count)> SensorsStatuses { get; set; } = new();
+        public List<(SensorStatus Status, int Count)> SensorsStatuses { get; } = new();
         
-        public List<(SensorType Type, int Count)> SensorsTypes { get; set; } = new();
+        public List<(SensorType Type, int Count)> SensorsTypes { get; } = new();
         
         
         public NodeViewModel Parent { get; }
@@ -21,11 +21,12 @@ namespace HSMServer.Model.ViewModel
         public string Name { get; }
         
         
-        public int TotalNodes { get; set; }
+        public int TotalNodes { get; }
         
-        public int TotalSensors { get; set; }
+        public int TotalSensors { get; }
 
-        public string TotalSensorTypesMessage { get; set; }
+        public string TotalSensorTypesMessage { get; }
+
         
         public ProductInfoViewModel(){ }
         
