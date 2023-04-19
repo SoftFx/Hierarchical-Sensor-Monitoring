@@ -11,7 +11,7 @@ namespace HSMServer.UserFilters
     {
         ByStatus = 1,
         ByHistory = 2,
-        ByNotifications = 4,
+        Notifications = 4,
         ByState = 8,
     }
 
