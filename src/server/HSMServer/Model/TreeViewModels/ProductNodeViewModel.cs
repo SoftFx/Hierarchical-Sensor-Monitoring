@@ -68,13 +68,12 @@ namespace HSMServer.Model.TreeViewModel
                 foreach (var (_, node) in Nodes)
                 {
                     node.RecalculateCharacteristics();
-
                     allSensorsCount += node.AllSensorsCount;
                 }
             }
-
+            
             AllSensorsCount = allSensorsCount + Sensors.Count;
-
+            
             ModifyUpdateTime();
             ModifyStatus();
 

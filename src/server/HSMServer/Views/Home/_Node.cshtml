@@ -1,4 +1,5 @@
-﻿@using HSMServer.Model.ViewModel
+﻿@using HSMServer.Extensions
+@using HSMServer.Model.ViewModel
 @using HSMServer.Model.TreeViewModel
 @using HSMServer.Model.Authentication
 @using HSMServer.UserFilters;
@@ -31,21 +32,10 @@
 
 
 <div>
-    <div class='row justify-content-start'>
-        <div class='d-flex col-md-auto' style="align-items: center">
-            <h5 class="m-2">@Html.Raw(Model.FullPath)</h5>
-            <button id="editProductButton" type='button' class='btn btn-secondary' onclick="editProductInfoButtonClick()"
-                    data-bs-toggle='tooltip' title='edit meta info'>
-                <i class='fas fa-edit'></i>
-            </button>
-        </div>
+    <div id='product_info_@Model.EncodedId'>
+        @await Html.PartialAsync("_MetaInfo", new ProductInfoViewModel(Model))
     </div>
     
-    <div id='product_info_@Model.EncodedId'>
-        @await Html.PartialAsync("_ProductMetaInfo", new ProductInfoViewModel(Model))
-    </div>
-
-
     <ul class='nav nav-tabs' role="tablist">
         <li class='nav-item'>
             <a id="gridLink_@nodeId" class='nav-link' data-bs-toggle='tab' href='#@gridDivId' role="tab"><i class="fa-solid fa-table-cells-large"></i> Grid</a>
