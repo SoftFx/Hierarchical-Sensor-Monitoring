@@ -62,9 +62,7 @@ namespace HSMServer.Model.TreeViewModel
         internal ProductNodeViewModel RecalculateCharacteristics()
         {
             int allSensorsCount = 0;
-            var types = new Dictionary<SensorType, int>();
-            var statuses = new Dictionary<SensorStatus, int>();
-            
+
             if (Nodes != null && !Nodes.IsEmpty)
             {
                 foreach (var (_, node) in Nodes)
