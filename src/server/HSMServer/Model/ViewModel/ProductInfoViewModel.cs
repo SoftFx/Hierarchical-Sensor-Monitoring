@@ -1,6 +1,7 @@
 ﻿using System.Collections.Generic;
 using System.Linq;
 using HSMServer.Core.Model;
+using HSMServer.Extensions;
 using HSMServer.Model.TreeViewModel;
 using SensorStatus = HSMServer.Model.TreeViewModel.SensorStatus;
 
@@ -38,10 +39,10 @@ namespace HSMServer.Model.ViewModel
             TotalNodes = product.Nodes.Count;
             TotalSensors = product.Sensors.Count;
 
-            NodeStatuses = product.Nodes.Values.GroupBy(x => x.Status).OrderBy(x => x.Key).Select(s => (s.Key, s.Count())).ToList();
+            NodeStatuses = product.Nodes.Values.ToGroupedList(x => x.Status);
+            SensorsStatuses = product.Sensors.Values.ToGroupedList(x => x.Status);
+            SensorsTypes = product.Sensors.Values.ToGroupedList(x => x.Type);
             
-            SensorsStatuses = product.Sensors.GroupBy(x => x.Value.Status).OrderBy(x => x.Key).Select(x => (x.Key, x.Count())).ToList();
-            SensorsTypes = product.Sensors.GroupBy(x => x.Value.Type).OrderBy(x => x.Key).Select(x => (x.Key, x.Count())).ToList();
             TotalSensorTypesMessage = string.Join("\n", SensorsTypes.Select(x => $"{x.Type} {x.Count}").ToArray());
         }
     }
