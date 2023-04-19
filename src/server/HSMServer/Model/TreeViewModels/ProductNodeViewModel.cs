@@ -95,9 +95,9 @@ namespace HSMServer.Model.TreeViewModel
             
             foreach (var (_, sensor) in Sensors)
             {
-                if (types.TryGetValue(sensor.SensorType, out var _))
-                    types[sensor.SensorType]++;
-                else types.TryAdd(sensor.SensorType, 1);
+                if (types.TryGetValue(sensor.Type, out var _))
+                    types[sensor.Type]++;
+                else types.TryAdd(sensor.Type, 1);
                 
                 if (statuses.TryGetValue(sensor.Status, out var _))
                     statuses[sensor.Status]++;
