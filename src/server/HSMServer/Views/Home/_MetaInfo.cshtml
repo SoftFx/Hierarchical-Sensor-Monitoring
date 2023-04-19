@@ -40,8 +40,8 @@
             </div>
         </div>
         <div class="naked-text ms-1 w-100" id='markdown_span_description_@(Model.EncodedId)'>@Model.Description</div>
-        <div class="d-none d-flex w-100 ms-1">
-            <textarea id='description_@(Model.EncodedId)' class="form-control naked-text w-100 mx-1 px-2 d-none"  type='text' asp-for="Description" value='@Model.Description' disabled></textarea>
+        <div class="d-none d-flex w-100 ps-3">
+            <textarea id='description_@(Model.EncodedId)' class="form-control naked-text w-100 d-none"  type='text' asp-for="Description" value='@Model.Description' disabled></textarea>
         </div>
 
         <div class="collapse" id="metaInfoCollapse">
