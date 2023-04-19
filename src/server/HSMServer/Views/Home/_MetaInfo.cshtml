@@ -32,7 +32,7 @@
     <form id="editMetaInfo_form" method="post" asp-action="@action">
         <input id="metaInfo_encodedId" style='display: none' asp-for="EncodedId" value="@Model.EncodedId"/>
         <div id="headline_metainfo" class="d-none d-flex" style="height: 2rem;">
-            <div id="description_title" class="d-none form-control ps-0 ms-1 border-0 fw-bold" style="max-width: 15rem;">
+            <div id="description_title" class="d-none form-control px-0 border-0 fw-bold" style="max-width: 15rem;">
                 Description:
             </div>
             <div class="d-flex my-1 ms-auto align-items-baseline">
@@ -45,13 +45,13 @@
         </div>
 
         <div class="collapse" id="metaInfoCollapse">
-            <div class="form-control border-0 fw-bold mb-1 px-0 ms-1" style="max-width: 15rem;">
+            <div class="form-control border-0 fw-bold px-0" style="max-width: 15rem;">
                 General info:
             </div>
             @if (Model is ProductInfoViewModel product)
             {
-                <div class="d-flex justify-content-start ms-1">
-                    <div class="d-flex ps-2 ms-1 text-nowrap">
+                <div class="d-flex justify-content-start">
+                    <div class="d-flex ms-3 text-nowrap">
                         <span style="min-width: 8rem">Total nodes:</span>
                     </div>
                     <div class="d-flex w-100 ps-2">
@@ -74,9 +74,9 @@
                     
                     </div>
                 </div>
-                <div class="d-flex justify-content-start ms-1">
+                <div class="d-flex justify-content-start">
 
-                    <div class="d-flex ps-2 ms-1 text-nowrap">
+                    <div class="d-flex ms-3 text-nowrap">
                         <span style="min-width: 8rem">Total sensors</span>
                     </div>
 

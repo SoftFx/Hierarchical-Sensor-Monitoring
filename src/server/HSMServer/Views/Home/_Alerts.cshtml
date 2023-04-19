@@ -2,10 +2,10 @@
 @model HSMServer.Model.ViewModel.NodeInfoBaseViewModel
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
 
-<div class="form-control border-0 fw-bold mb-1 px-0 ms-1" style="max-width: 15rem;">
+<div class="form-control border-0 fw-bold px-0" style="max-width: 15rem;">
     Alerts:
 </div>
-<div class="d-flex ps-2 ms-2 text-nowrap align-self-center">
+<div class="d-flex ms-3 text-nowrap align-self-center">
     <span class="d-flex align-items-center" style="min-width: 18rem">
         Expected sensor(s) update interval <i class='fas fa-question-circle ps-1' title='Time format: dd.hh:mm:ss min value 00:01:00. If the sensor doesn`t receive new data within the specified time interval, a notification sends'></i>
     </span>
@@ -16,7 +16,7 @@
         </div>
     </div>
 </div>
-<div class="d-flex mt-1 ps-2 ms-2 text-nowrap">
+<div class="d-flex mt-1 ms-3 text-nowrap">
     <span class="d-flex align-items-center" style="min-width: 18rem">
         Sensitivity sensor(s) interval <i class='fas fa-question-circle ps-1' title='Time format: dd.hh:mm:ss min value 00:01:00. If the sensor doesn`t return to Ok status after the specified time inverval, a notification sends'></i>
     </span>
