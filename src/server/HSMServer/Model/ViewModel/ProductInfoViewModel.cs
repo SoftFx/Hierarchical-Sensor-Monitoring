@@ -7,9 +7,9 @@ namespace HSMServer.Model.ViewModel
 {
     public class ProductInfoViewModel : NodeInfoBaseViewModel
     {
-        public List<(SensorStatus, int)> NodeStatuses { get; set; } = new();
+        public List<(SensorStatus Key, int Value)> NodeStatuses { get; set; } = new();
 
-        public Dictionary<SensorStatus, int> SensorStatuses { get; set; } = new();
+        public List<KeyValuePair<SensorStatus, int>> SensorStatuses { get; set; } = new();
         
         
         public NodeViewModel Parent { get; }
@@ -35,7 +35,7 @@ namespace HSMServer.Model.ViewModel
             TotalSensors = product.AllSensorsCount;
 
             NodeStatuses = product.Nodes.Values.GroupBy(x => x.Status).Select(s => (s.Key, s.Count())).ToList();
-            SensorStatuses = new Dictionary<SensorStatus, int>(product.TotalSensorsByStatuses.OrderBy(x => x.Key));
+            SensorStatuses = product.TotalSensorsByStatuses.OrderBy(x => x.Key).ToList();
             TotalSensorTypesMessage =  string.Join("\n", product.TotalSensorsByType.Select(x => $"{x.Value} {x.Key}").ToArray());
         }
     }
