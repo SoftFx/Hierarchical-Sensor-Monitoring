@@ -51,6 +51,26 @@
             </summary>
             <returns>List of <see cref="T:HSMServer.Core.Configuration.ConfigurationObject"/>.</returns>
         </member>
+        <member name="M:HSMServer.Controllers.GrafanaDatasources.JsonSource.JsonDatasourceController.TestConnection">
+            <summary>
+            with 200 status code response. Used for "Test connection" on the datasource config page.
+            </summary>
+        </member>
+        <member name="M:HSMServer.Controllers.GrafanaDatasources.JsonSource.JsonDatasourceController.GetMetrics(HSMServer.Controllers.GrafanaDatasources.JsonSource.MetricsRequest)">
+            <summary>
+            to return available Products
+            </summary>
+        </member>
+        <member name="M:HSMServer.Controllers.GrafanaDatasources.JsonSource.JsonDatasourceController.GetOptions(HSMServer.Controllers.GrafanaDatasources.JsonSource.MetricPayloadOptionsRequest)">
+            <summary>
+            to return a list of metric payload options (Sensors paths and data formats).
+            </summary>
+        </member>
+        <member name="M:HSMServer.Controllers.GrafanaDatasources.JsonSource.JsonDatasourceController.ReadHistory(HSMServer.Controllers.GrafanaDatasources.JsonSource.QueryHistoryRequest)">
+            <summary>
+            to return panel data or annotations
+            </summary>
+        </member>
         <member name="T:HSMServer.Controllers.SensorsController">
             <summary>
             Controller for receiving sensors data via https protocol. There is a default product for testing swagger methods.

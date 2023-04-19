@@ -54,13 +54,13 @@ namespace HSMServer.Model.TreeViewModel
 
         public UpdatedSensorDataViewModel(SensorNodeViewModel sensor) : base(sensor)
         {
-            SensorType = sensor.SensorType;
+            SensorType = sensor.Type;
             
             Value = sensor.ShortStringValue;
             ValidationError = sensor.ValidationError;
             IsValidationErrorVisible = sensor.IsValidationErrorVisible;
 
-            if (sensor.SensorType is SensorType.File)
+            if (sensor.Type is SensorType.File)
             {
                 FileNameString = sensor.FileNameString;
                 var file = (FileValue)sensor.LastValue;

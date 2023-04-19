@@ -40,6 +40,9 @@ namespace HSMServer.Core.Model
         public virtual SensorType Type { get; } //abstract not work with JsonIgnore, so use virtual
 
         [JsonIgnore]
+        public virtual object RawValue { get; }
+
+        [JsonIgnore]
         public virtual string ShortInfo { get; }
 
 
@@ -57,6 +60,9 @@ namespace HSMServer.Core.Model
     {
         public T Value { get; init; }
 
+
         public override string ShortInfo => Value?.ToString();
+
+        public override object RawValue => Value;
     }
 }
