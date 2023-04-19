@@ -75,7 +75,7 @@ namespace HSMServer.Model.TreeViewModel
                 {
                     node.RecalculateCharacteristics();
                     allSensorsCount += node.AllSensorsCount;
-                    
+
                     foreach (var (type, sensor) in node.TotalSensorsByType)
                     {
                         if (types.TryGetValue(type, out var _))

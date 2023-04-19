@@ -30,7 +30,7 @@ namespace HSMServer.Model.ViewModel
             Unit = sensor.Unit;
             StatusComment = sensor.ValidationError;
             Comment = sensor.LastValue?.Comment;
-            UpdateTime = sensor.UpdateTime;
+            LastUpdateTime = sensor.UpdateTime;
             ShortLastValue = sensor.ShortStringValue;
         }
     }

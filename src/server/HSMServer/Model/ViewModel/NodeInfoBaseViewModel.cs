@@ -38,7 +38,7 @@ namespace HSMServer.Model.ViewModel
 
         public string ProductName { get; }
         
-        public DateTime UpdateTime { get; set; }
+        public DateTime LastUpdateTime { get; set; }
 
         public SensorStatus Status { get; set; }
         

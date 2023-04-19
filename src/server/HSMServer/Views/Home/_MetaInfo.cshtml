@@ -25,7 +25,7 @@
             {
                 <input id='sensor_type_@Model.EncodedId' value='@((int)sensor.SensorType)' style='display: none'/>
             }
-            <div id='update_@Model.EncodedId' class='time-ago-div me-1'>updated @Model.UpdateTime.GetTimeAgo()</div>
+            <div id='update_@Model.EncodedId' class='time-ago-div me-1'>updated @Model.LastUpdateTime.GetTimeAgo()</div>
         </div>
     </div>
 
@@ -55,7 +55,23 @@
                         <span style="min-width: 8rem">Total nodes:</span>
                     </div>
                     <div class="d-flex w-100 ps-2">
-                        @Html.Raw($"{product.TotalNodes} {(product.TotalNodes > 0 ? $"({product.TotalNodesMessage})" : string.Empty)}")
+                        @if (product.TotalNodes > 0)
+                        {
+                            @Html.Raw($"{product.TotalNodes} (")
+                            
+                            @foreach (var (status, count) in product.NodeStatuses)
+                            {
+                                <i class='@status.ToIcon() pe-1 align-self-center'></i>
+                                <span>- @count</span>
+                            }
+                            <span>)</span>
+                        }
+                        else
+                        {
+                            @Html.Raw($"{product.TotalNodes}")
+                        }
+                       
+                    
                     </div>
                 </div>
                 <div class="d-flex justify-content-start ms-1">
@@ -67,8 +83,13 @@
                     <div class="d-flex w-100 ps-2">
                         @if (product.TotalSensors > 0)
                         {
-                            @Html.Raw($"{product.TotalSensors} ({product.TotalSensorsStatusesMessage})")
-                            <i class='fa-solid fa-circle-info ps-1 align-self-center' title="@product.TotalSensorsMessage"></i>
+                            @Html.Raw($"{product.TotalSensors} (")
+                            @foreach (var (status, count) in product.SensorStatuses)
+                            {
+                                <i class='@status.ToIcon() pe-1 align-self-center'></i><span>- @count</span>
+                            }
+                            <span>)</span>
+                            <i class='fa-solid fa-circle-info ps-1 align-self-center' title="@product.TotalSensorTypesMessage"></i>
                         }
                         else
                         {
