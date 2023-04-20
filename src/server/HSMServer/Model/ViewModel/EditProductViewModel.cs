@@ -39,7 +39,7 @@ namespace HSMServer.Model.ViewModel
 
             UsersRights = usersRights.Select(x => (new UserViewModel(x.Item1), x.Item2)).ToList();
             AccessKeys = product.GetAccessKeys();
-            Telegram = new(product.Notifications.UsedTelegram);
+            Telegram = new(product.Notifications.UsedTelegram, ProductId);
             IsNotificationsInherited = !product.Notifications.IsCustom;
 
             _usedUsers = UsersRights.Select(ur => ur.Item1).ToList();

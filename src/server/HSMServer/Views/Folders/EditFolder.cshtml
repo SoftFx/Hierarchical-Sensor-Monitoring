@@ -7,8 +7,6 @@
 @{
     var isAdd = Model.Id == default;
     var disabledTab = isAdd ? "disabled" : string.Empty;
-
-    ViewBag.EntityId = Model.Id;
 }
 
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers

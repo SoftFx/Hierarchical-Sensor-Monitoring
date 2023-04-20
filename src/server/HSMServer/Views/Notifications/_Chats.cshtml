@@ -5,7 +5,7 @@
 
 @inject NotificationsCenter NotificationsCenter
 
-@model List<TelegramChatViewModel>
+@model TelegramSettingsViewModel
 
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
 
@@ -13,7 +13,7 @@
 <div class="my-2">
     <div class="row">
         <h6 class="col-auto fw-bold">Groups</h6>
-        @if (Model.Count == 0)
+        @if (Model.Chats.Count == 0)
         {
             <h6 class="col-auto p-0">(There are no authorized groups)</h6>
         }
@@ -29,7 +29,7 @@
             <li class="list-group-item">The bot will send a notification that it has been successfully initialized.</li>
         </ul>
     </div>
-    @if (Model.Count > 0)
+    @if (Model.Chats.Count > 0)
     {
         <table class="table mx-4">
             <tr>
@@ -37,7 +37,7 @@
                 <th>Authorized</th>
                 <th style="text-align:center">Actions</th>
             </tr>
-            @foreach (var group in Model)
+            @foreach (var group in Model.Chats)
             {
                 <tr>
                     <td>
@@ -57,7 +57,7 @@
                                 <li>
                                     <a class="dropdown-item text-decoration-none fw-normal" asp-controller="@ViewConstants.NotificationsController"
                                        asp-action="@nameof(NotificationsController.SendTestTelegramMessage)"
-                                       asp-route-entityId="@ViewBag.EntityId"
+                                       asp-route-entityId="@Model.EntityId"
                                        asp-route-chatId="@group.ChatId">
                                         Send test message
                                     </a>
@@ -65,7 +65,7 @@
                                 <li>
                                     <a class="dropdown-item text-decoration-none fw-normal" asp-controller="@ViewConstants.NotificationsController"
                                        asp-action="@nameof(NotificationsController.RemoveTelegramAuthorization)"
-                                       asp-route-entityId="@ViewBag.EntityId"
+                                       asp-route-entityId="@Model.EntityId"
                                        asp-route-chatId="@group.ChatId">
                                         Remove authorization
                                     </a>
@@ -84,7 +84,7 @@
     function getGroupStartCommand() {
         $.ajax({
             type: 'GET',
-            url: `@Html.Raw(Url.Action(nameof(NotificationsController.CopyStartCommandForGroup), ViewConstants.NotificationsController))?entityId=@ViewBag.EntityId`,
+            url: `@Html.Raw(Url.Action(nameof(NotificationsController.CopyStartCommandForGroup), ViewConstants.NotificationsController))?entityId=@Model.EntityId`,
             dataType: 'html',
             contentType: 'application/json',
             cache: false,

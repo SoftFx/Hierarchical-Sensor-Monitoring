@@ -12,7 +12,6 @@
 
 @{
     ViewData["Title"] = $"Product {Model.ProductName}";
-    ViewBag.EntityId = Model.EncodedProductId;
 }
 
 <script>
@@ -205,7 +204,7 @@
                 @await Html.PartialAsync("~/Views/Notifications/_MessagesSettings.cshtml", Model.Telegram)
             </div>
 
-            @await Html.PartialAsync("~/Views/Notifications/_Chats.cshtml", Model.Telegram.Chats)
+            @await Html.PartialAsync("~/Views/Notifications/_Chats.cshtml", Model.Telegram)
         </div>
     </div>
 </div>

@@ -17,7 +17,7 @@
     <form id="telegramMessagesSettings_form" class="my-2" method="post"
           asp-controller="@ViewConstants.NotificationsController"
           asp-action="@nameof(NotificationsController.UpdateTelegramSettings)"
-          asp-route-entityId="@ViewBag.EntityId">
+          asp-route-entityId="@Model.EntityId">
         <div class="form-group row">
             <label class="col-2 col-form-label" asp-for="MessagesDelay"></label>
 

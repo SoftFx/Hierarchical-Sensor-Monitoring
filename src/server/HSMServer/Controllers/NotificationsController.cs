@@ -36,7 +36,7 @@ namespace HSMServer.Controllers
 
         public IActionResult Index()
         {
-            return View(new TelegramSettingsViewModel(CurrentUser.Notifications.UsedTelegram));
+            return View(new TelegramSettingsViewModel(CurrentUser.Notifications.UsedTelegram, CurrentUser.Id));
         }
 
         [HttpPost]
@@ -62,7 +62,7 @@ namespace HSMServer.Controllers
 
                 _folderManager.TryUpdate(folder);
 
-                return PartialView("_MessagesSettings", new TelegramSettingsViewModel(folder.Notifications.Telegram));
+                return PartialView("_MessagesSettings", new TelegramSettingsViewModel(folder.Notifications.Telegram, folder.Id));
             }
 
             return UpdateTelegramMessageSettings(entityId, update);

@@ -54,7 +54,7 @@ namespace HSMServer.Model.Folders.ViewModels
             Description = folder.Description;
             Color = folder.Color;
 
-            Telegram = new(folder.Notifications.Telegram);
+            Telegram = new(folder.Notifications.Telegram, Id);
             Products.InitFolderProducts(folder.Products);
             Alerts = new FolderAlertsViewModel(folder);
             Users = users;
