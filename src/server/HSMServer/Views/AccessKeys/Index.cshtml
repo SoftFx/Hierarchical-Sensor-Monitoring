@@ -1,6 +1,7 @@
 ﻿@using HSMServer.Model.AccessKeysViewModels
 @using HSMServer.Constants
 @using HSMServer.Controllers
+@using HSMServer.Model.Authentication
 
 @model AccessKeyTableViewModel
 
@@ -32,9 +33,12 @@
                 <button onclick="searchKey()" type="button" class="btn btn-secondary ms-1">
                     <i type="button" class="fas fa-search"></i>
                 </button>
-                 <button onclick="TestAddButton()" type="button" class="btn btn-secondary ms-1">
-                                    Add key
-                 </button>
+                @if ((User as User).IsAdmin)
+                {
+                    <button onclick="TestAddButton()" type="button" class="btn btn-secondary ms-1">
+                        Add key
+                    </button>
+                }
             </div>
         </div>
         <div class="container mt-2">
