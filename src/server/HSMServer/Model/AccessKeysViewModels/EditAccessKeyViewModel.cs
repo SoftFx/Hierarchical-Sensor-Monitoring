@@ -3,7 +3,10 @@ using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Model;
 using HSMServer.Helpers;
 using System;
+using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
+using System.Linq;
+using Microsoft.AspNetCore.Mvc.Rendering;
 
 namespace HSMServer.Model.AccessKeysViewModels
 {
@@ -19,6 +22,13 @@ namespace HSMServer.Model.AccessKeysViewModels
         Year,
     }
 
+    public enum AccessKeyModalType
+    {
+        EditProductModal,
+        ModifyAccessKeyModal,
+        NewAccessKeyModal
+    }
+    
 
     public class EditAccessKeyViewModel
     {
@@ -47,15 +57,31 @@ namespace HSMServer.Model.AccessKeysViewModels
         public bool CanAddSensors { get; set; }
 
         public bool CanReadSensorData { get; set; }
-        
+
         public bool CanUseGrafana { get; set; }
 
         [AccessKeyPermissionsValidation(ErrorMessage = "At least one permission should be selected.")]
         public KeyPermissions Permissions => BuildPermissions();
+        
+
+        public List<ProductModel> Products { get; set; } = new ();
+
+        public List<SelectListItem> ProductsItems => Products.Select(x => new SelectListItem()
+        {
+            Text = x.DisplayName,
+            Value = x.Id.ToString(),
+            Selected = false
+        }).ToList();
+        
+
+        [Display(Name = "Product name")]
+        public string SelectedProduct { get; set; }
 
 
         // public constructor without parameters for action Home/NewAccessKey
-        public EditAccessKeyViewModel() { }
+        public EditAccessKeyViewModel()
+        {
+        }
 
         public EditAccessKeyViewModel(AccessKeyModel key)
         {
@@ -74,7 +100,7 @@ namespace HSMServer.Model.AccessKeysViewModels
 
         internal AccessKeyModel ToModel(Guid userId)
         {
-            AccessKeyModel accessKey = new(userId, SensorPathHelper.DecodeGuid(EncodedProductId))
+            AccessKeyModel accessKey = new(userId, string.IsNullOrEmpty(EncodedProductId) ? Guid.Empty : new Guid(EncodedProductId))
             {
                 ExpirationTime = BuildExpirationTime(),
             };
@@ -83,12 +109,12 @@ namespace HSMServer.Model.AccessKeysViewModels
         }
 
         internal AccessKeyUpdate ToAccessKeyUpdate() =>
-             new()
-             {
-                 Id = Id,
-                 DisplayName = DisplayName,
-                 Permissions = Permissions,
-             };
+            new()
+            {
+                Id = Id,
+                DisplayName = DisplayName,
+                Permissions = Permissions,
+            };
 
         private KeyPermissions BuildPermissions()
         {

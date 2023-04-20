@@ -43,7 +43,7 @@
                     @if (Model.FullTable)
                     {
                         <td class="productName text-break">
-                            @if (key.ParentProduct.IsChangingAccessKeysAvailable(user))
+                            @if (key.ParentProduct is not null && key.ParentProduct.IsChangingAccessKeysAvailable(user))
                             {
                                 <a asp-controller="@ViewConstants.ProductController" asp-action="@nameof(ProductController.EditProduct)" asp-route-Product="@key.ParentProduct.EncodedId">
                                     @Html.Raw(key.NodePath)
@@ -113,7 +113,7 @@
                     {
                         <td nowrap class="text-center">
                             <div class='btn-group'>
-                                @if (key.ParentProduct.IsChangingAccessKeysAvailable(user))
+                                @if (key.ParentProduct is not null && key.ParentProduct.IsChangingAccessKeysAvailable(user))
                                 {
                                     <button id="actionButton" class="btn" data-bs-toggle="dropdown" data-bs-auto-close="true" aria-haspopup="true" aria-expanded="false">
                                         <i class="fa-solid fa-ellipsis-vertical" style="cursor: pointer"></i>
