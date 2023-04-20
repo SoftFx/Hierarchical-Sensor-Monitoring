@@ -35,7 +35,7 @@
                 </button>
                 @if ((User as User).IsAdmin)
                 {
-                    <button onclick="TestAddButton()" type="button" class="btn btn-secondary ms-1">
+                    <button onclick="createAccessKey()" type="button" class="btn btn-secondary ms-1">
                         Add key
                     </button>
                 }
@@ -87,8 +87,7 @@
                }
         });
     }
-    function TestAddButton(){
-       let productId = $('#encodedProductId').val();
+    function createAccessKey(){
        let newAccessKeyURL = "@Html.Raw(Url.Action(nameof(AccessKeysController.NewServerAccessKey), ViewConstants.AccessKeysController))";
     
        showNewAccessKeyModal(`${newAccessKeyURL}`, true);   

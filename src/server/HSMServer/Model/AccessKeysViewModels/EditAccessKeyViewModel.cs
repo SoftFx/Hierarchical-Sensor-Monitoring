@@ -1,11 +1,11 @@
 ﻿using HSMServer.Attributes;
 using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Model;
-using HSMServer.Helpers;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.Linq;
+using HSMServer.Helpers;
 using Microsoft.AspNetCore.Mvc.Rendering;
 
 namespace HSMServer.Model.AccessKeysViewModels
@@ -20,13 +20,6 @@ namespace HSMServer.Model.AccessKeysViewModels
         Month,
         [Display(Name = "1 Year")]
         Year,
-    }
-
-    public enum AccessKeyModalType
-    {
-        EditProductModal,
-        ModifyAccessKeyModal,
-        NewAccessKeyModal
     }
     
 
@@ -100,7 +93,7 @@ namespace HSMServer.Model.AccessKeysViewModels
 
         internal AccessKeyModel ToModel(Guid userId)
         {
-            AccessKeyModel accessKey = new(userId, string.IsNullOrEmpty(EncodedProductId) ? Guid.Empty : new Guid(EncodedProductId))
+            AccessKeyModel accessKey = new(userId, string.IsNullOrEmpty(EncodedProductId) ? Guid.Empty : SensorPathHelper.DecodeGuid(EncodedProductId))
             {
                 ExpirationTime = BuildExpirationTime(),
             };
