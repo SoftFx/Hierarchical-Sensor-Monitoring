@@ -1,6 +1,6 @@
 ﻿using HSMServer.Authentication;
 using HSMServer.Constants;
-using HSMServer.Core.Cache;
+using HSMServer.Folders;
 using HSMServer.Helpers;
 using HSMServer.Model;
 using HSMServer.Model.Authentication;
@@ -8,6 +8,7 @@ using HSMServer.Model.TreeViewModel;
 using HSMServer.Notification.Settings;
 using HSMServer.Notifications;
 using Microsoft.AspNetCore.Mvc;
+using System;
 using System.Threading.Tasks;
 using SensorStatus = HSMServer.Model.TreeViewModel.SensorStatus;
 
@@ -16,13 +17,16 @@ namespace HSMServer.Controllers
     [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
     public class NotificationsController : BaseController
     {
+        private readonly IFolderManager _folderManager;
         private readonly IUserManager _userManager;
-        private readonly TreeViewModel _tree;
         private readonly TelegramBot _telegramBot;
+        private readonly TreeViewModel _tree;
 
 
-        public NotificationsController(IUserManager userManager, TreeViewModel tree, ITreeValuesCache cache, NotificationsCenter notifications)
+        public NotificationsController(IUserManager userManager, IFolderManager folderManager,
+            TreeViewModel tree, NotificationsCenter notifications)
         {
+            _folderManager = folderManager;
             _userManager = userManager;
             _tree = tree;
 
@@ -49,7 +53,19 @@ namespace HSMServer.Controllers
         [HttpPost]
         public IActionResult UpdateTelegramSettings(TelegramSettingsViewModel telegramSettings, string entityId)
         {
-            return UpdateTelegramMessageSettings(entityId, telegramSettings.GetUpdateModel());
+            var update = telegramSettings.GetUpdateModel();
+
+            if (!string.IsNullOrEmpty(entityId) && Guid.TryParse(entityId, out var id) &&
+                _folderManager.TryGetValue(id, out var folder))
+            {
+                folder.Notifications.Telegram.Update(update);
+
+                _folderManager.TryUpdate(folder);
+
+                return PartialView("_MessagesSettings", new TelegramSettingsViewModel(folder.Notifications.Telegram));
+            }
+
+            return UpdateTelegramMessageSettings(entityId, update);
         }
 
         [HttpGet]
