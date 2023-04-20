@@ -20,6 +20,8 @@
     var editUserRole = "@Html.Raw(Url.Action(ViewConstants.EditUserRoleAction, ViewConstants.ProductController))";
     var deleteUserRole = "@Html.Raw(Url.Action(ViewConstants.RemoveUserRoleAction, ViewConstants.ProductController))";
     var invite = "@Html.Raw(Url.Action(ViewConstants.InviteAction, ViewConstants.ProductController))";
+
+    var changeInheritance = "@Url.Action(nameof(NotificationsController.ChangeInheritance), ViewConstants.NotificationsController)"
 </script>
 
 <div class="modal fade" id="modalDelete" tabindex="-1" aria-labelledby="modalDeleteLabel" aria-hidden="true">
@@ -187,12 +189,14 @@
         </div>
     
         <div class="my-1">
+            @{ ViewBag.FromParent = Model.IsNotificationsInherited; }
+
             <h5 class="col-auto my-1">Telegram <i class="fab fa-telegram"></i></h5>
 
             <div class="d-flex flex-row bd-highlight mb-3">
                 <h6 class="fw-bold">Messages settings (From parent</h6>
                 <div class="form-check form-switch m-0 p-1">
-                    <input class="form-check-input m-0" type="checkbox" asp-for="IsNotificationsInherited">
+                    <input id="telegramInheritance" class="form-check-input m-0" type="checkbox" asp-for="IsNotificationsInherited">
                 </div>
                 <h6 class="fw-bold">)</h6>
             </div>
@@ -378,5 +382,18 @@
 
 
 <script>
+    $("#telegramInheritance").change(function () {
+        let productId = $('#encodedProductId').val();
 
+        $.ajax({
+            type: 'POST',
+            url: `${changeInheritance}?productId=${productId}&fromParent=${this.checked}`,
+            datatype: 'html',
+            contenttype: 'application/json',
+            cache: false,
+            success: function () {
+                document.location.reload();
+            }
+        });
+    });
 </script>

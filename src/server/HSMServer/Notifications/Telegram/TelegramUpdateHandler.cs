@@ -126,10 +126,10 @@ namespace HSMServer.Notifications
 
             foreach (var entity in _addressBook.GetAuthorizedEntities(chat))
             {
-                var telegramSetting = entity.Notifications.Telegram;
+                var telegramSetting = entity.Notifications.UsedTelegram;
 
                 response.AppendLine($"{entityStr} '{entity.Name}'");
-                response.AppendLine($"    Messages delay: {telegramSetting.MessagesDelaySec}");
+                response.AppendLine($"    Messages delay: {telegramSetting.MessagesDelaySec} sec");
                 response.AppendLine($"    Min status level: {telegramSetting.MessagesMinStatus}");
                 response.AppendLine($"    Messages are enabled: {telegramSetting.MessagesAreEnabled}");
             }

@@ -35,7 +35,7 @@ namespace HSMServer.Model.TreeViewModel
 
         public ProductNodeViewModel(ProductModel model, ProductNodeViewModel parent, FolderModel folder) : base(model)
         {
-            Notifications = new(model.NotificationsSettings, folder?.Notifications ?? parent?.Notifications);
+            Notifications = new(model.NotificationsSettings, () => Parent is FolderModel folder ? folder.Notifications : (Parent as ProductNodeViewModel)?.Notifications);
 
             Update(model);
 

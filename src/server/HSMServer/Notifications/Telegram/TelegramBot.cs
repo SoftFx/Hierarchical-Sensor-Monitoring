@@ -170,7 +170,7 @@ namespace HSMServer.Notifications
         private static bool ShouldSendMessage(INotificatable entity, BaseSensorModel sensor, PolicyResult oldStatus)
         {
             var newStatus = sensor.Status;
-            var minWebStatus = entity.Notifications.Telegram.MessagesMinStatus.ToClient();
+            var minWebStatus = entity.Notifications.UsedTelegram.MessagesMinStatus.ToClient();
 
             return entity.CanSendData(sensor) && newStatus != oldStatus && sensor.State != SensorState.Muted &&
                    (newStatus.Status.ToClient() >= minWebStatus || oldStatus.Status.ToClient() >= minWebStatus);
@@ -186,7 +186,7 @@ namespace HSMServer.Notifications
                         if (ShouldSendMessage(entity, sensor, oldStatus))
                             foreach (var (_, chat) in chats)
                             {
-                                if (entity.Notifications.Telegram.MessagesDelaySec > 0)
+                                if (entity.Notifications.UsedTelegram.MessagesDelaySec > 0)
                                     chat.MessageBuilder.AddMessage(sensor, oldStatus.Status);
                                 else
                                     SendMarkdownMessageAsync(chat.ChatId, MessageBuilder.GetSingleMessage(sensor));
@@ -210,7 +210,7 @@ namespace HSMServer.Notifications
                         foreach (var (_, chat) in chats)
                             if (chat.MessageBuilder.ExpectedSendingTime <= DateTime.UtcNow)
                             {
-                                var message = chat.MessageBuilder.GetAggregateMessage(entity.Notifications.Telegram.MessagesDelaySec);
+                                var message = chat.MessageBuilder.GetAggregateMessage(entity.Notifications.UsedTelegram.MessagesDelaySec);
                                 if (!string.IsNullOrEmpty(message))
                                     SendMarkdownMessageAsync(chat.ChatId, message);
                             }

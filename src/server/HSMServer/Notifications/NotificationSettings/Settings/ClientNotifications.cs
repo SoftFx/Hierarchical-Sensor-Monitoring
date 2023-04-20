@@ -15,7 +15,7 @@ namespace HSMServer.Notification.Settings
 
         public ClientNotifications() : base() { }
 
-        internal ClientNotifications(NotificationSettingsEntity entity, NotificationSettings parent = null) : base(entity, parent)
+        internal ClientNotifications(NotificationSettingsEntity entity, Func<NotificationSettings> getParent = null) : base(entity, getParent)
         {
             if (entity?.IgnoredSensors is not null)
             {

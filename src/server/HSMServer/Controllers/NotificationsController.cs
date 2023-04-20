@@ -32,18 +32,24 @@ namespace HSMServer.Controllers
 
         public IActionResult Index()
         {
-            return View(new TelegramSettingsViewModel(CurrentUser.Notifications.Telegram));
+            return View(new TelegramSettingsViewModel(CurrentUser.Notifications.UsedTelegram));
+        }
+
+        [HttpPost]
+        public IActionResult ChangeInheritance(string productId, bool fromParent)
+        {
+            var update = new TelegramMessagesSettingsUpdate()
+            {
+                Inheritance = fromParent ? InheritedSettings.FromParent : InheritedSettings.Custom
+            };
+
+            return UpdateTelegramMessageSettings(productId, update);
         }
 
         [HttpPost]
         public IActionResult UpdateTelegramSettings(TelegramSettingsViewModel telegramSettings, string entityId)
         {
-            var entity = GetEntity(entityId);
-            entity.Notifications.Telegram.Update(telegramSettings.GetUpdateModel());
-
-            entity.UpdateEntity(_userManager, _tree);
-
-            return GetResult(entityId);
+            return UpdateTelegramMessageSettings(entityId, telegramSettings.GetUpdateModel());
         }
 
         [HttpGet]
@@ -82,6 +88,16 @@ namespace HSMServer.Controllers
             _telegramBot.RemoveChat(GetEntity(entityId), chatId);
 
             return GetResult(entityId);
+        }
+
+        private IActionResult UpdateTelegramMessageSettings(string productId, TelegramMessagesSettingsUpdate update)
+        {
+            var entity = GetEntity(productId);
+            entity.Notifications.Telegram.Update(update);
+
+            entity.UpdateEntity(_userManager, _tree);
+
+            return GetResult(productId);
         }
 
         private INotificatable GetEntity(string entityId) =>

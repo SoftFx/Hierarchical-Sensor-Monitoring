@@ -1,27 +1,35 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities;
+using System;
 
 namespace HSMServer.Notification.Settings
 {
     public class NotificationSettings
     {
-        private readonly NotificationSettings _parent;
-        private readonly TelegramSettings _telegram;
+        private readonly Func<NotificationSettings> _getParent;
 
 
-        public TelegramSettings Telegram => _telegram.IsCustom ? _telegram : _parent?.Telegram ?? _telegram;
+        public TelegramSettings UsedTelegram => IsCustom ? Telegram : _getParent?.Invoke()?.UsedTelegram ?? Telegram;
+
+        public TelegramSettings Telegram { get; }
+
+        internal bool IsCustom => Telegram.Inheritance == InheritedSettings.Custom;
 
 
         internal NotificationSettings()
         {
-            _telegram = new();
+            Telegram = new();
         }
 
-        internal NotificationSettings(NotificationSettingsEntity entity, NotificationSettings parent = null)
+        internal NotificationSettings(NotificationSettingsEntity entity, Func<NotificationSettings> getParent = null)
         {
-            _parent = parent;
-            _telegram = new(entity?.TelegramSettings);
+            _getParent = getParent;
+            Telegram = new(entity?.TelegramSettings);
         }
 
-        public NotificationSettingsEntity ToEntity() => new() { TelegramSettings = Telegram.ToEntity() };
+        public NotificationSettingsEntity ToEntity() =>
+            new()
+            {
+                TelegramSettings = Telegram.ToEntity()
+            };
     }
 }

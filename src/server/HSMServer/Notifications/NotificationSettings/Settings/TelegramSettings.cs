@@ -27,8 +27,6 @@ namespace HSMServer.Notification.Settings
 
         public InheritedSettings Inheritance { get; private set; } = InheritedSettings.Custom;
 
-        internal bool IsCustom => Inheritance == InheritedSettings.Custom;
-
 
         public TelegramSettings() { }
 
@@ -50,10 +48,10 @@ namespace HSMServer.Notification.Settings
 
         public void Update(TelegramMessagesSettingsUpdate settingsUpdate)
         {
-            MessagesMinStatus = settingsUpdate.MinStatus;
-            MessagesAreEnabled = settingsUpdate.Enabled;
-            MessagesDelaySec = settingsUpdate.Delay;
-            Inheritance = settingsUpdate.Inheritance;
+            MessagesMinStatus = settingsUpdate.MinStatus ?? MessagesMinStatus;
+            MessagesAreEnabled = settingsUpdate.Enabled ?? MessagesAreEnabled;
+            MessagesDelaySec = settingsUpdate.Delay ?? MessagesDelaySec;
+            Inheritance = settingsUpdate.Inheritance ?? Inheritance;
         }
 
         internal TelegramSettingsEntity ToEntity() =>
