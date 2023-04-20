@@ -32,6 +32,9 @@
                 <button onclick="searchKey()" type="button" class="btn btn-secondary ms-1">
                     <i type="button" class="fas fa-search"></i>
                 </button>
+                 <button onclick="TestAddButton()" type="button" class="btn btn-secondary ms-1">
+                                    Add key
+                 </button>
             </div>
         </div>
         <div class="container mt-2">
@@ -79,5 +82,11 @@
                     document.querySelectorAll("#accessTable tr").length <= 1 ? $('#accessKeysTable').html("<div><h2><strong>Keys not found</strong></h2></div>") : this;
                }
         });
+    }
+    function TestAddButton(){
+       let productId = $('#encodedProductId').val();
+       let newAccessKeyURL = "@Html.Raw(Url.Action(nameof(AccessKeysController.NewServerAccessKey), ViewConstants.AccessKeysController))";
+    
+       showNewAccessKeyModal(`${newAccessKeyURL}`, true);   
     }
 </script>

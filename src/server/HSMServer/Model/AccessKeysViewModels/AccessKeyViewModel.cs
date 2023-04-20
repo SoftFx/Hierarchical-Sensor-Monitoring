@@ -24,7 +24,7 @@ namespace HSMServer.Model.AccessKeysViewModels
 
         public string Permissions { get; private set; }
 
-        public string NodePath => ParentProduct.FullPath;
+        public string NodePath => ParentProduct?.FullPath;
 
         public string StatusTitle { get; private set; }
 
