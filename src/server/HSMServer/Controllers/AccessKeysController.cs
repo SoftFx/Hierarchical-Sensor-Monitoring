@@ -19,7 +19,7 @@ using Org.BouncyCastle.Math.EC;
 namespace HSMServer.Controllers
 {
     [Authorize]
-    public class AccessKeysController : Controller
+    public class AccessKeysController : BaseController
     {
         private readonly TreeViewModel _treeViewModel;
 
@@ -94,7 +94,7 @@ namespace HSMServer.Controllers
             if (string.IsNullOrEmpty(key.EncodedProductId))
                 key.EncodedProductId = key.SelectedProduct;
             
-            TreeValuesCache.AddAccessKey(key.ToModel((HttpContext.User as User).Id));
+            TreeValuesCache.AddAccessKey(key.ToModel(CurrentUser.Id));
 
 
             if (string.IsNullOrEmpty(key.EncodedProductId) && string.IsNullOrEmpty(key.SelectedProduct))
@@ -188,10 +188,9 @@ namespace HSMServer.Controllers
 
         private List<AccessKeyViewModel> GetAvailableAccessKeys()
         {
-            var user = HttpContext.User as User;
             var keys = new List<AccessKeyViewModel>(1 << 5);
 
-            var availableProducts = _treeViewModel.GetUserProducts(user);
+            var availableProducts = _treeViewModel.GetUserProducts(CurrentUser);
             foreach (var product in availableProducts)
             {
                 if (_treeViewModel.Nodes.TryGetValue(product.Id, out var productViewModel))
@@ -201,8 +200,8 @@ namespace HSMServer.Controllers
             keys = keys.OrderBy(key => key?.NodePath).ToList();
             var serverKeys = new List<AccessKeyViewModel>(1 << 4);
             
-            if (user.IsAdmin)
-               serverKeys.AddRange(TreeValuesCache.GetAccessKeys().Where(x => x.ProductId == Guid.Empty).Select(x => new AccessKeyViewModel(x, null, user.Name)).ToList());
+            if (CurrentUser.IsAdmin)
+               serverKeys.AddRange(TreeValuesCache.GetAccessKeys().Where(x => x.ProductId == Guid.Empty).Select(x => new AccessKeyViewModel(x, null, CurrentUser.Name)).ToList());
             
             serverKeys.AddRange(keys);
             

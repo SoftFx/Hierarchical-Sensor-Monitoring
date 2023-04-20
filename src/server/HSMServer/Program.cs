@@ -1,6 +1,7 @@
 ﻿using FluentValidation.AspNetCore;
 using HSMCommon.Constants;
 using HSMServer.Authentication;
+using HSMServer.Folders;
 using HSMServer.Model;
 using HSMServer.ServiceExtensions;
 using Microsoft.AspNetCore.Authentication.Cookies;
@@ -63,6 +64,7 @@ try
     var app = builder.Build();
 
     await app.Services.GetRequiredService<IUserManager>().Initialize();
+    await app.Services.GetRequiredService<IFolderManager>().Initialize();
 
     app.ConfigureMiddleware(app.Environment.IsDevelopment());
 

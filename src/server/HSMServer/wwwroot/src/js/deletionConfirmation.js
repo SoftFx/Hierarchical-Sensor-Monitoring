@@ -14,7 +14,7 @@ window.showDeletionConfirmationModal = function(title, body, okButtonAction) {
     $(`#${modalId}`).modal('show');
 }
 
-window.hideDeletionConfirmationModal = function() {
+window.hideDeletionConfirmationModal = function () {
     $(`#${modalId}`).modal('hide');
 }
 

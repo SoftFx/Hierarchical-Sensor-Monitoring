@@ -1,39 +1,12 @@
-﻿using System;
+using System;
+using System;
 using HSMServer.Model.TreeViewModel;
-using System.Collections.Generic;
 
 
 namespace HSMServer.Model.ViewModel
 {
     public abstract class NodeInfoBaseViewModel
     {
-        private static readonly List<TimeInterval> _predefinedExpectedIntervals =
-            new()
-            {
-                TimeInterval.FromParent,
-                TimeInterval.None,
-                TimeInterval.TenMinutes,
-                TimeInterval.Hour,
-                TimeInterval.Day,
-                TimeInterval.Week,
-                TimeInterval.Month,
-                TimeInterval.Custom
-            };
-        
-        private static readonly List<TimeInterval> _predefinedRestoreIntervals =
-            new()
-            {
-                TimeInterval.FromParent,
-                TimeInterval.None,
-                TimeInterval.OneMinute,
-                TimeInterval.FiveMinutes,
-                TimeInterval.TenMinutes,
-                TimeInterval.Hour,
-                TimeInterval.Day,
-                TimeInterval.Custom
-            };
-
-
         public string Path { get; }
 
         public string ProductName { get; }
@@ -61,8 +34,8 @@ namespace HSMServer.Model.ViewModel
             EncodedId = model.EncodedId;
             Description = model.Description;
 
-            ExpectedUpdateInterval = new(model.ExpectedUpdateInterval, _predefinedExpectedIntervals);
-            SensorRestorePolicy = new(model.SensorRestorePolicy, _predefinedRestoreIntervals);
+            ExpectedUpdateInterval = new(model.ExpectedUpdateInterval, PredefinedIntervals.ForTimeout);
+            SensorRestorePolicy = new(model.SensorRestorePolicy, PredefinedIntervals.ForRestore);
         }
     }
 }

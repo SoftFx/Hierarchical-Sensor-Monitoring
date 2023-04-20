@@ -2,13 +2,8 @@
 
 namespace HSMDatabase.AccessManager.DatabaseEntities
 {
-    public sealed class GroupEntity
+    public sealed class FolderEntity
     {
-        public List<string> ProductIds { get; init; }
-
-        public Dictionary<string, byte> UserRoles { get; init; }
-
-
         public string Id { get; init; }
 
         public string AuthorId { get; init; }
@@ -21,5 +16,8 @@ namespace HSMDatabase.AccessManager.DatabaseEntities
         public string Description { get; init; }
 
         public int Color { get; init; }
+
+
+        public List<TimeIntervalEntity> ServerPolicies { get; init; } = new();
     }
 }

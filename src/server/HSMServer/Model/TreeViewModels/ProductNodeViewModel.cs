@@ -3,6 +3,7 @@ using HSMServer.Core.Model;
 using HSMServer.Helpers;
 using HSMServer.Model.AccessKeysViewModels;
 using HSMServer.Model.Authentication;
+using HSMServer.Model.Folders;
 using HSMServer.Notification.Settings;
 using System;
 using System.Collections.Concurrent;
@@ -22,14 +23,14 @@ namespace HSMServer.Model.TreeViewModel
 
         public NotificationSettings Notifications { get; }
 
-
         public int AllSensorsCount { get; private set; }
 
 
-        public override bool HasData =>
-    Sensors.Values.Any(s => s.HasData) || Nodes.Values.Any(n => n.HasData);
+        public override bool HasData => Sensors.Values.Any(s => s.HasData) || Nodes.Values.Any(n => n.HasData);
 
         public bool IsEmpty => AllSensorsCount == 0;
+
+        public Guid? FolderId => Parent is FolderModel folder ? folder?.Id : null;
 
 
         public ProductNodeViewModel(ProductModel model) : base(model)
@@ -54,6 +55,14 @@ namespace HSMServer.Model.TreeViewModel
             sensor.Parent = this;
             Sensors.TryAdd(sensor.Id, sensor);
         }
+
+        internal void AddFolder(FolderModel folder)
+        {
+            folder.Products.Add(Id, this);
+            UpdateFolder(folder);
+        }
+
+        internal void UpdateFolder(FolderModel folder) => Parent = folder;
 
         internal void AddAccessKey(AccessKeyViewModel key) => AccessKeys.TryAdd(key.Id, key);
 

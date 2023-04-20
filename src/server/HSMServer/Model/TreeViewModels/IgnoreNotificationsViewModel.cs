@@ -1,7 +1,6 @@
 ﻿using HSMServer.Extensions;
 using HSMServer.Model.TreeViewModel;
 using System;
-using System.Collections.Generic;
 
 namespace HSMServer.Model
 {
@@ -17,20 +16,6 @@ namespace HSMServer.Model
         private const string SensorTreeElement = "sensor";
         private const string ProductTreeElement = "product";
 
-        private static readonly List<TimeInterval> _predefinedIntervals =
-            new()
-            {
-                TimeInterval.FiveMinutes,
-                TimeInterval.TenMinutes,
-                TimeInterval.ThirtyMinutes,
-                TimeInterval.FourHours,
-                TimeInterval.EightHours,
-                TimeInterval.SixteenHours,
-                TimeInterval.ThirtySixHours,
-                TimeInterval.SixtyHours,
-                TimeInterval.Forever,
-                TimeInterval.Custom
-            };
 
         public NotificationsTarget NotificationsTarget { get; set; }
 
@@ -68,7 +53,7 @@ namespace HSMServer.Model
             if (node.Id == node.RootProduct.Id)
                 TreeElement = ProductTreeElement;
 
-            IgnorePeriod = new(_predefinedIntervals, false);
+            IgnorePeriod = new(PredefinedIntervals.ForIgnore, false);
 
             DateTimeNow = DateTime.UtcNow.RoundToMin();
             NotificationsTarget = target;

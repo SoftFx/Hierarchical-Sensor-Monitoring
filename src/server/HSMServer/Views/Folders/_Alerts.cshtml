@@ -1,0 +1,55 @@
+﻿@using HSMServer.Model.Folders.ViewModels
+
+@model FolderAlertsViewModel
+
+@addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
+
+
+@if (Model != null)
+{
+    <input asp-for="Id" value="@Model.Id" class="d-none"/>
+
+    <div class="row mt-2">
+        <label class="col-3 col-form-label">
+            Expected sensor(s) update interval <i class='fas fa-question-circle' title='Time format: dd.hh:mm:ss min value 00:01:00. If the sensor doesn`t receive new data within the specified time interval, a notification sends'></i>
+        </label>
+        <div class="col-3">
+            <partial name="_TimeIntervalSelect" for="ExpectedUpdateInterval" />
+        </div>
+    </div>
+
+    <div class="row mt-2">
+        <label class="col-3 col-form-label">
+            Sensitivity sensor(s) interval <i class='fas fa-question-circle' title='Time format: dd.hh:mm:ss min value 00:01:00. If the sensor doesn`t return to Ok status after the specified time inverval, a notification sends'></i>
+        </label>
+        <div class="col-3">
+            <partial name="_TimeIntervalSelect" for="SensorRestorePolicy" />
+        </div>
+    </div>
+
+    <div class="d-flex justify-content-end my-2">
+        <button type="submit" class="btn btn-secondary independentSizeButton">Save</button>
+    </div>
+}
+
+
+<script>
+    $(document).on("submit", "#folderAlerts_form", function (event) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+
+        $.ajax({
+            type: 'POST',
+            url: $("#folderAlerts_form").attr("action"),
+            data: new FormData(this),
+            datatype: 'html',
+            processData: false,
+            contentType: false,
+            cache: false,
+            async: true,
+            success: function (viewData) {
+                $("#folderAlerts_form").html(viewData);
+            }
+        });
+    });
+</script>

@@ -1,51 +1,55 @@
-﻿@using HSMServer.Model.ViewModel
-@using HSMServer.Constants
-@model List<ProductViewModel>
+﻿@using HSMServer.Constants
+@using HSMServer.Controllers
+@using HSMServer.Helpers
+@using HSMServer.Model.Authentication
+@using HSMServer.Model.Folders.ViewModels
+@using HSMServer.Model.ViewModel
 
-@{ ViewData["Title"] = "Products"; }
+@model List<FolderViewModel>
+
+@{
+    ViewData["Title"] = "Products";
+
+    ViewBag.UserFolders = Model.ToDictionary(f => f.Id?.ToString() ?? string.Empty, f => (f.Name, f.Background, f.Foreground));
+}
 
 
 <script>
     var deleteAction = "@Html.Raw(Url.Action(ViewConstants.RemoveProductAction, ViewConstants.ProductController))";
-    var createAction = "@Html.Raw(Url.Action(ViewConstants.CreateProductAction, ViewConstants.ProductController))";
     var editAction = "@Html.Raw(Url.Action(ViewConstants.EditProductAction, ViewConstants.ProductController))";
 </script>
 
+
 <div class="container">
     <div class="row w-100 justify-content-center">
-        @await Html.PartialAsync("_ProductList", Model)
-        <script>
-        let errorText = '@TempData[TextConstants.TempDataErrorText]';
-        if (errorText !== undefined) {
-            let errorSpan = document.getElementById('new_product_name_span');
-            if (errorSpan != undefined) {
-                errorSpan.textContent = errorText;//.slice(0, errorText.length - 5);
-                errorSpan.setAttribute("style", "display: block;color: red;font-size: large;font-weight: normal;white-space: pre-line");
-            }
-        }
-        </script>
-    </div>
-</div>
+        <div class="m-2">
+            <div class="d-flex justify-content-between my-2">
+                <h5>Products</h5>
 
-
-<div class="modal fade" id="modalDelete" tabindex="-1" aria-labelledby="modalDeleteLabel" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h5 class="modal-title" id="modalDeleteLabel">Remove product</h5>
-            </div>
-
-            <div id="modalDeleteBody" class="modal-body text-break">
-
-            </div>
-
-            <div class="modal-footer">
-                <button id="closeDeleteButton" type="button" class="btn btn-secondary col-2" data-bs-dismiss="modalDelete">Close</button>
-                <button id="confirmDeleteButton" type="button" class="btn btn-secondary col-2">Confirm</button>
+                @if (UserRoleHelper.IsUserCRUDAllowed(Context.User as User))
+                {
+                    <div class='d-flex col-md-auto'>
+                        <a class="mx-3" href="javascript:showAddProductModal();">
+                            <i class="fa-solid fa-plus"></i> Add product
+                        </a>
+                        <a href="@Url.Action(nameof(FoldersController.EditFolder), ViewConstants.FoldersController)">
+                            <i class="fa-solid fa-folder-plus"></i> Add folder
+                        </a>
+                    </div>
+                }
             </div>
         </div>
+
+        @foreach (var folder in Model)
+        {
+            @await Html.PartialAsync("_FolderAccordion", folder)
+        }
     </div>
 </div>
+
+
+@await Html.PartialAsync("_AddProductModal", new AddProductViewModel())
+@await Html.PartialAsync("~/Views/Shared/_DeletionConfirmationModal.cshtml")
 
 <script>
     //copy buttons
@@ -55,53 +59,50 @@
     $('[id^="delete_"]').on("click",
         function () {
             key = this.id.substring("delete_".length, this.id.length);
-            name = $('#inputName_' + key).text();
-            
-            $('#modalDeleteBody').empty();
-            $('#modalDeleteBody').append(`Do you really want to remove "${name.trim().substring(0, 100)}" product?`);
+            name = $('#inputName_' + key).text().trim().substring(0, 100);
 
-            var modal = new bootstrap.Modal(document.getElementById('modalDelete'));
-            modal.show();
-
-            //modal confirm
-            $('#confirmDeleteButton').on('click', function () {
-                modal.hide();
-
-                $.ajax({//ProductController -> RemoveProduct
-                    type: 'GET',
-                    url: deleteAction + "?Product=" + key,
-                    cache: false,
-                    async: true,
-                    success: function () {
-                        document.location.reload();
-                    }
-                });
-            });
-
-            //modal close
-            $('#closeDeleteButton').on('click', function () {
-                modal.hide();
-            });
+            showDeletionConfirmationModal(
+                `Removing '${name}' product`,
+                `Do you really want to remove '${name}' product?`,
+                function () {
+                    $.ajax({
+                        type: 'GET',
+                        url: deleteAction + "?Product=" + key,
+                        cache: false,
+                        async: true,
+                        success: function () {
+                            document.location.reload();
+                        }
+                    });
+                }
+            );
         });
-
-    //create button
-    $('#createButton').on('click', function () {
-        name = $('#createName').val();
-
-        name = encodeURIComponent(name);
-            $.ajax({
-            type: 'GET',
-            url: createAction + "?Product=" + name,
-            cache: false,
-            async: true,
-            success: function() {
-                document.location.reload();
-            }
-        });
-    });
 
     $('[id^=change_]').on('click', function () {
         key = this.id.substring("change_".length, this.id.length);
         window.location.href = editAction + "?Product=" + key;
-    }); 
+    });
+
+    $('[id^=moveTo_]').on('click', function () {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+
+        $.ajax({
+            type: 'GET',
+            url: this.href,
+            cache: false,
+            async: true
+        }).done(function () {
+            sessionStorage.setItem("productMoving", "true");
+            document.location.reload();
+        });
+    });
+
+    window.onload = function () {
+        var productWasMoved = sessionStorage.getItem("productMoving");
+        if (productWasMoved) {
+            sessionStorage.removeItem("productMoving");
+            showToast("Product has been succesfully moved!");
+        }
+    }
 </script>

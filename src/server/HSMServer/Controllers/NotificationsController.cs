@@ -14,7 +14,7 @@ using SensorStatus = HSMServer.Model.TreeViewModel.SensorStatus;
 namespace HSMServer.Controllers
 {
     [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
-    public class NotificationsController : Controller
+    public class NotificationsController : BaseController
     {
         private readonly IUserManager _userManager;
         private readonly TreeViewModel _tree;
@@ -32,7 +32,7 @@ namespace HSMServer.Controllers
 
         public IActionResult Index()
         {
-            return View(new TelegramSettingsViewModel((HttpContext.User as User).Notifications.Telegram));
+            return View(new TelegramSettingsViewModel(CurrentUser.Notifications.Telegram));
         }
 
         [HttpPost]
@@ -68,7 +68,7 @@ namespace HSMServer.Controllers
 
         public IActionResult SendTestTelegramMessage(long chatId, string productId)
         {
-            var testMessage = $"Test message for {(HttpContext.User as User).Name}.";
+            var testMessage = $"Test message for {CurrentUser.Name}.";
             if (GetEntity(productId) is ProductNodeViewModel product)
                 testMessage = $"{testMessage} (Product {product.Name})";
 
@@ -89,7 +89,7 @@ namespace HSMServer.Controllers
                 ? _tree.Nodes[SensorPathHelper.DecodeGuid(productId)]
                 : GetCurrentUser();
 
-        private User GetCurrentUser() => _userManager[(HttpContext.User as User).Id];
+        private User GetCurrentUser() => _userManager[CurrentUser.Id];
 
         private RedirectToActionResult GetResult(string productId) =>
             string.IsNullOrEmpty(productId)

@@ -180,6 +180,14 @@ input.input-validation-error {
     text-underline-offset: 0.3rem;
 }
 
+.w-10 {
+    width: 10%;
+}
+
+.w-20 {
+    width: 20%;
+}
+
 .no-transition {
     transition: none!important;
     -webkit-transition: none!important;

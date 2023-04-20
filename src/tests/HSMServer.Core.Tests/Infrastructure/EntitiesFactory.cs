@@ -63,7 +63,7 @@ namespace HSMServer.Core.Tests.Infrastructure
             };
 
 
-        internal static GroupEntity BuildGroupEntity() =>
+        internal static FolderEntity BuildFolderEntity() =>
             new()
             {
                 Id = Guid.NewGuid().ToString(),
@@ -72,7 +72,6 @@ namespace HSMServer.Core.Tests.Infrastructure
                 DisplayName = RandomGenerator.GetRandomString(),
                 Description = RandomGenerator.GetRandomString(),
                 Color = Color.Red.ToArgb(),
-                UserRoles = new(),
             };
 
 

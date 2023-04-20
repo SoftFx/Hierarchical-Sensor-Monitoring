@@ -11,12 +11,12 @@ namespace HSMServer.Model.ViewModel
     {
         public List<(SensorStatus Status, int Count)> NodeStatuses { get; } = new();
 
+        public BaseNodeViewModel Parent { get; }
+
         public List<(SensorStatus Status, int Count)> SensorsStatuses { get; } = new();
         
         public List<(SensorType Type, int Count)> SensorsTypes { get; } = new();
         
-        
-        public NodeViewModel Parent { get; }
         
         public string Name { get; }
         

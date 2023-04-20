@@ -1,13 +1,15 @@
 using HSMServer.Authentication;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Cache.UpdateEntities;
+using HSMServer.Core.Helpers;
 using HSMServer.Core.Model;
 using HSMServer.Core.MonitoringHistoryProcessor.Factory;
 using HSMServer.Extensions;
+using HSMServer.Folders;
 using HSMServer.Helpers;
 using HSMServer.Model;
-using HSMServer.Model.Authentication;
 using HSMServer.Model.Authentication.History;
+using HSMServer.Model.Folders;
 using HSMServer.Model.TreeViewModel;
 using HSMServer.Model.ViewModel;
 using HSMServer.Notification.Settings;
@@ -19,13 +21,12 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using HSMServer.Core.Helpers;
 
 namespace HSMServer.Controllers
 {
     [Authorize]
     [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
-    public class HomeController : Controller
+    public class HomeController : BaseController
     {
         private const int LatestHistoryCount = -100;
         internal const int MaxHistoryCount = -TreeValuesCache.MaxHistoryCount;
@@ -34,14 +35,17 @@ namespace HSMServer.Controllers
         private static readonly EmptyResult _emptyResult = new();
 
         private readonly ITreeValuesCache _treeValuesCache;
+        private readonly IFolderManager _folderManager;
         private readonly TreeViewModel _treeViewModel;
         private readonly IUserManager _userManager;
 
 
-        public HomeController(ITreeValuesCache treeValuesCache, TreeViewModel treeViewModel, IUserManager userManager)
+        public HomeController(ITreeValuesCache treeValuesCache, IFolderManager folderManager,
+            TreeViewModel treeViewModel, IUserManager userManager)
         {
             _treeValuesCache = treeValuesCache;
             _treeViewModel = treeViewModel;
+            _folderManager = folderManager;
             _userManager = userManager;
         }
 
@@ -54,13 +58,15 @@ namespace HSMServer.Controllers
         [HttpPost]
         public IActionResult SelectNode([FromQuery(Name = "Selected")] string selectedId)
         {
-            NodeViewModel viewModel = null;
+            BaseNodeViewModel viewModel = null;
 
             if (!string.IsNullOrEmpty(selectedId))
             {
                 var decodedId = SensorPathHelper.DecodeGuid(selectedId);
 
-                if (_treeViewModel.Nodes.TryGetValue(decodedId, out var node))
+                if (_folderManager.TryGetValue(decodedId, out var folder))
+                    viewModel = folder;
+                else if (_treeViewModel.Nodes.TryGetValue(decodedId, out var node))
                     viewModel = node;
                 else if (_treeViewModel.Sensors.TryGetValue(decodedId, out var sensor))
                     viewModel = sensor;
@@ -72,15 +78,14 @@ namespace HSMServer.Controllers
         [HttpPost]
         public IActionResult RefreshTree()
         {
-            return PartialView("_Tree", _treeViewModel.GetUserTree(HttpContext.User as User));
+            return PartialView("_Tree", _treeViewModel.GetUserTree(CurrentUser));
         }
 
         [HttpPost]
         public IActionResult ApplyFilter(UserFilterViewModel viewModel)
         {
-            var user = HttpContext.User as User;
-            user.TreeFilter = viewModel.ToFilter();
-            _userManager.UpdateUser(user);
+            CurrentUser.TreeFilter = viewModel.ToFilter();
+            _userManager.UpdateUser(CurrentUser);
 
             return View("Index", _treeViewModel);
         }
@@ -198,7 +203,7 @@ namespace HSMServer.Controllers
 
         private void UpdateUserNotificationSettings(Guid selectedNode, Action<NotificationSettings, Guid> updateSettings)
         {
-            var user = _userManager[(HttpContext.User as User).Id];
+            var user = _userManager[CurrentUser.Id];
             foreach (var sensorId in GetNodeSensors(selectedNode))
             {
                 updateSettings?.Invoke(user.Notifications, sensorId);
@@ -239,6 +244,7 @@ namespace HSMServer.Controllers
             var decodedId = SensorPathHelper.DecodeGuid(selectedId);
             var updatedSensorsData = new List<object>();
 
+            // TODO: implement update selected folder tree item
             if (_treeViewModel.Nodes.TryGetValue(decodedId, out var node))
             {
                 foreach (var (_, childNode) in node.Nodes)
@@ -275,7 +281,7 @@ namespace HSMServer.Controllers
             var enumerator = _treeValuesCache.GetSensorValuesPage(SensorPathHelper.DecodeGuid(model.EncodedId), model.FromUtc, model.ToUtc, model.Count);
             var viewModel = await new HistoryValuesViewModel(model.EncodedId, model.Type, enumerator, GetLocalLastValue(model.EncodedId, model.FromUtc, model.ToUtc)).Initialize();
 
-            _userManager[(HttpContext.User as User).Id].Pagination = viewModel;
+            _userManager[CurrentUser.Id].Pagination = viewModel;
 
             return GetHistoryTable(viewModel);
         }
@@ -283,13 +289,13 @@ namespace HSMServer.Controllers
         [HttpGet]
         public IActionResult GetPreviousPage()
         {
-            return GetHistoryTable(_userManager[(HttpContext.User as User).Id].Pagination?.ToPreviousPage());
+            return GetHistoryTable(_userManager[CurrentUser.Id].Pagination?.ToPreviousPage());
         }
 
         [HttpGet]
         public async Task<IActionResult> GetNextPage()
         {
-            return GetHistoryTable(await (_userManager[(HttpContext.User as User).Id].Pagination?.ToNextPage()));
+            return GetHistoryTable(await (_userManager[CurrentUser.Id].Pagination?.ToNextPage()));
         }
 
 
@@ -408,8 +414,8 @@ namespace HSMServer.Controllers
         public async Task<IActionResult> GetRecentFilesView([FromQuery] string fileId)
         {
             var viewModel = await GetFileHistory(fileId);
-            _userManager[(HttpContext.User as User).Id].Pagination = viewModel;
-            
+            _userManager[CurrentUser.Id].Pagination = viewModel;
+
             return GetFileTable(viewModel);
         }
 
@@ -421,7 +427,7 @@ namespace HSMServer.Controllers
         private FileValue GetFileSensorValue(string encodedId) =>
             _treeValuesCache.GetSensor(SensorPathHelper.DecodeGuid(encodedId)).LastValue as FileValue;
 
-        private async Task<FileValue> GetFileByReceivingTimeOrDefault(string encodedId, long ticks = default) => (ticks == default 
+        private async Task<FileValue> GetFileByReceivingTimeOrDefault(string encodedId, long ticks = default) => (ticks == default
             ? GetFileSensorValue(encodedId)
             : (await GetFileHistory(encodedId)).Pages[0].Cast<FileValue>().FirstOrDefault(file => file.ReceivingTime.Ticks == ticks))
             .DecompressContent();
@@ -485,8 +491,8 @@ namespace HSMServer.Controllers
             var update = new ProductUpdate
             {
                 Id = product.Id,
-                ExpectedUpdateInterval = newModel.ExpectedUpdateInterval.ToModel(),
-                RestoreInterval = newModel.SensorRestorePolicy.ToModel(),
+                ExpectedUpdateInterval = newModel.ExpectedUpdateInterval.ToModel((product.Parent as FolderModel)?.ExpectedUpdateInterval),
+                RestoreInterval = newModel.SensorRestorePolicy.ToModel((product.Parent as FolderModel)?.SensorRestorePolicy),
                 Description = newModel.Description
             };
 

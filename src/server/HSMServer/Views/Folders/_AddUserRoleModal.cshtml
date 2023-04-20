@@ -1,0 +1,51 @@
+﻿@using HSMServer.Model.Authentication
+@using HSMServer.Model.Folders.ViewModels
+
+@model FolderUsersViewModel
+
+@addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
+
+
+<div class="modal fade" tabindex="-1" role="dialog" id="addUserRole_modal">
+    <div class="modal-dialog modal-dialog-centered modal-lg" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Add user role for folder '@Model.FolderName'</h5>
+                <button type="button" class="btn-close" onclick="hideAddUserRoleModal()" aria-label="Close"></button>
+            </div>
+
+            <div id="addUserRole_modalBody" class="modal-body">
+                <div class="row mt-2">
+                    <label class="col-auto col-form-label">User</label>
+                    <div class="col">
+                        <select class='form-select' id='userIdToAdd'>
+                            @foreach (var user in Model.NotAdminUsers)
+                            {
+                                <option value='@user.Id'>@user.Name</option>
+                            }
+                        </select>
+                    </div>
+                </div>
+
+                <div class="row mt-2">
+                    <label class="col-auto col-form-label">Role</label>
+                    <div class="col">
+                        <select class='form-select' id='userRoleToAdd'>
+                            @foreach (ProductRoleEnum role in Enum.GetValues<ProductRoleEnum>())
+                            {
+                                <option value='@((int)role)'>@role</option>
+                            }
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-group mt-3">
+                    <div align="right">
+                        <button class="btn btn-secondary col-1" type="button" onclick="addUserRole()">Add</button>
+                        <button class="btn btn-secondary col-1 px-2" type="button" onclick="hideAddUserRoleModal()">Cancel</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

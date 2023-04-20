@@ -1,0 +1,106 @@
+﻿@using HSMServer.Model.Folders.ViewModels
+@using HSMServer.Helpers
+@using HSMServer.Extensions
+@using HSMCommon.Constants
+
+@model FolderProductsViewModel
+
+@addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
+
+@{
+    var noProducts = Model.DisplayProducts.Count == 0;
+    var tableId = 0;
+}
+
+
+<hr />
+
+@if (noProducts)
+{
+    <label class="col-form-label">Products</label>
+}
+else
+{
+    <div class="d-flex justify-content-end">
+        <button type="button" class="col-auto btn btn-link p-0" onclick="addProducts()">
+            <i class="fa-solid fa-plus"></i> Add product(s)
+        </button>
+    </div>
+}
+
+<div id="productsSelect" class="selectpicker @(noProducts ? "" : "d-none")">
+    <select class="selectpicker" asp-for="SelectedProducts" asp-items="@Model.AvailableProducts" data-live-search="true" data-width="100%" title="Choose products to add" multiple></select>
+</div>
+
+@if (!noProducts)
+{
+    <table id="folderProductsTable_@tableId" class="table table-striped">
+        <thead>
+            <tr>
+                <th>Product name</th>
+                <th>
+                    <a class="btn sortSubmit" onclick="sortTable(this, 1, '@tableId')" type="submit">
+                        Last sensor update
+                        <i id="sortIcon" class="fa-solid fa-sort"></i>
+                    </a>
+                </th>
+                <th class="text-center">Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var product in Model.DisplayProducts)
+            {
+                <tr id="row_product_@product.Id">
+                    <td class="text-break">@Html.Raw(product.Name)</td>
+                    <td>
+                        <span title="@product.UpdateTime.ToDefaultFormat()" time="@product.UpdateTime">
+                            @product.UpdateTime.GetTimeAgo()
+                        </span>
+                        @if ((DateTime.UtcNow - product.UpdateTime).Ticks >= ConfigurationConstants.DefaultExpirationTime.Ticks)
+                        {
+                            <span>
+                                <img title="Product sensor(s) haven't been updated for @ConfigurationConstants.DefaultExpirationTime.ToToolTip()" src="~/dist/warning.svg" id="svg_exclamation" alt="warning icon" />
+                            </span>
+                        }
+                    </td>
+                    <td nowrap class="text-center w-10">
+                        <div class='btn-group'>
+                            <button id="actionButton" class="btn" data-bs-toggle="dropdown" data-bs-auto-close="true" aria-haspopup="true" aria-expanded="false">
+                                <i class="fa-solid fa-ellipsis-vertical" style="cursor: pointer"></i>
+                            </button>
+                            <ul class='dropdown-menu overflow-auto' aria-labelledby="dropdownMenuButton">
+                                <li>
+                                    <a id='exclude_@product.Id' class='dropdown-item text-decoration-none fw-normal' style="cursor: pointer;">
+                                        Exclude from folder
+                                    </a>
+                                </li>
+                            </ul>
+                        </div>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+
+    @*There is info about products for FormData*@
+    <div style="display:none">
+        @for (int i = 0; i < Model.Products.Count; i++)
+        {
+            <input id="folder_product_@Model.Products[i]" asp-for="Products[i]" value="@Model.Products[i]" />
+        }
+    </div>
+}
+
+
+<script>
+    function addProducts() {
+        $("#productsSelect").removeClass("d-none");
+    }
+
+    $('[id^=exclude_]').on('click', function () {
+        var productId = this.id.substring("exclude_".length, this.id.length);
+
+        $(`#row_product_${productId}`).remove();
+        $(`#folder_product_${productId}`).val('@Guid.Empty');
+    });
+</script>

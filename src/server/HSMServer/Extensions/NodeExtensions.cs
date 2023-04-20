@@ -1,4 +1,5 @@
-﻿using HSMServer.Model.TreeViewModel;
+﻿using HSMServer.Model.Folders;
+using HSMServer.Model.TreeViewModel;
 
 namespace HSMServer.Extensions
 {
@@ -35,6 +36,11 @@ namespace HSMServer.Extensions
                 SensorStatus.Error => "grid-cell-error",
                 _ => "grid-cell-offTime",
             };
+
+        internal static string GetChildrenAccordionTitle(this NodeViewModel node) =>
+            node is ProductNodeViewModel product
+                ? product.Parent is FolderModel ? "Products" : "Nodes"
+                : "Sensors";
 
         internal static string GetShortNodeName(this string name) => name.Cut(NodeNameMaxLength);
 
