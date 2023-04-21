@@ -31,7 +31,7 @@ namespace HSMServer.Model.AccessKeysViewModels
 
         public bool CloseModal { get; init; }
 
-        public bool IsModify { get; init; }
+        public bool IsModify { get; set; }
 
 
         public string EncodedProductId { get; set; }

@@ -54,16 +54,6 @@ namespace HSMServer.Controllers
         [AuthorizeIsAdmin(true)]
         public IActionResult NewServerAccessKey()
         {
-            var productSelectItemsList = new List<SelectListItem>()
-            {
-                new ()
-                {
-                    Text = "All products",
-                    Value = "1",
-                    Selected = true
-                }
-            };
-            
             return GetPartialNewAccessKey(new EditAccessKeyViewModel()
             {
                 CloseModal = true,
@@ -91,9 +81,17 @@ namespace HSMServer.Controllers
         public IActionResult NewAccessKey(EditAccessKeyViewModel key)
         {
             if (!ModelState.IsValid)
+            {
+                if (CurrentUser.IsAdmin)
+                {
+                    Guid.TryParse(key.EncodedProductId, out var id);
+                    key.Products = TreeValuesCache.GetProducts().ToList();
+                    key.SelectedProduct = key.Products.FirstOrDefault(x => x.Id == id)?.DisplayName;
+                    key.IsModify = false;
+                }
                 return GetPartialNewAccessKey(key);
+            }
 
-            TreeValuesCache.AddAccessKey(key.ToModel(CurrentUser.Id));
             if (string.IsNullOrEmpty(key.EncodedProductId))
                 key.EncodedProductId = key.SelectedProduct;
             
