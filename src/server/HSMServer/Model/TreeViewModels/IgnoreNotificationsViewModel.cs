@@ -1,7 +1,7 @@
 ﻿using HSMServer.Extensions;
+using HSMServer.Model.Folders;
 using HSMServer.Model.TreeViewModel;
 using System;
-using System.Collections.Generic;
 
 namespace HSMServer.Model
 {
@@ -16,21 +16,8 @@ namespace HSMServer.Model
         private const string NodeTreeElement = "node";
         private const string SensorTreeElement = "sensor";
         private const string ProductTreeElement = "product";
+        private const string FolderTreeElement = "folder";
 
-        private static readonly List<TimeInterval> _predefinedIntervals =
-            new()
-            {
-                TimeInterval.FiveMinutes,
-                TimeInterval.TenMinutes,
-                TimeInterval.ThirtyMinutes,
-                TimeInterval.FourHours,
-                TimeInterval.EightHours,
-                TimeInterval.SixteenHours,
-                TimeInterval.ThirtySixHours,
-                TimeInterval.SixtyHours,
-                TimeInterval.Forever,
-                TimeInterval.Custom
-            };
 
         public NotificationsTarget NotificationsTarget { get; set; }
 
@@ -56,23 +43,41 @@ namespace HSMServer.Model
         public bool IsOffTimeModal { get; set; }
 
 
-        // public constructor without parameters for action Home/IgnoreNotifications
-        public IgnoreNotificationsViewModel() { }
-
-        public IgnoreNotificationsViewModel(NodeViewModel node, NotificationsTarget target, bool isOffTimeModal)
+        private IgnoreNotificationsViewModel(BaseNodeViewModel node, NotificationsTarget target, bool isOffTimeModal)
         {
-            EncodedId = node.EncodedId;
-            Path = node.FullPath;
-            TreeElement = node is SensorNodeViewModel ? SensorTreeElement : NodeTreeElement;
+            TreeElement = node switch
+            {
+                SensorNodeViewModel => SensorTreeElement,
+                ProductNodeViewModel => NodeTreeElement,
+                FolderModel => FolderTreeElement,
+                _ => null
+            };
 
-            if (node.Id == node.RootProduct.Id)
-                TreeElement = ProductTreeElement;
-
-            IgnorePeriod = new(_predefinedIntervals, false);
+            IgnorePeriod = new(PredefinedIntervals.ForIgnore, false);
 
             DateTimeNow = DateTime.UtcNow.RoundToMin();
             NotificationsTarget = target;
             IsOffTimeModal = isOffTimeModal;
+        }
+
+        // public constructor without parameters for action Home/IgnoreNotifications
+        public IgnoreNotificationsViewModel() { }
+
+        public IgnoreNotificationsViewModel(NodeViewModel node, NotificationsTarget target, bool isOffTimeModal)
+            : this((BaseNodeViewModel)node, target, isOffTimeModal)
+        {
+            EncodedId = node.EncodedId;
+            Path = node.FullPath;
+
+            if (node.Id == node.RootProduct.Id)
+                TreeElement = ProductTreeElement;
+        }
+
+        public IgnoreNotificationsViewModel(FolderModel folder, NotificationsTarget target, bool isOffTimeModal)
+            : this((BaseNodeViewModel)folder, target, isOffTimeModal)
+        {
+            EncodedId = folder.Id.ToString();
+            Path = folder.Name;
         }
     }
 }

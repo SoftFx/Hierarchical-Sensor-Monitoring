@@ -8,6 +8,7 @@
         public const string HomeController = "Home";
         public const string AccountController = "Account";
         public const string ProductController = "Product";
+        public const string FoldersController = "Folders";
         public const string ConfigurationController = "Configuration";
         public const string AccessKeysController = "AccessKeys";
         public const string NotificationsController = "Notifications";
@@ -18,7 +19,6 @@
         public const string IndexAction = "Index";
         
         public const string RemoveProductAction = "RemoveProduct";
-        public const string CreateProductAction = "CreateProduct";
         public const string EditProductAction = "EditProduct";
 
         public const string UsersAction = "Users";

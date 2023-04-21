@@ -1,4 +1,5 @@
 ﻿using System.Collections.Generic;
+using System.Linq;
 
 namespace HSMServer.Core.Extensions
 {
@@ -15,6 +16,11 @@ namespace HSMServer.Core.Extensions
         {
             list.Add(newData);
             return list;
+        }
+
+        public static List<T> AddFluent<T>(this IEnumerable<T> collection, T newData)
+        {
+            return collection.ToList().AddFluent(newData);
         }
 
 

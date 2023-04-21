@@ -1,13 +1,21 @@
-﻿using System;
+﻿using HSMServer.Model.Authentication;
+using System;
+using System.Text.Json.Serialization;
 
 namespace HSMServer.Model.ViewModel
 {
     public class UserRightViewModel
     {
-        public Guid ProductKey { get; set; }
+        public Guid UserId { get; set; }
+
+        public Guid EntityId { get; set; }
+
         public int ProductRole { get; set; }
-        public Guid UserId { get;set; }
-        
+
+        [JsonIgnore]
+        public ProductRoleEnum Role => (ProductRoleEnum)ProductRole;
+
+
         public UserRightViewModel() { }
     }
 }

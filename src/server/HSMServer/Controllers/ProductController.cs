@@ -1,17 +1,22 @@
 ﻿using HSMCommon.Constants;
 using HSMServer.Authentication;
+using HSMServer.Configuration;
 using HSMServer.Constants;
 using HSMServer.Core.Cache;
-using HSMServer.Configuration;
-using HSMServer.Registration;
+using HSMServer.Core.Extensions;
+using HSMServer.Core.Registration;
 using HSMServer.Email;
 using HSMServer.Encryption;
+using HSMServer.Extensions;
 using HSMServer.Filters.ProductRoleFilters;
+using HSMServer.Folders;
 using HSMServer.Helpers;
 using HSMServer.Model.Authentication;
+using HSMServer.Model.Folders.ViewModels;
 using HSMServer.Model.TreeViewModel;
 using HSMServer.Model.Validators;
 using HSMServer.Model.ViewModel;
+using HSMServer.Registration;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
@@ -20,72 +25,115 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Threading.Tasks;
-using HSMServer.Core.Registration;
 
 namespace HSMServer.Controllers
 {
     [Authorize]
     [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
-    public class ProductController : Controller
+    public class ProductController : BaseController
     {
         private readonly IUserManager _userManager;
         private readonly IConfigurationProvider _configurationProvider;
         private readonly IRegistrationTicketManager _ticketManager;
         private readonly ITreeValuesCache _treeValuesCache;
+        private readonly IFolderManager _folderManager;
         private readonly TreeViewModel _treeViewModel;
         private readonly ILogger<ProductController> _logger;
 
         public ProductController(IUserManager userManager, IConfigurationProvider configurationProvider,
-            IRegistrationTicketManager ticketManager, ITreeValuesCache treeValuesCache,
+            IRegistrationTicketManager ticketManager, ITreeValuesCache treeValuesCache, IFolderManager folderManager,
             TreeViewModel treeViewModel, ILogger<ProductController> logger)
         {
             _userManager = userManager;
             _ticketManager = ticketManager;
             _configurationProvider = configurationProvider;
             _treeValuesCache = treeValuesCache;
+            _folderManager = folderManager;
             _treeViewModel = treeViewModel;
             _logger = logger;
         }
 
         #region Products
 
-        public IActionResult Index(string searchProductName = "", string searchProductManager = "")
+        public IActionResult Index()
         {
-            ViewBag.ProductName = searchProductName;
-            ViewBag.ProductManager = searchProductManager;
+            var userProducts = _treeViewModel.GetUserProducts(CurrentUser);
+            var userFolders = _folderManager.GetUserFolders(CurrentUser);
 
-            var user = HttpContext.User as User;
+            var folderProducts = new Dictionary<Guid, List<ProductViewModel>>(1 << 2);
+            var productsWithoutFolder = new List<ProductViewModel>(1 << 2);
 
-            var result = _treeViewModel.GetUserProducts(user)
-                .OrderBy(x => x.Name)
-                .Select(x => new ProductViewModel(x, _userManager));
-
-            if (!string.IsNullOrEmpty(searchProductName))
-                result = result.Where(x => x.Name.Contains(searchProductName, StringComparison.CurrentCultureIgnoreCase));
-
-            if (!string.IsNullOrEmpty(searchProductManager))
-                result = result.Where(x => x.Managers.Any(y => y.Contains(searchProductManager, StringComparison.CurrentCultureIgnoreCase)));
-
-            return View(result.ToList());
-        }
-
-        public void CreateProduct([FromQuery(Name = "Product")] string productName)
-        {
-            NewProductNameValidator validator = new NewProductNameValidator(_treeValuesCache);
-            var results = validator.Validate(productName);
-            if (!results.IsValid)
+            foreach (var product in userProducts)
             {
-                TempData[TextConstants.TempDataErrorText] = ValidatorHelper.GetErrorString(results.Errors);
-                return;
+                var productViewModel = new ProductViewModel(product, _userManager);
+
+                if (product.FolderId.HasValue)
+                {
+                    var folderId = product.FolderId.Value;
+
+                    if (!folderProducts.ContainsKey(folderId))
+                        folderProducts[folderId] = new(1 << 2);
+
+                    folderProducts[folderId].Add(productViewModel);
+                }
+                else
+                    productsWithoutFolder.Add(productViewModel);
             }
 
-            TempData.Remove(TextConstants.TempDataErrorText);
-            _treeValuesCache.AddProduct(productName);
+            var folders = new List<FolderViewModel>(folderProducts.Count);
+            foreach (var (folderId, products) in folderProducts)
+                folders.Add(new FolderViewModel(_folderManager[folderId], products));
+
+            foreach (var folder in userFolders)
+                if (!folderProducts.ContainsKey(folder.Id))
+                    folders.Add(new FolderViewModel(folder, null));
+
+            folders = folders.OrderBy(f => f.Name).AddFluent(new FolderViewModel(productsWithoutFolder));
+
+            return View(folders);
         }
 
-        public void RemoveProduct([FromQuery(Name = "Product")] Guid productId)
+        [HttpPost]
+        public IActionResult FilterFolderProducts(Guid? folderId, string productName = "", string productManager = "")
         {
-            _treeValuesCache.RemoveProduct(productId);
+            ViewBag.ProductName = productName;
+            ViewBag.ProductManager = productManager;
+
+            var userProducts = _treeViewModel.GetUserProducts(CurrentUser);
+            var folderProducts = new List<ProductViewModel>(1 << 3);
+
+            foreach (var product in userProducts)
+                if (product.FolderId == folderId)
+                {
+                    var productVM = new ProductViewModel(product, _userManager);
+
+                    if ((string.IsNullOrEmpty(productName) || productVM.Name.IgnoreCaseContains(productName)) &&
+                        (string.IsNullOrEmpty(productManager) || productVM.Managers.Any(m => m.IgnoreCaseContains(productManager))))
+                        folderProducts.Add(productVM);
+                }
+
+            var folder = folderId.HasValue
+                ? new FolderViewModel(_folderManager[folderId.Value], folderProducts)
+                : new FolderViewModel(folderProducts);
+
+            return PartialView("_ProductList", folder);
+        }
+
+        [HttpPost]
+        public IActionResult CreateProduct(AddProductViewModel product)
+        {
+            if (ModelState.IsValid)
+                _treeValuesCache.AddProduct(product.Name);
+
+            return PartialView("_AddProduct", product);
+        }
+
+        public void RemoveProduct(Guid product) => _treeValuesCache.RemoveProduct(product);
+
+        public void MoveProduct(Guid productId, Guid? fromFolderId, Guid? toFolderId)
+        {
+            if (_treeViewModel.Nodes.TryGetValue(productId, out var product))
+                _folderManager.MoveProduct(product, fromFolderId, toFolderId);
         }
 
         #endregion
@@ -125,7 +173,7 @@ namespace HSMServer.Controllers
             }
 
             var user = _userManager[model.UserId];
-            var pair = (model.ProductKey, (ProductRoleEnum)model.ProductRole);
+            var pair = (model.EntityId, (ProductRoleEnum)model.ProductRole);
 
             if (user.ProductsRoles == null || !user.ProductsRoles.Any())
                 user.ProductsRoles = new List<(Guid, ProductRoleEnum)> { pair };
@@ -140,10 +188,10 @@ namespace HSMServer.Controllers
         {
             var user = _userManager[model.UserId];
 
-            var role = user.ProductsRoles.First(ur => ur.Item1.Equals(model.ProductKey));
+            var role = user.ProductsRoles.First(ur => ur.Item1.Equals(model.EntityId));
             user.ProductsRoles.Remove(role);
 
-            foreach (var sensorId in _treeViewModel.GetAllNodeSensors(model.ProductKey))
+            foreach (var sensorId in _treeViewModel.GetAllNodeSensors(model.EntityId))
                 user.Notifications.RemoveSensor(sensorId);
 
             _userManager.UpdateUser(user);
@@ -153,9 +201,9 @@ namespace HSMServer.Controllers
         public void EditUserRole([FromBody] UserRightViewModel model)
         {
             var user = _userManager[model.UserId];
-            var pair = (model.ProductKey, (ProductRoleEnum)model.ProductRole);
+            var pair = (model.EntityId, (ProductRoleEnum)model.ProductRole);
 
-            var role = user.ProductsRoles.FirstOrDefault(ur => ur.Item1.Equals(model.ProductKey));
+            var role = user.ProductsRoles.FirstOrDefault(ur => ur.Item1.Equals(model.EntityId));
             //Skip empty corresponding pair
             if (role.Item1 == Guid.Empty && role.Item2 == 0)
                 return;
