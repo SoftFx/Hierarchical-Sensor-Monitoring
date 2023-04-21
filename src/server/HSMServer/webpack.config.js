@@ -32,6 +32,9 @@ module.exports = {
             $: 'jquery',
             jQuery: 'jquery',
         }),
+        new webpack.ProvidePlugin({
+            'window.Dropdown': ['bootstrap', 'Dropdown'],
+        }),
         new CopyPlugin({
             patterns: [
                 { 

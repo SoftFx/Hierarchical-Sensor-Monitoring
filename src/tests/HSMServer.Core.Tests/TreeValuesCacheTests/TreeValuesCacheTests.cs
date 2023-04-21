@@ -1,15 +1,16 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Cache.UpdateEntities;
-using HSMServer.Core.Converters;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Policies;
 using HSMServer.Core.SensorsUpdatesQueue;
 using HSMServer.Core.Tests.Infrastructure;
 using HSMServer.Core.Tests.MonitoringCoreTests;
 using HSMServer.Core.Tests.MonitoringCoreTests.Fixture;
+using HSMServer.Folders;
 using HSMServer.Model.Authentication;
 using HSMServer.Model.TreeViewModel;
+using Moq;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -33,7 +34,9 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         public TreeValuesCacheTests(TreeValuesCacheFixture fixture, DatabaseRegisterFixture registerFixture)
             : base(fixture, registerFixture)
         {
-            _treeViewModel = new(_valuesCache, _userManager);
+            var folderManager = new Mock<IFolderManager>().Object;
+
+            _treeViewModel = new(_valuesCache, _userManager, folderManager);
         }
 
 

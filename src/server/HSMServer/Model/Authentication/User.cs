@@ -21,9 +21,11 @@ namespace HSMServer.Model.Authentication
 
         public string Password { get; init; }
 
-        public NotificationSettings Notifications { get; init; }
+        public ClientNotifications Notifications { get; init; }
 
-        public List<(Guid, ProductRoleEnum)> ProductsRoles { get; set; }
+        public List<(Guid, ProductRoleEnum)> ProductsRoles { get; set; } = new();
+
+        public Dictionary<Guid, ProductRoleEnum> FoldersRoles { get; } = new();
 
         public TreeUserFilter TreeFilter { get; set; }
 
@@ -39,44 +41,37 @@ namespace HSMServer.Model.Authentication
         public User()
         {
             Id = Guid.NewGuid();
-            ProductsRoles = new List<(Guid, ProductRoleEnum)>();
             Notifications = new();
             TreeFilter = new();
         }
 
         public User(UserEntity entity)
         {
-            if (entity == null) return;
+            if (entity == null)
+                return;
 
             Id = entity.Id;
             Name = entity.UserName;
             Password = entity.Password;
             IsAdmin = entity.IsAdmin;
-
-            ProductsRoles = new List<(Guid, ProductRoleEnum)>();
-            if (entity.ProductsRoles != null && entity.ProductsRoles.Any())
-            {
-                ProductsRoles.AddRange(entity.ProductsRoles.Select(
-                    r => (Guid.Parse(r.Key), (ProductRoleEnum)r.Value)));
-            }
-
             Notifications = new(entity.NotificationSettings);
+
+            if (entity.ProductsRoles != null)
+                ProductsRoles.AddRange(entity.ProductsRoles.Select(r => (Guid.Parse(r.Key), (ProductRoleEnum)r.Value)));
+
+            foreach (var (folderId, role) in entity.FolderRoles)
+                FoldersRoles.Add(Guid.Parse(folderId), (ProductRoleEnum)role);
 
             TreeFilter = entity.TreeFilter is null
                 ? new TreeUserFilter()
                 : JsonSerializer.Deserialize<TreeUserFilter>(((JsonElement)entity.TreeFilter).GetRawText())?.RestoreFilterNames();
         }
 
+
         public void Update(UserUpdate update)
         {
             IsAdmin = update.IsAdmin ?? IsAdmin;
         }
-
-        public bool IsProductAvailable(Guid productId) =>
-            IsAdmin || (ProductsRoles?.Any(x => x.Item1.Equals(productId)) ?? false);
-
-        public bool IsManager(Guid productId) =>
-            IsAdmin || (ProductsRoles?.Any(x => x == (productId, ProductRoleEnum.ProductManager)) ?? false);
 
         public UserEntity ToEntity() =>
             new()
@@ -85,9 +80,23 @@ namespace HSMServer.Model.Authentication
                 Password = Password,
                 Id = Id,
                 IsAdmin = IsAdmin,
-                ProductsRoles = ProductsRoles?.Select(r => new KeyValuePair<string, byte>(r.Item1.ToString(), (byte)r.Item2))?.ToList(),
+                FolderRoles = FoldersRoles.ToDictionary(f => f.Key.ToString(), f => (byte)f.Value),
+                ProductsRoles = ProductsRoles.Select(r => new KeyValuePair<string, byte>(r.Item1.ToString(), (byte)r.Item2)).ToList(),
                 NotificationSettings = Notifications.ToEntity(),
                 TreeFilter = TreeFilter,
             };
+
+
+        internal bool IsManager(Guid productId) =>
+            IsAdmin || ProductsRoles.Contains((productId, ProductRoleEnum.ProductManager));
+
+        internal bool IsProductAvailable(Guid productId) => IsAdmin || IsUserProduct(productId);
+
+        internal bool IsFolderAvailable(Guid folderId) => IsAdmin || FoldersRoles.ContainsKey(folderId);
+
+        internal bool IsFolderManager(Guid folderId) => IsAdmin ||
+            (FoldersRoles.TryGetValue(folderId, out var role) && role == ProductRoleEnum.ProductManager);
+
+        internal bool IsUserProduct(Guid productId) => ProductsRoles.Any(x => x.Item1 == productId);
     }
 }

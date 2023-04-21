@@ -25,6 +25,8 @@ namespace HSMServer.Core.Model
 
         public ProductState State { get; }
 
+        public Guid? FolderId { get; private set; }
+
 
         public NotificationSettingsEntity NotificationsSettings { get; private set; }
 
@@ -38,6 +40,7 @@ namespace HSMServer.Core.Model
         {
             State = (ProductState)entity.State;
             NotificationsSettings = entity.NotificationSettings;
+            FolderId = Guid.TryParse(entity.FolderId, out var folderId) ? folderId : null;
         }
 
 
@@ -55,6 +58,9 @@ namespace HSMServer.Core.Model
         {
             base.Update(update);
 
+            FolderId = update.FolderId.HasValue
+                ? update.FolderId != Guid.Empty ? update.FolderId : null
+                : FolderId;
             NotificationsSettings = update?.NotificationSettings ?? NotificationsSettings;
 
             return this;
@@ -80,6 +86,7 @@ namespace HSMServer.Core.Model
                 Id = Id.ToString(),
                 AuthorId = AuthorId.ToString(),
                 ParentProductId = Parent?.Id.ToString(),
+                FolderId = FolderId?.ToString(),
                 State = (int)State,
                 DisplayName = DisplayName,
                 Description = Description,

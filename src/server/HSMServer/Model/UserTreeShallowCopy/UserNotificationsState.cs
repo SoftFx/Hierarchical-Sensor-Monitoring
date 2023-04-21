@@ -1,5 +1,4 @@
-﻿using HSMServer.Core.Model;
-using HSMServer.Notification.Settings;
+﻿using HSMServer.Notification.Settings;
 using System;
 
 namespace HSMServer.Model.UserTreeShallowCopy
@@ -11,7 +10,7 @@ namespace HSMServer.Model.UserTreeShallowCopy
         public bool IsAllIgnored { get; private set; } = true;
 
 
-        public void CalculateState(NotificationSettings settings, Guid sensorId)
+        public void CalculateState(ClientNotifications settings, Guid sensorId)
         {
             ChangeEnableState(settings.IsSensorEnabled(sensorId));
             ChangeIgnoreState(settings.IsSensorIgnored(sensorId));

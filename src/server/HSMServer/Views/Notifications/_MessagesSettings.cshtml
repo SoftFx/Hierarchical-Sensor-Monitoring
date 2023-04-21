@@ -1,0 +1,110 @@
+﻿@using HSMServer.Constants
+@using HSMServer.Controllers
+@using HSMServer.Model
+@using HSMServer.Model.TreeViewModel;
+
+@model TelegramSettingsViewModel
+
+@addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
+
+@{
+    var fromParent = ViewBag.FromParent ?? false;
+}
+
+
+@if (Model != null)
+{
+    <form id="telegramMessagesSettings_form" class="my-2" method="post"
+          asp-controller="@ViewConstants.NotificationsController"
+          asp-action="@nameof(NotificationsController.UpdateTelegramSettings)"
+          asp-route-entityId="@Model.EntityId">
+        <div class="form-group row">
+            <label class="col-2 col-form-label" asp-for="MessagesDelay"></label>
+
+            @if (fromParent)
+            {
+                <label class="col-auto col-form-label">@Model.MessagesDelay</label>
+            }
+            else
+            {
+                <div class="col-auto p-0">
+                    <div class="input-group">
+                        <input type="number" class="form-control" asp-for="MessagesDelay">
+                        <span class="input-group-text">sec</span>
+                    </div>
+                </div>
+            }
+        </div>
+
+        <div class="form-group row mt-2">
+            <label class="col-2 col-form-label" asp-for="MinStatusLevel"></label>
+
+            @if (fromParent)
+            {
+                <label id="statusLabel" class="col-auto col-form-label" asp-for="MinStatusLevel">@Model.MinStatusLevel</label>
+            }
+            else
+            {
+                <div class="col-auto p-0">
+                    <select id="statusSelect" class="form-select" asp-for="MinStatusLevel" asp-items="Html.GetEnumSelectList<SensorStatus>()"></select>
+                </div>
+            }
+
+            <div class="col-auto mx-2" style="align-self: center;color: grey;font-weight: 500;font-size: smaller;max-width: 20rem; line-height: 0.8rem;">
+                <span id="minStatusLevelHelper">@Model.MinStatusLevelHelper</span>
+            </div>
+        </div>
+
+        <div class="form-group row mt-2">
+            <label class="col-2 col-form-label" asp-for="EnableMessages"></label>
+
+            @if (fromParent)
+            {
+                <label class="col-auto col-form-label">@Model.EnableMessages</label>
+            }
+            else
+            {
+                <div class="col-auto form-check form-switch mt-2">
+                    <input id="messages-settings" class="form-check-input" type="checkbox" asp-for="EnableMessages">
+                </div>
+            }
+        </div>
+
+        @if (!fromParent)
+        {
+            <button type="submit" class="btn btn-secondary my-1">Save</button>
+        }
+    </form>
+
+
+    <script>
+        $(document).ready(function () {
+            let statusValue = $('#statusLabel').text();
+            if (statusValue == '') {
+                statusValue = $('#statusSelect')[0].value;
+            }
+
+            $.ajax({
+                type: 'GET',
+                url: `@Url.Action(nameof(NotificationsController.UpdateViewStatusLevelHelper), ViewConstants.NotificationsController)?newSensorStatus=${statusValue}`,
+                cache: false,
+                async: true
+            }).done(function (data) {
+                $('#minStatusLevelHelper')[0].innerText = data;
+            });
+        });
+
+        $('#statusSelect').on('change', function() {
+            let currentStatus = this.value;
+
+            $.ajax({
+            type: 'GET',
+            url: `@Url.Action(nameof(NotificationsController.UpdateViewStatusLevelHelper), ViewConstants.NotificationsController)?newSensorStatus=${currentStatus}`,
+            cache: false,
+            async: true
+            }).done(function (data) {
+                $('#minStatusLevelHelper')[0].innerText = data;
+            });
+        });
+    </script>
+}

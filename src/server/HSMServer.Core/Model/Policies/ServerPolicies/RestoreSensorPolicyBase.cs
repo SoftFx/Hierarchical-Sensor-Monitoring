@@ -32,7 +32,7 @@ namespace HSMServer.Core.Model.Policies
 
         internal PolicyResult Validate(SensorStatus status, DateTime lastUpdate)
         {
-            return status == TargetStatus && Interval != null && !Interval.IsNewer && !Interval.TimeIsUp(lastUpdate) ? Fail : Ok;
+            return status == TargetStatus && Interval != null && !Interval.IsNever && !Interval.TimeIsUp(lastUpdate) ? Fail : Ok;
         }
     }
 }

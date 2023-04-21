@@ -17,13 +17,13 @@ namespace HSMServer.Core.DataLayer
 
         #endregion
 
-        #region Groups
+        #region Folders
 
-        public void AddGroup(GroupEntity entity);
-        public void UpdateGroup(GroupEntity entity);
-        public void RemoveGroup(string id);
-        public GroupEntity GetGroup(string id);
-        public List<GroupEntity> GetAllGroups();
+        public void AddFolder(FolderEntity entity);
+        public void UpdateFolder(FolderEntity entity);
+        public void RemoveFolder(string id);
+        public FolderEntity GetFolder(string id);
+        public List<FolderEntity> GetAllFolders();
 
         #endregion
 

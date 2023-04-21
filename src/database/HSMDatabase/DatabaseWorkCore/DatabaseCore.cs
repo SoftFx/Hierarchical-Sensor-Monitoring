@@ -266,39 +266,39 @@ namespace HSMDatabase.DatabaseWorkCore
 
         #endregion
 
-        #region Groups
+        #region Folders
 
-        public void AddGroup(GroupEntity entity)
+        public void AddFolder(FolderEntity entity)
         {
-            _environmentDatabase.AddGroupToList(entity.Id);
-            _environmentDatabase.PutGroup(entity);
+            _environmentDatabase.AddFolderToList(entity.Id);
+            _environmentDatabase.PutFolder(entity);
         }
 
-        public void UpdateGroup(GroupEntity entity) =>
-            _environmentDatabase.PutGroup(entity);
+        public void UpdateFolder(FolderEntity entity) =>
+            _environmentDatabase.PutFolder(entity);
 
-        public void RemoveGroup(string id)
+        public void RemoveFolder(string id)
         {
-            _environmentDatabase.RemoveGroup(id);
-            _environmentDatabase.RemoveGroupFromList(id);
+            _environmentDatabase.RemoveFolder(id);
+            _environmentDatabase.RemoveFolderFromList(id);
         }
 
-        public GroupEntity GetGroup(string id) =>
-            _environmentDatabase.GetGroup(id);
+        public FolderEntity GetFolder(string id) =>
+            _environmentDatabase.GetFolder(id);
 
-        public List<GroupEntity> GetAllGroups()
+        public List<FolderEntity> GetAllFolders()
         {
-            var keys = _environmentDatabase.GetGroupsList();
+            var keys = _environmentDatabase.GetFoldersList();
 
-            var groupsEntities = new List<GroupEntity>(keys.Count);
+            var foldersEntities = new List<FolderEntity>(keys.Count);
             foreach (var key in keys)
             {
-                var group = _environmentDatabase.GetGroup(key);
-                if (group != null)
-                    groupsEntities.Add(group);
+                var folder = _environmentDatabase.GetFolder(key);
+                if (folder != null)
+                    foldersEntities.Add(folder);
             }
 
-            return groupsEntities;
+            return foldersEntities;
         }
 
         #endregion
