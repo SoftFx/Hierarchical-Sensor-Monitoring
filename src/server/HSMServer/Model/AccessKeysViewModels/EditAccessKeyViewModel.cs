@@ -39,6 +39,7 @@ namespace HSMServer.Model.AccessKeysViewModels
         [Display(Name = "Display name")]
         [Required(ErrorMessage = "{0} is required.")]
         [StringLength(100, ErrorMessage = "{0} length should be less than {1}.")]
+        [UniqueValidation(ErrorMessage = "Access key with the same name already exists.")]
         public string DisplayName { get; set; }
 
         public AccessKeyExpiration Expiration { get; set; }

@@ -97,13 +97,7 @@ namespace HSMServer.Controllers
             if (string.IsNullOrEmpty(key.EncodedProductId))
                 key.EncodedProductId = key.SelectedProduct;
             
-            AccessKeyNameValidator validator = new AccessKeyNameValidator(TreeValuesCache);
-            var results = validator.Validate(key.DisplayName);
-
-            if (!results.IsValid)
-                TempData[TextConstants.TempDataErrorText] = ValidatorHelper.GetErrorString(results.Errors);
-            else
-                TreeValuesCache.AddAccessKey(key.ToModel(CurrentUser.Id));
+            TreeValuesCache.AddAccessKey(key.ToModel(CurrentUser.Id));
 
             if (string.IsNullOrEmpty(key.EncodedProductId))
                 return PartialView("_AllAccessKeys", GenerateFullViewModel());
