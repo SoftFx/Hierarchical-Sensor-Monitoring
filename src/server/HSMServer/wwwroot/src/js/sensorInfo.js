@@ -1,5 +1,5 @@
 ﻿window.editInfoButtonClick = function () {
-    let sensorId = $('#sensorMetaInfo_encodedId').val();
+    let sensorId = $('#metaInfo_encodedId').val();
 
     $('#interval_' + sensorId).removeAttr("disabled");
     $('#description_' + sensorId).removeAttr("disabled").removeClass("naked-text");
@@ -8,12 +8,12 @@
     $('#revertInfo_' + sensorId).removeAttr("disabled").removeAttr("hidden");
     $('#editButtonMetaInfo').addClass('d-none');
 
-    $('#editSensorMetaInfo_form').children('div').each(function () {
+    $('#editMetaInfo_form').children('div').each(function () {
         $(this).removeClass('d-none');
     });
     $('[id^="markdown_span_description_"]').addClass('d-none')
     $('[id^="description_"]').removeClass('d-none')
-    $('#sensor_info_collapse').addClass('d-none')
+    $('#meta_info_collapse').addClass('d-none')
    
     $('#metainfo_separator').removeClass('d-none');
     
@@ -22,27 +22,22 @@
 
     $('#labelInterval').addClass('d-none');
     $('#labelRestoreInterval').addClass('d-none');
-
-    $(`#expectedUpdateInterval_${sensorId}:input`).each(() => this.removeAttribute('disabled'));
-    $(`#restorePolicy_${sensorId}:input`).each(() => this.removeAttribute('disabled'));
 }
 
 window.revertInfoClick = function () {
-    let sensorId = $('#sensorMetaInfo_encodedId').val();
+    let sensorId = $('#metaInfo_encodedId').val();
 
     showMetaInfo(sensorId);
 }
 
 window.displaySensorMetaInfo = function (sensorId, viewData) {
-    $('#sensor_info_' + sensorId).html(viewData);
+    $('#meta_info_' + sensorId).html(viewData);
    
     let metaInfo = $('#metaInfoCollapse');
 
     metaInfo.addClass('no-transition');
-    $('#sensor_info_collapse').click();
+    $('#meta_info_collapse').click();
     metaInfo.removeClass('no-transition');
-
-    disableExpectedUpdateIntervalControl();
 }
 
 function showMetaInfo(id) {
@@ -56,11 +51,4 @@ function showMetaInfo(id) {
     }).done(function (data) {
         displaySensorMetaInfo(id, data);
     });
-}
-
-function disableExpectedUpdateIntervalControl() {
-    let sensorId = $('#sensorMetaInfo_encodedId').val();
-
-    $(`#expectedUpdateInterval_${sensorId}:input`).each(() => this.setAttribute('disabled', true));
-    $(`#restorePolicy_${sensorId}:input`).each(() => this.setAttribute('disabled', true));
 }
