@@ -54,11 +54,8 @@ namespace HSMServer.Controllers
         [AuthorizeIsAdmin(true)]
         public IActionResult NewServerAccessKey()
         {
-            return GetPartialNewAccessKey(new EditAccessKeyViewModel()
-            {
-                CloseModal = true,
-                Products = TreeValuesCache.GetProducts().ToList()
-            });
+            return GetPartialNewAccessKey(
+                new EditAccessKeyViewModel().GenerateProducts(TreeValuesCache.GetProducts().ToList()));
         }
 
         [HttpGet]
@@ -88,6 +85,7 @@ namespace HSMServer.Controllers
                     key.Products = TreeValuesCache.GetProducts().ToList();
                     key.SelectedProduct = key.Products.FirstOrDefault(x => x.Id == id)?.DisplayName;
                     key.IsModify = false;
+                    key.GenerateProducts(TreeValuesCache.GetProducts().ToList());
                 }
                 return GetPartialNewAccessKey(key);
             }
@@ -115,7 +113,7 @@ namespace HSMServer.Controllers
                     EncodedProductId = SensorPathHelper.EncodeGuid(key.ProductId),
                     CloseModal = closeModal,
                     IsModify = true,
-                    SelectedProduct = TreeValuesCache.GetProductNameById(key.ProductId)
+                    SelectedProduct = key.ProductId == Guid.Empty ? "Server key" : TreeValuesCache.GetProductNameById(key.ProductId)
                 });
         }
 
@@ -127,7 +125,10 @@ namespace HSMServer.Controllers
                 return GetPartialNewAccessKey(key);
 
             TreeValuesCache.UpdateAccessKey(key.ToAccessKeyUpdate());
-
+            
+            if (!key.CloseModal)
+                return PartialView("_AllAccessKeys", GenerateFullViewModel());
+            
             return GetPartialProductAccessKeys(key.EncodedProductId);
         }
 
