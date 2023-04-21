@@ -272,8 +272,8 @@ function buildContextMenu(node) {
             }
         }
     }
-  
-    if (isMutedState !== '')
+
+    if ((curType === NodeType.Folder && node.children.length != 0) || (isMutedState !== '' && isMutedState !== undefined))
         contextMenu["Notifications"] = {
             "label": "Notifications",
             "separator_before": true,
