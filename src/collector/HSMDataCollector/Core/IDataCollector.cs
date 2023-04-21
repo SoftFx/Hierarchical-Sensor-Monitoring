@@ -17,6 +17,12 @@ namespace HSMDataCollector.Core
         CollectorStatus Status { get; }
 
 
+        event Action ToStarting;
+        event Action ToRunning;
+        event Action ToStopping;
+        event Action ToStopped;
+
+
         Task Start();
 
         Task Start(Task customStartingTask);
