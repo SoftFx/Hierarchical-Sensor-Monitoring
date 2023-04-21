@@ -1,0 +1,58 @@
+﻿@using HSMServer.Model.Folders
+@using HSMServer.Constants
+@using HSMServer.Controllers
+
+@model FolderModel
+
+@addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
+
+
+<div class="d-flex justify-content-between p-0">
+    <h5><i class="fa-regular fa-folder"></i> @Html.Raw(Model.Name)</h5>
+    <a asp-action="@nameof(FoldersController.EditFolder)" asp-controller="@ViewConstants.FoldersController" asp-route-folderId="@Model.Id">
+        <i class='fas fa-edit'></i> Edit
+    </a>
+</div>
+
+<table class='table table-bordered'>
+    <tbody>
+        <tr>
+            <td class="w-25">
+                Description
+            </td>
+            <td>
+                <textarea id='description_@(Model.Id)' type='text' class='form-control naked-text' asp-for="Description" value='@Model.Description' disabled></textarea>
+            </td>
+        </tr>
+        <tr>
+            <td class="w-25">
+                Expected sensor(s) update interval
+                <i class='fas fa-question-circle' title='Time format: dd.hh:mm:ss min value 00:01:00.
+If the sensor doesn`t receive new data within the specified time interval, a notification sends'></i>
+            </td>
+            <td id="productExpectedUpdateInterval_@(Model.Id)">
+                <label id="labelInterval" class="form-control naked-text">@Model.ExpectedUpdateInterval.DisplayInterval</label>
+                <div id="partialIntervalSelect" class="d-none">
+                    <partial name="_TimeIntervalSelect" for="ExpectedUpdateInterval" />
+                </div>
+            </td>
+        </tr>
+        <tr>
+            <td class="w-25">
+                Sensitivity sensor(s) interval
+                <i class='fas fa-question-circle' title='Time format: dd.hh:mm:ss min value 00:01:00.
+If the sensor doesn`t return to Ok status after the specified time inverval, a notification sends'></i>
+            </td>
+            <td id="productRestorePolicy_@(Model.Id)">
+                <label id="labelRestoreInterval" class="form-control naked-text">@Model.SensorRestorePolicy.DisplayInterval</label>
+                <div id="partialRestoreSelect" class="d-none">
+                    <partial name="_TimeIntervalSelect" for="SensorRestorePolicy" />
+                </div>
+            </td>
+        </tr>
+    </tbody>
+</table>
+
+
+
+@await Html.PartialAsync("_ChildrenPanel", Model)

@@ -1,0 +1,96 @@
+﻿@using HSMServer.Constants
+@using HSMServer.Controllers
+@using HSMServer.Notifications
+@using HSMServer.Model
+
+@inject NotificationsCenter NotificationsCenter
+
+@model TelegramSettingsViewModel
+
+@addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
+
+
+<div class="my-2">
+    <div class="row">
+        <h6 class="col-auto fw-bold">Groups</h6>
+        @if (Model.Chats.Count == 0)
+        {
+            <h6 class="col-auto p-0">(There are no authorized groups)</h6>
+        }
+    </div>
+
+    <div class="row mx-2 my-0">
+        <ul class="settingsList list-group">
+            <li class="list-group-item pt-0">1. Create group chat in Telegram.</li>
+            <li class="list-group-item">2. Add Telegram Bot (@NotificationsCenter.TelegramBot.BotName) to group chat.</li>
+            <li class="list-group-item">3. Give Admin right to Telegram Bot (@NotificationsCenter.TelegramBot.BotName).</li>
+            <li class="list-group-item">4. <a href="javascript:getGroupStartCommand()">Copy message</a></li>
+            <li class="list-group-item">5. Send message from clipboard to group chat.</li>
+            <li class="list-group-item">The bot will send a notification that it has been successfully initialized.</li>
+        </ul>
+    </div>
+    @if (Model.Chats.Count > 0)
+    {
+        <table class="table mx-4">
+            <tr>
+                <th>Group name</th>
+                <th>Authorized</th>
+                <th style="text-align:center">Actions</th>
+            </tr>
+            @foreach (var group in Model.Chats)
+            {
+                <tr>
+                    <td>
+                        <a target="_blank" asp-controller="@ViewConstants.NotificationsController"
+                           asp-action="@nameof(NotificationsController.OpenTelegramGroup)"
+                           asp-route-chatId="@group.ChatId">
+                            @group.Name
+                        </a>
+                    </td>
+                    <td>@group.AuthorizationTime</td>
+                    <td style="text-align:center">
+                        <div class="dropdown">
+                            <button id="actionButton" class="btn" data-bs-toggle="dropdown" data-bs-auto-close="true" aria-haspopup="true" aria-expanded="false">
+                                <i class="fa-solid fa-ellipsis-vertical" style="cursor: pointer"></i>
+                            </button>
+                            <ul class="dropdown-menu overflow-auto">
+                                <li>
+                                    <a class="dropdown-item text-decoration-none fw-normal" asp-controller="@ViewConstants.NotificationsController"
+                                       asp-action="@nameof(NotificationsController.SendTestTelegramMessage)"
+                                       asp-route-entityId="@Model.EntityId"
+                                       asp-route-chatId="@group.ChatId">
+                                        Send test message
+                                    </a>
+                                </li>
+                                <li>
+                                    <a class="dropdown-item text-decoration-none fw-normal" asp-controller="@ViewConstants.NotificationsController"
+                                       asp-action="@nameof(NotificationsController.RemoveTelegramAuthorization)"
+                                       asp-route-entityId="@Model.EntityId"
+                                       asp-route-chatId="@group.ChatId">
+                                        Remove authorization
+                                    </a>
+                                </li>
+                            </ul>
+                        </div>
+                    </td>
+                </tr>
+            }
+        </table>
+    }
+</div>
+
+
+<script>
+    function getGroupStartCommand() {
+        $.ajax({
+            type: 'GET',
+            url: `@Html.Raw(Url.Action(nameof(NotificationsController.CopyStartCommandForGroup), ViewConstants.NotificationsController))?entityId=@Model.EntityId`,
+            dataType: 'html',
+            contentType: 'application/json',
+            cache: false,
+            async: true
+        }).done(function (command) {
+            copyToClipboard(command);
+        });
+    }
+</script>

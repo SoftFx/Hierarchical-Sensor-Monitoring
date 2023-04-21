@@ -14,7 +14,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
         private readonly byte[] _accessKeyListKey = "AccessKeys"u8.ToArray();
         private readonly byte[] _sensorIdsKey = "SensorIds"u8.ToArray();
         private readonly byte[] _policyIdsKey = "PolicyIds"u8.ToArray();
-        private readonly byte[] _groupIdsKey = "GroupIds"u8.ToArray();
+        private readonly byte[] _folderIdsKey = "FolderIds"u8.ToArray();
 
         private readonly LevelDBDatabaseAdapter _database;
         private readonly Logger _logger;
@@ -27,92 +27,92 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
         }
 
 
-        #region Groups
+        #region Folders
 
-        public void PutGroup(GroupEntity group)
+        public void PutFolder(FolderEntity entity)
         {
             try
             {
-                _database.Put(Encoding.UTF8.GetBytes(group.Id), JsonSerializer.SerializeToUtf8Bytes(group));
+                _database.Put(Encoding.UTF8.GetBytes(entity.Id), JsonSerializer.SerializeToUtf8Bytes(entity));
             }
             catch (Exception e)
             {
-                _logger.Error(e, $"Failed to put group info for {group.Id}");
+                _logger.Error(e, $"Failed to put folder info for {entity.Id}");
             }
         }
 
-        public void RemoveGroup(string groupId)
+        public void RemoveFolder(string id)
         {
             try
             {
-                _database.Delete(Encoding.UTF8.GetBytes(groupId));
+                _database.Delete(Encoding.UTF8.GetBytes(id));
             }
             catch (Exception e)
             {
-                _logger.Error(e, $"Failed to remove info for group {groupId}");
+                _logger.Error(e, $"Failed to remove info for folder {id}");
             }
         }
 
-        public void AddGroupToList(string groupId)
+        public void AddFolderToList(string id)
         {
             try
             {
-                var currentList = GetGroupsList();
+                var currentList = GetFoldersList();
 
-                if (!currentList.Contains(groupId))
-                    currentList.Add(groupId);
+                if (!currentList.Contains(id))
+                    currentList.Add(id);
 
-                _database.Put(_groupIdsKey, JsonSerializer.SerializeToUtf8Bytes(currentList));
+                _database.Put(_folderIdsKey, JsonSerializer.SerializeToUtf8Bytes(currentList));
             }
             catch (Exception e)
             {
-                _logger.Error(e, $"Failed to add group {groupId} to list");
+                _logger.Error(e, $"Failed to add folder {id} to list");
             }
         }
 
-        public void RemoveGroupFromList(string groupId)
+        public void RemoveFolderFromList(string id)
         {
             try
             {
-                var currentList = GetGroupsList();
+                var currentList = GetFoldersList();
 
-                currentList.Remove(groupId);
+                currentList.Remove(id);
 
-                _database.Put(_groupIdsKey, JsonSerializer.SerializeToUtf8Bytes(currentList));
+                _database.Put(_folderIdsKey, JsonSerializer.SerializeToUtf8Bytes(currentList));
             }
             catch (Exception e)
             {
-                _logger.Error(e, $"Failed to remove group {groupId} from list");
+                _logger.Error(e, $"Failed to remove folder {id} from list");
             }
         }
 
-        public GroupEntity GetGroup(string id)
+        public FolderEntity GetFolder(string id)
         {
             try
             {
                 return _database.TryRead(Encoding.UTF8.GetBytes(id), out byte[] value)
-                    ? JsonSerializer.Deserialize<GroupEntity>(value)
+                    ? JsonSerializer.Deserialize<FolderEntity>(value)
                     : null;
             }
             catch (Exception e)
             {
-                _logger.Error(e, $"Failed to read info for group {id}");
+                _logger.Error(e, $"Failed to read info for folder {id}");
             }
 
             return null;
         }
 
-        public List<string> GetGroupsList()
+        public List<string> GetFoldersList()
         {
             try
             {
-                return _database.TryRead(_groupIdsKey, out byte[] value) ?
+                return _database.TryRead(_folderIdsKey, out byte[] value) ?
                     JsonSerializer.Deserialize<List<string>>(value)
                     : new();
             }
             catch (Exception e)
             {
-                _logger.Error(e, "Failed to get groups ids list");
+                _logger.Error(e, "Failed to get folders ids list");
             }
 
             return new();

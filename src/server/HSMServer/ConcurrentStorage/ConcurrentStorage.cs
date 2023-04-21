@@ -23,6 +23,8 @@ namespace HSMServer.ConcurrentStorage
 
         public new ModelType this[Guid id] => this.GetValueOrDefault(id);
 
+        public ModelType this[Guid? id] => id.HasValue ? this[id.Value] : null;
+
         public ModelType this[string name] => !string.IsNullOrEmpty(name) &&
             TryGetIdByName(name, out var id) && TryGetValue(id, out var model) ? model : null;
 
@@ -34,6 +36,15 @@ namespace HSMServer.ConcurrentStorage
 
         protected abstract ModelType FromEntity(EntityType entity);
 
+        public bool TryGetIdByName(string name, out Guid id) => _modelNames.TryGetValue(name, out id);
+
+        public bool TryGetValueById(Guid? id, out ModelType model)
+        {
+            model = null;
+
+            return id is not null && TryGetValue(id.Value, out model);
+        }
+
         public bool TryAdd(EntityType entity)
         {
             var model = FromEntity(entity);
@@ -41,7 +52,7 @@ namespace HSMServer.ConcurrentStorage
             return TryAdd(model.Id, model) && _modelNames.TryAdd(model.Name, model.Id);
         }
 
-        public Task<bool> TryAdd(ModelType model)
+        public virtual Task<bool> TryAdd(ModelType model)
         {
             var result = TryAdd(model.Id, model) && _modelNames.TryAdd(model.Name, model.Id);
 
@@ -54,7 +65,7 @@ namespace HSMServer.ConcurrentStorage
             return Task.FromResult(result);
         }
 
-        public async Task<bool> TryUpdate(UpdateType update)
+        public virtual async Task<bool> TryUpdate(UpdateType update)
         {
             var result = TryGetValue(update.Id, out var model);
 
@@ -67,7 +78,7 @@ namespace HSMServer.ConcurrentStorage
             return result;
         }
 
-        public Task<bool> TryUpdate(ModelType value)
+        public virtual Task<bool> TryUpdate(ModelType value)
         {
             var result = TryGetValue(value.Id, out var model);
 
@@ -80,7 +91,7 @@ namespace HSMServer.ConcurrentStorage
             return Task.FromResult(result);
         }
 
-        public Task<bool> TryRemove(Guid id)
+        public virtual Task<bool> TryRemove(Guid id)
         {
             var result = TryRemove(id, out var model) && _modelNames.TryRemove(model.Name, out _);
 
@@ -92,8 +103,6 @@ namespace HSMServer.ConcurrentStorage
 
             return Task.FromResult(result);
         }
-
-        public bool TryGetIdByName(string name, out Guid id) => _modelNames.TryGetValue(name, out id);
 
         public virtual Task Initialize()
         {

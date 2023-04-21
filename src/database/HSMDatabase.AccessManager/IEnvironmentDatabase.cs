@@ -6,14 +6,14 @@ namespace HSMDatabase.AccessManager
 {
     public interface IEnvironmentDatabase : IDisposable
     {
-        #region Groups
+        #region Folders
 
-        void PutGroup(GroupEntity group);
-        void RemoveGroup(string id);
-        void AddGroupToList(string groupId);
-        void RemoveGroupFromList(string groupId);
-        GroupEntity GetGroup(string id);
-        List<string> GetGroupsList();
+        void PutFolder(FolderEntity entity);
+        void RemoveFolder(string id);
+        void AddFolderToList(string id);
+        void RemoveFolderFromList(string id);
+        FolderEntity GetFolder(string id);
+        List<string> GetFoldersList();
 
         #endregion
 

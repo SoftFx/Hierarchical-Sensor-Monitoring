@@ -13,14 +13,14 @@ namespace HSMServer.Notification.Settings
 
         public string Name { get; }
 
-        public NotificationSettings Notifications { get; }
+        public ClientNotifications Notifications { get; }
 
         public ConcurrentDictionary<Telegram.Bot.Types.ChatId, TelegramChat> Chats =>
             Notifications?.Telegram.Chats ?? new();
 
 
         public bool CanSendData(BaseSensorModel sensor) =>
-            Notifications.Telegram.MessagesAreEnabled &&
+            Notifications.UsedTelegram.MessagesAreEnabled &&
             Notifications.IsSensorEnabled(sensor.Id) &&
             !Notifications.IsSensorIgnored(sensor.Id);
     }

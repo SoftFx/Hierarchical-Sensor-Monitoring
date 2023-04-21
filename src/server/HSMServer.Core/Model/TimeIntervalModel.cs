@@ -12,6 +12,7 @@ namespace HSMServer.Core.Model
         Month,
         OneMinute,
         FiveMinutes,
+        FromFolder = byte.MaxValue - 2,
         FromParent = byte.MaxValue - 1,
         Custom = byte.MaxValue,
     }
@@ -24,7 +25,10 @@ namespace HSMServer.Core.Model
         public long CustomPeriod { get; }
 
         [JsonIgnore]
-        public bool IsNewer => TimeInterval.IsCustom() && CustomPeriod == 0;
+        public bool IsNever => TimeInterval.IsCustom() && CustomPeriod == 0;
+
+        [JsonIgnore]
+        public bool IsFromFolder => TimeInterval == TimeInterval.FromFolder;
 
 
         [JsonConstructor]
@@ -43,7 +47,7 @@ namespace HSMServer.Core.Model
 
         internal bool TimeIsUp(DateTime time)
         {
-            if (TimeInterval.IsCustom() && CustomPeriod > 0L)
+            if (TimeInterval.UseCustomPeriod() && CustomPeriod > 0L)
                 return (DateTime.UtcNow - time).Ticks > CustomPeriod;
 
             return DateTime.UtcNow > TimeInterval switch
@@ -55,7 +59,7 @@ namespace HSMServer.Core.Model
                 TimeInterval.Day => time.AddDays(1),
                 TimeInterval.Week => time.AddDays(7),
                 TimeInterval.Month => time.AddMonths(1),
-                TimeInterval.Custom => DateTime.MaxValue, //for Never 
+                TimeInterval.Custom or TimeInterval.FromFolder => DateTime.MaxValue, //for Never 
                 _ => throw new NotImplementedException(),
             };
         }

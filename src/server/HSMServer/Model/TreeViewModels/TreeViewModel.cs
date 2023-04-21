@@ -3,10 +3,11 @@ using HSMServer.Core.Cache;
 using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Model;
 using HSMServer.Extensions;
+using HSMServer.Folders;
 using HSMServer.Model.AccessKeysViewModels;
 using HSMServer.Model.Authentication;
+using HSMServer.Model.Folders;
 using HSMServer.Model.UserTreeShallowCopy;
-using HSMServer.Notification.Settings;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -16,6 +17,7 @@ namespace HSMServer.Model.TreeViewModel
 {
     public sealed class TreeViewModel
     {
+        private readonly IFolderManager _folderManager;
         private readonly IUserManager _userManager;
         private readonly ITreeValuesCache _cache;
 
@@ -27,8 +29,9 @@ namespace HSMServer.Model.TreeViewModel
         public ConcurrentDictionary<Guid, ProductNodeViewModel> Nodes { get; } = new();
 
 
-        public TreeViewModel(ITreeValuesCache cache, IUserManager userManager)
+        public TreeViewModel(ITreeValuesCache cache, IUserManager userManager, IFolderManager folderManager)
         {
+            _folderManager = folderManager;
             _userManager = userManager;
             _cache = cache;
 
@@ -54,7 +57,7 @@ namespace HSMServer.Model.TreeViewModel
             return products.Where(p => user.IsProductAvailable(p.Id)).ToList();
         }
 
-        public List<NodeShallowModel> GetUserTree(User user)
+        public List<BaseShallowModel> GetUserTree(User user)
         {
             NodeShallowModel FilterNodes(ProductNodeViewModel product)
             {
@@ -69,44 +72,62 @@ namespace HSMServer.Model.TreeViewModel
                 return node;
             }
 
-
-            var tree = new List<NodeShallowModel>(1 << 4);
+            var folders = _folderManager.GetUserFolders(user).ToDictionary(k => k.Id, v => new FolderShallowModel(v, user));
+            var tree = new List<BaseShallowModel>(1 << 4);
 
             foreach (var product in GetUserProducts(user))
             {
                 var node = FilterNodes(product);
 
                 if (node.VisibleSensorsCount > 0 || user.IsEmptyProductVisible(product))
-                    tree.Add(node);
+                {
+                    var folderId = node.Data.FolderId;
+
+                    if (folderId.HasValue && folders.TryGetValue(folderId.Value, out var folder))
+                        folder.AddChild(node, user);
+                    else
+                        tree.Add(node);
+                }
             }
+
+            var isUserNoDataFilterEnabled = user.TreeFilter.ByHistory.Empty.Value;
+            foreach (var folder in folders.Values)
+                if (folder.Nodes.Count > 0 || isUserNoDataFilterEnabled)
+                    tree.Add(folder);
 
             return tree;
         }
 
 
-        internal IEnumerable<ProductNodeViewModel> GetRootProducts() => Nodes.Where(x => x.Value.Parent is null).Select(x => x.Value);
+        internal IEnumerable<ProductNodeViewModel> GetRootProducts() =>
+            Nodes.Where(x => x.Value.Parent is null or FolderModel).Select(x => x.Value);
 
         internal List<Guid> GetAllNodeSensors(Guid selectedNode)
         {
             var sensors = new List<Guid>(1 << 3);
 
+
+            void GetNodeSensors(Guid nodeId)
+            {
+                if (!Nodes.TryGetValue(nodeId, out var node))
+                    return;
+
+                foreach (var (subNodeId, _) in node.Nodes)
+                    GetNodeSensors(subNodeId);
+
+                foreach (var (sensorId, _) in node.Sensors)
+                    sensors.Add(sensorId);
+            }
+
+
             if (Sensors.TryGetValue(selectedNode, out var sensor))
                 sensors.Add(sensor.Id);
             else if (Nodes.TryGetValue(selectedNode, out var node))
-            {
-                void GetNodeSensors(Guid nodeId)
-                {
-                    if (!Nodes.TryGetValue(nodeId, out var node))
-                        return;
-
-                    foreach (var (subNodeId, _) in node.Nodes)
-                        GetNodeSensors(subNodeId);
-
-                    foreach (var (sensorId, _) in node.Sensors)
-                        sensors.Add(sensorId);
-                }
-
                 GetNodeSensors(node.Id);
+            else if (_folderManager.TryGetValue(selectedNode, out var folder))
+            {
+                foreach (var productId in folder.Products.Keys)
+                    GetNodeSensors(productId);
             }
 
             return sensors;
@@ -126,12 +147,12 @@ namespace HSMServer.Model.TreeViewModel
 
         private ProductNodeViewModel AddNewProductViewModel(ProductModel product)
         {
-            var node = new ProductNodeViewModel(product);
+            TryGetParentProduct(product, out var parent);
+            TryGetParentFolder(product, out var folder);
+
+            var node = new ProductNodeViewModel(product, parent, folder);
 
             Nodes.TryAdd(node.Id, node);
-
-            if (product.Parent != null && Nodes.TryGetValue(product.Parent.Id, out var parent))
-                parent.AddSubNode(node);
 
             foreach (var (_, child) in product.SubProducts)
                 AddNewProductViewModel(child);
@@ -173,7 +194,12 @@ namespace HSMServer.Model.TreeViewModel
 
                 case ActionType.Update:
                     if (Nodes.TryGetValue(model.Id, out var product))
+                    {
                         product.Update(model);
+
+                        if (product.FolderId != model.FolderId)
+                            product.UpdateFolder(_folderManager[model.FolderId]);
+                    }
                     break;
 
                 case ActionType.Delete:
@@ -224,5 +250,15 @@ namespace HSMServer.Model.TreeViewModel
                     break;
             }
         }
+
+        private bool TryGetParentProduct(ProductModel product, out ProductNodeViewModel parent)
+        {
+            parent = default;
+
+            return product.Parent != null && Nodes.TryGetValue(product.Parent.Id, out parent);
+        }
+
+        private bool TryGetParentFolder(ProductModel product, out FolderModel parent) =>
+            _folderManager.TryGetValueById(product.FolderId, out parent);
     }
 }

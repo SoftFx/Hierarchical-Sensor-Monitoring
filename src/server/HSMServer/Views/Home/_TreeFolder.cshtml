@@ -1,0 +1,47 @@
+﻿@using HSMServer.Extensions
+@using HSMServer.Model.UserTreeShallowCopy
+
+@model FolderShallowModel
+
+@{
+    var data = Model.Data;
+}
+
+
+<li id='@data.Id' title='@data.Tooltip' data-jstree='@Model.ToJSTree()'>
+    <span> @Html.Raw(data.Name.GetShortNodeName())</span>
+
+    @if (!Model.IsEmpty)
+    {
+        @if (Model.IsAccountsEnable)
+        {
+            <span>
+                <img class="tree-png-icon" src="~/dist/user.png" alt="!" />
+            </span>
+        }
+        else if (Model.AccountState.IsAllIgnored)
+        {
+            <span>
+                <img class="tree-png-icon" src="~/dist/user-crossed.png" alt="!" />
+            </span>
+        }
+
+        @if (Model.IsGroupsEnable)
+        {
+            <span>
+                <img class="tree-png-icon" src="~/dist/users.png" alt="!" />
+            </span>
+        }
+        else if (Model.GroupState.IsAllIgnored)
+        {
+            <span>
+                <img class="tree-png-icon" src="~/dist/users-crossed.png" alt="!" />
+            </span>
+        }
+    }
+
+    @foreach (var child in Model.Nodes)
+    {
+        <ul>@await Html.PartialAsync("_TreeNode", child)</ul>
+    }
+</li>
