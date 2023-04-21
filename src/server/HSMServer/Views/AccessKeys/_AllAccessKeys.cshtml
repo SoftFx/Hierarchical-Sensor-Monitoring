@@ -166,7 +166,9 @@
     $('[id^="changeAccessKey_"]').off("click").on("click",
         function () {
             const selectedKeyId = this.id.substring("changeAccessKey_".length, this.id.length);
-            changeAccessKey(changeAccessKeyAction, selectedKeyId)
+            const displayName = document.getElementById(`row_${selectedKeyId}`).getElementsByClassName("displayName")[0].textContent;
+            
+            changeAccessKey(changeAccessKeyAction, selectedKeyId, displayName)
         });
    
     $('[id^="deleteAccessKey_"]').off("click").on("click",
