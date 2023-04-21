@@ -16,19 +16,19 @@ namespace HSMServer.Notifications
             {
                 new BotCommand()
                 {
+                    Command = Icons,
+                    Description = "icons list with descriptions"
+                },
+                new BotCommand()
+                {
                     Command = Info,
-                    Description = "get authorized entities settings",
+                    Description = "authorized entities",
                 },
                 new BotCommand()
                 {
                     Command = Status,
-                    Description = "get info about HSM server version and working status",
+                    Description = "info about HSM server",
                 },
-                new BotCommand()
-                {
-                    Command = Icons,
-                    Description = "get icons list with descriptions"
-                }
             };
     }
 }
