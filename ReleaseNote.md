@@ -1,30 +1,30 @@
 # HSM Server
 
 ## New entity **Folder** has been added:
-It allows you to group different product and set the same settings for them (Telegram settings, Alerts, User roles)
+It allows you to group different products and set the same settings for them (telegram settings, alerts, user roles)
 
 ## Site
 
 ### Folder/Product/Sensor info tabs
-* Folder info tab has been added
-* Tabs with Product and Sensor info have been fully redesigned
+* Folder meta info panel has been added
+* Product and sensor meta info panels have been fully redesigned
 * Now all description inputs support **Markdown format**
 
 ### Tree
 * New node type **Folder** has been added
 * Context menu names have been uploaded
 * **Save and close tree / Restore tree** button has been added
-* **Clear history** in a context menu has been removed
+* **Clear history** in context menu has been removed
 
 ### Time intervals control
 * New value **From parent** has been added. If this value is selected, the parent setting is applied to current entity
-* **From parent** setting is available from a product in a folder too.
+* **From parent** setting is available for a product in a folder too.
 * Value **Never** is redone. If this value is selected, the current setting is disabled for the entity.
 * Control interface has been improved
 
 ### Alerts (Policies)
 * **Update Expected Interval** has been renamed to **Time to sensor leave**
-* New alerts **Sensitivity** has been added for sensors. If the sensor doesn`t return to Ok status after the specified time inverval, a notification sends.
+* New alert **Sensitivity** has been added for sensors. If the sensor doesn`t return to Ok status after the specified time inverval, a notification sends.
 * Icons have been added for all alerts
 
 ### File Sensor
@@ -32,8 +32,9 @@ It allows you to group different product and set the same settings for them (Tel
 * A list of recent sensor values will be shown instead of just the last file value
 
 ### Products
-* Product tab has been redesigned
-* Folders have been added in Product tab
+* Products tab has been redesigned
+* Folders have been added in Products tab
+* Modal window for add product has been added
 * **Move to...** setting has been added in Product actions (for moving products between folders)
 
 ### Bugfixing
