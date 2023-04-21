@@ -94,13 +94,13 @@
         $('#ignoreNotificatios_partial').empty();
     });
 
-    $('[id^="timeIntervalSelect"]').change(function () {
+    $('#timeIntervalSelect_@Model?.IgnorePeriod.Id').change(function () {
         calculateInputs();
         updateNote();
     });
 
     $('#interval_inputs :input').on('change', function () {
-        $(`#timeIntervalSelect option[value=${'@TimeInterval.Custom'}]`).prop('selected', true);
+        $(`#timeIntervalSelect_@Model?.IgnorePeriod.Id option[value=${'@TimeInterval.Custom'}]`).prop('selected', true);
         updateNote();
     });
 
@@ -111,7 +111,7 @@
     function calculateInputs() {
         clearInputs();
 
-        let selectedOptionText = $('option:selected', $('[id^="timeIntervalSelect"]')[0]).text();
+        let selectedOptionText = getTimeIntervalSelectText();
         let periods = selectedOptionText.split(' ');
 
         if (periods.length % 2 != 0) {
@@ -144,7 +144,7 @@
         let action = `@(Model?.IsOffTimeModal)` === 'True' ? 'muted' : 'ignored';
         let until = '';
 
-        if ($('option:selected', $('#timeIntervalSelect')).text() == '@TimeInterval.Forever') {
+        if (getTimeIntervalSelectText() == '@TimeInterval.Forever') {
             action = 'disabled';
             $('#interval_inputs').hide();
         }
@@ -162,5 +162,9 @@
         let note = `Note: @(Model?.TreeElement) ${entity}will be ${action}${until}`;
         
         $('#ignoreNotifications_note').html(note);
+    }
+
+    function getTimeIntervalSelectText() {
+        return $('option:selected', $('#timeIntervalSelect_@Model?.IgnorePeriod.Id')).text();
     }
 </script>

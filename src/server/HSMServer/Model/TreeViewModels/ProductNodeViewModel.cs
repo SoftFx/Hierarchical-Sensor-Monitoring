@@ -21,7 +21,7 @@ namespace HSMServer.Model.TreeViewModel
         public ConcurrentDictionary<Guid, AccessKeyViewModel> AccessKeys { get; } = new();
 
 
-        public NotificationSettings Notifications { get; }
+        public ClientNotifications Notifications { get; }
 
         public int AllSensorsCount { get; private set; }
 
@@ -33,11 +33,16 @@ namespace HSMServer.Model.TreeViewModel
         public Guid? FolderId => Parent is FolderModel folder ? folder?.Id : null;
 
 
-        public ProductNodeViewModel(ProductModel model) : base(model)
+        public ProductNodeViewModel(ProductModel model, ProductNodeViewModel parent, FolderModel folder) : base(model)
         {
-            Notifications = new(model.NotificationsSettings);
+            Notifications = new(model.NotificationsSettings, () => Parent is FolderModel folder ? folder.Notifications : (Parent as ProductNodeViewModel)?.Notifications);
 
             Update(model);
+
+            parent?.AddSubNode(this);
+
+            if (folder != null)
+                AddFolder(folder);
         }
 
 

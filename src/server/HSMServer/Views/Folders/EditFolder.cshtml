@@ -52,7 +52,11 @@
                 </form>
             </div>
 
-            <div class="tab-pane fade" id="notifications" role="tabpanel" aria-labelledby="notifications-tab">...</div>
+            <div class="tab-pane fade" id="notifications" role="tabpanel" aria-labelledby="notifications-tab">
+                <div id="notificationSettings">
+                    @await Html.PartialAsync("~/Views/Notifications/_MessagesSettings.cshtml", Model.Telegram)
+                </div>
+            </div>
 
             <div class="tab-pane fade" id="users" role="tabpanel" aria-labelledby="users-tab">
                 <div id="folderUsers">
@@ -84,4 +88,23 @@
             }
         );
     }
+
+    $(document).on("submit", "#telegramMessagesSettings_form", function (event) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+
+        $.ajax({
+            url: $("#telegramMessagesSettings_form").attr("action"),
+            type: 'POST',
+            data: new FormData(this),
+            datatype: 'html',
+            processData: false,
+            contentType: false,
+            cache: false,
+            async: true,
+            success: function (viewData) {
+                $("#notificationSettings").html(viewData);
+            }
+        });
+    });
 </script>

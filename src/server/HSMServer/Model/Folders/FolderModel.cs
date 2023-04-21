@@ -3,6 +3,7 @@ using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.ConcurrentStorage;
 using HSMServer.Model.Authentication;
 using HSMServer.Model.TreeViewModel;
+using HSMServer.Notification.Settings;
 using System;
 using System.Collections.Generic;
 using System.Drawing;
@@ -20,6 +21,8 @@ namespace HSMServer.Model.Folders
         public Guid AuthorId { get; }
 
 
+        public NotificationSettings Notifications { get; private set; } = new();
+
         public Color Color { get; private set; }
 
         public string Author { get; set; }
@@ -33,6 +36,7 @@ namespace HSMServer.Model.Folders
             Color = Color.FromArgb(entity.Color);
             AuthorId = Guid.Parse(entity.AuthorId);
             CreationDate = new DateTime(entity.CreationDate);
+            Notifications = new NotificationSettings(entity.Notifications);
 
             var policies = entity.ServerPolicies;
 
@@ -59,6 +63,7 @@ namespace HSMServer.Model.Folders
 
         public void Update(FolderUpdate update)
         {
+            Notifications = update.Notifications ?? Notifications;
             Description = update.Description ?? Description;
             Color = update.Color ?? Color;
 
@@ -78,6 +83,7 @@ namespace HSMServer.Model.Folders
                 Description = Description,
                 Color = Color.ToArgb(),
                 ServerPolicies = GetPolicyEntities(),
+                Notifications = Notifications.ToEntity(),
             };
 
         internal FolderModel RecalculateState()

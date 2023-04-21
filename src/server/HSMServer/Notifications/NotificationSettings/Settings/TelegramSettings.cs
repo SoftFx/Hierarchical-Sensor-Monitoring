@@ -7,19 +7,25 @@ using Telegram.Bot.Types;
 
 namespace HSMServer.Notification.Settings
 {
+    public enum InheritedSettings : byte
+    {
+        Custom,
+        FromParent
+    }
+
     public sealed class TelegramSettings
     {
-        private const int DefaultMinDelay = 10;
-        private const bool DefaultEnableState = true;
+        public ConcurrentDictionary<ChatId, TelegramChat> Chats { get; } = new();
 
 
         public SensorStatus MessagesMinStatus { get; private set; } = SensorStatus.Warning;
 
-        public bool MessagesAreEnabled { get; private set; } = DefaultEnableState;
+        public bool MessagesAreEnabled { get; private set; } = true;
 
-        public int MessagesDelay { get; private set; } = DefaultMinDelay;
+        public int MessagesDelaySec { get; private set; } = 60;
 
-        public ConcurrentDictionary<ChatId, TelegramChat> Chats { get; } = new();
+
+        public InheritedSettings Inheritance { get; private set; } = InheritedSettings.Custom;
 
 
         public TelegramSettings() { }
@@ -31,30 +37,21 @@ namespace HSMServer.Notification.Settings
 
             MessagesMinStatus = (SensorStatus)entity.MessagesMinStatus;
             MessagesAreEnabled = entity.MessagesAreEnabled;
-            MessagesDelay = entity.MessagesDelay;
+            MessagesDelaySec = entity.MessagesDelay;
+            Inheritance = (InheritedSettings)entity.Inheritance;
 
             if (entity.Chats != null)
                 foreach (var chat in entity.Chats)
                     Chats.TryAdd(new(chat.Id), new TelegramChat(chat));
-
-            if (entity.ChatIdentifier != 0) //TODO: migration logic should be removed
-            {
-                var chatId = new ChatId(entity.ChatIdentifier);
-                Chats.TryAdd(chatId, new TelegramChat()
-                {
-                    Id = chatId,
-                    Name = string.Empty,
-                    IsUserChat = true,
-                });
-            }
         }
 
 
         public void Update(TelegramMessagesSettingsUpdate settingsUpdate)
         {
-            MessagesMinStatus = settingsUpdate.MinStatus;
-            MessagesAreEnabled = settingsUpdate.Enabled;
-            MessagesDelay = settingsUpdate.Delay;
+            MessagesMinStatus = settingsUpdate.MinStatus ?? MessagesMinStatus;
+            MessagesAreEnabled = settingsUpdate.Enabled ?? MessagesAreEnabled;
+            MessagesDelaySec = settingsUpdate.Delay ?? MessagesDelaySec;
+            Inheritance = settingsUpdate.Inheritance ?? Inheritance;
         }
 
         internal TelegramSettingsEntity ToEntity() =>
@@ -62,7 +59,8 @@ namespace HSMServer.Notification.Settings
             {
                 MessagesMinStatus = (byte)MessagesMinStatus,
                 MessagesAreEnabled = MessagesAreEnabled,
-                MessagesDelay = MessagesDelay,
+                MessagesDelay = MessagesDelaySec,
+                Inheritance = (byte)Inheritance,
                 Chats = Chats.Select(ch => ch.Value.ToEntity()).ToList(),
             };
     }

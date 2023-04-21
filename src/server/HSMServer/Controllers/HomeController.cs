@@ -164,6 +164,8 @@ namespace HSMServer.Controllers
                 viewModel = new IgnoreNotificationsViewModel(node, target, isOffTimeModal);
             else if (_treeViewModel.Sensors.TryGetValue(decodedId, out var sensor))
                 viewModel = new IgnoreNotificationsViewModel(sensor, target, isOffTimeModal);
+            else if (_folderManager.TryGetValue(decodedId, out var folder))
+                viewModel = new IgnoreNotificationsViewModel(folder, target, isOffTimeModal);
 
             return PartialView("_IgnoreNotificationsModal", viewModel);
         }
@@ -195,13 +197,13 @@ namespace HSMServer.Controllers
             return string.Empty;
         }
 
-        private Action<Guid, Action<NotificationSettings, Guid>> GetHandler(NotificationsTarget actionType) => actionType switch
+        private Action<Guid, Action<ClientNotifications, Guid>> GetHandler(NotificationsTarget actionType) => actionType switch
         {
             NotificationsTarget.Groups => UpdateGroupNotificationSettings,
             NotificationsTarget.Accounts => UpdateUserNotificationSettings
         };
 
-        private void UpdateUserNotificationSettings(Guid selectedNode, Action<NotificationSettings, Guid> updateSettings)
+        private void UpdateUserNotificationSettings(Guid selectedNode, Action<ClientNotifications, Guid> updateSettings)
         {
             var user = _userManager[CurrentUser.Id];
             foreach (var sensorId in GetNodeSensors(selectedNode))
@@ -212,23 +214,20 @@ namespace HSMServer.Controllers
             _userManager.UpdateUser(user);
         }
 
-        private void UpdateGroupNotificationSettings(Guid selectedNode, Action<NotificationSettings, Guid> updateSettings)
+        private void UpdateGroupNotificationSettings(Guid selectedNode, Action<ClientNotifications, Guid> updateSettings)
         {
-            ProductNodeViewModel rootProduct = null;
-            if (_treeViewModel.Nodes.TryGetValue(selectedNode, out var node))
-                rootProduct = node.RootProduct;
-            else if (_treeViewModel.Sensors.TryGetValue(selectedNode, out var sensor))
-                rootProduct = sensor.RootProduct;
-
-            if (rootProduct is null)
-                return;
+            var updatedProducts = new HashSet<ProductNodeViewModel>();
 
             foreach (var sensorId in GetNodeSensors(selectedNode))
-            {
-                updateSettings?.Invoke(rootProduct.Notifications, sensorId);
-            }
+                if (_treeViewModel.Sensors.TryGetValue(sensorId, out var sensor) && sensor.RootProduct != null)
+                {
+                    updateSettings?.Invoke(sensor.RootProduct.Notifications, sensorId);
 
-            _treeViewModel.UpdateProductNotificationSettings(rootProduct);
+                    updatedProducts.Add(sensor.RootProduct);
+                }
+
+            foreach (var product in updatedProducts)
+                _treeViewModel.UpdateProductNotificationSettings(product);
         }
 
         private List<Guid> GetNodeSensors(Guid id) => _treeViewModel.GetAllNodeSensors(id);

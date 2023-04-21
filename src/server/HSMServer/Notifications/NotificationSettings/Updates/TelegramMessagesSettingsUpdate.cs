@@ -2,12 +2,14 @@
 
 namespace HSMServer.Notification.Settings
 {
-    public readonly struct TelegramMessagesSettingsUpdate
+    public record TelegramMessagesSettingsUpdate
     {
-        public SensorStatus MinStatus { get; init; }
+        public InheritedSettings? Inheritance { get; init; }
 
-        public bool Enabled { get; init; }
+        public SensorStatus? MinStatus { get; init; }
 
-        public int Delay { get; init; }
+        public bool? Enabled { get; init; }
+
+        public int? Delay { get; init; }
     }
 }

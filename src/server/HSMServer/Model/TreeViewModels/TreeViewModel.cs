@@ -106,23 +106,28 @@ namespace HSMServer.Model.TreeViewModel
         {
             var sensors = new List<Guid>(1 << 3);
 
+
+            void GetNodeSensors(Guid nodeId)
+            {
+                if (!Nodes.TryGetValue(nodeId, out var node))
+                    return;
+
+                foreach (var (subNodeId, _) in node.Nodes)
+                    GetNodeSensors(subNodeId);
+
+                foreach (var (sensorId, _) in node.Sensors)
+                    sensors.Add(sensorId);
+            }
+
+
             if (Sensors.TryGetValue(selectedNode, out var sensor))
                 sensors.Add(sensor.Id);
             else if (Nodes.TryGetValue(selectedNode, out var node))
-            {
-                void GetNodeSensors(Guid nodeId)
-                {
-                    if (!Nodes.TryGetValue(nodeId, out var node))
-                        return;
-
-                    foreach (var (subNodeId, _) in node.Nodes)
-                        GetNodeSensors(subNodeId);
-
-                    foreach (var (sensorId, _) in node.Sensors)
-                        sensors.Add(sensorId);
-                }
-
                 GetNodeSensors(node.Id);
+            else if (_folderManager.TryGetValue(selectedNode, out var folder))
+            {
+                foreach (var productId in folder.Products.Keys)
+                    GetNodeSensors(productId);
             }
 
             return sensors;
@@ -142,15 +147,12 @@ namespace HSMServer.Model.TreeViewModel
 
         private ProductNodeViewModel AddNewProductViewModel(ProductModel product)
         {
-            var node = new ProductNodeViewModel(product);
+            TryGetParentProduct(product, out var parent);
+            TryGetParentFolder(product, out var folder);
+
+            var node = new ProductNodeViewModel(product, parent, folder);
 
             Nodes.TryAdd(node.Id, node);
-
-            if (product.Parent != null && Nodes.TryGetValue(product.Parent.Id, out var parent))
-                parent.AddSubNode(node);
-
-            if (_folderManager.TryGetValueById(product.FolderId, out var folder))
-                node.AddFolder(folder);
 
             foreach (var (_, child) in product.SubProducts)
                 AddNewProductViewModel(child);
@@ -248,5 +250,15 @@ namespace HSMServer.Model.TreeViewModel
                     break;
             }
         }
+
+        private bool TryGetParentProduct(ProductModel product, out ProductNodeViewModel parent)
+        {
+            parent = default;
+
+            return product.Parent != null && Nodes.TryGetValue(product.Parent.Id, out parent);
+        }
+
+        private bool TryGetParentFolder(ProductModel product, out FolderModel parent) =>
+            _folderManager.TryGetValueById(product.FolderId, out parent);
     }
 }

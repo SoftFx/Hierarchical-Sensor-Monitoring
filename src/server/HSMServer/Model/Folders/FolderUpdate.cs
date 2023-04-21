@@ -1,4 +1,5 @@
 ﻿using HSMServer.ConcurrentStorage;
+using HSMServer.Notification.Settings;
 using System;
 using System.Drawing;
 
@@ -12,6 +13,8 @@ namespace HSMServer.Model.Folders
         public TimeIntervalViewModel ExpectedUpdateInterval { get; init; }
 
         public TimeIntervalViewModel RestoreInterval { get; init; }
+
+        public NotificationSettings Notifications { get; init; }
 
         public string Description { get; init; }
 
