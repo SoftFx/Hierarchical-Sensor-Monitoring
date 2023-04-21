@@ -6,7 +6,6 @@ using HSMDataCollector.Options;
 using HSMDataCollector.PublicInterface;
 using System;
 using System.Runtime.InteropServices;
-using HSMDataCollector.DefaultSensors;
 
 namespace HSMDataCollector.DefaultSensors
 {
@@ -20,6 +19,8 @@ namespace HSMDataCollector.DefaultSensors
         private readonly SensorsDefaultOptions _defaultOptions;
 
 
+        internal CollectorStatusSensor StatusSensor { get; private set; }
+
         internal bool IsUnixOS { get; } = RuntimeInformation.IsOSPlatform(OSPlatform.OSX) ||
                                           RuntimeInformation.IsOSPlatform(OSPlatform.Linux);
 
@@ -30,6 +31,8 @@ namespace HSMDataCollector.DefaultSensors
             _defaultOptions = sensorsOptions;
         }
 
+
+        #region Windows
 
         IWindowsCollection IWindowsCollection.AddProcessCpu(BarSensorOptions options)
         {
@@ -106,22 +109,22 @@ namespace HSMDataCollector.DefaultSensors
 
         IWindowsCollection IWindowsCollection.AddWindowsNeedUpdate(WindowsSensorOptions options)
         {
-            return ToWindows(new WindowsNeedUpdate(_defaultOptions.WindowsInfoMonitoring.Get(options)));
+            return ToWindows(new WindowsNeedUpdate(_defaultOptions.WindowsInfo.Get(options)));
         }
 
         IWindowsCollection IWindowsCollection.AddWindowsLastUpdate(WindowsSensorOptions options)
         {
-            return ToWindows(new WindowsLastUpdate(_defaultOptions.WindowsInfoMonitoring.Get(options)));
+            return ToWindows(new WindowsLastUpdate(_defaultOptions.WindowsInfo.Get(options)));
         }
 
         IWindowsCollection IWindowsCollection.AddWindowsLastRestart(WindowsSensorOptions options)
         {
-            return ToWindows(new WindowsLastRestart(_defaultOptions.WindowsInfoMonitoring.Get(options)));
+            return ToWindows(new WindowsLastRestart(_defaultOptions.WindowsInfo.Get(options)));
         }
 
         IWindowsCollection IWindowsCollection.AddWindowsInfoMonitoringSensors(WindowsSensorOptions options)
         {
-            options = _defaultOptions.WindowsInfoMonitoring.GetAndFill(options);
+            options = _defaultOptions.WindowsInfo.GetAndFill(options);
 
             return (this as IWindowsCollection).AddWindowsNeedUpdate(options)
                                                .AddWindowsLastUpdate(options)
@@ -131,14 +134,22 @@ namespace HSMDataCollector.DefaultSensors
 
         IWindowsCollection IWindowsCollection.AddCollectorHeartbeat(MonitoringSensorOptions options)
         {
-            return Register(new CollectorHeartbeat(_defaultOptions.CollectorAliveMonitoring.Get(options)));
+            return Register(new CollectorHeartbeat(_defaultOptions.CollectorAlive.Get(options)));
         }
 
         IWindowsCollection IWindowsCollection.AddProductInfo(ProductInfoOptions options)
         {
-            return Register(new ProductInfoSensor(_defaultOptions.ProductInfoMonitoring.GetAndFill(options)));
+            return Register(new ProductInfoSensor(_defaultOptions.ProductInfo.GetAndFill(options)));
         }
 
+        IWindowsCollection IWindowsCollection.AddCollectorStatuses(CollectorInfoOptions options)
+        {
+            return AddCollectorStatusSensor(options);
+        }
+
+        #endregion
+
+        #region Unix
 
         IUnixCollection IUnixCollection.AddProcessCpu(BarSensorOptions options)
         {
@@ -186,13 +197,20 @@ namespace HSMDataCollector.DefaultSensors
 
         IUnixCollection IUnixCollection.AddCollectorHeartbeat(MonitoringSensorOptions options)
         {
-            return Register(new CollectorHeartbeat(_defaultOptions.CollectorAliveMonitoring.Get(options)));
+            return Register(new CollectorHeartbeat(_defaultOptions.CollectorAlive.Get(options)));
         }
-        
+
         IUnixCollection IUnixCollection.AddProductInfo(ProductInfoOptions options)
         {
-            return Register(new ProductInfoSensor(_defaultOptions.ProductInfoMonitoring.GetAndFill(options)));
+            return Register(new ProductInfoSensor(_defaultOptions.ProductInfo.GetAndFill(options)));
         }
+
+        IUnixCollection IUnixCollection.AddCollectorStatuses(CollectorInfoOptions options)
+        {
+            return AddCollectorStatusSensor(options);
+        }
+
+        #endregion
 
         private DefaultSensorsCollection AddDisksMonitoring(DiskSensorOptions options, Func<DiskSensorOptions, SensorBase> newSensorFunc)
         {
@@ -201,6 +219,14 @@ namespace HSMDataCollector.DefaultSensors
 
             return this;
         }
+
+        private DefaultSensorsCollection AddCollectorStatusSensor(CollectorInfoOptions options)
+        {
+            StatusSensor = new CollectorStatusSensor(_defaultOptions.CollectorInfo.GetAndFill(options));
+
+            return Register(StatusSensor);
+        }
+
 
         private DefaultSensorsCollection ToWindows(SensorBase sensor)
         {

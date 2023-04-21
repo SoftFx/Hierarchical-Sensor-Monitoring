@@ -24,7 +24,7 @@ namespace HSMDataCollector.Core
         {
             foreach (var value in Values)
             {
-                value.ReceiveSensorValue -= _valuesQueue.Enqueue;
+                value.ReceiveSensorValue -= _valuesQueue.Push;
 
                 value.Dispose();
             }
@@ -38,7 +38,7 @@ namespace HSMDataCollector.Core
         {
             if (TryAdd(key, value))
             {
-                value.ReceiveSensorValue += _valuesQueue.Enqueue;
+                value.ReceiveSensorValue += _valuesQueue.Push;
 
                 _logManager.Logger?.Info($"Added new default sensor {key}");
             }

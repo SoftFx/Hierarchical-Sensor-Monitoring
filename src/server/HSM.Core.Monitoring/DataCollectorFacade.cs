@@ -1,12 +1,12 @@
 ﻿using HSMCommon.Constants;
+using HSMCommon.Extensions;
 using HSMDataCollector.Core;
-using HSMDataCollector.PublicInterface;
 using HSMDataCollector.Options;
+using HSMDataCollector.PublicInterface;
 using HSMServer.Core.Cache;
 using System;
 using System.Linq;
 using System.Reflection;
-using HSMCommon.Extensions;
 
 namespace HSM.Core.Monitoring
 {
@@ -49,7 +49,10 @@ namespace HSM.Core.Monitoring
             {
                 Version = Assembly.GetEntryAssembly()?.GetName().GetVersion()
             };
-            
+
+            var collectorInfoOptions = new CollectorInfoOptions();
+
+
             _dataCollector = new DataCollector(collectorOptions).AddNLog();
 
             if (OperatingSystem.IsWindows())
@@ -59,6 +62,7 @@ namespace HSM.Core.Monitoring
                                       .AddSystemMonitoringSensors()
                                       .AddWindowsInfoMonitoringSensors()
                                       .AddProductInfo(productInfoOptions)
+                                      .AddCollectorStatuses(collectorInfoOptions)
                                       .AddCollectorHeartbeat();
             }
             else
@@ -66,6 +70,7 @@ namespace HSM.Core.Monitoring
                 _dataCollector.Unix.AddProcessMonitoringSensors()
                                    .AddDiskMonitoringSensors()
                                    .AddProductInfo(productInfoOptions)
+                                   .AddCollectorStatuses(collectorInfoOptions)
                                    .AddCollectorHeartbeat();
             }
 

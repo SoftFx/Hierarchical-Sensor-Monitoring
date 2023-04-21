@@ -1,17 +1,23 @@
-﻿namespace HSMDataCollector.Options
+﻿using HSMDataCollector.Options.DefaultOptions;
+
+namespace HSMDataCollector.Options
 {
     internal sealed class SensorsDefaultOptions
     {
-        internal SystemMonitoringOptions SystemMonitoring { get; } = new SystemMonitoringOptions();
+        internal WindowsInfoMonitoringOptions WindowsInfo { get; } = new WindowsInfoMonitoringOptions();
+
 
         internal ProcessMonitoringOptions ProcessMonitoring { get; } = new ProcessMonitoringOptions();
 
+        internal SystemMonitoringOptions SystemMonitoring { get; } = new SystemMonitoringOptions();
+
         internal DiskMonitoringOptions DiskMonitoring { get; } = new DiskMonitoringOptions();
 
-        internal WindowsInfoMonitoringOptions WindowsInfoMonitoring { get; } = new WindowsInfoMonitoringOptions();
 
-        internal CollectorAliveOptions CollectorAliveMonitoring { get; } = new CollectorAliveOptions();
+        internal CollectorStatusesOptions CollectorInfo { get; } = new CollectorStatusesOptions();
 
-        internal ProductVersionOptions ProductInfoMonitoring { get; } = new ProductVersionOptions();
+        internal CollectorAliveOptions CollectorAlive { get; } = new CollectorAliveOptions();
+
+        internal ProductVersionOptions ProductInfo { get; } = new ProductVersionOptions();
     }
 }

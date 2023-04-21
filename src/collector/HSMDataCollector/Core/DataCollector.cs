@@ -14,6 +14,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
 using SensorBase = HSMDataCollector.Base.SensorBase;
 
@@ -35,16 +36,16 @@ namespace HSMDataCollector.Core
         private readonly LoggerManager _logManager = new LoggerManager();
 
         private readonly ConcurrentDictionary<string, ISensor> _nameToSensor = new ConcurrentDictionary<string, ISensor>();
-        private readonly DefaultSensorsCollection _defaultSensors;
+        private readonly DefaultSensorsCollection _defaultCollection;
         private readonly SensorsDefaultOptions _sensorsOptions;
         private readonly SensorsStorage _sensorsStorage;
         private readonly IDataQueue _dataQueue;
         private readonly HSMClient _hsmClient;
 
 
-        public IWindowsCollection Windows => _defaultSensors;
+        public IWindowsCollection Windows => _defaultCollection;
 
-        public IUnixCollection Unix => _defaultSensors;
+        public IUnixCollection Unix => _defaultCollection;
 
 
         public CollectorStatus Status { get; private set; } = CollectorStatus.Stopped;
@@ -70,7 +71,7 @@ namespace HSMDataCollector.Core
             _hsmClient = new HSMClient(options, _dataQueue, _logManager);
 
             _sensorsOptions = new SensorsDefaultOptions();
-            _defaultSensors = new DefaultSensorsCollection(_sensorsStorage, _sensorsOptions);
+            _defaultCollection = new DefaultSensorsCollection(_sensorsStorage, _sensorsOptions);
         }
 
         /// <summary>
@@ -108,18 +109,24 @@ namespace HSMDataCollector.Core
             _dataQueue.Init();
         }
 
-        public async Task Start()
+
+        public Task Start() => Start(Task.CompletedTask);
+
+        public async Task Start(Task customStartingTask)
         {
             try
             {
                 if (!Status.IsStopped())
                     return;
 
-                ChangeStatus(CollectorStatus.Starting);
-
                 _dataQueue.Init();
 
-                await _sensorsStorage.Start();
+                ChangeStatus(CollectorStatus.Starting);
+
+                foreach (var oldSensor in _nameToSensor.Values)
+                    oldSensor.Start();
+
+                await Task.WhenAll(_sensorsStorage.Start(), customStartingTask);
 
                 ChangeStatus(CollectorStatus.Running);
             }
@@ -129,7 +136,10 @@ namespace HSMDataCollector.Core
             }
         }
 
-        public async Task Stop()
+
+        public Task Stop() => Start(Task.CompletedTask);
+
+        public async Task Stop(Task customStartingTask)
         {
             try
             {
@@ -138,24 +148,11 @@ namespace HSMDataCollector.Core
 
                 ChangeStatus(CollectorStatus.Stopping);
 
-                await _sensorsStorage.Stop();
+                await Task.WhenAll(_sensorsStorage.Stop(), customStartingTask);
 
-                var allData = _dataQueue.DequeueData();
-
-                _dataQueue.Stop();
-
-                foreach (var pair in _nameToSensor)
-                    if (pair.Value.HasLastValue)
-                        allData.Add(pair.Value.GetLastValue());
-
-                //foreach (var pair in _nameToSensor)
-                //    pair.Value.Dispose();
-
-                _hsmClient.SendMonitoringData(allData);
-
-                ChangeStatus(CollectorStatus.Stopped);
+                StopQueue();
             }
-            catch (Exception ex) 
+            catch (Exception ex)
             {
                 ChangeStatus(CollectorStatus.Stopped, ex.Message);
             }
@@ -166,35 +163,43 @@ namespace HSMDataCollector.Core
             if (!Status.IsRunning())
                 return;
 
-            _logManager.Logger?.Info("DataCollector stopping...");
+            ChangeStatus(CollectorStatus.Stopping);
 
             _sensorsStorage.Dispose();
 
-            var lastData = _dataQueue.DequeueData();
+            StopQueue();
 
-            _dataQueue.Stop();
-
-            foreach (var pair in _nameToSensor)
-                if (pair.Value.HasLastValue)
-                    lastData.Add(pair.Value.GetLastValue());
-
-            foreach (var pair in _nameToSensor)
-                pair.Value.Dispose();
-
-            _hsmClient.SendMonitoringData(lastData);
-            _hsmClient?.Dispose();
-
-            _logManager.Logger?.Info("DataCollector successfully stopped.");
+            _hsmClient.Dispose();
         }
+
 
         public bool IsSensorExists(string path) => _nameToSensor.ContainsKey(path) || _sensorsStorage.ContainsKey(path);
 
+
+        private void StopQueue()
+        {
+            _dataQueue.Flush();
+
+            var lastData = _nameToSensor.Values.Where(v => v.HasLastValue).Select(v => v.GetLastValue()).ToList();
+
+            _hsmClient.SendData(lastData);
+
+            foreach (var pair in _nameToSensor.Values)
+                pair.Dispose();
+
+            ChangeStatus(CollectorStatus.Stopped);
+        }
 
         private void ChangeStatus(CollectorStatus newStatus, string error = null)
         {
             Status = newStatus;
 
             _logManager.Logger?.Info($"DataCollector -> {newStatus}");
+
+            _defaultCollection.StatusSensor?.SendValue(newStatus, error);
+
+            if (newStatus.IsStopped())
+                _dataQueue.Stop();
 
             switch (newStatus)
             {
@@ -214,10 +219,11 @@ namespace HSMDataCollector.Core
         }
 
         #region Obsolets
+
         [Obsolete("Use method AddSystemMonitoringSensors(options) in Windows collection")]
         public void InitializeSystemMonitoring(bool isCPU, bool isFreeRam, string specificPath = null)
         {
-            if (!_defaultSensors.IsUnixOS)
+            if (!_defaultCollection.IsUnixOS)
             {
                 var options = _sensorsOptions.SystemMonitoring.GetAndFill(new BarSensorOptions() { NodePath = specificPath });
 
@@ -235,7 +241,7 @@ namespace HSMDataCollector.Core
         {
             var options = _sensorsOptions.ProcessMonitoring.GetAndFill(new BarSensorOptions() { NodePath = specificPath });
 
-            if (_defaultSensors.IsUnixOS)
+            if (_defaultCollection.IsUnixOS)
             {
                 if (isCPU)
                     Unix.AddProcessCpu(options);
@@ -273,9 +279,9 @@ namespace HSMDataCollector.Core
         [Obsolete("Use method AddCollectorAlive(options) in Windows or Unix collections")]
         public void MonitorServiceAlive(string specificPath = null)
         {
-            var options = _sensorsOptions.CollectorAliveMonitoring.GetAndFill(new MonitoringSensorOptions() { NodePath = specificPath });
+            var options = _sensorsOptions.CollectorAlive.GetAndFill(new MonitoringSensorOptions() { NodePath = specificPath });
 
-            if (_defaultSensors.IsUnixOS)
+            if (_defaultCollection.IsUnixOS)
                 Unix.AddCollectorHeartbeat(options);
             else
                 Windows.AddCollectorHeartbeat(options);
@@ -295,7 +301,7 @@ namespace HSMDataCollector.Core
                     AcceptableUpdateInterval = updateInterval,
                 };
 
-                Windows.AddWindowsNeedUpdate(_sensorsOptions.WindowsInfoMonitoring.GetAndFill(options));
+                Windows.AddWindowsNeedUpdate(_sensorsOptions.WindowsInfo.GetAndFill(options));
             }
             catch
             {

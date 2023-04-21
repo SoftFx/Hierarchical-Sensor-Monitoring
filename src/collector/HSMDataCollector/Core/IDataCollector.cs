@@ -19,12 +19,15 @@ namespace HSMDataCollector.Core
 
         Task Start();
 
+        Task Start(Task customStartingTask);
 
         /// <summary>
         /// This method must be called before stopping the application. It sends all the data left, stops and disposes the timer.
         /// The method also disposes the HttpClient.
         /// </summary>
         Task Stop();
+
+        Task Stop(Task customStoppingTask);
 
 
         IDataCollector AddNLog(LoggerOptions options = null);

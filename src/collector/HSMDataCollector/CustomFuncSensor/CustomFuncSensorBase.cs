@@ -47,6 +47,8 @@ namespace HSMDataCollector.CustomFuncSensor
             return valueObject;
         }
 
+        public override void Start() => RestartTimerInternal(_timerSpan);
+
         protected void RestartTimerInternal(TimeSpan timerSpan)
         {
             if (_internalTimer != null)

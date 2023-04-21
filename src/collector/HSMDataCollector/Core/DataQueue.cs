@@ -12,52 +12,29 @@ namespace HSMDataCollector.Core
         private readonly ConcurrentQueue<SensorValueBase> _valuesQueue = new ConcurrentQueue<SensorValueBase>();
         private readonly ConcurrentQueue<SensorValueBase> _failedQueue = new ConcurrentQueue<SensorValueBase>();
 
-        private readonly TimeSpan _packageSendingPeriod;
+        private readonly TimeSpan _packageCollectPeriod;
         private readonly int _maxQueueSize;
         private readonly int _maxValuesInPackage;
 
         private Timer _sendTimer;
 
 
-        public bool Disposed => _sendTimer != null;
-
-
-        public event Action<List<SensorValueBase>> SendValues;
-        public event Action<FileSensorValue> FileReceiving;
+        public event Action<List<SensorValueBase>> SendValuesHandler;
+        public event Action<FileSensorValue> SendValueHandler;
 
 
         public DataQueue(CollectorOptions options)
         {
             _maxQueueSize = options.MaxQueueSize;
             _maxValuesInPackage = options.MaxValuesInPackage;
-            _packageSendingPeriod = options.PackageSendingPeriod;
+            _packageCollectPeriod = options.PackageCollectPeriod;
         }
 
-
-        public void ReturnData(List<SensorValueBase> values)
-        {
-            foreach (var sensorValueBase in values)
-                Enqueue(_failedQueue, sensorValueBase);
-        }
-
-        public List<SensorValueBase> DequeueData()
-        {
-            var dataList = new List<SensorValueBase>(1 << 3);
-
-            Dequeue(_failedQueue, dataList);
-            Dequeue(_valuesQueue, dataList);
-
-            return dataList;
-        }
-
-        public void ReturnSensorValue(SensorValueBase value) => Enqueue(_failedQueue, value);
-
-        public void Enqueue(SensorValueBase value) => Enqueue(_valuesQueue, value.TrimLongComment());
 
         public void Init()
         {
             if (_sendTimer == null)
-                _sendTimer = new Timer(OnTimerTick, null, _packageSendingPeriod, _packageSendingPeriod);
+                _sendTimer = new Timer((_) => Flush(), null, _packageCollectPeriod, _packageCollectPeriod);
         }
 
         public void Stop()
@@ -66,24 +43,38 @@ namespace HSMDataCollector.Core
             _sendTimer = null;
         }
 
+        public void Flush() => SendValuesHandler?.Invoke(DequeueAllData());
 
-        private void OnTimerTick(object state) => SendValues?.Invoke(DequeueData());
+
+        public void Push(SensorValueBase value) => Enqueue(_valuesQueue, value.TrimLongComment());
+
+        public void PushFailValue(SensorValueBase value) => Enqueue(_failedQueue, value);
+
+        public void PushFailValues(List<SensorValueBase> values)
+        {
+            foreach (var sensorValueBase in values)
+                Enqueue(_failedQueue, sensorValueBase);
+        }
+
 
         private void Enqueue(ConcurrentQueue<SensorValueBase> queue, SensorValueBase value)
         {
+            if (_sendTimer == null)
+                return;
+
             queue.Enqueue(value);
 
             while (queue.Count > _maxQueueSize)
                 queue.TryDequeue(out _);
         }
 
-        private void Dequeue(ConcurrentQueue<SensorValueBase> queue, List<SensorValueBase> dataList)
+        private List<SensorValueBase> Dequeue(ConcurrentQueue<SensorValueBase> queue, List<SensorValueBase> dataList)
         {
             while (dataList.Count < _maxValuesInPackage && queue.TryDequeue(out var value))
                 switch (value)
                 {
                     case FileSensorValue fileValue:
-                        FileReceiving?.Invoke(fileValue);
+                        SendValueHandler?.Invoke(fileValue);
                         break;
 
                     case BarSensorValueBase barSensor when barSensor.Count == 0:
@@ -93,6 +84,17 @@ namespace HSMDataCollector.Core
                         dataList.Add(value);
                         break;
                 }
+
+            return dataList;
+        }
+
+        private List<SensorValueBase> DequeueAllData()
+        {
+            var dataList = new List<SensorValueBase>(1 << 3);
+
+            Dequeue(_failedQueue, dataList);
+
+            return Dequeue(_valuesQueue, dataList);
         }
     }
 }

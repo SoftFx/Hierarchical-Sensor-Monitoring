@@ -1,3 +1,7 @@
+using HSMDataCollector.Logging;
+using HSMSensorDataObjects;
+using HSMSensorDataObjects.SensorValueRequests;
+using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
 using System.IO;
@@ -6,44 +10,39 @@ using System.Net;
 using System.Net.Http;
 using System.Text;
 using System.Threading.Tasks;
-using HSMDataCollector.Logging;
-using HSMSensorDataObjects;
-using HSMSensorDataObjects.SensorValueRequests;
-using Newtonsoft.Json;
 
 namespace HSMDataCollector.Core
 {
     internal sealed class HSMClient : IDisposable
     {
-        private readonly HttpClient _client;
-        private readonly IDataQueue _dataQueue;
         private readonly LoggerManager _logManager;
+        private readonly IDataQueue _dataQueue;
+        private readonly HttpClient _client;
+
         private readonly string _listSendingAddress;
         private readonly string _fileSendingAddress;
-        
-        
+
+
         internal HSMClient(CollectorOptions options, IDataQueue dataQueue, LoggerManager logger)
         {
             _dataQueue = dataQueue;
-            
             _logManager = logger;
-            
+
             _listSendingAddress = options.ListEndpoint;
             _fileSendingAddress = options.FileEndpoint;
 
             ServicePointManager.ServerCertificateValidationCallback += (sender, cert, chain, error) => true;
             ServicePointManager.SecurityProtocol = SecurityProtocolType.Tls11 | SecurityProtocolType.Tls12;
-            
-            HttpClientHandler handler = new HttpClientHandler
+
+            _client = new HttpClient(new HttpClientHandler
             {
                 ServerCertificateCustomValidationCallback = (message, certificate2, arg3, arg4) => true
-            };
-            
-            _client = new HttpClient(handler);
+            });
+
             _client.DefaultRequestHeaders.Add(nameof(BaseRequest.Key), options.AccessKey);
-            
-            _dataQueue.FileReceiving += DataQueueFileReceiving;
-            _dataQueue.SendValues += SendMonitoringData;
+
+            _dataQueue.SendValueHandler += DataQueueFileReceiving;
+            _dataQueue.SendValuesHandler += SendData;
         }
 
         internal async Task SendFileAsync(FileInfo fileInfo, string sensorPath, SensorStatus sensorStatus = SensorStatus.Ok, string comment = "")
@@ -53,7 +52,7 @@ namespace HSMDataCollector.Core
                 using (var stream = new StreamReader(fileInfo.FullName))
                     return Encoding.UTF8.GetBytes(await stream.ReadToEndAsync()).ToList();
             }
-            
+
             var value = new FileSensorValue()
             {
                 Path = sensorPath,
@@ -71,18 +70,18 @@ namespace HSMDataCollector.Core
 
         public void Dispose()
         {
-            _dataQueue.FileReceiving -= DataQueueFileReceiving;
-            _dataQueue.SendValues -= SendMonitoringData;
-            
+            _dataQueue.SendValueHandler -= DataQueueFileReceiving;
+            _dataQueue.SendValuesHandler -= SendData;
+
             _client.Dispose();
         }
 
-        
-        internal void SendMonitoringData(List<SensorValueBase> values) => _ = SendMonitoringDataAsync(values);
-        
-        internal void DataQueueFileReceiving(FileSensorValue value) => _ = DataQueueFileReceivingAsync(value);
-        
-        
+
+        internal void SendData(List<SensorValueBase> values) => _ = SendMonitoringDataAsync(values);
+
+        private void DataQueueFileReceiving(FileSensorValue value) => _ = DataQueueFileReceivingAsync(value);
+
+
         private async Task SendMonitoringDataAsync(List<SensorValueBase> values)
         {
             try
@@ -103,9 +102,7 @@ namespace HSMDataCollector.Core
             }
             catch (Exception e)
             {
-                if (_dataQueue != null && !_dataQueue.Disposed)
-                    _dataQueue?.ReturnData(values);
-
+                _dataQueue.PushFailValues(values);
                 _logManager.Logger?.Error($"Failed to send: {e}");
             }
         }
@@ -127,9 +124,7 @@ namespace HSMDataCollector.Core
             }
             catch (Exception e)
             {
-                if (_dataQueue != null && !_dataQueue.Disposed)
-                    _dataQueue?.ReturnSensorValue(value);
-
+                _dataQueue.PushFailValue(value);
                 _logManager.Logger?.Error($"Failed to send: {e}");
             }
         }

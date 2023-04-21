@@ -118,6 +118,8 @@ namespace HSMDataCollector.Bar
             }
         }
 
+        public override void Start() => StartTimer(_barTimerPeriod, _smallTimerPeriod);
+
         private void StartTimer(int barTimePeriod, int smallTimerPeriod)
         {
             Stop();
