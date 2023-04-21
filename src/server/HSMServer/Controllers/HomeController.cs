@@ -447,7 +447,7 @@ namespace HSMServer.Controllers
             if (!_treeViewModel.Sensors.TryGetValue(SensorPathHelper.DecodeGuid(encodedId), out var sensor))
                 return _emptyResult;
 
-            return PartialView("_SensorMetaInfo", new SensorInfoViewModel(sensor));
+            return PartialView("_MetaInfo", new SensorInfoViewModel(sensor));
         }
 
         [HttpPost]
@@ -467,7 +467,7 @@ namespace HSMServer.Controllers
 
             _treeValuesCache.UpdateSensor(update);
 
-            return PartialView("_SensorMetaInfo", new SensorInfoViewModel(sensor));
+            return PartialView("_MetaInfo", new SensorInfoViewModel(sensor));
         }
 
         #endregion
@@ -478,7 +478,7 @@ namespace HSMServer.Controllers
             if (!_treeViewModel.Nodes.TryGetValue(SensorPathHelper.DecodeGuid(encodedId), out var product))
                 return _emptyResult;
 
-            return PartialView("_ProductMetaInfo", new ProductInfoViewModel(product));
+            return PartialView("_MetaInfo", new ProductInfoViewModel(product));
         }
 
         [HttpPost]
@@ -497,7 +497,7 @@ namespace HSMServer.Controllers
 
             _treeValuesCache.UpdateProduct(update);
 
-            return PartialView("_ProductMetaInfo", new ProductInfoViewModel(product));
+            return PartialView("_MetaInfo", new ProductInfoViewModel(product));
         }
 
         private (string productName, string path) GetSensorProductAndPath(string encodedId)

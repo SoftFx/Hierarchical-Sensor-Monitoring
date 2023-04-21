@@ -1,4 +1,5 @@
-﻿using HSMServer.Model.TreeViewModel;
+using HSMServer.Model.TreeViewModel;
+using System;
 
 
 namespace HSMServer.Model.ViewModel
@@ -9,6 +10,9 @@ namespace HSMServer.Model.ViewModel
 
         public string ProductName { get; }
 
+        public DateTime LastUpdateTime { get; set; }
+
+        public SensorStatus Status { get; set; }
 
         public TimeIntervalViewModel ExpectedUpdateInterval { get; set; }
 

@@ -4,7 +4,7 @@
     {
         internal override FilterProperty[] Properties => new[] { GroupEnabled, AccountEnabled, GroupIgnored, AccountIgnored };
 
-        internal override FilterGroupType Type => FilterGroupType.ByNotifications;
+        internal override FilterGroupType Type => FilterGroupType.Notifications;
         
 
         public FilterProperty GroupEnabled { get; init; } = new("Enabled Groups");
