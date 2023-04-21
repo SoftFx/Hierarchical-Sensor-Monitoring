@@ -106,23 +106,28 @@ namespace HSMServer.Model.TreeViewModel
         {
             var sensors = new List<Guid>(1 << 3);
 
+
+            void GetNodeSensors(Guid nodeId)
+            {
+                if (!Nodes.TryGetValue(nodeId, out var node))
+                    return;
+
+                foreach (var (subNodeId, _) in node.Nodes)
+                    GetNodeSensors(subNodeId);
+
+                foreach (var (sensorId, _) in node.Sensors)
+                    sensors.Add(sensorId);
+            }
+
+
             if (Sensors.TryGetValue(selectedNode, out var sensor))
                 sensors.Add(sensor.Id);
             else if (Nodes.TryGetValue(selectedNode, out var node))
-            {
-                void GetNodeSensors(Guid nodeId)
-                {
-                    if (!Nodes.TryGetValue(nodeId, out var node))
-                        return;
-
-                    foreach (var (subNodeId, _) in node.Nodes)
-                        GetNodeSensors(subNodeId);
-
-                    foreach (var (sensorId, _) in node.Sensors)
-                        sensors.Add(sensorId);
-                }
-
                 GetNodeSensors(node.Id);
+            else if (_folderManager.TryGetValue(selectedNode, out var folder))
+            {
+                foreach (var productId in folder.Products.Keys)
+                    GetNodeSensors(productId);
             }
 
             return sensors;
