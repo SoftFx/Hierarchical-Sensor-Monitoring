@@ -97,7 +97,7 @@ namespace HSMServer.Controllers
             TreeValuesCache.AddAccessKey(key.ToModel((HttpContext.User as User).Id));
 
 
-            if (string.IsNullOrEmpty(key.EncodedProductId) && string.IsNullOrEmpty(key.SelectedProduct))
+            if (string.IsNullOrEmpty(key.EncodedProductId))
                 return PartialView("_AllAccessKeys", GenerateFullViewModel());
             
             return GetPartialProductAccessKeys(key.EncodedProductId);
