@@ -2,7 +2,7 @@ using System;
 
 namespace HSMDataCollector.Options
 {
-    internal sealed class ProductVersionOptions : OptionsProperty<ProductInfoOptions>
+    internal sealed class ProductInfoOptions : OptionsProperty<ProductInfoOptions>
     {
         protected override string NodePath { get; } = "Product Info";
 

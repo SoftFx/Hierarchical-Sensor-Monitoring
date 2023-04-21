@@ -32,6 +32,8 @@ namespace HSMDataCollector.Core
 
         internal Task Start() => Task.WhenAll(Values.Select(s => s.Start()));
 
+        internal Task Stop() => Task.WhenAll(Values.Select(s => s.Stop()));
+
         internal void Register(string key, SensorBase value)
         {
             if (TryAdd(key, value))

@@ -4,22 +4,29 @@ using HSMDataCollector.CustomFuncSensor;
 using HSMDataCollector.DefaultSensors;
 using HSMDataCollector.DefaultValueSensor;
 using HSMDataCollector.Exceptions;
+using HSMDataCollector.Extensions;
 using HSMDataCollector.InstantValue;
 using HSMDataCollector.Logging;
 using HSMDataCollector.Options;
 using HSMDataCollector.PublicInterface;
 using HSMSensorDataObjects;
-using HSMSensorDataObjects.SensorValueRequests;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
-using System.Threading;
 using System.Threading.Tasks;
 using SensorBase = HSMDataCollector.Base.SensorBase;
 
 namespace HSMDataCollector.Core
 {
+    public enum CollectorStatus : byte
+    {
+        Starting = 0,
+        Running,
+        Stopping,
+        Stopped,
+    }
+
     /// <summary>
     /// Main monitoring class which is used to create and control sensors' instances
     /// </summary>
@@ -34,11 +41,19 @@ namespace HSMDataCollector.Core
         private readonly IDataQueue _dataQueue;
         private readonly HSMClient _hsmClient;
 
-        private bool _isStopped;
 
         public IWindowsCollection Windows => _defaultSensors;
 
         public IUnixCollection Unix => _defaultSensors;
+
+
+        public CollectorStatus Status { get; private set; } = CollectorStatus.Stopped;
+
+
+        public event Action ToStarting;
+        public event Action ToRunning;
+        public event Action ToStopping;
+        public event Action ToStopped;
 
 
         [Obsolete]
@@ -53,7 +68,7 @@ namespace HSMDataCollector.Core
             _dataQueue = new DataQueue(options);
             _sensorsStorage = new SensorsStorage(_dataQueue as IValuesQueue, _logManager);
             _hsmClient = new HSMClient(options, _dataQueue, _logManager);
-            
+
             _sensorsOptions = new SensorsDefaultOptions();
             _defaultSensors = new DefaultSensorsCollection(_sensorsStorage, _sensorsOptions);
         }
@@ -70,11 +85,6 @@ namespace HSMDataCollector.Core
         { }
 
 
-        public void Dispose()
-        {
-            Stop();
-        }
-
         public IDataCollector AddNLog(LoggerOptions options = null)
         {
             _logManager.InitializeLogger(options);
@@ -89,55 +99,121 @@ namespace HSMDataCollector.Core
                 AddNLog();
 
             _logManager.Logger?.Info("Initialize timer...");
-            _dataQueue.InitializeTimer();
+            _dataQueue.Init();
         }
 
         [Obsolete("Use Initialize(bool, string, string)")]
         public void Initialize()
         {
-            _dataQueue.InitializeTimer();
+            _dataQueue.Init();
         }
 
-        public Task Start()
+        public async Task Start()
         {
-            _dataQueue.InitializeTimer();
-            
-            return _sensorsStorage.Start();
+            try
+            {
+                if (!Status.IsStopped())
+                    return;
+
+                ChangeStatus(CollectorStatus.Starting);
+
+                _dataQueue.Init();
+
+                await _sensorsStorage.Start();
+
+                ChangeStatus(CollectorStatus.Running);
+            }
+            catch (Exception ex)
+            {
+                ChangeStatus(CollectorStatus.Stopped, ex.Message);
+            }
         }
 
-        public void Stop()
+        public async Task Stop()
         {
-            if (_isStopped)
+            try
+            {
+                if (!Status.IsRunning())
+                    return;
+
+                ChangeStatus(CollectorStatus.Stopping);
+
+                await _sensorsStorage.Stop();
+
+                var allData = _dataQueue.DequeueData();
+
+                _dataQueue.Stop();
+
+                foreach (var pair in _nameToSensor)
+                    if (pair.Value.HasLastValue)
+                        allData.Add(pair.Value.GetLastValue());
+
+                //foreach (var pair in _nameToSensor)
+                //    pair.Value.Dispose();
+
+                _hsmClient.SendMonitoringData(allData);
+
+                ChangeStatus(CollectorStatus.Stopped);
+            }
+            catch (Exception ex) 
+            {
+                ChangeStatus(CollectorStatus.Stopped, ex.Message);
+            }
+        }
+
+        public void Dispose()
+        {
+            if (!Status.IsRunning())
                 return;
 
             _logManager.Logger?.Info("DataCollector stopping...");
 
             _sensorsStorage.Dispose();
 
-            var allData = new List<SensorValueBase>(1 << 3);
-            if (_dataQueue != null)
-            {
-                allData.AddRange(_dataQueue.DequeueData());
-                _dataQueue.Stop();
-            }
+            var lastData = _dataQueue.DequeueData();
 
-            Thread.Sleep(TimeSpan.FromSeconds(1));
+            _dataQueue.Stop();
 
             foreach (var pair in _nameToSensor)
                 if (pair.Value.HasLastValue)
-                    allData.Add(pair.Value.GetLastValue());
+                    lastData.Add(pair.Value.GetLastValue());
 
             foreach (var pair in _nameToSensor)
                 pair.Value.Dispose();
 
-            if (allData.Count != 0)
-                _hsmClient.SendMonitoringData(allData);
-
+            _hsmClient.SendMonitoringData(lastData);
             _hsmClient?.Dispose();
-            _isStopped = true;
+
             _logManager.Logger?.Info("DataCollector successfully stopped.");
         }
 
+        public bool IsSensorExists(string path) => _nameToSensor.ContainsKey(path) || _sensorsStorage.ContainsKey(path);
+
+
+        private void ChangeStatus(CollectorStatus newStatus, string error = null)
+        {
+            Status = newStatus;
+
+            _logManager.Logger?.Info($"DataCollector -> {newStatus}");
+
+            switch (newStatus)
+            {
+                case CollectorStatus.Starting:
+                    ToStarting?.Invoke();
+                    break;
+                case CollectorStatus.Running:
+                    ToRunning?.Invoke();
+                    break;
+                case CollectorStatus.Stopping:
+                    ToStopping?.Invoke();
+                    break;
+                case CollectorStatus.Stopped:
+                    ToStopped?.Invoke();
+                    break;
+            }
+        }
+
+        #region Obsolets
         [Obsolete("Use method AddSystemMonitoringSensors(options) in Windows collection")]
         public void InitializeSystemMonitoring(bool isCPU, bool isFreeRam, string specificPath = null)
         {
@@ -151,7 +227,7 @@ namespace HSMDataCollector.Core
                     Windows.AddFreeRamMemory(options);
             }
 
-            Start();
+            _ = Start();
         }
 
         [Obsolete("Use method AddProcessSensors(options) in Windows or Unix collections")]
@@ -178,7 +254,7 @@ namespace HSMDataCollector.Core
                     Windows.AddProcessThreadCount(options);
             }
 
-            Start();
+            _ = Start();
         }
 
         [Obsolete("Method has no implementation")]
@@ -204,7 +280,7 @@ namespace HSMDataCollector.Core
             else
                 Windows.AddCollectorHeartbeat(options);
 
-            Start();
+            _ = Start();
         }
 
         [Obsolete("Use method AddWindowsSensors(options) in Windows collection")]
@@ -226,12 +302,12 @@ namespace HSMDataCollector.Core
                 return false;
             }
 
-            Start();
+            _ = Start();
 
             return true;
         }
 
-        public bool IsSensorExists(string path) => _nameToSensor.ContainsKey(path) || _sensorsStorage.ContainsKey(path);
+        #endregion
 
         #region Generic sensors functionality
 
@@ -263,7 +339,7 @@ namespace HSMDataCollector.Core
 
             var sensor = new InstantFileSensor(path, fileName, extension, _dataQueue as IValuesQueue, description);
             AddNewSensor(sensor, path);
-            
+
             return sensor;
         }
 
@@ -271,11 +347,11 @@ namespace HSMDataCollector.Core
         {
             if (!File.Exists(filePath))
                 return default;
-            
+
             var file = new FileInfo(filePath);
-            
+
             return _hsmClient.SendFileAsync(file, sensorPath, status, comment);
-        }   
+        }
 
         public ILastValueSensor<bool> CreateLastValueBoolSensor(string path, bool defaultValue, string description = "")
         {

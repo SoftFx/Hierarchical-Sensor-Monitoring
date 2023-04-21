@@ -1,9 +1,9 @@
-﻿using HSMSensorDataObjects.SensorValueRequests;
+﻿using HSMDataCollector.Extensions;
+using HSMSensorDataObjects.SensorValueRequests;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Threading;
-using HSMDataCollector.Extensions;
 
 namespace HSMDataCollector.Core
 {
@@ -15,12 +15,12 @@ namespace HSMDataCollector.Core
         private readonly TimeSpan _packageSendingPeriod;
         private readonly int _maxQueueSize;
         private readonly int _maxValuesInPackage;
-        
+
         private Timer _sendTimer;
-        
-        
-        public bool Disposed { get; private set; }
-        
+
+
+        public bool Disposed => _sendTimer != null;
+
 
         public event Action<List<SensorValueBase>> SendValues;
         public event Action<FileSensorValue> FileReceiving;
@@ -34,41 +34,41 @@ namespace HSMDataCollector.Core
         }
 
 
-        public void ReturnData(List<SensorValueBase> values) 
+        public void ReturnData(List<SensorValueBase> values)
         {
-            foreach (var sensorValueBase in values) 
+            foreach (var sensorValueBase in values)
                 Enqueue(_failedQueue, sensorValueBase);
         }
 
         public List<SensorValueBase> DequeueData()
         {
             var dataList = new List<SensorValueBase>(1 << 3);
-            
+
             Dequeue(_failedQueue, dataList);
             Dequeue(_valuesQueue, dataList);
-            
+
             return dataList;
         }
 
         public void ReturnSensorValue(SensorValueBase value) => Enqueue(_failedQueue, value);
-        
+
         public void Enqueue(SensorValueBase value) => Enqueue(_valuesQueue, value.TrimLongComment());
-        
-        public void InitializeTimer()
+
+        public void Init()
         {
             if (_sendTimer == null)
                 _sendTimer = new Timer(OnTimerTick, null, _packageSendingPeriod, _packageSendingPeriod);
         }
-        
+
         public void Stop()
         {
             _sendTimer?.Dispose();
-            Disposed = true;
+            _sendTimer = null;
         }
 
 
         private void OnTimerTick(object state) => SendValues?.Invoke(DequeueData());
-        
+
         private void Enqueue(ConcurrentQueue<SensorValueBase> queue, SensorValueBase value)
         {
             queue.Enqueue(value);

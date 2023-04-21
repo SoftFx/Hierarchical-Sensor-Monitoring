@@ -19,7 +19,7 @@ namespace HSMDataCollector.Core
 
         List<SensorValueBase> DequeueData();
 
-        void InitializeTimer();
+        void Init();
 
         void Stop();
     }
