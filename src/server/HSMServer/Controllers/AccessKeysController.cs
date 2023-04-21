@@ -12,6 +12,8 @@ using System.Collections.Generic;
 using System.Linq;
 using HSMServer.Attributes;
 using HSMServer.Authentication;
+using HSMServer.Constants;
+using HSMServer.Model.Validators;
 using HSMServer.Model.ViewModel;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using Org.BouncyCastle.Math.EC;
@@ -94,8 +96,13 @@ namespace HSMServer.Controllers
             if (string.IsNullOrEmpty(key.EncodedProductId))
                 key.EncodedProductId = key.SelectedProduct;
             
-            TreeValuesCache.AddAccessKey(key.ToModel((HttpContext.User as User).Id));
+            AccessKeyNameValidator validator = new AccessKeyNameValidator(TreeValuesCache);
+            var results = validator.Validate(key.DisplayName);
 
+            if (!results.IsValid)
+                TempData[TextConstants.TempDataErrorText] = ValidatorHelper.GetErrorString(results.Errors);
+            else
+                TreeValuesCache.AddAccessKey(key.ToModel((HttpContext.User as User).Id));
 
             if (string.IsNullOrEmpty(key.EncodedProductId))
                 return PartialView("_AllAccessKeys", GenerateFullViewModel());
