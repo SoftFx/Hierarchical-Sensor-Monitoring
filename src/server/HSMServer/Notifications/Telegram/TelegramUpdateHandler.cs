@@ -66,8 +66,9 @@ namespace HSMServer.Notifications
                 {
                     TelegramBotCommands.Start => StartBot(parts, message, isUserChat),
                     TelegramBotCommands.Info => EntitiesInfo(message.Chat, isUserChat),
-                    TelegramBotCommands.Status => ServerStatus(),
+                    TelegramBotCommands.Server => ServerStatus(),
                     TelegramBotCommands.Icons => IconsInfo(),
+                    TelegramBotCommands.StatusPriority => StatusPriority(),
                     _ => null,
                 };
 
@@ -148,5 +149,8 @@ namespace HSMServer.Notifications
             """.EscapeMarkdownV2();
 
         private static string ServerStatus() => $"HSM server {ServerConfig.Version} is alive.".EscapeMarkdownV2();
+
+        private static string StatusPriority() =>
+            $"{Core.OffTime.ToIcon()} -> {Core.Ok.ToIcon()} -> {Core.Warning.ToIcon()} ({ExpectedUpdateIntervalPolicy.PolicyIcon}) -> {Core.Error.ToIcon()}".EscapeMarkdownV2();
     }
 }
