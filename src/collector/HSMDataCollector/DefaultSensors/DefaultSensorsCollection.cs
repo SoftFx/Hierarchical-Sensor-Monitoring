@@ -6,6 +6,7 @@ using HSMDataCollector.Options;
 using HSMDataCollector.PublicInterface;
 using System;
 using System.Runtime.InteropServices;
+using HSMDataCollector.DefaultSensors;
 
 namespace HSMDataCollector.DefaultSensors
 {
@@ -128,9 +129,14 @@ namespace HSMDataCollector.DefaultSensors
         }
 
 
-        IWindowsCollection IWindowsCollection.AddCollectorAlive(SensorOptions options)
+        IWindowsCollection IWindowsCollection.AddCollectorHeartbeat(MonitoringSensorOptions options)
         {
             return Register(new CollectorAlive(_defaultOptions.CollectorAliveMonitoring.Get(options)));
+        }
+
+        IWindowsCollection IWindowsCollection.AddProductInfo(ProductInfoOptions options)
+        {
+            return Register(new ProductInfoSensor(_defaultOptions.ProductInfoMonitoring.GetAndFill(options)));
         }
 
 
@@ -178,13 +184,17 @@ namespace HSMDataCollector.DefaultSensors
         }
 
 
-        IUnixCollection IUnixCollection.AddCollectorAlive(SensorOptions options)
+        IUnixCollection IUnixCollection.AddCollectorHeartbeat(MonitoringSensorOptions options)
         {
             return Register(new CollectorAlive(_defaultOptions.CollectorAliveMonitoring.Get(options)));
         }
+        
+        IUnixCollection IUnixCollection.AddProductInfo(ProductInfoOptions options)
+        {
+            return Register(new ProductInfoSensor(_defaultOptions.ProductInfoMonitoring.GetAndFill(options)));
+        }
 
-
-        private DefaultSensorsCollection AddDisksMonitoring(DiskSensorOptions options, Func<DiskSensorOptions, MonitoringSensorBase> newSensorFunc)
+        private DefaultSensorsCollection AddDisksMonitoring(DiskSensorOptions options, Func<DiskSensorOptions, SensorBase> newSensorFunc)
         {
             foreach (var diskOptions in _defaultOptions.DiskMonitoring.GetAllDisksOptions(options))
                 ToWindows(newSensorFunc(diskOptions));
@@ -192,17 +202,17 @@ namespace HSMDataCollector.DefaultSensors
             return this;
         }
 
-        private DefaultSensorsCollection ToWindows(MonitoringSensorBase sensor)
+        private DefaultSensorsCollection ToWindows(SensorBase sensor)
         {
             return !IsUnixOS ? Register(sensor) : throw _notSupportedException;
         }
 
-        private DefaultSensorsCollection ToUnix(MonitoringSensorBase sensor)
+        private DefaultSensorsCollection ToUnix(SensorBase sensor)
         {
             return IsUnixOS ? Register(sensor) : throw _notSupportedException;
         }
 
-        private DefaultSensorsCollection Register(MonitoringSensorBase sensor)
+        private DefaultSensorsCollection Register(SensorBase sensor)
         {
             _storage.Register(sensor.SensorPath, sensor);
 

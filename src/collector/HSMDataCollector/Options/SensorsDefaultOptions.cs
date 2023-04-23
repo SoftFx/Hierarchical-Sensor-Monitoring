@@ -11,5 +11,7 @@
         internal WindowsInfoMonitoringOptions WindowsInfoMonitoring { get; } = new WindowsInfoMonitoringOptions();
 
         internal CollectorAliveOptions CollectorAliveMonitoring { get; } = new CollectorAliveOptions();
+
+        internal ProductVersionOptions ProductInfoMonitoring { get; } = new ProductVersionOptions();
     }
 }

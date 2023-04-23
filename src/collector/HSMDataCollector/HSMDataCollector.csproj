@@ -5,12 +5,12 @@
 		<OutputType>Library</OutputType>
 		<GenerateBindingRedirectsOutputType>true</GenerateBindingRedirectsOutputType>
 		<GenerateAssemblyInfo>false</GenerateAssemblyInfo>
-		<Version>3.0.5</Version>
+		<Version>3.1.0</Version>
 		<Authors>HSM team</Authors>
 		<Company>Soft-FX</Company>
 		<PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
 		<PackageLicenseExpression>MIT</PackageLicenseExpression>
-		<Copyright>Copyright © 2022</Copyright>
+		<Copyright>Copyright © 2023</Copyright>
 		<IsPackable>true</IsPackable>
 		<Description>Data objects for HSMDataCollector</Description>
 		<DisableImplicitNuGetFallbackFolder>true</DisableImplicitNuGetFallbackFolder>

@@ -1,8 +1,8 @@
-﻿using HSMDataCollector.Extensions;
-using HSMDataCollector.Options;
+﻿using HSMDataCollector.Options;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
+using HSMDataCollector.Extensions;
 
 namespace HSMDataCollector.DefaultSensors
 {
@@ -17,9 +17,9 @@ namespace HSMDataCollector.DefaultSensors
         private BarType _internalBar;
 
         protected sealed override TimeSpan TimerDueTime => _receiveDataPeriod.GetTimerDueTime();
+        
 
-
-        public BarMonitoringSensorBase(BarSensorOptions options) : base(options)
+        protected BarMonitoringSensorBase(BarSensorOptions options) : base(options)
         {
             _barPeriod = options.BarPeriod;
             _collectBarPeriod = options.CollectBarPeriod;
@@ -40,11 +40,11 @@ namespace HSMDataCollector.DefaultSensors
             return isStarted;
         }
 
-        internal override void Stop()
+        internal override Task Stop()
         {
             _collectTimer?.Dispose();
 
-            base.Stop();
+            return base.Stop();
         }
 
 
