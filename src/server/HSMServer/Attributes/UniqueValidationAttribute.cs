@@ -34,19 +34,18 @@ namespace HSMServer.Attributes
 
         private bool AccessKeyNameCheck(EditAccessKeyViewModel model, ITreeValuesCache cache)
         {
-            model.EncodedProductId ??= model.SelectedProduct;
-            model.SelectedProduct ??= model.EncodedProductId;
+            model.SelectedProductId ??= Guid.Empty.ToString();
             
-            if ((string.IsNullOrEmpty(model.EncodedProductId) && string.IsNullOrEmpty(model.SelectedProduct)) ||
-                (Guid.Parse(model.EncodedProductId) == Guid.Empty && Guid.Parse(model.SelectedProduct) == Guid.Empty))
+            if (Guid.TryParse(model.SelectedProductId, out var id) && id == Guid.Empty)
             {
-                return !cache.GetAccessKeys().Where(x => x.ProductId == Guid.Empty).Any(x => x.DisplayName.Equals(model.DisplayName, StringComparison.InvariantCultureIgnoreCase) && x.Id != model.Id);
+                var serverKeys = cache.GetAccessKeys().Where(x => x.ProductId == Guid.Empty);
+
+                return !serverKeys.Any(x => x.DisplayName == model.DisplayName && x.Id != model.Id);
             }
             
-            var product = cache.GetProduct(Guid.Parse(model.SelectedProduct));
+            var product = cache.GetProduct(id);
 
-            return !product.AccessKeys.Values.Any(x => x.DisplayName.Equals(model.DisplayName, StringComparison.InvariantCultureIgnoreCase));
+            return !product.AccessKeys.Values.Any(x => x.DisplayName == model.DisplayName && x.Id != model.Id);
         }
-        
     }
 }

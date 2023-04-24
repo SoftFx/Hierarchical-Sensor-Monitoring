@@ -10,7 +10,7 @@
 <form asp-controller="@ViewConstants.AccessKeysController"
       asp-action="@(Model.IsModify ? nameof(AccessKeysController.ModifyAccessKey) : nameof(AccessKeysController.NewAccessKey))"
       method="post" id="newEditAccessKey_form">
-    <input id='accessKey_prodcutId' style='display: none' asp-for="EncodedProductId" value="@Model.EncodedProductId"/>
+    <input id='accessKey_prodcutId' style='display: none' asp-for="SelectedProductId" value="@Model.SelectedProductId"/>
     
     <input id='accessKeyId' style='display: none' asp-for="Id" value="@Model.Id"/>
     <input id='whetherCloseModal' style='display: none' asp-for="CloseModal" value="@Model.CloseModal"/>
@@ -19,15 +19,15 @@
     <input style='display: none' asp-for="ProductsItems" value="@Model.ProductsItems"/>
     <div class="row">
         <div class="form-group col-4">
-            <label asp-for="SelectedProduct" class="col-form-label"></label>
-            @if (Model.IsModify || !string.IsNullOrEmpty(Model.SelectedProduct))
+            <label asp-for="SelectedProductId" class="col-form-label"></label>
+            @if (Model.IsModify || !string.IsNullOrEmpty(Model.SelectedProductId))
             {
-                <input type="text" value="@Model.SelectedProduct" class="form-control" disabled/>
+                <input type="text" value="@Model.SelectedProductId" class="form-control" disabled/>
             }
             else
             {
-                <select asp-for="SelectedProduct" asp-items="@Model.ProductsItems" class="form-control form-select">
-                    <option value="">All products</option>
+                <select asp-for="SelectedProductId" asp-items="@Model.ProductsItems" class="form-control form-select">
+                    <option value="@Guid.Empty">All products</option>
                 </select>
             }
         </div>

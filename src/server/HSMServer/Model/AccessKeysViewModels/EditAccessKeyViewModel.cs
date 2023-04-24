@@ -34,7 +34,8 @@ namespace HSMServer.Model.AccessKeysViewModels
         public bool IsModify { get; set; }
 
 
-        public string EncodedProductId { get; set; }
+        [Display(Name = "Product")]
+        public string SelectedProductId { get; set; }
 
         [Display(Name = "Display name")]
         [Required(ErrorMessage = "{0} is required.")]
@@ -68,10 +69,6 @@ namespace HSMServer.Model.AccessKeysViewModels
         }).ToList();
         
 
-        [Display(Name = "Product name")]
-        public string SelectedProduct { get; set; }
-
-
         // public constructor without parameters for action Home/NewAccessKey
         public EditAccessKeyViewModel()
         {
@@ -94,7 +91,7 @@ namespace HSMServer.Model.AccessKeysViewModels
 
         internal AccessKeyModel ToModel(Guid userId)
         {
-            AccessKeyModel accessKey = new(userId, string.IsNullOrEmpty(EncodedProductId) ? Guid.Empty : SensorPathHelper.DecodeGuid(EncodedProductId))
+            AccessKeyModel accessKey = new(userId, string.IsNullOrEmpty(SelectedProductId) ? Guid.Empty : SensorPathHelper.DecodeGuid(SelectedProductId))
             {
                 ExpirationTime = BuildExpirationTime(),
             };

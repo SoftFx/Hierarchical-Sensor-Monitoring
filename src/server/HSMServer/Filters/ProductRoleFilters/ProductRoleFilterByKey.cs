@@ -15,6 +15,6 @@ namespace HSMServer.Filters.ProductRoleFilters
 
 
         protected override Guid? GetProductId(object arg, ActionExecutingContext _) =>
-            arg is EditAccessKeyViewModel key ? SensorPathHelper.DecodeGuid(key.EncodedProductId) : null;
+            arg is EditAccessKeyViewModel key ? SensorPathHelper.DecodeGuid(key.SelectedProductId) : null;
     }
 }
