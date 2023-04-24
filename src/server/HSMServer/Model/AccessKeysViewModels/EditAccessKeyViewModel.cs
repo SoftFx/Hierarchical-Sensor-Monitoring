@@ -5,7 +5,6 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.Linq;
-using System.Runtime.Intrinsics.X86;
 using HSMServer.Helpers;
 using Microsoft.AspNetCore.Mvc.Rendering;
 
@@ -30,7 +29,7 @@ namespace HSMServer.Model.AccessKeysViewModels
 
         public string ExpirationTime { get; init; }
 
-        public bool CloseModal { get; set; }
+        public bool CloseModal { get; init; }
 
         public bool IsModify { get; set; }
 
@@ -65,7 +64,7 @@ namespace HSMServer.Model.AccessKeysViewModels
         {
             Text = x.DisplayName,
             Value = x.Id.ToString(),
-            Selected = x.DisplayName == SelectedProduct
+            Selected = false
         }).ToList();
         
 
@@ -90,15 +89,6 @@ namespace HSMServer.Model.AccessKeysViewModels
             CanAddSensors = key.Permissions.HasFlag(KeyPermissions.CanAddSensors);
             CanReadSensorData = key.Permissions.HasFlag(KeyPermissions.CanReadSensorData);
             CanUseGrafana = key.Permissions.HasFlag(KeyPermissions.CanUseGrafana);
-        }
-
-        public EditAccessKeyViewModel GenerateProducts(List<ProductModel> products)
-        {
-            CloseModal = true;
-            Products = products;
-            Guid.TryParse(EncodedProductId, out var id);
-            SelectedProduct = Products.FirstOrDefault(x => x.Id == id)?.DisplayName;
-            return this;
         }
 
 
