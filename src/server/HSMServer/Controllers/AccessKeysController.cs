@@ -115,7 +115,7 @@ namespace HSMServer.Controllers
                     EncodedProductId = SensorPathHelper.EncodeGuid(key.ProductId),
                     CloseModal = closeModal,
                     IsModify = true,
-                    SelectedProduct = TreeValuesCache.GetProductNameById(key.ProductId)
+                    SelectedProduct = key.ProductId == Guid.Empty ? "Server": TreeValuesCache.GetProductNameById(key.ProductId)
                 });
         }
 
@@ -128,6 +128,10 @@ namespace HSMServer.Controllers
 
             TreeValuesCache.UpdateAccessKey(key.ToAccessKeyUpdate());
 
+            if (Guid.TryParse(key.EncodedProductId, out var id) && id == Guid.Empty)
+                return PartialView("_AllAccessKeys", GenerateFullViewModel());
+            
+            
             return GetPartialProductAccessKeys(key.EncodedProductId);
         }
 
