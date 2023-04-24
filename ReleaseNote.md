@@ -45,8 +45,8 @@ It allows you to group different products and set the same settings for them (te
 ## Telegram
 
 * **From parent** for Telegram notifications setting is available from a product in a folder.
-* /status command has been renamed to /server
-* /status_priority command has been added
+* /status command has been renamed to **/server**
+* **/status_priority** command has been added
 * Icon for Offtime status has been changed to 💤
 * Other minor improvements...
 
