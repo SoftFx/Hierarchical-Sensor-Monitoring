@@ -124,7 +124,16 @@ namespace HSMServer.Controllers
         public IActionResult ModifyAccessKey(EditAccessKeyViewModel key)
         {
             if (!ModelState.IsValid)
+            {
+                if (CurrentUser.IsAdmin)
+                {
+                    Guid.TryParse(key.EncodedProductId, out var currId);
+                    key.Products = TreeValuesCache.GetProducts().ToList();
+                    key.SelectedProduct = currId == Guid.Empty ? "Server" : TreeValuesCache.GetProductNameById(currId);
+                    key.IsModify = true;
+                }
                 return GetPartialNewAccessKey(key);
+            }
 
             TreeValuesCache.UpdateAccessKey(key.ToAccessKeyUpdate());
 
