@@ -34,18 +34,17 @@ namespace HSMServer.Attributes
 
         private bool AccessKeyNameCheck(EditAccessKeyViewModel model, ITreeValuesCache cache)
         {
+            if (string.IsNullOrEmpty(model.EncodedProductId) && string.IsNullOrEmpty(model.SelectedProduct))
+            {
+                return !cache.GetAccessKeys().Any(x => x.DisplayName.Equals(model.DisplayName, StringComparison.InvariantCultureIgnoreCase));
+            }
+            
             model.EncodedProductId ??= model.SelectedProduct;
             model.SelectedProduct ??= model.EncodedProductId;
             
-            if ((string.IsNullOrEmpty(model.EncodedProductId) && string.IsNullOrEmpty(model.SelectedProduct)) ||
-                (Guid.Parse(model.EncodedProductId) == Guid.Empty && Guid.Parse(model.SelectedProduct) == Guid.Empty))
-            {
-                return !cache.GetAccessKeys().Where(x => x.ProductId == Guid.Empty).Any(x => x.DisplayName.Equals(model.DisplayName, StringComparison.InvariantCultureIgnoreCase) && x.Id != model.Id);
-            }
-
             var product = cache.GetProduct(Guid.Parse(model.SelectedProduct));
 
-            return !product.AccessKeys.Values.Any(x => x.DisplayName.Equals(model.DisplayName, StringComparison.InvariantCultureIgnoreCase) && x.Id != model.Id);
+            return !product.AccessKeys.Values.Any(x => x.DisplayName.Equals(model.DisplayName, StringComparison.InvariantCultureIgnoreCase));
         }
         
     }
