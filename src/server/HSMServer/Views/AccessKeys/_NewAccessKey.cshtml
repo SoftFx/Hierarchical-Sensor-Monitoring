@@ -54,11 +54,11 @@
 
     <div class="form-group row mt-2">
         <label class="col-auto col-form-label" asp-for="Permissions"></label>
-        <button class="col-auto btn btn-light btn-sm" type="button" onclick="selectAllCheckBoxes()">Select all</button>
+        <button id="checkboxButton" class="col-auto btn btn-light btn-sm" type="button">Select all</button>
     </div>
     <span asp-validation-for="Permissions"></span>
 
-    <div class="form-group" id="permissions">
+    <div class="form-group" onchange="onChangeCheckBoxes()" id="permissions">
         <div class="form-check form-check-inline">
             <input class="form-check-input" type="checkbox" asp-for="CanSendSensorData">
             <label class="form-check-label" asp-for="CanSendSensorData"></label>
@@ -91,6 +91,10 @@
 
 
 <script>
+    $(document).ready(function () {
+        onChangeCheckBoxes();
+    })
+
     $(document).on("submit", "#newEditAccessKey_form", function (event) {
         event.preventDefault();
         event.stopImmediatePropagation();
@@ -119,6 +123,21 @@
         });
     });
 
+    function onChangeCheckBoxes(){
+        let i = 0;
+        $('#permissions :checkbox').each(function () {
+            if (this.checked === true)
+                i++;
+        });
+        
+        if (i === $('#permissions :checkbox').length) {
+            $('#checkboxButton').off('click').on('click', unSelectAllCheckBoxes).html('Unselect all');
+        }
+        else {
+            $('#checkboxButton').off('click').on('click', selectAllCheckBoxes).html('Select all');
+        } 
+    }
+    
     function cancelButtonClick() {
         closeModalOrShowAccessKeysList($('#whetherCloseModal').val(), function () {
             showAccessKeysList($('#accessKey_prodcutId').val(), false);
@@ -129,6 +148,16 @@
         $('#permissions :checkbox').each(function () {
             this.checked = true;
         });
+        
+        $('#checkboxButton').off('click').on('click', unSelectAllCheckBoxes).html('Unselect all');
+    }
+    
+    function unSelectAllCheckBoxes(){
+        $('#permissions :checkbox').each(function () {
+            this.checked = false;
+        });
+        
+        $('#checkboxButton').off('click').on('click', selectAllCheckBoxes).html('Select all');
     }
 
     function closeModalOrShowAccessKeysList(whetherCloseModal, showAccessKeys) {
