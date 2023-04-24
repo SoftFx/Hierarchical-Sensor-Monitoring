@@ -19,8 +19,6 @@ namespace HSMDataCollector.Core
 
         void Push(SensorValueBase value);
 
-        void PushFailValues(List<SensorValueBase> values);
-
         void PushFailValue(SensorValueBase value);
     }
 }

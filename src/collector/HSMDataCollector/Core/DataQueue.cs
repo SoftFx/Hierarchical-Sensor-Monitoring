@@ -39,6 +39,8 @@ namespace HSMDataCollector.Core
 
         public void Stop()
         {
+            Flush();
+
             _sendTimer?.Dispose();
             _sendTimer = null;
         }
@@ -49,12 +51,6 @@ namespace HSMDataCollector.Core
         public void Push(SensorValueBase value) => Enqueue(_valuesQueue, value.TrimLongComment());
 
         public void PushFailValue(SensorValueBase value) => Enqueue(_failedQueue, value);
-
-        public void PushFailValues(List<SensorValueBase> values)
-        {
-            foreach (var sensorValueBase in values)
-                Enqueue(_failedQueue, sensorValueBase);
-        }
 
 
         private void Enqueue(ConcurrentQueue<SensorValueBase> queue, SensorValueBase value)

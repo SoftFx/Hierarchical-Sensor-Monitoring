@@ -41,6 +41,9 @@ namespace HSMDataCollector.Bar
         {
             _barTimer?.Dispose();
             _smallTimer?.Dispose();
+
+            _barTimer = null;
+            _smallTimer = null;
         }
 
         public void Restart(int barPeriod, int smallPeriod)
@@ -124,9 +127,12 @@ namespace HSMDataCollector.Bar
         {
             Stop();
 
-            _smallTimer = new Timer(SmallTimerTick, null, TimeSpan.FromMilliseconds(smallTimerPeriod), TimeSpan.FromMilliseconds(smallTimerPeriod));
+            if (_smallTimer == null)
+                _smallTimer = new Timer(SmallTimerTick, null, TimeSpan.FromMilliseconds(smallTimerPeriod), TimeSpan.FromMilliseconds(smallTimerPeriod));
 
-            _barTimer = new Timer(SendDataTimer, null, GetSpanUntilFirstTick(barTimePeriod), TimeSpan.FromMilliseconds(barTimePeriod));
+            if (_barTimer == null)
+                _barTimer = new Timer(SendDataTimer, null, GetSpanUntilFirstTick(barTimePeriod), TimeSpan.FromMilliseconds(barTimePeriod));
+
             barStart = DateTime.Now;
         }
 

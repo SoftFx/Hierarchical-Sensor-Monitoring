@@ -15,12 +15,5 @@ namespace HSMDataCollector.Core
         public int MaxValuesInPackage { get; set; } = 1000;
 
         public TimeSpan PackageCollectPeriod { get; set; } = TimeSpan.FromSeconds(15);
-
-
-        internal string ConnectionAddress => $"{ServerAddress}:{Port}/api/sensors";
-
-        internal string ListEndpoint => $"{ConnectionAddress}/list";
-
-        internal string FileEndpoint => $"{ConnectionAddress}/file";
     }
 }

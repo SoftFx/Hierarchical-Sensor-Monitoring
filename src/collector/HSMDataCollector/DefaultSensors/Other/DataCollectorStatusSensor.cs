@@ -13,12 +13,14 @@ namespace HSMDataCollector.DefaultSensors.Other
         public CollectorStatusSensor(SensorOptions options) : base(options) { }
 
 
-        public void SendValue(CollectorStatus status, string error) =>
-            SendValue(new StringSensorValue
+        public void BuildAndSendValue(HSMClient client, CollectorStatus status, string error)
+        {
+            client.SendData(new StringSensorValue
             {
                 Comment = error,
                 Value = $"{status}",
                 Status = string.IsNullOrEmpty(error) ? SensorStatus.Ok : SensorStatus.Error,
             });
+        }
     }
 }

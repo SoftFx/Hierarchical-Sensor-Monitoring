@@ -66,12 +66,16 @@ namespace HSMDataCollector.Core
         /// <param name="options">Common options for datacollector</param>
         public DataCollector(CollectorOptions options)
         {
+            _sensorsOptions = new SensorsDefaultOptions();
+
             _dataQueue = new DataQueue(options);
             _sensorsStorage = new SensorsStorage(_dataQueue as IValuesQueue, _logManager);
+            _defaultCollection = new DefaultSensorsCollection(_sensorsStorage, _sensorsOptions);
+
             _hsmClient = new HSMClient(options, _dataQueue, _logManager);
 
-            _sensorsOptions = new SensorsDefaultOptions();
-            _defaultCollection = new DefaultSensorsCollection(_sensorsStorage, _sensorsOptions);
+            ToRunning += _dataQueue.Init;
+            ToStopped += _dataQueue.Stop;
         }
 
         /// <summary>
@@ -119,8 +123,6 @@ namespace HSMDataCollector.Core
                 if (!Status.IsStopped())
                     return;
 
-                _dataQueue.Init();
-
                 ChangeStatus(CollectorStatus.Starting);
 
                 foreach (var oldSensor in _nameToSensor.Values)
@@ -137,7 +139,7 @@ namespace HSMDataCollector.Core
         }
 
 
-        public Task Stop() => Start(Task.CompletedTask);
+        public Task Stop() => Stop(Task.CompletedTask);
 
         public async Task Stop(Task customStartingTask)
         {
@@ -150,7 +152,7 @@ namespace HSMDataCollector.Core
 
                 await Task.WhenAll(_sensorsStorage.Stop(), customStartingTask);
 
-                StopQueue();
+                StopSensors();
             }
             catch (Exception ex)
             {
@@ -167,7 +169,10 @@ namespace HSMDataCollector.Core
 
             _sensorsStorage.Dispose();
 
-            StopQueue();
+            StopSensors();
+
+            ToRunning -= _dataQueue.Init;
+            ToStopped -= _dataQueue.Stop;
 
             _hsmClient.Dispose();
         }
@@ -176,10 +181,8 @@ namespace HSMDataCollector.Core
         public bool IsSensorExists(string path) => _nameToSensor.ContainsKey(path) || _sensorsStorage.ContainsKey(path);
 
 
-        private void StopQueue()
+        private void StopSensors()
         {
-            _dataQueue.Flush();
-
             var lastData = _nameToSensor.Values.Where(v => v.HasLastValue).Select(v => v.GetLastValue()).ToList();
 
             _hsmClient.SendData(lastData);
@@ -196,10 +199,7 @@ namespace HSMDataCollector.Core
 
             _logManager.Logger?.Info($"DataCollector -> {newStatus}");
 
-            _defaultCollection.StatusSensor?.SendValue(newStatus, error);
-
-            if (newStatus.IsStopped())
-                _dataQueue.Stop();
+            _defaultCollection.StatusSensor?.BuildAndSendValue(_hsmClient, newStatus, error);
 
             switch (newStatus)
             {
