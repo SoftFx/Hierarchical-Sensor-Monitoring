@@ -15,7 +15,7 @@ namespace HSMServer.Core
             SensorStatus.Ok => "✅",
             SensorStatus.Warning => "⚠️",
             SensorStatus.Error => "❌",
-            SensorStatus.OffTime => "⏸",
+            SensorStatus.OffTime => "💤",
             _ => "❓"
         };
     }

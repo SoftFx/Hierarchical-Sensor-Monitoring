@@ -28,7 +28,6 @@ namespace HSMServer.Core.Tests.Infrastructure
             {
                 Id = id ?? Guid.NewGuid(),
                 Description = RandomGenerator.GetRandomString(),
-                Unit = RandomGenerator.GetRandomString(),
                 ExpectedUpdateInterval = new(TimeSpan.FromMinutes(10).Ticks),
                 State = SensorState.Blocked,
             };

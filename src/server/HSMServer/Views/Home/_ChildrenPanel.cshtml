@@ -29,12 +29,10 @@
 
     List<NodeViewModel> GetSortedNodes<T>(IEnumerable<T> nodes) where T : NodeViewModel
     {
-        var visibleNodes = nodes.Where(n => n.HasData);
-        var sortedNodes = user.TreeFilter.TreeSortType == TreeSortType.ByName
-            ? visibleNodes.OrderBy(n => n.Name)
-            : visibleNodes.OrderByDescending(n => n.UpdateTime);
-
-        return sortedNodes.Cast<NodeViewModel>().ToList();
+        return nodes.Where(n => n.HasData)
+                    .OrderByDescending(n => n.Status)
+                    .ThenBy(n => n.Name)
+                    .Cast<NodeViewModel>().ToList();
     }
 }
 

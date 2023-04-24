@@ -1,5 +1,6 @@
 ﻿@using HSMServer.Model.Authentication
 @using HSMServer.Model.Folders.ViewModels
+@using HSMServer.Extensions
 
 @model FolderUsersViewModel
 
@@ -33,7 +34,7 @@
                         <select class='form-select' id='userRoleToAdd'>
                             @foreach (ProductRoleEnum role in Enum.GetValues<ProductRoleEnum>())
                             {
-                                <option value='@((int)role)'>@role</option>
+                                <option value='@((int)role)'>@role.GetDisplayName()</option>
                             }
                         </select>
                     </div>

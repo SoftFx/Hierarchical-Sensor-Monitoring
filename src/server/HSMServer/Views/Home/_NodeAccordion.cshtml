@@ -15,19 +15,21 @@
                 <div class="w-100">
                     <div class='row justify-content-between'>
                         <div class='row col-md-auto'>
-                            <div class='col-md-auto sensor-icon-without-padding'>
-                                <li id='status_@nodeId' class='@Model.Status.ToIcon() sensor-icon-with-margin' title='Status: @Model.Status'></li>
-                                @if (Model is SensorNodeViewModel sensor)
-                                {
-                                    <span id='validation_@nodeId'>
-                                        @if (sensor.IsValidationErrorVisible)
-                                        {
-                                            <li id='errorIcon_@nodeId' class='fas fa-exclamation-triangle' style='margin-right:5px' title='@sensor.ValidationError'></li>
-                                        }
-                                    </span>
-                                }
+                            <div class="row">
+                                <div class='col-md-auto sensor-icon-without-padding'>
+                                    <li id='status_@nodeId' class='@Model.Status.ToIcon() sensor-icon-with-margin' title='Status: @Model.Status'></li>
+                                </div>
+                                @Model.Name
                             </div>
-                            @Model.Name
+                            @if (Model is SensorNodeViewModel sensor)
+                            {
+                                <span id='validation_@nodeId'>
+                                    @if (sensor.IsValidationErrorVisible)
+                                    {
+                                        <li id='errorIcon_@nodeId' class='fas fa-exclamation-triangle' style='margin-right:5px' title='@sensor.ValidationError'></li>
+                                    }
+                                </span>
+                            }
                         </div>
                         <div class='col-md-auto time-ago-div me-1' id='update_@nodeId'>updated @Model.UpdateTime.GetTimeAgo()</div>
                     </div>

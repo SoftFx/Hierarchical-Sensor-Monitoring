@@ -37,8 +37,6 @@ namespace HSMServer.Core.Model
 
         public SensorState State { get; private set; }
 
-        public string Unit { get; private set; } //TODO remove
-
 
         public bool IsWaitRestore=> !ServerPolicy.CheckRestorePolicies(Status.Status, LastUpdateTime).IsOk;
 
@@ -57,7 +55,6 @@ namespace HSMServer.Core.Model
         public BaseSensorModel(SensorEntity entity) : base(entity)
         {
             State = (SensorState)entity.State;
-            Unit = entity.Unit;
             EndOfMuting = entity.EndOfMuting > 0L ? new DateTime(entity.EndOfMuting) : null;
         }
 
@@ -90,7 +87,6 @@ namespace HSMServer.Core.Model
         {
             base.Update(update);
 
-            Unit = update.Unit ?? Unit;
             State = update?.State ?? State;
             EndOfMuting = update?.EndOfMutingPeriod ?? EndOfMuting;
 
@@ -113,7 +109,6 @@ namespace HSMServer.Core.Model
             ProductId = Parent.Id.ToString(),
             DisplayName = DisplayName,
             Description = Description,
-            Unit = Unit,
             CreationDate = CreationDate.Ticks,
             Type = (byte)Type,
             State = (byte)State,
