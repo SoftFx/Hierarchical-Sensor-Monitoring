@@ -98,6 +98,7 @@ namespace HSMServer.Controllers
         {
             ViewBag.ProductName = productName;
             ViewBag.ProductManager = productManager;
+            ViewBag.UserFolders = GetUserFolders();
 
             var userProducts = _treeViewModel.GetUserProducts(CurrentUser);
             var folderProducts = new List<ProductViewModel>(1 << 3);
@@ -249,6 +250,31 @@ namespace HSMServer.Controllers
         }
 
         #endregion
+
+        private Dictionary<string, (string, string, string)> GetUserFolders()
+        {
+            var userFolderIds = new HashSet<Guid>();
+
+            var userProducts = _treeViewModel.GetUserProducts(CurrentUser);
+            var userFolders = _folderManager.GetUserFolders(CurrentUser);
+
+            foreach (var product in userProducts)
+                if (product.FolderId.HasValue)
+                    userFolderIds.Add(product.FolderId.Value);
+
+            foreach (var folder in userFolders)
+                userFolderIds.Add(folder.Id);
+
+
+            var folders = new List<FolderViewModel>(userFolderIds.Count + 1);
+
+            foreach (var folderId in userFolderIds)
+                folders.Add(new FolderViewModel(_folderManager[folderId], null));
+
+            folders = folders.OrderBy(f => f.Name).AddFluent(new FolderViewModel(null));
+
+            return folders.ToDictionary(f => f.Id?.ToString() ?? string.Empty, f => (f.Name, f.Background, f.Foreground));
+        }
 
         private (string, string, string, string, string) GetMailConfiguration()
         {

@@ -460,7 +460,6 @@ namespace HSMServer.Controllers
             {
                 Id = sensor.Id,
                 Description = newModel.Description ?? string.Empty,
-                Unit = newModel.Unit ?? string.Empty,
                 ExpectedUpdateInterval = newModel.ExpectedUpdateInterval.ToModel(),
                 RestoreInterval = newModel.SensorRestorePolicy.ToModel(),
             };
