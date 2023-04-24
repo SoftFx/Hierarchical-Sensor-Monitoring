@@ -7,6 +7,7 @@ using HSMServer.Extensions;
 using HSMServer.Model.TreeViewModel;
 using HSMServer.Notification.Settings;
 using System;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Telegram.Bot;
@@ -235,8 +236,13 @@ namespace HSMServer.Notifications
 
         private void RemoveProductEventHandler(ProductModel model, ActionType transaction)
         {
-            if (transaction == ActionType.Delete && _tree.Nodes.TryGetValue(model.Id, out var product))
-                _addressBook.RemoveAllChats(product);
+            if (transaction == ActionType.Delete)
+            {
+                var product = _addressBook.ServerBook.Keys.FirstOrDefault(e => e.Id == model.Id);
+
+                if (product != null)
+                    _addressBook.RemoveAllChats(product);
+            }
         }
 
         private bool IsValidBotConfigurations() =>
