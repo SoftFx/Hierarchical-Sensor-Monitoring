@@ -4,9 +4,6 @@
     {
         public string ProductId { get; init; }
 
-        public string Unit { get; init; } //TODO remove unit
-
-
         public byte Type { get; init; }
 
         public byte State { get; init; }

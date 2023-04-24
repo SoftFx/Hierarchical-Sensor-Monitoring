@@ -3,7 +3,6 @@
 
     $('#interval_' + sensorId).removeAttr("disabled");
     $('#description_' + sensorId).removeAttr("disabled").removeClass("naked-text");
-    $('#unit_' + sensorId).removeAttr("disabled").removeClass("naked-text");
     $('#saveInfo_' + sensorId).removeAttr("disabled").removeAttr("hidden");
     $('#revertInfo_' + sensorId).removeAttr("disabled").removeAttr("hidden");
     $('#editButtonMetaInfo').addClass('d-none');
