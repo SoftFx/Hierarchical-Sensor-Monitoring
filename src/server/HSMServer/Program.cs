@@ -59,6 +59,12 @@ builder.Services.AddHttpsRedirection(с => с.HttpsPort = serverConfig.Kestrel.S
 
 builder.Services.AddApplicationServices();
 
+builder.Services.Configure<HostOptions>(hostOptions =>
+{
+    hostOptions.BackgroundServiceExceptionBehavior = BackgroundServiceExceptionBehavior.Ignore;
+});
+
+
 try
 {
     var app = builder.Build();
