@@ -9,6 +9,7 @@ It allows you to group different products and set the same settings for them (te
 * Folder meta info panel has been added
 * Product and sensor meta info panels have been fully redesigned
 * Now all description inputs support **Markdown format**
+* Default sorting for Grid and List panels has been changed (by status and then by name)
 
 ### Tree
 * New node type **Folder** has been added
@@ -40,6 +41,7 @@ It allows you to group different products and set the same settings for them (te
 ### Bugfixing
 * Product Manger rights have been restored
 * A sensor will not send the notification about changing state to *Mute* in Telegram
+* Telegram /info command will not contain deleted products
 * Other minor bugfixing...
 
 ## Telegram
