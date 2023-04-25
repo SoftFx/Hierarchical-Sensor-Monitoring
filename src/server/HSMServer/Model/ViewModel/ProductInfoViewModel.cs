@@ -16,11 +16,6 @@ namespace HSMServer.Model.ViewModel
         public List<(SensorType Type, int Count)> SensorsTypes { get; } = new();
 
 
-        public BaseNodeViewModel Parent { get; }
-
-        public string Name { get; }
-
-
         public string TotalSensorTypesMessage { get; }
 
         public int TotalSensors { get; }
@@ -32,18 +27,12 @@ namespace HSMServer.Model.ViewModel
 
         internal ProductInfoViewModel(ProductNodeViewModel product) : base(product)
         {
-            Name = product.Name;
-            Parent = product.Parent;
-            Status = product.Status;
-            LastUpdateTime = product.UpdateTime;
+            SensorsStatuses = product.Sensors.Values.ToGroupedList(x => x.Status);
+            NodeStatuses = product.Nodes.Values.ToGroupedList(x => x.Status);
+            SensorsTypes = product.Sensors.Values.ToGroupedList(x => x.Type);
 
             TotalNodes = product.Nodes.Count;
             TotalSensors = product.Sensors.Count;
-
-            NodeStatuses = product.Nodes.Values.ToGroupedList(x => x.Status);
-            SensorsStatuses = product.Sensors.Values.ToGroupedList(x => x.Status);
-            SensorsTypes = product.Sensors.Values.ToGroupedList(x => x.Type);
-
             TotalSensorTypesMessage = string.Join("\n", SensorsTypes.Select(x => $"{x.Type} {x.Count}").ToArray());
         }
     }

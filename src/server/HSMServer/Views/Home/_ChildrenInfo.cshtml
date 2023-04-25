@@ -1,0 +1,31 @@
+﻿@using HSMServer.Extensions
+@using HSMServer.Model.TreeViewModel
+
+@model (string title, int total, List<(SensorStatus Status, int Count)> statuses)
+
+
+<div class="d-flex justify-content-start">
+    <div class="d-flex ms-3 text-nowrap">
+        <span style="min-width: 8rem">@Model.title:</span>
+    </div>
+    <div class="d-flex w-100 ps-2">
+        @if (Model.total > 0)
+        {
+            @for (int i = 0; i < Model.statuses.Count; i++)
+            {
+                <i class='@Model.statuses[i].Status.ToIcon() pe-1 align-self-center'></i>
+                <span>
+                    (@Model.statuses[i].Count)
+                </span>
+                @if (i != Model.statuses.Count - 1)
+                {
+                    <span>,&nbsp;</span>
+                }
+            }
+        }
+        else
+        {
+            @Model.total
+        }
+    </div>
+</div>

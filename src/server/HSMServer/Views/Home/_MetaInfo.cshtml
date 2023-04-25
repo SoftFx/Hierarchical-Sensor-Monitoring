@@ -2,6 +2,7 @@
 @using HSMServer.Controllers
 @using HSMServer.Extensions
 @using HSMServer.Model.ViewModel
+@using HSMServer.Model.Folders.ViewModels
 @using Microsoft.AspNetCore.Mvc.TagHelpers
 
 @model HSMServer.Model.ViewModel.NodeInfoBaseViewModel
@@ -17,9 +18,18 @@
 <div id="meta_info_@Model.EncodedId">
     <div class="d-flex justify-content-between flex-grow-1">
         <div class='d-flex justify-content-start'>
-            <span id='status_@Model.EncodedId' class='@Model.Status.ToIcon() my-1 align-self-center sensor-icon-with-margin' title='Status: @Model.Status'></span>
-            <h5 class="d-flex my-1 align-self-top">@Html.Raw($"{Model.ProductName}{Model.Path}")</h5>
+            @if (Model is FolderInfoViewModel)
+            {
+                <i class="fa-regular fa-folder my-1 align-self-center sensor-icon-with-margin"></i>
+            }
+            else
+            {
+                <span id='status_@Model.EncodedId' class='@Model.Status.ToIcon() my-1 align-self-center sensor-icon-with-margin' title='Status: @Model.Status'></span>
+            }
+
+            <h5 class="d-flex my-1 align-self-top">@Html.Raw(Model.Header)</h5>
         </div>
+
         <div id='update_@Model.EncodedId' class='d-flex my-1 time-ago-div'>updated @Model.LastUpdateTime.GetTimeAgo()</div>
     </div>
 
@@ -45,60 +55,14 @@
                 General info:
             </div>
 
-            @if (Model is ProductInfoViewModel product)
+            @if (Model is FolderInfoViewModel folder)
             {
-                <div class="d-flex justify-content-start">
-                    <div class="d-flex ms-3 text-nowrap">
-                        <span style="min-width: 8rem">Nodes:</span>
-                    </div>
-                    <div class="d-flex w-100 ps-2">
-                        @if (product.TotalNodes > 0)
-                        {
-                            @for (int i = 0; i < product.NodeStatuses.Count; i++)
-                            {
-                                <i class='@product.NodeStatuses[i].Status.ToIcon() pe-1 align-self-center'></i>
-                                <span>
-                                    (@product.NodeStatuses[i].Count)
-                                </span>
-                                @if (i != product.NodeStatuses.Count - 1)
-                                {
-                                    <span>,&nbsp;</span>
-                                }
-                            }
-                        }
-                        else
-                        {
-                            @product.TotalNodes
-                        }
-                    </div>
-                </div>
-
-                <div class="d-flex justify-content-start">
-                    <div class="d-flex ms-3 text-nowrap">
-                        <span style="min-width: 8rem">Sensors:</span>
-                    </div>
-                    <div class="d-flex w-100 ps-2">
-                        @if (product.TotalSensors > 0)
-                        {
-                            @for (int i = 0; i < product.SensorsStatuses.Count; i++)
-                            {
-                                <i class='@product.SensorsStatuses[i].Status.ToIcon() pe-1 align-self-center'></i>
-                                <span>
-                                    (@product.SensorsStatuses[i].Count)
-                                </span>
-                                @if (i != product.SensorsStatuses.Count - 1)
-                                {
-                                    <span>,&nbsp;</span>
-                                }
-                            }
-                            <i class='fa-solid fa-circle-info ps-1 align-self-center' title="@product.TotalSensorTypesMessage"></i>
-                        }
-                        else
-                        {
-                            @product.TotalSensors
-                        }
-                    </div>
-                </div>
+                @await Html.PartialAsync("_ChildrenInfo", ("Products", folder.TotalProducts, folder.ProductStatuses))
+            }
+            else if (Model is ProductInfoViewModel product)
+            {
+                @await Html.PartialAsync("_ChildrenInfo", ("Nodes", product.TotalNodes, product.NodeStatuses))
+                @await Html.PartialAsync("_ChildrenInfo", ("Sensors", product.TotalSensors, product.SensorsStatuses))
             }
             else if (Model is SensorInfoViewModel sensor)
             {
