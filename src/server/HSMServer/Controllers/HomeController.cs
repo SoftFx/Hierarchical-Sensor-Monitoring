@@ -10,6 +10,7 @@ using HSMServer.Helpers;
 using HSMServer.Model;
 using HSMServer.Model.Authentication.History;
 using HSMServer.Model.Folders;
+using HSMServer.Model.Folders.ViewModels;
 using HSMServer.Model.TreeViewModel;
 using HSMServer.Model.ViewModel;
 using HSMServer.Notification.Settings;
@@ -497,6 +498,33 @@ namespace HSMServer.Controllers
             _treeValuesCache.UpdateProduct(update);
 
             return PartialView("_MetaInfo", new ProductInfoViewModel(product));
+        }
+
+        [HttpGet]
+        public IActionResult GetFolderInfo(string id)
+        {
+            return Guid.TryParse(id, out var folderId) && _folderManager.TryGetValue(folderId, out var folder)
+                ? PartialView("_MetaInfo", new FolderInfoViewModel(folder))
+                : _emptyResult;
+        }
+
+        [HttpPost]
+        public IActionResult UpdateFolderInfo(FolderInfoViewModel newModel)
+        {
+            if (!Guid.TryParse(newModel.EncodedId, out var id) || !_folderManager.TryGetValue(id, out var folder))
+                return _emptyResult;
+
+            var update = new FolderUpdate
+            {
+                Id = folder.Id,
+                Description = newModel.Description ?? string.Empty,
+                ExpectedUpdateInterval = newModel.ExpectedUpdateInterval,
+                RestoreInterval = newModel.SensorRestorePolicy,
+            };
+
+            _folderManager.TryUpdate(update);
+
+            return PartialView("_MetaInfo", new FolderInfoViewModel(folder));
         }
 
         private (string productName, string path) GetSensorProductAndPath(string encodedId)

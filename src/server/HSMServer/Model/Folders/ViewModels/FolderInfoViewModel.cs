@@ -12,6 +12,10 @@ namespace HSMServer.Model.Folders.ViewModels
         public int TotalProducts { get; }
 
 
+
+        // public constructor without parameters for action Home/UpdateFolderInfo
+        public FolderInfoViewModel() : base() { }
+
         internal FolderInfoViewModel(FolderModel folder) : base(folder)
         {
             ProductStatuses = folder.Products.Values.ToGroupedList(x => x.Status);

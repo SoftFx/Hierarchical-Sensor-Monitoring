@@ -10,8 +10,23 @@
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
 
 @{
-    var isProduct = Model is ProductInfoViewModel;
-    var action = isProduct ? nameof(HomeController.UpdateProductInfo) : nameof(HomeController.UpdateSensorInfo);
+    string updateAction = null, getAction = null;
+
+    if (Model is FolderInfoViewModel)
+    {
+        updateAction = nameof(HomeController.UpdateFolderInfo);
+        getAction = nameof(HomeController.GetFolderInfo);
+    }
+    else if (Model is ProductInfoViewModel)
+    {
+        updateAction = nameof(HomeController.UpdateProductInfo);
+        getAction = nameof(HomeController.GetProductInfo);
+    }
+    else if (Model is SensorInfoViewModel)
+    {
+        updateAction = nameof(HomeController.UpdateSensorInfo);
+        getAction = nameof(HomeController.GetSensorInfo);
+    }
 }
 
 
@@ -33,7 +48,7 @@
         <div id='update_@Model.EncodedId' class='d-flex my-1 time-ago-div'>updated @Model.LastUpdateTime.GetTimeAgo()</div>
     </div>
 
-    <form id="editMetaInfo_form" method="post" asp-action="@action">
+    <form id="editMetaInfo_form" method="post" asp-action="@updateAction">
         <input id="metaInfo_encodedId" style='display: none' asp-for="EncodedId" value="@Model.EncodedId"/>
 
         <div id="headline_metainfo" class="d-none d-flex" style="height: 2rem;">
@@ -131,9 +146,7 @@
         });
         
         $('#revertInfo').on('click', function (){
-            revertInfoButtonClick('@isProduct' === 'True'
-                ? "@Url.Action(nameof(HomeController.GetProductInfo), ViewConstants.HomeController)"
-                : "@Url.Action(nameof(HomeController.GetSensorInfo), ViewConstants.HomeController)");
+            revertInfoButtonClick("@Url.Action(getAction, ViewConstants.HomeController)");
            
             $('#metainfo_separator').addClass('d-none');
         });
