@@ -3,34 +3,29 @@
 @using HSMServer.Extensions
 @using HSMServer.Model.ViewModel
 @using Microsoft.AspNetCore.Mvc.TagHelpers
+
 @model HSMServer.Model.ViewModel.NodeInfoBaseViewModel
 
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
 
 @{
     var isProduct = Model is ProductInfoViewModel;
-
-    var action = string.Empty;
-    action = isProduct ? nameof(HomeController.UpdateProductInfo) : nameof(HomeController.UpdateSensorInfo);
+    var action = isProduct ? nameof(HomeController.UpdateProductInfo) : nameof(HomeController.UpdateSensorInfo);
 }
 
+
 <div id="meta_info_@Model.EncodedId">
-    <div class="d-flex mt-1 me-0 justify-content-between flex-grow-1">
+    <div class="d-flex justify-content-between flex-grow-1">
         <div class='d-flex justify-content-start'>
-            <li id='status_@Model.EncodedId' class='@Model.Status.ToIcon() my-1 pt-1 align-self-center sensor-icon-with-margin' title='Status: @Model.Status'></li>
+            <span id='status_@Model.EncodedId' class='@Model.Status.ToIcon() my-1 align-self-center sensor-icon-with-margin' title='Status: @Model.Status'></span>
             <h5 class="d-flex my-1 align-self-top">@Html.Raw($"{Model.ProductName}{Model.Path}")</h5>
         </div>
-        <div class='d-flex my-1'>
-            @if (Model is SensorInfoViewModel sensor)
-            {
-                <input id='sensor_type_@Model.EncodedId' value='@((int)sensor.SensorType)' style='display: none'/>
-            }
-            <div id='update_@Model.EncodedId' class='time-ago-div me-1'>updated @Model.LastUpdateTime.GetTimeAgo()</div>
-        </div>
+        <div id='update_@Model.EncodedId' class='d-flex my-1 time-ago-div'>updated @Model.LastUpdateTime.GetTimeAgo()</div>
     </div>
 
     <form id="editMetaInfo_form" method="post" asp-action="@action">
         <input id="metaInfo_encodedId" style='display: none' asp-for="EncodedId" value="@Model.EncodedId"/>
+
         <div id="headline_metainfo" class="d-none d-flex" style="height: 2rem;">
             <div id="description_title" class="d-none form-control px-0 border-0 fw-bold" style="max-width: 15rem;">
                 Description:
@@ -39,15 +34,17 @@
                 <a id="editButtonMetaInfo" class="d-none d-flex px-2 pb-2" href="#" title='edit meta info'><i class='fas fa-edit align-self-center'></i> Edit</a>
             </div>
         </div>
-        <div class="naked-text ms-1 w-100" id='markdown_span_description_@(Model.EncodedId)'>@Model.Description</div>
+
+        <div class="naked-text ms-1 w-100" id='markdown_span_description'>@Model.Description</div>
         <div class="d-none d-flex w-100 ps-3">
-            <textarea id='description_@(Model.EncodedId)' class="form-control naked-text w-100 d-none"  type='text' asp-for="Description" value='@Model.Description' disabled></textarea>
+            <textarea id='description' class="form-control naked-text w-100 d-none"  type='text' asp-for="Description" value='@Model.Description' disabled></textarea>
         </div>
 
         <div class="collapse" id="metaInfoCollapse">
             <div class="form-control border-0 fw-bold px-0" style="max-width: 15rem;">
                 General info:
             </div>
+
             @if (Model is ProductInfoViewModel product)
             {
                 <div class="d-flex justify-content-start">
@@ -75,6 +72,7 @@
                         }
                     </div>
                 </div>
+
                 <div class="d-flex justify-content-start">
                     <div class="d-flex ms-3 text-nowrap">
                         <span style="min-width: 8rem">Sensors:</span>
@@ -111,7 +109,9 @@
                     <div class="d-flex w-100">
                         <span>@(sensor.SensorType)</span>
                     </div>
+                    <input id='sensor_type_@Model.EncodedId' value='@((int)sensor.SensorType)' style='display: none' />
                 </div>
+
                 <div id="status_metainfo" class="d-flex justify-content-start">
                     <div class="d-flex ms-3 text-nowrap">
                         <span style="min-width: 8rem">Sensor status:</span>
@@ -121,6 +121,7 @@
                         <span id="status_name_@Model.EncodedId">@Model.Status</span>
                     </div>
                 </div>
+
                 <div id="validation_metainfo" class="d-flex justify-content-start">
                     @if (!string.IsNullOrEmpty(sensor.StatusComment))
                     {
@@ -136,105 +137,60 @@
 
             @await Html.PartialAsync("_Alerts", Model)
         </div>
-        <button class="btn btn-outline-secondary w-100
-                               border-start-0 border-end-0 border-top-0 rounded-0 border-bottom-1" id="meta_info_collapse" title="Show more info..." type="button" data-bs-toggle="collapse" onclick="collapseChangeTextContent()" href="#metaInfoCollapse" role="button" aria-expanded="false" aria-controls="metaInfoCollapse" style="border-right-color: unset;--bs-btn-hover-bg: #edf0f5">
+
+        <button class="btn btn-outline-secondary w-100 border-start-0 border-end-0 border-top-0 rounded-0 border-bottom-1"
+                id="meta_info_collapse" title="Show more info..." type="button" data-bs-toggle="collapse" onclick="collapseChangeTextContent()"
+                href="#metaInfoCollapse" role="button" aria-expanded="false" aria-controls="metaInfoCollapse" style="border-right-color: unset;--bs-btn-hover-bg: #edf0f5">
             <i id="collapse_icon" class="fa-solid fa-caret-down"></i>
         </button>
 
         <div class="d-flex justify-content-end mt-3 gap-2 me-0">
-            <button id='saveInfo_@Model.EncodedId' type='submit' class='btn btn-secondary px-2 independentSizeButton'
-                    data-bs-toggle='tooltip' title='save meta info' hidden disabled>
+            <button id='saveInfo' type='submit' class='btn btn-secondary px-2 independentSizeButton' data-bs-toggle='tooltip' title='save meta info' hidden>
                 <span>Save</span>
             </button>
-            <button id='revertInfo_@Model.EncodedId' type='button' class='btn btn-secondary px-2 independentSizeButton' data-bs-toggle='tooltip' title='revert changes' hidden disabled>
+            <button id='revertInfo' type='button' class='btn btn-secondary px-2 independentSizeButton' data-bs-toggle='tooltip' title='revert changes' hidden>
                 <span>Cancel</span>
             </button>
         </div>
     </form>
 </div>
+
 <hr id="metainfo_separator" class="d-none"/>
+
 
 <script>
     $(document).ready(() => {
-        let isNode = '@isProduct' === 'True';
-        
         replaceHTMLtoMarkdown();
+
         $('#editButtonMetaInfo').on('click', function (){
             editInfoButtonClick();
         });
         
-        $('[id^="revertInfo_"]').on('click', function (){
-            if (!isNode) {
-               revertInfoClick();
-            } 
-            else {
-               revertProductInfoClick();    
-            }
+        $('#revertInfo').on('click', function (){
+            revertInfoButtonClick('@isProduct' === 'True'
+                ? "@Url.Action(nameof(HomeController.GetProductInfo), ViewConstants.HomeController)"
+                : "@Url.Action(nameof(HomeController.GetSensorInfo), ViewConstants.HomeController)");
            
             $('#metainfo_separator').addClass('d-none');
         });
     })
-    
+
     $(document).on("submit", "#editMetaInfo_form", function (event) {
-            event.preventDefault();
-            event.stopImmediatePropagation();
-            
-            if ('@isProduct' === 'True'){
-                $.ajax({
-                    url: $("#editMetaInfo_form").attr("action"),
-                    type: 'POST',
-                    data: new FormData(this),
-                    datatype: 'html',
-                    processData: false,
-                    contentType: false,
-                    cache: false,
-                    async: true,
-                        success: function (viewData) {
-                            $('#editButtonMetaInfo').attr('hidden', false);
-                            $('#meta_info_' + $('#metaInfo_encodedId').val()).html(viewData);
-                            let metaInfo = $('#metaInfoCollapse');
-                                
-                            metaInfo.addClass('no-transition');
-                            $('#meta_info_collapse').click();
-                            metaInfo.removeClass('no-transition');
-                        }
-                });
-            }
-            else {
-                $.ajax({
-                    url: $("#editMetaInfo_form").attr("action"),
-                    type: 'POST',
-                    data: $("#editMetaInfo_form").serialize(),
-                    datatype: 'json',
-                    async: true,
-                    success: (viewData) => {
-                        displaySensorMetaInfo($('#metaInfo_encodedId').val(), viewData);
-                    }
-                });
-            }
-    });
-    function revertProductInfoClick() {
-        let id = $('#metaInfo_encodedId').val();
-        
+        event.preventDefault();
+        event.stopImmediatePropagation();
+
         $.ajax({
-            type: 'GET',
-            url: `@Html.Raw(Url.Action(nameof(HomeController.GetProductInfo), ViewConstants.HomeController))?Id=${id}`,
-            dataType: 'html',
-            contentType: 'application/json',
-            cache: false,
-            async: true
-        }).done(function (viewData) {
-                $('#product_info_' + id).html(viewData);
-                $('#editProductButton').attr('hidden', false);
-                      
-                let metaInfo = $('#metaInfoCollapse');
-                                            
-                metaInfo.addClass('no-transition');
-                $('#meta_info_collapse').click();
-                metaInfo.removeClass('no-transition');
-            });
-    }
-    
+            url: $("#editMetaInfo_form").attr("action"),
+            type: 'POST',
+            data: $("#editMetaInfo_form").serialize(),
+            datatype: 'json',
+            async: true,
+            success: (viewData) => {
+                displayMetaInfo($('#metaInfo_encodedId').val(), viewData);
+            }
+        });
+    });
+
     function replaceHTMLtoMarkdown() {
          $('[id^="markdown_"]').each(function () {
              let innerHtml = $(this)[0].innerHTML;
@@ -242,25 +198,25 @@
              $(this).children().last().css('margin-bottom', 0);
          });
     }
-    
+
      function collapseChangeTextContent() {
-            let icon = $('#collapse_icon')[0];
-    
-            if (icon.classList.contains('fa-caret-up')) {
-                icon.classList.toggle('fa-caret-down')
-                $('#meta_info_collapse').attr('title', 'Show more info...');
-                $('#editButtonMetaInfo').addClass('d-none');
-                $('#description_title').addClass('d-none');
-                $('#headline_metainfo').addClass('d-none');
-                $('[id^="markdown_span_description_"]').removeClass('ms-3');
-            }
-            else {
-                icon.classList.toggle('fa-caret-up')
-                $('#meta_info_collapse').attr('title', 'Hide info...');
-                $('#editButtonMetaInfo').removeClass('d-none');
-                $('#description_title').removeClass('d-none');
-                $('#headline_metainfo').removeClass('d-none');
-                $('[id^="markdown_span_description_"]').addClass('ms-3');
-            }
+        let icon = $('#collapse_icon')[0];
+
+        if (icon.classList.contains('fa-caret-up')) {
+            icon.classList.toggle('fa-caret-down')
+            $('#meta_info_collapse').attr('title', 'Show more info...');
+            $('#editButtonMetaInfo').addClass('d-none');
+            $('#description_title').addClass('d-none');
+            $('#headline_metainfo').addClass('d-none');
+            $('#markdown_span_description').removeClass('ms-3');
         }
+        else {
+            icon.classList.toggle('fa-caret-up')
+            $('#meta_info_collapse').attr('title', 'Hide info...');
+            $('#editButtonMetaInfo').removeClass('d-none');
+            $('#description_title').removeClass('d-none');
+            $('#headline_metainfo').removeClass('d-none');
+            $('#markdown_span_description').addClass('ms-3');
+        }
+    }
 </script>

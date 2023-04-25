@@ -491,7 +491,7 @@ namespace HSMServer.Controllers
                 Id = product.Id,
                 ExpectedUpdateInterval = newModel.ExpectedUpdateInterval.ToModel((product.Parent as FolderModel)?.ExpectedUpdateInterval),
                 RestoreInterval = newModel.SensorRestorePolicy.ToModel((product.Parent as FolderModel)?.SensorRestorePolicy),
-                Description = newModel.Description
+                Description = newModel.Description ?? string.Empty
             };
 
             _treeValuesCache.UpdateProduct(update);
