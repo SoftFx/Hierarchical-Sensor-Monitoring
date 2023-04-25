@@ -40,6 +40,18 @@ namespace HSMServer.Controllers
         [HttpPost]
         public async Task<IActionResult> EditFolder(EditFolderViewModel editFolder)
         {
+            if (!ModelState.IsValid)
+            {
+                var invalidFolder = BuildEditFolder(editFolder.Id);
+
+                invalidFolder.Name = editFolder.Name;
+                invalidFolder.Color = editFolder.Color;
+                invalidFolder.Description = editFolder.Description;
+                invalidFolder.Products = BuildFolderProducts(invalidFolder.Products?.SelectedProducts);
+
+                return View(nameof(EditFolder), invalidFolder);
+            }
+
             var folder = _folderManager[editFolder.Id];
             var oldProducts = new Dictionary<Guid, ProductNodeViewModel>(folder.Products);
 

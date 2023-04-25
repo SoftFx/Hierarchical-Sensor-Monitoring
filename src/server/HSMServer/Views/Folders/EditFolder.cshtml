@@ -5,7 +5,7 @@
 @model EditFolderViewModel
 
 @{
-    var isAdd = Model.Id == default;
+    var isAdd = Model.IsAddMode;
     var disabledTab = isAdd ? "disabled" : string.Empty;
 }
 
@@ -15,7 +15,7 @@
 <div class="container">
     <div class="row w-100 justify-content-center">
         <div class="d-flex justify-content-between my-3 p-0">
-            <h5 class="text-break">@(isAdd ? "Add folder" : $"Edit folder '{@Model.Name}'")</h5>
+            <h5 class="text-break">@(isAdd ? "Add folder" : $"Edit folder '{@Model.OldName}'")</h5>
 
             @if (!isAdd)
             {

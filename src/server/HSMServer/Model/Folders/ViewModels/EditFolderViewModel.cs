@@ -32,9 +32,16 @@ namespace HSMServer.Model.Folders.ViewModels
         [UniqueValidation(ErrorMessage = "Folder with the same name already exists.")]
         public string Name { get; set; }
 
+        public string OldName { get; set; }
+
         public string Description { get; set; }
 
         public Color Color { get; set; }
+
+
+        public bool IsAddMode => Id == default;
+
+        public bool IsNameChanged => Name != OldName;
 
 
         public EditFolderViewModel() { }
@@ -51,6 +58,7 @@ namespace HSMServer.Model.Folders.ViewModels
             Author = folder.Author;
             Id = folder.Id;
             Name = folder.Name;
+            OldName = folder.Name;
             Description = folder.Description;
             Color = folder.Color;
 
@@ -79,8 +87,9 @@ namespace HSMServer.Model.Folders.ViewModels
             new()
             {
                 Id = Id,
-                Description = Description is null ? string.Empty : Description,
                 Color = Color,
+                Name = IsNameChanged ? Name : null,
+                Description = Description is null ? string.Empty : Description,
             };
     }
 }
