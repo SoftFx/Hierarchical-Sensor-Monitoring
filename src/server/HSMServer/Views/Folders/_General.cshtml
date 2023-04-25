@@ -6,7 +6,7 @@
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
 
 @{
-    var isAdd = Model.Id == default;
+    var isAdd = Model.IsAdd;
 }
 
 
@@ -14,17 +14,11 @@
 
 <div class="row mt-2">
     <label class="col-2 col-form-label" asp-for="Name"></label>
-    @if (isAdd)
-    {
-        <div class="col-5">
-            <input class="form-control" asp-for="Name">
-            <span asp-validation-for="Name"></span>
-        </div>
-    }
-    else
-    {
-        <label class="col-auto col-form-label" asp-for="Name">@Model.Name</label>
-    }
+    <div class="col-5">
+        <input class="form-control" asp-for="Name">
+        <span asp-validation-for="Name"></span>
+    </div>
+    <input asp-for="@Model.OldName" value="@Model.OldName" style="display: none" />
 </div>
 
 <div class="row mt-2">

@@ -66,6 +66,7 @@ namespace HSMServer.Model.Folders
             Notifications = update.Notifications ?? Notifications;
             Description = update.Description ?? Description;
             Color = update.Color ?? Color;
+            Name = update.Name ?? Name;
 
             if (update.ExpectedUpdateInterval != null)
                 ExpectedUpdateInterval = new TimeIntervalViewModel(update.ExpectedUpdateInterval, PredefinedIntervals.ForTimeout);
