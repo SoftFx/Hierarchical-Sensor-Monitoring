@@ -39,7 +39,7 @@ namespace HSMServer.Model.Folders.ViewModels
         public Color Color { get; set; }
 
 
-        public bool IsAdd => Id == default;
+        public bool IsAddMode => Id == default;
 
         public bool IsNameChanged => Name != OldName;
 
