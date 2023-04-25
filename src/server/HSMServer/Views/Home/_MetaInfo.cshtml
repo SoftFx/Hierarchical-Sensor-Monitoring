@@ -57,62 +57,50 @@
                     <div class="d-flex w-100 ps-2">
                         @if (product.TotalNodes > 0)
                         {
-                            @Html.Raw($"{product.TotalNodes} (")
-                            
                             @for (int i = 0; i < product.NodeStatuses.Count; i++)
                             {
                                 <i class='@product.NodeStatuses[i].Status.ToIcon() pe-1 align-self-center'></i>
                                 <span>
-                                    - @product.NodeStatuses[i].Count
+                                    (@product.NodeStatuses[i].Count)
                                 </span>
                                 @if (i != product.NodeStatuses.Count - 1)
                                 {
                                     <span>,&nbsp;</span>
                                 }
-                                                                      
                             }
-                            <span>)</span>
                         }
                         else
                         {
-                            @Html.Raw($"{product.TotalNodes}")
+                            @product.TotalNodes
                         }
                     </div>
                 </div>
                 <div class="d-flex justify-content-start">
-
                     <div class="d-flex ms-3 text-nowrap">
                         <span style="min-width: 8rem">Sensors:</span>
                     </div>
-
                     <div class="d-flex w-100 ps-2">
                         @if (product.TotalSensors > 0)
                         {
-                            @Html.Raw($"{product.TotalSensors} (")
-                            
                             @for (int i = 0; i < product.SensorsStatuses.Count; i++)
                             {
                                 <i class='@product.SensorsStatuses[i].Status.ToIcon() pe-1 align-self-center'></i>
                                 <span>
-                                    - @product.SensorsStatuses[i].Count
+                                    (@product.SensorsStatuses[i].Count)
                                 </span>
                                 @if (i != product.SensorsStatuses.Count - 1)
                                 {
                                     <span>,&nbsp;</span>
                                 }
-                                                                      
                             }
-                            <span>)</span>
                             <i class='fa-solid fa-circle-info ps-1 align-self-center' title="@product.TotalSensorTypesMessage"></i>
                         }
                         else
                         {
-                            @Html.Raw(product.TotalSensors)
+                            @product.TotalSensors
                         }
                     </div>
                 </div>
-
-                @await Html.PartialAsync("_Alerts", product)
             }
             else if (Model is SensorInfoViewModel sensor)
             {
@@ -144,8 +132,9 @@
                         </div>
                     }
                 </div>
-                @await Html.PartialAsync("_Alerts", sensor)
             }
+
+            @await Html.PartialAsync("_Alerts", Model)
         </div>
         <button class="btn btn-outline-secondary w-100
                                border-start-0 border-end-0 border-top-0 rounded-0 border-bottom-1" id="meta_info_collapse" title="Show more info..." type="button" data-bs-toggle="collapse" onclick="collapseChangeTextContent()" href="#metaInfoCollapse" role="button" aria-expanded="false" aria-controls="metaInfoCollapse" style="border-right-color: unset;--bs-btn-hover-bg: #edf0f5">

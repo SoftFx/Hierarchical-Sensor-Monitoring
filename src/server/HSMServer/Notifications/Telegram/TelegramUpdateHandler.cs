@@ -67,8 +67,7 @@ namespace HSMServer.Notifications
                     TelegramBotCommands.Start => StartBot(parts, message, isUserChat),
                     TelegramBotCommands.Info => EntitiesInfo(message.Chat, isUserChat),
                     TelegramBotCommands.Server => ServerStatus(),
-                    TelegramBotCommands.Icons => IconsInfo(),
-                    TelegramBotCommands.StatusPriority => StatusPriority(),
+                    TelegramBotCommands.Help => Help(),
                     _ => null,
                 };
 
@@ -138,19 +137,14 @@ namespace HSMServer.Notifications
             return response.ToString();
         }
 
-        private static string IconsInfo() =>
+        private static string Help() =>
             $"""
-            {Core.OffTime.ToIcon()} - received Offtime status
-            {Core.Ok.ToIcon()} - received Ok status
-            {Core.Warning.ToIcon()} - received Warning status
-            {Core.Error.ToIcon()} - received Error status
-            {ExpectedUpdateIntervalPolicy.PolicyIcon} - sensor update timeout
-            ❓ - unknown status
+            Statuses: 
+                {Core.OffTime.ToIcon()} (OffTime) -> {Core.Ok.ToIcon()} (Ok) -> {Core.Warning.ToIcon()} (Warning) -> {Core.Error.ToIcon()} (Error)
+            Alerts: 
+                {ExpectedUpdateIntervalPolicy.PolicyIcon} - sensor update timeout
             """.EscapeMarkdownV2();
 
         private static string ServerStatus() => $"HSM server {ServerConfig.Version} is alive.".EscapeMarkdownV2();
-
-        private static string StatusPriority() =>
-            $"{Core.OffTime.ToIcon()} -> {Core.Ok.ToIcon()} -> {Core.Warning.ToIcon()} ({ExpectedUpdateIntervalPolicy.PolicyIcon}) -> {Core.Error.ToIcon()}".EscapeMarkdownV2();
     }
 }

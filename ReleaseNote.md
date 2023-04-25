@@ -24,7 +24,7 @@ It allows you to group different products and set the same settings for them (te
 * Control interface has been improved
 
 ### Alerts (Policies)
-* **Update Expected Interval** has been renamed to **Time to sensor leave**
+* **Update Expected Interval** has been renamed to **Time to sensor live**
 * New alert **Sensitivity** has been added for sensors. If the sensor doesn`t return to Ok status after the specified time inverval, a notification sends.
 * Icons have been added for all alerts
 
@@ -48,12 +48,9 @@ It allows you to group different products and set the same settings for them (te
 
 * **From parent** for Telegram notifications setting is available from a product in a folder.
 * /status command has been renamed to **/server**
-* **/status_priority** command has been added
-* Icon for Offtime status has been changed to 💤
+* **/help** command has been added. This command output contains information from command /icons and existing statuses ascending priority
+* Icon for OffTime status has been changed to 💤
 * Other minor improvements...
-
-## Access Keys
-* New permition **CanUseGrafana** has been added (needs for integration with Grafana agent)
 
 # HSM Datacollector
 
