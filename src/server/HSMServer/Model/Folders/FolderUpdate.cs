@@ -19,5 +19,7 @@ namespace HSMServer.Model.Folders
         public string Description { get; init; }
 
         public Color? Color { get; init; }
+
+        public string Name { get; init; }
     }
 }

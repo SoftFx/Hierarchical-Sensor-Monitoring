@@ -41,5 +41,9 @@ namespace HSMServer.UserFilters
             Name = name;
         }
 
+        public FilterProperty(string name, bool defaultValue) : this(name)
+        {
+            Value = defaultValue;
+        }
     }
 }

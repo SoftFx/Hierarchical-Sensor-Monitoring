@@ -7,7 +7,7 @@
         internal override FilterGroupType Type => FilterGroupType.ByHistory;
 
 
-        public FilterProperty Empty { get; init; } = new("No data");
+        public FilterProperty Empty { get; init; } = new("No data", true);
 
         public GroupByHistory() { }
 

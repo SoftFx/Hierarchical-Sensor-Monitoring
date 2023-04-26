@@ -11,7 +11,7 @@
 @{
     var user = User as User;
 
-    ViewData["Title"] = "Tree";
+    ViewData["Title"] = "Home";
 }
 
 <script>
@@ -32,9 +32,6 @@
     var rawHistoryLatestAction = "@Url.Action(nameof(HomeController.RawHistoryLatest), ViewConstants.HomeController)";
     var rawHistoryAction = "@Url.Action(nameof(HomeController.RawHistory), ViewConstants.HomeController)";
     var exportHistoryAction = "@Url.Action(nameof(HomeController.ExportHistory), ViewConstants.HomeController)";
-
-    var getSensorInfoAction = "@Url.Action(nameof(HomeController.GetSensorInfo), ViewConstants.HomeController)";
-    var updateSensorInfoAction = "@Url.Action(nameof(HomeController.UpdateSensorInfo), ViewConstants.HomeController)";
 
     var getNodePathAction = "@Url.Action(nameof(HomeController.GetNodePath), ViewConstants.HomeController)";
     var editProductAction = "@Url.Action(nameof(ProductController.EditProduct), ViewConstants.ProductController)";

@@ -10,6 +10,7 @@ using HSMServer.Helpers;
 using HSMServer.Model;
 using HSMServer.Model.Authentication.History;
 using HSMServer.Model.Folders;
+using HSMServer.Model.Folders.ViewModels;
 using HSMServer.Model.TreeViewModel;
 using HSMServer.Model.ViewModel;
 using HSMServer.Notification.Settings;
@@ -491,12 +492,36 @@ namespace HSMServer.Controllers
                 Id = product.Id,
                 ExpectedUpdateInterval = newModel.ExpectedUpdateInterval.ToModel((product.Parent as FolderModel)?.ExpectedUpdateInterval),
                 RestoreInterval = newModel.SensorRestorePolicy.ToModel((product.Parent as FolderModel)?.SensorRestorePolicy),
-                Description = newModel.Description
+                Description = newModel.Description ?? string.Empty
             };
 
             _treeValuesCache.UpdateProduct(update);
 
             return PartialView("_MetaInfo", new ProductInfoViewModel(product));
+        }
+
+        [HttpGet]
+        public IActionResult GetFolderInfo(string id)
+        {
+            return _folderManager.TryGetValue(SensorPathHelper.DecodeGuid(id), out var folder)
+                ? PartialView("_MetaInfo", new FolderInfoViewModel(folder))
+                : _emptyResult;
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> UpdateFolderInfo(FolderInfoViewModel newModel)
+        {
+            var update = new FolderUpdate
+            {
+                Id = SensorPathHelper.DecodeGuid(newModel.EncodedId),
+                Description = newModel.Description ?? string.Empty,
+                ExpectedUpdateInterval = newModel.ExpectedUpdateInterval,
+                RestoreInterval = newModel.SensorRestorePolicy,
+            };
+
+            return await _folderManager.TryUpdate(update)
+                ? PartialView("_MetaInfo", new FolderInfoViewModel(_folderManager[update.Id]))
+                : _emptyResult;
         }
 
         private (string productName, string path) GetSensorProductAndPath(string encodedId)

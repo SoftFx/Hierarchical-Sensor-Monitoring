@@ -1,3 +1,4 @@
+using HSMServer.Model.Folders;
 using HSMServer.Model.TreeViewModel;
 using System;
 
@@ -6,9 +7,7 @@ namespace HSMServer.Model.ViewModel
 {
     public abstract class NodeInfoBaseViewModel
     {
-        public string Path { get; }
-
-        public string ProductName { get; }
+        public string Header { get; }
 
         public DateTime LastUpdateTime { get; set; }
 
@@ -26,12 +25,23 @@ namespace HSMServer.Model.ViewModel
 
         public NodeInfoBaseViewModel() { }
 
-        internal NodeInfoBaseViewModel(NodeViewModel model)
+        internal NodeInfoBaseViewModel(NodeViewModel model) : this((BaseNodeViewModel)model)
         {
-            Path = model.Path;
-            ProductName = model.RootProduct.Name;
             EncodedId = model.EncodedId;
+            Header = $"{model.RootProduct.Name}{model.Path}";
+        }
+
+        internal NodeInfoBaseViewModel(FolderModel model) : this((BaseNodeViewModel)model)
+        {
+            EncodedId = model.Id.ToString();
+            Header = model.Name;
+        }
+
+        private NodeInfoBaseViewModel(BaseNodeViewModel model)
+        {
+            Status = model.Status;
             Description = model.Description;
+            LastUpdateTime = model.UpdateTime;
 
             ExpectedUpdateInterval = new(model.ExpectedUpdateInterval, PredefinedIntervals.ForTimeout);
             SensorRestorePolicy = new(model.SensorRestorePolicy, PredefinedIntervals.ForRestore);
