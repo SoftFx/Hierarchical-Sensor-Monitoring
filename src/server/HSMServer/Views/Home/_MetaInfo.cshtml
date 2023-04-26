@@ -2,6 +2,7 @@
 @using HSMServer.Controllers
 @using HSMServer.Extensions
 @using HSMServer.Model.ViewModel
+@using HSMServer.Model.TreeViewModel
 @using HSMServer.Model.Folders.ViewModels
 @using Microsoft.AspNetCore.Mvc.TagHelpers
 
@@ -72,12 +73,12 @@
 
             @if (Model is FolderInfoViewModel folder)
             {
-                @await Html.PartialAsync("_ChildrenInfo", ("Products", folder.TotalProducts, folder.ProductStatuses))
+                @await Html.PartialAsync("_ChildrenInfo", new ChildrenInfo("Products", folder.TotalProducts, folder.ProductStatuses))
             }
             else if (Model is ProductInfoViewModel product)
             {
-                @await Html.PartialAsync("_ChildrenInfo", ("Nodes", product.TotalNodes, product.NodeStatuses))
-                @await Html.PartialAsync("_ChildrenInfo", ("Sensors", product.TotalSensors, product.SensorsStatuses))
+                @await Html.PartialAsync("_ChildrenInfo", new ChildrenInfo("Nodes", product.TotalNodes, product.NodeStatuses))
+                @await Html.PartialAsync("_ChildrenInfo", new ChildrenInfo("Sensors", product.TotalSensors, product.SensorsStatuses))
             }
             else if (Model is SensorInfoViewModel sensor)
             {

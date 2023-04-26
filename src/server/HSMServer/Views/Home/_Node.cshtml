@@ -9,9 +9,7 @@
 
 
 <div>
-    <div id='product_info_@Model.EncodedId'>
-        @await Html.PartialAsync("_MetaInfo", new ProductInfoViewModel(Model))
-    </div>
+    @await Html.PartialAsync("_MetaInfo", new ProductInfoViewModel(Model))
     
     @await Html.PartialAsync("_ChildrenPanel", Model)
 </div>

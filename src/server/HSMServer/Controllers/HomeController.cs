@@ -503,7 +503,7 @@ namespace HSMServer.Controllers
         [HttpGet]
         public IActionResult GetFolderInfo(string id)
         {
-            return Guid.TryParse(id, out var folderId) && _folderManager.TryGetValue(folderId, out var folder)
+            return _folderManager.TryGetValue(SensorPathHelper.DecodeGuid(id), out var folder)
                 ? PartialView("_MetaInfo", new FolderInfoViewModel(folder))
                 : _emptyResult;
         }
@@ -511,7 +511,7 @@ namespace HSMServer.Controllers
         [HttpPost]
         public IActionResult UpdateFolderInfo(FolderInfoViewModel newModel)
         {
-            if (!Guid.TryParse(newModel.EncodedId, out var id) || !_folderManager.TryGetValue(id, out var folder))
+            if (!_folderManager.TryGetValue(SensorPathHelper.DecodeGuid(newModel.EncodedId), out var folder))
                 return _emptyResult;
 
             var update = new FolderUpdate
