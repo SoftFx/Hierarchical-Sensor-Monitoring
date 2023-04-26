@@ -509,22 +509,19 @@ namespace HSMServer.Controllers
         }
 
         [HttpPost]
-        public IActionResult UpdateFolderInfo(FolderInfoViewModel newModel)
+        public async Task<IActionResult> UpdateFolderInfo(FolderInfoViewModel newModel)
         {
-            if (!_folderManager.TryGetValue(SensorPathHelper.DecodeGuid(newModel.EncodedId), out var folder))
-                return _emptyResult;
-
             var update = new FolderUpdate
             {
-                Id = folder.Id,
+                Id = SensorPathHelper.DecodeGuid(newModel.EncodedId),
                 Description = newModel.Description ?? string.Empty,
                 ExpectedUpdateInterval = newModel.ExpectedUpdateInterval,
                 RestoreInterval = newModel.SensorRestorePolicy,
             };
 
-            _folderManager.TryUpdate(update);
-
-            return PartialView("_MetaInfo", new FolderInfoViewModel(folder));
+            return await _folderManager.TryUpdate(update)
+                ? PartialView("_MetaInfo", new FolderInfoViewModel(_folderManager[update.Id]))
+                : _emptyResult;
         }
 
         private (string productName, string path) GetSensorProductAndPath(string encodedId)

@@ -17,8 +17,6 @@ namespace HSMServer.Folders
 
         void AddProductToFolder(Guid productId, Guid folderId);
 
-        void UpdateProductInFolder(Guid productId, FolderModel folder);
-
         void RemoveProductFromFolder(Guid productId);
 
         List<FolderModel> GetUserFolders(User user);
