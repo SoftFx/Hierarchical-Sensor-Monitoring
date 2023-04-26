@@ -110,12 +110,11 @@ namespace HSMServer.Controllers
         {
             if (!ModelState.IsValid)
             {
-                if (CurrentUser.IsAdmin)
-                {
-                    Guid.TryParse(key.SelectedProductId, out var currId);
-                    key.Products = TreeValuesCache.GetProducts().ToList();
-                    key.IsModify = true;
-                }
+                var currkey = TreeValuesCache.GetAccessKey(key.Id);
+                key.SelectedProductId = currkey.ProductId == Guid.Empty
+                    ? Guid.Empty.ToString()
+                    : TreeValuesCache.GetProductNameById(currkey.ProductId);
+                key.IsModify = true;
                 return GetPartialNewAccessKey(key);
             }
 

@@ -24,7 +24,7 @@
                 if (Guid.TryParse(Model.SelectedProductId, out var guid) && guid == Guid.Empty)
                 {
                     <input type="text" value="All products" class="form-control" disabled/>
-
+                    <input id="selectedProductId" style='display: none' asp-for="SelectedProductId" value="@Model.SelectedProductId"/>
                 }
                 else
                 {

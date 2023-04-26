@@ -35,6 +35,21 @@ namespace HSMServer.Attributes
         private bool AccessKeyNameCheck(EditAccessKeyViewModel model, ITreeValuesCache cache)
         {
             model.SelectedProductId ??= Guid.Empty.ToString();
+
+            if (model.Id != Guid.Empty)
+            {
+                var key = cache.GetAccessKey(model.Id);
+                
+                if (key.ProductId == Guid.Empty)
+                {
+                    var serverKeys = cache.GetAccessKeys().Where(x => x.ProductId == Guid.Empty);
+                    return !serverKeys.Any(x => x.DisplayName == model.DisplayName && x.Id != model.Id);
+                }
+                
+                var keys = cache.GetProduct(key.ProductId).AccessKeys;
+                
+                return !keys.Values.Any(x => x.DisplayName == model.DisplayName && x.Id != model.Id);
+            }
             
             if (Guid.TryParse(model.SelectedProductId, out var id) && id == Guid.Empty)
             {
