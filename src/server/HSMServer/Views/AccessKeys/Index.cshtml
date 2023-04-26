@@ -29,14 +29,14 @@
             <div class="col-4 p-0">
                 <input id="searchKey" type="text" class="form-control" placeholder="Filter by key"/>
             </div>
-            <div class="col">
+            <div class="d-flex justify-content-between col">
                 <button onclick="searchKey()" type="button" class="btn btn-secondary ms-1">
                     <i type="button" class="fas fa-search"></i>
                 </button>
                 @if ((User as User).IsAdmin)
                 {
-                    <button onclick="createAccessKey()" class="btn btn-link ms-1">
-                        <i class="fa-solid fa-plus"></i>
+                    <button onclick="createAccessKey()" class="btn btn-link me-0 pe-0">
+                       <i class="fa-solid fa-key"></i>
                         Add key
                     </button>
                 }
