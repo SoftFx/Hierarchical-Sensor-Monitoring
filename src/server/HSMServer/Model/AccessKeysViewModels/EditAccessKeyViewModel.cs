@@ -65,8 +65,9 @@ namespace HSMServer.Model.AccessKeysViewModels
         {
             Text = x.DisplayName,
             Value = x.Id.ToString(),
-            Selected = false
+            Selected = x.Id.ToString() == SelectedProductId
         }).ToList();
+        
         
 
         // public constructor without parameters for action Home/NewAccessKey
@@ -91,7 +92,7 @@ namespace HSMServer.Model.AccessKeysViewModels
 
         internal AccessKeyModel ToModel(Guid userId)
         {
-            AccessKeyModel accessKey = new(userId, string.IsNullOrEmpty(SelectedProductId) ? Guid.Empty : SensorPathHelper.DecodeGuid(SelectedProductId))
+            AccessKeyModel accessKey = new(userId, Guid.TryParse(SelectedProductId, out var guid) ? guid : Guid.Empty)
             {
                 ExpirationTime = BuildExpirationTime(),
             };

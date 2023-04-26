@@ -76,14 +76,10 @@ namespace HSMServer.Controllers
                 {
                     Guid.TryParse(key.SelectedProductId, out var id);
                     key.Products = TreeValuesCache.GetProducts().ToList();
-                    key.SelectedProductId = key.Products.FirstOrDefault(x => x.Id == id)?.DisplayName;
                     key.IsModify = false;
                 }
                 return GetPartialNewAccessKey(key);
             }
-
-            if (string.IsNullOrEmpty(key.SelectedProductId))
-                key.SelectedProductId = key.SelectedProductId;
             
             TreeValuesCache.AddAccessKey(key.ToModel(CurrentUser.Id));
 
