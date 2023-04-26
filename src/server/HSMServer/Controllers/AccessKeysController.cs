@@ -98,14 +98,11 @@ namespace HSMServer.Controllers
             }
             
             TreeValuesCache.AddAccessKey(key.ToModel(CurrentUser.Id));
-
-            if (string.IsNullOrEmpty(key.SelectedProductId))
-                return PartialView("_AllAccessKeys", GenerateFullViewModel());
             
             if (key.ReturnType is AccessKeyReturnType.Modal)
                 return GetPartialProductAccessKeys(key.SelectedProductId);
 
-            return default;
+            return PartialView("_AllAccessKeys", GenerateFullViewModel());
         }
 
         [HttpGet]
@@ -119,7 +116,10 @@ namespace HSMServer.Controllers
                 {
                     CloseModal = closeModal,
                     IsModify = true,
-                    Products = new List<ProductModel>() {TreeValuesCache.GetProduct(key.ProductId)},
+                    Products = new List<ProductModel>()
+                    {
+                        key.ProductId == Guid.Empty ? new ProductModel("All products") : TreeValuesCache.GetProduct(key.ProductId)
+                    },
                 });
         }
 
@@ -132,7 +132,9 @@ namespace HSMServer.Controllers
                 if (key.ReturnType is not AccessKeyReturnType.Table)
                 {
                     key.Products = new List<ProductModel>()
-                        {TreeValuesCache.GetProduct(Guid.Parse(key.SelectedProductId))};
+                    {
+                        key.SelectedProductId == Guid.Empty.ToString() ? new ProductModel("All products") : TreeValuesCache.GetProduct(Guid.Parse(key.SelectedProductId))
+                    };
                     key.IsModify = true;
                     
                     return GetPartialNewAccessKey(key);
