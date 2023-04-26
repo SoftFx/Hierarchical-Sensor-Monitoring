@@ -1,6 +1,7 @@
 @using HSMServer.Constants
 @using HSMServer.Controllers
 @using HSMServer.Extensions
+@using HSMServer.Model.Authentication
 @using HSMServer.Model.ViewModel
 @using HSMServer.Model.TreeViewModel
 @using HSMServer.Model.Folders.ViewModels
@@ -11,6 +12,9 @@
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
 
 @{
+    var user = User as User;
+    bool hasUserRights = Model is FolderInfoViewModel f ? user.IsFolderManager(f.Id) : user.IsManager(Model.RootProductId);
+
     string updateAction = null, getAction = null;
 
     if (Model is FolderInfoViewModel)
@@ -56,9 +60,13 @@
             <div id="description_title" class="d-none form-control px-0 border-0 fw-bold" style="max-width: 15rem;">
                 Description:
             </div>
-            <div class="d-flex my-1 ms-auto align-items-baseline">
-                <a id="editButtonMetaInfo" class="d-none d-flex px-2 pb-2" href="#" title='edit meta info'><i class='fas fa-edit align-self-center'></i> Edit</a>
-            </div>
+
+            @if (hasUserRights)
+            {
+                <div class="d-flex my-1 ms-auto align-items-baseline">
+                    <a id="editButtonMetaInfo" class="d-none d-flex px-2 pb-2" href="#" title='edit meta info'><i class='fas fa-edit align-self-center'></i> Edit</a>
+                </div>
+            }
         </div>
 
         <div class="naked-text ms-1 w-100" id='markdown_span_description'>@Model.Description</div>
