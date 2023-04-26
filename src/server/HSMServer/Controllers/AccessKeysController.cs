@@ -57,13 +57,18 @@ namespace HSMServer.Controllers
         [HttpGet]
         [ProductRoleFilterByEncodedProductId(ProductRoleEnum.ProductManager)]
         public IActionResult NewAccessKey([FromQuery(Name = "Selected")] string encodedProductId,
-                                          [FromQuery(Name = "CloseModal")] bool closeModal = false)
+                                          [FromQuery(Name = "CloseModal")] bool closeModal = false,
+                                          [FromQuery]AccessKeyReturnType returnType = AccessKeyReturnType.Modal)
         {
-            return GetPartialNewAccessKey(new EditAccessKeyViewModel()
+            var key = new EditAccessKeyViewModel()
             {
                 SelectedProductId = encodedProductId,
-                CloseModal = closeModal
-            });
+                CloseModal = closeModal,
+                ReturnType = returnType,
+                Products = new List<ProductModel>(){TreeValuesCache.GetProduct(Guid.Parse(encodedProductId))}
+            };
+
+            return GetPartialNewAccessKey(key);
         }
 
         [HttpPost]
@@ -72,6 +77,15 @@ namespace HSMServer.Controllers
         {
             if (!ModelState.IsValid)
             {
+                if (key.ReturnType is not AccessKeyReturnType.Table)
+                {
+                    key.Products = new List<ProductModel>()
+                        {TreeValuesCache.GetProduct(Guid.Parse(key.SelectedProductId))};
+                    key.IsModify = false;
+                    
+                    return GetPartialNewAccessKey(key);
+                }
+                
                 if (CurrentUser.IsAdmin)
                 {
                     Guid.TryParse(key.SelectedProductId, out var id);
@@ -86,7 +100,10 @@ namespace HSMServer.Controllers
             if (string.IsNullOrEmpty(key.SelectedProductId))
                 return PartialView("_AllAccessKeys", GenerateFullViewModel());
             
-            return GetPartialProductAccessKeys(key.SelectedProductId);
+            if (key.ReturnType is AccessKeyReturnType.Modal)
+                return GetPartialProductAccessKeys(key.SelectedProductId);
+
+            return default;
         }
 
         [HttpGet]
@@ -100,7 +117,7 @@ namespace HSMServer.Controllers
                 {
                     CloseModal = closeModal,
                     IsModify = true,
-                    SelectedProductId = key.ProductId == Guid.Empty ? Guid.Empty.ToString(): TreeValuesCache.GetProductNameById(key.ProductId)
+                    Products = new List<ProductModel>() {TreeValuesCache.GetProduct(key.ProductId)},
                 });
         }
 
@@ -110,6 +127,16 @@ namespace HSMServer.Controllers
         {
             if (!ModelState.IsValid)
             {
+                if (key.ReturnType is not AccessKeyReturnType.Table)
+                {
+                    key.Products = new List<ProductModel>()
+                        {TreeValuesCache.GetProduct(Guid.Parse(key.SelectedProductId))};
+                    key.IsModify = true;
+                    
+                    return GetPartialNewAccessKey(key);
+                }
+                
+                
                 var currkey = TreeValuesCache.GetAccessKey(key.Id);
                 key.SelectedProductId = currkey.ProductId == Guid.Empty
                     ? Guid.Empty.ToString()

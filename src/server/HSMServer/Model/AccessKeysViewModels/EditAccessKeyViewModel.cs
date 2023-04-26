@@ -21,6 +21,13 @@ namespace HSMServer.Model.AccessKeysViewModels
         [Display(Name = "1 Year")]
         Year,
     }
+
+    public enum AccessKeyReturnType
+    {
+        Modal,
+        Table,
+        EditProduct
+    }
     
 
     public class EditAccessKeyViewModel
@@ -68,6 +75,7 @@ namespace HSMServer.Model.AccessKeysViewModels
             Selected = x.Id.ToString() == SelectedProductId
         }).ToList();
         
+        public AccessKeyReturnType ReturnType { get; set; }
         
 
         // public constructor without parameters for action Home/NewAccessKey
@@ -82,6 +90,8 @@ namespace HSMServer.Model.AccessKeysViewModels
             DisplayName = key.DisplayName;
             ExpirationTime = AccessKeyViewModel.BuildExpiration(key.ExpirationTime);
 
+            SelectedProductId = key.ProductId.ToString();
+            
             CanSendSensorData = key.Permissions.HasFlag(KeyPermissions.CanSendSensorData);
             CanAddNodes = key.Permissions.HasFlag(KeyPermissions.CanAddNodes);
             CanAddSensors = key.Permissions.HasFlag(KeyPermissions.CanAddSensors);
