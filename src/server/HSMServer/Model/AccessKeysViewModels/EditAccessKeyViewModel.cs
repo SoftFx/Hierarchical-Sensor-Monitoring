@@ -5,7 +5,6 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.Linq;
-using HSMServer.Helpers;
 using Microsoft.AspNetCore.Mvc.Rendering;
 
 namespace HSMServer.Model.AccessKeysViewModels
@@ -65,9 +64,8 @@ namespace HSMServer.Model.AccessKeysViewModels
         [AccessKeyPermissionsValidation(ErrorMessage = "At least one permission should be selected.")]
         public KeyPermissions Permissions => BuildPermissions();
         
-
+        
         public List<ProductModel> Products { get; set; } = new ();
-
         public List<SelectListItem> ProductsItems => Products.Select(x => new SelectListItem()
         {
             Text = x.DisplayName,
@@ -79,9 +77,7 @@ namespace HSMServer.Model.AccessKeysViewModels
         
 
         // public constructor without parameters for action Home/NewAccessKey
-        public EditAccessKeyViewModel()
-        {
-        }
+        public EditAccessKeyViewModel() { }
 
         public EditAccessKeyViewModel(AccessKeyModel key)
         {

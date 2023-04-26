@@ -18,8 +18,6 @@ namespace HSMServer.Model.TreeViewModel
 
         public string FileNameString { get; private set; }
 
-        internal string Unit { get; private set; }
-
         internal BaseValue LastValue { get; private set; }
 
         public string ValidationError { get; private set; }
@@ -50,7 +48,6 @@ namespace HSMServer.Model.TreeViewModel
             UpdateTime = model.LastUpdateTime;
             Status = model.Status.Status.ToClient();
             ValidationError = State == SensorState.Muted ? GetMutedErrorTooltip(model.EndOfMuting) : model.Status.Message;
-            Unit = model.Unit;
 
             LastValue = model.LastValue;
             HasData = model.HasData;

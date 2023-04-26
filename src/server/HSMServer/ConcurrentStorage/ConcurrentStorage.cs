@@ -71,6 +71,9 @@ namespace HSMServer.ConcurrentStorage
 
             if (result)
             {
+                if (update.Name != null && _modelNames.TryRemove(model.Name, out var id))
+                    _modelNames.TryAdd(update.Name, id);
+
                 model.Update(update);
                 result &= await TryUpdate(model);
             }

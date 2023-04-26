@@ -38,9 +38,7 @@
                             <select class='form-select d-none' id='role_@user.Id'>
                                 @foreach (ProductRoleEnum role in Enum.GetValues<ProductRoleEnum>())
                                 {
-                                    <option value='@((int)role)' @(
-                               role == userRole ? "selected" : string.Empty
-                               )>@role.GetDisplayName()</option>
+                                    <option value='@((int)role)' @(role == userRole ? "selected" : string.Empty)>@role.GetDisplayName()</option>
                                 }
                             </select>
                         </td>

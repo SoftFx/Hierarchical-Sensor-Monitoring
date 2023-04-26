@@ -135,7 +135,6 @@ namespace HSMServer.Core.Tests.Infrastructure
         {
             Assert.NotNull(actual);
             Assert.Equal(expected.Description, actual.Description);
-            Assert.Equal(expected.Unit, actual.Unit);
 
             TestSensorModelWithoutUpdatedMetadata(expected, actual);
         }
@@ -204,7 +203,6 @@ namespace HSMServer.Core.Tests.Infrastructure
 
             Assert.Equal(expected.Description, actual.Description);
             Assert.Equal(expected.ServerPolicy.ExpectedUpdate.Policy, actual.ServerPolicy.ExpectedUpdate.Policy);
-            Assert.Equal(expected.Unit, actual.Unit);
         }
 
         internal static void TestSensorModel(StoreInfo expected, BaseSensorModel actual, ProductModel parentProduct = null)
@@ -228,14 +226,12 @@ namespace HSMServer.Core.Tests.Infrastructure
         internal static void TestSensorModel(SensorUpdate expected, BaseSensorModel actual)
         {
             Assert.Equal(expected.Description, actual.Description);
-            Assert.Equal(expected.Unit, actual.Unit);
             Assert.Equal(expected.State, actual.State);
         }
 
         internal static void TestSensorModel(SensorUpdate expected, SensorEntity actual)
         {
             Assert.Equal(expected.Description, actual.Description);
-            Assert.Equal(expected.Unit, actual.Unit);
             Assert.Equal(expected.State, (SensorState)actual.State);
         }
 

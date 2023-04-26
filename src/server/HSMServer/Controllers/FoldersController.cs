@@ -40,6 +40,18 @@ namespace HSMServer.Controllers
         [HttpPost]
         public async Task<IActionResult> EditFolder(EditFolderViewModel editFolder)
         {
+            if (!ModelState.IsValid)
+            {
+                var invalidFolder = BuildEditFolder(editFolder.Id);
+
+                invalidFolder.Name = editFolder.Name;
+                invalidFolder.Color = editFolder.Color;
+                invalidFolder.Description = editFolder.Description;
+                invalidFolder.Products = BuildFolderProducts(invalidFolder.Products?.SelectedProducts);
+
+                return View(nameof(EditFolder), invalidFolder);
+            }
+
             var folder = _folderManager[editFolder.Id];
             var oldProducts = new Dictionary<Guid, ProductNodeViewModel>(folder.Products);
 
@@ -103,11 +115,9 @@ namespace HSMServer.Controllers
                 RestoreInterval = folderAlerts.SensorRestorePolicy
             };
 
-            if (_folderManager.TryGetValue(update.Id, out var folder) && await _folderManager.TryUpdate(update))
-                foreach (var productId in folder.Products.Keys)
-                    _folderManager.UpdateProductInFolder(productId, folder);
+            await _folderManager.TryUpdate(update);
 
-            return PartialView("_Alerts", new FolderAlertsViewModel(folder));
+            return PartialView("_Alerts", new FolderAlertsViewModel(_folderManager[update.Id]));
         }
 
 

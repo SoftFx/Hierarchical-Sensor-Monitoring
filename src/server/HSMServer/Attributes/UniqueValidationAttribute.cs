@@ -22,7 +22,7 @@ namespace HSMServer.Attributes
 
                 result = context.ObjectInstance switch
                 {
-                    EditFolderViewModel => folderManager[name] == null,
+                    EditFolderViewModel folder => !folder.IsNameChanged || folderManager[name] == null,
                     AddProductViewModel => cache.GetProductByName(name) == null,
                     EditAccessKeyViewModel model => AccessKeyNameCheck(model, cache),
                     _ => false

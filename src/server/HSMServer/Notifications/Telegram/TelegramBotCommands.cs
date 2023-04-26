@@ -5,10 +5,10 @@ namespace HSMServer.Notifications
 {
     internal static class TelegramBotCommands
     {
+        internal const string Server = "/server";
         internal const string Start = "/start";
+        internal const string Help = "/help";
         internal const string Info = "/info";
-        internal const string Status = "/status";
-        internal const string Icons = "/icons";
 
 
         internal static List<BotCommand> Commands { get; } =
@@ -16,19 +16,19 @@ namespace HSMServer.Notifications
             {
                 new BotCommand()
                 {
+                    Command = Help,
+                    Description = "statuses (with icons) ascending priority"
+                },
+                new BotCommand()
+                {
                     Command = Info,
-                    Description = "get authorized entities settings",
+                    Description = "authorized entities",
                 },
                 new BotCommand()
                 {
-                    Command = Status,
-                    Description = "get info about HSM server version and working status",
+                    Command = Server,
+                    Description = "info about HSM server",
                 },
-                new BotCommand()
-                {
-                    Command = Icons,
-                    Description = "get icons list with descriptions"
-                }
             };
     }
 }
