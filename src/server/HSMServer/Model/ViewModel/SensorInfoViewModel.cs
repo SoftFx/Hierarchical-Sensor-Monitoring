@@ -21,10 +21,8 @@ namespace HSMServer.Model.ViewModel
         internal SensorInfoViewModel(SensorNodeViewModel sensor) : base(sensor)
         {
             SensorType = sensor.Type;
-            Status = sensor.Status;
             StatusComment = sensor.ValidationError;
             Comment = sensor.LastValue?.Comment;
-            LastUpdateTime = sensor.UpdateTime;
             ShortLastValue = sensor.ShortStringValue;
         }
     }

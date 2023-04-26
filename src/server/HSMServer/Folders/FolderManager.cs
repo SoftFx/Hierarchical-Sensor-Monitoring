@@ -13,7 +13,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using System.Xml.Linq;
 
 namespace HSMServer.Folders
 {
@@ -69,6 +68,17 @@ namespace HSMServer.Folders
             return result;
         }
 
+        public async override Task<bool> TryUpdate(FolderUpdate update)
+        {
+            var result = TryGetValue(update.Id, out var folder) && await base.TryUpdate(update);
+
+            if (result && (update.ExpectedUpdateInterval != null || update.RestoreInterval != null))
+                foreach (var productId in folder.Products.Keys)
+                    UpdateProductInFolder(productId, folder);
+
+            return result;
+        }
+
         public async override Task<bool> TryRemove(Guid folderId)
         {
             var result = TryGetValue(folderId, out var folder) && await base.TryRemove(folderId);
@@ -103,6 +113,19 @@ namespace HSMServer.Folders
                         folder.UserRoles.Add(user, role);
         }
 
+        public List<FolderModel> GetUserFolders(User user)
+        {
+            var folders = Values.Select(f => f.RecalculateState()).ToList();
+
+            if (user == null || user.IsAdmin)
+                return folders;
+
+            if (user.FoldersRoles.Count == 0)
+                return new();
+
+            return folders.Where(f => user.IsFolderAvailable(f.Id)).ToList();
+        }
+
         public void MoveProduct(ProductNodeViewModel product, Guid? fromFolderId, Guid? toFolderId)
         {
             if (TryGetValueById(fromFolderId, out var fromFolder))
@@ -126,7 +149,7 @@ namespace HSMServer.Folders
         public void RemoveProductFromFolder(Guid productId) =>
             UpdateProductInFolder(productId, null);
 
-        public void UpdateProductInFolder(Guid productId, FolderModel folder)
+        private void UpdateProductInFolder(Guid productId, FolderModel folder)
         {
             var product = _cache.GetProduct(productId);
 
@@ -145,20 +168,6 @@ namespace HSMServer.Folders
 
                 _cache.UpdateProduct(update);
             }
-        }
-
-
-        public List<FolderModel> GetUserFolders(User user)
-        {
-            var folders = Values.Select(f => f.RecalculateState()).ToList();
-
-            if (user == null || user.IsAdmin)
-                return folders;
-
-            if (user.FoldersRoles.Count == 0)
-                return new();
-
-            return folders.Where(f => user.IsFolderAvailable(f.Id)).ToList();
         }
 
 
