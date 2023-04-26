@@ -173,6 +173,25 @@ namespace HSMDataCollector.DefaultSensors
         }
 
 
+        IUnixCollection IUnixCollection.AddTotalCpu(BarSensorOptions options)
+        {
+            return ToUnix(new UnixTotalCpu(_defaultOptions.SystemMonitoring.Get(options)));
+        }
+
+        IUnixCollection IUnixCollection.AddFreeRamMemory(BarSensorOptions options)
+        {
+            return ToUnix(new UnixFreeRamMemory(_defaultOptions.SystemMonitoring.Get(options)));
+        }
+
+        IUnixCollection IUnixCollection.AddSystemMonitoringSensors(BarSensorOptions options)
+        {
+            options = _defaultOptions.SystemMonitoring.GetAndFill(options);
+
+            return (this as IUnixCollection).AddFreeRamMemory(options)
+                                            .AddTotalCpu(options);
+        }
+
+
         IUnixCollection IUnixCollection.AddFreeDiskSpace(DiskSensorOptions options)
         {
             return ToUnix(new UnixFreeDiskSpace(_defaultOptions.DiskMonitoring.Get(options)));

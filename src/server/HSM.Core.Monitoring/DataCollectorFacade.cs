@@ -69,6 +69,7 @@ namespace HSM.Core.Monitoring
             {
                 _dataCollector.Unix.AddProcessMonitoringSensors()
                                    .AddDiskMonitoringSensors()
+                                   .AddSystemMonitoringSensors()
                                    .AddProductInfo(productInfoOptions)
                                    .AddCollectorStatuses(collectorInfoOptions)
                                    .AddCollectorHeartbeat();
