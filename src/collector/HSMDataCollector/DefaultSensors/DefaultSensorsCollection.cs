@@ -21,6 +21,9 @@ namespace HSMDataCollector.DefaultSensors
 
         internal CollectorStatusSensor StatusSensor { get; private set; }
 
+        internal ProductInfoSensor ProductInfoSensor { get; private set; }
+
+
         internal bool IsUnixOS { get; } = RuntimeInformation.IsOSPlatform(OSPlatform.OSX) ||
                                           RuntimeInformation.IsOSPlatform(OSPlatform.Linux);
 
@@ -137,15 +140,9 @@ namespace HSMDataCollector.DefaultSensors
             return Register(new CollectorHeartbeat(_defaultOptions.CollectorAlive.Get(options)));
         }
 
-        IWindowsCollection IWindowsCollection.AddProductInfo(ProductInfoOptions options)
-        {
-            return Register(new ProductInfoSensor(_defaultOptions.ProductInfo.GetAndFill(options)));
-        }
+        IWindowsCollection IWindowsCollection.AddProductInfo(ProductInfoOptions options) => AddProductInfoSensor(options);
 
-        IWindowsCollection IWindowsCollection.AddCollectorStatuses(CollectorInfoOptions options)
-        {
-            return AddCollectorStatusSensor(options);
-        }
+        IWindowsCollection IWindowsCollection.AddCollectorStatuses(CollectorInfoOptions options) => AddCollectorStatusSensor(options);
 
         #endregion
 
@@ -200,15 +197,9 @@ namespace HSMDataCollector.DefaultSensors
             return Register(new CollectorHeartbeat(_defaultOptions.CollectorAlive.Get(options)));
         }
 
-        IUnixCollection IUnixCollection.AddProductInfo(ProductInfoOptions options)
-        {
-            return Register(new ProductInfoSensor(_defaultOptions.ProductInfo.GetAndFill(options)));
-        }
+        IUnixCollection IUnixCollection.AddProductInfo(ProductInfoOptions options) => AddProductInfoSensor(options);
 
-        IUnixCollection IUnixCollection.AddCollectorStatuses(CollectorInfoOptions options)
-        {
-            return AddCollectorStatusSensor(options);
-        }
+        IUnixCollection IUnixCollection.AddCollectorStatuses(CollectorInfoOptions options) => AddCollectorStatusSensor(options);
 
         #endregion
 
@@ -222,11 +213,23 @@ namespace HSMDataCollector.DefaultSensors
 
         private DefaultSensorsCollection AddCollectorStatusSensor(CollectorInfoOptions options)
         {
+            if (StatusSensor != null)
+                return this;
+
             StatusSensor = new CollectorStatusSensor(_defaultOptions.CollectorInfo.GetAndFill(options));
 
             return Register(StatusSensor);
         }
 
+        private DefaultSensorsCollection AddProductInfoSensor(ProductInfoOptions options)
+        {
+            if (ProductInfoSensor != null)
+                return this;
+
+            ProductInfoSensor = new ProductInfoSensor(_defaultOptions.ProductInfo.GetAndFill(options));
+
+            return Register(ProductInfoSensor);
+        }
 
         private DefaultSensorsCollection ToWindows(SensorBase sensor)
         {

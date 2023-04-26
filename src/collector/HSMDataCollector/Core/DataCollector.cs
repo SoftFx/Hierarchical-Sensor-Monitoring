@@ -74,7 +74,7 @@ namespace HSMDataCollector.Core
 
             _hsmClient = new HSMClient(options, _dataQueue, _logManager);
 
-            ToRunning += _dataQueue.Init;
+            ToRunning += ToStartingCollector;
             ToStopped += _dataQueue.Stop;
         }
 
@@ -134,7 +134,7 @@ namespace HSMDataCollector.Core
             }
             catch (Exception ex)
             {
-                ChangeStatus(CollectorStatus.Stopped, ex.Message);
+                StopSensors(ex.Message);
             }
         }
 
@@ -156,7 +156,7 @@ namespace HSMDataCollector.Core
             }
             catch (Exception ex)
             {
-                ChangeStatus(CollectorStatus.Stopped, ex.Message);
+                StopSensors(ex.Message);
             }
         }
 
@@ -171,7 +171,7 @@ namespace HSMDataCollector.Core
 
             StopSensors();
 
-            ToRunning -= _dataQueue.Init;
+            ToRunning -= ToStartingCollector;
             ToStopped -= _dataQueue.Stop;
 
             _hsmClient.Dispose();
@@ -181,7 +181,7 @@ namespace HSMDataCollector.Core
         public bool IsSensorExists(string path) => _nameToSensor.ContainsKey(path) || _sensorsStorage.ContainsKey(path);
 
 
-        private void StopSensors()
+        private void StopSensors(string error = null)
         {
             var lastData = _nameToSensor.Values.Where(v => v.HasLastValue).Select(v => v.GetLastValue()).ToList();
 
@@ -190,7 +190,7 @@ namespace HSMDataCollector.Core
             foreach (var pair in _nameToSensor.Values)
                 pair.Dispose();
 
-            ChangeStatus(CollectorStatus.Stopped);
+            ChangeStatus(CollectorStatus.Stopped, error);
         }
 
         private void ChangeStatus(CollectorStatus newStatus, string error = null)
@@ -216,6 +216,12 @@ namespace HSMDataCollector.Core
                     ToStopped?.Invoke();
                     break;
             }
+        }
+
+        private void ToStartingCollector()
+        {
+            _dataQueue.Init();
+            _defaultCollection.ProductInfoSensor?.SendVersion();
         }
 
         #region Obsolets

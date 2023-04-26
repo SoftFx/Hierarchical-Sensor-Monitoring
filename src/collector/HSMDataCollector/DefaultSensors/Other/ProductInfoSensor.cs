@@ -1,6 +1,5 @@
 using HSMDataCollector.Options;
 using System;
-using System.Threading.Tasks;
 
 namespace HSMDataCollector.DefaultSensors.Other
 {
@@ -9,7 +8,7 @@ namespace HSMDataCollector.DefaultSensors.Other
         private readonly string _version;
         private readonly DateTime _startTime;
 
-        protected override string SensorName => "Running versions";
+        protected override string SensorName => "Version";
 
 
         public ProductInfoSensor(ProductInfoOptions options) : base(options)
@@ -19,10 +18,6 @@ namespace HSMDataCollector.DefaultSensors.Other
         }
 
 
-        internal override Task<bool> Start()
-        {
-            SendValue($"Version: {_version}", comment: $"Start: {_startTime}");
-            return base.Start();
-        }
+        internal void SendVersion() => SendValue($"Version: {_version}", comment: $"Start: {_startTime.ToString(DefaultTimeFormat)}");
     }
 }

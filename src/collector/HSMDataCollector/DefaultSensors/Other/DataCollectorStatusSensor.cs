@@ -18,6 +18,7 @@ namespace HSMDataCollector.DefaultSensors.Other
             client.SendData(new StringSensorValue
             {
                 Comment = error,
+                Path = SensorPath,
                 Value = $"{status}",
                 Status = string.IsNullOrEmpty(error) ? SensorStatus.Ok : SensorStatus.Error,
             });

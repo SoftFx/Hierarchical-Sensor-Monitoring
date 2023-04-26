@@ -9,19 +9,18 @@ using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace HSMDataCollector.Core
 {
     internal sealed class HSMClient : IDisposable
     {
+        private readonly CancellationTokenSource _tokenSource = new CancellationTokenSource();
         private readonly LoggerManager _logManager;
         private readonly IDataQueue _dataQueue;
         private readonly Endpoints _endpoints;
         private readonly HttpClient _client;
-
-        private readonly string _listSendingAddress;
-        private readonly string _fileSendingAddress;
 
 
         internal HSMClient(CollectorOptions options, IDataQueue dataQueue, LoggerManager logger)
@@ -70,6 +69,8 @@ namespace HSMDataCollector.Core
 
         public void Dispose()
         {
+            _tokenSource.Cancel();
+
             _dataQueue.SendValueHandler -= RecieveQueueData;
             _dataQueue.SendValuesHandler -= RecieveQueueData;
 
@@ -142,7 +143,7 @@ namespace HSMDataCollector.Core
                 _logManager.Logger?.Debug($"{nameof(RequestToServer)}: {json}");
 
             var data = new StringContent(json, Encoding.UTF8, "application/json");
-            var res = await _client.PostAsync(uri, data);
+            var res = await _client.PostAsync(uri, data, _tokenSource.Token);
 
             if (!res.IsSuccessStatusCode)
                 _logManager.Logger?.Error($"Failed to send data. StatusCode={res.StatusCode}");
