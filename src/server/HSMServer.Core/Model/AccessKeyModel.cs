@@ -12,6 +12,7 @@ namespace HSMServer.Core.Model
         CanAddNodes = 2,
         CanAddSensors = 4,
         CanReadSensorData = 8,
+        CanUseGrafana = 16,
     }
 
     public enum KeyState : byte
