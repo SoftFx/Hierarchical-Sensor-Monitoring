@@ -114,7 +114,6 @@ namespace HSMServer.Controllers
                 {
                     Guid.TryParse(key.SelectedProductId, out var currId);
                     key.Products = TreeValuesCache.GetProducts().ToList();
-                    key.SelectedProductId = currId == Guid.Empty ? "Server" : TreeValuesCache.GetProductNameById(currId);
                     key.IsModify = true;
                 }
                 return GetPartialNewAccessKey(key);

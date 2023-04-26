@@ -21,7 +21,15 @@
             <label asp-for="SelectedProductId" class="col-form-label"></label>
             @if (Model.IsModify)
             {
-                <input type="text" value="@Model.SelectedProductId" class="form-control" disabled/>
+                if (Guid.TryParse(Model.SelectedProductId, out var guid) && guid == Guid.Empty)
+                {
+                    <input type="text" value="All products" class="form-control" disabled/>
+
+                }
+                else
+                {
+                    <input type="text" value="@Model.SelectedProductId" class="form-control" disabled/>
+                }
             }
             else
             {
