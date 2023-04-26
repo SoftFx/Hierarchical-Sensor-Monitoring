@@ -25,8 +25,8 @@ namespace HSMServer.Model.AccessKeysViewModels
     public enum AccessKeyReturnType
     {
         Modal,
-        Table,
-        EditProduct
+        EditProduct,
+        Table
     }
     
 

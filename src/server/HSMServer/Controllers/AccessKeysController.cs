@@ -50,7 +50,9 @@ namespace HSMServer.Controllers
             return GetPartialNewAccessKey(new EditAccessKeyViewModel()
             {
                 CloseModal = true,
-                Products = TreeValuesCache.GetProducts().ToList()
+                Products = TreeValuesCache.GetProducts().ToList(),
+                ReturnType = AccessKeyReturnType.Table,
+                SelectedProductId = Guid.Empty.ToString()
             });
         }
 

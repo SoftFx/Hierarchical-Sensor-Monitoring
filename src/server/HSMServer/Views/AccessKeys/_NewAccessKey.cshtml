@@ -12,7 +12,10 @@
       method="post" id="newEditAccessKey_form">
 
     <input id='accessKeyId' style='display: none' asp-for="Id" value="@Model.Id"/>
-    <input id="selectedProductId" style='display: none' asp-for="SelectedProductId" value="@Model.SelectedProductId"/>
+    @if (Model.ReturnType is not AccessKeyReturnType.Table)
+    {
+        <input id="selectedProductId" style='display: none' asp-for="SelectedProductId" value="@Model.SelectedProductId"/>
+    }
     <input id='whetherCloseModal' style='display: none' asp-for="CloseModal" value="@Model.CloseModal"/>
     <input id='returnType' style='display: none' asp-for="ReturnType" value="@Model.ReturnType"/>
     <input style='display: none' asp-for="IsModify" value="@Model.IsModify"/>
