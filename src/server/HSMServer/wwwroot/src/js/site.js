@@ -20,3 +20,13 @@ window.showToast = function (message) {
 window.markdownToHTML = function (text) {
     return window.DOMPurify.sanitize(window.marked.marked(text));
 }
+
+window.replaceHtmlToMarkdown = function (elementId) {
+    let element = $(`#${elementId}`);
+    let innerHtml = element.html();
+
+    if (innerHtml !== undefined) {
+        element.empty().append(markdownToHTML(innerHtml));
+        element.children().last().css('margin-bottom', 0);
+    }
+}

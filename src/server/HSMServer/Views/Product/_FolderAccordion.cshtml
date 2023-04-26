@@ -26,7 +26,7 @@
                             </a>
                         }
                         </div>
-                    <div>@Model.Description</div>
+                    <div id="markdown_@(Model.Id)_description">@Model.Description</div>
                 </div>
             </button>
         </h2>
@@ -37,3 +37,10 @@
         </div>
     </div>
 </div>
+
+
+<script>
+    $(document).ready(() => {
+        replaceHtmlToMarkdown('markdown_@(Model.Id)_description');
+    });
+</script>

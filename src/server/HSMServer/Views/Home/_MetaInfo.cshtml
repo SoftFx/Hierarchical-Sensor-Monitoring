@@ -140,7 +140,8 @@
 
 <script>
     $(document).ready(() => {
-        replaceHTMLtoMarkdown();
+        replaceHtmlToMarkdown('markdown_span_description');
+        replaceHtmlToMarkdown('markdown_status_comment');
 
         $('#editButtonMetaInfo').on('click', function (){
             editInfoButtonClick();
@@ -169,15 +170,7 @@
         });
     });
 
-    function replaceHTMLtoMarkdown() {
-         $('[id^="markdown_"]').each(function () {
-             let innerHtml = $(this)[0].innerHTML;
-             $(this).empty().append(markdownToHTML(innerHtml))
-             $(this).children().last().css('margin-bottom', 0);
-         });
-    }
-
-     function collapseChangeTextContent() {
+    function collapseChangeTextContent() {
         let icon = $('#collapse_icon')[0];
 
         if (icon.classList.contains('fa-caret-up')) {
