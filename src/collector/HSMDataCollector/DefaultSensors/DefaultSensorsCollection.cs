@@ -142,7 +142,7 @@ namespace HSMDataCollector.DefaultSensors
 
         IWindowsCollection IWindowsCollection.AddProductInfo(ProductInfoOptions options) => AddProductInfoSensor(options);
 
-        IWindowsCollection IWindowsCollection.AddCollectorStatuses(CollectorInfoOptions options) => AddCollectorStatusSensor(options);
+        IWindowsCollection IWindowsCollection.AddCollectorStatus(CollectorInfoOptions options) => AddCollectorStatusSensor(options);
 
         #endregion
 
@@ -218,7 +218,7 @@ namespace HSMDataCollector.DefaultSensors
 
         IUnixCollection IUnixCollection.AddProductInfo(ProductInfoOptions options) => AddProductInfoSensor(options);
 
-        IUnixCollection IUnixCollection.AddCollectorStatuses(CollectorInfoOptions options) => AddCollectorStatusSensor(options);
+        IUnixCollection IUnixCollection.AddCollectorStatus(CollectorInfoOptions options) => AddCollectorStatusSensor(options);
 
         #endregion
 

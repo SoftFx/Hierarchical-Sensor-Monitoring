@@ -62,7 +62,7 @@ namespace HSM.Core.Monitoring
                                       .AddSystemMonitoringSensors()
                                       .AddWindowsInfoMonitoringSensors()
                                       .AddProductInfo(productInfoOptions)
-                                      .AddCollectorStatuses(collectorInfoOptions)
+                                      .AddCollectorStatus(collectorInfoOptions)
                                       .AddCollectorHeartbeat();
             }
             else
@@ -71,7 +71,7 @@ namespace HSM.Core.Monitoring
                                    .AddDiskMonitoringSensors()
                                    .AddSystemMonitoringSensors()
                                    .AddProductInfo(productInfoOptions)
-                                   .AddCollectorStatuses(collectorInfoOptions)
+                                   .AddCollectorStatus(collectorInfoOptions)
                                    .AddCollectorHeartbeat();
             }
 
