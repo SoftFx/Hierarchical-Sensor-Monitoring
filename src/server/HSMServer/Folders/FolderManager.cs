@@ -63,7 +63,7 @@ namespace HSMServer.Folders
 
             if (result)
                 foreach (var productId in model.Products.Keys)
-                    AddProductToFolder(productId, model.Id);
+                    await AddProductToFolder(productId, model.Id);
 
             return result;
         }
@@ -74,7 +74,7 @@ namespace HSMServer.Folders
 
             if (result && (update.ExpectedUpdateInterval != null || update.RestoreInterval != null))
                 foreach (var productId in folder.Products.Keys)
-                    UpdateProductInFolder(productId, folder);
+                    TryUpdateProductInFolder(productId, folder);
 
             return result;
         }
@@ -86,7 +86,7 @@ namespace HSMServer.Folders
             if (result)
             {
                 foreach (var productId in folder.Products.Keys)
-                    RemoveProductFromFolder(productId);
+                    await RemoveProductFromFolder(productId, folderId);
 
                 foreach (var user in folder.UserRoles.Keys)
                 {
@@ -126,30 +126,45 @@ namespace HSMServer.Folders
             return folders.Where(f => user.IsFolderAvailable(f.Id)).ToList();
         }
 
-        public void MoveProduct(ProductNodeViewModel product, Guid? fromFolderId, Guid? toFolderId)
+        public async Task MoveProduct(ProductNodeViewModel product, Guid? fromFolderId, Guid? toFolderId)
         {
             if (TryGetValueById(fromFolderId, out var fromFolder))
+            {
                 fromFolder.Products.Remove(product.Id);
+                await RemoveProductFromFolder(product.Id, fromFolderId.Value);
+            }
 
             if (TryGetValueById(toFolderId, out var toFolder))
             {
                 toFolder.Products.Add(product.Id, product);
-                AddProductToFolder(product.Id, toFolderId.Value);
+                await AddProductToFolder(product.Id, toFolderId.Value);
             }
-            else
-                RemoveProductFromFolder(product.Id);
         }
 
-        public void AddProductToFolder(Guid productId, Guid folderId)
+        public async Task AddProductToFolder(Guid productId, Guid folderId)
         {
-            if (TryGetValue(folderId, out var folder))
-                UpdateProductInFolder(productId, folder);
+            if (TryGetValue(folderId, out var folder) && TryUpdateProductInFolder(productId, folder))
+            {
+                foreach (var (user, role) in folder.UserRoles)
+                    if (!user.IsUserProduct(productId))
+                    {
+                        user.ProductsRoles.Add((productId, role));
+                        await _userManager.UpdateUser(user);
+                    }
+            }
         }
 
-        public void RemoveProductFromFolder(Guid productId) =>
-            UpdateProductInFolder(productId, null);
+        public async Task RemoveProductFromFolder(Guid productId, Guid folderId)
+        {
+            if (TryGetValue(folderId, out var folder) && TryUpdateProductInFolder(productId, null))
+            {
+                foreach (var (user, role) in folder.UserRoles)
+                    if (user.ProductsRoles.Remove((productId, role)))
+                        await _userManager.UpdateUser(user);
+            }
+        }
 
-        private void UpdateProductInFolder(Guid productId, FolderModel folder)
+        private bool TryUpdateProductInFolder(Guid productId, FolderModel folder)
         {
             var product = _cache.GetProduct(productId);
 
@@ -167,7 +182,11 @@ namespace HSMServer.Folders
                 };
 
                 _cache.UpdateProduct(update);
+
+                return true;
             }
+
+            return false;
         }
 
 

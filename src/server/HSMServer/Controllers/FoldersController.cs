@@ -66,25 +66,10 @@ namespace HSMServer.Controllers
             if (await _folderManager.TryUpdate(editFolder.ToFolderUpdate()))
             {
                 foreach (var (productId, _) in oldProducts.Except(folder.Products))
-                {
-                    _folderManager.RemoveProductFromFolder(productId);
-
-                    foreach (var (user, role) in folder.UserRoles)
-                        if (user.ProductsRoles.Remove((productId, role)))
-                            await _userManager.UpdateUser(user);
-                }
+                    await _folderManager.RemoveProductFromFolder(productId, folder.Id);
 
                 foreach (var (productId, _) in folder.Products.Except(oldProducts))
-                {
-                    _folderManager.AddProductToFolder(productId, folder.Id);
-
-                    foreach (var (user, role) in folder.UserRoles)
-                        if (!user.IsUserProduct(productId))
-                        {
-                            user.ProductsRoles.Add((productId, role));
-                            await _userManager.UpdateUser(user);
-                        }
-                }
+                    await _folderManager.AddProductToFolder(productId, folder.Id);
             }
 
             return View(nameof(EditFolder), BuildEditFolder(folder.Id));

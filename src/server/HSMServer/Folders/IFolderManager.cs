@@ -13,11 +13,11 @@ namespace HSMServer.Folders
     {
         Task<bool> TryAdd(FolderAdd folderAdd, out FolderModel folder);
 
-        void MoveProduct(ProductNodeViewModel product, Guid? fromFolderId, Guid? toFolderId);
+        Task MoveProduct(ProductNodeViewModel product, Guid? fromFolderId, Guid? toFolderId);
 
-        void AddProductToFolder(Guid productId, Guid folderId);
+        Task AddProductToFolder(Guid productId, Guid folderId);
 
-        void RemoveProductFromFolder(Guid productId);
+        Task RemoveProductFromFolder(Guid productId, Guid folderId);
 
         List<FolderModel> GetUserFolders(User user);
     }
