@@ -11,6 +11,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using HSMServer.Attributes;
+using HSMServer.Authentication;
 
 namespace HSMServer.Controllers
 {
@@ -18,14 +19,16 @@ namespace HSMServer.Controllers
     public class AccessKeysController : BaseController
     {
         private readonly TreeViewModel _treeViewModel;
+        private readonly IUserManager _userManager;
 
         internal ITreeValuesCache TreeValuesCache { get; }
 
 
-        public AccessKeysController(ITreeValuesCache treeValuesCache, TreeViewModel treeViewModel)
+        public AccessKeysController(ITreeValuesCache treeValuesCache, IUserManager userManager, TreeViewModel treeViewModel)
         {
             TreeValuesCache = treeValuesCache;
             _treeViewModel = treeViewModel;
+            _userManager = userManager;
         }
 
         public IActionResult Index() => View(GenerateFullViewModel());
@@ -230,7 +233,8 @@ namespace HSMServer.Controllers
             var serverKeys = new List<AccessKeyViewModel>(1 << 4);
 
             if (CurrentUser.IsAdmin)
-                serverKeys.AddRange(TreeValuesCache.GetAccessKeys().Where(x => x.ProductId == Guid.Empty).Select(x => new AccessKeyViewModel(x, null, CurrentUser.Name)).ToList());
+                serverKeys.AddRange(TreeValuesCache.GetAccessKeys().Where(x => x.ProductId == Guid.Empty)
+                                                                           .Select(x => new AccessKeyViewModel(x, null, x.AuthorId.HasValue ? (_userManager[x.AuthorId.Value]?.Name ?? x.AuthorId.ToString()) : x.AuthorId?.ToString())).ToList());
 
             serverKeys.AddRange(keys);
 
