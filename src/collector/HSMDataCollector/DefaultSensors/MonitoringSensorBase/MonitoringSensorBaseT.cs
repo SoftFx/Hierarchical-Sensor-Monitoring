@@ -12,6 +12,7 @@ namespace HSMDataCollector.DefaultSensors
     {
         protected readonly TimeSpan _receiveDataPeriod;
 
+        protected bool _needSendValue = true;
         private Timer _sendTimer;
 
 
@@ -19,23 +20,17 @@ namespace HSMDataCollector.DefaultSensors
 
         protected bool IsStarted => _sendTimer != null;
 
-        protected bool NeedSendValue { get; set; } = true;
-
 
         protected MonitoringSensorBase(MonitoringSensorOptions options) : base(options)
         {
             _receiveDataPeriod = options.PostDataPeriod;
-
-            _sendTimer = new Timer(OnTimerTick, null, Timeout.Infinite, Timeout.Infinite);
         }
 
 
         internal override Task<bool> Start()
         {
-            if (IsStarted)
-                return Task.FromResult(false);
-
-            _sendTimer = new Timer(OnTimerTick, null, TimerDueTime, _receiveDataPeriod);
+            if (!IsStarted)
+                _sendTimer = new Timer(OnTimerTick, null, TimerDueTime, _receiveDataPeriod);
 
             return Task.FromResult(IsStarted);
         }
@@ -65,7 +60,7 @@ namespace HSMDataCollector.DefaultSensors
         {
             var value = BuildSensorValue();
 
-            if (NeedSendValue)
+            if (_needSendValue)
                 SendValue(value);
         }
 

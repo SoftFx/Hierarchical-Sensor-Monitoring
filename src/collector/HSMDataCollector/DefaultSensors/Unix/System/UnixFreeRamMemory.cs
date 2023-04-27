@@ -14,6 +14,11 @@ namespace HSMDataCollector.DefaultSensors.Unix
         internal UnixFreeRamMemory(BarSensorOptions options) : base(options) { }
 
 
-        protected override double GetBarData() => double.TryParse(TotalCpuBashCommand.BashExecute(), out var barData) ? barData : -1.0;
+        protected override double GetBarData()
+        {
+            _needSendValue = double.TryParse(TotalCpuBashCommand.BashExecute().Replace("\n", ""), out var barData);
+
+            return _needSendValue ? barData : -1.0;
+        }
     }
 }

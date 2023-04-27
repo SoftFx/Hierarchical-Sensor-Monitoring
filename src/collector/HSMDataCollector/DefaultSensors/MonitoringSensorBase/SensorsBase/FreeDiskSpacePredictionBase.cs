@@ -45,9 +45,9 @@ namespace HSMDataCollector.DefaultSensors
             var deltaSpace = _startAvailableSpace - currentAvailableSpace;
             var deltaTime = DateTime.UtcNow - _startTime;
 
-            NeedSendValue = deltaSpace > 0;
+            _needSendValue = deltaSpace > 0;
 
-            if (NeedSendValue)
+            if (_needSendValue)
                 return new TimeSpan(currentAvailableSpace / deltaSpace * deltaTime.Ticks);
 
             if (deltaSpace < 0)

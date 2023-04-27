@@ -5,7 +5,7 @@ namespace HSMDataCollector.DefaultSensors.Unix
 {
     internal sealed class UnixTotalCpu : BarMonitoringSensorBase<DoubleMonitoringBar, double>
     {
-        private const string TotalCpuBashCommand = "top -bn1 | grep \"Cpu(s)\" | sed \"s/.*, *\\([0-9.]*\\)%* id.*/\\1/\" | awk '{print 100 - $}'";
+        private const string TotalCpuBashCommand = "top -bn1 | grep \"Cpu(s)\" | sed \"s/.*, *\\([0-9.]*\\)%* id.*/\\1/\" | awk '{print 100 - $1}'";
 
 
         protected override string SensorName => "Total CPU";
@@ -14,6 +14,11 @@ namespace HSMDataCollector.DefaultSensors.Unix
         internal UnixTotalCpu(BarSensorOptions options) : base(options) { }
 
 
-        protected override double GetBarData() => double.TryParse(TotalCpuBashCommand.BashExecute(), out var barData) ? barData : -1.0;
+        protected override double GetBarData()
+        {
+            _needSendValue = double.TryParse(TotalCpuBashCommand.BashExecute().Replace("\n", ""), out var barData);
+
+            return _needSendValue ? barData : -1.0;
+        }
     }
 }
