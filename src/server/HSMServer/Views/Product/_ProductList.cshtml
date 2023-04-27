@@ -101,10 +101,10 @@
                                         <i class="fa fa-ellipsis-vertical disabled" style="color: darkgrey" data-bs-toggle="dropdown"></i>
                                     }
                                     <div class="dropdown-menu" aria-labelledby="actionButton">
-                                        <a id='change_@product.EncodedId' class="dropdown-item text-decoration-none fw-normal button-link">Edit</a>
+                                        <a id='change_@(Model.Id)_@product.EncodedId' class="dropdown-item text-decoration-none fw-normal button-link">Edit</a>
                                         @if (isProductCrudAllowed)
                                         {
-                                            <a id='delete_@product.Id' class="dropdown-item text-decoration-none fw-normal button-link">Delete</a>
+                                            <a id='delete_@(Model.Id)_@product.Id' class="dropdown-item text-decoration-none fw-normal button-link">Delete</a>
                                         }
                                         @if (ViewBag.UserFolders is Dictionary<string, string> folders && folders.Count > 1)
                                         {
@@ -117,7 +117,7 @@
                                                     {
                                                         @if (id != currentFolderId)
                                                         {
-                                                            <a id="moveTo_@id" class="dropdown-item text-decoration-none fw-normal button-link"
+                                                            <a id="moveTo_@(Model.Id)_@id" class="dropdown-item text-decoration-none fw-normal button-link"
                                                                asp-controller="@ViewConstants.ProductController" asp-action="@nameof(ProductController.MoveProduct)"
                                                                asp-route-productId="@product.Id" asp-route-toFolderId="@id" asp-route-fromFolderId="@Model.Id">
                                                                 @name
@@ -191,9 +191,9 @@
 
 <script>
     //delete buttons
-    $('[id^="delete_"]').on("click",
+    $('[id^="delete_@(Model.Id)_"]').on("click",
         function () {
-            key = this.id.substring("delete_".length, this.id.length);
+            key = this.id.substring("delete_@(Model.Id)_".length, this.id.length);
             name = $('#inputName_' + key).text().trim().substring(0, 100);
 
             showDeletionConfirmationModal(
@@ -213,12 +213,12 @@
             );
         });
 
-    $('[id^=change_]').on('click', function () {
-        key = this.id.substring("change_".length, this.id.length);
+    $('[id^=change_@(Model.Id)_]').on('click', function () {
+        key = this.id.substring("change_@(Model.Id)_".length, this.id.length);
         window.location.href = editAction + "?Product=" + key;
     });
 
-    $('[id^=moveTo_]').on('click', function () {
+    $('[id^=moveTo_@(Model.Id)_]').on('click', function () {
         event.preventDefault();
         event.stopImmediatePropagation();
 
