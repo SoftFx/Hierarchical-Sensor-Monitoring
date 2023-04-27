@@ -106,18 +106,18 @@
                                         {
                                             <a id='delete_@product.Id' class="dropdown-item text-decoration-none fw-normal button-link">Delete</a>
                                         }
-                                        @if (ViewBag.UserFolders is Dictionary<string, (string, string, string)> folders && folders.Count > 1)
+                                        @if (ViewBag.UserFolders is Dictionary<string, string> folders && folders.Count > 1)
                                         {
                                             var currentFolderId = Model.Id?.ToString() ?? string.Empty;
 
                                             <div class="dropdown dropend">
                                                 <a class="dropdown-item text-decoration-none fw-normal button-link" id="moveToAction" data-bs-toggle="dropdown" data-bs-auto-close="true" aria-haspopup="true" aria-expanded="false">Move to ...</a>
                                                 <div class="dropdown-menu" aria-labelledby="moveToAction">
-                                                    @foreach (var (id, (name, background, foreground)) in folders)
+                                                    @foreach (var (id, name) in folders)
                                                     {
                                                         @if (id != currentFolderId)
                                                         {
-                                                            <a id="moveTo_@id" class="dropdown-item text-decoration-none fw-normal button-link" style="background:@background; color:@foreground"
+                                                            <a id="moveTo_@id" class="dropdown-item text-decoration-none fw-normal button-link"
                                                                asp-controller="@ViewConstants.ProductController" asp-action="@nameof(ProductController.MoveProduct)"
                                                                asp-route-productId="@product.Id" asp-route-toFolderId="@id" asp-route-fromFolderId="@Model.Id">
                                                                 @name

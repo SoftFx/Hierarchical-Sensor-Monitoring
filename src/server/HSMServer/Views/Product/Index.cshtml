@@ -10,7 +10,7 @@
 @{
     ViewData["Title"] = "Products";
 
-    ViewBag.UserFolders = Model.ToDictionary(f => f.Id?.ToString() ?? string.Empty, f => (f.Name, f.Background, f.Foreground));
+    ViewBag.UserFolders = Model.ToDictionary(f => f.Id?.ToString() ?? string.Empty, f => f.Name);
 }
 
 
