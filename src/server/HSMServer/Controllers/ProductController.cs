@@ -251,7 +251,7 @@ namespace HSMServer.Controllers
 
         #endregion
 
-        private Dictionary<string, (string, string, string)> GetUserFolders()
+        private Dictionary<string, string> GetUserFolders()
         {
             var userFolderIds = new HashSet<Guid>();
 
@@ -273,7 +273,7 @@ namespace HSMServer.Controllers
 
             folders = folders.OrderBy(f => f.Name).AddFluent(new FolderViewModel(null));
 
-            return folders.ToDictionary(f => f.Id?.ToString() ?? string.Empty, f => (f.Name, f.Background, f.Foreground));
+            return folders.ToDictionary(f => f.Id?.ToString() ?? string.Empty, f => f.Name);
         }
 
         private (string, string, string, string, string) GetMailConfiguration()
