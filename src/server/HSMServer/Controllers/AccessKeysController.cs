@@ -105,6 +105,9 @@ namespace HSMServer.Controllers
 
             TreeValuesCache.AddAccessKey(key.ToModel(CurrentUser.Id));
 
+            if (key.CloseModal)
+                return Ok();
+            
             if (key.ReturnType is AccessKeyReturnType.Modal)
                 return GetPartialProductAccessKeys(key.SelectedProductId);
 
@@ -148,9 +151,9 @@ namespace HSMServer.Controllers
 
             TreeValuesCache.UpdateAccessKey(key.ToAccessKeyUpdate());
 
-            if (Guid.TryParse(key.SelectedProductId, out var id) && id == Guid.Empty)
-                return PartialView("_AllAccessKeys", GenerateFullViewModel());
-            
+            if (key.CloseModal)
+                return Ok();
+
             return GetPartialProductAccessKeys(key.SelectedProductId);
         }
 
