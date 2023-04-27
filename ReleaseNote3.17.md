@@ -51,3 +51,19 @@ It allows you to group different products and set the same settings for them (te
 * **/help** command has been added. This command output contains information from command /icons and existing statuses ascending priority
 * Icon for OffTime status has been changed to 💤
 * Other minor improvements...
+
+# HSM Datacollector
+
+### Structure and optimizations
+* Async requests and handlers for HttpClient have been added
+* Base structure for **Simple sensor** (a sensor that sends data on user request, not on a timer) has been added
+
+### Default sensors
+* **CollectorAlive** sensor has been renamed to **CollectorHeartbeat**. Sensor name has been renamed from **Service alive** to **Service heartbeat**
+* New default sensor **Product info** has been added. Now it contains Product Version with Version start time
+
+### New methods
+* New method **SendFileAsync** has been added
+
+### Other
+* Collector version has been increased to 3.1.0
