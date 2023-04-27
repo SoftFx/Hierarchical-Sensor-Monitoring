@@ -32,7 +32,7 @@ namespace HSMServer.Attributes
             return result ? ValidationResult.Success : new ValidationResult(ErrorMessage);
         }
 
-        private bool AccessKeyNameCheck(EditAccessKeyViewModel model, ITreeValuesCache cache)
+        private static bool AccessKeyNameCheck(EditAccessKeyViewModel model, ITreeValuesCache cache)
         {
             model.SelectedProductId ??= Guid.Empty.ToString();
 
