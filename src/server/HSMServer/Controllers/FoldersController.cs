@@ -1,5 +1,7 @@
 ﻿using HSMServer.Authentication;
+using HSMServer.Filters.FolderRoleFilters;
 using HSMServer.Folders;
+using HSMServer.Model.Authentication;
 using HSMServer.Model.Folders;
 using HSMServer.Model.Folders.ViewModels;
 using HSMServer.Model.TreeViewModel;
@@ -30,6 +32,7 @@ namespace HSMServer.Controllers
 
 
         [HttpGet]
+        [FolderRoleFilterByFolderId(ProductRoleEnum.ProductManager)]
         public IActionResult EditFolder(Guid? folderId)
         {
             return folderId == null
@@ -38,6 +41,7 @@ namespace HSMServer.Controllers
         }
 
         [HttpPost]
+        [FolderRoleFilterByEditModel(ProductRoleEnum.ProductManager)]
         public async Task<IActionResult> EditFolder(EditFolderViewModel editFolder)
         {
             if (!ModelState.IsValid)
@@ -87,25 +91,28 @@ namespace HSMServer.Controllers
         }
 
         [HttpPost]
-        public async Task<IActionResult> AddFolder(EditFolderViewModel folder)
+        [FolderRoleFilterByEditModel(ProductRoleEnum.ProductManager)]
+        public async Task<IActionResult> AddFolder(EditFolderViewModel editFolder)
         {
             if (!ModelState.IsValid)
             {
-                folder.Products = BuildFolderProducts(folder.Products?.SelectedProducts);
+                editFolder.Products = BuildFolderProducts(editFolder.Products?.SelectedProducts);
 
-                return View(nameof(EditFolder), folder);
+                return View(nameof(EditFolder), editFolder);
             }
 
-            await _folderManager.TryAdd(folder.ToFolderAdd(CurrentUser, _tree), out var newFolder);
+            await _folderManager.TryAdd(editFolder.ToFolderAdd(CurrentUser, _tree), out var newFolder);
 
             return View(nameof(EditFolder), BuildEditFolder(newFolder.Id));
         }
 
         [HttpPost]
+        [FolderRoleFilterByFolderId(ProductRoleEnum.ProductManager)]
         public Task RemoveFolder(Guid folderId) => _folderManager.TryRemove(folderId);
 
 
         [HttpPost]
+        [FolderRoleFilterByEditAlerts(ProductRoleEnum.ProductManager)]
         public async Task<IActionResult> EditAlerts(FolderAlertsViewModel folderAlerts)
         {
             var update = new FolderUpdate()
@@ -125,6 +132,7 @@ namespace HSMServer.Controllers
         public IActionResult ResetUsers(Guid folderId) => GetUsersPartialView(_folderManager[folderId]);
 
         [HttpPost]
+        [FolderRoleFilterByUserRights(ProductRoleEnum.ProductManager)]
         public async Task<IActionResult> AddUserRole([FromBody] UserRightViewModel model)
         {
             var user = _userManager[model.UserId];
@@ -143,6 +151,7 @@ namespace HSMServer.Controllers
         }
 
         [HttpPost]
+        [FolderRoleFilterByUserRights(ProductRoleEnum.ProductManager)]
         public async Task<IActionResult> EditUserRole([FromBody] UserRightViewModel model)
         {
             var user = _userManager[model.UserId];
@@ -164,6 +173,7 @@ namespace HSMServer.Controllers
         }
 
         [HttpPost]
+        [FolderRoleFilterByUserRights(ProductRoleEnum.ProductManager)]
         public async Task<IActionResult> RemoveUserRole([FromBody] UserRightViewModel model)
         {
             var user = _userManager[model.UserId];

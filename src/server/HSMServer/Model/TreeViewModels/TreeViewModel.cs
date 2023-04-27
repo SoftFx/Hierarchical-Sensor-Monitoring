@@ -83,8 +83,16 @@ namespace HSMServer.Model.TreeViewModel
                 {
                     var folderId = node.Data.FolderId;
 
-                    if (folderId.HasValue && folders.TryGetValue(folderId.Value, out var folder))
+                    if (folderId.HasValue)
+                    {
+                        if (!folders.TryGetValue(folderId.Value, out var folder))
+                        {
+                            folder = new FolderShallowModel(_folderManager[folderId], user);
+                            folders.Add(folderId.Value, folder);
+                        }
+
                         folder.AddChild(node, user);
+                    }
                     else
                         tree.Add(node);
                 }
