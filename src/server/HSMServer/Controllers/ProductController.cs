@@ -131,10 +131,10 @@ namespace HSMServer.Controllers
 
         public void RemoveProduct(Guid product) => _treeValuesCache.RemoveProduct(product);
 
-        public void MoveProduct(Guid productId, Guid? fromFolderId, Guid? toFolderId)
+        public async Task MoveProduct(Guid productId, Guid? fromFolderId, Guid? toFolderId)
         {
             if (_treeViewModel.Nodes.TryGetValue(productId, out var product))
-                _folderManager.MoveProduct(product, fromFolderId, toFolderId);
+                await _folderManager.MoveProduct(product, fromFolderId, toFolderId);
         }
 
         #endregion
