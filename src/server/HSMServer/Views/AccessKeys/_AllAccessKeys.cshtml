@@ -63,7 +63,16 @@
                             <a role="button" tabindex="0" id="copy_@key.Id" onclick="copyToClipboard(`@key.Id`)" title="copy key" class="link-primary fw-normal">copy</a>
                         </td>
                         <td>@key.Permissions</td>
-                        <td>@key.AuthorName</td>
+                        <td>
+                            @if (Guid.TryParse(key.AuthorName, out var guid))
+                            {
+                                <span class="fst-italic">Removed</span>
+                            }
+                            else
+                            {
+                                @key.AuthorName
+                            }
+                        </td>
                         <td class="text-center">
                             @if (key.State == KeyState.Expired)
                             {
