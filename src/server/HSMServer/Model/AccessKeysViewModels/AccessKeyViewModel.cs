@@ -1,8 +1,6 @@
-﻿using HSMCommon.Constants;
-using HSMServer.Core.Model;
+﻿using HSMServer.Core.Model;
 using HSMServer.Model.TreeViewModel;
 using System;
-using System.Collections.Generic;
 using HSMServer.Extensions;
 
 namespace HSMServer.Model.AccessKeysViewModels
@@ -14,6 +12,8 @@ namespace HSMServer.Model.AccessKeysViewModels
         public ProductNodeViewModel ParentProduct { get; }
 
         public string AuthorName { get; }
+        
+        public Guid AuthorId { get; }
 
         public string ExpirationDate { get; }
 
@@ -34,6 +34,7 @@ namespace HSMServer.Model.AccessKeysViewModels
             Id = accessKey.Id;
             ParentProduct = parent;
             AuthorName = authorName;
+            AuthorId = accessKey.AuthorId ?? Guid.Empty;
             ExpirationDate = BuildExpiration(accessKey.ExpirationTime);
 
             Update(accessKey);

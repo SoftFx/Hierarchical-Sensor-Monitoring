@@ -1,4 +1,5 @@
-﻿@using HSMServer.Model.AccessKeysViewModels
+﻿@using HSMServer.Authentication
+@using HSMServer.Model.AccessKeysViewModels
 @using HSMServer.Controllers
 @using HSMServer.Constants
 @using HSMServer.Helpers
@@ -7,6 +8,8 @@
 @using HSMServer.Extensions
 @using Microsoft.AspNetCore.Mvc.TagHelpers
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
+
+@inject IUserManager UserManager
 
 @model AccessKeyTableViewModel
 
@@ -64,13 +67,13 @@
                         </td>
                         <td>@key.Permissions</td>
                         <td>
-                            @if (Guid.TryParse(key.AuthorName, out var guid))
+                            @if (!string.IsNullOrEmpty(@UserManager[key.AuthorId]?.Name))
                             {
-                                <span class="fst-italic">Removed</span>
+                                @key.AuthorName
                             }
                             else
                             {
-                                @key.AuthorName
+                                <span class="fst-italic">Removed</span>
                             }
                         </td>
                         <td class="text-center">
