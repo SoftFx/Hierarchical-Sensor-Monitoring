@@ -27,15 +27,15 @@ namespace HSMDataCollector.PublicInterface
         IUnixCollection AddDiskMonitoringSensors(DiskSensorOptions options = null);
 
 
-        IUnixCollection AddCollectorHeartbeat(MonitoringSensorOptions options = null);
+        IUnixCollection AddCollectorHeartbeat(CollectorMonitoringInfoOptions options = null);
 
-        IUnixCollection AddCollectorVersion(ProductVersionOptions options = null);
+        IUnixCollection AddCollectorVersion(CollectorInfoOptions options = null);
 
         IUnixCollection AddCollectorStatus(CollectorInfoOptions options = null);
 
-        IUnixCollection AddCollectorMonitoringSensors(CollectorInfoOptions options = null);
+        IUnixCollection AddCollectorMonitoringSensors(CollectorMonitoringInfoOptions options = null);
 
 
-        IUnixCollection AddProductVersion(ProductVersionOptions options = null);
+        IUnixCollection AddProductVersion(VersionSensorOptions options = null);
     }
 }

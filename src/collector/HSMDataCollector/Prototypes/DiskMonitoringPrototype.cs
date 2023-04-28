@@ -4,7 +4,7 @@ using System.IO;
 
 namespace HSMDataCollector.Options
 {
-    internal sealed class DiskMonitoringPrototype : OptionsProperty<DiskSensorOptions>
+    internal sealed class DiskMonitoringPrototype : Prototype<DiskSensorOptions>
     {
         protected override string NodePath { get; } = "Disk monitoring";
 

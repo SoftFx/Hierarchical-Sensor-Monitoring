@@ -2,12 +2,12 @@
 
 namespace HSMDataCollector.Options
 {
-    internal sealed class WindowsInfoMonitoringOptions : Prototype<WindowsSensorOptions>
+    internal sealed class WindowsInfoMonitoringPrototype : Prototype<WindowsSensorOptions>
     {
         protected override string NodePath { get; } = "Windows OS Info";
 
 
-        internal WindowsInfoMonitoringOptions() : base()
+        internal WindowsInfoMonitoringPrototype() : base()
         {
             DefaultOptions.PostDataPeriod = TimeSpan.FromHours(12);
         }

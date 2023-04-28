@@ -36,13 +36,20 @@ namespace HSMDataCollector.Options
     }
 
 
-    public sealed class ProductVersionOptions : SensorOptions
+    public sealed class VersionSensorOptions : SensorOptions
     {
         public string Version { get; set; }
+
+        public string SensorName { get; set; }
 
         public DateTime StartTime { get; set; }
     }
 
 
-    public sealed class CollectorInfoOptions : SensorOptions { }
+    public sealed class CollectorInfoOptions : SensorOptions
+    {
+        internal const string BaseCollectorPath = "Product Info/Collector";
+    }
+
+    public sealed class CollectorMonitoringInfoOptions : MonitoringSensorOptions { }
 }

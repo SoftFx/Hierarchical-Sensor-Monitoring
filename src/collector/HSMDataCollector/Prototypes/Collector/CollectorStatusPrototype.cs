@@ -2,6 +2,6 @@
 {
     internal sealed class CollectorStatusPrototype : Prototype<CollectorInfoOptions>
     {
-        protected override string NodePath { get; } = "Product Info";
+        protected override string NodePath { get; } = CollectorInfoOptions.BaseCollectorPath;
     }
 }
