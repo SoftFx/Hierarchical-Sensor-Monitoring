@@ -42,8 +42,13 @@ namespace HSMDataCollector.PublicInterface
 
         IWindowsCollection AddCollectorHeartbeat(MonitoringSensorOptions options = null);
 
+        IWindowsCollection AddCollectorVersion(ProductVersionOptions options = null);
+
         IWindowsCollection AddCollectorStatus(CollectorInfoOptions options = null);
 
-        IWindowsCollection AddProductInfo(ProductInfoOptions options = null);
+        IWindowsCollection AddCollectorMonitoringSensors(CollectorInfoOptions options = null);
+
+
+        IWindowsCollection AddProductVersion(ProductVersionOptions options = null);
     }
 }

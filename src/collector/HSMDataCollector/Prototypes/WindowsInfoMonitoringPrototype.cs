@@ -2,7 +2,7 @@
 
 namespace HSMDataCollector.Options
 {
-    internal sealed class WindowsInfoMonitoringOptions : OptionsProperty<WindowsSensorOptions>
+    internal sealed class WindowsInfoMonitoringOptions : Prototype<WindowsSensorOptions>
     {
         protected override string NodePath { get; } = "Windows OS Info";
 

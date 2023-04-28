@@ -16,19 +16,19 @@ namespace HSMDataCollector.DefaultSensors
         private static readonly NotSupportedException _notSupportedException = new NotSupportedException(NotSupportedSensor);
 
         private readonly SensorsStorage _storage;
-        private readonly SensorsDefaultOptions _defaultOptions;
+        private readonly SensorsPrototype _defaultOptions;
 
 
         internal CollectorStatusSensor StatusSensor { get; private set; }
 
-        internal ProductInfoSensor ProductInfoSensor { get; private set; }
+        internal ProductVersionSensor ProductVersion { get; private set; }
 
 
         internal bool IsUnixOS { get; } = RuntimeInformation.IsOSPlatform(OSPlatform.OSX) ||
                                           RuntimeInformation.IsOSPlatform(OSPlatform.Linux);
 
 
-        internal DefaultSensorsCollection(SensorsStorage storage, SensorsDefaultOptions sensorsOptions)
+        internal DefaultSensorsCollection(SensorsStorage storage, SensorsPrototype sensorsOptions)
         {
             _storage = storage;
             _defaultOptions = sensorsOptions;
@@ -140,10 +140,21 @@ namespace HSMDataCollector.DefaultSensors
             return Register(new CollectorHeartbeat(_defaultOptions.CollectorAlive.Get(options)));
         }
 
-        IWindowsCollection IWindowsCollection.AddProductInfo(ProductInfoOptions options) => AddProductInfoSensor(options);
-
         IWindowsCollection IWindowsCollection.AddCollectorStatus(CollectorInfoOptions options) => AddCollectorStatusSensor(options);
 
+        IWindowsCollection IWindowsCollection.AddCollectorVersion(ProductVersionOptions options)
+        {
+            throw new NotImplementedException();
+        }
+
+        IWindowsCollection IWindowsCollection.AddCollectorMonitoringSensors(CollectorInfoOptions options)
+        {
+            throw new NotImplementedException();
+        }
+
+
+        IWindowsCollection IWindowsCollection.AddProductVersion(ProductVersionOptions options) => AddProductVersionSensor(options);
+        
         #endregion
 
         #region Unix
@@ -216,12 +227,26 @@ namespace HSMDataCollector.DefaultSensors
             return Register(new CollectorHeartbeat(_defaultOptions.CollectorAlive.Get(options)));
         }
 
-        IUnixCollection IUnixCollection.AddProductInfo(ProductInfoOptions options) => AddProductInfoSensor(options);
-
         IUnixCollection IUnixCollection.AddCollectorStatus(CollectorInfoOptions options) => AddCollectorStatusSensor(options);
+
+
+        IUnixCollection IUnixCollection.AddCollectorVersion(ProductVersionOptions options)
+        {
+            throw new NotImplementedException();
+        }
+
+        IUnixCollection IUnixCollection.AddCollectorMonitoringSensors(CollectorInfoOptions options)
+        {
+            throw new NotImplementedException();
+        }
+
+
+        IUnixCollection IUnixCollection.AddProductVersion(ProductVersionOptions options) => AddProductVersionSensor(options);
 
         #endregion
 
+
+        #region Common
         private DefaultSensorsCollection AddDisksMonitoring(DiskSensorOptions options, Func<DiskSensorOptions, SensorBase> newSensorFunc)
         {
             foreach (var diskOptions in _defaultOptions.DiskMonitoring.GetAllDisksOptions(options))
@@ -240,14 +265,14 @@ namespace HSMDataCollector.DefaultSensors
             return Register(StatusSensor);
         }
 
-        private DefaultSensorsCollection AddProductInfoSensor(ProductInfoOptions options)
+        private DefaultSensorsCollection AddProductVersionSensor(ProductVersionOptions options)
         {
-            if (ProductInfoSensor != null)
+            if (ProductVersion != null)
                 return this;
 
-            ProductInfoSensor = new ProductInfoSensor(_defaultOptions.ProductInfo.GetAndFill(options));
+            ProductVersion = new ProductVersionSensor(_defaultOptions.ProductVersion.GetAndFill(options));
 
-            return Register(ProductInfoSensor);
+            return Register(ProductVersion);
         }
 
         private DefaultSensorsCollection ToWindows(SensorBase sensor)
@@ -266,5 +291,7 @@ namespace HSMDataCollector.DefaultSensors
 
             return this;
         }
+
+        #endregion
     }
 }

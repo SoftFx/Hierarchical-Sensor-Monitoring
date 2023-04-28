@@ -75,7 +75,7 @@ namespace HSMDataCollector.Core
             _hsmClient = new HSMClient(options, _dataQueue, _logManager);
 
             ToRunning += ToStartingCollector;
-            ToStopped += _dataQueue.Stop;
+            ToStopped += ToStoppingCollector;
         }
 
         /// <summary>
@@ -172,7 +172,7 @@ namespace HSMDataCollector.Core
             StopSensors();
 
             ToRunning -= ToStartingCollector;
-            ToStopped -= _dataQueue.Stop;
+            ToStopped -= ToStoppingCollector;
 
             _hsmClient.Dispose();
         }
@@ -221,7 +221,13 @@ namespace HSMDataCollector.Core
         private void ToStartingCollector()
         {
             _dataQueue.Init();
-            _defaultCollection.ProductInfoSensor?.SendVersion();
+            _defaultCollection.ProductVersion?.StartInfo();
+        }
+
+        private void ToStoppingCollector()
+        {
+            _defaultCollection.ProductVersion?.StopInfo();
+            _dataQueue.Stop();
         }
 
         #region Obsolets
