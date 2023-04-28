@@ -372,11 +372,11 @@ namespace HSMServer.Controllers
         #region File
 
         [HttpGet]
-        public async Task<IActionResult> GetFile([FromQuery] string selectedId, [FromQuery] long dateTime = default)
+        public async Task<IActionResult> GetFile([FromQuery] string selectedId, [FromQuery] long dateTime = default, [FromQuery] int numberOfFiles = 20)
         {
             var (_, path) = GetSensorProductAndPath(selectedId);
 
-            var value = await GetFileByReceivingTimeOrDefault(selectedId, dateTime);
+            var value = await GetFileByReceivingTimeOrDefault(selectedId, dateTime, numberOfFiles);
 
             if (value is null)
                 return _emptyResult;
@@ -387,11 +387,11 @@ namespace HSMServer.Controllers
         }
 
         [HttpPost]
-        public async Task<IActionResult> GetFileStream([FromQuery] string selectedId, [FromQuery] long dateTime = default)
+        public async Task<IActionResult> GetFileStream([FromQuery] string selectedId, [FromQuery] long dateTime = default, [FromQuery] int numberOfFiles = 20)
         {
             var (_, path) = GetSensorProductAndPath(selectedId);
 
-            var value = await GetFileByReceivingTimeOrDefault(selectedId, dateTime);
+            var value = await GetFileByReceivingTimeOrDefault(selectedId, dateTime, numberOfFiles);
 
             if (value is null)
                 return _emptyResult;
@@ -427,9 +427,9 @@ namespace HSMServer.Controllers
         private FileValue GetFileSensorValue(string encodedId) =>
             _treeValuesCache.GetSensor(Guid.Parse(encodedId)).LastValue as FileValue;
 
-        private async Task<FileValue> GetFileByReceivingTimeOrDefault(string selectedId, long ticks = default) => (ticks == default
+        private async Task<FileValue> GetFileByReceivingTimeOrDefault(string selectedId, long ticks = default, int numberOfFiles = 20) => (ticks == default
             ? GetFileSensorValue(selectedId)
-            : (await GetFileHistory(selectedId)).Pages[0].Cast<FileValue>().FirstOrDefault(file => file.ReceivingTime.Ticks == ticks))
+            : (await GetFileHistory(selectedId, numberOfFiles)).Pages[0].Cast<FileValue>().FirstOrDefault(file => file.ReceivingTime.Ticks == ticks))
             .DecompressContent();
 
         private Task<HistoryValuesViewModel> GetFileHistory(string selectedId, int numberOfFiles = 20)

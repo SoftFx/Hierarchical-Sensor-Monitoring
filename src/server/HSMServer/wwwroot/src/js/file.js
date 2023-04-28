@@ -14,7 +14,7 @@ window.openFileInBrowser = function(path, fileName, viewFileAction, time = undef
     let url = time === undefined ? `${viewFileAction}?selectedId=${path}` : `${viewFileAction}?selectedId=${path}&dateTime=${time}`;
     $.ajax({
         type: 'POST',
-        url: url,
+        url: url + `&numberOfFiles=${$('#numberOfFiles')[0].value}`,
         cache: false,
         contentType: "application/json",
         success: function (response) {

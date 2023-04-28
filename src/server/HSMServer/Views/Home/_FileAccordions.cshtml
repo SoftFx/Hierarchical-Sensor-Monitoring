@@ -96,7 +96,7 @@
     function fileDownload(time){
         let encodedId = ($('[id^=recentValues_]')).attr('id').substring("recentValues_".length);
 
-        window.location.href = getFileAction + "?selectedId=" + encodedId + "&dateTime=" + time;
+        window.location.href = getFileAction + "?selectedId=" + encodedId + "&dateTime=" + time + `&numberOfFiles=${$('#numberOfFiles')[0].value}`;
     }
 
     function previewButtonClick(time, currentId, extension, isEnabled){
@@ -110,7 +110,7 @@
         
         $.ajax({
             type: 'POST',
-            url: `${viewFileAction}?selectedId=${encodedId}&datetime=${time}`,
+            url: `${viewFileAction}?selectedId=${encodedId}&datetime=${time}&numberOfFiles=${$('#numberOfFiles')[0].value}`,
             cache: false,
             contentType: 'application/json',
             success: function (file){
