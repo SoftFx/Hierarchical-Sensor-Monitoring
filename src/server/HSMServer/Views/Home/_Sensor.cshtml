@@ -30,10 +30,10 @@
     {
         @if (file is not null)
         {
-            <div class="d-flex align-items-center" style="height: 2rem">
-                <label class="d-flex flex-grow-2" for="numberOfFiles">Number of files to load</label>
-                <input id="numberOfFiles" class="d-flex flex-grow-0 form-control w-25 ms-1" value="@numberOfFiles" />
-                <button class="btn btn-outline-primary ms-1" onclick="loadFiles($('#numberOfFiles')[0].value)">Apply</button>
+            <div class="d-flex align-items-center justify-content-end" style="height: 2rem">
+                <label class="d-flex flex-grow-2" for="numberOfFiles">List size: </label>
+                <input id="numberOfFiles" type="number" class="d-flex flex-grow-0 form-control form-control-sm ms-1 px-0 text-center" style="width: 4rem" value="@numberOfFiles" />
+                <button class="btn btn-outline-primary btn-sm ms-1" onclick="loadFiles($('#numberOfFiles')[0].value)">Apply</button>
             </div>
             <div class='accordion mt-2' id='sensorData_@sensorId'>
                 <div class='accordion-item'>
