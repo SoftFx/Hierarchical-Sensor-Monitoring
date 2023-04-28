@@ -16,13 +16,26 @@
                     <div class="modal-header">
                         <div class="text-break">
                             <h5 class="modal-title">Edit sensor status</h5>
-                            <h6 class="modal-title">Path</h6>
-                            @* <h6 class="modal-title">@Model.Path</h6> *@
+                            <h6 class="modal-title">@Model.Path</h6>
                         </div>
                     </div>
 
-                    <div class="modal-body">
-                        <p>Pasdashjdasljdasljdasljdas</p>
+                    <div class="d-flex justify-content-between modal-body">
+                        <div class="col-auto">
+                            <label asp-for="@Model.Status">Current status</label>
+                            <input asp-for="@Model.Status" class="form-control" value="@Model.Status" disabled/>
+                        </div>
+                        <span class="align-self-end pb-2">-></span>
+                        <div class="col-auto">
+                            <label asp-for="@Model.Status">New status</label>
+                            <input asp-for="@Model.Status" class="form-control" value="@Model.Status" disabled/>
+                        </div>
+                        <div>
+                            Accesskey dropdown
+                        </div>
+                        <textarea>
+
+                        </textarea>
                     </div>
 
                     <div class="modal-footer">
@@ -37,6 +50,25 @@
 
 
 <script>
+   $(document).on("submit", "#ignoreNotifications_form", function (event) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+
+        $.ajax({
+            url: $("#ignoreNotifications_form").attr("action"),
+            type: 'POST',
+            data: new FormData(this),
+            datatype: 'html',
+            processData: false,
+            contentType: false,
+            async: true
+        }).done(function () {
+            hideIgnoreNotificationsModal();
+            updateSelectedNodeData();
+            updateTreeTimer();
+        });
+    });
+
     function hideEditSensorModal() {
         $('#editSensorStatus_modal').modal('hide');
     }

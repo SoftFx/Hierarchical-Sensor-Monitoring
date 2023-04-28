@@ -13,6 +13,8 @@ namespace HSMServer.Model.ViewModel
         public string Comment { get; set; }
 
         public string ShortLastValue { get; set; }
+        
+        public string Path { get; set; }
 
 
         // public constructor without parameters for action Home/UpdateSensorInfo
@@ -24,6 +26,7 @@ namespace HSMServer.Model.ViewModel
             StatusComment = sensor.ValidationError;
             Comment = sensor.LastValue?.Comment;
             ShortLastValue = sensor.ShortStringValue;
+            Path = sensor.FullPath;
         }
     }
 }
