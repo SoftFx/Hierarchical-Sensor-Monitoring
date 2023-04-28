@@ -226,8 +226,7 @@ namespace HSMServer.Controllers
             var serverKeys = new List<AccessKeyViewModel>(1 << 4);
 
             if (CurrentUser.IsAdmin)
-                serverKeys.AddRange(TreeValuesCache.GetAccessKeys().Where(x => x.ProductId == Guid.Empty)
-                                                                           .Select(x => new AccessKeyViewModel(x, null, x.AuthorId.HasValue ? (_userManager[x.AuthorId.Value]?.Name ?? x.AuthorId.ToString()) : x.AuthorId?.ToString())).ToList());
+                serverKeys.AddRange(TreeValuesCache.GetAccessKeys().Where(x => x.ProductId == Guid.Empty).Select(x => new AccessKeyViewModel(x, null, _userManager[x.AuthorId])));
 
             serverKeys.AddRange(keys);
 

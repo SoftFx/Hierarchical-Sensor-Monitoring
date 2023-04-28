@@ -67,9 +67,9 @@
                         </td>
                         <td>@key.Permissions</td>
                         <td>
-                            @if (!string.IsNullOrEmpty(UserManager[key.AuthorId]?.Name))
+                            @if (UserManager[key.Author?.Id] is not null)
                             {
-                                @key.AuthorName
+                                @key.Author?.Name
                             }
                             else
                             {

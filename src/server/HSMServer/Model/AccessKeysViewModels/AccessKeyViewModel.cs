@@ -2,6 +2,7 @@
 using HSMServer.Model.TreeViewModel;
 using System;
 using HSMServer.Extensions;
+using HSMServer.Model.Authentication;
 
 namespace HSMServer.Model.AccessKeysViewModels
 {
@@ -10,10 +11,8 @@ namespace HSMServer.Model.AccessKeysViewModels
         public Guid Id { get; }
 
         public ProductNodeViewModel ParentProduct { get; }
-
-        public string AuthorName { get; }
         
-        public Guid AuthorId { get; }
+        public User Author { get; }
 
         public string ExpirationDate { get; }
 
@@ -29,12 +28,11 @@ namespace HSMServer.Model.AccessKeysViewModels
         public string StatusTitle { get; private set; }
 
 
-        internal AccessKeyViewModel(AccessKeyModel accessKey, ProductNodeViewModel parent, string authorName)
+        internal AccessKeyViewModel(AccessKeyModel accessKey, ProductNodeViewModel parent, User author)
         {
             Id = accessKey.Id;
             ParentProduct = parent;
-            AuthorName = authorName;
-            AuthorId = accessKey.AuthorId ?? Guid.Empty;
+            Author = author;
             ExpirationDate = BuildExpiration(accessKey.ExpirationTime);
 
             Update(accessKey);
