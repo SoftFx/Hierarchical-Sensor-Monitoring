@@ -1,10 +1,12 @@
 ﻿using System;
+using System.Collections.Generic;
 using HSMServer.Core.Cache;
 using HSMServer.Folders;
 using HSMServer.Model.Folders.ViewModels;
 using HSMServer.Model.ViewModel;
 using System.ComponentModel.DataAnnotations;
 using System.Linq;
+using HSMServer.Core.Model;
 using HSMServer.Model.AccessKeysViewModels;
 
 namespace HSMServer.Attributes
@@ -35,32 +37,29 @@ namespace HSMServer.Attributes
         private static bool AccessKeyNameCheck(EditAccessKeyViewModel model, ITreeValuesCache cache)
         {
             model.SelectedProductId ??= Guid.Empty.ToString();
-
+            IEnumerable<AccessKeyModel> keys;
+            
             if (model.Id != Guid.Empty)
             {
                 var key = cache.GetAccessKey(model.Id);
                 
-                if (key.ProductId == Guid.Empty)
-                {
-                    var serverKeys = cache.GetAccessKeys().Where(x => x.ProductId == Guid.Empty);
-                    return !serverKeys.Any(x => x.DisplayName == model.DisplayName && x.Id != model.Id);
-                }
+                keys = key.ProductId == Guid.Empty ? GetMasterKeys(cache) : GetProductKeys(cache, key.ProductId);
                 
-                var keys = cache.GetProduct(key.ProductId).AccessKeys;
-                
-                return !keys.Values.Any(x => x.DisplayName == model.DisplayName && x.Id != model.Id);
+                return IsValidAccessKey(keys, model.DisplayName, model.Id);
             }
-            
-            if (Guid.TryParse(model.SelectedProductId, out var id) && id == Guid.Empty)
-            {
-                var serverKeys = cache.GetAccessKeys().Where(x => x.ProductId == Guid.Empty);
 
-                return !serverKeys.Any(x => x.DisplayName == model.DisplayName && x.Id != model.Id);
-            }
-            
-            var product = cache.GetProduct(id);
+            keys = Guid.TryParse(model.SelectedProductId, out var id) && id == Guid.Empty ? GetMasterKeys(cache) : GetProductKeys(cache, id);
 
-            return !product.AccessKeys.Values.Any(x => x.DisplayName == model.DisplayName && x.Id != model.Id);
+            return IsValidAccessKey(keys, model.DisplayName, model.Id);
         }
+
+        private static bool IsValidAccessKey(IEnumerable<AccessKeyModel> keys, string displayName, Guid id) => 
+            !keys.Any(x => x.DisplayName == displayName && x.Id != id);
+
+        private static IEnumerable<AccessKeyModel> GetMasterKeys(ITreeValuesCache cache) =>
+            cache.GetAccessKeys().Where(x => x.ProductId == Guid.Empty);
+
+        private static IEnumerable<AccessKeyModel> GetProductKeys(ITreeValuesCache cache, Guid productId) =>
+            cache.GetProduct(productId).AccessKeys.Values;
     }
 }
