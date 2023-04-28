@@ -13,7 +13,7 @@ namespace HSMServer.Filters.ProductRoleFilters
         public ProductRoleFilterByKey(params ProductRoleEnum[] roles) : base(roles) { }
 
 
-        protected override Guid? GetProductId(object arg, ActionExecutingContext _) =>
+        protected override Guid? GetEntityId(object arg, ActionExecutingContext _) =>
             arg is EditAccessKeyViewModel key ? key.SelectedProductId : null;
     }
 }
