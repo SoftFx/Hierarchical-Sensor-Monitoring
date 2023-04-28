@@ -103,6 +103,13 @@ namespace HSMServer.Model.AccessKeysViewModels
             return accessKey.Update(ToAccessKeyUpdate());
         }
 
+        internal EditAccessKeyViewModel ToNotModify(params ProductModel[] products)
+        {
+            IsModify = false;
+            Products = new List<ProductModel>(products);
+            return this;
+        }
+
         internal AccessKeyUpdate ToAccessKeyUpdate() =>
             new()
             {

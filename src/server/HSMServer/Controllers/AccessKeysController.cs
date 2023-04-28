@@ -12,6 +12,7 @@ using System.Collections.Generic;
 using System.Linq;
 using HSMServer.Attributes;
 using HSMServer.Authentication;
+using ProductModel = HSMServer.Core.Model.ProductModel;
 
 namespace HSMServer.Controllers
 {
@@ -63,7 +64,7 @@ namespace HSMServer.Controllers
         [HttpGet]
         [ProductRoleFilterByEncodedProductId(ProductRoleEnum.ProductManager)]
         public IActionResult NewAccessKey([FromQuery(Name = "Selected")] string encodedProductId,
-                                          [FromQuery(Name = "CloseModal")] bool closeModal = false,
+                                          [FromQuery] bool closeModal = false,
                                           [FromQuery] AccessKeyReturnType returnType = AccessKeyReturnType.Modal)
         {
             var key = new EditAccessKeyViewModel()
@@ -87,15 +88,7 @@ namespace HSMServer.Controllers
             if (!ModelState.IsValid)
             {
                 if (key.ReturnType is not AccessKeyReturnType.Table)
-                {
-                    key.Products = new List<ProductModel>()
-                    {
-                        TreeValuesCache.GetProduct(Guid.Parse(key.SelectedProductId))
-                    };
-                    key.IsModify = false;
-
-                    return GetPartialNewAccessKey(key);
-                }
+                    return GetPartialNewAccessKey(key.ToNotModify(TreeValuesCache.GetProduct(Guid.Parse(key.SelectedProductId))));
 
                 if (CurrentUser.IsAdmin)
                 {
@@ -103,7 +96,7 @@ namespace HSMServer.Controllers
                     key.IsModify = false;
                 }
 
-                return GetPartialNewAccessKey(key);
+                return GetPartialNewAccessKey(key.ToNotModify(CurrentUser.IsAdmin ? TreeValuesCache.GetProducts().ToArray() : Array.Empty<ProductModel>()));
             }
 
             TreeValuesCache.AddAccessKey(key.ToModel(CurrentUser.Id));
