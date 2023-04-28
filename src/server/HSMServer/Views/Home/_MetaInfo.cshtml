@@ -90,6 +90,8 @@
             }
             else if (Model is SensorInfoViewModel sensor)
             {
+                @await Html.PartialAsync("_EditSensorStatusModal", sensor)
+                
                 <div class="d-flex justify-content-start">
                     <div class="d-flex ms-3 text-nowrap">
                         <span style="min-width: 8rem">Sensor type:</span>
@@ -107,6 +109,7 @@
                     <div class="d-flex w-100">
                         <li id='metainfo_icon_status' class='@Model.Status.ToIcon() sensor-icon-with-margin align-self-center' title='Status: @Model.Status'></li>
                         <span id="status_name_@Model.EncodedId">@Model.Status</span>
+                        <i class="fas fa-edit align-self-center ms-1" onclick="openEditSensorStatusModal()"></i>
                     </div>
                 </div>
 
@@ -197,5 +200,9 @@
             $('#headline_metainfo').removeClass('d-none');
             $('#markdown_span_description').addClass('ms-3');
         }
+    }
+    
+    function openEditSensorStatusModal(){
+        $('#editSensorStatus_modal').modal('show');
     }
 </script>

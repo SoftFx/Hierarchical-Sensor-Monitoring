@@ -1,0 +1,43 @@
+﻿@using Microsoft.AspNetCore.Mvc.TagHelpers
+
+@model HSMServer.Model.ViewModel.SensorInfoViewModel
+
+@addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
+
+
+@if (Model != null)
+{
+    <form id="editSensorStatus_form" asp-action="" method="post">
+        <input class="d-none" asp-for="EncodedId" />
+
+        <div class="modal fade" tabindex="-1" role="dialog" id="editSensorStatus_modal">
+            <div class="modal-dialog modal-dialog-centered" role="document">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <div class="text-break">
+                            <h5 class="modal-title">Edit sensor status</h5>
+                            <h6 class="modal-title">Path</h6>
+                            @* <h6 class="modal-title">@Model.Path</h6> *@
+                        </div>
+                    </div>
+
+                    <div class="modal-body">
+                        <p>Pasdashjdasljdasljdasljdas</p>
+                    </div>
+
+                    <div class="modal-footer">
+                        <button class="btn btn-secondary col-2" type="submit">OK</button>
+                        <button class="btn btn-secondary col-2" type="button" onclick="hideEditSensorModal()">Cancel</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </form>
+}
+
+
+<script>
+    function hideEditSensorModal() {
+        $('#editSensorStatus_modal').modal('hide');
+    }
+</script>
