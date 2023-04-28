@@ -47,6 +47,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
                         ProductId = product.Id,
                         DisplayName = $"sensor{j}",
                         Type = (byte)SensorType.Boolean,
+                        Integration = (int)Integration.Grafana,
                     };
                     var boolValue = new BooleanValue()
                     {
