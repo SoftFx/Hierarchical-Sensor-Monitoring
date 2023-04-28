@@ -42,7 +42,10 @@ namespace HSMServer.Notifications.Telegram.AddressBook.MessageBuilder
     }
 
 
-    internal sealed class CHash : HashSet<Guid>, ICCollection
+    internal class CGuidHash : CHash<Guid> { };
+
+
+    internal class CHash<T> : HashSet<T>, ICCollection
     {
         private readonly object _lock = new();
 
@@ -50,13 +53,18 @@ namespace HSMServer.Notifications.Telegram.AddressBook.MessageBuilder
         public bool IsEmpty => Count == 0;
 
 
-        internal new void Add(Guid item)
+        internal CHash() : base() { }
+
+        internal CHash(IEqualityComparer<T> comparer) : base(comparer) { }
+
+
+        internal new void Add(T item)
         {
             lock (_lock)
                 base.Add(item);
         }
 
-        internal new void Remove(Guid item)
+        internal new void Remove(T item)
         {
             lock (_lock)
                 base.Remove(item);

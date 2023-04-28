@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+﻿using System.Collections.Concurrent;
 
 namespace HSMServer.Notifications.Telegram.AddressBook.MessageBuilder
 {
@@ -7,7 +7,7 @@ namespace HSMServer.Notifications.Telegram.AddressBook.MessageBuilder
         private const int MaxGroupedItemsCount = 9; //plus 1 main total 10
         internal const char Separator = '/';
 
-        private readonly List<string> _groupedNodes = new();
+        private readonly ConcurrentQueue<string> _groupedNodes = new();
         private readonly string[] _templatePath;
 
         private int _totalGroupedItems = 1; //main item
@@ -41,7 +41,7 @@ namespace HSMServer.Notifications.Telegram.AddressBook.MessageBuilder
             if (hasDiff && (_groupedIndex == -1 || diffIndex == _groupedIndex))
             {
                 if (_groupedNodes.Count < MaxGroupedItemsCount)
-                    _groupedNodes.Add(newPath[diffIndex]);
+                    _groupedNodes.Enqueue(newPath[diffIndex]);
 
                 _groupedIndex = diffIndex;
                 _totalGroupedItems++;
@@ -56,7 +56,7 @@ namespace HSMServer.Notifications.Telegram.AddressBook.MessageBuilder
         {
             if (_groupedIndex != -1)
             {
-                _groupedNodes.Add(_templatePath[_groupedIndex]);
+                _groupedNodes.Enqueue(_templatePath[_groupedIndex]);
 
                 var hiddenNodes = _totalGroupedItems - _groupedNodes.Count;
                 var group = string.Join(", ", _groupedNodes);
@@ -67,7 +67,7 @@ namespace HSMServer.Notifications.Telegram.AddressBook.MessageBuilder
                 _templatePath[_groupedIndex] = $"[{group}]";
             }
 
-            return  $"{Separator}{string.Join(Separator, _templatePath)}";
+            return $"{Separator}{string.Join(Separator, _templatePath)}";
         }
     }
 }
