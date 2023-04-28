@@ -372,11 +372,11 @@ namespace HSMServer.Controllers
         #region File
 
         [HttpGet]
-        public async Task<IActionResult> GetFile([FromQuery(Name = "Selected")] string encodedId, [FromQuery] long dateTime = default)
+        public async Task<IActionResult> GetFile([FromQuery] string selectedId, [FromQuery] long dateTime = default)
         {
-            var (_, path) = GetSensorProductAndPath(encodedId);
+            var (_, path) = GetSensorProductAndPath(selectedId);
 
-            var value = await GetFileByReceivingTimeOrDefault(encodedId, dateTime);
+            var value = await GetFileByReceivingTimeOrDefault(selectedId, dateTime);
 
             if (value is null)
                 return _emptyResult;
@@ -387,11 +387,11 @@ namespace HSMServer.Controllers
         }
 
         [HttpPost]
-        public async Task<IActionResult> GetFileStream([FromQuery(Name = "Selected")] string encodedId, [FromQuery] long dateTime = default)
+        public async Task<IActionResult> GetFileStream([FromQuery] string selectedId, [FromQuery] long dateTime = default)
         {
-            var (_, path) = GetSensorProductAndPath(encodedId);
+            var (_, path) = GetSensorProductAndPath(selectedId);
 
-            var value = await GetFileByReceivingTimeOrDefault(encodedId, dateTime);
+            var value = await GetFileByReceivingTimeOrDefault(selectedId, dateTime);
 
             if (value is null)
                 return _emptyResult;
@@ -403,17 +403,17 @@ namespace HSMServer.Controllers
         }
 
         [HttpGet]
-        public ActionResult<FileValue> GetFileInfo([FromQuery(Name = "Selected")] string encodedId)
+        public ActionResult<FileValue> GetFileInfo([FromQuery] string selectedId)
         {
-            var value = GetFileSensorValue(encodedId);
+            var value = GetFileSensorValue(selectedId);
 
             return value is null ? _emptyResult : value;
         }
 
         [HttpGet]
-        public async Task<IActionResult> GetRecentFilesView([FromQuery] string fileId)
+        public async Task<IActionResult> GetRecentFilesView([FromQuery] string fileId, [FromQuery] int numberOfFiles = 20)
         {
-            var viewModel = await GetFileHistory(fileId);
+            var viewModel = await GetFileHistory(fileId, numberOfFiles);
             _userManager[CurrentUser.Id].Pagination = viewModel;
 
             return GetFileTable(viewModel);
@@ -425,17 +425,17 @@ namespace HSMServer.Controllers
         public IActionResult FilePreview() => View("FilePreview");
 
         private FileValue GetFileSensorValue(string encodedId) =>
-            _treeValuesCache.GetSensor(SensorPathHelper.DecodeGuid(encodedId)).LastValue as FileValue;
+            _treeValuesCache.GetSensor(Guid.Parse(encodedId)).LastValue as FileValue;
 
-        private async Task<FileValue> GetFileByReceivingTimeOrDefault(string encodedId, long ticks = default) => (ticks == default
-            ? GetFileSensorValue(encodedId)
-            : (await GetFileHistory(encodedId)).Pages[0].Cast<FileValue>().FirstOrDefault(file => file.ReceivingTime.Ticks == ticks))
+        private async Task<FileValue> GetFileByReceivingTimeOrDefault(string selectedId, long ticks = default) => (ticks == default
+            ? GetFileSensorValue(selectedId)
+            : (await GetFileHistory(selectedId)).Pages[0].Cast<FileValue>().FirstOrDefault(file => file.ReceivingTime.Ticks == ticks))
             .DecompressContent();
 
-        private Task<HistoryValuesViewModel> GetFileHistory(string encodedId)
+        private Task<HistoryValuesViewModel> GetFileHistory(string selectedId, int numberOfFiles = 20)
         {
-            var enumerator = _treeValuesCache.GetSensorValuesPage(SensorPathHelper.DecodeGuid(encodedId), DateTime.MinValue, DateTime.MaxValue, -20);
-            return new HistoryValuesViewModel(encodedId, 6, enumerator, GetLocalLastValue(encodedId, DateTime.MinValue, DateTime.MaxValue)).Initialize();
+            var enumerator = _treeValuesCache.GetSensorValuesPage(Guid.Parse(selectedId), DateTime.MinValue, DateTime.MaxValue, -numberOfFiles);
+            return new HistoryValuesViewModel(selectedId, 6, enumerator, GetLocalLastValue(selectedId, DateTime.MinValue, DateTime.MaxValue)).Initialize();
         }
 
         #endregion

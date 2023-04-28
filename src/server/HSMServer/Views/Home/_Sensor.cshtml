@@ -15,6 +15,7 @@
 
 
     var sensorId = Model.EncodedId;
+    var numberOfFiles = 20;
 
     var graphElementId = $"graph_{sensorId}";
     var graphParentDivId = $"graph_parent_{sensorId}";
@@ -29,6 +30,11 @@
     {
         @if (file is not null)
         {
+            <div class="d-flex align-items-center" style="height: 2rem">
+                <label class="d-flex flex-grow-2" for="numberOfFiles">Number of files to load</label>
+                <input id="numberOfFiles" class="d-flex flex-grow-0 form-control w-25 ms-1" value="@numberOfFiles" />
+                <button class="btn btn-outline-primary ms-1" onclick="loadFiles($('#numberOfFiles')[0].value)">Apply</button>
+            </div>
             <div class='accordion mt-2' id='sensorData_@sensorId'>
                 <div class='accordion-item'>
                     <h2 class='accordion-header' id='heading_@sensorId'>
@@ -200,7 +206,7 @@
     function setContentPreview(encodedId) {
         $.ajax({
             type: 'GET',
-            url: `${getFileInfo}?Selected=${encodedId}`,
+            url: `${getFileInfo}?selectedId=${encodedId}`,
             cache: false,
             contentType: "application/json",
             success: function (response) {
@@ -211,7 +217,7 @@
                     (response.originalSize < 1024 * 1024 && response.extension === 'txt')) { // 1MB
                     $.ajax({
                         type: 'POST',
-                        url: `${viewFileAction}?Selected=${encodedId}`,
+                        url: `${viewFileAction}?selectedId=${encodedId}`,
                         cache: false,
                         contentType: "application/json",
                         success: function (file) {
@@ -256,16 +262,16 @@
                     $('#bigFilePreview').removeClass('d-none');
                 }
 
-                loadFiles();
+                loadFiles($('#numberOfFiles')[0].value);
                 previousReceivedTime = response.time;
             }
         })
     }
     var getFilesInfo = '@Url.Action(nameof(HomeController.GetRecentFilesView), "Home")';
-    function loadFiles() {
+    function loadFiles(numberOfFiles = 20) {
         $.ajax({
             type: 'GET',
-            url: `${getFilesInfo}?fileId=@Model.EncodedId`,
+            url: `${getFilesInfo}?fileId=@Model.EncodedId&numberOfFiles=${numberOfFiles}`,
             cache: false,
             contentType: "application/json",
             success: function (response) {

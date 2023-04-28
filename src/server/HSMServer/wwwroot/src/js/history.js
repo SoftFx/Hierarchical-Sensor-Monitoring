@@ -48,7 +48,7 @@ function Data(to, from, type, encodedId) {
     function downloadFile() {
         let encodedId = this.id.substring("button_download_".length);
 
-        window.location.href = getFileAction + "?Selected=" + encodedId;
+        window.location.href = getFileAction + "?selectedId=" + encodedId;
     }
 
     function viewFile() {

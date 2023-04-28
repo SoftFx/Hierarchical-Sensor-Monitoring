@@ -11,7 +11,7 @@ window.openFileInBrowser = function(path, fileName, viewFileAction, time = undef
     $("#mainContainer").css("display", "none");
     $("#navbar").css("display", "none");
 
-    let url = time === undefined ? `${viewFileAction}?Selected=${path}` : `${viewFileAction}?Selected=${path}&dateTime=${time}`;
+    let url = time === undefined ? `${viewFileAction}?selectedId=${path}` : `${viewFileAction}?selectedId=${path}&dateTime=${time}`;
     $.ajax({
         type: 'POST',
         url: url,
