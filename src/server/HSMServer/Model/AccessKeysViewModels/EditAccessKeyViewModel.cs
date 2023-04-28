@@ -41,7 +41,7 @@ namespace HSMServer.Model.AccessKeysViewModels
 
 
         [Display(Name = "Product")]
-        public string SelectedProductId { get; set; }
+        public Guid SelectedProductId { get; set; }
 
         [Display(Name = "Display name")]
         [Required(ErrorMessage = "{0} is required.")]
@@ -68,7 +68,7 @@ namespace HSMServer.Model.AccessKeysViewModels
         {
             Text = x.DisplayName,
             Value = x.Id.ToString(),
-            Selected = x.Id.ToString() == SelectedProductId
+            Selected = x.Id == SelectedProductId
         }).ToList();
         
         public AccessKeyReturnType ReturnType { get; set; }
@@ -84,7 +84,7 @@ namespace HSMServer.Model.AccessKeysViewModels
             DisplayName = key.DisplayName;
             ExpirationTime = AccessKeyViewModel.BuildExpiration(key.ExpirationTime);
 
-            SelectedProductId = key.ProductId.ToString();
+            SelectedProductId = key.ProductId;
             
             CanSendSensorData = key.Permissions.HasFlag(KeyPermissions.CanSendSensorData);
             CanAddNodes = key.Permissions.HasFlag(KeyPermissions.CanAddNodes);
@@ -95,7 +95,7 @@ namespace HSMServer.Model.AccessKeysViewModels
 
         internal AccessKeyModel ToModel(Guid userId)
         {
-            AccessKeyModel accessKey = new(userId, Guid.TryParse(SelectedProductId, out var guid) ? guid : Guid.Empty)
+            AccessKeyModel accessKey = new(userId, SelectedProductId)
             {
                 ExpirationTime = BuildExpirationTime(),
             };

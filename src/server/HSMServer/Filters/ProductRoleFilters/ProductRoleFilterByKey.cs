@@ -14,6 +14,6 @@ namespace HSMServer.Filters.ProductRoleFilters
 
 
         protected override Guid? GetProductId(object arg, ActionExecutingContext _) =>
-            arg is EditAccessKeyViewModel key ? Guid.TryParse(key.SelectedProductId, out var guid) ? guid : Guid.Empty : null;
+            arg is EditAccessKeyViewModel key ? key.SelectedProductId : null;
     }
 }

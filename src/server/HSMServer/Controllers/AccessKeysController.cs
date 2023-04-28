@@ -1,7 +1,6 @@
 ﻿using HSMServer.Core.Cache;
 using HSMServer.Core.Model;
 using HSMServer.Filters.ProductRoleFilters;
-using HSMServer.Helpers;
 using HSMServer.Model.AccessKeysViewModels;
 using HSMServer.Model.Authentication;
 using HSMServer.Model.TreeViewModel;
@@ -46,7 +45,7 @@ namespace HSMServer.Controllers
 
         [HttpGet]
         public IActionResult AccessKeysForProduct([FromQuery(Name = "Selected")] string productId) => 
-            GetPartialProductAccessKeys(productId);
+            GetPartialProductAccessKeys(Guid.Parse(productId));
         
         [HttpGet]
         [AuthorizeIsAdmin(true)]
@@ -57,7 +56,7 @@ namespace HSMServer.Controllers
                 CloseModal = true,
                 Products = TreeValuesCache.GetProducts().ToList(),
                 ReturnType = AccessKeyReturnType.Table,
-                SelectedProductId = Guid.Empty.ToString()
+                SelectedProductId = Guid.Empty
             });
         }
 
@@ -69,7 +68,7 @@ namespace HSMServer.Controllers
         {
             var key = new EditAccessKeyViewModel()
             {
-                SelectedProductId = encodedProductId,
+                SelectedProductId = Guid.Parse(encodedProductId),
                 CloseModal = closeModal,
                 ReturnType = returnType,
                 Products = new List<ProductModel>()
@@ -88,7 +87,7 @@ namespace HSMServer.Controllers
             if (!ModelState.IsValid)
             {
                 if (key.ReturnType is not AccessKeyReturnType.Table)
-                    return GetPartialNewAccessKey(key.ToNotModify(TreeValuesCache.GetProduct(Guid.Parse(key.SelectedProductId))));
+                    return GetPartialNewAccessKey(key.ToNotModify(TreeValuesCache.GetProduct(key.SelectedProductId)));
 
                 if (CurrentUser.IsAdmin)
                 {
@@ -136,9 +135,9 @@ namespace HSMServer.Controllers
             {
                 key.Products = new List<ProductModel>()
                 {
-                    key.SelectedProductId == Guid.Empty.ToString()
+                    key.SelectedProductId == Guid.Empty
                         ? new ProductModel("All products")
-                        : TreeValuesCache.GetProduct(Guid.Parse(key.SelectedProductId))
+                        : TreeValuesCache.GetProduct(key.SelectedProductId)
                 };
                 key.IsModify = true;
 
@@ -183,9 +182,9 @@ namespace HSMServer.Controllers
             return PartialView("_AllAccessKeys", GenerateShortViewModel(key.ProductId));
         }
 
-        private PartialViewResult GetPartialProductAccessKeys(string productId)
+        private PartialViewResult GetPartialProductAccessKeys(Guid productId)
         {
-            _treeViewModel.Nodes.TryGetValue(SensorPathHelper.DecodeGuid(productId), out var node);
+            _treeViewModel.Nodes.TryGetValue(productId, out var node);
 
             return PartialView("_ProductAccessKeys", node);
         }
