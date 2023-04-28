@@ -163,7 +163,7 @@
             Swagger filter for adding required string 'Key' in API requests header
             </summary>
         </member>
-        <member name="T:HSMServer.Filters.ProductRoleFilters.ProductRoleFilterBase">
+        <member name="T:HSMServer.Filters.UserRoleFilterBase">
             <summary>
             The attribute denies access to some actions for a user who is neither admin or has role from _roles
             </summary>

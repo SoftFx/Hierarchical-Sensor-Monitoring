@@ -104,6 +104,7 @@
             async: true,
             success: function (viewData) {
                 $("#notificationSettings").html(viewData);
+                showToast("Folder notifications settings have been succesfully saved!");
             }
         });
     });

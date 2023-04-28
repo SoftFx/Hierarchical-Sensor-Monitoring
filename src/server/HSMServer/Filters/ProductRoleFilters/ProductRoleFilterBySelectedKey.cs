@@ -13,7 +13,7 @@ namespace HSMServer.Filters.ProductRoleFilters
         public ProductRoleFilterBySelectedKey(params ProductRoleEnum[] roles) : base(roles) { }
 
 
-        protected override Guid? GetProductId(object arg, ActionExecutingContext context)
+        protected override Guid? GetEntityId(object arg, ActionExecutingContext context)
         {
             if (arg is string selectedKey)
             {

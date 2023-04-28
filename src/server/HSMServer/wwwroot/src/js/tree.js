@@ -184,8 +184,8 @@ function buildContextMenu(node) {
                 }
             } 
         }
-        
-        if (curType !== NodeType.Node) {
+
+        if (curType !== NodeType.Node && curType !== NodeType.Sensor) {
             contextMenu["Edit"] = {
                 "label": `Edit ${getKeyByValue(curType)}`,
                 "action": _ => {
@@ -194,9 +194,6 @@ function buildContextMenu(node) {
 
                     if (curType === NodeType.Product)
                         window.location.href = `${editProductAction}?Product=${node.id}`;
-
-                    if (curType === NodeType.Sensor)
-                        $(`#sensorInfo_link_${node.id}`).click();
                 }
             };
         }

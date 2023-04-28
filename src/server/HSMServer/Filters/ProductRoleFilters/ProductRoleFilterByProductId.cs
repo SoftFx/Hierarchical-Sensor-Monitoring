@@ -12,7 +12,7 @@ namespace HSMServer.Filters.ProductRoleFilters
         public ProductRoleFilterByProductId(params ProductRoleEnum[] roles) : base(roles) { }
 
 
-        protected override Guid? GetProductId(object arg, ActionExecutingContext _) =>
+        protected override Guid? GetEntityId(object arg, ActionExecutingContext _) =>
             arg is Guid productId ? productId : null;
     }
 }

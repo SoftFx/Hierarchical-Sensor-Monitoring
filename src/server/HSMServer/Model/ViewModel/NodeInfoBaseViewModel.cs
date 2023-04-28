@@ -9,6 +9,8 @@ namespace HSMServer.Model.ViewModel
     {
         public string Header { get; }
 
+        public Guid RootProductId { get; }
+
         public DateTime LastUpdateTime { get; set; }
 
         public SensorStatus Status { get; set; }
@@ -29,6 +31,7 @@ namespace HSMServer.Model.ViewModel
         {
             EncodedId = model.EncodedId;
             Header = $"{model.RootProduct.Name}{model.Path}";
+            RootProductId = model.RootProduct.Id;
         }
 
         internal NodeInfoBaseViewModel(FolderModel model) : this((BaseNodeViewModel)model)

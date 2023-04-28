@@ -1,6 +1,7 @@
 ﻿@using HSMServer.Constants
 @using HSMServer.Controllers
 @using HSMServer.Extensions
+@using HSMServer.Model.Authentication
 @using HSMServer.Model.Folders.ViewModels
 
 @model FolderViewModel
@@ -17,7 +18,7 @@
                 <div class="w-100">
                     <div class='d-flex col-md-auto'>
                         <div style="font-weight: bold;">@Html.Raw(Model.Name)</div>
-                        @if (Model.Id.HasValue)
+                        @if (Model.Id.HasValue && (User as User).IsFolderManager(Model.Id.Value))
                         {
                             <a asp-controller="@ViewConstants.FoldersController" asp-action="@nameof(FoldersController.EditFolder)" asp-route-folderId="@Model.Id"
                                 class="ms-2" style="color:@Model.Foreground">
@@ -25,7 +26,7 @@
                             </a>
                         }
                         </div>
-                    <div>@Model.Description</div>
+                    <div id="markdown_@(Model.Id)_description">@Model.Description</div>
                 </div>
             </button>
         </h2>
@@ -36,3 +37,10 @@
         </div>
     </div>
 </div>
+
+
+<script>
+    $(document).ready(() => {
+        replaceHtmlToMarkdown('markdown_@(Model.Id)_description');
+    });
+</script>

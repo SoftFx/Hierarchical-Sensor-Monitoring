@@ -1,6 +1,7 @@
 @using HSMServer.Constants
 @using HSMServer.Controllers
 @using HSMServer.Extensions
+@using HSMServer.Model.Authentication
 @using HSMServer.Model.ViewModel
 @using HSMServer.Model.TreeViewModel
 @using HSMServer.Model.Folders.ViewModels
@@ -11,6 +12,9 @@
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
 
 @{
+    var user = User as User;
+    bool hasUserRights = Model is FolderInfoViewModel f ? user.IsFolderManager(f.Id) : user.IsManager(Model.RootProductId);
+
     string updateAction = null, getAction = null;
 
     if (Model is FolderInfoViewModel)
@@ -56,9 +60,13 @@
             <div id="description_title" class="d-none form-control px-0 border-0 fw-bold" style="max-width: 15rem;">
                 Description:
             </div>
-            <div class="d-flex my-1 ms-auto align-items-baseline">
-                <a id="editButtonMetaInfo" class="d-none d-flex px-2 pb-2" href="#" title='edit meta info'><i class='fas fa-edit align-self-center'></i> Edit</a>
-            </div>
+
+            @if (hasUserRights)
+            {
+                <div class="d-flex my-1 ms-auto align-items-baseline">
+                    <a id="editButtonMetaInfo" class="d-none d-flex px-2 pb-2" href="#" title='edit meta info'><i class='fas fa-edit align-self-center'></i> Edit</a>
+                </div>
+            }
         </div>
 
         <div class="naked-text ms-1 w-100" id='markdown_span_description'>@Model.Description</div>
@@ -73,12 +81,12 @@
 
             @if (Model is FolderInfoViewModel folder)
             {
-                @await Html.PartialAsync("_ChildrenInfo", new ChildrenInfo("Products", folder.TotalProducts, folder.ProductStatuses))
+                @await Html.PartialAsync("_ChildrenStatistic", new ChildrenStatistic("Products", folder.TotalProducts, folder.ProductStatuses))
             }
             else if (Model is ProductInfoViewModel product)
             {
-                @await Html.PartialAsync("_ChildrenInfo", new ChildrenInfo("Nodes", product.TotalNodes, product.NodeStatuses))
-                @await Html.PartialAsync("_ChildrenInfo", new ChildrenInfo("Sensors", product.TotalSensors, product.SensorsStatuses))
+                @await Html.PartialAsync("_ChildrenStatistic", new ChildrenStatistic("Nodes", product.TotalNodes, product.NodeStatuses))
+                @await Html.PartialAsync("_ChildrenStatistic", new ChildrenStatistic("Sensors", product.TotalSensors, product.SensorsStatuses))
             }
             else if (Model is SensorInfoViewModel sensor)
             {
@@ -140,7 +148,8 @@
 
 <script>
     $(document).ready(() => {
-        replaceHTMLtoMarkdown();
+        replaceHtmlToMarkdown('markdown_span_description');
+        replaceHtmlToMarkdown('markdown_status_comment');
 
         $('#editButtonMetaInfo').on('click', function (){
             editInfoButtonClick();
@@ -169,15 +178,7 @@
         });
     });
 
-    function replaceHTMLtoMarkdown() {
-         $('[id^="markdown_"]').each(function () {
-             let innerHtml = $(this)[0].innerHTML;
-             $(this).empty().append(markdownToHTML(innerHtml))
-             $(this).children().last().css('margin-bottom', 0);
-         });
-    }
-
-     function collapseChangeTextContent() {
+    function collapseChangeTextContent() {
         let icon = $('#collapse_icon')[0];
 
         if (icon.classList.contains('fa-caret-up')) {
