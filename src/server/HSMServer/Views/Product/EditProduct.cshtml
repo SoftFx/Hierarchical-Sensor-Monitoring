@@ -372,7 +372,7 @@
         let productId = $('#encodedProductId').val();
         let newAccessKeyURL = "@Html.Raw(Url.Action(nameof(AccessKeysController.NewAccessKey), ViewConstants.AccessKeysController))";
 
-        showNewAccessKeyModal(`${newAccessKeyURL}?Selected=${productId}&CloseModal=true`, true);
+        showNewAccessKeyModal(`${newAccessKeyURL}?selectedId=${productId}&closeModal=true`, true);
     }
 
     $('#accessKeys_modal').on('hidden.bs.modal', function(e) {

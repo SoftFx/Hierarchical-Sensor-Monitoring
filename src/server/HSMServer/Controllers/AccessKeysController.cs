@@ -34,7 +34,7 @@ namespace HSMServer.Controllers
         public IActionResult Index() => View(GenerateFullViewModel());
 
         [HttpGet]
-        public IActionResult SearchKeyResult([FromQuery(Name = "SearchKey")] string searchKey)
+        public IActionResult SearchKeyResult([FromQuery] string searchKey)
         {
             searchKey ??= string.Empty;
             return PartialView("_AllAccessKeys", GenerateFullViewModel(searchKey));
@@ -44,7 +44,7 @@ namespace HSMServer.Controllers
         public IActionResult AvailableAccessKeys() => PartialView("_AllAccessKeys", GenerateFullViewModel());
 
         [HttpGet]
-        public IActionResult AccessKeysForProduct([FromQuery(Name = "Selected")] string productId) => 
+        public IActionResult AccessKeysForProduct([FromQuery] string productId) => 
             GetPartialProductAccessKeys(Guid.Parse(productId));
         
         [HttpGet]
@@ -62,18 +62,18 @@ namespace HSMServer.Controllers
 
         [HttpGet]
         [ProductRoleFilterByEncodedProductId(ProductRoleEnum.ProductManager)]
-        public IActionResult NewAccessKey([FromQuery(Name = "Selected")] string encodedProductId,
+        public IActionResult NewAccessKey([FromQuery] string selectedId,
                                           [FromQuery] bool closeModal = false,
                                           [FromQuery] AccessKeyReturnType returnType = AccessKeyReturnType.Modal)
         {
             var key = new EditAccessKeyViewModel()
             {
-                SelectedProductId = Guid.Parse(encodedProductId),
+                SelectedProductId = Guid.Parse(selectedId),
                 CloseModal = closeModal,
                 ReturnType = returnType,
                 Products = new List<ProductModel>()
                 {
-                    TreeValuesCache.GetProduct(Guid.Parse(encodedProductId))
+                    TreeValuesCache.GetProduct(Guid.Parse(selectedId))
                 }
             };
 
@@ -154,7 +154,7 @@ namespace HSMServer.Controllers
 
         [HttpPost]
         [ProductRoleFilterBySelectedKey(ProductRoleEnum.ProductManager)]
-        public IActionResult RemoveAccessKeyFromAllTable([FromQuery(Name = "SelectedKey")] string selectedKey,
+        public IActionResult RemoveAccessKeyFromAllTable([FromQuery] string selectedKey,
                                                          [FromQuery] bool fullTable)
         {
             var key = TreeValuesCache.RemoveAccessKey(Guid.Parse(selectedKey));

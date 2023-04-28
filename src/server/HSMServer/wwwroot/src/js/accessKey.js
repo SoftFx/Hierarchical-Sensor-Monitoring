@@ -16,7 +16,7 @@ window.hideModal = function() {
 window.showAccessKeysList = function(productId, showModalFirst) {
     $.ajax({
         type: 'get',
-        url: showProductAccessKeyTable + '?Selected=' + productId,
+        url: showProductAccessKeyTable + '?productId=' + productId,
         datatype: 'html',
         contenttype: 'application/json',
         cache: false,

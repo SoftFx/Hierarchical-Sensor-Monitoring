@@ -79,7 +79,7 @@
         const keyToSearch = document.getElementById("searchKey").value;
         $.ajax({
                type: 'GET',
-               url: getSearchKeyResult + "?SearchKey=" + keyToSearch,
+               url: getSearchKeyResult + "?searchKey=" + keyToSearch,
                cache: false,
                async: true,
                success: function (viewData) {
