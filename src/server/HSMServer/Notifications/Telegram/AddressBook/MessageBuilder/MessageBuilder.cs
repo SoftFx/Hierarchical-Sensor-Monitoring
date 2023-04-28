@@ -2,13 +2,14 @@
 using HSMServer.Notification.Settings;
 using HSMServer.Notifications.Telegram.AddressBook.MessageBuilder;
 using System;
+using System.Linq;
 using System.Text;
 
 namespace HSMServer.Notifications
 {
     internal sealed class MessageBuilder
     {
-        private readonly CDict<CTupleDict<CHash>> _messageTree = new();
+        private readonly CDict<CTupleDict<CGuidHash>> _messageTree = new();
         private readonly PathCompressor _compressor = new();
 
         internal DateTime ExpectedSendingTime { get; private set; } = DateTime.UtcNow;
