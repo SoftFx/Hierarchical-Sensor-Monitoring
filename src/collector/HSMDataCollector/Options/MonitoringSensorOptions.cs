@@ -38,7 +38,7 @@ namespace HSMDataCollector.Options
 
     public sealed class VersionSensorOptions : SensorOptions
     {
-        public string Version { get; set; }
+        public Version Version { get; set; }
 
         public string SensorName { get; set; }
 

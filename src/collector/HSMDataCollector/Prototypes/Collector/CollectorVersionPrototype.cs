@@ -18,7 +18,7 @@ namespace HSMDataCollector.Options.DefaultOptions
             return new VersionSensorOptions
             {
                 SensorName = "Collector version",
-                Version = version != null ? $"{version.Major}.{version.Minor}.{version.Build}" : "0.0.0",
+                Version = version,
                 NodePath = options.NodePath,
                 StartTime = DateTime.UtcNow,
             };

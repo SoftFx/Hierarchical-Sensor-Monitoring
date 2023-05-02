@@ -50,9 +50,9 @@ public static class ApplicationServiceExtensions
         {
             o.UseInlineDefinitionsForEnums();
             o.OperationFilter<DataRequestHeaderSwaggerFilter>();
-            o.SwaggerDoc(ServerConfig.Version, new OpenApiInfo
+            o.SwaggerDoc(ServerConfig.Version.ToString(), new OpenApiInfo
             {
-                Version = ServerConfig.Version,
+                Version = ServerConfig.Version.ToString(),
                 Title = ServerConfig.Name,
             });
             
