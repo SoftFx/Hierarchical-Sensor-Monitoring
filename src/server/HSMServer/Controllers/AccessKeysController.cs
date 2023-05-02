@@ -89,12 +89,6 @@ namespace HSMServer.Controllers
                 if (key.ReturnType is not AccessKeyReturnType.Table)
                     return GetPartialNewAccessKey(key.ToNotModify(TreeValuesCache.GetProduct(key.SelectedProductId)));
 
-                if (CurrentUser.IsAdmin)
-                {
-                    key.Products = TreeValuesCache.GetProducts().ToList();
-                    key.IsModify = false;
-                }
-
                 return GetPartialNewAccessKey(key.ToNotModify(CurrentUser.IsAdmin ? TreeValuesCache.GetProducts().ToArray() : Array.Empty<ProductModel>()));
             }
 
@@ -115,16 +109,7 @@ namespace HSMServer.Controllers
         {
             var key = TreeValuesCache.GetAccessKey(Guid.Parse(selectedKey));
 
-            return GetPartialNewAccessKey(
-                new EditAccessKeyViewModel(key)
-                {
-                    CloseModal = closeModal,
-                    IsModify = true,
-                    Products = new List<ProductModel>()
-                    {
-                        key.IsMaster ? new ProductModel("All products") : TreeValuesCache.GetProduct(key.ProductId)
-                    }
-                });
+            return GetPartialNewAccessKey(new EditAccessKeyViewModel(key).ToModify(key.IsMaster ? null : TreeValuesCache.GetProduct(key.ProductId), closeModal));
         }
 
         [HttpPost]
@@ -132,15 +117,7 @@ namespace HSMServer.Controllers
         public IActionResult ModifyAccessKey(EditAccessKeyViewModel key)
         {
             if (!ModelState.IsValid)
-            {
-                key.Products = new List<ProductModel>()
-                {
-                    key.IsMaster ? new ProductModel("All products") : TreeValuesCache.GetProduct(key.SelectedProductId)
-                };
-                key.IsModify = true;
-
-                return GetPartialNewAccessKey(key);
-            }
+                return GetPartialNewAccessKey(key.ToModify(key.IsMaster ? null : TreeValuesCache.GetProduct(key.SelectedProductId), key.CloseModal));
 
             TreeValuesCache.UpdateAccessKey(key.ToAccessKeyUpdate());
 

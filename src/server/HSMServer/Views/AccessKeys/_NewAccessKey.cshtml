@@ -142,7 +142,8 @@
     
     function cancelButtonClick() {
         closeModalOrShowAccessKeysList($('#whetherCloseModal').val(), function () {
-            showAccessKeysList($('#accessKey_prodcutId').val(), false);
+            let id = $('#accessKey_prodcutId').val() === undefined ? $('#selectedProductId').val() : $('#accessKey_prodcutId').val()
+            showAccessKeysList(id, false);
         });
     }
 

@@ -31,11 +31,13 @@ namespace HSMServer.Model.AccessKeysViewModels
 
     public class EditAccessKeyViewModel
     {
+        private static ProductModel _masterProductModel = new ProductModel("All products");
+        
         public Guid Id { get; set; }
 
         public string ExpirationTime { get; init; }
 
-        public bool CloseModal { get; init; }
+        public bool CloseModal { get; set; }
 
         public bool IsModify { get; set; }
 
@@ -109,6 +111,17 @@ namespace HSMServer.Model.AccessKeysViewModels
         {
             IsModify = false;
             Products = new List<ProductModel>(products);
+            return this;
+        }
+        
+        internal EditAccessKeyViewModel ToModify(ProductModel product, bool closeModal)
+        {
+            Products = new List<ProductModel>()
+            {
+                product ?? _masterProductModel
+            };
+            IsModify = true;
+            CloseModal = closeModal;
             return this;
         }
 
