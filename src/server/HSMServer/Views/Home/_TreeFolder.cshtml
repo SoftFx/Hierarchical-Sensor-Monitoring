@@ -19,7 +19,7 @@
                 <img class="tree-png-icon" src="~/dist/user.png" alt="!" />
             </span>
         }
-        else if (Model.AccountState.IsAllIgnored)
+        else if (Model.IsAccountsIgnore)
         {
             <span>
                 <img class="tree-png-icon" src="~/dist/user-crossed.png" alt="!" />
@@ -32,10 +32,17 @@
                 <img class="tree-png-icon" src="~/dist/users.png" alt="!" />
             </span>
         }
-        else if (Model.GroupState.IsAllIgnored)
+        else if (Model.IsGroupsIgnore)
         {
             <span>
                 <img class="tree-png-icon" src="~/dist/users-crossed.png" alt="!" />
+            </span>
+        }
+
+        @if (Model.IsGrafanaEnabled)
+        {
+            <span>
+                <img class="tree-png-icon" src="~/dist/grafana.svg" alt="!" />
             </span>
         }
     }
