@@ -1,4 +1,5 @@
-﻿using HSMServer.Core.Model;
+﻿using HSMServer.Core;
+using HSMServer.Core.Model;
 using HSMServer.Model.Authentication;
 using HSMServer.Model.TreeViewModel;
 using System;
@@ -20,7 +21,7 @@ namespace HSMServer.Model.UserTreeShallowCopy
 
         internal SensorShallowModel(SensorNodeViewModel data, User user) : base(data, user)
         {
-            IsGrafanaEnabled = data.Integration.HasFlag(Integration.Grafana);
+            IsGrafanaEnabled = data.Integration.HasGrafana();
             IsAccountsEnable = user.Notifications.IsSensorEnabled(data.Id);
             IsGroupsEnable = data.RootProduct.Notifications.IsSensorEnabled(data.Id);
 
