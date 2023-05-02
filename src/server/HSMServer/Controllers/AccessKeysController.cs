@@ -14,7 +14,7 @@ using System.Linq;
 namespace HSMServer.Controllers
 {
     [Authorize]
-    public class AccessKeysController : Controller
+    public class AccessKeysController : BaseController
     {
         private readonly TreeViewModel _treeViewModel;
 
@@ -61,7 +61,7 @@ namespace HSMServer.Controllers
             if (!ModelState.IsValid)
                 return GetPartialNewAccessKey(key);
 
-            TreeValuesCache.AddAccessKey(key.ToModel((HttpContext.User as User).Id));
+            TreeValuesCache.AddAccessKey(key.ToModel(CurrentUser.Id));
 
             return GetPartialProductAccessKeys(key.EncodedProductId);
         }
@@ -150,10 +150,9 @@ namespace HSMServer.Controllers
 
         private List<AccessKeyViewModel> GetAvailableAccessKeys()
         {
-            var user = HttpContext.User as User;
             var keys = new List<AccessKeyViewModel>(1 << 5);
 
-            var availableProducts = _treeViewModel.GetUserProducts(user);
+            var availableProducts = _treeViewModel.GetUserProducts(CurrentUser);
             foreach (var product in availableProducts)
             {
                 if (_treeViewModel.Nodes.TryGetValue(product.Id, out var productViewModel))

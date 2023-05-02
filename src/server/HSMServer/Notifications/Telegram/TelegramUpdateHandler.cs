@@ -1,10 +1,13 @@
 ﻿using HSMCommon.Constants;
 using HSMServer.Authentication;
-using HSMServer.Core.Cache;
-using HSMServer.Core.Configuration;
+using HSMServer.Configuration;
+using HSMServer.Core;
+using HSMServer.Core.Model.Policies;
+using HSMServer.Model;
+using HSMServer.Model.TreeViewModel;
+using HSMServer.Notification.Settings;
 using NLog;
 using System;
-using System.Reflection;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
@@ -15,23 +18,26 @@ using Telegram.Bot.Types.Enums;
 
 namespace HSMServer.Notifications
 {
+    using Core = Core.Model.SensorStatus;
+
+
     public sealed class TelegramUpdateHandler : IUpdateHandler
     {
         private readonly Logger _logger = LogManager.GetCurrentClassLogger();
         private readonly AddressBook _addressBook;
         private readonly IUserManager _userManager;
-        private readonly ITreeValuesCache _cache;
+        private readonly TreeViewModel _tree;
         private readonly IConfigurationProvider _config;
 
         private string BotName => $"@{_config.ReadOrDefault(ConfigurationConstants.BotName).Value.ToLower()}";
 
 
         internal TelegramUpdateHandler(AddressBook addressBook, IUserManager userManager,
-            ITreeValuesCache cache, IConfigurationProvider config)
+            TreeViewModel tree, IConfigurationProvider config)
         {
             _addressBook = addressBook;
             _userManager = userManager;
-            _cache = cache;
+            _tree = tree;
             _config = config;
         }
 
@@ -60,13 +66,13 @@ namespace HSMServer.Notifications
                 {
                     TelegramBotCommands.Start => StartBot(parts, message, isUserChat),
                     TelegramBotCommands.Info => EntitiesInfo(message.Chat, isUserChat),
-                    TelegramBotCommands.Status => ServerStatus(),
-                    TelegramBotCommands.Icons => IconsInfo(),
+                    TelegramBotCommands.Server => ServerStatus(),
+                    TelegramBotCommands.Help => Help(),
                     _ => null,
                 };
 
                 if (!string.IsNullOrEmpty(response))
-                    await botClient.SendTextMessageAsync(message.Chat, response, cancellationToken: cToken);
+                    await botClient.SendTextMessageAsync(message.Chat, response, ParseMode.MarkdownV2, cancellationToken: cToken);
                 else
                     _logger.Warn($"There is some invalid update message: {msgText}");
             }
@@ -100,7 +106,7 @@ namespace HSMServer.Notifications
                 else
                 {
                     _addressBook.RegisterChat(message, token, isUserChat);
-                    token.Entity.UpdateEntity(_userManager, _cache);
+                    token.Entity.UpdateEntity(_userManager, _tree);
 
                     response.Append(token.Entity.BuildSuccessfullResponse());
                 }
@@ -108,7 +114,7 @@ namespace HSMServer.Notifications
             else
                 response.Append("Your token is invalid or expired.");
 
-            return response.ToString();
+            return response.ToString().EscapeMarkdownV2();
         }
 
         private string EntitiesInfo(ChatId chat, bool isUserChat)
@@ -116,36 +122,29 @@ namespace HSMServer.Notifications
             var response = new StringBuilder(1 << 6);
             var entityStr = isUserChat ? "user" : "product";
 
-            response.AppendLine($"{(isUserChat ? "Authorized" : "Added")} {entityStr}(s) settings:");
+            response.AppendLine($"{(isUserChat ? "Authorized" : "Added")} {entityStr}(s) settings:".EscapeMarkdownV2());
 
             foreach (var entity in _addressBook.GetAuthorizedEntities(chat))
             {
-                var telegramSetting = entity.Notifications.Telegram;
+                var telegramSetting = entity.Notifications.UsedTelegram;
 
-                response.AppendLine($"{entityStr} '{entity.Name}'");
-                response.AppendLine($"    Messages delay: {telegramSetting.MessagesDelay}");
-                response.AppendLine($"    Min status level: {telegramSetting.MessagesMinStatus}");
-                response.AppendLine($"    Messages are enabled: {telegramSetting.MessagesAreEnabled}");
+                response.AppendLine($"{entityStr} *{entity.Name.EscapeMarkdownV2()}*");
+                response.AppendLine($"    Messages delay: {telegramSetting.MessagesDelaySec} sec".EscapeMarkdownV2());
+                response.AppendLine($"    Min status level: {telegramSetting.MessagesMinStatus}".EscapeMarkdownV2());
+                response.AppendLine($"    Messages are enabled: {telegramSetting.MessagesAreEnabled}".EscapeMarkdownV2());
             }
 
             return response.ToString();
         }
-        
-        private string IconsInfo() =>
-            """
-            ⚠️ - received Warning status
-            ✅ - received Ok status
-            ❌ - received Error status  
-            ⏸ - received Offtime status 
-            ⌛️ - sensor update timeout
-            ❓ - unknown status
-            """;
 
-        private static string ServerStatus()
-        {
-            var version = Assembly.GetExecutingAssembly().GetName().Version;
+        private static string Help() =>
+            $"""
+            Statuses: 
+                {Core.OffTime.ToIcon()} (OffTime) -> {Core.Ok.ToIcon()} (Ok) -> {Core.Warning.ToIcon()} (Warning) -> {Core.Error.ToIcon()} (Error)
+            Alerts: 
+                {ExpectedUpdateIntervalPolicy.PolicyIcon} - sensor update timeout
+            """.EscapeMarkdownV2();
 
-            return $"HSM server {version.Major}.{version.Minor}.{version.Build} is alive";
-        }
+        private static string ServerStatus() => $"HSM server {ServerConfig.Version} is alive.".EscapeMarkdownV2();
     }
 }

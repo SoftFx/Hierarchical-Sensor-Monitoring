@@ -33,24 +33,21 @@
 .tree-height-weight-parameters {
     max-width: 100%;
     min-width: 10vw;
-    height: calc(100vh - 5vh - 80px - 3rem)!important;
-    overflow-y: auto;
-    overflow-x: hidden;
+    overflow: inherit;
 }
 
 .button-link {
     cursor: pointer;
 }
 
-#timeIntervalSelect {
-    grid-row-start: 1;
-    grid-column-start: 1;
-    width: 100%;
+.timeIntervalSelect {
+    grid-row: 1;
+    grid-column: 1;
 }
 
 .customTimeInterval {
-    grid-row-start: 1;
-    grid-column-start: 1;
+    grid-row: 1;
+    grid-column: 1;
     position: relative;
     width: 90%;
     height: 95%;
@@ -211,4 +208,37 @@ img .tree-png-icon{
     cursor: text;
     padding-top: 0;
     padding-left: 0;
+}
+
+.reserved-scroll-y{
+    scrollbar-gutter: stable
+}
+
+.overflow-y-auto{
+    overflow-y: auto;
+    overflow-x: hidden;
+}
+
+.tree-collapse-button{
+    color: #0b5fef; 
+    cursor: pointer; 
+    padding-right: 2px
+}
+
+.tree-main-container{
+    height: calc(100vh - var(--header-height ) - var(--footer-height) - 1.5rem)
+}
+
+.tree-wrapper{
+   height: calc(100% - var(--header-height)); 
+}
+
+.button-width-static{
+    max-width: 8rem; 
+    width: 7rem;
+}
+
+.small-icon{
+    width: 1rem;
+    height: 1rem;
 }

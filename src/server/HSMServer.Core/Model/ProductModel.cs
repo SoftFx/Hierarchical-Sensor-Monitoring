@@ -2,6 +2,7 @@
 using HSMServer.Core.Cache.UpdateEntities;
 using System;
 using System.Collections.Concurrent;
+using System.Linq;
 
 namespace HSMServer.Core.Model
 {
@@ -13,7 +14,7 @@ namespace HSMServer.Core.Model
     }
 
 
-    public sealed class ProductModel : NodeBaseModel, INotificatable
+    public sealed class ProductModel : BaseNodeModel
     {
         public ConcurrentDictionary<Guid, AccessKeyModel> AccessKeys { get; } = new();
 
@@ -22,49 +23,61 @@ namespace HSMServer.Core.Model
         public ConcurrentDictionary<Guid, BaseSensorModel> Sensors { get; } = new();
 
 
-        public NotificationSettings Notifications { get; } = new();
-
         public ProductState State { get; }
 
-        string INotificatable.Name => DisplayName;
+        public Guid? FolderId { get; private set; }
 
 
-        public ProductModel() { }
+        public NotificationSettingsEntity NotificationsSettings { get; private set; }
 
-        public ProductModel(ProductEntity entity) : this()
+
+        public ProductModel(string name) : base(name.Trim())
         {
-            Id = Guid.TryParse(entity.Id, out var entityId) ? entityId : Guid.NewGuid(); // TODO: remove Guid.NewGuid() after removing prosuctId string -> Guid migration
-            AuthorId = Guid.TryParse(entity.AuthorId, out var authorId) ? authorId : null;
-            State = (ProductState)entity.State;
-            DisplayName = entity.DisplayName;
-            Description = entity.Description;
-            CreationDate = new DateTime(entity.CreationDate);
-            Notifications = new(entity.NotificationSettings);
-        }
-
-        public ProductModel(string name) : this()
-        {
-            Id = Guid.NewGuid();
             State = ProductState.FullAccess;
-            DisplayName = name.Trim();
-            CreationDate = DateTime.UtcNow;
         }
 
+        public ProductModel(ProductEntity entity) : base(entity)
+        {
+            State = (ProductState)entity.State;
+            NotificationsSettings = entity.NotificationSettings;
+            FolderId = Guid.TryParse(entity.FolderId, out var folderId) ? folderId : null;
+        }
 
-        internal bool AddAccessKey(AccessKeyModel key) => AccessKeys.TryAdd(key.Id, key);
 
         internal void AddSubProduct(ProductModel product)
         {
-            product.ParentProduct = this;
-
-            SubProducts.TryAdd(product.Id, product);
+            SubProducts.TryAdd(product.Id, (ProductModel)product.AddParent(this));
         }
 
         internal void AddSensor(BaseSensorModel sensor)
         {
-            sensor.ParentProduct = this;
+            Sensors.TryAdd(sensor.Id, (BaseSensorModel)sensor.AddParent(this));
+        }
 
-            Sensors.TryAdd(sensor.Id, sensor);
+        internal ProductModel Update(ProductUpdate update)
+        {
+            base.Update(update);
+
+            FolderId = update.FolderId.HasValue
+                ? update.FolderId != Guid.Empty ? update.FolderId : null
+                : FolderId;
+            NotificationsSettings = update?.NotificationSettings ?? NotificationsSettings;
+
+            return this;
+        }
+
+
+        internal override bool HasUpdateTimeout()
+        {
+            var result = false;
+
+            foreach (var (_, sensor) in Sensors)
+                result |= sensor.HasUpdateTimeout();
+
+            foreach (var (_, subProduct) in SubProducts)
+                result |= subProduct.HasUpdateTimeout();
+
+            return result;
         }
 
         internal ProductEntity ToProductEntity() =>
@@ -72,51 +85,14 @@ namespace HSMServer.Core.Model
             {
                 Id = Id.ToString(),
                 AuthorId = AuthorId.ToString(),
-                ParentProductId = ParentProduct?.Id.ToString(),
+                ParentProductId = Parent?.Id.ToString(),
+                FolderId = FolderId?.ToString(),
                 State = (int)State,
                 DisplayName = DisplayName,
                 Description = Description,
                 CreationDate = CreationDate.Ticks,
-                NotificationSettings = Notifications.ToEntity(),
-                Policies = GetPolicyIds(),
+                NotificationSettings = NotificationsSettings,
+                Policies = GetPolicyIds().Select(u => $"{u}").ToList(),
             };
-
-        internal ProductModel Update(ProductUpdate updatedProduct)
-        {
-            Description = updatedProduct.Description ?? Description;
-            return this;
-        }
-
-        internal override void BuildProductNameAndPath()
-        {
-            if (ParentProduct == null)
-            {
-                RootProductId = Id;
-                RootProductName = DisplayName;
-            }
-            else
-                base.BuildProductNameAndPath();
-
-            foreach (var (_, sensor) in Sensors)
-                sensor.BuildProductNameAndPath();
-
-            foreach (var (_, subProduct) in SubProducts)
-                subProduct.BuildProductNameAndPath();
-        }
-
-
-        internal override void RefreshOutdatedError() =>
-            UpdateChildSensorsValidationResult(this);
-
-        private static void UpdateChildSensorsValidationResult(ProductModel product)
-        {
-            foreach (var (_, sensor) in product.Sensors)
-                if (sensor.ExpectedUpdateInterval == null)
-                    sensor.RefreshOutdatedError();
-
-            foreach (var (_, subProduct) in product.SubProducts)
-                if (subProduct.ExpectedUpdateInterval == null)
-                    UpdateChildSensorsValidationResult(subProduct);
-        }
     }
 }

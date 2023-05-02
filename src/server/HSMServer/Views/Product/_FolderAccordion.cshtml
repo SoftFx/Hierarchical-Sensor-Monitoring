@@ -1,0 +1,46 @@
+﻿@using HSMServer.Constants
+@using HSMServer.Controllers
+@using HSMServer.Extensions
+@using HSMServer.Model.Authentication
+@using HSMServer.Model.Folders.ViewModels
+
+@model FolderViewModel
+
+@addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
+
+
+<div class='accordion my-1' id='folderData_@Model.Id'>
+    <div class='accordion-item' style="border-color:@Model.BackgroundColor.ToRGB();">
+        <h2 class='accordion-header' id='heading_@Model.Id'>
+            <button id='accordion_@Model.Id' class='accordion-button' type='button' data-bs-toggle='collapse'
+                    data-bs-target='#collapse_@Model.Id' aria-expanded='true' aria-controls='collapse_@Model.Id'
+                    style="background-color:@Model.Background; color:@Model.Foreground">
+                <div class="w-100">
+                    <div class='d-flex col-md-auto'>
+                        <div style="font-weight: bold;">@Html.Raw(Model.Name)</div>
+                        @if (Model.Id.HasValue && (User as User).IsFolderManager(Model.Id.Value))
+                        {
+                            <a asp-controller="@ViewConstants.FoldersController" asp-action="@nameof(FoldersController.EditFolder)" asp-route-folderId="@Model.Id"
+                                class="ms-2" style="color:@Model.Foreground">
+                                <i class='fas fa-edit'></i>
+                            </a>
+                        }
+                        </div>
+                    <div id="markdown_@(Model.Id)_description">@Model.Description</div>
+                </div>
+            </button>
+        </h2>
+        <div id='collapse_@Model.Id' class='accordion-collapse collapse show text-break' aria-labelledby='heading_@Model.Id' data-bs-parent='#folderData_@Model.Id'>
+            <div id="accordionBody_@Model.Id" class='accordion-body p-3'>
+                @await Html.PartialAsync("_ProductList", Model)
+            </div>
+        </div>
+    </div>
+</div>
+
+
+<script>
+    $(document).ready(() => {
+        replaceHtmlToMarkdown('markdown_@(Model.Id)_description');
+    });
+</script>

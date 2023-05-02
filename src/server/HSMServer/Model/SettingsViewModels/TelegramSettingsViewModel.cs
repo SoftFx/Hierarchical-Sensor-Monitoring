@@ -1,5 +1,6 @@
-﻿using HSMServer.Core.Model;
-using HSMServer.Extensions;
+﻿using HSMServer.Extensions;
+using HSMServer.Notification.Settings;
+using HSMServer.Notifications.Telegram;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
@@ -10,14 +11,16 @@ namespace HSMServer.Model
 {
     public class TelegramSettingsViewModel
     {
+        public Guid EntityId { get; }
+
         [Display(Name = "Enable messages")]
         public bool EnableMessages { get; set; }
 
-        [Display(Name = "Min status level")] 
+        [Display(Name = "Min status level")]
         public SensorStatus MinStatusLevel { get; set; } = SensorStatus.Warning;
-        
+
         public string MinStatusLevelHelper { get; set; }
-        
+
         [Display(Name = "Messages delay")]
         public int MessagesDelay { get; set; }
 
@@ -27,16 +30,18 @@ namespace HSMServer.Model
         // public constructor without parameters for action Account/UpdateTelegramSettings
         public TelegramSettingsViewModel() { }
 
-        public TelegramSettingsViewModel(TelegramSettings settings)
+        public TelegramSettingsViewModel(TelegramSettings settings, Guid entityId)
         {
+            EntityId = entityId;
+
             Update(settings);
         }
-        
+
         internal void Update(TelegramSettings settings)
         {
             EnableMessages = settings.MessagesAreEnabled;
             MinStatusLevel = settings.MessagesMinStatus.ToClient();
-            MessagesDelay = settings.MessagesDelay;
+            MessagesDelay = settings.MessagesDelaySec;
 
             Chats.Clear();
             foreach (var (_, chat) in settings.Chats)
@@ -50,7 +55,7 @@ namespace HSMServer.Model
                 Enabled = EnableMessages,
                 Delay = MessagesDelay,
             };
-        
+
         public static string GetStatusPairs(SensorStatus newStatus)
         {
             var length = Enum.GetValues<SensorStatus>().Length;
@@ -58,14 +63,13 @@ namespace HSMServer.Model
             var builder = new StringBuilder(1 << 4);
 
             for (int i = 0; i < length; i++)
-            for (int j = 0; j < length; j++)
-                if (i != j && (i >= (int)newStatus || j >= (int)newStatus))
-                    builder.Append($"{(SensorStatus)i} -> {(SensorStatus)j}, ");
+                for (int j = 0; j < length; j++)
+                    if (i != j && (i >= (int)newStatus || j >= (int)newStatus))
+                        builder.Append($"{(SensorStatus)i} -> {(SensorStatus)j}, ");
 
             var response = builder.ToString();
             return string.IsNullOrEmpty(response) ? response : response[..^2];
         }
-
     }
 
 

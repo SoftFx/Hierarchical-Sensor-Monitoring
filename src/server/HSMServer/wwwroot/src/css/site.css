@@ -1,6 +1,11 @@
 ﻿/* Please see documentation at https://docs.microsoft.com/aspnet/core/client-side/bundling-and-minification
 for details on configuring this project to bundle and minify static web assets. */
 
+:root{
+    --footer-height: 3rem;
+    --header-height: 3rem;
+}
+
 a.navbar-brand {
     white-space: normal;
     text-align: center;
@@ -28,12 +33,23 @@ a {
 -------------------------------------------------- */
 html {
     font-size: 14px;
+    height: 100%;
+    width: 100%;
 }
 
 @media (min-width: 768px) {
     html {
         font-size: 16px;
+        height: 100%;
+        width: 100%;
     }
+}
+
+body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    width: 100%;
 }
 
 .border-top {
@@ -60,12 +76,16 @@ html {
     min-height: 100%;
 }
 
+.header{
+    height: var(--header-height);
+}
+
 .footer {
     position: absolute;
     bottom: 0;
     width: 100%;
     white-space: nowrap;
-    line-height: 5vh; /* Vertically center the text there */
+    height: var(--footer-height);
 }
 
 .login-form-div {
@@ -158,4 +178,31 @@ input.input-validation-error {
 .table td a:hover {
     text-decoration: underline;
     text-underline-offset: 0.3rem;
+}
+
+.w-10 {
+    width: 10%;
+}
+
+.w-20 {
+    width: 20%;
+}
+
+.no-transition {
+    transition: none!important;
+    -webkit-transition: none!important;
+    display: none;
+}
+
+/* Wrappers
+-------------------------------------------------- */
+
+.body-content-wrapper{
+    width: 100%;
+    min-height: 100vh; 
+    position: relative
+}
+
+.body-content{
+    padding-bottom: var(--footer-height)
 }

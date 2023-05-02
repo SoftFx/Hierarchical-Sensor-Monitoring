@@ -1,4 +1,6 @@
-﻿using HSMServer.Core.Model;
+﻿using HSMServer.Notification.Settings;
+using HSMServer.Notifications.Telegram;
+using HSMServer.Notifications.Telegram.AddressBook.MessageBuilder;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -9,12 +11,12 @@ namespace HSMServer.Notifications
     internal sealed class AddressBook
     {
         private readonly ConcurrentDictionary<Guid, InvitationToken> _tokens = new();
-        private readonly ConcurrentDictionary<ChatId, HashSet<INotificatable>> _telegramBook = new();
+        private readonly ConcurrentDictionary<ChatId, CHash<INotificatable>> _telegramBook = new();
 
         internal ConcurrentDictionary<INotificatable, ConcurrentDictionary<ChatId, ChatSettings>> ServerBook { get; } = new(new NotificatableComparator());
 
 
-        internal HashSet<INotificatable> GetAuthorizedEntities(ChatId chat) => _telegramBook.GetValueOrDefault(chat) ?? new();
+        internal CHash<INotificatable> GetAuthorizedEntities(ChatId chat) => _telegramBook.GetValueOrDefault(chat) ?? new(new NotificatableComparator());
 
         internal Guid BuildInvitationToken(INotificatable entity)
         {
@@ -69,7 +71,7 @@ namespace HSMServer.Notifications
                 ServerBook[entity] = new ConcurrentDictionary<ChatId, ChatSettings>();
 
             if (!_telegramBook.ContainsKey(chat.Id))
-                _telegramBook[chat.Id] = new HashSet<INotificatable>();
+                _telegramBook[chat.Id] = new CHash<INotificatable>(new NotificatableComparator());
 
             ServerBook[entity].TryAdd(chat.Id, new ChatSettings(chat));
             _telegramBook[chat.Id].Add(entity);

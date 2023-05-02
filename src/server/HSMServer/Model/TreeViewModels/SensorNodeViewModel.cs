@@ -10,7 +10,7 @@ namespace HSMServer.Model.TreeViewModel
         private const string FileNamePattern = "File name: ";
 
 
-        public SensorType SensorType { get; private set; }
+        public SensorType Type { get; private set; }
 
         public SensorState State { get; private set; }
 
@@ -18,18 +18,22 @@ namespace HSMServer.Model.TreeViewModel
 
         public string FileNameString { get; private set; }
 
-        public bool IsPlottingSupported { get; private set; }
-
-        internal string Unit { get; private set; }
-
         internal BaseValue LastValue { get; private set; }
 
         public string ValidationError { get; private set; }
 
+
         public bool IsValidationErrorVisible => !string.IsNullOrEmpty(ValidationError);
 
+        public bool IsChartSupported => Type is not SensorType.String;
 
-        public SensorNodeViewModel(BaseSensorModel model) : base(model.Id)
+        public bool IsTableFormatSupported => Type is not SensorType.File;
+
+        public bool IsDatapointFormatSupported => Type is SensorType.Integer or SensorType.Double or SensorType.Boolean
+                                                  or SensorType.String or SensorType.TimeSpan;
+
+
+        public SensorNodeViewModel(BaseSensorModel model) : base(model)
         {
             Update(model);
         }
@@ -39,23 +43,18 @@ namespace HSMServer.Model.TreeViewModel
         {
             base.Update(model);
 
-            SensorType = model.Type;
+            Type = model.Type;
             State = model.State;
             UpdateTime = model.LastUpdateTime;
-            Status = model.ValidationResult.Result.ToClient();
-            ValidationError = State == SensorState.Muted ? GetMutedErrorTooltip(model.EndOfMuting) : model.ValidationResult.Message;
-            Path = model.Path;
-            Unit = model.Unit;
+            Status = model.Status.Status.ToClient();
+            ValidationError = State == SensorState.Muted ? GetMutedErrorTooltip(model.EndOfMuting) : model.Status.Message;
 
             LastValue = model.LastValue;
             HasData = model.HasData;
             ShortStringValue = model.LastValue?.ShortInfo;
 
-            IsPlottingSupported = IsSensorPlottingAvailable(model.Type);
             FileNameString = GetFileNameString(model.Type, ShortStringValue);
         }
-
-        private static bool IsSensorPlottingAvailable(SensorType type) => type is not SensorType.String;
 
         private static string GetFileNameString(SensorType sensorType, string value)
         {

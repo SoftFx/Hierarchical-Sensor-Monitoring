@@ -1,4 +1,5 @@
-﻿using HSMServer.Core.Model;
+﻿using HSMServer.Core;
+using HSMServer.Core.Model;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -7,13 +8,16 @@ namespace HSMServer.Notifications.Telegram.AddressBook.MessageBuilder
 {
     internal sealed class PathCompressor : ConcurrentDictionary<Guid, (string, string)>
     {
+        private readonly ConcurrentDictionary<Guid, (BaseSensorModel, SensorStatus)> _inRestore = new();
         private readonly ConcurrentDictionary<Guid, BaseSensorModel> _sensors = new();
-        private readonly List<GroupedPath> _groups = new();
+        private readonly ConcurrentQueue<GroupedPath> _groups = new();
 
 
-        internal bool TryGetOrAdd(BaseSensorModel sensor, out (string oldStatus, string) key)
+        internal bool TryGetOrAdd(BaseSensorModel sensor, SensorStatus firstStatus, out (string oldStatus, string) key)
         {
             var id = sensor.Id;
+
+            TryAddInRestore(sensor, firstStatus);
 
             if (TryGetValue(id, out key))
                 return true;
@@ -24,11 +28,28 @@ namespace HSMServer.Notifications.Telegram.AddressBook.MessageBuilder
             return false;
         }
 
-        internal IEnumerable<string> GetGroupedPaths(CHash hash)
+        internal IEnumerable<string> GetGroupedPaths(CGuidHash hash)
         {
             foreach (var id in hash)
-                if (_sensors.TryGetValue(id, out var sensor))
-                    ApplyToGroups(sensor.Path);
+                if (!_inRestore.ContainsKey(id))
+                {
+                    if (_sensors.TryGetValue(id, out var sensor) && !TryAddInRestore(sensor))
+                        ApplyToGroups(sensor);
+
+                    if (!_inRestore.ContainsKey(id))
+                        hash.Remove(id);
+                }
+
+            foreach ((var id, (var sensor, var firstState)) in _inRestore)
+                if (hash.Contains(id) && !sensor.IsWaitRestore)
+                {
+                    if (sensor.Status.IsOk && firstState.IsOk())
+                        RemoveSensor(id);
+                    else
+                        ApplyToGroups(sensor);
+
+                    hash.Remove(id);
+                }
 
             foreach (var group in _groups)
                 yield return group.ToString();
@@ -36,24 +57,37 @@ namespace HSMServer.Notifications.Telegram.AddressBook.MessageBuilder
             _groups.Clear();
         }
 
-        internal new void Clear()
+
+        private void ApplyToGroups(BaseSensorModel sensor)
         {
-            _sensors.Clear();
-            _groups.Clear();
+            RemoveSensor(sensor.Id);
 
-            base.Clear();
-        }
-
-
-        private void ApplyToGroups(string strPath)
-        {
-            var path = strPath.Split(GroupedPath.Separator, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            var path = sensor.Path.Split(GroupedPath.Separator, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
             foreach (var group in _groups)
                 if (group.Apply(path))
                     return;
 
-            _groups.Add(new GroupedPath(path));
+            _groups.Enqueue(new GroupedPath(path));
+        }
+
+
+        private bool TryAddInRestore(BaseSensorModel sensor, SensorStatus? firstStatus = null)
+        {
+            var ok = !sensor.Status.IsOk && sensor.IsWaitRestore;
+
+            if (ok)
+                _inRestore.TryAdd(sensor.Id, (sensor, firstStatus ?? sensor.Status.Status));
+
+            return ok;
+        }
+
+
+        private void RemoveSensor(Guid id)
+        {
+            _inRestore.Remove(id, out _);
+            _sensors.Remove(id, out _);
+            this.Remove(id, out _);
         }
     }
 }

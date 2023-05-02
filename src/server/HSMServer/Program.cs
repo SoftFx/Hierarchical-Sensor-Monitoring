@@ -1,5 +1,7 @@
-using FluentValidation.AspNetCore;
+﻿using FluentValidation.AspNetCore;
 using HSMCommon.Constants;
+using HSMServer.Authentication;
+using HSMServer.Folders;
 using HSMServer.Model;
 using HSMServer.ServiceExtensions;
 using Microsoft.AspNetCore.Authentication.Cookies;
@@ -53,13 +55,22 @@ builder.Services.AddMvc();
 builder.Services.AddFluentValidationAutoValidation()
                 .AddFluentValidationClientsideAdapters();
 
-builder.Services.AddHttpsRedirection(configureOptions => configureOptions.HttpsPort = serverConfig.Kestrel.SitePort);
+builder.Services.AddHttpsRedirection(с => с.HttpsPort = serverConfig.Kestrel.SitePort);
 
 builder.Services.AddApplicationServices();
+
+builder.Services.Configure<HostOptions>(hostOptions =>
+{
+    hostOptions.BackgroundServiceExceptionBehavior = BackgroundServiceExceptionBehavior.Ignore;
+});
+
 
 try
 {
     var app = builder.Build();
+
+    await app.Services.GetRequiredService<IUserManager>().Initialize();
+    await app.Services.GetRequiredService<IFolderManager>().Initialize();
 
     app.ConfigureMiddleware(app.Environment.IsDevelopment());
 

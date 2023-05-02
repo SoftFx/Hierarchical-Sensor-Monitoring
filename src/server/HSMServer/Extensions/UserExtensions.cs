@@ -1,7 +1,7 @@
 ﻿using HSMServer.Core.Model;
-using HSMServer.Core.Model.UserFilters;
 using HSMServer.Model.Authentication;
 using HSMServer.Model.TreeViewModel;
+using HSMServer.UserFilters;
 
 namespace HSMServer.Extensions
 {
@@ -58,24 +58,13 @@ namespace HSMServer.Extensions
             return false;
         }
 
-        public static User WithoutPassword(this User user) =>
-            new()
-            {
-                UserName = user.UserName,
-                Password = null,
-                IsAdmin = user.IsAdmin,
-                ProductsRoles = user.ProductsRoles,
-                Notifications = new(user.Notifications.ToEntity()),
-                TreeFilter = user.TreeFilter
-            };
-
         private static FilterGroupType GetStateMask(this SensorNodeViewModel sensor, User user)
         {
             var sensorStateMask = DefaultNodeMask;
 
             if (user.Notifications.IsSensorEnabled(sensor.Id) || user.Notifications.IsSensorIgnored(sensor.Id) ||
                 sensor.RootProduct.Notifications.IsSensorEnabled(sensor.Id) || sensor.RootProduct.Notifications.IsSensorIgnored(sensor.Id))
-                sensorStateMask |= FilterGroupType.ByNotifications;
+                sensorStateMask |= FilterGroupType.Notifications;
             if (sensor.State == SensorState.Muted)
                 sensorStateMask |= FilterGroupType.ByState;
 

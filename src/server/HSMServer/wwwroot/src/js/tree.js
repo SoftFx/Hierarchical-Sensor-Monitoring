@@ -17,18 +17,30 @@ window.initializeTree = function () {
         "sort": function (a, b) {
             let isTimeSort = sortingType.val() == "1";
 
+            let nodeA = this.get_node(a).data.jstree;
+            let nodeB = this.get_node(b).data.jstree;
+
+            let aIsFolder = isFolder(nodeA);
+            let bIsFolder = isFolder(nodeB);
+
+            if (aIsFolder ^ bIsFolder) {
+                return aIsFolder ? -1 : 1;
+            }
+
             if (isTimeSort) {
-                a = this.get_node(a).data.jstree.time;
-                b = this.get_node(b).data.jstree.time;
+                [a, b] = [nodeA.time, nodeB.time];
             }
             else {
-                [a, b] = [this.get_node(b).data.jstree.title.toLowerCase(), this.get_node(a).data.jstree.title.toLowerCase()]
+                [a, b] = [nodeB.title.toLowerCase(), nodeA.title.toLowerCase()];
             }
             
             return a < b ? 1 : -1;
         }
     }).on("state_ready.jstree", function () {
         selectNodeAjax($(this).jstree('get_selected'));
+    }).on('open_node.jstree', function () {
+        isTreeCollapsed = false;
+        $('#collapseIcon').removeClass('fa-regular fa-square-plus').addClass('fa-regular fa-square-minus').attr('title','Save and close tree');
     });
 
     initializeActivateNodeTree();
@@ -42,6 +54,10 @@ window.activateNode = function (currentNodeId, nodeIdToActivate) {
     if (currentSelectedNodeId != nodeIdToActivate) {
         selectNodeAjax(nodeIdToActivate);
     }
+}
+
+function isFolder(node) {
+    return node.icon.includes("fa-folder");
 }
 
 function initializeActivateNodeTree() {
@@ -80,10 +96,6 @@ function selectNodeAjax(selectedId) {
         openAccordions('[id^="grid-accordion_"]');
         openAccordions('[id^="list-accordion_"]');
 
-        var selectedAccordionId = '#accordion_' + selectedId;
-        if ($(selectedAccordionId).attr('aria-expanded') == 'false')
-            $(selectedAccordionId).click();
-
         if (needToActivateListTab) {
             selectNodeInfoTab("list", selectedId);
 
@@ -116,7 +128,7 @@ function selectNodeInfoTab(tab, selectedId) {
 }
 
 const TelegramTarget = { Groups: 0, Accounts: 1 };
-const NodeType = { Product: 0, Node: 1, Sensor: 2 };
+const NodeType = { Folder: 0, Product: 1, Node: 2, Sensor: 3 };
 
 const AjaxPost = {
     type: 'POST',
@@ -143,7 +155,7 @@ function buildContextMenu(node) {
             "action": _ => copyToClipboard(node.data.jstree.title),
         };
     }
-    else {
+    else if (curType !== NodeType.Folder) {
         contextMenu["CopyPath"] = {
             "label": "Copy path",
             "separator_after": true,
@@ -154,10 +166,10 @@ function buildContextMenu(node) {
     let isMutedState = node.data.jstree.isMutedState;
 
     if (isManager) {
-        if (isMutedState !== '') {
+        if (isMutedState !== undefined && isMutedState !== '') {
             if (!(isMutedState === "True")) {
                 contextMenu["Mute"] = {
-                    "label": `Mute ${getKeyByValue(curType)}`,
+                    "label": `Mute ${getKeyByValue(curType)} for...`,
                     "separator_after": true,
                     "separator_before": true,
                     "action": _ => ignoreNotificationsRequest(node, TelegramTarget.Groups, 'true')
@@ -172,80 +184,51 @@ function buildContextMenu(node) {
                 }
             } 
         }
-        
-        if (curType !== NodeType.Node) {
+
+        if (curType !== NodeType.Node && curType !== NodeType.Sensor) {
             contextMenu["Edit"] = {
                 "label": `Edit ${getKeyByValue(curType)}`,
                 "action": _ => {
+                    if (curType === NodeType.Folder)
+                        window.location.href = `${editFolderAction}?folderId=${node.id}`;
+
                     if (curType === NodeType.Product)
                         window.location.href = `${editProductAction}?Product=${node.id}`;
-
-                    if (curType === NodeType.Sensor)
-                        $(`#sensorInfo_link_${node.id}`).click();
                 }
             };
         }
 
-        contextMenu["RemoveNode"] = {
-            "label": `Remove ${getKeyByValue(curType)}`,
-            "action": _ => {
-                var modal = new bootstrap.Modal(document.getElementById('modalDelete'));
+        if (curType != NodeType.Folder) {
+            contextMenu["RemoveNode"] = {
+                "label": `Remove ${getKeyByValue(curType)}`,
+                "action": _ => {
+                    var modal = new bootstrap.Modal(document.getElementById('modalDelete'));
 
-                //modal
-                $('#modalDeleteLabel').empty();
-                $('#modalDeleteLabel').append(`Remove ${getKeyByValue(curType)}`);
-                $('#modalDeleteBody').empty();
+                    //modal
+                    $('#modalDeleteLabel').empty();
+                    $('#modalDeleteLabel').append(`Remove ${getKeyByValue(curType)}`);
+                    $('#modalDeleteBody').empty();
 
-                $.when(getFullPathAction(node.id)).done((path) => {
-                    $('#modalDeleteBody').append(`Do you really want to remove ${path} ?`);
-                    modal.show();
-                })
+                    $.when(getFullPathAction(node.id)).done((path) => {
+                        $('#modalDeleteBody').append(`Do you really want to remove ${path}?`);
+                        modal.show();
+                    })
 
-                //modal confirm
-                $('#confirmDeleteButton').off('click').on('click', () => {
-                    modal.hide();
+                    //modal confirm
+                    $('#confirmDeleteButton').off('click').on('click', () => {
+                        modal.hide();
 
-                    $.ajax(`${removeNodeAction}?selectedId=${node.id}`, AjaxPost)
-                        .done(() => {
-                            updateTreeTimer();
-                            showToast(`${getKeyByValue(curType)} has been removed`);
+                        $.ajax(`${removeNodeAction}?selectedId=${node.id}`, AjaxPost)
+                            .done(() => {
+                                updateTreeTimer();
+                                showToast(`${getKeyByValue(curType)} has been removed`);
 
-                            $(`#${node.parents[0]}_anchor`).trigger('click');
-                        });
-                });
+                                $(`#${node.parents[0]}_anchor`).trigger('click');
+                            });
+                    });
 
-                $('#closeDeleteButton').off('click').on('click', () => modal.hide());
-            }
-        }
-
-        contextMenu["CleanHistory"] = {
-            "label": "Clean history",
-            "action": _ => {
-                var modal = new bootstrap.Modal(document.getElementById('modalDelete'));
-                //modal
-                $('#modalDeleteLabel').empty();
-                $('#modalDeleteLabel').append(`Clean history for ${getKeyByValue(curType)}`);
-                $('#modalDeleteBody').empty();
-
-                $.when(getFullPathAction(node.id)).done((path) => {
-                    $('#modalDeleteBody').append(`Do you really want to clean history for ${path} ?`);
-                    modal.show();
-                })
-
-                //modal confirm
-                $('#confirmDeleteButton').off('click').on('click', () => {
-                    modal.hide();
-
-                    $.ajax(`${clearHistoryAction}?selectedId=${node.id}`, AjaxPost)
-                        .done(() => {
-                            updateTreeTimer();
-                            showToast(`${getKeyByValue(curType)} has been cleared`);
-
-                            $(`#${node.parents[0]}_anchor`).trigger('click');
-                        });
-                });
-
-                $('#closeDeleteButton').off('click').on('click', () => modal.hide());
+                    $('#closeDeleteButton').off('click').on('click', () => modal.hide());
+                }
             }
         }
     }
@@ -262,7 +245,7 @@ function buildContextMenu(node) {
     }
     else {
         notificationSubmenu["Accounts enable"] = {
-            "label": "Enable for accounts",
+            "label": "Enable for accounts...",
             "icon": "fab fa-telegram",
             "action": _ => enableNotificationsRequest(node, TelegramTarget.Accounts),
         }
@@ -280,14 +263,14 @@ function buildContextMenu(node) {
         }
         else {
             notificationSubmenu["Groups enable"] = {
-                "label": "Enable for groups",
+                "label": "Enable for groups...",
                 "icon": "fab fa-telegram",
                 "action": _ => enableNotificationsRequest(node, TelegramTarget.Groups),
             }
         }
     }
-  
-    if (isMutedState !== '')
+
+    if ((curType === NodeType.Folder && node.children.length != 0) || (isMutedState !== '' && isMutedState !== undefined))
         contextMenu["Notifications"] = {
             "label": "Notifications",
             "separator_before": true,
@@ -320,7 +303,11 @@ function getFullPathAction(nodeId) {
 }
 
 function getCurrentElementType(node) {
-    if (node.parents.length === 1)
+    if (node.parents.length === 1 && isFolder(node))
+        return NodeType.Folder;
+
+    if ((node.parents.length === 1 && !isFolder(node)) ||
+        (node.parents.length === 2 && isFolder($('#jstree').jstree().get_node(node.parents[0]))))
         return NodeType.Product;
     
     if (node.children.length === 0)

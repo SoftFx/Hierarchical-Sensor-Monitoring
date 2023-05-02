@@ -10,13 +10,14 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
 {
     internal class EnvironmentDatabaseWorker : IEnvironmentDatabase
     {
+        private readonly byte[] _productListKey = "ProductsNames"u8.ToArray();
+        private readonly byte[] _accessKeyListKey = "AccessKeys"u8.ToArray();
+        private readonly byte[] _sensorIdsKey = "SensorIds"u8.ToArray();
+        private readonly byte[] _policyIdsKey = "PolicyIds"u8.ToArray();
+        private readonly byte[] _folderIdsKey = "FolderIds"u8.ToArray();
+
         private readonly LevelDBDatabaseAdapter _database;
         private readonly Logger _logger;
-
-        private readonly byte[] _accessKeyListKey = Encoding.UTF8.GetBytes(PrefixConstants.GetAccessKeyListKey());
-        private readonly byte[] _productListKey = Encoding.UTF8.GetBytes(PrefixConstants.GetProductsListKey());
-        private readonly byte[] _sensorIdsKey = Encoding.UTF8.GetBytes(PrefixConstants.GetSensorIdsKey());
-        private readonly byte[] _policyIdsKey = Encoding.UTF8.GetBytes(PrefixConstants.GetPolicyIdsKey());
 
 
         public EnvironmentDatabaseWorker(string name)
@@ -25,6 +26,99 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             _logger = LogManager.GetCurrentClassLogger();
         }
 
+
+        #region Folders
+
+        public void PutFolder(FolderEntity entity)
+        {
+            try
+            {
+                _database.Put(Encoding.UTF8.GetBytes(entity.Id), JsonSerializer.SerializeToUtf8Bytes(entity));
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, $"Failed to put folder info for {entity.Id}");
+            }
+        }
+
+        public void RemoveFolder(string id)
+        {
+            try
+            {
+                _database.Delete(Encoding.UTF8.GetBytes(id));
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, $"Failed to remove info for folder {id}");
+            }
+        }
+
+        public void AddFolderToList(string id)
+        {
+            try
+            {
+                var currentList = GetFoldersList();
+
+                if (!currentList.Contains(id))
+                    currentList.Add(id);
+
+                _database.Put(_folderIdsKey, JsonSerializer.SerializeToUtf8Bytes(currentList));
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, $"Failed to add folder {id} to list");
+            }
+        }
+
+        public void RemoveFolderFromList(string id)
+        {
+            try
+            {
+                var currentList = GetFoldersList();
+
+                currentList.Remove(id);
+
+                _database.Put(_folderIdsKey, JsonSerializer.SerializeToUtf8Bytes(currentList));
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, $"Failed to remove folder {id} from list");
+            }
+        }
+
+        public FolderEntity GetFolder(string id)
+        {
+            try
+            {
+                return _database.TryRead(Encoding.UTF8.GetBytes(id), out byte[] value)
+                    ? JsonSerializer.Deserialize<FolderEntity>(value)
+                    : null;
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, $"Failed to read info for folder {id}");
+            }
+
+            return null;
+        }
+
+        public List<string> GetFoldersList()
+        {
+            try
+            {
+                return _database.TryRead(_folderIdsKey, out byte[] value) ?
+                    JsonSerializer.Deserialize<List<string>>(value)
+                    : new();
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, "Failed to get folders ids list");
+            }
+
+            return new();
+        }
+
+        #endregion
 
         #region Products
 
@@ -43,7 +137,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             }
             catch (Exception e)
             {
-                _logger.Error(e, "Failed to add prodct to list");
+                _logger.Error(e, "Failed to add product to list");
             }
         }
 
@@ -123,7 +217,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             }
             catch (Exception e)
             {
-                _logger.Error(e, $"Failed to remove prodct {productId} from list");
+                _logger.Error(e, $"Failed to remove product {productId} from list");
             }
         }
 
@@ -348,11 +442,10 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
         public void AddPolicy(PolicyEntity entity)
         {
             var bytesKey = Encoding.UTF8.GetBytes(entity.Id);
-            var bytesValue = JsonSerializer.SerializeToUtf8Bytes(entity.Policy);
 
             try
             {
-                _database.Put(bytesKey, bytesValue);
+                _database.Put(bytesKey, entity.Policy);
             }
             catch (Exception e)
             {

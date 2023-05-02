@@ -1,0 +1,55 @@
+﻿@using HSMServer.Model.Folders.ViewModels;
+@using HSMServer.Extensions
+
+@model EditFolderViewModel
+
+@addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
+
+@{
+    var isAdd = Model.IsAddMode;
+}
+
+
+<input id="folderIdToEdit" asp-for="@Model.Id" value="@Model.Id" style="display: none" />
+
+<div class="row mt-2">
+    <label class="col-2 col-form-label" asp-for="Name"></label>
+    <div class="col-5">
+        <input class="form-control" asp-for="Name">
+        <span asp-validation-for="Name"></span>
+    </div>
+    <input asp-for="@Model.OldName" value="@Model.OldName" style="display: none" />
+</div>
+
+<div class="row mt-2">
+    <label class="col-2 col-form-label" asp-for="Description"></label>
+    <div class="col">
+        <textarea type='text' class='form-control' asp-for="Description" value='@Model.Description'></textarea>
+    </div>
+</div>
+
+<div class="row mt-2">
+    <label class="col-2 col-form-label" asp-for="Color"></label>
+    <div class="col-auto">
+        <input class="form-control form-control-color" type="color" asp-for="Color" value="@(isAdd ? ColorExtensions.GenerateRandomColor() : Model.Color.ToRGB())">
+    </div>
+</div>
+
+@if (!isAdd)
+{
+    <div class="row mt-2">
+        <label class="col-2 col-form-label" asp-for="Author"></label>
+        <label class="col-auto col-form-label" asp-for="Author">@Model.Author</label>
+    </div>
+
+    <div class="row mt-2">
+        <label class="col-2 col-form-label" asp-for="CreationDate"></label>
+        <label class="col-auto col-form-label" asp-for="CreationDate">@Model.CreationDate</label>
+    </div>
+}
+
+<partial name="_Products" for="Products" />
+
+<div class="d-flex justify-content-end my-2">
+    <button type="submit" class="btn btn-secondary independentSizeButton">Save</button>
+</div>

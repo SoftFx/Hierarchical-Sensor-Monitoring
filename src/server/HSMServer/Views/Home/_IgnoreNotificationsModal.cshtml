@@ -18,7 +18,7 @@
             <div class="modal-dialog modal-dialog-centered" role="document">
                 <div class="modal-content">
                     <div class="modal-header">
-                        <div>
+                        <div class="text-break">
                             @if (Model.IsOffTimeModal)
                             {
                                 <h5 class="modal-title">Mute @Model.TreeElement</h5>
@@ -94,13 +94,13 @@
         $('#ignoreNotificatios_partial').empty();
     });
 
-    $('#timeIntervalSelect').change(function () {
+    $('#timeIntervalSelect_@Model?.IgnorePeriod.Id').change(function () {
         calculateInputs();
         updateNote();
     });
 
     $('#interval_inputs :input').on('change', function () {
-        $(`#timeIntervalSelect option[value=${'@TimeInterval.Custom'}]`).prop('selected', true);
+        $(`#timeIntervalSelect_@Model?.IgnorePeriod.Id option[value=${'@TimeInterval.Custom'}]`).prop('selected', true);
         updateNote();
     });
 
@@ -111,7 +111,7 @@
     function calculateInputs() {
         clearInputs();
 
-        let selectedOptionText = $('option:selected', $('#timeIntervalSelect')).text();
+        let selectedOptionText = getTimeIntervalSelectText();
         let periods = selectedOptionText.split(' ');
 
         if (periods.length % 2 != 0) {
@@ -144,7 +144,7 @@
         let action = `@(Model?.IsOffTimeModal)` === 'True' ? 'muted' : 'ignored';
         let until = '';
 
-        if ($('option:selected', $('#timeIntervalSelect')).text() == '@TimeInterval.Forever') {
+        if (getTimeIntervalSelectText() == '@TimeInterval.Forever') {
             action = 'disabled';
             $('#interval_inputs').hide();
         }
@@ -162,5 +162,9 @@
         let note = `Note: @(Model?.TreeElement) ${entity}will be ${action}${until}`;
         
         $('#ignoreNotifications_note').html(note);
+    }
+
+    function getTimeIntervalSelectText() {
+        return $('option:selected', $('#timeIntervalSelect_@Model?.IgnorePeriod.Id')).text();
     }
 </script>

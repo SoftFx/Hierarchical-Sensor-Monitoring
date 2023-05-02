@@ -1,5 +1,7 @@
 ﻿using HSMServer.Authentication;
 using HSMServer.Core.Cache;
+using HSMServer.Model.TreeViewModel;
+using HSMServer.Notification.Settings;
 using HSMServer.Notifications;
 using Microsoft.Extensions.Hosting;
 using System;
@@ -12,93 +14,63 @@ namespace HSMServer.BackgroundTask
     {
         private const int Delay = 60000; // 1 minute
 
-        private readonly ITreeValuesCache _cache;
+        private readonly NotificationsCenter _notifications;
         private readonly IUserManager _userManager;
-        private readonly TelegramBot _telegramBot;
+        private readonly ITreeValuesCache _cache;
+        private readonly TreeViewModel _tree;
 
 
-        public MonitoringBackgroundService(ITreeValuesCache cache, IUserManager userManager, INotificationsCenter notifications)
+        public MonitoringBackgroundService(ITreeValuesCache cache, TreeViewModel tree, IUserManager userManager, NotificationsCenter notifications)
         {
-            _cache = cache;
+            _notifications = notifications;
             _userManager = userManager;
-            _telegramBot = notifications.TelegramBot;
+            _cache = cache;
+            _tree = tree;
         }
 
 
-        protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+        protected override async Task ExecuteAsync(CancellationToken cToken)
         {
-            while (!stoppingToken.IsCancellationRequested)
+            await Task.Delay((60 - DateTime.UtcNow.Second + 1) * 1000, cToken); //task start time alignment
+
+            while (!cToken.IsCancellationRequested)
             {
                 if (_cache.IsInitialized)
                 {
-                    ValidateSensors();
-                    UpdateAccessKeysState();
+                    _cache.UpdateCacheState();
+                    _notifications.CheckNotificationCenterState();
+
                     RemoveOutdatedIgnoredNotifications();
-                    RemoveExpiredInvitationTokens();
-                    UpdateMutedSensorsState();
                 }
 
-                await Task.Delay(Delay, stoppingToken);
+                await Task.Delay(Delay, cToken);
             }
         }
 
-        private void ValidateSensors()
-        {
-            foreach (var sensor in _cache.GetSensors())
-            {
-                var oldStatus = sensor.ValidationResult;
-
-                if (sensor.CheckExpectedUpdateInterval())
-                    _cache.NotifyAboutChanges(sensor, oldStatus);
-            }
-        }
-
-        private void UpdateAccessKeysState()
-        {
-            foreach (var key in _cache.GetAccessKeys())
-                _cache.CheckAccessKeyExpiration(key);
-        }
 
         private void RemoveOutdatedIgnoredNotifications()
         {
             foreach (var user in _userManager.GetUsers())
-            {
-                bool needUpdateUser = false;
-
-                foreach (var (sensorId, endOfIgnorePeriod) in user.Notifications.IgnoredSensors)
-                    if (DateTime.UtcNow >= endOfIgnorePeriod)
-                    {
-                        user.Notifications.RemoveIgnore(sensorId);
-                        needUpdateUser = true;
-                    }
-
-                if (needUpdateUser)
+                if (ShouldRemoveIgnoreStatus(user))
                     _userManager.UpdateUser(user);
-            }
 
-            foreach (var product in _cache.GetProducts())
-            {
-                bool needUpdate = false;
-
-                foreach (var (sensorId, endOfIgnorePeriod) in product.Notifications.IgnoredSensors)
-                    if (DateTime.UtcNow >= endOfIgnorePeriod)
-                    {
-                        product.Notifications.RemoveIgnore(sensorId);
-                        needUpdate = true;
-                    }
-
-                if (needUpdate)
-                    _cache.UpdateProduct(product);
-            }
+            foreach (var product in _tree.GetRootProducts())
+                if (ShouldRemoveIgnoreStatus(product))
+                    _tree.UpdateProductNotificationSettings(product);
         }
 
-        private void UpdateMutedSensorsState()
+        private static bool ShouldRemoveIgnoreStatus(INotificatable entity)
         {
-            foreach (var sensor in _cache.GetSensors())
-                if (sensor.EndOfMuting <= DateTime.UtcNow)
-                    _cache.UpdateMutedSensorState(sensor.Id);
-        }
+            bool needResave = false;
 
-        private void RemoveExpiredInvitationTokens() => _telegramBot.RemoveOldInvitationTokens();
+            foreach (var (sensorId, endOfIgnorePeriod) in entity.Notifications.IgnoredSensors)
+                if (DateTime.UtcNow >= endOfIgnorePeriod)
+                {
+                    entity.Notifications.RemoveIgnore(sensorId);
+                    needResave = true;
+                }
+
+            return needResave;
+        }
     }
 }

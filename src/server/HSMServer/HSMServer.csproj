@@ -5,11 +5,11 @@
         <DocumentationFile>HSMSwaggerComments.xml</DocumentationFile>
         <NoWarn>$(NoWarn);1591</NoWarn>
         <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
-        <Version>3.16.0</Version>
+        <Version>3.17.0</Version>
         <Authors>HSM team</Authors>
         <Company>Soft-FX</Company>
         <PackageLicenseExpression>MIT</PackageLicenseExpression>
-        <Copyright>Copyright © 2022</Copyright>
+        <Copyright>Copyright © 2023</Copyright>
         <ContainerImageName>hsmonitoring/hierarchical_sensor_monitoring</ContainerImageName>
     </PropertyGroup>
 
@@ -31,14 +31,11 @@
 
     <ItemGroup>
         <PackageReference Include="FluentValidation.AspNetCore" Version="11.2.2" />
-        <PackageReference Include="Microsoft.Extensions.PlatformAbstractions" Version="1.1.0" />
         <PackageReference Include="Microsoft.NET.Build.Containers" Version="0.2.7" />
-        <PackageReference Include="NLog" Version="4.7.10" />
-        <PackageReference Include="NLog.Web.AspNetCore" Version="4.13.0" />
+        <PackageReference Include="NLog.Web.AspNetCore" Version="5.2.2" />
         <PackageReference Include="Swashbuckle.AspNetCore" Version="6.4.0" />
         <PackageReference Include="System.Linq.Async" Version="6.0.1" />
         <PackageReference Include="Telegram.Bot" Version="18.0.0" />
-        <PackageReference Include="HSMDataCollector.HSMSensorDataObjects" Version="3.0.1" />
     </ItemGroup>
 
     <ItemGroup>

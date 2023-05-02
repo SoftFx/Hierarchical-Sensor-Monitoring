@@ -1,14 +1,12 @@
-﻿using HSMServer.Core.Model;
+using HSMDatabase.AccessManager.DatabaseEntities;
 using System;
 
 namespace HSMServer.Core.Cache.UpdateEntities
 {
-    public sealed class ProductUpdate
+    public sealed record ProductUpdate : BaseNodeUpdate
     {
-        public Guid Id { get; init; }
-        
-        public string Description { get; init; }
+        public Guid? FolderId { get; init; }
 
-        public TimeIntervalModel ExpectedUpdateInterval { get; init; }
+        public NotificationSettingsEntity NotificationSettings { get; init; }
     }
 }

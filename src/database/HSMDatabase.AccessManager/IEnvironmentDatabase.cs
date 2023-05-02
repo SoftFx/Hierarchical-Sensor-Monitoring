@@ -6,6 +6,17 @@ namespace HSMDatabase.AccessManager
 {
     public interface IEnvironmentDatabase : IDisposable
     {
+        #region Folders
+
+        void PutFolder(FolderEntity entity);
+        void RemoveFolder(string id);
+        void AddFolderToList(string id);
+        void RemoveFolderFromList(string id);
+        FolderEntity GetFolder(string id);
+        List<string> GetFoldersList();
+
+        #endregion
+
         #region Products
 
         void AddProductToList(string productName);

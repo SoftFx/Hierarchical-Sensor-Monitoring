@@ -3,11 +3,16 @@ using HSMServer.Model.TreeViewModel;
 
 namespace HSMServer.Model.ViewModel
 {
-    public class SensorInfoViewModel : NodeInfoBaseViewModel
+    public sealed class SensorInfoViewModel : NodeInfoBaseViewModel
     {
         public SensorType SensorType { get; }
 
-        public string Unit { get; set; }
+
+        public string StatusComment { get; set; }
+
+        public string Comment { get; set; }
+
+        public string ShortLastValue { get; set; }
 
 
         // public constructor without parameters for action Home/UpdateSensorInfo
@@ -15,8 +20,10 @@ namespace HSMServer.Model.ViewModel
 
         internal SensorInfoViewModel(SensorNodeViewModel sensor) : base(sensor)
         {
-            SensorType = sensor.SensorType;
-            Unit = sensor.Unit;
+            SensorType = sensor.Type;
+            StatusComment = sensor.ValidationError;
+            Comment = sensor.LastValue?.Comment;
+            ShortLastValue = sensor.ShortStringValue;
         }
     }
 }

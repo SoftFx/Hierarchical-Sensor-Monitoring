@@ -1,51 +1,75 @@
 ﻿using HSMServer.Authentication;
 using HSMServer.Constants;
-using HSMServer.Core.Cache;
-using HSMServer.Core.Model;
+using HSMServer.Folders;
 using HSMServer.Helpers;
 using HSMServer.Model;
 using HSMServer.Model.Authentication;
+using HSMServer.Model.TreeViewModel;
+using HSMServer.Notification.Settings;
 using HSMServer.Notifications;
 using Microsoft.AspNetCore.Mvc;
+using System;
 using System.Threading.Tasks;
 using SensorStatus = HSMServer.Model.TreeViewModel.SensorStatus;
 
 namespace HSMServer.Controllers
 {
     [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
-    public class NotificationsController : Controller
+    public class NotificationsController : BaseController
     {
+        private readonly IFolderManager _folderManager;
         private readonly IUserManager _userManager;
-        private readonly ITreeValuesCache _cache;
         private readonly TelegramBot _telegramBot;
+        private readonly TreeViewModel _tree;
 
 
-        public NotificationsController(IUserManager userManager, ITreeValuesCache cache, INotificationsCenter notificationsCenter)
+        public NotificationsController(IUserManager userManager, IFolderManager folderManager,
+            TreeViewModel tree, NotificationsCenter notifications)
         {
+            _folderManager = folderManager;
             _userManager = userManager;
-            _cache = cache;
-            _telegramBot = notificationsCenter.TelegramBot;
+            _tree = tree;
+
+            _telegramBot = notifications.TelegramBot;
         }
 
 
         public IActionResult Index()
         {
-            return View(new TelegramSettingsViewModel((HttpContext.User as User).Notifications.Telegram));
+            return View(new TelegramSettingsViewModel(CurrentUser.Notifications.UsedTelegram, CurrentUser.Id));
         }
 
         [HttpPost]
-        public IActionResult UpdateTelegramSettings(TelegramSettingsViewModel telegramSettings, string productId)
+        public IActionResult ChangeInheritance(string productId, bool fromParent)
         {
-            var entity = GetEntity(productId);
-            entity.Notifications.Telegram.Update(telegramSettings.GetUpdateModel());
+            var update = new TelegramMessagesSettingsUpdate()
+            {
+                Inheritance = fromParent ? InheritedSettings.FromParent : InheritedSettings.Custom
+            };
 
-            entity.UpdateEntity(_userManager, _cache);
+            return UpdateTelegramMessageSettings(productId, update);
+        }
 
-            return GetResult(productId);
+        [HttpPost]
+        public IActionResult UpdateTelegramSettings(TelegramSettingsViewModel telegramSettings, string entityId)
+        {
+            var update = telegramSettings.GetUpdateModel();
+
+            if (!string.IsNullOrEmpty(entityId) && Guid.TryParse(entityId, out var id) &&
+                _folderManager.TryGetValue(id, out var folder))
+            {
+                folder.Notifications.Telegram.Update(update);
+
+                _folderManager.TryUpdate(folder);
+
+                return PartialView("_MessagesSettings", new TelegramSettingsViewModel(folder.Notifications.Telegram, folder.Id));
+            }
+
+            return UpdateTelegramMessageSettings(entityId, update);
         }
 
         [HttpGet]
-        public string UpdateViewStatusLevelHelper([FromQuery]SensorStatus newSensorStatus) => 
+        public string UpdateViewStatusLevelHelper([FromQuery] SensorStatus newSensorStatus) =>
             TelegramSettingsViewModel.GetStatusPairs(newSensorStatus);
 
         public RedirectResult OpenInvitationLink() =>
@@ -55,42 +79,53 @@ namespace HSMServer.Controllers
             Redirect(await _telegramBot.GetChatLink(chatId));
 
         [HttpGet]
-        public string CopyStartCommandForGroup([FromQuery(Name = "ProductId")] string encodedProductId)
+        public string CopyStartCommandForGroup(string entityId)
         {
-            var productId = SensorPathHelper.DecodeGuid(encodedProductId);
-            var product = _cache.GetProduct(productId);
+            var id = SensorPathHelper.DecodeGuid(entityId);
+
+            _tree.Nodes.TryGetValue(id, out var product);
 
             return _telegramBot.GetStartCommandForGroup(product);
         }
 
-        public IActionResult SendTestTelegramMessage(long chatId, string productId)
+        public IActionResult SendTestTelegramMessage(long chatId, string entityId)
         {
-            var testMessage = $"Test message for {(HttpContext.User as User).UserName}.";
-            if (GetEntity(productId) is ProductModel product)
-                testMessage = $"{testMessage} (Product {product.DisplayName})";
+            var testMessage = $"Test message for {CurrentUser.Name}.";
+            if (GetEntity(entityId) is ProductNodeViewModel product)
+                testMessage = $"{testMessage} (Product {product.Name})";
 
             _telegramBot.SendTestMessage(chatId, testMessage);
 
-            return GetResult(productId);
+            return GetResult(entityId);
         }
 
-        public IActionResult RemoveTelegramAuthorization(long chatId, string productId)
+        public IActionResult RemoveTelegramAuthorization(long chatId, string entityId)
         {
-            _telegramBot.RemoveChat(GetEntity(productId), chatId);
+            _telegramBot.RemoveChat(GetEntity(entityId), chatId);
+
+            return GetResult(entityId);
+        }
+
+        private IActionResult UpdateTelegramMessageSettings(string productId, TelegramMessagesSettingsUpdate update)
+        {
+            var entity = GetEntity(productId);
+            entity.Notifications.Telegram.Update(update);
+
+            entity.UpdateEntity(_userManager, _tree);
 
             return GetResult(productId);
         }
 
-        private INotificatable GetEntity(string productId) =>
-            !string.IsNullOrEmpty(productId)
-                ? _cache.GetProduct(SensorPathHelper.DecodeGuid(productId))
+        private INotificatable GetEntity(string entityId) =>
+            !string.IsNullOrEmpty(entityId)
+                ? _tree.Nodes[SensorPathHelper.DecodeGuid(entityId)]
                 : GetCurrentUser();
 
-        private User GetCurrentUser() => _userManager.GetUser((HttpContext.User as User).Id);
+        private User GetCurrentUser() => _userManager[CurrentUser.Id];
 
-        private RedirectToActionResult GetResult(string productId) =>
-            string.IsNullOrEmpty(productId)
+        private RedirectToActionResult GetResult(string entityId) =>
+            string.IsNullOrEmpty(entityId)
                 ? RedirectToAction(nameof(Index))
-                : RedirectToAction(nameof(ProductController.EditProduct), ViewConstants.ProductController, new { Product = productId });
+                : RedirectToAction(nameof(ProductController.EditProduct), ViewConstants.ProductController, new { Product = entityId });
     }
 }

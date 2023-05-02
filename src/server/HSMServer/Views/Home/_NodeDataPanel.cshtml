@@ -1,18 +1,15 @@
 ﻿@using HSMServer.Model.TreeViewModel
+@using HSMServer.Model.Folders
 
-@model NodeViewModel
+@model BaseNodeViewModel
 
-<div class='col' id='list'>
-    @if (Model == null)
+
+<div id='list' class='container-fluid ps-3 pe-2 pt-2 overflow-y-auto'>
+    @(Model switch
     {
-        <div>
-            <ul id='noData' class='list-group'>
-                <li class='list-group-item'>No Data</li>
-            </ul>
-        </div>
-    }
-    else if (Model is ProductNodeViewModel productVM)
-        @await Html.PartialAsync("_Node", productVM)
-    else if (Model is SensorNodeViewModel sensorVM)
-        @await Html.PartialAsync("_Sensor", sensorVM)
+        FolderModel folder => await Html.PartialAsync("_Folder", folder),
+        ProductNodeViewModel productVM => await Html.PartialAsync("_Node", productVM),
+        SensorNodeViewModel sensorVM => await Html.PartialAsync("_Sensor", sensorVM),
+        _ => Html.Raw("No Data")
+    })
 </div>

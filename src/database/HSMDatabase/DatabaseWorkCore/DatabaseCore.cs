@@ -3,9 +3,11 @@ using HSMDatabase.AccessManager;
 using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMDatabase.LevelDB;
 using HSMDatabase.Settings;
+using HSMServer.Core.Configuration;
 using HSMServer.Core.Converters;
 using HSMServer.Core.DataLayer;
 using HSMServer.Core.Model;
+using HSMServer.Core.Registration;
 using NLog;
 using System;
 using System.Collections.Generic;
@@ -260,6 +262,43 @@ namespace HSMDatabase.DatabaseWorkCore
             }
 
             return policies;
+        }
+
+        #endregion
+
+        #region Folders
+
+        public void AddFolder(FolderEntity entity)
+        {
+            _environmentDatabase.AddFolderToList(entity.Id);
+            _environmentDatabase.PutFolder(entity);
+        }
+
+        public void UpdateFolder(FolderEntity entity) =>
+            _environmentDatabase.PutFolder(entity);
+
+        public void RemoveFolder(string id)
+        {
+            _environmentDatabase.RemoveFolder(id);
+            _environmentDatabase.RemoveFolderFromList(id);
+        }
+
+        public FolderEntity GetFolder(string id) =>
+            _environmentDatabase.GetFolder(id);
+
+        public List<FolderEntity> GetAllFolders()
+        {
+            var keys = _environmentDatabase.GetFoldersList();
+
+            var foldersEntities = new List<FolderEntity>(keys.Count);
+            foreach (var key in keys)
+            {
+                var folder = _environmentDatabase.GetFolder(key);
+                if (folder != null)
+                    foldersEntities.Add(folder);
+            }
+
+            return foldersEntities;
         }
 
         #endregion

@@ -1,7 +1,7 @@
 ﻿using HSMCommon.Constants;
+using HSMServer.Configuration;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Configuration;
-using HSMServer.Core.Model;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using System;

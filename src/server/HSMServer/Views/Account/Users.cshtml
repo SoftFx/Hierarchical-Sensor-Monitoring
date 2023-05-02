@@ -69,7 +69,7 @@
                                 <input id='isAdmin_@userItem.Username' type='checkbox' class='form-check-input ms-0'
                                        disabled value='@userItem.IsAdmin' @(userItem.IsAdmin ? "checked" : "")/>
                             </td>
-                            <td>
+                            <td class="text-break">
                                 @{
                                     var products = TempData[TextConstants.TempDataProductsText] as Dictionary<Guid, string>;
                                     if (userItem.ProductsRoles == null || userItem.ProductsRoles.Count == 0)

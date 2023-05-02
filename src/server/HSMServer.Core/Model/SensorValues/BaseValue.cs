@@ -29,18 +29,21 @@ namespace HSMServer.Core.Model
     {
         public DateTime ReceivingTime { get; init; } = DateTime.UtcNow;
 
+        public SensorStatus Status { get; init; }
+
         public string Comment { get; init; }
 
         public DateTime Time { get; init; }
 
-        public SensorStatus Status { get; init; }
-
 
         [JsonIgnore]
-        public abstract SensorType Type { get; }
+        public virtual SensorType Type { get; } //abstract not work with JsonIgnore, so use virtual
 
         [JsonIgnore]
-        public abstract string ShortInfo { get; }
+        public virtual object RawValue { get; }
+
+        [JsonIgnore]
+        public virtual string ShortInfo { get; }
 
 
         internal SensorValueEntity ToEntity(Guid sensorId) =>
@@ -57,7 +60,9 @@ namespace HSMServer.Core.Model
     {
         public T Value { get; init; }
 
-        [JsonIgnore]
+
         public override string ShortInfo => Value?.ToString();
+
+        public override object RawValue => Value;
     }
 }

@@ -3,9 +3,9 @@ using HSMCommon.Constants;
 using HSMServer.Attributes;
 using HSMServer.Authentication;
 using HSMServer.Constants;
-using HSMServer.Core.Configuration;
-using HSMServer.Core.Encryption;
-using HSMServer.Core.Registration;
+using HSMServer.Configuration;
+using HSMServer.Encryption;
+using HSMServer.Registration;
 using HSMServer.Filters;
 using HSMServer.Model.Authentication;
 using HSMServer.Model.TreeViewModel;
@@ -57,7 +57,7 @@ namespace HSMServer.Controllers
         //[ValidateAntiForgeryToken]
         public async Task<IActionResult> Authenticate([FromForm] LoginViewModel model)
         {
-            LoginValidator validator = new LoginValidator(_userManager);
+            LoginValidator validator = new(_userManager);
             var results = validator.Validate(model);
             if (!results.IsValid)
             {
@@ -118,7 +118,7 @@ namespace HSMServer.Controllers
         [Consumes("application/x-www-form-urlencoded")]
         public async Task<IActionResult> Registrate([FromForm] RegistrationViewModel model)
         {
-            RegistrationValidator validator = new RegistrationValidator(_userManager);
+            RegistrationValidator validator = new(_userManager);
             var results = validator.Validate(model);
             if (!results.IsValid)
             {
@@ -135,7 +135,7 @@ namespace HSMServer.Controllers
                 };
             }
 
-            _userManager.AddUser(model.Username, HashComputer.ComputePasswordHash(model.Password), false, products);
+            await _userManager.AddUser(model.Username, HashComputer.ComputePasswordHash(model.Password), false, products);
             await Authenticate(model.Username, true);
 
             if (!string.IsNullOrEmpty(model.TicketId))
@@ -155,40 +155,43 @@ namespace HSMServer.Controllers
             TempData[TextConstants.TempDataProductsText] =
                 _treeViewModel.Nodes.Values.ToDictionary(product => product.Id, product => product.Name);
 
-            var users = _userManager.GetUsers().OrderBy(x => x.UserName);
+            var users = _userManager.GetUsers().OrderBy(x => x.Name);
             return View(users.Select(x => new UserViewModel(x)).ToList());
         }
-        
+
         [HttpPost]
-        public void RemoveUser([FromBody] UserViewModel model)
+        public Task RemoveUser([FromBody] UserViewModel model)
         {
-            _userManager.RemoveUser(model.Username);
+            return _userManager.RemoveUser(model.Username);
         }
 
         [HttpPost]
-        public void CreateUser([FromBody] UserViewModel model)
+        public async Task CreateUser([FromBody] UserViewModel model)
         {
-            UserValidator validator = new UserValidator(_userManager);
+            NewUserValidator validator = new(_userManager);
             var results = validator.Validate(model);
+
             if (!results.IsValid)
                 TempData[TextConstants.TempDataErrorText] = ValidatorHelper.GetErrorString(results.Errors);
-
             else
-                _userManager.AddUser(model.Username.Trim(),
-                HashComputer.ComputePasswordHash(model.Password), model.IsAdmin);
+                await _userManager.AddUser(model.Username.Trim(), HashComputer.ComputePasswordHash(model.Password), model.IsAdmin);
         }
 
         [HttpPost]
-        public void UpdateUser([FromBody] UserViewModel userViewModel)
+        public Task UpdateUser([FromBody] UserViewModel userViewModel)
         {
-            var currentUser = _userManager.GetUserByUserName(userViewModel.Username);
-            userViewModel.Password = currentUser.Password;
-            userViewModel.UserId = currentUser.Id.ToString();
+            if (_userManager.TryGetIdByName(userViewModel.Username, out var userId))
+            {
+                var updateUser = new UserUpdate
+                {
+                    Id = userId,
+                    IsAdmin = userViewModel.IsAdmin,
+                };
 
-            User user = GetModelFromViewModel(userViewModel);
-            user.ProductsRoles = currentUser.ProductsRoles;
+                return _userManager.TryUpdate(updateUser);
+            }
 
-            _userManager.UpdateUser(user);
+            return Task.CompletedTask;
         }
 
         #endregion
@@ -202,28 +205,14 @@ namespace HSMServer.Controllers
         }
 
 
-        private async Task Authenticate(string login, bool keepLoggedIn)
+        private Task Authenticate(string login, bool keepLoggedIn)
         {
             var claims = new List<Claim> { new Claim(ClaimsIdentity.DefaultNameClaimType, login) };
-            ClaimsIdentity id = new ClaimsIdentity(claims, "ApplicationCookie",
+            ClaimsIdentity id = new(claims, "ApplicationCookie",
                 ClaimsIdentity.DefaultNameClaimType, ClaimsIdentity.DefaultRoleClaimType);
 
-            AuthenticationProperties properties = new AuthenticationProperties();
-            properties.IsPersistent = keepLoggedIn;
-            await HttpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, new ClaimsPrincipal(id),
-                properties);
-
-        }
-
-        private User GetModelFromViewModel(UserViewModel userViewModel)
-        {
-            User user = new User(userViewModel.Username)
-            {
-                Password = userViewModel.Password,
-                IsAdmin = userViewModel.IsAdmin
-            };
-            user.Id = Guid.Parse(userViewModel.UserId);
-            return user;
+            AuthenticationProperties properties = new() { IsPersistent = keepLoggedIn };
+            return HttpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, new ClaimsPrincipal(id), properties);
         }
     }
 }

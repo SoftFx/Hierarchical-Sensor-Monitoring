@@ -1,47 +1,27 @@
-﻿using HSMServer.Extensions;
-using HSMServer.Model.Authentication;
-using HSMServer.Model.TreeViewModel;
+﻿using HSMServer.Model.TreeViewModel;
 
 namespace HSMServer.Model.UserTreeShallowCopy
 {
-    public abstract class BaseShallowModel<T> where T : NodeViewModel
+    public abstract class BaseShallowModel
     {
-        private readonly bool _curUserIsManager;
-
-        
-        protected bool? _mutedValue;
-        
-
-        public T Data { get; }
-
-        public bool IsMutedState => _mutedValue ?? false;
-
-        public NodeShallowModel Parent { get; internal set; }
-
+        public abstract bool CurUserIsManager { get; }
 
         public abstract bool IsAccountsEnable { get; }
 
         public abstract bool IsGroupsEnable { get; }
-        
-        protected BaseShallowModel(T data, User user)
-        {
-            _curUserIsManager = user.IsManager(data.Parent?.Id ?? data.Id);
 
+
+        public abstract string ToJSTree();
+    }
+
+    public abstract class BaseShallowModel<T> : BaseShallowModel where T : BaseNodeViewModel
+    {
+        public T Data { get; }
+
+
+        protected BaseShallowModel(T data)
+        {
             Data = data;
         }
-
-
-        public string ToJSTree() =>
-        $$"""
-        {
-            "title": "{{Data.Title}}",
-            "icon": "{{Data.Status.ToIcon()}}",
-            "time": "{{Data.UpdateTime.Ticks}}",
-            "isManager": "{{_curUserIsManager}}",
-            "isAccountsEnable": "{{IsAccountsEnable}}",
-            "isGroupsEnable": "{{IsGroupsEnable}}",
-            "isMutedState": "{{_mutedValue}}"
-        }
-        """;
     }
 }

@@ -1,6 +1,7 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities;
+using HSMServer.Core.Configuration;
 using HSMServer.Core.DataLayer;
-using HSMServer.Core.Model;
+using HSMServer.Core.Registration;
 using HSMServer.Core.Tests.DatabaseTests;
 using HSMServer.Core.Tests.DatabaseTests.Fixture;
 using HSMServer.Core.Tests.Infrastructure;
@@ -318,6 +319,54 @@ namespace HSMServer.Core.Tests
 
         #endregion
 
+        #region [ Folder Tests ]
+
+        [Theory]
+        [InlineData(1)]
+        [InlineData(3)]
+        [InlineData(10)]
+        [InlineData(50)]
+        [InlineData(100)]
+        [InlineData(500)]
+        [InlineData(1000)]
+        [Trait("Category", "AddFolder(s)")]
+        public void AddFoldersTest(int count)
+        {
+            for (int i = 0; i < count; i++)
+            {
+                var folder = EntitiesFactory.BuildFolderEntity();
+                _databaseCore.AddFolder(folder);
+
+                FullFolderTest(folder, _databaseCore.GetFolder(folder.Id));
+            }
+        }
+
+        [Theory]
+        [InlineData(1)]
+        [InlineData(3)]
+        [InlineData(10)]
+        [InlineData(50)]
+        [InlineData(100)]
+        [InlineData(500)]
+        [InlineData(1000)]
+        [Trait("Category", "RemoveFolder(s)")]
+        public void RemoveFoldersTest(int count)
+        {
+            for (int i = 0; i < count; i++)
+            {
+                var folder = EntitiesFactory.BuildFolderEntity();
+
+                _databaseCore.AddFolder(folder);
+                _databaseCore.RemoveFolder(folder.Id);
+
+                Assert.Null(_databaseCore.GetFolder(folder.Id));
+            }
+
+            Assert.Empty(_databaseCore.GetAllFolders());
+        }
+
+        #endregion
+
         #region [ Registration Ticket ]
 
         [Fact]
@@ -522,6 +571,17 @@ namespace HSMServer.Core.Tests
                     Assert.Equal(expectedRole.Value, actualRole.Value);
                 }
             }
+        }
+
+        private static void FullFolderTest(FolderEntity expectedFolder, FolderEntity actualFolder)
+        {
+            Assert.NotNull(actualFolder);
+            Assert.Equal(expectedFolder.Id, actualFolder.Id);
+            Assert.Equal(expectedFolder.AuthorId, actualFolder.AuthorId);
+            Assert.Equal(expectedFolder.DisplayName, actualFolder.DisplayName);
+            Assert.Equal(expectedFolder.Description, actualFolder.Description);
+            Assert.Equal(expectedFolder.CreationDate, actualFolder.CreationDate);
+            Assert.Equal(expectedFolder.Color, actualFolder.Color);
         }
 
         private static void FullTicketTest(RegistrationTicket expectedTicket, RegistrationTicket actualTicket)

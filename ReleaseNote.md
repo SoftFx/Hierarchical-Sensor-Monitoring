@@ -1,30 +1,53 @@
 # HSM Server
 
+## New entity **Folder** has been added:
+It allows you to group different products and set the same settings for them (telegram settings, alerts, user roles)
+
 ## Site
 
-* On-site files preview and preview in new tab have been added for file sensors ('.txt' and '.csv' extensions supported)
-* If sensor/node/product is *Muted*, *Notifications* in context menu will be hidden for this item
-* Sort by Last update has been optimized for Tree
-* Status comment (if status is not Ok) has been moved from Tooltip to bottom of a sensor panel. 
+### Folder/Product/Sensor info tabs
+* Folder meta info panel has been added
+* Product and sensor meta info panels have been fully redesigned
+* Now all description inputs support **Markdown format**
+* Default sorting for Grid and List panels has been changed (by status and then by name)
 
-## Rest API
+### Tree
+* New node type **Folder** has been added
+* Context menu names have been uploaded
+* **Save and close tree / Restore tree** button has been added
+* **Clear history** in context menu has been removed
 
-* An ability to request the latest sensor history values has been added. You need to use a [from - count] request where count is negative
+### Time intervals control
+* New value **From parent** has been added. If this value is selected, the parent setting is applied to current entity
+* **From parent** setting is available for a product in a folder too.
+* Value **Never** is redone. If this value is selected, the current setting is disabled for the entity.
+* Control interface has been improved
 
-## Telegram notifications
+### Alerts (Policies)
+* **Update Expected Interval** has been renamed to **Time to sensor live**
+* New alert **Sensitivity** has been added for sensors. If the sensor doesn`t return to Ok status after the specified time inverval, a notification sends.
+* Icons have been added for all alerts
 
-* Grouping by nodes has been added (ex. ⚠️->❌->✅ [testAggregation]/[Free2X, FXOpen, Binanace1, Binanace2, Binanace3, Binanace4, Binanace5, Binanace6, Binanace7, Binanace ... and 3 more]/Status/IsConnect)
-* New command /icons has been added for Telegram bot. The next content will be shown:
-```
-    ⚠️ - received Warning status
-    ✅ - received Ok status
-    ❌ - received Error status  
-    ⏸ - received Offtime status
-    ⌛️ - sensor update timeout
-    ❓ - unknown status
-```
+### File Sensor
+* A file sensor preview has been improved
+* A list of recent sensor values will be shown instead of just the last file value
 
-## Bugfixing
+### Products
+* Products tab has been redesigned
+* Folders have been added in Products tab
+* Modal window for add product has been added
+* **Move to...** setting has been added in Product actions (for moving products between folders)
 
-* Displaying *Custom* expected update interval has been fixed in sensor/node/product meta information grid
-* Bug when all new empty products have been marked as *Muted* has been fixed
+### Bugfixing
+* Product Manger rights have been restored
+* A sensor will not send the notification about changing state to *Mute* in Telegram
+* Telegram /info command will not contain deleted products
+* Other minor bugfixing...
+
+## Telegram
+
+* **From parent** for Telegram notifications setting is available from a product in a folder.
+* /status command has been renamed to **/server**
+* **/help** command has been added. This command output contains information from command /icons and existing statuses ascending priority
+* Icon for OffTime status has been changed to 💤
+* Other minor improvements...

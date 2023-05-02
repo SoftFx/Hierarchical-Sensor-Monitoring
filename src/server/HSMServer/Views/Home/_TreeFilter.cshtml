@@ -1,7 +1,7 @@
 ﻿@using HSMServer.Constants
 @using HSMServer.Controllers
-@using HSMServer.Core.Model.UserFilters
 @using HSMServer.Model.ViewModel
+@using HSMServer.UserFilters;
 
 @model UserFilterViewModel
 
@@ -11,7 +11,7 @@
       asp-action="@nameof(HomeController.ApplyFilter)"
       method="post" class="px-2" id="filter" style="display: none;">
 
-    <h6 class="dropdown-header">Update tree interval</h6>
+    <h6 class="dropdown-header px-0">Update tree interval</h6>
     <div class="d-flex">
         <input type="number" id="treeInterval" asp-for="TreeUpdateInterval" class="form-control" min="5" max="600"
                value="@Model.TreeUpdateInterval" />
@@ -19,7 +19,7 @@
     </div>
     <div class="dropdown-divider"></div>
 
-    <h6 class="dropdown-header">Status</h6>
+    <h6 class="dropdown-header px-0">Status</h6>
     <div class="form-check">
         <input type="checkbox" class="form-check-input" id="ok" asp-for="HasOkStatus"/>
         <label class="form-check-label" for="ok" title="Ok">
@@ -50,7 +50,7 @@
     <div class="dropdown-divider"></div>
 
 
-    <h6 class="dropdown-header">History</h6>
+    <h6 class="dropdown-header px-0">History</h6>
     <div class="form-check">
         <input type="checkbox" class="form-check-input" id="history" asp-for="IsEmptyHistory"/>
         <label class="form-check-label" for="history">
@@ -59,9 +59,9 @@
     </div>
     <div class="dropdown-divider"></div>
 
-    <h6 class="dropdown-header">Notifications</h6>
+    <h6 class="dropdown-header px-0">Notifications</h6>
     
-    Enabled for
+    Enabled for:
     <div class="form-check">
         <div class="form-check">
             <input type="checkbox" class="form-check-input" id="enabledGroup" asp-for="IsGroupNotificationsEnabled" />
@@ -77,7 +77,7 @@
         </div>
     </div>
     
-    Ignored for
+    Ignored for:
     <div class="form-check">
         <div class="form-check">
             <input type="checkbox" class="form-check-input" id="ignoredGroup" asp-for="IsGroupNotificationsIgnored" />
@@ -95,7 +95,7 @@
     
     <div class="dropdown-divider"></div>
 
-    <h6 class="dropdown-header">Sensor state</h6>
+    <h6 class="dropdown-header px-0">Sensor state</h6>
     <div class="form-check">
         <input type="checkbox" class="form-check-input" id="blocked" asp-for="IsMutedSensorsState" />
         <label class="form-check-label muted-state-text" for="blocked" title="Muted sensors">
@@ -104,7 +104,7 @@
     </div>
     <div class="dropdown-divider"></div>
 
-    <h6 class="dropdown-header">Sort By</h6>
+    <h6 class="dropdown-header px-0">Sort By</h6>
     <div class="form-check">
         <input class="form-check-input" type="radio" id="sorting"
                value="@((int)TreeSortType.ByName)" asp-for="TreeSortType"/>

@@ -22,7 +22,6 @@ function Data(to, from, type, encodedId) {
     window.initialize = function() {
         initializeSensorAccordion();
         initializeFileSensorEvents();
-        initializeInfoLinks();
     }
 
     window.searchHistory = function(encodedId) {
@@ -33,9 +32,7 @@ function Data(to, from, type, encodedId) {
     }
 
     function initializeSensorAccordion() {
-        $('[id^="collapse"]').off('show.bs.collapse', accordionClicked)
-        $('[id^="collapse"]').on('show.bs.collapse', accordionClicked);
-
+        InitializeHistory();
         InitializePeriodRequests();
         initializeTabLinksRequests();
     }
@@ -61,13 +58,18 @@ function Data(to, from, type, encodedId) {
         openFileInBrowser(encodedId, fileType, viewFileAction);
     }
 
-    function accordionClicked() {
-        let encodedId = this.id.substring("collapse_".length);
+    function InitializeHistory() {
+        let info = ($('[id^=meta_info_]')).attr('id');
+        if (info === undefined) 
+            return;
+        
+        let encodedId = info.substring("meta_info_".length)
         let type = getTypeForSensor(encodedId);
         let date = new Date();
-        if (isFileSensor(type)) {
+        
+        if (isFileSensor(type)) 
             return;
-        }
+        
         if (isGraphAvailable(type)) {
             initializeGraph(encodedId, rawHistoryLatestAction, type, Data(date, date, type, encodedId), true);
         } else {
@@ -85,7 +87,7 @@ function Data(to, from, type, encodedId) {
         let type = getTypeForSensor(encodedId);
         const { from, to } = getFromAndTo(encodedId);
         let body = Data(to, from, type, encodedId);
-
+       
         showBarsCount(encodedId);
         initializeGraph(encodedId, rawHistoryAction, type, body);
     }
@@ -268,7 +270,7 @@ function Data(to, from, type, encodedId) {
     }
 
     function getTypeForSensor(encodedId) {
-        return $('#sensor_type_' + encodedId).val();
+        return $('#sensor_type_' + encodedId).first().val();
     }    
 }
 

@@ -1,47 +1,53 @@
-﻿using HSMServer.Model.TreeViewModel;
-using System.Collections.Generic;
+using HSMServer.Model.Folders;
+using HSMServer.Model.TreeViewModel;
+using System;
+
 
 namespace HSMServer.Model.ViewModel
 {
     public abstract class NodeInfoBaseViewModel
     {
-        protected static readonly List<TimeInterval> _predefinedIntervals =
-            new()
-            {
-                TimeInterval.None,
-                TimeInterval.TenMinutes,
-                TimeInterval.Hour,
-                TimeInterval.Day,
-                TimeInterval.Week,
-                TimeInterval.Month,
-                TimeInterval.Custom
-            };
+        public string Header { get; }
 
+        public Guid RootProductId { get; }
 
-        public string Path { get; }
+        public DateTime LastUpdateTime { get; set; }
 
-        public string ProductName { get; }
-
-        public bool IsOwnExpectedUpdateInterval { get; }
-
-        public string EncodedId { get; set; }
-        
-        public string Description { get; set; }
+        public SensorStatus Status { get; set; }
 
         public TimeIntervalViewModel ExpectedUpdateInterval { get; set; }
+
+        public TimeIntervalViewModel SensorRestorePolicy { get; set; }
+
+
+        public string EncodedId { get; set; }
+
+        public string Description { get; set; }
 
 
         public NodeInfoBaseViewModel() { }
 
-        internal NodeInfoBaseViewModel(NodeViewModel model)
+        internal NodeInfoBaseViewModel(NodeViewModel model) : this((BaseNodeViewModel)model)
         {
-            Path = model.Path;
-            ProductName = model.RootProduct.DisplayName;
             EncodedId = model.EncodedId;
-            Description = model.Description;
+            Header = $"{model.RootProduct.Name}{model.Path}";
+            RootProductId = model.RootProduct.Id;
+        }
 
-            ExpectedUpdateInterval = new(model.ExpectedUpdateInterval.ToModel(), _predefinedIntervals);
-            IsOwnExpectedUpdateInterval = model.IsOwnExpectedUpdateInterval;
+        internal NodeInfoBaseViewModel(FolderModel model) : this((BaseNodeViewModel)model)
+        {
+            EncodedId = model.Id.ToString();
+            Header = model.Name;
+        }
+
+        private NodeInfoBaseViewModel(BaseNodeViewModel model)
+        {
+            Status = model.Status;
+            Description = model.Description;
+            LastUpdateTime = model.UpdateTime;
+
+            ExpectedUpdateInterval = new(model.ExpectedUpdateInterval, PredefinedIntervals.ForTimeout);
+            SensorRestorePolicy = new(model.SensorRestorePolicy, PredefinedIntervals.ForRestore);
         }
     }
 }

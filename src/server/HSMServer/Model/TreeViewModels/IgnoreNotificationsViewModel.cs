@@ -1,6 +1,7 @@
-﻿using HSMServer.Model.TreeViewModel;
+﻿using HSMServer.Extensions;
+using HSMServer.Model.Folders;
+using HSMServer.Model.TreeViewModel;
 using System;
-using System.Collections.Generic;
 
 namespace HSMServer.Model
 {
@@ -15,21 +16,8 @@ namespace HSMServer.Model
         private const string NodeTreeElement = "node";
         private const string SensorTreeElement = "sensor";
         private const string ProductTreeElement = "product";
+        private const string FolderTreeElement = "folder";
 
-        private static readonly List<TimeInterval> _predefinedIntervals =
-            new()
-            {
-                TimeInterval.FiveMinutes,
-                TimeInterval.TenMinutes,
-                TimeInterval.ThirtyMinutes,
-                TimeInterval.FourHours,
-                TimeInterval.EightHours,
-                TimeInterval.SixteenHours,
-                TimeInterval.ThirtySixHours,
-                TimeInterval.SixtyHours,
-                TimeInterval.Forever,
-                TimeInterval.Custom
-            };
 
         public NotificationsTarget NotificationsTarget { get; set; }
 
@@ -49,35 +37,47 @@ namespace HSMServer.Model
 
         public DateTime DateTimeNow { get; set; }
 
-        public DateTime EndOfIgnorePeriod => IgnorePeriod.TimeInterval == TimeInterval.Forever ? 
+        public DateTime EndOfIgnorePeriod => IgnorePeriod.TimeInterval == TimeInterval.Forever ?
                                              DateTime.MaxValue : DateTimeNow.AddDays(Days).AddHours(Hours).AddMinutes(Minutes);
 
         public bool IsOffTimeModal { get; set; }
 
 
+        private IgnoreNotificationsViewModel(BaseNodeViewModel node, NotificationsTarget target, bool isOffTimeModal)
+        {
+            TreeElement = node switch
+            {
+                SensorNodeViewModel => SensorTreeElement,
+                ProductNodeViewModel => NodeTreeElement,
+                FolderModel => FolderTreeElement,
+                _ => null
+            };
+
+            IgnorePeriod = new(PredefinedIntervals.ForIgnore, false);
+
+            DateTimeNow = DateTime.UtcNow.RoundToMin();
+            NotificationsTarget = target;
+            IsOffTimeModal = isOffTimeModal;
+        }
+
         // public constructor without parameters for action Home/IgnoreNotifications
         public IgnoreNotificationsViewModel() { }
 
         public IgnoreNotificationsViewModel(NodeViewModel node, NotificationsTarget target, bool isOffTimeModal)
+            : this((BaseNodeViewModel)node, target, isOffTimeModal)
         {
             EncodedId = node.EncodedId;
-            Path = $"{node.RootProduct.DisplayName}{node.Path}";
-            TreeElement = node is SensorNodeViewModel ? SensorTreeElement : NodeTreeElement;
+            Path = node.FullPath;
 
             if (node.Id == node.RootProduct.Id)
                 TreeElement = ProductTreeElement;
-            
-            IgnorePeriod = new(_predefinedIntervals)
-            {
-                CanCustomInputBeVisible = false,
-            };
+        }
 
-            var now = DateTime.UtcNow;
-            DateTimeNow = now.AddSeconds(-now.Second)
-                             .AddMilliseconds(-now.Millisecond);
-            
-            NotificationsTarget = target;
-            IsOffTimeModal = isOffTimeModal;
+        public IgnoreNotificationsViewModel(FolderModel folder, NotificationsTarget target, bool isOffTimeModal)
+            : this((BaseNodeViewModel)folder, target, isOffTimeModal)
+        {
+            EncodedId = folder.Id.ToString();
+            Path = folder.Name;
         }
     }
 }

@@ -1,7 +1,8 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities;
-using HSMServer.Core.Model;
-using HSMServer.Core.Model.UserFilters;
+using HSMServer.ConcurrentStorage;
 using HSMServer.Model.Authentication.History;
+using HSMServer.Notification.Settings;
+using HSMServer.UserFilters;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -10,19 +11,21 @@ using System.Text.Json;
 
 namespace HSMServer.Model.Authentication
 {
-    public class User : ClaimsPrincipal, INotificatable
+    public class User : ClaimsPrincipal, IServerModel<UserEntity, UserUpdate>, INotificatable
     {
-        public Guid Id { get; set; }
+        public Guid Id { get; init; }
 
         public bool IsAdmin { get; set; }
 
-        public string UserName { get; set; }
+        public string Name { get; init; }
 
-        public string Password { get; set; }
+        public string Password { get; init; }
 
-        public List<(Guid, ProductRoleEnum)> ProductsRoles { get; set; }
+        public ClientNotifications Notifications { get; init; }
 
-        public NotificationSettings Notifications { get; set; }
+        public List<(Guid, ProductRoleEnum)> ProductsRoles { get; set; } = new();
+
+        public Dictionary<Guid, ProductRoleEnum> FoldersRoles { get; } = new();
 
         public TreeUserFilter TreeFilter { get; set; }
 
@@ -30,97 +33,70 @@ namespace HSMServer.Model.Authentication
         public HistoryValuesViewModel Pagination { get; set; }
 
 
-        string INotificatable.Name => UserName;
-
-
         public User(string userName) : this()
         {
-            UserName = userName;
+            Name = userName;
         }
 
         public User()
         {
             Id = Guid.NewGuid();
-            ProductsRoles = new List<(Guid, ProductRoleEnum)>();
             Notifications = new();
             TreeFilter = new();
         }
 
-
-        public User(User user)
-        {
-            if (user == null) return;
-
-            Id = user.Id;
-            UserName = user.UserName;
-            Password = user.Password;
-            IsAdmin = user.IsAdmin;
-            ProductsRoles = user.ProductsRoles != null ? new(user.ProductsRoles) : new();
-            Notifications = new(user.Notifications.ToEntity());
-            TreeFilter = user.TreeFilter;
-        }
-
         public User(UserEntity entity)
         {
-            if (entity == null) return;
+            if (entity == null)
+                return;
 
             Id = entity.Id;
-            UserName = entity.UserName;
+            Name = entity.UserName;
             Password = entity.Password;
             IsAdmin = entity.IsAdmin;
-
-            ProductsRoles = new List<(Guid, ProductRoleEnum)>();
-            if (entity.ProductsRoles != null && entity.ProductsRoles.Any())
-            {
-                ProductsRoles.AddRange(entity.ProductsRoles.Select(
-                    r => (Guid.Parse(r.Key), (ProductRoleEnum)r.Value)));
-            }
-
             Notifications = new(entity.NotificationSettings);
+
+            if (entity.ProductsRoles != null)
+                ProductsRoles.AddRange(entity.ProductsRoles.Select(r => (Guid.Parse(r.Key), (ProductRoleEnum)r.Value)));
+
+            foreach (var (folderId, role) in entity.FolderRoles)
+                FoldersRoles.Add(Guid.Parse(folderId), (ProductRoleEnum)role);
 
             TreeFilter = entity.TreeFilter is null
                 ? new TreeUserFilter()
                 : JsonSerializer.Deserialize<TreeUserFilter>(((JsonElement)entity.TreeFilter).GetRawText())?.RestoreFilterNames();
         }
 
-        /// <summary>
-        /// Update works as HTTP PUT: all the fields will be updated
-        /// </summary>
-        /// <param name="user"></param>
-        public void Update(User user)
+
+        public void Update(UserUpdate update)
         {
-            Password = user.Password;
-            IsAdmin = user.IsAdmin;
-            ProductsRoles = user.ProductsRoles != null ? new(user.ProductsRoles) : new();
-            Notifications = new(user.Notifications.ToEntity());
-            TreeFilter = user.TreeFilter;
+            IsAdmin = update.IsAdmin ?? IsAdmin;
         }
 
-        public User Copy()
-        {
-            var copy = this.MemberwiseClone() as User;
-            copy.ProductsRoles = new List<(Guid, ProductRoleEnum)>(ProductsRoles);
-            copy.Notifications = new(Notifications.ToEntity());
-            copy.TreeFilter = TreeFilter;
-            return copy;
-        }
-
-        public bool IsProductAvailable(Guid productId) =>
-            IsAdmin || (ProductsRoles?.Any(x => x.Item1.Equals(productId)) ?? false);
-
-        public bool IsManager(Guid productId) =>
-            IsAdmin || (ProductsRoles?.Any(x => x == (productId, ProductRoleEnum.ProductManager)) ?? false);
-
-        internal UserEntity ToEntity() =>
+        public UserEntity ToEntity() =>
             new()
             {
-                UserName = UserName,
+                UserName = Name,
                 Password = Password,
                 Id = Id,
                 IsAdmin = IsAdmin,
-                ProductsRoles = ProductsRoles?.Select(r => new KeyValuePair<string, byte>(r.Item1.ToString(), (byte)r.Item2))?.ToList(),
+                FolderRoles = FoldersRoles.ToDictionary(f => f.Key.ToString(), f => (byte)f.Value),
+                ProductsRoles = ProductsRoles.Select(r => new KeyValuePair<string, byte>(r.Item1.ToString(), (byte)r.Item2)).ToList(),
                 NotificationSettings = Notifications.ToEntity(),
                 TreeFilter = TreeFilter,
             };
+
+
+        internal bool IsManager(Guid productId) =>
+            IsAdmin || ProductsRoles.Contains((productId, ProductRoleEnum.ProductManager));
+
+        internal bool IsProductAvailable(Guid productId) => IsAdmin || IsUserProduct(productId);
+
+        internal bool IsFolderAvailable(Guid folderId) => IsAdmin || FoldersRoles.ContainsKey(folderId);
+
+        internal bool IsFolderManager(Guid folderId) => IsAdmin ||
+            (FoldersRoles.TryGetValue(folderId, out var role) && role == ProductRoleEnum.ProductManager);
+
+        internal bool IsUserProduct(Guid productId) => ProductsRoles.Any(x => x.Item1 == productId);
     }
 }

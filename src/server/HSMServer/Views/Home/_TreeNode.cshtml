@@ -9,11 +9,11 @@
 
 
 <li id='@data.EncodedId' title='@data.Tooltip' data-jstree='@Model.ToJSTree()'>
-    <span class="@(Model.IsMutedState ? "muted-state-text" : "")">@Html.Raw(data.Name.GetShortNodeName()) @Model.SensorsCountString</span>
+    <span class="@(Model.IsMutedState ? "muted-state-text" : "")"> @Html.Raw(data.Name.GetShortNodeName()) @Model.SensorsCountString </span>
 
     @if (!data.IsEmpty && !Model.IsMutedState)
     {
-        @if (data.TelegramSettings.Chats.Count > 0)
+        @if (data.Notifications.Telegram.Chats.Count > 0)
         {
             @if (Model.IsAccountsEnable)
             {

@@ -1,7 +1,7 @@
 ﻿using HSMServer.Core.Model;
-using HSMServer.Extensions;
+using HSMServer.Core.Model.Policies;
 using HSMServer.Helpers;
-using System;
+using HSMServer.Model.Folders;
 
 namespace HSMServer.Model.TreeViewModel
 {
@@ -14,56 +14,51 @@ namespace HSMServer.Model.TreeViewModel
     }
 
 
-    public abstract class NodeViewModel
+    public abstract class NodeViewModel : BaseNodeViewModel
     {
-        public Guid Id { get; }
-
         public string EncodedId { get; }
-        
-        public TimeIntervalViewModel ExpectedUpdateInterval { get; } = new();
-        
-        
-        public required ProductModel RootProduct { get; init; }
-        
 
-        public string Name { get; protected set; }
-        
-        public string Path { get; protected set; }
-        
-        public string Description { get; protected set; }
-        
-        public bool IsOwnExpectedUpdateInterval { get; protected set; }
 
-        public DateTime UpdateTime { get; protected set; }
+        public string Path { get; private set; }
 
-        public SensorStatus Status { get; protected set; }
-
-        
         public virtual bool HasData { get; protected set; }
-        
 
-        public NodeViewModel Parent { get; internal set; }
-        
-   
-        public string Tooltip =>
-            $"{Name}{Environment.NewLine}{(UpdateTime != DateTime.MinValue ? UpdateTime.ToDefaultFormat() : "no data")}";
-
-        public string Title => Name?.Replace('\\', ' ') ?? string.Empty;
+        public BaseNodeViewModel Parent { get; internal set; }
 
 
-        internal NodeViewModel(Guid id)
+        //TODO: should be changed to NodeViewModel when Sensor will have its own Telegram Settings
+        public ProductNodeViewModel RootProduct => Parent is null or FolderModel ? (ProductNodeViewModel)this : ((ProductNodeViewModel)Parent).RootProduct;
+
+        public string FullPath => $"{RootProduct?.Name}{Path}";
+
+
+        protected NodeViewModel(BaseNodeModel model)
         {
-            Id = id;
-            EncodedId = SensorPathHelper.EncodeGuid(id);
+            Id = model.Id;
+            Path = model.Path;
+            EncodedId = SensorPathHelper.EncodeGuid(model.Id);
+
+            bool NodeHasFolder() => Parent is FolderModel;
+
+            ExpectedUpdateInterval = new(model.ServerPolicy.ExpectedUpdate.Policy.Interval, () => Parent?.ExpectedUpdateInterval, NodeHasFolder);
+            SensorRestorePolicy = new(model.ServerPolicy.RestoreError.Policy.Interval, () => Parent?.SensorRestorePolicy, NodeHasFolder);
         }
 
-        protected void Update(NodeBaseModel model)
+
+        internal void Update(BaseNodeModel model)
         {
+            Path = model.Path;
             Name = model.DisplayName;
             Description = model.Description;
 
-            ExpectedUpdateInterval.Update(model.UsedExpectedUpdateInterval?.ToTimeInterval());
-            IsOwnExpectedUpdateInterval = model.ExpectedUpdateInterval != null || model.ParentProduct == null;
+            UpdatePolicyView(model.ServerPolicy.ExpectedUpdate, ExpectedUpdateInterval);
+            UpdatePolicyView(model.ServerPolicy.RestoreError, SensorRestorePolicy);
+        }
+
+
+        private static void UpdatePolicyView<T>(CollectionProperty<T> property, TimeIntervalViewModel targetView) where T : ServerPolicy, new()
+        {
+            targetView.Update(property.IsSet ? property.Policy.Interval : null);
         }
     }
 }

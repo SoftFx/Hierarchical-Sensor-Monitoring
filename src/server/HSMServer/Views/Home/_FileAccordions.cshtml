@@ -1,0 +1,154 @@
+﻿@using HSMServer.Core.Model
+@using HSMServer.Extensions
+@using HSMServer.Model.Authentication.History
+
+@model HistoryValuesViewModel
+
+@{
+    var firstPage = Model.Pages[0];
+}
+
+@for (var i = 1; i < firstPage.Count; i++)
+{
+    var value = (FileValue)firstPage[i];
+
+    bool isEnabledPreview = (value.Extension == "csv" && value.OriginalSize < 5 * 1024 * 1024) ||
+                            (value.Extension == "txt" && value.OriginalSize < 1024 * 1024);
+
+    <div class='accordion my-1' id='sensorData_@i'>
+        <div class='accordion-item'>
+            <h2 class='accordion-header' id='heading_@i'>
+                <button id='file_accordion_' class='accordion-button collapsed pt-2 pb-1' type='button' data-bs-toggle='collapse'
+                        data-bs-target='#collapse_@i' aria-expanded='false' aria-controls='collapse_@i' onclick="previewButtonClick('@value.ReceivingTime.Ticks', @i, '@value.Extension', '@isEnabledPreview')">
+                    <div class="w-100">
+                        <div class='row justify-content-between'>
+                            <div class='row col-md-auto align-items-center align-self-baseline'>
+                                <div class='col-md-auto sensor-icon-without-padding'>
+                                    <li id='status_@i' class='@value.Status.ToClient().ToIcon() sensor-icon-with-margin'
+                                        title='Status: @value.Status'>
+                                    </li>
+                                    @value.Name.@value.Extension
+                                    <div class="d-flex text-break pt-2">
+                                        @if (!string.IsNullOrEmpty(value.Comment))
+                                        {
+                                            <span class="d-flex text-break">Comment: @value.Comment</span>
+                                        }
+                                    </div>
+                                </div>
+                            </div>
+                            <div class='col-md-auto time-ago-div me-3 align-self-end' id='update_@i'>
+                                <div id="side_info_@i" class="d-flex flex-md-column align-items-end" style="font-size: smaller">
+                                    <span>
+                                        Size: @value.FileSizeToNormalString()
+                                    </span>
+                                    <span>
+                                        @value.ReceivingTime.ToDefaultFormat()
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </button>
+            </h2>
+            <div id='collapse_@i' class='accordion-collapse collapse text-break' aria-labelledby='heading_@i' data-bs-parent='#sensorData_@i'>
+                <div class='accordion-body p-3'>
+                    <div class="row">
+                        <div class="d-flex col-6">
+                            <div class="align-self-center text-end">
+                                @if (isEnabledPreview)
+                                {
+                                    <h5 class="mb-0" id="preview-header">Content:</h5>
+                                }
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="row justify-content-end">
+                                <div class="d-flex flex-row-reverse">
+                                    <input style='display: none;' id='fileType_@i' value='@value.Name.@value.Extension'/>
+                                    <a id='button_download_@i' onclick="fileDownload('@value.ReceivingTime.Ticks')" class='btn btn-outline-secondary d-flex justify-content-center align-items-center button-width-static mx-1' title='Download'>
+                                        <i class='fas fa-file-download small-icon pe-1'></i>
+                                        <span style="font-size: smaller">Download</span>
+                                    </a>
+                                    <a id='button_view_@i' onclick="fileNewTabView('@value.ReceivingTime.Ticks', '@value.Extension')" class='btn btn-outline-secondary d-flex justify-content-center align-items-center button-width-static mx-1' title='Preview'>
+                                        <i class='fas fa-eye small-icon pe-1'></i>
+                                        <span style="font-size: smaller"> Preview</span>
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="d-grid d-none pt-3" id="preview_@i">
+                        <div style="overflow-x: auto" id="preview-content_@i"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<script>
+    function fileNewTabView(time, fileType){
+        let encodedId = ($('[id^=recentValues_]')).attr('id').substring("recentValues_".length);
+
+        openFileInBrowser(encodedId, fileType, viewFileAction, time);
+    }
+    
+    function fileDownload(time){
+        let encodedId = ($('[id^=recentValues_]')).attr('id').substring("recentValues_".length);
+
+        window.location.href = getFileAction + "?Selected=" + encodedId + "&dateTime=" + time;
+    }
+
+    function previewButtonClick(time, currentId, extension, isEnabled){
+        if (isEnabled === 'False')
+            return;
+
+        let encodedId = ($('[id^=recentValues_]')).attr('id').substring("recentValues_".length);
+        
+        if ($(`#preview-content_${currentId}`)[0].innerHTML !== '')
+            return;
+        
+        $.ajax({
+            type: 'POST',
+            url: `${viewFileAction}?Selected=${encodedId}&datetime=${time}`,
+            cache: false,
+            contentType: 'application/json',
+            success: function (file){
+                let dataSet = []
+                if (extension === 'csv') {
+                    file.split('\n').forEach( el => {
+                        let splitted = el.split(',');
+                        
+                        let isEmpty = splitted.every(x => {
+                            return x !== '';
+                        })
+                        
+                        if (isEmpty) {
+                            dataSet.push(el.split(','))
+                        }
+                    })
+                    
+                    let columns = [];
+                    
+                    dataSet[0].forEach(el => {
+                        columns.push({"title" : el})
+                    });
+                    
+                    $(`#preview_${currentId}`).removeClass('d-none container');
+                    $(`#preview-content_${currentId}`).html( `<table class="display w-100" id='example_${currentId}'></table>` );
+                                         
+                    $(`#example_${currentId}`).dataTable( {
+                       "data": dataSet.splice(1),
+                       "columns": columns,
+                       "lengthMenu": [ [5, 20, 50, 100], [5, 20, 50, 100] ],
+                       "pageLength": 20
+                    });  
+                }
+                else if (extension === 'txt') {
+                    $(`#preview_${currentId}`).removeClass('d-none container');
+                    $(`#preview-content_${currentId}`).addClass('w-100 mw-100 text-break').html(file); 
+                }
+            }
+        })
+    }
+</script>

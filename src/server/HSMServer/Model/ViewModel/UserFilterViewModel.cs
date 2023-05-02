@@ -1,4 +1,4 @@
-﻿using HSMServer.Core.Model.UserFilters;
+﻿using HSMServer.UserFilters;
 
 namespace HSMServer.Model.ViewModel
 {
