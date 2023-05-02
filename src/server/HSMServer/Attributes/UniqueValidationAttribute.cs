@@ -42,12 +42,12 @@ namespace HSMServer.Attributes
             {
                 var key = cache.GetAccessKey(model.Id);
                 
-                keys = key.ProductId == Guid.Empty ? GetMasterKeys(cache) : GetProductKeys(cache, key.ProductId);
+                keys = key.IsMaster ? GetMasterKeys(cache) : GetProductKeys(cache, key.ProductId);
                 
                 return IsValidAccessKey(keys, model.DisplayName, model.Id);
             }
 
-            keys = model.SelectedProductId == Guid.Empty ? GetMasterKeys(cache) : GetProductKeys(cache, model.SelectedProductId);
+            keys = model.IsMaster ? GetMasterKeys(cache) : GetProductKeys(cache, model.SelectedProductId);
 
             return IsValidAccessKey(keys, model.DisplayName, model.Id);
         }
@@ -56,7 +56,7 @@ namespace HSMServer.Attributes
             !keys.Any(x => x.DisplayName == displayName && x.Id != id);
 
         private static IEnumerable<AccessKeyModel> GetMasterKeys(ITreeValuesCache cache) =>
-            cache.GetAccessKeys().Where(x => x.ProductId == Guid.Empty);
+            cache.GetAccessKeys().Where(x => x.IsMaster);
 
         private static IEnumerable<AccessKeyModel> GetProductKeys(ITreeValuesCache cache, Guid productId) =>
             cache.GetProduct(productId).AccessKeys.Values;

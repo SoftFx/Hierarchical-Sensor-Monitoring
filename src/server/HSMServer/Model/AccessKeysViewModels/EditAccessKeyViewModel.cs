@@ -59,6 +59,8 @@ namespace HSMServer.Model.AccessKeysViewModels
 
         public bool CanReadSensorData { get; set; }
 
+        public bool IsMaster => SelectedProductId == Guid.Empty;
+
         [AccessKeyPermissionsValidation(ErrorMessage = "At least one permission should be selected.")]
         public KeyPermissions Permissions => BuildPermissions();
         

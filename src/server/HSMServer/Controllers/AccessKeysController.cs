@@ -122,7 +122,7 @@ namespace HSMServer.Controllers
                     IsModify = true,
                     Products = new List<ProductModel>()
                     {
-                        key.ProductId == Guid.Empty ? new ProductModel("All products") : TreeValuesCache.GetProduct(key.ProductId)
+                        key.IsMaster ? new ProductModel("All products") : TreeValuesCache.GetProduct(key.ProductId)
                     }
                 });
         }
@@ -135,9 +135,7 @@ namespace HSMServer.Controllers
             {
                 key.Products = new List<ProductModel>()
                 {
-                    key.SelectedProductId == Guid.Empty
-                        ? new ProductModel("All products")
-                        : TreeValuesCache.GetProduct(key.SelectedProductId)
+                    key.IsMaster ? new ProductModel("All products") : TreeValuesCache.GetProduct(key.SelectedProductId)
                 };
                 key.IsModify = true;
 
@@ -225,7 +223,7 @@ namespace HSMServer.Controllers
             var serverKeys = new List<AccessKeyViewModel>(1 << 4);
 
             if (CurrentUser.IsAdmin)
-                serverKeys.AddRange(TreeValuesCache.GetAccessKeys().Where(x => x.ProductId == Guid.Empty).Select(x => new AccessKeyViewModel(x, null, _userManager[x.AuthorId])));
+                serverKeys.AddRange(TreeValuesCache.GetAccessKeys().Where(x => x.IsMaster).Select(x => new AccessKeyViewModel(x, null, _userManager[x.AuthorId])));
 
             serverKeys.AddRange(keys);
 

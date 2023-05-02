@@ -49,6 +49,8 @@ namespace HSMServer.Core.Model
 
 
         public bool IsExpired => DateTime.UtcNow >= ExpirationTime;
+        
+        public bool IsMaster => ProductId == Guid.Empty;
 
 
         protected AccessKeyModel()
