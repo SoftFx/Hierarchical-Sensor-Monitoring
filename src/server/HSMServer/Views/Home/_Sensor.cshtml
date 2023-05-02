@@ -126,6 +126,24 @@
                     </div>
                 </div>
             </div>
+            <div id="recentValues_@sensorId"></div>
+            <div class="container d-flex justify-content-center">
+                <ul class="pagination">
+                    <li id="prevPageButton" class="page-item button-link">
+                        <a class="page-link" aria-label="Previous" onclick="showPage(prevPageAction, '@(Model.EncodedId)')">
+                            <span aria-hidden="true">&laquo;</span>
+                        </a>
+                    </li>
+                    <li class="page-item">
+                        <a class="page-link">pageNumber</a>
+                    </li>
+                    <li id="nextPageButton" class="page-item button-link">
+                        <a class="page-link" aria-label="Next" onclick="showPage(nextPageAction, '@(Model.EncodedId)')">
+                            <span aria-hidden="true">&raquo;</span>
+                        </a>
+                    </li>
+                </ul>
+            </div>
         }
     }
     else
@@ -191,10 +209,11 @@
             </div>
         </div>
     }
-
-    <div id="recentValues_@sensorId"></div>
 </div>
 <script>
+    var nextPageFileAction;
+    var prePageFileAction;
+
     var previousReceivedTime = undefined;
 
     $(document).ready(function () {
@@ -268,7 +287,7 @@
         })
     }
     var getFilesInfo = '@Url.Action(nameof(HomeController.GetRecentFilesView), "Home")';
-    function loadFiles(numberOfFiles = 20) {
+    function loadFiles(numberOfFiles = 20, pageNumber = 1) {
         $.ajax({
             type: 'GET',
             url: `${getFilesInfo}?fileId=@Model.EncodedId&numberOfFiles=${numberOfFiles}`,
@@ -278,5 +297,21 @@
                 $('#recentValues_@Model.EncodedId').html(response);
             }
         })
+    }
+    
+    function nextFilePage() {
+        $.ajax({
+            type: 'GET',
+            url: `${getFilesInfo}?fileId=@Model.EncodedId`,
+            cache: false,
+            contentType: "application/json",
+            success: function (response) {
+                $('#recentValues_@Model.EncodedId').html(response);
+            }
+        })
+    }
+    
+    function prevFilePage() {
+        
     }
 </script>

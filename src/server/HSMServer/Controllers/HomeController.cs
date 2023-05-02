@@ -411,7 +411,7 @@ namespace HSMServer.Controllers
         }
 
         [HttpGet]
-        public async Task<IActionResult> GetRecentFilesView([FromQuery] string fileId, [FromQuery] int numberOfFiles = 20)
+        public async Task<IActionResult> GetRecentFilesView([FromQuery] string fileId, [FromQuery] int numberOfFiles = 20, [FromQuery] int pageNumber = 1)
         {
             var viewModel = await GetFileHistory(fileId, numberOfFiles);
             _userManager[CurrentUser.Id].Pagination = viewModel;
@@ -427,9 +427,9 @@ namespace HSMServer.Controllers
         private FileValue GetFileSensorValue(string encodedId) =>
             _treeValuesCache.GetSensor(Guid.Parse(encodedId)).LastValue as FileValue;
 
-        private async Task<FileValue> GetFileByReceivingTimeOrDefault(string selectedId, long ticks = default, int numberOfFiles = 20) => (ticks == default
+        private async Task<FileValue> GetFileByReceivingTimeOrDefault(string selectedId, long ticks = default, int numberOfFiles = 20, int pageSize = 0) => (ticks == default
             ? GetFileSensorValue(selectedId)
-            : (await GetFileHistory(selectedId, numberOfFiles)).Pages[0].Cast<FileValue>().FirstOrDefault(file => file.ReceivingTime.Ticks == ticks))
+            : (await GetFileHistory(selectedId, numberOfFiles)).Pages[pageSize].Cast<FileValue>().FirstOrDefault(file => file.ReceivingTime.Ticks == ticks))
             .DecompressContent();
 
         private Task<HistoryValuesViewModel> GetFileHistory(string selectedId, int numberOfFiles = 20)
