@@ -50,5 +50,10 @@
         /// Simple sensor which collects data of TimeSpan type and sends the collected data instantly
         /// </summary>
         TimeSpanSensor = 7,
+        
+        /// <summary>
+        /// Simple sensor which collects data of Version type and sends the collected data instantly
+        /// </summary>
+        VersionSensor = 8,
     }
 }
