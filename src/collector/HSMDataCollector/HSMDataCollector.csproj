@@ -4,8 +4,11 @@
 		<TargetFrameworks>netstandard2.0;net472</TargetFrameworks>
 		<OutputType>Library</OutputType>
 		<GenerateBindingRedirectsOutputType>true</GenerateBindingRedirectsOutputType>
-		<GenerateAssemblyInfo>false</GenerateAssemblyInfo>
 		<Version>3.1.0</Version>
+		<AssemblyVersion>3.1.0</AssemblyVersion>
+		<AssemblyFileVersion>3.1.0</AssemblyFileVersion>
+		<ProductVersion>3.1.0</ProductVersion>
+		<GenerateAssemblyInfo>true</GenerateAssemblyInfo>
 		<Authors>HSM team</Authors>
 		<Company>Soft-FX</Company>
 		<PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>

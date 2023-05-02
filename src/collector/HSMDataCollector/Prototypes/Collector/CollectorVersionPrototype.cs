@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Reflection;
-
 namespace HSMDataCollector.Options.DefaultOptions
 {
     internal sealed class CollectorVersionPrototype : Prototype<CollectorInfoOptions>
@@ -12,7 +11,7 @@ namespace HSMDataCollector.Options.DefaultOptions
         {
             options = GetAndFill(options);
 
-            var assembly = Assembly.GetEntryAssembly()?.GetName();
+            var assembly = Assembly.GetExecutingAssembly()?.GetName();
             var version = assembly.Version;
 
             return new VersionSensorOptions
