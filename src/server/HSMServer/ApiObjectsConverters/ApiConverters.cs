@@ -65,7 +65,7 @@ namespace HSMServer.ApiObjectsConverters
                 Comment = value.Comment,
                 Time = value.Time,
                 Status = value.Status.Convert(),
-                Value = Version.TryParse(value.Value, out var version) ? version : new Version("0.0.0")
+                Value = value.Value
             };
         }
 

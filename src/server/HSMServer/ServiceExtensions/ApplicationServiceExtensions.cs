@@ -55,10 +55,17 @@ public static class ApplicationServiceExtensions
                 Version = ServerConfig.Version,
                 Title = ServerConfig.Name,
             });
+            
             o.MapType<TimeSpan>(() => new OpenApiSchema
             {
                 Type = "string",
                 Example = new OpenApiString("00.00:00:00")
+            });
+            
+            o.MapType<Version>(() => new OpenApiSchema
+            {
+                Type = "string",
+                Example = new OpenApiString("0.0.0.0")
             });
 
             var xmlPath = Path.Combine(Environment.CurrentDirectory, "HSMSwaggerComments.xml");
