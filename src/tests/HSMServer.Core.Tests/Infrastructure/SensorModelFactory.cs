@@ -30,6 +30,7 @@ namespace HSMServer.Core.Tests.Infrastructure
                 Description = RandomGenerator.GetRandomString(),
                 ExpectedUpdateInterval = new(TimeSpan.FromMinutes(10).Ticks),
                 State = SensorState.Blocked,
+                Integration = Integration.Grafana,
             };
     }
 }

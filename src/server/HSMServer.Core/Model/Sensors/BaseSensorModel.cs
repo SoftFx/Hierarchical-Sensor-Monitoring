@@ -13,6 +13,12 @@ namespace HSMServer.Core.Model
         Blocked = byte.MaxValue,
     }
 
+    [Flags]
+    public enum Integration : int
+    {
+        Grafana = 1,
+    }
+
 
     public interface IBarSensor
     {
@@ -33,12 +39,14 @@ namespace HSMServer.Core.Model
         public abstract SensorType Type { get; }
 
 
+        public Integration Integration { get; private set; }
+
         public DateTime? EndOfMuting { get; private set; }
 
         public SensorState State { get; private set; }
 
 
-        public bool IsWaitRestore=> !ServerPolicy.CheckRestorePolicies(Status.Status, LastUpdateTime).IsOk;
+        public bool IsWaitRestore => !ServerPolicy.CheckRestorePolicies(Status.Status, LastUpdateTime).IsOk;
 
         public PolicyResult Status => State == SensorState.Muted ? _muteResult : _serverResult + _dataResult;
 
@@ -55,6 +63,7 @@ namespace HSMServer.Core.Model
         public BaseSensorModel(SensorEntity entity) : base(entity)
         {
             State = (SensorState)entity.State;
+            Integration = (Integration)entity.Integration;
             EndOfMuting = entity.EndOfMuting > 0L ? new DateTime(entity.EndOfMuting) : null;
         }
 
@@ -88,6 +97,7 @@ namespace HSMServer.Core.Model
             base.Update(update);
 
             State = update?.State ?? State;
+            Integration = update?.Integration ?? Integration;
             EndOfMuting = update?.EndOfMutingPeriod ?? EndOfMuting;
 
             if (State == SensorState.Available)
@@ -112,6 +122,7 @@ namespace HSMServer.Core.Model
             CreationDate = CreationDate.Ticks,
             Type = (byte)Type,
             State = (byte)State,
+            Integration = (int)Integration,
             Policies = GetPolicyIds().Select(u => u.ToString()).ToList(),
             EndOfMuting = EndOfMuting?.Ticks ?? 0L,
         };
