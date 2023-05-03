@@ -132,12 +132,18 @@
                 i++;
         });
         
-        if (i === $('#permissions :checkbox').length) {
-            $('#checkboxButton').off('click').on('click', unSelectAllCheckBoxes).html('Unselect all');
-        }
-        else {
-            $('#checkboxButton').off('click').on('click', selectAllCheckBoxes).html('Select all');
-        } 
+        if (i === $('#permissions :checkbox').length) 
+            initUnselectAll()
+        else
+            initSelectAll()
+    }
+    
+    function initSelectAll() {
+        $('#checkboxButton').off('click').on('click', selectAllCheckBoxes).html('Select all');    
+    }
+    
+    function initUnselectAll() {
+        $('#checkboxButton').off('click').on('click', unSelectAllCheckBoxes).html('Unselect all');       
     }
     
     function cancelButtonClick() {
