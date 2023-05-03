@@ -75,7 +75,7 @@ namespace HSMServer.Core.Cache
 
         public List<AccessKeyModel> GetAccessKeys() => _keys.Values.ToList();
 
-        public ProductModel AddProduct(string productName) => AddProduct(new ProductModel(productName));
+        public ProductModel AddProduct(string productName, Guid authorId) => AddProduct(new ProductModel(productName, authorId));
 
         private void UpdateProduct(ProductModel product)
         {

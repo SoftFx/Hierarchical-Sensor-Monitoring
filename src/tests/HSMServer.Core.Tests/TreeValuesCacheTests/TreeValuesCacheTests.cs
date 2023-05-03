@@ -99,7 +99,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
                 var productName = RandomGenerator.GetRandomString();
                 productNames.Add(productName);
 
-                addedProducts.Add(_valuesCache.AddProduct(productName));
+                addedProducts.Add(_valuesCache.AddProduct(productName, Guid.Empty));
             }
 
             _valuesCache.ChangeProductEvent -= AddProductEventHandle;
@@ -132,7 +132,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
 
             var addedProducts = new List<Guid>(count);
             for (int i = 0; i < count; ++i)
-                addedProducts.Add(_valuesCache.AddProduct(RandomGenerator.GetRandomString()).Id);
+                addedProducts.Add(_valuesCache.AddProduct(RandomGenerator.GetRandomString(), Guid.Empty).Id);
 
             await Task.Delay(100);
 

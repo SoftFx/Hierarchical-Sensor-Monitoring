@@ -78,7 +78,7 @@ namespace HSM.Core.Monitoring
         private static string GetSelfMonitoringKey(ITreeValuesCache cache)
         {
             var selfMonitoring = cache.GetProductByName(SelfMonitoringProductName);
-            selfMonitoring ??= cache.AddProduct(SelfMonitoringProductName);
+            selfMonitoring ??= cache.AddProduct(SelfMonitoringProductName, Guid.Empty);
 
             var key = selfMonitoring.AccessKeys.FirstOrDefault(k => k.Value.DisplayName == CommonConstants.DefaultAccessKey).Key;
 

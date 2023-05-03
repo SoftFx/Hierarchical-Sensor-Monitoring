@@ -14,7 +14,7 @@ namespace HSMServer.Core.Model
 
         public Guid Id { get; }
 
-        public Guid? AuthorId { get; }
+        public Guid? AuthorId { get; protected init; }
 
         public DateTime CreationDate { get; }
 
@@ -35,7 +35,7 @@ namespace HSMServer.Core.Model
         protected BaseNodeModel()
         {
             Id = Guid.NewGuid();
-            AuthorId = Guid.Empty;
+            AuthorId ??= Guid.Empty;
             CreationDate = DateTime.UtcNow;
 
             ServerPolicy.ExpectedUpdate.Uploaded += (_, _) => HasUpdateTimeout();
