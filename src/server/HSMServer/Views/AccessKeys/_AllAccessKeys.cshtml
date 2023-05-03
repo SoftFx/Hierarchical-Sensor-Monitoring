@@ -43,7 +43,7 @@
             @foreach (var key in Model.Keys)
             {
                 var isParentEditAvailable = key.ParentProduct is not null && key.ParentProduct.IsChangingAccessKeysAvailable(user);
-                
+
                 <tr id="row_@key.Id">
                     @if (Model.FullTable)
                     {
@@ -69,7 +69,7 @@
                         </td>
                         <td>@key.Permissions</td>
                         <td>
-                            @if (key.AuthorId.HasValue)
+                            @if (key.AuthorId.HasValue && key.AuthorId.Value != Guid.Empty)
                             {
                                 @if (UserManager[key.AuthorId] is not null)
                                 {
@@ -80,7 +80,6 @@
                                     <span class="fst-italic">Removed</span>
                                 }
                             }
-                           
                         </td>
                         <td class="text-center">
                             @if (key.State == KeyState.Expired)
