@@ -44,7 +44,7 @@ namespace HSMDataCollector.Core
 
 
         internal static bool IsUnixOS { get; } = RuntimeInformation.IsOSPlatform(OSPlatform.OSX) ||
-                                                RuntimeInformation.IsOSPlatform(OSPlatform.Linux);
+                                                 RuntimeInformation.IsOSPlatform(OSPlatform.Linux);
 
         private DefaultSensorsCollection CurrentCollection => IsUnixOS ? (DefaultSensorsCollection)Unix : (DefaultSensorsCollection)Windows;
 
@@ -81,7 +81,7 @@ namespace HSMDataCollector.Core
             _hsmClient = new HSMClient(options, _dataQueue, _logManager);
 
             ToRunning += ToStartingCollector;
-            ToStopped += ToStoppingCollector;
+            ToStopped += ToStoppedCollector;
         }
 
         /// <summary>
@@ -178,7 +178,7 @@ namespace HSMDataCollector.Core
             StopSensors();
 
             ToRunning -= ToStartingCollector;
-            ToStopped -= ToStoppingCollector;
+            ToStopped -= ToStoppedCollector;
 
             _hsmClient.Dispose();
         }
@@ -232,7 +232,7 @@ namespace HSMDataCollector.Core
             CurrentCollection.CollectorVersion?.StartInfo();
         }
 
-        private void ToStoppingCollector()
+        private void ToStoppedCollector()
         {
             CurrentCollection.ProductVersion?.StopInfo();
             CurrentCollection.CollectorVersion?.StopInfo();

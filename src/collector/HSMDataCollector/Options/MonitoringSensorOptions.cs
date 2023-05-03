@@ -51,5 +51,6 @@ namespace HSMDataCollector.Options
         internal const string BaseCollectorPath = "Product Info/Collector";
     }
 
+
     public sealed class CollectorMonitoringInfoOptions : MonitoringSensorOptions { }
 }

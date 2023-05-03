@@ -2,12 +2,6 @@
   "version": 1,
   "dependencies": {
     ".NETFramework,Version=v4.7.2": {
-      "HSMDataCollector.HSMSensorDataObjects": {
-        "type": "Direct",
-        "requested": "[3.0.1, )",
-        "resolved": "3.0.1",
-        "contentHash": "Ham3bjbjmny/FMIp6CdBhahyI+0MZ2wry4OG5qh4yaz++bE5dPEgn25YQnoDnw76uKo2viHVircGTD4D1ijbmA=="
-      },
       "Microsoft.CSharp": {
         "type": "Direct",
         "requested": "[4.7.0, )",
@@ -103,15 +97,12 @@
         "type": "Transitive",
         "resolved": "5.0.0",
         "contentHash": "t0MGLukB5WAVU9bO3MGzvlGnyJPgUlcwerXn1kzBRjwLKixT96XV0Uza41W49gVd8zEMFu9vQEFlv0IOrytICA=="
+      },
+      "HSMDataCollector.HSMSensorDataObjects": {
+        "type": "Project"
       }
     },
     ".NETStandard,Version=v2.0": {
-      "HSMDataCollector.HSMSensorDataObjects": {
-        "type": "Direct",
-        "requested": "[3.0.1, )",
-        "resolved": "3.0.1",
-        "contentHash": "Ham3bjbjmny/FMIp6CdBhahyI+0MZ2wry4OG5qh4yaz++bE5dPEgn25YQnoDnw76uKo2viHVircGTD4D1ijbmA=="
-      },
       "Microsoft.CSharp": {
         "type": "Direct",
         "requested": "[4.7.0, )",
@@ -747,6 +738,9 @@
           "Microsoft.NETCore.Targets": "1.1.0",
           "System.Runtime": "4.3.0"
         }
+      },
+      "HSMDataCollector.HSMSensorDataObjects": {
+        "type": "Project"
       }
     }
   }

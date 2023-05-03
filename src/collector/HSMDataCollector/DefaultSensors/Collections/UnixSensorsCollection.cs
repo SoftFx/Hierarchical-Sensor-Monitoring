@@ -13,9 +13,6 @@ namespace HSMDataCollector.DefaultSensors
         internal UnixSensorsCollection(SensorsStorage storage, SensorsPrototype prototype) : base(storage, prototype) { }
 
 
-        private UnixSensorsCollection ToUnix(SensorBase sensor) => (UnixSensorsCollection)Register(sensor);
-
-
         #region Process
 
         public IUnixCollection AddProcessCpu(BarSensorOptions options)
@@ -95,18 +92,14 @@ namespace HSMDataCollector.DefaultSensors
 
         public IUnixCollection AddCollectorStatus(CollectorInfoOptions options) => (IUnixCollection)AddCollectorStatusCommon(options);
 
-        public IUnixCollection AddCollectorMonitoringSensors(CollectorMonitoringInfoOptions monitoringOptions)
-        {
-            monitoringOptions = _prototype.CollectorAlive.GetAndFill(monitoringOptions);
-
-            var options = _prototype.CollectorStatus.GetAndFill(new CollectorInfoOptions() { NodePath = monitoringOptions.NodePath });
-
-            return AddCollectorHeartbeat(monitoringOptions).AddCollectorVersion(options).AddCollectorStatus(options);
-        }
+        public IUnixCollection AddCollectorMonitoringSensors(CollectorMonitoringInfoOptions options) => (IUnixCollection)AddFullCollectorMonitoringCommon(options);
 
         #endregion
 
 
         public IUnixCollection AddProductVersion(VersionSensorOptions options) => (IUnixCollection)AddProductVersionCommon(options);
+
+
+        private UnixSensorsCollection ToUnix(SensorBase sensor) => (UnixSensorsCollection)Register(sensor);
     }
 }

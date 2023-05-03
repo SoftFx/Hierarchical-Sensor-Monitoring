@@ -40,8 +40,8 @@ namespace HSMDataCollector.Core
 
             _client.DefaultRequestHeaders.Add(nameof(BaseRequest.Key), options.AccessKey);
 
-            _dataQueue.SendValueHandler += RecieveQueueData;
-            _dataQueue.SendValuesHandler += RecieveQueueData;
+            _dataQueue.NewValueEvent += RecieveQueueData;
+            _dataQueue.NewValuesEvent += RecieveQueueData;
         }
 
         internal async Task SendFileAsync(FileInfo fileInfo, string sensorPath, SensorStatus sensorStatus = SensorStatus.Ok, string comment = "")
@@ -71,8 +71,8 @@ namespace HSMDataCollector.Core
         {
             _tokenSource.Cancel();
 
-            _dataQueue.SendValueHandler -= RecieveQueueData;
-            _dataQueue.SendValuesHandler -= RecieveQueueData;
+            _dataQueue.NewValueEvent -= RecieveQueueData;
+            _dataQueue.NewValuesEvent -= RecieveQueueData;
 
             _client.Dispose();
         }

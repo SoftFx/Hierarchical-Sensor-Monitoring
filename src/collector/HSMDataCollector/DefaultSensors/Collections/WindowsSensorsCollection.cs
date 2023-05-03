@@ -14,9 +14,6 @@ namespace HSMDataCollector.DefaultSensors
         public WindowsSensorsCollection(SensorsStorage storage, SensorsPrototype prototype) : base(storage, prototype) { }
 
 
-        private WindowsSensorsCollection ToWindows(SensorBase sensor) => (WindowsSensorsCollection)Register(sensor);
-
-
         #region Process
 
         public IWindowsCollection AddProcessCpu(BarSensorOptions options)
@@ -141,19 +138,14 @@ namespace HSMDataCollector.DefaultSensors
 
         public IWindowsCollection AddCollectorStatus(CollectorInfoOptions options) => (IWindowsCollection)AddCollectorStatusCommon(options);
 
-
-        public IWindowsCollection AddCollectorMonitoringSensors(CollectorMonitoringInfoOptions monitoringOptions)
-        {
-            monitoringOptions = _prototype.CollectorAlive.GetAndFill(monitoringOptions);
-
-            var options = _prototype.CollectorStatus.GetAndFill(new CollectorInfoOptions() { NodePath = monitoringOptions.NodePath });
-
-            return AddCollectorHeartbeat(monitoringOptions).AddCollectorVersion(options).AddCollectorStatus(options);
-        }
+        public IWindowsCollection AddCollectorMonitoringSensors(CollectorMonitoringInfoOptions options) => (IWindowsCollection)AddFullCollectorMonitoringCommon(options);
 
         #endregion
 
 
         public IWindowsCollection AddProductVersion(VersionSensorOptions options) => (IWindowsCollection)AddProductVersionCommon(options);
+
+
+        private WindowsSensorsCollection ToWindows(SensorBase sensor) => (WindowsSensorsCollection)Register(sensor);
     }
 }

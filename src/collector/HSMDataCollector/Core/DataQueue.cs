@@ -19,8 +19,8 @@ namespace HSMDataCollector.Core
         private Timer _sendTimer;
 
 
-        public event Action<List<SensorValueBase>> SendValuesHandler;
-        public event Action<FileSensorValue> SendValueHandler;
+        public event Action<List<SensorValueBase>> NewValuesEvent;
+        public event Action<FileSensorValue> NewValueEvent;
 
 
         public DataQueue(CollectorOptions options)
@@ -45,7 +45,7 @@ namespace HSMDataCollector.Core
             _sendTimer = null;
         }
 
-        public void Flush() => SendValuesHandler?.Invoke(DequeueAllData());
+        public void Flush() => NewValuesEvent?.Invoke(DequeueAllData());
 
 
         public void Push(SensorValueBase value) => Enqueue(_valuesQueue, value.TrimLongComment());
@@ -70,7 +70,7 @@ namespace HSMDataCollector.Core
                 switch (value)
                 {
                     case FileSensorValue fileValue:
-                        SendValueHandler?.Invoke(fileValue);
+                        NewValueEvent?.Invoke(fileValue);
                         break;
 
                     case BarSensorValueBase barSensor when barSensor.Count == 0:

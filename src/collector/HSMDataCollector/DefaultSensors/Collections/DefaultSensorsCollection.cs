@@ -58,6 +58,14 @@ namespace HSMDataCollector.DefaultSensors
             return Register(StatusSensor);
         }
 
+        protected DefaultSensorsCollection AddFullCollectorMonitoringCommon(CollectorMonitoringInfoOptions monitoringOptions)
+        {
+            monitoringOptions = _prototype.CollectorAlive.GetAndFill(monitoringOptions);
+
+            var options = _prototype.CollectorStatus.GetAndFill(new CollectorInfoOptions() { NodePath = monitoringOptions.NodePath });
+
+            return AddCollectorHeartbeatCommon(monitoringOptions).AddCollectorVersionCommon(options).AddCollectorStatusCommon(options);
+        }
 
         protected DefaultSensorsCollection AddProductVersionCommon(VersionSensorOptions options)
         {
@@ -68,7 +76,6 @@ namespace HSMDataCollector.DefaultSensors
 
             return Register(ProductVersion);
         }
-
 
         protected DefaultSensorsCollection Register(SensorBase sensor)
         {

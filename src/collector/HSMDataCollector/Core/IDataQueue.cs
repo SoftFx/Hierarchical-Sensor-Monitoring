@@ -6,8 +6,8 @@ namespace HSMDataCollector.Core
 {
     public interface IDataQueue
     {
-        event Action<List<SensorValueBase>> SendValuesHandler;
-        event Action<FileSensorValue> SendValueHandler;
+        event Action<List<SensorValueBase>> NewValuesEvent;
+        event Action<FileSensorValue> NewValueEvent;
 
 
         void Init();

@@ -10,10 +10,10 @@ namespace HSMDataCollector.DefaultSensors
 {
     public abstract class MonitoringSensorBase<T> : SensorBase<T>
     {
-        protected readonly TimeSpan _receiveDataPeriod;
-
-        protected bool _needSendValue = true;
         private Timer _sendTimer;
+
+        protected readonly TimeSpan _receiveDataPeriod;
+        protected bool _needSendValue = true;
 
 
         protected virtual TimeSpan TimerDueTime => _receiveDataPeriod;
