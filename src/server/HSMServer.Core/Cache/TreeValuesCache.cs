@@ -590,6 +590,7 @@ namespace HSMServer.Core.Cache
         private ProductModel AddNonExistingProductsAndGetParentProduct(ProductModel parentProduct, BaseRequestModel request)
         {
             var pathParts = request.PathParts;
+            var authorId = GetAccessKey(request.KeyGuid).AuthorId;
 
             for (int i = 0; i < pathParts.Length - 1; ++i)
             {
@@ -597,7 +598,7 @@ namespace HSMServer.Core.Cache
                 var subProduct = parentProduct.SubProducts.FirstOrDefault(p => p.Value.DisplayName == subProductName).Value;
                 if (subProduct == null)
                 {
-                    subProduct = new ProductModel(subProductName);
+                    subProduct = new ProductModel(subProductName, authorId);
                     parentProduct.AddSubProduct(subProduct);
 
                     AddProduct(subProduct);

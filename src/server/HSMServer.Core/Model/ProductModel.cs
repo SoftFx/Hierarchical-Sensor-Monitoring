@@ -36,7 +36,7 @@ namespace HSMServer.Core.Model
             State = ProductState.FullAccess;
         }
         
-        public ProductModel(string name, Guid authorId) : base(name.Trim())
+        public ProductModel(string name, Guid? authorId) : base(name.Trim())
         {
             State = ProductState.FullAccess;
             AuthorId = authorId;
