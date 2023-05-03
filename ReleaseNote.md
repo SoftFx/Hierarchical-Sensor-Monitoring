@@ -1,53 +1,51 @@
 # HSM Server
 
-## New entity **Folder** has been added:
-It allows you to group different products and set the same settings for them (telegram settings, alerts, user roles)
+## New sensor type [**Version**](https://github.com/SoftFx/Hierarchical-Sensor-Monitoring/wiki/Sensor-types) has been added:
+* New endpoint **/version** has been added
+* New table for sensor type **Version** has been added. Version format *1.2.3.4*
 
-## Site
+## New type of Access keys has been added - **Master key**
+* Master key has access to ALL products on the server
+* Admin ONLY can create Master key
 
-### Folder/Product/Sensor info tabs
-* Folder meta info panel has been added
-* Product and sensor meta info panels have been fully redesigned
-* Now all description inputs support **Markdown format**
-* Default sorting for Grid and List panels has been changed (by status and then by name)
+## Ability to integrate with [**Grafana**](https://grafana.com/) has been added:
+* New endopoints for [**JsonDatasource**](https://grafana.com/grafana/plugins/simpod-json-datasource/) have been added: */grafana/JsonDatasource*, */grafana/JsonDatasource/metrics*, */grafana/JsonDatasource/metric-payload-options*, */grafana/JsonDatasource/query*
+* Grafana connection guide is [here]()
+* List of available datasources and sensor types is [here](https://github.com/SoftFx/Hierarchical-Sensor-Monitoring/wiki/Integration-with-Grafana#json-datasource)
 
-### Tree
-* New node type **Folder** has been added
-* Context menu names have been uploaded
-* **Save and close tree / Restore tree** button has been added
-* **Clear history** in context menu has been removed
+## Tree
+* **Enable/Disable Grafana** item has been added in Context menu
+* Grafana icon is shown for sensors with Grafana enabled setting
 
-### Time intervals control
-* New value **From parent** has been added. If this value is selected, the parent setting is applied to current entity
-* **From parent** setting is available for a product in a folder too.
-* Value **Never** is redone. If this value is selected, the current setting is disabled for the entity.
-* Control interface has been improved
+## Sensor info
+* New property **Enable for** has been added
 
-### Alerts (Policies)
-* **Update Expected Interval** has been renamed to **Time to sensor live**
-* New alert **Sensitivity** has been added for sensors. If the sensor doesn`t return to Ok status after the specified time inverval, a notification sends.
-* Icons have been added for all alerts
+## Access keys
+* Select product input has been added in Edit modal
+* New link for creating access keys has been added on Access Keys tab (Only for admins)
+* Unique access key name validation has been added in Edit modal
+* **Unselect all** button has been added in Edit modal
+* Key's authors that have been removed have been marked as *Removed*
 
-### File Sensor
-* A file sensor preview has been improved
-* A list of recent sensor values will be shown instead of just the last file value
+# HSM Datacollector
 
-### Products
-* Products tab has been redesigned
-* Folders have been added in Products tab
-* Modal window for add product has been added
-* **Move to...** setting has been added in Product actions (for moving products between folders)
+### Structure and optimizations
+* Async requests and handlers for HttpClient have been added
+* Base structure for **Simple sensor** (a sensor that sends data on user request, not on a timer) has been added
+* Collector statuses have been added. Now collector has 4 statuses: **Starting**, **Running**, **Stopping**, **Stopped**. [More info](https://github.com/SoftFx/Hierarchical-Sensor-Monitoring/wiki/DataCollector-statuses)
 
-### Bugfixing
-* Product Manger rights have been restored
-* A sensor will not send the notification about changing state to *Mute* in Telegram
-* Telegram /info command will not contain deleted products
-* Other minor bugfixing...
+### Default sensors
+* **CollectorAlive** sensor has been renamed to [**CollectorHeartbeat**](https://github.com/SoftFx/Hierarchical-Sensor-Monitoring/wiki/Unix-sensors-collection#addcollectorheartbeat). Sensor name has been renamed from **Service alive** to **Service heartbeat**.
+* New default sensor [**Product info**](https://github.com/SoftFx/Hierarchical-Sensor-Monitoring/wiki/Windows-sensors-collection#addproductversion) has been added. Now it contains Product Version with Version start/stop time.
+* New defaut sensor [**Collector status**](https://github.com/SoftFx/Hierarchical-Sensor-Monitoring/wiki/Unix-sensors-collection#addcollectorstatus) has been added. It describes current collector state and contains error message (if exsists).
 
-## Telegram
+### Unix sensors
+* [**Free RAM memory MB**](https://github.com/SoftFx/Hierarchical-Sensor-Monitoring/wiki/Unix-sensors-collection#addfreerammemory) has been added.
+* [**Total CPU**](https://github.com/SoftFx/Hierarchical-Sensor-Monitoring/wiki/Unix-sensors-collection#addtotalcpu) has been added.
+* [**AddSystemMonitoringSensors**](https://github.com/SoftFx/Hierarchical-Sensor-Monitoring/wiki/Unix-sensors-collection#addsystemmonitoringsensors) facade for **Free RAM memory MB** and **Total CPU** has been added.
 
-* **From parent** for Telegram notifications setting is available from a product in a folder.
-* /status command has been renamed to **/server**
-* **/help** command has been added. This command output contains information from command /icons and existing statuses ascending priority
-* Icon for OffTime status has been changed to 💤
-* Other minor improvements...
+### New methods
+* New method **SendFileAsync** has been added
+
+### Other
+* Collector version has been increased to 3.1.0
