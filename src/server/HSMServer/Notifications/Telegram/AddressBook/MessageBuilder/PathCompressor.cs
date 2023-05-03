@@ -10,7 +10,7 @@ namespace HSMServer.Notifications.Telegram.AddressBook.MessageBuilder
     {
         private readonly ConcurrentDictionary<Guid, (BaseSensorModel, SensorStatus)> _inRestore = new();
         private readonly ConcurrentDictionary<Guid, BaseSensorModel> _sensors = new();
-        private readonly List<GroupedPath> _groups = new();
+        private readonly ConcurrentQueue<GroupedPath> _groups = new();
 
 
         internal bool TryGetOrAdd(BaseSensorModel sensor, SensorStatus firstStatus, out (string oldStatus, string) key)
@@ -28,7 +28,7 @@ namespace HSMServer.Notifications.Telegram.AddressBook.MessageBuilder
             return false;
         }
 
-        internal IEnumerable<string> GetGroupedPaths(CHash hash)
+        internal IEnumerable<string> GetGroupedPaths(CGuidHash hash)
         {
             foreach (var id in hash)
                 if (!_inRestore.ContainsKey(id))
@@ -68,7 +68,7 @@ namespace HSMServer.Notifications.Telegram.AddressBook.MessageBuilder
                 if (group.Apply(path))
                     return;
 
-            _groups.Add(new GroupedPath(path));
+            _groups.Enqueue(new GroupedPath(path));
         }
 
 

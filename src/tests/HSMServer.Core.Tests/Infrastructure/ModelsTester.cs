@@ -226,6 +226,7 @@ namespace HSMServer.Core.Tests.Infrastructure
         internal static void TestSensorModel(SensorUpdate expected, BaseSensorModel actual)
         {
             Assert.Equal(expected.Description, actual.Description);
+            Assert.Equal(expected.Integration, actual.Integration);
             Assert.Equal(expected.State, actual.State);
         }
 
@@ -233,6 +234,7 @@ namespace HSMServer.Core.Tests.Infrastructure
         {
             Assert.Equal(expected.Description, actual.Description);
             Assert.Equal(expected.State, (SensorState)actual.State);
+            Assert.Equal(expected.Integration, (Integration)actual.Integration);
         }
 
         internal static void TestExpectedUpdateIntervalPolicy(SensorUpdate expected, Policy actual)

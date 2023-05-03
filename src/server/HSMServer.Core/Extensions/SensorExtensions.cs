@@ -18,5 +18,7 @@ namespace HSMServer.Core
             SensorStatus.OffTime => "💤",
             _ => "❓"
         };
+
+        public static bool HasGrafana(this Integration integration) => integration.HasFlag(Integration.Grafana);
     }
 }

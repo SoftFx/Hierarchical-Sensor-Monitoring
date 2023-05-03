@@ -14,6 +14,8 @@ namespace HSMServer.Model.TreeViewModel
 
         public SensorState State { get; private set; }
 
+        public Integration Integration { get; private set; }
+
         public string ShortStringValue { get; private set; }
 
         public string FileNameString { get; private set; }
@@ -45,6 +47,7 @@ namespace HSMServer.Model.TreeViewModel
 
             Type = model.Type;
             State = model.State;
+            Integration = model.Integration;
             UpdateTime = model.LastUpdateTime;
             Status = model.Status.Status.ToClient();
             ValidationError = State == SensorState.Muted ? GetMutedErrorTooltip(model.EndOfMuting) : model.Status.Message;
