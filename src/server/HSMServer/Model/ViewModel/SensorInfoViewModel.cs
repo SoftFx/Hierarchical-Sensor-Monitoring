@@ -1,4 +1,5 @@
-﻿using HSMServer.Core.Model;
+﻿using HSMServer.Core;
+using HSMServer.Core.Model;
 using HSMServer.Model.TreeViewModel;
 
 namespace HSMServer.Model.ViewModel
@@ -7,14 +8,9 @@ namespace HSMServer.Model.ViewModel
     {
         public SensorType SensorType { get; }
 
+        public string StatusComment { get; }
 
-        public string StatusComment { get; set; }
-
-        public string Comment { get; set; }
-
-        public string ShortLastValue { get; set; }
-        
-        public string Path { get; set; }
+        public bool HasGrafana { get; }
 
 
         // public constructor without parameters for action Home/UpdateSensorInfo
@@ -24,9 +20,7 @@ namespace HSMServer.Model.ViewModel
         {
             SensorType = sensor.Type;
             StatusComment = sensor.ValidationError;
-            Comment = sensor.LastValue?.Comment;
-            ShortLastValue = sensor.ShortStringValue;
-            Path = sensor.FullPath;
+            HasGrafana = sensor.Integration.HasGrafana();
         }
     }
 }

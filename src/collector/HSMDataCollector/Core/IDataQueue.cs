@@ -6,21 +6,19 @@ namespace HSMDataCollector.Core
 {
     public interface IDataQueue
     {
-        bool Disposed { get; }
+        event Action<List<SensorValueBase>> NewValuesEvent;
+        event Action<FileSensorValue> NewValueEvent;
 
 
-        event Action<List<SensorValueBase>> SendValues;
-        event Action<FileSensorValue> FileReceiving;
-
-
-        void ReturnData(List<SensorValueBase> values);
-
-        void ReturnSensorValue(SensorValueBase file);
-
-        List<SensorValueBase> DequeueData();
-
-        void InitializeTimer();
+        void Init();
 
         void Stop();
+
+        void Flush();
+
+
+        void Push(SensorValueBase value);
+
+        void PushFailValue(SensorValueBase value);
     }
 }

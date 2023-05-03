@@ -231,6 +231,22 @@ function buildContextMenu(node) {
                 }
             }
         }
+
+        let isGrafanaEnabled = node.data.jstree.isGrafanaEnabled === "True";
+        if (isGrafanaEnabled) {
+            contextMenu["Grafana disable"] = {
+                "label": `Disabe Grafana`,
+                "icon": "/dist/grafana.svg",
+                "action": _ => grafanaRequest(node, disableGrafanaAction),
+            };
+        }
+        else {
+            contextMenu["Grafana enable"] = {
+                "label": `Enable Grafana`,
+                "icon": "/dist/grafana.svg",
+                "action": _ => grafanaRequest(node, enableGrafanaAction),
+            };
+        }
     }
 
     notificationSubmenu = {}
@@ -296,6 +312,10 @@ function ignoreNotificationsRequest(node, target, isOffTimeModal = 'false') {
         cache: false,
         success: (v) => $("#ignoreNotificatios_partial").html(v),
     }).done(() => $('#ignoreNotifications_modal').modal('show'))
+}
+
+function grafanaRequest(node, action) {
+    return $.ajax(`${action}?selectedId=${node.id}`, AjaxPost).done(updateTreeTimer);
 }
 
 function getFullPathAction(nodeId) {

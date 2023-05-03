@@ -7,6 +7,8 @@ namespace HSMDataCollector.DefaultSensors
 {
     public abstract class SensorBase : IDisposable
     {
+        internal const string DefaultTimeFormat = "dd/MM/yyyy HH:mm:ss";
+
         private readonly string _nodePath;
         
 

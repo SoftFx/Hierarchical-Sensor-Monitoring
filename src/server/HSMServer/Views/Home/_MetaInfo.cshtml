@@ -113,6 +113,18 @@
                     </div>
                 </div>
 
+                if (sensor.HasGrafana)
+                {
+                    <div class="d-flex justify-content-start">
+                        <div class="d-flex ms-3 text-nowrap">
+                            <span style="min-width: 8rem">Enabled for:</span>
+                        </div>
+                        <div class="d-flex w-100">
+                            <img class="tree-png-icon" src="~/dist/grafana.svg" alt="!" title="Grafana" />
+                        </div>
+                    </div>
+                }
+
                 <div id="validation_metainfo" class="d-flex justify-content-start">
                     @if (!string.IsNullOrEmpty(sensor.StatusComment))
                     {

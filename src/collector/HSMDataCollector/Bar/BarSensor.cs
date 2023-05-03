@@ -11,14 +11,13 @@ namespace HSMDataCollector.Bar
     internal sealed class BarSensor<T> : BarSensorBase, IBarSensor<T> where T : struct
     {
         private readonly SensorType _type;
-        private readonly List<T> _valuesList;
+        private readonly List<T> _valuesList = new List<T>();
 
 
         public BarSensor(string path, IValuesQueue queue, SensorType type, int barTimerPeriod, int smallTimerPeriod,
             string description = "", int precision = 2)
             : base(path, queue, barTimerPeriod, smallTimerPeriod, description, precision)
         {
-            _valuesList = new List<T>();
             _type = type;
         }
 

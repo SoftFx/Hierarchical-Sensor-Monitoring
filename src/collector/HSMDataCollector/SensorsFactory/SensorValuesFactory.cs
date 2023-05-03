@@ -19,6 +19,8 @@ namespace HSMDataCollector.SensorsFactory
                     return new StringSensorValue() { Value = stringV };
                 case TimeSpan timeSpanV:
                     return new TimeSpanSensorValue() { Value = timeSpanV };
+                case Version version:
+                    return new VersionSensorValue() { Value = version };
                 case SensorValueBase sensorV:
                     return sensorV;
                 default:

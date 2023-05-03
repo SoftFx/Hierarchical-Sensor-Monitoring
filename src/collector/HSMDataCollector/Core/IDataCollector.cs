@@ -1,9 +1,9 @@
 ﻿using HSMDataCollector.Logging;
 using HSMDataCollector.PublicInterface;
+using HSMSensorDataObjects;
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
-using HSMSensorDataObjects;
 
 namespace HSMDataCollector.Core
 {
@@ -13,7 +13,28 @@ namespace HSMDataCollector.Core
 
         IUnixCollection Unix { get; }
 
+
+        CollectorStatus Status { get; }
+
+
+        event Action ToStarting;
+        event Action ToRunning;
+        event Action ToStopping;
+        event Action ToStopped;
+
+
         Task Start();
+
+        Task Start(Task customStartingTask);
+
+        /// <summary>
+        /// This method must be called before stopping the application. It sends all the data left, stops and disposes the timer.
+        /// The method also disposes the HttpClient.
+        /// </summary>
+        Task Stop();
+
+        Task Stop(Task customStoppingTask);
+
 
         IDataCollector AddNLog(LoggerOptions options = null);
 
@@ -33,12 +54,6 @@ namespace HSMDataCollector.Core
         /// <param name="fileNameFormat">File name format, if null default file name is specified</param>
         [Obsolete("Use method AddNLog() to add logging and method Start() after default sensors initialization")]
         void Initialize(bool useLogging = true, string folderPath = null, string fileNameFormat = null);
-
-        /// <summary>
-        /// This method must be called before stopping the application. It sends all the data left, stops and disposes the timer.
-        /// The method also disposes the HttpClient.
-        /// </summary>
-        void Stop();
 
         /// <summary>
         /// Creates and initializes sensors, which automatically monitor CPU and RAM usage of the current machine.
@@ -402,7 +417,7 @@ namespace HSMDataCollector.Core
         IParamsFuncSensor<T, U> Create5MinParamsFuncSensor<T, U>(string path, string description, Func<List<U>, T> function);
 
         #endregion
-        
+
         /// <summary>
         /// The event is fired after the values queue (current capacity is 100000 items) overflows
         /// </summary>
