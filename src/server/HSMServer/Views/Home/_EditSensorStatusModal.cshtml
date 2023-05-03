@@ -1,61 +1,104 @@
-﻿@using Microsoft.AspNetCore.Mvc.TagHelpers
+﻿@using HSMServer.Controllers
+@using HSMServer.Core.Cache
+@using HSMServer.Core.Model
+@using HSMServer.Model.Authentication
+@using Microsoft.AspNetCore.Mvc.TagHelpers
 
-@model HSMServer.Model.ViewModel.SensorInfoViewModel
+@model HSMServer.Model.ViewModel.EditSensorStatusViewModal
 
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
 
+@inject ITreeValuesCache Cache
+
+@{
+    var accesskeys = Cache.GetProduct(@Model.RootProductId).AccessKeys.Values
+        .Where(x => (x.Permissions & KeyPermissions.CanSendSensorData) != 0)
+        .Select(x => new SelectListItem() { Value = x.Id.ToString(), Text = x.DisplayName });
+
+    var user = (User as User);
+}
 
 @if (Model != null)
 {
-    <form id="editSensorStatus_form" asp-action="" method="post">
-        <input class="d-none" asp-for="EncodedId" />
+    <input class="d-none" asp-for="SensorId"/>
 
-        <div class="modal fade" tabindex="-1" role="dialog" id="editSensorStatus_modal">
-            <div class="modal-dialog modal-dialog-centered" role="document">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <div class="text-break">
-                            <h5 class="modal-title">Edit sensor status</h5>
-                            <h6 class="modal-title">@Model.Path</h6>
+    <div class="modal fade" tabindex="-1" role="dialog" id="editSensorStatus_modal">
+        <div class="modal-dialog modal-dialog-centered" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <div class="text-break">
+                        <h5 class="modal-title">@Model.ModelHeader</h5>
+                        <h6 class="modal-title">@Model.Path</h6>
+                    </div>
+                </div>
+
+                <div class="d-flex modal-body flex-column">
+                    <div class="form-group">
+                        <div class="justify-content-between d-flex">
+                            <div class="col-auto">
+                                <label asp-for="@Model.Status"></label>
+                                <input asp-for="@Model.Status" form="editSensorStatus_form" class="form-control" value="@Model.Status" disabled/>
+                            </div>
+                            <span class="align-self-end pb-2">-></span>
+                            <div class="col-auto">
+                                <label asp-for="@Model.NewStatus"></label>
+                                <select asp-for="@Model.NewStatus" asp-items="Html.GetEnumSelectList<SensorStatus>()" form="editSensorStatus_form" class="form-select w-100"></select>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="form-group mt-2">
+                        <div class="d-flex flex-column">
+                            <label class="form-label">Requester</label>
+                            <input class="form-control" value="@user.Name" disabled/>
+                        </div>
+                        <div class="d-flex flex-column mt-2">
+                            <label class="form-label" asp-for="@Model.SelectedAccessKey"></label>
+                            <select class="form-control form-select" asp-for="@Model.SelectedAccessKey" form="editSensorStatus_form" asp-items="@accesskeys"></select>
+                        </div>
+                        <div class="d-flex flex-column mt-2">
+                            <label class="form-label" asp-for="@Model.Reason"></label>
+                            <textarea class="form-control" asp-for="@Model.Reason" form="editSensorStatus_form">
+                                                    
+                                </textarea>
                         </div>
                     </div>
 
-                    <div class="d-flex justify-content-between modal-body">
-                        <div class="col-auto">
-                            <label asp-for="@Model.Status">Current status</label>
-                            <input asp-for="@Model.Status" class="form-control" value="@Model.Status" disabled/>
-                        </div>
-                        <span class="align-self-end pb-2">-></span>
-                        <div class="col-auto">
-                            <label asp-for="@Model.Status">New status</label>
-                            <input asp-for="@Model.Status" class="form-control" value="@Model.Status" disabled/>
-                        </div>
-                        <div>
-                            Accesskey dropdown
-                        </div>
-                        <textarea>
+                </div>
 
-                        </textarea>
-                    </div>
-
-                    <div class="modal-footer">
-                        <button class="btn btn-secondary col-2" type="submit">OK</button>
-                        <button class="btn btn-secondary col-2" type="button" onclick="hideEditSensorModal()">Cancel</button>
-                    </div>
+                <div class="modal-footer">
+                    <button class="btn btn-secondary col-2" type="submit" form="editSensorStatus_form" >OK</button>
+                    <button class="btn btn-secondary col-2" type="button" onclick="hideEditSensorModal()">Cancel</button>
                 </div>
             </div>
         </div>
-    </form>
+    </div>
 }
 
 
 <script>
-   $(document).on("submit", "#ignoreNotifications_form", function (event) {
+    // function UpdateSensorStatus() {
+    //     console.log(this)
+    //     console.log($("#editSensorStatus_form"))
+    //     console.log(new FormData($("#editSensorStatus_form")))
+    //      $.ajax({
+    //                 url: @nameof(HomeController.UpdateSensorStatus),
+    //                 type: 'POST',
+    //                 data: new FormData($("#editSensorStatus_form")),
+    //                 datatype: 'html',
+    //                 processData: false,
+    //                 contentType: false,
+    //                 async: true
+    //             }).done(function () {
+    //                
+    //             });
+    // }
+
+   $(document).on("submit", "#editSensorStatus_form", function (event) {
         event.preventDefault();
         event.stopImmediatePropagation();
 
         $.ajax({
-            url: $("#ignoreNotifications_form").attr("action"),
+            url: $("#editSensorStatus_form").attr("action"),
             type: 'POST',
             data: new FormData(this),
             datatype: 'html',
@@ -63,9 +106,7 @@
             contentType: false,
             async: true
         }).done(function () {
-            hideIgnoreNotificationsModal();
-            updateSelectedNodeData();
-            updateTreeTimer();
+
         });
     });
 

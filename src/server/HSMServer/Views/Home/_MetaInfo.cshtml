@@ -52,7 +52,7 @@
 
         <div id='update_@Model.EncodedId' class='d-flex my-1 time-ago-div'>updated @Model.LastUpdateTime.GetTimeAgo()</div>
     </div>
-
+    <form id="editSensorStatus_form" method="post" asp-action="@nameof(HomeController.UpdateSensorStatus)"></form>
     <form id="editMetaInfo_form" method="post" asp-action="@updateAction">
         <input id="metaInfo_encodedId" style='display: none' asp-for="EncodedId" value="@Model.EncodedId"/>
 
@@ -90,7 +90,7 @@
             }
             else if (Model is SensorInfoViewModel sensor)
             {
-                @await Html.PartialAsync("_EditSensorStatusModal", sensor)
+                @await Html.PartialAsync("_EditSensorStatusModal", new EditSensorStatusViewModal(sensor))
                 
                 <div class="d-flex justify-content-start">
                     <div class="d-flex ms-3 text-nowrap">

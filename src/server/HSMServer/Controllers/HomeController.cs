@@ -490,6 +490,13 @@ namespace HSMServer.Controllers
             return PartialView("_MetaInfo", new SensorInfoViewModel(sensor));
         }
 
+        [HttpPost]
+        public IActionResult UpdateSensorStatus(EditSensorStatusViewModal modal)
+        {
+            var a = 1;
+            return default;
+        }
+
         #endregion
 
         [HttpGet]
