@@ -33,13 +33,14 @@ namespace HSMServer.Model.AccessKeysViewModels
     {
         private static ProductModel _masterProductModel = new ProductModel("All products");
         
+        
         public Guid Id { get; set; }
 
         public string ExpirationTime { get; init; }
 
         public bool CloseModal { get; set; }
 
-        public bool IsModify { get; set; }
+        public bool IsModify { get; private set; }
 
 
         [Display(Name = "Product")]
