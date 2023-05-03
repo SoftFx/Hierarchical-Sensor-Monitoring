@@ -29,7 +29,7 @@ namespace HSMServer.Model
         public static string ConfigPath => Path.Combine(Environment.CurrentDirectory, "Config");
 
         [JsonIgnore]
-        public static string Version { get; }
+        public static Version Version { get; }
 
         [JsonIgnore]
         public static string Name { get; }

@@ -3,9 +3,9 @@ using System;
 
 namespace HSMDataCollector.DefaultSensors.Other
 {
-    internal sealed class ProductVersionSensor : SensorBase<string>
+    internal sealed class ProductVersionSensor : SensorBase<Version>
     {
-        private readonly string _version;
+        private readonly Version _version;
         private readonly DateTime _startTime;
 
         protected override string SensorName { get; }

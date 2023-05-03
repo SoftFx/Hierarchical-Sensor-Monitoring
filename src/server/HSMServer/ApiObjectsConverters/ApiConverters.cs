@@ -1,4 +1,5 @@
-﻿using HSMSensorDataObjects.HistoryRequests;
+﻿using System;
+using HSMSensorDataObjects.HistoryRequests;
 using HSMSensorDataObjects.SensorValueRequests;
 using HSMServer.Core.Helpers;
 using HSMServer.Core.Model;
@@ -56,6 +57,17 @@ namespace HSMServer.ApiObjectsConverters
                 Status = value.Status.Convert(),
                 Value = value.Value
             };
+        
+        public static VersionValue Convert(this VersionSensorValue value)
+        {
+            return new()
+            {
+                Comment = value.Comment,
+                Time = value.Time,
+                Status = value.Status.Convert(),
+                Value = value.Value
+            };
+        }
 
         public static FileValue Convert(this FileSensorValue value) =>
             new()
@@ -111,6 +123,7 @@ namespace HSMServer.ApiObjectsConverters
                 BoolSensorValue sv => sv.Convert(),
                 StringSensorValue sv => sv.Convert(),
                 TimeSpanSensorValue sv => sv.Convert(),
+                VersionSensorValue sv => sv.Convert(),
                 _ => null
             };
 
