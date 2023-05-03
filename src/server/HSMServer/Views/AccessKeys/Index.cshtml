@@ -88,8 +88,9 @@
                }
         });
     }
+    
     function createAccessKey(){
-       let newAccessKeyURL = "@Html.Raw(Url.Action(nameof(AccessKeysController.NewServerAccessKey), ViewConstants.AccessKeysController))";
+       let newAccessKeyURL = "@Url.Action(nameof(AccessKeysController.NewServerAccessKey), ViewConstants.AccessKeysController)";
     
        showNewAccessKeyModal(`${newAccessKeyURL}`, true);   
     }

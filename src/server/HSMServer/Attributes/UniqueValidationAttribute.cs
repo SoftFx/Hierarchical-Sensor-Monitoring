@@ -43,11 +43,9 @@ namespace HSMServer.Attributes
                 var key = cache.GetAccessKey(model.Id);
                 
                 keys = key.IsMaster ? cache.GetMasterKeys() : GetProductKeys(cache, key.ProductId);
-                
-                return IsValidAccessKey(keys, model.DisplayName, model.Id);
             }
-
-            keys = model.IsMaster ? cache.GetMasterKeys() : GetProductKeys(cache, model.SelectedProductId);
+            else
+                keys = model.IsMaster ? cache.GetMasterKeys() : GetProductKeys(cache, model.SelectedProductId);
 
             return IsValidAccessKey(keys, model.DisplayName, model.Id);
         }

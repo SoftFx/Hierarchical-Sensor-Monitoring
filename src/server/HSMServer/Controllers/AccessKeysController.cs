@@ -11,7 +11,6 @@ using System.Collections.Generic;
 using System.Linq;
 using HSMServer.Attributes;
 using HSMServer.Authentication;
-using ProductModel = HSMServer.Core.Model.ProductModel;
 
 namespace HSMServer.Controllers
 {

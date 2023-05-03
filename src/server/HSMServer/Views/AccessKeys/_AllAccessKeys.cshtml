@@ -42,17 +42,19 @@
         <tbody>
             @foreach (var key in Model.Keys)
             {
+                var isParentEditAvailable = key.ParentProduct is not null && key.ParentProduct.IsChangingAccessKeysAvailable(user);
+                
                 <tr id="row_@key.Id">
                     @if (Model.FullTable)
                     {
                         <td class="productName text-break">
-                            @if (key.ParentProduct is not null && key.ParentProduct.IsChangingAccessKeysAvailable(user))
+                            @if (isParentEditAvailable)
                             {
                                 <a asp-controller="@ViewConstants.ProductController" asp-action="@nameof(ProductController.EditProduct)" asp-route-Product="@key.ParentProduct.EncodedId">
                                     @Html.Raw(key.NodePath)
                                 </a>
                             }
-                            else if ((User as User).IsAdmin)
+                            else if (user.IsAdmin)
                             {
                                 <span class="fw-bold" style="color: black">Master Key</span>
                             }
@@ -129,7 +131,7 @@
                     {
                         <td nowrap class="text-center">
                             <div class='btn-group'>
-                                @if ((key.ParentProduct is not null && key.ParentProduct.IsChangingAccessKeysAvailable(user)) || (User as User).IsAdmin)
+                                @if (isParentEditAvailable || user.IsAdmin)
                                 {
                                     <button id="actionButton" class="btn" data-bs-toggle="dropdown" data-bs-auto-close="true" aria-haspopup="true" aria-expanded="false">
                                         <i class="fa-solid fa-ellipsis-vertical" style="cursor: pointer"></i>
