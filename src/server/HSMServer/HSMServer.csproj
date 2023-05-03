@@ -1,83 +1,82 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk.Web">
-    <PropertyGroup>
-        <TargetFramework>net7.0</TargetFramework>
-        <ApplicationIcon>Icon.ico</ApplicationIcon>
-        <DocumentationFile>HSMSwaggerComments.xml</DocumentationFile>
-        <NoWarn>$(NoWarn);1591</NoWarn>
-        <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
-        <Version>3.17.0</Version>
-        <Authors>HSM team</Authors>
-        <Company>Soft-FX</Company>
-        <PackageLicenseExpression>MIT</PackageLicenseExpression>
-        <Copyright>Copyright © 2023</Copyright>
-        <ContainerImageName>hsmonitoring/hierarchical_sensor_monitoring</ContainerImageName>
-    </PropertyGroup>
+  <PropertyGroup>
+    <TargetFramework>net7.0</TargetFramework>
+    <ApplicationIcon>Icon.ico</ApplicationIcon>
+    <DocumentationFile>HSMSwaggerComments.xml</DocumentationFile>
+    <NoWarn>$(NoWarn);1591</NoWarn>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    <Version>3.17.1</Version>
+    <Authors>HSM team</Authors>
+    <Company>Soft-FX</Company>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <Copyright>Copyright © 2023</Copyright>
+    <ContainerImageName>hsmonitoring/hierarchical_sensor_monitoring</ContainerImageName>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
+    <DefineConstants>DEBUG;TRACE</DefineConstants>
+    <DebugType>full</DebugType>
+    <DebugSymbols>true</DebugSymbols>
+  </PropertyGroup>
 
-    <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
-        <DefineConstants>DEBUG;TRACE</DefineConstants>
-        <DebugType>full</DebugType>
-        <DebugSymbols>true</DebugSymbols>
-    </PropertyGroup>
+  <ItemGroup>
+    <Content Remove="nlog.config" />
+    <Content Update="Config\appsettings.Development.json">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
+    <Content Update="Config\appsettings.json">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
 
-    <ItemGroup>
-        <Content Remove="nlog.config" />
-        <Content Update="Config\appsettings.Development.json">
-            <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-        </Content>
-        <Content Update="Config\appsettings.json">
-            <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-        </Content>
-    </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="FluentValidation.AspNetCore" Version="11.2.2" />
+    <PackageReference Include="Microsoft.NET.Build.Containers" Version="0.2.7" />
+    <PackageReference Include="NLog.Web.AspNetCore" Version="5.2.2" />
+    <PackageReference Include="Swashbuckle.AspNetCore" Version="6.4.0" />
+    <PackageReference Include="System.Linq.Async" Version="6.0.1" />
+    <PackageReference Include="Telegram.Bot" Version="18.0.0" />
+  </ItemGroup>
 
-    <ItemGroup>
-        <PackageReference Include="FluentValidation.AspNetCore" Version="11.2.2" />
-        <PackageReference Include="Microsoft.NET.Build.Containers" Version="0.2.7" />
-        <PackageReference Include="NLog.Web.AspNetCore" Version="5.2.2" />
-        <PackageReference Include="Swashbuckle.AspNetCore" Version="6.4.0" />
-        <PackageReference Include="System.Linq.Async" Version="6.0.1" />
-        <PackageReference Include="Telegram.Bot" Version="18.0.0" />
-    </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\database\HSMDatabase\HSMDatabase.csproj" />
+    <ProjectReference Include="..\HSM.Core.Monitoring\HSM.Core.Monitoring.csproj" />
+    <ProjectReference Include="..\HSMCommon\HSMCommon.csproj" />
+    <ProjectReference Include="..\HSMServer.Core\HSMServer.Core.csproj" />
+  </ItemGroup>
 
-    <ItemGroup>
-        <ProjectReference Include="..\..\database\HSMDatabase\HSMDatabase.csproj" />
-        <ProjectReference Include="..\HSM.Core.Monitoring\HSM.Core.Monitoring.csproj" />
-        <ProjectReference Include="..\HSMCommon\HSMCommon.csproj" />
-        <ProjectReference Include="..\HSMServer.Core\HSMServer.Core.csproj" />
-    </ItemGroup>
+  <ItemGroup>
+    <Folder Include="Images\" />
+  </ItemGroup>
 
-    <ItemGroup>
-        <Folder Include="Images\" />
-    </ItemGroup>
+  <ItemGroup>
+    <None Include="nlog.config">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
 
-    <ItemGroup>
-        <None Include="nlog.config">
-            <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-        </None>
-    </ItemGroup>
+  <ItemGroup>
+    <Reference Include="BouncyCastle.Crypto">
+      <HintPath>..\..\lib\BouncyCastle.Crypto.dll</HintPath>
+    </Reference>
+    <Reference Include="LightningDB">
+      <HintPath>..\..\lib\LightningDB.dll</HintPath>
+    </Reference>
+  </ItemGroup>
 
-    <ItemGroup>
-        <Reference Include="BouncyCastle.Crypto">
-            <HintPath>..\..\lib\BouncyCastle.Crypto.dll</HintPath>
-        </Reference>
-        <Reference Include="LightningDB">
-            <HintPath>..\..\lib\LightningDB.dll</HintPath>
-        </Reference>
-    </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Settings\DefaultCertificates\default.server.pfx">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <TargetPath>default.server.pfx</TargetPath>
+    </EmbeddedResource>
+  </ItemGroup>
 
-    <ItemGroup>
-        <EmbeddedResource Include="Settings\DefaultCertificates\default.server.pfx">
-            <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-            <TargetPath>default.server.pfx</TargetPath>
-        </EmbeddedResource>
-    </ItemGroup>
+  <Target Name="NpmProdBuild" AfterTargets="Build" Condition="'$(Configuration)'=='Release'">
+    <Exec Command="npm install" />
+    <Exec Command="npm run build_prod" />
+  </Target>
 
-    <Target Name="NpmProdBuild" AfterTargets="Build" Condition="'$(Configuration)'=='Release'">
-        <Exec Command="npm install" />
-        <Exec Command="npm run build_prod" />
-    </Target>
-
-    <Target Name="NpmDevBuild" AfterTargets="Build" Condition="'$(Configuration)'=='Debug'">
-        <Exec Command="npm install" />
-        <Exec Command="npm run build_dev" />
-    </Target>
+  <Target Name="NpmDevBuild" AfterTargets="Build" Condition="'$(Configuration)'=='Debug'">
+    <Exec Command="npm install" />
+    <Exec Command="npm run build_dev" />
+  </Target>
 </Project>

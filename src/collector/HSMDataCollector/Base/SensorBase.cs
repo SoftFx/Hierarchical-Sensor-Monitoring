@@ -24,10 +24,12 @@ namespace HSMDataCollector.Base
         }
 
 
+        public virtual void Start() { }
+
         public abstract void Dispose();
 
         public abstract SensorValueBase GetLastValue();
 
-        protected void EnqueueValue(SensorValueBase value) => _queue.Enqueue(value);
+        protected void EnqueueValue(SensorValueBase value) => _queue.Push(value);
     }
 }

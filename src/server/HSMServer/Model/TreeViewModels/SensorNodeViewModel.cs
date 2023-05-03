@@ -27,7 +27,7 @@ namespace HSMServer.Model.TreeViewModel
 
         public bool IsValidationErrorVisible => !string.IsNullOrEmpty(ValidationError);
 
-        public bool IsChartSupported => Type is not SensorType.String;
+        public bool IsChartSupported => Type is not (SensorType.String or SensorType.Version);
 
         public bool IsTableFormatSupported => Type is not SensorType.File;
 

@@ -4,6 +4,6 @@ namespace HSMDataCollector.Core
 {
     public interface IValuesQueue
     {
-        void Enqueue(SensorValueBase value);
+        void Push(SensorValueBase value);
     }
 }

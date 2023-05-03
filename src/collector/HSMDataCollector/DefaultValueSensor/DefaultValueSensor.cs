@@ -13,7 +13,7 @@ namespace HSMDataCollector.DefaultValueSensor
         private readonly object _syncRoot = new object();
         private T _currentValue;
         private string _currentComment;
-        private SensorStatus _currentStatus;
+        private SensorStatus _currentStatus = SensorStatus.Ok;
 
         public override bool HasLastValue => true;
 
