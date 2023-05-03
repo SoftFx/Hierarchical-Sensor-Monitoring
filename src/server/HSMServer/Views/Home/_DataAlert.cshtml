@@ -1,0 +1,19 @@
+﻿@using HSMServer.Model.DataAlerts
+
+@model DataAlertViewModelBase
+
+@addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
+
+
+<div class="input-group">
+    <label class="input-group-text">If</label>
+    <select class="form-select" asp-for="Property" asp-items="@Model.PropertiesItems"></select>
+    <select class="form-select" asp-for="Action" asp-items="@Model.ActionsItems"></select>
+    <input type="text" class="form-control" asp-for="Value" value="@Model.Value">
+
+    <label class="input-group-text">then</label>
+    <select class="form-select" asp-for="Status" asp-items="@Model.StatusesItems"></select>
+
+    <label class="input-group-text">with</label>
+    <input type="text" class="form-control w-50" placeholder="custom comment" asp-for="Comment" value="@Model.Comment">
+</div>
