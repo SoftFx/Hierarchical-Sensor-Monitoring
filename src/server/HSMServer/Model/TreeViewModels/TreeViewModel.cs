@@ -184,7 +184,7 @@ namespace HSMServer.Model.TreeViewModel
 
         private void AddNewAccessKeyViewModel(AccessKeyModel key, ProductNodeViewModel parent)
         {
-            var viewModel = new AccessKeyViewModel(key, parent, _userManager[key.AuthorId]);
+            var viewModel = new AccessKeyViewModel(key, parent, key.AuthorId);
 
             parent.AddAccessKey(viewModel);
             AccessKeys.TryAdd(key.Id, viewModel);

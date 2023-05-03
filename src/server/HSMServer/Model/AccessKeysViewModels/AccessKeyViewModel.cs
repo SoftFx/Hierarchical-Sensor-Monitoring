@@ -12,7 +12,7 @@ namespace HSMServer.Model.AccessKeysViewModels
 
         public ProductNodeViewModel ParentProduct { get; }
         
-        public User Author { get; }
+        public Guid? AuthorId { get; }
 
         public string ExpirationDate { get; }
 
@@ -28,11 +28,11 @@ namespace HSMServer.Model.AccessKeysViewModels
         public string StatusTitle { get; private set; }
 
 
-        internal AccessKeyViewModel(AccessKeyModel accessKey, ProductNodeViewModel parent, User author)
+        internal AccessKeyViewModel(AccessKeyModel accessKey, ProductNodeViewModel parent, Guid? authorId)
         {
             Id = accessKey.Id;
             ParentProduct = parent;
-            Author = author;
+            AuthorId = authorId;
             ExpirationDate = BuildExpiration(accessKey.ExpirationTime);
 
             Update(accessKey);

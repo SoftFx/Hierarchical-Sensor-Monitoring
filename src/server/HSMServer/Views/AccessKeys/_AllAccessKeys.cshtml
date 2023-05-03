@@ -69,14 +69,18 @@
                         </td>
                         <td>@key.Permissions</td>
                         <td>
-                            @if (UserManager[key.Author?.Id] is not null)
+                            @if (key.AuthorId.HasValue)
                             {
-                                @key.Author?.Name
+                                @if (UserManager[key.AuthorId] is not null)
+                                {
+                                    @UserManager[key.AuthorId].Name
+                                }
+                                else
+                                {
+                                    <span class="fst-italic">Removed</span>
+                                }
                             }
-                            else
-                            {
-                                <span class="fst-italic">Removed</span>
-                            }
+                           
                         </td>
                         <td class="text-center">
                             @if (key.State == KeyState.Expired)

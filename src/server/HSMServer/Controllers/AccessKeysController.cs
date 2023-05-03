@@ -199,7 +199,7 @@ namespace HSMServer.Controllers
             var serverKeys = new List<AccessKeyViewModel>(1 << 4);
 
             if (CurrentUser.IsAdmin)
-                serverKeys.AddRange(TreeValuesCache.GetMasterKeys().Select(x => new AccessKeyViewModel(x, null, _userManager[x.AuthorId])));
+                serverKeys.AddRange(TreeValuesCache.GetMasterKeys().Select(x => new AccessKeyViewModel(x, null, x.AuthorId)));
 
             serverKeys.AddRange(keys);
 
