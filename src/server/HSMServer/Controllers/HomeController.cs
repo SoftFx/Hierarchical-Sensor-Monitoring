@@ -493,7 +493,10 @@ namespace HSMServer.Controllers
         [HttpPost]
         public IActionResult UpdateSensorStatus(EditSensorStatusViewModal modal)
         {
-            var a = 1;
+            if (!ModelState.IsValid)
+                return PartialView("_EditSensorStatusModal", modal);
+            
+
             return default;
         }
 

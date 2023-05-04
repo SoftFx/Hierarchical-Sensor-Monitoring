@@ -24,7 +24,7 @@ public class EditSensorStatusViewModal
     [Display(Name = "New Status")]
     public SensorStatus NewStatus { get; set; }
     
-    
+    [Required(ErrorMessage = "Reason required")]
     [Display(Name = "Reason")]
     public string Reason { get; set; }
 
