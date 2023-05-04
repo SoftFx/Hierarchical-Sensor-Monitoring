@@ -497,12 +497,32 @@ namespace HSMServer.Controllers
         }
 
         [HttpPost]
-        public async Task<IActionResult> UpdateSensorStatus(EditSensorStatusViewModal modal)
+        public IActionResult UpdateSensorStatus(EditSensorStatusViewModal modal)
         {
             if (!ModelState.IsValid)
                 return BadRequest(ModelState);
-
-            return Ok(modal);
+            var sensor = _treeValuesCache.GetSensor(modal.SensorId);
+            
+            var testObj = new
+            {
+                Path = sensor.Path,
+                Comment = modal.Reason,
+                Time = DateTime.UtcNow,
+                Status = modal.NewStatus,
+                Type = sensor.Type
+            };
+            var header = new
+            {
+                Key = _treeValuesCache.GetAccessKey(modal.SelectedAccessKey).Id
+            };
+            
+            var body = new
+            {
+                Sensor = testObj,
+                header
+            };
+            
+            return Ok(body);
         }
 
         #endregion

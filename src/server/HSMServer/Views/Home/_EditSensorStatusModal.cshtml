@@ -75,7 +75,7 @@
    $(document).on("submit", "#editSensorStatus_form", function (event) {
         event.preventDefault();
         event.stopImmediatePropagation();
-
+    
         $.ajax({
             url: $("#editSensorStatus_form").attr("action"),
             type: 'POST',
@@ -84,8 +84,19 @@
             processData: false,
             contentType: false,
             async: true,
-            success: function (data) {
-                $('#editSensorStatusContent').html(data)
+            success: function (response) {
+                 $.ajax({
+                     url: 'api/Sensors/list',
+                     headers: { 'key': response.header.key },
+                     type: 'POST',
+                     contentType: 'application/json',
+                     dataType: 'JSON',
+                     data: JSON.stringify([response.sensor]),
+                     async: true,
+                     success: function () {
+                        hideEditSensorModal();
+                     }
+                 })
             },
             error: function (jqXHR, exception) {
                 $('span.field-validation-valid').each(function () {
