@@ -11,7 +11,7 @@ namespace HSMServer.Core.Model
         CanSendSensorData = 1,
         CanAddNodes = 2,
         CanAddSensors = 4,
-        CanReadSensorData = 8,
+        CanReadSensorData = 8
     }
 
     public enum KeyState : byte
@@ -49,6 +49,8 @@ namespace HSMServer.Core.Model
 
 
         public bool IsExpired => DateTime.UtcNow >= ExpirationTime;
+        
+        public bool IsMaster => ProductId == Guid.Empty;
 
 
         protected AccessKeyModel()
