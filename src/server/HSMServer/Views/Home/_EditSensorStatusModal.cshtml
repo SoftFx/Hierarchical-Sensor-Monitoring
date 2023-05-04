@@ -85,8 +85,17 @@
             contentType: false,
             async: true,
             success: function (data) {
-                console.log(data)
                 $('#editSensorStatusContent').html(data)
+            },
+            error: function (jqXHR, exception) {
+                $('span.field-validation-valid').each(function () {
+                    let errFor = $(this).data('valmsgFor'); 
+                    if (jqXHR.responseJSON[errFor] !== undefined) {
+                       $(this).removeClass('field-validation-valid')
+                       $(this).addClass('field-validation-error')
+                       $(this).html(jqXHR.responseJSON[errFor][0]);
+                    }
+                })
             }
         })
     });

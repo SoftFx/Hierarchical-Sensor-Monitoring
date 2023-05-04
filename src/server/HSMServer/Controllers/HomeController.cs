@@ -21,7 +21,9 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Text.Encodings.Web;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Http.HttpResults;
 
 namespace HSMServer.Controllers
 {
@@ -155,7 +157,8 @@ namespace HSMServer.Controllers
         }
 
         [HttpGet]
-        public IActionResult IgnoreNotifications([FromQuery] string selectedId, [FromQuery] NotificationsTarget target, [FromQuery] bool isOffTimeModal)
+        public IActionResult IgnoreNotifications([FromQuery] string selectedId, [FromQuery] NotificationsTarget target,
+            [FromQuery] bool isOffTimeModal)
         {
             var decodedId = SensorPathHelper.DecodeGuid(selectedId);
 
@@ -298,8 +301,10 @@ namespace HSMServer.Controllers
             if (model == null)
                 return _emptyResult;
 
-            var enumerator = _treeValuesCache.GetSensorValuesPage(SensorPathHelper.DecodeGuid(model.EncodedId), model.FromUtc, model.ToUtc, model.Count);
-            var viewModel = await new HistoryValuesViewModel(model.EncodedId, model.Type, enumerator, GetLocalLastValue(model.EncodedId, model.FromUtc, model.ToUtc)).Initialize();
+            var enumerator =
+                _treeValuesCache.GetSensorValuesPage(SensorPathHelper.DecodeGuid(model.EncodedId), model.FromUtc, model.ToUtc, model.Count);
+            var viewModel = await new HistoryValuesViewModel(model.EncodedId, model.Type, enumerator,
+                GetLocalLastValue(model.EncodedId, model.FromUtc, model.ToUtc)).Initialize();
 
             _userManager[CurrentUser.Id].Pagination = viewModel;
 
@@ -448,14 +453,15 @@ namespace HSMServer.Controllers
             _treeValuesCache.GetSensor(SensorPathHelper.DecodeGuid(encodedId)).LastValue as FileValue;
 
         private async Task<FileValue> GetFileByReceivingTimeOrDefault(string encodedId, long ticks = default) => (ticks == default
-            ? GetFileSensorValue(encodedId)
-            : (await GetFileHistory(encodedId)).Pages[0].Cast<FileValue>().FirstOrDefault(file => file.ReceivingTime.Ticks == ticks))
+                ? GetFileSensorValue(encodedId)
+                : (await GetFileHistory(encodedId)).Pages[0].Cast<FileValue>().FirstOrDefault(file => file.ReceivingTime.Ticks == ticks))
             .DecompressContent();
 
         private Task<HistoryValuesViewModel> GetFileHistory(string encodedId)
         {
             var enumerator = _treeValuesCache.GetSensorValuesPage(SensorPathHelper.DecodeGuid(encodedId), DateTime.MinValue, DateTime.MaxValue, -20);
-            return new HistoryValuesViewModel(encodedId, 6, enumerator, GetLocalLastValue(encodedId, DateTime.MinValue, DateTime.MaxValue)).Initialize();
+            return new HistoryValuesViewModel(encodedId, 6, enumerator, GetLocalLastValue(encodedId, DateTime.MinValue, DateTime.MaxValue))
+                .Initialize();
         }
 
         #endregion
@@ -491,13 +497,12 @@ namespace HSMServer.Controllers
         }
 
         [HttpPost]
-        public IActionResult UpdateSensorStatus(EditSensorStatusViewModal modal)
+        public async Task<IActionResult> UpdateSensorStatus(EditSensorStatusViewModal modal)
         {
             if (!ModelState.IsValid)
-                return PartialView("_EditSensorStatusModal", modal);
-            
+                return BadRequest(ModelState);
 
-            return default;
+            return Ok(modal);
         }
 
         #endregion
