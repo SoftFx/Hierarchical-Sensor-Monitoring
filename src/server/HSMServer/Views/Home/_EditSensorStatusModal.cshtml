@@ -87,7 +87,7 @@
             success: function (response) {
                  $.ajax({
                      url: 'api/Sensors/list',
-                     headers: { 'key': response.header.key },
+                     headers: { 'key': response.key },
                      type: 'POST',
                      contentType: 'application/json',
                      dataType: 'JSON',

@@ -503,26 +503,20 @@ namespace HSMServer.Controllers
                 return BadRequest(ModelState);
             var sensor = _treeValuesCache.GetSensor(modal.SensorId);
             
-            var testObj = new
+            var returnBody = new
             {
-                Path = sensor.Path,
-                Comment = modal.Reason,
-                Time = DateTime.UtcNow,
-                Status = modal.NewStatus,
-                Type = sensor.Type
-            };
-            var header = new
-            {
+                Sensor = new
+                {
+                    Path = sensor.Path,
+                    Comment = modal.Reason,
+                    Time = DateTime.UtcNow,
+                    Status = modal.NewStatus.ToClient(),
+                    Type = sensor.Type
+                },
                 Key = _treeValuesCache.GetAccessKey(modal.SelectedAccessKey).Id
             };
             
-            var body = new
-            {
-                Sensor = testObj,
-                header
-            };
-            
-            return Ok(body);
+            return Ok(returnBody);
         }
 
         #endregion
