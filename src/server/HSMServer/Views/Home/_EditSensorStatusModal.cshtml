@@ -98,7 +98,7 @@
             async: true,
             success: function (response) {
                  $.ajax({
-                     url: 'api/Sensors/list',
+                     url: '/api/Sensors/list',
                      headers: { 'key': response.key },
                      type: 'POST',
                      contentType: 'application/json',
@@ -111,14 +111,16 @@
                  })
             },
             error: function (jqXHR, exception) {
-                $('span.field-validation-valid').each(function () {
-                    let errFor = $(this).data('valmsgFor'); 
-                    if (jqXHR.responseJSON[errFor] !== undefined) {
-                       $(this).removeClass('field-validation-valid')
-                       $(this).addClass('field-validation-error')
-                       $(this).html(jqXHR.responseJSON[errFor][0]);
-                    }
-                })
+                if (jqXHR.status === 403)
+                    $('span.field-validation-valid').each(function () {
+                        let errFor = $(this).data('valmsgFor'); 
+                        if (jqXHR.responseJSON[errFor] !== undefined) {
+                           $(this).removeClass('field-validation-valid')
+                           $(this).addClass('field-validation-error')
+                           $(this).html(jqXHR.responseJSON[errFor][0]);
+                        }
+                    })
+                else hideEditSensorModal();
             }
         })
     });
