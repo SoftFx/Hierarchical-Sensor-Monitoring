@@ -75,7 +75,7 @@ namespace HSMServer.Core.Cache
 
         public List<AccessKeyModel> GetAccessKeys() => _keys.Values.ToList();
 
-        public ProductModel AddProduct(string productName) => AddProduct(new ProductModel(productName));
+        public ProductModel AddProduct(string productName, Guid authorId) => AddProduct(new ProductModel(productName, authorId));
 
         private void UpdateProduct(ProductModel product)
         {
@@ -228,6 +228,8 @@ namespace HSMServer.Core.Cache
         }
 
         public AccessKeyModel GetAccessKey(Guid id) => _keys.GetValueOrDefault(id);
+
+        public List<AccessKeyModel> GetMasterKeys() => GetAccessKeys().Where(x => x.IsMaster).ToList();
 
         public void UpdateSensor(SensorUpdate update)
         {
@@ -588,6 +590,7 @@ namespace HSMServer.Core.Cache
         private ProductModel AddNonExistingProductsAndGetParentProduct(ProductModel parentProduct, BaseRequestModel request)
         {
             var pathParts = request.PathParts;
+            var authorId = GetAccessKey(request.KeyGuid).AuthorId;
 
             for (int i = 0; i < pathParts.Length - 1; ++i)
             {
@@ -595,7 +598,7 @@ namespace HSMServer.Core.Cache
                 var subProduct = parentProduct.SubProducts.FirstOrDefault(p => p.Value.DisplayName == subProductName).Value;
                 if (subProduct == null)
                 {
-                    subProduct = new ProductModel(subProductName);
+                    subProduct = new ProductModel(subProductName, authorId);
                     parentProduct.AddSubProduct(subProduct);
 
                     AddProduct(subProduct);

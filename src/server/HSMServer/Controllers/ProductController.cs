@@ -124,7 +124,7 @@ namespace HSMServer.Controllers
         public IActionResult CreateProduct(AddProductViewModel product)
         {
             if (ModelState.IsValid)
-                _treeValuesCache.AddProduct(product.Name);
+                _treeValuesCache.AddProduct(product.Name, CurrentUser.Id);
 
             return PartialView("_AddProduct", product);
         }

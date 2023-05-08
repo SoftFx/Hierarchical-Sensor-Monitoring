@@ -35,21 +35,21 @@ namespace HSMServer.Core.Model
         protected BaseNodeModel()
         {
             Id = Guid.NewGuid();
-            AuthorId = Guid.Empty;
             CreationDate = DateTime.UtcNow;
 
             ServerPolicy.ExpectedUpdate.Uploaded += (_, _) => HasUpdateTimeout();
         }
 
-        protected BaseNodeModel(string name) : this()
+        protected BaseNodeModel(string name, Guid? authorId) : this()
         {
             DisplayName = name;
+            AuthorId = authorId ?? Guid.Empty;
         }
 
         protected BaseNodeModel(BaseNodeEntity entity) : this()
         {
             Id = Guid.Parse(entity.Id);
-            AuthorId = Guid.TryParse(entity.AuthorId, out var authorId) ? authorId : null;
+            AuthorId = Guid.TryParse(entity.AuthorId, out var authorId) ? authorId : Guid.Empty;
             CreationDate = new DateTime(entity.CreationDate);
 
             DisplayName = entity.DisplayName;
