@@ -21,9 +21,8 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
-using System.Text.Encodings.Web;
 using System.Threading.Tasks;
-using Microsoft.AspNetCore.Http.HttpResults;
+using HSMServer.Attributes;
 
 namespace HSMServer.Controllers
 {
@@ -497,10 +496,12 @@ namespace HSMServer.Controllers
         }
 
         [HttpPost]
+        [AuthorizeIsAdmin]
         public IActionResult UpdateSensorStatus(EditSensorStatusViewModal modal)
         {
             if (!ModelState.IsValid)
                 return BadRequest(ModelState);
+
             var sensor = _treeValuesCache.GetSensor(modal.SensorId);
             
             var returnBody = new
