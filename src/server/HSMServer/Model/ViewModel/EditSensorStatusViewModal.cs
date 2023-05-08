@@ -16,6 +16,8 @@ public class EditSensorStatusViewModal
     
     public Guid RootProductId { get; set; }
     
+    public string RootProductName { get; set; }
+    
     public Guid SensorId { get; set; }
     
     [Display(Name = "Current Status")]
@@ -37,5 +39,14 @@ public class EditSensorStatusViewModal
         SensorId = Guid.Parse(sensorInfoViewModel.EncodedId);
 
         Status = sensorInfoViewModel.Status.ToCore();
+    }
+    
+    public EditSensorStatusViewModal(BaseSensorModel sensorModel)
+    {
+        Path = sensorModel.Path;
+        RootProductName = sensorModel.RootProductName;
+        SensorId = sensorModel.Id;
+
+        Status = sensorModel.Status.Status;
     }
 }

@@ -495,6 +495,15 @@ namespace HSMServer.Controllers
             return PartialView("_MetaInfo", new SensorInfoViewModel(sensor));
         }
 
+        [HttpGet]
+        [AuthorizeIsAdmin]
+        public IActionResult GetSensorEditModal(Guid sensorId)
+        {
+            var sensor = _treeValuesCache.GetSensor(sensorId);
+            
+            return PartialView("_EditSensorStatusModal", new EditSensorStatusViewModal(sensor));
+        }
+
         [HttpPost]
         [AuthorizeIsAdmin]
         public IActionResult UpdateSensorStatus(EditSensorStatusViewModal modal)

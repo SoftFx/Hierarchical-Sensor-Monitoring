@@ -1,5 +1,4 @@
-﻿@using HSMServer.Controllers
-@using HSMServer.Core.Cache
+﻿@using HSMServer.Core.Cache
 @using HSMServer.Core.Model
 @using HSMServer.Model.Authentication
 @using Microsoft.AspNetCore.Mvc.TagHelpers
@@ -11,12 +10,16 @@
 @inject ITreeValuesCache Cache
 
 @{
-    var accesskeys = Cache.GetProduct(@Model.RootProductId).AccessKeys.Values
+    var rootProduct = Model.RootProductId == default 
+        ? Cache.GetProductByName(Model.RootProductName) 
+        : Cache.GetProduct(@Model.RootProductId);
+
+    var accesskeys = rootProduct.AccessKeys.Values
         .Where(x => (x.Permissions & KeyPermissions.CanSendSensorData) != 0)
-        .Select(x => new SelectListItem() { Value = x.Id.ToString(), Text = x.DisplayName });
+        .Select(x => new SelectListItem() {Value = x.Id.ToString(), Text = x.DisplayName});
 
     var isAccessKeysEmpty = accesskeys.Count() == 0;
-    
+
     var user = User as User;
 }
 
@@ -26,7 +29,7 @@
     <input class="d-none" form="editSensorStatus_form" asp-for="RootProductId"/>
     <input class="d-none" form="editSensorStatus_form" asp-for="ModelHeader"/>
     <input class="d-none" form="editSensorStatus_form" asp-for="Path"/>
-    
+
     <div class="modal-header">
         <div class="text-break">
             <h5 class="modal-title">@Model.ModelHeader</h5>
@@ -54,10 +57,10 @@
                 <input class="form-control" value="@user.Name" disabled/>
             </div>
             <div class="d-flex flex-column mt-2">
-                 
+
                 <label class="form-label" asp-for="@Model.SelectedAccessKey"></label>
                 <div class="d-flex flex-row">
-                     <select class="form-control form-select" asp-for="@Model.SelectedAccessKey" form="editSensorStatus_form" asp-items="@accesskeys" disabled="@(isAccessKeysEmpty ? true : false)"></select>
+                    <select class="form-control form-select" asp-for="@Model.SelectedAccessKey" form="editSensorStatus_form" asp-items="@accesskeys" disabled="@(isAccessKeysEmpty ? true : false)"></select>
                     @if (isAccessKeysEmpty)
                     {
                         <button onclick="" class="d-flex btn btn-link me-0 pe-0">
@@ -65,7 +68,7 @@
                         </button>
                     }
                 </div>
-               
+
             </div>
             <div class="d-flex flex-column mt-2">
                 <label class="form-label" asp-for="@Model.Reason"></label>

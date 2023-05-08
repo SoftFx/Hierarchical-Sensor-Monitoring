@@ -32,6 +32,8 @@
         updateAction = nameof(HomeController.UpdateSensorInfo);
         getAction = nameof(HomeController.GetSensorInfo);
     }
+
+    var sensorId = Model.EncodedId;
 }
 
 
@@ -94,7 +96,7 @@
                 <div class="modal fade" tabindex="-1" role="dialog" id="editSensorStatus_modal">
                     <div class="modal-dialog modal-dialog-centered" role="document">
                         <div class="modal-content" id="editSensorStatusContent">
-                             @await Html.PartialAsync("_EditSensorStatusModal", new EditSensorStatusViewModal(sensor))
+                            @* @await Html.PartialAsync("_EditSensorStatusModal", new EditSensorStatusViewModal(sensor)) *@
                         </div>
                     </div>
                 </div>
@@ -118,7 +120,9 @@
                         <span id="status_name_@Model.EncodedId">@Model.Status</span>
                         @if (user.IsAdmin)
                         {
-                            <i class="fas fa-edit align-self-center ms-2" onclick="openEditSensorStatusModal()" style="cursor: pointer"></i>
+                            <span onclick="openEditSensorStatusModal()">
+                                <i class="fas fa-edit align-self-center ms-2" style="cursor: pointer"></i>
+                            </span>
                         }
                     </div>
                 </div>
@@ -225,6 +229,16 @@
     }
     
     function openEditSensorStatusModal(){
+        $.ajax({
+            url: '@Url.Action(nameof(HomeController.GetSensorEditModal))?sensorId=@sensorId',
+            type: 'GET',
+            datatype: 'json',
+            async: true,
+            success: (viewData) => {
+                $('#editSensorStatusContent').html(viewData);
+            }
+        });
+        
         $('#editSensorStatus_modal').modal('show');
     }
 </script>
