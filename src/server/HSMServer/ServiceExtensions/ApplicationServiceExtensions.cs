@@ -50,15 +50,22 @@ public static class ApplicationServiceExtensions
         {
             o.UseInlineDefinitionsForEnums();
             o.OperationFilter<DataRequestHeaderSwaggerFilter>();
-            o.SwaggerDoc(ServerConfig.Version, new OpenApiInfo
+            o.SwaggerDoc(ServerConfig.Version.ToString(), new OpenApiInfo
             {
-                Version = ServerConfig.Version,
+                Version = ServerConfig.Version.ToString(),
                 Title = ServerConfig.Name,
             });
+            
             o.MapType<TimeSpan>(() => new OpenApiSchema
             {
                 Type = "string",
                 Example = new OpenApiString("00.00:00:00")
+            });
+            
+            o.MapType<Version>(() => new OpenApiSchema
+            {
+                Type = "string",
+                Example = new OpenApiString("0.0.0.0")
             });
 
             var xmlPath = Path.Combine(Environment.CurrentDirectory, "HSMSwaggerComments.xml");

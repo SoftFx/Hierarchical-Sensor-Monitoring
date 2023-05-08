@@ -196,7 +196,7 @@ namespace HSMServer.Notifications
             }
             catch (Exception ex)
             {
-                _logger.Error(ex.Message);
+                _logger.Error(ex);
             }
         }
 
@@ -224,7 +224,7 @@ namespace HSMServer.Notifications
                 }
                 catch (Exception ex)
                 {
-                    _logger.Error(ex.Message);
+                    _logger.Error(ex);
                 }
             }
         }

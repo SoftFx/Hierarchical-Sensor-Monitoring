@@ -17,6 +17,7 @@ namespace HSMServer.Core.Model
                 SensorType.DoubleBar => new DoubleBarSensorModel(entity),
                 SensorType.File => new FileSensorModel(entity),
                 SensorType.TimeSpan => new TimeSpanSensorModel(entity),
+                SensorType.Version => new VersionSensorModel(entity),
                 _ => throw new ArgumentException($"Unexpected sensor entity type {entity.Type}"),
             };
         }

@@ -1,12 +1,12 @@
 ﻿using HSMCommon.Constants;
+using HSMCommon.Extensions;
 using HSMDataCollector.Core;
-using HSMDataCollector.PublicInterface;
 using HSMDataCollector.Options;
+using HSMDataCollector.PublicInterface;
 using HSMServer.Core.Cache;
 using System;
 using System.Linq;
 using System.Reflection;
-using HSMCommon.Extensions;
 
 namespace HSM.Core.Monitoring
 {
@@ -45,11 +45,14 @@ namespace HSM.Core.Monitoring
                 ServerAddress = "https://localhost",
             };
 
-            var productInfoOptions = new ProductInfoOptions()
+            var productInfoOptions = new VersionSensorOptions()
             {
                 Version = Assembly.GetEntryAssembly()?.GetName().GetVersion()
             };
-            
+
+            var collectorInfoOptions = new CollectorMonitoringInfoOptions();
+
+
             _dataCollector = new DataCollector(collectorOptions).AddNLog();
 
             if (OperatingSystem.IsWindows())
@@ -58,15 +61,16 @@ namespace HSM.Core.Monitoring
                                       .AddDiskMonitoringSensors()
                                       .AddSystemMonitoringSensors()
                                       .AddWindowsInfoMonitoringSensors()
-                                      .AddProductInfo(productInfoOptions)
-                                      .AddCollectorHeartbeat();
+                                      .AddProductVersion(productInfoOptions)
+                                      .AddCollectorMonitoringSensors(collectorInfoOptions);
             }
             else
             {
                 _dataCollector.Unix.AddProcessMonitoringSensors()
                                    .AddDiskMonitoringSensors()
-                                   .AddProductInfo(productInfoOptions)
-                                   .AddCollectorHeartbeat();
+                                   .AddSystemMonitoringSensors()
+                                   .AddProductVersion(productInfoOptions)
+                                   .AddCollectorMonitoringSensors(collectorInfoOptions);
             }
 
             InitializeSensors();
@@ -78,7 +82,7 @@ namespace HSM.Core.Monitoring
         private static string GetSelfMonitoringKey(ITreeValuesCache cache)
         {
             var selfMonitoring = cache.GetProductByName(SelfMonitoringProductName);
-            selfMonitoring ??= cache.AddProduct(SelfMonitoringProductName);
+            selfMonitoring ??= cache.AddProduct(SelfMonitoringProductName, Guid.Empty);
 
             var key = selfMonitoring.AccessKeys.FirstOrDefault(k => k.Value.DisplayName == CommonConstants.DefaultAccessKey).Key;
 
