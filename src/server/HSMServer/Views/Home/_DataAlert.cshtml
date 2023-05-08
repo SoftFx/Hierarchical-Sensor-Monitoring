@@ -23,4 +23,12 @@
 
     <label class="input-group-text">with</label>
     <input type="text" class="form-control w-50" placeholder="custom comment" asp-for="Comment" value="@Model.Comment">
+
+    <button id="actionButton" class="btn" data-bs-toggle="dropdown" data-bs-auto-close="true" aria-haspopup="true" aria-expanded="false">
+        <i class="fa-solid fa-ellipsis-vertical button-link"></i>
+    </button>
+    <div class="dropdown-menu dropdown-menu-end" aria-labelledby="actionButton">
+        <a class="dropdown-item text-decoration-none fw-normal button-link">Send test message</a>
+        <a class="dropdown-item text-decoration-none fw-normal button-link">Remove</a>
+    </div>
 </div>
