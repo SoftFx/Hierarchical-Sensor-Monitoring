@@ -20,10 +20,10 @@ public class EditSensorStatusViewModal
     
     public Guid SensorId { get; set; }
     
-    [Display(Name = "Current Status")]
+    [Display(Name = "Current status")]
     public SensorStatus Status { get; set; }
     
-    [Display(Name = "New Status")]
+    [Display(Name = "New status")]
     public SensorStatus NewStatus { get; set; }
     
     [Required(ErrorMessage = "Reason required")]
