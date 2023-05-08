@@ -1,4 +1,6 @@
-﻿@using HSMServer.Core
+﻿@using HSMServer.Constants
+@using HSMServer.Controllers
+@using HSMServer.Core
 @using HSMServer.Core.Cache
 @using HSMServer.Core.Model
 @using HSMServer.Model.Authentication
@@ -14,7 +16,7 @@
     var rootProduct = Model.RootProductId == default
         ? Cache.GetProductByName(Model.RootProductName)
         : Cache.GetProduct(@Model.RootProductId);
-    
+    Model.RootProductId = rootProduct.Id;
     var isAccessKeyExist = rootProduct.AccessKeys.Values.Any(x => (x.Permissions & KeyPermissions.CanSendSensorData) != 0);
 
     var user = User as User;
@@ -66,7 +68,7 @@
                 <div class="d-flex flex-column mt-2">
                     <div class="d-flex flex-row align-items-center">
                         <span asp-validation-for="RootProductId" form="editSensorStatus_form" style="color: #b94a48;font-size: small;">There is no access key with @KeyPermissions.CanSendSensorData</span>
-                        <button onclick="" class="d-flex btn btn-link me-0 pe-0">
+                        <button onclick="newAccessKeyModal()" type="button" class="d-flex btn btn-link me-0 pe-0">
                             Add
                         </button>
                     </div>
@@ -131,6 +133,22 @@
         })
     });
 
+   function newAccessKeyModal(){
+       let url = "@Html.Raw(Url.Action(nameof(AccessKeysController.NewAccessKey), ViewConstants.AccessKeysController))";
+
+       $.ajax({
+               type: 'get',
+               url: `${url}?selectedId=@Model.RootProductId&closeModal=true`,
+               datatype: 'html',
+               contenttype: 'application/json',
+               cache: false,
+               success: function (viewData) {
+                   console.log(viewData)
+                   $('#editSensorStatusContent').html(viewData)
+               }
+           })
+   }
+   
     function hideEditSensorModal() {
         $('#editSensorStatus_modal').modal('hide');
     }
