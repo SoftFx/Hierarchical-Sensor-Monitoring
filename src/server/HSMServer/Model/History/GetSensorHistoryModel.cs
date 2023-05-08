@@ -3,7 +3,7 @@ using HSMServer.Extensions;
 using System;
 using System.Text.Json.Serialization;
 
-namespace HSMServer.Model
+namespace HSMServer.Model.Model.History
 {
     public class GetSensorHistoryModel
     {
@@ -19,7 +19,7 @@ namespace HSMServer.Model
 
 
         [JsonIgnore]
-        internal int Count { get; set; } = HomeController.MaxHistoryCount;
+        internal int Count { get; set; } = SensorHistoryController.MaxHistoryCount;
 
         [JsonIgnore]
         internal DateTime ToUtc => To.ToUtcKind();
