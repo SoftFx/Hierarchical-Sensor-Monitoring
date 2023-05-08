@@ -11,15 +11,11 @@
 @inject ITreeValuesCache Cache
 
 @{
-    var rootProduct = Model.RootProductId == default 
-        ? Cache.GetProductByName(Model.RootProductName) 
+    var rootProduct = Model.RootProductId == default
+        ? Cache.GetProductByName(Model.RootProductName)
         : Cache.GetProduct(@Model.RootProductId);
-
-    var accesskeys = rootProduct.AccessKeys.Values
-        .Where(x => (x.Permissions & KeyPermissions.CanSendSensorData) != 0)
-        .Select(x => new SelectListItem() {Value = x.Id.ToString(), Text = x.DisplayName});
-
-    var isAccessKeysEmpty = accesskeys.Count() == 0;
+    
+    var isAccessKeyExist = rootProduct.AccessKeys.Values.Any(x => (x.Permissions & KeyPermissions.CanSendSensorData) != 0);
 
     var user = User as User;
 }
@@ -52,7 +48,7 @@
                         @foreach (var sensor in Html.GetEnumSelectList<SensorStatus>())
                         {
                             <option value="@sensor.Value">
-                                @(((SensorStatus)int.Parse(sensor.Value)).ToSelectIcon())
+                                @(((SensorStatus) int.Parse(sensor.Value)).ToSelectIcon())
                                 @sensor.Text
                             </option>
                         }
@@ -65,20 +61,17 @@
                 <label class="form-label mb-0">Requester:</label>
                 <span class="ms-1" disabled>@user.Name</span>
             </div>
-            <div class="d-flex flex-column mt-2">
-
-                <label class="form-label" asp-for="@Model.SelectedAccessKey"></label>
-                <div class="d-flex flex-row">
-                    <select class="form-control form-select" asp-for="@Model.SelectedAccessKey" form="editSensorStatus_form" asp-items="@accesskeys" disabled="@(isAccessKeysEmpty ? true : false)"></select>
-                    @if (isAccessKeysEmpty)
-                    {
+            @if (!isAccessKeyExist)
+            {
+                <div class="d-flex flex-column mt-2">
+                    <div class="d-flex flex-row align-items-center">
+                        <span asp-validation-for="RootProductId" form="editSensorStatus_form" style="color: #b94a48;font-size: small;">There is no access key with @KeyPermissions.CanSendSensorData</span>
                         <button onclick="" class="d-flex btn btn-link me-0 pe-0">
                             Add
                         </button>
-                    }
+                    </div>
                 </div>
-
-            </div>
+            }
             <div class="d-flex flex-column mt-2">
                 <label class="form-label" asp-for="@Model.Reason"></label>
                 <textarea class="form-control" asp-for="@Model.Reason" form="editSensorStatus_form"></textarea>
@@ -125,6 +118,7 @@
             error: function (jqXHR, exception) {
                
                     $('span.field-validation-valid').each(function () {
+                        console.log($(this))
                         let errFor = $(this).data('valmsgFor'); 
                         if (jqXHR.responseJSON[errFor] !== undefined) {
                            $(this).removeClass('field-validation-valid')

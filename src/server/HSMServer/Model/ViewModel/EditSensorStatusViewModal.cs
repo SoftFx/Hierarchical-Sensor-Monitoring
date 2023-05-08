@@ -1,5 +1,6 @@
 using System;
 using System.ComponentModel.DataAnnotations;
+using HSMServer.Attributes;
 using HSMServer.Core.Model;
 using HSMServer.Extensions;
 
@@ -13,7 +14,8 @@ public class EditSensorStatusViewModal
     
     [Display(Name = "Access key")]
     public Guid SelectedAccessKey { get; set; }
-    
+
+    [AccessKeyCanSendPermission]
     public Guid RootProductId { get; set; }
     
     public string RootProductName { get; set; }
@@ -46,7 +48,7 @@ public class EditSensorStatusViewModal
         Path = sensorModel.Path;
         RootProductName = sensorModel.RootProductName;
         SensorId = sensorModel.Id;
-
+        
         Status = sensorModel.Status.Status;
     }
 }
