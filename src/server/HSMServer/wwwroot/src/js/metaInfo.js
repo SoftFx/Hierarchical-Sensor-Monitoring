@@ -1,5 +1,4 @@
 ﻿window.editInfoButtonClick = function () {
-    $('#description').removeAttr("disabled");
     $('#saveInfo').removeAttr("hidden");
     $('#revertInfo').removeAttr("hidden");
     $('#editButtonMetaInfo').addClass('d-none');
@@ -16,9 +15,11 @@
 
     $('#partialIntervalSelect').removeClass('d-none');
     $('#partialRestoreSelect').removeClass('d-none');
+    $('[id^="dataAlertInputGroupd_"]').removeClass('d-none');
 
     $('#labelInterval').addClass('d-none');
     $('#labelRestoreInterval').addClass('d-none');
+    $('[id^="dataAlertLabel_"]').addClass('d-none');
 }
 
 window.revertInfoButtonClick = function (action) {

@@ -67,9 +67,12 @@
             }
         </div>
 
-        <label class="col-form-label py-0" id='markdown_span_description'>@Model.Description</label>
-        <div class="d-none d-flex w-100 ps-3">
-            <textarea id='description' class="form-control w-100 d-none"  type='text' asp-for="Description" value='@Model.Description' disabled></textarea>
+        @if (!string.IsNullOrEmpty(Model.Description))
+        {
+            <label class="col-form-label py-0" id='markdown_span_description'>@Model.Description</label>
+        }
+        <div class="ps-3">
+            <textarea id='description' class="form-control w-100 d-none"  type='text' asp-for="Description" value='@Model.Description'></textarea>
         </div>
 
         <div class="collapse" id="metaInfoCollapse">

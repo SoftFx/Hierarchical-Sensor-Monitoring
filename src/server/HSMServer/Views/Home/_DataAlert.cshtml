@@ -1,4 +1,5 @@
 ﻿@using HSMServer.Model.DataAlerts
+@using HSMServer.Extensions;
 
 @model DataAlertViewModelBase
 
@@ -7,7 +8,11 @@
 
 <input class="d-none" asp-for="Id" value="@Model.Id" />
 
-<div id="dataAlertInputGroupd_@Model.Id" class="input-group mb-1">
+<div id="dataAlertLabel_@Model.Id" class="ms-3">
+    If @Model.Property @Model.Action.GetDisplayName() @Model.Value then @Model.Status with @Model.Comment
+</div>
+
+<div id="dataAlertInputGroupd_@Model.Id" class="input-group mb-1 d-none">
     <label class="input-group-text">If</label>
     <select class="form-select" asp-for="Property" asp-items="@Model.PropertiesItems"></select>
     <select class="form-select" asp-for="Action" asp-items="@Model.ActionsItems"></select>

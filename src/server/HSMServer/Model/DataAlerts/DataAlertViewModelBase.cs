@@ -51,6 +51,13 @@ namespace HSMServer.Model.DataAlerts
         public List<SelectListItem> StatusesItems => _statuses.Select(s => new SelectListItem(s.GetDisplayName(), $"{s}")).ToList();
 
 
-        public DataAlertViewModelBase() { }
+        public DataAlertViewModelBase()
+        {
+            // TODO: it shoule be empty constructor body
+            Property = "Value";
+            Value = "50";
+            Status = SensorStatus.Warning;
+            Comment = "$sensor $property $action $value";
+        }
     }
 }
