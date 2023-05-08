@@ -57,9 +57,7 @@
         <input id="metaInfo_encodedId" style='display: none' asp-for="EncodedId" value="@Model.EncodedId"/>
 
         <div id="headline_metainfo" class="d-none d-flex" style="height: 2rem;">
-            <div id="description_title" class="d-none form-control px-0 border-0 fw-bold" style="max-width: 15rem;">
-                Description:
-            </div>
+            <label id="description_title" class="col-form-label fw-bold">Description:</label>
 
             @if (hasUserRights)
             {
@@ -69,15 +67,13 @@
             }
         </div>
 
-        <div class="naked-text ms-1 w-100" id='markdown_span_description'>@Model.Description</div>
+        <label class="col-form-label py-0" id='markdown_span_description'>@Model.Description</label>
         <div class="d-none d-flex w-100 ps-3">
-            <textarea id='description' class="form-control naked-text w-100 d-none"  type='text' asp-for="Description" value='@Model.Description' disabled></textarea>
+            <textarea id='description' class="form-control w-100 d-none"  type='text' asp-for="Description" value='@Model.Description' disabled></textarea>
         </div>
 
         <div class="collapse" id="metaInfoCollapse">
-            <div class="form-control border-0 fw-bold px-0" style="max-width: 15rem;">
-                General info:
-            </div>
+            <label class="col-form-label fw-bold">General info:</label>
 
             @if (Model is FolderInfoViewModel folder)
             {

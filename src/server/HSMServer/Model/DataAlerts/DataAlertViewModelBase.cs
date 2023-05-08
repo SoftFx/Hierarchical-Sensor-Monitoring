@@ -1,6 +1,7 @@
 ﻿using HSMServer.Extensions;
 using HSMServer.Model.TreeViewModel;
 using Microsoft.AspNetCore.Mvc.Rendering;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.Linq;
@@ -29,6 +30,8 @@ namespace HSMServer.Model.DataAlerts
 
         protected abstract List<Operation> Actions { get; }
 
+
+        public Guid Id { get; set; }
 
         public string Property { get; set; }
 

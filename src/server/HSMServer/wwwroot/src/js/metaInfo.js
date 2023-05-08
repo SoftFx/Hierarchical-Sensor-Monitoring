@@ -1,5 +1,5 @@
 ﻿window.editInfoButtonClick = function () {
-    $('#description').removeAttr("disabled").removeClass("naked-text");
+    $('#description').removeAttr("disabled");
     $('#saveInfo').removeAttr("hidden");
     $('#revertInfo').removeAttr("hidden");
     $('#editButtonMetaInfo').addClass('d-none');
