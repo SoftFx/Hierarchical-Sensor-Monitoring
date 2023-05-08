@@ -1,4 +1,5 @@
-﻿@using HSMServer.Core.Cache
+﻿@using HSMServer.Core
+@using HSMServer.Core.Cache
 @using HSMServer.Core.Model
 @using HSMServer.Model.Authentication
 @using Microsoft.AspNetCore.Mvc.TagHelpers
@@ -42,19 +43,27 @@
             <div class="justify-content-between d-flex">
                 <div class="col-auto">
                     <label asp-for="@Model.Status"></label>
-                    <input asp-for="@Model.Status" form="editSensorStatus_form" class="form-control" value="@Model.Status" disabled/>
+                    <input asp-for="@Model.Status" form="editSensorStatus_form" class="form-control" value="@(Model.Status.ToSelectIcon() + Model.Status)" disabled/>
                 </div>
                 <span class="align-self-end pb-2">-></span>
                 <div class="col-auto">
                     <label asp-for="@Model.NewStatus"></label>
-                    <select asp-for="@Model.NewStatus" asp-items="Html.GetEnumSelectList<SensorStatus>()" form="editSensorStatus_form" class="form-select d-inline-block"></select>
+                    <select asp-for="@Model.NewStatus" form="editSensorStatus_form" class="form-select d-inline-block">
+                        @foreach (var sensor in Html.GetEnumSelectList<SensorStatus>())
+                        {
+                            <option value="@sensor.Value">
+                                @(((SensorStatus)int.Parse(sensor.Value)).ToSelectIcon())
+                                @sensor.Text
+                            </option>
+                        }
+                    </select>
                 </div>
             </div>
         </div>
         <div class="form-group mt-2">
             <div class="d-flex flex-row align-items-center">
                 <label class="form-label mb-0">Requester:</label>
-                <input class="ms-1 form-control" value="@user.Name" disabled/>
+                <span class="ms-1" disabled>@user.Name</span>
             </div>
             <div class="d-flex flex-column mt-2">
 
@@ -114,7 +123,7 @@
                  })
             },
             error: function (jqXHR, exception) {
-                if (jqXHR.status === 403)
+               
                     $('span.field-validation-valid').each(function () {
                         let errFor = $(this).data('valmsgFor'); 
                         if (jqXHR.responseJSON[errFor] !== undefined) {
@@ -123,7 +132,7 @@
                            $(this).html(jqXHR.responseJSON[errFor][0]);
                         }
                     })
-                else hideEditSensorModal();
+                
             }
         })
     });
