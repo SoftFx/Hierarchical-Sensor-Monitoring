@@ -1,5 +1,6 @@
 ﻿@using HSMServer.Constants
 @using HSMServer.Controllers
+@using HSMServer.Extensions
 @using HSMServer.Helpers
 @using HSMServer.Model.Authentication
 @using HSMServer.Model
@@ -148,7 +149,7 @@
         <footer class="border-top footer text-muted content">
             <div class="d-flex justify-content-between align-items-center mx-3 my-2">
                 <div>
-                    &copy; 2023 - Soft-FX Current version: @ServerConfig.Version
+                    &copy; 2023 - Soft-FX Current version: @ServerConfig.Version.RemoveTailZeroes()
                 </div>
                 <div>
                     <div id="updateTime"></div>

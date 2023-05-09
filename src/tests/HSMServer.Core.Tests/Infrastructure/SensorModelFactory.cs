@@ -19,6 +19,7 @@ namespace HSMServer.Core.Tests.Infrastructure
                 SensorType.DoubleBar => new DoubleBarSensorModel(entity),
                 SensorType.File => new FileSensorModel(entity),
                 SensorType.TimeSpan => new TimeSpanSensorModel(entity),
+                SensorType.Version => new VersionSensorModel(entity),
                 _ => throw new ArgumentException($"Unexpected sensor entity type {entity.Type}"),
             };
         }
@@ -30,6 +31,7 @@ namespace HSMServer.Core.Tests.Infrastructure
                 Description = RandomGenerator.GetRandomString(),
                 ExpectedUpdateInterval = new(TimeSpan.FromMinutes(10).Ticks),
                 State = SensorState.Blocked,
+                Integration = Integration.Grafana,
             };
     }
 }

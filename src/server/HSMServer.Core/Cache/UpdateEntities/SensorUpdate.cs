@@ -10,6 +10,8 @@ namespace HSMServer.Core.Cache.UpdateEntities
     {
         public SensorState? State { get; init; }
 
+        public Integration? Integration { get; init; }
+
         public DateTime? EndOfMutingPeriod { get; init; }
     }
 }

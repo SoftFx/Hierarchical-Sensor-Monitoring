@@ -1,13 +1,13 @@
 ﻿namespace HSMDataCollector.Options
 {
-    internal abstract class OptionsProperty<T> where T : SensorOptions, new()
+    internal abstract class Prototype<T> where T : SensorOptions, new()
     {
         protected abstract string NodePath { get; }
 
         protected T DefaultOptions { get; }
 
 
-        protected OptionsProperty()
+        protected Prototype()
         {
             DefaultOptions = new T()
             {

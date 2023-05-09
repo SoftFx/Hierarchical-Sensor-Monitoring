@@ -191,14 +191,16 @@
     max-width: 10rem;
 }
 
-.tree-png-icon{
-    max-width: 1rem!important;
-    max-height: 1rem!important;
+.tree-png-icon {
+    max-width: 1rem !important;
+    max-height: 1rem !important;
+    vertical-align: top;
+    margin: 4px 0px;
 }
 
-img .tree-png-icon{
-    width: 1rem!important;
-    height: 1rem!important;
+img .tree-png-icon {
+    width: 1rem !important;
+    height: 1rem !important;
 }
 
 .naked-text{

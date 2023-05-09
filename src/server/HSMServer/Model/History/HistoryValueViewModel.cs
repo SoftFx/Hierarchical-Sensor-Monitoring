@@ -25,13 +25,14 @@ namespace HSMServer.Model.History
                 SensorType.DoubleBar => Create((DoubleBarValue)value),
                 SensorType.TimeSpan => Create((TimeSpanValue)value),
                 SensorType.File => Create((FileValue)value),
+                SensorType.Version => Create((VersionValue)value),
                 _ => throw new ArgumentException($"Sensor type {sensorType} is not alowed for history table"),
             };
 
         private static SimpleSensorValueViewModel Create<T>(BaseValue<T> value) =>
             new()
             {
-                Value = value.Value?.ToString(),
+                Value = value is VersionValue version ? version.Value.RemoveTailZeroes() :value.Value?.ToString() ,
                 Time = value.Time,
                 Status = value.Status.ToClient(),
                 Comment = value.Comment,

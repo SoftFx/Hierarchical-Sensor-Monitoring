@@ -24,7 +24,7 @@ namespace HSMDataCollector.Core
         {
             foreach (var value in Values)
             {
-                value.ReceiveSensorValue -= _valuesQueue.Enqueue;
+                value.ReceiveSensorValue -= _valuesQueue.Push;
 
                 value.Dispose();
             }
@@ -32,11 +32,13 @@ namespace HSMDataCollector.Core
 
         internal Task Start() => Task.WhenAll(Values.Select(s => s.Start()));
 
+        internal Task Stop() => Task.WhenAll(Values.Select(s => s.Stop()));
+
         internal void Register(string key, SensorBase value)
         {
             if (TryAdd(key, value))
             {
-                value.ReceiveSensorValue += _valuesQueue.Enqueue;
+                value.ReceiveSensorValue += _valuesQueue.Push;
 
                 _logManager.Logger?.Info($"Added new default sensor {key}");
             }

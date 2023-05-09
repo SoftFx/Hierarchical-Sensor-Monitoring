@@ -39,7 +39,7 @@
         let productId = $('#accessKey_prodcutId').val();
         let newAccessKeyURL = "@Html.Raw(Url.Action(nameof(AccessKeysController.NewAccessKey), ViewConstants.AccessKeysController))";
 
-        showNewAccessKeyModal(`${newAccessKeyURL}?Selected=${productId}`, false);
+        showNewAccessKeyModal(`${newAccessKeyURL}?selectedId=${productId}`, false);
     }
     
     $(document).ready(() => {

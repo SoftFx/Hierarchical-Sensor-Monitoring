@@ -192,6 +192,35 @@ namespace HSMServer.Controllers
                 return BadRequest(sensorValue);
             }
         }
+        
+        /// <summary>
+        /// Receives value of version sensor
+        /// </summary>
+        /// <param name="sensorValue"></param>
+        /// <returns></returns>
+        [HttpPost("version")]
+        [Consumes(MediaTypeNames.Application.Json)]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status406NotAcceptable)]
+        public ActionResult<VersionSensorValue> Post([FromBody] VersionSensorValue sensorValue)
+        {
+            try
+            {
+                _dataCollector.ReportSensorsCount(1);
+
+                if (CanAddToQueue(BuildStoreInfo(sensorValue, sensorValue.Convert()),
+                        out var message))
+                    return Ok(sensorValue);
+
+                return StatusCode(406, message);
+            }
+            catch (Exception e)
+            {
+                _logger.LogError(e, "Failed to put data!");
+                return BadRequest(sensorValue);
+            }
+        }
 
         /// <summary>
         /// Receives value of double bar sensor

@@ -198,6 +198,26 @@ namespace HSMServer.Controllers
             return string.Empty;
         }
 
+        [HttpPost]
+        public void EnableGrafana(string selectedId) => ChangeSensorsIntegration(selectedId, Integration.Grafana);
+
+        [HttpPost]
+        public void DisableGrafana(string selectedId) => ChangeSensorsIntegration(selectedId, 0);
+
+        private void ChangeSensorsIntegration(string selectedNode, Integration integration)
+        {
+            foreach (var sensorId in GetNodeSensors(SensorPathHelper.DecodeGuid(selectedNode)))
+            {
+                var update = new SensorUpdate()
+                {
+                    Id = sensorId,
+                    Integration = integration,
+                };
+
+                _treeValuesCache.UpdateSensor(update);
+            }
+        }
+
         private Action<Guid, Action<ClientNotifications, Guid>> GetHandler(NotificationsTarget actionType) => actionType switch
         {
             NotificationsTarget.Groups => UpdateGroupNotificationSettings,
