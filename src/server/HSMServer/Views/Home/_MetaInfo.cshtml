@@ -197,17 +197,21 @@
     });
 
     function collectDataAlerts(formData) {
-        setFormDataAlertsProperty(formData, "input", "Id");
-        setFormDataAlertsProperty(formData, "select", "Property");
-        setFormDataAlertsProperty(formData, "select", "Action");
-        setFormDataAlertsProperty(formData, "input", "Value");
-        setFormDataAlertsProperty(formData, "select", "Status");
-        setFormDataAlertsProperty(formData, "input", "Comment");
+        $("[id^='dataAlertsList_']").each(function () {
+            const type = this.id.substring("dataAlertsList_".length, this.id.length);
+
+            setFormDataAlertsProperty(formData, "input", type, "Id");
+            setFormDataAlertsProperty(formData, "select", type, "Property");
+            setFormDataAlertsProperty(formData, "select", type, "Action");
+            setFormDataAlertsProperty(formData, "input", type, "Value");
+            setFormDataAlertsProperty(formData, "select", type, "Status");
+            setFormDataAlertsProperty(formData, "input", type, "Comment");
+        });
     }
 
-    function setFormDataAlertsProperty(formData, element, propertyName) {
+    function setFormDataAlertsProperty(formData, element, type, propertyName) {
         $(`${element}[name='${propertyName}']`).each(function (i) {
-            formData.append(`DataAlerts[${i}].${propertyName}`, $(this).val());
+            formData.append(`DataAlerts[${type}][${i}].${propertyName}`, $(this).val());
         });
     }
 

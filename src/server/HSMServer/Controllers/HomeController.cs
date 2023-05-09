@@ -491,7 +491,16 @@ namespace HSMServer.Controllers
             return PartialView("_MetaInfo", new SensorInfoViewModel(sensor));
         }
 
-        public IActionResult AddDataPolicy() => PartialView("_DataAlert", new IntegerDataAlertViewModel() { IsModify = true });
+        public IActionResult AddDataPolicy(SensorType type)
+        {
+            var viewModel = type switch
+            {
+                SensorType.Integer => new IntegerDataAlertViewModel() { IsModify = true },
+                _ => null,
+            };
+
+            return PartialView("_DataAlert", viewModel);
+        }
 
         #endregion
 

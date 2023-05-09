@@ -39,9 +39,7 @@
 <script>
     $(document).ready(function () {
         $("a.deleteRow").off("click").on("click", function () {
-            console.log($(this));
             $(this).parents("div.dataAlertRow:first").remove();
-            return false;
         });
     });
 </script>

@@ -15,7 +15,7 @@ namespace HSMServer.Model.DataAlerts
         [Display(Name = "<")]
         LessThan,
         [Display(Name = ">")]
-        GreatedThan,
+        GreaterThan,
         [Display(Name = ">=")]
         GreaterThanOrEqual,
     }
