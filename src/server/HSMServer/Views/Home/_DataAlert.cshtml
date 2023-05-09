@@ -6,29 +6,42 @@
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
 
 
-<input class="d-none" asp-for="Id" value="@Model.Id" />
+<div class="dataAlertRow">
+    <input class="d-none" asp-for="Id" value="@Model.Id" />
 
-<div id="dataAlertLabel_@Model.Id" class="ms-3 @(Model.IsModify ? "d-none" : string.Empty)">
-    If <b>@Model.Property @Model.Action.GetDisplayName() @Model.Value</b> then send @Model.Status.ToIconStatus() with message <i>@Model.Comment</i>
-</div>
+    <div id="dataAlertLabel_@Model.Id" class="ms-3 @(Model.IsModify ? "d-none" : string.Empty)">
+        If <b>@Model.Property @Model.Action.GetDisplayName() @Model.Value</b> then send @Model.Status.ToIconStatus() with message <i>@Model.Comment</i>
+    </div>
 
-<div id="dataAlertInputGroupd_@Model.Id" class="input-group mb-1 @(!Model.IsModify ? "d-none" : string.Empty)">
-    <label class="input-group-text">If</label>
-    <select class="form-select" asp-for="Property" asp-items="@Model.PropertiesItems"></select>
-    <select class="form-select" asp-for="Action" asp-items="@Model.ActionsItems"></select>
-    <input type="text" class="form-control" asp-for="Value" value="@Model.Value">
+    <div id="dataAlertInputGroupd_@Model.Id" class="input-group mb-1 @(!Model.IsModify ? "d-none" : string.Empty)">
+        <label class="input-group-text">If</label>
+        <select class="form-select" asp-for="Property" asp-items="@Model.PropertiesItems"></select>
+        <select class="form-select" asp-for="Action" asp-items="@Model.ActionsItems"></select>
+        <input type="text" class="form-control" asp-for="Value" value="@Model.Value">
 
-    <label class="input-group-text">then</label>
-    <select class="form-select" asp-for="Status" asp-items="@Model.StatusesItems"></select>
+        <label class="input-group-text">then</label>
+        <select class="form-select" asp-for="Status" asp-items="@Model.StatusesItems"></select>
 
-    <label class="input-group-text">with</label>
-    <input type="text" class="form-control w-50" placeholder="custom comment" asp-for="Comment" value="@Model.Comment">
+        <label class="input-group-text">with</label>
+        <input type="text" class="form-control w-50" placeholder="custom comment" asp-for="Comment" value="@Model.Comment">
 
-    <button id="actionButton" class="btn" data-bs-toggle="dropdown" data-bs-auto-close="true" aria-haspopup="true" aria-expanded="false">
-        <i class="fa-solid fa-ellipsis-vertical button-link"></i>
-    </button>
-    <div class="dropdown-menu dropdown-menu-end" aria-labelledby="actionButton">
-        <a class="dropdown-item text-decoration-none fw-normal button-link">Send test message</a>
-        <a class="dropdown-item text-decoration-none fw-normal button-link">Remove</a>
+        <button id="actionButton" class="btn" data-bs-toggle="dropdown" data-bs-auto-close="true" aria-haspopup="true" aria-expanded="false">
+            <i class="fa-solid fa-ellipsis-vertical button-link"></i>
+        </button>
+        <div class="dropdown-menu dropdown-menu-end" aria-labelledby="actionButton">
+            <a class="dropdown-item text-decoration-none fw-normal button-link">Send test message</a>
+            <a class="dropdown-item text-decoration-none fw-normal button-link deleteRow">Remove</a>
+        </div>
     </div>
 </div>
+
+
+<script>
+    $(document).ready(function () {
+        $("a.deleteRow").off("click").on("click", function () {
+            console.log($(this));
+            $(this).parents("div.dataAlertRow:first").remove();
+            return false;
+        });
+    });
+</script>
