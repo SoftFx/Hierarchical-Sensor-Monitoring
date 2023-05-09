@@ -10,12 +10,18 @@
     <Company>Soft-FX</Company>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <Copyright>Copyright © 2023</Copyright>
-    <ContainerImageName>hsmonitoring/hierarchical_sensor_monitoring</ContainerImageName>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
     <DefineConstants>DEBUG;TRACE</DefineConstants>
     <DebugType>full</DebugType>
     <DebugSymbols>true</DebugSymbols>
+  </PropertyGroup>
+
+  <PropertyGroup>
+    <PublishProfile>DefaultContainer</PublishProfile>
+    <ContainerBaseImage>redleonfire/hsm_deps:1.0.0</ContainerBaseImage>
+    <ContainerImageName>redleonfire/hsm</ContainerImageName>
+    <ContainerImageTags>$(Version);latest</ContainerImageTags>
   </PropertyGroup>
 
   <ItemGroup>
@@ -30,7 +36,7 @@
 
   <ItemGroup>
     <PackageReference Include="FluentValidation.AspNetCore" Version="11.2.2" />
-    <PackageReference Include="Microsoft.NET.Build.Containers" Version="0.2.7" />
+    <PackageReference Include="Microsoft.NET.Build.Containers" Version="0.4.0" />
     <PackageReference Include="NLog.Web.AspNetCore" Version="5.2.2" />
     <PackageReference Include="Swashbuckle.AspNetCore" Version="6.4.0" />
     <PackageReference Include="System.Linq.Async" Version="6.0.1" />

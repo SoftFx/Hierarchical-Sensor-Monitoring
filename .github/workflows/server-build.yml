@@ -148,7 +148,7 @@ jobs:
           password: ${{ secrets.DOCKERHUBTOKEN }}
 
       - name: Build and push image to Local Docker
-        run: dotnet publish ${{ env.ServerPath }} --os linux --arch x64 -p:PublishProfile=DefaultContainer -c Release
+        run: dotnet publish ${{ env.ServerPath }} --os linux --arch x64 -c Release
 
       - name: Push image to remote Docker
         run: docker push "${{ env.DockerimageName }}:${{ needs.build.outputs.VERSION }}"
