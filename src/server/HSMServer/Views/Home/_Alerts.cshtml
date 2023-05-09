@@ -1,5 +1,6 @@
-@using Microsoft.AspNetCore.Mvc.TagHelpers
 @using HSMServer.Model.DataAlerts
+@using HSMServer.Constants
+@using HSMServer.Controllers
 
 @model HSMServer.Model.ViewModel.NodeInfoBaseViewModel
 
@@ -32,6 +33,29 @@
     </div>
 </div>
 
-<label class="col-form-label fw-bold">Data alerts:</label>
 
-@await Html.PartialAsync("_DataAlert", new IntegerDataAlertViewModel())
+<div class="d-flex align-items-center">
+    <label class="col-form-label fw-bold">Data alerts:</label>
+    <a id="addDataAlert" class="d-none mx-2" href="javascript:addDataAlert();">
+        <i class="fa-solid fa-plus"></i> Add
+    </a>
+</div>
+
+<div id="dataAlertsList">
+    @foreach (var alert in Model.DataAlerts)
+    {
+        @await Html.PartialAsync("_DataAlert", alert)
+    }
+</div>
+
+
+<script>
+    function addDataAlert() {
+        $.ajax({
+            url: '@Url.Action(nameof(HomeController.AddDataPolicy), ViewConstants.HomeController)',
+            cache: false
+        }).done(function (viewData) {
+            $('#dataAlertsList').append(viewData);
+        });
+    }
+</script>

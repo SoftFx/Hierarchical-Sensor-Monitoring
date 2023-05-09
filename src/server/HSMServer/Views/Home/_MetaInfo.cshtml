@@ -180,17 +180,36 @@
         event.preventDefault();
         event.stopImmediatePropagation();
 
+        var formData = new FormData(this);
+        collectDataAlerts(formData);
+
         $.ajax({
             url: $("#editMetaInfo_form").attr("action"),
             type: 'POST',
-            data: $("#editMetaInfo_form").serialize(),
-            datatype: 'json',
+            data: formData,
+            processData: false,
+            contentType: false,
             async: true,
             success: (viewData) => {
                 displayMetaInfo($('#metaInfo_encodedId').val(), viewData);
             }
         });
     });
+
+    function collectDataAlerts(formData) {
+        setFormDataAlertsProperty(formData, "input", "Id");
+        setFormDataAlertsProperty(formData, "select", "Property");
+        setFormDataAlertsProperty(formData, "select", "Action");
+        setFormDataAlertsProperty(formData, "input", "Value");
+        setFormDataAlertsProperty(formData, "select", "Status");
+        setFormDataAlertsProperty(formData, "input", "Comment");
+    }
+
+    function setFormDataAlertsProperty(formData, element, propertyName) {
+        $(`${element}[name='${propertyName}']`).each(function (i) {
+            formData.append(`DataAlerts[${i}].${propertyName}`, $(this).val());
+        });
+    }
 
     function collapseChangeTextContent() {
         let icon = $('#collapse_icon')[0];

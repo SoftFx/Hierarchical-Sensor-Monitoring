@@ -1,5 +1,6 @@
 ﻿using HSMServer.Model.Folders;
 using HSMServer.Model.TreeViewModel;
+using Microsoft.AspNetCore.Html;
 
 namespace HSMServer.Extensions
 {
@@ -20,6 +21,9 @@ namespace HSMServer.Extensions
 
         internal static string ToIcon(this SensorStatus status) =>
             $"fas fa-circle {status.ToCssIconClass()}";
+
+        internal static HtmlString ToIconStatus(this SensorStatus status) =>
+            new HtmlString($"<span class='{status.ToIcon()}'></span> {status}");
 
         internal static string ToCssClass(this Core.Model.SensorState state) =>
             state switch

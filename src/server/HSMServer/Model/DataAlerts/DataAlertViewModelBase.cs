@@ -21,16 +21,8 @@ namespace HSMServer.Model.DataAlerts
     }
 
 
-    public abstract class DataAlertViewModelBase
+    public class DataAlertViewModel
     {
-        private readonly List<SensorStatus> _statuses = new() { SensorStatus.Error, SensorStatus.Warning };
-
-
-        protected abstract List<string> Properties { get; }
-
-        protected abstract List<Operation> Actions { get; }
-
-
         public Guid Id { get; set; }
 
         public string Property { get; set; }
@@ -44,6 +36,23 @@ namespace HSMServer.Model.DataAlerts
         public string Comment { get; set; }
 
 
+        public DataAlertViewModel() { }
+    }
+
+
+    public abstract class DataAlertViewModelBase : DataAlertViewModel
+    {
+        private readonly List<SensorStatus> _statuses = new() { SensorStatus.Error, SensorStatus.Warning };
+
+
+        protected abstract List<string> Properties { get; }
+
+        protected abstract List<Operation> Actions { get; }
+
+
+        public required bool IsModify { get; init; }
+
+
         public List<SelectListItem> PropertiesItems => Properties.Select(p => new SelectListItem(p, p)).ToList();
 
         public List<SelectListItem> ActionsItems => Actions.Select(a => new SelectListItem(a.GetDisplayName(), $"{a}")).ToList();
@@ -51,13 +60,13 @@ namespace HSMServer.Model.DataAlerts
         public List<SelectListItem> StatusesItems => _statuses.Select(s => new SelectListItem(s.GetDisplayName(), $"{s}")).ToList();
 
 
-        public DataAlertViewModelBase()
+        public DataAlertViewModelBase() : base()
         {
             // TODO: it shoule be empty constructor body
             Property = "Value";
             Value = "50";
             Status = SensorStatus.Warning;
-            Comment = "$sensor $property $action $value";
+            Comment = "For $sensor $property is $action $value!!!";
         }
     }
 }

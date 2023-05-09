@@ -15,6 +15,6 @@ namespace HSMServer.Model.DataAlerts
         };
 
 
-        public IntegerDataAlertViewModel() { }
+        public IntegerDataAlertViewModel() : base() { }
     }
 }

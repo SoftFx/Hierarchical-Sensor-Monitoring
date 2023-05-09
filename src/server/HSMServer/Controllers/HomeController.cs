@@ -9,6 +9,7 @@ using HSMServer.Folders;
 using HSMServer.Helpers;
 using HSMServer.Model;
 using HSMServer.Model.Authentication.History;
+using HSMServer.Model.DataAlerts;
 using HSMServer.Model.Folders;
 using HSMServer.Model.Folders.ViewModels;
 using HSMServer.Model.TreeViewModel;
@@ -489,6 +490,8 @@ namespace HSMServer.Controllers
 
             return PartialView("_MetaInfo", new SensorInfoViewModel(sensor));
         }
+
+        public IActionResult AddDataPolicy() => PartialView("_DataAlert", new IntegerDataAlertViewModel() { IsModify = true });
 
         #endregion
 

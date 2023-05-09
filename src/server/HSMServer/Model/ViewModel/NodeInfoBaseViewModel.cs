@@ -1,7 +1,8 @@
+using HSMServer.Model.DataAlerts;
 using HSMServer.Model.Folders;
 using HSMServer.Model.TreeViewModel;
 using System;
-
+using System.Collections.Generic;
 
 namespace HSMServer.Model.ViewModel
 {
@@ -18,6 +19,8 @@ namespace HSMServer.Model.ViewModel
         public TimeIntervalViewModel ExpectedUpdateInterval { get; set; }
 
         public TimeIntervalViewModel SensorRestorePolicy { get; set; }
+
+        public List<DataAlertViewModel> DataAlerts { get; set; }
 
 
         public string EncodedId { get; set; }
@@ -48,6 +51,8 @@ namespace HSMServer.Model.ViewModel
 
             ExpectedUpdateInterval = new(model.ExpectedUpdateInterval, PredefinedIntervals.ForTimeout);
             SensorRestorePolicy = new(model.SensorRestorePolicy, PredefinedIntervals.ForRestore);
+
+            DataAlerts = new() { new IntegerDataAlertViewModel() { IsModify = false } };
         }
     }
 }
