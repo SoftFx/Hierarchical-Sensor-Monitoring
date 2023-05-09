@@ -136,7 +136,7 @@ jobs:
     needs: [build]
     environment: DockerHub
     env:
-      DockerimageName: hsmonitoring/hierarchical_sensor_monitoring
+      DockerimageName: redleonfire/hsm
       ServerPath: src/server/HSMServer/HSMServer.csproj
     steps:
       - uses: actions/checkout@v3
