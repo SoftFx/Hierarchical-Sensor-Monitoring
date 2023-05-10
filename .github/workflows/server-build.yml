@@ -142,7 +142,7 @@ jobs:
       DockerfilePath: .github/docker/dockerfile_deps
       DepsTag: latest
     outputs:
-      DockerDepsTag: ${{ steps.save-deps-tag.outputs.tag }}
+      DOCKER_DEPS_TAG: ${{ steps.save-deps-tag.outputs.tag }}
     steps:
       - uses: actions/checkout@v3
 
@@ -152,7 +152,7 @@ jobs:
           username: ${{ secrets.DOCKERHUBUSERNAME }}
           password: ${{ secrets.DOCKERHUBTOKEN }}
 
-      - id: save-tag
+      - id: save-deps-tag
         name: Save deps tag
         run: echo "tag=${{ env.DOCKERHUB_USER }}/${{ env.DOCKER_DEPS_REPOS }}:${{env.DepsTag}}" >> $GITHUB_OUTPUT
 
@@ -179,7 +179,7 @@ jobs:
           password: ${{ secrets.DOCKERHUBTOKEN }}
 
       - name: Build full deps url
-        run: echo "DockerDepsUrl=${{ env.DockerReposUrlPrefix }}/${{ needs.publish-docker-deps.outputs.DockerDepsTag }}" >> $GITHUB_ENV
+        run: echo "DockerDepsUrl=${{ env.DockerReposUrlPrefix }}/${{ needs.publish-docker-deps.outputs.DOCKER_DEPS_TAG }}" >> $GITHUB_ENV
 
       - name: Build full main repos name
         run: echo "DockerMainName=${{ env.DOCKERHUB_USER }}/${{ env.DOCKER_MAIN_REPOS }}" >> $GITHUB_ENV
