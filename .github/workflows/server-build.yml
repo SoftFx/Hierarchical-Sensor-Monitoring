@@ -157,10 +157,10 @@ jobs:
         run: echo "tag=${{ env.DOCKERHUB_USER }}/${{ env.DOCKER_DEPS_REPOS }}:${{env.DepsTag}}" >> $GITHUB_OUTPUT
 
       - name: Build deps image for main Docker container
-        run: docker build . -f ${{ env.DockerfilePath }} -t ${{ steps.save-tag.outputs.tag }}
+        run: docker build . -f ${{ env.DockerfilePath }} -t ${{ steps.save-deps-tag.outputs.tag }}
 
       - name: Push image to remote Docker
-        run: docker push ${{ steps.save-tag.outputs.tag }}
+        run: docker push ${{ steps.save-deps-tag.outputs.tag }}
 
 
   publish-docker-image:
