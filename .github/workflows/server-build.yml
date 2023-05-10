@@ -17,7 +17,7 @@ env:
   SERVER_PATH: src/server/HSMServer/HSMServer.csproj
 
   DOCKERHUB_USER: redleonfire
-  DOCKER_DEPS_REPOS: hsm-deps
+  DOCKER_DEPS_REPOS: hsm_deps
   DOCKER_MAIN_REPOS: hsm
 
 jobs:
@@ -46,7 +46,7 @@ jobs:
       run: dotnet build ${{ env.SOLUTION_PATH }} -c Release --no-restore
 
     - name: Test Solution
-      run: dotnet test ${{ env.SOLUTION_PATH }} --no-build
+      run: dotnet test ${{ env.SOLUTION_PATH }}
 
     - name: Publish HSMServer
       run: dotnet publish ${{ env.SERVER_PATH }} -c Release -o ${{ env.OUTPUT_FOLDER }}
