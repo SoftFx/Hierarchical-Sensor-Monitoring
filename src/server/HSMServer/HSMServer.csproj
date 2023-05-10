@@ -20,9 +20,6 @@
   <PropertyGroup>
     <EnableSDKContainerSupport>true</EnableSDKContainerSupport>
     <PublishProfile>DefaultContainer</PublishProfile>
-    <ContainerBaseImage>index.docker.io/redleonfire/hsm_deps:1.0.0</ContainerBaseImage>
-    <ContainerImageName>redleonfire/hsm</ContainerImageName>
-    <ContainerImageTags>$(Version)</ContainerImageTags>
   </PropertyGroup>
 
   <ItemGroup>
