@@ -44,6 +44,9 @@ jobs:
     - name: Build & Test Solution
       run: dotnet test ${{ env.SOLUTION_PATH }} --no-restore -c Release
 
+    - name: Build HSMServer
+      run: dotnet build ${{ env.SERVER_PATH }} --no-restore -c Release -o ${{ env.OUTPUT_FOLDER}}
+
     - id: save-version
       name: Try to get server version
       run: echo "version=$((Get-Item ${{ env.OUTPUT_FOLDER }}/HSMServer.exe).VersionInfo.ProductVersion)" >> $env:GITHUB_OUTPUT
