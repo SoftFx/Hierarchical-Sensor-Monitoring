@@ -42,7 +42,7 @@ jobs:
       run: dotnet restore ${{ env.SOLUTION_PATH }}
 
     - name: Build & Test Solution
-      run: dotnet test ${{ env.SOLUTION_PATH }} --no-restore
+      run: dotnet test ${{ env.SOLUTION_PATH }} --no-restore -c Release
 
     - id: save-version
       name: Try to get server version
@@ -147,7 +147,6 @@ jobs:
   publish-docker-deps:
     if: ${{ github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
-    environment: DockerHub
     env:
       DockerfilePath: .github/docker/dockerfile_deps
       DepsTag: latest
@@ -166,11 +165,13 @@ jobs:
         name: Save deps tag
         run: echo "tag=${{ env.DOCKER_PROFILE }}/${{ env.DOCKER_DEPS_REPOS }}:${{env.DepsTag}}" >> $GITHUB_OUTPUT
 
-      - name: Build deps image for main Docker container
-        run: docker build . -f ${{ env.DockerfilePath }} -t ${{ steps.save-deps-tag.outputs.tag }}
-
-      - name: Push image to remote Docker
-        run: docker push ${{ steps.save-deps-tag.outputs.tag }}
+      - name: Build and push docker deps
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          push: true
+          file: ${{ env.DockerfilePath }}
+          tags: ${{ steps.save-deps-tag.outputs.tag }}
 
 
   publish-docker-image:
