@@ -153,23 +153,29 @@ jobs:
     environment: DockerHub
     env:
       DockerfilePath: .github/docker/dockerfile_deps
-      DockerDepsTag: "${{ env.DOCKER_PROFILE }}/${{ env.DOCKER_DEPS_REPOS }}:latest"
+      DepsTag: latest
+    outputs:
+      DOCKER_DEPS_TAG: ${{ steps.save-deps-tag.outputs.tag }}
     steps:
       - uses: actions/checkout@v3
+
+      - id: save-deps-tag
+        name: Save deps tag
+        run: echo "tag=${{ env.DOCKER_PROFILE }}/${{ env.DOCKER_DEPS_REPOS }}:${{env.DepsTag}}" >> $GITHUB_OUTPUT
 
       - name: Log in to Docker Hub
         uses: docker/login-action@v2
         with:
           username: ${{ secrets.DOCKERHUBUSERNAME }}
           password: ${{ secrets.DOCKERHUBTOKEN }}
-      
+
       - name: Build and push docker deps
         uses: docker/build-push-action@v4
         with:
           context: .
           push: true
           file: ${{ env.DockerfilePath }}
-          tags: ${{ env.DockerDepsTag }}
+          tags: ${{ steps.save-deps-tag.outputs.tag }}
 
 
   publish-docker-image:
@@ -188,7 +194,7 @@ jobs:
           password: ${{ secrets.DOCKERHUBTOKEN }}
 
       - name: Build full deps url
-        run: echo "DockerDepsUrl=${{ env.DockerReposUrlPrefix }}/${{ needs.publish-docker-deps.env.DockerDepsTag }}" >> $GITHUB_ENV
+        run: echo "DockerDepsUrl=${{ env.DockerReposUrlPrefix }}/${{ needs.publish-docker-deps.outputs.DOCKER_DEPS_TAG }}" >> $GITHUB_ENV
 
       - name: Build full main repos name
         run: echo "DockerMainName=${{ env.DOCKER_PROFILE }}/${{ env.DOCKER_MAIN_REPOS }}" >> $GITHUB_ENV
