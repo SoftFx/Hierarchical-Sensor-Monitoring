@@ -44,4 +44,6 @@ window.displayMetaInfo = function (id, viewData) {
     metaInfo.addClass('no-transition');
     $('#meta_info_collapse').click();
     metaInfo.removeClass('no-transition');
+
+    $('#metainfo_separator').addClass('d-none');
 }

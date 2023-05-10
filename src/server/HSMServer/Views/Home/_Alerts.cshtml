@@ -14,6 +14,7 @@
         <div id="partialIntervalSelect" class="d-none">
             <partial name="_TimeIntervalSelect" for="ExpectedUpdateInterval"/>
         </div>
+        <span asp-validation-for="ExpectedUpdateInterval"></span>
     </div>
 </div>
 <div class="d-flex mt-1 ms-3 text-nowrap">
@@ -25,5 +26,6 @@
         <div id="partialRestoreSelect" class="d-none">
             <partial name="_TimeIntervalSelect" for="SensorRestorePolicy"/>
         </div>
+        <span asp-validation-for="SensorRestorePolicy"></span>
     </div>
 </div>
