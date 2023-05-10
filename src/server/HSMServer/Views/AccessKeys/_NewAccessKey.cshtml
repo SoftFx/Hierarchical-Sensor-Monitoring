@@ -10,86 +10,86 @@
 <form asp-controller="@ViewConstants.AccessKeysController"
       asp-action="@(Model.IsModify ? nameof(AccessKeysController.ModifyAccessKey) : nameof(AccessKeysController.NewAccessKey))"
       method="post" id="newEditAccessKey_form">
-
-    <input id='accessKeyId' style='display: none' asp-for="Id" value="@Model.Id"/>
-    @if (Model.ReturnType is not AccessKeyReturnType.Table)
-    {
-        <input id="selectedProductId" style='display: none' asp-for="SelectedProductId" value="@Model.SelectedProductId"/>
-    }
-    <input id='whetherCloseModal' style='display: none' asp-for="CloseModal" value="@Model.CloseModal"/>
-    <input id='returnType' style='display: none' asp-for="ReturnType" value="@Model.ReturnType"/>
-    <input style='display: none' asp-for="IsModify" value="@Model.IsModify"/>
-    <input style='display: none' asp-for="ExpirationTime" value="@Model.ExpirationTime"/>
-    <input style='display: none' asp-for="ProductsItems" value="@Model.ProductsItems"/>
-    <div class="row">
-        <div class="form-group col-4">
-            <label asp-for="SelectedProductId" class="col-form-label"></label>
-            @if (Model.ProductsItems.Count == 1)
-            {
-                <select asp-for="SelectedProductId" asp-items="@Model.ProductsItems" disabled class="form-control form-select">
-                    <option value="@Guid.Empty">All products</option>
-                </select>
-            }
-            else
-            {
-                <select asp-for="SelectedProductId" asp-items="@Model.ProductsItems" class="form-control form-select">
-                    <option value="@Guid.Empty">All products</option>
-                </select>
-            }
-        </div>
-    </div>
-    <div class="row">
-        <div class="form-group col-8">
-            <label asp-for="DisplayName" class="col-form-label"></label>
-            <input type="text" asp-for="DisplayName" class="form-control"/>
-            <span asp-validation-for="DisplayName"></span>
-        </div>
-
-        <div class="form-group col-4">
-            <label asp-for="Expiration" class="col-form-label"></label>
-            @if (Model.IsModify)
-            {
-                <input type="text" value="@Model.ExpirationTime" class="form-control" disabled/>
-            }
-            else
-            {
-                <select asp-for="Expiration" asp-items="Html.GetEnumSelectList<AccessKeyExpiration>()" class="form-control form-select"></select>
-            }
-        </div>
-    </div>
-
-    <div class="form-group row mt-2">
-        <label class="col-auto col-form-label" asp-for="Permissions"></label>
-        <button id="checkboxButton" class="col-auto btn btn-light btn-sm" type="button" style="width: 6rem">Select all</button>
-    </div>
-    <span asp-validation-for="Permissions"></span>
-
-    <div class="form-group" onchange="onChangeCheckBoxes()" id="permissions">
-        <div class="form-check form-check-inline">
-            <input class="form-check-input" type="checkbox" asp-for="CanSendSensorData">
-            <label class="form-check-label" asp-for="CanSendSensorData"></label>
-        </div>
-        <div class="form-check form-check-inline">
-            <input class="form-check-input" type="checkbox" asp-for="CanAddNodes">
-            <label class="form-check-label" asp-for="CanAddNodes"></label>
-        </div>
-        <div class="form-check form-check-inline">
-            <input class="form-check-input" type="checkbox" asp-for="CanAddSensors">
-            <label class="form-check-label" asp-for="CanAddSensors"></label>
-        </div>
-        <div class="form-check form-check-inline">
-            <input class="form-check-input" type="checkbox" asp-for="CanReadSensorData">
-            <label class="form-check-label" asp-for="CanReadSensorData"></label>
-        </div>
-    </div>
-
-    <div class="form-group">
-        <div align="right">
-            <button class="btn btn-secondary col-xl-1 col-2" type="submit">Save</button>
-            <button class="btn btn-secondary col-xl-1 col-2" type="button" onclick="cancelButtonClick()">Cancel</button>
-        </div>
-    </div>
 </form>
+
+<input id='accessKeyId' style='display: none' asp-for="Id" value="@Model.Id" form="newEditAccessKey_form"/>
+@if (Model.ReturnType is not AccessKeyReturnType.Table)
+{
+    <input id="selectedProductId" style='display: none' asp-for="SelectedProductId" value="@Model.SelectedProductId" form="newEditAccessKey_form"/>
+}
+<input id='whetherCloseModal' style='display: none' asp-for="CloseModal" value="@Model.CloseModal" form="newEditAccessKey_form"/>
+<input id='returnType' style='display: none' asp-for="ReturnType" value="@Model.ReturnType" form="newEditAccessKey_form"/>
+<input style='display: none' asp-for="IsModify" value="@Model.IsModify" form="newEditAccessKey_form"/>
+<input style='display: none' asp-for="ExpirationTime" value="@Model.ExpirationTime" form="newEditAccessKey_form"/>
+<input style='display: none' asp-for="ProductsItems" value="@Model.ProductsItems" form="newEditAccessKey_form"/>
+<div class="row">
+    <div class="form-group col-4">
+        <label asp-for="SelectedProductId" class="col-form-label" form="newEditAccessKey_form"></label>
+        @if (Model.ProductsItems.Count == 1)
+        {
+            <select asp-for="SelectedProductId" asp-items="@Model.ProductsItems" disabled class="form-control form-select" form="newEditAccessKey_form">
+                <option value="@Guid.Empty" form="newEditAccessKey_form">All products</option>
+            </select>
+        }
+        else
+        {
+            <select asp-for="SelectedProductId" asp-items="@Model.ProductsItems" class="form-control form-select" form="newEditAccessKey_form">
+                <option value="@Guid.Empty">All products</option>
+            </select>
+        }
+    </div>
+</div>
+<div class="row">
+    <div class="form-group col-8">
+        <label asp-for="DisplayName" class="col-form-label" form="newEditAccessKey_form"></label>
+        <input type="text" asp-for="DisplayName" class="form-control" form="newEditAccessKey_form"/>
+        <span asp-validation-for="DisplayName" form="newEditAccessKey_form"></span>
+    </div>
+
+    <div class="form-group col-4">
+        <label asp-for="Expiration" class="col-form-label" form="newEditAccessKey_form"></label>
+        @if (Model.IsModify)
+        {
+            <input type="text" value="@Model.ExpirationTime" class="form-control" disabled/>
+        }
+        else
+        {
+            <select asp-for="Expiration" asp-items="Html.GetEnumSelectList<AccessKeyExpiration>()" class="form-control form-select" form="newEditAccessKey_form"></select>
+        }
+    </div>
+</div>
+
+<div class="form-group row mt-2">
+    <label class="col-auto col-form-label" asp-for="Permissions" form="newEditAccessKey_form"></label>
+    <button id="checkboxButton" class="col-auto btn btn-light btn-sm" type="button" style="width: 6rem">Select all</button>
+</div>
+<span asp-validation-for="Permissions"></span>
+
+<div class="form-group" onchange="onChangeCheckBoxes()" id="permissions">
+    <div class="form-check form-check-inline">
+        <input class="form-check-input" type="checkbox" asp-for="CanSendSensorData" form="newEditAccessKey_form">
+        <label class="form-check-label" asp-for="CanSendSensorData" form="newEditAccessKey_form"></label>
+    </div>
+    <div class="form-check form-check-inline">
+        <input class="form-check-input" type="checkbox" asp-for="CanAddNodes" form="newEditAccessKey_form">
+        <label class="form-check-label" asp-for="CanAddNodes" form="newEditAccessKey_form"></label>
+    </div>
+    <div class="form-check form-check-inline">
+        <input class="form-check-input" type="checkbox" asp-for="CanAddSensors" form="newEditAccessKey_form">
+        <label class="form-check-label" asp-for="CanAddSensors" form="newEditAccessKey_form"></label>
+    </div>
+    <div class="form-check form-check-inline">
+        <input class="form-check-input" type="checkbox" asp-for="CanReadSensorData" form="newEditAccessKey_form">
+        <label class="form-check-label" asp-for="CanReadSensorData" form="newEditAccessKey_form"></label>
+    </div>
+</div>
+
+<div class="form-group">
+    <div align="right">
+        <button class="btn btn-secondary col-xl-1 col-2" type="submit" form="newEditAccessKey_form">Save</button>
+        <button class="btn btn-secondary col-xl-1 col-2" type="button" onclick="cancelButtonClick()">Cancel</button>
+    </div>
+</div>
 
 
 <script>
@@ -121,6 +121,9 @@
                 closeModalOrShowAccessKeysList(whetherCloseModal, function () {
                     showAccessKeysListModal();
                 });
+                
+                if (typeof editSensorModal !== 'undefined')
+                    openEditSensorStatusModal()
             }
         });
     });

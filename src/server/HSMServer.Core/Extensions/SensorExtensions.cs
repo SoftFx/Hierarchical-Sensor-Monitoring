@@ -19,14 +19,6 @@ namespace HSMServer.Core
             _ => "❓"
         };
 
-        public static string ToSelectIcon(this SensorStatus status) => status switch
-        {
-            SensorStatus.Ok => "🟢",
-            SensorStatus.Warning => "️🟡",
-            SensorStatus.Error => "🔴",
-            SensorStatus.OffTime => "⚪️",
-        };
-
         public static bool HasGrafana(this Integration integration) => integration.HasFlag(Integration.Grafana);
     }
 }

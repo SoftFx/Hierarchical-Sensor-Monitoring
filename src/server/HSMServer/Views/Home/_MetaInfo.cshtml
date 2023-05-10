@@ -96,7 +96,6 @@
                 <div class="modal fade" tabindex="-1" role="dialog" id="editSensorStatus_modal">
                     <div class="modal-dialog modal-dialog-centered" role="document">
                         <div class="modal-content" id="editSensorStatusContent">
-                            @* @await Html.PartialAsync("_EditSensorStatusModal", new EditSensorStatusViewModal(sensor)) *@
                         </div>
                     </div>
                 </div>
@@ -179,6 +178,8 @@
 
 
 <script>
+    var editSensorModal;
+
     $(document).ready(() => {
         replaceHtmlToMarkdown('markdown_span_description');
         replaceHtmlToMarkdown('markdown_status_comment');
@@ -239,6 +240,7 @@
             async: true,
             success: (viewData) => {
                 $('#editSensorStatusContent').html(viewData);
+                editSensorModal = true;
             }
         });
         

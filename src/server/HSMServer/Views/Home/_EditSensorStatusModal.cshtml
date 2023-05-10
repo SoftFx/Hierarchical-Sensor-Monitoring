@@ -1,10 +1,11 @@
 ﻿@using HSMServer.Constants
 @using HSMServer.Controllers
-@using HSMServer.Core
 @using HSMServer.Core.Cache
 @using HSMServer.Core.Model
+@using HSMServer.Extensions
 @using HSMServer.Model.Authentication
 @using Microsoft.AspNetCore.Mvc.TagHelpers
+@using SensorStatus = HSMServer.Model.TreeViewModel.SensorStatus
 
 @model HSMServer.Model.ViewModel.EditSensorStatusViewModal
 
@@ -118,17 +119,15 @@
                  })
             },
             error: function (jqXHR, exception) {
-               
-                    $('span.field-validation-valid').each(function () {
-                        console.log($(this))
-                        let errFor = $(this).data('valmsgFor'); 
-                        if (jqXHR.responseJSON[errFor] !== undefined) {
-                           $(this).removeClass('field-validation-valid')
-                           $(this).addClass('field-validation-error')
-                           $(this).html(jqXHR.responseJSON[errFor][0]);
-                        }
-                    })
-                
+                $('span.field-validation-valid').each(function () {
+                    console.log($(this))
+                    let errFor = $(this).data('valmsgFor'); 
+                    if (jqXHR.responseJSON[errFor] !== undefined) {
+                        $(this).removeClass('field-validation-valid')
+                        $(this).addClass('field-validation-error')
+                        $(this).html(jqXHR.responseJSON[errFor][0]);
+                    }
+                })
             }
         })
     });
@@ -136,20 +135,12 @@
    function newAccessKeyModal(){
        let url = "@Html.Raw(Url.Action(nameof(AccessKeysController.NewAccessKey), ViewConstants.AccessKeysController))";
 
-       $.ajax({
-               type: 'get',
-               url: `${url}?selectedId=@Model.RootProductId&closeModal=true`,
-               datatype: 'html',
-               contenttype: 'application/json',
-               cache: false,
-               success: function (viewData) {
-                   console.log(viewData)
-                   $('#editSensorStatusContent').html(viewData)
-               }
-           })
+       hideEditSensorModal();
+       showNewAccessKeyModal(`${url}?selectedId=@Model.RootProductId&closeModal=true`, true);   
    }
    
     function hideEditSensorModal() {
+        editSensorModal = false;
         $('#editSensorStatus_modal').modal('hide');
     }
 </script>

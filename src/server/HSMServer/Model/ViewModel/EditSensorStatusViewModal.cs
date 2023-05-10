@@ -3,6 +3,7 @@ using System.ComponentModel.DataAnnotations;
 using HSMServer.Attributes;
 using HSMServer.Core.Model;
 using HSMServer.Extensions;
+using SensorStatus = HSMServer.Model.TreeViewModel.SensorStatus;
 
 namespace HSMServer.Model.ViewModel;
 
@@ -40,7 +41,7 @@ public class EditSensorStatusViewModal
         RootProductId = sensorInfoViewModel.RootProductId;
         SensorId = Guid.Parse(sensorInfoViewModel.EncodedId);
 
-        Status = sensorInfoViewModel.Status.ToCore();
+        Status = sensorInfoViewModel.Status;
     }
     
     public EditSensorStatusViewModal(BaseSensorModel sensorModel)
@@ -49,6 +50,6 @@ public class EditSensorStatusViewModal
         RootProductName = sensorModel.RootProductName;
         SensorId = sensorModel.Id;
         
-        Status = sensorModel.Status.Status;
+        Status = sensorModel.Status.Status.ToClient();
     }
 }

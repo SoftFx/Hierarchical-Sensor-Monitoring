@@ -520,10 +520,10 @@ namespace HSMServer.Controllers
                     Path = sensor.Path,
                     Comment = modal.Reason,
                     Time = DateTime.UtcNow,
-                    Status = modal.NewStatus.ToClient(),
+                    Status = modal.NewStatus,
                     Type = sensor.Type
                 },
-                Key = _treeValuesCache.GetAccessKey(modal.SelectedAccessKey).Id
+                Key = _treeValuesCache.GetProduct(modal.RootProductId).AccessKeys.Values.FirstOrDefault(x => (x.Permissions & KeyPermissions.CanSendSensorData) != 0)?.Id
             };
             
             return Ok(returnBody);
