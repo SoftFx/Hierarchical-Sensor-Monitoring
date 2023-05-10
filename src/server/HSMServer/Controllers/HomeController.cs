@@ -20,8 +20,12 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Reflection.Metadata;
 using System.Text;
+using System.Text.Encodings.Web;
 using System.Threading.Tasks;
+using Microsoft.AspNetCore.Mvc.Rendering;
+using SensorStatus = HSMServer.Model.TreeViewModel.SensorStatus;
 
 namespace HSMServer.Controllers
 {
@@ -279,6 +283,21 @@ namespace HSMServer.Controllers
             return Json(updatedSensorsData);
         }
 
+        [HttpGet]
+        public ActionResult GetChildrenStatistic(string selectedId)
+        {
+            if (_treeViewModel.Nodes.TryGetValue(Guid.Parse(selectedId), out var node))
+            {
+                var product = new ProductInfoViewModel(node);
+                return Json(new
+                {
+                    nodes = product.NodeStatuses.Select(x => new KeyValuePair<string, int>(x.Status.ToIcon(), x.Count)),
+                    sensors = product.SensorsStatuses.Select(x => new KeyValuePair<string, int>(x.Status.ToIcon(), x.Count))
+                });
+            }
+            return default;
+        }
+        
         #endregion
 
         #region SensorsHistory

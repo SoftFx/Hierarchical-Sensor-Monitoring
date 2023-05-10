@@ -279,8 +279,37 @@
                         updateSpecificSensorData(dataObject);
                     }
                 }
+                
+                $.ajax({
+                    type: 'GET',
+                    url: `@Url.Action(nameof(HomeController.GetChildrenStatistic))?selectedId=${selectedNodeId}`,
+                    cache: false,
+                    async: true,
+                    success: function (viewdata) {
+                      
+                           let nodes = "";
+                           let sensors = "";
+                           
+                           viewdata.nodes.forEach( (el, key, arr) => {
+                               nodes += `<i class="${el.key} pe-1 align-self-center"></i>`;
+                               if (!Object.is(arr.length - 1, key)) {
+                                    nodes += `<span>(${el.value}),&nbsp;</span>`
+                               }
+                           })
+                           
+                           viewdata.sensors.forEach( (el, key, arr) => {
+                               sensors += `<i class="${el.key} pe-1 align-self-center"></i>`;
+                               if (!Object.is(arr.length - 1, key)) {
+                                    sensors += `<span>(${el.value}),&nbsp;</span>`
+                               }
+                           })
+                           
+                           $('#general_info_Nodes').html(nodes === "" ? '0' : nodes);
+                           $('#general_info_Sensors').html(sensors === "" ? '0' : sensors);
+                    }
+                });
             });
-
+        
         $('#updateTime').empty();
         $('#updateTime').append('Update Time: ' + new Date().toUTCString());
     }
