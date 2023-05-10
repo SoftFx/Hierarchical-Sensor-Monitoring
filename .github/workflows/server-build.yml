@@ -9,7 +9,7 @@ on:
         description: 'PreRelease'
         type: boolean
         required: true
-        default: false
+        default: true
 env:
   OUTPUT_FOLDER: ${{ github.workspace }}/BuildOutput
 
@@ -157,7 +157,7 @@ jobs:
         run: echo "tag=${{ env.DOCKERHUB_USER }}/${{ env.DOCKER_DEPS_REPOS }}:${{env.DepsTag}}" >> $GITHUB_OUTPUT
 
       - name: Build deps image for main Docker container
-        run: docker build . -f ${{ env.DockerfilePath }} -t ${{ steps.save-tag.outputs.tag }}
+        run: docker build ${ GITHUB_WORKSPACE }  -f ${{ env.DockerfilePath }} -t ${{ steps.save-tag.outputs.tag }}
 
       - name: Push image to remote Docker
         run: docker push ${{ steps.save-tag.outputs.tag }}
