@@ -136,6 +136,7 @@ jobs:
 
   publish-docker-deps:
     if: ${{ github.event_name == 'workflow_dispatch' }}
+    runs-on: ubuntu-latest
     environment: DockerHub
     env:
       DockerfilePath: .github/docker/docker_deps
