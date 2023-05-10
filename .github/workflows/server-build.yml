@@ -153,7 +153,7 @@ jobs:
     environment: DockerHub
     env:
       DockerfilePath: .github/docker/dockerfile_deps
-      DockerDepsTag: ${{ env.DOCKER_PROFILE }}/${{ env.DOCKER_DEPS_REPOS }}:latest
+      DockerDepsTag: "${{ env.DOCKER_PROFILE }}/${{ env.DOCKER_DEPS_REPOS }}:latest"
     steps:
       - uses: actions/checkout@v3
 
