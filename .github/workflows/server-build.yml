@@ -16,8 +16,8 @@ env:
   SOLUTION_PATH: src/server/HSMServer/HSMServer.sln
   SERVER_PATH: src/server/HSMServer/HSMServer.csproj
 
-  DOCKER_PROFILE: redleonfire
   DOCKER_DEPS_REPOS: hsm_deps
+  DOCKER_DEPS_TAG: latest
   DOCKER_MAIN_REPOS: hsm
 
 jobs:
@@ -153,15 +153,8 @@ jobs:
     environment: DockerHub
     env:
       DockerfilePath: .github/docker/dockerfile_deps
-      DepsTag: latest
-    outputs:
-      DOCKER_DEPS_TAG: ${{ steps.save-deps-tag.outputs.tag }}
     steps:
       - uses: actions/checkout@v3
-
-      - id: save-deps-tag
-        name: Save deps tag
-        run: echo "tag=${{ env.DOCKER_PROFILE }}/${{ env.DOCKER_DEPS_REPOS }}:${{env.DepsTag}}" >> $GITHUB_OUTPUT
 
       - name: Log in to Docker Hub
         uses: docker/login-action@v2
@@ -175,7 +168,7 @@ jobs:
           context: .
           push: true
           file: ${{ env.DockerfilePath }}
-          tags: ${{ steps.save-deps-tag.outputs.tag }}
+          tags: ${{ secrets.DOCKERHUBUSERNAME }}/${{ env.DOCKER_DEPS_REPOS }}:${{ env.DOCKER_DEPS_TAG }}
 
 
   publish-docker-image:
@@ -194,10 +187,10 @@ jobs:
           password: ${{ secrets.DOCKERHUBTOKEN }}
 
       - name: Build full deps url
-        run: echo "DockerDepsUrl=${{ env.DockerReposUrlPrefix }}/${{ needs.publish-docker-deps.outputs.DOCKER_DEPS_TAG }}" >> $GITHUB_ENV
+        run: echo "DockerDepsUrl=${{ env.DockerReposUrlPrefix }}/${{ secrets.DOCKERHUBUSERNAME }}/${{ env.DOCKER_DEPS_REPOS }}:${{ env.DOCKER_DEPS_TAG }}" >> $GITHUB_ENV
 
       - name: Build full main repos name
-        run: echo "DockerMainName=${{ env.DOCKER_PROFILE }}/${{ env.DOCKER_MAIN_REPOS }}" >> $GITHUB_ENV
+        run: echo "DockerMainName=${{ secrets.DOCKERHUBUSERNAME }}/${{ env.DOCKER_MAIN_REPOS }}" >> $GITHUB_ENV
 
       - name: Build Linux image for Docker
         run: dotnet publish ${{ env.SERVER_PATH }} --os linux --arch x64 -c Release -p:ContainerBaseImage=${{ env.DockerDepsUrl }} -p:ContainerImageName=${{ env.DockerMainName }} -p:ContainerImageTags=${{ needs.build.outputs.VERSION }}
