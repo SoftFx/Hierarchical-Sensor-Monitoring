@@ -157,7 +157,7 @@ jobs:
 
   publish-docker-image:
     runs-on: ubuntu-latest
-    needs: [build, publish-docker-deps]
+    needs: [publish-docker-deps]
     environment: DockerHub
     steps:
       - uses: actions/checkout@v3
@@ -178,4 +178,4 @@ jobs:
         run: dotnet publish ${{ env.SERVER_PATH }} --os linux --arch x64 -c Release -p:ContainerBaseImage=${{ env.DockerDepsUrl }} -p:ContainerImageName=${{ env.DockerMainName }} -p:ContainerImageTags=${{ needs.build.outputs.VERSION }}
 
       - name: Push image to remote Docker
-        run: docker push "${{ env.DockerMainName }}:${{ needs.build.outputs.VERSION }}"
+        run: docker push "${{ env.DockerMainName }}:latest"
