@@ -22,7 +22,6 @@ env:
 
 jobs:
   build:
-    if: ${{ github.event_name == 'workflow_dispatch' }}
     runs-on: windows-latest
     outputs:
       VERSION: ${{ steps.save-version.outputs.version }}
@@ -159,15 +158,16 @@ jobs:
   publish-docker-image:
     runs-on: ubuntu-latest
     environment: DockerHub
+    needs: [publish-docker-deps, build]
     env:
-      DockerHubBaseRegistry: index.docker.io
+      DockerHubDepsRegistry: index.docker.io
     steps:
       - uses: actions/checkout@v3
 
-      - name: Log in to Docker Hub for base iamge
+      - name: Log in to Docker Hub for deps repos pull
         uses: docker/login-action@v2
         with:
-          registry: ${{ env.DockerHubBaseRegistry }}
+          registry: ${{ env.DockerHubDepsRegistry }}
           username: ${{ secrets.DOCKERHUBUSERNAME }}
           password: ${{ secrets.DOCKERHUBTOKEN }}
 
@@ -178,7 +178,7 @@ jobs:
           password: ${{ secrets.DOCKERHUBTOKEN }}
 
       - name: Build full deps url
-        run: echo "DockerDepsUrl=${{ env.DockerHubBaseRegistry }}/${{ secrets.DOCKERHUBUSERNAME }}/${{ env.DOCKER_DEPS_REPOS }}:${{ env.DOCKER_DEPS_TAG }}" >> $GITHUB_ENV
+        run: echo "DockerDepsUrl=${{ env.DockerHubDepsRegistry }}/${{ secrets.DOCKERHUBUSERNAME }}/${{ env.DOCKER_DEPS_REPOS }}:${{ env.DOCKER_DEPS_TAG }}" >> $GITHUB_ENV
 
       - name: Build full main repos name
         run: echo "DockerMainName=${{ secrets.DOCKERHUBUSERNAME }}/${{ env.DOCKER_MAIN_REPOS }}" >> $GITHUB_ENV
@@ -187,7 +187,7 @@ jobs:
         run: cat  ~/.docker/config.json 
 
       - name: Build Linux image for Docker
-        run: dotnet publish ${{ env.SERVER_PATH }} --os linux --arch x64 -c Release -p:ContainerBaseImage=${{ env.DockerDepsUrl }} -p:ContainerImageName=${{ env.DockerMainName }} -p:ContainerImageTags=latest
+        run: dotnet publish ${{ env.SERVER_PATH }} --os linux --arch x64 -c Release -p:ContainerBaseImage=${{ env.DockerDepsUrl }} -p:ContainerImageName=${{ env.DockerMainName }} -p:ContainerImageTags=${{ needs.build.outputs.VERSION }}
 
       - name: Push image to remote Docker
-        run: docker push "${{ env.DockerMainName }}:latest"
+        run: docker push "${{ env.DockerMainName }}:${{ needs.build.outputs.VERSION }}"
