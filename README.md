@@ -1,5 +1,4 @@
 # Hierarchical-Sensor-Monitoring
-Alternative Monitoring Solution
 
 HSM is a solution, that allows users to collect, store and process different monitoring data from various sources. Besides traditional data sources, there is a DataCollector library, fully compatible with HSM.
 
