@@ -295,7 +295,14 @@ namespace HSMServer.Controllers
                     sensors = product.SensorsStatuses.Select(x => new KeyValuePair<string, int>(x.Status.ToIcon(), x.Count))
                 });
             }
-            return default;
+
+            if (_folderManager[Guid.Parse(selectedId)] is not null)
+                return Json(new
+                {
+                    products = _folderManager[Guid.Parse(selectedId)].Products.Values.GroupBy(x => x.Status).OrderBy(x => x.Key).Select(x => new KeyValuePair<string, int>(x.Key.ToIcon(), x.Count()))
+                });
+            
+            return Json(_emptyResult);
         }
         
         #endregion

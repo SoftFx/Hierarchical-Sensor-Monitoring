@@ -190,6 +190,54 @@
         
         $('#status_name_' + id).empty().html(dataObject.status);
     }
+    
+    function updateGeneralInfo(selectedNodeId) {
+        $.ajax({
+            type: 'GET',
+            url: `@Url.Action(nameof(HomeController.GetChildrenStatistic))?selectedId=${selectedNodeId}`,
+            cache: false,
+            async: true,
+            success: function (viewdata) {
+                let nodes = "";
+                let sensors = "";
+                let products = "";
+                
+                if ('nodes' in viewdata && viewdata.nodes.length !== 0) {
+                    viewdata.nodes.forEach( (el, key, arr) => {
+                        nodes += `<i class="${el.key} pe-1 align-self-center"></i>`;
+                        if (!Object.is(arr.length - 1, key)) {
+                         nodes += `<span>(${el.value}),&nbsp;</span>`
+                        }
+                        else nodes += `<span>(${el.value})</span>`
+                    })                    
+                }
+
+                if ('sensors' in viewdata && viewdata.sensors.length !== 0) {
+                    viewdata.sensors.forEach( (el, key, arr) => {
+                        sensors += `<i class="${el.key} pe-1 align-self-center"></i>`;
+                        if (!Object.is(arr.length - 1, key)) {
+                         sensors += `<span>(${el.value}),&nbsp;</span>`
+                        }
+                        else sensors += `<span>(${el.value})</span>`
+                    })                    
+                }
+            
+                if ('products' in viewdata && viewdata.products.length !== 0) {
+                    viewdata.products.forEach( (el, key, arr) => {
+                        products += `<i class="${el.key} pe-1 align-self-center"></i>`;
+                        if (!Object.is(arr.length - 1, key)) {
+                         products += `<span>(${el.value}),&nbsp;</span>`
+                        }
+                        else products += `<span>(${el.value})</span>`
+                    })                    
+                }              
+                               
+                $('#general_info_Nodes').html(nodes === "" ? '0' : nodes);
+                $('#general_info_Sensors').html(sensors === "" ? '0' : sensors);
+                $('#general_info_Products').html(products === "" ? '0' : products);
+            }
+        });
+    }
 
     function updateSpecificSensorData(dataObject) {
         var id = dataObject.id;
@@ -274,40 +322,13 @@
 
                     updateGridCell(dataObject);
                     updateNodeData(dataObject);
-
+                    
                     if (dataObject.hasOwnProperty('value')) {
                         updateSpecificSensorData(dataObject);
                     }
                 }
                 
-                $.ajax({
-                    type: 'GET',
-                    url: `@Url.Action(nameof(HomeController.GetChildrenStatistic))?selectedId=${selectedNodeId}`,
-                    cache: false,
-                    async: true,
-                    success: function (viewdata) {
-                      
-                           let nodes = "";
-                           let sensors = "";
-                           
-                           viewdata.nodes.forEach( (el, key, arr) => {
-                               nodes += `<i class="${el.key} pe-1 align-self-center"></i>`;
-                               if (!Object.is(arr.length - 1, key)) {
-                                    nodes += `<span>(${el.value}),&nbsp;</span>`
-                               }
-                           })
-                           
-                           viewdata.sensors.forEach( (el, key, arr) => {
-                               sensors += `<i class="${el.key} pe-1 align-self-center"></i>`;
-                               if (!Object.is(arr.length - 1, key)) {
-                                    sensors += `<span>(${el.value}),&nbsp;</span>`
-                               }
-                           })
-                           
-                           $('#general_info_Nodes').html(nodes === "" ? '0' : nodes);
-                           $('#general_info_Sensors').html(sensors === "" ? '0' : sensors);
-                    }
-                });
+                updateGeneralInfo(selectedNodeId);
             });
         
         $('#updateTime').empty();
