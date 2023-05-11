@@ -171,7 +171,7 @@ jobs:
           username: ${{ secrets.DOCKERHUBUSERNAME }}
           password: ${{ secrets.DOCKERHUBTOKEN }}
 
-        - name: Log in to Docker Hub
+      - name: Log in to Docker Hub
         uses: docker/login-action@v2
         with:
           username: ${{ secrets.DOCKERHUBUSERNAME }}
