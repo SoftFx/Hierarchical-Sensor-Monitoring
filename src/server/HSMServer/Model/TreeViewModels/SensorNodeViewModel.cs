@@ -67,6 +67,7 @@ namespace HSMServer.Model.TreeViewModel
         private DataAlertViewModel BuildAlert(Policy policy) => policy switch
         {
             IntegerDataPolicy intPolicy => new IntegerDataAlertViewModel(intPolicy) { IsModify = false },
+            DoubleBarDataPolicy doubleBarPolicy => new DoubleBarDataAlertViewModel(doubleBarPolicy) { IsModify = false },
         };
 
         private static string GetFileNameString(SensorType sensorType, string value)

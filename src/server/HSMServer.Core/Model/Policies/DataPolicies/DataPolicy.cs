@@ -22,7 +22,7 @@ namespace HSMServer.Core.Model.Policies
     public sealed record TargetValue(TargetType Type, string Value);
 
 
-    public class DataPolicy<T> : Policy where T : BaseValue
+    public abstract class DataPolicy : Policy
     {
         protected override SensorStatus FailStatus => Status;
 
@@ -43,7 +43,7 @@ namespace HSMServer.Core.Model.Policies
         public DataPolicy() : base() { }
 
 
-        internal DataPolicy<T> Update(DataPolicyUpdate update)
+        internal DataPolicy Update(DataPolicyUpdate update)
         {
             Property = update.Property;
             Action = update.Action;
@@ -54,6 +54,14 @@ namespace HSMServer.Core.Model.Policies
             return this;
         }
 
+    }
+
+
+    public abstract class DataPolicy<T> : DataPolicy where T : BaseValue
+    {
+        public DataPolicy() : base() { }
+
+
         internal PolicyResult Validate(T value)
         {
             return PolicyResult.Ok;
@@ -62,4 +70,7 @@ namespace HSMServer.Core.Model.Policies
 
 
     public class IntegerDataPolicy : DataPolicy<IntegerValue> { }
+
+
+    public class DoubleBarDataPolicy : DataPolicy<DoubleBarValue> { }
 }

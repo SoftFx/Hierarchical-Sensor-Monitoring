@@ -71,13 +71,24 @@ namespace HSMServer.Core.Model.Policies
             foreach (var update in updatesList)
                 if (update.Id == Guid.Empty)
                 {
-                    var policy = new IntegerDataPolicy().Update(update);
+                    var policy = CreatePolicy(update);
 
-                    Add(policy as DataPolicy<T>);
+                    Add(policy);
                     Uploaded?.Invoke(ActionType.Add, policy);
                 }
         }
 
         internal void Add(DataPolicy<T> policy) => _storage.TryAdd(policy.Id, policy);
+
+        private DataPolicy<T> CreatePolicy(DataPolicyUpdate update)
+        {
+            DataPolicy policy = typeof(T).Name switch
+            {
+                nameof(IntegerValue) => new IntegerDataPolicy(),
+                nameof(DoubleBarValue) => new DoubleBarDataPolicy(),
+            };
+
+            return policy.Update(update) as DataPolicy<T>;
+        }
     }
 }

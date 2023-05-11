@@ -494,9 +494,10 @@ namespace HSMServer.Controllers
 
         public IActionResult AddDataPolicy(SensorType type)
         {
-            var viewModel = type switch
+            DataAlertViewModelBase viewModel = type switch
             {
                 SensorType.Integer => new IntegerDataAlertViewModel() { IsModify = true },
+                SensorType.DoubleBar => new DoubleBarDataAlertViewModel() { IsModify = true },
                 _ => null,
             };
 
