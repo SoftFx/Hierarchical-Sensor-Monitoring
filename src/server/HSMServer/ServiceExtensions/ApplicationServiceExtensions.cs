@@ -35,16 +35,18 @@ public static class ApplicationServiceExtensions
         services.AddSingleton<IUpdatesQueue, UpdatesQueue>();
         services.AddSingleton<ITreeValuesCache, TreeValuesCache>();
         services.AddSingleton<IUserManager, UserManager>();
+        services.AddSingleton<IFolderManager, FolderManager>();
+
         services.AddSingleton<IRegistrationTicketManager, RegistrationTicketManager>();
         services.AddSingleton<IConfigurationProvider, ConfigurationProvider>();
+
         services.AddSingleton<NotificationsCenter>();
-        services.AddSingleton<IDataCollectorFacade, DataCollectorFacade>();
-        services.AddSingleton<IFolderManager, FolderManager>();
+        services.AddSingleton<DataCollectorWrapper>();
         services.AddSingleton<TreeViewModel>();
 
         services.AddHostedService<OutdatedSensorService>();
-        services.AddHostedService<DatabaseMonitoringService>();
-        services.AddHostedService<MonitoringBackgroundService>();
+        services.AddHostedService<DatacollectorService>();
+        services.AddHostedService<DatacollectorService>();
 
         services.AddSwaggerGen(o =>
         {
@@ -55,13 +57,13 @@ public static class ApplicationServiceExtensions
                 Version = ServerConfig.Version.ToString(),
                 Title = ServerConfig.Name,
             });
-            
+
             o.MapType<TimeSpan>(() => new OpenApiSchema
             {
                 Type = "string",
                 Example = new OpenApiString("00.00:00:00")
             });
-            
+
             o.MapType<Version>(() => new OpenApiSchema
             {
                 Type = "string",
@@ -92,7 +94,10 @@ public static class ApplicationServiceExtensions
     {
         webHostBuilder.ConfigureKestrel(options =>
         {
-            options.ConfigureKestrelListenOptions(serverConfig);
+            var kestrelListenAction = KestrelListenOptions(serverConfig.ServerCertificate);
+
+            options.ListenAnyIP(serverConfig.Kestrel.SensorPort, kestrelListenAction);
+            options.ListenAnyIP(serverConfig.Kestrel.SitePort, kestrelListenAction);
 
             options.Limits.MaxRequestBodySize = 52428800; // Set up to ~50MB
             options.Limits.MinRequestBodyDataRate = null; //???
@@ -137,21 +142,14 @@ public static class ApplicationServiceExtensions
         return applicationBuilder;
     }
 
-
-    private static void ConfigureKestrelListenOptions(this KestrelServerOptions options, ServerConfig serverConfig)
-    {
-        options.ListenAnyIP(serverConfig.Kestrel.SensorPort, KestrelListenOptions(serverConfig.ServerCertificate));
-        options.ListenAnyIP(serverConfig.Kestrel.SitePort, KestrelListenOptions(serverConfig.ServerCertificate));
-    }
-
-    private static Action<ListenOptions> KestrelListenOptions(ServerCertificateConfig serverCertificateConfig) =>
+    private static Action<ListenOptions> KestrelListenOptions(ServerCertificateConfig config) =>
         options =>
         {
             options.Protocols = HttpProtocols.Http1AndHttp2;
             options.UseHttps(portOptions =>
             {
                 portOptions.SslProtocols = SslProtocols.Tls13 | SslProtocols.Tls12;
-                portOptions.ServerCertificate = serverCertificateConfig.Certificate;
+                portOptions.ServerCertificate = config.Certificate;
             });
         };
 }

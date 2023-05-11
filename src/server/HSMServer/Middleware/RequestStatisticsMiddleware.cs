@@ -6,25 +6,27 @@ namespace HSMServer.Middleware
 {
     internal sealed class RequestStatisticsMiddleware
     {
-        private readonly IDataCollectorFacade _dataCollector;
+        private const double KbDivisor = 1 << 10;
+
+        private readonly DataCollectorWrapper _collector;
         private readonly RequestDelegate _next;
 
-        public RequestStatisticsMiddleware(RequestDelegate next, IDataCollectorFacade dataCollector)
+        public RequestStatisticsMiddleware(RequestDelegate next, DataCollectorWrapper collector)
         {
+            _collector = collector;
             _next = next;
-            _dataCollector = dataCollector;
         }
 
         public Task InvokeAsync(HttpContext context)
         {
-            _dataCollector.IncreaseRequestsCount();
+            _collector.RequestsCountSensor.AddValue(1);
 
             var request = context.Request;
-            _dataCollector.ReportRequestSize(request.ContentLength ?? 0);
+            _collector.RequestSizeSensor.AddValue(request.ContentLength ?? 0 / KbDivisor);
 
             context.Response.OnCompleted(() =>
             {
-                _dataCollector.ReportResponseSize(context.Response.ContentLength ?? 0);
+                _collector.ResponseSizeSensor.AddValue(context.Response.ContentLength ?? 0 / KbDivisor);
                 return Task.CompletedTask;
             });
 
