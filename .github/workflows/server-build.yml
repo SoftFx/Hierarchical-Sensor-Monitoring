@@ -163,13 +163,10 @@ jobs:
       - uses: actions/checkout@v3
 
       - name: Log in to Docker Hub
-        uses: docker/login-action@v2
-        with:
-          username: ${{ secrets.DOCKERHUBUSERNAME }}
-          password: ${{ secrets.DOCKERHUBTOKEN }}
+        run: docker login -u ${{ secrets.DOCKERHUBUSERNAME }} -p ${{ secrets.DOCKERHUBTOKEN }}
 
       - name: Build full deps url
-        run: echo "DockerDepsUrl=index.docker.io/v1/${{ secrets.DOCKERHUBUSERNAME }}/${{ env.DOCKER_DEPS_REPOS }}:${{ env.DOCKER_DEPS_TAG }}" >> $GITHUB_ENV
+        run: echo "DockerDepsUrl=index.docker.io/${{ secrets.DOCKERHUBUSERNAME }}/${{ env.DOCKER_DEPS_REPOS }}:${{ env.DOCKER_DEPS_TAG }}" >> $GITHUB_ENV
 
       - name: Build full main repos name
         run: echo "DockerMainName=${{ secrets.DOCKERHUBUSERNAME }}/${{ env.DOCKER_MAIN_REPOS }}" >> $GITHUB_ENV
@@ -178,7 +175,7 @@ jobs:
         run: cat  ~/.docker/config.json 
 
       - name: Build Linux image for Docker
-        run: dotnet publish ${{ env.SERVER_PATH }} --os linux --arch x64 -c Release -p:ContainerBaseImage=mcr.microsoft.com/dotnet/aspnet:7.0 -p:ContainerImageName=${{ env.DockerMainName }} -p:ContainerImageTags=latest
+        run: dotnet publish ${{ env.SERVER_PATH }} --os linux --arch x64 -c Release -p:ContainerBaseImage=${{ env.DockerDepsUrl }} -p:ContainerImageName=${{ env.DockerMainName }} -p:ContainerImageTags=latest
 
       - name: Push image to remote Docker
         run: docker push "${{ env.DockerMainName }}:latest"
