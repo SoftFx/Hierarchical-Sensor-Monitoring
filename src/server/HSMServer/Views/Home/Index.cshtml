@@ -230,8 +230,29 @@
                         }
                         else products += `<span>(${el.value})</span>`
                     })                    
-                }              
-                               
+                }
+                
+                let integration = "";
+                
+                if ('integration' in viewdata && viewdata.integration.length !== 0) {
+                    integration += `<div class="d-flex justify-content-start">
+                                        <div class="d-flex ms-3 text-nowrap">
+                                            <span style="min-width: 8rem">Enabled for:</span>
+                                        </div>`;
+                    
+                    viewdata.integration.forEach( (el, key, arr) => {
+                        integration += ` <div class="d-flex w-100">
+                                            <div class="sensor-icon-with-margin">
+                                                <img class="tree-png-icon" src="/dist/${el.valueOf().toLowerCase()}.svg" />
+                                            </div>
+                                            <span>${el.valueOf()}</span>
+                                        </div>`
+                        if (!Object.is(arr.length - 1, key)) {
+                         integration += `<span>,&nbsp;</span>`
+                        }
+                    })                    
+                }
+                $('#integrations').html(integration === "" ? '' : integration);
                 $('#general_info_Nodes').html(nodes === "" ? '0' : nodes);
                 $('#general_info_Sensors').html(sensors === "" ? '0' : sensors);
                 $('#general_info_Products').html(products === "" ? '0' : products);

@@ -286,7 +286,9 @@ namespace HSMServer.Controllers
         [HttpGet]
         public ActionResult GetChildrenStatistic(string selectedId)
         {
-            if (_treeViewModel.Nodes.TryGetValue(Guid.Parse(selectedId), out var node))
+            var id = Guid.Parse(selectedId);
+            
+            if (_treeViewModel.Nodes.TryGetValue(id, out var node))
             {
                 var product = new ProductInfoViewModel(node);
                 return Json(new
@@ -296,10 +298,16 @@ namespace HSMServer.Controllers
                 });
             }
 
-            if (_folderManager[Guid.Parse(selectedId)] is not null)
+            if (_folderManager[id] is not null)
                 return Json(new
                 {
                     products = _folderManager[Guid.Parse(selectedId)].Products.Values.GroupBy(x => x.Status).OrderBy(x => x.Key).Select(x => new KeyValuePair<string, int>(x.Key.ToIcon(), x.Count()))
+                });
+
+            if (_treeViewModel.Sensors.TryGetValue(id, out var sensor))
+                return Json(new
+                {
+                    integration = Enum.GetValues<Integration>().Cast<Enum>().Where(sensor.Integration.HasFlag).Select(x => x.ToString())
                 });
             
             return Json(_emptyResult);
