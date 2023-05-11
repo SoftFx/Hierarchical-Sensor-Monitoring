@@ -4,9 +4,9 @@ using System.Collections.Generic;
 
 namespace HSMServer.Model.DataAlerts
 {
-    public sealed class IntegerDataAlertViewModel : DataAlertViewModelBase<IntegerValue>
+    public abstract class SimpleDataAlertViewModel<T> : DataAlertViewModelBase<T> where T : BaseValue
     {
-        protected override List<string> Properties => new() { nameof(IntegerValue.Value) };
+        protected override List<string> Properties => new() { nameof(BaseValue<T>.Value) };
 
         protected override List<Operation> Actions => new()
         {
@@ -17,6 +17,14 @@ namespace HSMServer.Model.DataAlerts
         };
 
 
+        public SimpleDataAlertViewModel() : base() { }
+
+        public SimpleDataAlertViewModel(DataPolicy<T> policy) : base(policy) { }
+    }
+
+
+    public sealed class IntegerDataAlertViewModel : SimpleDataAlertViewModel<IntegerValue>
+    {
         public IntegerDataAlertViewModel() : base() { }
 
         public IntegerDataAlertViewModel(IntegerDataPolicy policy) : base(policy) { }

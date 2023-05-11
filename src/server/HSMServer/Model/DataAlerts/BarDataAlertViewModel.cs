@@ -4,7 +4,7 @@ using System.Collections.Generic;
 
 namespace HSMServer.Model.DataAlerts
 {
-    public class DoubleBarDataAlertViewModel : DataAlertViewModelBase<DoubleBarValue>
+    public abstract class BarDataAlertViewModel<T> : DataAlertViewModelBase<T> where T : BaseValue
     {
         protected override List<string> Properties => new()
         {
@@ -23,6 +23,14 @@ namespace HSMServer.Model.DataAlerts
         };
 
 
+        public BarDataAlertViewModel() : base() { }
+
+        public BarDataAlertViewModel(DataPolicy<T> policy) : base(policy) { }
+    }
+
+
+    public class DoubleBarDataAlertViewModel : BarDataAlertViewModel<DoubleBarValue>
+    {
         public DoubleBarDataAlertViewModel() : base() { }
 
         public DoubleBarDataAlertViewModel(DoubleBarDataPolicy policy) : base(policy) { }
