@@ -43,10 +43,9 @@ namespace HSMDataCollector.Core
         private readonly HSMClient _hsmClient;
 
 
-        internal static bool IsUnixOS { get; } = RuntimeInformation.IsOSPlatform(OSPlatform.OSX) ||
-                                                 RuntimeInformation.IsOSPlatform(OSPlatform.Linux);
+        internal static bool IsWindowsOS { get; } = RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
 
-        private DefaultSensorsCollection CurrentCollection => IsUnixOS ? (DefaultSensorsCollection)Unix : (DefaultSensorsCollection)Windows;
+        private DefaultSensorsCollection CurrentCollection => IsWindowsOS ? (DefaultSensorsCollection)Windows : (DefaultSensorsCollection)Unix;
 
 
         public IWindowsCollection Windows { get; }
@@ -245,7 +244,7 @@ namespace HSMDataCollector.Core
         [Obsolete("Use method AddSystemMonitoringSensors(options) in Windows collection")]
         public void InitializeSystemMonitoring(bool isCPU, bool isFreeRam, string specificPath = null)
         {
-            if (!IsUnixOS)
+            if (IsWindowsOS)
             {
                 var options = _sensorsPrototype.SystemMonitoring.GetAndFill(new BarSensorOptions() { NodePath = specificPath });
 
@@ -263,16 +262,7 @@ namespace HSMDataCollector.Core
         {
             var options = _sensorsPrototype.ProcessMonitoring.GetAndFill(new BarSensorOptions() { NodePath = specificPath });
 
-            if (IsUnixOS)
-            {
-                if (isCPU)
-                    Unix.AddProcessCpu(options);
-                if (isMemory)
-                    Unix.AddProcessMemory(options);
-                if (isThreads)
-                    Unix.AddProcessThreadCount(options);
-            }
-            else
+            if (IsWindowsOS)
             {
                 if (isCPU)
                     Windows.AddProcessCpu(options);
@@ -280,6 +270,15 @@ namespace HSMDataCollector.Core
                     Windows.AddProcessMemory(options);
                 if (isThreads)
                     Windows.AddProcessThreadCount(options);
+            }
+            else
+            {
+                if (isCPU)
+                    Unix.AddProcessCpu(options);
+                if (isMemory)
+                    Unix.AddProcessMemory(options);
+                if (isThreads)
+                    Unix.AddProcessThreadCount(options);
             }
 
             _ = Start();
@@ -303,10 +302,10 @@ namespace HSMDataCollector.Core
         {
             var options = _sensorsPrototype.CollectorAlive.GetAndFill(new CollectorMonitoringInfoOptions() { NodePath = specificPath });
 
-            if (IsUnixOS)
-                Unix.AddCollectorHeartbeat(options);
-            else
+            if (IsWindowsOS)
                 Windows.AddCollectorHeartbeat(options);
+            else
+                Unix.AddCollectorHeartbeat(options);
 
             _ = Start();
         }
