@@ -516,7 +516,7 @@ namespace HSMServer.Controllers
                 Sensor = new
                 {
                     Path = sensor.Path,
-                    Comment = $"User: {CurrentUser.Name}, Reason: {modal.Reason}",
+                    Comment = $"User: {CurrentUser.Name}. Reason: {modal.Reason}",
                     Time = DateTime.UtcNow,
                     Status = modal.NewStatus,
                     Type = sensor.Type
