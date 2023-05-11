@@ -22,6 +22,7 @@ env:
 
 jobs:
   build:
+    if: ${{ github.event_name == 'workflow_dispatch' }}
     runs-on: windows-latest
     outputs:
       VERSION: ${{ steps.save-version.outputs.version }}
@@ -132,7 +133,6 @@ jobs:
 
 
   publish-docker-deps:
-    if: ${{ github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
     environment: DockerHub
     env:
