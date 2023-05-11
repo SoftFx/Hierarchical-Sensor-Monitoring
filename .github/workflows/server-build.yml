@@ -160,7 +160,7 @@ jobs:
     runs-on: ubuntu-latest
     environment: DockerHub
     env:
-      DockerHubBaseRegistry: .github/docker/dockerfile_deps
+      DockerHubBaseRegistry: index.docker.io
     steps:
       - uses: actions/checkout@v3
 
