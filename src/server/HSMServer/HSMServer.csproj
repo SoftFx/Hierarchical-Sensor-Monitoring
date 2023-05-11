@@ -20,7 +20,9 @@
   <PropertyGroup>
     <EnableSDKContainerSupport>true</EnableSDKContainerSupport>
     <PublishProfile>DefaultContainer</PublishProfile>
+    <RuntimeIdentifier>linux-x64</RuntimeIdentifier>
     <ContainerImageTags>$(Version)</ContainerImageTags>
+    <ContainerImageName>$(MSBuildProjectName)</ContainerImageName>
   </PropertyGroup>
 
   <ItemGroup>

@@ -16,9 +16,9 @@ env:
   SOLUTION_PATH: src/server/HSMServer/HSMServer.sln
   SERVER_PATH: src/server/HSMServer/HSMServer.csproj
 
-  DOCKER_DEPS_REPOS: hsm_deps
+  DOCKER_DEPS_REPOS: hierarchical_sensor_monitoring_deps
   DOCKER_DEPS_TAG: latest
-  DOCKER_MAIN_REPOS: hsm
+  DOCKER_MAIN_REPOS: hierarchical_sensor_monitoring
 
 jobs:
   build:
@@ -183,11 +183,8 @@ jobs:
       - name: Build full main repos name
         run: echo "DockerMainName=${{ secrets.DOCKERHUBUSERNAME }}/${{ env.DOCKER_MAIN_REPOS }}" >> $GITHUB_ENV
 
-      - name: Print config
-        run: cat  ~/.docker/config.json 
-
       - name: Build Linux image for Docker
-        run: dotnet publish ${{ env.SERVER_PATH }} --os linux --arch x64 -c Release -p:ContainerBaseImage=${{ env.DockerDepsUrl }} -p:ContainerImageName=${{ env.DockerMainName }}
+        run: dotnet publish ${{ env.SERVER_PATH }} -c Release -p:ContainerBaseImage=${{ env.DockerDepsUrl }} -p:ContainerImageName=${{ env.DockerMainName }}
 
       - name: Push image to remote Docker
         run: docker push "${{ env.DockerMainName }}:${{ needs.build.outputs.VERSION }}"
