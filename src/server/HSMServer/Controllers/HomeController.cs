@@ -156,8 +156,7 @@ namespace HSMServer.Controllers
         }
 
         [HttpGet]
-        public IActionResult IgnoreNotifications([FromQuery] string selectedId, [FromQuery] NotificationsTarget target,
-            [FromQuery] bool isOffTimeModal)
+        public IActionResult IgnoreNotifications(string selectedId, NotificationsTarget target, bool isOffTimeModal)
         {
             var decodedId = SensorPathHelper.DecodeGuid(selectedId);
 
@@ -459,8 +458,7 @@ namespace HSMServer.Controllers
         private Task<HistoryValuesViewModel> GetFileHistory(string encodedId)
         {
             var enumerator = _treeValuesCache.GetSensorValuesPage(SensorPathHelper.DecodeGuid(encodedId), DateTime.MinValue, DateTime.MaxValue, -20);
-            return new HistoryValuesViewModel(encodedId, 6, enumerator, GetLocalLastValue(encodedId, DateTime.MinValue, DateTime.MaxValue))
-                .Initialize();
+            return new HistoryValuesViewModel(encodedId, 6, enumerator, GetLocalLastValue(encodedId, DateTime.MinValue, DateTime.MaxValue)).Initialize();
         }
 
         #endregion

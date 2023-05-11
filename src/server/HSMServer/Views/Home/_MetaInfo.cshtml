@@ -232,7 +232,7 @@
         }
     }
     
-    function openEditSensorStatusModal(){
+    function openEditSensorStatusModal() {
         $.ajax({
             url: '@Url.Action(nameof(HomeController.GetSensorEditModal))?sensorId=@sensorId',
             type: 'GET',
