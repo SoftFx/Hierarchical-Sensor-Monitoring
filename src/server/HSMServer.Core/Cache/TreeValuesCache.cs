@@ -12,7 +12,6 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
-using System.Text.Json.Nodes;
 
 namespace HSMServer.Core.Cache
 {
@@ -360,7 +359,19 @@ namespace HSMServer.Core.Cache
         }
 
 
-        private void SubscribeToPolicyUpdate(ServerPolicyCollection collection)
+        private void SubscribeSensorToPolicyUpdate(BaseSensorModel sensor)
+        {
+            SubscribeToServerPolicyUpdate(sensor.ServerPolicy);
+
+            sensor.DataPolicies.Uploaded += UpdatePolicy;
+        }
+
+        private void SubscribeProductToPolicyUpdate(ProductModel product)
+        {
+            SubscribeToServerPolicyUpdate(product.ServerPolicy);
+        }
+
+        private void SubscribeToServerPolicyUpdate(ServerPolicyCollection collection)
         {
             foreach (var serverPolicy in collection)
                 serverPolicy.Uploaded += UpdatePolicy;
@@ -506,7 +517,7 @@ namespace HSMServer.Core.Cache
                 var product = new ProductModel(productEntity);
                 product.ApplyPolicies(productEntity.Policies, policies);
 
-                SubscribeToPolicyUpdate(product.ServerPolicy);
+                SubscribeProductToPolicyUpdate(product);
 
                 _tree.TryAdd(product.Id, product);
             }
@@ -563,7 +574,7 @@ namespace HSMServer.Core.Cache
 
                     _sensors.TryAdd(sensor.Id, sensor);
 
-                    SubscribeToPolicyUpdate(sensor.ServerPolicy);
+                    SubscribeSensorToPolicyUpdate(sensor);
                 }
                 catch (Exception ex)
                 {
@@ -612,7 +623,7 @@ namespace HSMServer.Core.Cache
         {
             if (_tree.TryAdd(product.Id, product))
             {
-                SubscribeToPolicyUpdate(product.ServerPolicy);
+                SubscribeProductToPolicyUpdate(product);
 
                 if (product.Parent == null)
                     ResetServerPolicyForRootProduct(product);
@@ -636,7 +647,7 @@ namespace HSMServer.Core.Cache
             _sensors.TryAdd(sensor.Id, sensor);
             _databaseCore.AddSensor(sensor.ToEntity());
 
-            SubscribeToPolicyUpdate(sensor.ServerPolicy);
+            SubscribeSensorToPolicyUpdate(sensor);
 
             ChangeSensorEvent?.Invoke(sensor, ActionType.Add);
         }

@@ -1,9 +1,10 @@
 ﻿using HSMServer.Core.Model;
+using HSMServer.Core.Model.Policies;
 using System.Collections.Generic;
 
 namespace HSMServer.Model.DataAlerts
 {
-    public sealed class IntegerDataAlertViewModel : DataAlertViewModelBase
+    public sealed class IntegerDataAlertViewModel : DataAlertViewModelBase<IntegerValue>
     {
         protected override List<string> Properties => new() { nameof(IntegerValue.Value) };
 
@@ -17,5 +18,7 @@ namespace HSMServer.Model.DataAlerts
 
 
         public IntegerDataAlertViewModel() : base() { }
+
+        public IntegerDataAlertViewModel(IntegerDataPolicy policy) : base(policy) { }
     }
 }

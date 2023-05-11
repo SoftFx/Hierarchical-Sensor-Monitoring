@@ -484,6 +484,7 @@ namespace HSMServer.Controllers
                 Description = newModel.Description ?? string.Empty,
                 ExpectedUpdateInterval = newModel.ExpectedUpdateInterval.ToModel(),
                 RestoreInterval = newModel.SensorRestorePolicy.ToModel(),
+                DataPolicies = newModel.DataAlerts[sensor.Type].Select(a => a.ToUpdate()).ToList(),
             };
 
             _treeValuesCache.UpdateSensor(update);

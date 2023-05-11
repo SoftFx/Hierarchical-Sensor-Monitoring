@@ -1,6 +1,9 @@
 ﻿using HSMServer.Core.Model;
+using HSMServer.Core.Model.Policies;
 using HSMServer.Extensions;
+using HSMServer.Model.DataAlerts;
 using System;
+using System.Linq;
 
 namespace HSMServer.Model.TreeViewModel
 {
@@ -57,7 +60,14 @@ namespace HSMServer.Model.TreeViewModel
             ShortStringValue = model.LastValue?.ShortInfo;
 
             FileNameString = GetFileNameString(model.Type, ShortStringValue);
+
+            DataAlerts[Type] = model.DataPolicies.Policies.Select(BuildAlert).ToList();
         }
+
+        private DataAlertViewModel BuildAlert(Policy policy) => policy switch
+        {
+            IntegerDataPolicy intPolicy => new IntegerDataAlertViewModel(intPolicy) { IsModify = false },
+        };
 
         private static string GetFileNameString(SensorType sensorType, string value)
         {

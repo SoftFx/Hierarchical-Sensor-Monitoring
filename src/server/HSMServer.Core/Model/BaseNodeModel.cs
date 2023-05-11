@@ -88,7 +88,7 @@ namespace HSMServer.Core.Model
 
         internal virtual void AddPolicy<T>(T policy) where T : Policy => ServerPolicy.ApplyPolicy(policy);
 
-        protected virtual List<Guid> GetPolicyIds() => ServerPolicy.GetIds().ToList();
+        protected List<Guid> GetPolicyIds() => ServerPolicy.GetIds().ToList();
 
         internal void ApplyPolicies(List<string> policyIds, Dictionary<string, Policy> allPolicies)
         {

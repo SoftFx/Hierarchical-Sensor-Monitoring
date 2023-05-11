@@ -11,6 +11,7 @@ namespace HSMServer.Core.Model.Policies
     [JsonDerivedType(typeof(RestoreWarningPolicy), 1101)]
     [JsonDerivedType(typeof(RestoreOffTimePolicy), 1102)]
     [JsonDerivedType(typeof(StringValueLengthPolicy), 2000)]
+    [JsonDerivedType(typeof(IntegerDataPolicy), 2001)]
     public abstract class Policy
     {
         protected static PolicyResult Ok => PolicyResult.Ok;
@@ -43,12 +44,6 @@ namespace HSMServer.Core.Model.Policies
                 Id = Id.ToString(),
                 Policy = JsonSerializer.SerializeToUtf8Bytes(this),
             };
-    }
-
-
-    public abstract class DataPolicy<T> : Policy where T : BaseValue
-    {
-        internal abstract PolicyResult Validate(T value);
     }
 
 

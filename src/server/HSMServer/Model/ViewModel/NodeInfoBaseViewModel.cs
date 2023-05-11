@@ -53,7 +53,7 @@ namespace HSMServer.Model.ViewModel
             ExpectedUpdateInterval = new(model.ExpectedUpdateInterval, PredefinedIntervals.ForTimeout);
             SensorRestorePolicy = new(model.SensorRestorePolicy, PredefinedIntervals.ForRestore);
 
-            DataAlerts = new() { { SensorType.Integer, new List<DataAlertViewModel>() { new IntegerDataAlertViewModel() { IsModify = false } } } };
+            DataAlerts = model.DataAlerts;
         }
     }
 }

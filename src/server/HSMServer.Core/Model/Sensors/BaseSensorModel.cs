@@ -1,5 +1,7 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Core.Cache.UpdateEntities;
+using HSMServer.Core.Extensions;
+using HSMServer.Core.Model.Policies;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -31,10 +33,11 @@ namespace HSMServer.Core.Model
         private static readonly PolicyResult _muteResult = new(SensorStatus.OffTime, "Muted");
 
         private PolicyResult _serverResult = PolicyResult.Ok;
-        protected PolicyResult _dataResult = PolicyResult.Ok;
 
 
         protected abstract ValuesStorage Storage { get; }
+
+        public abstract DataPolicyCollection DataPolicies { get; }
 
         public abstract SensorType Type { get; }
 
@@ -48,7 +51,7 @@ namespace HSMServer.Core.Model
 
         public bool IsWaitRestore => !ServerPolicy.CheckRestorePolicies(Status.Status, LastUpdateTime).IsOk;
 
-        public PolicyResult Status => State == SensorState.Muted ? _muteResult : _serverResult + _dataResult;
+        public PolicyResult Status => State == SensorState.Muted ? _muteResult : _serverResult + DataPolicies.Result;
 
 
         public bool HasData => Storage.HasData;
@@ -92,7 +95,7 @@ namespace HSMServer.Core.Model
         }
 
 
-        internal void Update(SensorUpdate update)
+        internal virtual void Update(SensorUpdate update)
         {
             base.Update(update);
 
@@ -107,7 +110,7 @@ namespace HSMServer.Core.Model
         internal void ResetSensor()
         {
             _serverResult = PolicyResult.Ok;
-            _dataResult = PolicyResult.Ok;
+            DataPolicies.Reset();
 
             Storage.Clear();
         }
@@ -123,7 +126,7 @@ namespace HSMServer.Core.Model
             Type = (byte)Type,
             State = (byte)State,
             Integration = (int)Integration,
-            Policies = GetPolicyIds().Select(u => u.ToString()).ToList(),
+            Policies = GetPolicyIds().AddRangeFluent(DataPolicies.Ids).Select(u => u.ToString()).ToList(),
             EndOfMuting = EndOfMuting?.Ticks ?? 0L,
         };
     }

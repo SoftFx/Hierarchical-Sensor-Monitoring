@@ -1,6 +1,7 @@
 ﻿namespace HSMServer.Core.Model.Policies
 {
-    internal sealed class StringValueLengthPolicy : DataPolicy<StringValue>
+    // TODO: should be DataPolicy<StringValue>
+    internal sealed class StringValueLengthPolicy : Policy
     {
         internal const int DefaultMaxStringLength = 150;
 
@@ -17,9 +18,9 @@
         public StringValueLengthPolicy() { }
 
 
-        internal override PolicyResult Validate(StringValue value)
-        {
-            return value.Value?.Length > MaxStringLength ? Fail : Ok;
-        }
+        //internal override PolicyResult Validate(StringValue value)
+        //{
+        //    return value.Value?.Length > MaxStringLength ? Fail : Ok;
+        //}
     }
 }

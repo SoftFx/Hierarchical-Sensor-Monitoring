@@ -1,4 +1,6 @@
-﻿using HSMServer.Extensions;
+﻿using HSMServer.Core.Cache.UpdateEntities;
+using HSMServer.Core.Model.Policies;
+using HSMServer.Extensions;
 using HSMServer.Model.TreeViewModel;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using System;
@@ -37,6 +39,10 @@ namespace HSMServer.Model.DataAlerts
 
 
         public DataAlertViewModel() { }
+
+
+        internal DataPolicyUpdate ToUpdate() =>
+            new(Id, Property, Action.ToCore(), new TargetValue(TargetType.Const, Value), Status.ToCore(), Comment);
     }
 
 
@@ -60,13 +66,22 @@ namespace HSMServer.Model.DataAlerts
         public List<SelectListItem> StatusesItems => _statuses.Select(s => new SelectListItem(s.GetDisplayName(), $"{s}")).ToList();
 
 
-        public DataAlertViewModelBase() : base()
+        public DataAlertViewModelBase() : base() { }
+    }
+
+
+    public abstract class DataAlertViewModelBase<T> : DataAlertViewModelBase where T : Core.Model.BaseValue
+    {
+        public DataAlertViewModelBase() : base() { }
+
+        public DataAlertViewModelBase(DataPolicy<T> policy)
         {
-            // TODO: it shoule be empty constructor body
-            Property = "Value";
-            Value = "50";
-            Status = SensorStatus.Warning;
-            Comment = "For $sensor $property is $action $value!!!";
+            Id = policy.Id;
+            Property = policy.Property;
+            Action = policy.Action.ToClient();
+            Value = policy.Target.Value;
+            Status = policy.Status.ToClient();
+            Comment = policy.Comment;
         }
     }
 }
