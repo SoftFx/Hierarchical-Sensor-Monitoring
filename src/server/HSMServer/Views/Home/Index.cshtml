@@ -194,7 +194,7 @@
     function updateGeneralInfo(selectedNodeId) {
         $.ajax({
             type: 'GET',
-            url: `@Url.Action(nameof(HomeController.GetChildrenStatistic))?selectedId=${selectedNodeId}`,
+            url: `@Url.Action(nameof(HomeController.GetGeneralInfo))?selectedId=${selectedNodeId}`,
             cache: false,
             async: true,
             success: function (viewdata) {

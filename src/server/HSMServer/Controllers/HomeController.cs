@@ -280,7 +280,7 @@ namespace HSMServer.Controllers
         }
 
         [HttpGet]
-        public ActionResult GetChildrenStatistic(string selectedId)
+        public ActionResult GetGeneralInfo(string selectedId)
         {
             var id = Guid.Parse(selectedId);
             
