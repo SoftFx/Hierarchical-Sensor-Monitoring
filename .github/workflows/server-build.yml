@@ -178,7 +178,7 @@ jobs:
         run: cat  ~/.docker/config.json 
 
       - name: Build Linux image for Docker
-        run: dotnet publish ${{ env.SERVER_PATH }} --os linux --arch x64 -c Release -p:ContainerBaseImage=index.docker.io/redleonfire/hsm_deps:latest -p:ContainerImageName=${{ env.DockerMainName }} -p:ContainerImageTags=${{ needs.build.outputs.VERSION }}
+        run: dotnet publish ${{ env.SERVER_PATH }} --os linux --arch x64 -c Release -p:ContainerBaseImage=index.docker.io/redleonfire/hsm_deps:latest -p:ContainerImageName=${{ env.DockerMainName }} -p:ContainerImageTags=latest
 
       - name: Push image to remote Docker
         run: docker push "${{ env.DockerMainName }}:latest"
