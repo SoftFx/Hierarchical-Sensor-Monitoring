@@ -25,6 +25,7 @@ jobs:
     runs-on: windows-latest
     outputs:
       VERSION: ${{ steps.save-version.outputs.version }}
+      ARTIFACT_NAME: ${{ steps.build-artifact-name.outputs.name}}
     steps:
     - uses: actions/checkout@v3
 
@@ -44,29 +45,12 @@ jobs:
     - name: Build & Test Solution
       run: dotnet test ${{ env.SOLUTION_PATH }} --no-restore -c Release
 
-    - name: Build HSMServer
-      run: dotnet build ${{ env.SERVER_PATH }} --no-restore -c Release -o ${{ env.OUTPUT_FOLDER}}
+    - name: Publish HSMServer
+      run: dotnet publish ${{ env.SERVER_PATH }} -c Release -o ${{ env.OUTPUT_FOLDER }}
 
     - id: save-version
       name: Try to get server version
       run: echo "version=$((Get-Item ${{ env.OUTPUT_FOLDER }}/HSMServer.exe).VersionInfo.ProductVersion)" >> $env:GITHUB_OUTPUT
-
-
-  create-artifacts:
-    runs-on: windows-latest
-    needs: build
-    outputs:
-      ARTIFACT_NAME: ${{ steps.build-artifact-name.outputs.name}}
-    steps:
-    - uses: actions/checkout@v3
-
-    - name: Setup .NET Core
-      uses: actions/setup-dotnet@v2
-      with:
-        dotnet-version: 7.0.x
-
-    - name: Publish HSMServer
-      run: dotnet publish ${{ env.SERVER_PATH }} -c Release -o ${{ env.OUTPUT_FOLDER }}
 
     - id: build-artifact-name
       name: Build artifact name
@@ -110,7 +94,7 @@ jobs:
 
   create-release:
     runs-on: ubuntu-latest
-    needs: [build, create-tag, create-artifacts]
+    needs: [build, create-tag]
     env:
       ReleaseNote: "ReleaseNote.md"
     steps:
@@ -119,7 +103,7 @@ jobs:
       - name: Download artifacts
         uses: actions/download-artifact@v3
         with:
-          name: ${{ needs.create-artifacts.outputs.ARTIFACT_NAME }}
+          name: ${{ needs.build.outputs.ARTIFACT_NAME }}
           path: ${{ env.OUTPUT_FOLDER }}
 
       - name: Create archive name
@@ -138,7 +122,7 @@ jobs:
       - name: Create release
         uses: ncipollo/release-action@v1
         with:
-          name: ${{ needs.create-artifacts.outputs.ARTIFACT_NAME }}
+          name: ${{ needs.build.outputs.ARTIFACT_NAME }}
           tag: ${{ needs.create-tag.outputs.BUILD_TAG }}
           token: ${{ secrets.GITHUB_TOKEN }}
           artifacts: ${{ env.ArtifactZip }}
@@ -185,7 +169,7 @@ jobs:
           password: ${{ secrets.DOCKERHUBTOKEN }}
 
       - name: Build full deps url
-        run: echo "DockerDepsUrl=${{ secrets.DOCKERHUBUSERNAME }}/${{ env.DOCKER_DEPS_REPOS }}:${{ env.DOCKER_DEPS_TAG }}" >> $GITHUB_ENV
+        run: echo "DockerDepsUrl=index.docker.io/${{ secrets.DOCKERHUBUSERNAME }}/${{ env.DOCKER_DEPS_REPOS }}:${{ env.DOCKER_DEPS_TAG }}" >> $GITHUB_ENV
 
       - name: Build full main repos name
         run: echo "DockerMainName=${{ secrets.DOCKERHUBUSERNAME }}/${{ env.DOCKER_MAIN_REPOS }}" >> $GITHUB_ENV
