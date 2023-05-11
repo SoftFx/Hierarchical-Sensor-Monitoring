@@ -159,18 +159,26 @@ jobs:
   publish-docker-image:
     runs-on: ubuntu-latest
     environment: DockerHub
+    env:
+      DockerHubBaseRegistry: .github/docker/dockerfile_deps
     steps:
       - uses: actions/checkout@v3
 
-      - name: Log in to Docker Hub
+      - name: Log in to Docker Hub for base iamge
         uses: docker/login-action@v2
         with:
-          registry: index.docker.io
+          registry: ${{ env.DockerHubBaseRegistry }}
+          username: ${{ secrets.DOCKERHUBUSERNAME }}
+          password: ${{ secrets.DOCKERHUBTOKEN }}
+
+        - name: Log in to Docker Hub
+        uses: docker/login-action@v2
+        with:
           username: ${{ secrets.DOCKERHUBUSERNAME }}
           password: ${{ secrets.DOCKERHUBTOKEN }}
 
       - name: Build full deps url
-        run: echo "DockerDepsUrl=index.docker.io/${{ secrets.DOCKERHUBUSERNAME }}/${{ env.DOCKER_DEPS_REPOS }}:${{ env.DOCKER_DEPS_TAG }}" >> $GITHUB_ENV
+        run: echo "DockerDepsUrl=${{ env.DockerHubBaseRegistry }}/${{ secrets.DOCKERHUBUSERNAME }}/${{ env.DOCKER_DEPS_REPOS }}:${{ env.DOCKER_DEPS_TAG }}" >> $GITHUB_ENV
 
       - name: Build full main repos name
         run: echo "DockerMainName=${{ secrets.DOCKERHUBUSERNAME }}/${{ env.DOCKER_MAIN_REPOS }}" >> $GITHUB_ENV
