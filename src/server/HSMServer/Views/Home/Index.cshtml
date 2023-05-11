@@ -343,7 +343,7 @@
 
                     updateGridCell(dataObject);
                     updateNodeData(dataObject);
-                    
+
                     if (dataObject.hasOwnProperty('value')) {
                         updateSpecificSensorData(dataObject);
                     }
@@ -351,7 +351,7 @@
                 
                 updateGeneralInfo(selectedNodeId);
             });
-        
+
         $('#updateTime').empty();
         $('#updateTime').append('Update Time: ' + new Date().toUTCString());
     }

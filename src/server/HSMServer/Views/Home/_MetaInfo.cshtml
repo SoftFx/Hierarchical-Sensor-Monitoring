@@ -78,7 +78,7 @@
             <div class="form-control border-0 fw-bold px-0" style="max-width: 15rem;">
                 General info:
             </div>
-            
+
             @if (Model is FolderInfoViewModel folder)
             {
                 @await Html.PartialAsync("_ChildrenStatistic", new ChildrenStatistic("Products", folder.TotalProducts, folder.ProductStatuses))
