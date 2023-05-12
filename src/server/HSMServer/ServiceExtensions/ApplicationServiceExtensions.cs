@@ -45,7 +45,7 @@ public static class ApplicationServiceExtensions
         services.AddSingleton<TreeViewModel>();
 
         services.AddHostedService<OutdatedSensorService>();
-        services.AddHostedService<DatacollectorService>();
+        services.AddHostedService<MonitoringBackgroundService>();
         services.AddHostedService<DatacollectorService>();
 
         services.AddSwaggerGen(o =>

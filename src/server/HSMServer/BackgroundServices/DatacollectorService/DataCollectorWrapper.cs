@@ -97,8 +97,6 @@ namespace HSM.Core.Monitoring
             _dbSizeSensor = _collector.CreateDoubleSensor(TotalDbSizePath);
             _environmentDbSizeSensor = _collector.CreateDoubleSensor(EnvironmentDbSizePath);
             _historyDbSizeSensor = _collector.CreateDoubleSensor(HistoryDbSizePath);
-
-            _collector.Start();
         }
 
 

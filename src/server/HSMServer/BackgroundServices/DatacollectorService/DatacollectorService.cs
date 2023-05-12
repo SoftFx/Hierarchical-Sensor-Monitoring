@@ -11,7 +11,9 @@ namespace HSMServer.BackgroundTask
     {
         private readonly ILogger<DatacollectorService> _logger;
         private readonly DataCollectorWrapper _collector;
+
         private readonly TimeSpan _sleepPeriod = new(0, 0, 5, 0);
+        private readonly TimeSpan _initDelay = new(0, 0, 10);
 
 
         public DatacollectorService(DataCollectorWrapper collector, ILogger<DatacollectorService> logger)
@@ -23,32 +25,19 @@ namespace HSMServer.BackgroundTask
         }
 
 
-        public override Task StartAsync(CancellationToken _)
-        {
-            var task = _collector.Start();
-
-            _logger.LogInformation($"{nameof(DatacollectorService)} started!");
-
-            return task;
-        }
-
-        public override Task StopAsync(CancellationToken _)
-        {
-            var task = _collector.Stop();
-
-            _logger.LogInformation($"{nameof(DatacollectorService)} stopped!");
-
-            return task;
-        }
+        public override Task StopAsync(CancellationToken _) => _collector.Stop();
 
 
         protected override async Task ExecuteAsync(CancellationToken token)
         {
+            await Task.Delay(_initDelay, token); //small delay wait server initializing
+            await _collector.Start();
+
             while (!token.IsCancellationRequested)
             {
-                _collector.SendDbInfo();
-
                 await Task.Delay(_sleepPeriod, token);
+
+                _collector.SendDbInfo();
             }
         }
     }

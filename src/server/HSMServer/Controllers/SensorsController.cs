@@ -151,8 +151,7 @@ namespace HSMServer.Controllers
             {
                 _dataCollector.ReceivedDataCountSensor.AddValue(1);
 
-                if (CanAddToQueue(BuildStoreInfo(sensorValue, sensorValue.Convert()),
-                    out var message))
+                if (CanAddToQueue(BuildStoreInfo(sensorValue, sensorValue.Convert()), out var message))
                     return Ok(sensorValue);
 
                 return StatusCode(406, message);
@@ -192,7 +191,7 @@ namespace HSMServer.Controllers
                 return BadRequest(sensorValue);
             }
         }
-        
+
         /// <summary>
         /// Receives value of version sensor
         /// </summary>
@@ -344,7 +343,6 @@ namespace HSMServer.Controllers
                 return BadRequest(values);
             }
         }
-
 
         /// <summary>
         /// Obsolete method. Will be removed.
