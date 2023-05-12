@@ -1,4 +1,3 @@
-using HSM.Core.Monitoring;
 using HSMDatabase.DatabaseWorkCore;
 using HSMServer.Authentication;
 using HSMServer.BackgroundTask;

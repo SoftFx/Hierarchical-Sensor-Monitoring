@@ -12,7 +12,7 @@ using System.Numerics;
 using System.Reflection;
 using System.Threading.Tasks;
 
-namespace HSM.Core.Monitoring
+namespace HSMServer.BackgroundTask
 {
     public sealed class DataCollectorWrapper : IDisposable
     {
