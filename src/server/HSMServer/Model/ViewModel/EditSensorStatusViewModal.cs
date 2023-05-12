@@ -9,14 +9,14 @@ namespace HSMServer.Model.ViewModel;
 
 public class EditSensorStatusViewModal
 {
-    public readonly string ModelHeader = "Edit sensor status";
+    public string ModelHeader => "Edit sensor status";
     
     public string Path { get; set; }
     
     [Display(Name = "Access key")]
     public Guid SelectedAccessKey { get; set; }
 
-    [AccessKeyCanSendPermission]
+    [RequiredKeyPermissions(KeyPermissions.CanSendSensorData)]
     public Guid RootProductId { get; set; }
     
     public string RootProductName { get; set; }
@@ -29,20 +29,12 @@ public class EditSensorStatusViewModal
     [Display(Name = "New status")]
     public SensorStatus NewStatus { get; set; }
     
-    [Required(ErrorMessage = "Reason required")]
     [Display(Name = "Reason")]
+    [Required(ErrorMessage = "Reason required")]
     public string Reason { get; set; }
 
+
     public EditSensorStatusViewModal() { }
-
-    public EditSensorStatusViewModal(SensorInfoViewModel sensorInfoViewModel)
-    {
-        Path = sensorInfoViewModel.Path;
-        RootProductId = sensorInfoViewModel.RootProductId;
-        SensorId = Guid.Parse(sensorInfoViewModel.EncodedId);
-
-        Status = sensorInfoViewModel.Status;
-    }
     
     public EditSensorStatusViewModal(BaseSensorModel sensorModel)
     {
