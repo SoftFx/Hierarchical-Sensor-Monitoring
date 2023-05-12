@@ -109,9 +109,9 @@ namespace HSMServer.BackgroundTask
 
         internal void SendDbInfo()
         {
-            static double GetRoundedDouble(long mdSize)
+            static double GetRoundedDouble(long sizeInBytes)
             {
-                return Math.Round(mdSize / MbDivisor, DigitsCnt, MidpointRounding.AwayFromZero);
+                return Math.Round(sizeInBytes / MbDivisor, DigitsCnt, MidpointRounding.AwayFromZero);
             }
 
             _dbSizeSensor.AddValue(GetRoundedDouble(_database.GetDatabaseSize()));
@@ -139,7 +139,7 @@ namespace HSMServer.BackgroundTask
 
             var denominator = T.CreateChecked(_barInterval.TotalSeconds);
 
-            return _collector.CreateParamsFuncSensor<T, T>(path, string.Empty, values => T.Round(GetSum(values) / denominator, 2, MidpointRounding.AwayFromZero), _barInterval);
+            return _collector.CreateParamsFuncSensor<T, T>(path, string.Empty, values => T.Round(GetSum(values) / denominator, DigitsCnt, MidpointRounding.AwayFromZero), _barInterval);
         }
     }
 }
