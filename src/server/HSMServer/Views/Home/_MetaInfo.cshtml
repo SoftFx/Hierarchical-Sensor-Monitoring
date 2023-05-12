@@ -54,7 +54,9 @@
 
         <div id='update_@Model.EncodedId' class='d-flex my-1 time-ago-div'>updated @Model.LastUpdateTime.GetTimeAgo()</div>
     </div>
-    <form id="editSensorStatus_form" method="post" asp-action="@nameof(HomeController.UpdateSensorStatus)"></form>
+
+    @await Html.PartialAsync("_EditSensorStatusModal", new EditSensorStatusViewModal(Model))
+
     <form id="editMetaInfo_form" method="post" asp-action="@updateAction">
         <input id="metaInfo_encodedId" style='display: none' asp-for="EncodedId" value="@Model.EncodedId"/>
 
@@ -92,14 +94,6 @@
             }
             else if (Model is SensorInfoViewModel sensor)
             {
-                
-                <div class="modal fade" tabindex="-1" role="dialog" id="editSensorStatus_modal">
-                    <div class="modal-dialog modal-dialog-centered" role="document">
-                        <div class="modal-content" id="editSensorStatusContent">
-                        </div>
-                    </div>
-                </div>
-                
                 <div class="d-flex justify-content-start">
                     <div class="d-flex ms-3 text-nowrap">
                         <span style="min-width: 8rem">Sensor type:</span>
@@ -233,17 +227,19 @@
     }
     
     function openEditSensorStatusModal() {
+        $('#editSensorStatus_modal').modal('show');
+    }
+    
+    function loadEditSensorStatusModal() {
         $.ajax({
             url: '@Url.Action(nameof(HomeController.GetSensorEditModal))?sensorId=@sensorId',
             type: 'GET',
             datatype: 'json',
             async: true,
             success: (viewData) => {
-                $('#editSensorStatusContent').html(viewData);
-                editSensorModal = true;
+                $('#editSensorStatus_form').html(viewData);
+                openEditSensorStatusModal();
             }
         });
-        
-        $('#editSensorStatus_modal').modal('show');
     }
 </script>

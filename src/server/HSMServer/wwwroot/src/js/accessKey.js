@@ -49,6 +49,8 @@ window.showNewAccessKeyModal = function(url, openModal) {
 
         showMiddleModal();
         setModalTitle("New access key");
+        
+        $(document).trigger(jQuery.Event("newAccessKeyLoaded"))
     });
 }
 

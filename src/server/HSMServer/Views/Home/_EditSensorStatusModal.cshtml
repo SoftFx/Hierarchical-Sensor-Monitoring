@@ -19,71 +19,77 @@
         : Cache.GetProduct(@Model.RootProductId);
     Model.RootProductId = rootProduct.Id;
     var isAccessKeyExist = rootProduct.AccessKeys.Values.Any(x => (x.Permissions & KeyPermissions.CanSendSensorData) != 0);
-
-    var user = User as User;
 }
 
 @if (Model != null)
 {
-    <input class="d-none" form="editSensorStatus_form" asp-for="SensorId"/>
-    <input class="d-none" form="editSensorStatus_form" asp-for="RootProductId"/>
-    <input class="d-none" form="editSensorStatus_form" asp-for="ModelHeader"/>
-    <input class="d-none" form="editSensorStatus_form" asp-for="Path"/>
+    <form id="editSensorStatus_form" method="post" asp-action="@nameof(HomeController.UpdateSensorStatus)">
+        <div class="modal fade" tabindex="-1" role="dialog" id="editSensorStatus_modal">
+            <div class="modal-dialog modal-dialog-centered" role="document">
+                <div class="modal-content" id="editSensorStatusContent">
+                    <input class="d-none" form="editSensorStatus_form" asp-for="SensorId"/>
+                    <input class="d-none" form="editSensorStatus_form" asp-for="RootProductId"/>
+                    <input class="d-none" form="editSensorStatus_form" asp-for="ModelHeader"/>
+                    <input class="d-none" form="editSensorStatus_form" asp-for="Path"/>
 
-    <div class="modal-header">
-        <div class="text-break">
-            <h5 class="modal-title">@Model.ModelHeader</h5>
-            <h6 class="modal-title">@Model.Path</h6>
-        </div>
-    </div>
+                    <div class="modal-header">
+                        <div class="text-break">
+                            <h5 class="modal-title">@Model.ModelHeader</h5>
+                            <h6 class="modal-title">@Model.Path</h6>
+                        </div>
+                    </div>
 
-    <div class="d-flex modal-body flex-column" id="editSensorStatusModalBody">
-        <div class="form-group">
-            <div class="justify-content-between d-flex">
-                <div class="col-auto">
-                    <label asp-for="@Model.Status"></label>
-                    <input asp-for="@Model.Status" form="editSensorStatus_form" class="form-control" value="@(Model.Status.ToSelectIcon() + Model.Status)" disabled/>
-                </div>
-                <span class="align-self-end pb-2">-></span>
-                <div class="col-auto">
-                    <label asp-for="@Model.NewStatus"></label>
-                    <select asp-for="@Model.NewStatus" form="editSensorStatus_form" class="form-select d-inline-block">
-                        @foreach (var sensor in Html.GetEnumSelectList<SensorStatus>())
-                        {
-                            <option value="@sensor.Value">
-                                @(((SensorStatus) int.Parse(sensor.Value)).ToSelectIcon())
-                                @sensor.Text
-                            </option>
-                        }
-                    </select>
-                </div>
-            </div>
-        </div>
-        <div class="form-group mt-2">
-            @if (!isAccessKeyExist)
-            {
-                <div class="d-flex flex-column mt-2">
-                    <div class="d-flex flex-row align-items-center">
-                        <span asp-validation-for="RootProductId" form="editSensorStatus_form" style="color: #b94a48;font-size: small;">There is no access key with @KeyPermissions.CanSendSensorData</span>
-                        <button onclick="newAccessKeyModal()" type="button" class="d-flex btn btn-link me-0 pe-0">
-                            Add
-                        </button>
+                    <div class="d-flex modal-body flex-column" id="editSensorStatusModalBody">
+                        <div class="form-group">
+                            <div class="justify-content-between d-flex">
+                                <div class="col-auto">
+                                    <label asp-for="@Model.Status"></label>
+                                    <input asp-for="@Model.Status" form="editSensorStatus_form" class="form-control" value="@(Model.Status.ToSelectIcon() + Model.Status)" disabled/>
+                                </div>
+                                <span class="align-self-end pb-2">-></span>
+                                <div class="col-auto">
+                                    <label asp-for="@Model.NewStatus"></label>
+                                    <select asp-for="@Model.NewStatus" form="editSensorStatus_form" class="form-select d-inline-block">
+                                        @foreach (var sensor in Html.GetEnumSelectList<SensorStatus>())
+                                        {
+                                            <option value="@sensor.Value">
+                                                @(((SensorStatus)int.Parse(sensor.Value)).ToSelectIcon())
+                                                @sensor.Text
+                                            </option>
+                                        }
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="form-group mt-2">
+                            @if (!isAccessKeyExist)
+                            {
+                                <div class="d-flex flex-column mt-2">
+                                    <div class="d-flex flex-row align-items-center">
+                                        <span asp-validation-for="RootProductId" form="editSensorStatus_form" style="color: #b94a48;font-size: small;">There is no access key with @KeyPermissions.CanSendSensorData</span>
+                                        <button onclick="newAccessKeyModal()" type="button" class="d-flex btn btn-link me-0 pe-0">
+                                            Add
+                                        </button>
+                                    </div>
+                                </div>
+                            }
+                            <div class="d-flex flex-column mt-2">
+                                <label class="form-label" asp-for="@Model.Reason"></label>
+                                <textarea class="form-control" asp-for="@Model.Reason" form="editSensorStatus_form"></textarea>
+                                <span asp-validation-for="Reason" form="editSensorStatus_form"></span>
+                            </div>
+                        </div>
+
+                    </div>
+
+                    <div class="modal-footer">
+                        <button class="btn btn-secondary col-2" type="submit" form="editSensorStatus_form">OK</button>
+                        <button class="btn btn-secondary col-2" type="button" onclick="hideEditSensorModal()">Cancel</button>
                     </div>
                 </div>
-            }
-            <div class="d-flex flex-column mt-2">
-                <label class="form-label" asp-for="@Model.Reason"></label>
-                <textarea class="form-control" asp-for="@Model.Reason" form="editSensorStatus_form"></textarea>
-                <span asp-validation-for="Reason" form="editSensorStatus_form"></span>
             </div>
         </div>
-
-    </div>
-
-    <div class="modal-footer">
-        <button class="btn btn-secondary col-2" type="submit" form="editSensorStatus_form">OK</button>
-        <button class="btn btn-secondary col-2" type="button" onclick="hideEditSensorModal()">Cancel</button>
-    </div>
+    </form>
 }
 
 
@@ -116,7 +122,6 @@
             },
             error: function (jqXHR, exception) {
                 $('span.field-validation-valid').each(function () {
-                    console.log($(this))
                     let errFor = $(this).data('valmsgFor'); 
                     if (jqXHR.responseJSON[errFor] !== undefined) {
                         $(this).removeClass('field-validation-valid')
@@ -128,15 +133,17 @@
         })
     });
 
-   function newAccessKeyModal(){
+   async function newAccessKeyModal(){
        let url = "@Html.Raw(Url.Action(nameof(AccessKeysController.NewAccessKey), ViewConstants.AccessKeysController))";
 
        hideEditSensorModal();
-       showNewAccessKeyModal(`${url}?selectedId=@Model.RootProductId&closeModal=true`, true);   
+       showNewAccessKeyModal(`${url}?selectedId=@Model.RootProductId&closeModal=true`, true)
+       
+       $(document).on("newAccessKeyLoaded", () => $('#cancelButton').on('click', () => openEditSensorStatusModal()));
+       $(document).on('successSubmit', () => loadEditSensorStatusModal())
    }
    
     function hideEditSensorModal() {
-        editSensorModal = false;
         $('#editSensorStatus_modal').modal('hide');
     }
 </script>

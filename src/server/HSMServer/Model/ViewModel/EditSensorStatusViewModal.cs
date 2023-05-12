@@ -33,8 +33,16 @@ public class EditSensorStatusViewModal
     [Required(ErrorMessage = "Reason required")]
     public string Reason { get; set; }
 
-
     public EditSensorStatusViewModal() { }
+
+    public EditSensorStatusViewModal(NodeInfoBaseViewModel model)
+    {
+        Path = model.Header;
+        RootProductId = model.RootProductId;
+        SensorId = Guid.Parse(model.EncodedId);
+
+        Status = model.Status;
+    }
     
     public EditSensorStatusViewModal(BaseSensorModel sensorModel)
     {
