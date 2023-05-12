@@ -46,7 +46,7 @@ jobs:
       run: dotnet test ${{ env.SOLUTION_PATH }} --no-restore -c Release
 
     - name: Publish HSMServer
-      run: dotnet publish ${{ env.SERVER_PATH }} -c Release -o ${{ env.OUTPUT_FOLDER }}
+      run: dotnet publish ${{ env.SERVER_PATH }} -c Release -o ${{ env.OUTPUT_FOLDER }} --os win-x64
 
     - id: save-version
       name: Try to get server version
