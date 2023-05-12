@@ -82,13 +82,13 @@ namespace HSMServer.Controllers
             return PartialView("_Tree", _treeViewModel.GetUserTree(CurrentUser));
         }
 
-        [HttpPost]
+        [HttpGet]
         public IActionResult ApplyFilter(UserFilterViewModel viewModel)
         {
             CurrentUser.TreeFilter = viewModel.ToFilter();
             _userManager.UpdateUser(CurrentUser);
 
-            return View("Index", _treeViewModel);
+            return Redirect("Index");
         }
 
         [HttpPost]
