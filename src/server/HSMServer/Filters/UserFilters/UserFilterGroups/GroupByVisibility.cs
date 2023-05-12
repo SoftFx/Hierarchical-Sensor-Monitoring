@@ -1,15 +1,15 @@
 ﻿namespace HSMServer.UserFilters
 {
-    public class GroupByHistory : UserFilterGroupBase
+    public class GroupByVisibility : UserFilterGroupBase
     {
         internal override FilterProperty[] Properties => new[] { Empty };
 
-        internal override FilterGroupType Type => FilterGroupType.ByHistory;
+        internal override FilterGroupType Type => FilterGroupType.ByVisibility;
 
 
-        public FilterProperty Empty { get; init; } = new("No data", true);
+        public FilterProperty Empty { get; init; } = new("Empty sensors", true);
 
-        public GroupByHistory() { }
+        public GroupByVisibility() { }
 
 
         internal override bool IsSensorSuitable(FilteredSensor sensor) =>
