@@ -5,7 +5,7 @@ using System.Text.Json.Serialization;
 
 namespace HSMServer.Core.Model.Policies
 {
-    [JsonPolymorphic(TypeDiscriminatorPropertyName = "$type")]
+    [JsonPolymorphic(TypeDiscriminatorPropertyName = "$type", IgnoreUnrecognizedTypeDiscriminators = true)]
     [JsonDerivedType(typeof(ExpectedUpdateIntervalPolicy), 1000)]
     [JsonDerivedType(typeof(RestoreErrorPolicy), 1100)]
     [JsonDerivedType(typeof(RestoreWarningPolicy), 1101)]
