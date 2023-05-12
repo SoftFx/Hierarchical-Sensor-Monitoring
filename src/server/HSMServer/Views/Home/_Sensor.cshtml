@@ -13,13 +13,14 @@
         isEnabledPreview = (file.Extension == "csv" && file.OriginalSize < 5 * 1024 * 1024) ||
                            (file.Extension == "txt" && file.OriginalSize < 1024 * 1024);
 
-
     var sensorId = Model.EncodedId;
 
     var graphElementId = $"graph_{sensorId}";
     var graphParentDivId = $"graph_parent_{sensorId}";
     var valuesElementId = $"values_{sensorId}";
     var valuesParentDivId = $"values_parent_{sensorId}";
+
+    string visibilityClass = Model.UpdateTime == DateTime.MinValue ? "d-none" : string.Empty;
 }
 
 <div>
@@ -99,7 +100,7 @@
                                     <div class="col-6">
                                         <div class="justify-content-end">
                                             <div class="d-flex flex-row-reverse">
-                                                <input style='display: none;' id='fileType_@sensorId' value='@Model.FileNameString' />
+                                                <input style='display: none;' id='fileType_@sensorId' value='@Model.FileNameString'/>
                                                 <a id='button_download_@sensorId' class='btn btn-outline-secondary d-flex justify-content-center align-items-center mx-1 button-width-static' title='Download'>
                                                     <i class='fas fa-file-download small-icon pe-1'></i>
                                                     <span style="font-size: smaller">Download</span>
@@ -124,63 +125,65 @@
     }
     else
     {
-        <div id='collapse_@sensorId' class='pt-3 text-break'>
-            <div class="d-flex justify-content-between">
-                <div>
-                    <label class="me-1" for="from_@sensorId">From:</label>
-                    <input class="me-2" type="datetime-local" id="from_@sensorId" name="from">
+        <div id="childrenPanel" class="@visibilityClass">
+            <div id='collapse_@sensorId' class='pt-3 text-break'>
+                <div class="d-flex justify-content-between">
+                    <div>
+                        <label class="me-1" for="from_@sensorId">From:</label>
+                        <input class="me-2" type="datetime-local" id="from_@sensorId" name="from">
 
-                    <label class="me-1" for="to_@sensorId">To:</label>
-                    <input class="me-2" type="datetime-local" id="to_@sensorId" name="to">
+                        <label class="me-1" for="to_@sensorId">To:</label>
+                        <input class="me-2" type="datetime-local" id="to_@sensorId" name="to">
 
-                    @if (Model.Type is SensorType.IntegerBar or SensorType.DoubleBar)
-                    {
-                        <label class="me-1" for="barsCount_@sensorId" id="labelBarsCount_@sensorId">Bars count:</label>
-                        <input class="me-2" style="width:70px" type="number" id="barsCount_@sensorId" name="barsCount" min="1" max="1000">
-                    }
+                        @if (Model.Type is SensorType.IntegerBar or SensorType.DoubleBar)
+                        {
+                            <label class="me-1" for="barsCount_@sensorId" id="labelBarsCount_@sensorId">Bars count:</label>
+                            <input class="me-2" style="width:70px" type="number" id="barsCount_@sensorId" name="barsCount" min="1" max="1000">
+                        }
 
-                    <button onclick="searchHistory('@sensorId')" type="button" class="btn btn-secondary">
-                        <i type="button" class="fas fa-search"></i>
-                    </button>
-                </div>
+                        <button onclick="searchHistory('@sensorId')" type="button" class="btn btn-secondary">
+                            <i type="button" class="fas fa-search"></i>
+                        </button>
+                    </div>
 
-                <div class='btn-group'>
-                    <button class='btn btn-secondary btn-sm dropdown-toggle' type='button' data-bs-toggle='dropdown'>Actions</button>
-                    <ul class='dropdown-menu'>
-                        <li>
-                            <a class='dropdown-item' href='#' id='button_export_csv_@sensorId'>Export to CSV</a>
-                        </li>
-                    </ul>
-                </div>
-            </div>
-            <div class="mt-2">
-                <div id='no_data_@sensorId' style='display: none'>
-                    <p>No data for the specified period</p>
-                </div>
-                <div id='history_@sensorId'>
-                    @if (Model.IsChartSupported)
-                    {
-                        <ul class='nav nav-tabs'>
-                            <li class='nav-item'>
-                                <a id='link_graph_@sensorId' class='nav-link active' data-bs-toggle='tab' href='#@graphParentDivId'>Graph</a>
-                            </li>
-                            <li class='nav-item'>
-                                <a id='link_table_@sensorId' class='nav-link' data-bs-toggle='tab' href='#@valuesParentDivId'>Table</a>
+                    <div class='btn-group'>
+                        <button class='btn btn-secondary btn-sm dropdown-toggle' type='button' data-bs-toggle='dropdown'>Actions</button>
+                        <ul class='dropdown-menu'>
+                            <li>
+                                <a class='dropdown-item' href='#' id='button_export_csv_@sensorId'>Export to CSV</a>
                             </li>
                         </ul>
-                        <div class='tab-content'>
-                            <div class='tab-pane fade show active' id=@graphParentDivId>
-                                <div id='@graphElementId'></div>
+                    </div>
+                </div>
+                <div class="mt-2">
+                    <div id='no_data_@sensorId' style='display: none'>
+                        <p>No data for the specified period</p>
+                    </div>
+                    <div id='history_@sensorId'>
+                        @if (Model.IsChartSupported)
+                        {
+                            <ul class='nav nav-tabs'>
+                                <li class='nav-item'>
+                                    <a id='link_graph_@sensorId' class='nav-link active' data-bs-toggle='tab' href='#@graphParentDivId'>Graph</a>
+                                </li>
+                                <li class='nav-item'>
+                                    <a id='link_table_@sensorId' class='nav-link' data-bs-toggle='tab' href='#@valuesParentDivId'>Table</a>
+                                </li>
+                            </ul>
+                            <div class='tab-content'>
+                                <div class='tab-pane fade show active' id=@graphParentDivId>
+                                    <div id='@graphElementId'></div>
+                                </div>
+                                <div class='tab-pane fade' id=@valuesParentDivId>
+                                    <div id='@valuesElementId'></div>
+                                </div>
                             </div>
-                            <div class='tab-pane fade' id=@valuesParentDivId>
-                                <div id='@valuesElementId'></div>
-                            </div>
-                        </div>
-                    }
-                    else
-                    {
-                        <div id='values_@sensorId'></div>
-                    }
+                        }
+                        else
+                        {
+                            <div id='values_@sensorId'></div>
+                        }
+                    </div>
                 </div>
             </div>
         </div>
