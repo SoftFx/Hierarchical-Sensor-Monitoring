@@ -133,7 +133,7 @@
         })
     });
 
-   async function newAccessKeyModal(){
+   function newAccessKeyModal(){
        let url = "@Html.Raw(Url.Action(nameof(AccessKeysController.NewAccessKey), ViewConstants.AccessKeysController))";
 
        hideEditSensorModal();
