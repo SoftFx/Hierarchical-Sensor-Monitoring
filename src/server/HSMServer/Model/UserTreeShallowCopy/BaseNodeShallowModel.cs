@@ -26,7 +26,7 @@ namespace HSMServer.Model.UserTreeShallowCopy
         $$"""
         {
             "title": "{{Data.Title}}",
-            "icon": "{{(Data.HasData ? Data.Status.ToIcon() : "fa-regular fa-circle")}}",
+            "icon": "{{(Data.HasData ? Data.Status.ToIcon() : NodeExtensions.GetEmptySensorIcon())}}",
             "time": "{{Data.UpdateTime.Ticks}}",
             "isManager": "{{CurUserIsManager}}",
             "isGrafanaEnabled": "{{IsGrafanaEnabled}}",

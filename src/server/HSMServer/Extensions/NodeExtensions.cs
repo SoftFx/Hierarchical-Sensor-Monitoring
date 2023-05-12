@@ -42,6 +42,8 @@ namespace HSMServer.Extensions
                 ? product.Parent is FolderModel ? "Products" : "Nodes"
                 : "Sensors";
 
+        internal static string GetEmptySensorIcon() => "fa-regular fa-circle";
+        
         internal static string GetShortNodeName(this string name) => name.Cut(NodeNameMaxLength);
 
         internal static string GetShortCellName(this string name) => name.Cut(CellNameMaxLength);

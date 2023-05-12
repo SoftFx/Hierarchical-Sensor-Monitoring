@@ -1,5 +1,6 @@
 ﻿@using HSMServer.Constants
 @using HSMServer.Controllers
+@using HSMServer.Extensions
 @using HSMServer.Model.ViewModel
 @using HSMServer.UserFilters;
 
@@ -54,7 +55,7 @@
     <div class="form-check">
         <input type="checkbox" class="form-check-input" id="history" asp-for="IsEmptyHistory"/>
         <label class="form-check-label" for="history">
-            Empty sensors <i class="fa-regular fa-circle"></i>
+            Empty sensors <i class="@NodeExtensions.GetEmptySensorIcon()"></i>
         </label>
     </div>
     <div class="dropdown-divider"></div>
