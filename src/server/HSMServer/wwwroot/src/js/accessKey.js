@@ -124,9 +124,3 @@ function setModalTitle(title) {
     $('#accessKeys_modalTitle').empty();
     $('#accessKeys_modalTitle').append(title);
 }
-
-function createAccessKey(){
-    let newAccessKeyURL = "@Url.Action(nameof(AccessKeysController.NewServerAccessKey), ViewConstants.AccessKeysController)";
-
-    showNewAccessKeyModal(`${newAccessKeyURL}`, true);
-}

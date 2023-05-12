@@ -32,8 +32,6 @@
         updateAction = nameof(HomeController.UpdateSensorInfo);
         getAction = nameof(HomeController.GetSensorInfo);
     }
-
-    var sensorId = Model.EncodedId;
 }
 
 
@@ -54,8 +52,6 @@
 
         <div id='update_@Model.EncodedId' class='d-flex my-1 time-ago-div'>updated @Model.LastUpdateTime.GetTimeAgo()</div>
     </div>
-
-    @await Html.PartialAsync("_EditSensorStatusModal", new EditSensorStatusViewModal(Model))
 
     <form id="editMetaInfo_form" method="post" asp-action="@updateAction">
         <input id="metaInfo_encodedId" style='display: none' asp-for="EncodedId" value="@Model.EncodedId"/>
@@ -170,10 +166,12 @@
 
 <hr id="metainfo_separator" class="d-none"/>
 
+@if (Model is SensorInfoViewModel)
+{
+    @(await Html.PartialAsync("_EditSensorStatusModal", new EditSensorStatusViewModal(Model)))
+}
 
 <script>
-    var editSensorModal;
-
     $(document).ready(() => {
         replaceHtmlToMarkdown('markdown_span_description');
         replaceHtmlToMarkdown('markdown_status_comment');
@@ -232,7 +230,7 @@
     
     function loadEditSensorStatusModal() {
         $.ajax({
-            url: '@Url.Action(nameof(HomeController.GetSensorEditModal))?sensorId=@sensorId',
+            url: '@Url.Action(nameof(HomeController.GetSensorEditModal))?sensorId=@Model.EncodedId',
             type: 'GET',
             datatype: 'json',
             async: true,

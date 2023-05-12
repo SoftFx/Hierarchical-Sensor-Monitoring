@@ -11,8 +11,6 @@ namespace HSMServer.Model.ViewModel
         public string StatusComment { get; }
 
         public bool HasGrafana { get; }
-        
-        public string Path { get; set; }
 
 
         // public constructor without parameters for action Home/UpdateSensorInfo
@@ -23,7 +21,6 @@ namespace HSMServer.Model.ViewModel
             SensorType = sensor.Type;
             StatusComment = sensor.ValidationError;
             HasGrafana = sensor.Integration.HasGrafana();
-            Path = sensor.FullPath;
         }
     }
 }

@@ -3,7 +3,6 @@
 @using HSMServer.Core.Cache
 @using HSMServer.Core.Model
 @using HSMServer.Extensions
-@using HSMServer.Model.Authentication
 @using Microsoft.AspNetCore.Mvc.TagHelpers
 @using SensorStatus = HSMServer.Model.TreeViewModel.SensorStatus
 
@@ -27,10 +26,10 @@
         <div class="modal fade" tabindex="-1" role="dialog" id="editSensorStatus_modal">
             <div class="modal-dialog modal-dialog-centered" role="document">
                 <div class="modal-content" id="editSensorStatusContent">
-                    <input class="d-none" form="editSensorStatus_form" asp-for="SensorId"/>
-                    <input class="d-none" form="editSensorStatus_form" asp-for="RootProductId"/>
-                    <input class="d-none" form="editSensorStatus_form" asp-for="ModelHeader"/>
-                    <input class="d-none" form="editSensorStatus_form" asp-for="Path"/>
+                    <input class="d-none" asp-for="SensorId"/>
+                    <input class="d-none" asp-for="RootProductId"/>
+                    <input class="d-none" asp-for="ModelHeader"/>
+                    <input class="d-none" asp-for="Path"/>
 
                     <div class="modal-header">
                         <div class="text-break">
@@ -44,12 +43,12 @@
                             <div class="justify-content-between d-flex">
                                 <div class="col-auto">
                                     <label asp-for="@Model.Status"></label>
-                                    <input asp-for="@Model.Status" form="editSensorStatus_form" class="form-control" value="@(Model.Status.ToSelectIcon() + Model.Status)" disabled/>
+                                    <input asp-for="@Model.Status" class="form-control" value="@(Model.Status.ToSelectIcon() + Model.Status)" disabled/>
                                 </div>
                                 <span class="align-self-end pb-2">-></span>
                                 <div class="col-auto">
                                     <label asp-for="@Model.NewStatus"></label>
-                                    <select asp-for="@Model.NewStatus" form="editSensorStatus_form" class="form-select d-inline-block">
+                                    <select asp-for="@Model.NewStatus" class="form-select d-inline-block">
                                         @foreach (var sensor in Html.GetEnumSelectList<SensorStatus>())
                                         {
                                             <option value="@sensor.Value">
@@ -66,7 +65,7 @@
                             {
                                 <div class="d-flex flex-column mt-2">
                                     <div class="d-flex flex-row align-items-center">
-                                        <span asp-validation-for="RootProductId" form="editSensorStatus_form" style="color: #b94a48;font-size: small;">There is no access key with @KeyPermissions.CanSendSensorData</span>
+                                        <span asp-validation-for="RootProductId" style="color: #b94a48;font-size: small;">There is no access key with @KeyPermissions.CanSendSensorData</span>
                                         <button onclick="newAccessKeyModal()" type="button" class="d-flex btn btn-link me-0 pe-0">
                                             Add
                                         </button>
@@ -75,15 +74,15 @@
                             }
                             <div class="d-flex flex-column mt-2">
                                 <label class="form-label" asp-for="@Model.Reason"></label>
-                                <textarea class="form-control" asp-for="@Model.Reason" form="editSensorStatus_form"></textarea>
-                                <span asp-validation-for="Reason" form="editSensorStatus_form"></span>
+                                <textarea class="form-control" asp-for="@Model.Reason"></textarea>
+                                <span asp-validation-for="Reason"></span>
                             </div>
                         </div>
 
                     </div>
 
                     <div class="modal-footer">
-                        <button class="btn btn-secondary col-2" type="submit" form="editSensorStatus_form">OK</button>
+                        <button class="btn btn-secondary col-2" type="submit">OK</button>
                         <button class="btn btn-secondary col-2" type="button" onclick="hideEditSensorModal()">Cancel</button>
                     </div>
                 </div>
