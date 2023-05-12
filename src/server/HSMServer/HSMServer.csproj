@@ -20,7 +20,9 @@
   <PropertyGroup>
     <EnableSDKContainerSupport>true</EnableSDKContainerSupport>
     <PublishProfile>DefaultContainer</PublishProfile>
+    <RuntimeIdentifier>linux-x64</RuntimeIdentifier>
     <ContainerImageTags>$(Version)</ContainerImageTags>
+    <ContainerImageName>$(MSBuildProjectName)</ContainerImageName>
   </PropertyGroup>
 
   <ItemGroup>
@@ -43,8 +45,8 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\collector\HSMDataCollector\HSMDataCollector.csproj" />
     <ProjectReference Include="..\..\database\HSMDatabase\HSMDatabase.csproj" />
-    <ProjectReference Include="..\HSM.Core.Monitoring\HSM.Core.Monitoring.csproj" />
     <ProjectReference Include="..\HSMCommon\HSMCommon.csproj" />
     <ProjectReference Include="..\HSMServer.Core\HSMServer.Core.csproj" />
   </ItemGroup>
