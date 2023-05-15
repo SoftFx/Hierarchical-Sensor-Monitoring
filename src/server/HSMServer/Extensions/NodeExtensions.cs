@@ -20,7 +20,7 @@ namespace HSMServer.Extensions
             };
 
         internal static SensorStatus ToEmpty(this SensorStatus status, bool hasData) =>
-            !hasData && status == SensorStatus.Ok ? SensorStatus.Empty : status;
+            !hasData ? SensorStatus.Empty : status;
 
         internal static string ToIcon(this SensorStatus status) =>
             $"fas fa-circle {status.ToCssIconClass()}";
