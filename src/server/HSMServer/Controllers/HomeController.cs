@@ -492,7 +492,6 @@ namespace HSMServer.Controllers
         }
 
         [HttpGet]
-        [AuthorizeIsAdmin]
         public IActionResult GetSensorEditModal(Guid sensorId)
         {
             var sensor = new SensorNodeViewModel(_treeValuesCache.GetSensor(sensorId));
@@ -501,7 +500,6 @@ namespace HSMServer.Controllers
         }
 
         [HttpPost]
-        [AuthorizeIsAdmin]
         public IActionResult UpdateSensorStatus(EditSensorStatusViewModal modal)
         {
             if (!ModelState.IsValid)

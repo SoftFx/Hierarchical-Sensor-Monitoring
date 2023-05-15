@@ -3,6 +3,7 @@
 @using HSMServer.Core.Cache
 @using HSMServer.Core.Model
 @using HSMServer.Extensions
+@using HSMServer.Model.Authentication
 @using Microsoft.AspNetCore.Mvc.TagHelpers
 @using SensorStatus = HSMServer.Model.TreeViewModel.SensorStatus
 
@@ -62,9 +63,12 @@
                                 <div class="d-flex flex-column mt-2">
                                     <div class="d-flex flex-row align-items-center">
                                         <span asp-validation-for="RootProductId" style="color: #b94a48;font-size: small;">There is no access key with @KeyPermissions.CanSendSensorData</span>
-                                        <button onclick="newAccessKeyModal()" type="button" class="d-flex btn btn-link me-0 pe-0">
-                                            Add
-                                        </button>
+                                        @if ((User as User).IsAdmin)
+                                        {
+                                            <button onclick="newAccessKeyModal()" type="button" class="d-flex btn btn-link me-0 pe-0">
+                                                Add
+                                            </button>
+                                        }
                                     </div>
                                 </div>
                             }
