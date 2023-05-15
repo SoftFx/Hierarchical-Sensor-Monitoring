@@ -23,7 +23,7 @@ namespace HSMServer.BackgroundTask
         private const string SelfMonitoringProductName = "HSM Server Monitoring";
 
         private const string RequestsCountPath = "Load/Requests per second";
-        private const string DataCountPath = "Load/Received data cnt per second";
+        private const string DataCountPath = "Load/Received data count per second";
 
         private const string ResponseSizePath = "Load/Sent data per second KB";
         private const string RequestSizePath = "Load/Received data per second KB";

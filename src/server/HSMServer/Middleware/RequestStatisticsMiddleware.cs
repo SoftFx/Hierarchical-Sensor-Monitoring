@@ -22,11 +22,11 @@ namespace HSMServer.Middleware
             _collector.RequestsCountSensor.AddValue(1);
 
             var request = context.Request;
-            _collector.RequestSizeSensor.AddValue(request.ContentLength ?? 0 / KbDivisor);
+            _collector.RequestSizeSensor.AddValue((request.ContentLength ?? 0) / KbDivisor);
 
             context.Response.OnCompleted(() =>
             {
-                _collector.ResponseSizeSensor.AddValue(context.Response.ContentLength ?? 0 / KbDivisor);
+                _collector.ResponseSizeSensor.AddValue((context.Response.ContentLength ?? 0) / KbDivisor);
                 return Task.CompletedTask;
             });
 
