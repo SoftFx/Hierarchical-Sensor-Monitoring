@@ -15,8 +15,12 @@ namespace HSMServer.Extensions
                 SensorStatus.Ok => "tree-icon-ok",
                 SensorStatus.Warning => "tree-icon-warning",
                 SensorStatus.Error => "tree-icon-error",
+                SensorStatus.Empty => GetEmptySensorIcon(),
                 _ => "tree-icon-offTime",
             };
+
+        internal static SensorStatus ToEmpty(this SensorStatus status, bool hasData) =>
+            !hasData && status == SensorStatus.Ok ? SensorStatus.Empty : status;
 
         internal static string ToIcon(this SensorStatus status) =>
             $"fas fa-circle {status.ToCssIconClass()}";
