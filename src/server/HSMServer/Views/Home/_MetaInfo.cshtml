@@ -14,8 +14,6 @@
 @{
     var user = User as User;
     bool hasUserRights = Model is FolderInfoViewModel f ? user.IsFolderManager(f.Id) : user.IsManager(Model.RootProductId);
-    bool hasData = Model.LastUpdateTime != DateTime.MinValue;
-    string icon = !hasData ? NodeExtensions.GetEmptySensorIcon() : Model.Status.ToIcon();
 
     string updateAction = null, getAction = null;
 
@@ -46,7 +44,7 @@
             }
             else
             {
-                <span id='status_@Model.EncodedId' class='@icon my-1 align-self-center sensor-icon-with-margin' title='Status: @Model.Status'></span>
+                <span id='status_@Model.EncodedId' class='@Model.Status.ToIcon() my-1 align-self-center sensor-icon-with-margin' title='Status: @Model.Status'></span>
             }
 
             <h5 class="d-flex my-1 align-self-top">@Html.Raw(Model.Header)</h5>
@@ -107,8 +105,8 @@
                         <span style="min-width: 8rem">Sensor status:</span>
                     </div>
                     <div class="d-flex w-100">
-                        <li id='metainfo_icon_status' class='@Model.Status.ToEmpty(hasData).ToIcon() sensor-icon-with-margin align-self-center' title='Status: @Model.Status'></li>
-                        <span id="status_name_@Model.EncodedId">@Model.Status.ToEmpty(hasData)</span>
+                        <li id='metainfo_icon_status' class='@Model.Status.ToIcon() sensor-icon-with-margin align-self-center' title='Status: @Model.Status'></li>
+                        <span id="status_name_@Model.EncodedId">@Model.Status</span>
                     </div>
                 </div>
 
