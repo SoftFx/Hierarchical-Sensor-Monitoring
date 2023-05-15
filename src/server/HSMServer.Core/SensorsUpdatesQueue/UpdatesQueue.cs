@@ -9,12 +9,13 @@ namespace HSMServer.Core.SensorsUpdatesQueue
 {
     public sealed class UpdatesQueue : IUpdatesQueue
     {
-        private const int Delay = 10;
         private const int PackageMaxSize = 100;
+        private const int Delay = 10;
 
         private readonly ConcurrentQueue<StoreInfo> _queue;
 
         private bool _run;
+
 
         public event Action<List<StoreInfo>> NewItemsEvent;
 
