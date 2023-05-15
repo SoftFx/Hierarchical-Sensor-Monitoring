@@ -43,7 +43,7 @@
                             <div class="justify-content-between d-flex">
                                 <div class="col-auto">
                                     <label asp-for="@Model.Status"></label>
-                                    <input asp-for="@Model.Status" class="form-control" value="@(Model.Status.ToSelectIcon() + Model.Status)" disabled/>
+                                    <input asp-for="@Model.Status" class="form-control" value="@(Model.Status.ToSelectIcon() + " " + Model.Status)" disabled/>
                                 </div>
                                 <span class="align-self-end pb-2">-></span>
                                 <div class="col-auto">

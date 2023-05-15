@@ -513,11 +513,11 @@ namespace HSMServer.Controllers
             {
                 Sensor = new
                 {
-                    Path = sensor.Path,
+                    sensor.Path,
                     Comment = $"User: {CurrentUser.Name}. Reason: {modal.Reason}",
                     Time = DateTime.UtcNow,
                     Status = modal.NewStatus,
-                    Type = sensor.Type
+                    sensor.Type
                 },
                 Key = _treeValuesCache.GetProduct(modal.RootProductId).AccessKeys.Values.FirstOrDefault(x => (x.Permissions & KeyPermissions.CanSendSensorData) != 0)?.Id
             };
