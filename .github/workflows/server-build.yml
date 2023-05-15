@@ -16,6 +16,7 @@ env:
   SOLUTION_PATH: src/server/HSMServer/HSMServer.sln
   SERVER_PATH: src/server/HSMServer/HSMServer.csproj
 
+  DOCKER_DOCKERHUB_ORG: hsmonitoring
   DOCKER_DEPS_REPOS: hierarchical_sensor_monitoring_deps
   DOCKER_DEPS_TAG: latest
   DOCKER_MAIN_REPOS: hierarchical_sensor_monitoring
@@ -152,7 +153,7 @@ jobs:
           context: .
           push: true
           file: ${{ env.DockerfilePath }}
-          tags: ${{ secrets.DOCKERHUBUSERNAME }}/${{ env.DOCKER_DEPS_REPOS }}:${{ env.DOCKER_DEPS_TAG }}
+          tags: ${{ env.DOCKER_DOCKERHUB_ORG }}/${{ env.DOCKER_DEPS_REPOS }}:${{ env.DOCKER_DEPS_TAG }}
 
 
   publish-docker-image:
@@ -178,10 +179,10 @@ jobs:
           password: ${{ secrets.DOCKERHUBTOKEN }}
 
       - name: Build full deps url
-        run: echo "DockerDepsUrl=${{ env.DockerHubDepsRegistry }}/${{ secrets.DOCKERHUBUSERNAME }}/${{ env.DOCKER_DEPS_REPOS }}:${{ env.DOCKER_DEPS_TAG }}" >> $GITHUB_ENV
+        run: echo "DockerDepsUrl=${{ env.DockerHubDepsRegistry }}/${{ env.DOCKER_DOCKERHUB_ORG }}/${{ env.DOCKER_DEPS_REPOS }}:${{ env.DOCKER_DEPS_TAG }}" >> $GITHUB_ENV
 
       - name: Build full main repos name
-        run: echo "DockerMainName=${{ secrets.DOCKERHUBUSERNAME }}/${{ env.DOCKER_MAIN_REPOS }}" >> $GITHUB_ENV
+        run: echo "DockerMainName=${{ env.DOCKER_DOCKERHUB_ORG }}/${{ env.DOCKER_MAIN_REPOS }}" >> $GITHUB_ENV
 
       - name: Build Linux image for Docker
         run: dotnet publish ${{ env.SERVER_PATH }} -c Release -p:PublishProfile=DefaultContainer -p:ContainerBaseImage=${{ env.DockerDepsUrl }} -p:ContainerImageName=${{ env.DockerMainName }}
