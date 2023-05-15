@@ -1,6 +1,7 @@
 using HSMServer.Model.Folders;
 using HSMServer.Model.TreeViewModel;
 using System;
+using System.ComponentModel.DataAnnotations;
 using HSMServer.Attributes;
 
 
@@ -16,12 +17,13 @@ namespace HSMServer.Model.ViewModel
 
         public SensorStatus Status { get; set; }
 
-        [CustomTimeIntervalMinValue(600000000, ErrorMessage = "Time to live interval minimal value is 1 min")]
+        [Display(Name = "Time to live interval")]
+        [MinTimeInterval(TimeInterval.OneMinute, ErrorMessage = "{0} minimal value is {1}.")]
         public TimeIntervalViewModel ExpectedUpdateInterval { get; set; }
 
-        [CustomTimeIntervalMinValue(600000000, ErrorMessage = "Sensitivity interval minimal value is 1 min")]
+        [Display(Name = "Sensitivity interval")]
+        [MinTimeInterval(TimeInterval.OneMinute, ErrorMessage = "{0} minimal value is {1}.")]
         public TimeIntervalViewModel SensorRestorePolicy { get; set; }
-
 
         public string EncodedId { get; set; }
 
