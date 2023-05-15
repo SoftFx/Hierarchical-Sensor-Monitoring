@@ -13,12 +13,7 @@
 @inject ITreeValuesCache Cache
 
 @{
-    var rootProduct = Model.RootProductId == default
-        ? Cache.GetProductByName(Model.RootProductName)
-        : Cache.GetProduct(@Model.RootProductId);
-    Model.RootProductId = rootProduct.Id;
-    
-    var isAccessKeyExist = rootProduct.AccessKeys.Values.Any(x => (x.Permissions & KeyPermissions.CanSendSensorData) != 0);
+    var isAccessKeyExist = Cache.GetProduct(Model.RootProductId).AccessKeys.Values.Any(x => x.Permissions.HasFlag(KeyPermissions.CanSendSensorData));
 }
 
 @if (Model != null)

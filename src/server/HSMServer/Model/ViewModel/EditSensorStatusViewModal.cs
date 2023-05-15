@@ -17,9 +17,7 @@ public class EditSensorStatusViewModal
 
     [RequiredKeyPermissions(KeyPermissions.CanSendSensorData)]
     public Guid RootProductId { get; set; }
-    
-    public string RootProductName { get; set; }
-    
+
     public Guid SensorId { get; set; }
     
     [Display(Name = "Current status")]
