@@ -1,4 +1,5 @@
-﻿using HSMServer.Core.Configuration;
+﻿using HSMCommon.Constants;
+using HSMServer.Core.Configuration;
 
 namespace HSMServer.Model.ViewModel
 {
@@ -16,6 +17,9 @@ namespace HSMServer.Model.ViewModel
             Name = obj.Name;
             Value = obj.Value;
             Description = obj.Description;
+
+            if (Name == ConfigurationConstants.SensorExpirationTime)
+                Name = "Remove sensor data after N days inactivity";
         }
     }
 }

@@ -159,9 +159,10 @@
             </button>
         </div>
     </form>
+    
+    <hr id="metainfo_separator" class="d-none"/>
 </div>
 
-<hr id="metainfo_separator" class="d-none"/>
 
 @if (Model is SensorInfoViewModel sensor)
 {
@@ -196,6 +197,9 @@
             async: true,
             success: (viewData) => {
                 displayMetaInfo($('#metaInfo_encodedId').val(), viewData);
+                
+                if ($(".field-validation-error").length !== 0)
+                    editInfoButtonClick()
             }
         });
     });
