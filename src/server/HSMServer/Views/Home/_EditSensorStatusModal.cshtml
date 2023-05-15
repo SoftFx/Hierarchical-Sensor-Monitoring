@@ -17,6 +17,7 @@
         ? Cache.GetProductByName(Model.RootProductName)
         : Cache.GetProduct(@Model.RootProductId);
     Model.RootProductId = rootProduct.Id;
+    
     var isAccessKeyExist = rootProduct.AccessKeys.Values.Any(x => (x.Permissions & KeyPermissions.CanSendSensorData) != 0);
 }
 
@@ -132,7 +133,7 @@
         })
     });
 
-   function newAccessKeyModal(){
+   function newAccessKeyModal() {
        let url = "@Html.Raw(Url.Action(nameof(AccessKeysController.NewAccessKey), ViewConstants.AccessKeysController))";
 
        hideEditSensorModal();

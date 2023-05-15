@@ -495,9 +495,9 @@ namespace HSMServer.Controllers
         [AuthorizeIsAdmin]
         public IActionResult GetSensorEditModal(Guid sensorId)
         {
-            var sensor = _treeValuesCache.GetSensor(sensorId);
+            var sensor = new SensorNodeViewModel(_treeValuesCache.GetSensor(sensorId));
             
-            return PartialView("_EditSensorStatusModal", new EditSensorStatusViewModal(sensor));
+            return PartialView("_EditSensorStatusModal", new EditSensorStatusViewModal(new SensorInfoViewModel(sensor)));
         }
 
         [HttpPost]
@@ -519,7 +519,7 @@ namespace HSMServer.Controllers
                     Status = modal.NewStatus,
                     Type = sensor.Type
                 },
-                Key = _treeValuesCache.GetProduct(modal.RootProductId).AccessKeys.Values.FirstOrDefault(x => (x.Permissions & KeyPermissions.CanSendSensorData) != 0)?.Id
+                Key = _treeValuesCache.GetProduct(modal.RootProductId).AccessKeys.Values.FirstOrDefault(x => x.Permissions.HasFlag(KeyPermissions.CanSendSensorData))?.Id
             };
             
             return Ok(returnBody);
