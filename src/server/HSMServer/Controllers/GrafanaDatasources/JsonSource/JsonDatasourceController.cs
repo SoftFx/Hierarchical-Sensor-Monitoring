@@ -1,7 +1,6 @@
 ﻿using HSMServer.Core;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Model;
-using HSMServer.Extensions;
 using HSMServer.Model.TreeViewModel;
 using Microsoft.AspNetCore.Mvc;
 using System;
@@ -86,7 +85,7 @@ namespace HSMServer.Controllers.GrafanaDatasources.JsonSource
 
                 if (target.Payload.IsFull && TryGetSensor(sensorId, out var sensor))
                 {
-                    var sensorData = await _cache.GetSensorValuesPage(sensor.Id, request.Range.FromUtc, request.Range.ToUtc, request.MaxDataPoints).Flatten();
+                    var sensorData = await GetSensorValues(request, sensor);
 
                     object sensorHistory = target.Payload.Type switch
                     {
@@ -151,6 +150,26 @@ namespace HSMServer.Controllers.GrafanaDatasources.JsonSource
             sensor = default;
 
             return Guid.TryParse(rawId, out var sensorId) && _tree.Sensors.TryGetValue(sensorId, out sensor);
+        }
+
+        private async Task<List<BaseValue>> GetSensorValues(QueryHistoryRequest request, SensorNodeViewModel sensor)
+        {
+            var sensorValues = new List<BaseValue>(request.MaxDataPoints);
+            var interval = new TimeSpan(0, 0, 0, 0, request.IntervalMs);
+
+            await foreach (var page in _cache.GetSensorValuesPage(sensor.Id, request.Range.FromUtc, request.Range.ToUtc, TreeValuesCache.MaxHistoryCount))
+            {
+                foreach (var value in page)
+                {
+                    if (sensorValues.Count == 0 || (value.ReceivingTime - sensorValues[^1].ReceivingTime) >= interval)
+                        sensorValues.Add(value);
+
+                    if (sensorValues.Count == request.MaxDataPoints)
+                        return sensorValues;
+                }
+            }
+
+            return sensorValues;
         }
     }
 }
