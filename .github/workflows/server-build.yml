@@ -47,7 +47,7 @@ jobs:
       run: dotnet test ${{ env.SOLUTION_PATH }} --no-restore -c Release
 
     - name: Publish HSMServer
-      run: dotnet publish ${{ env.SERVER_PATH }} -c Release -o ${{ env.OUTPUT_FOLDER }} --os win
+      run: dotnet publish ${{ env.SERVER_PATH }} -c Release -o ${{ env.OUTPUT_FOLDER }}
 
     - id: save-version
       name: Try to get server version
@@ -185,7 +185,7 @@ jobs:
         run: echo "DockerMainName=${{ env.DOCKER_DOCKERHUB_ORG }}/${{ env.DOCKER_MAIN_REPOS }}" >> $GITHUB_ENV
 
       - name: Build Linux image for Docker
-        run: dotnet publish ${{ env.SERVER_PATH }} -c Release -p:PublishProfile=DefaultContainer -p:ContainerBaseImage=${{ env.DockerDepsUrl }} -p:ContainerImageName=${{ env.DockerMainName }}
+        run: dotnet publish ${{ env.SERVER_PATH }} -c Release --os linux --arch x64 -p:PublishProfile=DefaultContainer -p:ContainerBaseImage=${{ env.DockerDepsUrl }} -p:ContainerImageName=${{ env.DockerMainName }}
 
       - name: Push image to remote Docker
         run: docker push "${{ env.DockerMainName }}:${{ needs.build.outputs.VERSION }}"

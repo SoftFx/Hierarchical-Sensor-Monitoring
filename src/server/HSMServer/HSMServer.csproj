@@ -19,7 +19,6 @@
 
   <PropertyGroup>
     <EnableSDKContainerSupport>true</EnableSDKContainerSupport>
-    <RuntimeIdentifier>linux-x64</RuntimeIdentifier>
     <ContainerImageTags>$(Version)</ContainerImageTags>
     <ContainerImageName>$(MSBuildProjectName)</ContainerImageName>
   </PropertyGroup>
