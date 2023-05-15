@@ -27,8 +27,8 @@ namespace HSMServer.Model.ViewModel
 
         internal ProductInfoViewModel(ProductNodeViewModel product) : base(product)
         {
-            SensorsStatuses = product.Sensors.Values.ToGroupedList(x => x.Status);
-            NodeStatuses = product.Nodes.Values.ToGroupedList(x => x.Status);
+            SensorsStatuses = product.Sensors.Values.ToGroupedList(x => x.Status.ToEmpty(x.HasData));
+            NodeStatuses = product.Nodes.Values.ToGroupedList(x => x.Status.ToEmpty(x.HasData));
             SensorsTypes = product.Sensors.Values.ToGroupedList(x => x.Type);
 
             TotalNodes = product.Nodes.Count;
