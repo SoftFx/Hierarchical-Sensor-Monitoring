@@ -15,6 +15,8 @@
 
         internal string Timespan => $"{ConnectionAddress}/timespan";
 
+        internal string Version => $"{ConnectionAddress}/version";
+
 
         internal string DoubleBar => $"{ConnectionAddress}/doubleBar";
 

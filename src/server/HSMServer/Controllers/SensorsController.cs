@@ -1,8 +1,8 @@
-﻿using HSM.Core.Monitoring;
-using HSMSensorDataObjects;
+﻿using HSMSensorDataObjects;
 using HSMSensorDataObjects.HistoryRequests;
 using HSMSensorDataObjects.SensorValueRequests;
 using HSMServer.ApiObjectsConverters;
+using HSMServer.BackgroundTask;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Requests;
@@ -35,11 +35,11 @@ namespace HSMServer.Controllers
     {
         private readonly ILogger<SensorsController> _logger;
         private readonly IUpdatesQueue _updatesQueue;
-        private readonly IDataCollectorFacade _dataCollector;
+        private readonly DataCollectorWrapper _dataCollector;
         private readonly ITreeValuesCache _cache;
 
 
-        public SensorsController(IUpdatesQueue updatesQueue, IDataCollectorFacade dataCollector,
+        public SensorsController(IUpdatesQueue updatesQueue, DataCollectorWrapper dataCollector,
             ILogger<SensorsController> logger, ITreeValuesCache cache)
         {
             _updatesQueue = updatesQueue;
@@ -62,7 +62,7 @@ namespace HSMServer.Controllers
         {
             try
             {
-                _dataCollector.ReportSensorsCount(1);
+                _dataCollector.ReceivedDataCountSensor.AddValue(1);
 
                 if (CanAddToQueue(BuildStoreInfo(sensorValue, sensorValue.Convert()),
                     out var message))
@@ -91,7 +91,7 @@ namespace HSMServer.Controllers
         {
             try
             {
-                _dataCollector.ReportSensorsCount(1);
+                _dataCollector.ReceivedDataCountSensor.AddValue(1);
 
                 if (CanAddToQueue(BuildStoreInfo(sensorValue, sensorValue.Convert()),
                     out var message))
@@ -120,7 +120,7 @@ namespace HSMServer.Controllers
         {
             try
             {
-                _dataCollector.ReportSensorsCount(1);
+                _dataCollector.ReceivedDataCountSensor.AddValue(1);
 
                 if (CanAddToQueue(BuildStoreInfo(sensorValue, sensorValue.Convert()),
                     out var message))
@@ -149,10 +149,9 @@ namespace HSMServer.Controllers
         {
             try
             {
-                _dataCollector.ReportSensorsCount(1);
+                _dataCollector.ReceivedDataCountSensor.AddValue(1);
 
-                if (CanAddToQueue(BuildStoreInfo(sensorValue, sensorValue.Convert()),
-                    out var message))
+                if (CanAddToQueue(BuildStoreInfo(sensorValue, sensorValue.Convert()), out var message))
                     return Ok(sensorValue);
 
                 return StatusCode(406, message);
@@ -178,7 +177,7 @@ namespace HSMServer.Controllers
         {
             try
             {
-                _dataCollector.ReportSensorsCount(1);
+                _dataCollector.ReceivedDataCountSensor.AddValue(1);
 
                 if (CanAddToQueue(BuildStoreInfo(sensorValue, sensorValue.Convert()),
                     out var message))
@@ -192,7 +191,7 @@ namespace HSMServer.Controllers
                 return BadRequest(sensorValue);
             }
         }
-        
+
         /// <summary>
         /// Receives value of version sensor
         /// </summary>
@@ -207,7 +206,7 @@ namespace HSMServer.Controllers
         {
             try
             {
-                _dataCollector.ReportSensorsCount(1);
+                _dataCollector.ReceivedDataCountSensor.AddValue(1);
 
                 if (CanAddToQueue(BuildStoreInfo(sensorValue, sensorValue.Convert()),
                         out var message))
@@ -236,7 +235,7 @@ namespace HSMServer.Controllers
         {
             try
             {
-                _dataCollector.ReportSensorsCount(1);
+                _dataCollector.ReceivedDataCountSensor.AddValue(1);
 
                 if (CanAddToQueue(BuildStoreInfo(sensorValue, sensorValue.Convert()),
                     out var message))
@@ -265,7 +264,7 @@ namespace HSMServer.Controllers
         {
             try
             {
-                _dataCollector.ReportSensorsCount(1);
+                _dataCollector.ReceivedDataCountSensor.AddValue(1);
 
                 if (CanAddToQueue(BuildStoreInfo(sensorValue, sensorValue.Convert()),
                     out var message))
@@ -294,7 +293,7 @@ namespace HSMServer.Controllers
         {
             try
             {
-                _dataCollector.ReportSensorsCount(1);
+                _dataCollector.ReceivedDataCountSensor.AddValue(1);
 
                 if (CanAddToQueue(BuildStoreInfo(sensorValue, sensorValue.Convert()),
                     out var message))
@@ -325,7 +324,7 @@ namespace HSMServer.Controllers
         {
             try
             {
-                _dataCollector.ReportSensorsCount(values.Count);
+                _dataCollector.ReceivedDataCountSensor.AddValue(values.Count);
 
                 var result = new Dictionary<string, string>(values.Count);
                 foreach (var value in values)
@@ -345,7 +344,6 @@ namespace HSMServer.Controllers
             }
         }
 
-
         /// <summary>
         /// Obsolete method. Will be removed.
         /// Accepts data in UnitedSensorValue format. Converts data to a typed format and saves it to the database.
@@ -364,7 +362,7 @@ namespace HSMServer.Controllers
 
             try
             {
-                _dataCollector.ReportSensorsCount(values.Count);
+                _dataCollector.ReceivedDataCountSensor.AddValue(values.Count);
 
                 var result = new Dictionary<string, string>(values.Count);
                 foreach (var value in values)

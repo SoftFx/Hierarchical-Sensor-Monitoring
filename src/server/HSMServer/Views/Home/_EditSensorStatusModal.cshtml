@@ -3,6 +3,7 @@
 @using HSMServer.Core.Cache
 @using HSMServer.Core.Model
 @using HSMServer.Extensions
+@using HSMServer.Model.Authentication
 @using Microsoft.AspNetCore.Mvc.TagHelpers
 @using SensorStatus = HSMServer.Model.TreeViewModel.SensorStatus
 
@@ -13,11 +14,7 @@
 @inject ITreeValuesCache Cache
 
 @{
-    var rootProduct = Model.RootProductId == default
-        ? Cache.GetProductByName(Model.RootProductName)
-        : Cache.GetProduct(@Model.RootProductId);
-    Model.RootProductId = rootProduct.Id;
-    var isAccessKeyExist = rootProduct.AccessKeys.Values.Any(x => (x.Permissions & KeyPermissions.CanSendSensorData) != 0);
+    var isAccessKeyExist = Cache.GetProduct(Model.RootProductId).AccessKeys.Values.Any(x => x.Permissions.HasFlag(KeyPermissions.CanSendSensorData));
 }
 
 @if (Model != null)
@@ -66,9 +63,12 @@
                                 <div class="d-flex flex-column mt-2">
                                     <div class="d-flex flex-row align-items-center">
                                         <span asp-validation-for="RootProductId" style="color: #b94a48;font-size: small;">There is no access key with @KeyPermissions.CanSendSensorData</span>
-                                        <button onclick="newAccessKeyModal()" type="button" class="d-flex btn btn-link me-0 pe-0">
-                                            Add
-                                        </button>
+                                        @if ((User as User).IsAdmin)
+                                        {
+                                            <button onclick="newAccessKeyModal()" type="button" class="d-flex btn btn-link me-0 pe-0">
+                                                Add
+                                            </button>
+                                        }
                                     </div>
                                 </div>
                             }
@@ -132,7 +132,7 @@
         })
     });
 
-   function newAccessKeyModal(){
+   function newAccessKeyModal() {
        let url = "@Html.Raw(Url.Action(nameof(AccessKeysController.NewAccessKey), ViewConstants.AccessKeysController))";
 
        hideEditSensorModal();

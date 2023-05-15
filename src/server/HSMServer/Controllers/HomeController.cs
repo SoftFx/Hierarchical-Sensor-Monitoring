@@ -478,6 +478,9 @@ namespace HSMServer.Controllers
             if (!_treeViewModel.Sensors.TryGetValue(SensorPathHelper.DecodeGuid(newModel.EncodedId), out var sensor))
                 return _emptyResult;
 
+            if (!ModelState.IsValid)
+                return PartialView("_MetaInfo", new SensorInfoViewModel(sensor));
+
             var update = new SensorUpdate
             {
                 Id = sensor.Id,
@@ -492,16 +495,14 @@ namespace HSMServer.Controllers
         }
 
         [HttpGet]
-        [AuthorizeIsAdmin]
         public IActionResult GetSensorEditModal(Guid sensorId)
         {
-            var sensor = _treeValuesCache.GetSensor(sensorId);
+            var sensor = new SensorNodeViewModel(_treeValuesCache.GetSensor(sensorId));
             
-            return PartialView("_EditSensorStatusModal", new EditSensorStatusViewModal(sensor));
+            return PartialView("_EditSensorStatusModal", new EditSensorStatusViewModal(new SensorInfoViewModel(sensor)));
         }
 
         [HttpPost]
-        [AuthorizeIsAdmin]
         public IActionResult UpdateSensorStatus(EditSensorStatusViewModal modal)
         {
             if (!ModelState.IsValid)
@@ -519,7 +520,7 @@ namespace HSMServer.Controllers
                     Status = modal.NewStatus,
                     sensor.Type
                 },
-                Key = _treeValuesCache.GetProduct(modal.RootProductId).AccessKeys.Values.FirstOrDefault(x => (x.Permissions & KeyPermissions.CanSendSensorData) != 0)?.Id
+                Key = _treeValuesCache.GetProduct(modal.RootProductId).AccessKeys.Values.FirstOrDefault(x => x.Permissions.HasFlag(KeyPermissions.CanSendSensorData))?.Id
             };
             
             return Ok(returnBody);
@@ -542,6 +543,9 @@ namespace HSMServer.Controllers
             if (!_treeViewModel.Nodes.TryGetValue(SensorPathHelper.DecodeGuid(newModel.EncodedId), out var product))
                 return _emptyResult;
 
+            if (!ModelState.IsValid)
+                return PartialView("_MetaInfo", new ProductInfoViewModel(product));
+            
             var update = new ProductUpdate
             {
                 Id = product.Id,
@@ -566,6 +570,9 @@ namespace HSMServer.Controllers
         [HttpPost]
         public async Task<IActionResult> UpdateFolderInfo(FolderInfoViewModel newModel)
         {
+            if (!ModelState.IsValid)
+                return PartialView("_MetaInfo", new FolderInfoViewModel(_folderManager[Guid.Parse(newModel.EncodedId)]));
+            
             var update = new FolderUpdate
             {
                 Id = SensorPathHelper.DecodeGuid(newModel.EncodedId),

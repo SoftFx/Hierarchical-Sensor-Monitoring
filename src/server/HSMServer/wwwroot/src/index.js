@@ -23,16 +23,11 @@ window.Plotly = Plotly;
 import * as TimeSpan from 'timespan';
 window.TimeSpan = TimeSpan;
 
-import * as Heiho from '@kktsvetkov/heiho';
-window.Heiho = Heiho;
-
 import * as Marked from 'marked'
 window.marked = Marked;
 
 import * as DOMPurify from 'dompurify';
 window.DOMPurify = DOMPurify;
-
-import '@kktsvetkov/heiho/heiho.css';
 
 import 'datatables';
 import 'datatables/media/css/jquery.dataTables.min.css';
