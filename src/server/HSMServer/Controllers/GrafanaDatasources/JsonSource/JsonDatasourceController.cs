@@ -1,4 +1,5 @@
-﻿using HSMServer.Core.Cache;
+﻿using HSMServer.Core;
+using HSMServer.Core.Cache;
 using HSMServer.Core.Model;
 using HSMServer.Extensions;
 using HSMServer.Model.TreeViewModel;
@@ -123,7 +124,7 @@ namespace HSMServer.Controllers.GrafanaDatasources.JsonSource
             var options = new List<PayloadOption>(sensors.Count);
 
             foreach (var sensorId in sensors)
-                if (_tree.Sensors.TryGetValue(sensorId, out var sensor))
+                if (_tree.Sensors.TryGetValue(sensorId, out var sensor) && sensor.Integration.HasGrafana())
                     options.Add(new PayloadOption(sensor.Path, sensorId.ToString()));
 
             return options;
