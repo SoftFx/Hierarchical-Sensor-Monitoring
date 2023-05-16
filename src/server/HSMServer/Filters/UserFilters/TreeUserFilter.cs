@@ -13,6 +13,7 @@ namespace HSMServer.UserFilters
         ByHistory = 2,
         Notifications = 4,
         ByState = 8,
+        Integrations = 16,
     }
 
     public enum TreeSortType : int
@@ -27,7 +28,7 @@ namespace HSMServer.UserFilters
         private const int DefaultInterval = 5;
 
         private UserFilterGroupBase[] Groups =>
-            new UserFilterGroupBase[] { ByStatus, ByHistory, ByNotifications, ByState };
+            new UserFilterGroupBase[] { ByStatus, ByHistory, ByNotifications, ByState, ByIntegrations};
 
 
         public GroupByStatus ByStatus { get; init; } = new();
@@ -37,6 +38,9 @@ namespace HSMServer.UserFilters
         public GroupByNotifications ByNotifications { get; init; } = new();
 
         public GroupByState ByState { get; init; } = new();
+        
+        public GroupByIntegrations ByIntegrations { get; init; } = new();
+
 
 
         public int TreeUpdateInterval { get; init; } = DefaultInterval;
