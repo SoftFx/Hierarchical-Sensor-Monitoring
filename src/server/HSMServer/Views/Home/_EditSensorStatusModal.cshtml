@@ -14,7 +14,7 @@
 @inject ITreeValuesCache Cache
 
 @{
-    var isAccessKeyExist = Cache.GetProduct(Model.RootProductId).AccessKeys.Values.Any(x => x.Permissions.HasFlag(KeyPermissions.CanSendSensorData));
+    var isAccessKeyExist = Cache.GetProduct(Model.RootProductId).AccessKeys.Values.Any(x => x.Permissions.HasFlag(KeyPermissions.CanSendSensorData) && x.State.HasFlag(KeyState.Active));
 }
 
 @if (Model != null)
@@ -48,8 +48,9 @@
                                     <select asp-for="@Model.NewStatus" class="form-select d-inline-block">
                                         @foreach (var sensor in Html.GetEnumSelectList<SensorStatus>())
                                         {
-                                            <option value="@sensor.Value">
-                                                @(((SensorStatus)int.Parse(sensor.Value)).ToSelectIcon())
+                                            var statusValue = ((SensorStatus)int.Parse(sensor.Value));
+                                            <option value="@sensor.Value" selected="@(statusValue is SensorStatus.Ok)">
+                                                @((statusValue).ToSelectIcon())
                                                 @sensor.Text
                                             </option>
                                         }

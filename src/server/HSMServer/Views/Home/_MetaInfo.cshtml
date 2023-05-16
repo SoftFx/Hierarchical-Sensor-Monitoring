@@ -107,7 +107,7 @@
                     <div class="d-flex w-100">
                         <li id='metainfo_icon_status' class='@Model.Status.ToIcon() sensor-icon-with-margin align-self-center' title='Status: @Model.Status'></li>
                         <span id="status_name_@Model.EncodedId">@Model.Status</span>
-                        <span onclick="openEditSensorStatusModal()">
+                        <span onclick="loadEditSensorStatusModal()">
                             <i class="fas fa-edit align-self-center ms-2" style="cursor: pointer"></i>
                         </span>
                     </div>
@@ -236,7 +236,7 @@
             datatype: 'json',
             async: true,
             success: (viewData) => {
-                $('#editSensorStatus_form').html(viewData);
+                $('#editSensorStatus_form').replaceWith(viewData);
                 openEditSensorStatusModal();
             }
         });

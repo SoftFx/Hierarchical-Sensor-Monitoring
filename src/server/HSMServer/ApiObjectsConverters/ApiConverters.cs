@@ -124,6 +124,7 @@ namespace HSMServer.ApiObjectsConverters
                 StringSensorValue sv => sv.Convert(),
                 TimeSpanSensorValue sv => sv.Convert(),
                 VersionSensorValue sv => sv.Convert(),
+                FileSensorValue sv => sv.Convert(),
                 _ => null
             };
 

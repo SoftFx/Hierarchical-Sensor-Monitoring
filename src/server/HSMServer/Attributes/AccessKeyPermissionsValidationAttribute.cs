@@ -21,7 +21,7 @@ namespace HSMServer.Attributes
         public RequiredKeyPermissions(KeyPermissions permissions)
         {
             _permissions = permissions;
-            _validationError = new ValidationResult($"There is no access key with {_permissions}");
+            _validationError = new ValidationResult($"There is no active access key with {_permissions}");
         }
         
         protected override ValidationResult IsValid(object value, ValidationContext context)

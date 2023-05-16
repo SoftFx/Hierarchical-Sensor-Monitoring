@@ -497,9 +497,9 @@ namespace HSMServer.Controllers
         [HttpGet]
         public IActionResult GetSensorEditModal(Guid sensorId)
         {
-            var sensor = new SensorNodeViewModel(_treeValuesCache.GetSensor(sensorId));
+            _treeViewModel.Sensors.TryGetValue(sensorId, out var sensorNodeViewModel);
             
-            return PartialView("_EditSensorStatusModal", new EditSensorStatusViewModal(new SensorInfoViewModel(sensor)));
+            return PartialView("_EditSensorStatusModal", new EditSensorStatusViewModal(new SensorInfoViewModel(sensorNodeViewModel)));
         }
 
         [HttpPost]
@@ -508,19 +508,42 @@ namespace HSMServer.Controllers
             if (!ModelState.IsValid)
                 return BadRequest(ModelState);
 
+            var key = _treeValuesCache.GetProduct(modal.RootProductId).AccessKeys.Values.FirstOrDefault(x => x.Permissions.HasFlag(KeyPermissions.CanSendSensorData) && x.State.HasFlag(KeyState.Active))?.Id;
+
+            if (key is null)
+                return BadRequest();
+                
             var sensor = _treeValuesCache.GetSensor(modal.SensorId);
+            var comment = $"User: {CurrentUser.Name}. Reason: {modal.Reason}";
+
+            if (sensor.Type is SensorType.File)
+                return Ok(new
+                {
+                    Sensor = new
+                    {
+                        sensor.Path,
+                        Comment = comment,
+                        Time = DateTime.UtcNow,
+                        Status = modal.NewStatus,
+                        sensor.Type,
+                        Value = new []{0},
+                        Extension = string.Empty,
+                        Name = string.Empty
+                    },
+                    Key = key
+                });
             
             var returnBody = new
             {
                 Sensor = new
                 {
                     sensor.Path,
-                    Comment = $"User: {CurrentUser.Name}. Reason: {modal.Reason}",
+                    Comment = comment,
                     Time = DateTime.UtcNow,
                     Status = modal.NewStatus,
                     sensor.Type
                 },
-                Key = _treeValuesCache.GetProduct(modal.RootProductId).AccessKeys.Values.FirstOrDefault(x => x.Permissions.HasFlag(KeyPermissions.CanSendSensorData))?.Id
+                Key = key
             };
             
             return Ok(returnBody);
