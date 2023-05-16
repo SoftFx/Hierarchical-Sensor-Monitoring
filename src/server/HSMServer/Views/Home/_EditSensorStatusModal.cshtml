@@ -12,9 +12,6 @@
 
 @inject ITreeValuesCache Cache
 
-@{
-    var isAccessKeyExist = Cache.GetProduct(Model.RootProductId).AccessKeys.Values.Any(x => x.Permissions.HasFlag(KeyPermissions.CanSendSensorData) && x.State.HasFlag(KeyState.Active));
-}
 
 @if (Model != null)
 {
@@ -46,7 +43,7 @@
                                     <select asp-for="@Model.NewStatus" class="form-select d-inline-block">
                                         @foreach (var sensor in Html.GetEnumSelectList<SensorStatus>())
                                         {
-                                            var statusValue = ((SensorStatus)int.Parse(sensor.Value));
+                                            var statusValue = ((SensorStatus) int.Parse(sensor.Value));
                                             <option value="@sensor.Value" selected="@(statusValue is SensorStatus.Ok)">
                                                 @((statusValue).ToSelectIcon())
                                                 @sensor.Text
@@ -57,20 +54,14 @@
                             </div>
                         </div>
                         <div class="form-group mt-2">
-                            @if (!isAccessKeyExist)
-                            {
-                                <div class="d-flex flex-column mt-2">
-                                    <div class="d-flex flex-row align-items-center">
-                                        <span asp-validation-for="RootProductId" style="color: #b94a48;font-size: small;">There is no access key with @KeyPermissions.CanSendSensorData</span>
-                                        @if ((User as User).IsAdmin)
-                                        {
-                                            <button onclick="newAccessKeyModal()" type="button" class="d-flex btn btn-link me-0 pe-0">
-                                                Add
-                                            </button>
-                                        }
-                                    </div>
+                            <div class="d-flex flex-column mt-2">
+                                <div class="d-flex flex-row align-items-center">
+                                    <span asp-validation-for="RootProductId" style="color: #b94a48;font-size: small;"></span>
+                                    <button id="buttonAddKey" onclick="newAccessKeyModal()" type="button" class="d-flex btn btn-link me-0 pe-0 @((User as User).IsAdmin && !Model.IsAccessKeyExist ? "" : "d-none")">
+                                            Add
+                                    </button>
                                 </div>
-                            }
+                            </div>
                             <div class="d-flex flex-column mt-2">
                                 <label class="form-label" asp-for="@Model.Reason"></label>
                                 <textarea class="form-control" asp-for="@Model.Reason"></textarea>
@@ -96,6 +87,8 @@
         event.preventDefault();
         event.stopImmediatePropagation();
     
+        let isAdmin = '@((User as User).IsAdmin)'
+   
         $.ajax({
             url: $("#editSensorStatus_form").attr("action"),
             type: 'POST',
@@ -118,13 +111,17 @@
                      }
                  })
             },
-            error: function (jqXHR, exception) {
+            error: function (jqXHR) {
                 $('span.field-validation-valid').each(function () {
                     let errFor = $(this).data('valmsgFor'); 
                     if (jqXHR.responseJSON[errFor] !== undefined) {
                         $(this).removeClass('field-validation-valid')
                         $(this).addClass('field-validation-error')
                         $(this).html(jqXHR.responseJSON[errFor][0]);
+                        
+                        if (errFor === 'RootProductId' && isAdmin === 'True') {
+                            $('#buttonAddKey').removeClass('d-none')
+                        }
                     }
                 })
             }

@@ -497,8 +497,12 @@ namespace HSMServer.Controllers
         public IActionResult GetSensorEditModal(Guid sensorId)
         {
             _treeViewModel.Sensors.TryGetValue(sensorId, out var sensorNodeViewModel);
+            var isAccessKeyExist = _treeValuesCache.GetProduct(sensorNodeViewModel.RootProduct.Id).AccessKeys.Values.Any(x => x.Permissions.HasFlag(KeyPermissions.CanSendSensorData) && !x.State.IsBlockedOrExpired());
             
-            return PartialView("_EditSensorStatusModal", new EditSensorStatusViewModal(new SensorInfoViewModel(sensorNodeViewModel)));
+            if (!isAccessKeyExist)
+                ModelState.AddModelError("RootProductId", $"There is no access key with {KeyPermissions.CanSendSensorData}");
+            
+            return PartialView("_EditSensorStatusModal", new EditSensorStatusViewModal(new SensorInfoViewModel(sensorNodeViewModel), isAccessKeyExist));
         }
 
         [HttpPost]
@@ -507,10 +511,14 @@ namespace HSMServer.Controllers
             if (!ModelState.IsValid)
                 return BadRequest(ModelState);
 
-            var key = _treeValuesCache.GetProduct(modal.RootProductId).AccessKeys.Values.FirstOrDefault(x => x.Permissions.HasFlag(KeyPermissions.CanSendSensorData) && x.State.HasFlag(KeyState.Active))?.Id;
+            var key = _treeValuesCache.GetProduct(modal.RootProductId).AccessKeys.Values.FirstOrDefault(x => x.Permissions.HasFlag(KeyPermissions.CanSendSensorData) && !x.State.IsBlockedOrExpired())?.Id;
 
             if (key is null)
-                return BadRequest();
+            {
+                ModelState.AddModelError("RootProductId", $"There is no access key with {KeyPermissions.CanSendSensorData}");
+
+                return BadRequest(ModelState);
+            }
                 
             var sensor = _treeValuesCache.GetSensor(modal.SensorId);
             var comment = $"User: {CurrentUser.Name}. Reason: {modal.Reason}";

@@ -24,15 +24,18 @@ public class EditSensorStatusViewModal
     [Display(Name = "Reason")]
     [Required(ErrorMessage = "Reason required")]
     public string Reason { get; set; }
+    
+    public bool IsAccessKeyExist { get; internal set; }
 
     
     public EditSensorStatusViewModal() { }
 
-    public EditSensorStatusViewModal(NodeInfoBaseViewModel model)
+    public EditSensorStatusViewModal(NodeInfoBaseViewModel model, bool isAccessKeyExist = false)
     {
         Path = model.Header;
         RootProductId = model.RootProductId;
         SensorId = Guid.Parse(model.EncodedId);
+        IsAccessKeyExist = isAccessKeyExist;
 
         Status = model.Status;
     }
