@@ -4,7 +4,6 @@
 @using HSMServer.Core.Model
 @using HSMServer.Extensions
 @using HSMServer.Model.Authentication
-@using Microsoft.AspNetCore.Mvc.TagHelpers
 @using SensorStatus = HSMServer.Model.TreeViewModel.SensorStatus
 
 @model HSMServer.Model.ViewModel.EditSensorStatusViewModal
@@ -25,12 +24,11 @@
                 <div class="modal-content" id="editSensorStatusContent">
                     <input class="d-none" asp-for="SensorId"/>
                     <input class="d-none" asp-for="RootProductId"/>
-                    <input class="d-none" asp-for="ModelHeader"/>
                     <input class="d-none" asp-for="Path"/>
 
                     <div class="modal-header">
                         <div class="text-break">
-                            <h5 class="modal-title">@Model.ModelHeader</h5>
+                            <h5 class="modal-title">Edit sensor statusr</h5>
                             <h6 class="modal-title">@Model.Path</h6>
                         </div>
                     </div>
@@ -40,7 +38,7 @@
                             <div class="justify-content-between d-flex">
                                 <div class="col-auto">
                                     <label asp-for="@Model.Status"></label>
-                                    <input asp-for="@Model.Status" class="form-control" value="@(Model.Status.ToSelectIcon() + " " + Model.Status)" disabled/>
+                                    <input asp-for="@Model.Status" class="form-control" value="@($"{Model.Status.ToSelectIcon()} {Model.Status}")" disabled/>
                                 </div>
                                 <span class="align-self-end pb-2">-></span>
                                 <div class="col-auto">

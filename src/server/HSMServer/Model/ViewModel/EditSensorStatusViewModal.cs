@@ -8,12 +8,7 @@ namespace HSMServer.Model.ViewModel;
 
 public class EditSensorStatusViewModal
 {
-    public string ModelHeader => "Edit sensor status";
-    
     public string Path { get; set; }
-    
-    [Display(Name = "Access key")]
-    public Guid SelectedAccessKey { get; set; }
 
     [RequiredKeyPermissions(KeyPermissions.CanSendSensorData)]
     public Guid RootProductId { get; set; }

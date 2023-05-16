@@ -12,13 +12,13 @@ namespace HSMServer.Attributes
             value is KeyPermissions permissions && permissions != 0;
     }
 
-    public class RequiredKeyPermissions : ValidationAttribute
+    public class RequiredKeyPermissionsAttribute : ValidationAttribute
     {
         private readonly ValidationResult _validationError;
-        
         private readonly KeyPermissions _permissions;
         
-        public RequiredKeyPermissions(KeyPermissions permissions)
+        
+        public RequiredKeyPermissionsAttribute(KeyPermissions permissions)
         {
             _permissions = permissions;
             _validationError = new ValidationResult($"There is no active access key with {_permissions}");
