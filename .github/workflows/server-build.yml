@@ -55,7 +55,7 @@ jobs:
 
     - id: build-artifact-name
       name: Build artifact name
-      run: echo "name=HSMServer v${{ needs.build.outputs.VERSION }}" >> $env:GITHUB_OUTPUT
+      run: echo "name=HSMServer v${{ steps.save-version.outputs.version }}" >> $env:GITHUB_OUTPUT
 
     - name: Upload artifact
       uses: actions/upload-artifact@v3
