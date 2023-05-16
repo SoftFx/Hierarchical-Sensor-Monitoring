@@ -26,6 +26,7 @@ namespace HSMServer.Extensions
                     IsGroupNotificationsEnabled = sensor.RootProduct.Notifications.IsSensorEnabled(sensor.Id),
                     IsAccountNotificationsIgnored = user.Notifications.IsSensorIgnored(sensor.Id),
                     IsGroupNotificationsIgnored = sensor.RootProduct.Notifications.IsSensorIgnored(sensor.Id),
+                    IsGrafanaEnabled = sensor.Integration.HasFlag(Integration.Grafana),
                     HasData = sensor.HasData,
                     Status = sensor.Status.ToCore(),
                     State = sensor.State,
@@ -65,9 +66,13 @@ namespace HSMServer.Extensions
             if (user.Notifications.IsSensorEnabled(sensor.Id) || user.Notifications.IsSensorIgnored(sensor.Id) ||
                 sensor.RootProduct.Notifications.IsSensorEnabled(sensor.Id) || sensor.RootProduct.Notifications.IsSensorIgnored(sensor.Id))
                 sensorStateMask |= FilterGroupType.Notifications;
+            
             if (sensor.State == SensorState.Muted)
                 sensorStateMask |= FilterGroupType.ByState;
 
+            if (sensor.Integration.HasFlag(Integration.Grafana))
+                sensorStateMask |= FilterGroupType.Integrations;
+            
             return sensorStateMask;
         }
     }
