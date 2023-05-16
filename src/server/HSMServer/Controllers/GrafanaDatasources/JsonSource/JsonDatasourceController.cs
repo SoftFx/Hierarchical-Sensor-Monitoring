@@ -168,19 +168,12 @@ namespace HSMServer.Controllers.GrafanaDatasources.JsonSource
             key = null;
             message = null;
 
-            Request.Headers.TryGetValue(nameof(HSMSensorDataObjects.BaseRequest.Key), out var keyStr);
-
-            if (!string.IsNullOrEmpty(keyStr) && Guid.TryParse(keyStr, out var keyId))
-            {
+            if (Request.Headers.TryGetValue(nameof(HSMSensorDataObjects.BaseRequest.Key), out var keyStr) && Guid.TryParse(keyStr, out var keyId))
                 key = _cache.GetAccessKey(keyId);
+            else
+                message = "Ivalid key";
 
-                if (key != null)
-                    return true;
-            }
-
-            message = "Ivalid key";
-
-            return false;
+            return key != null;
         }
 
         private async Task<List<BaseValue>> GetSensorValues(QueryHistoryRequest request, SensorNodeViewModel sensor)
