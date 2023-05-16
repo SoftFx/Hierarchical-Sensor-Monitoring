@@ -5,12 +5,12 @@ using HSMServer.Model;
 
 namespace HSMServer.Attributes;
 
-public class MinTimeInterval : ValidationAttribute
+public class MinTimeIntervalAttribute : ValidationAttribute
 {
     private readonly TimeInterval _interval;
     
     
-    public MinTimeInterval(TimeInterval interval)
+    public MinTimeIntervalAttribute(TimeInterval interval)
     {
         _interval = interval;
     }
@@ -18,7 +18,7 @@ public class MinTimeInterval : ValidationAttribute
     public override bool IsValid(object value)
     {
         if (value is TimeIntervalViewModel model && model.TimeInterval.IsCustom())
-            return model.TimeInterval.ToCustomTicks(model.CustomTimeInterval) > _interval.ToCustomTicks(string.Empty);
+            return model.TimeInterval.ToCustomTicks(model.CustomTimeInterval) >= _interval.ToCustomTicks(string.Empty);
 
         return true;
     }

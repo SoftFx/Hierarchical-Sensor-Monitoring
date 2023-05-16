@@ -95,11 +95,11 @@ namespace HSMServer.Model
 
         internal TimeIntervalEntity ToEntity() => new((byte)TimeInterval.ToCore(), GetCustomTicks());
 
-        internal TimeIntervalViewModel ToFolderUpdate(TimeIntervalViewModel folderInterval)
+        internal TimeIntervalViewModel ResaveCustomTicks(TimeIntervalViewModel interval)
         {
-            folderInterval.CustomTimeInterval = new TimeSpan(GetCustomTicks(folderInterval)).ToString();
+            interval.CustomTimeInterval = new TimeSpan(GetCustomTicks(interval)).ToString();
 
-            return folderInterval;
+            return interval;
         }
 
         private void SetInterval(CoreTimeInterval interval, long customPeriod)

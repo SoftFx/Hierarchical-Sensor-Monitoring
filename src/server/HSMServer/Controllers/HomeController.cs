@@ -544,8 +544,8 @@ namespace HSMServer.Controllers
             {
                 Id = SensorPathHelper.DecodeGuid(newModel.EncodedId),
                 Description = newModel.Description ?? string.Empty,
-                ExpectedUpdateInterval = newModel.ExpectedUpdateInterval.ToFolderUpdate(newModel.ExpectedUpdateInterval),
-                RestoreInterval = newModel.SensorRestorePolicy.ToFolderUpdate(newModel.SensorRestorePolicy),
+                ExpectedUpdateInterval = newModel.ExpectedUpdateInterval.ResaveCustomTicks(newModel.ExpectedUpdateInterval),
+                RestoreInterval = newModel.SensorRestorePolicy.ResaveCustomTicks(newModel.SensorRestorePolicy),
             };
 
             return await _folderManager.TryUpdate(update)
