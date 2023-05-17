@@ -1,17 +1,19 @@
 ﻿@using HSMServer.Extensions
+@using HSMServer.Model.Authentication
 @using HSMServer.Model.UserTreeShallowCopy
 
 @model NodeShallowModel
 
 @{
     var data = Model.Data;
+    var showIcons = (User as User).TreeFilter.ByVisibility.Icons.Value;
 }
 
 
 <li id='@data.EncodedId' title='@data.Tooltip' data-jstree='@Model.ToJSTree()'>
     <span class="@(Model.IsMutedState ? "muted-state-text" : "")"> @Html.Raw(data.Name.GetShortNodeName()) @Model.SensorsCountString </span>
 
-    @if (!data.IsEmpty && !Model.IsMutedState)
+    @if (!data.IsEmpty && !Model.IsMutedState && showIcons)
     {
         @if (Model.IsAccountsEnable && !(Model.Parent?.IsAccountsEnable ?? false))
         {

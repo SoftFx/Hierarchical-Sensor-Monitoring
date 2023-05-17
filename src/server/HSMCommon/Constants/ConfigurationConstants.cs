@@ -2,7 +2,7 @@
 
 namespace HSMCommon.Constants
 {
-    public class ConfigurationConstants
+    public static class ConfigurationConstants
     {
         public const int SensorsPort = 44330;
         public const int SitePort = 44333;
@@ -69,9 +69,7 @@ namespace HSMCommon.Constants
 
         #endregion
 
-        public static string GetDefault(string name)
-        {
-            return name switch
+        public static string GetDefault(string name) => name switch
             {
                 MaxPathLength => DefaultMaxPathLength.ToString(),
                 SensorExpirationTime => DefaultExpirationTime.ToString(),
@@ -87,14 +85,10 @@ namespace HSMCommon.Constants
                 BotToken => DefaultBotToken,
                 BotName => DefaultBotName,
                 AreBotMessagesEnabled => DefaultAreBotMessagesEnabled,
-
                 _ => string.Empty
             };
-        }
 
-        public static string GetDescription(string name)
-        {
-            return name switch
+        public static string GetDescription(string name) => name switch
             {
                 MaxPathLength => MaxPathLengthDescription,
                 SensorExpirationTime => SensorExpirationTimeDescription,
@@ -110,9 +104,7 @@ namespace HSMCommon.Constants
                 BotToken => BotTokenDescription,
                 BotName => BotNameDescription,
                 AreBotMessagesEnabled => AreBotMessagesEnabledDescription,
-
                 _ => string.Empty
             };
-        }
     }
 }
