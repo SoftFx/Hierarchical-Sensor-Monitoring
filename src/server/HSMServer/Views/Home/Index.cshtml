@@ -337,6 +337,7 @@
                 async: true
             }).done(function (sensorsData) {
                 var array = JSON.parse(sensorsData);
+                let displayChildrenInfo = false;
 
                 for (let i = 0; i < array.length; i++) {
                     let dataObject = array[i];
@@ -344,12 +345,18 @@
                     updateGridCell(dataObject);
                     updateNodeData(dataObject);
 
+                    if (dataObject.value !== null && dataObject.value !== undefined)
+                        displayChildrenInfo = true;
+                    
                     if (dataObject.hasOwnProperty('value')) {
                         updateSpecificSensorData(dataObject);
                     }
                 }
                 
                 updateGeneralInfo(selectedNodeId);
+                
+                if (displayChildrenInfo)
+                    $('#dataPanel').removeClass('d-none');
             });
 
         $('#updateTime').empty();

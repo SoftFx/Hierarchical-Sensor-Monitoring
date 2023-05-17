@@ -82,13 +82,13 @@ namespace HSMServer.Controllers
             return PartialView("_Tree", _treeViewModel.GetUserTree(CurrentUser));
         }
 
-        [HttpPost]
+        [HttpGet]
         public IActionResult ApplyFilter(UserFilterViewModel viewModel)
         {
             CurrentUser.TreeFilter = viewModel.ToFilter();
             _userManager.UpdateUser(CurrentUser);
 
-            return View("Index", _treeViewModel);
+            return Redirect("Index");
         }
 
         [HttpPost]
@@ -507,6 +507,9 @@ namespace HSMServer.Controllers
             if (!_treeViewModel.Sensors.TryGetValue(SensorPathHelper.DecodeGuid(newModel.EncodedId), out var sensor))
                 return _emptyResult;
 
+            if (!ModelState.IsValid)
+                return PartialView("_MetaInfo", new SensorInfoViewModel(sensor));
+
             var update = new SensorUpdate
             {
                 Id = sensor.Id,
@@ -537,6 +540,9 @@ namespace HSMServer.Controllers
             if (!_treeViewModel.Nodes.TryGetValue(SensorPathHelper.DecodeGuid(newModel.EncodedId), out var product))
                 return _emptyResult;
 
+            if (!ModelState.IsValid)
+                return PartialView("_MetaInfo", new ProductInfoViewModel(product));
+            
             var update = new ProductUpdate
             {
                 Id = product.Id,
@@ -561,12 +567,15 @@ namespace HSMServer.Controllers
         [HttpPost]
         public async Task<IActionResult> UpdateFolderInfo(FolderInfoViewModel newModel)
         {
+            if (!ModelState.IsValid)
+                return PartialView("_MetaInfo", new FolderInfoViewModel(_folderManager[Guid.Parse(newModel.EncodedId)]));
+
             var update = new FolderUpdate
             {
                 Id = SensorPathHelper.DecodeGuid(newModel.EncodedId),
                 Description = newModel.Description ?? string.Empty,
-                ExpectedUpdateInterval = newModel.ExpectedUpdateInterval,
-                RestoreInterval = newModel.SensorRestorePolicy,
+                ExpectedUpdateInterval = newModel.ExpectedUpdateInterval.ResaveCustomTicks(newModel.ExpectedUpdateInterval),
+                RestoreInterval = newModel.SensorRestorePolicy.ResaveCustomTicks(newModel.SensorRestorePolicy),
             };
 
             return await _folderManager.TryUpdate(update)

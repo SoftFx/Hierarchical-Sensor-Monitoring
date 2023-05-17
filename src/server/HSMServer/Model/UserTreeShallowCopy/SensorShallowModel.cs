@@ -25,6 +25,8 @@ namespace HSMServer.Model.UserTreeShallowCopy
             IsAccountsEnable = user.Notifications.IsSensorEnabled(data.Id);
             IsGroupsEnable = data.RootProduct.Notifications.IsSensorEnabled(data.Id);
 
+            IsGrafanaEnabled = data.Integration.HasFlag(Integration.Grafana);
+            
             _mutedValue = data.State == SensorState.Muted;
 
             IsGroupsIgnore = data.RootProduct.Notifications.IgnoredSensors.TryGetValue(data.Id, out var accountTime) && accountTime != DateTime.MaxValue;
