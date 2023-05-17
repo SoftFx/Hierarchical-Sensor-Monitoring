@@ -22,6 +22,7 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using HSMServer.Attributes;
 
 namespace HSMServer.Controllers
 {
@@ -500,7 +501,7 @@ namespace HSMServer.Controllers
             var isAccessKeyExist = _treeValuesCache.GetProduct(sensorNodeViewModel.RootProduct.Id).AccessKeys.Values.Any(x => x.Permissions.HasFlag(KeyPermissions.CanSendSensorData) && !x.State.IsBlockedOrExpired());
             
             if (!isAccessKeyExist)
-                ModelState.AddModelError("RootProductId", $"There is no access key with {KeyPermissions.CanSendSensorData}");
+                ModelState.AddModelError("RootProductId", RequiredKeyPermissionsAttribute.ValidationErrorMessage);
             
             return PartialView("_EditSensorStatusModal", new EditSensorStatusViewModal(new SensorInfoViewModel(sensorNodeViewModel), isAccessKeyExist));
         }
@@ -515,7 +516,7 @@ namespace HSMServer.Controllers
 
             if (key is null)
             {
-                ModelState.AddModelError("RootProductId", $"There is no access key with {KeyPermissions.CanSendSensorData}");
+                ModelState.AddModelError("RootProductId", RequiredKeyPermissionsAttribute.ValidationErrorMessage);
 
                 return BadRequest(ModelState);
             }

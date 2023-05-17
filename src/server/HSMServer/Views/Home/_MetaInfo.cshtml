@@ -237,8 +237,9 @@
             async: true,
             success: (viewData) => {
                 $('#editSensorStatus_form').replaceWith(viewData);
-                openEditSensorStatusModal();
             }
+        }).done(function (){
+            openEditSensorStatusModal();
         });
     }
 </script>

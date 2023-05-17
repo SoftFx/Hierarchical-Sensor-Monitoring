@@ -116,7 +116,7 @@
                 setModalBody(viewData);
             }
         }).done(function () {
-            if (document.getElementsByClassName("field-validation-error").length === 0) {
+            if ($("#newEditAccessKey_form .field-validation-error").length === 0) {
                 closeModalOrShowAccessKeysList(whetherCloseModal, function () {
                     showAccessKeysListModal();
                 });

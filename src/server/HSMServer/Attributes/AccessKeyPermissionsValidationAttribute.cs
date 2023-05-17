@@ -14,14 +14,16 @@ namespace HSMServer.Attributes
 
     public class RequiredKeyPermissionsAttribute : ValidationAttribute
     {
-        private readonly ValidationResult _validationError;
+        private readonly ValidationResult _validationError = new (ValidationErrorMessage);
         private readonly KeyPermissions _permissions;
+
+        
+        public const string ValidationErrorMessage = "There is no suitable access key for this operation";
         
         
         public RequiredKeyPermissionsAttribute(KeyPermissions permissions)
         {
             _permissions = permissions;
-            _validationError = new ValidationResult($"There is no active access key with {_permissions}");
         }
         
         protected override ValidationResult IsValid(object value, ValidationContext context)
