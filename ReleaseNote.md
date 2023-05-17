@@ -15,12 +15,12 @@
 
 ## Site
 * New sensor status **Empty sensor** has been added with white circle (if sensor history is empty)
-* Configuration tab - unused settings have been hidden
+* Unused settings have been hidden in Configuration tab
+* Validation on min value for interval control (TTL, Sensativity) has been added
 
 ## Tree
 * **Enable/Disable Grafana** item has been added in Context menu
 * Grafana icon is shown for sensors with Grafana enabled setting
-* Validation on min value for interval control (TTL, Sensativity) has been added
 
 ## Tree filters
 * **History** has been renamed to **Visibility**
@@ -40,9 +40,8 @@
 * **Unselect all** button has been added in Edit modal
 * Key's authors that have been removed have been marked as *Removed*
 
-## Bugfixsing
-* Removed authors names have been fixed in Access Key tab
-* Redirect on Home page after filters applying has been fixed
+## Bugfixing
+* Redirect to Home page after filters applying has been fixed
 
 # HSM Datacollector
 
