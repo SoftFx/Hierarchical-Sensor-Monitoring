@@ -27,6 +27,20 @@ namespace HSMServer.Core.Model.Policies
     }
 
 
+    public sealed class DoubleDataPolicy : SingleSensorDataPolicy<DoubleValue, double>
+    {
+        protected override double GetConstTarget(string strValue) => double.Parse(strValue);
+
+        protected override Func<double, double, bool> GetOperation(PolicyOperation operation) => DataPolicyBuilder.GetNumberOperation<double>(operation);
+    }
+
+
+    public sealed class IntegerBarDataPolicy : BarSensorDataPolicy<IntegerBarValue, int>
+    {
+        protected override int GetConstTarget(string strValue) => int.Parse(strValue);
+    }
+
+
     public sealed class DoubleBarDataPolicy : BarSensorDataPolicy<DoubleBarValue, double>
     {
         protected override double GetConstTarget(string strValue) => double.Parse(strValue);

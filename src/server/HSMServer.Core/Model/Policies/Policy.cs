@@ -12,6 +12,8 @@ namespace HSMServer.Core.Model.Policies
     [JsonDerivedType(typeof(RestoreOffTimePolicy), 1102)]
     [JsonDerivedType(typeof(StringValueLengthPolicy), 2000)]
     [JsonDerivedType(typeof(IntegerDataPolicy), 2001)]
+    [JsonDerivedType(typeof(DoubleDataPolicy), 2002)]
+    [JsonDerivedType(typeof(IntegerBarDataPolicy), 2003)]
     [JsonDerivedType(typeof(DoubleBarDataPolicy), 2004)]
     public abstract class Policy
     {

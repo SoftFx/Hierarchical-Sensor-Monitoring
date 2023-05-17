@@ -74,7 +74,7 @@ namespace HSMServer.Model.DataAlerts
     {
         public DataAlertViewModelBase() : base() { }
 
-        public DataAlertViewModelBase(DataPolicyT<T> policy)
+        public DataAlertViewModelBase(DataPolicy<T> policy)
         {
             Id = policy.Id;
             Property = policy.Property;

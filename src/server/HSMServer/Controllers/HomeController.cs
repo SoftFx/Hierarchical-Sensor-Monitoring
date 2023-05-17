@@ -497,6 +497,8 @@ namespace HSMServer.Controllers
             DataAlertViewModelBase viewModel = type switch
             {
                 SensorType.Integer => new IntegerDataAlertViewModel() { IsModify = true },
+                SensorType.Double => new DoubleDataAlertViewModel() { IsModify = true },
+                SensorType.IntegerBar => new IntegerBarDataAlertViewModel() { IsModify = true },
                 SensorType.DoubleBar => new DoubleBarDataAlertViewModel() { IsModify = true },
                 _ => null,
             };

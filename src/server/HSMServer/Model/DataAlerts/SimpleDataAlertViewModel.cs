@@ -29,4 +29,12 @@ namespace HSMServer.Model.DataAlerts
 
         public IntegerDataAlertViewModel(IntegerDataPolicy policy) : base(policy) { }
     }
+
+
+    public sealed class DoubleDataAlertViewModel : SimpleDataAlertViewModel<DoubleValue>
+    {
+        public DoubleDataAlertViewModel() : base() { }
+
+        public DoubleDataAlertViewModel(DoubleDataPolicy policy) : base(policy) { }
+    }
 }

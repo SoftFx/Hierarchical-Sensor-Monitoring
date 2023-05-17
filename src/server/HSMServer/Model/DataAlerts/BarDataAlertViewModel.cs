@@ -29,6 +29,14 @@ namespace HSMServer.Model.DataAlerts
     }
 
 
+    public class IntegerBarDataAlertViewModel : BarDataAlertViewModel<IntegerBarValue>
+    {
+        public IntegerBarDataAlertViewModel() : base() { }
+
+        public IntegerBarDataAlertViewModel(IntegerBarDataPolicy policy) : base(policy) { }
+    }
+
+
     public class DoubleBarDataAlertViewModel : BarDataAlertViewModel<DoubleBarValue>
     {
         public DoubleBarDataAlertViewModel() : base() { }
