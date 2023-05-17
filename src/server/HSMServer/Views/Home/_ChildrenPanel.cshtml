@@ -27,6 +27,8 @@
     var listDivId = $"list_{nodeId}";
     var gridDivId = $"grid_{nodeId}";
 
+    var visibilityClass = visibleNodes.Count > 0 || visibleSensors.Count > 0 ? string.Empty : "d-none";
+    
     List<NodeViewModel> GetSortedNodes<T>(IEnumerable<T> nodes) where T : NodeViewModel
     {
         return nodes.Where(n => n.HasData)
@@ -37,7 +39,7 @@
 }
 
 
-<ul class='nav nav-tabs' role="tablist">
+<ul id="dataPanel" class='nav nav-tabs @visibilityClass' role="tablist">
     <li class='nav-item'>
         <a id="gridLink_@nodeId" class='nav-link' data-bs-toggle='tab' href='#@gridDivId' role="tab"><i class="fa-solid fa-table-cells-large"></i> Grid</a>
     </li>

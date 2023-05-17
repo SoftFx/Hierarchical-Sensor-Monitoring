@@ -32,7 +32,7 @@ namespace HSMServer.Model.History
         private static SimpleSensorValueViewModel Create<T>(BaseValue<T> value) =>
             new()
             {
-                Value = value is VersionValue version ? version.Value.RemoveTailZeroes() :value.Value?.ToString() ,
+                Value = value is VersionValue version ? version.Value.RemoveTailZeroes() : value.Value?.ToString(),
                 Time = value.Time,
                 Status = value.Status.ToClient(),
                 Comment = value.Comment,

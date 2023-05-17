@@ -7,7 +7,7 @@ namespace HSMServer.Extensions
 {
     public static class UserExtensions
     {
-        private const FilterGroupType DefaultNodeMask = FilterGroupType.ByStatus | FilterGroupType.ByHistory;
+        private const FilterGroupType DefaultNodeMask = FilterGroupType.ByStatus | FilterGroupType.ByVisibility;
 
 
         public static bool IsSensorVisible(this User user, SensorNodeViewModel sensor)
@@ -48,7 +48,7 @@ namespace HSMServer.Extensions
 
             if (filterMask != 0 && (filterMask & DefaultNodeMask) == filterMask)
             {
-                bool isProductVisible = filterMask.HasFlag(FilterGroupType.ByHistory);
+                bool isProductVisible = filterMask.HasFlag(FilterGroupType.ByVisibility);
 
                 if (filterMask.HasFlag(FilterGroupType.ByStatus))
                     isProductVisible &= filter.ByStatus.IsStatusSuitable(product.Status.ToCore());

@@ -10,7 +10,7 @@ namespace HSMServer.UserFilters
     public enum FilterGroupType
     {
         ByStatus = 1,
-        ByHistory = 2,
+        ByVisibility = 2,
         Notifications = 4,
         ByState = 8,
         Integrations = 16,
@@ -28,12 +28,12 @@ namespace HSMServer.UserFilters
         private const int DefaultInterval = 5;
 
         private UserFilterGroupBase[] Groups =>
-            new UserFilterGroupBase[] { ByStatus, ByHistory, ByNotifications, ByState, ByIntegrations};
+            new UserFilterGroupBase[] { ByStatus, ByVisibility, ByNotifications, ByState, ByIntegrations};
 
 
         public GroupByStatus ByStatus { get; init; } = new();
 
-        public GroupByHistory ByHistory { get; init; } = new();
+        public GroupByVisibility ByVisibility { get; init; } = new();
 
         public GroupByNotifications ByNotifications { get; init; } = new();
 

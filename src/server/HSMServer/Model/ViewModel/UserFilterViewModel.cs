@@ -44,7 +44,7 @@ namespace HSMServer.Model.ViewModel
             HasErrorStatus = filter.ByStatus.Error.Value;
             HasOffTimeStatus = filter.ByStatus.OffTime.Value;
 
-            IsEmptyHistory = filter.ByHistory.Empty.Value;
+            IsEmptyHistory = filter.ByVisibility.Empty.Value;
 
             IsAccountNotificationsIgnored = filter.ByNotifications.AccountIgnored.Value;
             IsGroupNotificationsIgnored = filter.ByNotifications.GroupIgnored.Value;
@@ -73,7 +73,7 @@ namespace HSMServer.Model.ViewModel
             filter.ByStatus.Error.Value = HasErrorStatus;
             filter.ByStatus.OffTime.Value = HasOffTimeStatus;
 
-            filter.ByHistory.Empty.Value = IsEmptyHistory;
+            filter.ByVisibility.Empty.Value = IsEmptyHistory;
 
             filter.ByNotifications.AccountEnabled.Value = IsAccountNotificationsEnabled;
             filter.ByNotifications.GroupEnabled.Value = IsGroupNotificationsEnabled;

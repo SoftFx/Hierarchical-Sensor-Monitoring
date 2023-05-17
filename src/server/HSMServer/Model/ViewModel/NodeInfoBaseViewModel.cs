@@ -3,6 +3,7 @@ using HSMServer.Model.TreeViewModel;
 using System;
 using System.ComponentModel.DataAnnotations;
 using HSMServer.Attributes;
+using HSMServer.Extensions;
 
 
 namespace HSMServer.Model.ViewModel
@@ -47,7 +48,7 @@ namespace HSMServer.Model.ViewModel
 
         private NodeInfoBaseViewModel(BaseNodeViewModel model)
         {
-            Status = model.Status;
+            Status = model.Status.ToEmpty(model.UpdateTime != DateTime.MinValue);
             Description = model.Description;
             LastUpdateTime = model.UpdateTime;
 
