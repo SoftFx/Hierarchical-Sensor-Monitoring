@@ -95,7 +95,7 @@ namespace HSMServer.Core.Model
         }
 
 
-        internal virtual void Update(SensorUpdate update)
+        internal void Update(SensorUpdate update)
         {
             base.Update(update);
 
@@ -105,6 +105,8 @@ namespace HSMServer.Core.Model
 
             if (State == SensorState.Available)
                 EndOfMuting = null;
+
+            DataPolicies.Update(update.DataPolicies);
         }
 
         internal void ResetSensor()

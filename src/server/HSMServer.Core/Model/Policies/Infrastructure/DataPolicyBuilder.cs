@@ -3,21 +3,21 @@ using System.Numerics;
 
 namespace HSMServer.Core.Model.Policies
 {
-    internal static class PolicyBuilder
+    internal static class DataPolicyBuilder
     {
-        internal static Func<U, U, bool> BuilNumberOperation<U>(Operation action) where U : INumber<U> =>
+        internal static Func<U, U, bool> GetNumberOperation<U>(PolicyOperation action) where U : INumber<U> =>
             action switch
             {
-                Operation.LessThan => (U src, U target) => src < target,
-                Operation.GreaterThan => (U src, U target) => src > target,
-                Operation.LessThanOrEqual => (U src, U target) => src <= target,
-                Operation.GreaterThanOrEqual => (U src, U target) => src >= target,
-                Operation.Equal => (U src, U target) => src == target,
-                Operation.NotEqual => (U src, U target) => src != target,
+                PolicyOperation.LessThan => (U src, U target) => src < target,
+                PolicyOperation.GreaterThan => (U src, U target) => src > target,
+                PolicyOperation.LessThanOrEqual => (U src, U target) => src <= target,
+                PolicyOperation.GreaterThanOrEqual => (U src, U target) => src >= target,
+                PolicyOperation.Equal => (U src, U target) => src == target,
+                PolicyOperation.NotEqual => (U src, U target) => src != target,
                 _ => (_, _) => false,
             };
 
-        internal static Func<T, U> GetSimpleProperty<T, U>(string property) where T : BaseValue<U> =>
+        internal static Func<T, U> GetSingleProperty<T, U>(string property) where T : BaseValue<U> =>
             property switch
             {
                 nameof(BaseValue<U>.Value) => (T value) => value.Value,

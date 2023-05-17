@@ -23,7 +23,7 @@ namespace HSMServer.Core.Cache.UpdateEntities
     public sealed record DataPolicyUpdate(
         Guid Id,
         string Property,
-        Operation Action,
+        PolicyOperation Operation,
         TargetValue Target,
         SensorStatus Status,
         string Comment

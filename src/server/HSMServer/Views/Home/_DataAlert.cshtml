@@ -10,13 +10,13 @@
     <input class="d-none" asp-for="Id" value="@Model.Id" />
 
     <div id="dataAlertLabel_@Model.Id" class="ms-3 @(Model.IsModify ? "d-none" : string.Empty)">
-        If <b>@Model.Property @Model.Action.GetDisplayName() @Model.Value</b> then send @Model.Status.ToIconStatus() with message <i>@Model.Comment</i>
+        If <b>@Model.Property @Model.Operation.GetDisplayName() @Model.Value</b> then send @Model.Status.ToIconStatus() with message <i>@Model.Comment</i>
     </div>
 
     <div id="dataAlertInputGroupd_@Model.Id" class="input-group mb-1 @(!Model.IsModify ? "d-none" : string.Empty)">
         <label class="input-group-text">If</label>
         <select class="form-select" asp-for="Property" asp-items="@Model.PropertiesItems"></select>
-        <select class="form-select" asp-for="Action" asp-items="@Model.ActionsItems"></select>
+        <select class="form-select" asp-for="Operation" asp-items="@Model.ActionsItems"></select>
         <input type="text" class="form-control" asp-for="Value" value="@Model.Value">
 
         <label class="input-group-text">then</label>

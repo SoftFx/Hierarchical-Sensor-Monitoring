@@ -61,7 +61,7 @@ namespace HSMServer.Model.TreeViewModel
 
             FileNameString = GetFileNameString(model.Type, ShortStringValue);
 
-            DataAlerts[Type] = model.DataPolicies.Policies.Select(BuildAlert).ToList();
+            DataAlerts[Type] = model.DataPolicies.Select(BuildAlert).ToList();
         }
 
         private DataAlertViewModel BuildAlert(Policy policy) => policy switch

@@ -1,10 +1,14 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities;
+using HSMServer.Core.Model.Policies;
 
 namespace HSMServer.Core.Model
 {
     public sealed class DoubleBarSensorModel : BaseSensorModel<DoubleBarValue>, IBarSensor
     {
         protected override DoubleBarValuesStorage Storage { get; } = new DoubleBarValuesStorage();
+
+
+        public override DataPolicyCollection<DoubleBarValue, DoubleBarDataPolicy> DataPolicies { get; } = new();
 
         public override SensorType Type { get; } = SensorType.DoubleBar;
 

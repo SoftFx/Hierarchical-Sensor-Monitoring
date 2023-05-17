@@ -4,7 +4,7 @@ using System.Numerics;
 
 namespace HSMServer.Core.Model.Policies
 {
-    public enum Operation : byte
+    public enum PolicyOperation : byte
     {
         LessThanOrEqual,
         LessThan,
@@ -24,113 +24,133 @@ namespace HSMServer.Core.Model.Policies
     public sealed record TargetValue(TargetType Type, string Value);
 
 
-    public abstract class DataPolicy : Policy
+    public abstract class DataPolicy<T> : Policy where T : BaseValue
     {
         protected override SensorStatus FailStatus => Status;
 
         protected override string FailMessage => Comment;
 
 
-        public string Property { get; set; }
-
-        public Operation Action { get; set; }
-
-        public TargetValue Target { get; set; }
-
         public SensorStatus Status { get; set; }
 
         public string Comment { get; set; }
 
 
-        public DataPolicy() : base() { }
+        public abstract string Property { get; set; }
+
+        public abstract PolicyOperation Operation { get; set; }
+
+        public abstract TargetValue Target { get; set; }
 
 
-        internal abstract DataPolicy Initialize();
-
-        internal DataPolicy Update(DataPolicyUpdate update)
+        internal void Update(DataPolicyUpdate update)
         {
+            Operation = update.Operation;
             Property = update.Property;
-            Action = update.Action;
+            Comment = update.Comment;
             Target = update.Target;
             Status = update.Status;
-            Comment = update.Comment;
-
-            return Initialize();
         }
+
+        internal abstract PolicyResult Validate(T value);
     }
 
 
-    public abstract class DataPolicy<T, U> : DataPolicy where T : BaseValue
+    public abstract class DataPolicy<T, U> : DataPolicy<T> where T : BaseValue
     {
-        protected private Func<U, U, bool> _operation;
-        protected private Func<T, U> _getProperty;
-        protected private U _targetValue;
+        private Func<U, U, bool> _executeOperation;
+        private Func<T, U> _getProperty;
+        private U _targetValue;
 
-        public DataPolicy() : base() { }
+        private PolicyOperation _operationName;
+        private TargetValue _targetName;
+        private string _propertyName;
 
 
-        internal PolicyResult Validate(T value)
+        public override PolicyOperation Operation
         {
-            return _operation(_getProperty(value), _targetValue) ? PolicyResult.Ok : Fail;
-        }
-
-        internal override DataPolicy Initialize()
-        {
-            _targetValue = Target.Type switch
+            get => _operationName;
+            set
             {
-                TargetType.Const => GetConstTarget(),
-                _ => default,
-            };
+                if (_operationName == value)
+                    return;
 
-            _operation = GetOperation();
-            _getProperty = GetProperty(); // typeof(T) == typeof(BarBaseValue) ? PolicyBuilder.GetBarProperty<T, U>(Property) : PolicyBuilder.GetSimpleProperty<T, U>(Property);
+                _operationName = value;
+                _executeOperation = GetOperation(value);
+            }
+        }
 
-            return this;
+        public override string Property
+        {
+            get => _propertyName;
+            set
+            {
+                if (_propertyName == value)
+                    return;
+
+                _propertyName = value;
+                _getProperty = GetProperty(value);
+            }
+        }
+
+        public override TargetValue Target
+        {
+            get => _targetName;
+            set
+            {
+                if (_targetName == value)
+                    return;
+
+                _targetName = value;
+
+                _targetValue = Target.Type switch
+                {
+                    TargetType.Const => GetConstTarget(value.Value),
+                    _ => default,
+                };
+            }
         }
 
 
-        protected abstract Func<U, U, bool> GetOperation();
+        protected abstract Func<U, U, bool> GetOperation(PolicyOperation operation);
 
-        protected abstract Func<T, U> GetProperty();
+        protected abstract Func<T, U> GetProperty(string property);
 
-        protected abstract U GetConstTarget();
-    }
+        protected abstract U GetConstTarget(string strValue);
 
 
-    public abstract class SimpleDataPolicy<T, U> : DataPolicy<T, U> where T : BaseValue<U> where U : INumber<U>
-    {
-        protected override Func<T, U> GetProperty() => Property switch
+        internal override PolicyResult Validate(T value)
         {
-            nameof(BaseValue<U>.Value) => (T value) => value.Value,
-            _ => default,
-        };
-        protected override Func<U, U, bool> GetOperation() => PolicyBuilder.BuilNumberOperation<U>(Action);
+            return _executeOperation(_getProperty(value), _targetValue) ? PolicyResult.Ok : Fail;
+        }
     }
 
 
-    public sealed class IntegerDataPolicy : SimpleDataPolicy<IntegerValue, int>
+    public abstract class SingleSensorDataPolicy<T, U> : DataPolicy<T, U> where T : BaseValue<U>
     {
-        protected override int GetConstTarget() => int.Parse(Target.Value);
+        protected override Func<T, U> GetProperty(string property) => DataPolicyBuilder.GetSingleProperty<T, U>(property);
+    }
+
+    public abstract class BarSensorDataPolicy<T, U> : DataPolicy<T, U>
+        where T : BarBaseValue<U>
+        where U : struct, INumber<U>
+    {
+        protected override Func<T, U> GetProperty(string property) => DataPolicyBuilder.GetBarProperty<T, U>(property);
+
+        protected override Func<U, U, bool> GetOperation(PolicyOperation operation) => DataPolicyBuilder.GetNumberOperation<U>(operation);
     }
 
 
-    public abstract class BarDataPolicy<T, U> : DataPolicy<T, U> where T : BarBaseValue<U> where U : struct, INumber<U>
+    public sealed class IntegerDataPolicy : SingleSensorDataPolicy<IntegerValue, int>
     {
-        protected override U GetPropertyValue(T value) => Property switch
-        {
-            nameof(value.Min) => value.Min,
-            nameof(value.Max) => value.Max,
-            nameof(value.Mean) => value.Mean,
-            nameof(value.LastValue) => value.LastValue,
-            _ => default,
-        };
+        protected override int GetConstTarget(string strValue) => int.Parse(strValue);
 
-        protected override Func<U, U, bool> GetOperation() => PolicyBuilder.BuilNumberOperation<U>(Action);
+        protected override Func<int, int, bool> GetOperation(PolicyOperation operation) => DataPolicyBuilder.GetNumberOperation<int>(operation);
     }
 
 
-    public sealed class DoubleBarDataPolicy : BarDataPolicy<DoubleBarValue, double>
+    public sealed class DoubleBarDataPolicy : BarSensorDataPolicy<DoubleBarValue, double>
     {
-        protected override double GetConstTarget() => double.Parse(Target.Value);
+        protected override double GetConstTarget(string strValue) => double.Parse(strValue);
     }
 }

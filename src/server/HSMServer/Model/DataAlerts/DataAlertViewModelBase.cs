@@ -29,7 +29,7 @@ namespace HSMServer.Model.DataAlerts
 
         public string Property { get; set; }
 
-        public Operation Action { get; set; }
+        public Operation Operation { get; set; }
 
         public string Value { get; set; }
 
@@ -42,7 +42,7 @@ namespace HSMServer.Model.DataAlerts
 
 
         internal DataPolicyUpdate ToUpdate() =>
-            new(Id, Property, Action.ToCore(), new TargetValue(TargetType.Const, Value), Status.ToCore(), Comment);
+            new(Id, Property, Operation.ToCore(), new TargetValue(TargetType.Const, Value), Status.ToCore(), Comment);
     }
 
 
@@ -78,7 +78,7 @@ namespace HSMServer.Model.DataAlerts
         {
             Id = policy.Id;
             Property = policy.Property;
-            Action = policy.Action.ToClient();
+            Operation = policy.Operation.ToClient();
             Value = policy.Target.Value;
             Status = policy.Status.ToClient();
             Comment = policy.Comment;

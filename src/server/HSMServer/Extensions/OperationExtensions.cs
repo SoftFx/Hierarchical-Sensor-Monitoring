@@ -5,24 +5,24 @@ namespace HSMServer.Extensions
 {
     public static class OperationExtensions
     {
-        internal static Client.Operation ToClient(this Server.Operation status) =>
+        internal static Client.Operation ToClient(this Server.PolicyOperation status) =>
             status switch
             {
-                Server.Operation.LessThanOrEqual => Client.Operation.LessThanOrEqual,
-                Server.Operation.LessThan => Client.Operation.LessThan,
-                Server.Operation.GreaterThan => Client.Operation.GreaterThan,
-                Server.Operation.GreaterThanOrEqual => Client.Operation.GreaterThanOrEqual,
+                Server.PolicyOperation.LessThanOrEqual => Client.Operation.LessThanOrEqual,
+                Server.PolicyOperation.LessThan => Client.Operation.LessThan,
+                Server.PolicyOperation.GreaterThan => Client.Operation.GreaterThan,
+                Server.PolicyOperation.GreaterThanOrEqual => Client.Operation.GreaterThanOrEqual,
                 _ => Client.Operation.LessThanOrEqual,
             };
 
-        internal static Server.Operation ToCore(this Client.Operation status) =>
+        internal static Server.PolicyOperation ToCore(this Client.Operation status) =>
             status switch
             {
-                Client.Operation.LessThanOrEqual => Server.Operation.LessThanOrEqual,
-                Client.Operation.LessThan => Server.Operation.LessThan,
-                Client.Operation.GreaterThan => Server.Operation.GreaterThan,
-                Client.Operation.GreaterThanOrEqual => Server.Operation.GreaterThanOrEqual,
-                _ => Server.Operation.LessThanOrEqual,
+                Client.Operation.LessThanOrEqual => Server.PolicyOperation.LessThanOrEqual,
+                Client.Operation.LessThan => Server.PolicyOperation.LessThan,
+                Client.Operation.GreaterThan => Server.PolicyOperation.GreaterThan,
+                Client.Operation.GreaterThanOrEqual => Server.PolicyOperation.GreaterThanOrEqual,
+                _ => Server.PolicyOperation.LessThanOrEqual,
             };
     }
 }
