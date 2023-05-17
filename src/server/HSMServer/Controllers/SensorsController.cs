@@ -383,7 +383,7 @@ namespace HSMServer.Controllers
                     };
 
                     if (!CanAddToQueue(storeInfo, out var message))
-                        result[storeInfo.Key] = message;
+                        result[storeInfo.Path] = message;
                 }
                 return result.Count == 0 ? Ok(values) : StatusCode(406, result);
             }
