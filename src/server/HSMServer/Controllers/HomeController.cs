@@ -505,7 +505,7 @@ namespace HSMServer.Controllers
             if (!isAccessKeyExist)
                 ModelState.AddModelError("RootProductId", RequiredKeyPermissionsAttribute.ValidationErrorMessage);
             
-            return PartialView("_EditSensorStatusModal", new EditSensorStatusViewModal(new SensorInfoViewModel(sensorNodeViewModel), isAccessKeyExist));
+            return PartialView("_EditSensorStatusModal", new EditSensorStatusViewModal(sensorNodeViewModel, isAccessKeyExist));
         }
 
         [HttpPost]
