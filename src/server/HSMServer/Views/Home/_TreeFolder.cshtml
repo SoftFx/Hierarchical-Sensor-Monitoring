@@ -6,14 +6,14 @@
 
 @{
     var data = Model.Data;
-    var areIconsVisible = (User as User).TreeFilter.ByVisibility.Icons.Value;
+    var showIcons = (User as User).TreeFilter.ByVisibility.Icons.Value;
 }
 
 
 <li id='@data.Id' title='@data.Tooltip' data-jstree='@Model.ToJSTree()'>
     <span> @Html.Raw(data.Name.GetShortNodeName())</span>
 
-    @if (!Model.IsEmpty && areIconsVisible)
+    @if (!Model.IsEmpty && showIcons)
     {
         @if (Model.IsAccountsEnable)
         {
