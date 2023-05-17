@@ -22,7 +22,9 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using HSMSensorDataObjects.SensorValueRequests;
 using HSMServer.Attributes;
+using SensorStatus = HSMSensorDataObjects.SensorStatus;
 
 namespace HSMServer.Controllers
 {
@@ -520,41 +522,38 @@ namespace HSMServer.Controllers
 
                 return BadRequest(ModelState);
             }
-                
+
             var sensor = _treeValuesCache.GetSensor(modal.SensorId);
             var comment = $"User: {CurrentUser.Name}. Reason: {modal.Reason}";
 
-            if (sensor.Type is SensorType.File)
-                return Ok(new
-                {
-                    Sensor = new
-                    {
-                        sensor.Path,
-                        Comment = comment,
-                        Time = DateTime.UtcNow,
-                        Status = modal.NewStatus,
-                        sensor.Type,
-                        Value = new []{0},
-                        Extension = string.Empty,
-                        Name = string.Empty
-                    },
-                    Key = key
-                });
-            
-            var returnBody = new
+            SensorValueBase CreateNewSensorValue(SensorType sensorType) => sensorType switch
             {
-                Sensor = new
-                {
-                    sensor.Path,
-                    Comment = comment,
-                    Time = DateTime.UtcNow,
-                    Status = modal.NewStatus,
-                    sensor.Type
-                },
-                Key = key
+                SensorType.Boolean => new BoolSensorValue(),
+                SensorType.IntegerBar => new IntBarSensorValue(),
+                SensorType.DoubleBar => new DoubleBarSensorValue(),
+                SensorType.Double => new DoubleSensorValue(),
+                SensorType.Integer => new IntSensorValue(),
+                SensorType.String => new StringSensorValue(),
+                SensorType.File => new FileSensorValue(),
+                SensorType.TimeSpan => new TimeSpanSensorValue(),
+                SensorType.Version => new VersionSensorValue(),
+                _ => null
             };
+
+            var sensorValue = CreateNewSensorValue(sensor.Type);
             
-            return Ok(returnBody);
+            if (sensorValue is null)
+                return BadRequest();
+            
+            sensorValue.Comment = comment;
+            sensorValue.Path = sensor.Path;
+            sensorValue.Status = (SensorStatus)modal.NewStatus;
+
+            return Ok(new
+            {
+                Sensor = sensorValue,
+                Key = key
+            });
         }
 
         #endregion

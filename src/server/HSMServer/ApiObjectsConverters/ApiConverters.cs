@@ -75,10 +75,10 @@ namespace HSMServer.ApiObjectsConverters
                 Comment = value.Comment,
                 Time = value.Time,
                 Status = value.Status.Convert(),
-                Value = value.Value.ToArray(),
+                Value = value.Value is null ? Array.Empty<byte>() : value.Value.ToArray(),
                 Name = value.Name,
                 Extension = value.Extension,
-                OriginalSize = value.Value.Count
+                OriginalSize = value.Value?.Count ?? 0L
             };
 
         public static IntegerBarValue Convert(this IntBarSensorValue value) =>
