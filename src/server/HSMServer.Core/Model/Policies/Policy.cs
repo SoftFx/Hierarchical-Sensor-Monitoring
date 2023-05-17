@@ -15,6 +15,11 @@ namespace HSMServer.Core.Model.Policies
     [JsonDerivedType(typeof(DoubleDataPolicy), 2002)]
     [JsonDerivedType(typeof(IntegerBarDataPolicy), 2003)]
     [JsonDerivedType(typeof(DoubleBarDataPolicy), 2004)]
+    [JsonDerivedType(typeof(BooleanDataPolicy), 2005)]
+    [JsonDerivedType(typeof(StringDataPolicy), 2006)]
+    [JsonDerivedType(typeof(TimeSpanDataPolicy), 2007)]
+    [JsonDerivedType(typeof(VersionDataPolicy), 2008)]
+    [JsonDerivedType(typeof(FileDataPolicy), 2009)]
     public abstract class Policy
     {
         protected static PolicyResult Ok => PolicyResult.Ok;

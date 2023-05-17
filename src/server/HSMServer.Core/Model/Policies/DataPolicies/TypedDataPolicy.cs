@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Numerics;
+using System.Text;
 
 namespace HSMServer.Core.Model.Policies
 {
@@ -32,6 +33,46 @@ namespace HSMServer.Core.Model.Policies
         protected override double GetConstTarget(string strValue) => double.Parse(strValue);
 
         protected override Func<double, double, bool> GetOperation(PolicyOperation operation) => DataPolicyBuilder.GetNumberOperation<double>(operation);
+    }
+
+
+    public sealed class BooleanDataPolicy : SingleSensorDataPolicy<BooleanValue, bool>
+    {
+        protected override bool GetConstTarget(string strValue) => bool.Parse(strValue);
+
+        protected override Func<bool, bool, bool> GetOperation(PolicyOperation operation) => (bool src, bool target) => true;
+    }
+
+
+    public sealed class StringDataPolicy : SingleSensorDataPolicy<StringValue, string>
+    {
+        protected override string GetConstTarget(string strValue) => strValue;
+
+        protected override Func<string, string, bool> GetOperation(PolicyOperation operation) => (string src, string target) => true;
+    }
+
+
+    public sealed class TimeSpanDataPolicy : SingleSensorDataPolicy<TimeSpanValue, TimeSpan>
+    {
+        protected override TimeSpan GetConstTarget(string strValue) => TimeSpan.Parse(strValue);
+
+        protected override Func<TimeSpan, TimeSpan, bool> GetOperation(PolicyOperation operation) => (TimeSpan src, TimeSpan target) => true;
+    }
+
+
+    public sealed class VersionDataPolicy : SingleSensorDataPolicy<VersionValue, Version>
+    {
+        protected override Version GetConstTarget(string strValue) => Version.Parse(strValue);
+
+        protected override Func<Version, Version, bool> GetOperation(PolicyOperation operation) => (Version src, Version target) => true;
+    }
+
+
+    public sealed class FileDataPolicy : SingleSensorDataPolicy<FileValue, byte[]>
+    {
+        protected override byte[] GetConstTarget(string strValue) => Encoding.UTF8.GetBytes(strValue);
+
+        protected override Func<byte[], byte[], bool> GetOperation(PolicyOperation operation) => (byte[] src, byte[] target) => true;
     }
 
 
