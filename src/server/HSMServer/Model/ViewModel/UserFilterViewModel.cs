@@ -26,6 +26,8 @@ namespace HSMServer.Model.ViewModel
         
         public bool IsGrafanaEnabled { get; set; }
 
+        public bool AreIconsVisible { get; set; }
+
 
         public bool IsMutedSensorsState { get; set; }
 
@@ -45,6 +47,7 @@ namespace HSMServer.Model.ViewModel
             HasOffTimeStatus = filter.ByStatus.OffTime.Value;
 
             IsEmptyHistory = filter.ByVisibility.Empty.Value;
+            AreIconsVisible = filter.ByVisibility.Icons.Value;
 
             IsAccountNotificationsIgnored = filter.ByNotifications.AccountIgnored.Value;
             IsGroupNotificationsIgnored = filter.ByNotifications.GroupIgnored.Value;
@@ -52,7 +55,7 @@ namespace HSMServer.Model.ViewModel
             IsGroupNotificationsEnabled = filter.ByNotifications.GroupEnabled.Value;
 
             IsGrafanaEnabled = filter.ByIntegrations.GrafanaEnabled.Value;
-            
+
             IsMutedSensorsState = filter.ByState.Muted.Value;
 
             TreeUpdateInterval = filter.TreeUpdateInterval;
@@ -74,6 +77,7 @@ namespace HSMServer.Model.ViewModel
             filter.ByStatus.OffTime.Value = HasOffTimeStatus;
 
             filter.ByVisibility.Empty.Value = IsEmptyHistory;
+            filter.ByVisibility.Icons.Value = AreIconsVisible;
 
             filter.ByNotifications.AccountEnabled.Value = IsAccountNotificationsEnabled;
             filter.ByNotifications.GroupEnabled.Value = IsGroupNotificationsEnabled;
