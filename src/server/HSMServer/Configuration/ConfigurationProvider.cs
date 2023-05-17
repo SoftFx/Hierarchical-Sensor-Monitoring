@@ -5,6 +5,7 @@ using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 
 namespace HSMServer.Configuration
 {
@@ -16,14 +17,12 @@ namespace HSMServer.Configuration
         
         private readonly ILogger<ConfigurationProvider> _logger;
         
-        private readonly List<string> _configurationObjectNamesList = new List<string>
+        private readonly List<string> _configurationObjectNamesList = new()
         {
-            ConfigurationConstants.MaxPathLength, ConfigurationConstants.AesEncryptionKey,
-            ConfigurationConstants.SensorExpirationTime, ConfigurationConstants.SMTPServer, 
-            ConfigurationConstants.SMTPPort, ConfigurationConstants.SMTPLogin, 
-            ConfigurationConstants.SMTPPassword, ConfigurationConstants.SMTPFromEmail,
-            ConfigurationConstants.ServerCertificatePassword, ConfigurationConstants.BotName,
-            ConfigurationConstants.BotToken, ConfigurationConstants.AreBotMessagesEnabled
+            ConfigurationConstants.SensorExpirationTime, 
+            ConfigurationConstants.BotName,
+            ConfigurationConstants.BotToken,
+            ConfigurationConstants.AreBotMessagesEnabled
         };
         
         
@@ -42,10 +41,7 @@ namespace HSMServer.Configuration
 
         public string ClientAppFolderPath => _clientAppFolderPath ??= Path.Combine(AppDomain.CurrentDomain.BaseDirectory, CommonConstants.ClientAppFolderName);
 
-        public List<string> GetAllParameterNames()
-        {
-            return _configurationObjectNamesList;
-        }
+        public List<string> GetAllParameterNames() => _configurationObjectNamesList;
 
         public void AddConfigurationObject(string name, string value)
         {
@@ -66,24 +62,14 @@ namespace HSMServer.Configuration
                 ConfigurationConstants.GetDefault(name), ConfigurationConstants.GetDescription(name));
         }
 
-        public List<ConfigurationObject> GetAllConfigurationObjects()
-        {
-            List<ConfigurationObject> result = new List<ConfigurationObject>();
-            foreach (var name in _configurationObjectNamesList)
-            {
-                result.Add(ReadOrDefault(name));
-            }
-
-            return result;
-        }
+        public List<ConfigurationObject> GetAllConfigurationObjects() => _configurationObjectNamesList.Select(name => ReadOrDefault(name)).ToList();
 
         public ConfigurationObject ReadConfigurationObject(string name)
         {
             var objectFromDB = _databaseCore.GetConfigurationObject(name);
             if (objectFromDB != null)
-            {
                 objectFromDB.Description = ConfigurationConstants.GetDescription(name);
-            }
+            
             return objectFromDB;
         }
 
