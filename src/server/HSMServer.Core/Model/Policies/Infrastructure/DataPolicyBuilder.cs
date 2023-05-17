@@ -3,6 +3,26 @@ using System.Numerics;
 
 namespace HSMServer.Core.Model.Policies
 {
+    public enum PolicyOperation : byte
+    {
+        LessThanOrEqual,
+        LessThan,
+        GreaterThan,
+        GreaterThanOrEqual,
+        Equal,
+        NotEqual,
+    }
+
+    public enum TargetType : byte
+    {
+        Const,
+        Sensor,
+    }
+
+
+    public sealed record TargetValue(TargetType Type, string Value);
+
+
     internal static class DataPolicyBuilder
     {
         internal static Func<U, U, bool> GetNumberOperation<U>(PolicyOperation action) where U : INumber<U> =>
