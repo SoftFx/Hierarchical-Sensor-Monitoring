@@ -10,16 +10,38 @@
 <form asp-controller="@ViewConstants.AccessKeysController"
       asp-action="@(Model.IsModify ? nameof(AccessKeysController.ModifyAccessKey) : nameof(AccessKeysController.NewAccessKey))"
       method="post" id="newEditAccessKey_form">
-    <input id='accessKey_prodcutId' style='display: none' asp-for="EncodedProductId" value="@Model.EncodedProductId" />
-    <input id='accessKeyId' style='display: none' asp-for="Id" value="@Model.Id" />
-    <input id='whetherCloseModal' style='display: none' asp-for="CloseModal" value="@Model.CloseModal" />
-    <input style='display: none' asp-for="IsModify" value="@Model.IsModify" />
-    <input style='display: none' asp-for="ExpirationTime" value="@Model.ExpirationTime"/>
 
+    <input id='accessKeyId' style='display: none' asp-for="Id" value="@Model.Id"/>
+    @if (Model.ReturnType is not AccessKeyReturnType.Table)
+    {
+        <input id="selectedProductId" style='display: none' asp-for="SelectedProductId" value="@Model.SelectedProductId"/>
+    }
+    <input id='whetherCloseModal' style='display: none' asp-for="CloseModal" value="@Model.CloseModal"/>
+    <input id='returnType' style='display: none' asp-for="ReturnType" value="@Model.ReturnType"/>
+    <input style='display: none' asp-for="IsModify" value="@Model.IsModify"/>
+    <input style='display: none' asp-for="ExpirationTime" value="@Model.ExpirationTime"/>
+    <input style='display: none' asp-for="ProductsItems" value="@Model.ProductsItems"/>
+    <div class="row">
+        <div class="form-group col-4">
+            <label asp-for="SelectedProductId" class="col-form-label"></label>
+            @if (Model.ProductsItems.Count == 1)
+            {
+                <select asp-for="SelectedProductId" asp-items="@Model.ProductsItems" disabled class="form-control form-select">
+                    <option value="@Guid.Empty">All products</option>
+                </select>
+            }
+            else
+            {
+                <select asp-for="SelectedProductId" asp-items="@Model.ProductsItems" class="form-control form-select">
+                    <option value="@Guid.Empty">All products</option>
+                </select>
+            }
+        </div>
+    </div>
     <div class="row">
         <div class="form-group col-8">
             <label asp-for="DisplayName" class="col-form-label"></label>
-            <input type="text" asp-for="DisplayName" class="form-control" />
+            <input type="text" asp-for="DisplayName" class="form-control"/>
             <span asp-validation-for="DisplayName"></span>
         </div>
 
@@ -38,11 +60,11 @@
 
     <div class="form-group row mt-2">
         <label class="col-auto col-form-label" asp-for="Permissions"></label>
-        <button class="col-auto btn btn-light btn-sm" type="button" onclick="selectAllCheckBoxes()">Select all</button>
+        <button id="checkboxButton" class="col-auto btn btn-light btn-sm" type="button" style="width: 6rem">Select all</button>
     </div>
     <span asp-validation-for="Permissions"></span>
 
-    <div class="form-group" id="permissions">
+    <div class="form-group" onchange="onChangeCheckBoxes()" id="permissions">
         <div class="form-check form-check-inline">
             <input class="form-check-input" type="checkbox" asp-for="CanSendSensorData">
             <label class="form-check-label" asp-for="CanSendSensorData"></label>
@@ -71,6 +93,10 @@
 
 
 <script>
+    $(document).ready(function () {
+        onChangeCheckBoxes();
+    })
+
     $(document).on("submit", "#newEditAccessKey_form", function (event) {
         event.preventDefault();
         event.stopImmediatePropagation();
@@ -99,9 +125,31 @@
         });
     });
 
+    function onChangeCheckBoxes(){
+        let i = 0;
+        $('#permissions :checkbox').each(function () {
+            if (this.checked === true)
+                i++;
+        });
+        
+        if (i === $('#permissions :checkbox').length) 
+            initUnselectAll()
+        else
+            initSelectAll()
+    }
+    
+    function initSelectAll() {
+        $('#checkboxButton').off('click').on('click', selectAllCheckBoxes).html('Select all');    
+    }
+    
+    function initUnselectAll() {
+        $('#checkboxButton').off('click').on('click', unSelectAllCheckBoxes).html('Unselect all');       
+    }
+    
     function cancelButtonClick() {
         closeModalOrShowAccessKeysList($('#whetherCloseModal').val(), function () {
-            showAccessKeysList($('#accessKey_prodcutId').val(), false);
+            let id = $('#accessKey_prodcutId').val() === undefined ? $('#selectedProductId').val() : $('#accessKey_prodcutId').val()
+            showAccessKeysList(id, false);
         });
     }
 
@@ -109,6 +157,16 @@
         $('#permissions :checkbox').each(function () {
             this.checked = true;
         });
+        
+        $('#checkboxButton').off('click').on('click', unSelectAllCheckBoxes).html('Unselect all');
+    }
+    
+    function unSelectAllCheckBoxes(){
+        $('#permissions :checkbox').each(function () {
+            this.checked = false;
+        });
+        
+        $('#checkboxButton').off('click').on('click', selectAllCheckBoxes).html('Select all');
     }
 
     function closeModalOrShowAccessKeysList(whetherCloseModal, showAccessKeys) {

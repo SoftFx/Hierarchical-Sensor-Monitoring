@@ -29,7 +29,7 @@ namespace HSMServer.Core.Cache
         List<BaseSensorModel> GetSensors();
         List<AccessKeyModel> GetAccessKeys();
 
-        ProductModel AddProduct(string productName);
+        ProductModel AddProduct(string productName, Guid authorId);
         void UpdateProduct(ProductUpdate product);
         void RemoveProduct(Guid id);
         ProductModel GetProduct(Guid id);
@@ -45,6 +45,7 @@ namespace HSMServer.Core.Cache
         AccessKeyModel UpdateAccessKey(AccessKeyUpdate key);
         AccessKeyModel UpdateAccessKeyState(Guid id, KeyState state);
         AccessKeyModel GetAccessKey(Guid id);
+        List<AccessKeyModel> GetMasterKeys();
 
         void UpdateSensor(SensorUpdate updatedSensor);
         void RemoveSensor(Guid sensorId);

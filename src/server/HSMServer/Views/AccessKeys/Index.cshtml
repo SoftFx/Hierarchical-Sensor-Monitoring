@@ -1,6 +1,7 @@
 ﻿@using HSMServer.Model.AccessKeysViewModels
 @using HSMServer.Constants
 @using HSMServer.Controllers
+@using HSMServer.Model.Authentication
 
 @model AccessKeyTableViewModel
 
@@ -24,14 +25,21 @@
                 </div>
             </div>
         </div>
-        <div class="container row my-1">
+        <div class="container row my-1 pe-0">
             <div class="col-4 p-0">
                 <input id="searchKey" type="text" class="form-control" placeholder="Filter by key"/>
             </div>
-            <div class="col">
+            <div class="d-flex justify-content-between col">
                 <button onclick="searchKey()" type="button" class="btn btn-secondary ms-1">
                     <i type="button" class="fas fa-search"></i>
                 </button>
+                @if ((User as User).IsAdmin)
+                {
+                    <button onclick="createAccessKey()" class="btn btn-link me-0 pe-0">
+                       <i class="fa-solid fa-key"></i>
+                        Add key
+                    </button>
+                }
             </div>
         </div>
         <div class="container mt-2">
@@ -71,7 +79,7 @@
         const keyToSearch = document.getElementById("searchKey").value;
         $.ajax({
                type: 'GET',
-               url: getSearchKeyResult + "?SearchKey=" + keyToSearch,
+               url: getSearchKeyResult + "?searchKey=" + keyToSearch,
                cache: false,
                async: true,
                success: function (viewData) {
@@ -79,5 +87,11 @@
                     document.querySelectorAll("#accessTable tr").length <= 1 ? $('#accessKeysTable').html("<div><h2><strong>Keys not found</strong></h2></div>") : this;
                }
         });
+    }
+    
+    function createAccessKey(){
+       let newAccessKeyURL = "@Url.Action(nameof(AccessKeysController.NewServerAccessKey), ViewConstants.AccessKeysController)";
+    
+       showNewAccessKeyModal(`${newAccessKeyURL}`, true);   
     }
 </script>

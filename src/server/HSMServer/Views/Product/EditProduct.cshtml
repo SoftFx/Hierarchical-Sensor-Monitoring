@@ -177,10 +177,11 @@
         </div>
     
         <div class="my-1">
-            <div class="row">
+            <div class="d-flex justify-content-between row">
                 <h5 class="col-auto mt-2">Access keys</h5>
-                <button type='button' class='btn btn-secondary col-auto' title='add access key' onclick="addAccessKeyButtonClick()">
-                    <i class='fas fa-plus'></i>
+                <button onclick="addAccessKeyButtonClick()" class="btn btn-link col-auto py-0 mt-2">
+                     <i class="fa-solid fa-key"></i>
+                     Add key
                 </button>
             </div>
                 
@@ -371,7 +372,7 @@
         let productId = $('#encodedProductId').val();
         let newAccessKeyURL = "@Html.Raw(Url.Action(nameof(AccessKeysController.NewAccessKey), ViewConstants.AccessKeysController))";
 
-        showNewAccessKeyModal(`${newAccessKeyURL}?Selected=${productId}&CloseModal=true`, true);
+        showNewAccessKeyModal(`${newAccessKeyURL}?selectedId=${productId}&closeModal=true`, true);
     }
 
     $('#accessKeys_modal').on('hidden.bs.modal', function(e) {

@@ -117,7 +117,10 @@
                             <span style="min-width: 8rem">Enabled for:</span>
                         </div>
                         <div class="d-flex w-100">
-                            <img class="tree-png-icon" src="~/dist/grafana.svg" alt="!" title="Grafana" />
+                            <div class="sensor-icon-with-margin">
+                                <img class="tree-png-icon" src="~/dist/grafana.svg" alt="!" />
+                            </div>
+                            <span>Grafana</span>
                         </div>
                     </div>
                 }
@@ -153,9 +156,10 @@
             </button>
         </div>
     </form>
+    
+    <hr id="metainfo_separator" class="d-none"/>
 </div>
 
-<hr id="metainfo_separator" class="d-none"/>
 
 
 <script>
@@ -186,6 +190,9 @@
             async: true,
             success: (viewData) => {
                 displayMetaInfo($('#metaInfo_encodedId').val(), viewData);
+                
+                if ($(".field-validation-error").length !== 0)
+                    editInfoButtonClick()
             }
         });
     });

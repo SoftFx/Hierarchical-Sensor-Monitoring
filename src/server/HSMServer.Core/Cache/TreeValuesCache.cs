@@ -21,6 +21,7 @@ namespace HSMServer.Core.Cache
         private const string NotInitializedCacheError = "Cache is not initialized yet.";
         private const string NotExistingSensor = "Sensor with your path does not exist.";
         private const string ErrorKeyNotFound = "Key doesn't exist.";
+        private const string ErrorMasterKey = "Master key is invalid for this request because product is not specified.";
 
         public const int MaxHistoryCount = 50000;
 
@@ -75,7 +76,7 @@ namespace HSMServer.Core.Cache
 
         public List<AccessKeyModel> GetAccessKeys() => _keys.Values.ToList();
 
-        public ProductModel AddProduct(string productName) => AddProduct(new ProductModel(productName));
+        public ProductModel AddProduct(string productName, Guid authorId) => AddProduct(new ProductModel(productName, authorId));
 
         private void UpdateProduct(ProductModel product)
         {
@@ -228,6 +229,8 @@ namespace HSMServer.Core.Cache
         }
 
         public AccessKeyModel GetAccessKey(Guid id) => _keys.GetValueOrDefault(id);
+
+        public List<AccessKeyModel> GetMasterKeys() => GetAccessKeys().Where(x => x.IsMaster).ToList();
 
         public void UpdateSensor(SensorUpdate update)
         {
@@ -588,6 +591,7 @@ namespace HSMServer.Core.Cache
         private ProductModel AddNonExistingProductsAndGetParentProduct(ProductModel parentProduct, BaseRequestModel request)
         {
             var pathParts = request.PathParts;
+            var authorId = GetAccessKey(request.KeyGuid).AuthorId;
 
             for (int i = 0; i < pathParts.Length - 1; ++i)
             {
@@ -595,7 +599,7 @@ namespace HSMServer.Core.Cache
                 var subProduct = parentProduct.SubProducts.FirstOrDefault(p => p.Value.DisplayName == subProductName).Value;
                 if (subProduct == null)
                 {
-                    subProduct = new ProductModel(subProductName);
+                    subProduct = new ProductModel(subProductName, authorId);
                     parentProduct.AddSubProduct(subProduct);
 
                     AddProduct(subProduct);
@@ -663,11 +667,19 @@ namespace HSMServer.Core.Cache
 
         private bool TryGetProductByKey(BaseRequestModel request, out ProductModel product, out string message)
         {
+            product = null;
+
             var keyModel = GetAccessKeyModel(request);
+
             if (keyModel == AccessKeyModel.InvalidKey)
             {
                 message = ErrorKeyNotFound;
-                product = null;
+                return false;
+            }
+
+            if (keyModel.IsMaster)
+            {
+                message = ErrorMasterKey;
                 return false;
             }
 

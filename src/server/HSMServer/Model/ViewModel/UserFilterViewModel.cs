@@ -23,6 +23,10 @@ namespace HSMServer.Model.ViewModel
         public bool IsGroupNotificationsIgnored { get; set; }
 
         public bool IsAccountNotificationsIgnored { get; set; }
+        
+        public bool IsGrafanaEnabled { get; set; }
+
+        public bool AreIconsVisible { get; set; }
 
 
         public bool IsMutedSensorsState { get; set; }
@@ -42,12 +46,15 @@ namespace HSMServer.Model.ViewModel
             HasErrorStatus = filter.ByStatus.Error.Value;
             HasOffTimeStatus = filter.ByStatus.OffTime.Value;
 
-            IsEmptyHistory = filter.ByHistory.Empty.Value;
+            IsEmptyHistory = filter.ByVisibility.Empty.Value;
+            AreIconsVisible = filter.ByVisibility.Icons.Value;
 
             IsAccountNotificationsIgnored = filter.ByNotifications.AccountIgnored.Value;
             IsGroupNotificationsIgnored = filter.ByNotifications.GroupIgnored.Value;
             IsAccountNotificationsEnabled = filter.ByNotifications.AccountEnabled.Value;
             IsGroupNotificationsEnabled = filter.ByNotifications.GroupEnabled.Value;
+
+            IsGrafanaEnabled = filter.ByIntegrations.GrafanaEnabled.Value;
 
             IsMutedSensorsState = filter.ByState.Muted.Value;
 
@@ -69,13 +76,16 @@ namespace HSMServer.Model.ViewModel
             filter.ByStatus.Error.Value = HasErrorStatus;
             filter.ByStatus.OffTime.Value = HasOffTimeStatus;
 
-            filter.ByHistory.Empty.Value = IsEmptyHistory;
+            filter.ByVisibility.Empty.Value = IsEmptyHistory;
+            filter.ByVisibility.Icons.Value = AreIconsVisible;
 
             filter.ByNotifications.AccountEnabled.Value = IsAccountNotificationsEnabled;
             filter.ByNotifications.GroupEnabled.Value = IsGroupNotificationsEnabled;
             filter.ByNotifications.AccountIgnored.Value = IsAccountNotificationsIgnored;
             filter.ByNotifications.GroupIgnored.Value = IsGroupNotificationsIgnored;
 
+            filter.ByIntegrations.GrafanaEnabled.Value = IsGrafanaEnabled;
+            
             filter.ByState.Muted.Value = IsMutedSensorsState;
 
             return filter;

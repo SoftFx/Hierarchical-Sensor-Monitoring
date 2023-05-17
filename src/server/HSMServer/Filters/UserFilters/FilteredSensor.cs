@@ -13,6 +13,8 @@ namespace HSMServer.UserFilters
         public bool IsGroupNotificationsEnabled { get; init; }
         
         public bool IsAccountNotificationsEnabled { get; init; }
+        
+        public bool IsGrafanaEnabled { get; init; }
 
         public SensorStatus Status { get; init; }
 

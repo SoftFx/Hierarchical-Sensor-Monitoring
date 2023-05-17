@@ -1,4 +1,5 @@
-﻿@using HSMServer.Model.AccessKeysViewModels
+﻿@using HSMServer.Authentication
+@using HSMServer.Model.AccessKeysViewModels
 @using HSMServer.Controllers
 @using HSMServer.Constants
 @using HSMServer.Helpers
@@ -7,6 +8,8 @@
 @using HSMServer.Extensions
 @using Microsoft.AspNetCore.Mvc.TagHelpers
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
+
+@inject IUserManager UserManager
 
 @model AccessKeyTableViewModel
 
@@ -39,15 +42,21 @@
         <tbody>
             @foreach (var key in Model.Keys)
             {
+                var isParentEditAvailable = key.ParentProduct is not null && key.ParentProduct.IsChangingAccessKeysAvailable(user);
+
                 <tr id="row_@key.Id">
                     @if (Model.FullTable)
                     {
                         <td class="productName text-break">
-                            @if (key.ParentProduct.IsChangingAccessKeysAvailable(user))
+                            @if (isParentEditAvailable)
                             {
                                 <a asp-controller="@ViewConstants.ProductController" asp-action="@nameof(ProductController.EditProduct)" asp-route-Product="@key.ParentProduct.EncodedId">
                                     @Html.Raw(key.NodePath)
                                 </a>
+                            }
+                            else if (user.IsAdmin)
+                            {
+                                <span class="fw-bold" style="color: black">Master Key</span>
                             }
                             else
                             {
@@ -59,7 +68,19 @@
                             <a role="button" tabindex="0" id="copy_@key.Id" onclick="copyToClipboard(`@key.Id`)" title="copy key" class="link-primary fw-normal">copy</a>
                         </td>
                         <td>@key.Permissions</td>
-                        <td>@key.AuthorName</td>
+                        <td>
+                            @if (key.AuthorId.HasValue && key.AuthorId.Value != Guid.Empty)
+                            {
+                                @if (UserManager[key.AuthorId] is not null)
+                                {
+                                    @UserManager[key.AuthorId].Name
+                                }
+                                else
+                                {
+                                    <span class="fst-italic">Removed</span>
+                                }
+                            }
+                        </td>
                         <td class="text-center">
                             @if (key.State == KeyState.Expired)
                             {
@@ -113,7 +134,7 @@
                     {
                         <td nowrap class="text-center">
                             <div class='btn-group'>
-                                @if (key.ParentProduct.IsChangingAccessKeysAvailable(user))
+                                @if (isParentEditAvailable || user.IsAdmin)
                                 {
                                     <button id="actionButton" class="btn" data-bs-toggle="dropdown" data-bs-auto-close="true" aria-haspopup="true" aria-expanded="false">
                                         <i class="fa-solid fa-ellipsis-vertical" style="cursor: pointer"></i>
@@ -162,7 +183,9 @@
     $('[id^="changeAccessKey_"]').off("click").on("click",
         function () {
             const selectedKeyId = this.id.substring("changeAccessKey_".length, this.id.length);
-            changeAccessKey(changeAccessKeyAction, selectedKeyId)
+            const displayName = document.getElementById(`row_${selectedKeyId}`).getElementsByClassName("displayName")[0].textContent;
+            
+            changeAccessKey(changeAccessKeyAction, selectedKeyId, displayName)
         });
    
     $('[id^="deleteAccessKey_"]').off("click").on("click",

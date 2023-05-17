@@ -1,5 +1,4 @@
-﻿using HSMServer.Helpers;
-using HSMServer.Model.AccessKeysViewModels;
+﻿using HSMServer.Model.AccessKeysViewModels;
 using HSMServer.Model.Authentication;
 using Microsoft.AspNetCore.Mvc.Filters;
 using System;
@@ -15,6 +14,6 @@ namespace HSMServer.Filters.ProductRoleFilters
 
 
         protected override Guid? GetEntityId(object arg, ActionExecutingContext _) =>
-            arg is EditAccessKeyViewModel key ? SensorPathHelper.DecodeGuid(key.EncodedProductId) : null;
+            arg is EditAccessKeyViewModel key ? key.SelectedProductId : null;
     }
 }

@@ -78,75 +78,65 @@ namespace HSMDataCollector.Core
         }
 
 
-        internal Task SendData(List<SensorValueBase> values)
-        {
-            try
-            {
-                return RequestToServer(values.Cast<object>(), _endpoints.List);
-            }
-            catch (Exception ex)
-            {
-                _logManager.Logger?.Error($"Failed to send: {ex}");
-
-                foreach (var value in values)
-                    _dataQueue.PushFailValue(value);
-            }
-
-            return Task.CompletedTask;
-        }
+        internal Task SendData(List<SensorValueBase> values) => RequestToServer(values.Cast<object>(), _endpoints.List);
 
         internal Task SendData(SensorValueBase value)
         {
-            try
+            switch (value)
             {
-                switch (value)
-                {
-                    case BoolSensorValue boolV:
-                        return RequestToServer(boolV, _endpoints.Bool);
-                    case IntSensorValue intV:
-                        return RequestToServer(intV, _endpoints.Integer);
-                    case DoubleSensorValue doubleV:
-                        return RequestToServer(doubleV, _endpoints.Double);
-                    case StringSensorValue stringV:
-                        return RequestToServer(stringV, _endpoints.String);
-                    case TimeSpanSensorValue timeSpanV:
-                        return RequestToServer(timeSpanV, _endpoints.Timespan);
-                    case IntBarSensorValue intBarV:
-                        return RequestToServer(intBarV, _endpoints.IntBar);
-                    case DoubleBarSensorValue doubleBarV:
-                        return RequestToServer(doubleBarV, _endpoints.DoubleBar);
-                    case FileSensorValue fileV:
-                        return RequestToServer(fileV, _endpoints.File);
-                }
+                case BoolSensorValue boolV:
+                    return RequestToServer(boolV, _endpoints.Bool);
+                case IntSensorValue intV:
+                    return RequestToServer(intV, _endpoints.Integer);
+                case DoubleSensorValue doubleV:
+                    return RequestToServer(doubleV, _endpoints.Double);
+                case StringSensorValue stringV:
+                    return RequestToServer(stringV, _endpoints.String);
+                case TimeSpanSensorValue timeSpanV:
+                    return RequestToServer(timeSpanV, _endpoints.Timespan);
+                case IntBarSensorValue intBarV:
+                    return RequestToServer(intBarV, _endpoints.IntBar);
+                case DoubleBarSensorValue doubleBarV:
+                    return RequestToServer(doubleBarV, _endpoints.DoubleBar);
+                case FileSensorValue fileV:
+                    return RequestToServer(fileV, _endpoints.File);
+                case VersionSensorValue versionV:
+                    return RequestToServer(versionV, _endpoints.Version);
+                default:
+                    _logManager.Logger?.Error($"Unsupported sensor type: {value.Path}");
+                    return Task.CompletedTask;
             }
-            catch (Exception ex)
-            {
-                _logManager.Logger?.Error($"Failed to send: {ex}");
-
-                _dataQueue.PushFailValue(value);
-            }
-
-            return Task.CompletedTask;
         }
-
 
         private void RecieveQueueData(SensorValueBase value) => SendData(value);
 
         private void RecieveQueueData(List<SensorValueBase> value) => SendData(value);
 
-
         private async Task RequestToServer<T>(T value, string uri) where T : class
         {
-            string json = JsonConvert.SerializeObject(value);
+            try
+            {
+                string json = JsonConvert.SerializeObject(value);
 
-            if (_logManager.WriteDebug)
-                _logManager.Logger?.Debug($"{nameof(RequestToServer)}: {json}");
+                if (_logManager.WriteDebug)
+                    _logManager.Logger?.Debug($"{nameof(RequestToServer)}: {json}");
 
-            var data = new StringContent(json, Encoding.UTF8, "application/json");
-            var res = await _client.PostAsync(uri, data, _tokenSource.Token);
+                var data = new StringContent(json, Encoding.UTF8, "application/json");
+                var res = await _client.PostAsync(uri, data, _tokenSource.Token);
 
-            if (!res.IsSuccessStatusCode)
-                _logManager.Logger?.Error($"Failed to send data. StatusCode={res.StatusCode}");
+                if (!res.IsSuccessStatusCode)
+                    _logManager.Logger?.Error($"Failed to send data. StatusCode={res.StatusCode}");
+            }
+            catch (Exception ex)
+            {
+                _logManager.Logger?.Error($"Failed to send: {ex}");
+
+                if (value is IEnumerable<SensorValueBase> list)
+                    foreach (var data in list)
+                        _dataQueue.PushFailValue(data);
+                else if (value is SensorValueBase single)
+                    _dataQueue.PushFailValue(single);
+            }
         }
     }
 }
