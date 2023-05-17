@@ -98,7 +98,7 @@ namespace HSMServer.Model.TreeViewModel
                 }
             }
 
-            var isUserNoDataFilterEnabled = user.TreeFilter.ByHistory.Empty.Value;
+            var isUserNoDataFilterEnabled = user.TreeFilter.ByVisibility.Empty.Value;
             foreach (var folder in folders.Values)
                 if (folder.Nodes.Count > 0 || isUserNoDataFilterEnabled)
                     tree.Add(folder);

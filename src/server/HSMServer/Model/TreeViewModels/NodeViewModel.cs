@@ -11,6 +11,7 @@ namespace HSMServer.Model.TreeViewModel
         Ok,
         Warning,
         Error,
+        Empty,
     }
 
 

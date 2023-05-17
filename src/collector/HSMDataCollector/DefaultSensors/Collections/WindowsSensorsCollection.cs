@@ -8,7 +8,7 @@ namespace HSMDataCollector.DefaultSensors
 {
     internal sealed class WindowsSensorsCollection : DefaultSensorsCollection, IWindowsCollection
     {
-        protected override bool IsCorrectOs => !DataCollector.IsUnixOS;
+        protected override bool IsCorrectOs => DataCollector.IsWindowsOS;
 
 
         public WindowsSensorsCollection(SensorsStorage storage, SensorsPrototype prototype) : base(storage, prototype) { }

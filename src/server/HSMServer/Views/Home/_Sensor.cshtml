@@ -13,13 +13,14 @@
         isEnabledPreview = (file.Extension == "csv" && file.OriginalSize < 5 * 1024 * 1024) ||
                            (file.Extension == "txt" && file.OriginalSize < 1024 * 1024);
 
-
     var sensorId = Model.EncodedId;
 
     var graphElementId = $"graph_{sensorId}";
     var graphParentDivId = $"graph_parent_{sensorId}";
     var valuesElementId = $"values_{sensorId}";
     var valuesParentDivId = $"values_parent_{sensorId}";
+
+    string visibilityClass = Model.UpdateTime == DateTime.MinValue ? "d-none" : string.Empty;
 }
 
 <div>
@@ -99,7 +100,7 @@
                                     <div class="col-6">
                                         <div class="justify-content-end">
                                             <div class="d-flex flex-row-reverse">
-                                                <input style='display: none;' id='fileType_@sensorId' value='@Model.FileNameString' />
+                                                <input style='display: none;' id='fileType_@sensorId' value='@Model.FileNameString'/>
                                                 <a id='button_download_@sensorId' class='btn btn-outline-secondary d-flex justify-content-center align-items-center mx-1 button-width-static' title='Download'>
                                                     <i class='fas fa-file-download small-icon pe-1'></i>
                                                     <span style="font-size: smaller">Download</span>
@@ -124,7 +125,7 @@
     }
     else
     {
-        <div id='collapse_@sensorId' class='pt-3 text-break'>
+        <div id='dataPanel' class='pt-3 text-break @visibilityClass'>
             <div class="d-flex justify-content-between">
                 <div>
                     <label class="me-1" for="from_@sensorId">From:</label>
@@ -188,6 +189,8 @@
 
     <div id="recentValues_@sensorId"></div>
 </div>
+
+
 <script>
     var previousReceivedTime = undefined;
 
@@ -261,11 +264,11 @@
             }
         })
     }
-    var getFilesInfo = '@Url.Action(nameof(HomeController.GetRecentFilesView), "Home")';
+
     function loadFiles() {
         $.ajax({
             type: 'GET',
-            url: `${getFilesInfo}?fileId=@Model.EncodedId`,
+            url: `@Url.Action(nameof(HomeController.GetRecentFilesView), "Home")?fileId=@Model.EncodedId`,
             cache: false,
             contentType: "application/json",
             success: function (response) {

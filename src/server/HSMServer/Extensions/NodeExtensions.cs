@@ -16,8 +16,12 @@ namespace HSMServer.Extensions
                 SensorStatus.Ok => "tree-icon-ok",
                 SensorStatus.Warning => "tree-icon-warning",
                 SensorStatus.Error => "tree-icon-error",
+                SensorStatus.Empty => GetEmptySensorIcon(),
                 _ => "tree-icon-offTime",
             };
+
+        internal static SensorStatus ToEmpty(this SensorStatus status, bool hasData) =>
+            !hasData ? SensorStatus.Empty : status;
 
         internal static string ToIcon(this SensorStatus status) =>
             $"fas fa-circle {status.ToCssIconClass()}";
@@ -46,6 +50,8 @@ namespace HSMServer.Extensions
                 ? product.Parent is FolderModel ? "Products" : "Nodes"
                 : "Sensors";
 
+        internal static string GetEmptySensorIcon() => "fa-regular fa-circle";
+        
         internal static string GetShortNodeName(this string name) => name.Cut(NodeNameMaxLength);
 
         internal static string GetShortCellName(this string name) => name.Cut(CellNameMaxLength);

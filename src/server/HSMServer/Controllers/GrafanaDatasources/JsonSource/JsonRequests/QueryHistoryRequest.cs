@@ -6,12 +6,9 @@ namespace HSMServer.Controllers.GrafanaDatasources.JsonSource
     {
         public List<TargetMetric> Targets { get; set; }
 
-
-        public string PanelId { get; set; }
-
         public TimeRange Range { get; set; }
 
-        public long IntervalMs { get; set; }
+        public int IntervalMs { get; set; }
 
         public int MaxDataPoints { get; set; }
     }

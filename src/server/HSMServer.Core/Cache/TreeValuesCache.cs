@@ -20,6 +20,7 @@ namespace HSMServer.Core.Cache
         private const string NotInitializedCacheError = "Cache is not initialized yet.";
         private const string NotExistingSensor = "Sensor with your path does not exist.";
         private const string ErrorKeyNotFound = "Key doesn't exist.";
+        private const string ErrorMasterKey = "Master key is invalid for this request because product is not specified.";
 
         public const int MaxHistoryCount = 50000;
 
@@ -674,11 +675,19 @@ namespace HSMServer.Core.Cache
 
         private bool TryGetProductByKey(BaseRequestModel request, out ProductModel product, out string message)
         {
+            product = null;
+
             var keyModel = GetAccessKeyModel(request);
+
             if (keyModel == AccessKeyModel.InvalidKey)
             {
                 message = ErrorKeyNotFound;
-                product = null;
+                return false;
+            }
+
+            if (keyModel.IsMaster)
+            {
+                message = ErrorMasterKey;
                 return false;
             }
 
