@@ -539,13 +539,13 @@ namespace HSMServer.Controllers
         {
             if (!ModelState.IsValid)
                 return PartialView("_MetaInfo", new FolderInfoViewModel(_folderManager[Guid.Parse(newModel.EncodedId)]));
-            
+
             var update = new FolderUpdate
             {
                 Id = SensorPathHelper.DecodeGuid(newModel.EncodedId),
                 Description = newModel.Description ?? string.Empty,
-                ExpectedUpdateInterval = newModel.ExpectedUpdateInterval,
-                RestoreInterval = newModel.SensorRestorePolicy,
+                ExpectedUpdateInterval = newModel.ExpectedUpdateInterval.ResaveCustomTicks(newModel.ExpectedUpdateInterval),
+                RestoreInterval = newModel.SensorRestorePolicy.ResaveCustomTicks(newModel.SensorRestorePolicy),
             };
 
             return await _folderManager.TryUpdate(update)
