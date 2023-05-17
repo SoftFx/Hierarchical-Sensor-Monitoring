@@ -11,6 +11,7 @@ window.showAccessKeysListModal = function() {
 
 window.hideModal = function() {
     $('#accessKeys_modal').modal('hide');
+    $('#editSensorStatus_form').trigger(jQuery.Event('hideNewAccessKeyModal'));
 }
 
 window.showAccessKeysList = function(productId, showModalFirst) {
@@ -49,8 +50,6 @@ window.showNewAccessKeyModal = function(url, openModal) {
 
         showMiddleModal();
         setModalTitle("New access key");
-        
-        $(document).trigger(jQuery.Event("newAccessKeyLoaded"))
     });
 }
 

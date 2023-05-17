@@ -8,6 +8,9 @@
 
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
 
+@{
+    var isAdmin = ((User as User).IsAdmin);
+}
 
 @if (Model != null)
 {
@@ -21,7 +24,7 @@
 
                     <div class="modal-header">
                         <div class="text-break">
-                            <h5 class="modal-title">Edit sensor statusr</h5>
+                            <h5 class="modal-title">Edit sensor status</h5>
                             <h6 class="modal-title">@Model.Path</h6>
                         </div>
                     </div>
@@ -52,8 +55,8 @@
                         <div class="form-group mt-2">
                             <div class="d-flex flex-column mt-2">
                                 <div class="d-flex flex-row align-items-center">
-                                    <span asp-validation-for="RootProductId" style="color: #b94a48;font-size: small;"></span>
-                                    <button id="buttonAddKey" onclick="newAccessKeyModal()" type="button" class="d-flex btn btn-link me-0 pe-0 @((User as User).IsAdmin && !Model.IsAccessKeyExist ? "" : "d-none")">
+                                    <span asp-validation-for="RootProductId"></span>
+                                    <button id="buttonAddKey" onclick="newAccessKeyModal()" type="button" class="d-flex btn btn-link me-0 pe-0 @(isAdmin && !Model.IsAccessKeyExist ? "" : "d-none")">
                                             Add
                                     </button>
                                 </div>
@@ -83,8 +86,6 @@
         event.preventDefault();
         event.stopImmediatePropagation();
     
-        let isAdmin = '@((User as User).IsAdmin)'
-   
         $.ajax({
             url: $("#editSensorStatus_form").attr("action"),
             type: 'POST',
@@ -115,7 +116,7 @@
                         $(this).addClass('field-validation-error')
                         $(this).html(jqXHR.responseJSON[errFor][0]);
                         
-                        if (errFor === 'RootProductId' && isAdmin === 'True') {
+                        if (errFor === 'RootProductId' && '@isAdmin' === 'True') {
                             $('#buttonAddKey').removeClass('d-none')
                         }
                     }
@@ -126,12 +127,9 @@
 
    function newAccessKeyModal() {
        let url = "@Html.Raw(Url.Action(nameof(AccessKeysController.NewAccessKey), ViewConstants.AccessKeysController))";
-
+       $('#editSensorStatus_form').on('hideNewAccessKeyModal', () => loadEditSensorStatusModal())
        hideEditSensorModal();
        showNewAccessKeyModal(`${url}?selectedId=@Model.RootProductId&closeModal=true`, true)
-       
-       $(document).on("newAccessKeyLoaded", () => $('#cancelButton').on('click', () => openEditSensorStatusModal()));
-       $(document).on('successSubmit', () => loadEditSensorStatusModal())
    }
    
     function hideEditSensorModal() {
