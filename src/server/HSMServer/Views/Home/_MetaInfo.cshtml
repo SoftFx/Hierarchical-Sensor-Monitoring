@@ -107,6 +107,9 @@
                     <div class="d-flex w-100">
                         <li id='metainfo_icon_status' class='@Model.Status.ToIcon() sensor-icon-with-margin align-self-center' title='Status: @Model.Status'></li>
                         <span id="status_name_@Model.EncodedId">@Model.Status</span>
+                        <span onclick="loadEditSensorStatusModal()">
+                            <i class="fas fa-edit align-self-center ms-2" style="cursor: pointer"></i>
+                        </span>
                     </div>
                 </div>
 
@@ -160,6 +163,10 @@
     <hr id="metainfo_separator" class="d-none"/>
 </div>
 
+@if (Model is SensorInfoViewModel)
+{
+    @await Html.PartialAsync("_EditSensorStatusModal", new EditSensorStatusViewModal())
+}
 
 
 <script>
@@ -216,5 +223,23 @@
             $('#headline_metainfo').removeClass('d-none');
             $('#markdown_span_description').addClass('ms-3');
         }
+    }
+    
+    function openEditSensorStatusModal() {
+        $('#editSensorStatus_modal').modal('show');
+    }
+    
+    function loadEditSensorStatusModal() {
+        $.ajax({
+            url: '@Url.Action(nameof(HomeController.GetSensorEditModal))?sensorId=@Model.EncodedId',
+            type: 'GET',
+            datatype: 'json',
+            async: true,
+            success: (viewData) => {
+                $('#editSensorStatus_form').replaceWith(viewData);
+            }
+        }).done(function (){
+            openEditSensorStatusModal();
+        });
     }
 </script>

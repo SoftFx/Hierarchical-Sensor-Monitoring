@@ -232,6 +232,7 @@ namespace HSMServer.Core.Cache
 
         public List<AccessKeyModel> GetMasterKeys() => GetAccessKeys().Where(x => x.IsMaster).ToList();
 
+
         public void UpdateSensor(SensorUpdate update)
         {
             if (!_sensors.TryGetValue(update.Id, out var sensor))
