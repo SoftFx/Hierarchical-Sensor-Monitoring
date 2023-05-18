@@ -16,18 +16,14 @@ namespace HSMServer.Controllers
 {
     public class FoldersController : BaseController
     {
-        private static readonly EmptyResult _emptyResult = new();
-
-        private readonly TreeViewModel _tree;
-        private readonly IUserManager _userManager;
         private readonly IFolderManager _folderManager;
+        private readonly TreeViewModel _tree;
 
 
-        public FoldersController(IFolderManager folderManager, IUserManager userManager, TreeViewModel treeViewModel)
+        public FoldersController(IFolderManager folderManager, IUserManager userManager, TreeViewModel treeViewModel) : base(userManager)
         {
-            _tree = treeViewModel;
-            _userManager = userManager;
             _folderManager = folderManager;
+            _tree = treeViewModel;
         }
 
 

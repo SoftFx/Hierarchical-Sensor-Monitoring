@@ -3,9 +3,9 @@ using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
-namespace HSMServer.Model.Authentication.History
+namespace HSMServer.Model.History
 {
-    public sealed class HistoryValuesViewModel
+    public sealed class TableValuesViewModel
     {
         private readonly IAsyncEnumerator<List<BaseValue>> _pagesEnumerator;
 
@@ -25,7 +25,7 @@ namespace HSMServer.Model.Authentication.History
         public int CurrentPageIndex { get; private set; }
 
 
-        public HistoryValuesViewModel(string encodedId, int type, IAsyncEnumerable<List<BaseValue>> enumerator, BarBaseValue localLastValue = null)
+        public TableValuesViewModel(string encodedId, int type, IAsyncEnumerable<List<BaseValue>> enumerator, BarBaseValue localLastValue = null)
         {
             _pagesEnumerator = enumerator.GetAsyncEnumerator();
             _localLastValue = localLastValue;
@@ -35,7 +35,7 @@ namespace HSMServer.Model.Authentication.History
         }
 
 
-        public async Task<HistoryValuesViewModel> Initialize()
+        public async Task<TableValuesViewModel> Initialize()
         {
             await TryReadNextPage();
 
@@ -51,7 +51,7 @@ namespace HSMServer.Model.Authentication.History
             return this;
         }
 
-        public async Task<HistoryValuesViewModel> ToNextPage()
+        public async Task<TableValuesViewModel> ToNextPage()
         {
             await TryReadNextPage();
 
@@ -60,7 +60,7 @@ namespace HSMServer.Model.Authentication.History
             return this;
         }
 
-        public HistoryValuesViewModel ToPreviousPage()
+        public TableValuesViewModel ToPreviousPage()
         {
             CurrentPageIndex = Math.Max(CurrentPageIndex - 1, 0);
 

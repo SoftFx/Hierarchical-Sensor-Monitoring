@@ -7,9 +7,9 @@ using HSMServer.Extensions;
 using HSMServer.Folders;
 using HSMServer.Helpers;
 using HSMServer.Model;
-using HSMServer.Model.Authentication.History;
 using HSMServer.Model.Folders;
 using HSMServer.Model.Folders.ViewModels;
+using HSMServer.Model.History;
 using HSMServer.Model.TreeViewModel;
 using HSMServer.Model.ViewModel;
 using HSMServer.Notification.Settings;
@@ -30,16 +30,14 @@ namespace HSMServer.Controllers
         private readonly ITreeValuesCache _treeValuesCache;
         private readonly IFolderManager _folderManager;
         private readonly TreeViewModel _treeViewModel;
-        private readonly IUserManager _userManager;
 
 
         public HomeController(ITreeValuesCache treeValuesCache, IFolderManager folderManager,
-            TreeViewModel treeViewModel, IUserManager userManager)
+            TreeViewModel treeViewModel, IUserManager userManager) : base(userManager)
         {
             _treeValuesCache = treeValuesCache;
             _treeViewModel = treeViewModel;
             _folderManager = folderManager;
-            _userManager = userManager;
         }
 
 
@@ -218,13 +216,12 @@ namespace HSMServer.Controllers
 
         private void UpdateUserNotificationSettings(Guid selectedNode, Action<ClientNotifications, Guid> updateSettings)
         {
-            var user = _userManager[CurrentUser.Id];
             foreach (var sensorId in GetNodeSensors(selectedNode))
             {
-                updateSettings?.Invoke(user.Notifications, sensorId);
+                updateSettings?.Invoke(StoredUser.Notifications, sensorId);
             }
 
-            _userManager.UpdateUser(user);
+            _userManager.UpdateUser(StoredUser);
         }
 
         private void UpdateGroupNotificationSettings(Guid selectedNode, Action<ClientNotifications, Guid> updateSettings)
@@ -318,12 +315,12 @@ namespace HSMServer.Controllers
         public async Task<IActionResult> GetRecentFilesView([FromQuery] string fileId)
         {
             var viewModel = await GetFileHistory(fileId);
-            _userManager[CurrentUser.Id].Pagination = viewModel;
+            _userManager[CurrentUser.Id].History.Table = viewModel;
 
             return GetFileTable(viewModel);
         }
 
-        private PartialViewResult GetFileTable(HistoryValuesViewModel viewModel) =>
+        private PartialViewResult GetFileTable(TableValuesViewModel viewModel) =>
             PartialView("_FileAccordions", viewModel);
 
         private FileValue GetFileSensorValue(string encodedId) =>
@@ -334,10 +331,10 @@ namespace HSMServer.Controllers
             : (await GetFileHistory(encodedId)).Pages[0].Cast<FileValue>().FirstOrDefault(file => file.ReceivingTime.Ticks == ticks))
             .DecompressContent();
 
-        private Task<HistoryValuesViewModel> GetFileHistory(string encodedId)
+        private Task<TableValuesViewModel> GetFileHistory(string encodedId)
         {
             var enumerator = _treeValuesCache.GetSensorValuesPage(SensorPathHelper.DecodeGuid(encodedId), DateTime.MinValue, DateTime.MaxValue, -20);
-            return new HistoryValuesViewModel(encodedId, 6, enumerator, GetLocalLastValue(encodedId, DateTime.MinValue, DateTime.MaxValue)).Initialize();
+            return new TableValuesViewModel(encodedId, 6, enumerator, GetLocalLastValue(encodedId, DateTime.MinValue, DateTime.MaxValue)).Initialize();
         }
 
         #endregion
@@ -394,7 +391,7 @@ namespace HSMServer.Controllers
 
             if (!ModelState.IsValid)
                 return PartialView("_MetaInfo", new ProductInfoViewModel(product));
-            
+
             var update = new ProductUpdate
             {
                 Id = product.Id,

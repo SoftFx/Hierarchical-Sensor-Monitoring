@@ -1,11 +1,10 @@
 ﻿@using HSMServer.Core.Model
-@using HSMServer.Model.Authentication.History;
 @using HSMServer.Model.History;
 @using HSMServer.Extensions;
 
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
 
-@model HistoryValuesViewModel
+@model TableValuesViewModel
 
 @{
     var values = Model.Pages.Count == 0 ? Enumerable.Empty<BaseValue>() : Model.Pages[Model.CurrentPageIndex];
