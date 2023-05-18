@@ -41,6 +41,10 @@
                                     @foreach (var sensor in Html.GetEnumSelectList<SensorStatus>())
                                     {
                                         var statusValue = ((SensorStatus)int.Parse(sensor.Value));
+
+                                        @if (statusValue == SensorStatus.Empty)
+                                            continue;
+
                                         <option value="@sensor.Value" selected="@(statusValue is SensorStatus.Ok)">
                                             @((statusValue).ToSelectIcon())
                                             @sensor.Text
