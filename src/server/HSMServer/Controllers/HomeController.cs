@@ -499,7 +499,7 @@ namespace HSMServer.Controllers
         public IActionResult GetSensorEditModal(Guid sensorId)
         {
             _treeViewModel.Sensors.TryGetValue(sensorId, out var sensorNodeViewModel);
-            var isAccessKeyExist = _treeValuesCache.GetKeyOrDefaultWithPermissions(sensorNodeViewModel.RootProduct.Id, KeyPermissions.CanSendSensorData) is not null;
+            var isAccessKeyExist = _treeValuesCache.GetKeyOrDefaultWithPermissions(sensorNodeViewModel?.RootProduct.Id ?? Guid.Empty, KeyPermissions.CanSendSensorData) is not null;
             
             if (!isAccessKeyExist)
                 ModelState.AddModelError(nameof(EditSensorStatusViewModal.RootProductId), EditSensorStatusViewModal.AccessKeyValidationErrorMessage);
