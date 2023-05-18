@@ -20,9 +20,6 @@ namespace HSMServer.UserFilters
 
 
         internal abstract bool IsSensorSuitable(FilteredSensor sensor);
-
-        internal virtual bool NeedToCheckSensor(FilterGroupType mask) =>
-            mask.HasFlag(Type);
     }
 
 
