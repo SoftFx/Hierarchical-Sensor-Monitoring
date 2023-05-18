@@ -46,6 +46,9 @@ namespace HSMServer.Model.ViewModel
             Header = model.Name;
         }
 
+        
+        protected abstract GeneralInfoUpdate GetInfoUpdate();
+
         private NodeInfoBaseViewModel(BaseNodeViewModel model)
         {
             Status = model.Status.ToEmpty(model.UpdateTime != DateTime.MinValue);

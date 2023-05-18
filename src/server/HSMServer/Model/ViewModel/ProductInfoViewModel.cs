@@ -35,5 +35,7 @@ namespace HSMServer.Model.ViewModel
             TotalSensors = product.Sensors.Count;
             TotalSensorTypesMessage = string.Join("\n", SensorsTypes.Select(x => $"{x.Type} {x.Count}").ToArray());
         }
+
+        protected override GeneralInfoUpdate GetInfoUpdate() => new(this);
     }
 }

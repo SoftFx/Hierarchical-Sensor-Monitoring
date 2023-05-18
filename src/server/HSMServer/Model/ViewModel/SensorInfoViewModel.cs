@@ -22,5 +22,7 @@ namespace HSMServer.Model.ViewModel
             StatusComment = sensor.ValidationError;
             HasGrafana = sensor.Integration.HasGrafana();
         }
+
+        protected override GeneralInfoUpdate GetInfoUpdate() => new(this);
     }
 }
