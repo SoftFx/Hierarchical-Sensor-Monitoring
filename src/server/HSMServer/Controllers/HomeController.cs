@@ -284,6 +284,7 @@ namespace HSMServer.Controllers
         {
             var id = Guid.Parse(selectedId);
             GeneralInfoUpdate generalInfoUpdate = null;
+            
             if (_treeViewModel.Nodes.TryGetValue(id, out var node))
                 generalInfoUpdate = new GeneralInfoUpdate(new ProductInfoViewModel(node));
             
