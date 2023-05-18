@@ -15,6 +15,4 @@ public static class AccessKeyExtensions
 
     internal static string ToIcon(this KeyState state) =>
         $"{state.ToCssIconClass()}";
-
-    internal static bool IsBlockedOrExpired(this KeyState state) => state.HasFlag(KeyState.Blocked) || state.HasFlag(KeyState.Expired);
 }

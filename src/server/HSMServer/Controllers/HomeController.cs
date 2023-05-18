@@ -22,7 +22,6 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using HSMServer.Attributes;
 using HSMServer.ApiObjectsConverters;
 using SensorStatus = HSMSensorDataObjects.SensorStatus;
 
