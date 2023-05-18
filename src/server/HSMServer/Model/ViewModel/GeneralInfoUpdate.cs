@@ -12,7 +12,7 @@ public class GeneralInfoUpdate
     
     public List<KeyValuePair<string, int>> Products { get; set; }
 
-    public string GrafanaIntegration { get; set; }
+    public bool GrafanaIntegration { get; set; }
     
     
     public GeneralInfoUpdateType UpdateType { get; }
@@ -20,7 +20,7 @@ public class GeneralInfoUpdate
     
     public GeneralInfoUpdate(SensorInfoViewModel sensor)
     {
-        GrafanaIntegration = sensor.HasGrafana.ToString();
+        GrafanaIntegration = sensor.HasGrafana;
         UpdateType = GeneralInfoUpdateType.Sensor;
     }
     

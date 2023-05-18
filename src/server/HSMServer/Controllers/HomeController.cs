@@ -283,30 +283,17 @@ namespace HSMServer.Controllers
         public ActionResult GetGeneralInfo(string selectedId)
         {
             var id = Guid.Parse(selectedId);
-            
+            GeneralInfoUpdate generalInfoUpdate = null;
             if (_treeViewModel.Nodes.TryGetValue(id, out var node))
-            {
-                var product = new ProductInfoViewModel(node);
-                return Json(new
-                {
-                    nodes = product.NodeStatuses.Select(x => new KeyValuePair<string, int>(x.Status.ToIcon(), x.Count)),
-                    sensors = product.SensorsStatuses.Select(x => new KeyValuePair<string, int>(x.Status.ToIcon(), x.Count))
-                });
-            }
-
-            if (_folderManager[id] is not null)
-                return Json(new
-                {
-                    products = _folderManager[Guid.Parse(selectedId)].Products.Values.GroupBy(x => x.Status).OrderBy(x => x.Key).Select(x => new KeyValuePair<string, int>(x.Key.ToIcon(), x.Count()))
-                });
-
-            if (_treeViewModel.Sensors.TryGetValue(id, out var sensor))
-                return Json(new
-                {
-                    integration = Enum.GetValues<Integration>().Cast<Enum>().Where(sensor.Integration.HasFlag).Select(x => x.ToString())
-                });
+                generalInfoUpdate = new GeneralInfoUpdate(new ProductInfoViewModel(node));
             
-            return Json(_emptyResult);
+            if (_folderManager[id] is not null)
+                generalInfoUpdate = new GeneralInfoUpdate(new FolderInfoViewModel(_folderManager[id]));
+            
+            if (_treeViewModel.Sensors.TryGetValue(id, out var sensor))
+                generalInfoUpdate = new GeneralInfoUpdate(new SensorInfoViewModel(sensor));
+            
+            return generalInfoUpdate is not null ? Json(generalInfoUpdate) : _emptyResult;
         }
         
         #endregion

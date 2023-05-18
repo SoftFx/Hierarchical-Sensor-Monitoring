@@ -110,20 +110,17 @@
                     </div>
                 </div>
                 <div id="integrations">
-                    @if (sensor.HasGrafana)
-                    {
-                        <div class="d-flex justify-content-start">
-                            <div class="d-flex ms-3 text-nowrap">
-                                <span style="min-width: 8rem">Enabled for:</span>
-                            </div>
-                            <div class="d-flex w-100">
-                                <div class="sensor-icon-with-margin">
-                                    <img class="tree-png-icon" src="~/dist/grafana.svg" alt="!" />
-                                </div>
-                                <span>Grafana</span>
-                            </div>
+                    <div id="sensorGrafanaEnabled" class="d-flex justify-content-start @(sensor.HasGrafana ? string.Empty : "d-none")">
+                        <div class="d-flex ms-3 text-nowrap">
+                            <span style="min-width: 8rem">Enabled for:</span>
                         </div>
-                    }
+                        <div class="d-flex w-100">
+                            <div class="sensor-icon-with-margin">
+                                <img class="tree-png-icon" src="~/dist/grafana.svg" alt="!" />
+                            </div>
+                            <span>Grafana</span>
+                        </div>
+                    </div>
                 </div>
                 <div id="validation_metainfo" class="d-flex justify-content-start">
                     @if (!string.IsNullOrEmpty(sensor.StatusComment))
