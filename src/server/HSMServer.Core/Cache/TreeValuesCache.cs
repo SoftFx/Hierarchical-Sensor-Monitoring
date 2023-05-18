@@ -231,9 +231,6 @@ namespace HSMServer.Core.Cache
 
         public List<AccessKeyModel> GetMasterKeys() => GetAccessKeys().Where(x => x.IsMaster).ToList();
 
-        public AccessKeyModel GetKeyOrDefaultWithPermissions(Guid productId, KeyPermissions permissions) =>
-            GetProduct(productId).AccessKeys.Values.FirstOrDefault(x => x.IsValid(permissions, out _));
-
 
         public void UpdateSensor(SensorUpdate update)
         {

@@ -46,7 +46,6 @@ namespace HSMServer.Core.Cache
         AccessKeyModel UpdateAccessKeyState(Guid id, KeyState state);
         AccessKeyModel GetAccessKey(Guid id);
         List<AccessKeyModel> GetMasterKeys();
-        AccessKeyModel GetKeyOrDefaultWithPermissions(Guid productId, KeyPermissions permissions);
 
         void UpdateSensor(SensorUpdate updatedSensor);
         void RemoveSensor(Guid sensorId);
