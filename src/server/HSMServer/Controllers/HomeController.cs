@@ -32,7 +32,6 @@ namespace HSMServer.Controllers
     public class HomeController : BaseController
     {
         private const int LatestHistoryCount = -100;
-        private const string AccessKeyValidationErrorMessage = "There is no suitable access key for this operation";
         internal const int MaxHistoryCount = -TreeValuesCache.MaxHistoryCount;
 
         private static readonly JsonResult _emptyJsonResult = new(new EmptyResult());
@@ -503,7 +502,7 @@ namespace HSMServer.Controllers
             var isAccessKeyExist = _treeValuesCache.GetKeyOrDefaultWithPermissions(sensorNodeViewModel.RootProduct.Id, KeyPermissions.CanSendSensorData) is not null;
             
             if (!isAccessKeyExist)
-                ModelState.AddModelError(nameof(EditSensorStatusViewModal.RootProductId), AccessKeyValidationErrorMessage);
+                ModelState.AddModelError(nameof(EditSensorStatusViewModal.RootProductId), EditSensorStatusViewModal.AccessKeyValidationErrorMessage);
             
             return PartialView("_EditSensorStatusModal", new EditSensorStatusViewModal(sensorNodeViewModel, isAccessKeyExist));
         }
@@ -518,7 +517,7 @@ namespace HSMServer.Controllers
 
             if (key is null)
             {
-                ModelState.AddModelError(nameof(EditSensorStatusViewModal.RootProductId), AccessKeyValidationErrorMessage);
+                ModelState.AddModelError(nameof(EditSensorStatusViewModal.RootProductId), EditSensorStatusViewModal.AccessKeyValidationErrorMessage);
                 return BadRequest(ModelState);
             }
             

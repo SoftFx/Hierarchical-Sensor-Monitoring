@@ -7,6 +7,8 @@ namespace HSMServer.Model.ViewModel;
 
 public class EditSensorStatusViewModal
 {
+    public const string AccessKeyValidationErrorMessage = "There is no suitable access key for this operation";
+    
     public string Path { get; set; }
 
     public Guid RootProductId { get; set; }
@@ -24,7 +26,7 @@ public class EditSensorStatusViewModal
     public string Reason { get; set; }
     
     public bool IsAccessKeyExist { get; internal set; }
-
+    
     
     public EditSensorStatusViewModal() { }
 
