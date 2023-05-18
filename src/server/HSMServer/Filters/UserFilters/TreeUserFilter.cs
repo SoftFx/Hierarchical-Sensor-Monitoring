@@ -89,7 +89,7 @@ namespace HSMServer.UserFilters
             var isSensorVisible = true;
 
             foreach (var group in Groups)
-                if (mask.HasFlag(group.Type))
+                if (mask.HasFlag(group.Type) || group.Type is FilterGroupType.ByVisibility)
                     isSensorVisible &= group.IsSensorSuitable(sensor);
 
             return isSensorVisible;
