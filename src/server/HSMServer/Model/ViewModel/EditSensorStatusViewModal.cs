@@ -1,7 +1,5 @@
 using System;
 using System.ComponentModel.DataAnnotations;
-using HSMServer.Attributes;
-using HSMServer.Core.Model;
 using HSMServer.Model.TreeViewModel;
 using SensorStatus = HSMServer.Model.TreeViewModel.SensorStatus;
 
@@ -11,7 +9,6 @@ public class EditSensorStatusViewModal
 {
     public string Path { get; set; }
 
-    [RequiredKeyPermissions(KeyPermissions.CanSendSensorData)]
     public Guid RootProductId { get; set; }
 
     public Guid SensorId { get; set; }

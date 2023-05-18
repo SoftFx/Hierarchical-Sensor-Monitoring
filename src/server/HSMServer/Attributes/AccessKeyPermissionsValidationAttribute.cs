@@ -3,6 +3,7 @@ using HSMServer.Core.Model;
 using System.ComponentModel.DataAnnotations;
 using System.Linq;
 using HSMServer.Core.Cache;
+using HSMServer.Model.ViewModel;
 
 namespace HSMServer.Attributes
 {
@@ -34,9 +35,9 @@ namespace HSMServer.Attributes
             {
                 var cache = (ITreeValuesCache) context.GetService(typeof(ITreeValuesCache));
                 var product = cache?.GetProduct(id);
-
+                
                 if (product != null)
-                    result = product.AccessKeys.Values.Any(x => x.Permissions.HasFlag(_permissions));
+                    result = product.AccessKeys.Values.Any(x => x.IsValid(_permissions, out var message));
             }
 
             return result ? ValidationResult.Success : _validationError;

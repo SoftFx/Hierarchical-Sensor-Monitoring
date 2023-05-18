@@ -22,8 +22,8 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using HSMSensorDataObjects.SensorValueRequests;
 using HSMServer.Attributes;
+using HSMServer.ApiObjectsConverters;
 using SensorStatus = HSMSensorDataObjects.SensorStatus;
 
 namespace HSMServer.Controllers
@@ -500,10 +500,10 @@ namespace HSMServer.Controllers
         public IActionResult GetSensorEditModal(Guid sensorId)
         {
             _treeViewModel.Sensors.TryGetValue(sensorId, out var sensorNodeViewModel);
-            var isAccessKeyExist = _treeValuesCache.GetProduct(sensorNodeViewModel.RootProduct.Id).AccessKeys.Values.Any(x => x.Permissions.HasFlag(KeyPermissions.CanSendSensorData) && !x.State.IsBlockedOrExpired());
+            var isAccessKeyExist = _treeValuesCache.GetKeyOrDefaultWithPermissions(sensorNodeViewModel.RootProduct.Id, KeyPermissions.CanSendSensorData) is not null;
             
             if (!isAccessKeyExist)
-                ModelState.AddModelError("RootProductId", RequiredKeyPermissionsAttribute.ValidationErrorMessage);
+                ModelState.AddModelError(nameof(EditSensorStatusViewModal.RootProductId), RequiredKeyPermissionsAttribute.ValidationErrorMessage);
             
             return PartialView("_EditSensorStatusModal", new EditSensorStatusViewModal(sensorNodeViewModel, isAccessKeyExist));
         }
@@ -514,33 +514,18 @@ namespace HSMServer.Controllers
             if (!ModelState.IsValid)
                 return BadRequest(ModelState);
 
-            var key = _treeValuesCache.GetProduct(modal.RootProductId).AccessKeys.Values.FirstOrDefault(x => x.Permissions.HasFlag(KeyPermissions.CanSendSensorData) && !x.State.IsBlockedOrExpired())?.Id;
+            var key = _treeValuesCache.GetKeyOrDefaultWithPermissions(modal.RootProductId, KeyPermissions.CanSendSensorData)?.Id;
 
             if (key is null)
             {
-                ModelState.AddModelError("RootProductId", RequiredKeyPermissionsAttribute.ValidationErrorMessage);
-
+                ModelState.AddModelError(nameof(EditSensorStatusViewModal.RootProductId), RequiredKeyPermissionsAttribute.ValidationErrorMessage);
                 return BadRequest(ModelState);
             }
-
+            
             var sensor = _treeValuesCache.GetSensor(modal.SensorId);
             var comment = $"User: {CurrentUser.Name}. Reason: {modal.Reason}";
 
-            SensorValueBase CreateNewSensorValue(SensorType sensorType) => sensorType switch
-            {
-                SensorType.Boolean => new BoolSensorValue(),
-                SensorType.IntegerBar => new IntBarSensorValue(),
-                SensorType.DoubleBar => new DoubleBarSensorValue(),
-                SensorType.Double => new DoubleSensorValue(),
-                SensorType.Integer => new IntSensorValue(),
-                SensorType.String => new StringSensorValue(),
-                SensorType.File => new FileSensorValue(),
-                SensorType.TimeSpan => new TimeSpanSensorValue(),
-                SensorType.Version => new VersionSensorValue(),
-                _ => null
-            };
-
-            var sensorValue = CreateNewSensorValue(sensor.Type);
+            var sensorValue = ApiConverters.CreateNewSensorValue(sensor.Type);
             
             if (sensorValue is null)
                 return BadRequest();

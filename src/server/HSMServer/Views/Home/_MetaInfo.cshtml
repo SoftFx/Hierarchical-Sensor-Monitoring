@@ -163,7 +163,10 @@
     <hr id="metainfo_separator" class="d-none"/>
 </div>
 
-@await Html.PartialAsync("_EditSensorStatusModal", new EditSensorStatusViewModal())
+@if (Model is SensorInfoViewModel)
+{
+    @await Html.PartialAsync("_EditSensorStatusModal", new EditSensorStatusViewModal())
+}
 
 
 <script>
