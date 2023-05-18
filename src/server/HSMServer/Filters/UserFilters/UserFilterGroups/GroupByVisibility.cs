@@ -14,7 +14,8 @@
         public GroupByVisibility() { }
 
 
-        internal override bool IsSensorSuitable(FilteredSensor sensor) =>
-            Empty.Value || sensor.HasData;
+        internal override bool IsSensorSuitable(FilteredSensor sensor) => Empty.Value || sensor.HasData;
+        
+        internal override bool NeedToCheckSensor(FilterGroupType mask) => true;
     }
 }
