@@ -6,19 +6,32 @@
 
 ## New type of Access keys has been added - **Master key**
 * Master key has access to ALL products on the server
-* Admin ONLY can create Master key
+* **Admin ONLY** can create Master key
 
 ## Ability to integrate with [**Grafana**](https://grafana.com/) has been added:
 * New endopoints for [**JsonDatasource**](https://grafana.com/grafana/plugins/simpod-json-datasource/) have been added: */grafana/JsonDatasource*, */grafana/JsonDatasource/metrics*, */grafana/JsonDatasource/metric-payload-options*, */grafana/JsonDatasource/query*
-* Grafana connection guide is [here]()
-* List of available datasources and sensor types is [here](https://github.com/SoftFx/Hierarchical-Sensor-Monitoring/wiki/Integration-with-Grafana#json-datasource)
+* Grafana connection guide is [here](https://github.com/SoftFx/Hierarchical-Sensor-Monitoring/wiki/Integration-with-Grafana)
+* List of available datasources and sensor types is [here](https://github.com/SoftFx/Hierarchical-Sensor-Monitoring/wiki/Supported-Grafana-datasources#json-datasource)
+
+## Site
+* New sensor status **Empty sensor** has been added with white circle (if sensor history is empty)
+* Unused settings have been hidden in Configuration tab
+* Validation on min value for interval control (TTL, Sensativity) has been added
 
 ## Tree
 * **Enable/Disable Grafana** item has been added in Context menu
 * Grafana icon is shown for sensors with Grafana enabled setting
 
+## Tree filters
+* **History** has been renamed to **Visibility**
+* **No data** has been renamed to **Empty sensors**
+* **Show icons** setting has been added
+* **Integrations** group with **Grafana** property has been added
+
 ## Sensor info
 * New property **Enable for** has been added
+* Auto update by Update tree interval has been added
+* Manually change for sensor status has been added (available for **ALL** users)
 
 ## Access keys
 * Select product input has been added in Edit modal
@@ -26,6 +39,9 @@
 * Unique access key name validation has been added in Edit modal
 * **Unselect all** button has been added in Edit modal
 * Key's authors that have been removed have been marked as *Removed*
+
+## Bugfixing
+* Redirect to Home page after filters applying has been fixed
 
 # HSM Datacollector
 
