@@ -283,18 +283,17 @@ namespace HSMServer.Controllers
         public ActionResult GetGeneralInfo(string selectedId)
         {
             var id = Guid.Parse(selectedId);
-            GeneralInfoUpdate generalInfoUpdate = null;
-            
+
             if (_treeViewModel.Nodes.TryGetValue(id, out var node))
-                generalInfoUpdate = new GeneralInfoUpdate(new ProductInfoViewModel(node));
+                return PartialView("_GeneralInfo", new ProductInfoViewModel(node));
             
             if (_folderManager[id] is not null)
-                generalInfoUpdate = new GeneralInfoUpdate(new FolderInfoViewModel(_folderManager[id]));
+                return PartialView("_GeneralInfo", new FolderInfoViewModel(_folderManager[id]));
             
             if (_treeViewModel.Sensors.TryGetValue(id, out var sensor))
-                generalInfoUpdate = new GeneralInfoUpdate(new SensorInfoViewModel(sensor));
-            
-            return generalInfoUpdate is not null ? Json(generalInfoUpdate) : _emptyResult;
+                return PartialView("_GeneralInfo", new SensorInfoViewModel(sensor));
+
+            return _emptyResult;
         }
         
         #endregion

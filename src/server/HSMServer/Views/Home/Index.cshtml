@@ -198,20 +198,7 @@
             cache: false,
             async: true,
             success: function (viewdata) {
-                switch (viewdata.updateType) {
-                    case 0:
-                        if (viewdata.grafanaIntegration)
-                            $('#sensorGrafanaEnabled').removeClass('d-none');
-                        else $('#sensorGrafanaEnabled').addClass('d-none');
-                        break;
-                    case 1:
-                        $('#general_info_Nodes').html(mergeToHtml(viewdata.nodes));
-                        $('#general_info_Sensors').html(mergeToHtml(viewdata.sensors));
-                        break;
-                    case 2:
-                        $('#general_info_Products').html(mergeToHtml(viewdata.products));  
-                        break;    
-                }
+                $('#meta_info_general_info').empty().replaceWith(viewdata);
             }
         });
         
