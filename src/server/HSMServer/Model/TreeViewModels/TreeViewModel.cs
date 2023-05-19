@@ -60,37 +60,43 @@ namespace HSMServer.Model.TreeViewModel
 
         public List<BaseShallowModel> GetUserTree(User user)
         {
-            NodeShallowModel FilterNodes(ProductNodeViewModel product, int currentDepth)
+            NodeShallowModel FilterNodes(ProductNodeViewModel product)
             {
                 var node = new NodeShallowModel(product, user);
-
                 
-                    currentDepth--;
-                    foreach (var (_, childNode) in product.Nodes)
-                        node.AddChild(FilterNodes(childNode, currentDepth), user);
-                    if (currentDepth >= 0)
-                    {
-                        foreach (var (_, sensor) in product.Sensors)
-                            node.AddChild(new SensorShallowModel(sensor, user), user);
-                    }
-                // foreach (var (_, childNode) in product.Nodes)
-                //     node.AddChild(FilterNodes(childNode, currentDepth), user);
-                //
-                // foreach (var (_, sensor) in product.Sensors)
-                //     node.AddChild(new SensorShallowModel(sensor, user), user);
+                foreach (var (_, childNode) in product.Nodes)
+                    node.AddChild(FilterNodes(childNode), user);
+                
+                foreach (var (_, sensor) in product.Sensors)
+                    node.AddChild(new SensorShallowModel(sensor, user), user);
 
                 return node;
             }
 
-            var folders = _folderManager.GetUserFolders(user).ToDictionary(k => k.Id, v => new FolderShallowModel(v, user));
+            var folders = _folderManager.GetUserFolders(user)
+                .ToDictionary(k => k.Id, v => new FolderShallowModel(v, user));
             var tree = new List<BaseShallowModel>(1 << 4);
 
             foreach (var product in GetUserProducts(user))
             {
+                // TODO: delete this line
                 if (product.Name != "depth") continue;
-                
-                var node = FilterNodes(product, product.RootProduct.DefinedRenderDepth);
 
+                var node = FilterNodes(product);
+
+                void ReduceNesting(NodeShallowModel node, int depth)
+                {
+                    depth--;
+                    foreach (var subNode in node.Nodes)
+                    {
+                        if (depth < 0)
+                            subNode.Sensors.Clear();
+                        ReduceNesting(subNode, depth);
+                    }   
+                }
+                
+                ReduceNesting(node, product.RootProduct.DefinedRenderDepth);
+                
                 if (node.VisibleSensorsCount > 0 || user.IsEmptyProductVisible(product))
                 {
                     var folderId = node.Data.FolderId;
@@ -219,10 +225,12 @@ namespace HSMServer.Model.TreeViewModel
                         if (product.FolderId != model.FolderId)
                             product.UpdateFolder(_folderManager[model.FolderId]);
                     }
+
                     break;
 
                 case ActionType.Delete:
-                    if (Nodes.TryRemove(model.Id, out _) && model.Parent != null && Nodes.TryGetValue(model.Parent.Id, out var parentProduct))
+                    if (Nodes.TryRemove(model.Id, out _) && model.Parent != null &&
+                        Nodes.TryGetValue(model.Parent.Id, out var parentProduct))
                         parentProduct.Nodes.TryRemove(model.Id, out var _);
                     break;
             }
@@ -264,7 +272,8 @@ namespace HSMServer.Model.TreeViewModel
                     break;
 
                 case ActionType.Delete:
-                    if (AccessKeys.TryRemove(model.Id, out _) && Nodes.TryGetValue(model.ProductId, out var parentProduct))
+                    if (AccessKeys.TryRemove(model.Id, out _) &&
+                        Nodes.TryGetValue(model.ProductId, out var parentProduct))
                         parentProduct.AccessKeys.TryRemove(model.Id, out var _);
                     break;
             }
