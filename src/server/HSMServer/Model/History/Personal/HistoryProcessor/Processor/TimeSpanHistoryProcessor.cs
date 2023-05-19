@@ -1,10 +1,10 @@
-﻿using HSMServer.Core.Model;
+using HSMServer.Core.Model;
 using System.Collections.Generic;
 using System.Text;
 
-namespace HSMServer.Core.MonitoringHistoryProcessor.Processor
+namespace HSMServer.Model.History
 {
-    internal sealed class BoolHistoryProcessor : HistoryProcessorBase
+    internal class TimeSpanHistoryProcessor : HistoryProcessorBase
     {
         public override string GetCsvHistory(List<BaseValue> values)
         {
@@ -13,7 +13,7 @@ namespace HSMServer.Core.MonitoringHistoryProcessor.Processor
             sb.AppendLine($"Index,Time,Value,Comment");
             for (int i = 0; i < values.Count; ++i)
             {
-                if (values[i] is BooleanValue value)
+                if (values[i] is TimeSpanValue value)
                     sb.AppendLine($"{i},{value.Time.ToUniversalTime():s},{value.Value},{value.Comment}");
             }
 

@@ -4,7 +4,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 
-namespace HSMServer.Core.MonitoringHistoryProcessor.Processor
+namespace HSMServer.Model.History
 {
     internal abstract class BarHistoryProcessor<T> : HistoryProcessorBase where T : struct, IComparable
     {

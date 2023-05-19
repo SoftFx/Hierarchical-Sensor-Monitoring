@@ -1,7 +1,7 @@
 ﻿using HSMServer.Core.Model;
 using System.Globalization;
 
-namespace HSMServer.Core.MonitoringHistoryProcessor.Processor
+namespace HSMServer.Model.History
 {
     internal sealed class DoubleBarHistoryProcessor : BarHistoryProcessor<double>
     {

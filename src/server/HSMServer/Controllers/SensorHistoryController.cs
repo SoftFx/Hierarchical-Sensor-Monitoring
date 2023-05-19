@@ -1,7 +1,6 @@
 ﻿using HSMServer.Authentication;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Model;
-using HSMServer.Core.MonitoringHistoryProcessor.Factory;
 using HSMServer.Extensions;
 using HSMServer.Helpers;
 using HSMServer.Model.History;

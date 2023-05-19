@@ -1,7 +1,6 @@
 ﻿using HSMServer.Core.Model;
-using HSMServer.Core.MonitoringHistoryProcessor.Processor;
 
-namespace HSMServer.Core.MonitoringHistoryProcessor.Factory
+namespace HSMServer.Model.History
 {
     public static class HistoryProcessorFactory
     {
