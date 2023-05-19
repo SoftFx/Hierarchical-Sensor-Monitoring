@@ -64,3 +64,8 @@
 
 ### Other
 * Collector version has been increased to 3.1.0
+
+# HSM DataObjects
+
+* New sensor type **Version** has been added
+* DataObjects version has been increased to 3.0.2
