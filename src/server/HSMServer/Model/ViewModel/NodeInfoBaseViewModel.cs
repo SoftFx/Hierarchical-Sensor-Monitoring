@@ -45,6 +45,7 @@ namespace HSMServer.Model.ViewModel
             EncodedId = model.Id.ToString();
             Header = model.Name;
         }
+        
 
         private NodeInfoBaseViewModel(BaseNodeViewModel model)
         {

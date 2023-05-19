@@ -194,6 +194,18 @@
         
         $('#status_name_' + id).empty().html(dataObject.status);
     }
+    
+    function updateGeneralInfo(selectedNodeId) {
+        $.ajax({
+            type: 'GET',
+            url: `@Url.Action(nameof(HomeController.GetGeneralInfo))?selectedId=${selectedNodeId}`,
+            cache: false,
+            async: true,
+            success: function (viewdata) {
+                $('#meta_info_general_info').empty().replaceWith(viewdata);
+            }
+        });
+    }
 
     function updateSpecificSensorData(dataObject) {
         var id = dataObject.id;
@@ -287,6 +299,8 @@
                         updateSpecificSensorData(dataObject);
                     }
                 }
+                
+                updateGeneralInfo(selectedNodeId);
                 
                 if (displayChildrenInfo)
                     $('#dataPanel').removeClass('d-none');

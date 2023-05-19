@@ -281,6 +281,23 @@ namespace HSMServer.Controllers
             return Json(updatedSensorsData);
         }
 
+        [HttpGet]
+        public ActionResult GetGeneralInfo(string selectedId)
+        {
+            var id = Guid.Parse(selectedId);
+
+            if (_treeViewModel.Nodes.TryGetValue(id, out var node))
+                return PartialView("_GeneralInfo", new ProductInfoViewModel(node));
+            
+            if (_folderManager[id] is not null)
+                return PartialView("_GeneralInfo", new FolderInfoViewModel(_folderManager[id]));
+            
+            if (_treeViewModel.Sensors.TryGetValue(id, out var sensor))
+                return PartialView("_GeneralInfo", new SensorInfoViewModel(sensor));
+
+            return _emptyResult;
+        }
+        
         #endregion
 
         #region SensorsHistory
