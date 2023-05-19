@@ -26,7 +26,5 @@ namespace HSMServer.Model.Folders.ViewModels
             TotalProducts = folder.Products.Count;
             Id = folder.Id;
         }
-
-        protected override GeneralInfoUpdate GetInfoUpdate() => new(this);
     }
 }

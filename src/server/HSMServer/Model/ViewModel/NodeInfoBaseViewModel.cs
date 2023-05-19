@@ -45,9 +45,7 @@ namespace HSMServer.Model.ViewModel
             EncodedId = model.Id.ToString();
             Header = model.Name;
         }
-
         
-        protected abstract GeneralInfoUpdate GetInfoUpdate();
 
         private NodeInfoBaseViewModel(BaseNodeViewModel model)
         {

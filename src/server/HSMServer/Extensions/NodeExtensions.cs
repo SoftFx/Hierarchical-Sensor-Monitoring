@@ -54,9 +54,6 @@ namespace HSMServer.Extensions
 
         internal static string GetShortCellName(this string name) => name.Cut(CellNameMaxLength);
 
-        internal static List<KeyValuePair<string, int>> ToStatusCountList(this List<(SensorStatus Status, int Count)> statuses) =>
-            statuses.Select(x => new KeyValuePair<string, int>(x.Status.ToIcon(), x.Count)).ToList();
-
         private static string Cut(this string str, int stringLength) =>
             str.Length > stringLength ? $"{str[..stringLength]}..." : str;
     }
