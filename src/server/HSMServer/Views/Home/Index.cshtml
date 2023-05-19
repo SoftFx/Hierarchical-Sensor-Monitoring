@@ -205,20 +205,6 @@
                 $('#meta_info_general_info').empty().replaceWith(viewdata);
             }
         });
-        
-        function mergeToHtml(dict) {
-            let replaceHtml = "";
-            
-            dict.forEach( (el, key, arr) => {
-                replaceHtml += `<i class="${el.key} pe-1 align-self-center"></i>`;
-                if (!Object.is(arr.length - 1, key)) {
-                    replaceHtml += `<span>(${el.value}),&nbsp;</span>`
-                }
-                else replaceHtml += `<span>(${el.value})</span>`
-            })
-            
-            return replaceHtml === "" ? '0' : replaceHtml;
-        }
     }
 
     function updateSpecificSensorData(dataObject) {

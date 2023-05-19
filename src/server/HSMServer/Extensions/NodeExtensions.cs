@@ -1,6 +1,4 @@
-﻿using System.Collections.Generic;
-using System.Linq;
-using HSMServer.Model.Folders;
+﻿using HSMServer.Model.Folders;
 using HSMServer.Model.TreeViewModel;
 
 namespace HSMServer.Extensions
