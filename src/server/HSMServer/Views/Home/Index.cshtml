@@ -182,8 +182,9 @@
             $('#update_' + id).empty().append(dataObject.updatedTimeStr);
 
         $('#status_' + id).removeClass('tree-icon-offTime tree-icon-ok tree-icon-warning tree-icon-error')
-            .addClass(dataObject.statusIconColorClass)
-            .prop('title', `Status: ${dataObject.status}`)
+                          .addClass(dataObject.statusIconColorClass)
+                          .prop('title', `Status: ${dataObject.status}`)
+
         $('#metainfo_icon_status').removeClass('tree-icon-offTime tree-icon-ok tree-icon-warning tree-icon-error')
                                   .addClass(dataObject.statusIconColorClass)
                                   .prop('title', `Status: ${dataObject.status}`);
