@@ -86,7 +86,7 @@ namespace HSMDataCollector.DefaultSensors
 
         #region Collector
 
-        public IUnixCollection AddCollectorHeartbeat(CollectorMonitoringInfoOptions options) => (IUnixCollection)AddCollectorHeartbeatCommon(options);
+        public IUnixCollection AddCollectorAlive(CollectorMonitoringInfoOptions options) => (IUnixCollection)AddCollectorAliveCommon(options);
 
         public IUnixCollection AddCollectorVersion(CollectorInfoOptions options) => (IUnixCollection)AddCollectorVersionCommon(options);
 
