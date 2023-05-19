@@ -30,6 +30,8 @@ namespace HSMServer.Core.Model
     public record TimeSpanValue : BaseValue<TimeSpan>
     {
         public override SensorType Type => SensorType.TimeSpan;
+
+        public override object RawValue => Value.Ticks;
     }
 
     public record VersionValue : BaseValue<Version>

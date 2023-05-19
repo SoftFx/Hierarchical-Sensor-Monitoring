@@ -132,7 +132,7 @@ namespace HSMDataCollector.DefaultSensors
 
         #region Collector
 
-        public IWindowsCollection AddCollectorHeartbeat(CollectorMonitoringInfoOptions options) => (IWindowsCollection)AddCollectorHeartbeatCommon(options);
+        public IWindowsCollection AddCollectorAlive(CollectorMonitoringInfoOptions options) => (IWindowsCollection)AddCollectorAliveCommon(options);
 
         public IWindowsCollection AddCollectorVersion(CollectorInfoOptions options) => (IWindowsCollection)AddCollectorVersionCommon(options);
 

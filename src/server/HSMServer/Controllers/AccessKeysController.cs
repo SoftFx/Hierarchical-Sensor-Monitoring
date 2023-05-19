@@ -47,7 +47,7 @@ namespace HSMServer.Controllers
             GetPartialProductAccessKeys(Guid.Parse(productId));
         
         [HttpGet]
-        [AuthorizeIsAdmin(true)]
+        [AuthorizeIsAdmin]
         public IActionResult NewServerAccessKey()
         {
             return GetPartialNewAccessKey(new EditAccessKeyViewModel()
