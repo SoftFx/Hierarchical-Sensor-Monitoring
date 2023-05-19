@@ -12,6 +12,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using Microsoft.AspNetCore.Localization;
 
 namespace HSMServer.Model.TreeViewModel
 {
@@ -59,15 +60,24 @@ namespace HSMServer.Model.TreeViewModel
 
         public List<BaseShallowModel> GetUserTree(User user)
         {
-            NodeShallowModel FilterNodes(ProductNodeViewModel product)
+            NodeShallowModel FilterNodes(ProductNodeViewModel product, int currentDepth)
             {
                 var node = new NodeShallowModel(product, user);
 
-                foreach (var (_, childNode) in product.Nodes)
-                    node.AddChild(FilterNodes(childNode), user);
-
-                foreach (var (_, sensor) in product.Sensors)
-                    node.AddChild(new SensorShallowModel(sensor, user), user);
+                
+                    currentDepth--;
+                    foreach (var (_, childNode) in product.Nodes)
+                        node.AddChild(FilterNodes(childNode, currentDepth), user);
+                    if (currentDepth >= 0)
+                    {
+                        foreach (var (_, sensor) in product.Sensors)
+                            node.AddChild(new SensorShallowModel(sensor, user), user);
+                    }
+                // foreach (var (_, childNode) in product.Nodes)
+                //     node.AddChild(FilterNodes(childNode, currentDepth), user);
+                //
+                // foreach (var (_, sensor) in product.Sensors)
+                //     node.AddChild(new SensorShallowModel(sensor, user), user);
 
                 return node;
             }
@@ -77,7 +87,9 @@ namespace HSMServer.Model.TreeViewModel
 
             foreach (var product in GetUserProducts(user))
             {
-                var node = FilterNodes(product);
+                if (product.Name != "depth") continue;
+                
+                var node = FilterNodes(product, product.RootProduct.DefinedRenderDepth);
 
                 if (node.VisibleSensorsCount > 0 || user.IsEmptyProductVisible(product))
                 {

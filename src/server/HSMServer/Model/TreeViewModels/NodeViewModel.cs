@@ -17,6 +17,8 @@ namespace HSMServer.Model.TreeViewModel
 
     public abstract class NodeViewModel : BaseNodeViewModel
     {
+        public int DefinedRenderDepth => 2;
+        
         public string EncodedId { get; }
 
 

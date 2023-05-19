@@ -41,6 +41,8 @@ window.initializeTree = function () {
     }).on('open_node.jstree', function () {
         isTreeCollapsed = false;
         $('#collapseIcon').removeClass('fa-regular fa-square-plus').addClass('fa-regular fa-square-minus').attr('title','Save and close tree');
+    }).on('select_node.jstree', function () {
+        console.log($(this));
     });
 
     initializeActivateNodeTree();
