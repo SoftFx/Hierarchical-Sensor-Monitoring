@@ -18,7 +18,9 @@ namespace HSMDataCollector.DefaultSensors
         
         
         internal event Action<SensorValueBase> ReceiveSensorValue;
-         
+
+        public event Action<string, Exception> ExceptionThrowing;
+
         
         protected SensorBase(SensorOptions options)
         {
@@ -37,7 +39,9 @@ namespace HSMDataCollector.DefaultSensors
         
         internal virtual Task Stop() => Task.CompletedTask;
 
-        
+        protected void ThrowException(Exception ex) => ExceptionThrowing?.Invoke(SensorPath, ex);
+
+
         public void Dispose() => Stop();
     }
 }
