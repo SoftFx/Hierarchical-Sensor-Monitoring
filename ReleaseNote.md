@@ -51,7 +51,6 @@
 * Collector statuses have been added. Now collector has 4 statuses: **Starting**, **Running**, **Stopping**, **Stopped**. [More info](https://github.com/SoftFx/Hierarchical-Sensor-Monitoring/wiki/DataCollector-statuses)
 
 ### Default sensors
-* **CollectorAlive** sensor has been renamed to [**CollectorHeartbeat**](https://github.com/SoftFx/Hierarchical-Sensor-Monitoring/wiki/Unix-sensors-collection#addcollectorheartbeat). Sensor name has been renamed from **Service alive** to **Service heartbeat**.
 * New default sensor [**Product info**](https://github.com/SoftFx/Hierarchical-Sensor-Monitoring/wiki/Windows-sensors-collection#addproductversion) has been added. Now it contains Product Version with Version start/stop time.
 * New defaut sensor [**Collector status**](https://github.com/SoftFx/Hierarchical-Sensor-Monitoring/wiki/Unix-sensors-collection#addcollectorstatus) has been added. It describes current collector state and contains error message (if exsists).
 
@@ -65,3 +64,8 @@
 
 ### Other
 * Collector version has been increased to 3.1.0
+
+# HSM DataObjects
+
+* New sensor type **Version** has been added
+* DataObjects version has been increased to 3.0.2

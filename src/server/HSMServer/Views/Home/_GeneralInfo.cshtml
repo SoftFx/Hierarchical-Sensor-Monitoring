@@ -1,0 +1,73 @@
+﻿@using HSMServer.Extensions
+@using HSMServer.Model.Folders.ViewModels
+@using HSMServer.Model.TreeViewModel
+@using HSMServer.Model.ViewModel
+
+@model HSMServer.Model.ViewModel.NodeInfoBaseViewModel
+
+
+<div id="meta_info_general_info">
+    <label class="col-form-label fw-bold">General info:</label>
+
+    @if (Model is FolderInfoViewModel folder)
+    {
+        @await Html.PartialAsync("_ChildrenStatistic", new ChildrenStatistic("Products", folder.TotalProducts, folder.ProductStatuses))
+    }
+    else if (Model is ProductInfoViewModel product)
+    {
+        @await Html.PartialAsync("_ChildrenStatistic", new ChildrenStatistic("Nodes", product.TotalNodes, product.NodeStatuses))
+        @await Html.PartialAsync("_ChildrenStatistic", new ChildrenStatistic("Sensors", product.TotalSensors, product.SensorsStatuses))
+    }
+    else if (Model is SensorInfoViewModel sensor)
+    {
+        <div class="d-flex justify-content-start">
+            <div class="d-flex ms-3 text-nowrap">
+                <span style="min-width: 8rem">Sensor type:</span>
+            </div>
+            <div class="d-flex w-100">
+                <span>@(sensor.SensorType)</span>
+            </div>
+            <input id='sensor_type_@Model.EncodedId' value='@((int)sensor.SensorType)' style='display: none'/>
+        </div>
+
+        <div id="status_metainfo" class="d-flex justify-content-start">
+            <div class="d-flex ms-3 text-nowrap">
+                <span style="min-width: 8rem">Sensor status:</span>
+            </div>
+            <div class="d-flex w-100">
+                <li id='metainfo_icon_status' class='@Model.Status.ToIcon() sensor-icon-with-margin align-self-center' title='Status: @Model.Status'></li>
+                <span id="status_name_@Model.EncodedId">@Model.Status</span>
+                <span onclick="loadEditSensorStatusModal()">
+                    <i class="fas fa-edit align-self-center ms-2" style="cursor: pointer"></i>
+                </span>
+            </div>
+        </div>
+
+        if (sensor.HasGrafana)
+        {
+            <div class="d-flex justify-content-start">
+                <div class="d-flex ms-3 text-nowrap">
+                    <span style="min-width: 8rem">Enabled for:</span>
+                </div>
+                <div class="d-flex w-100">
+                    <div class="sensor-icon-with-margin">
+                        <img class="tree-png-icon" src="~/dist/grafana.svg" alt="!"/>
+                    </div>
+                    <span>Grafana</span>
+                </div>
+            </div>
+        }
+
+        <div id="validation_metainfo" class="d-flex justify-content-start">
+            @if (!string.IsNullOrEmpty(sensor.StatusComment))
+            {
+                <div class="d-flex ms-3 text-nowrap">
+                    <span style="min-width: 8rem">Status comment:</span>
+                </div>
+                <div class="d-flex w-100">
+                    <span id="markdown_status_comment">@Html.Raw(sensor.StatusComment)</span>
+                </div>
+            }
+        </div>
+    }
+</div>

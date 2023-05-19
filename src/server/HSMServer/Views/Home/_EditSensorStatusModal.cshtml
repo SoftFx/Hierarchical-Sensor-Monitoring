@@ -1,0 +1,139 @@
+﻿@using HSMServer.Constants
+@using HSMServer.Controllers
+@using HSMServer.Extensions
+@using HSMServer.Model.Authentication
+@using SensorStatus = HSMServer.Model.TreeViewModel.SensorStatus
+
+@model HSMServer.Model.ViewModel.EditSensorStatusViewModal
+
+@addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
+
+@{
+    var isAdmin = ((User as User).IsAdmin);
+}
+
+<form id="editSensorStatus_form" method="post" asp-action="@nameof(HomeController.UpdateSensorStatus)">
+    <div class="modal fade" tabindex="-1" role="dialog" id="editSensorStatus_modal">
+        <div class="modal-dialog modal-dialog-centered" role="document">
+            <div class="modal-content" id="editSensorStatusContent">
+                <input class="d-none" asp-for="SensorId"/>
+                <input class="d-none" asp-for="RootProductId"/>
+                <input class="d-none" asp-for="Path"/>
+
+                <div class="modal-header">
+                    <div class="text-break">
+                        <h5 class="modal-title">Edit sensor status</h5>
+                        <h6 class="modal-title">@Model.Path</h6>
+                    </div>
+                </div>
+
+                <div class="d-flex modal-body flex-column" id="editSensorStatusModalBody">
+                    <div class="form-group">
+                        <div class="justify-content-between d-flex">
+                            <div class="col-auto">
+                                <label asp-for="@Model.Status"></label>
+                                <input asp-for="@Model.Status" class="form-control" value="@($"{Model.Status.ToSelectIcon()} {Model.Status}")" disabled/>
+                            </div>
+                            <span class="align-self-end pb-2">-></span>
+                            <div class="col-auto">
+                                <label asp-for="@Model.NewStatus"></label>
+                                <select asp-for="@Model.NewStatus" class="form-select d-inline-block">
+                                    @foreach (var sensor in Html.GetEnumSelectList<SensorStatus>())
+                                    {
+                                        var statusValue = ((SensorStatus)int.Parse(sensor.Value));
+
+                                        @if (statusValue == SensorStatus.Empty)
+                                            continue;
+
+                                        <option value="@sensor.Value" selected="@(statusValue is SensorStatus.Ok)">
+                                            @((statusValue).ToSelectIcon())
+                                            @sensor.Text
+                                        </option>
+                                    }
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="form-group mt-2">
+                        <div class="d-flex flex-column mt-2">
+                            <div class="d-flex flex-row align-items-center">
+                                <span asp-validation-for="RootProductId"></span>
+                                <button id="buttonAddKey" onclick="newAccessKeyModal()" type="button" class="d-flex btn btn-link me-0 pe-0 @(isAdmin && !Model.IsAccessKeyExist ? "" : "d-none")">
+                                    Add
+                                </button>
+                            </div>
+                        </div>
+                        <div class="d-flex flex-column mt-2">
+                            <label class="form-label" asp-for="@Model.Reason"></label>
+                            <textarea class="form-control" asp-for="@Model.Reason"></textarea>
+                            <span asp-validation-for="Reason"></span>
+                        </div>
+                    </div>
+
+                </div>
+
+                <div class="modal-footer">
+                    <button class="btn btn-secondary col-2" type="submit">OK</button>
+                    <button class="btn btn-secondary col-2" type="button" onclick="hideEditSensorModal()">Cancel</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</form>
+
+
+<script>
+   $(document).on("submit", "#editSensorStatus_form", function (event) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+    
+        $.ajax({
+            url: $("#editSensorStatus_form").attr("action"),
+            type: 'POST',
+            data: new FormData(this),
+            datatype: 'html',
+            processData: false,
+            contentType: false,
+            async: true,
+            success: function (response) {
+                 $.ajax({
+                     url: '/api/Sensors/list',
+                     headers: { 'key': response.key },
+                     type: 'POST',
+                     contentType: 'application/json',
+                     dataType: 'JSON',
+                     data: JSON.stringify([response.sensor]),
+                     async: true,
+                     success: function () {
+                        hideEditSensorModal();
+                     }
+                 })
+            },
+            error: function (jqXHR) {
+                $('span.field-validation-valid').each(function () {
+                    let errFor = $(this).data('valmsgFor'); 
+                    if (jqXHR.responseJSON[errFor] !== undefined) {
+                        $(this).removeClass('field-validation-valid')
+                        $(this).addClass('field-validation-error')
+                        $(this).html(jqXHR.responseJSON[errFor][0]);
+                        
+                        if (errFor === 'RootProductId' && '@isAdmin' === 'True') {
+                            $('#buttonAddKey').removeClass('d-none')
+                        }
+                    }
+                })
+            }
+        })
+    });
+
+   function newAccessKeyModal() {
+       let url = "@Html.Raw(Url.Action(nameof(AccessKeysController.NewAccessKey), ViewConstants.AccessKeysController))";
+       $('#editSensorStatus_form').on('hideNewAccessKeyModal', () => loadEditSensorStatusModal())
+       hideEditSensorModal();
+       showNewAccessKeyModal(`${url}?selectedId=@Model.RootProductId&closeModal=true`, true)
+   }
+   
+    function hideEditSensorModal() {
+        $('#editSensorStatus_modal').modal('hide');
+    }
+</script>
