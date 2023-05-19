@@ -26,23 +26,6 @@ namespace HSMServer.Model.History
         protected abstract T Average(T value1, T value2);
 
 
-        public override string GetCsvHistory(List<BaseValue> values)
-        {
-            var sb = new StringBuilder(values.Count);
-
-            sb.AppendLine($"Index,StartTime,EndTime,Min,Max,Mean,Count,Last");
-            for (int i = 0; i < values.Count; ++i)
-            {
-                if (values[i] is BarBaseValue<T> value)
-                    sb.AppendLine($"{i},{GetCsvRow(value)}");
-            }
-
-            return sb.ToString();
-        }
-
-        protected virtual string GetCsvRow(BarBaseValue<T> value) =>
-            $"{value.OpenTime.ToUniversalTime():s},{value.CloseTime.ToUniversalTime():s},{value.Min},{value.Max},{value.Mean},{value.Count},{value.LastValue}";
-
         protected override List<BaseValue> Compress(List<BaseValue> values, TimeSpan compressionInterval)
         {
             if (values == null || values.Count == 0)

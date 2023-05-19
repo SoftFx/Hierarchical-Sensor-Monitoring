@@ -1,4 +1,5 @@
-﻿using HSMServer.Authentication;
+﻿using HSMServer.ApiObjectsConverters;
+using HSMServer.Authentication;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Model;
 using HSMServer.Extensions;
@@ -59,13 +60,13 @@ namespace HSMServer.Controllers
         [HttpGet]
         public IActionResult GetPreviousPage()
         {
-            return GetHistoryTable(_userManager[CurrentUser.Id].History.Table?.ToPreviousPage());
+            return GetHistoryTable(StoredUser.History.Table?.ToPreviousPage());
         }
 
         [HttpGet]
         public async Task<IActionResult> GetNextPage()
         {
-            return GetHistoryTable(await (_userManager[CurrentUser.Id].History.Table?.ToNextPage()));
+            return GetHistoryTable(await (StoredUser.History.Table?.ToNextPage()));
         }
 
 
@@ -87,6 +88,7 @@ namespace HSMServer.Controllers
             var values = await GetSensorValues(model.EncodedId, model.FromUtc, model.ToUtc, model.Count);
 
             var localValue = GetLocalLastValue(model.EncodedId, model.FromUtc, model.ToUtc);
+
             if (localValue is not null)
                 values.Add(localValue);
 
@@ -97,26 +99,20 @@ namespace HSMServer.Controllers
         public async Task<FileResult> ExportHistory([FromQuery(Name = "EncodedId")] string encodedId, [FromQuery(Name = "Type")] int type,
             [FromQuery(Name = "From")] DateTime from, [FromQuery(Name = "To")] DateTime to)
         {
-            var (productName, path) = GetSensorProductAndPath(encodedId);
-            string fileName = $"{productName}_{path.Replace('/', '_')}_from_{from:s}_to{to:s}.csv";
+            _tree.Sensors.TryGetValue(SensorPathHelper.DecodeGuid(encodedId), out var sensor);
+
+            string fileName = $"{sensor.FullPath.Replace('/', '_')}_from_{from:s}_to{to:s}.csv";
             Response.Headers.Add("Content-Disposition", $"attachment;filename={fileName}");
 
             var values = await GetSensorValues(encodedId, from.ToUtcKind(), to.ToUtcKind(), MaxHistoryCount);
-
-            return GetExportHistory(values, type, fileName);
-        }
-
-
-        private PartialViewResult GetHistoryTable(TableValuesViewModel viewModel) =>
-            PartialView("_SensorValuesTable", viewModel);
-
-        private FileResult GetExportHistory(List<BaseValue> values, int type, string fileName)
-        {
-            var csv = HistoryProcessorFactory.BuildProcessor(type).GetCsvHistory(values);
-            var content = Encoding.UTF8.GetBytes(csv);
+            var content = Encoding.UTF8.GetBytes(values.ConvertToCsv());
 
             return File(content, fileName.GetContentType(), fileName);
         }
+
+
+        private PartialViewResult GetHistoryTable(TableValuesViewModel viewModel) => PartialView("_SensorValuesTable", viewModel);
+
 
         private ValueTask<List<BaseValue>> GetSensorValues(string encodedId, DateTime from, DateTime to, int count)
         {
@@ -137,14 +133,6 @@ namespace HSMServer.Controllers
             return model;
         }
 
-        private (string productName, string path) GetSensorProductAndPath(string encodedId)
-        {
-            var decodedId = SensorPathHelper.DecodeGuid(encodedId);
-
-            _tree.Sensors.TryGetValue(decodedId, out var sensor);
-
-            return (sensor?.RootProduct.Name, sensor?.Path);
-        }
 
         private BarBaseValue GetLocalLastValue(string encodedId, DateTime from, DateTime to)
         {

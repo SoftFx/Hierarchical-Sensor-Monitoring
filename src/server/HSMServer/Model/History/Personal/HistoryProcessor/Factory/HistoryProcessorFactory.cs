@@ -4,7 +4,7 @@ namespace HSMServer.Model.History
 {
     public static class HistoryProcessorFactory
     {
-        public static IHistoryProcessor BuildProcessor(int sensorType = -1) =>
+        internal static HistoryProcessorBase BuildProcessor(int sensorType = -1) =>
             (SensorType)sensorType switch
             {
                 SensorType.Boolean => new BoolHistoryProcessor(),
