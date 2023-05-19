@@ -6,9 +6,9 @@
 @model HSMServer.Model.ViewModel.NodeInfoBaseViewModel
 <div id="meta_info_general_info">
     <div class="form-control border-0 fw-bold px-0" style="max-width: 15rem;">
-    General info:
+        General info:
     </div>
-    
+
     @if (Model is FolderInfoViewModel folder)
     {
         @await Html.PartialAsync("_ChildrenStatistic", new ChildrenStatistic("Products", folder.TotalProducts, folder.ProductStatuses))
@@ -29,7 +29,7 @@
             </div>
             <input id='sensor_type_@Model.EncodedId' value='@((int)sensor.SensorType)' style='display: none'/>
         </div>
-    
+
         <div id="status_metainfo" class="d-flex justify-content-start">
             <div class="d-flex ms-3 text-nowrap">
                 <span style="min-width: 8rem">Sensor status:</span>
@@ -37,10 +37,15 @@
             <div class="d-flex w-100">
                 <li id='metainfo_icon_status' class='@Model.Status.ToIcon() sensor-icon-with-margin align-self-center' title='Status: @Model.Status'></li>
                 <span id="status_name_@Model.EncodedId">@Model.Status</span>
+                <span onclick="loadEditSensorStatusModal()">
+                    <i class="fas fa-edit align-self-center ms-2" style="cursor: pointer"></i>
+                </span>
             </div>
         </div>
-        <div id="integrations">
-            <div id="sensorGrafanaEnabled" class="d-flex justify-content-start @(sensor.HasGrafana ? string.Empty : "d-none")">
+
+        if (sensor.HasGrafana)
+        {
+            <div class="d-flex justify-content-start">
                 <div class="d-flex ms-3 text-nowrap">
                     <span style="min-width: 8rem">Enabled for:</span>
                 </div>
@@ -51,7 +56,8 @@
                     <span>Grafana</span>
                 </div>
             </div>
-        </div>
+        }
+
         <div id="validation_metainfo" class="d-flex justify-content-start">
             @if (!string.IsNullOrEmpty(sensor.StatusComment))
             {
