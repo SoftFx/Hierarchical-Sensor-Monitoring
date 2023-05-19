@@ -11,7 +11,7 @@ using System.Threading.Tasks;
 namespace HSMServer.Controllers
 {
     [Authorize]
-    [AuthorizeIsAdmin(true)]
+    [AuthorizeIsAdmin]
     [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
     public class ConfigurationController : Controller
     {

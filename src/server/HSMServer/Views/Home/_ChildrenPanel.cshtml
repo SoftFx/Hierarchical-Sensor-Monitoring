@@ -34,6 +34,7 @@
         return nodes.Where(n => n.HasData)
                     .OrderByDescending(n => n.Status)
                     .ThenBy(n => n.Name)
+                    .Take(1000)
                     .Cast<NodeViewModel>().ToList();
     }
 }

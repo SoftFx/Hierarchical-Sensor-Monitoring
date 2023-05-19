@@ -185,10 +185,26 @@
             .addClass(dataObject.statusIconColorClass)
             .prop('title', `Status: ${dataObject.status}`)
         $('#metainfo_icon_status').removeClass('tree-icon-offTime tree-icon-ok tree-icon-warning tree-icon-error')
-            .addClass(dataObject.statusIconColorClass)
-            .prop('title', `Status: ${dataObject.status}`);
-
+                                  .addClass(dataObject.statusIconColorClass)
+                                  .prop('title', `Status: ${dataObject.status}`);
+        
+        $('#file_status_' + id).removeClass('tree-icon-offTime tree-icon-ok tree-icon-warning tree-icon-error')
+                                .addClass(dataObject.statusIconColorClass)
+                                .prop('title', `Status: ${dataObject.status}`)
+        
         $('#status_name_' + id).empty().html(dataObject.status);
+    }
+    
+    function updateGeneralInfo(selectedNodeId) {
+        $.ajax({
+            type: 'GET',
+            url: `@Url.Action(nameof(HomeController.GetGeneralInfo))?selectedId=${selectedNodeId}`,
+            cache: false,
+            async: true,
+            success: function (viewdata) {
+                $('#meta_info_general_info').empty().replaceWith(viewdata);
+            }
+        });
     }
 
     function updateSpecificSensorData(dataObject) {
@@ -283,6 +299,8 @@
                         updateSpecificSensorData(dataObject);
                     }
                 }
+                
+                updateGeneralInfo(selectedNodeId);
                 
                 if (displayChildrenInfo)
                     $('#dataPanel').removeClass('d-none');

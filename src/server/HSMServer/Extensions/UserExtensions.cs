@@ -48,7 +48,10 @@ namespace HSMServer.Extensions
 
             if (filterMask != 0 && (filterMask & DefaultNodeMask) == filterMask)
             {
-                bool isProductVisible = filterMask.HasFlag(FilterGroupType.ByVisibility);
+                var isProductVisible = true;
+                
+                if (filterMask.HasFlag(FilterGroupType.ByVisibility))
+                    isProductVisible &= filter.ByVisibility.Empty.Value;
 
                 if (filterMask.HasFlag(FilterGroupType.ByStatus))
                     isProductVisible &= filter.ByStatus.IsStatusSuitable(product.Status.ToCore());

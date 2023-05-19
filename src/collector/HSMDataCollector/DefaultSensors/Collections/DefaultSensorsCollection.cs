@@ -33,9 +33,9 @@ namespace HSMDataCollector.DefaultSensors
 
 
 
-        protected DefaultSensorsCollection AddCollectorHeartbeatCommon(CollectorMonitoringInfoOptions options)
+        protected DefaultSensorsCollection AddCollectorAliveCommon(CollectorMonitoringInfoOptions options)
         {
-            return Register(new CollectorHeartbeat(_prototype.CollectorAlive.Get(options)));
+            return Register(new CollectorAlive(_prototype.CollectorAlive.Get(options)));
         }
 
         protected DefaultSensorsCollection AddCollectorVersionCommon(CollectorInfoOptions options)
@@ -64,7 +64,7 @@ namespace HSMDataCollector.DefaultSensors
 
             var options = _prototype.CollectorStatus.GetAndFill(new CollectorInfoOptions() { NodePath = monitoringOptions.NodePath });
 
-            return AddCollectorHeartbeatCommon(monitoringOptions).AddCollectorVersionCommon(options).AddCollectorStatusCommon(options);
+            return AddCollectorAliveCommon(monitoringOptions).AddCollectorVersionCommon(options).AddCollectorStatusCommon(options);
         }
 
         protected DefaultSensorsCollection AddProductVersionCommon(VersionSensorOptions options)
