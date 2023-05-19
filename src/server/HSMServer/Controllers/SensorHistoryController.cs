@@ -35,16 +35,16 @@ namespace HSMServer.Controllers
 
 
         [HttpPost]
-        public Task<IActionResult> HistoryLatest([FromBody] GetSensorHistoryModel model)
+        public Task<IActionResult> TabelHistoryLatest([FromBody] GetSensorHistoryModel model)
         {
             if (model == null)
                 return Task.FromResult(_emptyResult as IActionResult);
 
-            return History(SpecifyLatestHistoryModel(model));
+            return TableHistory(SpecifyLatestHistoryModel(model));
         }
 
         [HttpPost]
-        public async Task<IActionResult> History([FromBody] GetSensorHistoryModel model)
+        public async Task<IActionResult> TableHistory([FromBody] GetSensorHistoryModel model)
         {
             if (model == null)
                 return _emptyResult;
@@ -58,29 +58,29 @@ namespace HSMServer.Controllers
         }
 
         [HttpGet]
-        public IActionResult GetPreviousPage()
+        public IActionResult GetPreviousTablePage()
         {
             return GetHistoryTable(StoredUser.History.Table?.ToPreviousPage());
         }
 
         [HttpGet]
-        public async Task<IActionResult> GetNextPage()
+        public async Task<IActionResult> GetNextTablePage()
         {
             return GetHistoryTable(await (StoredUser.History.Table?.ToNextPage()));
         }
 
 
         [HttpPost]
-        public Task<JsonResult> RawHistoryLatest([FromBody] GetSensorHistoryModel model)
+        public Task<JsonResult> ChartHistoryLatest([FromBody] GetSensorHistoryModel model)
         {
             if (model == null)
                 return Task.FromResult(_emptyJsonResult);
 
-            return RawHistory(SpecifyLatestHistoryModel(model));
+            return ChartHistory(SpecifyLatestHistoryModel(model));
         }
 
         [HttpPost]
-        public async Task<JsonResult> RawHistory([FromBody] GetSensorHistoryModel model)
+        public async Task<JsonResult> ChartHistory([FromBody] GetSensorHistoryModel model)
         {
             if (model == null)
                 return _emptyJsonResult;

@@ -43,7 +43,8 @@ namespace HSMServer.Model.History
             {
                 if (Pages.Count == 0)
                     Pages.Add(new() { _localLastValue });
-                else Pages[0].Insert(0, _localLastValue);
+                else 
+                    Pages[0].Insert(0, _localLastValue);
             }
 
             await TryReadNextPage();

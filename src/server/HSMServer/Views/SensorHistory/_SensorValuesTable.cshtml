@@ -30,6 +30,7 @@ else
                         <th>Mean</th>
                         <th>Max</th>
                         <th>Count</th>
+                        <th>Last value</th>
                     }
                     else
                     {
@@ -52,19 +53,13 @@ else
                             <td>@barValue.Mean</td>
                             <td>@barValue.Max</td>
                             <td>@barValue.Count</td>
+                            <td>@barValue.LastValue</td>
                         }
                         else
                         {
                             var simpleValue = value as SimpleSensorValueViewModel;
 
-                            if (Model.SensorType == SensorType.TimeSpan)
-                            {
-                                <td>@simpleValue.Value.ToTableView()</td>
-                            }
-                            else
-                            {
-                                <td>@simpleValue.Value</td>
-                            }
+                            <td>@simpleValue.Value</td>
                         }
                         <td>
                             <span class="@value.Status.ToIcon()"></span> @value.Status

@@ -32,11 +32,19 @@ namespace HSMServer.Model.History
         private static SimpleSensorValueViewModel Create<T>(BaseValue<T> value) =>
             new()
             {
-                Value = value is VersionValue version ? version.Value.RemoveTailZeroes() : value.Value?.ToString(),
+                Value = GetTableValue(value),
                 Time = value.Time,
                 Status = value.Status.ToClient(),
                 Comment = value.Comment,
             };
+
+        private static string GetTableValue<T>(BaseValue<T> value) => value switch
+        {
+            VersionValue version => version.Value.RemoveTailZeroes(),
+            TimeSpanValue timespan => timespan.Value.ToTableView(),
+            _ => value.Value?.ToString(),
+        };
+
 
         private static BarSensorValueViewModel Create<T>(BarBaseValue<T> value) where T : struct =>
             new()
@@ -45,6 +53,7 @@ namespace HSMServer.Model.History
                 Min = value.Min.ToString(),
                 Max = value.Max.ToString(),
                 Mean = value.Mean.ToString(),
+                LastValue = value.LastValue.ToString(),
                 Time = value.Time,
                 Status = value.Status.ToClient(),
                 Comment = value.Comment,
@@ -67,5 +76,7 @@ namespace HSMServer.Model.History
         public string Max { get; init; }
 
         public string Mean { get; init; }
+
+        public string LastValue { get; init; }
     }
 }
