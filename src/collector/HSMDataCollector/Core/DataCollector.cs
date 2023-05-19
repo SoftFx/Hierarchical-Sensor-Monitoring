@@ -303,9 +303,9 @@ namespace HSMDataCollector.Core
             var options = _sensorsPrototype.CollectorAlive.GetAndFill(new CollectorMonitoringInfoOptions() { NodePath = specificPath });
 
             if (IsWindowsOS)
-                Windows.AddCollectorHeartbeat(options);
+                Windows.AddCollectorAlive(options);
             else
-                Unix.AddCollectorHeartbeat(options);
+                Unix.AddCollectorAlive(options);
 
             _ = Start();
         }

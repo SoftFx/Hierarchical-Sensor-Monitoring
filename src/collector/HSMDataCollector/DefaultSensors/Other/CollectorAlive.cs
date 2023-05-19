@@ -2,12 +2,12 @@
 
 namespace HSMDataCollector.DefaultSensors.Other
 {
-    internal sealed class CollectorHeartbeat : MonitoringSensorBase<bool>
+    internal sealed class CollectorAlive : MonitoringSensorBase<bool>
     {
         protected override string SensorName => "Service alive";
 
 
-        public CollectorHeartbeat(MonitoringSensorOptions options) : base(options) { }
+        public CollectorAlive(MonitoringSensorOptions options) : base(options) { }
 
 
         protected override bool GetValue() => true;
