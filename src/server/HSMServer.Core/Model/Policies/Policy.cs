@@ -32,7 +32,7 @@ namespace HSMServer.Core.Model.Policies
         protected virtual string FailIcon => FailStatus.ToIcon();
 
 
-        internal PolicyResult Fail { get; }
+        internal PolicyResult Fail { get; private set; }
 
 
         public Guid Id { get; init; }
@@ -40,7 +40,7 @@ namespace HSMServer.Core.Model.Policies
 
         protected Policy()
         {
-            Fail = new(FailStatus, FailMessage, FailIcon);
+            InitializeFail();
 
             Id = Guid.NewGuid();
         }
@@ -52,6 +52,8 @@ namespace HSMServer.Core.Model.Policies
                 Id = Id.ToString(),
                 Policy = JsonSerializer.SerializeToUtf8Bytes(this),
             };
+
+        protected void InitializeFail() => Fail = new(FailStatus, FailMessage, FailIcon);
     }
 
 

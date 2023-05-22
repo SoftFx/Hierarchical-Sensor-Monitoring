@@ -18,9 +18,6 @@ namespace HSMServer.Core.Model.Policies
             get => _operationName;
             set
             {
-                if (_operationName == value)
-                    return;
-
                 _operationName = value;
                 _executeOperation = GetOperation(value);
             }
@@ -67,7 +64,7 @@ namespace HSMServer.Core.Model.Policies
 
         internal override PolicyResult Validate(T value)
         {
-            return _executeOperation(_getProperty(value), _targetValue) ? PolicyResult.Ok : Fail;
+            return _executeOperation(_getProperty(value), _targetValue) ? Fail : PolicyResult.Ok;
         }
     }
 }

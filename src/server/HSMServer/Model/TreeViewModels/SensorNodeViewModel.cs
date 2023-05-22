@@ -61,7 +61,8 @@ namespace HSMServer.Model.TreeViewModel
 
             FileNameString = GetFileNameString(model.Type, ShortStringValue);
 
-            DataAlerts[Type] = model.DataPolicies.Select(BuildAlert).ToList();
+            if (model is DoubleSensorModel or IntegerSensorModel or DoubleBarSensorModel or IntegerBarSensorModel)
+                DataAlerts[Type] = model.DataPolicies.Select(BuildAlert).ToList();
         }
 
         private DataAlertViewModel BuildAlert(Policy policy) => policy switch
