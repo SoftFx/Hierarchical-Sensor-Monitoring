@@ -32,16 +32,11 @@ namespace HSMServer.Core.Model.Policies
         protected virtual string FailIcon => FailStatus.ToIcon();
 
 
-        internal PolicyResult Fail { get; private set; }
-
-
         public Guid Id { get; init; }
 
 
         protected Policy()
         {
-            InitializeFail();
-
             Id = Guid.NewGuid();
         }
 
@@ -52,13 +47,14 @@ namespace HSMServer.Core.Model.Policies
                 Id = Id.ToString(),
                 Policy = JsonSerializer.SerializeToUtf8Bytes(this),
             };
-
-        protected void InitializeFail() => Fail = new(FailStatus, FailMessage, FailIcon);
     }
 
 
     public abstract class ServerPolicy : Policy
     {
+        internal PolicyResult Fail { get; }
+
+
         public TimeIntervalModel Interval { get; set; }
 
 
@@ -70,6 +66,7 @@ namespace HSMServer.Core.Model.Policies
         protected ServerPolicy(TimeIntervalModel interval) : base()
         {
             Interval = interval;
+            Fail = new(FailStatus, FailMessage, FailIcon);
         }
 
 

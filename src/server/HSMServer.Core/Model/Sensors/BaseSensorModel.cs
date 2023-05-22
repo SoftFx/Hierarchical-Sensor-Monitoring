@@ -68,6 +68,8 @@ namespace HSMServer.Core.Model
             State = (SensorState)entity.State;
             Integration = (Integration)entity.Integration;
             EndOfMuting = entity.EndOfMuting > 0L ? new DateTime(entity.EndOfMuting) : null;
+
+            DataPolicies.Attach(this);
         }
 
 

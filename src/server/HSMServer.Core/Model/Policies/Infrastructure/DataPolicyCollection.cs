@@ -20,6 +20,8 @@ namespace HSMServer.Core.Model.Policies
 
         internal abstract void Update(List<DataPolicyUpdate> updates);
 
+        internal abstract void Attach(BaseSensorModel sensor);
+
         internal void Reset() => Result = PolicyResult.Ok;
 
 
@@ -56,6 +58,8 @@ namespace HSMServer.Core.Model.Policies
     {
         private readonly ConcurrentDictionary<Guid, U> _storage = new();
 
+        private BaseSensorModel _sensor;
+
 
         internal override IEnumerable<Guid> Ids => _storage.Keys;
 
@@ -63,7 +67,7 @@ namespace HSMServer.Core.Model.Policies
         protected override bool CalculateStorageResult(T value)
         {
             foreach (var (_, policy) in _storage)
-                Result += policy.Validate(value);
+                Result += policy.Validate(value, _sensor);
 
             Result += PolicyResult.FromValue(value); //add user status
 
@@ -101,6 +105,8 @@ namespace HSMServer.Core.Model.Policies
                     Uploaded?.Invoke(ActionType.Add, policy);
                 }
         }
+
+        internal override void Attach(BaseSensorModel sensor) => _sensor = sensor;
 
         public override IEnumerator<Policy> GetEnumerator() => _storage.Values.GetEnumerator();
     }
