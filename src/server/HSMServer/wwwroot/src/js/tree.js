@@ -39,19 +39,9 @@ window.initializeTree = function () {
     }).on("state_ready.jstree", function () {
         selectNodeAjax($(this).jstree('get_selected'));
     }).on('open_node.jstree', function (e, data) {
-        // TODO: add logic when underfiend (on load some deep nodes might be opened)
         if (isRefreshing != true) {
-            // console.log('node opened')
-            // console.log(e)
-            //console.log(data)
             let real = data.node.data.jstree.childrenCount;
             let visible = data.node.children.length;
-
-            //resuest to get node data
-
-            // console.log('real = ', real, ', visible = ', visible)
-            // console.log(data.node.id)
-            // console.log(real == visible)
 
             if (real != visible && isRefreshing !== undefined) {
                 $.ajax({
@@ -61,35 +51,11 @@ window.initializeTree = function () {
                     contenttype: 'application/json',
                     cache: false,
                     success: function (viewData) {
-                       // var oldLi = $('#jstree').jstree(true).settings.core.data.getElementById(data.node.id)
-
-                        //oldLi.parentNode.replaceChild(oldLi, viewData)
-
-                        //$('#jstree').jstree(true).set_text(data.node.id, viewData);
-                        //data.node.data = viewData;
-                        //console.log($('#jstree').jstree(true).get_node(data.node.id));
-
-                        // console.log(viewData)
-                        //console.log($('#jstree').jstree(true).settings.core.data)
-                        // console.log($('#jstree').jstree(true))
-
                         isRefreshing = true;
                         $('#jstree').jstree(true).settings.core.data = viewData;
                         $('#jstree').jstree(true).refresh(true);
                         isRefreshing = false;
-                        
-                        // $('#jstree').jstree(true).get_node(data.node.id, true)[0].outerHTML = viewData;
-                        // isRefreshing = true;
-                        // $('#jstree').jstree(true).redraw(true);
-                        //$('#jstree').jstree(true).get_node(data.node.id, true).replaceWith('').html(viewData)
-                        //isRefreshing = false;
-
-
-                        //$(`#${data.node.id}`).replaceWith(viewData);
-                        //$('#jstree').jstree(true).redraw_node(data.node.id);
-                        // $('#jstree').jstree(true).set_data(data.node.id, viewData);
-
-                        //console.log(viewData)
+                      
                     }
                 })   
             }

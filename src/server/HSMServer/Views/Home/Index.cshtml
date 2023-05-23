@@ -108,7 +108,6 @@
                     <div class="tree-height-weight-parameters col-auto ms-2 pe-0">
                         <div class="col-md-auto">
                             <div id="jstree">@await Html.PartialAsync("_Tree", Model.GetUserTree(user))</div>
-                            @* <div id="jstree"></div> *@
                         </div>
                     </div>
                 </div>
@@ -134,7 +133,6 @@
 
     $(document).ready(() => {
            $('#updateTime').empty().append('Update Time: ' + new Date().toUTCString());
-           $('#jstree').jstree(true).settings.core.data = $('#jstree')[0].innerHTML;
     })
      
     $(window).on('load' ,function (){
@@ -146,7 +144,6 @@
 
     var interval = $("#treeInterval").val() * 1000;
 
-    //updateTreeTimer();
 
     setTimeout(updateTreeTimer, interval);
     setTimeout(updateSelectedNodeData, interval);
