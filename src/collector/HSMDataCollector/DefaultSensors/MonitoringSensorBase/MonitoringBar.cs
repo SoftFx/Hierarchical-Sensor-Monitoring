@@ -9,6 +9,8 @@ namespace HSMDataCollector.DefaultSensors
 {
     public abstract class MonitoringBarBase<T> : BarSensorValueBase<T>
     {
+        private readonly object _lock = new object();
+
         protected readonly List<T> _barValues = new List<T>(1 << 6);
 
 
@@ -18,28 +20,37 @@ namespace HSMDataCollector.DefaultSensors
             CloseTime = OpenTime + timerPeriod;
         }
 
-        internal void AddValue(T value) => _barValues.Add(value);
+        internal void AddValue(T value)
+        {
+            lock (_lock)
+            {
+                _barValues.Add(value);
+            }
+        }
 
         internal MonitoringBarBase<T> Complete()
         {
-            Count = _barValues.Count;
-
-            if (Count > 0)
+            lock (_lock)
             {
-                LastValue = Round(_barValues.LastOrDefault());
+                Count = _barValues.Count;
 
-                _barValues.Sort();
+                if (Count > 0)
+                {
+                    LastValue = Round(_barValues.LastOrDefault());
 
-                Min = Round(_barValues.First());
-                Max = Round(_barValues.Last());
-                Mean = Round(CountMean());
+                    _barValues.Sort();
 
-                AddPercentile(_barValues, 0.25);
-                AddPercentile(_barValues, 0.5);
-                AddPercentile(_barValues, 0.75);
+                    Min = Round(_barValues.First());
+                    Max = Round(_barValues.Last());
+                    Mean = Round(CountMean());
+
+                    AddPercentile(_barValues, 0.25);
+                    AddPercentile(_barValues, 0.5);
+                    AddPercentile(_barValues, 0.75);
+                }
+
+                return this;
             }
-
-            return this;
         }
 
         protected abstract T CountMean();
