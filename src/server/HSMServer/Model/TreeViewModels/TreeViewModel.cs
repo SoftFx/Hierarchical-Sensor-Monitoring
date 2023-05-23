@@ -14,6 +14,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json.Nodes;
 using Microsoft.AspNetCore.Localization;
+using Newtonsoft.Json.Converters;
 
 namespace HSMServer.Model.TreeViewModel
 {
@@ -29,6 +30,8 @@ namespace HSMServer.Model.TreeViewModel
         public ConcurrentDictionary<Guid, SensorNodeViewModel> Sensors { get; } = new();
 
         public ConcurrentDictionary<Guid, ProductNodeViewModel> Nodes { get; } = new();
+
+        public ConcurrentDictionary<Guid, List<Guid>> NodesToRender { get; } = new();
 
 
         public TreeViewModel(ITreeValuesCache cache, IUserManager userManager, IFolderManager folderManager)
@@ -64,15 +67,30 @@ namespace HSMServer.Model.TreeViewModel
             var folders = _folderManager.GetUserFolders(user)
                 .ToDictionary(k => k.Id, v => new FolderShallowModel(v, user));
             var tree = new List<BaseShallowModel>(1 << 4);
-            var treeJson = new JsonArray(1 << 4);
 
+            NodesToRender.TryGetValue(user.Id, out var nodeIds);
             foreach (var product in GetUserProducts(user))
             {
-                // TODO: delete this line
                 if (product.Name != "depth") continue;
-
+                
                 var node = FilterNodes(product, user);
-
+                void ReduceNesting(NodeShallowModel node, int depth)
+                {
+                    depth--;
+                    foreach (var subNode in node.Nodes)
+                    {
+                        if (depth <= 0)
+                        {
+                            
+                            if (nodeIds is not null && nodeIds.Contains(subNode.Data.Id)) continue;
+                            subNode.Sensors.RemoveRange(1, subNode.Sensors.Count - 1);
+                            subNode.Nodes.Clear();
+                        }
+                        
+                        ReduceNesting(subNode, depth);
+                    }
+                }
+                
                 ReduceNesting(node, product.RootProduct.DefinedRenderDepth);
                 
                 if (node.VisibleSensorsCount > 0 || user.IsEmptyProductVisible(product))
@@ -102,21 +120,6 @@ namespace HSMServer.Model.TreeViewModel
             return tree;
         }
 
-        private void ReduceNesting(NodeShallowModel node, int depth)
-        {
-            depth--;
-            foreach (var subNode in node.Nodes)
-            {
-                if (depth <= 0)
-                {
-                    subNode.Sensors.RemoveRange(1, subNode.Sensors.Count - 1);
-                    subNode.Nodes.Clear();
-                }
-                        
-                ReduceNesting(subNode, depth);
-            }
-        }
-
         private NodeShallowModel FilterNodes(ProductNodeViewModel product, User user)
         {
             var node = new NodeShallowModel(product, user);
@@ -130,14 +133,14 @@ namespace HSMServer.Model.TreeViewModel
             return node;
         }
 
-        public NodeShallowModel GetNodeRendered(ProductNodeViewModel product, User user)
-        {
-            var node = FilterNodes(product, user);
-            
-            ReduceNesting(node, 1);
-    
-            return node;
-        }
+        // public NodeShallowModel GetNodeRendered(ProductNodeViewModel product, User user)
+        // {
+        //     var node = FilterNodes(product, user);
+        //     
+        //     ReduceNesting(node, 1);
+        //
+        //     return node;
+        // }
 
 
         internal IEnumerable<ProductNodeViewModel> GetRootProducts() =>

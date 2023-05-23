@@ -79,16 +79,31 @@ namespace HSMServer.Controllers
             return PartialView("_NodeDataPanel", viewModel);
         }
 
-        [HttpPost]
-        public IActionResult GetOpenedNode(Guid openedId)
-        {
-            var node = _treeValuesCache.GetProduct(openedId);
+        // [HttpPost]
+        // public IActionResult GetOpenedNode(Guid openedId)
+        // {
+        //     var node = _treeValuesCache.GetProduct(openedId);
+        //
+        //     _treeViewModel.Nodes.TryGetValue(openedId, out var nodeViewModel);
+        //     var r = _treeViewModel.GetNodeRendered(nodeViewModel, CurrentUser);
+        //     var newNode = new NodeShallowModel(nodeViewModel, CurrentUser);
+        //     
+        //     return PartialView("_TreeNode", r);
+        // }
 
-            _treeViewModel.Nodes.TryGetValue(openedId, out var nodeViewModel);
-            var r = _treeViewModel.GetNodeRendered(nodeViewModel, CurrentUser);
-            var newNode = new NodeShallowModel(nodeViewModel, CurrentUser);
+        [HttpPost]
+        public IActionResult AddRenderingNode(Guid nodeId)
+        {
+            if (_treeViewModel.NodesToRender.TryGetValue(CurrentUser.Id, out var list))
+            {
+                if (list is null)
+                    list = new List<Guid>();
+
+                list.Add(nodeId);
+            }
+            else _treeViewModel.NodesToRender.TryAdd(CurrentUser.Id, new List<Guid>() {nodeId});
             
-            return PartialView("_TreeNode", r);
+            return PartialView("_Tree", _treeViewModel.GetUserTree(CurrentUser));
         }
         
         [HttpPost]
