@@ -39,7 +39,26 @@ namespace HSMServer.Core.Model.Policies.Infrastructure
         }
 
 
-        public static string GetTemplateString(string raw)
+        public static string GetSingleComment<T, U>(T value, BaseSensorModel sensor, DataPolicy<T, U> policy)
+            where T : BaseValue<U>
+        {
+            var template = GetTemplateString(policy.Comment);
+
+            return string.Format(template, sensor.RootProductName, sensor.Path, sensor.DisplayName, policy.Operation, policy.Target.Value,
+                value.Time, value.Status, value.Comment, value.Value, null, null, null, null);
+        }
+
+        public static string GetBarComment<T, U>(T value, BaseSensorModel sensor, DataPolicy<T, U> policy)
+            where T : BarBaseValue<U>
+            where U : struct
+        {
+            var template = GetTemplateString(policy.Comment);
+
+            return string.Format(template, sensor.RootProductName, sensor.Path, sensor.DisplayName, policy.Operation, policy.Target.Value,
+                value.Time, value.Status, value.Comment, null, value.Min, value.Max, value.Mean, value.LastValue);
+        }
+
+        private static string GetTemplateString(string raw)
         {
             var words = raw.Split(Separator, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
 
@@ -53,25 +72,6 @@ namespace HSMServer.Core.Model.Policies.Infrastructure
             }
 
             return string.Join(Separator, words);
-        }
-
-        internal static string GetSingleComment<T, U>(T value, BaseSensorModel sensor, DataPolicy<T, U> policy)
-            where T : BaseValue<U>
-        {
-            var template = GetTemplateString(policy.Comment);
-
-            return string.Format(template, sensor.RootProductName, sensor.Path, sensor.DisplayName, policy.Operation, policy.Target.Value,
-                value.Time, value.Status, value.Comment, value.Value, null, null, null, null);
-        }
-
-        internal static string GetBarComment<T, U>(T value, BaseSensorModel sensor, DataPolicy<T, U> policy)
-            where T : BarBaseValue<U>
-            where U : struct
-        {
-            var template = GetTemplateString(policy.Comment);
-
-            return string.Format(template, sensor.RootProductName, sensor.Path, sensor.DisplayName, policy.Operation, policy.Target.Value,
-                value.Time, value.Status, value.Comment, null, value.Min, value.Max, value.Mean, value.LastValue);
         }
     }
 }

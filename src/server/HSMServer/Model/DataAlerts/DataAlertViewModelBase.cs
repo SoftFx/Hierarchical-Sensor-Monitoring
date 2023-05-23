@@ -56,6 +56,8 @@ namespace HSMServer.Model.DataAlerts
         protected abstract List<Operation> Actions { get; }
 
 
+        public string DisplayComment { get; protected set; }
+
         public required bool IsModify { get; init; }
 
 
