@@ -33,16 +33,91 @@ window.initializeTree = function () {
             else {
                 [a, b] = [nodeB.title.toLowerCase(), nodeA.title.toLowerCase()];
             }
-            
+
             return a < b ? 1 : -1;
         }
     }).on("state_ready.jstree", function () {
         selectNodeAjax($(this).jstree('get_selected'));
-    }).on('open_node.jstree', function () {
+    }).on('open_node.jstree', function (e, data) {
+        // TODO: add logic when underfiend (on load some deep nodes might be opened)
+        // if (isRefreshing != true) {
+        //     // console.log('node opened')
+        //     // console.log(e)
+        //     //console.log(data)
+        //     let real = data.node.data.jstree.childrenCount;
+        //     let visible = data.node.children.length;
+        //    
+        //     //resuest to get node data
+        //    
+        //     // console.log('real = ', real, ', visible = ', visible)
+        //     // console.log(data.node.id)
+        //     // console.log(real == visible)
+        //    
+        //     if (real != visible && isRefreshing !== undefined) {
+        //         $.ajax({
+        //             type: 'post',
+        //             url: openNode + '?openedId=' + data.node.id,
+        //             datatype: 'html',
+        //             contenttype: 'application/json',
+        //             cache: false,
+        //             success: function (viewData) {
+        //                // var oldLi = $('#jstree').jstree(true).settings.core.data.getElementById(data.node.id)
+        //
+        //                 //oldLi.parentNode.replaceChild(oldLi, viewData)
+        //
+        //                 //$('#jstree').jstree(true).set_text(data.node.id, viewData);
+        //                 //data.node.data = viewData;
+        //                 //console.log($('#jstree').jstree(true).get_node(data.node.id));
+        //                
+        //                 // console.log(viewData)
+        //                 //console.log($('#jstree').jstree(true).settings.core.data)
+        //                 // console.log($('#jstree').jstree(true))
+        //
+        //                 let doc = new DOMParser().parseFromString($('#jstree').jstree(true).settings.core.data, 'text/html')
+        //                 console.log(doc.body.innerHTML)
+        //                 console.log('///')
+        //                 console.log($('#jstree').jstree(true).settings.core.data)
+        //                 console.log('///')
+        //                 // console.log($('#jstree').jstree(true).settings.core.data)
+        //                 console.log(doc.getElementById(data.node.id))
+        //                 let div = document.createElement('DIV');
+        //                 div.innerHTML = viewData;
+        //                 let el = doc.getElementById(data.node.id);
+        //                 console.log(el.parentNode)
+        //                 el.parentNode.replaceChild(div.firstChild, el)
+        //                
+        //                 $('#jstree').jstree(true).settings.core.data = doc.body.innerHTML
+        //                
+        //                 isRefreshing = true;
+        //                 $('#jstree').jstree(true).refresh(true);
+        //                 isRefreshing = false;
+        //                 // $('#jstree').jstree(true).get_node(data.node.id, true)[0].outerHTML = viewData;
+        //                 // isRefreshing = true;
+        //                 // $('#jstree').jstree(true).redraw(true);
+        //                 //$('#jstree').jstree(true).get_node(data.node.id, true).replaceWith('').html(viewData)
+        //                 //isRefreshing = false;
+        //
+        //
+        //                 //$(`#${data.node.id}`).replaceWith(viewData);
+        //                 //$('#jstree').jstree(true).redraw_node(data.node.id);
+        //                 // $('#jstree').jstree(true).set_data(data.node.id, viewData);
+        //
+        //                 //console.log(viewData)
+        //             }
+        //         })   
+        //     }
+        // }
         isTreeCollapsed = false;
         $('#collapseIcon').removeClass('fa-regular fa-square-plus').addClass('fa-regular fa-square-minus').attr('title','Save and close tree');
-    }).on('select_node.jstree', function () {
-        console.log($(this));
+    }).on('select_node.jstree', function (e, data) {
+        if (isRefreshing != true) {
+            //console.log('node selected')
+        }
+        //console.log($(this));
+    }).on('activate_node.jstree', function (e , data) {
+        if (isRefreshing != true) {
+            //console.log('node activated')
+        }
     });
 
     initializeActivateNodeTree();
@@ -100,7 +175,6 @@ function selectNodeAjax(selectedId) {
 
         if (needToActivateListTab) {
             selectNodeInfoTab("list", selectedId);
-
             needToActivateListTab = false;
         }
         else {

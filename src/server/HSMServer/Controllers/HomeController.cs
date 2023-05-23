@@ -23,6 +23,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using HSMServer.ApiObjectsConverters;
+using HSMServer.Model.UserTreeShallowCopy;
 using SensorStatus = HSMSensorDataObjects.SensorStatus;
 
 namespace HSMServer.Controllers
@@ -79,8 +80,27 @@ namespace HSMServer.Controllers
         }
 
         [HttpPost]
+        public IActionResult GetOpenedNode(Guid openedId)
+        {
+            var node = _treeValuesCache.GetProduct(openedId);
+
+            _treeViewModel.Nodes.TryGetValue(openedId, out var nodeViewModel);
+            var r = _treeViewModel.GetNodeRendered(nodeViewModel, CurrentUser);
+            var newNode = new NodeShallowModel(nodeViewModel, CurrentUser);
+            
+            return PartialView("_TreeNode", r);
+        }
+        
+        [HttpPost]
         public IActionResult RefreshTree()
         {
+            return PartialView("_Tree", _treeViewModel.GetUserTree(CurrentUser));
+        }
+        
+        [HttpGet]
+        public IActionResult RefreshTree(string id)
+        {
+            var json = _treeViewModel.GetUserTree(CurrentUser);
             return PartialView("_Tree", _treeViewModel.GetUserTree(CurrentUser));
         }
 

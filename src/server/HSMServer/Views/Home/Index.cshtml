@@ -23,6 +23,7 @@
 
     var selectNode = "@Url.Action(nameof(HomeController.SelectNode), ViewConstants.HomeController)";
     var refreshTree = "@Url.Action(nameof(HomeController.RefreshTree), ViewConstants.HomeController)";
+    var openNode = "@Url.Action(nameof(HomeController.GetOpenedNode), ViewConstants.HomeController)";
 
     var historyLatestAction = "@Url.Action(nameof(HomeController.HistoryLatest), ViewConstants.HomeController)";
     var historyAction = "@Url.Action(nameof(HomeController.History), ViewConstants.HomeController)";
@@ -107,6 +108,7 @@
                     <div class="tree-height-weight-parameters col-auto ms-2 pe-0">
                         <div class="col-md-auto">
                             <div id="jstree">@await Html.PartialAsync("_Tree", Model.GetUserTree(user))</div>
+                            @* <div id="jstree"></div> *@
                         </div>
                     </div>
                 </div>
@@ -132,6 +134,7 @@
 
     $(document).ready(() => {
            $('#updateTime').empty().append('Update Time: ' + new Date().toUTCString());
+           $('#jstree').jstree(true).settings.core.data = $('#jstree')[0].innerHTML;
     })
      
     $(window).on('load' ,function (){
@@ -142,6 +145,8 @@
              });
 
     var interval = $("#treeInterval").val() * 1000;
+
+    //updateTreeTimer();
 
     setTimeout(updateTreeTimer, interval);
     setTimeout(updateSelectedNodeData, interval);
@@ -249,9 +254,10 @@
     }
 
     var refreshTreeTimeoutId;
+    var isRefreshing = false;
     function updateTreeTimer() {
         clearTimeout(refreshTreeTimeoutId);
-
+        
         $.ajax({
             type: 'POST',
             url: refreshTree,
@@ -260,11 +266,15 @@
             cache: false,
             async: true
         }).done(function (treeData) {
+            isRefreshing = true;
+            console.log($('#jstree').jstree(true))
             $('#jstree').jstree(true).settings.core.data = treeData;
             $('#jstree').jstree(true).refresh(true);
-
+            
             refreshTreeTimeoutId = setTimeout(updateTreeTimer, interval);
             updateSelectedNodeDataTimeoutId = setTimeout(updateSelectedNodeData, interval);
+            
+            isRefreshing = false;
         });
     }
 
