@@ -1,10 +1,15 @@
 @using HSMServer.Model.DataAlerts
 @using HSMServer.Constants
 @using HSMServer.Controllers
+@using HSMServer.Core.Model.Policies.Infrastructure
 
 @model HSMServer.Model.ViewModel.NodeInfoBaseViewModel
 
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
+
+@{
+    var customCommentHelp = $"There is the next variables:<br/>{string.Join("<br/>", CustomCommentBuilder.Properties.Select(p => $"<b>{p.Key} -</b> {p.Value}"))}";
+}
 
 
 <label class="col-form-label fw-bold">Alerts:</label>
@@ -39,17 +44,16 @@
 @foreach (var (type, alerts) in Model.DataAlerts)
 {
     <div id="dataAlertsList_@type">
-        <div class="d-flex align-items-center">
-            <label class="col-form-label fw-bold">@type data alerts:</label>
-            <div id="addDataAlert" class="d-none ms-2">
-                <a data-bs-toggle="popover" title="Custom comment variables" data-bs-html="true"
-                   data-bs-content="There is the next variables: $value, $time, $product, $path, $sensor, $status, $comment, $target, $action">
-                    <i class="fas fa-question-circle"></i>
-                </a>
-                <a href="javascript:addDataAlert('@type');" class="mx-2">
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <label class="col-form-label fw-bold">@type data alerts:</label>
+                <a id="addDataAlert" href="javascript:addDataAlert('@type');" class="d-none mx-2">
                     <i class="fa-solid fa-plus"></i> Add
                 </a>
             </div>
+            <a data-bs-toggle="popover" title="Custom comment variables" data-bs-html="true" data-bs-content="@customCommentHelp">
+                Custom comment help
+            </a>
         </div>
 
         @foreach (var alert in alerts)

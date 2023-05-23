@@ -10,7 +10,7 @@ namespace HSMServer.Core.Model.Policies
         protected override Func<T, U> GetProperty(string property) => DataPolicyBuilder.GetSingleProperty<T, U>(property);
 
         protected override string GetComment(T value, BaseSensorModel sensor) =>
-            CustomCommentBuilder.GetSingleComment(value, sensor, Comment);
+            CustomCommentBuilder.GetSingleComment(value, sensor, this);
     }
 
 
@@ -23,7 +23,7 @@ namespace HSMServer.Core.Model.Policies
         protected override Func<U, U, bool> GetOperation(PolicyOperation operation) => DataPolicyBuilder.GetNumberOperation<U>(operation);
 
         protected override string GetComment(T value, BaseSensorModel sensor) =>
-            CustomCommentBuilder.GetBarComment(value, sensor, Comment);
+            CustomCommentBuilder.GetBarComment(value, sensor, this);
     }
 
 
