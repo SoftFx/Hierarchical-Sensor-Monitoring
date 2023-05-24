@@ -441,8 +441,8 @@ namespace HSMServer.Controllers
                     var response = historyValues.ConvertToCsv();
 
                     return request.IsZipArchive
-                        ? File(response.CompressToZip(request.FileName, request.Extension), $"{request.FileName}.zip".GetContentType())
-                        : File(Encoding.UTF8.GetBytes(response), $"{request.FileName}.{request.Extension}".GetContentType());
+                           ? File(response.CompressToZip(request.FileName, request.Extension), $"{request.FileName}.zip".GetContentType())
+                           : File(Encoding.UTF8.GetBytes(response), $"{request.FileName}.{request.Extension}".GetContentType());
                 }
 
                 return StatusCode(406, message);
