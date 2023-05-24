@@ -15,12 +15,12 @@ namespace HSMServer.Model.DataAlerts
             nameof(DoubleBarValue.LastValue),
         };
 
-        protected override List<Operation> Actions => new()
+        protected override List<PolicyOperation> Actions => new()
         {
-            Operation.LessThanOrEqual,
-            Operation.LessThan,
-            Operation.GreaterThan,
-            Operation.GreaterThanOrEqual,
+            PolicyOperation.LessThanOrEqual,
+            PolicyOperation.LessThan,
+            PolicyOperation.GreaterThan,
+            PolicyOperation.GreaterThanOrEqual,
         };
 
 

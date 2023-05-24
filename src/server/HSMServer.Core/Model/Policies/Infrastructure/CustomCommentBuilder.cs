@@ -1,4 +1,5 @@
-﻿using System;
+﻿using HSMCommon.Extensions;
+using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
@@ -44,7 +45,7 @@ namespace HSMServer.Core.Model.Policies.Infrastructure
         {
             var template = GetTemplateString(policy.Comment);
 
-            return string.Format(template, sensor.RootProductName, sensor.Path, sensor.DisplayName, policy.Operation, policy.Target.Value,
+            return string.Format(template, sensor.RootProductName, sensor.Path, sensor.DisplayName, policy.Operation.GetDisplayName(), policy.Target.Value,
                 value.Time, value.Status, value.Comment, value.Value, null, null, null, null);
         }
 
@@ -54,7 +55,7 @@ namespace HSMServer.Core.Model.Policies.Infrastructure
         {
             var template = GetTemplateString(policy.Comment);
 
-            return string.Format(template, sensor.RootProductName, sensor.Path, sensor.DisplayName, policy.Operation, policy.Target.Value,
+            return string.Format(template, sensor.RootProductName, sensor.Path, sensor.DisplayName, policy.Operation.GetDisplayName(), policy.Target.Value,
                 value.Time, value.Status, value.Comment, null, value.Min, value.Max, value.Mean, value.LastValue);
         }
 

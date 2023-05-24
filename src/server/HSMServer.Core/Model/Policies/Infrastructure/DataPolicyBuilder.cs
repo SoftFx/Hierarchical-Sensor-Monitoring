@@ -1,15 +1,22 @@
 ﻿using System;
+using System.ComponentModel.DataAnnotations;
 using System.Numerics;
 
 namespace HSMServer.Core.Model.Policies
 {
     public enum PolicyOperation : byte
     {
+        [Display(Name = "<=")]
         LessThanOrEqual,
+        [Display(Name = "<")]
         LessThan,
+        [Display(Name = ">")]
         GreaterThan,
+        [Display(Name = ">=")]
         GreaterThanOrEqual,
+        [Display(Name = "==")]
         Equal,
+        [Display(Name = "!=")]
         NotEqual,
     }
 

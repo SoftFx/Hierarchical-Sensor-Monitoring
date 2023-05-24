@@ -9,12 +9,12 @@ namespace HSMServer.Model.DataAlerts
     {
         protected override List<string> Properties => new() { nameof(BaseValue<T>.Value) };
 
-        protected override List<Operation> Actions => new()
+        protected override List<PolicyOperation> Actions => new()
         {
-            Operation.LessThanOrEqual,
-            Operation.LessThan,
-            Operation.GreaterThan,
-            Operation.GreaterThanOrEqual,
+            PolicyOperation.LessThanOrEqual,
+            PolicyOperation.LessThan,
+            PolicyOperation.GreaterThan,
+            PolicyOperation.GreaterThanOrEqual,
         };
 
 

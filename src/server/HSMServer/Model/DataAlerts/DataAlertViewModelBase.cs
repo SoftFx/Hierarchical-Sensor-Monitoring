@@ -1,35 +1,22 @@
-﻿using HSMServer.Core.Cache.UpdateEntities;
+﻿using HSMCommon.Extensions;
+using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Model.Policies;
 using HSMServer.Extensions;
 using HSMServer.Model.TreeViewModel;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using System;
 using System.Collections.Generic;
-using System.ComponentModel.DataAnnotations;
 using System.Linq;
 
 namespace HSMServer.Model.DataAlerts
 {
-    public enum Operation
-    {
-        [Display(Name = "<=")]
-        LessThanOrEqual,
-        [Display(Name = "<")]
-        LessThan,
-        [Display(Name = ">")]
-        GreaterThan,
-        [Display(Name = ">=")]
-        GreaterThanOrEqual,
-    }
-
-
     public class DataAlertViewModel
     {
         public Guid Id { get; set; }
 
         public string Property { get; set; }
 
-        public Operation Operation { get; set; }
+        public PolicyOperation Operation { get; set; }
 
         public string Value { get; set; }
 
@@ -42,7 +29,7 @@ namespace HSMServer.Model.DataAlerts
 
 
         internal DataPolicyUpdate ToUpdate() =>
-            new(Id, Property, Operation.ToCore(), new TargetValue(TargetType.Const, Value), Status.ToCore(), Comment);
+            new(Id, Property, Operation, new TargetValue(TargetType.Const, Value), Status.ToCore(), Comment);
     }
 
 
@@ -53,7 +40,7 @@ namespace HSMServer.Model.DataAlerts
 
         protected abstract List<string> Properties { get; }
 
-        protected abstract List<Operation> Actions { get; }
+        protected abstract List<PolicyOperation> Actions { get; }
 
 
         public string DisplayComment { get; protected set; }
@@ -80,7 +67,7 @@ namespace HSMServer.Model.DataAlerts
         {
             Id = policy.Id;
             Property = policy.Property;
-            Operation = policy.Operation.ToClient();
+            Operation = policy.Operation;
             Value = policy.Target.Value;
             Status = policy.Status.ToClient();
             Comment = policy.Comment;
