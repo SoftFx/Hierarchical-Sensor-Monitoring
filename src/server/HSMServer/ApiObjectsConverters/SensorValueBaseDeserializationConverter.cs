@@ -57,16 +57,27 @@ namespace HSMServer.ApiObjectsConverters
         {
             var obj = JsonSerializer.Deserialize<JsonObject>(ref reader, options);
 
+
+            string GetValue(string key, JsonObject src = null)
+            {
+                src ??= obj;
+
+                return src[key]?.ToString();
+            }
+
+            int GetIntValue(string key, JsonObject src = null) => int.Parse(GetValue(key, src));
+
+
             return new VersionSensorValue()
             {
-                Key = obj[nameof(VersionSensorValue.Key)]?.ToString(),
-                Path = obj[nameof(VersionSensorValue.Path)]?.ToString(),
-                Time = DateTime.Parse(obj[nameof(VersionSensorValue.Time)]?.ToString()).ToUniversalTime(),
-                Status = (SensorStatus)int.Parse(obj[nameof(VersionSensorValue.Status)]?.ToString()),
-                Comment = obj[nameof(VersionSensorValue.Comment)]?.ToString(),
+                Key = GetValue(nameof(VersionSensorValue.Key)),
+                Path = GetValue(nameof(VersionSensorValue.Path)),
+                Time = DateTime.Parse(GetValue(nameof(VersionSensorValue.Time))).ToUniversalTime(),
+                Status = (SensorStatus)GetIntValue(nameof(VersionSensorValue.Status)),
+                Comment = GetValue(nameof(VersionSensorValue.Comment)),
                 Value = obj[nameof(VersionSensorValue.Value)] is JsonObject valueObj
-                    ? new Version(int.Parse(valueObj[nameof(Version.Major)].ToString()), int.Parse(valueObj[nameof(Version.Minor)].ToString()), int.Parse(valueObj[nameof(Version.Build)].ToString()), int.Parse(valueObj[nameof(Version.Revision)].ToString()))
-                    : new Version(obj[nameof(VersionSensorValue.Value)]?.ToString()),
+                    ? new Version(GetIntValue(nameof(Version.Major), valueObj), GetIntValue(nameof(Version.Minor), valueObj), GetIntValue(nameof(Version.Build), valueObj), GetIntValue(nameof(Version.Revision), valueObj))
+                    : new Version(GetValue(nameof(VersionSensorValue.Value))),
             };
         }
     }
