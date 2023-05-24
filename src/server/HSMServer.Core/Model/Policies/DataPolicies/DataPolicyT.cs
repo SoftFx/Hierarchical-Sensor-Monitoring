@@ -4,11 +4,6 @@ namespace HSMServer.Core.Model.Policies
 {
     public abstract class DataPolicy<T> : Policy where T : BaseValue
     {
-        protected override SensorStatus FailStatus => Status;
-
-        protected override string FailMessage { get; }
-
-
         public SensorStatus Status { get; set; }
 
         public string Comment { get; set; }

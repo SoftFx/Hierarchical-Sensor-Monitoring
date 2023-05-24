@@ -6,14 +6,14 @@ using System.Linq;
 
 namespace HSMServer.Core.Model.Policies.Infrastructure
 {
-    public static class CustomCommentBuilder
+    public static class CommentBuilder
     {
         private const char Separator = ' ';
 
-        private readonly static ConcurrentDictionary<string, string> _properties = new();
+        private readonly static ConcurrentDictionary<string, string> _templates = new();
 
 
-        public static Dictionary<string, string> Properties { get; } = new()
+        public static Dictionary<string, string> Variables { get; } = new()
         {
             { "$product", "Parent product name" },
             { "$path", "Sensor path" },
@@ -31,12 +31,12 @@ namespace HSMServer.Core.Model.Policies.Infrastructure
         };
 
 
-        static CustomCommentBuilder()
+        static CommentBuilder()
         {
-            var properties = Properties.Keys.ToList();
+            var properties = Variables.Keys.ToList();
 
             for (int i = 0; i < properties.Count; ++i)
-                _properties.TryAdd(properties[i], $"{{{i}}}");
+                _templates.TryAdd(properties[i], $"{{{i}}}");
         }
 
 
@@ -67,7 +67,7 @@ namespace HSMServer.Core.Model.Policies.Infrastructure
             {
                 ref string word = ref words[i];
 
-                foreach (var (property, index) in _properties)
+                foreach (var (property, index) in _templates)
                     if (word.Contains(property))
                         word = word.Replace(property, index);
             }

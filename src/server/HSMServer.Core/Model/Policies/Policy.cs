@@ -25,13 +25,6 @@ namespace HSMServer.Core.Model.Policies
         protected static PolicyResult Ok => PolicyResult.Ok;
 
 
-        protected abstract SensorStatus FailStatus { get; }
-
-        protected abstract string FailMessage { get; }
-
-        protected virtual string FailIcon => FailStatus.ToIcon();
-
-
         public Guid Id { get; init; }
 
 
@@ -52,6 +45,13 @@ namespace HSMServer.Core.Model.Policies
 
     public abstract class ServerPolicy : Policy
     {
+        protected abstract SensorStatus FailStatus { get; }
+
+        protected abstract string FailMessage { get; }
+
+        protected virtual string FailIcon => FailStatus.ToIcon();
+
+
         internal PolicyResult Fail { get; }
 
 

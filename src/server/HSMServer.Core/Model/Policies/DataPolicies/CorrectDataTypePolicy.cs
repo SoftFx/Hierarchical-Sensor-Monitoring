@@ -2,22 +2,20 @@
 {
     internal sealed class CorrectDataTypePolicy<T> : Policy where T : BaseValue
     {
-        private PolicyResult Fail { get; }
+        private const SensorStatus FailStatus = SensorStatus.Error;
 
-        protected override SensorStatus FailStatus => SensorStatus.Error;
-
-        protected override string FailMessage => $"Sensor value type is not {typeof(T).Name}";
+        private readonly PolicyResult _fail;
 
 
         internal CorrectDataTypePolicy()
         {
-            Fail = new(FailStatus, FailMessage, FailIcon);
+            _fail = new(FailStatus, $"Sensor value type is not {typeof(T).Name}", FailStatus.ToIcon());
         }
 
 
         internal PolicyResult Validate(T value)
         {
-            return value is not null ? Ok : Fail;
+            return value is not null ? Ok : _fail;
         }
     }
 }

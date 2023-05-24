@@ -67,10 +67,10 @@ namespace HSMServer.Model.TreeViewModel
 
         private DataAlertViewModel BuildAlert(Policy policy, BaseSensorModel sensor) => policy switch
         {
-            IntegerDataPolicy p => new IntegerDataAlertViewModel(p, sensor) { IsModify = false },
-            DoubleDataPolicy p => new DoubleDataAlertViewModel(p, sensor) { IsModify = false },
-            IntegerBarDataPolicy p => new IntegerBarDataAlertViewModel(p, sensor) { IsModify = false },
-            DoubleBarDataPolicy p => new DoubleBarDataAlertViewModel(p, sensor) { IsModify = false },
+            IntegerDataPolicy p => new IntegerDataAlertViewModel(p, sensor),
+            DoubleDataPolicy p => new DoubleDataAlertViewModel(p, sensor),
+            IntegerBarDataPolicy p => new IntegerBarDataAlertViewModel(p, sensor),
+            DoubleBarDataPolicy p => new DoubleBarDataAlertViewModel(p, sensor),
         };
 
         private static string GetFileNameString(SensorType sensorType, string value)

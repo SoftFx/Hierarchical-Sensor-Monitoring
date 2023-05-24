@@ -8,7 +8,7 @@
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
 
 @{
-    var customCommentHelp = $"There is the next variables:<br/>{string.Join("<br/>", CustomCommentBuilder.Properties.Select(p => $"<b>{p.Key} -</b> {p.Value}"))}";
+    var customCommentHelp = $"There is the next variables:<br/>{string.Join("<br/>", CommentBuilder.Variables.Select(p => $"<b>{p.Key} -</b> {p.Value}"))}";
 }
 
 

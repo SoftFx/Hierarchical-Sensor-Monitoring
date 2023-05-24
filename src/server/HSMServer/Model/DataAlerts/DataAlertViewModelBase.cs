@@ -12,20 +12,17 @@ namespace HSMServer.Model.DataAlerts
 {
     public class DataAlertViewModel
     {
-        public Guid Id { get; set; }
-
-        public string Property { get; set; }
-
         public PolicyOperation Operation { get; set; }
-
-        public string Value { get; set; }
 
         public SensorStatus Status { get; set; }
 
+        public string Property { get; set; }
+
         public string Comment { get; set; }
 
+        public string Value { get; set; }
 
-        public DataAlertViewModel() { }
+        public Guid Id { get; set; }
 
 
         internal DataPolicyUpdate ToUpdate() =>
@@ -45,25 +42,33 @@ namespace HSMServer.Model.DataAlerts
 
         public string DisplayComment { get; protected set; }
 
-        public required bool IsModify { get; init; }
+        public bool IsModify { get; protected set; }
 
 
-        public List<SelectListItem> PropertiesItems => Properties.Select(p => new SelectListItem(p, p)).ToList();
+        public List<SelectListItem> PropertiesItems { get; }
 
-        public List<SelectListItem> ActionsItems => Actions.Select(a => new SelectListItem(a.GetDisplayName(), $"{a}")).ToList();
+        public List<SelectListItem> ActionsItems { get; }
 
-        public List<SelectListItem> StatusesItems => _statuses.Select(s => new SelectListItem($"{s.ToSelectIcon()} {s.GetDisplayName()}", $"{s}")).ToList();
+        public List<SelectListItem> StatusesItems { get; }
 
 
-        public DataAlertViewModelBase() : base() { }
+        public DataAlertViewModelBase()
+        {
+            PropertiesItems = Properties.Select(p => new SelectListItem(p, p)).ToList();
+            ActionsItems = Actions.Select(a => new SelectListItem(a.GetDisplayName(), $"{a}")).ToList();
+            StatusesItems = _statuses.Select(s => new SelectListItem($"{s.ToSelectIcon()} {s.GetDisplayName()}", $"{s}")).ToList();
+        }
     }
 
 
     public abstract class DataAlertViewModelBase<T> : DataAlertViewModelBase where T : Core.Model.BaseValue
     {
-        public DataAlertViewModelBase() : base() { }
+        public DataAlertViewModelBase() : base()
+        {
+            IsModify = true;
+        }
 
-        public DataAlertViewModelBase(DataPolicy<T> policy)
+        public DataAlertViewModelBase(DataPolicy<T> policy) : base()
         {
             Id = policy.Id;
             Property = policy.Property;
