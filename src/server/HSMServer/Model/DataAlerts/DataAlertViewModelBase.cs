@@ -52,7 +52,7 @@ namespace HSMServer.Model.DataAlerts
 
         public List<SelectListItem> ActionsItems => Actions.Select(a => new SelectListItem(a.GetDisplayName(), $"{a}")).ToList();
 
-        public List<SelectListItem> StatusesItems => _statuses.Select(s => new SelectListItem(s.GetDisplayName(), $"{s}")).ToList();
+        public List<SelectListItem> StatusesItems => _statuses.Select(s => new SelectListItem($"{s.ToSelectIcon()} {s.GetDisplayName()}", $"{s}")).ToList();
 
 
         public DataAlertViewModelBase() : base() { }

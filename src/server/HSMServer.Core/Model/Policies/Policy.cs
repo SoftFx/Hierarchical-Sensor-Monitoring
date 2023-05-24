@@ -61,12 +61,14 @@ namespace HSMServer.Core.Model.Policies
         internal bool FromParent => Interval == null || Interval?.TimeInterval == TimeInterval.FromParent;
 
 
-        protected ServerPolicy() : base() { }
+        protected ServerPolicy() : base()
+        {
+            Fail = new(FailStatus, FailMessage, FailIcon);
+        }
 
-        protected ServerPolicy(TimeIntervalModel interval) : base()
+        protected ServerPolicy(TimeIntervalModel interval) : this()
         {
             Interval = interval;
-            Fail = new(FailStatus, FailMessage, FailIcon);
         }
 
 
