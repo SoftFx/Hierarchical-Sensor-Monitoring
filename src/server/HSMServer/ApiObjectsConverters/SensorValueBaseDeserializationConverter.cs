@@ -2,6 +2,7 @@
 using HSMSensorDataObjects.SensorValueRequests;
 using System;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 
 namespace HSMServer.ApiObjectsConverters
@@ -38,7 +39,7 @@ namespace HSMServer.ApiObjectsConverters
                     SensorType.DoubleBarSensor => JsonSerializer.Deserialize<DoubleBarSensorValue>(ref reader, options),
                     SensorType.FileSensor => JsonSerializer.Deserialize<FileSensorValue>(ref reader, options),
                     SensorType.TimeSpanSensor => JsonSerializer.Deserialize<TimeSpanSensorValue>(ref reader, options),
-                    SensorType.VersionSensor => JsonSerializer.Deserialize<VersionSensorValue>(ref reader, options),
+                    SensorType.VersionSensor => DeserializeVersion(ref reader, options),
                     _ => throw new JsonException(UnexpectedSensorTypeError),
                 };
             }
@@ -49,6 +50,24 @@ namespace HSMServer.ApiObjectsConverters
         public override void Write(Utf8JsonWriter writer, SensorValueBase value, JsonSerializerOptions options)
         {
             throw new NotImplementedException();
+        }
+
+
+        private static VersionSensorValue DeserializeVersion(ref Utf8JsonReader reader, JsonSerializerOptions options)
+        {
+            var obj = JsonSerializer.Deserialize<JsonObject>(ref reader, options);
+
+            return new VersionSensorValue()
+            {
+                Key = obj[nameof(VersionSensorValue.Key)]?.ToString(),
+                Path = obj[nameof(VersionSensorValue.Path)]?.ToString(),
+                Time = DateTime.Parse(obj[nameof(VersionSensorValue.Time)]?.ToString()).ToUniversalTime(),
+                Status = (SensorStatus)int.Parse(obj[nameof(VersionSensorValue.Status)]?.ToString()),
+                Comment = obj[nameof(VersionSensorValue.Comment)]?.ToString(),
+                Value = obj[nameof(VersionSensorValue.Value)] is JsonObject valueObj
+                    ? new Version(int.Parse(valueObj[nameof(Version.Major)].ToString()), int.Parse(valueObj[nameof(Version.Minor)].ToString()), int.Parse(valueObj[nameof(Version.Build)].ToString()), int.Parse(valueObj[nameof(Version.Revision)].ToString()))
+                    : new Version(obj[nameof(VersionSensorValue.Value)]?.ToString()),
+            };
         }
     }
 }
