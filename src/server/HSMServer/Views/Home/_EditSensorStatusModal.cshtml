@@ -101,6 +101,9 @@
             contentType: false,
             async: true,
             success: function (response) {
+                if (response.sensor.type === 8)
+                    response.sensor.value = "0.0.0.0";
+                    
                  $.ajax({
                      url: '/api/Sensors/list',
                      headers: { 'key': response.key },
