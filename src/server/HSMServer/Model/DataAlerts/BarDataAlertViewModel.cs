@@ -5,8 +5,10 @@ using System.Collections.Generic;
 
 namespace HSMServer.Model.DataAlerts
 {
-    public abstract class BarDataAlertViewModel<T, U> : DataAlertViewModelBase<T> where T : BarBaseValue<U> where U : struct
+    public sealed class BarDataAlertViewModel<T, U> : DataAlertViewModelBase<T> where T : BarBaseValue<U> where U : struct
     {
+        public override string DisplayComment { get; }
+
         protected override List<string> Properties { get; } = new()
         {
             nameof(BarBaseValue<U>.Min),
@@ -30,21 +32,5 @@ namespace HSMServer.Model.DataAlerts
         {
             DisplayComment = CommentBuilder.GetBarComment(sensor.LastValue as T, sensor, policy);
         }
-    }
-
-
-    public class IntegerBarDataAlertViewModel : BarDataAlertViewModel<IntegerBarValue, int>
-    {
-        public IntegerBarDataAlertViewModel() : base() { }
-
-        public IntegerBarDataAlertViewModel(IntegerBarDataPolicy policy, BaseSensorModel sensor) : base(policy, sensor) { }
-    }
-
-
-    public class DoubleBarDataAlertViewModel : BarDataAlertViewModel<DoubleBarValue, double>
-    {
-        public DoubleBarDataAlertViewModel() : base() { }
-
-        public DoubleBarDataAlertViewModel(DoubleBarDataPolicy policy, BaseSensorModel sensor) : base(policy, sensor) { }
     }
 }

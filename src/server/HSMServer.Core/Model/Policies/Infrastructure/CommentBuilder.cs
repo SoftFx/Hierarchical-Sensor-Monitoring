@@ -61,7 +61,7 @@ namespace HSMServer.Core.Model.Policies.Infrastructure
 
         private static string GetTemplateString(string raw)
         {
-            var words = raw.Split(Separator, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+            var words = raw?.Split(Separator, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries) ?? Array.Empty<string>();
 
             for (int i = 0; i < words.Length; ++i)
             {

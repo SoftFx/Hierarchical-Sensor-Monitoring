@@ -516,10 +516,10 @@ namespace HSMServer.Controllers
         {
             DataAlertViewModelBase viewModel = type switch
             {
-                SensorType.Integer => new IntegerDataAlertViewModel(),
-                SensorType.Double => new DoubleDataAlertViewModel(),
-                SensorType.IntegerBar => new IntegerBarDataAlertViewModel(),
-                SensorType.DoubleBar => new DoubleBarDataAlertViewModel(),
+                SensorType.Integer => new SingleDataAlertViewModel<IntegerValue, int>(),
+                SensorType.Double => new SingleDataAlertViewModel<DoubleValue, double>(),
+                SensorType.IntegerBar => new BarDataAlertViewModel<IntegerBarValue, int>(),
+                SensorType.DoubleBar => new BarDataAlertViewModel<DoubleBarValue, double>(),
                 _ => null,
             };
 

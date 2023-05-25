@@ -35,12 +35,12 @@ namespace HSMServer.Model.DataAlerts
         private readonly List<SensorStatus> _statuses = new() { SensorStatus.Error, SensorStatus.Warning };
 
 
+        public abstract string DisplayComment { get; }
+
         protected abstract List<string> Properties { get; }
 
         protected abstract List<PolicyOperation> Actions { get; }
 
-
-        public string DisplayComment { get; protected set; }
 
         public bool IsModify { get; protected set; }
 
