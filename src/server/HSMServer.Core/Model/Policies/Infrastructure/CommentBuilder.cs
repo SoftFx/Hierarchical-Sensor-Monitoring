@@ -20,8 +20,8 @@ namespace HSMServer.Core.Model.Policies.Infrastructure
             { "$sensor", "Sensor name" },
             { "$action" , "Alert binary operation" },
             { "$target" , "Alert constant to compare" },
+            { "$status", "Sensor status" },
             { "$time", "Sensor value sending time" },
-            { "$status", "Sensor value status" },
             { "$comment", "Sensor value comment" },
             { "$value", "Sensor value" },
             { "$min", "Bar sensor min value" },
@@ -46,7 +46,7 @@ namespace HSMServer.Core.Model.Policies.Infrastructure
             var template = GetTemplateString(policy.Comment);
 
             return string.Format(template, sensor.RootProductName, sensor.Path, sensor.DisplayName, policy.Operation.GetDisplayName(), policy.Target.Value,
-                value.Time, value.Status, value.Comment, value.Value, null, null, null, null);
+               value.Status, value.Time, value.Comment, value.Value, null, null, null, null);
         }
 
         public static string GetBarComment<T, U>(T value, BaseSensorModel sensor, DataPolicy<T, U> policy)
@@ -56,10 +56,10 @@ namespace HSMServer.Core.Model.Policies.Infrastructure
             var template = GetTemplateString(policy.Comment);
 
             return string.Format(template, sensor.RootProductName, sensor.Path, sensor.DisplayName, policy.Operation.GetDisplayName(), policy.Target.Value,
-                value.Time, value.Status, value.Comment, null, value.Min, value.Max, value.Mean, value.LastValue);
+                value.Status, value.Time, value.Comment, null, value.Min, value.Max, value.Mean, value.LastValue);
         }
 
-        private static string GetTemplateString(string raw)
+        public static string GetTemplateString(string raw)
         {
             var words = raw?.Split(Separator, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries) ?? Array.Empty<string>();
 

@@ -20,6 +20,8 @@ namespace HSMServer.Model.DataAlerts
 
         public string Comment { get; set; }
 
+        public Guid EntityId { get; set; }
+
         public string Value { get; set; }
 
         public Guid Id { get; set; }
@@ -63,13 +65,15 @@ namespace HSMServer.Model.DataAlerts
 
     public abstract class DataAlertViewModelBase<T> : DataAlertViewModelBase where T : Core.Model.BaseValue
     {
-        public DataAlertViewModelBase() : base()
+        public DataAlertViewModelBase(Guid entityId) : base()
         {
+            EntityId = entityId;
             IsModify = true;
         }
 
-        public DataAlertViewModelBase(DataPolicy<T> policy) : base()
+        public DataAlertViewModelBase(DataPolicy<T> policy, Core.Model.BaseSensorModel sensor) : base()
         {
+            EntityId = sensor.Id;
             Id = policy.Id;
             Property = policy.Property;
             Operation = policy.Operation;

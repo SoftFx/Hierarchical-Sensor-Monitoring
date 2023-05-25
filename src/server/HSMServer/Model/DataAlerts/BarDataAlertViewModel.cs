@@ -1,6 +1,7 @@
 ﻿using HSMServer.Core.Model;
 using HSMServer.Core.Model.Policies;
 using HSMServer.Core.Model.Policies.Infrastructure;
+using System;
 using System.Collections.Generic;
 
 namespace HSMServer.Model.DataAlerts
@@ -26,9 +27,9 @@ namespace HSMServer.Model.DataAlerts
         };
 
 
-        public BarDataAlertViewModel() : base() { }
+        public BarDataAlertViewModel(Guid entityId) : base(entityId) { }
 
-        public BarDataAlertViewModel(DataPolicy<T, U> policy, BaseSensorModel sensor) : base(policy)
+        public BarDataAlertViewModel(DataPolicy<T, U> policy, BaseSensorModel sensor) : base(policy, sensor)
         {
             DisplayComment = CommentBuilder.GetBarComment(sensor.LastValue as T, sensor, policy);
         }

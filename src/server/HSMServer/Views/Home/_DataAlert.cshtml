@@ -1,6 +1,7 @@
 ﻿@using HSMServer.Model.DataAlerts
-@using HSMServer.Extensions;
-@using HSMCommon.Extensions;
+@using HSMServer.Extensions
+@using HSMCommon.Extensions
+@using HSMServer.Controllers
 
 @model DataAlertViewModelBase
 
@@ -9,6 +10,7 @@
 
 <div class="dataAlertRow">
     <input class="d-none" asp-for="Id" value="@Model.Id" />
+    <input class="d-none" asp-for="EntityId" value="@Model.EntityId" />
 
     <div id="dataAlertLabel_@Model.Id" class="ms-3 @(Model.IsModify ? "d-none" : string.Empty)">
         If <b>@Model.Property @Model.Operation.GetDisplayName() @Model.Value</b> then send @Model.Status.ToIconStatus() with message <i>@Model.DisplayComment</i>
@@ -30,7 +32,7 @@
             <i class="fa-solid fa-ellipsis-vertical button-link"></i>
         </button>
         <div class="dropdown-menu dropdown-menu-end" aria-labelledby="actionButton">
-            <a class="dropdown-item text-decoration-none fw-normal button-link">Send test message</a>
+            <a class="dropdown-item text-decoration-none fw-normal button-link sendMessage">Send test message</a>
             <a class="dropdown-item text-decoration-none fw-normal button-link deleteRow">Remove</a>
         </div>
     </div>
@@ -43,4 +45,31 @@
             $(this).parents("div.dataAlertRow:first").remove();
         });
     });
+
+    $(document).ready(function () {
+        $("a.sendMessage").off("click").on("click", function () {
+            var element = $(this).parents("div.dataAlertRow:first");
+
+            var form = new FormData();
+            appendProperty(form, element, "select", "Property");
+            appendProperty(form, element, "select", "Operation");
+            appendProperty(form, element, "select", "Status");
+            appendProperty(form, element, "input", "Comment");
+            appendProperty(form, element, "input", "Value");
+            appendProperty(form, element, "input", "EntityId");
+
+            $.ajax({
+                url: '@Url.Action(nameof(HomeController.SendTestMessage))',
+                type: 'POST',
+                data: form,
+                processData: false,
+                contentType: false,
+                async: true
+            });
+        });
+    });
+
+    function appendProperty(form, element, propertyElement, propertyName) {
+        form.append(`alert.${propertyName}`, element.find($(`${propertyElement}[name='${propertyName}']`)).val());
+    }
 </script>

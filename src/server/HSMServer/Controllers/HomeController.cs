@@ -1,9 +1,11 @@
+using HSMCommon.Extensions;
 using HSMServer.ApiObjectsConverters;
 using HSMServer.Authentication;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Helpers;
 using HSMServer.Core.Model;
+using HSMServer.Core.Model.Policies.Infrastructure;
 using HSMServer.Core.MonitoringHistoryProcessor.Factory;
 using HSMServer.Extensions;
 using HSMServer.Folders;
@@ -16,6 +18,7 @@ using HSMServer.Model.Folders.ViewModels;
 using HSMServer.Model.TreeViewModel;
 using HSMServer.Model.ViewModel;
 using HSMServer.Notification.Settings;
+using HSMServer.Notifications;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System;
@@ -42,11 +45,13 @@ namespace HSMServer.Controllers
         private readonly IFolderManager _folderManager;
         private readonly TreeViewModel _treeViewModel;
         private readonly IUserManager _userManager;
+        private readonly TelegramBot _telegramBot;
 
 
         public HomeController(ITreeValuesCache treeValuesCache, IFolderManager folderManager,
-            TreeViewModel treeViewModel, IUserManager userManager)
+            TreeViewModel treeViewModel, IUserManager userManager, NotificationsCenter notifications)
         {
+            _telegramBot = notifications.TelegramBot;
             _treeValuesCache = treeValuesCache;
             _treeViewModel = treeViewModel;
             _folderManager = folderManager;
@@ -512,19 +517,40 @@ namespace HSMServer.Controllers
             return PartialView("_MetaInfo", new SensorInfoViewModel(sensor));
         }
 
-        public IActionResult AddDataPolicy(SensorType type)
+
+        public IActionResult AddDataPolicy(SensorType type, Guid sensorId)
         {
             DataAlertViewModelBase viewModel = type switch
             {
-                SensorType.Integer => new SingleDataAlertViewModel<IntegerValue, int>(),
-                SensorType.Double => new SingleDataAlertViewModel<DoubleValue, double>(),
-                SensorType.IntegerBar => new BarDataAlertViewModel<IntegerBarValue, int>(),
-                SensorType.DoubleBar => new BarDataAlertViewModel<DoubleBarValue, double>(),
+                SensorType.Integer => new SingleDataAlertViewModel<IntegerValue, int>(sensorId),
+                SensorType.Double => new SingleDataAlertViewModel<DoubleValue, double>(sensorId),
+                SensorType.IntegerBar => new BarDataAlertViewModel<IntegerBarValue, int>(sensorId),
+                SensorType.DoubleBar => new BarDataAlertViewModel<DoubleBarValue, double>(sensorId),
                 _ => null,
             };
 
             return PartialView("_DataAlert", viewModel);
         }
+
+        [HttpPost]
+        public void SendTestMessage(DataAlertViewModel alert)
+        {
+            var sensor = _treeValuesCache.GetSensor(alert.EntityId);
+            if (sensor == null)
+                return;
+
+            var product = _treeValuesCache.GetProductByName(sensor.RootProductName);
+            if (product == null)
+                return;
+
+            var template = CommentBuilder.GetTemplateString(alert.Comment);
+            var testMessage = string.Format(template, sensor.RootProductName, sensor.Path, sensor.DisplayName,
+                alert.Operation.GetDisplayName(), alert.Value, SensorStatus.Ok, DateTime.UtcNow, "value comment", 0, 0, 0, 0, 0);
+
+            foreach (var chat in product.NotificationsSettings.TelegramSettings.Chats)
+                _telegramBot.SendTestMessage(chat.Id, testMessage);
+        }
+
 
         [HttpGet]
         public IActionResult GetSensorEditModal(Guid sensorId)

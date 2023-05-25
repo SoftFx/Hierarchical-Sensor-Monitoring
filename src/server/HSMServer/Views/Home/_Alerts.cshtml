@@ -47,7 +47,7 @@
         <div class="d-flex justify-content-between align-items-center">
             <div>
                 <label class="col-form-label fw-bold">@type data alerts:</label>
-                <a id="addDataAlert" href="javascript:addDataAlert('@type');" class="d-none mx-2">
+                <a id="addDataAlert" href="javascript:addDataAlert('@type', '@Model.EncodedId');" class="d-none mx-2">
                     <i class="fa-solid fa-plus"></i> Add
                 </a>
             </div>
@@ -73,9 +73,9 @@
         });
     });
 
-    function addDataAlert(type) {
+    function addDataAlert(type, entityId) {
         $.ajax({
-            url: `@Url.Action(nameof(HomeController.AddDataPolicy), ViewConstants.HomeController)?type=${type}`,
+            url: `@Url.Action(nameof(HomeController.AddDataPolicy), ViewConstants.HomeController)?type=${type}&sensorId=${entityId}`,
             cache: false
         }).done(function (viewData) {
             $(`#dataAlertsList_${type}`).append(viewData);
