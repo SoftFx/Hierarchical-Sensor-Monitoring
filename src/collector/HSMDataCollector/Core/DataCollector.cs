@@ -10,6 +10,7 @@ using HSMDataCollector.Logging;
 using HSMDataCollector.Options;
 using HSMDataCollector.PublicInterface;
 using HSMSensorDataObjects;
+using NLog;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -139,6 +140,8 @@ namespace HSMDataCollector.Core
             }
             catch (Exception ex)
             {
+                _logManager.Logger?.Error(ex);
+
                 StopSensors(ex.Message);
             }
         }
@@ -161,6 +164,8 @@ namespace HSMDataCollector.Core
             }
             catch (Exception ex)
             {
+                _logManager.Logger?.Error(ex);
+
                 StopSensors(ex.Message);
             }
         }

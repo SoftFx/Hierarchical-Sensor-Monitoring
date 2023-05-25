@@ -63,4 +63,9 @@
 * New method **SendFileAsync** has been added
 
 ### Other
-* Collector version has been increased to 3.1.0
+* Collector version has been increased to 3.1.2
+
+# HSM DataObjects
+
+* New sensor type **Version** has been added
+* DataObjects version has been increased to 3.0.2

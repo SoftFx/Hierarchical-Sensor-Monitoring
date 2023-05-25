@@ -51,7 +51,10 @@ namespace HSMDataCollector.DefaultSensors
 
         protected abstract T GetValue();
 
+
         protected virtual string GetComment() => null;
+
+        protected virtual T GetDefaultValue() => default;
 
         protected virtual SensorStatus GetStatus() => SensorStatus.Ok;
 
@@ -72,7 +75,9 @@ namespace HSMDataCollector.DefaultSensors
             }
             catch (Exception ex)
             {
-                return GetSensorValue(default).Complete(ex.Message, SensorStatus.Error);
+                ThrowException(ex);
+
+                return GetSensorValue(GetDefaultValue()).Complete(ex.Message, SensorStatus.Error);
             }
         }
     }
