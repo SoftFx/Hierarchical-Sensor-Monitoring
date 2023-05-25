@@ -3,12 +3,10 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace HSMServer.Core.MonitoringHistoryProcessor.Processor
+namespace HSMServer.Model.History
 {
-    internal abstract class HistoryProcessorBase : IHistoryProcessor
+    internal abstract class HistoryProcessorBase
     {
-        public abstract string GetCsvHistory(List<BaseValue> originalData);
-
         public List<BaseValue> ProcessingAndCompression(List<BaseValue> values, int compressedValuesCount)
         {
             values = values.OrderBy(v => v.Time).ThenBy(v => v.ReceivingTime).ToList();

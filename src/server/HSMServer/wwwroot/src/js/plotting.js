@@ -1,7 +1,5 @@
 ﻿window.displayGraph = function(graphData, graphType, graphElementId, graphName) {
     let convertedData = convertToGraphData(graphData, graphType, graphName);
-
-    //console.log('converted graph data:', convertedData);
     let zoomData = getPreviousZoomData(graphElementId);
     var config = { responsive: true }
     if (graphType === "7") {

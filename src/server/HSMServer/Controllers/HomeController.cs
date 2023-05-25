@@ -1,14 +1,13 @@
+using HSMServer.ApiObjectsConverters;
 using HSMServer.Authentication;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Helpers;
 using HSMServer.Core.Model;
-using HSMServer.Core.MonitoringHistoryProcessor.Factory;
 using HSMServer.Extensions;
 using HSMServer.Folders;
 using HSMServer.Helpers;
 using HSMServer.Model;
-using HSMServer.Model.Authentication.History;
 using HSMServer.Model.Folders;
 using HSMServer.Model.Folders.ViewModels;
 using HSMServer.Model.TreeViewModel;
@@ -20,10 +19,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Text;
 using System.Threading.Tasks;
-using HSMServer.ApiObjectsConverters;
-using HSMServer.Model.UserTreeShallowCopy;
 using SensorStatus = HSMSensorDataObjects.SensorStatus;
 
 namespace HSMServer.Controllers
@@ -32,25 +28,17 @@ namespace HSMServer.Controllers
     [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
     public class HomeController : BaseController
     {
-        private const int LatestHistoryCount = -100;
-        internal const int MaxHistoryCount = -TreeValuesCache.MaxHistoryCount;
-
-        private static readonly JsonResult _emptyJsonResult = new(new EmptyResult());
-        private static readonly EmptyResult _emptyResult = new();
-
         private readonly ITreeValuesCache _treeValuesCache;
         private readonly IFolderManager _folderManager;
         private readonly TreeViewModel _treeViewModel;
-        private readonly IUserManager _userManager;
 
 
         public HomeController(ITreeValuesCache treeValuesCache, IFolderManager folderManager,
-            TreeViewModel treeViewModel, IUserManager userManager)
+            TreeViewModel treeViewModel, IUserManager userManager) : base(userManager)
         {
             _treeValuesCache = treeValuesCache;
             _treeViewModel = treeViewModel;
             _folderManager = folderManager;
-            _userManager = userManager;
         }
 
 
@@ -63,20 +51,24 @@ namespace HSMServer.Controllers
         }
 
         [HttpPost]
-        public IActionResult SelectNode([FromQuery(Name = "Selected")] string selectedId)
+        public IActionResult SelectNode(string selectedId)
         {
             BaseNodeViewModel viewModel = null;
 
             if (!string.IsNullOrEmpty(selectedId))
             {
-                var decodedId = SensorPathHelper.DecodeGuid(selectedId);
+                var id = selectedId.ToGuid();
 
-                if (_folderManager.TryGetValue(decodedId, out var folder))
+                if (_folderManager.TryGetValue(id, out var folder))
                     viewModel = folder;
-                else if (_treeViewModel.Nodes.TryGetValue(decodedId, out var node))
+                else if (_treeViewModel.Nodes.TryGetValue(id, out var node))
                     viewModel = node;
-                else if (_treeViewModel.Sensors.TryGetValue(decodedId, out var sensor))
+                else if (_treeViewModel.Sensors.TryGetValue(id, out var sensor))
+                {
                     viewModel = sensor;
+
+                    StoredUser.History.ConnectSensor(_treeValuesCache.GetSensor(id));
+                }
             }
 
             return PartialView("_NodeDataPanel", viewModel);
@@ -247,13 +239,12 @@ namespace HSMServer.Controllers
 
         private void UpdateUserNotificationSettings(Guid selectedNode, Action<ClientNotifications, Guid> updateSettings)
         {
-            var user = _userManager[CurrentUser.Id];
             foreach (var sensorId in GetNodeSensors(selectedNode))
             {
-                updateSettings?.Invoke(user.Notifications, sensorId);
+                updateSettings?.Invoke(StoredUser.Notifications, sensorId);
             }
 
-            _userManager.UpdateUser(user);
+            _userManager.UpdateUser(StoredUser);
         }
 
         private void UpdateGroupNotificationSettings(Guid selectedNode, Action<ClientNotifications, Guid> updateSettings)
@@ -307,124 +298,14 @@ namespace HSMServer.Controllers
 
             if (_treeViewModel.Nodes.TryGetValue(id, out var node))
                 return PartialView("_GeneralInfo", new ProductInfoViewModel(node));
-            
+
             if (_folderManager[id] is not null)
                 return PartialView("_GeneralInfo", new FolderInfoViewModel(_folderManager[id]));
-            
+
             if (_treeViewModel.Sensors.TryGetValue(id, out var sensor))
                 return PartialView("_GeneralInfo", new SensorInfoViewModel(sensor));
 
             return _emptyResult;
-        }
-        
-        #endregion
-
-        #region SensorsHistory
-
-        [HttpPost]
-        public Task<IActionResult> HistoryLatest([FromBody] GetSensorHistoryModel model)
-        {
-            if (model == null)
-                return Task.FromResult(_emptyResult as IActionResult);
-
-            return History(SpecifyLatestHistoryModel(model));
-        }
-
-        [HttpPost]
-        public async Task<IActionResult> History([FromBody] GetSensorHistoryModel model)
-        {
-            if (model == null)
-                return _emptyResult;
-
-            var enumerator =
-                _treeValuesCache.GetSensorValuesPage(SensorPathHelper.DecodeGuid(model.EncodedId), model.FromUtc, model.ToUtc, model.Count);
-            var viewModel = await new HistoryValuesViewModel(model.EncodedId, model.Type, enumerator,
-                GetLocalLastValue(model.EncodedId, model.FromUtc, model.ToUtc)).Initialize();
-
-            _userManager[CurrentUser.Id].Pagination = viewModel;
-
-            return GetHistoryTable(viewModel);
-        }
-
-        [HttpGet]
-        public IActionResult GetPreviousPage()
-        {
-            return GetHistoryTable(_userManager[CurrentUser.Id].Pagination?.ToPreviousPage());
-        }
-
-        [HttpGet]
-        public async Task<IActionResult> GetNextPage()
-        {
-            return GetHistoryTable(await (_userManager[CurrentUser.Id].Pagination?.ToNextPage()));
-        }
-
-
-        [HttpPost]
-        public Task<JsonResult> RawHistoryLatest([FromBody] GetSensorHistoryModel model)
-        {
-            if (model == null)
-                return Task.FromResult(_emptyJsonResult);
-
-            return RawHistory(SpecifyLatestHistoryModel(model));
-        }
-
-        [HttpPost]
-        public async Task<JsonResult> RawHistory([FromBody] GetSensorHistoryModel model)
-        {
-            if (model == null)
-                return _emptyJsonResult;
-
-            var values = await GetSensorValues(model.EncodedId, model.FromUtc, model.ToUtc, model.Count);
-
-            var localValue = GetLocalLastValue(model.EncodedId, model.FromUtc, model.ToUtc);
-            if (localValue is not null)
-                values.Add(localValue);
-
-            return new(HistoryProcessorFactory.BuildProcessor(model.Type).ProcessingAndCompression(values, model.BarsCount).Select(v => (object)v));
-        }
-
-
-        public async Task<FileResult> ExportHistory([FromQuery(Name = "EncodedId")] string encodedId, [FromQuery(Name = "Type")] int type,
-            [FromQuery(Name = "From")] DateTime from, [FromQuery(Name = "To")] DateTime to)
-        {
-            var (productName, path) = GetSensorProductAndPath(encodedId);
-            string fileName = $"{productName}_{path.Replace('/', '_')}_from_{from:s}_to{to:s}.csv";
-            Response.Headers.Add("Content-Disposition", $"attachment;filename={fileName}");
-
-            var values = await GetSensorValues(encodedId, from.ToUtcKind(), to.ToUtcKind(), MaxHistoryCount);
-
-            return GetExportHistory(values, type, fileName);
-        }
-
-
-        private PartialViewResult GetHistoryTable(HistoryValuesViewModel viewModel) =>
-            PartialView("_SensorValuesTable", viewModel);
-
-        private FileResult GetExportHistory(List<BaseValue> values, int type, string fileName)
-        {
-            var csv = HistoryProcessorFactory.BuildProcessor(type).GetCsvHistory(values);
-            var content = Encoding.UTF8.GetBytes(csv);
-
-            return File(content, fileName.GetContentType(), fileName);
-        }
-
-        private ValueTask<List<BaseValue>> GetSensorValues(string encodedId, DateTime from, DateTime to, int count)
-        {
-            if (string.IsNullOrEmpty(encodedId))
-                return new(new List<BaseValue>());
-
-            return _treeValuesCache.GetSensorValuesPage(SensorPathHelper.DecodeGuid(encodedId), from, to, count).Flatten();
-        }
-
-        private GetSensorHistoryModel SpecifyLatestHistoryModel(GetSensorHistoryModel model)
-        {
-            _treeViewModel.Sensors.TryGetValue(SensorPathHelper.DecodeGuid(model.EncodedId), out var sensor);
-
-            model.From = DateTime.MinValue;
-            model.To = sensor?.LastValue?.ReceivingTime ?? DateTime.MinValue;
-            model.Count = LatestHistoryCount;
-
-            return model;
         }
 
         #endregion
@@ -434,7 +315,7 @@ namespace HSMServer.Controllers
         [HttpGet]
         public async Task<IActionResult> GetFile([FromQuery(Name = "Selected")] string encodedId, [FromQuery] long dateTime = default)
         {
-            var (_, path) = GetSensorProductAndPath(encodedId);
+            var path = GetSensorPath(encodedId);
 
             var value = await GetFileByReceivingTimeOrDefault(encodedId, dateTime);
 
@@ -449,7 +330,7 @@ namespace HSMServer.Controllers
         [HttpPost]
         public async Task<IActionResult> GetFileStream([FromQuery(Name = "Selected")] string encodedId, [FromQuery] long dateTime = default)
         {
-            var (_, path) = GetSensorProductAndPath(encodedId);
+            var path = GetSensorPath(encodedId);
 
             var value = await GetFileByReceivingTimeOrDefault(encodedId, dateTime);
 
@@ -473,25 +354,29 @@ namespace HSMServer.Controllers
         [HttpGet]
         public async Task<IActionResult> GetRecentFilesView([FromQuery] string fileId)
         {
-            var viewModel = await GetFileHistory(fileId);
-            _userManager[CurrentUser.Id].Pagination = viewModel;
-
-            return GetFileTable(viewModel);
+            return GetFileTable(await GetFileHistory(fileId));
         }
 
-        private PartialViewResult GetFileTable(HistoryValuesViewModel viewModel) =>
+        private PartialViewResult GetFileTable(HistoryTableViewModel viewModel) =>
             PartialView("_FileAccordions", viewModel);
 
         private FileValue GetFileSensorValue(string encodedId) =>
             _treeValuesCache.GetSensor(SensorPathHelper.DecodeGuid(encodedId)).LastValue as FileValue;
 
-        private async Task<FileValue> GetFileByReceivingTimeOrDefault(string encodedId, long ticks = default) => 
+        private async Task<FileValue> GetFileByReceivingTimeOrDefault(string encodedId, long ticks = default) =>
             (ticks == default ? GetFileSensorValue(encodedId) : (await GetFileHistory(encodedId)).Pages[0].Cast<FileValue>().FirstOrDefault(file => file.ReceivingTime.Ticks == ticks)).DecompressContent();
 
-        private Task<HistoryValuesViewModel> GetFileHistory(string encodedId)
+        private async Task<HistoryTableViewModel> GetFileHistory(string encodedId)
         {
-            var enumerator = _treeValuesCache.GetSensorValuesPage(SensorPathHelper.DecodeGuid(encodedId), DateTime.MinValue, DateTime.MaxValue, -20);
-            return new HistoryValuesViewModel(encodedId, 6, enumerator, GetLocalLastValue(encodedId, DateTime.MinValue, DateTime.MaxValue)).Initialize();
+            var request = new GetSensorHistoryModel()
+            {
+                EncodedId = encodedId,
+                BarsCount = -20,
+            };
+
+            await StoredUser.History.Reload(_treeValuesCache, request);
+
+            return StoredUser.History.Table;
         }
 
         #endregion
@@ -534,10 +419,10 @@ namespace HSMServer.Controllers
         {
             _treeViewModel.Sensors.TryGetValue(sensorId, out var sensorNodeViewModel);
             var isAccessKeyExist = GetKeyOrDefaultWithPermissions(sensorNodeViewModel?.RootProduct.Id ?? Guid.Empty, KeyPermissions.CanSendSensorData) is not null;
-            
+
             if (!isAccessKeyExist)
                 ModelState.AddModelError(nameof(EditSensorStatusViewModal.RootProductId), EditSensorStatusViewModal.AccessKeyValidationErrorMessage);
-            
+
             return PartialView("_EditSensorStatusModal", new EditSensorStatusViewModal(sensorNodeViewModel, isAccessKeyExist));
         }
 
@@ -554,15 +439,15 @@ namespace HSMServer.Controllers
                 ModelState.AddModelError(nameof(EditSensorStatusViewModal.RootProductId), EditSensorStatusViewModal.AccessKeyValidationErrorMessage);
                 return BadRequest(ModelState);
             }
-            
+
             var sensor = _treeValuesCache.GetSensor(modal.SensorId);
             var comment = $"User: {CurrentUser.Name}. Reason: {modal.Reason}";
 
             var sensorValue = ApiConverters.CreateNewSensorValue(sensor.Type);
-            
+
             if (sensorValue is null)
                 return BadRequest();
-            
+
             sensorValue.Comment = comment;
             sensorValue.Path = sensor.Path;
             sensorValue.Status = (SensorStatus)modal.NewStatus;
@@ -593,7 +478,7 @@ namespace HSMServer.Controllers
 
             if (!ModelState.IsValid)
                 return PartialView("_MetaInfo", new ProductInfoViewModel(product));
-            
+
             var update = new ProductUpdate
             {
                 Id = product.Id,
@@ -634,13 +519,11 @@ namespace HSMServer.Controllers
                 : _emptyResult;
         }
 
-        private (string productName, string path) GetSensorProductAndPath(string encodedId)
+        private string GetSensorPath(string encodedId)
         {
-            var decodedId = SensorPathHelper.DecodeGuid(encodedId);
+            _treeViewModel.Sensors.TryGetValue(SensorPathHelper.DecodeGuid(encodedId), out var sensor);
 
-            _treeViewModel.Sensors.TryGetValue(decodedId, out var sensor);
-
-            return (sensor?.RootProduct.Name, sensor?.Path);
+            return sensor?.Path;
         }
 
         private BarBaseValue GetLocalLastValue(string encodedId, DateTime from, DateTime to)
@@ -651,7 +534,7 @@ namespace HSMServer.Controllers
 
             return localValue?.ReceivingTime >= from && localValue?.ReceivingTime <= to ? localValue : null;
         }
-        
+
         private AccessKeyModel GetKeyOrDefaultWithPermissions(Guid productId, KeyPermissions permissions) =>
             _treeValuesCache.GetProduct(productId).AccessKeys.Values.FirstOrDefault(x => x.IsValid(permissions, out _));
     }

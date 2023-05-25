@@ -1,6 +1,6 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.ConcurrentStorage;
-using HSMServer.Model.Authentication.History;
+using HSMServer.Model.History;
 using HSMServer.Notification.Settings;
 using HSMServer.UserFilters;
 using System;
@@ -30,7 +30,7 @@ namespace HSMServer.Model.Authentication
         public TreeUserFilter TreeFilter { get; set; }
 
 
-        public HistoryValuesViewModel Pagination { get; set; }
+        public SelectedSensorHistoryViewModel History { get; } = new();
 
 
         public User(string userName) : this()

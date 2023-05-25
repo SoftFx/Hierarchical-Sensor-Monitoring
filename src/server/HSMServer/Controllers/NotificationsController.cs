@@ -18,16 +18,14 @@ namespace HSMServer.Controllers
     public class NotificationsController : BaseController
     {
         private readonly IFolderManager _folderManager;
-        private readonly IUserManager _userManager;
         private readonly TelegramBot _telegramBot;
         private readonly TreeViewModel _tree;
 
 
         public NotificationsController(IUserManager userManager, IFolderManager folderManager,
-            TreeViewModel tree, NotificationsCenter notifications)
+            TreeViewModel tree, NotificationsCenter notifications) : base(userManager)
         {
             _folderManager = folderManager;
-            _userManager = userManager;
             _tree = tree;
 
             _telegramBot = notifications.TelegramBot;

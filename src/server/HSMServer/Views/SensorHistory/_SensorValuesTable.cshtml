@@ -1,25 +1,23 @@
 ﻿@using HSMServer.Core.Model
-@using HSMServer.Model.Authentication.History;
 @using HSMServer.Model.History;
 @using HSMServer.Extensions;
 
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
 
-@model HistoryValuesViewModel
+@model HistoryTableViewModel
 
 @{
-    var values = Model.Pages.Count == 0 ? Enumerable.Empty<BaseValue>() : Model.Pages[Model.CurrentPageIndex];
-    var historyValues = values.Select(v => HistoryValueViewModel.Create(v, (int)Model.SensorType)).ToList();
+    var olderTime = Model.CurrentPage?.LastOrDefault()?.Time;
 }
 
 
-@if (historyValues.Count == 0)
+@if (Model.Pages.Count == 0)
 {
-    <div id="noTableValues_@Model.EncodedId"></div>
+    <div id="noTableValues_@Model.SensorId"></div>
 }
 else
 {
-    <input id="oldest_date_@Model.EncodedId" style='display: none' value="@values.LastOrDefault()?.Time" />
+    <input id="oldest_date_@Model.SensorId" style='display: none' value="@olderTime" />
     <div>
         <table class='table table-striped'>
             <thead>
@@ -31,6 +29,7 @@ else
                         <th>Mean</th>
                         <th>Max</th>
                         <th>Count</th>
+                        <th>Last value</th>
                     }
                     else
                     {
@@ -41,7 +40,7 @@ else
                 </tr>
             </thead>
             <tbody>
-                @foreach (var value in historyValues)
+                @foreach (var value in Model.CurrentPage)
                 {
                     <tr>
                         <td>@value.Time.ToDefaultFormat()</td>
@@ -53,19 +52,13 @@ else
                             <td>@barValue.Mean</td>
                             <td>@barValue.Max</td>
                             <td>@barValue.Count</td>
+                            <td>@barValue.LastValue</td>
                         }
                         else
                         {
                             var simpleValue = value as SimpleSensorValueViewModel;
 
-                            if (Model.SensorType == SensorType.TimeSpan)
-                            {
-                                <td>@simpleValue.Value.ToTableView()</td>
-                            }
-                            else
-                            {
-                                <td>@simpleValue.Value</td>
-                            }
+                            <td>@simpleValue.Value</td>
                         }
                         <td>
                             <span class="@value.Status.ToIcon()"></span> @value.Status
@@ -79,15 +72,15 @@ else
         <div class="container d-flex justify-content-center">
             <ul class="pagination">
                 <li id="prevPageButton" class="page-item button-link">
-                    <a class="page-link" aria-label="Previous" onclick="showPage(prevPageAction, '@(Model.EncodedId)')">
+                    <a class="page-link" aria-label="Previous" onclick="showPage(prevPageAction, '@(Model.SensorId)')">
                         <span aria-hidden="true">&laquo;</span>
                     </a>
                 </li>
                 <li class="page-item">
-                    <a class="page-link">@(Model.CurrentPageIndex + 1)</a>
+                    <a class="page-link">@(Model.CurrentIndex + 1)</a>
                 </li>
                 <li id="nextPageButton" class="page-item button-link">
-                    <a class="page-link" aria-label="Next" onclick="showPage(nextPageAction, '@(Model.EncodedId)')">
+                    <a class="page-link" aria-label="Next" onclick="showPage(nextPageAction, '@(Model.SensorId)')">
                         <span aria-hidden="true">&raquo;</span>
                     </a>
                 </li>
@@ -98,11 +91,11 @@ else
 
 
 <script>
-    if (@Model.CurrentPageIndex === @Model.LastPageIndex) {
+    if (@Model.CurrentIndex === @Model.LastIndex) {
         $('#nextPageButton').addClass('disabled');
     }
 
-    if (@Model.CurrentPageIndex === 0) {
+    if (@Model.CurrentIndex === 0) {
         $('#prevPageButton').addClass('disabled');
     }
 </script>
