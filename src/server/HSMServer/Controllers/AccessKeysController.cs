@@ -78,7 +78,7 @@ namespace HSMServer.Controllers
         }
 
         [HttpPost]
-        [ProductRoleFilterByKey(ProductRoleEnum.ProductManager)]
+        [ProductRoleFilterByKey(nameof(key), ProductRoleEnum.ProductManager)]
         public IActionResult NewAccessKey(EditAccessKeyViewModel key)
         {
             if (!ModelState.IsValid)
@@ -101,7 +101,7 @@ namespace HSMServer.Controllers
         }
 
         [HttpGet]
-        [ProductRoleFilterBySelectedKey(ProductRoleEnum.ProductManager)]
+        [ProductRoleFilterBySelectedKey(nameof(selectedKey), ProductRoleEnum.ProductManager)]
         public IActionResult ModifyAccessKey(string selectedKey, bool closeModal = false)
         {
             var key = TreeValuesCache.GetAccessKey(Guid.Parse(selectedKey));
@@ -110,7 +110,7 @@ namespace HSMServer.Controllers
         }
 
         [HttpPost]
-        [ProductRoleFilterByKey(ProductRoleEnum.ProductManager)]
+        [ProductRoleFilterByKey(nameof(key), ProductRoleEnum.ProductManager)]
         public IActionResult ModifyAccessKey(EditAccessKeyViewModel key)
         {
             if (!ModelState.IsValid)
@@ -125,7 +125,7 @@ namespace HSMServer.Controllers
         }
 
         [HttpPost]
-        [ProductRoleFilterBySelectedKey(ProductRoleEnum.ProductManager)]
+        [ProductRoleFilterBySelectedKey(nameof(selectedKey), ProductRoleEnum.ProductManager)]
         public IActionResult RemoveAccessKeyFromAllTable(string selectedKey, bool fullTable)
         {
             var key = TreeValuesCache.RemoveAccessKey(Guid.Parse(selectedKey));
@@ -137,7 +137,7 @@ namespace HSMServer.Controllers
         }
 
         [HttpPost]
-        [ProductRoleFilterBySelectedKey(ProductRoleEnum.ProductManager)]
+        [ProductRoleFilterBySelectedKey(nameof(selectedKey), ProductRoleEnum.ProductManager)]
         public IActionResult BlockAccessKeyFromAllTable(string selectedKey, KeyState updatedState, bool fullTable)
         {
             var key = TreeValuesCache.GetAccessKey(Guid.Parse(selectedKey));

@@ -17,12 +17,13 @@ namespace HSMServer.Filters
         private readonly RedirectToActionResult _redirectToHomeIndex =
             new(ViewConstants.IndexAction, ViewConstants.HomeController, null);
 
-        protected abstract string ArgumentName { get; set; }
+        protected string ArgumentName { get; }
 
 
-        public UserRoleFilterBase(params ProductRoleEnum[] parameters)
+        public UserRoleFilterBase(string argumentName, params ProductRoleEnum[] parameters)
         {
             _roles = new List<ProductRoleEnum>(parameters);
+            ArgumentName = argumentName;
         }
 
 
