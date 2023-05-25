@@ -60,7 +60,7 @@ namespace HSMServer.Controllers
         }
 
         [HttpGet]
-        [ProductRoleFilterByEncodedProductId(ProductRoleEnum.ProductManager)]
+        [ProductRoleFilterByEncodedProductId(nameof(selectedId), ProductRoleEnum.ProductManager)]
         public IActionResult NewAccessKey(string selectedId, bool closeModal = false, AccessKeyReturnType returnType = AccessKeyReturnType.Modal)
         {
             var key = new EditAccessKeyViewModel()

@@ -141,7 +141,7 @@ namespace HSMServer.Controllers
 
         #region Edit Product
 
-        [ProductRoleFilterByEncodedProductId(ProductRoleEnum.ProductManager)]
+        [ProductRoleFilterByEncodedProductId("Product",ProductRoleEnum.ProductManager)]
         public IActionResult EditProduct([FromQuery(Name = "Product")] string encodedProductId)
         {
             var notAdminUsers = _userManager.GetUsers(u => !u.IsAdmin).ToList();

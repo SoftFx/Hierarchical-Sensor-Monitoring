@@ -7,7 +7,7 @@ namespace HSMServer.Filters.ProductRoleFilters
 {
     public class ProductRoleFilterBySelectedKey : ProductRoleFilterBase
     {
-        protected override string ArgumentName => "selectedKey";
+        protected override string ArgumentName { get; set; } = "selectedKey";
 
 
         public ProductRoleFilterBySelectedKey(params ProductRoleEnum[] roles) : base(roles) { }

@@ -6,7 +6,7 @@ namespace HSMServer.Filters.FolderRoleFilters
 {
     public sealed class FolderRoleFilterByFolderId : FolderRoleFilterBase
     {
-        protected override string ArgumentName => "folderId";
+        protected override string ArgumentName { get; set; } = "folderId";
 
 
         public FolderRoleFilterByFolderId(params ProductRoleEnum[] roles) : base(roles) { }
