@@ -130,9 +130,11 @@
 <script>
     initializeTree();
     initialize();
-
+    
     $(document).ready(() => {
            $('#updateTime').empty().append('Update Time: ' + new Date().toUTCString());
+           console.log($('#jstree').jstree(true))
+           console.log($('#jstree').jstree(true).get_json('#', {}))
     })
      
     $(window).on('load' ,function (){

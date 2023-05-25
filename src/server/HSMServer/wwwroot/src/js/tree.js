@@ -37,6 +37,7 @@ window.initializeTree = function () {
             return a < b ? 1 : -1;
         }
     }).on("state_ready.jstree", function () {
+        console.log($(this).jstree('get_selected'))
         selectNodeAjax($(this).jstree('get_selected'));
     }).on('open_node.jstree', function (e, data) {
         if (isRefreshing != true) {

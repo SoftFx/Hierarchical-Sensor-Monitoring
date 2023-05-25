@@ -83,6 +83,7 @@ namespace HSMServer.Model.TreeViewModel
                         {
                             
                             if (nodeIds is not null && nodeIds.Contains(subNode.Data.Id)) continue;
+                            
                             subNode.Sensors.RemoveRange(1, subNode.Sensors.Count - 1);
                             subNode.Nodes.Clear();
                         }
