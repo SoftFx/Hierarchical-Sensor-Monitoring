@@ -1,3 +1,4 @@
+using HSMServer.ApiObjectsConverters;
 using HSMServer.Authentication;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Cache.UpdateEntities;
@@ -10,6 +11,7 @@ using HSMServer.Model;
 using HSMServer.Model.Folders;
 using HSMServer.Model.Folders.ViewModels;
 using HSMServer.Model.History;
+using HSMServer.Model.Model.History;
 using HSMServer.Model.TreeViewModel;
 using HSMServer.Model.ViewModel;
 using HSMServer.Notification.Settings;
@@ -20,7 +22,6 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
-using HSMServer.ApiObjectsConverters;
 using SensorStatus = HSMSensorDataObjects.SensorStatus;
 
 namespace HSMServer.Controllers
@@ -49,20 +50,24 @@ namespace HSMServer.Controllers
         }
 
         [HttpPost]
-        public IActionResult SelectNode([FromQuery(Name = "Selected")] string selectedId)
+        public IActionResult SelectNode(string selectedId)
         {
             BaseNodeViewModel viewModel = null;
 
             if (!string.IsNullOrEmpty(selectedId))
             {
-                var decodedId = SensorPathHelper.DecodeGuid(selectedId);
+                var id = selectedId.ToGuid();
 
-                if (_folderManager.TryGetValue(decodedId, out var folder))
+                if (_folderManager.TryGetValue(id, out var folder))
                     viewModel = folder;
-                else if (_treeViewModel.Nodes.TryGetValue(decodedId, out var node))
+                else if (_treeViewModel.Nodes.TryGetValue(id, out var node))
                     viewModel = node;
-                else if (_treeViewModel.Sensors.TryGetValue(decodedId, out var sensor))
+                else if (_treeViewModel.Sensors.TryGetValue(id, out var sensor))
+                {
                     viewModel = sensor;
+
+                    StoredUser.History.ConnectSensor(_treeValuesCache.GetSensor(id));
+                }
             }
 
             return PartialView("_NodeDataPanel", viewModel);
@@ -277,16 +282,16 @@ namespace HSMServer.Controllers
 
             if (_treeViewModel.Nodes.TryGetValue(id, out var node))
                 return PartialView("_GeneralInfo", new ProductInfoViewModel(node));
-            
+
             if (_folderManager[id] is not null)
                 return PartialView("_GeneralInfo", new FolderInfoViewModel(_folderManager[id]));
-            
+
             if (_treeViewModel.Sensors.TryGetValue(id, out var sensor))
                 return PartialView("_GeneralInfo", new SensorInfoViewModel(sensor));
 
             return _emptyResult;
         }
-        
+
         #endregion
 
         #region File
@@ -333,25 +338,29 @@ namespace HSMServer.Controllers
         [HttpGet]
         public async Task<IActionResult> GetRecentFilesView([FromQuery] string fileId)
         {
-            var viewModel = await GetFileHistory(fileId);
-            _userManager[CurrentUser.Id].History.Table = viewModel;
-
-            return GetFileTable(viewModel);
+            return GetFileTable(await GetFileHistory(fileId));
         }
 
-        private PartialViewResult GetFileTable(TableValuesViewModel viewModel) =>
+        private PartialViewResult GetFileTable(HistoryTableViewModel viewModel) =>
             PartialView("_FileAccordions", viewModel);
 
         private FileValue GetFileSensorValue(string encodedId) =>
             _treeValuesCache.GetSensor(SensorPathHelper.DecodeGuid(encodedId)).LastValue as FileValue;
 
-        private async Task<FileValue> GetFileByReceivingTimeOrDefault(string encodedId, long ticks = default) => 
+        private async Task<FileValue> GetFileByReceivingTimeOrDefault(string encodedId, long ticks = default) =>
             (ticks == default ? GetFileSensorValue(encodedId) : (await GetFileHistory(encodedId)).Pages[0].Cast<FileValue>().FirstOrDefault(file => file.ReceivingTime.Ticks == ticks)).DecompressContent();
 
-        private Task<TableValuesViewModel> GetFileHistory(string encodedId)
+        private async Task<HistoryTableViewModel> GetFileHistory(string encodedId)
         {
-            var enumerator = _treeValuesCache.GetSensorValuesPage(SensorPathHelper.DecodeGuid(encodedId), DateTime.MinValue, DateTime.MaxValue, -20);
-            return new TableValuesViewModel(encodedId, 6, enumerator, GetLocalLastValue(encodedId, DateTime.MinValue, DateTime.MaxValue)).Initialize();
+            var request = new GetSensorHistoryModel()
+            {
+                EncodedId = encodedId,
+                BarsCount = -20,
+            };
+
+            await StoredUser.History.Reload(_treeValuesCache, request);
+
+            return StoredUser.History.Table;
         }
 
         #endregion
@@ -394,10 +403,10 @@ namespace HSMServer.Controllers
         {
             _treeViewModel.Sensors.TryGetValue(sensorId, out var sensorNodeViewModel);
             var isAccessKeyExist = GetKeyOrDefaultWithPermissions(sensorNodeViewModel?.RootProduct.Id ?? Guid.Empty, KeyPermissions.CanSendSensorData) is not null;
-            
+
             if (!isAccessKeyExist)
                 ModelState.AddModelError(nameof(EditSensorStatusViewModal.RootProductId), EditSensorStatusViewModal.AccessKeyValidationErrorMessage);
-            
+
             return PartialView("_EditSensorStatusModal", new EditSensorStatusViewModal(sensorNodeViewModel, isAccessKeyExist));
         }
 
@@ -414,15 +423,15 @@ namespace HSMServer.Controllers
                 ModelState.AddModelError(nameof(EditSensorStatusViewModal.RootProductId), EditSensorStatusViewModal.AccessKeyValidationErrorMessage);
                 return BadRequest(ModelState);
             }
-            
+
             var sensor = _treeValuesCache.GetSensor(modal.SensorId);
             var comment = $"User: {CurrentUser.Name}. Reason: {modal.Reason}";
 
             var sensorValue = ApiConverters.CreateNewSensorValue(sensor.Type);
-            
+
             if (sensorValue is null)
                 return BadRequest();
-            
+
             sensorValue.Comment = comment;
             sensorValue.Path = sensor.Path;
             sensorValue.Status = (SensorStatus)modal.NewStatus;
@@ -509,7 +518,7 @@ namespace HSMServer.Controllers
 
             return localValue?.ReceivingTime >= from && localValue?.ReceivingTime <= to ? localValue : null;
         }
-        
+
         private AccessKeyModel GetKeyOrDefaultWithPermissions(Guid productId, KeyPermissions permissions) =>
             _treeValuesCache.GetProduct(productId).AccessKeys.Values.FirstOrDefault(x => x.IsValid(permissions, out _));
     }

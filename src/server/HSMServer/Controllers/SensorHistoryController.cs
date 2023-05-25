@@ -27,6 +27,9 @@ namespace HSMServer.Controllers
         private readonly TreeViewModel _tree;
 
 
+        private HistoryTableViewModel SelectedTable => StoredUser.History.Table;
+
+
         public SensorHistoryController(ITreeValuesCache cache, TreeViewModel tree, IUserManager userManager) : base(userManager)
         {
             _cache = cache;
@@ -49,24 +52,21 @@ namespace HSMServer.Controllers
             if (model == null)
                 return _emptyResult;
 
-            var enumerator = _cache.GetSensorValuesPage(SensorPathHelper.DecodeGuid(model.EncodedId), model.FromUtc, model.ToUtc, model.Count);
-            var viewModel = await new TableValuesViewModel(model.EncodedId, model.Type, enumerator, GetLocalLastValue(model.EncodedId, model.FromUtc, model.ToUtc)).Initialize();
+            await StoredUser.History.Reload(_cache, model);
 
-            StoredUser.History.Table = viewModel;
-
-            return GetHistoryTable(viewModel);
+            return GetHistoryTable(SelectedTable);
         }
 
         [HttpGet]
         public IActionResult GetPreviousTablePage()
         {
-            return GetHistoryTable(StoredUser.History.Table?.ToPreviousPage());
+            return GetHistoryTable(SelectedTable?.ToPreviousPage());
         }
 
         [HttpGet]
         public async Task<IActionResult> GetNextTablePage()
         {
-            return GetHistoryTable(await (StoredUser.History.Table?.ToNextPage()));
+            return GetHistoryTable(await SelectedTable?.ToNextPage());
         }
 
 
@@ -111,7 +111,7 @@ namespace HSMServer.Controllers
         }
 
 
-        private PartialViewResult GetHistoryTable(TableValuesViewModel viewModel) => PartialView("_SensorValuesTable", viewModel);
+        private PartialViewResult GetHistoryTable(HistoryTableViewModel viewModel) => PartialView("_SensorValuesTable", viewModel);
 
 
         private ValueTask<List<BaseValue>> GetSensorValues(string encodedId, DateTime from, DateTime to, int count)

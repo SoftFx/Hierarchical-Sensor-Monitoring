@@ -83,7 +83,7 @@ function selectNodeAjax(selectedId) {
 
     $.ajax({
         type: 'post',
-        url: selectNode + '?Selected=' + selectedId,
+        url: `${selectNode}?selectedId=${selectedId}`,
         datatype: 'html',
         contenttype: 'application/json',
         cache: false,

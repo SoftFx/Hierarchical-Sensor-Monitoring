@@ -28,6 +28,8 @@ namespace HSMServer.Core.Model
             if (canStore)
                 Storage.AddValue(valueT);
 
+            ReceivedNewValue?.Invoke(valueT);
+
             return canStore;
         }
 

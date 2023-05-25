@@ -7,17 +7,6 @@ namespace HSMServer.Model.Model.History
 {
     public class GetSensorHistoryModel
     {
-        public string EncodedId { get; set; }
-
-        public DateTime To { get; set; } = DateTime.MaxValue;
-
-        public DateTime From { get; set; } = DateTime.MinValue;
-
-        public int Type { get; set; }
-
-        public int BarsCount { get; set; }
-
-
         [JsonIgnore]
         internal int Count { get; set; } = SensorHistoryController.MaxHistoryCount;
 
@@ -26,5 +15,16 @@ namespace HSMServer.Model.Model.History
 
         [JsonIgnore]
         internal DateTime FromUtc => From.ToUtcKind();
+
+
+        public string EncodedId { get; set; }
+
+        public int Type { get; set; }
+
+        public int BarsCount { get; set; }
+
+        public DateTime To { get; set; } = DateTime.MaxValue;
+
+        public DateTime From { get; set; } = DateTime.MinValue;
     }
 }
