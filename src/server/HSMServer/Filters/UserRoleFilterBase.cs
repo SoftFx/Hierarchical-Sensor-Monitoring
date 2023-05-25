@@ -14,16 +14,15 @@ namespace HSMServer.Filters
     public abstract class UserRoleFilterBase : Attribute, IActionFilter
     {
         private readonly List<ProductRoleEnum> _roles;
-        private readonly RedirectToActionResult _redirectToHomeIndex =
-            new(ViewConstants.IndexAction, ViewConstants.HomeController, null);
+        private readonly RedirectToActionResult _redirectToHomeIndex = new(ViewConstants.IndexAction, ViewConstants.HomeController, null);
 
-        protected string ArgumentName { get; }
+        private readonly string _argumentName;
 
 
         public UserRoleFilterBase(string argumentName, params ProductRoleEnum[] parameters)
         {
             _roles = new List<ProductRoleEnum>(parameters);
-            ArgumentName = argumentName;
+            _argumentName = argumentName;
         }
 
 
@@ -51,7 +50,7 @@ namespace HSMServer.Filters
         {
             folderId = null;
 
-            if (context.ActionArguments.TryGetValue(ArgumentName, out var arg))
+            if (context.ActionArguments.TryGetValue(_argumentName, out var arg))
                 folderId = GetEntityId(arg, context);
 
             return folderId != null;
