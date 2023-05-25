@@ -135,14 +135,17 @@ namespace HSMServer.Controllers
         }
 
         [HttpPost]
-        public void RemoveNode([FromQuery] string selectedId)
+        public void RemoveNode([FromBody] string[] ids)
         {
-            var decodedId = SensorPathHelper.DecodeGuid(selectedId);
+            foreach (var id in ids)
+            {
+                var decodedId = SensorPathHelper.DecodeGuid(id);
 
-            if (_treeViewModel.Nodes.TryGetValue(decodedId, out var node))
-                _treeValuesCache.RemoveNode(node.Id);
-            else if (_treeViewModel.Sensors.TryGetValue(decodedId, out var sensor))
-                _treeValuesCache.RemoveSensor(sensor.Id);
+                if (_treeViewModel.Nodes.TryGetValue(decodedId, out var node))
+                    _treeValuesCache.RemoveNode(node.Id);
+                else if (_treeViewModel.Sensors.TryGetValue(decodedId, out var sensor))
+                    _treeValuesCache.RemoveSensor(sensor.Id);
+            }
         }
 
         [HttpPost]

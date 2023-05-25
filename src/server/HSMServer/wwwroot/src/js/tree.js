@@ -9,6 +9,7 @@ window.initializeTree = function () {
     $('#jstree').jstree({
         "core": {
             "check_callback": true,
+            "multiple": true
         },
         "contextmenu": {
             "items": buildContextMenu
@@ -137,10 +138,50 @@ const AjaxPost = {
 };
 
 function buildContextMenu(node) {
+    var contextMenu = {};
+    
     let curType = getCurrentElementType(node);
     let isManager = node.data.jstree.isManager === "True";
+    
+    let selectedNodes = $('#jstree').jstree(true).get_selected();
+    
+    if (selectedNodes.length > 1) {
+        contextMenu["RemoveNode"] = {
+            "label": `Remove items`,
+            "action": _ => {
+                var modal = new bootstrap.Modal(document.getElementById('modalDelete'));
 
-    var contextMenu = {};
+                //modal
+                $('#modalDeleteLabel').empty().append(`Remove items`);
+                $('#modalDeleteBody').empty().append(`Do you really want to remove selected items?`);
+                modal.show();
+                
+
+                //modal confirm
+                $('#confirmDeleteButton').off('click').on('click', () => {
+                    modal.hide();
+                    
+                    $.ajax({
+                        url:`${removeNodeAction}`,
+                        type: 'POST',
+                        cache: false,
+                        async: true,
+                        data: JSON.stringify(selectedNodes),
+                        contentType: "application/json"
+                    }).done(() => {
+                        updateTreeTimer();
+                        showToast(`Items have been removed`);
+
+                        $(`#${node.parents[0]}_anchor`).trigger('click');
+                    });
+                });
+
+                $('#closeDeleteButton').off('click').on('click', () => modal.hide());
+            }
+        }
+        
+        return contextMenu;
+    }
 
     if (curType === NodeType.Product) {
         contextMenu["AccessKeys"] = {
@@ -218,7 +259,14 @@ function buildContextMenu(node) {
                     $('#confirmDeleteButton').off('click').on('click', () => {
                         modal.hide();
 
-                        $.ajax(`${removeNodeAction}?selectedId=${node.id}`, AjaxPost)
+                        $.ajax({
+                                url:`${removeNodeAction}`,
+                                type: 'POST',
+                                cache: false,
+                                async: true,
+                                data: JSON.stringify([node.id]),
+                                contentType: "application/json"
+                            })
                             .done(() => {
                                 updateTreeTimer();
                                 showToast(`${getKeyByValue(curType)} has been removed`);
@@ -292,7 +340,7 @@ function buildContextMenu(node) {
             "separator_before": true,
             "submenu": notificationSubmenu,
         };
-
+    console.log(123)
     return contextMenu;
 }
 
