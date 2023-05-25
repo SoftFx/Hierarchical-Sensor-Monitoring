@@ -5,7 +5,7 @@ namespace HSMServer.Filters.FolderRoleFilters
 {
     public abstract class FolderRoleFilterBase : UserRoleFilterBase
     {
-        public FolderRoleFilterBase(params ProductRoleEnum[] parameters) : base(parameters) { }
+        public FolderRoleFilterBase(string argumentName, params ProductRoleEnum[] parameters) : base(argumentName, parameters) { }
 
 
         protected override bool HasRole(User user, Guid? entityId, ProductRoleEnum role) =>
