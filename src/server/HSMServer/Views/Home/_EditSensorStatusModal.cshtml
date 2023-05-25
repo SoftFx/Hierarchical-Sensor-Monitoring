@@ -112,8 +112,6 @@
                      success: function () {
                         hideEditSensorModal();
                      }
-                 }).done(function (){
-                     allowSubmitEditStatus = true;
                  })
             },
             error: function (jqXHR) {
@@ -128,8 +126,9 @@
                             $('#buttonAddKey').removeClass('d-none')
                         }
                     }
+                    allowSubmitEditStatus = true;
                 })
-                allowSubmitEditStatus = true;
+               
             }
         })
     });
@@ -145,4 +144,7 @@
         $('#editSensorStatus_modal').modal('hide');
     }
 
+    $("#editSensorStatus_modal").on("hidden", function () {
+        allowSubmitEditStatus = true;
+    });
 </script>
