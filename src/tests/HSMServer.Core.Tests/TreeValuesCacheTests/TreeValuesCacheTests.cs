@@ -47,7 +47,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             await Task.Delay(1000);
 
             var expectedProducts = _databaseCoreManager.DatabaseCore.GetAllProducts();
-            var actualProducts = _valuesCache.GetNodes();
+            var actualProducts = _valuesCache.GetAllNodes();
 
             ModelsTester.TestProducts(expectedProducts, actualProducts);
         }
@@ -546,7 +546,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         }
 
         private ProductModel GetProductByName(string name) =>
-            _valuesCache.GetNodes().FirstOrDefault(p => p.DisplayName == name);
+            _valuesCache.GetAllNodes().FirstOrDefault(p => p.DisplayName == name);
 
         private BaseSensorModel GetSensorByNameFromCache(string name) =>
             _valuesCache.GetSensors().FirstOrDefault(s => s.DisplayName == name);
