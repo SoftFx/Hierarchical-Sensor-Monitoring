@@ -2,14 +2,11 @@
 @using HSMServer.Constants
 @using HSMServer.Controllers
 @using HSMServer.Core.Model.Policies.Infrastructure
+@using HSMServer.Helpers
 
 @model HSMServer.Model.ViewModel.NodeInfoBaseViewModel
 
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
-
-@{
-    var customCommentHelp = $"There is the next variables:<br/>{string.Join("<br/>", CommentBuilder.Variables.Select(p => $"<b>{p.Key} -</b> {p.Value}"))}";
-}
 
 
 <label class="col-form-label fw-bold">Alerts:</label>
@@ -51,7 +48,7 @@
                     <i class="fa-solid fa-plus"></i> Add
                 </a>
             </div>
-            <a id="commentHelp" data-bs-toggle="popover" title="Custom comment variables" data-bs-html="true" data-bs-content="@customCommentHelp"
+            <a id="commentHelp" data-bs-toggle="popover" title="Custom comment variables" data-bs-html="true" data-bs-content="@DataAlertCommentHelper.CreateCommentHelp()"
                class="d-none" style="color: #0366d6; cursor: pointer; text-decoration: underline;">
                 Comment help
             </a>
