@@ -69,7 +69,9 @@ namespace HSMServer.Core.Cache
         }
 
 
-        public List<ProductModel> GetNodes() => _tree.Values.ToList();
+        public List<ProductModel> GetAllNodes() => _tree.Values.ToList();
+
+        public List<ProductModel> GetNodes() => _tree.Values.Where(p => p.Parent != null).ToList();
 
         public List<BaseSensorModel> GetSensors() => _sensors.Values.ToList();
 

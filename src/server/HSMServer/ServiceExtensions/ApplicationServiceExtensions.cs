@@ -43,7 +43,7 @@ public static class ApplicationServiceExtensions
         services.AddSingleton<DataCollectorWrapper>();
         services.AddSingleton<TreeViewModel>();
 
-        services.AddHostedService<OutdatedSensorService>();
+        services.AddHostedService<ClearDatabaseService>();
         services.AddHostedService<MonitoringBackgroundService>();
         services.AddHostedService<DatacollectorService>();
 

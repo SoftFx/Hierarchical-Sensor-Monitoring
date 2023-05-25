@@ -51,6 +51,9 @@ namespace HSMServer.Core.Model
 
         public bool IsWaitRestore => !ServerPolicy.CheckRestorePolicies(Status.Status, LastUpdateTime).IsOk;
 
+        public bool ShouldDestroy => ServerPolicy.SelfDestroy.Policy?.Validate(LastUpdateTime).IsOk ?? false;
+
+
         public PolicyResult Status => State == SensorState.Muted ? _muteResult : _serverResult + DataPolicies.Result;
 
 
