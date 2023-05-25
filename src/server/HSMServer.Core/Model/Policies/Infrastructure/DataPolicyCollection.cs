@@ -1,33 +1,21 @@
 ﻿using HSMServer.Core.Cache;
 using HSMServer.Core.Cache.UpdateEntities;
+using HSMServer.Core.Model.Policies.Infrastructure;
 using System;
-using System.Collections;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 
 namespace HSMServer.Core.Model.Policies
 {
-    public abstract class DataPolicyCollection : IEnumerable<Policy>
+    public abstract class DataPolicyCollection : PolicyCollectionBase<Policy>
     {
-        internal abstract IEnumerable<Guid> Ids { get; }
-
-        internal protected PolicyResult Result { get; protected set; } = PolicyResult.Ok;
-
-
         public Action<ActionType, Policy> Uploaded;
 
 
         internal abstract void Update(List<DataPolicyUpdate> updates);
 
         internal abstract void Attach(BaseSensorModel sensor);
-
-        internal void Reset() => Result = PolicyResult.Ok;
-
-
-        public abstract IEnumerator<Policy> GetEnumerator();
-
-        IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
     }
 
 
@@ -78,6 +66,9 @@ namespace HSMServer.Core.Model.Policies
 
         internal override void Update(List<DataPolicyUpdate> updatesList)
         {
+            if (updatesList == null)
+                return;
+
             var updates = updatesList.Where(u => u.Id != Guid.Empty).ToDictionary(u => u.Id);
 
             foreach (var (id, policy) in _storage)
