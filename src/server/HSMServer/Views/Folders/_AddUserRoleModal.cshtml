@@ -19,7 +19,7 @@
                 <div class="row mt-2">
                     <label class="col-auto col-form-label">User</label>
                     <div class="col">
-                        <select class='form-select' id='userIdToAdd'>
+                        <select id='userIdToAdd' class="selectpicker" data-live-search="true" data-width="100%" title="Choose user to add">
                             @foreach (var user in Model.NotAdminUsers)
                             {
                                 <option value='@user.Id'>@user.Name</option>
@@ -50,3 +50,10 @@
         </div>
     </div>
 </div>
+
+
+<script>
+    $(document).ready(function () {
+        $("#userIdToAdd").selectpicker();
+    });
+</script>
