@@ -10,7 +10,7 @@ namespace HSMDataCollector.Core
 
         public int Port { get; set; } = 44330;
         
-        public int MaxQueueSize { get; set; } = 10000;
+        public int MaxQueueSize { get; set; } = 20000;
 
         public int MaxValuesInPackage { get; set; } = 1000;
 

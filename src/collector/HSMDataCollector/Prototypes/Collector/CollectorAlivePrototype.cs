@@ -1,6 +1,6 @@
 ﻿namespace HSMDataCollector.Options
 {
-    internal sealed class CollectorAlivePrototype : Prototype<CollectorMonitoringInfoOptions>
+    internal sealed class CollectorAlivePrototype : MonitoringPrototype<CollectorMonitoringInfoOptions>
     {
         protected override string NodePath { get; } = CollectorInfoOptions.BaseCollectorPath;
     }
