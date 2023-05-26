@@ -174,12 +174,14 @@ namespace HSMServer.Model.TreeViewModel
             return node;
         }
 
-        private void AddNewSensorViewModel(BaseSensorModel sensor, ProductNodeViewModel parent)
+        private SensorNodeViewModel AddNewSensorViewModel(BaseSensorModel sensor, ProductNodeViewModel parent)
         {
             var viewModel = new SensorNodeViewModel(sensor);
 
             parent.AddSensor(viewModel);
             Sensors.TryAdd(viewModel.Id, viewModel);
+
+            return viewModel;
         }
 
         private void AddNewAccessKeyViewModel(AccessKeyModel key, ProductNodeViewModel parent)
@@ -222,7 +224,14 @@ namespace HSMServer.Model.TreeViewModel
             {
                 case ActionType.Add:
                     if (Nodes.TryGetValue(model.Parent.Id, out var parent))
-                        AddNewSensorViewModel(model, parent);
+                    {
+                        var newSensor = AddNewSensorViewModel(model, parent);
+                        if (!newSensor.RootProduct.Notifications.Telegram.Chats.IsEmpty)
+                        {
+                            newSensor.RootProduct.Notifications.Enable(model.Id);
+                            UpdateProductNotificationSettings(newSensor.RootProduct);
+                        }
+                    }
                     break;
 
                 case ActionType.Update:
