@@ -31,6 +31,8 @@ namespace HSMDataCollector.Core
             }
         }
 
+        internal Task Init() => Task.WhenAll(Values.Select(s => s.Init()));
+
         internal Task Start() => Task.WhenAll(Values.Select(s => s.Start()));
 
         internal Task Stop() => Task.WhenAll(Values.Select(s => s.Stop()));

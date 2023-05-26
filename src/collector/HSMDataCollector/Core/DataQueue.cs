@@ -17,7 +17,7 @@ namespace HSMDataCollector.Core
         private readonly int _maxValuesInPackage;
 
         private Timer _sendTimer;
-
+        private bool _flushing;
 
         public event Action<List<SensorValueBase>> NewValuesEvent;
         public event Action<FileSensorValue> NewValueEvent;
@@ -45,7 +45,27 @@ namespace HSMDataCollector.Core
             _sendTimer = null;
         }
 
-        public void Flush() => NewValuesEvent?.Invoke(DequeueAllData());
+        public void Flush()
+        {
+            if (!_flushing)
+            {
+                _flushing = true;
+
+                var packageCount = (_failedQueue.Count + _valuesQueue.Count) / _maxValuesInPackage;
+
+                while (packageCount-- > 0)
+                {
+                    var dataList = new List<SensorValueBase>(_maxValuesInPackage);
+
+                    Dequeue(_failedQueue, dataList);
+                    Dequeue(_valuesQueue, dataList);
+
+                    NewValuesEvent?.Invoke(dataList);
+                }
+
+                _flushing = false;
+            }
+        }
 
 
         public void Push(SensorValueBase value) => Enqueue(_valuesQueue, value.TrimLongComment());
@@ -82,15 +102,6 @@ namespace HSMDataCollector.Core
                 }
 
             return dataList;
-        }
-
-        private List<SensorValueBase> DequeueAllData()
-        {
-            var dataList = new List<SensorValueBase>(1 << 3);
-
-            Dequeue(_failedQueue, dataList);
-
-            return Dequeue(_valuesQueue, dataList);
         }
     }
 }

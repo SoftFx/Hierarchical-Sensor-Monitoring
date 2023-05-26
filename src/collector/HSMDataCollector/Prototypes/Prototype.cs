@@ -28,4 +28,18 @@
             return options;
         }
     }
+
+
+    internal abstract class BarMonitoringPrototype<T> : Prototype<T> where T : MonitoringSensorOptions, new()
+    {
+        internal override T GetAndFill(T options)
+        {
+            base.GetAndFill(options);
+
+            if (options.PostDataPeriod == null)
+                options.PostDataPeriod = options.DefaultPostDataPeriod;
+
+            return options;
+        }
+    }
 }

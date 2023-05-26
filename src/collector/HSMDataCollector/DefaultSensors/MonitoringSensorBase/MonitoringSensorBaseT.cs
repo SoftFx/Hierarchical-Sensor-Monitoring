@@ -27,7 +27,7 @@ namespace HSMDataCollector.DefaultSensors
         }
 
 
-        internal override Task<bool> Start()
+        internal override Task<bool> Init()
         {
             if (!IsStarted)
                 _sendTimer = new Timer(OnTimerTick, null, TimerDueTime, _receiveDataPeriod);
@@ -42,8 +42,6 @@ namespace HSMDataCollector.DefaultSensors
 
             _sendTimer?.Dispose();
             _sendTimer = null;
-
-            OnTimerTick();
 
             return Task.CompletedTask;
         }
