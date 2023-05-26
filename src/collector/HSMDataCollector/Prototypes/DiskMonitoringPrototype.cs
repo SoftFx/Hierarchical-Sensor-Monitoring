@@ -4,15 +4,9 @@ using System.IO;
 
 namespace HSMDataCollector.Options
 {
-    internal sealed class DiskMonitoringPrototype : Prototype<DiskSensorOptions>
+    internal sealed class DiskMonitoringPrototype : MonitoringPrototype<DiskSensorOptions>
     {
         protected override string NodePath { get; } = "Disk monitoring";
-
-
-        internal DiskMonitoringPrototype() : base()
-        {
-            DefaultOptions.PostDataPeriod = TimeSpan.FromMinutes(5);
-        }
 
 
         internal IEnumerable<DiskSensorOptions> GetAllDisksOptions(DiskSensorOptions userOptions)
