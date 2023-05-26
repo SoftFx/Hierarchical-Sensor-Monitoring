@@ -146,7 +146,7 @@ namespace HSMServer.Controllers
             var decodedId = SensorPathHelper.DecodeGuid(selectedId);
 
             if (_treeViewModel.Nodes.TryGetValue(decodedId, out var node))
-                _treeValuesCache.RemoveNode(node.Id);
+                _treeValuesCache.RemoveProduct(node.Id);
             else if (_treeViewModel.Sensors.TryGetValue(decodedId, out var sensor))
                 _treeValuesCache.RemoveSensor(sensor.Id);
         }

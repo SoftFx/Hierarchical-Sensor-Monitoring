@@ -117,6 +117,8 @@ namespace HSMServer.Core.Cache
                 foreach (var (id, _) in product.AccessKeys)
                     RemoveAccessKey(id);
 
+                RemoveEntityPolicies(product);
+
                 ChangeProductEvent?.Invoke(product, ActionType.Delete);
             }
 
@@ -253,6 +255,8 @@ namespace HSMServer.Core.Cache
             if (_tree.TryGetValue(sensor.Parent.Id, out var parent))
                 parent.Sensors.TryRemove(sensorId, out _);
 
+            RemoveSensorPolicies(sensor);
+
             _databaseCore.RemoveSensorWithMetadata(sensorId.ToString());
 
             ChangeSensorEvent?.Invoke(sensor, ActionType.Delete);
@@ -270,20 +274,6 @@ namespace HSMServer.Core.Cache
                     State = endOfMuting is null ? SensorState.Available : SensorState.Muted,
                     EndOfMutingPeriod = endOfMuting,
                 });
-        }
-
-        public void RemoveNode(Guid productId)
-        {
-            if (!_tree.TryGetValue(productId, out var product))
-                return;
-
-            foreach (var (subProductId, _) in product.SubProducts)
-                RemoveNode(subProductId);
-
-            foreach (var (sensorId, _) in product.Sensors)
-                RemoveSensor(sensorId);
-
-            RemoveProduct(product.Id);
         }
 
         public void ClearNodeHistory(Guid productId)
@@ -377,6 +367,22 @@ namespace HSMServer.Core.Cache
         {
             foreach (var serverPolicy in collection)
                 serverPolicy.Uploaded += UpdatePolicy;
+        }
+
+        private void RemoveSensorPolicies(BaseSensorModel sensor)
+        {
+            sensor.DataPolicies.Uploaded -= UpdatePolicy;
+
+            RemoveEntityPolicies(sensor);
+        }
+
+        private void RemoveEntityPolicies(BaseNodeModel entity)
+        {
+            foreach (var serverPolicy in entity.ServerPolicy)
+                serverPolicy.Uploaded -= UpdatePolicy;
+
+            foreach (var policyId in entity.GetPolicyIds())
+                _databaseCore.RemovePolicy(policyId);
         }
 
         private static void ResetServerPolicyForRootProduct(ProductModel product)

@@ -105,6 +105,8 @@ namespace HSMServer.Core.Model
             Storage.Clear();
         }
 
+        internal override List<Guid> GetPolicyIds() => base.GetPolicyIds().AddRangeFluent(DataPolicies.Ids);
+
         internal SensorEntity ToEntity() => new()
         {
             Id = Id.ToString(),
@@ -116,7 +118,7 @@ namespace HSMServer.Core.Model
             Type = (byte)Type,
             State = (byte)State,
             Integration = (int)Integration,
-            Policies = GetPolicyIds().AddRangeFluent(DataPolicies.Ids).Select(u => u.ToString()).ToList(),
+            Policies = GetPolicyIds().Select(u => u.ToString()).ToList(),
             EndOfMuting = EndOfMuting?.Ticks ?? 0L,
         };
     }
