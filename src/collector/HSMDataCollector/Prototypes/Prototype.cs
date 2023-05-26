@@ -30,13 +30,13 @@
     }
 
 
-    internal abstract class BarMonitoringPrototype<T> : Prototype<T> where T : MonitoringSensorOptions, new()
+    internal abstract class MonitoringPrototype<T> : Prototype<T> where T : MonitoringSensorOptions, new()
     {
         internal override T GetAndFill(T options)
         {
             base.GetAndFill(options);
 
-            if (options.PostDataPeriod == null)
+            if (options.PostDataPeriod == default)
                 options.PostDataPeriod = options.DefaultPostDataPeriod;
 
             return options;
