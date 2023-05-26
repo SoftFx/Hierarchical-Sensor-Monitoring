@@ -63,7 +63,7 @@
 * New method **SendFileAsync** has been added
 
 ### Other
-* Collector version has been increased to 3.1.2
+* Collector version has been increased to 3.1.4
 
 # HSM DataObjects
 
