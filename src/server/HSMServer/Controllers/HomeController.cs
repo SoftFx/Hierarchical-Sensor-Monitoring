@@ -135,17 +135,42 @@ namespace HSMServer.Controllers
         }
 
         [HttpPost]
-        public void RemoveNode([FromBody] string[] ids)
+        public ActionResult RemoveNode([FromBody] string[] ids)
         {
+            var removedItems = new Dictionary<string, int>();
+            var showFolderError = false;
             foreach (var id in ids)
             {
                 var decodedId = SensorPathHelper.DecodeGuid(id);
 
+                if (_folderManager[decodedId] is not null)
+                {
+                    showFolderError = true;
+                    continue;
+                }
+                
                 if (_treeViewModel.Nodes.TryGetValue(decodedId, out var node))
+                {
                     _treeValuesCache.RemoveNode(node.Id);
-                else if (_treeViewModel.Sensors.TryGetValue(decodedId, out var sensor))
-                    _treeValuesCache.RemoveSensor(sensor.Id);
+                    if (removedItems.TryGetValue(nameof(_treeViewModel.Nodes), out _))
+                        removedItems[nameof(_treeViewModel.Nodes)]++;
+                    else removedItems.TryAdd(nameof(_treeViewModel.Nodes), 1);
+                    continue;
+                }
+                
+                if (!_treeViewModel.Sensors.TryGetValue(decodedId, out var sensor)) continue;
+
+                _treeValuesCache.RemoveSensor(sensor.Id);
+                    
+                if (removedItems.TryGetValue(nameof(_treeViewModel.Sensors), out _))
+                    removedItems[nameof(_treeViewModel.Sensors)]++;
+                else removedItems.TryAdd(nameof(_treeViewModel.Sensors), 1);
             }
+            return Json(new
+            {
+                toastMessage = string.Join(", ",removedItems.Select(x => $"{x.Key} : {x.Value}")),
+                error = showFolderError ? "Folders cannot be deleted" : string.Empty
+            });
         }
 
         [HttpPost]

@@ -156,7 +156,6 @@ function buildContextMenu(node) {
                 $('#modalDeleteBody').empty().append(`Do you really want to remove selected items?`);
                 modal.show();
                 
-
                 //modal confirm
                 $('#confirmDeleteButton').off('click').on('click', () => {
                     modal.hide();
@@ -168,10 +167,16 @@ function buildContextMenu(node) {
                         async: true,
                         data: JSON.stringify(selectedNodes),
                         contentType: "application/json"
-                    }).done(() => {
+                    }).done((response) => {
                         updateTreeTimer();
-                        showToast(`Items have been removed`);
+                        
+                        let toastMessage = `${response.toastMessage} have been removed`;
 
+                        if (response.error !== "")
+                            toastMessage += `<br> <span style="color: red">${response.error}</span>`
+                        
+                        showToast(toastMessage);
+                        
                         $(`#${node.parents[0]}_anchor`).trigger('click');
                     });
                 });
