@@ -63,7 +63,11 @@
 * New method **SendFileAsync** has been added
 
 ### Other
-* Collector version has been increased to 3.1.2
+* Collector version has been increased to 3.1.4
+* Package sending has been reworked. Packages will be sent until the queue is empty
+* Default queue size has been increased to 20.000 items
+* Default PostTime for WindowsInfo and DiskMonitroing sensors has been increased to 6h and 5min
+* The collector version will be logged
 
 # HSM DataObjects
 
