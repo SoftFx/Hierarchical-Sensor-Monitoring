@@ -31,12 +31,12 @@ namespace HSMDataCollector.DefaultSensors
 
         internal override async Task<bool> Init()
         {
-            var isStarted = await base.Init();
+            var isInitialized = await base.Init();
 
-            if (isStarted)
+            if (isInitialized)
                 _collectTimer = new Timer(CollectBar, null, _collectBarPeriod, _collectBarPeriod);
 
-            return isStarted;
+            return isInitialized;
         }
 
         internal override async Task Stop()

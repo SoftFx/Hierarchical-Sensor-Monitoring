@@ -51,7 +51,7 @@ namespace HSMDataCollector.Core
             {
                 _flushing = true;
 
-                var packageCount = (_failedQueue.Count + _valuesQueue.Count) / _maxValuesInPackage;
+                var packageCount = (_failedQueue.Count + _valuesQueue.Count) / _maxValuesInPackage + 1;
 
                 while (packageCount-- > 0)
                 {
@@ -60,7 +60,10 @@ namespace HSMDataCollector.Core
                     Dequeue(_failedQueue, dataList);
                     Dequeue(_valuesQueue, dataList);
 
-                    NewValuesEvent?.Invoke(dataList);
+                    if (dataList.Count > 0)
+                        NewValuesEvent?.Invoke(dataList);
+                    else
+                        break;
                 }
 
                 _flushing = false;

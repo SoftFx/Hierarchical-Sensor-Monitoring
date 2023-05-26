@@ -18,7 +18,7 @@ namespace HSMDataCollector.DefaultSensors
 
         protected virtual TimeSpan TimerDueTime => _receiveDataPeriod;
 
-        protected bool IsStarted => _sendTimer != null;
+        protected bool IsInitialized => _sendTimer != null;
 
 
         protected MonitoringSensorBase(MonitoringSensorOptions options) : base(options)
@@ -29,15 +29,15 @@ namespace HSMDataCollector.DefaultSensors
 
         internal override Task<bool> Init()
         {
-            if (!IsStarted)
+            if (!IsInitialized)
                 _sendTimer = new Timer(OnTimerTick, null, TimerDueTime, _receiveDataPeriod);
 
-            return Task.FromResult(IsStarted);
+            return Task.FromResult(IsInitialized);
         }
 
         internal override Task Stop()
         {
-            if (!IsStarted)
+            if (!IsInitialized)
                 return Task.FromResult(false);
 
             _sendTimer?.Dispose();
