@@ -34,7 +34,7 @@
     {
         internal override T GetAndFill(T options)
         {
-            base.GetAndFill(options);
+            options = base.GetAndFill(options);
 
             if (options.PostDataPeriod == default)
                 options.PostDataPeriod = options.DefaultPostDataPeriod;
