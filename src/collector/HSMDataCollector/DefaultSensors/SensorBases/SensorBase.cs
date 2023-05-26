@@ -35,8 +35,10 @@ namespace HSMDataCollector.DefaultSensors
         }
 
 
-        internal virtual Task<bool> Start() => Task.FromResult(true);
+        internal virtual Task<bool> Init() => Task.FromResult(true);
         
+        internal virtual Task<bool> Start() => Task.FromResult(true);
+
         internal virtual Task Stop() => Task.CompletedTask;
 
         protected void ThrowException(Exception ex) => ExceptionThrowing?.Invoke(SensorPath, ex);
