@@ -51,9 +51,9 @@ namespace HSMDataCollector.Core
             {
                 _flushing = true;
 
-                var packageCount = (_failedQueue.Count + _valuesQueue.Count) / _maxValuesInPackage + 1;
+                var packagesCount = (_failedQueue.Count + _valuesQueue.Count) / _maxValuesInPackage + 1;
 
-                while (packageCount-- > 0)
+                while (packagesCount-- > 0)
                 {
                     var dataList = new List<SensorValueBase>(_maxValuesInPackage);
 
