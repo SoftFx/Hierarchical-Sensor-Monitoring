@@ -1,5 +1,4 @@
-﻿using HSMServer.Authentication;
-using HSMServer.Core.Cache;
+﻿using HSMServer.Core.Cache;
 using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Model;
 using HSMServer.Extensions;
@@ -18,7 +17,6 @@ namespace HSMServer.Model.TreeViewModel
     public sealed class TreeViewModel
     {
         private readonly IFolderManager _folderManager;
-        private readonly IUserManager _userManager;
         private readonly ITreeValuesCache _cache;
 
 
@@ -29,10 +27,9 @@ namespace HSMServer.Model.TreeViewModel
         public ConcurrentDictionary<Guid, ProductNodeViewModel> Nodes { get; } = new();
 
 
-        public TreeViewModel(ITreeValuesCache cache, IUserManager userManager, IFolderManager folderManager)
+        public TreeViewModel(ITreeValuesCache cache, IFolderManager folderManager)
         {
             _folderManager = folderManager;
-            _userManager = userManager;
             _cache = cache;
 
             _cache.ChangeProductEvent += ChangeProductHandler;
@@ -225,11 +222,12 @@ namespace HSMServer.Model.TreeViewModel
                 case ActionType.Add:
                     if (Nodes.TryGetValue(model.Parent.Id, out var parent))
                     {
-                        var newSensor = AddNewSensorViewModel(model, parent);
-                        if (!newSensor.RootProduct.Notifications.Telegram.Chats.IsEmpty)
+                        var addedSensor = AddNewSensorViewModel(model, parent);
+
+                        if (!addedSensor.RootProduct.Notifications.Telegram.Chats.IsEmpty)
                         {
-                            newSensor.RootProduct.Notifications.Enable(model.Id);
-                            UpdateProductNotificationSettings(newSensor.RootProduct);
+                            addedSensor.RootProduct.Notifications.Enable(model.Id);
+                            UpdateProductNotificationSettings(addedSensor.RootProduct);
                         }
                     }
                     break;
@@ -240,8 +238,13 @@ namespace HSMServer.Model.TreeViewModel
                     break;
 
                 case ActionType.Delete:
-                    if (Sensors.TryRemove(model.Id, out _) && Nodes.TryGetValue(model.Parent.Id, out var parentProduct))
+                    if (Sensors.TryRemove(model.Id, out var removedSensor) && Nodes.TryGetValue(model.Parent.Id, out var parentProduct))
+                    {
                         parentProduct.Sensors.TryRemove(model.Id, out var _);
+
+                        if (removedSensor.RootProduct.Notifications.RemoveSensor(model.Id))
+                            UpdateProductNotificationSettings(removedSensor.RootProduct);
+                    }
                     break;
             }
         }
