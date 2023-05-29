@@ -170,10 +170,10 @@ function buildContextMenu(node) {
                     }).done((response) => {
                         updateTreeTimer();
                         
-                        let message = response.deletionMessage.replace(/(?:\r\n|\r|\n)/g, '<br>')
+                        let message = response.deletionInfo.replace(/(?:\r\n|\r|\n)/g, '<br>')
 
-                        if (response.deletionErrorMessage !== null)
-                            message += `<br> <span style="color: red">${response.deletionErrorMessage}</span>`
+                        if (response.errorMessage !== "")
+                            message += `<br> <span style="color: red">${response.errorMessage}</span>`
                         
                         showToast(message);
 

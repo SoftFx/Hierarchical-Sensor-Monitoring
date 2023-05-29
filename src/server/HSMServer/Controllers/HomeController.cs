@@ -137,7 +137,6 @@ namespace HSMServer.Controllers
         [HttpPost]
         public ActionResult RemoveNode([FromBody] string[] ids)
         {
-            var showFolderError = false;
             var deletionViewModel = new DeletionViewModel();
             
             foreach (var id in ids)
@@ -146,24 +145,21 @@ namespace HSMServer.Controllers
 
                 if (_folderManager[decodedId] is not null)
                 {
-                    showFolderError = true;
-                    continue;
+                    deletionViewModel.AddError(_folderManager[decodedId].Name);
                 }
-
-                if (_treeViewModel.Nodes.TryGetValue(decodedId, out var node))
+                else if (_treeViewModel.Nodes.TryGetValue(decodedId, out var node))
                 {
                     _treeValuesCache.RemoveNode(node.Id);
                     deletionViewModel.AddDeletedItem(node);
-                    continue;
                 }
-                
-                if (!_treeViewModel.Sensors.TryGetValue(decodedId, out var sensor)) continue;
-
-                _treeValuesCache.RemoveSensor(sensor.Id);
-                deletionViewModel.AddDeletedItem(sensor);
+                else if (_treeViewModel.Sensors.TryGetValue(decodedId, out var sensor))
+                {
+                    _treeValuesCache.RemoveSensor(sensor.Id);
+                    deletionViewModel.AddDeletedItem(sensor);
+                }
             }
 
-            return Json(deletionViewModel.BuildDeletedItemsMessage(showFolderError));
+            return Json(deletionViewModel.BuildDeletedItemsMessage());
         }
 
         [HttpPost]

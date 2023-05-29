@@ -1,5 +1,5 @@
-﻿using System.Collections.Generic;
-using System.Linq;
+﻿using System;
+using System.Collections;
 using System.Text;
 using HSMServer.Model.TreeViewModel;
 
@@ -7,84 +7,60 @@ namespace HSMServer.Model.ViewModel;
 
 public class DeletionViewModel
 {
-    private LimitedQueue<ProductNodeViewModel> DeletedProducts { get; } = new(5);
+    private LimitedQueue<string> DeletedProducts { get; } = new(5);
     
-    private LimitedQueue<ProductNodeViewModel> DeletedNodes { get; } = new(5);
+    private LimitedQueue<string> DeletedNodes { get; } = new(5);
     
-    private LimitedQueue<SensorNodeViewModel> DeletedSensors { get; } = new(10);
-    
+    private LimitedQueue<string> DeletedSensors { get; } = new(10);
 
-    public string DeletionMessage { get; private set; }
+
+    public string DeletionInfo { get; private set; } = string.Empty;
     
-    public string DeletionErrorMessage { get; private set; }
+    public string ErrorMessage { get; private set; } = string.Empty;
+
     
     public void AddDeletedItem(NodeViewModel item)
     {
         if (item.RootProduct.Id == item.Id)
         {
-            DeletedProducts.Enqueue(item as ProductNodeViewModel);
+            DeletedProducts.Enqueue((item as ProductNodeViewModel)?.Name);
             return;
         }
 
         if (item is SensorNodeViewModel sensorNodeViewModel)
         {
-            DeletedSensors.Enqueue(sensorNodeViewModel);
-
+            DeletedSensors.Enqueue(sensorNodeViewModel.FullPath);
             return;
         }
         
-        DeletedNodes.Enqueue(item as ProductNodeViewModel);
+        DeletedNodes.Enqueue((item as ProductNodeViewModel)?.FullPath);
     }
 
-    public DeletionViewModel BuildDeletedItemsMessage(bool deleteFolderAttempt)
+    public DeletionViewModel BuildDeletedItemsMessage()
     {
-        var response = new StringBuilder(10);
+        var response = new StringBuilder(1 << 5);
 
-        if (DeletedProducts.Count > 0)
-        {
-            response.AppendLine("Removed products:")
-                .AppendJoin(", ", DeletedProducts.Select(x => x.Name))
-                .AppendLine();
-            
-            if (DeletedProducts.OverflowCount > 0)
-                response.AppendLine($"... and other {DeletedProducts.OverflowCount}");
-        }
+        DeletedProducts.ToBuilder(response, "Removed products:");
+        DeletedNodes.ToBuilder(response, "Removed nodes:", Environment.NewLine);
+        DeletedSensors.ToBuilder(response, "Removed sensors:", Environment.NewLine);
         
-        if (DeletedNodes.Count > 0)
-        {
-            response.AppendLine("Removed nodes:")
-                .AppendJoin("\n", DeletedNodes.Select(x => x.FullPath))
-                .AppendLine();
-            
-            if (DeletedNodes.OverflowCount > 0)
-                response.AppendLine($"... and other {DeletedNodes.OverflowCount}");
-        }
+        DeletionInfo = response.ToString();
         
-        if (DeletedSensors.Count > 0)
-        {
-            response.AppendLine("Removed sensors:")
-                .AppendJoin("\n", DeletedSensors.Select(x => x.FullPath))
-                .AppendLine();
-            
-            if (DeletedSensors.OverflowCount > 0)
-                response.AppendLine($"... and other {DeletedSensors.OverflowCount}");
-        }
+        return this;
+    }
 
-        if (deleteFolderAttempt)
-            DeletionErrorMessage = "Folders cannot be deleted";
-
-        DeletionMessage = response.ToString();
-        
+    public DeletionViewModel AddError(string objectName)
+    {
+        ErrorMessage += $"Folder {objectName} cannot be deleted{Environment.NewLine}";
         return this;
     }
 }
 
-public class LimitedQueue<T> : Queue<T>
+public sealed class LimitedQueue<T> : Queue
 {
     private readonly int _limit;
-
     
-    public int OverflowCount = 0;
+    private int _overflowCount = 0;
     
     
     public LimitedQueue(int limit) : base(limit)
@@ -94,11 +70,21 @@ public class LimitedQueue<T> : Queue<T>
 
     public new void Enqueue(T item)
     {
-        while (Count > _limit)
-        {
-            OverflowCount++;
-            Dequeue();
-        }
-        base.Enqueue(item);
+        if (Count < _limit)
+            base.Enqueue(item);
+        else _overflowCount++;
+    }
+
+    public StringBuilder ToBuilder(StringBuilder builder, string header, string separator = ", ")
+    {
+        if (Count > 0)
+            builder.AppendLine(header)
+                .AppendJoin(separator, ToArray())
+                .AppendLine();
+            
+        if (_overflowCount > 0)
+            builder.AppendLine($"... and other {_overflowCount}");
+        
+        return builder;
     }
 }
