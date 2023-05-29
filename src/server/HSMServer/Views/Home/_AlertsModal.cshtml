@@ -2,7 +2,8 @@
 @model HSMServer.Model.ViewModel.EditAlertsViewModel
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
 
-<form id="editMultipleInterval" method="post" asp-action="">
+<form id="editMultipleInterval" method="post" asp-action="EditAlerts">
+    <input class="d-none" asp-for="NodeIds" value="[]"/>
     <div class="modal fade" tabindex="-1" role="dialog" id="editMultipleInterval_modal">
         <div class="modal-dialog modal-dialog-centered" role="document">
             <div class="modal-content" id="editMultipleIntervalContent">
@@ -16,7 +17,7 @@
                         Time to sensor(s) live <i class='fas fa-question-circle ps-1' title='Time format: dd.hh:mm:ss min value 00:01:00. If the sensor doesn`t receive new data within the specified time interval, a notification sends'></i>
                     </span>
                     <div class="pb-0" style="width: 17rem;">
-                        <div id="partialIntervalSelect" class="d-none">
+                        <div id="intervalSelectModal" class="d-none">
                             <partial name="_TimeIntervalSelect" for="ExpectedUpdateInterval"/>
                         </div>
                     </div>
@@ -27,7 +28,7 @@
                         Sensitivity sensor(s) interval <i class='fas fa-question-circle ps-1' title='Time format: dd.hh:mm:ss min value 00:01:00. If the sensor doesn`t return to Ok status after the specified time inverval, a notification sends'></i>
                     </span>
                     <div class="pb-0" style="width: 17rem;">
-                        <div id="partialRestoreSelect" class="d-none">
+                        <div id="restoreSelectModal" class="d-none">
                             <partial name="_TimeIntervalSelect" for="SensorRestorePolicy"/>
                         </div>
                     </div>
@@ -44,15 +45,25 @@
 
 <script>
     $(document).ready(function () {
-        $('#partialIntervalSelect').removeClass('d-none');
-        $('#partialRestoreSelect').removeClass('d-none');
+        $('#intervalSelectModal').removeClass('d-none');
+        $('#restoreSelectModal').removeClass('d-none');
     });
     
     $('#editMultipleInterval').submit(function (){
-        console.log($('#editMultipleInterval').serializeArray())
-        console.log($('#editMultipleInterval').serialize())
-        console.log(new FormData(document.getElementById('editMultipleInterval')))
-        console.log(JSON.stringify($('#editMultipleInterval').serialize()))
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        $('#NodeIds')[0].value = [$('#jstree').jstree(true).get_selected()];
+
+        $.ajax({
+            url: $("#editMultipleInterval").attr("action"),
+            type: 'POST',
+            data: $("#editMultipleInterval").serialize(),
+            datatype: 'json',
+            async: true,
+            success: (viewData) => {
+                
+            }
+        });
     })
     
     function hideAlertsModal (){

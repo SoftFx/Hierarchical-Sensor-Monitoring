@@ -163,6 +163,12 @@ namespace HSMServer.Controllers
         }
 
         [HttpPost]
+        public IActionResult EditAlerts(EditAlertsViewModel model)
+        {
+            return default;
+        }
+
+        [HttpPost]
         public void ClearHistoryNode([FromQuery] string selectedId)
         {
             var decodedId = SensorPathHelper.DecodeGuid(selectedId);
