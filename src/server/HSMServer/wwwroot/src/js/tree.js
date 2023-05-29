@@ -153,7 +153,7 @@ function buildContextMenu(node) {
 
                 //modal
                 $('#modalDeleteLabel').empty().append(`Remove items`);
-                $('#modalDeleteBody').empty().append(`Do you really want to remove selected items?`);
+                $('#modalDeleteBody').empty().append(`Do you really want to remove ${selectedNodes.length} selected items?`);
                 modal.show();
                 
                 //modal confirm
