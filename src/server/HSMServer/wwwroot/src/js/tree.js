@@ -172,12 +172,12 @@ function buildContextMenu(node) {
                         
                         let message = response.deletionMessage.replace(/(?:\r\n|\r|\n)/g, '<br>')
 
-                        if (response.deletionErrorMessage !== "")
+                        if (response.deletionErrorMessage !== null)
                             message += `<br> <span style="color: red">${response.deletionErrorMessage}</span>`
                         
                         showToast(message);
-                        
-                        $(`#${node.parents[0]}_anchor`).trigger('click');
+
+                        $(`#${$('#jstree').jstree(true).get_node('#').children[0]}_anchor`).trigger('click');
                     });
                 });
 
