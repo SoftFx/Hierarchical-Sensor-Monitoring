@@ -170,12 +170,12 @@ function buildContextMenu(node) {
                     }).done((response) => {
                         updateTreeTimer();
                         
-                        let toastMessage = `${response.toastMessage} have been removed`;
+                        let message = response.deletionMessage.replace(/(?:\r\n|\r|\n)/g, '<br>')
 
-                        if (response.error !== "")
-                            toastMessage += `<br> <span style="color: red">${response.error}</span>`
+                        if (response.deletionErrorMessage !== "")
+                            message += `<br> <span style="color: red">${response.deletionErrorMessage}</span>`
                         
-                        showToast(toastMessage);
+                        showToast(message);
                         
                         $(`#${node.parents[0]}_anchor`).trigger('click');
                     });
@@ -345,7 +345,7 @@ function buildContextMenu(node) {
             "separator_before": true,
             "submenu": notificationSubmenu,
         };
-    console.log(123)
+    
     return contextMenu;
 }
 
