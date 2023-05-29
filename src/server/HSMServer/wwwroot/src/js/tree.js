@@ -185,6 +185,15 @@ function buildContextMenu(node) {
             }
         }
         
+        contextMenu["Edit policies"] = {
+            "label": `Edit policies`,
+            "action": _ => {
+                $('#editMultipleInterval_modal').modal('show')
+                $('#editMultipleInterval').submit(function() {
+                    
+                });
+            }
+        }
         return contextMenu;
     }
 
