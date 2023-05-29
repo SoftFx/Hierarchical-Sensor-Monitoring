@@ -173,7 +173,7 @@ function buildContextMenu(node) {
                         let message = response.deletionInfo.replace(/(?:\r\n|\r|\n)/g, '<br>')
 
                         if (response.errorMessage !== "")
-                            message += `<br> <span style="color: red">${response.errorMessage}</span>`
+                            message += `<span style="color: red">${response.errorMessage.replace(/(?:\r\n|\r|\n)/g, '<br>')}</span>`
                         
                         showToast(message);
 
