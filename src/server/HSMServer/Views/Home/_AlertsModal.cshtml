@@ -48,26 +48,8 @@
         $('#intervalSelectModal').removeClass('d-none');
         $('#restoreSelectModal').removeClass('d-none');
     });
-    
-    $('#editMultipleInterval').submit(function (){
-        event.preventDefault();
-        event.stopImmediatePropagation();
-        $('#NodeIds')[0].value = [$('#jstree').jstree(true).get_selected()];
 
-        $.ajax({
-            url: $("#editMultipleInterval").attr("action"),
-            type: 'POST',
-            data: $("#editMultipleInterval").serialize(),
-            datatype: 'json',
-            async: true,
-            success: (viewData) => {
-                
-            }
-        });
-    })
-    
     function hideAlertsModal (){
         $('#editMultipleInterval_modal').modal('hide');
     }
-
 </script>

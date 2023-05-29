@@ -190,7 +190,20 @@ function buildContextMenu(node) {
             "action": _ => {
                 $('#editMultipleInterval_modal').modal('show')
                 $('#editMultipleInterval').submit(function() {
-                    
+                    event.preventDefault();
+                    event.stopImmediatePropagation();
+                    $('#NodeIds')[0].value = selectedNodes;
+
+                    $.ajax({
+                        url: $("#editMultipleInterval").attr("action"),
+                        type: 'POST',
+                        data: $("#editMultipleInterval").serialize(),
+                        datatype: 'json',
+                        async: true,
+                        success: (viewData) => {
+
+                        }
+                    });
                 });
             }
         }
