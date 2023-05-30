@@ -24,6 +24,7 @@ using System.Text;
 using System.Threading.Tasks;
 using HSMServer.ApiObjectsConverters;
 using SensorStatus = HSMSensorDataObjects.SensorStatus;
+using TimeInterval = HSMServer.Model.TimeInterval;
 
 namespace HSMServer.Controllers
 {
@@ -145,7 +146,7 @@ namespace HSMServer.Controllers
 
                 if (_folderManager[decodedId] is not null)
                 {
-                    model.AddError(_folderManager[decodedId].Name);
+                    model.AddError(MultiActionToastViewModel.ToastErrorType.Deletion, _folderManager[decodedId].Name, "Folder");
                 }
                 else if (_treeViewModel.Nodes.TryGetValue(decodedId, out var node))
                 {
@@ -176,31 +177,57 @@ namespace HSMServer.Controllers
                 {
                     var update = new FolderUpdate
                     {
-                        Id = id,
-                        ExpectedUpdateInterval = model.IsChangedTimeout 
-                            ? model.ExpectedUpdateInterval.ResaveCustomTicks(model.ExpectedUpdateInterval) 
-                            : _folderManager[id].ExpectedUpdateInterval,
-                        RestoreInterval = model.IsChangedRestore 
-                            ? model.SensorRestorePolicy.ResaveCustomTicks(model.SensorRestorePolicy) 
-                            : _folderManager[id].SensorRestorePolicy,
+                        Id = id
                     };
 
-                    await _folderManager.TryUpdate(update);
+                    if (model.IsChangedTimeout && model.SensorRestorePolicy.TimeInterval is not TimeInterval.FromParent)
+                        update = update with
+                        {
+                            RestoreInterval = model.SensorRestorePolicy.ResaveCustomTicks(model.SensorRestorePolicy) 
+                        };
+
+                    if (model.IsChangedRestore) 
+                        update = update with
+                        {
+                            ExpectedUpdateInterval = model.ExpectedUpdateInterval.ResaveCustomTicks(model.ExpectedUpdateInterval)
+                        };
+
+                    if (model.ExpectedUpdateInterval.TimeInterval is TimeInterval.FromParent || model.SensorRestorePolicy.TimeInterval is TimeInterval.FromParent)
+                        toastViewModel.AddError(MultiActionToastViewModel.ToastErrorType.Edit, _folderManager[id].Name, "Folder", TimeInterval.FromParent);
+                    
                     toastViewModel.AddItem(_folderManager[id]);
+                    await _folderManager.TryUpdate(update);
                 }
                 else if (_treeViewModel.Nodes.TryGetValue(id, out var product))
                 {
                     var update = new ProductUpdate
                     {
-                        Id = product.Id,
-                        ExpectedUpdateInterval = model.IsChangedTimeout
-                            ? model.ExpectedUpdateInterval.ToModel((product.Parent as FolderModel)?.ExpectedUpdateInterval) 
-                            : product.ExpectedUpdateInterval.ToModel((product.Parent as FolderModel)?.ExpectedUpdateInterval),
-                        RestoreInterval = model.IsChangedRestore
-                            ? model.SensorRestorePolicy.ToModel((product.Parent as FolderModel)?.SensorRestorePolicy) 
-                            : product.SensorRestorePolicy.ToModel((product.Parent as FolderModel)?.SensorRestorePolicy),
+                        Id = product.Id
                     };
             
+                    if (model.IsChangedTimeout)
+                    {
+                        update = update with
+                        {
+                            RestoreInterval =  model.ExpectedUpdateInterval.ToModel((product.Parent as FolderModel)?.ExpectedUpdateInterval)  
+                        };
+                    }
+                    
+                    if (model.IsChangedRestore)
+                    {
+                        update = update with
+                        {
+                            ExpectedUpdateInterval = model.SensorRestorePolicy.ToModel((product.Parent as FolderModel)?.SensorRestorePolicy) 
+                        };
+                    }
+
+                    var isProduct = product.RootProduct?.Id == product.Id;
+                    if (model.ExpectedUpdateInterval.TimeInterval is TimeInterval.FromParent ||
+                        model.SensorRestorePolicy.TimeInterval is TimeInterval.FromParent &&
+                        product.FolderId is null)
+                        toastViewModel.AddError(MultiActionToastViewModel.ToastErrorType.Edit, product.Name, !isProduct ? "Node" : "Product", TimeInterval.FromParent);
+                    
+                    toastViewModel.AddItem(product);
                     _treeValuesCache.UpdateProduct(update);
                 }
                 else if (_treeViewModel.Sensors.TryGetValue(id, out var sensor))
@@ -220,8 +247,8 @@ namespace HSMServer.Controllers
                     _treeValuesCache.UpdateSensor(update);
                 }
             }
-            
-            return Ok();
+
+            return Json(toastViewModel.BuildEditItemsMessage());
         }
 
         [HttpPost]

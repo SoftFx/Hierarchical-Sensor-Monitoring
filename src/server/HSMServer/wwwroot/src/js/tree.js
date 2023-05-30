@@ -170,7 +170,7 @@ function buildContextMenu(node) {
                     }).done((response) => {
                         updateTreeTimer();
                         
-                        let message = response.deletionInfo.replace(/(?:\r\n|\r|\n)/g, '<br>')
+                        let message = response.responseInfo.replace(/(?:\r\n|\r|\n)/g, '<br>')
 
                         if (response.errorMessage !== "")
                             message += `<span style="color: red">${response.errorMessage.replace(/(?:\r\n|\r|\n)/g, '<br>')}</span>`
@@ -200,8 +200,17 @@ function buildContextMenu(node) {
                         data: $("#editMultipleInterval").serialize(),
                         datatype: 'json',
                         async: true,
-                        success: (viewData) => {
+                        success: (response) => {
+                            updateTreeTimer();
 
+                            let message = response.responseInfo.replace(/(?:\r\n|\r|\n)/g, '<br>')
+
+                            if (response.errorMessage !== "")
+                                message += `<span style="color: red">${response.errorMessage.replace(/(?:\r\n|\r|\n)/g, '<br>')}</span>`
+
+                            showToast(message);
+
+                            hideAlertsModal();
                         },
                         error: function (jqXHR) {
                             console.log(jqXHR);

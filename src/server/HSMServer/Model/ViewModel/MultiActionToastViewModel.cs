@@ -9,15 +9,15 @@ namespace HSMServer.Model.ViewModel;
 public sealed class MultiActionToastViewModel
 {
     private readonly LimitedQueue<string> _folders = new(5);
-    
     private readonly LimitedQueue<string> _products = new(5);
-    
     private readonly LimitedQueue<string> _nodes = new(5);
-    
     private readonly LimitedQueue<string> _sensors = new(10);
 
+    private const string _deletionError = @"{0} {1} cannot be deleted";
+    private const string _editingError = @"{0} {1} can't have {2} interval";
 
-    public string DeletionInfo { get; private set; } = string.Empty;
+
+    public string ResponseInfo { get; private set; } = string.Empty;
     
     public string ErrorMessage { get; private set; } = string.Empty;
 
@@ -39,7 +39,7 @@ public sealed class MultiActionToastViewModel
         _nodes.Enqueue((item as ProductNodeViewModel)?.FullPath);
     }
     
-    public void AddItem(FolderModel folder) => _folders.Enqueue(folder.Name);
+    public void AddItem(FolderModel folder) => _folders.Enqueue(folder?.Name);
     
 
     public MultiActionToastViewModel BuildDeletedItemsMessage()
@@ -50,15 +50,44 @@ public sealed class MultiActionToastViewModel
         _nodes.ToBuilder(response, "Removed nodes:", Environment.NewLine);
         _sensors.ToBuilder(response, "Removed sensors:", Environment.NewLine);
         
-        DeletionInfo = response.ToString();
+        ResponseInfo = response.ToString();
         
         return this;
     }
 
-    public MultiActionToastViewModel AddError(string objectName)
+    public MultiActionToastViewModel BuildEditItemsMessage()
     {
-        ErrorMessage += $"Folder {objectName} cannot be deleted{Environment.NewLine}";
+        var response = new StringBuilder(1 << 5);
+
+        _folders.ToBuilder(response, "Edited folders");
+        _products.ToBuilder(response, "Edited products:");
+        _nodes.ToBuilder(response, "Edited nodes:", Environment.NewLine);
+        _sensors.ToBuilder(response, "Edited sensors:", Environment.NewLine);
+        
+        ResponseInfo = response.ToString();
+        
         return this;
+    }
+
+    public MultiActionToastViewModel AddError(ToastErrorType errorType, string objectType, string objectName, TimeInterval interval = default)
+    {
+        switch (errorType)
+        {
+            case ToastErrorType.Deletion:
+                ErrorMessage += $"{string.Format(_deletionError, objectName, objectType)}{Environment.NewLine}";
+                    break;
+            case ToastErrorType.Edit:
+                ErrorMessage += $"{string.Format(_editingError, objectName, objectType, interval)}{Environment.NewLine}";
+                break;
+        }
+
+        return this;
+    }
+    
+    public enum ToastErrorType
+    {
+        Deletion,
+        Edit
     }
 }
 
