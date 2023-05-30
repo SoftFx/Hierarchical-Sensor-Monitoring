@@ -13,7 +13,7 @@
     <input class="d-none" asp-for="EntityId" value="@Model.EntityId" />
 
     <div id="dataAlertLabel_@Model.Id" class="ms-3 @(Model.IsModify ? "d-none" : string.Empty)">
-        If <b>@Model.Property @Model.Operation.GetDisplayName() @Model.Value</b> then send @Model.Status.ToIconStatus() with message <i>@Model.DisplayComment</i>
+        If <b>@Model.Property @Model.Operation.GetDisplayName() @Model.Value</b> then send ↕️ with message <i>@Model.DisplayComment</i>
     </div>
 
     <div id="dataAlertInputGroupd_@Model.Id" class="input-group mb-1 @(!Model.IsModify ? "d-none" : string.Empty)">
@@ -22,10 +22,10 @@
         <select class="form-select" asp-for="Operation" asp-items="@Model.ActionsItems"></select>
         <input type="text" class="form-control" asp-for="Value" value="@Model.Value">
 
-        <label class="input-group-text">then</label>
-        <select class="form-select" asp-for="Status" asp-items="@Model.StatusesItems"></select>
+        <label class="input-group-text">then send</label>
+@*        <select class="form-select" asp-for="Status" asp-items="@Model.StatusesItems"></select>
 
-        <label class="input-group-text">with</label>
+        <label class="input-group-text">with</label>*@
         <input type="text" class="form-control w-50" placeholder="custom comment" asp-for="Comment" value="@Model.Comment">
 
         <button id="actionButton" class="btn" data-bs-toggle="dropdown" data-bs-auto-close="true" aria-haspopup="true" aria-expanded="false">
@@ -53,7 +53,7 @@
             var form = new FormData();
             appendProperty(form, element, "select", "Property");
             appendProperty(form, element, "select", "Operation");
-            appendProperty(form, element, "select", "Status");
+            //appendProperty(form, element, "select", "Status");
             appendProperty(form, element, "input", "Comment");
             appendProperty(form, element, "input", "Value");
             appendProperty(form, element, "input", "EntityId");

@@ -28,7 +28,7 @@ namespace HSMServer.Model.DataAlerts
 
 
         internal DataPolicyUpdate ToUpdate() =>
-            new(Id, Property, Operation, new TargetValue(TargetType.Const, Value), Status.ToCore(), Comment);
+            new(Id, Property, Operation, new TargetValue(TargetType.Const, Value), Core.Model.SensorStatus.Error, Comment);
     }
 
 
