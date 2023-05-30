@@ -202,6 +202,17 @@ function buildContextMenu(node) {
                         async: true,
                         success: (viewData) => {
 
+                        },
+                        error: function (jqXHR) {
+                            console.log(jqXHR);
+                            $('#editMultipleInterval span.field-validation-valid').each(function () {
+                                let errFor = $(this).data('valmsgFor');
+                                if (jqXHR.responseJSON[errFor] !== undefined) {
+                                    $(this).removeClass('field-validation-valid')
+                                    $(this).addClass('field-validation-error')
+                                    $(this).html(jqXHR.responseJSON[errFor][0]);
+                                }
+                            })
                         }
                     });
                 });

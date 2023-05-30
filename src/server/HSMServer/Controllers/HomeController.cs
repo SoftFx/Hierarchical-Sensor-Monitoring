@@ -165,9 +165,11 @@ namespace HSMServer.Controllers
         [HttpPost]
         public async Task<IActionResult> EditAlerts(EditAlertsViewModel model)
         {
+            if (!ModelState.IsValid)
+                return BadRequest(ModelState);
+            
             var toastViewModel = new MultiActionToastViewModel();
-            Console.WriteLine(model.IsChangedTimeout);
-            Console.WriteLine(model.IsChangedRestore);
+            
             foreach (var id in model.SelectedNodes)
             {
                 if (_folderManager[id] is not null)

@@ -18,24 +18,25 @@
                     <span class="d-flex align-items-center" style="min-width: 18rem">
                         Time to sensor(s) live <i class='fas fa-question-circle ps-1' title='Time format: dd.hh:mm:ss min value 00:01:00. If the sensor doesn`t receive new data within the specified time interval, a notification sends'></i>
                     </span>
-                    <div class="pb-0" style="width: 17rem;">
+                    <div class="pb-0 me-2" style="width: 17rem;">
                         <div id="intervalSelectModal" class="d-none">
                             <partial name="_TimeIntervalSelect" for="ExpectedUpdateInterval"/>
                         </div>
                     </div>
-                    <span class="d-flex align-self-center ms-2" asp-validation-for="ExpectedUpdateInterval"></span>
                 </div>
+                <span class="d-flex justify-content-end me-2" asp-validation-for="ExpectedUpdateInterval"></span>
                 <div class="d-flex mt-1 ms-3 text-nowrap my-2">
                     <span class="d-flex align-items-center" style="min-width: 18rem">
                         Sensitivity sensor(s) interval <i class='fas fa-question-circle ps-1' title='Time format: dd.hh:mm:ss min value 00:01:00. If the sensor doesn`t return to Ok status after the specified time inverval, a notification sends'></i>
                     </span>
-                    <div class="pb-0" style="width: 17rem;">
+                    <div class="pb-0 me-2" style="width: 17rem;">
                         <div id="restoreSelectModal" class="d-none">
                             <partial name="_TimeIntervalSelect" for="SensorRestorePolicy"/>
                         </div>
                     </div>
-                    <span class="d-flex align-self-center ms-2" asp-validation-for="SensorRestorePolicy"></span>
+                    
                 </div>
+                <span class="d-flex justify-content-end me-2" asp-validation-for="SensorRestorePolicy"></span>
                 <div class="modal-footer">
                     <button class="btn btn-secondary col-2" type="submit">Save</button>
                     <button class="btn btn-secondary col-2" type="button" onclick="hideAlertsModal()">Cancel</button>
