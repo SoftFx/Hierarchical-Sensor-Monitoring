@@ -170,7 +170,8 @@ namespace HSMServer.Controllers
                 return BadRequest(ModelState);
             
             var toastViewModel = new MultiActionToastViewModel();
-            
+            var isExpectedFromParent = model.ExpectedUpdateInterval.TimeInterval is TimeInterval.FromParent;
+            var isRestoreFromParent = model.SensorRestorePolicy.TimeInterval is TimeInterval.FromParent;
             foreach (var id in model.SelectedNodes)
             {
                 if (_folderManager[id] is not null)
@@ -180,26 +181,31 @@ namespace HSMServer.Controllers
                         Id = id
                     };
 
-                    if (model.IsChangedTimeout && model.SensorRestorePolicy.TimeInterval is not TimeInterval.FromParent)
+                    if (model.IsChangedTimeout && !isRestoreFromParent)
                         update = update with
                         {
                             RestoreInterval = model.SensorRestorePolicy.ResaveCustomTicks(model.SensorRestorePolicy) 
                         };
 
-                    if (model.IsChangedRestore) 
+                    if (model.IsChangedRestore && !isExpectedFromParent) 
                         update = update with
                         {
                             ExpectedUpdateInterval = model.ExpectedUpdateInterval.ResaveCustomTicks(model.ExpectedUpdateInterval)
                         };
 
-                    if (model.ExpectedUpdateInterval.TimeInterval is TimeInterval.FromParent || model.SensorRestorePolicy.TimeInterval is TimeInterval.FromParent)
+                    if (isExpectedFromParent || isRestoreFromParent)
                         toastViewModel.AddError(MultiActionToastViewModel.ToastErrorType.Edit, _folderManager[id].Name, "Folder", TimeInterval.FromParent);
+                    else 
+                        toastViewModel.AddItem(_folderManager[id]);
                     
-                    toastViewModel.AddItem(_folderManager[id]);
                     await _folderManager.TryUpdate(update);
                 }
                 else if (_treeViewModel.Nodes.TryGetValue(id, out var product))
                 {
+                    var hasParent = product.Parent is not null || product.FolderId is not null;
+                    var restoreUpdate = hasParent || !isRestoreFromParent;
+                    var expectedUpdate = hasParent || !isExpectedFromParent;
+                    
                     var update = new ProductUpdate
                     {
                         Id = product.Id
@@ -207,27 +213,29 @@ namespace HSMServer.Controllers
             
                     if (model.IsChangedTimeout)
                     {
-                        update = update with
-                        {
-                            RestoreInterval =  model.ExpectedUpdateInterval.ToModel((product.Parent as FolderModel)?.ExpectedUpdateInterval)  
-                        };
+                        if (expectedUpdate)
+                            update = update with
+                            {
+                                RestoreInterval = model.ExpectedUpdateInterval.ToModel((product.Parent as FolderModel)?.ExpectedUpdateInterval)
+                            };
                     }
                     
                     if (model.IsChangedRestore)
                     {
-                        update = update with
-                        {
-                            ExpectedUpdateInterval = model.SensorRestorePolicy.ToModel((product.Parent as FolderModel)?.SensorRestorePolicy) 
-                        };
+                        if (restoreUpdate)
+                            update = update with
+                            {
+                                ExpectedUpdateInterval = model.SensorRestorePolicy.ToModel((product.Parent as FolderModel)?.SensorRestorePolicy) 
+                            };
                     }
 
                     var isProduct = product.RootProduct?.Id == product.Id;
-                    if (model.ExpectedUpdateInterval.TimeInterval is TimeInterval.FromParent ||
-                        model.SensorRestorePolicy.TimeInterval is TimeInterval.FromParent &&
-                        product.FolderId is null)
+                    if (!restoreUpdate || !expectedUpdate)
                         toastViewModel.AddError(MultiActionToastViewModel.ToastErrorType.Edit, product.Name, !isProduct ? "Node" : "Product", TimeInterval.FromParent);
                     
-                    toastViewModel.AddItem(product);
+                    if (restoreUpdate || expectedUpdate)
+                        toastViewModel.AddItem(product);
+                    
                     _treeValuesCache.UpdateProduct(update);
                 }
                 else if (_treeViewModel.Sensors.TryGetValue(id, out var sensor))
