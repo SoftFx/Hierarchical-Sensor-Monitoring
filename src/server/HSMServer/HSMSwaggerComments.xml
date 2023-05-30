@@ -23,11 +23,6 @@
             </summary>
             <param name="userName">Name of the user to remove.</param>
         </member>
-        <member name="T:HSMServer.BackgroundTask.DatabaseMonitoringService">
-            <summary>
-            Background service, which reports database size every 5 minutes 
-            </summary>
-        </member>
         <member name="T:HSMServer.BackgroundTask.OutdatedSensorService">
             <summary>
             This class is derived from BackgroundService. Every day, all sensors are checked. Sensors with latest updated older
@@ -107,6 +102,13 @@
         <member name="M:HSMServer.Controllers.SensorsController.Post(HSMSensorDataObjects.SensorValueRequests.TimeSpanSensorValue)">
             <summary>
             Receives value of timespan sensor
+            </summary>
+            <param name="sensorValue"></param>
+            <returns></returns>
+        </member>
+        <member name="M:HSMServer.Controllers.SensorsController.Post(HSMSensorDataObjects.SensorValueRequests.VersionSensorValue)">
+            <summary>
+            Receives value of version sensor
             </summary>
             <param name="sensorValue"></param>
             <returns></returns>

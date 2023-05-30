@@ -1,73 +1,51 @@
 ﻿@using HSMServer.Extensions
+@using HSMServer.Model.Authentication
 @using HSMServer.Model.UserTreeShallowCopy
 
 @model NodeShallowModel
 
 @{
     var data = Model.Data;
+    var showIcons = (User as User).TreeFilter.ByVisibility.Icons.Value;
 }
 
 
 <li id='@data.EncodedId' title='@data.Tooltip' data-jstree='@Model.ToJSTree()'>
     <span class="@(Model.IsMutedState ? "muted-state-text" : "")"> @Html.Raw(data.Name.GetShortNodeName()) @Model.SensorsCountString </span>
 
-    @if (!data.IsEmpty && !Model.IsMutedState)
+    @if (!data.IsEmpty && !Model.IsMutedState && showIcons)
     {
-        @if (data.Notifications.Telegram.Chats.Count > 0)
+        @if (Model.IsAccountsEnable && !(Model.Parent?.IsAccountsEnable ?? false))
         {
-            @if (Model.IsAccountsEnable)
-            {
-                <span>
-                    <img class="tree-png-icon" src="~/dist/user.png" alt="!"/>
-                </span>
-            }
-            else if (Model.AccountState.IsAllIgnored)
-            {
-                <span>
-                    <img class="tree-png-icon" src="~/dist/user-crossed.png" alt="!"/>
-                </span>
-            }
-        
-            @if (Model.IsGroupsEnable)
-            {
-                <span>
-                    <img class="tree-png-icon" src="~/dist/users.png" alt="!"/>
-                </span>
-            }
-            else if (Model.GroupState.IsAllIgnored)
-            {
-                <span>
-                    <img class="tree-png-icon" src="~/dist/users-crossed.png" alt="!"/>
-                </span>
-            }
+            <span>
+                <img class="tree-png-icon" src="~/dist/user.png" alt="!"/>
+            </span>
         }
-        else
+        else if (Model.IsAccountsIgnore && !(Model.Parent?.IsAccountsIgnore ?? false))
         {
-            @if (Model.IsAccountsEnable && !(Model.Parent?.IsAccountsEnable ?? false))
-            {
-                <span>
-                    <img class="tree-png-icon" src="~/dist/user.png" alt="!"/>
-                </span>
-            }
-            else if (Model.AccountState.IsAllIgnored && !(Model.Parent?.AccountState.IsAllIgnored ?? false))
-            {
-                <span>
-                    <img class="tree-png-icon" src="~/dist/user-crossed.png" alt="!"/>
-                </span>
-            }
+            <span>
+                <img class="tree-png-icon" src="~/dist/user-crossed.png" alt="!"/>
+            </span>
+        }
         
-            @if (Model.IsGroupsEnable && !(Model.Parent?.IsGroupsEnable ?? false))
-            {
-                <span>
-                    <img class="tree-png-icon" src="~/dist/users.png" alt="!"/>
-                </span>
-            }
-            else if (Model.GroupState.IsAllIgnored && !(Model.Parent?.GroupState.IsAllIgnored ?? false))
-            {
-                <span>
-                    <img class="tree-png-icon" src="~/dist/users-crossed.png" alt="!"/>
-                </span>
-            }
+        @if (Model.IsGroupsEnable && !(Model.Parent?.IsGroupsEnable ?? false))
+        {
+            <span>
+                <img class="tree-png-icon" src="~/dist/users.png" alt="!"/>
+            </span>
+        }
+        else if (Model.IsGroupsIgnore && !(Model.Parent?.IsGroupsIgnore ?? false))
+        {
+            <span>
+                <img class="tree-png-icon" src="~/dist/users-crossed.png" alt="!"/>
+            </span>
+        }
+
+        @if (Model.IsGrafanaEnabled && !(Model.Parent?.IsGrafanaEnabled ?? false))
+        {
+            <span>
+                <img class="tree-png-icon" src="~/dist/grafana.svg" alt="!" title="Grafana" />
+            </span>
         }
     }
 

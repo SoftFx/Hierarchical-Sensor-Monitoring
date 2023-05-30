@@ -8,6 +8,8 @@
 
         public byte State { get; init; }
 
+        public int Integration { get; init; }
+
         public long EndOfMuting { get; init; }
     }
 }

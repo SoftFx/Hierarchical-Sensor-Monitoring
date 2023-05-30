@@ -1,8 +1,8 @@
-﻿using HSMDataCollector.Options;
+﻿using HSMDataCollector.Extensions;
+using HSMDataCollector.Options;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
-using HSMDataCollector.Extensions;
 
 namespace HSMDataCollector.DefaultSensors
 {
@@ -10,41 +10,42 @@ namespace HSMDataCollector.DefaultSensors
         where BarType : MonitoringBarBase<T>, new()
         where T : struct
     {
-        private readonly Timer _collectTimer;
         private readonly TimeSpan _barPeriod;
         private readonly TimeSpan _collectBarPeriod;
 
         private BarType _internalBar;
+        private Timer _collectTimer;
+
 
         protected sealed override TimeSpan TimerDueTime => _receiveDataPeriod.GetTimerDueTime();
-        
+
 
         protected BarMonitoringSensorBase(BarSensorOptions options) : base(options)
         {
             _barPeriod = options.BarPeriod;
             _collectBarPeriod = options.CollectBarPeriod;
 
-            _collectTimer = new Timer(CollectBar, null, Timeout.Infinite, Timeout.Infinite);
-
             BuildNewBar();
         }
 
 
-        internal override async Task<bool> Start()
+        internal override async Task<bool> Init()
         {
-            var isStarted = await base.Start();
+            var isInitialized = await base.Init();
 
-            if (isStarted)
-                _collectTimer.Change(_collectBarPeriod, _collectBarPeriod);
+            if (isInitialized)
+                _collectTimer = new Timer(CollectBar, null, _collectBarPeriod, _collectBarPeriod);
 
-            return isStarted;
+            return isInitialized;
         }
 
-        internal override Task Stop()
+        internal override async Task Stop()
         {
             _collectTimer?.Dispose();
 
-            return base.Stop();
+            await base.Stop();
+
+            OnTimerTick();
         }
 
 
@@ -52,6 +53,15 @@ namespace HSMDataCollector.DefaultSensors
 
         protected sealed override BarType GetValue() => _internalBar.Complete() as BarType;
 
+        protected sealed override BarType GetDefaultValue()
+        {
+            return new BarType()
+            {
+                OpenTime = _internalBar?.OpenTime ?? DateTime.UtcNow,
+                CloseTime = _internalBar?.CloseTime ?? DateTime.UtcNow,
+                Count = 1,
+            };
+        }
 
         private void CollectBar(object _)
         {

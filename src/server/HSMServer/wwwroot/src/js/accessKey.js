@@ -11,12 +11,13 @@ window.showAccessKeysListModal = function() {
 
 window.hideModal = function() {
     $('#accessKeys_modal').modal('hide');
+    $('#editSensorStatus_form').trigger(jQuery.Event('hideNewAccessKeyModal'));
 }
 
 window.showAccessKeysList = function(productId, showModalFirst) {
     $.ajax({
         type: 'get',
-        url: showProductAccessKeyTable + '?Selected=' + productId,
+        url: showProductAccessKeyTable + '?productId=' + productId,
         datatype: 'html',
         contenttype: 'application/json',
         cache: false,
@@ -52,7 +53,7 @@ window.showNewAccessKeyModal = function(url, openModal) {
     });
 }
 
-window.changeAccessKey = function(url, id) {
+window.changeAccessKey = function(url, id, name) {
     const isModalOpen = $('#accessKeys_modal').is(':visible')
     $.ajax({
         type: 'GET',
@@ -65,14 +66,14 @@ window.changeAccessKey = function(url, id) {
     }).done(function () {
         showModal();
         showMiddleModal();
-        setModalTitle(`Edit access key '${id}'`);
+        setModalTitle(`Edit access key '${name}'`);
     });
 }
 
 window.deleteAccessKey = function(url, id, name) {
     showDeletionConfirmationModal(
         `Removing ${name} access key`,
-        `Do you really want to remove selected access key <strong>${name}</strong> ('${id}')?`,
+        `Do you really want to remove selected access key <strong>${name}</strong> ('${name}')?`,
         function () {
             $.ajax({
                 type: 'POST',

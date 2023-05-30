@@ -1,6 +1,4 @@
-﻿using System.Collections.Generic;
-
-namespace HSMServer.Controllers.GrafanaDatasources.JsonSource
+﻿namespace HSMServer.Controllers.GrafanaDatasources.JsonSource
 {
     public class SelectedPayload
     {

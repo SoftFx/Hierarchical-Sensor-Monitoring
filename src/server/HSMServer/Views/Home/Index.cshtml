@@ -40,6 +40,8 @@
 
     var editFolderAction = "@Url.Action(nameof(FoldersController.EditFolder), ViewConstants.FoldersController)";
 
+    var enableGrafanaAction = "@Url.Action(nameof(HomeController.EnableGrafana), ViewConstants.HomeController)";
+    var disableGrafanaAction = "@Url.Action(nameof(HomeController.DisableGrafana), ViewConstants.HomeController)";
     var enableNotificationsAction = "@Url.Action(nameof(HomeController.EnableNotifications), ViewConstants.HomeController)";
     var ignoreNotificationsAction = "@Url.Action(nameof(HomeController.IgnoreNotifications), ViewConstants.HomeController)";
     var unmuteAction = "@Url.Action(nameof(HomeController.RemoveMutedStateToSensor), ViewConstants.HomeController)";
@@ -178,7 +180,7 @@
 
         if (dataObject.sensorType !== 6)
             $('#update_' + id).empty().append(dataObject.updatedTimeStr);
-       
+    
         $('#status_' + id).removeClass('tree-icon-offTime tree-icon-ok tree-icon-warning tree-icon-error')
                           .addClass(dataObject.statusIconColorClass)
                           .prop('title', `Status: ${dataObject.status}`)
@@ -186,7 +188,23 @@
                                   .addClass(dataObject.statusIconColorClass)
                                   .prop('title', `Status: ${dataObject.status}`);
         
+        $('#file_status_' + id).removeClass('tree-icon-offTime tree-icon-ok tree-icon-warning tree-icon-error')
+                                .addClass(dataObject.statusIconColorClass)
+                                .prop('title', `Status: ${dataObject.status}`)
+        
         $('#status_name_' + id).empty().html(dataObject.status);
+    }
+    
+    function updateGeneralInfo(selectedNodeId) {
+        $.ajax({
+            type: 'GET',
+            url: `@Url.Action(nameof(HomeController.GetGeneralInfo))?selectedId=${selectedNodeId}`,
+            cache: false,
+            async: true,
+            success: function (viewdata) {
+                $('#meta_info_general_info').empty().replaceWith(viewdata);
+            }
+        });
     }
 
     function updateSpecificSensorData(dataObject) {
@@ -266,6 +284,7 @@
                 async: true
             }).done(function (sensorsData) {
                 var array = JSON.parse(sensorsData);
+                let displayChildrenInfo = false;
 
                 for (let i = 0; i < array.length; i++) {
                     let dataObject = array[i];
@@ -273,10 +292,18 @@
                     updateGridCell(dataObject);
                     updateNodeData(dataObject);
 
+                    if (dataObject.value !== null && dataObject.value !== undefined)
+                        displayChildrenInfo = true;
+                    
                     if (dataObject.hasOwnProperty('value')) {
                         updateSpecificSensorData(dataObject);
                     }
                 }
+                
+                updateGeneralInfo(selectedNodeId);
+                
+                if (displayChildrenInfo)
+                    $('#dataPanel').removeClass('d-none');
             });
 
         $('#updateTime').empty();

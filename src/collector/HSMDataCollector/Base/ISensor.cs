@@ -8,6 +8,8 @@ namespace HSMDataCollector.Base
         bool HasLastValue { get; }
 
 
+        void Start();
+
         SensorValueBase GetLastValue();
     }
 }

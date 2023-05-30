@@ -1,17 +1,19 @@
 ﻿@using HSMServer.Extensions
+@using HSMServer.Model.Authentication
 @using HSMServer.Model.UserTreeShallowCopy
 
 @model FolderShallowModel
 
 @{
     var data = Model.Data;
+    var showIcons = (User as User).TreeFilter.ByVisibility.Icons.Value;
 }
 
 
 <li id='@data.Id' title='@data.Tooltip' data-jstree='@Model.ToJSTree()'>
     <span> @Html.Raw(data.Name.GetShortNodeName())</span>
 
-    @if (!Model.IsEmpty)
+    @if (!Model.IsEmpty && showIcons)
     {
         @if (Model.IsAccountsEnable)
         {
@@ -19,7 +21,7 @@
                 <img class="tree-png-icon" src="~/dist/user.png" alt="!" />
             </span>
         }
-        else if (Model.AccountState.IsAllIgnored)
+        else if (Model.IsAccountsIgnore)
         {
             <span>
                 <img class="tree-png-icon" src="~/dist/user-crossed.png" alt="!" />
@@ -32,10 +34,17 @@
                 <img class="tree-png-icon" src="~/dist/users.png" alt="!" />
             </span>
         }
-        else if (Model.GroupState.IsAllIgnored)
+        else if (Model.IsGroupsIgnore)
         {
             <span>
                 <img class="tree-png-icon" src="~/dist/users-crossed.png" alt="!" />
+            </span>
+        }
+
+        @if (Model.IsGrafanaEnabled)
+        {
+            <span>
+                <img class="tree-png-icon" src="~/dist/grafana.svg" alt="!" title="Grafana" />
             </span>
         }
     }

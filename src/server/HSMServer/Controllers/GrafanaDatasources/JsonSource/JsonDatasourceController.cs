@@ -1,6 +1,6 @@
-﻿using HSMServer.Core.Cache;
+﻿using HSMServer.Core;
+using HSMServer.Core.Cache;
 using HSMServer.Core.Model;
-using HSMServer.Extensions;
 using HSMServer.Model.TreeViewModel;
 using Microsoft.AspNetCore.Mvc;
 using System;
@@ -24,6 +24,7 @@ namespace HSMServer.Controllers.GrafanaDatasources.JsonSource
         private readonly ITreeValuesCache _cache;
         private readonly TreeViewModel _tree;
 
+
         public JsonDatasourceController(ITreeValuesCache cache, TreeViewModel tree)
         {
             _cache = cache;
@@ -36,7 +37,7 @@ namespace HSMServer.Controllers.GrafanaDatasources.JsonSource
         /// </summary>
         [HttpGet]
         [ActionName("")]
-        public bool TestConnection() => true;
+        public ActionResult<bool> TestConnection() => TryGetKey(out _, out var message) ? true : BadRequest(message);
 
 
         /// <summary>
@@ -44,9 +45,13 @@ namespace HSMServer.Controllers.GrafanaDatasources.JsonSource
         /// </summary>
         [HttpPost]
         [ActionName("metrics")]
-        public string GetMetrics(MetricsRequest _)
+        public ActionResult<string> GetMetrics(MetricsRequest _)
         {
-            var metrics = _tree.GetRootProducts().Select(u => new Metric(u.Name, u.Id));
+            if (!TryGetKey(out var key, out var message))
+                return BadRequest(message);
+
+            var products = key.IsMaster ? _cache.GetProducts() : new List<ProductModel>(1) { _cache.GetProduct(key.ProductId) };
+            var metrics = products.OrderBy(p => p.DisplayName).Select(u => new Metric(u.DisplayName, u.Id));
 
             return JsonSerializer.Serialize(metrics, _options);
         }
@@ -57,8 +62,11 @@ namespace HSMServer.Controllers.GrafanaDatasources.JsonSource
         /// </summary>
         [HttpPost]
         [ActionName("metric-payload-options")]
-        public string GetOptions(MetricPayloadOptionsRequest request)
+        public ActionResult<string> GetOptions(MetricPayloadOptionsRequest request)
         {
+            if (!TryGetKey(out _, out var message))
+                return BadRequest(message);
+
             var options = request.Name switch
             {
                 Metric.SensorsPayloadName => GetSensorsOptions(Guid.Parse(request.Metric)),
@@ -75,17 +83,20 @@ namespace HSMServer.Controllers.GrafanaDatasources.JsonSource
         /// </summary>
         [HttpPost]
         [ActionName("query")]
-        public async Task<string> ReadHistory(QueryHistoryRequest request)
+        public async Task<ActionResult<string>> ReadHistory(QueryHistoryRequest request)
         {
+            if (!TryGetKey(out _, out var message))
+                return BadRequest(message);
+
             var historyResponse = new List<object>(1 << 2);
 
             foreach (var target in request.Targets)
             {
                 var sensorId = target.Payload.Sensor;
 
-                if (target.Payload.IsFull && TryGetSensor(sensorId, out var sensor))
+                if (target.Payload.IsFull && TryGetSensor(sensorId, out var sensor) && sensor.Integration.HasGrafana())
                 {
-                    var sensorData = await _cache.GetSensorValuesPage(sensor.Id, request.Range.FromUtc, request.Range.ToUtc, request.MaxDataPoints).Flatten();
+                    var sensorData = await GetSensorValues(request, sensor);
 
                     object sensorHistory = target.Payload.Type switch
                     {
@@ -123,7 +134,7 @@ namespace HSMServer.Controllers.GrafanaDatasources.JsonSource
             var options = new List<PayloadOption>(sensors.Count);
 
             foreach (var sensorId in sensors)
-                if (_tree.Sensors.TryGetValue(sensorId, out var sensor))
+                if (_tree.Sensors.TryGetValue(sensorId, out var sensor) && sensor.Integration.HasGrafana())
                     options.Add(new PayloadOption(sensor.Path, sensorId.ToString()));
 
             return options;
@@ -150,6 +161,39 @@ namespace HSMServer.Controllers.GrafanaDatasources.JsonSource
             sensor = default;
 
             return Guid.TryParse(rawId, out var sensorId) && _tree.Sensors.TryGetValue(sensorId, out sensor);
+        }
+
+        private bool TryGetKey(out AccessKeyModel key, out string message)
+        {
+            key = null;
+            message = null;
+
+            if (Request.Headers.TryGetValue(nameof(HSMSensorDataObjects.BaseRequest.Key), out var keyStr) && Guid.TryParse(keyStr, out var keyId))
+                key = _cache.GetAccessKey(keyId);
+            else
+                message = "Ivalid key";
+
+            return key != null;
+        }
+
+        private async Task<List<BaseValue>> GetSensorValues(QueryHistoryRequest request, SensorNodeViewModel sensor)
+        {
+            var sensorValues = new List<BaseValue>(request.MaxDataPoints);
+            var interval = new TimeSpan(0, 0, 0, 0, request.IntervalMs);
+
+            await foreach (var page in _cache.GetSensorValuesPage(sensor.Id, request.Range.FromUtc, request.Range.ToUtc, TreeValuesCache.MaxHistoryCount))
+            {
+                foreach (var value in page)
+                {
+                    if (sensorValues.Count == 0 || (value.ReceivingTime - sensorValues[^1].ReceivingTime) >= interval)
+                        sensorValues.Add(value);
+
+                    if (sensorValues.Count == request.MaxDataPoints)
+                        return sensorValues;
+                }
+            }
+
+            return sensorValues;
         }
     }
 }

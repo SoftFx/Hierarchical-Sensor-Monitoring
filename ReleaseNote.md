@@ -1,53 +1,75 @@
 # HSM Server
 
-## New entity **Folder** has been added:
-It allows you to group different products and set the same settings for them (telegram settings, alerts, user roles)
+## New sensor type [**Version**](https://github.com/SoftFx/Hierarchical-Sensor-Monitoring/wiki/Sensor-types) has been added:
+* New endpoint **/version** has been added
+* New table for sensor type **Version** has been added. Version format *1.2.3.4*
+
+## New type of Access keys has been added - **Master key**
+* Master key has access to ALL products on the server
+* **Admin ONLY** can create Master key
+
+## Ability to integrate with [**Grafana**](https://grafana.com/) has been added:
+* New endopoints for [**JsonDatasource**](https://grafana.com/grafana/plugins/simpod-json-datasource/) have been added: */grafana/JsonDatasource*, */grafana/JsonDatasource/metrics*, */grafana/JsonDatasource/metric-payload-options*, */grafana/JsonDatasource/query*
+* Grafana connection guide is [here](https://github.com/SoftFx/Hierarchical-Sensor-Monitoring/wiki/Integration-with-Grafana)
+* List of available datasources and sensor types is [here](https://github.com/SoftFx/Hierarchical-Sensor-Monitoring/wiki/Supported-Grafana-datasources#json-datasource)
 
 ## Site
+* New sensor status **Empty sensor** has been added with white circle (if sensor history is empty)
+* Unused settings have been hidden in Configuration tab
+* Validation on min value for interval control (TTL, Sensativity) has been added
 
-### Folder/Product/Sensor info tabs
-* Folder meta info panel has been added
-* Product and sensor meta info panels have been fully redesigned
-* Now all description inputs support **Markdown format**
-* Default sorting for Grid and List panels has been changed (by status and then by name)
+## Tree
+* **Enable/Disable Grafana** item has been added in Context menu
+* Grafana icon is shown for sensors with Grafana enabled setting
 
-### Tree
-* New node type **Folder** has been added
-* Context menu names have been uploaded
-* **Save and close tree / Restore tree** button has been added
-* **Clear history** in context menu has been removed
+## Tree filters
+* **History** has been renamed to **Visibility**
+* **No data** has been renamed to **Empty sensors**
+* **Show icons** setting has been added
+* **Integrations** group with **Grafana** property has been added
 
-### Time intervals control
-* New value **From parent** has been added. If this value is selected, the parent setting is applied to current entity
-* **From parent** setting is available for a product in a folder too.
-* Value **Never** is redone. If this value is selected, the current setting is disabled for the entity.
-* Control interface has been improved
+## Sensor info
+* New property **Enable for** has been added
+* Auto update by Update tree interval has been added
+* Manually change for sensor status has been added (available for **ALL** users)
 
-### Alerts (Policies)
-* **Update Expected Interval** has been renamed to **Time to sensor live**
-* New alert **Sensitivity** has been added for sensors. If the sensor doesn`t return to Ok status after the specified time inverval, a notification sends.
-* Icons have been added for all alerts
+## Access keys
+* Select product input has been added in Edit modal
+* New link for creating access keys has been added on Access Keys tab (Only for admins)
+* Unique access key name validation has been added in Edit modal
+* **Unselect all** button has been added in Edit modal
+* Key's authors that have been removed have been marked as *Removed*
 
-### File Sensor
-* A file sensor preview has been improved
-* A list of recent sensor values will be shown instead of just the last file value
+## Bugfixing
+* Redirect to Home page after filters applying has been fixed
 
-### Products
-* Products tab has been redesigned
-* Folders have been added in Products tab
-* Modal window for add product has been added
-* **Move to...** setting has been added in Product actions (for moving products between folders)
+# HSM Datacollector
 
-### Bugfixing
-* Product Manger rights have been restored
-* A sensor will not send the notification about changing state to *Mute* in Telegram
-* Telegram /info command will not contain deleted products
-* Other minor bugfixing...
+### Structure and optimizations
+* Async requests and handlers for HttpClient have been added
+* Base structure for **Simple sensor** (a sensor that sends data on user request, not on a timer) has been added
+* Collector statuses have been added. Now collector has 4 statuses: **Starting**, **Running**, **Stopping**, **Stopped**. [More info](https://github.com/SoftFx/Hierarchical-Sensor-Monitoring/wiki/DataCollector-statuses)
 
-## Telegram
+### Default sensors
+* New default sensor [**Product info**](https://github.com/SoftFx/Hierarchical-Sensor-Monitoring/wiki/Windows-sensors-collection#addproductversion) has been added. Now it contains Product Version with Version start/stop time.
+* New defaut sensor [**Collector status**](https://github.com/SoftFx/Hierarchical-Sensor-Monitoring/wiki/Unix-sensors-collection#addcollectorstatus) has been added. It describes current collector state and contains error message (if exsists).
 
-* **From parent** for Telegram notifications setting is available from a product in a folder.
-* /status command has been renamed to **/server**
-* **/help** command has been added. This command output contains information from command /icons and existing statuses ascending priority
-* Icon for OffTime status has been changed to 💤
-* Other minor improvements...
+### Unix sensors
+* [**Free RAM memory MB**](https://github.com/SoftFx/Hierarchical-Sensor-Monitoring/wiki/Unix-sensors-collection#addfreerammemory) has been added.
+* [**Total CPU**](https://github.com/SoftFx/Hierarchical-Sensor-Monitoring/wiki/Unix-sensors-collection#addtotalcpu) has been added.
+* [**AddSystemMonitoringSensors**](https://github.com/SoftFx/Hierarchical-Sensor-Monitoring/wiki/Unix-sensors-collection#addsystemmonitoringsensors) facade for **Free RAM memory MB** and **Total CPU** has been added.
+
+### New methods
+* New method **SendFileAsync** has been added
+
+### Other
+* Collector version has been increased to 3.1.5
+* Package sending has been reworked. Packages will be sent until the queue is empty
+* Default queue size has been increased to 20.000 items
+* Default PostTime for WindowsInfo and DiskMonitroing sensors has been increased to 6h and 5min
+* The collector version will be logged
+
+# HSM DataObjects
+
+* New sensor type **Version** has been added
+* DataObjects version has been increased to 3.0.2

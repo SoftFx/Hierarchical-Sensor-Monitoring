@@ -1,4 +1,5 @@
-﻿using HSMSensorDataObjects.HistoryRequests;
+﻿using System;
+using HSMSensorDataObjects.HistoryRequests;
 using HSMSensorDataObjects.SensorValueRequests;
 using HSMServer.Core.Helpers;
 using HSMServer.Core.Model;
@@ -56,6 +57,17 @@ namespace HSMServer.ApiObjectsConverters
                 Status = value.Status.Convert(),
                 Value = value.Value
             };
+        
+        public static VersionValue Convert(this VersionSensorValue value)
+        {
+            return new()
+            {
+                Comment = value.Comment,
+                Time = value.Time,
+                Status = value.Status.Convert(),
+                Value = value.Value
+            };
+        }
 
         public static FileValue Convert(this FileSensorValue value) =>
             new()
@@ -63,10 +75,10 @@ namespace HSMServer.ApiObjectsConverters
                 Comment = value.Comment,
                 Time = value.Time,
                 Status = value.Status.Convert(),
-                Value = value.Value.ToArray(),
+                Value = value.Value is null ? Array.Empty<byte>() : value.Value.ToArray(),
                 Name = value.Name,
                 Extension = value.Extension,
-                OriginalSize = value.Value.Count
+                OriginalSize = value.Value?.Count ?? 0L
             };
 
         public static IntegerBarValue Convert(this IntBarSensorValue value) =>
@@ -111,6 +123,8 @@ namespace HSMServer.ApiObjectsConverters
                 BoolSensorValue sv => sv.Convert(),
                 StringSensorValue sv => sv.Convert(),
                 TimeSpanSensorValue sv => sv.Convert(),
+                VersionSensorValue sv => sv.Convert(),
+                FileSensorValue sv => sv.Convert(),
                 _ => null
             };
 
@@ -191,6 +205,20 @@ namespace HSMServer.ApiObjectsConverters
                 To = request.To,
                 Count = request.Count
             };
+        
+        public static SensorValueBase CreateNewSensorValue(SensorType sensorType) => sensorType switch
+        {
+            SensorType.Boolean => new BoolSensorValue(),
+            SensorType.IntegerBar => new IntBarSensorValue(),
+            SensorType.DoubleBar => new DoubleBarSensorValue(),
+            SensorType.Double => new DoubleSensorValue(),
+            SensorType.Integer => new IntSensorValue(),
+            SensorType.String => new StringSensorValue(),
+            SensorType.File => new FileSensorValue(),
+            SensorType.TimeSpan => new TimeSpanSensorValue(),
+            SensorType.Version => new VersionSensorValue(),
+            _ => null
+        };
 
 
         private static SensorStatus Convert(this ApiSensorStatus status) =>

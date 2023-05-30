@@ -7,6 +7,8 @@ namespace HSMDataCollector.DefaultSensors
 {
     public abstract class SensorBase : IDisposable
     {
+        internal const string DefaultTimeFormat = "dd/MM/yyyy HH:mm:ss";
+
         private readonly string _nodePath;
         
 
@@ -16,7 +18,9 @@ namespace HSMDataCollector.DefaultSensors
         
         
         internal event Action<SensorValueBase> ReceiveSensorValue;
-         
+
+        public event Action<string, Exception> ExceptionThrowing;
+
         
         protected SensorBase(SensorOptions options)
         {
@@ -31,11 +35,15 @@ namespace HSMDataCollector.DefaultSensors
         }
 
 
-        internal virtual Task<bool> Start() => Task.FromResult(true);
+        internal virtual Task<bool> Init() => Task.FromResult(true);
         
+        internal virtual Task<bool> Start() => Task.FromResult(true);
+
         internal virtual Task Stop() => Task.CompletedTask;
 
-        
+        protected void ThrowException(Exception ex) => ExceptionThrowing?.Invoke(SensorPath, ex);
+
+
         public void Dispose() => Stop();
     }
 }

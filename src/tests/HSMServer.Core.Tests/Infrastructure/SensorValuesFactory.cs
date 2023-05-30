@@ -17,6 +17,7 @@ namespace HSMServer.Core.Tests.Infrastructure
                 SensorType.DoubleBar => BuildDoubleBarValue(),
                 SensorType.File => BuildFileValue(),
                 SensorType.TimeSpan => BuildTimeSpanValue(),
+                SensorType.Version => BuildVersionValue(),
                 _ => null,
             };
 
@@ -63,6 +64,15 @@ namespace HSMServer.Core.Tests.Infrastructure
                 Time = DateTime.UtcNow,
                 Status = SensorStatus.Ok,
                 Value = RandomGenerator.GetRandomTimeSpan(),
+            };
+
+        internal static VersionValue BuildVersionValue() =>
+            new()
+            {
+                Comment = RandomGenerator.GetRandomString(),
+                Time = DateTime.UtcNow,
+                Status = SensorStatus.Ok,
+                Value = new Version(RandomGenerator.GetRandomInt(positive: true), RandomGenerator.GetRandomInt(positive: true)),
             };
 
         internal static IntegerBarValue BuildIntegerBarValue() =>

@@ -124,7 +124,7 @@ namespace HSMServer.Controllers
         public IActionResult CreateProduct(AddProductViewModel product)
         {
             if (ModelState.IsValid)
-                _treeValuesCache.AddProduct(product.Name);
+                _treeValuesCache.AddProduct(product.Name, CurrentUser.Id);
 
             return PartialView("_AddProduct", product);
         }
@@ -141,7 +141,7 @@ namespace HSMServer.Controllers
 
         #region Edit Product
 
-        [ProductRoleFilterByEncodedProductId(ProductRoleEnum.ProductManager)]
+        [ProductRoleFilterByEncodedProductId(nameof(encodedProductId), ProductRoleEnum.ProductManager)]
         public IActionResult EditProduct([FromQuery(Name = "Product")] string encodedProductId)
         {
             var notAdminUsers = _userManager.GetUsers(u => !u.IsAdmin).ToList();

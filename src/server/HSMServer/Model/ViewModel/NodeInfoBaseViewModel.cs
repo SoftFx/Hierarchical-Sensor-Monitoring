@@ -1,6 +1,9 @@
 using HSMServer.Model.Folders;
 using HSMServer.Model.TreeViewModel;
 using System;
+using System.ComponentModel.DataAnnotations;
+using HSMServer.Attributes;
+using HSMServer.Extensions;
 
 
 namespace HSMServer.Model.ViewModel
@@ -15,10 +18,13 @@ namespace HSMServer.Model.ViewModel
 
         public SensorStatus Status { get; set; }
 
+        [Display(Name = "Time to live interval")]
+        [MinTimeInterval(TimeInterval.OneMinute, ErrorMessage = "{0} minimal value is {1}.")]
         public TimeIntervalViewModel ExpectedUpdateInterval { get; set; }
 
+        [Display(Name = "Sensitivity interval")]
+        [MinTimeInterval(TimeInterval.OneMinute, ErrorMessage = "{0} minimal value is {1}.")]
         public TimeIntervalViewModel SensorRestorePolicy { get; set; }
-
 
         public string EncodedId { get; set; }
 
@@ -39,10 +45,11 @@ namespace HSMServer.Model.ViewModel
             EncodedId = model.Id.ToString();
             Header = model.Name;
         }
+        
 
         private NodeInfoBaseViewModel(BaseNodeViewModel model)
         {
-            Status = model.Status;
+            Status = model.Status.ToEmpty(model.UpdateTime != DateTime.MinValue);
             Description = model.Description;
             LastUpdateTime = model.UpdateTime;
 

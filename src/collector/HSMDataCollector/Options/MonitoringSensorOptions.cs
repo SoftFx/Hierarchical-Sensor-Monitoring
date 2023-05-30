@@ -6,11 +6,20 @@ namespace HSMDataCollector.Options
     {
         public string NodePath { get; set; }
     }
-    
-    
+
+
     public class MonitoringSensorOptions : SensorOptions
     {
-        public TimeSpan PostDataPeriod { get; set; } = TimeSpan.FromSeconds(15);
+        internal virtual TimeSpan DefaultPostDataPeriod { get; } = TimeSpan.FromSeconds(15);
+
+
+        public TimeSpan PostDataPeriod { get; set; }
+
+
+        public MonitoringSensorOptions()
+        {
+            PostDataPeriod = DefaultPostDataPeriod;
+        }
     }
 
 
@@ -24,6 +33,9 @@ namespace HSMDataCollector.Options
 
     public sealed class DiskSensorOptions : MonitoringSensorOptions
     {
+        internal override TimeSpan DefaultPostDataPeriod { get; } = TimeSpan.FromMinutes(5);
+
+
         public string TargetPath { get; set; } = @"C:\";
 
         public int CalibrationRequests { get; set; } = 6;
@@ -32,14 +44,28 @@ namespace HSMDataCollector.Options
 
     public sealed class WindowsSensorOptions : MonitoringSensorOptions
     {
+        internal override TimeSpan DefaultPostDataPeriod { get; } = TimeSpan.FromHours(12);
+
+
         public TimeSpan AcceptableUpdateInterval { get; set; } = TimeSpan.FromDays(30);
     }
 
-    
-    public sealed class ProductInfoOptions : SensorOptions
+
+    public sealed class VersionSensorOptions : SensorOptions
     {
-        public string Version { get; set; }
-        
+        public Version Version { get; set; }
+
+        public string SensorName { get; set; }
+
         public DateTime StartTime { get; set; }
     }
+
+
+    public sealed class CollectorInfoOptions : SensorOptions
+    {
+        internal const string BaseCollectorPath = "Product Info/Collector";
+    }
+
+
+    public sealed class CollectorMonitoringInfoOptions : MonitoringSensorOptions { }
 }

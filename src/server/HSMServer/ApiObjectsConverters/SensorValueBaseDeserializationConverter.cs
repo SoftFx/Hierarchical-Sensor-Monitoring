@@ -2,6 +2,7 @@
 using HSMSensorDataObjects.SensorValueRequests;
 using System;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 using System.Text.Json.Serialization;
 
 namespace HSMServer.ApiObjectsConverters
@@ -38,6 +39,7 @@ namespace HSMServer.ApiObjectsConverters
                     SensorType.DoubleBarSensor => JsonSerializer.Deserialize<DoubleBarSensorValue>(ref reader, options),
                     SensorType.FileSensor => JsonSerializer.Deserialize<FileSensorValue>(ref reader, options),
                     SensorType.TimeSpanSensor => JsonSerializer.Deserialize<TimeSpanSensorValue>(ref reader, options),
+                    SensorType.VersionSensor => DeserializeVersion(ref reader, options),
                     _ => throw new JsonException(UnexpectedSensorTypeError),
                 };
             }
@@ -48,6 +50,35 @@ namespace HSMServer.ApiObjectsConverters
         public override void Write(Utf8JsonWriter writer, SensorValueBase value, JsonSerializerOptions options)
         {
             throw new NotImplementedException();
+        }
+
+
+        private static VersionSensorValue DeserializeVersion(ref Utf8JsonReader reader, JsonSerializerOptions options)
+        {
+            var obj = JsonSerializer.Deserialize<JsonObject>(ref reader, options);
+
+
+            string GetValue(string key, JsonObject src = null)
+            {
+                src ??= obj;
+
+                return src[key]?.ToString();
+            }
+
+            int GetIntValue(string key, JsonObject src = null) => int.Parse(GetValue(key, src));
+
+
+            return new VersionSensorValue()
+            {
+                Key = GetValue(nameof(VersionSensorValue.Key)),
+                Path = GetValue(nameof(VersionSensorValue.Path)),
+                Time = DateTime.Parse(GetValue(nameof(VersionSensorValue.Time))).ToUniversalTime(),
+                Status = (SensorStatus)GetIntValue(nameof(VersionSensorValue.Status)),
+                Comment = GetValue(nameof(VersionSensorValue.Comment)),
+                Value = obj[nameof(VersionSensorValue.Value)] is JsonObject valueObj
+                    ? new Version(GetIntValue(nameof(Version.Major), valueObj), GetIntValue(nameof(Version.Minor), valueObj), GetIntValue(nameof(Version.Build), valueObj), GetIntValue(nameof(Version.Revision), valueObj))
+                    : new Version(GetValue(nameof(VersionSensorValue.Value))),
+            };
         }
     }
 }

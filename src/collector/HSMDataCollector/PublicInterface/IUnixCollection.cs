@@ -13,6 +13,13 @@ namespace HSMDataCollector.PublicInterface
         IUnixCollection AddProcessMonitoringSensors(BarSensorOptions options = null);
 
 
+        IUnixCollection AddTotalCpu(BarSensorOptions options = null);
+
+        IUnixCollection AddFreeRamMemory(BarSensorOptions options = null);
+
+        IUnixCollection AddSystemMonitoringSensors(BarSensorOptions options = null);
+
+
         IUnixCollection AddFreeDiskSpace(DiskSensorOptions options = null);
 
         IUnixCollection AddFreeDiskSpacePrediction(DiskSensorOptions options = null);
@@ -20,8 +27,15 @@ namespace HSMDataCollector.PublicInterface
         IUnixCollection AddDiskMonitoringSensors(DiskSensorOptions options = null);
 
 
-        IUnixCollection AddCollectorHeartbeat(MonitoringSensorOptions options = null);
-        
-        IUnixCollection AddProductInfo(ProductInfoOptions options = null);
+        IUnixCollection AddCollectorAlive(CollectorMonitoringInfoOptions options = null);
+
+        IUnixCollection AddCollectorVersion(CollectorInfoOptions options = null);
+
+        IUnixCollection AddCollectorStatus(CollectorInfoOptions options = null);
+
+        IUnixCollection AddCollectorMonitoringSensors(CollectorMonitoringInfoOptions options = null);
+
+
+        IUnixCollection AddProductVersion(VersionSensorOptions options = null);
     }
 }

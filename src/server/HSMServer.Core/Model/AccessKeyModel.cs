@@ -11,7 +11,7 @@ namespace HSMServer.Core.Model
         CanSendSensorData = 1,
         CanAddNodes = 2,
         CanAddSensors = 4,
-        CanReadSensorData = 8,
+        CanReadSensorData = 8
     }
 
     public enum KeyState : byte
@@ -49,6 +49,8 @@ namespace HSMServer.Core.Model
 
 
         public bool IsExpired => DateTime.UtcNow >= ExpirationTime;
+        
+        public bool IsMaster => ProductId == Guid.Empty;
 
 
         protected AccessKeyModel()
@@ -99,6 +101,10 @@ namespace HSMServer.Core.Model
 
             return this;
         }
+        
+        public virtual bool IsValid(KeyPermissions permissions, out string message) =>
+            !CheckBlocked(out message) && !CheckExpired(out message) && IsHasPermissions(permissions, out message);
+        
 
         internal AccessKeyEntity ToAccessKeyEntity() =>
             new()
@@ -149,14 +155,11 @@ namespace HSMServer.Core.Model
 
             return !string.IsNullOrEmpty(message);
         }
-
-        internal virtual bool IsValid(KeyPermissions permissions, out string message) =>
-            !CheckBlocked(out message) && !CheckExpired(out message) && IsHasPermissions(permissions, out message);
     }
 
     public class InvalidAccessKey : AccessKeyModel
     {
-        internal override bool IsValid(KeyPermissions permissions, out string message)
+        public override bool IsValid(KeyPermissions permissions, out string message)
         {
             message = "Key is invalid.";
             return false;

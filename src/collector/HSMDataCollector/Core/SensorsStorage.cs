@@ -1,9 +1,9 @@
-﻿using HSMDataCollector.Logging;
+﻿using HSMDataCollector.DefaultSensors;
+using HSMDataCollector.Logging;
 using System;
 using System.Collections.Concurrent;
 using System.Linq;
 using System.Threading.Tasks;
-using HSMDataCollector.DefaultSensors;
 
 namespace HSMDataCollector.Core
 {
@@ -24,22 +24,34 @@ namespace HSMDataCollector.Core
         {
             foreach (var value in Values)
             {
-                value.ReceiveSensorValue -= _valuesQueue.Enqueue;
+                value.ReceiveSensorValue -= _valuesQueue.Push;
+                value.ExceptionThrowing -= WriteSensorException;
 
                 value.Dispose();
             }
         }
 
+        internal Task Init() => Task.WhenAll(Values.Select(s => s.Init()));
+
         internal Task Start() => Task.WhenAll(Values.Select(s => s.Start()));
+
+        internal Task Stop() => Task.WhenAll(Values.Select(s => s.Stop()));
 
         internal void Register(string key, SensorBase value)
         {
             if (TryAdd(key, value))
             {
-                value.ReceiveSensorValue += _valuesQueue.Enqueue;
+                value.ReceiveSensorValue += _valuesQueue.Push;
+                value.ExceptionThrowing += WriteSensorException;
 
                 _logManager.Logger?.Info($"Added new default sensor {key}");
             }
+        }
+
+
+        private void WriteSensorException(string sensorPath, Exception ex)
+        {
+            _logManager.Logger?.Error($"Sensor: {sensorPath}, {ex}");
         }
     }
 }

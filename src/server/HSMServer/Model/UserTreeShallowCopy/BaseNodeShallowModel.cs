@@ -11,7 +11,7 @@ namespace HSMServer.Model.UserTreeShallowCopy
 
         public override bool CurUserIsManager { get; }
 
-        public NodeShallowModel Parent { get; internal set; }
+        public BaseShallowModel Parent { get; internal set; }
 
         public bool IsMutedState => _mutedValue ?? false;
 
@@ -26,9 +26,10 @@ namespace HSMServer.Model.UserTreeShallowCopy
         $$"""
         {
             "title": "{{Data.Title}}",
-            "icon": "{{Data.Status.ToIcon()}}",
+            "icon": "{{(Data.HasData ? Data.Status.ToIcon() : NodeExtensions.GetEmptySensorIcon())}}",
             "time": "{{Data.UpdateTime.Ticks}}",
             "isManager": "{{CurUserIsManager}}",
+            "isGrafanaEnabled": "{{IsGrafanaEnabled}}",
             "isAccountsEnable": "{{IsAccountsEnable}}",
             "isGroupsEnable": "{{IsGroupsEnable}}",
             "isMutedState": "{{_mutedValue}}"
