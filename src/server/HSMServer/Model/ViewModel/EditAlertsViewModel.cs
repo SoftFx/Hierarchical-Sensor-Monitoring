@@ -18,6 +18,13 @@ public class EditAlertsViewModel
     [Display(Name = "Sensitivity interval")]
     [MinTimeInterval(TimeInterval.OneMinute, ErrorMessage = "{0} minimal value is {1}.")]
     public TimeIntervalViewModel SensorRestorePolicy { get; set; } = new (PredefinedIntervals.ForRestore);
-    
+
     public string NodeIds { get; set; }
+
+    public bool IsChangedTimeout { get; set; }
+
+    public bool IsChangedRestore { get; set; }
+    
+    
+    public EditAlertsViewModel(){ }
 }

@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections;
 using System.Text;
+using HSMServer.Model.Folders;
 using HSMServer.Model.TreeViewModel;
 
 namespace HSMServer.Model.ViewModel;
@@ -21,7 +22,7 @@ public sealed class MultiActionToastViewModel
     public string ErrorMessage { get; private set; } = string.Empty;
 
     
-    public void AddDeletedItem(NodeViewModel item)
+    public void AddItem(NodeViewModel item)
     {
         if (item.RootProduct.Id == item.Id)
         {
@@ -37,6 +38,9 @@ public sealed class MultiActionToastViewModel
         
         _nodes.Enqueue((item as ProductNodeViewModel)?.FullPath);
     }
+    
+    public void AddItem(FolderModel folder) => _folders.Enqueue(folder.Name);
+    
 
     public MultiActionToastViewModel BuildDeletedItemsMessage()
     {

@@ -150,12 +150,12 @@ namespace HSMServer.Controllers
                 else if (_treeViewModel.Nodes.TryGetValue(decodedId, out var node))
                 {
                     _treeValuesCache.RemoveNode(node.Id);
-                    model.AddDeletedItem(node);
+                    model.AddItem(node);
                 }
                 else if (_treeViewModel.Sensors.TryGetValue(decodedId, out var sensor))
                 {
                     _treeValuesCache.RemoveSensor(sensor.Id);
-                    model.AddDeletedItem(sensor);
+                    model.AddItem(sensor);
                 }
             }
 
@@ -163,9 +163,63 @@ namespace HSMServer.Controllers
         }
 
         [HttpPost]
-        public IActionResult EditAlerts(EditAlertsViewModel model)
+        public async Task<IActionResult> EditAlerts(EditAlertsViewModel model)
         {
-            return default;
+            var toastViewModel = new MultiActionToastViewModel();
+            Console.WriteLine(model.IsChangedTimeout);
+            Console.WriteLine(model.IsChangedRestore);
+            foreach (var id in model.SelectedNodes)
+            {
+                if (_folderManager[id] is not null)
+                {
+                    var update = new FolderUpdate
+                    {
+                        Id = id,
+                        ExpectedUpdateInterval = model.IsChangedTimeout 
+                            ? model.ExpectedUpdateInterval.ResaveCustomTicks(model.ExpectedUpdateInterval) 
+                            : _folderManager[id].ExpectedUpdateInterval,
+                        RestoreInterval = model.IsChangedRestore 
+                            ? model.SensorRestorePolicy.ResaveCustomTicks(model.SensorRestorePolicy) 
+                            : _folderManager[id].SensorRestorePolicy,
+                    };
+
+                    await _folderManager.TryUpdate(update);
+                    toastViewModel.AddItem(_folderManager[id]);
+                }
+                else if (_treeViewModel.Nodes.TryGetValue(id, out var product))
+                {
+                    var update = new ProductUpdate
+                    {
+                        Id = product.Id,
+                        ExpectedUpdateInterval = model.IsChangedTimeout
+                            ? model.ExpectedUpdateInterval.ToModel((product.Parent as FolderModel)?.ExpectedUpdateInterval) 
+                            : product.ExpectedUpdateInterval.ToModel((product.Parent as FolderModel)?.ExpectedUpdateInterval),
+                        RestoreInterval = model.IsChangedRestore
+                            ? model.SensorRestorePolicy.ToModel((product.Parent as FolderModel)?.SensorRestorePolicy) 
+                            : product.SensorRestorePolicy.ToModel((product.Parent as FolderModel)?.SensorRestorePolicy),
+                    };
+            
+                    _treeValuesCache.UpdateProduct(update);
+                }
+                else if (_treeViewModel.Sensors.TryGetValue(id, out var sensor))
+                {
+                    var update = new SensorUpdate
+                    {
+                        Id = sensor.Id,
+                        ExpectedUpdateInterval = model.IsChangedTimeout
+                            ? model.ExpectedUpdateInterval.ToModel() 
+                            : sensor.ExpectedUpdateInterval.ToModel(),
+                        RestoreInterval =  model.IsChangedRestore
+                            ? model.SensorRestorePolicy.ToModel() 
+                            : sensor.SensorRestorePolicy.ToModel(),
+                    };
+                    
+                    toastViewModel.AddItem(sensor);
+                    _treeValuesCache.UpdateSensor(update);
+                }
+            }
+            
+            return Ok();
         }
 
         [HttpPost]
