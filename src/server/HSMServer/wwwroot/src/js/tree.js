@@ -268,20 +268,47 @@ function buildContextMenu(node) {
     }
 
     if (isManager) {
-        isGroupEnabled = node.data.jstree.isGroupsEnable === "True";
+        if (curType === NodeType.Folder) {
+            isGroupEnabled = node.data.jstree.isGroupsEnable === "True";
 
-        if (isGroupEnabled) {
-            notificationSubmenu["Groups ignore"] = {
-                "label": "Ignore for groups...",
-                "icon": "fab fa-telegram",
-                "action": _ => ignoreNotificationsRequest(node, TelegramTarget.Groups),
+            if (isGroupEnabled) {
+                notificationSubmenu["Groups ignore"] = {
+                    "label": "Ignore for groups...",
+                    "icon": "fab fa-telegram",
+                    "action": _ => ignoreNotificationsRequest(node, TelegramTarget.Groups),
+                }
+            }
+            else {
+                notificationSubmenu["Groups enable"] = {
+                    "label": "Enable for groups...",
+                    "icon": "fab fa-telegram",
+                    "action": _ => enableNotificationsRequest(node, TelegramTarget.Groups),
+                }
             }
         }
         else {
-            notificationSubmenu["Groups enable"] = {
-                "label": "Enable for groups...",
-                "icon": "fab fa-telegram",
-                "action": _ => enableNotificationsRequest(node, TelegramTarget.Groups),
+            for (let chatId in node.data.jstree.groups) {
+                isGroupEnabled = node.data.jstree.isGroupsEnable === "True";
+
+                console.log(chatId);
+                console.log(node.data.jstree.groups[chatId]);
+
+                let group = node.data.jstree.groups[chatId].Name;
+
+                if (isGroupEnabled) {
+                    notificationSubmenu[`Groups ignore ${chatId}`] = {
+                        "label": `Ignore for '${group}''...`,
+                        "icon": "fab fa-telegram",
+                        "action": _ => ignoreNotificationsRequest(node, TelegramTarget.Groups),
+                    }
+                }
+                else {
+                    notificationSubmenu[`Groups enable ${chatId}`] = {
+                        "label": `Enable for '${group}'...'`,
+                        "icon": "fab fa-telegram",
+                        "action": _ => enableNotificationsRequest(node, TelegramTarget.Groups),
+                    }
+                }
             }
         }
     }

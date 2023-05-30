@@ -168,12 +168,12 @@ namespace HSMServer.Notifications
                     _addressBook.RegisterChat(product, chat);
         }
 
-        private static bool ShouldSendMessage(INotificatable entity, BaseSensorModel sensor, PolicyResult oldStatus)
+        private static bool ShouldSendMessage(INotificatable entity, BaseSensorModel sensor, PolicyResult oldStatus, ChatId chatId)
         {
             var newStatus = sensor.Status;
             var minWebStatus = entity.Notifications.UsedTelegram.MessagesMinStatus.ToClient();
 
-            return entity.CanSendData(sensor) && newStatus != oldStatus && sensor.State != SensorState.Muted &&
+            return entity.CanSendData(sensor, chatId) && newStatus != oldStatus && sensor.State != SensorState.Muted &&
                    (newStatus.Status.ToClient() >= minWebStatus || oldStatus.Status.ToClient() >= minWebStatus);
         }
 
@@ -183,16 +183,14 @@ namespace HSMServer.Notifications
             {
                 if (IsBotRunning && AreBotMessagesEnabled)
                     foreach (var (entity, chats) in _addressBook.ServerBook)
-                    {
-                        if (ShouldSendMessage(entity, sensor, oldStatus))
-                            foreach (var (_, chat) in chats)
+                        foreach (var (_, chat) in chats)
+                            if (ShouldSendMessage(entity, sensor, oldStatus, chat.ChatId))
                             {
                                 if (entity.Notifications.UsedTelegram.MessagesDelaySec > 0)
                                     chat.MessageBuilder.AddMessage(sensor, oldStatus.Status);
                                 else
                                     SendMarkdownMessageAsync(chat.ChatId, MessageBuilder.GetSingleMessage(sensor));
                             }
-                    }
             }
             catch (Exception ex)
             {

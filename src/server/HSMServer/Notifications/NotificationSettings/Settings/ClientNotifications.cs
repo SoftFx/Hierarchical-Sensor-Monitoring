@@ -3,29 +3,28 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using Telegram.Bot.Types;
 
 namespace HSMServer.Notification.Settings
 {
     public class ClientNotifications : NotificationSettings
     {
+        public ConcurrentDictionary<ChatId, ConcurrentDictionary<Guid, DateTime>> PartiallyIgnored { get; } = new();
+
+        [Obsolete("Remove after migration IgnoredSensors->PartiallyIgnored")]
         public ConcurrentDictionary<Guid, DateTime> IgnoredSensors { get; } = new();
 
         public HashSet<Guid> EnabledSensors { get; } = new();
+
+
+        [Obsolete("Remove after migration IgnoredSensors->PartiallyIgnored")]
+        public bool Migrated { get; }
 
 
         public ClientNotifications() : base() { }
 
         internal ClientNotifications(NotificationSettingsEntity entity, Func<NotificationSettings> getParent = null) : base(entity, getParent)
         {
-            if (entity?.IgnoredSensors is not null)
-            {
-                IgnoredSensors.Clear();
-
-                foreach (var (sensorIdStr, endIgnorePeriodTicks) in entity.IgnoredSensors)
-                    if (Guid.TryParse(sensorIdStr, out var sensorId))
-                        IgnoredSensors.TryAdd(sensorId, new DateTime(endIgnorePeriodTicks));
-            }
-
             if (entity?.EnabledSensors is not null)
             {
                 EnabledSensors.Clear();
@@ -34,19 +33,54 @@ namespace HSMServer.Notification.Settings
                     if (Guid.TryParse(sensorIdStr, out var sensorId))
                         EnabledSensors.Add(sensorId);
             }
+
+            if (entity?.PartiallyIgnored is not null)
+            {
+                PartiallyIgnored.Clear();
+
+                foreach (var (chat, sensors) in entity.PartiallyIgnored)
+                {
+                    var ignoredSensors = new ConcurrentDictionary<Guid, DateTime>();
+                    foreach (var (sensorIdStr, endIgnorePeriodTicks) in sensors)
+                        if (Guid.TryParse(sensorIdStr, out var sensorId))
+                            ignoredSensors.TryAdd(sensorId, new DateTime(endIgnorePeriodTicks));
+
+                    PartiallyIgnored.TryAdd(new(chat), ignoredSensors);
+                }
+            }
+            else if (entity?.IgnoredSensors is not null) // TODO: remove migration
+            {
+                if (!Telegram.Chats.IsEmpty)
+                    foreach (var (chat, _) in Telegram.Chats)
+                    {
+                        var ignoredSensors = new ConcurrentDictionary<Guid, DateTime>();
+                        foreach (var (sensorIdStr, endIgnorePeriodTicks) in entity.IgnoredSensors)
+                            if (Guid.TryParse(sensorIdStr, out var sensorId))
+                                ignoredSensors.TryAdd(sensorId, new DateTime(endIgnorePeriodTicks));
+
+                        PartiallyIgnored.TryAdd(chat, ignoredSensors);
+                    }
+
+                Migrated = true;
+            }
         }
 
 
-        public bool IsSensorIgnored(Guid sensorId) => IgnoredSensors.ContainsKey(sensorId);
+        public bool IsSensorIgnored(Guid sensorId, ChatId chatId = null)
+        {
+            return chatId is null
+                ? PartiallyIgnored.Any(ch => ch.Value.ContainsKey(sensorId))
+                : PartiallyIgnored.TryGetValue(chatId, out var ignoredSensors) && ignoredSensors.ContainsKey(sensorId);
+        }
 
         public bool IsSensorEnabled(Guid sensorId) => EnabledSensors.Contains(sensorId);
 
         public bool RemoveSensor(Guid sensorId)
         {
-            bool isSensorRemoved = false;
+            bool isSensorRemoved = EnabledSensors.Remove(sensorId);
 
-            isSensorRemoved |= EnabledSensors.Remove(sensorId);
-            isSensorRemoved |= IgnoredSensors.TryRemove(sensorId, out _);
+            foreach (var (_, ignoredSensors) in PartiallyIgnored)
+                isSensorRemoved |= ignoredSensors.TryRemove(sensorId, out _);
 
             return isSensorRemoved;
         }
@@ -55,23 +89,35 @@ namespace HSMServer.Notification.Settings
         public void Enable(Guid sensorId)
         {
             EnabledSensors.Add(sensorId);
-            IgnoredSensors.TryRemove(sensorId, out _);
+
+            foreach (var (_, ignoredSensors) in PartiallyIgnored)
+                ignoredSensors.TryRemove(sensorId, out _);
         }
 
-        public void Ignore(Guid sensorId, DateTime endOfIgnorePeriod)
+        public void Ignore(Guid sensorId, DateTime endOfIgnorePeriod, ChatId chatId = null)
         {
             if (IsSensorEnabled(sensorId))
             {
-                IgnoredSensors.TryAdd(sensorId, endOfIgnorePeriod);
+                if (chatId is null)
+                    foreach (var (_, ignoredSensors) in PartiallyIgnored)
+                        ignoredSensors.TryAdd(sensorId, endOfIgnorePeriod);
+                else if (PartiallyIgnored.TryGetValue(chatId, out var ignoredSensors))
+                    ignoredSensors.TryAdd(sensorId, endOfIgnorePeriod);
+
                 EnabledSensors.Remove(sensorId);
             }
         }
 
-        public void RemoveIgnore(Guid sensorId)
+        public void RemoveIgnore(Guid sensorId, ChatId chatId = null)
         {
             if (IsSensorIgnored(sensorId))
             {
-                IgnoredSensors.TryRemove(sensorId, out _);
+                if (chatId is null)
+                    foreach (var (_, ignoredSensors) in PartiallyIgnored)
+                        ignoredSensors.TryRemove(sensorId, out _);
+                else if (PartiallyIgnored.TryGetValue(chatId, out var ignoredSensors))
+                    ignoredSensors.TryRemove(sensorId, out _);
+
                 EnabledSensors.Add(sensorId);
             }
         }
@@ -82,7 +128,7 @@ namespace HSMServer.Notification.Settings
         {
             TelegramSettings = Telegram.ToEntity(),
             EnabledSensors = EnabledSensors.Select(s => s.ToString()).ToList(),
-            IgnoredSensors = IgnoredSensors.ToDictionary(s => s.Key.ToString(), s => s.Value.Ticks),
+            PartiallyIgnored = PartiallyIgnored.ToDictionary(s => s.Key.Identifier ?? 0L, s => s.Value.ToDictionary(i => i.Key.ToString(), i => i.Value.Ticks)),
         };
     }
 }

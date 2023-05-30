@@ -1,3 +1,4 @@
+using HSMServer.ApiObjectsConverters;
 using HSMServer.Authentication;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Cache.UpdateEntities;
@@ -22,7 +23,6 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using HSMServer.ApiObjectsConverters;
 using SensorStatus = HSMSensorDataObjects.SensorStatus;
 
 namespace HSMServer.Controllers
@@ -184,7 +184,7 @@ namespace HSMServer.Controllers
                 if (model.IgnorePeriod.TimeInterval == Model.TimeInterval.Forever)
                     s.Disable(g);
                 else
-                    s.Ignore(g, model.EndOfIgnorePeriod);
+                    s.Ignore(g, model.EndOfIgnorePeriod, model.Chat);
             });
 
         [HttpPost]
@@ -288,16 +288,16 @@ namespace HSMServer.Controllers
 
             if (_treeViewModel.Nodes.TryGetValue(id, out var node))
                 return PartialView("_GeneralInfo", new ProductInfoViewModel(node));
-            
+
             if (_folderManager[id] is not null)
                 return PartialView("_GeneralInfo", new FolderInfoViewModel(_folderManager[id]));
-            
+
             if (_treeViewModel.Sensors.TryGetValue(id, out var sensor))
                 return PartialView("_GeneralInfo", new SensorInfoViewModel(sensor));
 
             return _emptyResult;
         }
-        
+
         #endregion
 
         #region SensorsHistory
@@ -466,7 +466,7 @@ namespace HSMServer.Controllers
         private FileValue GetFileSensorValue(string encodedId) =>
             _treeValuesCache.GetSensor(SensorPathHelper.DecodeGuid(encodedId)).LastValue as FileValue;
 
-        private async Task<FileValue> GetFileByReceivingTimeOrDefault(string encodedId, long ticks = default) => 
+        private async Task<FileValue> GetFileByReceivingTimeOrDefault(string encodedId, long ticks = default) =>
             (ticks == default ? GetFileSensorValue(encodedId) : (await GetFileHistory(encodedId)).Pages[0].Cast<FileValue>().FirstOrDefault(file => file.ReceivingTime.Ticks == ticks)).DecompressContent();
 
         private Task<HistoryValuesViewModel> GetFileHistory(string encodedId)
@@ -515,10 +515,10 @@ namespace HSMServer.Controllers
         {
             _treeViewModel.Sensors.TryGetValue(sensorId, out var sensorNodeViewModel);
             var isAccessKeyExist = GetKeyOrDefaultWithPermissions(sensorNodeViewModel?.RootProduct.Id ?? Guid.Empty, KeyPermissions.CanSendSensorData) is not null;
-            
+
             if (!isAccessKeyExist)
                 ModelState.AddModelError(nameof(EditSensorStatusViewModal.RootProductId), EditSensorStatusViewModal.AccessKeyValidationErrorMessage);
-            
+
             return PartialView("_EditSensorStatusModal", new EditSensorStatusViewModal(sensorNodeViewModel, isAccessKeyExist));
         }
 
@@ -535,15 +535,15 @@ namespace HSMServer.Controllers
                 ModelState.AddModelError(nameof(EditSensorStatusViewModal.RootProductId), EditSensorStatusViewModal.AccessKeyValidationErrorMessage);
                 return BadRequest(ModelState);
             }
-            
+
             var sensor = _treeValuesCache.GetSensor(modal.SensorId);
             var comment = $"User: {CurrentUser.Name}. Reason: {modal.Reason}";
 
             var sensorValue = ApiConverters.CreateNewSensorValue(sensor.Type);
-            
+
             if (sensorValue is null)
                 return BadRequest();
-            
+
             sensorValue.Comment = comment;
             sensorValue.Path = sensor.Path;
             sensorValue.Status = (SensorStatus)modal.NewStatus;
@@ -574,7 +574,7 @@ namespace HSMServer.Controllers
 
             if (!ModelState.IsValid)
                 return PartialView("_MetaInfo", new ProductInfoViewModel(product));
-            
+
             var update = new ProductUpdate
             {
                 Id = product.Id,
@@ -632,7 +632,7 @@ namespace HSMServer.Controllers
 
             return localValue?.ReceivingTime >= from && localValue?.ReceivingTime <= to ? localValue : null;
         }
-        
+
         private AccessKeyModel GetKeyOrDefaultWithPermissions(Guid productId, KeyPermissions permissions) =>
             _treeValuesCache.GetProduct(productId).AccessKeys.Values.FirstOrDefault(x => x.IsValid(permissions, out _));
     }

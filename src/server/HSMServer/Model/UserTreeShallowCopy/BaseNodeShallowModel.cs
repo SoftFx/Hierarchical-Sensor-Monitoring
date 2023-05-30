@@ -1,6 +1,8 @@
 ﻿using HSMServer.Extensions;
 using HSMServer.Model.Authentication;
 using HSMServer.Model.TreeViewModel;
+using System.Linq;
+using System.Text.Json;
 
 namespace HSMServer.Model.UserTreeShallowCopy
 {
@@ -32,6 +34,7 @@ namespace HSMServer.Model.UserTreeShallowCopy
             "isGrafanaEnabled": "{{IsGrafanaEnabled}}",
             "isAccountsEnable": "{{IsAccountsEnable}}",
             "isGroupsEnable": "{{IsGroupsEnable}}",
+            "groups": {{JsonSerializer.Serialize(Data.RootProduct.Notifications.Telegram.Chats.ToDictionary(k => k.Key?.Identifier ?? 0L, v => v.Value.ToEntity()))}},
             "isMutedState": "{{_mutedValue}}"
         }
         """;
