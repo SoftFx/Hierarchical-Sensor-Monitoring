@@ -137,7 +137,7 @@ namespace HSMServer.Controllers
         [HttpPost]
         public ActionResult RemoveNode([FromBody] string[] ids)
         {
-            var deletionViewModel = new DeletionViewModel();
+            var model = new MultiActionToastViewModel();
             
             foreach (var id in ids)
             {
@@ -145,21 +145,21 @@ namespace HSMServer.Controllers
 
                 if (_folderManager[decodedId] is not null)
                 {
-                    deletionViewModel.AddError(_folderManager[decodedId].Name);
+                    model.AddError(_folderManager[decodedId].Name);
                 }
                 else if (_treeViewModel.Nodes.TryGetValue(decodedId, out var node))
                 {
                     _treeValuesCache.RemoveNode(node.Id);
-                    deletionViewModel.AddDeletedItem(node);
+                    model.AddDeletedItem(node);
                 }
                 else if (_treeViewModel.Sensors.TryGetValue(decodedId, out var sensor))
                 {
                     _treeValuesCache.RemoveSensor(sensor.Id);
-                    deletionViewModel.AddDeletedItem(sensor);
+                    model.AddDeletedItem(sensor);
                 }
             }
 
-            return Json(deletionViewModel.BuildDeletedItemsMessage());
+            return Json(model.BuildDeletedItemsMessage());
         }
 
         [HttpPost]

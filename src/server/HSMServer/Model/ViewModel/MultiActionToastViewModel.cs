@@ -5,13 +5,15 @@ using HSMServer.Model.TreeViewModel;
 
 namespace HSMServer.Model.ViewModel;
 
-public class DeletionViewModel
+public sealed class MultiActionToastViewModel
 {
-    private LimitedQueue<string> DeletedProducts { get; } = new(5);
+    private readonly LimitedQueue<string> _folders = new(5);
     
-    private LimitedQueue<string> DeletedNodes { get; } = new(5);
+    private readonly LimitedQueue<string> _products = new(5);
     
-    private LimitedQueue<string> DeletedSensors { get; } = new(10);
+    private readonly LimitedQueue<string> _nodes = new(5);
+    
+    private readonly LimitedQueue<string> _sensors = new(10);
 
 
     public string DeletionInfo { get; private set; } = string.Empty;
@@ -23,33 +25,33 @@ public class DeletionViewModel
     {
         if (item.RootProduct.Id == item.Id)
         {
-            DeletedProducts.Enqueue((item as ProductNodeViewModel)?.Name);
+            _products.Enqueue((item as ProductNodeViewModel)?.Name);
             return;
         }
 
         if (item is SensorNodeViewModel sensorNodeViewModel)
         {
-            DeletedSensors.Enqueue(sensorNodeViewModel.FullPath);
+            _sensors.Enqueue(sensorNodeViewModel.FullPath);
             return;
         }
         
-        DeletedNodes.Enqueue((item as ProductNodeViewModel)?.FullPath);
+        _nodes.Enqueue((item as ProductNodeViewModel)?.FullPath);
     }
 
-    public DeletionViewModel BuildDeletedItemsMessage()
+    public MultiActionToastViewModel BuildDeletedItemsMessage()
     {
         var response = new StringBuilder(1 << 5);
 
-        DeletedProducts.ToBuilder(response, "Removed products:");
-        DeletedNodes.ToBuilder(response, "Removed nodes:", Environment.NewLine);
-        DeletedSensors.ToBuilder(response, "Removed sensors:", Environment.NewLine);
+        _products.ToBuilder(response, "Removed products:");
+        _nodes.ToBuilder(response, "Removed nodes:", Environment.NewLine);
+        _sensors.ToBuilder(response, "Removed sensors:", Environment.NewLine);
         
         DeletionInfo = response.ToString();
         
         return this;
     }
 
-    public DeletionViewModel AddError(string objectName)
+    public MultiActionToastViewModel AddError(string objectName)
     {
         ErrorMessage += $"Folder {objectName} cannot be deleted{Environment.NewLine}";
         return this;
@@ -72,15 +74,16 @@ public sealed class LimitedQueue<T> : Queue
     {
         if (Count < _limit)
             base.Enqueue(item);
-        else _overflowCount++;
+        else 
+            _overflowCount++;
     }
 
     public StringBuilder ToBuilder(StringBuilder builder, string header, string separator = ", ")
     {
         if (Count > 0)
             builder.AppendLine(header)
-                .AppendJoin(separator, ToArray())
-                .AppendLine();
+                   .AppendJoin(separator, ToArray())
+                   .AppendLine();
             
         if (_overflowCount > 0)
             builder.AppendLine($"... and other {_overflowCount}");
