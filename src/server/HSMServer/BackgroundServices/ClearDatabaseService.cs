@@ -38,41 +38,12 @@ namespace HSMServer.BackgroundTask
 
                 await Task.Delay(_delay, token);
             }
-
-            //do
-            //{
-            //    DateTime currentDateTime = DateTime.Now;
-            //    if (currentDateTime - _lastChecked > _delay)
-            //    {
-            //        ConfigurationObject obj =  _configurationProvider.ReadOrDefault(nameof(ConfigurationConstants.SensorExpirationTime));
-            //        var expireInterval = TimeSpan.Parse(obj.Value);
-
-            //        var sensorsToRemove = new List<Guid>();
-
-            //        var sensors = _cache.GetSensors();
-            //        foreach (var sensor in sensors)
-            //        {
-            //            if (!sensor.HasData || DateTime.Now - sensor.LastUpdateTime < expireInterval)
-            //                continue;
-
-            //            sensorsToRemove.Add(sensor.Id);
-            //        }
-
-            //        foreach (var sensorId in sensorsToRemove)
-            //            _cache.ClearSensorHistory(sensorId);
-
-            //        _logger.LogInformation($"{sensorsToRemove.Count} sensors removed.");
-            //        _lastChecked = DateTime.Now;
-            //    }
-
-            //    await Task.Delay(_delay, token);
-
-            //} while (!token.IsCancellationRequested);
         }
 
         private void ClearData()
         {
-            RunSelfDestroy();
+            RunClearHistory();
+            //RunSelfDestroy();
         }
 
         private void RunSelfDestroy()
@@ -93,6 +64,26 @@ namespace HSMServer.BackgroundTask
             }
 
             _logger.LogInformation($"Stop {nameof(RunSelfDestroy)}");
+        }
+
+        private void RunClearHistory()
+        {
+            _logger.LogInformation($"Start {nameof(RunClearHistory)}");
+
+            var utcNow = DateTime.UtcNow;
+
+            foreach (var sensor in _cache.GetSensors())
+            {
+                var id = sensor.Id;
+
+                _logger.LogInformation("Start clear: {id} product {product} path {path}", id, sensor.RootProductName, sensor.Path);
+
+                _cache.CheckSensorHistory(id);
+
+                _logger.LogInformation("Stop clear: {id} product {product} path {path}", id, sensor.RootProductName, sensor.Path);
+            }
+
+            _logger.LogInformation($"Stop {nameof(RunClearHistory)}");
         }
     }
 }

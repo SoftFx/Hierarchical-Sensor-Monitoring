@@ -1,10 +1,12 @@
 using HSMDatabase.DatabaseWorkCore;
 using HSMServer.Authentication;
+using HSMServer.BackgroundServices;
 using HSMServer.BackgroundTask;
 using HSMServer.Configuration;
 using HSMServer.Core.Cache;
 using HSMServer.Core.DataLayer;
 using HSMServer.Core.SensorsUpdatesQueue;
+using HSMServer.Core.TreeStateSnapshot;
 using HSMServer.Filters;
 using HSMServer.Folders;
 using HSMServer.Middleware;
@@ -30,22 +32,24 @@ public static class ApplicationServiceExtensions
 {
     public static IServiceCollection AddApplicationServices(this IServiceCollection services)
     {
-        services.AddSingleton<IDatabaseCore, DatabaseCore>();
-        services.AddSingleton<IUpdatesQueue, UpdatesQueue>();
-        services.AddSingleton<ITreeValuesCache, TreeValuesCache>();
-        services.AddSingleton<IUserManager, UserManager>();
-        services.AddSingleton<IFolderManager, FolderManager>();
+        services.AddSingleton<IDatabaseCore, DatabaseCore>()
+                .AddSingleton<ITreeStateSnapshot, TreeStateSnapshot>()
+                .AddSingleton<IUpdatesQueue, UpdatesQueue>()
+                .AddSingleton<ITreeValuesCache, TreeValuesCache>()
+                .AddSingleton<IUserManager, UserManager>()
+                .AddSingleton<IFolderManager, FolderManager>();
 
-        services.AddSingleton<IRegistrationTicketManager, RegistrationTicketManager>();
-        services.AddSingleton<IConfigurationProvider, ConfigurationProvider>();
+        services.AddSingleton<IRegistrationTicketManager, RegistrationTicketManager>()
+                .AddSingleton<IConfigurationProvider, ConfigurationProvider>();
 
-        services.AddSingleton<NotificationsCenter>();
-        services.AddSingleton<DataCollectorWrapper>();
-        services.AddSingleton<TreeViewModel>();
+        services.AddSingleton<NotificationsCenter>()
+                .AddSingleton<DataCollectorWrapper>()
+                .AddSingleton<TreeViewModel>();
 
-        services.AddHostedService<ClearDatabaseService>();
-        services.AddHostedService<MonitoringBackgroundService>();
-        services.AddHostedService<DatacollectorService>();
+        services.AddHostedService<TreeSnapshotService>()
+                .AddHostedService<ClearDatabaseService>()
+                .AddHostedService<MonitoringBackgroundService>()
+                .AddHostedService<DatacollectorService>();
 
         services.AddSwaggerGen(o =>
         {

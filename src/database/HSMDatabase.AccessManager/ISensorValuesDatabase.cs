@@ -16,7 +16,7 @@ namespace HSMDatabase.AccessManager
 
         void PutSensorValue(byte[] key, object value);
 
-        void RemoveSensorValues(string sensorId);
+        void RemoveSensorValues(byte[] from, byte[] to);
 
         IEnumerable<byte[]> GetValuesFrom(byte[] from, byte[] to);
 
