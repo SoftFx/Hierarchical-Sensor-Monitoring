@@ -24,4 +24,13 @@ public sealed class EditAlertsViewModel
     public bool IsChangedTimeout { get; set; }
 
     public bool IsChangedRestore { get; set; }
+
+    public void Upload()
+    {
+        if (!IsChangedTimeout)
+            ExpectedUpdateInterval = null;
+
+        if (!IsChangedRestore)
+            SensorRestorePolicy = null;
+    }
 }

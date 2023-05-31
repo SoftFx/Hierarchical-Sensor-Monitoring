@@ -175,9 +175,11 @@ namespace HSMServer.Controllers
             if (ModelState[nameof(model.SensorRestorePolicy)]?.Errors.Count > 0 || ModelState[nameof(model.ExpectedUpdateInterval)]?.Errors.Count > 0)
                 return BadRequest(ModelState);
             
+            model.Upload();
+            
             var toastViewModel = new MultiActionToastViewModel();
-            var isExpectedFromParent = model.ExpectedUpdateInterval.TimeInterval is TimeInterval.FromParent;
-            var isRestoreFromParent = model.SensorRestorePolicy.TimeInterval is TimeInterval.FromParent;
+            var isExpectedFromParent = model.ExpectedUpdateInterval?.TimeInterval is TimeInterval.FromParent;
+            var isRestoreFromParent = model.SensorRestorePolicy?.TimeInterval is TimeInterval.FromParent;
             foreach (var id in model.SelectedNodes)
             {
                 if (_folderManager[id] is not null)
@@ -187,16 +189,16 @@ namespace HSMServer.Controllers
                         Id = id
                     };
 
-                    if (model.IsChangedTimeout && !isRestoreFromParent)
+                    if (!isRestoreFromParent)
                         update = update with
                         {
-                            RestoreInterval = model.SensorRestorePolicy.ResaveCustomTicks(model.SensorRestorePolicy) 
+                            RestoreInterval = (model.SensorRestorePolicy ?? _folderManager[id].SensorRestorePolicy).ResaveCustomTicks(model.SensorRestorePolicy) 
                         };
 
-                    if (model.IsChangedRestore && !isExpectedFromParent) 
+                    if (!isExpectedFromParent) 
                         update = update with
                         {
-                            ExpectedUpdateInterval = model.ExpectedUpdateInterval.ResaveCustomTicks(model.ExpectedUpdateInterval)
+                            ExpectedUpdateInterval = (model.ExpectedUpdateInterval ?? _folderManager[id].ExpectedUpdateInterval).ResaveCustomTicks(model.ExpectedUpdateInterval)
                         };
 
                     if (isExpectedFromParent || isRestoreFromParent)
@@ -216,24 +218,18 @@ namespace HSMServer.Controllers
                     {
                         Id = product.Id
                     };
-            
-                    if (model.IsChangedTimeout)
-                    {
-                        if (expectedUpdate)
-                            update = update with
-                            {
-                                RestoreInterval = model.ExpectedUpdateInterval.ToModel((product.Parent as FolderModel)?.ExpectedUpdateInterval)
-                            };
-                    }
                     
-                    if (model.IsChangedRestore)
-                    {
-                        if (restoreUpdate)
-                            update = update with
-                            {
-                                ExpectedUpdateInterval = model.SensorRestorePolicy.ToModel((product.Parent as FolderModel)?.SensorRestorePolicy) 
-                            };
-                    }
+                    if (expectedUpdate)
+                        update = update with
+                        {
+                            RestoreInterval = (model.SensorRestorePolicy ?? product.SensorRestorePolicy).ToModel((product.Parent as FolderModel)?.ExpectedUpdateInterval)
+                        };
+                    
+                    if (restoreUpdate)
+                        update = update with
+                        {
+                            ExpectedUpdateInterval = (model.ExpectedUpdateInterval ?? product.ExpectedUpdateInterval).ToModel((product.Parent as FolderModel)?.SensorRestorePolicy) 
+                        };
 
                     var isProduct = product.RootProduct?.Id == product.Id;
                     if (!restoreUpdate || !expectedUpdate)
@@ -249,12 +245,8 @@ namespace HSMServer.Controllers
                     var update = new SensorUpdate
                     {
                         Id = sensor.Id,
-                        ExpectedUpdateInterval = model.IsChangedTimeout
-                            ? model.ExpectedUpdateInterval.ToModel() 
-                            : sensor.ExpectedUpdateInterval.ToModel(),
-                        RestoreInterval =  model.IsChangedRestore
-                            ? model.SensorRestorePolicy.ToModel() 
-                            : sensor.SensorRestorePolicy.ToModel(),
+                        ExpectedUpdateInterval = (model.ExpectedUpdateInterval ?? sensor.ExpectedUpdateInterval).ToModel(),
+                        RestoreInterval = (model.SensorRestorePolicy ?? sensor.SensorRestorePolicy).ToModel(),
                     };
                     
                     toastViewModel.AddItem(sensor);
