@@ -4,7 +4,7 @@ namespace HSMServer.Core.TreeStateSnapshot
 {
     public sealed class LastSensorState
     {
-        public LastHistoryPeriod History { get; set; }
+        public LastHistoryPeriod History { get; set; } = new();
     }
 
 
