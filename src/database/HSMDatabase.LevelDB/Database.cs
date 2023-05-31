@@ -62,27 +62,6 @@ namespace HSMDatabase.LevelDB
             }
         }
 
-        public void DeleteAllStartingWith(byte[] startWithKey)
-        {
-            Iterator iterator = null;
-
-            try
-            {
-                iterator = _database.CreateIterator(_iteratorOptions);
-
-                for (iterator.Seek(startWithKey); iterator.IsValid && iterator.Key().StartsWith(startWithKey); iterator.Next())
-                    _database.Delete(iterator.Key());
-            }
-            catch (Exception e)
-            {
-                throw new ServerDatabaseException(e.Message, e);
-            }
-            finally
-            {
-                iterator?.Dispose();
-            }
-        }
-
         public void DeleteValueFromTo(byte[] from, byte[] to)
         {
             Iterator iterator = null;

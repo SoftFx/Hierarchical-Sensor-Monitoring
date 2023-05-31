@@ -59,20 +59,6 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             }
         }
 
-        public void RemoveSensorValues(string sensorId)
-        {
-            var key = Encoding.UTF8.GetBytes(sensorId);
-
-            try
-            {
-                _openedDb.DeleteAllStartingWith(key);
-            }
-            catch (Exception e)
-            {
-                _logger.Error(e, $"Failed to remove values for sensor {sensorId}");
-            }
-        }
-
         public void RemoveSensorValues(byte[] from, byte[] to)
         {
             try

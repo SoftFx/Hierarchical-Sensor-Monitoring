@@ -144,7 +144,8 @@ namespace HSMDatabase.DatabaseWorkCore
             var toBytes = BuildSensorValueKey(sensorId, toTicks);
 
             foreach (var db in _sensorValuesDatabases)
-                db.RemoveSensorValues(fromBytes, toBytes);
+                if (db.From <= toTicks && db.To >= fromTicks)
+                    db.RemoveSensorValues(fromBytes, toBytes);
         }
 
         public void RemoveSensorWithMetadata(string sensorId)
