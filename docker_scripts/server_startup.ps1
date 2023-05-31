@@ -4,7 +4,7 @@ $ExpectedImageTag = "${Repository}:$Version"
 $ContainerName = "HSMServer"
 
 Write-Host "Current running container"
-$CurrentContainerId = docker ps --filer "name=$ContainerName" -q
+$CurrentContainerId = docker ps -q -f "name=$ContainerName"
 if ($CurrentContainerId)
 {
     Write-Host "Current id container = $CurrentContainerId"
