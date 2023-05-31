@@ -40,11 +40,7 @@ namespace HSMServer.Model.UserTreeShallowCopy
         }
 
 
-        internal NodeShallowModel(ProductNodeViewModel data, User user) : base(data, user)
-        {
-            foreach (var (chatId, chat) in data.RootProduct.Notifications.Telegram.Chats)
-                GroupsState.Add(chatId, new GroupNotificationsState() { Name = chat.Name });
-        }
+        internal NodeShallowModel(ProductNodeViewModel data, User user) : base(data, user) { }
 
 
         internal void AddChild(SensorShallowModel shallowSensor, User user)
@@ -56,9 +52,7 @@ namespace HSMServer.Model.UserTreeShallowCopy
             if (sensor.State != SensorState.Muted)
             {
                 AccountState.CalculateState(user.Notifications, sensor.Id);
-
-                foreach (var (chatId, group) in GroupsState)
-                    group.CalculateState(shallowSensor.GroupsState[chatId]);
+                UpdateGroupsState(shallowSensor);
             }
 
             var isSensorMuted = sensor.State == SensorState.Muted;
@@ -83,9 +77,7 @@ namespace HSMServer.Model.UserTreeShallowCopy
                 if (!node._mutedValue.Value)
                 {
                     AccountState.CalculateState(node.AccountState);
-
-                    foreach (var (chatId, group) in GroupsState)
-                        group.CalculateState(node.GroupsState[chatId]);
+                    UpdateGroupsState(node);
                 }
 
                 _mutedValue = !_mutedValue.HasValue ? node._mutedValue : _mutedValue & node._mutedValue;

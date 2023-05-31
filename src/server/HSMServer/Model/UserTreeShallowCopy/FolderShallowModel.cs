@@ -41,19 +41,7 @@ namespace HSMServer.Model.UserTreeShallowCopy
             if (!node.IsMutedState)
             {
                 AccountState.CalculateState(node.AccountState);
-
-                foreach (var (chatId, groupInfo) in node.GroupsState)
-                {
-                    if (GroupsState.TryGetValue(chatId, out var info))
-                        info.CalculateState(groupInfo);
-                    else
-                        GroupsState.Add(chatId, new GroupNotificationsState()
-                        {
-                            Name = groupInfo.Name,
-                            IsEnabled = groupInfo.IsEnabled,
-                            IsIgnored = groupInfo.IsIgnored
-                        });
-                }
+                UpdateGroupsState(node);
             }
 
             GrafanaState.CalculateState(node.GrafanaState);

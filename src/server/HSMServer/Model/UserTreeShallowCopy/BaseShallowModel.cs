@@ -12,9 +12,9 @@ namespace HSMServer.Model.UserTreeShallowCopy
 
         public string GroupsObject => JsonSerializer.Serialize(GroupsState.ToDictionary(k => k.Key?.Identifier ?? 0L, v => v.Value));
 
-        public bool IsGroupsEnable => GroupsState.Values.Any(g => g.IsEnabled);
+        public bool IsGroupsEnable => GroupsState.Values.All(g => g.IsEnabled);
 
-        public bool IsGroupsIgnore => GroupsState.Values.Any(g => g.IsIgnored);
+        public bool IsGroupsIgnore => GroupsState.Values.All(g => g.IsIgnored);
 
 
         public abstract bool CurUserIsManager { get; }
@@ -27,6 +27,23 @@ namespace HSMServer.Model.UserTreeShallowCopy
 
 
         public abstract string ToJSTree();
+
+
+        protected void UpdateGroupsState(BaseShallowModel model)
+        {
+            foreach (var (chatId, groupInfo) in model.GroupsState)
+            {
+                if (GroupsState.TryGetValue(chatId, out var info))
+                    info.CalculateState(groupInfo);
+                else
+                    GroupsState.Add(chatId, new GroupNotificationsState()
+                    {
+                        Name = groupInfo.Name,
+                        IsEnabled = groupInfo.IsEnabled,
+                        IsIgnored = groupInfo.IsIgnored
+                    });
+            }
+        }
     }
 
 

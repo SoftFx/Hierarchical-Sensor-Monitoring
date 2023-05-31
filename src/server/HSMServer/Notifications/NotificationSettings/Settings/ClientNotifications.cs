@@ -11,9 +11,6 @@ namespace HSMServer.Notification.Settings
     {
         public ConcurrentDictionary<ChatId, ConcurrentDictionary<Guid, DateTime>> PartiallyIgnored { get; } = new();
 
-        [Obsolete("Remove after migration IgnoredSensors->PartiallyIgnored")]
-        public ConcurrentDictionary<Guid, DateTime> IgnoredSensors { get; } = new();
-
         public HashSet<Guid> EnabledSensors { get; } = new();
 
 
