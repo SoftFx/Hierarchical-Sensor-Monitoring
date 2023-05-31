@@ -1,10 +1,10 @@
-﻿using System;
-using HSMSensorDataObjects.HistoryRequests;
+﻿using HSMSensorDataObjects.HistoryRequests;
 using HSMSensorDataObjects.SensorValueRequests;
 using HSMServer.Core.Helpers;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.HistoryValues;
 using HSMServer.Core.Model.Requests;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using ApiSensorStatus = HSMSensorDataObjects.SensorStatus;
@@ -57,7 +57,7 @@ namespace HSMServer.ApiObjectsConverters
                 Status = value.Status.Convert(),
                 Value = value.Value
             };
-        
+
         public static VersionValue Convert(this VersionSensorValue value)
         {
             return new()
@@ -205,7 +205,7 @@ namespace HSMServer.ApiObjectsConverters
                 To = request.To,
                 Count = request.Count
             };
-        
+
         public static SensorValueBase CreateNewSensorValue(SensorType sensorType) => sensorType switch
         {
             SensorType.Boolean => new BoolSensorValue(),

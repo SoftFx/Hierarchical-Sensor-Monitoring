@@ -4,10 +4,10 @@
 @using HSMServer.Model.ViewModel
 
 @model HSMServer.Model.ViewModel.NodeInfoBaseViewModel
+
+
 <div id="meta_info_general_info">
-    <div class="form-control border-0 fw-bold px-0" style="max-width: 15rem;">
-        General info:
-    </div>
+    <label class="col-form-label fw-bold">General info:</label>
 
     @if (Model is FolderInfoViewModel folder)
     {
