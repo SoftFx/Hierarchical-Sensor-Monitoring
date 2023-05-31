@@ -1,13 +1,10 @@
 ﻿using HSMServer.Notification.Settings;
 using System;
-using Telegram.Bot.Types;
 
 namespace HSMServer.Model.UserTreeShallowCopy
 {
     public sealed class UserNotificationsState
     {
-        public ChatId ChatId { get; }
-
         public bool IsAllEnabled { get; private set; } = true;
 
         public bool IsAllIgnored { get; private set; } = true;
@@ -16,7 +13,7 @@ namespace HSMServer.Model.UserTreeShallowCopy
         public void CalculateState(ClientNotifications settings, Guid sensorId)
         {
             ChangeEnableState(settings.IsSensorEnabled(sensorId));
-            ChangeIgnoreState(settings.IsSensorIgnored(sensorId)); // TODO: check for chat
+            ChangeIgnoreState(settings.IsSensorIgnored(sensorId));
         }
 
         public void CalculateState(UserNotificationsState state)

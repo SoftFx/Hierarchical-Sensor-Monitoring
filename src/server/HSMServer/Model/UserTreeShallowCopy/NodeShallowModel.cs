@@ -15,8 +15,6 @@ namespace HSMServer.Model.UserTreeShallowCopy
 
         public IntegrationState GrafanaState { get; } = new();
 
-        public UserNotificationsState GroupState { get; } = new();
-
         public UserNotificationsState AccountState { get; } = new();
 
 
@@ -25,10 +23,6 @@ namespace HSMServer.Model.UserTreeShallowCopy
         public override bool IsAccountsEnable => AccountState.IsAllEnabled;
 
         public override bool IsAccountsIgnore => AccountState.IsAllIgnored;
-
-        public override bool IsGroupsEnable => GroupState.IsAllEnabled;
-
-        public override bool IsGroupsIgnore => GroupState.IsAllIgnored;
 
 
         public int VisibleSensorsCount { get; private set; }
@@ -46,7 +40,11 @@ namespace HSMServer.Model.UserTreeShallowCopy
         }
 
 
-        internal NodeShallowModel(ProductNodeViewModel data, User user) : base(data, user) { }
+        internal NodeShallowModel(ProductNodeViewModel data, User user) : base(data, user)
+        {
+            foreach (var (chatId, chat) in data.RootProduct.Notifications.Telegram.Chats)
+                GroupsState.Add(chatId, new GroupNotificationsState() { Name = chat.Name });
+        }
 
 
         internal void AddChild(SensorShallowModel shallowSensor, User user)
@@ -58,7 +56,9 @@ namespace HSMServer.Model.UserTreeShallowCopy
             if (sensor.State != SensorState.Muted)
             {
                 AccountState.CalculateState(user.Notifications, sensor.Id);
-                GroupState.CalculateState(sensor.RootProduct.Notifications, sensor.Id);
+
+                foreach (var (chatId, group) in GroupsState)
+                    group.CalculateState(shallowSensor.GroupsState[chatId]);
             }
 
             var isSensorMuted = sensor.State == SensorState.Muted;
@@ -83,7 +83,9 @@ namespace HSMServer.Model.UserTreeShallowCopy
                 if (!node._mutedValue.Value)
                 {
                     AccountState.CalculateState(node.AccountState);
-                    GroupState.CalculateState(node.GroupState);
+
+                    foreach (var (chatId, group) in GroupsState)
+                        group.CalculateState(node.GroupsState[chatId]);
                 }
 
                 _mutedValue = !_mutedValue.HasValue ? node._mutedValue : _mutedValue & node._mutedValue;
