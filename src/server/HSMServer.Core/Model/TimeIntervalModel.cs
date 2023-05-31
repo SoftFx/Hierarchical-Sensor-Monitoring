@@ -50,19 +50,21 @@ namespace HSMServer.Core.Model
             if (TimeInterval.UseCustomPeriod() && CustomPeriod > 0L)
                 return (DateTime.UtcNow - time).Ticks > CustomPeriod;
 
-            return DateTime.UtcNow > TimeInterval switch
-            {
-                TimeInterval.OneMinute => time.AddMinutes(1),
-                TimeInterval.FiveMinutes => time.AddMinutes(5),
-                TimeInterval.TenMinutes => time.AddMinutes(10),
-                TimeInterval.Hour => time.AddHours(1),
-                TimeInterval.Day => time.AddDays(1),
-                TimeInterval.Week => time.AddDays(7),
-                TimeInterval.Month => time.AddMonths(1),
-                TimeInterval.Custom or TimeInterval.FromFolder => DateTime.MaxValue, //for Never 
-                _ => throw new NotImplementedException(),
-            };
+            return DateTime.UtcNow > GetShiftedTime(time);
         }
+
+        public DateTime GetShiftedTime(DateTime time) => TimeInterval switch
+        {
+            TimeInterval.OneMinute => time.AddMinutes(1),
+            TimeInterval.FiveMinutes => time.AddMinutes(5),
+            TimeInterval.TenMinutes => time.AddMinutes(10),
+            TimeInterval.Hour => time.AddHours(1),
+            TimeInterval.Day => time.AddDays(1),
+            TimeInterval.Week => time.AddDays(7),
+            TimeInterval.Month => time.AddMonths(1),
+            TimeInterval.Custom or TimeInterval.FromFolder => DateTime.MaxValue, //for Never 
+            _ => throw new NotImplementedException(),
+        };
 
 
         public override bool Equals(object obj)

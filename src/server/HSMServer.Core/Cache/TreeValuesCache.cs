@@ -6,6 +6,7 @@ using HSMServer.Core.Model;
 using HSMServer.Core.Model.Policies;
 using HSMServer.Core.Model.Requests;
 using HSMServer.Core.SensorsUpdatesQueue;
+using HSMServer.Core.TreeStateSnapshot;
 using NLog;
 using System;
 using System.Collections.Concurrent;
@@ -32,6 +33,7 @@ namespace HSMServer.Core.Cache
 
         private readonly IDatabaseCore _databaseCore;
         private readonly IUpdatesQueue _updatesQueue;
+        private readonly ITreeStateSnapshot _snapshot;
 
 
         public bool IsInitialized { get; }
@@ -43,9 +45,10 @@ namespace HSMServer.Core.Cache
         public event Action<BaseSensorModel, PolicyResult> NotifyAboutChangesEvent;
 
 
-        public TreeValuesCache(IDatabaseCore databaseCore, IUpdatesQueue updatesQueue)
+        public TreeValuesCache(IDatabaseCore databaseCore, ITreeStateSnapshot snapshot, IUpdatesQueue updatesQueue)
         {
             _databaseCore = databaseCore;
+            _snapshot = snapshot;
 
             _updatesQueue = updatesQueue;
             _updatesQueue.NewItemsEvent += UpdatesQueueNewItemsHandler;
@@ -287,19 +290,39 @@ namespace HSMServer.Core.Cache
                 ClearNodeHistory(subProductId);
 
             foreach (var (sensorId, _) in product.Sensors)
-                ClearSensorHistory(sensorId);
+                ClearSensorHistory(sensorId, DateTime.MaxValue);
         }
 
-        public void ClearSensorHistory(Guid sensorId)
+        public void CheckSensorHistory(Guid sensorId)
         {
             if (!_sensors.TryGetValue(sensorId, out var sensor))
                 return;
 
+            var from = _snapshot.Sensors[sensorId].History.From;
+            var policy = sensor.ServerPolicy.SavedHistoryPeriod.Policy;
+
+            if (!policy.Validate(from).IsOk)
+                ClearSensorHistory(sensorId, policy.Interval.GetShiftedTime(from));
+        }
+
+        public void ClearSensorHistory(Guid sensorId, DateTime to)
+        {
+            if (!_sensors.TryGetValue(sensorId, out var sensor))
+                return;
+
+            var from = _snapshot.Sensors[sensorId].History.From;
+
+            if (from > to)
+                return;
+
             sensor.ResetSensor();
-            _databaseCore.ClearSensorValues(sensor.Id.ToString());
+
+            _databaseCore.ClearSensorValues(sensor.Id.ToString(), from, to);
+            _snapshot.Sensors[sensorId].History.From = to;
 
             ChangeSensorEvent?.Invoke(sensor, ActionType.Update);
         }
+
 
         public BaseSensorModel GetSensor(Guid sensorId) => _sensors.GetValueOrDefault(sensorId);
 
@@ -445,7 +468,11 @@ namespace HSMServer.Core.Cache
             var oldStatus = sensor.Status;
 
             if (sensor.TryAddValue(value) && sensor.LastDbValue != null)
+            {
                 _databaseCore.AddSensorValue(sensor.LastDbValue.ToEntity(sensor.Id));
+
+                _snapshot.Sensors[sensor.Id].History.To = sensor.LastDbValue.ReceivingTime;
+            }
 
             NotifyAboutChanges(sensor, oldStatus);
         }

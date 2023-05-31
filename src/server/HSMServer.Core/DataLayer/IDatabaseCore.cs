@@ -9,6 +9,8 @@ namespace HSMServer.Core.DataLayer
 {
     public interface IDatabaseCore : IDisposable
     {
+        void AddSnapshot();
+
         #region Size
 
         long GetDatabaseSize();
@@ -54,7 +56,7 @@ namespace HSMServer.Core.DataLayer
         void RemoveSensorWithMetadata(string sensorId);
 
         void AddSensorValue(SensorValueEntity valueEntity);
-        void ClearSensorValues(string sensorId);
+        void ClearSensorValues(string sensorId, DateTime from, DateTime to);
 
         Dictionary<Guid, byte[]> GetLatestValues(List<BaseSensorModel> sensors);
         IAsyncEnumerable<List<byte[]>> GetSensorValuesPage(string sensorId, DateTime from, DateTime to, int count);

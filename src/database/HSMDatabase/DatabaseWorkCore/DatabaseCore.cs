@@ -135,15 +135,24 @@ namespace HSMDatabase.DatabaseWorkCore
         public void UpdateSensor(SensorEntity entity) =>
             _environmentDatabase.AddSensor(entity);
 
-        public void ClearSensorValues(string sensorId) =>
-            RemoveSensorValues(sensorId);
+        public void ClearSensorValues(string sensorId, DateTime from, DateTime to)
+        {
+            var fromTicks = from.ToUniversalTime().Ticks;
+            var toTicks = to.ToUniversalTime().Ticks;
+
+            var fromBytes = BuildSensorValueKey(sensorId, fromTicks);
+            var toBytes = BuildSensorValueKey(sensorId, toTicks);
+
+            foreach (var db in _sensorValuesDatabases)
+                db.RemoveSensorValues(fromBytes, toBytes);
+        }
 
         public void RemoveSensorWithMetadata(string sensorId)
         {
             _environmentDatabase.RemoveSensor(sensorId);
             _environmentDatabase.RemoveSensorIdFromList(sensorId);
 
-            RemoveSensorValues(sensorId);
+            ClearSensorValues(sensorId, DateTime.MinValue, DateTime.MaxValue);
         }
 
         public void AddSensorValue(SensorValueEntity valueEntity)
@@ -222,12 +231,6 @@ namespace HSMDatabase.DatabaseWorkCore
         // "D19" string format is for inserting leading zeros (long.MaxValue has 19 symbols)
         private static byte[] BuildSensorValueKey(string sensorId, long time) =>
             Encoding.UTF8.GetBytes($"{sensorId}_{time:D19}");
-
-        private void RemoveSensorValues(string sensorId)
-        {
-            foreach (var db in _sensorValuesDatabases)
-                db.RemoveSensorValues(sensorId);
-        }
 
         #endregion
 
@@ -437,6 +440,13 @@ namespace HSMDatabase.DatabaseWorkCore
         {
             _environmentDatabase.Dispose();
             _sensorValuesDatabases.ToList().ForEach(d => d.Dispose());
+        }
+
+        public void AddSnapshot()
+        {
+            using var fs = new StreamWriter($"{Path.Combine(Environment.CurrentDirectory, "snapshot.txt")}");
+
+            fs.WriteLine($"{DateTime.UtcNow} snapshot");
         }
     }
 }

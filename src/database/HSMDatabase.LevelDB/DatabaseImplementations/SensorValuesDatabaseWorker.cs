@@ -73,6 +73,18 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             }
         }
 
+        public void RemoveSensorValues(byte[] from, byte[] to)
+        {
+            try
+            {
+                _openedDb.DeleteValueFromTo(from, to);
+            }
+            catch (Exception e)
+            {
+                _logger.Error($"Failed remove values [{from.GetString()}, {to.GetString()}] - {e.Message}");
+            }
+        }
+
         public IEnumerable<byte[]> GetValuesFrom(byte[] from, byte[] to)
         {
             try

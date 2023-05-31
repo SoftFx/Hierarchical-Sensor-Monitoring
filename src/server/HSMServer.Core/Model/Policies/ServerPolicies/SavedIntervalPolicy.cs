@@ -1,6 +1,6 @@
 ﻿namespace HSMServer.Core.Model.Policies.ServerPolicies
 {
-    public sealed class SelfDestroyPolicy : ServerPolicy
+    public sealed class SavedIntervalPolicy : ServerPolicy
     {
         protected override SensorStatus FailStatus => SensorStatus.Error;
 

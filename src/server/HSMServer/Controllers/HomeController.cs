@@ -256,7 +256,7 @@ namespace HSMServer.Controllers
             if (_treeViewModel.Nodes.TryGetValue(decodedId, out var node))
                 _treeValuesCache.ClearNodeHistory(node.Id);
             else if (_treeViewModel.Sensors.TryGetValue(decodedId, out var sensor))
-                _treeValuesCache.ClearSensorHistory(sensor.Id);
+                _treeValuesCache.ClearSensorHistory(sensor.Id, DateTime.MaxValue);
         }
 
         [HttpGet]
