@@ -18,7 +18,6 @@ namespace HSMServer.Core.Model.Policies
         public CollectionProperty<SelfDestroyPolicy> SelfDestroy { get; }
 
 
-
         public CollectionProperty<RestoreOffTimePolicy> RestoreOffTime { get; }
 
         public CollectionProperty<RestoreWarningPolicy> RestoreWarning { get; }

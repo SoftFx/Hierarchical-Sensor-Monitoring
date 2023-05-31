@@ -1,4 +1,5 @@
-﻿using HSMServer.Core.TreeStateSnapshot;
+﻿using HSMServer.BackgroundServices.DatabaseServices;
+using HSMServer.Core.TreeStateSnapshot;
 using Microsoft.Extensions.Hosting;
 using System;
 using System.Threading;
@@ -6,10 +7,13 @@ using System.Threading.Tasks;
 
 namespace HSMServer.BackgroundServices
 {
-    public class TreeSnapshotService : BackgroundService
+    public class TreeSnapshotService : BaseDelayedBackgroundService
     {
         private readonly IHostApplicationLifetime _lifetimeHost;
         private readonly ITreeStateSnapshot _snapshot;
+
+
+        public override TimeSpan Delay { get; } = new TimeSpan(0, 5, 0);
 
 
         public TreeSnapshotService(IHostApplicationLifetime lifetimeHost, ITreeStateSnapshot snapshot)
@@ -22,27 +26,25 @@ namespace HSMServer.BackgroundServices
         public override Task StartAsync(CancellationToken token)
         {
             _lifetimeHost.ApplicationStarted.Register(OnStarted);
-            _lifetimeHost.ApplicationStopping.Register(OnStopping);
+            _lifetimeHost.ApplicationStopping.Register(ServiceAction);
 
             return base.StartAsync(token);
         }
 
-        public override Task StopAsync(CancellationToken token) => base.StopAsync(token);
-
-        protected override Task ExecuteAsync(CancellationToken stoppingToken)
+        protected override void ServiceAction()
         {
-            return Task.CompletedTask;
+            _logger.Info($"Start state flushing");
+
+            _snapshot.FlushState();
+
+            _logger.Info($"Stop state flushing");
+
+            Console.Write("Flush state");
         }
 
         private void OnStarted()
         {
             Console.WriteLine("SNAPSHOT START!");
-        }
-
-        private void OnStopping()
-        {
-            _snapshot.FlushState();
-            Console.WriteLine("SNAPSHOT STOPPING!");
         }
     }
 }
