@@ -203,15 +203,6 @@ img .tree-png-icon {
     height: 1rem !important;
 }
 
-.naked-text{
-    background: rgba(0, 0, 0, 0)!important;
-    border: none;
-    outline: 0;
-    cursor: text;
-    padding-top: 0;
-    padding-left: 0;
-}
-
 .reserved-scroll-y{
     scrollbar-gutter: stable
 }
