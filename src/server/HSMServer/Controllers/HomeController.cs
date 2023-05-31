@@ -152,7 +152,7 @@ namespace HSMServer.Controllers
 
                 if (_folderManager[decodedId] is not null)
                 {
-                    model.AddError(MultiActionToastViewModel.ToastErrorType.Deletion, _folderManager[decodedId].Name, "Folder");
+                    model.AddRemoveError(_folderManager[decodedId].Name, "Folder");
                 }
                 else if (_treeViewModel.Nodes.TryGetValue(decodedId, out var node))
                 {
@@ -166,13 +166,13 @@ namespace HSMServer.Controllers
                 }
             }
 
-            return Json(model.BuildDeletedItemsMessage());
+            return Json(model.BuildResponse("Removed"));
         }
 
         [HttpPost]
         public async Task<IActionResult> EditAlerts(EditAlertsViewModel model)
         {
-            if (!ModelState.IsValid)
+            if (ModelState[nameof(model.SensorRestorePolicy)]?.Errors.Count > 0 || ModelState[nameof(model.ExpectedUpdateInterval)]?.Errors.Count > 0)
                 return BadRequest(ModelState);
             
             var toastViewModel = new MultiActionToastViewModel();
@@ -200,7 +200,7 @@ namespace HSMServer.Controllers
                         };
 
                     if (isExpectedFromParent || isRestoreFromParent)
-                        toastViewModel.AddError(MultiActionToastViewModel.ToastErrorType.Edit, _folderManager[id].Name, "Folder", TimeInterval.FromParent);
+                        toastViewModel.AddCantChangeIntervalError(_folderManager[id].Name, "Folder", TimeInterval.FromParent);
                     else 
                         toastViewModel.AddItem(_folderManager[id]);
                     
@@ -237,7 +237,7 @@ namespace HSMServer.Controllers
 
                     var isProduct = product.RootProduct?.Id == product.Id;
                     if (!restoreUpdate || !expectedUpdate)
-                        toastViewModel.AddError(MultiActionToastViewModel.ToastErrorType.Edit, product.Name, !isProduct ? "Node" : "Product", TimeInterval.FromParent);
+                        toastViewModel.AddCantChangeIntervalError(product.Name, !isProduct ? "Node" : "Product", TimeInterval.FromParent);
                     
                     if (restoreUpdate || expectedUpdate)
                         toastViewModel.AddItem(product);
@@ -262,7 +262,7 @@ namespace HSMServer.Controllers
                 }
             }
 
-            return Json(toastViewModel.BuildEditItemsMessage());
+            return Json(toastViewModel.BuildResponse("Edited"));
         }
 
         [HttpPost]

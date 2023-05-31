@@ -1,5 +1,5 @@
 ﻿using System;
-using System.Collections;
+using System.Collections.Generic;
 using System.Text;
 using HSMServer.Model.Folders;
 using HSMServer.Model.TreeViewModel;
@@ -8,18 +8,22 @@ namespace HSMServer.Model.ViewModel;
 
 public sealed class MultiActionToastViewModel
 {
+    private const string DeletionError = @"{0} {1} cannot be deleted";
+    private const string EditingError = @"{0} {1} can't have {2} interval";
+    
+    
     private readonly LimitedQueue<string> _folders = new(5);
     private readonly LimitedQueue<string> _products = new(5);
     private readonly LimitedQueue<string> _nodes = new(5);
     private readonly LimitedQueue<string> _sensors = new(10);
 
-    private const string _deletionError = @"{0} {1} cannot be deleted";
-    private const string _editingError = @"{0} {1} can't have {2} interval";
-
-
-    public string ResponseInfo { get; private set; } = string.Empty;
     
-    public string ErrorMessage { get; private set; } = string.Empty;
+    private StringBuilder _errorBuilder = new (1 << 5);
+    private StringBuilder _responseBuilder = new (1 << 5);
+    
+    
+    public string ErrorMessage => _errorBuilder.ToString();
+    public string ResponseInfo => _responseBuilder.ToString();
 
     
     public void AddItem(NodeViewModel item)
@@ -40,58 +44,26 @@ public sealed class MultiActionToastViewModel
     }
     
     public void AddItem(FolderModel folder) => _folders.Enqueue(folder?.Name);
+
+
+    public MultiActionToastViewModel BuildResponse(string header)
+    {
+        _folders.ToBuilder(_responseBuilder, $"{header} folders");
+        _products.ToBuilder(_responseBuilder, $"{header} products:");
+        _nodes.ToBuilder(_responseBuilder, $"{header} nodes:", Environment.NewLine);
+        _sensors.ToBuilder(_responseBuilder, $"{header} sensors:", Environment.NewLine);
+        
+        return this;
+    }
+
+    public void AddError(string errorMessage) => _errorBuilder.AppendLine(errorMessage);
     
+    public void AddRemoveError(string name, string type) => AddError(string.Format(DeletionError, name, type));
 
-    public MultiActionToastViewModel BuildDeletedItemsMessage()
-    {
-        var response = new StringBuilder(1 << 5);
-
-        _products.ToBuilder(response, "Removed products:");
-        _nodes.ToBuilder(response, "Removed nodes:", Environment.NewLine);
-        _sensors.ToBuilder(response, "Removed sensors:", Environment.NewLine);
-        
-        ResponseInfo = response.ToString();
-        
-        return this;
-    }
-
-    public MultiActionToastViewModel BuildEditItemsMessage()
-    {
-        var response = new StringBuilder(1 << 5);
-
-        _folders.ToBuilder(response, "Edited folders");
-        _products.ToBuilder(response, "Edited products:");
-        _nodes.ToBuilder(response, "Edited nodes:", Environment.NewLine);
-        _sensors.ToBuilder(response, "Edited sensors:", Environment.NewLine);
-        
-        ResponseInfo = response.ToString();
-        
-        return this;
-    }
-
-    public MultiActionToastViewModel AddError(ToastErrorType errorType, string objectType, string objectName, TimeInterval interval = default)
-    {
-        switch (errorType)
-        {
-            case ToastErrorType.Deletion:
-                ErrorMessage += $"{string.Format(_deletionError, objectName, objectType)}{Environment.NewLine}";
-                    break;
-            case ToastErrorType.Edit:
-                ErrorMessage += $"{string.Format(_editingError, objectName, objectType, interval)}{Environment.NewLine}";
-                break;
-        }
-
-        return this;
-    }
-    
-    public enum ToastErrorType
-    {
-        Deletion,
-        Edit
-    }
+    public void AddCantChangeIntervalError(string name, string type, TimeInterval interval) => AddError(string.Format(EditingError, name, type, interval));
 }
 
-public sealed class LimitedQueue<T> : Queue
+internal sealed class LimitedQueue<T> : Queue<T>
 {
     private readonly int _limit;
     

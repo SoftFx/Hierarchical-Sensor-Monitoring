@@ -6,7 +6,7 @@ using HSMServer.Attributes;
 
 namespace HSMServer.Model.ViewModel;
 
-public class EditAlertsViewModel
+public sealed class EditAlertsViewModel
 {
     public List<Guid> SelectedNodes => string.IsNullOrEmpty(NodeIds) ? new () : NodeIds.Split(',').Select(Guid.Parse).ToList();
 
@@ -24,7 +24,4 @@ public class EditAlertsViewModel
     public bool IsChangedTimeout { get; set; }
 
     public bool IsChangedRestore { get; set; }
-    
-    
-    public EditAlertsViewModel(){ }
 }
