@@ -12,7 +12,6 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
-using System.Text.Json.Nodes;
 
 namespace HSMServer.Core.Cache
 {
@@ -117,6 +116,8 @@ namespace HSMServer.Core.Cache
 
                 foreach (var (id, _) in product.AccessKeys)
                     RemoveAccessKey(id);
+
+                RemoveEntityPolicies(product);
 
                 ChangeProductEvent?.Invoke(product, ActionType.Delete);
             }
@@ -254,6 +255,8 @@ namespace HSMServer.Core.Cache
             if (_tree.TryGetValue(sensor.Parent.Id, out var parent))
                 parent.Sensors.TryRemove(sensorId, out _);
 
+            RemoveSensorPolicies(sensor);
+
             _databaseCore.RemoveSensorWithMetadata(sensorId.ToString());
 
             ChangeSensorEvent?.Invoke(sensor, ActionType.Delete);
@@ -271,20 +274,6 @@ namespace HSMServer.Core.Cache
                     State = endOfMuting is null ? SensorState.Available : SensorState.Muted,
                     EndOfMutingPeriod = endOfMuting,
                 });
-        }
-
-        public void RemoveNode(Guid productId)
-        {
-            if (!_tree.TryGetValue(productId, out var product))
-                return;
-
-            foreach (var (subProductId, _) in product.SubProducts)
-                RemoveNode(subProductId);
-
-            foreach (var (sensorId, _) in product.Sensors)
-                RemoveSensor(sensorId);
-
-            RemoveProduct(product.Id);
         }
 
         public void ClearNodeHistory(Guid productId)
@@ -362,10 +351,38 @@ namespace HSMServer.Core.Cache
         }
 
 
-        private void SubscribeToPolicyUpdate(ServerPolicyCollection collection)
+        private void SubscribeSensorToPolicyUpdate(BaseSensorModel sensor)
+        {
+            SubscribeToServerPolicyUpdate(sensor.ServerPolicy);
+
+            sensor.DataPolicies.Uploaded += UpdatePolicy;
+        }
+
+        private void SubscribeProductToPolicyUpdate(ProductModel product)
+        {
+            SubscribeToServerPolicyUpdate(product.ServerPolicy);
+        }
+
+        private void SubscribeToServerPolicyUpdate(ServerPolicyCollection collection)
         {
             foreach (var serverPolicy in collection)
                 serverPolicy.Uploaded += UpdatePolicy;
+        }
+
+        private void RemoveSensorPolicies(BaseSensorModel sensor)
+        {
+            sensor.DataPolicies.Uploaded -= UpdatePolicy;
+
+            RemoveEntityPolicies(sensor);
+        }
+
+        private void RemoveEntityPolicies(BaseNodeModel entity)
+        {
+            foreach (var serverPolicy in entity.ServerPolicy)
+                serverPolicy.Uploaded -= UpdatePolicy;
+
+            foreach (var policyId in entity.GetPolicyIds())
+                _databaseCore.RemovePolicy(policyId);
         }
 
         private static void ResetServerPolicyForRootProduct(ProductModel product)
@@ -508,7 +525,7 @@ namespace HSMServer.Core.Cache
                 var product = new ProductModel(productEntity);
                 product.ApplyPolicies(productEntity.Policies, policies);
 
-                SubscribeToPolicyUpdate(product.ServerPolicy);
+                SubscribeProductToPolicyUpdate(product);
 
                 _tree.TryAdd(product.Id, product);
             }
@@ -526,9 +543,6 @@ namespace HSMServer.Core.Cache
                     if (_tree.TryGetValue(parentId, out var parent) && _tree.TryGetValue(productId, out var product))
                         parent.AddSubProduct(product);
                 }
-
-            foreach (var product in GetProducts()) //TODO remove after migration
-                ResetServerPolicyForRootProduct(product);
 
             _logger.Info("Links between products are built");
         }
@@ -568,7 +582,7 @@ namespace HSMServer.Core.Cache
 
                     _sensors.TryAdd(sensor.Id, sensor);
 
-                    SubscribeToPolicyUpdate(sensor.ServerPolicy);
+                    SubscribeSensorToPolicyUpdate(sensor);
                 }
                 catch (Exception ex)
                 {
@@ -617,7 +631,7 @@ namespace HSMServer.Core.Cache
         {
             if (_tree.TryAdd(product.Id, product))
             {
-                SubscribeToPolicyUpdate(product.ServerPolicy);
+                SubscribeProductToPolicyUpdate(product);
 
                 if (product.Parent == null)
                     ResetServerPolicyForRootProduct(product);
@@ -641,7 +655,7 @@ namespace HSMServer.Core.Cache
             _sensors.TryAdd(sensor.Id, sensor);
             _databaseCore.AddSensor(sensor.ToEntity());
 
-            SubscribeToPolicyUpdate(sensor.ServerPolicy);
+            SubscribeSensorToPolicyUpdate(sensor);
 
             ChangeSensorEvent?.Invoke(sensor, ActionType.Add);
         }
@@ -767,39 +781,14 @@ namespace HSMServer.Core.Cache
                     sensor.TryAddValue(value);
         }
 
-        private Dictionary<string, Policy> GetPolicyModels(List<byte[]> policyEntities)
+        private static Dictionary<string, Policy> GetPolicyModels(List<byte[]> policyEntities)
         {
             Dictionary<string, Policy> policies = new(policyEntities.Count);
 
-            foreach (var entity in policyEntities) //TODO: remove migration
+            foreach (var entity in policyEntities)
             {
-                var obj = JsonSerializer.Deserialize<JsonObject>(entity);
-                var isOldObj = obj["Type"] != null;
-
-                if (isOldObj)
-                {
-                    var newObj = new JsonObject();
-
-                    var value = obj["Type"].AsValue().ToString();
-
-                    newObj["$type"] = value switch
-                    {
-                        "ExpectedUpdateIntervalPolicy" => 1000,
-                        "StringValueLengthPolicy" => 2000,
-                    };
-
-                    foreach (var node in obj)
-                        if (node.Key != "Type")
-                            newObj[node.Key] = JsonNode.Parse(node.Value.ToJsonString());
-
-                    obj = newObj;
-                }
-
-                var policy = JsonSerializer.Deserialize<Policy>(obj);
+                var policy = JsonSerializer.Deserialize<Policy>(entity);
                 policies.Add(policy.Id.ToString(), policy);
-
-                if (isOldObj)
-                    UpdatePolicy(ActionType.Update, policy);
             }
 
             return policies;

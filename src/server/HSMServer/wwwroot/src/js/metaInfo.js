@@ -1,5 +1,4 @@
 ﻿window.editInfoButtonClick = function () {
-    $('#description').removeAttr("disabled").removeClass("naked-text");
     $('#saveInfo').removeAttr("hidden");
     $('#revertInfo').removeAttr("hidden");
     $('#editButtonMetaInfo').addClass('d-none');
@@ -10,15 +9,19 @@
 
     $('#description').removeClass('d-none')
     $('#metainfo_separator').removeClass('d-none');
+    $('#addDataAlert').removeClass('d-none');
+    $('#commentHelp').removeClass('d-none');
 
     $('#markdown_span_description').addClass('d-none')
     $('#meta_info_collapse').addClass('d-none')
 
     $('#partialIntervalSelect').removeClass('d-none');
     $('#partialRestoreSelect').removeClass('d-none');
+    $('[id^="dataAlertInputGroupd_"]').removeClass('d-none');
 
     $('#labelInterval').addClass('d-none');
     $('#labelRestoreInterval').addClass('d-none');
+    $('[id^="dataAlertLabel_"]').addClass('d-none');
 }
 
 window.revertInfoButtonClick = function (action) {

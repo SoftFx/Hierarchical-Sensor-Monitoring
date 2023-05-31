@@ -4,10 +4,10 @@
     <TargetFrameworks>netstandard2.0;net472</TargetFrameworks>
     <OutputType>Library</OutputType>
     <GenerateBindingRedirectsOutputType>true</GenerateBindingRedirectsOutputType>
-    <AssemblyVersion>3.1.2</AssemblyVersion>
-    <AssemblyFileVersion>3.1.2</AssemblyFileVersion>
-    <ProductVersion>3.1.2</ProductVersion>
-    <Version>3.1.2</Version>
+    <AssemblyVersion>3.1.5</AssemblyVersion>
+    <AssemblyFileVersion>3.1.5</AssemblyFileVersion>
+    <ProductVersion>3.1.5</ProductVersion>
+    <Version>3.1.5</Version>
     <GenerateAssemblyInfo>true</GenerateAssemblyInfo>
     <Authors>HSM team</Authors>
     <Company>Soft-FX</Company>
@@ -15,7 +15,7 @@
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
     <Copyright>Copyright © 2023</Copyright>
     <IsPackable>true</IsPackable>
-    <Description>Data objects for HSMDataCollector</Description>
+    <Description>Collection with default sensors and http client for work with HSM server</Description>
     <DisableImplicitNuGetFallbackFolder>true</DisableImplicitNuGetFallbackFolder>
     <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
   </PropertyGroup>

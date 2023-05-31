@@ -7,10 +7,7 @@ namespace HSMServer.Filters.ProductRoleFilters
 {
     public sealed class ProductRoleFilterByEncodedProductId : ProductRoleFilterBase
     {
-        protected override string ArgumentName => "encodedProductId";
-
-
-        public ProductRoleFilterByEncodedProductId(params ProductRoleEnum[] roles) : base(roles) { }
+        public ProductRoleFilterByEncodedProductId(string argumentName, params ProductRoleEnum[] roles) : base(argumentName, roles) { }
 
 
         protected override Guid? GetEntityId(object arg, ActionExecutingContext _) =>

@@ -3,7 +3,6 @@
 @using HSMServer.Extensions
 @using HSMServer.Model.Authentication
 @using HSMServer.Model.ViewModel
-@using HSMServer.Model.TreeViewModel
 @using HSMServer.Model.Folders.ViewModels
 @using Microsoft.AspNetCore.Mvc.TagHelpers
 
@@ -57,9 +56,7 @@
         <input id="metaInfo_encodedId" style='display: none' asp-for="EncodedId" value="@Model.EncodedId"/>
 
         <div id="headline_metainfo" class="d-none d-flex" style="height: 2rem;">
-            <div id="description_title" class="d-none form-control px-0 border-0 fw-bold" style="max-width: 15rem;">
-                Description:
-            </div>
+            <label id="description_title" class="col-form-label fw-bold">Description:</label>
 
             @if (hasUserRights)
             {
@@ -69,14 +66,16 @@
             }
         </div>
 
-        <div class="naked-text ms-1 w-100" id='markdown_span_description'>@Model.Description</div>
-        <div class="d-none d-flex w-100 ps-3">
-            <textarea id='description' class="form-control naked-text w-100 d-none"  type='text' asp-for="Description" value='@Model.Description' disabled></textarea>
+        @if (!string.IsNullOrEmpty(Model.Description))
+        {
+            <label class="col-form-label py-0" id='markdown_span_description'>@Model.Description</label>
+        }
+        <div class="ps-3">
+            <textarea id='description' class="form-control w-100 d-none"  type='text' asp-for="Description" value='@Model.Description'></textarea>
         </div>
 
         <div class="collapse" id="metaInfoCollapse">
             @await Html.PartialAsync("_GeneralInfo", Model)
-
             @await Html.PartialAsync("_Alerts", Model)
         </div>
 
@@ -125,11 +124,15 @@
         event.preventDefault();
         event.stopImmediatePropagation();
 
+        var formData = new FormData(this);
+        collectDataAlerts(formData);
+
         $.ajax({
             url: $("#editMetaInfo_form").attr("action"),
             type: 'POST',
-            data: $("#editMetaInfo_form").serialize(),
-            datatype: 'json',
+            data: formData,
+            processData: false,
+            contentType: false,
             async: true,
             success: (viewData) => {
                 displayMetaInfo($('#metaInfo_encodedId').val(), viewData);
@@ -139,6 +142,25 @@
             }
         });
     });
+
+    function collectDataAlerts(formData) {
+        $("[id^='dataAlertsList_']").each(function () {
+            const type = this.id.substring("dataAlertsList_".length, this.id.length);
+
+            setFormDataAlertsProperty(formData, "input", type, "Id");
+            setFormDataAlertsProperty(formData, "select", type, "Property");
+            setFormDataAlertsProperty(formData, "select", type, "Operation");
+            setFormDataAlertsProperty(formData, "input", type, "Value");
+            setFormDataAlertsProperty(formData, "select", type, "Status");
+            setFormDataAlertsProperty(formData, "input", type, "Comment");
+        });
+    }
+
+    function setFormDataAlertsProperty(formData, element, type, propertyName) {
+        $(`${element}[name='${propertyName}']`).each(function (i) {
+            formData.append(`DataAlerts[${type}][${i}].${propertyName}`, $(this).val());
+        });
+    }
 
     function collapseChangeTextContent() {
         let icon = $('#collapse_icon')[0];

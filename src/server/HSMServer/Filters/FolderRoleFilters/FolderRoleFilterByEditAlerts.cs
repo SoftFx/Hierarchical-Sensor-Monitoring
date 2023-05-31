@@ -7,10 +7,7 @@ namespace HSMServer.Filters.FolderRoleFilters
 {
     public sealed class FolderRoleFilterByEditAlerts : FolderRoleFilterBase
     {
-        protected override string ArgumentName => "folderAlerts";
-
-
-        public FolderRoleFilterByEditAlerts(params ProductRoleEnum[] roles) : base(roles) { }
+        public FolderRoleFilterByEditAlerts(string argumentName, params ProductRoleEnum[] roles) : base(argumentName, roles) { }
 
 
         protected override Guid? GetEntityId(object arg, ActionExecutingContext context = null) =>

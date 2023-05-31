@@ -144,6 +144,7 @@ namespace HSMServer.Notifications
                 {Core.OffTime.ToIcon()} (OffTime) -> {Core.Ok.ToIcon()} (Ok) -> {Core.Warning.ToIcon()} (Warning) -> {Core.Error.ToIcon()} (Error)
             Alerts: 
                 {ExpectedUpdateIntervalPolicy.PolicyIcon} - sensor update timeout
+                "↕️" - sensor value alert
             """.EscapeMarkdownV2();
 
         private static string ServerStatus() => $"HSM server {ServerConfig.Version.RemoveTailZeroes()} is alive.".EscapeMarkdownV2();
