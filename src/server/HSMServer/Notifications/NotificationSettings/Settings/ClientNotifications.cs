@@ -83,12 +83,17 @@ namespace HSMServer.Notification.Settings
         }
 
 
-        public void Enable(Guid sensorId)
+        public void Enable(Guid sensorId, ChatId chatId = null)
         {
             EnabledSensors.Add(sensorId);
 
-            foreach (var (_, ignoredSensors) in PartiallyIgnored)
-                ignoredSensors.TryRemove(sensorId, out _);
+            foreach (var (chat, ignoredSensors) in PartiallyIgnored)
+            {
+                if (chatId is null || chat == chatId)
+                    ignoredSensors.TryRemove(sensorId, out _);
+                else
+                    ignoredSensors.TryAdd(sensorId, DateTime.MaxValue);
+            }
         }
 
         public void Ignore(Guid sensorId, DateTime endOfIgnorePeriod, ChatId chatId = null)
@@ -101,7 +106,8 @@ namespace HSMServer.Notification.Settings
                 else if (PartiallyIgnored.TryGetValue(chatId, out var ignoredSensors))
                     ignoredSensors.TryAdd(sensorId, endOfIgnorePeriod);
 
-                EnabledSensors.Remove(sensorId);
+                if (PartiallyIgnored.Values.All(s => s.ContainsKey(sensorId)))
+                    EnabledSensors.Remove(sensorId);
             }
         }
 
@@ -118,8 +124,6 @@ namespace HSMServer.Notification.Settings
                 EnabledSensors.Add(sensorId);
             }
         }
-
-        public void Disable(Guid sensorId) => RemoveSensor(sensorId);
 
         public new NotificationSettingsEntity ToEntity() => new()
         {

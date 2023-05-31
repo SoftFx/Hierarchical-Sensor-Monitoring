@@ -163,7 +163,7 @@ namespace HSMServer.Controllers
         }
 
         [HttpGet]
-        public IActionResult IgnoreNotifications(string selectedId, NotificationsTarget target, bool isOffTimeModal)
+        public IActionResult IgnoreNotifications(string selectedId, NotificationsTarget target, bool isOffTimeModal, long? chat)
         {
             var decodedId = SensorPathHelper.DecodeGuid(selectedId);
 
@@ -176,22 +176,18 @@ namespace HSMServer.Controllers
             else if (_folderManager.TryGetValue(decodedId, out var folder))
                 viewModel = new IgnoreNotificationsViewModel(folder, target, isOffTimeModal);
 
+            viewModel.Chat = chat;
+
             return PartialView("_IgnoreNotificationsModal", viewModel);
         }
 
         [HttpPost]
-        public void EnableNotifications([FromQuery] string selectedId, [FromQuery] NotificationsTarget target) =>
-            GetHandler(target)(SensorPathHelper.DecodeGuid(selectedId), (s, g) => s.Enable(g));
+        public void EnableNotifications(string selectedId, NotificationsTarget target, long? chat) =>
+            GetHandler(target)(SensorPathHelper.DecodeGuid(selectedId), (s, g) => s.Enable(g, chat));
 
         [HttpPost]
         public void IgnoreNotifications(IgnoreNotificationsViewModel model) =>
-            GetHandler(model.NotificationsTarget)(SensorPathHelper.DecodeGuid(model.EncodedId), (s, g) =>
-            {
-                if (model.IgnorePeriod.TimeInterval == Model.TimeInterval.Forever)
-                    s.Disable(g);
-                else
-                    s.Ignore(g, model.EndOfIgnorePeriod, model.Chat);
-            });
+            GetHandler(model.NotificationsTarget)(SensorPathHelper.DecodeGuid(model.EncodedId), (s, g) => s.Ignore(g, model.EndOfIgnorePeriod, model.Chat));
 
         [HttpPost]
         public string GetNodePath([FromQuery] string selectedId, [FromQuery] bool isFullPath = false)

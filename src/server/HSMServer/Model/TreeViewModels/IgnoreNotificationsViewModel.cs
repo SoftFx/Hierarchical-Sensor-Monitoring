@@ -30,7 +30,7 @@ namespace HSMServer.Model
 
         public TimeIntervalViewModel IgnorePeriod { get; set; }
 
-        public ChatId Chat { get; set; }
+        public long? Chat { get; set; }
 
         public int Days { get; set; }
 
