@@ -65,7 +65,7 @@ namespace HSMServer.Core.Model.Policies
         internal override PolicyResult Validate(T value, BaseSensorModel sensor)
         {
             return _executeOperation(_getProperty(value), _targetValue)
-                ? new(Status, GetComment(value, sensor), Status.ToIcon())
+                ? new(Status, GetComment(value, sensor), "↕️")
                 : PolicyResult.Ok;
         }
     }
