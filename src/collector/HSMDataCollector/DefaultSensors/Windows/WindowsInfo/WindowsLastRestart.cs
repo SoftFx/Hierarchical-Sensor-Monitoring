@@ -23,6 +23,13 @@ namespace HSMDataCollector.DefaultSensors.Windows
         }
 
 
+        internal override Task<bool> Start() //send data on start
+        {
+            OnTimerTick();
+
+            return base.Start();
+        }
+
         protected override TimeSpan GetValue() => TimeSpan.FromSeconds(_performanceCounter.NextValue());
 
         internal override Task Stop()

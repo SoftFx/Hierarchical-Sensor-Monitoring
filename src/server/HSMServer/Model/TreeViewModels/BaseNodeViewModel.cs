@@ -1,10 +1,15 @@
-﻿using HSMServer.Extensions;
+﻿using HSMServer.Core.Model;
+using HSMServer.Extensions;
+using HSMServer.Model.DataAlerts;
 using System;
+using System.Collections.Generic;
 
 namespace HSMServer.Model.TreeViewModel
 {
     public abstract class BaseNodeViewModel
     {
+        public Dictionary<SensorType, List<DataAlertViewModel>> DataAlerts { get; protected set; } = new();
+
         public TimeIntervalViewModel ExpectedUpdateInterval { get; protected set; }
 
         public TimeIntervalViewModel SensorRestorePolicy { get; protected set; }

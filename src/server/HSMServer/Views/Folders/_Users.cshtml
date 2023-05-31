@@ -2,7 +2,7 @@
 @using HSMServer.Model.Folders.ViewModels
 @using HSMServer.Controllers
 @using HSMServer.Constants
-@using HSMServer.Extensions
+@using HSMCommon.Extensions
 
 @model FolderUsersViewModel
 
@@ -11,7 +11,7 @@
 {
     <div class="my-2" align="right">
         <a href="javascript:showAddUserRoleModal();" class="btn btn-link p-0 @(Model.NotAdminUsers.Count == 0 ? "disabled" : string.Empty)">
-            <i class="fa-solid fa-user-plus"></i> Add user role
+            <i class="fa-solid fa-user-plus"></i> Add user
         </a>
     </div>
 

@@ -1,19 +1,24 @@
+using HSMCommon.Extensions;
+using HSMServer.ApiObjectsConverters;
 using HSMServer.Authentication;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Helpers;
 using HSMServer.Core.Model;
+using HSMServer.Core.Model.Policies.Infrastructure;
 using HSMServer.Core.MonitoringHistoryProcessor.Factory;
 using HSMServer.Extensions;
 using HSMServer.Folders;
 using HSMServer.Helpers;
 using HSMServer.Model;
 using HSMServer.Model.Authentication.History;
+using HSMServer.Model.DataAlerts;
 using HSMServer.Model.Folders;
 using HSMServer.Model.Folders.ViewModels;
 using HSMServer.Model.TreeViewModel;
 using HSMServer.Model.ViewModel;
 using HSMServer.Notification.Settings;
+using HSMServer.Notifications;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System;
@@ -22,7 +27,6 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using HSMServer.ApiObjectsConverters;
 using SensorStatus = HSMSensorDataObjects.SensorStatus;
 using TimeInterval = HSMServer.Model.TimeInterval;
 
@@ -42,11 +46,13 @@ namespace HSMServer.Controllers
         private readonly IFolderManager _folderManager;
         private readonly TreeViewModel _treeViewModel;
         private readonly IUserManager _userManager;
+        private readonly TelegramBot _telegramBot;
 
 
         public HomeController(ITreeValuesCache treeValuesCache, IFolderManager folderManager,
-            TreeViewModel treeViewModel, IUserManager userManager)
+            TreeViewModel treeViewModel, IUserManager userManager, NotificationsCenter notifications)
         {
+            _telegramBot = notifications.TelegramBot;
             _treeValuesCache = treeValuesCache;
             _treeViewModel = treeViewModel;
             _folderManager = folderManager;
@@ -150,7 +156,7 @@ namespace HSMServer.Controllers
                 }
                 else if (_treeViewModel.Nodes.TryGetValue(decodedId, out var node))
                 {
-                    _treeValuesCache.RemoveNode(node.Id);
+                    _treeValuesCache.RemoveProduct(node.Id);
                     model.AddItem(node);
                 }
                 else if (_treeViewModel.Sensors.TryGetValue(decodedId, out var sensor))
@@ -402,16 +408,16 @@ namespace HSMServer.Controllers
 
             if (_treeViewModel.Nodes.TryGetValue(id, out var node))
                 return PartialView("_GeneralInfo", new ProductInfoViewModel(node));
-            
+
             if (_folderManager[id] is not null)
                 return PartialView("_GeneralInfo", new FolderInfoViewModel(_folderManager[id]));
-            
+
             if (_treeViewModel.Sensors.TryGetValue(id, out var sensor))
                 return PartialView("_GeneralInfo", new SensorInfoViewModel(sensor));
 
             return _emptyResult;
         }
-        
+
         #endregion
 
         #region SensorsHistory
@@ -580,7 +586,7 @@ namespace HSMServer.Controllers
         private FileValue GetFileSensorValue(string encodedId) =>
             _treeValuesCache.GetSensor(SensorPathHelper.DecodeGuid(encodedId)).LastValue as FileValue;
 
-        private async Task<FileValue> GetFileByReceivingTimeOrDefault(string encodedId, long ticks = default) => 
+        private async Task<FileValue> GetFileByReceivingTimeOrDefault(string encodedId, long ticks = default) =>
             (ticks == default ? GetFileSensorValue(encodedId) : (await GetFileHistory(encodedId)).Pages[0].Cast<FileValue>().FirstOrDefault(file => file.ReceivingTime.Ticks == ticks)).DecompressContent();
 
         private Task<HistoryValuesViewModel> GetFileHistory(string encodedId)
@@ -617,6 +623,7 @@ namespace HSMServer.Controllers
                 Description = newModel.Description ?? string.Empty,
                 ExpectedUpdateInterval = newModel.ExpectedUpdateInterval.ToModel(),
                 RestoreInterval = newModel.SensorRestorePolicy.ToModel(),
+                DataPolicies = newModel.DataAlerts?[sensor.Type].Select(a => a.ToUpdate()).ToList() ?? new(),
             };
 
             _treeValuesCache.UpdateSensor(update);
@@ -624,15 +631,50 @@ namespace HSMServer.Controllers
             return PartialView("_MetaInfo", new SensorInfoViewModel(sensor));
         }
 
+
+        public IActionResult AddDataPolicy(SensorType type, Guid sensorId)
+        {
+            DataAlertViewModelBase viewModel = type switch
+            {
+                SensorType.Integer => new SingleDataAlertViewModel<IntegerValue, int>(sensorId),
+                SensorType.Double => new SingleDataAlertViewModel<DoubleValue, double>(sensorId),
+                SensorType.IntegerBar => new BarDataAlertViewModel<IntegerBarValue, int>(sensorId),
+                SensorType.DoubleBar => new BarDataAlertViewModel<DoubleBarValue, double>(sensorId),
+                _ => null,
+            };
+
+            return PartialView("_DataAlert", viewModel);
+        }
+
+        [HttpPost]
+        public void SendTestMessage(DataAlertViewModel alert)
+        {
+            var sensor = _treeValuesCache.GetSensor(alert.EntityId);
+            if (sensor == null)
+                return;
+
+            var product = _treeValuesCache.GetProductByName(sensor.RootProductName);
+            if (product == null)
+                return;
+
+            var template = CommentBuilder.GetTemplateString(alert.Comment);
+            var testMessage = string.Format(template, sensor.RootProductName, sensor.Path, sensor.DisplayName,
+                alert.Operation.GetDisplayName(), alert.Value, SensorStatus.Ok, DateTime.UtcNow, "value comment", 0, 0, 0, 0, 0);
+
+            foreach (var chat in product.NotificationsSettings.TelegramSettings.Chats)
+                _telegramBot.SendTestMessage(chat.Id, testMessage);
+        }
+
+
         [HttpGet]
         public IActionResult GetSensorEditModal(Guid sensorId)
         {
             _treeViewModel.Sensors.TryGetValue(sensorId, out var sensorNodeViewModel);
             var isAccessKeyExist = GetKeyOrDefaultWithPermissions(sensorNodeViewModel?.RootProduct.Id ?? Guid.Empty, KeyPermissions.CanSendSensorData) is not null;
-            
+
             if (!isAccessKeyExist)
                 ModelState.AddModelError(nameof(EditSensorStatusViewModal.RootProductId), EditSensorStatusViewModal.AccessKeyValidationErrorMessage);
-            
+
             return PartialView("_EditSensorStatusModal", new EditSensorStatusViewModal(sensorNodeViewModel, isAccessKeyExist));
         }
 
@@ -649,15 +691,15 @@ namespace HSMServer.Controllers
                 ModelState.AddModelError(nameof(EditSensorStatusViewModal.RootProductId), EditSensorStatusViewModal.AccessKeyValidationErrorMessage);
                 return BadRequest(ModelState);
             }
-            
+
             var sensor = _treeValuesCache.GetSensor(modal.SensorId);
             var comment = $"User: {CurrentUser.Name}. Reason: {modal.Reason}";
 
             var sensorValue = ApiConverters.CreateNewSensorValue(sensor.Type);
-            
+
             if (sensorValue is null)
                 return BadRequest();
-            
+
             sensorValue.Comment = comment;
             sensorValue.Path = sensor.Path;
             sensorValue.Status = (SensorStatus)modal.NewStatus;
@@ -688,7 +730,7 @@ namespace HSMServer.Controllers
 
             if (!ModelState.IsValid)
                 return PartialView("_MetaInfo", new ProductInfoViewModel(product));
-            
+
             var update = new ProductUpdate
             {
                 Id = product.Id,
@@ -746,7 +788,7 @@ namespace HSMServer.Controllers
 
             return localValue?.ReceivingTime >= from && localValue?.ReceivingTime <= to ? localValue : null;
         }
-        
+
         private AccessKeyModel GetKeyOrDefaultWithPermissions(Guid productId, KeyPermissions permissions) =>
             _treeValuesCache.GetProduct(productId).AccessKeys.Values.FirstOrDefault(x => x.IsValid(permissions, out _));
     }

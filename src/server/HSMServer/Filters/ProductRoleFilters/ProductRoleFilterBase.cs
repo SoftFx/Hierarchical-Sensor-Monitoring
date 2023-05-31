@@ -8,7 +8,7 @@ namespace HSMServer.Filters.ProductRoleFilters
 {
     public abstract class ProductRoleFilterBase : UserRoleFilterBase
     {
-        public ProductRoleFilterBase(params ProductRoleEnum[] parameters) : base(parameters) { }
+        public ProductRoleFilterBase(string argumentName, params ProductRoleEnum[] parameters) : base(argumentName, parameters) { }
 
 
         protected override bool HasRole(User user, Guid? entityId, ProductRoleEnum role) =>
