@@ -95,7 +95,7 @@ namespace HSMServer.Notifications
             entity.UpdateEntity(_userManager, _tree);
         }
 
-        internal void SendTestMessage(long chatId, string message)
+        internal void SendTestMessage(ChatId chatId, string message)
         {
             if (IsBotRunning)
                 _bot?.SendTextMessageAsync(chatId, message, cancellationToken: _tokenSource.Token);
