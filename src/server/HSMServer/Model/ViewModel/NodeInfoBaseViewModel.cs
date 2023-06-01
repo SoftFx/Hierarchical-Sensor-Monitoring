@@ -1,10 +1,12 @@
+using HSMServer.Attributes;
+using HSMServer.Extensions;
+using HSMServer.Model.DataAlerts;
 using HSMServer.Model.Folders;
 using HSMServer.Model.TreeViewModel;
 using System;
+using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
-using HSMServer.Attributes;
-using HSMServer.Extensions;
-
+using SensorType = HSMServer.Core.Model.SensorType;
 
 namespace HSMServer.Model.ViewModel
 {
@@ -26,6 +28,8 @@ namespace HSMServer.Model.ViewModel
         [MinTimeInterval(TimeInterval.OneMinute, ErrorMessage = "{0} minimal value is {1}.")]
         public TimeIntervalViewModel SensorRestorePolicy { get; set; }
 
+        public Dictionary<SensorType, List<DataAlertViewModel>> DataAlerts { get; set; }
+
         public string EncodedId { get; set; }
 
         public string Description { get; set; }
@@ -45,7 +49,7 @@ namespace HSMServer.Model.ViewModel
             EncodedId = model.Id.ToString();
             Header = model.Name;
         }
-        
+
 
         private NodeInfoBaseViewModel(BaseNodeViewModel model)
         {
@@ -55,6 +59,8 @@ namespace HSMServer.Model.ViewModel
 
             ExpectedUpdateInterval = new(model.ExpectedUpdateInterval, PredefinedIntervals.ForTimeout);
             SensorRestorePolicy = new(model.SensorRestorePolicy, PredefinedIntervals.ForRestore);
+
+            DataAlerts = model.DataAlerts;
         }
     }
 }

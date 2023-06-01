@@ -10,7 +10,6 @@ using HSMDataCollector.Logging;
 using HSMDataCollector.Options;
 using HSMDataCollector.PublicInterface;
 using HSMSensorDataObjects;
-using NLog;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -134,7 +133,7 @@ namespace HSMDataCollector.Core
                 foreach (var oldSensor in _nameToSensor.Values)
                     oldSensor.Start();
 
-                await Task.WhenAll(_sensorsStorage.Start(), customStartingTask);
+                await Task.WhenAll(_sensorsStorage.Init(), customStartingTask);
 
                 ChangeStatus(CollectorStatus.Running);
             }
@@ -207,7 +206,7 @@ namespace HSMDataCollector.Core
         {
             Status = newStatus;
 
-            _logManager.Logger?.Info($"DataCollector -> {newStatus}");
+            _logManager.Logger?.Info($"DataCollector (v. {DataCollectorExtensions.Version}) -> {newStatus}");
 
             CurrentCollection.StatusSensor?.BuildAndSendValue(_hsmClient, newStatus, error);
 
@@ -234,6 +233,8 @@ namespace HSMDataCollector.Core
 
             CurrentCollection.ProductVersion?.StartInfo();
             CurrentCollection.CollectorVersion?.StartInfo();
+
+            _ = _sensorsStorage.Start();
         }
 
         private void ToStoppedCollector()

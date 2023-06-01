@@ -1,5 +1,7 @@
 ﻿using HSMServer.Core.Model;
+using HSMServer.Core.Model.Policies;
 using System;
+using System.Collections.Generic;
 
 namespace HSMServer.Core.Cache.UpdateEntities
 {
@@ -13,5 +15,17 @@ namespace HSMServer.Core.Cache.UpdateEntities
         public Integration? Integration { get; init; }
 
         public DateTime? EndOfMutingPeriod { get; init; }
+
+        public List<DataPolicyUpdate> DataPolicies { get; init; }
     }
+
+
+    public sealed record DataPolicyUpdate(
+        Guid Id,
+        string Property,
+        PolicyOperation Operation,
+        TargetValue Target,
+        SensorStatus Status,
+        string Comment
+    );
 }

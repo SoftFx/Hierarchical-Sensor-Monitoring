@@ -63,12 +63,13 @@ namespace HSMServer.BackgroundTask
         {
             bool needResave = false;
 
-            foreach (var (sensorId, endOfIgnorePeriod) in entity.Notifications.IgnoredSensors)
-                if (DateTime.UtcNow >= endOfIgnorePeriod)
-                {
-                    entity.Notifications.RemoveIgnore(sensorId);
-                    needResave = true;
-                }
+            foreach (var (chatId, ignoredSensors) in entity.Notifications.PartiallyIgnored)
+                foreach (var (sensorId, endOfIgnorePeriod) in ignoredSensors)
+                    if (DateTime.UtcNow >= endOfIgnorePeriod)
+                    {
+                        entity.Notifications.RemoveIgnore(sensorId, chatId);
+                        needResave = true;
+                    }
 
             return needResave;
         }

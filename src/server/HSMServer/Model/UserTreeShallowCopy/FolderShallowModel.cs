@@ -13,8 +13,6 @@ namespace HSMServer.Model.UserTreeShallowCopy
 
         public IntegrationState GrafanaState { get; } = new();
 
-        public UserNotificationsState GroupState { get; } = new();
-
         public UserNotificationsState AccountState { get; } = new();
 
 
@@ -26,10 +24,6 @@ namespace HSMServer.Model.UserTreeShallowCopy
         public override bool IsAccountsEnable => AccountState.IsAllEnabled;
 
         public override bool IsAccountsIgnore => AccountState.IsAllIgnored;
-
-        public override bool IsGroupsEnable => GroupState.IsAllEnabled;
-
-        public override bool IsGroupsIgnore => GroupState.IsAllIgnored;
 
 
         public bool IsEmpty => Nodes.All(n => n.Data.IsEmpty);
@@ -47,7 +41,7 @@ namespace HSMServer.Model.UserTreeShallowCopy
             if (!node.IsMutedState)
             {
                 AccountState.CalculateState(node.AccountState);
-                GroupState.CalculateState(node.GroupState);
+                UpdateGroupsState(node);
             }
 
             GrafanaState.CalculateState(node.GrafanaState);
@@ -65,7 +59,7 @@ namespace HSMServer.Model.UserTreeShallowCopy
             "isManager": "{{CurUserIsManager}}",
             "isGrafanaEnabled": "{{IsGrafanaEnabled}}",
             "isAccountsEnable": "{{IsAccountsEnable}}",
-            "isGroupsEnable": "{{IsGroupsEnable}}"
+            "groups": {{GroupsJsonDict}}
         }
         """;
     }

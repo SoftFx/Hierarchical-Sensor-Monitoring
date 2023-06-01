@@ -59,7 +59,10 @@ namespace HSMServer.Notifications
                 };
 
                 if (chats.TryAdd(message.Chat, chatModel))
+                {
+                    entity.Notifications.PartiallyIgnored.TryAdd(message.Chat, new ConcurrentDictionary<Guid, DateTime>());
                     RegisterChat(entity, chatModel);
+                }
             }
 
             RemoveToken(token.Token);
@@ -81,7 +84,13 @@ namespace HSMServer.Notifications
         {
             if (ServerBook.TryGetValue(entity, out var chats))
                 if (chats.TryRemove(chatId, out _))
+                {
                     entity.Chats.TryRemove(chatId, out _);
+                    entity.Notifications.PartiallyIgnored.TryRemove(chatId, out _);
+
+                    if (entity.Chats.IsEmpty)
+                        entity.Notifications.EnabledSensors.Clear();
+                }
 
             RemoveEntity(entity, chatId);
         }

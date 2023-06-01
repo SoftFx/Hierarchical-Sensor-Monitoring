@@ -15,8 +15,6 @@ namespace HSMServer.Model.UserTreeShallowCopy
 
         public IntegrationState GrafanaState { get; } = new();
 
-        public UserNotificationsState GroupState { get; } = new();
-
         public UserNotificationsState AccountState { get; } = new();
 
 
@@ -25,13 +23,8 @@ namespace HSMServer.Model.UserTreeShallowCopy
         public override bool IsAccountsEnable => AccountState.IsAllEnabled;
 
         public override bool IsAccountsIgnore => AccountState.IsAllIgnored;
-
-        public override bool IsGroupsEnable => GroupState.IsAllEnabled;
-
-        public override bool IsGroupsIgnore => GroupState.IsAllIgnored;
         
         public override int ChildrenCount => VisibleChildrenCount;
-
 
         public int VisibleSensorsCount { get; private set; }
         
@@ -62,7 +55,7 @@ namespace HSMServer.Model.UserTreeShallowCopy
             if (sensor.State != SensorState.Muted)
             {
                 AccountState.CalculateState(user.Notifications, sensor.Id);
-                GroupState.CalculateState(sensor.RootProduct.Notifications, sensor.Id);
+                UpdateGroupsState(shallowSensor);
             }
 
             var isSensorMuted = sensor.State == SensorState.Muted;
@@ -88,7 +81,7 @@ namespace HSMServer.Model.UserTreeShallowCopy
                 if (!node._mutedValue.Value)
                 {
                     AccountState.CalculateState(node.AccountState);
-                    GroupState.CalculateState(node.GroupState);
+                    UpdateGroupsState(node);
                 }
 
                 _mutedValue = !_mutedValue.HasValue ? node._mutedValue : _mutedValue & node._mutedValue;

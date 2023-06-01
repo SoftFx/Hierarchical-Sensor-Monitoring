@@ -83,10 +83,15 @@
 
 
 <script>
+   var allowSubmitEditStatus = true;
+   
    $(document).on("submit", "#editSensorStatus_form", function (event) {
         event.preventDefault();
         event.stopImmediatePropagation();
     
+        if (!allowSubmitEditStatus) return;
+        
+        allowSubmitEditStatus = false;
         $.ajax({
             url: $("#editSensorStatus_form").attr("action"),
             type: 'POST',
@@ -96,6 +101,9 @@
             contentType: false,
             async: true,
             success: function (response) {
+                if (response.sensor.type === 8)
+                    response.sensor.value = "0.0.0.0";
+                    
                  $.ajax({
                      url: '/api/Sensors/list',
                      headers: { 'key': response.key },
@@ -121,7 +129,9 @@
                             $('#buttonAddKey').removeClass('d-none')
                         }
                     }
+                    allowSubmitEditStatus = true;
                 })
+               
             }
         })
     });
@@ -136,4 +146,8 @@
     function hideEditSensorModal() {
         $('#editSensorStatus_modal').modal('hide');
     }
+
+    $("#editSensorStatus_modal").on("hidden", function () {
+        allowSubmitEditStatus = true;
+    });
 </script>

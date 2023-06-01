@@ -3,7 +3,7 @@ using System.ComponentModel.DataAnnotations;
 using System.Linq;
 using System.Reflection;
 
-namespace HSMServer.Extensions
+namespace HSMCommon.Extensions
 {
     public static class EnumExtensions
     {
