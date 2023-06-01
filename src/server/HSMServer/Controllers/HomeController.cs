@@ -1,4 +1,4 @@
-using HSMCommon.Extensions;
+﻿using HSMCommon.Extensions;
 using HSMServer.ApiObjectsConverters;
 using HSMServer.Authentication;
 using HSMServer.Core.Cache;
@@ -531,20 +531,19 @@ namespace HSMServer.Controllers
         [HttpPost]
         public void SendTestMessage(DataAlertViewModel alert)
         {
-            var sensor = _treeValuesCache.GetSensor(alert.EntityId);
-            if (sensor == null)
-                return;
-
-            var product = _treeValuesCache.GetProductByName(sensor.RootProductName);
-            if (product == null)
+            if (!_treeViewModel.Sensors.TryGetValue(alert.EntityId, out var sensor) ||
+                !_treeViewModel.Nodes.TryGetValue(sensor.RootProduct.Id, out var product))
                 return;
 
             var template = CommentBuilder.GetTemplateString(alert.Comment);
-            var testMessage = string.Format(template, sensor.RootProductName, sensor.Path, sensor.DisplayName,
+            var comment = string.Format(template, product.Name, sensor.Path, sensor.Name,
                 alert.Operation.GetDisplayName(), alert.Value, SensorStatus.Ok, DateTime.UtcNow, "value comment", 0, 0, 0, 0, 0);
+            var testMessage = $"↕️ [{product.Name}]{sensor.Path} = {comment}";
 
-            foreach (var chat in product.NotificationsSettings.TelegramSettings.Chats)
-                _telegramBot.SendTestMessage(chat.Id, testMessage);
+            var notifications = product.Notifications;
+            foreach (var (chat, _) in notifications.Telegram.Chats)
+                if (notifications.IsSensorEnabled(sensor.Id) && !notifications.IsSensorIgnored(sensor.Id, chat))
+                    _telegramBot.SendTestMessage(chat, testMessage);
         }
 
 
