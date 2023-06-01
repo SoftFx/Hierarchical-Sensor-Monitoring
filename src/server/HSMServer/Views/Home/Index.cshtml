@@ -68,7 +68,7 @@
 
 @await Html.PartialAsync("~/Views/AccessKeys/_AccessKeysModal.cshtml")
 
-@await Html.PartialAsync("_AlertsModal", new EditAlertsViewModel());
+@await Html.PartialAsync("_AlertsModal", new EditAlertsViewModel())
 
 <div id="ignoreNotificatios_partial">@await Html.PartialAsync("_IgnoreNotificationsModal", (IgnoreNotificationsViewModel)null)</div>
 
