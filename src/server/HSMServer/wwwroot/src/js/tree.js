@@ -268,20 +268,24 @@ function buildContextMenu(node) {
     }
 
     if (isManager) {
-        isGroupEnabled = node.data.jstree.isGroupsEnable === "True";
+        let groups = node.data.jstree.groups;
 
-        if (isGroupEnabled) {
-            notificationSubmenu["Groups ignore"] = {
-                "label": "Ignore for groups...",
-                "icon": "fab fa-telegram",
-                "action": _ => ignoreNotificationsRequest(node, TelegramTarget.Groups),
+        for (let chatId in groups) {
+            let group = groups[chatId].Name;
+
+            if (groups[chatId].IsEnabled && !groups[chatId].IsIgnored) {
+                notificationSubmenu[`Groups ignore ${chatId}`] = {
+                    "label": `Ignore for '${group}''...`,
+                    "icon": "fab fa-telegram",
+                    "action": _ => ignoreNotificationsRequest(node, TelegramTarget.Groups, false, chatId),
+                }
             }
-        }
-        else {
-            notificationSubmenu["Groups enable"] = {
-                "label": "Enable for groups...",
-                "icon": "fab fa-telegram",
-                "action": _ => enableNotificationsRequest(node, TelegramTarget.Groups),
+            else {
+                notificationSubmenu[`Groups enable ${chatId}`] = {
+                    "label": `Enable for '${group}'...'`,
+                    "icon": "fab fa-telegram",
+                    "action": _ => enableNotificationsRequest(node, TelegramTarget.Groups, chatId),
+                }
             }
         }
     }
@@ -296,8 +300,8 @@ function buildContextMenu(node) {
     return contextMenu;
 }
 
-function enableNotificationsRequest(node, target) {
-    return $.ajax(`${enableNotificationsAction}?selectedId=${node.id}&target=${target}`, AjaxPost).done(updateTreeTimer);
+function enableNotificationsRequest(node, target, chat = null) {
+    return $.ajax(`${enableNotificationsAction}?selectedId=${node.id}&target=${target}&chat=${chat}`, AjaxPost).done(updateTreeTimer);
 }
 
 function unmuteRequest(node){
@@ -307,8 +311,8 @@ function unmuteRequest(node){
     });
 }
 
-function ignoreNotificationsRequest(node, target, isOffTimeModal = 'false') {
-    return $.ajax(`${ignoreNotificationsAction}?selectedId=${node.id}&target=${target}&isOffTimeModal=${isOffTimeModal}`, {
+function ignoreNotificationsRequest(node, target, isOffTimeModal = 'false', chat = null) {
+    return $.ajax(`${ignoreNotificationsAction}?selectedId=${node.id}&target=${target}&isOffTimeModal=${isOffTimeModal}&chat=${chat}`, {
         cache: false,
         success: (v) => $("#ignoreNotificatios_partial").html(v),
     }).done(() => $('#ignoreNotifications_modal').modal('show'))

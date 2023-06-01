@@ -31,7 +31,7 @@ namespace HSMServer.Model.UserTreeShallowCopy
             "isManager": "{{CurUserIsManager}}",
             "isGrafanaEnabled": "{{IsGrafanaEnabled}}",
             "isAccountsEnable": "{{IsAccountsEnable}}",
-            "isGroupsEnable": "{{IsGroupsEnable}}",
+            "groups": {{GroupsJsonDict}},
             "isMutedState": "{{_mutedValue}}"
         }
         """;

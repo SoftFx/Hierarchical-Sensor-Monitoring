@@ -4,6 +4,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
+using Telegram.Bot.Types;
 
 namespace HSMServer.Notification.Settings
 {
@@ -19,10 +20,10 @@ namespace HSMServer.Notification.Settings
             Notifications?.Telegram.Chats ?? new();
 
 
-        public bool CanSendData(BaseSensorModel sensor) =>
+        public bool CanSendData(BaseSensorModel sensor, ChatId chatId) =>
             Notifications.UsedTelegram.MessagesAreEnabled &&
             Notifications.IsSensorEnabled(sensor.Id) &&
-            !Notifications.IsSensorIgnored(sensor.Id);
+            !Notifications.IsSensorIgnored(sensor.Id, chatId);
     }
 
 

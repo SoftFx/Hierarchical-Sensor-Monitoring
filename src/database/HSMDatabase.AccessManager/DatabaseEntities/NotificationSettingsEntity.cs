@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 
 namespace HSMDatabase.AccessManager.DatabaseEntities
 {
@@ -6,6 +7,9 @@ namespace HSMDatabase.AccessManager.DatabaseEntities
     {
         public TelegramSettingsEntity TelegramSettings { get; init; }
 
+        public Dictionary<long, Dictionary<string, long>> PartiallyIgnored { get; init; }
+
+        [Obsolete("Remove after migration IgnoredSensors->PartiallyIgnored")]
         public Dictionary<string, long> IgnoredSensors { get; init; }
 
         public List<string> EnabledSensors { get; init; }
