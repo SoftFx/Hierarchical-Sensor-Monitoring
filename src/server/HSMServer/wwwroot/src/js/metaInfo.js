@@ -11,6 +11,7 @@
     $('#metainfo_separator').removeClass('d-none');
     $('#addDataAlert').removeClass('d-none');
     $('#commentHelp').removeClass('d-none');
+    $('[id^="dataAlertsList_"]').removeClass('d-none');
 
     $('#markdown_span_description').addClass('d-none')
     $('#meta_info_collapse').addClass('d-none')
