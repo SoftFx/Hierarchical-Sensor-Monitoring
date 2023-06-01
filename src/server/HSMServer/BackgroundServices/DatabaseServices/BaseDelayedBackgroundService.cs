@@ -5,7 +5,7 @@ using System;
 using System.Threading.Tasks;
 using System.Threading;
 
-namespace HSMServer.BackgroundServices.DatabaseServices
+namespace HSMServer.BackgroundServices
 {
     public abstract class BaseDelayedBackgroundService : BackgroundService
     {

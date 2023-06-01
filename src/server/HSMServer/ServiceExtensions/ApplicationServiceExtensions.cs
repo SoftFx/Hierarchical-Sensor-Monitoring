@@ -1,7 +1,6 @@
 using HSMDatabase.DatabaseWorkCore;
 using HSMServer.Authentication;
 using HSMServer.BackgroundServices;
-using HSMServer.BackgroundTask;
 using HSMServer.Configuration;
 using HSMServer.Core.Cache;
 using HSMServer.Core.DataLayer;
