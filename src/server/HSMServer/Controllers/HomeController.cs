@@ -189,30 +189,21 @@ namespace HSMServer.Controllers
                     
                     var update = new FolderUpdate
                     {
-                        Id = id
+                        Id = id,
+                        RestoreInterval = !isRestoreFromParent ? folderRestorePolicy.ResaveCustomTicks(folderRestorePolicy) : null,
+                        ExpectedUpdateInterval = !isExpectedFromParent ? folderExpectedUpdate.ResaveCustomTicks(folderExpectedUpdate) : null
                     };
 
-                    if (!isRestoreFromParent)
-                        update = update with
-                        {
-                            RestoreInterval = folderRestorePolicy.ResaveCustomTicks(folderRestorePolicy) 
-                        };
-
-                    if (!isExpectedFromParent) 
-                        update = update with
-                        {
-                            ExpectedUpdateInterval = folderExpectedUpdate.ResaveCustomTicks(folderExpectedUpdate)
-                        };
+                    if (isRestoreFromParent)
+                        toastViewModel.AddCantChangeIntervalError(_folderManager[id].Name, "Folder", "Sensitivity", TimeInterval.FromParent);
 
                     if (isExpectedFromParent)
                         toastViewModel.AddCantChangeIntervalError(_folderManager[id].Name, "Folder", "Time to live", TimeInterval.FromParent);
                     
-                    if (isRestoreFromParent) 
-                        toastViewModel.AddCantChangeIntervalError(_folderManager[id].Name, "Folder", "Sensitivity", TimeInterval.FromParent);
-
                     if (!isExpectedFromParent && !isRestoreFromParent)
                     {
                         toastViewModel.AddItem(_folderManager[id]);
+                        await _folderManager.TryUpdate(update);
                         await _folderManager.TryUpdate(update);
                     }
                 }
@@ -225,31 +216,21 @@ namespace HSMServer.Controllers
                     var productRestorePolicy = model.SensorRestorePolicy ?? product.SensorRestorePolicy;
                     var productExpectedUpdate = model.ExpectedUpdateInterval ?? product.ExpectedUpdateInterval;
                     
-                    var update = new ProductUpdate
-                    {
-                        Id = product.Id
-                    };
-                    
-                    if (expectedUpdate)
-                        update = update with
-                        {
-                            RestoreInterval = productRestorePolicy.ToModel((product.Parent as FolderModel)?.SensorRestorePolicy)
-                        };
-                    
-                    if (restoreUpdate)
-                        update = update with
-                        {
-                            ExpectedUpdateInterval = productExpectedUpdate.ToModel((product.Parent as FolderModel)?.ExpectedUpdateInterval) 
-                        };
-
                     var isProduct = product.RootProduct?.Id == product.Id;
                     
-                    if (!restoreUpdate)
-                        toastViewModel.AddCantChangeIntervalError(product.Name, !isProduct ? "Node" : "Product", "Time to live", TimeInterval.FromParent);
+                    var update = new ProductUpdate
+                    {
+                        Id = product.Id,
+                        RestoreInterval = restoreUpdate ? productRestorePolicy.ToModel((product.Parent as FolderModel)?.SensorRestorePolicy) : null,
+                        ExpectedUpdateInterval = expectedUpdate ? productExpectedUpdate.ToModel((product.Parent as FolderModel)?.ExpectedUpdateInterval) : null
+                    };
                     
-                    if (!expectedUpdate)
+                    if (!restoreUpdate)
                         toastViewModel.AddCantChangeIntervalError(product.Name, !isProduct ? "Node" : "Product", "Sensitivity", TimeInterval.FromParent);
 
+                    if (!expectedUpdate)
+                        toastViewModel.AddCantChangeIntervalError(product.Name, !isProduct ? "Node" : "Product", "Time to live", TimeInterval.FromParent);
+                    
                     if (restoreUpdate || expectedUpdate)
                     {
                         toastViewModel.AddItem(product);
