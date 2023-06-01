@@ -8,21 +8,19 @@ namespace HSMServer.Model.ViewModel;
 
 public sealed class MultiActionToastViewModel
 {
-    private const string DeletionError = @"{0} {1} cannot be deleted";
-    private const string EditingError = @"{0} {1} can't have {2} interval";
-    
-    
     private readonly LimitedQueue<string> _folders = new(5);
     private readonly LimitedQueue<string> _products = new(5);
     private readonly LimitedQueue<string> _nodes = new(5);
     private readonly LimitedQueue<string> _sensors = new(10);
 
     
-    private StringBuilder _errorBuilder = new (1 << 5);
-    private StringBuilder _responseBuilder = new (1 << 5);
+    private readonly StringBuilder _errorBuilder = new (1 << 5);
+    
+    private readonly StringBuilder _responseBuilder = new (1 << 5);
     
     
     public string ErrorMessage => _errorBuilder.ToString();
+    
     public string ResponseInfo => _responseBuilder.ToString();
 
     
@@ -58,9 +56,9 @@ public sealed class MultiActionToastViewModel
 
     public void AddError(string errorMessage) => _errorBuilder.AppendLine(errorMessage);
     
-    public void AddRemoveError(string name, string type) => AddError(string.Format(DeletionError, name, type));
+    public void AddRemoveFolderError(string name) => AddError($"Folder {name} cannot be deleted");
 
-    public void AddCantChangeIntervalError(string name, string type, TimeInterval interval) => AddError(string.Format(EditingError, name, type, interval));
+    public void AddCantChangeIntervalError(string name, string type, string policy, TimeInterval interval) => AddError($"{type} {name} can't have {policy} {interval} interval");
 }
 
 internal sealed class LimitedQueue<T> : Queue<T>
