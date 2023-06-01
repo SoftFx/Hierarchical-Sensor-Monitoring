@@ -10,11 +10,11 @@ namespace HSMServer.Model.UserTreeShallowCopy
         internal Dictionary<Telegram.Bot.Types.ChatId, GroupNotificationsState> GroupsState { get; } = new();
 
 
-        public string GroupsObject => JsonSerializer.Serialize(GroupsState.ToDictionary(k => k.Key?.Identifier ?? 0L, v => v.Value));
+        protected string GroupsJsonDict => JsonSerializer.Serialize(GroupsState.ToDictionary(k => k.Key?.Identifier ?? 0L, v => v.Value));
 
-        public bool IsGroupsEnable => GroupsState.Values.All(g => g.IsEnabled);
+        public bool IsGroupsEnable => GroupsState.Count > 0 && GroupsState.Values.All(g => g.IsEnabled);
 
-        public bool IsGroupsIgnore => GroupsState.Values.All(g => g.IsIgnored);
+        public bool IsGroupsIgnore => GroupsState.Count > 0 && GroupsState.Values.All(g => g.IsIgnored);
 
 
         public abstract bool CurUserIsManager { get; }

@@ -85,6 +85,9 @@ namespace HSMServer.Notification.Settings
 
         public void Enable(Guid sensorId, ChatId chatId = null)
         {
+            if (chatId is not null && !Telegram.Chats.ContainsKey(chatId))
+                return;
+
             EnabledSensors.Add(sensorId);
 
             foreach (var (chat, ignoredSensors) in PartiallyIgnored)
@@ -113,7 +116,7 @@ namespace HSMServer.Notification.Settings
 
         public void RemoveIgnore(Guid sensorId, ChatId chatId = null)
         {
-            if (IsSensorIgnored(sensorId))
+            if (IsSensorIgnored(sensorId, chatId))
             {
                 if (chatId is null)
                     foreach (var (_, ignoredSensors) in PartiallyIgnored)
