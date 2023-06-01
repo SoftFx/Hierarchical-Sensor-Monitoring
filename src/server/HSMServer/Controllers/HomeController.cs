@@ -195,14 +195,14 @@ namespace HSMServer.Controllers
                     };
 
                     if (isRestoreFromParent)
-                        toastViewModel.AddCantChangeIntervalError(_folderManager[id].Name, "Folder", "Sensitivity", TimeInterval.FromParent);
+                        toastViewModel.AddCantChangeIntervalError(folder.Name, "Folder", "Sensitivity", TimeInterval.FromParent);
 
                     if (isExpectedFromParent)
-                        toastViewModel.AddCantChangeIntervalError(_folderManager[id].Name, "Folder", "Time to live", TimeInterval.FromParent);
+                        toastViewModel.AddCantChangeIntervalError(folder.Name, "Folder", "Time to live", TimeInterval.FromParent);
                     
                     if (!isExpectedFromParent || !isRestoreFromParent)
                     {
-                        toastViewModel.AddItem(_folderManager[id]);
+                        toastViewModel.AddItem(folder);
                         await _folderManager.TryUpdate(update);
                     }
                 }
