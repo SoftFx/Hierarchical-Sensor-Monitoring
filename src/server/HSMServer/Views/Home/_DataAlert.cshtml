@@ -20,13 +20,13 @@
         <label class="input-group-text">If</label>
         <select class="form-select" asp-for="Property" asp-items="@Model.PropertiesItems"></select>
         <select class="form-select" asp-for="Operation" asp-items="@Model.ActionsItems"></select>
-        <input type="text" class="form-control" asp-for="Value" value="@Model.Value">
+        <input type="text" class="form-control" asp-for="Value" value="@Model.Value" required>
 
         <label class="input-group-text">then send</label>
 @*        <select class="form-select" asp-for="Status" asp-items="@Model.StatusesItems"></select>
 
         <label class="input-group-text">with</label>*@
-        <input type="text" class="form-control w-50" placeholder="custom comment" asp-for="Comment" value="@Model.Comment">
+        <input type="text" class="form-control w-50" placeholder="custom comment" asp-for="Comment" value="@Model.Comment" required>
 
         <button id="actionButton" class="btn" data-bs-toggle="dropdown" data-bs-auto-close="true" aria-haspopup="true" aria-expanded="false">
             <i class="fa-solid fa-ellipsis-vertical button-link"></i>
