@@ -24,12 +24,16 @@ $mean - Bar sensor mean value
 $lastValue - Bar sensor lastValue value
 ```
 
+## Multiselect for Tree node has been added (shift + RCM, ctrl + RCM)
+* **Remove** item for multiselect context menu has been added
+* **Edit** item for multiselect context menu has been added (Multiedit for TTL and Sensetivity)
+
 ## Telegram
 * New icon ↕️ for Data alerts has been added
-
-
-## New sensors
-* New sensors subscribe to TG group if it's enabled for sensors product
+* Partial ignore (for TG groups has been added)
+* Enable/ignore for different groups logic has been added in Tree context menu
 
 ## Other
-...
+* New sensors subscribe to TG group if it's enabled for sensors product
+* User name validation for adding user to folder has been added
+* Timespan chart default type has been changed from Bars to Line
