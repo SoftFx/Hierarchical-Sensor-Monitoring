@@ -2,10 +2,10 @@
 
 ## New entity **Data alerts** has been added
 * Data alerts check new sensor data and send Telegram notification after certain conditions
-* Data alerts available for Integer, Double, IntegerBar and DoubleBar sensors
+* Data alerts are available for Integer, Double, IntegerBar and DoubleBar sensors
 * Integer and Double alerts can check **Value** data property
-* IntegerBar and DoubleBar alerts can check **Min**, **Max**, **Mean**, **Last value** data property
-* **If Data alert triggers then Sensor status will be change to Error**
+* IntegerBar and DoubleBar alerts can check **Min**, **Max**, **Mean**, **Last value** data properties
+* **If Data alert triggers then Sensor status is changed to Error**
 * Send test message logic has been added for Data alerts
 * Custom comment constructor has been added for Data alerts with the next variables:
 ```
@@ -24,9 +24,9 @@ $mean - Bar sensor mean value
 $lastValue - Bar sensor lastValue value
 ```
 
-## Multiselect for Tree node has been added (shift + RCM, ctrl + RCM)
+## Multiselect for Tree node has been added (shift + RMB, ctrl + RMB)
 * **Remove** item for multiselect context menu has been added
-* **Edit** item for multiselect context menu has been added (Multiedit for TTL and Sensetivity)
+* **Edit** item for multiselect context menu has been added (multiedit for TTL and Sensetivity)
 
 ## Telegram
 * New icon ↕️ for Data alerts has been added
@@ -34,6 +34,5 @@ $lastValue - Bar sensor lastValue value
 * Enable/ignore for different groups logic has been added in Tree context menu
 
 ## Other
-* New sensors subscribe to TG group if it's enabled for sensors product
-* User name validation for adding user to folder has been added
+* New sensors subscribe to TG group if there is some telegram groups in product
 * Timespan chart default type has been changed from Bars to Line
