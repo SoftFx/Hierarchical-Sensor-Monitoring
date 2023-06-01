@@ -170,7 +170,7 @@ function buildContextMenu(node) {
                     }).done((response) => {
                         updateTreeTimer();
                         
-                        let message = response.deletionInfo.replace(/(?:\r\n|\r|\n)/g, '<br>')
+                        let message = response.responseInfo.replace(/(?:\r\n|\r|\n)/g, '<br>')
 
                         if (response.errorMessage !== "")
                             message += `<span style="color: red">${response.errorMessage.replace(/(?:\r\n|\r|\n)/g, '<br>')}</span>`
@@ -185,6 +185,48 @@ function buildContextMenu(node) {
             }
         }
         
+        contextMenu["Edit policies"] = {
+            "label": `Edit policies`,
+            "action": _ => {
+                $('#editMultipleInterval_modal').modal('show')
+                $('#editMultipleInterval').submit(function() {
+                    event.preventDefault();
+                    event.stopImmediatePropagation();
+                    $('#NodeIds')[0].value = selectedNodes;
+
+                    $.ajax({
+                        url: $("#editMultipleInterval").attr("action"),
+                        type: 'POST',
+                        data: $("#editMultipleInterval").serialize(),
+                        datatype: 'json',
+                        async: true,
+                        success: (response) => {
+                            updateTreeTimer();
+
+                            let message = response.responseInfo.replace(/(?:\r\n|\r|\n)/g, '<br>')
+
+                            if (response.errorMessage !== "")
+                                message += `<span style="color: red">${response.errorMessage.replace(/(?:\r\n|\r|\n)/g, '<br>')}</span>`
+
+                            showToast(message);
+
+                            hideAlertsModal();
+                        },
+                        error: function (jqXHR) {
+                            console.log(jqXHR);
+                            $('#editMultipleInterval span.field-validation-valid').each(function () {
+                                let errFor = $(this).data('valmsgFor');
+                                if (jqXHR.responseJSON[errFor] !== undefined) {
+                                    $(this).removeClass('field-validation-valid')
+                                    $(this).addClass('field-validation-error')
+                                    $(this).html(jqXHR.responseJSON[errFor][0]);
+                                }
+                            })
+                        }
+                    });
+                });
+            }
+        }
         return contextMenu;
     }
 

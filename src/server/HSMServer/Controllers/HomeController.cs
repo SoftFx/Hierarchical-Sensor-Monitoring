@@ -28,6 +28,7 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using SensorStatus = HSMSensorDataObjects.SensorStatus;
+using TimeInterval = HSMServer.Model.TimeInterval;
 
 namespace HSMServer.Controllers
 {
@@ -151,21 +152,105 @@ namespace HSMServer.Controllers
 
                 if (_folderManager[decodedId] is not null)
                 {
-                    model.AddError(_folderManager[decodedId].Name);
+                    model.AddRemoveFolderError(_folderManager[decodedId].Name);
                 }
                 else if (_treeViewModel.Nodes.TryGetValue(decodedId, out var node))
                 {
                     _treeValuesCache.RemoveProduct(node.Id);
-                    model.AddDeletedItem(node);
+                    model.AddItem(node);
                 }
                 else if (_treeViewModel.Sensors.TryGetValue(decodedId, out var sensor))
                 {
                     _treeValuesCache.RemoveSensor(sensor.Id);
-                    model.AddDeletedItem(sensor);
+                    model.AddItem(sensor);
                 }
             }
 
-            return Json(model.BuildDeletedItemsMessage());
+            return Json(model.BuildResponse("Removed"));
+        }
+
+        [HttpPost]
+        public async Task<IActionResult> EditAlerts(EditAlertsViewModel model)
+        {
+            if (ModelState[nameof(model.SensorRestorePolicy)]?.Errors.Count > 0 || ModelState[nameof(model.ExpectedUpdateInterval)]?.Errors.Count > 0)
+                return BadRequest(ModelState);
+            
+            model.Upload();
+            
+            var toastViewModel = new MultiActionToastViewModel();
+            var isExpectedFromParent = model.ExpectedUpdateInterval?.TimeInterval is TimeInterval.FromParent;
+            var isRestoreFromParent = model.SensorRestorePolicy?.TimeInterval is TimeInterval.FromParent;
+            foreach (var id in model.SelectedNodes)
+            {
+                if (_folderManager.TryGetValue(id, out var folder))
+                {
+                    var folderRestorePolicy = model.SensorRestorePolicy ?? folder.SensorRestorePolicy;
+                    var folderExpectedUpdate = model.ExpectedUpdateInterval ?? folder.ExpectedUpdateInterval;
+                    
+                    var update = new FolderUpdate
+                    {
+                        Id = id,
+                        RestoreInterval = !isRestoreFromParent ? folderRestorePolicy.ResaveCustomTicks(folderRestorePolicy) : null,
+                        ExpectedUpdateInterval = !isExpectedFromParent ? folderExpectedUpdate.ResaveCustomTicks(folderExpectedUpdate) : null
+                    };
+
+                    if (isRestoreFromParent)
+                        toastViewModel.AddCantChangeIntervalError(folder.Name, "Folder", "Sensitivity", TimeInterval.FromParent);
+
+                    if (isExpectedFromParent)
+                        toastViewModel.AddCantChangeIntervalError(folder.Name, "Folder", "Time to live", TimeInterval.FromParent);
+                    
+                    if (!isExpectedFromParent || !isRestoreFromParent)
+                    {
+                        toastViewModel.AddItem(folder);
+                        await _folderManager.TryUpdate(update);
+                    }
+                }
+                else if (_treeViewModel.Nodes.TryGetValue(id, out var product))
+                {
+                    var hasParent = product.Parent is not null || product.FolderId is not null;
+                    var restoreUpdate = hasParent || !isRestoreFromParent;
+                    var expectedUpdate = hasParent || !isExpectedFromParent;
+                    
+                    var productRestorePolicy = model.SensorRestorePolicy ?? product.SensorRestorePolicy;
+                    var productExpectedUpdate = model.ExpectedUpdateInterval ?? product.ExpectedUpdateInterval;
+                    
+                    var isProduct = product.RootProduct?.Id == product.Id;
+                    
+                    var update = new ProductUpdate
+                    {
+                        Id = product.Id,
+                        RestoreInterval = restoreUpdate ? productRestorePolicy.ToModel((product.Parent as FolderModel)?.SensorRestorePolicy) : null,
+                        ExpectedUpdateInterval = expectedUpdate ? productExpectedUpdate.ToModel((product.Parent as FolderModel)?.ExpectedUpdateInterval) : null
+                    };
+                    
+                    if (!restoreUpdate)
+                        toastViewModel.AddCantChangeIntervalError(product.Name, !isProduct ? "Node" : "Product", "Sensitivity", TimeInterval.FromParent);
+
+                    if (!expectedUpdate)
+                        toastViewModel.AddCantChangeIntervalError(product.Name, !isProduct ? "Node" : "Product", "Time to live", TimeInterval.FromParent);
+                    
+                    if (restoreUpdate || expectedUpdate)
+                    {
+                        toastViewModel.AddItem(product);
+                        _treeValuesCache.UpdateProduct(update);
+                    }
+                }
+                else if (_treeViewModel.Sensors.TryGetValue(id, out var sensor))
+                {
+                    var update = new SensorUpdate
+                    {
+                        Id = sensor.Id,
+                        ExpectedUpdateInterval = (model.ExpectedUpdateInterval ?? sensor.ExpectedUpdateInterval).ToModel(),
+                        RestoreInterval = (model.SensorRestorePolicy ?? sensor.SensorRestorePolicy).ToModel(),
+                    };
+                    
+                    toastViewModel.AddItem(sensor);
+                    _treeValuesCache.UpdateSensor(update);
+                }
+            }
+
+            return Json(toastViewModel.BuildResponse("Edited"));
         }
 
         [HttpPost]

@@ -1,6 +1,7 @@
 ﻿using System;
-using System.Collections;
+using System.Collections.Generic;
 using System.Text;
+using HSMServer.Model.Folders;
 using HSMServer.Model.TreeViewModel;
 
 namespace HSMServer.Model.ViewModel;
@@ -8,20 +9,22 @@ namespace HSMServer.Model.ViewModel;
 public sealed class MultiActionToastViewModel
 {
     private readonly LimitedQueue<string> _folders = new(5);
-    
     private readonly LimitedQueue<string> _products = new(5);
-    
     private readonly LimitedQueue<string> _nodes = new(5);
-    
     private readonly LimitedQueue<string> _sensors = new(10);
 
-
-    public string DeletionInfo { get; private set; } = string.Empty;
     
-    public string ErrorMessage { get; private set; } = string.Empty;
+    private readonly StringBuilder _errorBuilder = new (1 << 5);
+    
+    private readonly StringBuilder _responseBuilder = new (1 << 5);
+    
+    
+    public string ErrorMessage => _errorBuilder.ToString();
+    
+    public string ResponseInfo => _responseBuilder.ToString();
 
     
-    public void AddDeletedItem(NodeViewModel item)
+    public void AddItem(NodeViewModel item)
     {
         if (item.RootProduct.Id == item.Id)
         {
@@ -37,28 +40,28 @@ public sealed class MultiActionToastViewModel
         
         _nodes.Enqueue((item as ProductNodeViewModel)?.FullPath);
     }
+    
+    public void AddItem(FolderModel folder) => _folders.Enqueue(folder?.Name);
 
-    public MultiActionToastViewModel BuildDeletedItemsMessage()
+
+    public MultiActionToastViewModel BuildResponse(string header)
     {
-        var response = new StringBuilder(1 << 5);
-
-        _products.ToBuilder(response, "Removed products:");
-        _nodes.ToBuilder(response, "Removed nodes:", Environment.NewLine);
-        _sensors.ToBuilder(response, "Removed sensors:", Environment.NewLine);
-        
-        DeletionInfo = response.ToString();
+        _folders.ToBuilder(_responseBuilder, $"{header} folders");
+        _products.ToBuilder(_responseBuilder, $"{header} products:");
+        _nodes.ToBuilder(_responseBuilder, $"{header} nodes:", Environment.NewLine);
+        _sensors.ToBuilder(_responseBuilder, $"{header} sensors:", Environment.NewLine);
         
         return this;
     }
 
-    public MultiActionToastViewModel AddError(string objectName)
-    {
-        ErrorMessage += $"Folder {objectName} cannot be deleted{Environment.NewLine}";
-        return this;
-    }
+    public void AddError(string errorMessage) => _errorBuilder.AppendLine(errorMessage);
+    
+    public void AddRemoveFolderError(string name) => AddError($"Folder {name} cannot be deleted");
+
+    public void AddCantChangeIntervalError(string name, string type, string policy, TimeInterval interval) => AddError($"{type} {name} can't have {policy} {interval} interval");
 }
 
-public sealed class LimitedQueue<T> : Queue
+internal sealed class LimitedQueue<T> : Queue<T>
 {
     private readonly int _limit;
     
