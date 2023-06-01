@@ -87,6 +87,9 @@ namespace HSMServer.Notifications
                 {
                     entity.Chats.TryRemove(chatId, out _);
                     entity.Notifications.PartiallyIgnored.TryRemove(chatId, out _);
+
+                    if (entity.Chats.IsEmpty)
+                        entity.Notifications.EnabledSensors.Clear();
                 }
 
             RemoveEntity(entity, chatId);
