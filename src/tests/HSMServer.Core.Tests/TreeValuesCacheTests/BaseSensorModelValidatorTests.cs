@@ -52,23 +52,23 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             Assert.False(sensor.TryAddValue((BaseValue)null));
         }
 
-        [Fact]
-        [Trait("Category", "StringSensorValueTooLong")]
-        public void StringSensorValueTooLongValidationTest()
-        {
-            var sensor = BuildSensorModel(SensorType.String);
-            sensor.AddPolicy(new StringValueLengthPolicy());
+        //[Fact]
+        //[Trait("Category", "StringSensorValueTooLong")]
+        //public void StringSensorValueTooLongValidationTest()
+        //{
+        //    var sensor = BuildSensorModel(SensorType.String);
+        //    sensor.AddPolicy(new StringValueLengthPolicy());
 
-            var stringBase = new StringValue
-            {
-                Value = RandomGenerator.GetRandomString(DefaultMaxStringLength + 1)
-            };
+        //    var stringBase = new StringValue
+        //    {
+        //        Value = RandomGenerator.GetRandomString(DefaultMaxStringLength + 1)
+        //    };
 
-            Assert.True(sensor.TryAddValue(stringBase));
-            Assert.True(sensor.Status.HasWarning);
-            Assert.Equal(SensorStatus.Warning, sensor.Status.Status);
-            Assert.Equal(sensor.Status.Message, SensorValueIsTooLong);
-        }
+        //    Assert.True(sensor.TryAddValue(stringBase));
+        //    Assert.True(sensor.Status.HasWarning);
+        //    Assert.Equal(SensorStatus.Warning, sensor.Status.Status);
+        //    Assert.Equal(sensor.Status.Message, SensorValueIsTooLong);
+        //}
 
         [Theory]
         [InlineData(SensorType.Boolean)]

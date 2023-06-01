@@ -94,7 +94,7 @@ namespace HSMServer.Controllers.GrafanaDatasources.JsonSource
             {
                 var sensorId = target.Payload.Sensor;
 
-                if (target.Payload.IsFull && TryGetSensor(sensorId, out var sensor))
+                if (target.Payload.IsFull && TryGetSensor(sensorId, out var sensor) && sensor.Integration.HasGrafana())
                 {
                     var sensorData = await GetSensorValues(request, sensor);
 

@@ -1,9 +1,10 @@
 $Version = $args[0]
 $Repository = "hsmonitoring/hierarchical_sensor_monitoring"
 $ExpectedImageTag = "${Repository}:$Version"
+$ContainerName = "HSMServer"
 
 Write-Host "Current running container"
-$CurrentContainerId = docker container ls -q
+$CurrentContainerId = docker ps -q -f "name=$ContainerName"
 if ($CurrentContainerId)
 {
     Write-Host "Current id container = $CurrentContainerId"
@@ -19,20 +20,6 @@ else
     Write-Host "Running container hasn't be found"
 }
 
-Write-Host "Current running image"
-$CurrentIdImage = docker ps -q
-if ($CurrentIdImage)
-{
-    Write-Host "Current id image = $CurrentIdImage"
-    Write-Host "Stop image $CurrentIdImage"
-
-    docker stop $CurrentIdImage
-}
-else
-{
-    Write-Host "Running images haven't been found"
-}
-
 $ExpectedImageId = docker images --filter=reference=$ExpectedImageTag -q
 if ($ExpectedImageId)
 {
@@ -45,7 +32,7 @@ if ($ExpectedImageId)
 	$SensorDataPort = "44330:44330"
 	$SensorSitePort = "44333:44333"
 
-	docker run -d -it -v $LogsFolder -v $SensorConfigFolder -v $EnvironmentDatabaseFolder -p $SensorDataPort -p $SensorSitePort $ExpectedImageId
+	docker run -d -it --name "${ContainerName}_$Version" -v $LogsFolder -v $SensorConfigFolder -v $EnvironmentDatabaseFolder -p $SensorDataPort -p $SensorSitePort $ExpectedImageId
 }
 else
 {

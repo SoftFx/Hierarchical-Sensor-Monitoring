@@ -6,10 +6,7 @@ namespace HSMServer.Filters.FolderRoleFilters
 {
     public sealed class FolderRoleFilterByFolderId : FolderRoleFilterBase
     {
-        protected override string ArgumentName => "folderId";
-
-
-        public FolderRoleFilterByFolderId(params ProductRoleEnum[] roles) : base(roles) { }
+        public FolderRoleFilterByFolderId(string argumentName, params ProductRoleEnum[] roles) : base(argumentName, roles) { }
 
 
         protected override Guid? GetEntityId(object arg, ActionExecutingContext context = null) =>
