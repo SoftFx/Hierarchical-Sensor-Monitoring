@@ -200,10 +200,9 @@ namespace HSMServer.Controllers
                     if (isExpectedFromParent)
                         toastViewModel.AddCantChangeIntervalError(_folderManager[id].Name, "Folder", "Time to live", TimeInterval.FromParent);
                     
-                    if (!isExpectedFromParent && !isRestoreFromParent)
+                    if (!isExpectedFromParent || !isRestoreFromParent)
                     {
                         toastViewModel.AddItem(_folderManager[id]);
-                        await _folderManager.TryUpdate(update);
                         await _folderManager.TryUpdate(update);
                     }
                 }
