@@ -1,5 +1,4 @@
-﻿using HSMServer.BackgroundServices.DatabaseServices;
-using HSMServer.Core.TreeStateSnapshot;
+﻿using HSMServer.Core.TreeStateSnapshot;
 using Microsoft.Extensions.Hosting;
 using System;
 using System.Threading;

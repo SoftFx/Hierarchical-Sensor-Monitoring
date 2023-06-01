@@ -1,11 +1,10 @@
-﻿using HSMServer.BackgroundServices.DatabaseServices;
-using HSMServer.Core.Cache;
+﻿using HSMServer.Core.Cache;
 using System;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace HSMServer.BackgroundTask
+namespace HSMServer.BackgroundServices
 {
     public class ClearDatabaseService : BaseDelayedBackgroundService
     {

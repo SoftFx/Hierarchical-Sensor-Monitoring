@@ -8,7 +8,7 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace HSMServer.BackgroundTask
+namespace HSMServer.BackgroundServices
 {
     public sealed class MonitoringBackgroundService : BackgroundService
     {
