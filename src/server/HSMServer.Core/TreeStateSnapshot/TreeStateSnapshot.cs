@@ -17,7 +17,7 @@ namespace HSMServer.Core.TreeStateSnapshot
 
         public void FlushState()
         {
-            _db.AddSnapshot();
+            _db.SaveSensorSnapshot();
         }
     }
 }

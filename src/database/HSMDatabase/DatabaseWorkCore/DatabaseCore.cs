@@ -443,9 +443,9 @@ namespace HSMDatabase.DatabaseWorkCore
             _sensorValuesDatabases.ToList().ForEach(d => d.Dispose());
         }
 
-        public void AddSnapshot()
+        public void SaveSensorSnapshot()
         {
-            using var fs = new StreamWriter($"{Path.Combine(Environment.CurrentDirectory, "snapshot.txt")}");
+            using var fs = new StreamWriter($"{Path.Combine(Environment.CurrentDirectory,"Databases", "Snaphots", "sensors.txt")}");
 
             fs.WriteLine($"{DateTime.UtcNow} snapshot");
         }

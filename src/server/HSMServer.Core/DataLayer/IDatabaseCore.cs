@@ -9,7 +9,7 @@ namespace HSMServer.Core.DataLayer
 {
     public interface IDatabaseCore : IDisposable
     {
-        void AddSnapshot();
+        void SaveSensorSnapshot();
 
         #region Size
 
