@@ -1,17 +1,27 @@
-﻿using System;
+﻿using HSMServer.Core.TreeStateSnapshot.States;
+using System;
 
 namespace HSMServer.Core.TreeStateSnapshot
 {
-    public sealed class LastSensorState
+    public sealed class LastSensorState : ILastState
     {
         public LastHistoryPeriod History { get; set; } = new();
+
+
+        public bool IsDefault => History.IsDefault;
     }
 
 
     public sealed class LastHistoryPeriod
     {
-        public DateTime From { get; set; } = DateTime.MinValue;
+        private static readonly DateTime _fromDefault = DateTime.MinValue;
+        private static readonly DateTime _toDefault = DateTime.MinValue;
 
-        public DateTime To { get; set; } = DateTime.MaxValue;
+
+        public DateTime From { get; set; } = _fromDefault;
+
+        public DateTime To { get; set; } = _toDefault;
+
+        internal bool IsDefault => From == _fromDefault && To == _toDefault;
     }
 }
