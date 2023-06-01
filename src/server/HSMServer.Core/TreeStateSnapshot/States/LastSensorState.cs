@@ -1,4 +1,5 @@
-﻿using HSMServer.Core.TreeStateSnapshot.States;
+﻿using HSMDatabase.AccessManager.DatabaseEntities.SnapshotEntity;
+using HSMServer.Core.TreeStateSnapshot.States;
 using System;
 
 namespace HSMServer.Core.TreeStateSnapshot
@@ -8,7 +9,27 @@ namespace HSMServer.Core.TreeStateSnapshot
         public LastHistoryPeriod History { get; set; } = new();
 
 
+        public LastSensorState() { }
+
+        internal LastSensorState(SensorStateEntity entity)
+        {
+            History = new()
+            {
+                From = new DateTime(entity.HistoryFrom),
+                To = entity.HistoryTo == 0L ? DateTime.MaxValue : new DateTime(entity.HistoryTo),
+            };
+        }
+
+
         public bool IsDefault => History.IsDefault;
+
+
+        internal SensorStateEntity ToEntity() =>
+            new()
+            {
+                HistoryFrom = History.From.Ticks,
+                HistoryTo = History.To == DateTime.MaxValue ? 0L : History.To.Ticks,
+            };
     }
 
 

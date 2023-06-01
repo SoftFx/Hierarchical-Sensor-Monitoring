@@ -19,8 +19,6 @@ namespace HSMServer.BackgroundServices
 
         protected override async Task ExecuteAsync(CancellationToken token)
         {
-            ServiceAction();
-
             var start = DateTime.UtcNow.Ceil(Delay);
 
             await Task.Delay(start - DateTime.UtcNow, token);

@@ -1,6 +1,7 @@
 ﻿using HSMCommon.Constants;
 using HSMDatabase.AccessManager;
 using HSMDatabase.AccessManager.DatabaseEntities;
+using HSMDatabase.AccessManager.DatabaseEntities.SnapshotEntity;
 using HSMDatabase.LevelDB;
 using HSMDatabase.Settings;
 using HSMServer.Core.Configuration;
@@ -14,6 +15,8 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace HSMDatabase.DatabaseWorkCore
 {
@@ -62,15 +65,15 @@ namespace HSMDatabase.DatabaseWorkCore
 
         public long GetEnvironmentDatabaseSize()
         {
-            DirectoryInfo environmentDatabaseDir = new DirectoryInfo(_databaseSettings.GetPathToEnvironmentDatabase());
+            var environmentDatabaseDir = new DirectoryInfo(_databaseSettings.GetPathToEnvironmentDatabase());
             return GetDirectorySize(environmentDatabaseDir);
         }
 
         private static long GetDirectorySize(DirectoryInfo directory)
         {
-            long size = 0;
-            FileInfo[] files = directory.GetFiles();
-            foreach (var file in files)
+            var size = 0L;
+
+            foreach (var file in directory.GetFiles())
             {
                 try
                 {
@@ -79,8 +82,7 @@ namespace HSMDatabase.DatabaseWorkCore
                 catch { }
             }
 
-            DirectoryInfo[] directories = directory.GetDirectories();
-            foreach (var dir in directories)
+            foreach (var dir in directory.GetDirectories())
             {
                 size += GetDirectorySize(dir);
             }
@@ -443,11 +445,36 @@ namespace HSMDatabase.DatabaseWorkCore
             _sensorValuesDatabases.ToList().ForEach(d => d.Dispose());
         }
 
-        public void SaveSensorSnapshot()
+        public void SaveSensorSnapshot(Dictionary<Guid, SensorStateEntity> sensors)
         {
-            using var fs = new StreamWriter($"{Path.Combine(Environment.CurrentDirectory,"Databases", "Snaphots", "sensors.txt")}");
+            var path = Path.Combine(Environment.CurrentDirectory, "Databases", "Snaphots");
 
-            fs.WriteLine($"{DateTime.UtcNow} snapshot");
+            Directory.CreateDirectory(path);
+
+            using var fs = new StreamWriter(Path.Combine(path, "sensors.txt"));
+
+            var options = new JsonSerializerOptions
+            {
+                DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingDefault,
+                WriteIndented = true,
+            };
+
+            fs.WriteLine(JsonSerializer.Serialize(sensors, options));
+        }
+
+        public Dictionary<Guid, SensorStateEntity> GetSensorSnapshot()
+        {
+            var path = Path.Combine(Environment.CurrentDirectory, "Databases", "Snaphots");
+
+            using var fs = new StreamReader(Path.Combine(path, "sensors.txt"));
+
+            var options = new JsonSerializerOptions
+            {
+                DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingDefault,
+                WriteIndented = true,
+            };
+
+            return JsonSerializer.Deserialize<Dictionary<Guid, SensorStateEntity>>(fs.ReadToEnd());
         }
     }
 }
