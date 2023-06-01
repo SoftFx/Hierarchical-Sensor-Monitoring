@@ -54,8 +54,6 @@ namespace HSMServer.Core.Cache
             _updatesQueue.NewItemsEvent += UpdatesQueueNewItemsHandler;
 
             Initialize();
-
-            IsInitialized = true;
         }
 
 
@@ -511,6 +509,10 @@ namespace HSMServer.Core.Cache
             _logger.Info($"{nameof(accessKeysEntities)} applied");
 
             _logger.Info($"{nameof(TreeValuesCache)} initialized");
+
+
+
+            IsInitialized = true;
         }
 
         private List<ProductEntity> RequestProducts()

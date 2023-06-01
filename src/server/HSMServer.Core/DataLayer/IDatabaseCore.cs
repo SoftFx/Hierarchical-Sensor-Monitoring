@@ -1,4 +1,5 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities;
+using HSMDatabase.AccessManager.DatabaseEntities.SnapshotEntity;
 using HSMServer.Core.Configuration;
 using HSMServer.Core.Model;
 using HSMServer.Core.Registration;
@@ -9,7 +10,9 @@ namespace HSMServer.Core.DataLayer
 {
     public interface IDatabaseCore : IDisposable
     {
-        void SaveSensorSnapshot();
+        void SaveSensorSnapshot(Dictionary<Guid, SensorStateEntity> sensors);
+
+        Dictionary<Guid, SensorStateEntity> GetSensorSnapshot();
 
         #region Size
 

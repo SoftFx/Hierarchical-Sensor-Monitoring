@@ -1,7 +1,7 @@
 ﻿namespace HSMServer.Core.TreeStateSnapshot.States
 {
-    public interface ILastState
+    internal interface ILastState
     {
-        bool IsDefault { get; }
+        public bool IsDefault { get; }
     }
 }
