@@ -263,6 +263,7 @@ namespace HSMServer.Core.Cache
             RemoveSensorPolicies(sensor);
 
             _databaseCore.RemoveSensorWithMetadata(sensorId.ToString());
+            _snapshot.Sensors.Remove(sensorId, out _);
 
             ChangeSensorEvent?.Invoke(sensor, ActionType.Delete);
         }
