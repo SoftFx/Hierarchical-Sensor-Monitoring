@@ -38,7 +38,7 @@ window.initializeTree = function () {
             return a < b ? 1 : -1;
         }
     }).on("state_ready.jstree", function () {
-        selectNodeAjax($(this).jstree('get_selected'));
+        selectNodeAjax($(this).jstree('get_selected')[0]);
     }).on('open_node.jstree', function () {
         isTreeCollapsed = false;
         $('#collapseIcon').removeClass('fa-regular fa-square-plus').addClass('fa-regular fa-square-minus').attr('title','Save and close tree');
