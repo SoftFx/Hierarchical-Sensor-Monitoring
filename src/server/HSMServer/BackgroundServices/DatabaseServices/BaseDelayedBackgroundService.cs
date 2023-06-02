@@ -2,8 +2,8 @@
 using Microsoft.Extensions.Hosting;
 using NLog;
 using System;
-using System.Threading.Tasks;
 using System.Threading;
+using System.Threading.Tasks;
 
 namespace HSMServer.BackgroundServices
 {
@@ -15,7 +15,7 @@ namespace HSMServer.BackgroundServices
         public abstract TimeSpan Delay { get; }
 
 
-        protected abstract void ServiceAction();
+        protected abstract Task ServiceAction();
 
         protected override async Task ExecuteAsync(CancellationToken token)
         {
@@ -25,8 +25,7 @@ namespace HSMServer.BackgroundServices
 
             while (!token.IsCancellationRequested)
             {
-                ServiceAction();
-
+                await ServiceAction();
                 await Task.Delay(Delay, token);
             }
         }

@@ -26,10 +26,12 @@ namespace HSMServer.BackgroundServices
             return base.ExecuteAsync(token);
         }
 
-        protected override void ServiceAction()
+        protected override Task ServiceAction()
         {
             //RunAction(RunSelfDestroy);
             RunAction(RunClearHistory);
+
+            return Task.CompletedTask;
         }
 
 

@@ -1,27 +1,46 @@
-﻿using HSMServer.Core.DataLayer;
-using System.Linq;
+﻿using HSMDatabase.AccessManager;
+using HSMDatabase.AccessManager.DatabaseEntities.SnapshotEntity;
+using HSMServer.Core.DataLayer;
+using System.Threading.Tasks;
 
 namespace HSMServer.Core.TreeStateSnapshot
 {
     public sealed class TreeStateSnapshot : ITreeStateSnapshot
     {
-        private readonly IDatabaseCore _db;
+        private readonly StateCollection<LastSensorState, SensorStateEntity> _sensors = new();
+        private readonly ISnapshotDatabase _db;
 
 
-        public StateCollection<LastSensorState> Sensors { get; }
+        public ISnapshotCollection<LastSensorState> Sensors => _sensors;
+
+
+        public bool HasData { get; } = true;
+
+        public bool IsFinal { get; }
 
 
         public TreeStateSnapshot(IDatabaseCore db)
         {
-            _db = db;
+            _db = db.Snapshots;
 
-            Sensors = new StateCollection<LastSensorState>(_db.GetSensorSnapshot().ToDictionary(k => k.Key, v => new LastSensorState(v.Value)));
+            if (_db.TryGetLastNode(out var node))
+            {
+                _sensors = new StateCollection<LastSensorState, SensorStateEntity>(node.Sensors);
+
+                IsFinal = node.IsFinal;
+            }
+            else
+                HasData = false;
         }
 
 
-        public void FlushState()
+        public Task FlushState(bool isFinal)
         {
-            _db.SaveSensorSnapshot(Sensors.Where(u => !u.Value.IsDefault).ToDictionary(k => k.Key, v => v.Value.ToEntity()));
+            var node = _db.BuildNode(isFinal);
+
+            node.Sensors.Data = _sensors.GetStates();
+
+            return node.Save();
         }
     }
 }

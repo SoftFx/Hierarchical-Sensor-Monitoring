@@ -11,7 +11,6 @@ namespace HSMDatabase.DatabaseWorkCore
     internal sealed class SensorValuesDatabaseDictionary : IEnumerable<ISensorValuesDatabase>
     {
         private readonly ConcurrentQueue<ISensorValuesDatabase> _sensorDbs = new();
-
         private readonly IDatabaseSettings _dbSettings;
 
         private ISensorValuesDatabase _lastDb;

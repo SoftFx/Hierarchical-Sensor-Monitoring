@@ -1,13 +1,12 @@
 ﻿using HSMCommon.Constants;
 using HSMDatabase.AccessManager;
 using HSMDatabase.AccessManager.DatabaseEntities;
-using HSMDatabase.AccessManager.DatabaseEntities.SnapshotEntity;
 using HSMDatabase.LevelDB;
 using HSMDatabase.Settings;
+using HSMDatabase.SnapshotsDb;
 using HSMServer.Core.Configuration;
 using HSMServer.Core.Converters;
 using HSMServer.Core.DataLayer;
-using HSMServer.Core.Model;
 using HSMServer.Core.Registration;
 using NLog;
 using System;
@@ -15,8 +14,6 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
-using System.Text.Json;
-using System.Text.Json.Serialization;
 
 namespace HSMDatabase.DatabaseWorkCore
 {
@@ -26,9 +23,13 @@ namespace HSMDatabase.DatabaseWorkCore
 
         private static readonly Logger _logger = LogManager.GetLogger(CommonConstants.InfrastructureLoggerName);
 
-        private readonly IEnvironmentDatabase _environmentDatabase;
         private readonly SensorValuesDatabaseDictionary _sensorValuesDatabases;
-        private readonly IDatabaseSettings _databaseSettings;
+        private readonly IEnvironmentDatabase _environmentDatabase;
+        private readonly IDatabaseSettings _settings;
+
+
+        public ISnapshotDatabase Snapshots { get; }
+
 
         private delegate IEnumerable<byte[]> GetValuesFunc(ISensorValuesDatabase db);
 
@@ -37,9 +38,11 @@ namespace HSMDatabase.DatabaseWorkCore
         {
             _logger.Info($"{nameof(DatabaseCore)} is initializing");
 
-            _databaseSettings = dbSettings ?? new DatabaseSettings();
-            _environmentDatabase = LevelDBManager.GetEnvitonmentDatabaseInstance(_databaseSettings.GetPathToEnvironmentDatabase());
-            _sensorValuesDatabases = new SensorValuesDatabaseDictionary(_databaseSettings);
+            _settings = dbSettings ?? new DatabaseSettings();
+            _environmentDatabase = LevelDBManager.GetEnvitonmentDatabaseInstance(_settings.PathToEnvironmentDb);
+            _sensorValuesDatabases = new SensorValuesDatabaseDictionary(_settings);
+
+            Snapshots = new SnapshotsDatabase(_settings.PathToSnaphotsDb);
 
             _logger.Info($"{nameof(DatabaseCore)} initialized");
         }
@@ -49,8 +52,7 @@ namespace HSMDatabase.DatabaseWorkCore
 
         public long GetDatabaseSize()
         {
-            var databasesDir = new DirectoryInfo(_databaseSettings.DatabaseFolder);
-            return GetDirectorySize(databasesDir);
+            return GetDirectorySize(_settings.DatabaseFolder);
         }
 
         public long GetSensorsHistoryDatabaseSize()
@@ -58,19 +60,19 @@ namespace HSMDatabase.DatabaseWorkCore
             long size = 0;
 
             foreach (var db in _sensorValuesDatabases)
-                size += GetDirectorySize(new DirectoryInfo(db.Name));
+                size += GetDirectorySize(db.Name);
 
             return size;
         }
 
         public long GetEnvironmentDatabaseSize()
         {
-            var environmentDatabaseDir = new DirectoryInfo(_databaseSettings.GetPathToEnvironmentDatabase());
-            return GetDirectorySize(environmentDatabaseDir);
+            return GetDirectorySize(_settings.PathToEnvironmentDb);
         }
 
-        private static long GetDirectorySize(DirectoryInfo directory)
+        private static long GetDirectorySize(string directoryName)
         {
+            var directory = new DirectoryInfo(directoryName);
             var size = 0L;
 
             foreach (var file in directory.GetFiles())
@@ -84,7 +86,7 @@ namespace HSMDatabase.DatabaseWorkCore
 
             foreach (var dir in directory.GetDirectories())
             {
-                size += GetDirectorySize(dir);
+                size += GetDirectorySize(dir.Name);
             }
 
             return size;
@@ -94,35 +96,50 @@ namespace HSMDatabase.DatabaseWorkCore
 
         #region Fill Sensors (start app)
 
-        public Dictionary<Guid, byte[]> GetLatestValues(List<BaseSensorModel> sensors)
+        public Dictionary<Guid, byte[]> GetLatestValues(Dictionary<Guid, long> sensors)
         {
-            var result = new Dictionary<Guid, byte[]>(sensors.Count);
+            var orderedList = sensors.OrderBy(u => u.Value).ToList();
+            var result = GetResult(sensors.Keys.ToList());
 
-            foreach (var sensor in sensors)
-                result.Add(sensor.Id, null);
+            var curDb = _sensorValuesDatabases.GetEnumerator();
+            var maxBorder = DateTime.MaxValue.Ticks;
 
-            var tempResult = new Dictionary<byte[], (Guid sensorId, byte[] value)>(sensors.Count);
+            curDb.MoveNext();
 
-            foreach (var sensor in sensors)
-            {
-                if (result[sensor.Id] != null)
-                    continue;
+            foreach (var (sensorId, time) in orderedList)
+                if (time < maxBorder)
+                {
+                    while (curDb.Current != null && curDb.Current.To < time)
+                        curDb.MoveNext();
 
-                byte[] key = Encoding.UTF8.GetBytes(sensor.Id.ToString());
-                (Guid sensorId, byte[] latestValue) value = (sensor.Id, null);
+                    if (curDb.Current != null)
+                        result[sensorId] = curDb.Current.Get(BuildSensorValueKey(sensorId.ToString(), time));
+                    else
+                        break;
+                }
 
-                tempResult.Add(key, value);
-            }
+            return result;
+        }
+
+        public Dictionary<Guid, byte[]> GetLatestValuesFrom(Dictionary<Guid, long> sensors)
+        {
+            var result = GetResult(sensors.Keys.ToList());
+
+            var tempResult = new Dictionary<byte[], (long from, byte[] value)>(sensors.Count);
+
+            foreach (var (id, from) in sensors)
+                tempResult.Add(Encoding.UTF8.GetBytes(id.ToString()), (from, null));
 
             foreach (var database in _sensorValuesDatabases.Reverse())
                 database.FillLatestValues(tempResult);
 
-            foreach (var (_, (sensorId, value)) in tempResult)
-                if (value != null)
-                    result[sensorId] = value;
+            foreach (var (key, (_, value)) in tempResult)
+                result[Guid.Parse(Encoding.UTF8.GetString(key))] = value;
 
             return result;
         }
+
+        private static Dictionary<Guid, byte[]> GetResult(List<Guid> ids) => ids.ToDictionary(k => k, v => (byte[])null);
 
         #endregion
 
@@ -146,7 +163,7 @@ namespace HSMDatabase.DatabaseWorkCore
             var toBytes = BuildSensorValueKey(sensorId, toTicks);
 
             foreach (var db in _sensorValuesDatabases)
-                if (db.From <= toTicks && db.To >= fromTicks)
+                if (db.IsInclude(fromTicks, toTicks))
                     db.RemoveSensorValues(fromBytes, toBytes);
         }
 
@@ -189,7 +206,7 @@ namespace HSMDatabase.DatabaseWorkCore
             var fromBytes = BuildSensorValueKey(sensorId, fromTicks);
             var toBytes = BuildSensorValueKey(sensorId, toTicks);
 
-            var databases = _sensorValuesDatabases.Where(db => fromTicks <= db.To && toTicks >= db.From).ToList();
+            var databases = _sensorValuesDatabases.Where(db => db.IsInclude(fromTicks, toTicks)).ToList();
             GetValuesFunc getValues = (db) => db.GetValuesFrom(fromBytes, toBytes);
 
             if (count < 0)
@@ -443,38 +460,6 @@ namespace HSMDatabase.DatabaseWorkCore
         {
             _environmentDatabase.Dispose();
             _sensorValuesDatabases.ToList().ForEach(d => d.Dispose());
-        }
-
-        public void SaveSensorSnapshot(Dictionary<Guid, SensorStateEntity> sensors)
-        {
-            var path = Path.Combine(Environment.CurrentDirectory, "Databases", "Snaphots");
-
-            Directory.CreateDirectory(path);
-
-            using var fs = new StreamWriter(Path.Combine(path, "sensors.txt"));
-
-            var options = new JsonSerializerOptions
-            {
-                DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingDefault,
-                WriteIndented = true,
-            };
-
-            fs.WriteLine(JsonSerializer.Serialize(sensors, options));
-        }
-
-        public Dictionary<Guid, SensorStateEntity> GetSensorSnapshot()
-        {
-            var path = Path.Combine(Environment.CurrentDirectory, "Databases", "Snaphots");
-
-            using var fs = new StreamReader(Path.Combine(path, "sensors.txt"));
-
-            var options = new JsonSerializerOptions
-            {
-                DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingDefault,
-                WriteIndented = true,
-            };
-
-            return JsonSerializer.Deserialize<Dictionary<Guid, SensorStateEntity>>(fs.ReadToEnd());
         }
     }
 }

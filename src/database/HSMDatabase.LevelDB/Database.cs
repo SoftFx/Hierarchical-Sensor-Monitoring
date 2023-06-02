@@ -104,6 +104,24 @@ namespace HSMDatabase.LevelDB
             }
         }
 
+        public byte[] Get(byte[] key)
+        {
+            Iterator iterator = null;
+
+            try
+            {
+                iterator = _database.CreateIterator(_iteratorOptions);
+
+                iterator.Seek(key);
+
+                return iterator.IsValid ? iterator.Value() : Array.Empty<byte>();
+            }
+            finally
+            {
+                iterator?.Dispose();
+            }
+        }
+
         public IEnumerable<byte[]> GetValueFromTo(byte[] from, byte[] to)
         {
             Iterator iterator = null;
@@ -175,7 +193,7 @@ namespace HSMDatabase.LevelDB
             }
         }
 
-        public void FillLatestValues(Dictionary<byte[], (Guid sensorId, byte[] latestValue)> keyValuePairs)
+        public void FillLatestValues(Dictionary<byte[], (long from, byte[] latestValue)> keyValuePairs, long endBase)
         {
             Iterator iterator = null;
 
@@ -185,10 +203,10 @@ namespace HSMDatabase.LevelDB
 
                 foreach (var (key, value) in keyValuePairs)
                 {
-                    if (value.latestValue == null)
+                    if (value.latestValue == null && endBase >= value.from)
                     {
                         for (iterator.Seek(key); iterator.IsValid && iterator.Key().StartsWith(key); iterator.Next())
-                            keyValuePairs[key] = (value.sensorId, iterator.Value());
+                            keyValuePairs[key] = (value.from, iterator.Value());
                     }
                 }
             }

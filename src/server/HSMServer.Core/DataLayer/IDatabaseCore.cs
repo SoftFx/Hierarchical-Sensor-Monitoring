@@ -1,5 +1,5 @@
-﻿using HSMDatabase.AccessManager.DatabaseEntities;
-using HSMDatabase.AccessManager.DatabaseEntities.SnapshotEntity;
+﻿using HSMDatabase.AccessManager;
+using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Core.Configuration;
 using HSMServer.Core.Model;
 using HSMServer.Core.Registration;
@@ -10,9 +10,7 @@ namespace HSMServer.Core.DataLayer
 {
     public interface IDatabaseCore : IDisposable
     {
-        void SaveSensorSnapshot(Dictionary<Guid, SensorStateEntity> sensors);
-
-        Dictionary<Guid, SensorStateEntity> GetSensorSnapshot();
+        ISnapshotDatabase Snapshots { get; }
 
         #region Size
 
@@ -61,7 +59,11 @@ namespace HSMServer.Core.DataLayer
         void AddSensorValue(SensorValueEntity valueEntity);
         void ClearSensorValues(string sensorId, DateTime from, DateTime to);
 
-        Dictionary<Guid, byte[]> GetLatestValues(List<BaseSensorModel> sensors);
+
+        Dictionary<Guid, byte[]> GetLatestValues(Dictionary<Guid, long> sensors);
+
+        Dictionary<Guid, byte[]> GetLatestValuesFrom(Dictionary<Guid, long> sensors);
+
         IAsyncEnumerable<List<byte[]>> GetSensorValuesPage(string sensorId, DateTime from, DateTime to, int count);
 
         List<SensorEntity> GetAllSensors();

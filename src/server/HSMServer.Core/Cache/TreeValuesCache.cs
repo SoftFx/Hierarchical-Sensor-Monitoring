@@ -31,9 +31,9 @@ namespace HSMServer.Core.Cache
 
         private readonly Logger _logger = LogManager.GetLogger(CommonConstants.InfrastructureLoggerName);
 
-        private readonly IDatabaseCore _databaseCore;
-        private readonly IUpdatesQueue _updatesQueue;
         private readonly ITreeStateSnapshot _snapshot;
+        private readonly IUpdatesQueue _updatesQueue;
+        private readonly IDatabaseCore _database;
 
 
         public bool IsInitialized { get; }
@@ -45,15 +45,17 @@ namespace HSMServer.Core.Cache
         public event Action<BaseSensorModel, PolicyResult> NotifyAboutChangesEvent;
 
 
-        public TreeValuesCache(IDatabaseCore databaseCore, ITreeStateSnapshot snapshot, IUpdatesQueue updatesQueue)
+        public TreeValuesCache(IDatabaseCore database, ITreeStateSnapshot snapshot, IUpdatesQueue updatesQueue)
         {
-            _databaseCore = databaseCore;
+            _database = database;
             _snapshot = snapshot;
 
             _updatesQueue = updatesQueue;
             _updatesQueue.NewItemsEvent += UpdatesQueueNewItemsHandler;
 
             Initialize();
+
+            IsInitialized = true;
         }
 
 
@@ -64,9 +66,9 @@ namespace HSMServer.Core.Cache
 
             foreach (var sensor in _sensors.Values)
                 if (sensor is IBarSensor barModel && barModel.LocalLastValue != default)
-                    _databaseCore.AddSensorValue(barModel.LocalLastValue.ToEntity(sensor.Id));
+                    _database.AddSensorValue(barModel.LocalLastValue.ToEntity(sensor.Id));
 
-            _databaseCore.Dispose();
+            _database.Dispose();
         }
 
 
@@ -82,7 +84,7 @@ namespace HSMServer.Core.Cache
 
         private void UpdateProduct(ProductModel product)
         {
-            _databaseCore.UpdateProduct(product.ToProductEntity());
+            _database.UpdateProduct(product.ToProductEntity());
 
             ChangeProductEvent?.Invoke(product, ActionType.Update);
         }
@@ -96,7 +98,7 @@ namespace HSMServer.Core.Cache
 
             GetProductSensorsStatuses(product, sensorsOldStatuses);
 
-            _databaseCore.UpdateProduct(product.Update(update).ToProductEntity());
+            _database.UpdateProduct(product.Update(update).ToProductEntity());
 
             NotifyAllProductChildrenAboutUpdate(product, sensorsOldStatuses);
         }
@@ -115,7 +117,7 @@ namespace HSMServer.Core.Cache
                     RemoveSensor(sensorId);
 
                 product.Parent?.SubProducts.TryRemove(productId, out _);
-                _databaseCore.RemoveProduct(product.Id.ToString());
+                _database.RemoveProduct(product.Id.ToString());
 
                 foreach (var (id, _) in product.AccessKeys)
                     RemoveAccessKey(id);
@@ -181,7 +183,7 @@ namespace HSMServer.Core.Cache
         {
             if (AddKeyToTree(key))
             {
-                _databaseCore.AddAccessKey(key.ToAccessKeyEntity());
+                _database.AddAccessKey(key.ToAccessKeyEntity());
 
                 ChangeAccessKeyEvent?.Invoke(key, ActionType.Add);
 
@@ -201,7 +203,7 @@ namespace HSMServer.Core.Cache
                     ChangeProductEvent?.Invoke(product, ActionType.Update);
                 }
 
-                _databaseCore.RemoveAccessKey(id);
+                _database.RemoveAccessKey(id);
 
                 ChangeAccessKeyEvent?.Invoke(key, ActionType.Delete);
             }
@@ -215,7 +217,7 @@ namespace HSMServer.Core.Cache
                 return null;
 
             key.Update(updatedKey);
-            _databaseCore.UpdateAccessKey(key.ToAccessKeyEntity());
+            _database.UpdateAccessKey(key.ToAccessKeyEntity());
 
             ChangeAccessKeyEvent?.Invoke(key, ActionType.Update);
 
@@ -244,7 +246,7 @@ namespace HSMServer.Core.Cache
 
             sensor.Update(update);
 
-            _databaseCore.UpdateSensor(sensor.ToEntity());
+            _database.UpdateSensor(sensor.ToEntity());
             NotifyAboutChanges(sensor, oldStatus);
         }
 
@@ -256,8 +258,8 @@ namespace HSMServer.Core.Cache
             if (_tree.TryGetValue(sensor.Parent.Id, out var parent))
                 parent.Sensors.TryRemove(sensorId, out _);
 
-            _databaseCore.RemoveSensorWithMetadata(sensorId.ToString());
-            _snapshot.Sensors.Remove(sensorId, out _);
+            _database.RemoveSensorWithMetadata(sensorId.ToString());
+            _snapshot.Sensors.Remove(sensorId);
 
             ChangeSensorEvent?.Invoke(sensor, ActionType.Delete);
         }
@@ -326,7 +328,7 @@ namespace HSMServer.Core.Cache
 
             sensor.ResetSensor();
 
-            _databaseCore.ClearSensorValues(sensor.Id.ToString(), from, to);
+            _database.ClearSensorValues(sensor.Id.ToString(), from, to);
             _snapshot.Sensors[sensorId].History.From = to;
 
             ChangeSensorEvent?.Invoke(sensor, ActionType.Update);
@@ -361,7 +363,7 @@ namespace HSMServer.Core.Cache
         {
             if (_sensors.TryGetValue(sensorId, out var sensor))
             {
-                var pages = _databaseCore.GetSensorValuesPage(sensorId.ToString(), from, to, count);
+                var pages = _database.GetSensorValuesPage(sensorId.ToString(), from, to, count);
 
                 await foreach (var page in pages)
                     yield return sensor.ConvertValues(page);
@@ -373,13 +375,13 @@ namespace HSMServer.Core.Cache
             switch (type)
             {
                 case ActionType.Add:
-                    _databaseCore.AddPolicy(policy.ToEntity());
+                    _database.AddPolicy(policy.ToEntity());
                     return;
                 case ActionType.Update:
-                    _databaseCore.UpdatePolicy(policy.ToEntity());
+                    _database.UpdatePolicy(policy.ToEntity());
                     return;
                 case ActionType.Delete:
-                    _databaseCore.RemovePolicy(policy.Id);
+                    _database.RemovePolicy(policy.Id);
                     return;
             }
         }
@@ -462,7 +464,7 @@ namespace HSMServer.Core.Cache
 
             if (sensor.TryAddValue(value) && sensor.LastDbValue != null)
             {
-                _databaseCore.AddSensorValue(sensor.LastDbValue.ToEntity(sensor.Id));
+                _database.AddSensorValue(sensor.LastDbValue.ToEntity(sensor.Id));
 
                 _snapshot.Sensors[sensor.Id].History.To = sensor.LastDbValue.ReceivingTime;
             }
@@ -501,7 +503,7 @@ namespace HSMServer.Core.Cache
             ApplySensors(productEntities, RequestSensors(), policies);
 
             _logger.Info($"{nameof(IDatabaseCore.GetAccessKeys)} is requesting");
-            var accessKeysEntities = _databaseCore.GetAccessKeys();
+            var accessKeysEntities = _database.GetAccessKeys();
             _logger.Info($"{nameof(IDatabaseCore.GetAccessKeys)} requested");
 
             _logger.Info($"{nameof(accessKeysEntities)} are applying");
@@ -509,16 +511,12 @@ namespace HSMServer.Core.Cache
             _logger.Info($"{nameof(accessKeysEntities)} applied");
 
             _logger.Info($"{nameof(TreeValuesCache)} initialized");
-
-
-
-            IsInitialized = true;
         }
 
         private List<ProductEntity> RequestProducts()
         {
             _logger.Info($"{nameof(IDatabaseCore.GetAllProducts)} is requesting");
-            var productEntities = _databaseCore.GetAllProducts();
+            var productEntities = _database.GetAllProducts();
             _logger.Info($"{nameof(IDatabaseCore.GetAllProducts)} requested");
 
             return productEntities;
@@ -527,7 +525,7 @@ namespace HSMServer.Core.Cache
         private List<SensorEntity> RequestSensors()
         {
             _logger.Info($"{nameof(IDatabaseCore.GetAllSensors)} is requesting");
-            var sensorEntities = _databaseCore.GetAllSensors();
+            var sensorEntities = _database.GetAllSensors();
             _logger.Info($"{nameof(IDatabaseCore.GetAllSensors)} requested");
 
             return sensorEntities;
@@ -536,7 +534,7 @@ namespace HSMServer.Core.Cache
         private List<byte[]> RequestPolicies()
         {
             _logger.Info($"{nameof(IDatabaseCore.GetAllPolicies)} is requesting");
-            var policyEntities = _databaseCore.GetAllPolicies();
+            var policyEntities = _database.GetAllPolicies();
             _logger.Info($"{nameof(IDatabaseCore.GetAllPolicies)} requested");
 
             return policyEntities;
@@ -662,7 +660,7 @@ namespace HSMServer.Core.Cache
                 if (product.Parent == null)
                     ResetServerPolicyForRootProduct(product);
 
-                _databaseCore.AddProduct(product.ToProductEntity());
+                _database.AddProduct(product.ToProductEntity());
 
                 ChangeProductEvent?.Invoke(product, ActionType.Add);
 
@@ -679,7 +677,7 @@ namespace HSMServer.Core.Cache
         private void AddSensor(BaseSensorModel sensor)
         {
             _sensors.TryAdd(sensor.Id, sensor);
-            _databaseCore.AddSensor(sensor.ToEntity());
+            _database.AddSensor(sensor.ToEntity());
 
             SubscribeSensorToPolicyUpdate(sensor);
 
@@ -800,11 +798,27 @@ namespace HSMServer.Core.Cache
 
         private void FillSensorsData()
         {
-            var sensorValues = _databaseCore.GetLatestValues(GetSensors());
+            var requests = GetSensors().ToDictionary(k => k.Id, _ => 0L);
 
-            foreach (var (sensorId, value) in sensorValues)
+            if (_snapshot.HasData)
+            {
+                foreach (var (key, state) in _snapshot.Sensors)
+                    if (requests.ContainsKey(key))
+                        requests[key] = state.History.To.Ticks;
+            }
+
+            var values = _snapshot.IsFinal ? _database.GetLatestValues(requests) :
+                                             _database.GetLatestValuesFrom(requests);
+
+            foreach (var (sensorId, value) in values)
                 if (value is not null && _sensors.TryGetValue(sensorId, out var sensor))
+                {
                     sensor.TryAddValue(value);
+                    _snapshot.Sensors[sensorId].History.To = sensor.LastValue.ReceivingTime;
+                }
+
+            if (!_snapshot.IsFinal)
+                _snapshot.FlushState(true);
         }
 
         private static Dictionary<string, Policy> GetPolicyModels(List<byte[]> policyEntities)
