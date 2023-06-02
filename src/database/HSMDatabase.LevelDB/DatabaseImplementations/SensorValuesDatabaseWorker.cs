@@ -1,6 +1,5 @@
 ﻿using HSMDatabase.AccessManager;
 using HSMDatabase.LevelDB.Extensions;
-using LevelDB;
 using NLog;
 using System;
 using System.Collections.Generic;
