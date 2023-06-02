@@ -14,7 +14,6 @@ namespace HSMDatabase.SnapshotsDb
         private static readonly JsonSerializerOptions _options = new()
         {
             DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingDefault,
-            WriteIndented = true,
         };
 
 
@@ -22,25 +21,16 @@ namespace HSMDatabase.SnapshotsDb
 
 
         internal required string FilePath { get; init; }
-        
+
 
         public Dictionary<Guid, SensorStateEntity> Read()
         {
-            using var fs = new StreamReader(FilePath);
-
-            Data = JsonSerializer.Deserialize<Dictionary<Guid, SensorStateEntity>>(fs.ReadToEnd());
+            Data = JsonSerializer.Deserialize<Dictionary<Guid, SensorStateEntity>>(File.ReadAllBytes(FilePath));
 
             return Data;
         }
 
-        public Task Save()
-        {
-            if (Data is null || Data.Count == 0)
-                return Task.CompletedTask;
-
-            using var fs = new StreamWriter(FilePath);
-
-            return fs.WriteLineAsync(JsonSerializer.Serialize(Data, _options));
-        }
+        public Task Save() => Data is null || Data.Count == 0 ? Task.CompletedTask :
+            File.WriteAllBytesAsync(FilePath, JsonSerializer.SerializeToUtf8Bytes(Data, _options));
     }
 }
