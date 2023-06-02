@@ -14,18 +14,18 @@ namespace HSMDatabase.SnapshotsDb
         private const string FinalSuffix = "_final";
 
         private readonly List<IEntitySnapshotCollection> _collections = new();
-        private readonly string _folderName;
 
 
         public IEntitySnapshotCollection<SensorStateEntity> Sensors { get; }
+
+        public string FolderName { get; }
 
         public bool IsFinal { get; }
 
 
         internal SnapshotNode(string folder)
         {
-            _folderName = folder;
-
+            FolderName = folder;
             IsFinal = Path.GetFileNameWithoutExtension(folder).EndsWith(FinalSuffix);
 
             Sensors = Register<SensorStateEntity>(nameof(Sensors));
@@ -33,7 +33,7 @@ namespace HSMDatabase.SnapshotsDb
 
         internal SnapshotNode(string mainFolder, bool isFinal) : this(Path.Combine(mainFolder, BuildFolderName(isFinal)))
         {
-            Directory.CreateDirectory(_folderName);
+            Directory.CreateDirectory(FolderName);
         }
 
 
@@ -44,7 +44,7 @@ namespace HSMDatabase.SnapshotsDb
         {
             var collection = new SnapshotCollection<T>()
             {
-                FilePath = Path.Combine(_folderName, $"{name}.json"),
+                FilePath = Path.Combine(FolderName, name),
             };
 
             _collections.Add(collection);
