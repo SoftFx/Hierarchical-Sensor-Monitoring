@@ -70,6 +70,20 @@
         });
     });
 
+    $('#commentHelp').on('show.bs.popover', () => {
+        $('html').on('click', hideNotFocusedHelp);
+    });
+
+    $('#commentHelp').on('hide.bs.popover', () => {
+        $('html').off('click', hideNotFocusedHelp);
+    });
+
+    function hideNotFocusedHelp(e) {
+        if (!$(e.target).parents().is('.popover')) {
+            $('#commentHelp').popover('hide');
+        }
+    }
+
     function addDataAlert(type, entityId) {
         $.ajax({
             url: `@Url.Action(nameof(HomeController.AddDataPolicy), ViewConstants.HomeController)?type=${type}&sensorId=${entityId}`,
