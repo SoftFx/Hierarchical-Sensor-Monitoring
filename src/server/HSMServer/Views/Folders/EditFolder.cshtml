@@ -69,12 +69,12 @@
     </div>
 </div>
 
-@await Html.PartialAsync("~/Views/Shared/_DeletionConfirmationModal.cshtml")
+@await Html.PartialAsync("~/Views/Shared/_ConfirmationModal.cshtml")
 
 
 <script>
     function removeFolder() {
-        showDeletionConfirmationModal(
+        showConfirmationModal(
             `Removing folder '@Model.Name'`,
             `Do you really want to remove folder '@Model.Name'? All products from this folder will be moved to products without folder.`,
             function () {

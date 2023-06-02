@@ -1,6 +1,6 @@
 ﻿var needToActivateListTab = false;
 
-var currentSelectedNodeId = "";
+window.currentSelectedNodeId = "";
 
 
 window.initializeTree = function () {
@@ -73,6 +73,54 @@ function selectNodeAjax(selectedId) {
     if (currentSelectedNodeId == selectedId)
         return;
 
+    let isEditMode = !$("#description").hasClass("d-none") && currentSelectedNodeId !== "";
+
+    if (isEditMode) {
+        saveMetaData(selectedId);
+    }
+    else {
+        initSelectedNode(selectedId);
+    }
+}
+
+function saveMetaData(selectedId) {
+    let form = document.getElementById("editMetaInfo_form");
+    let formData = new FormData(form);
+    collectDataAlerts(formData);
+
+    $.ajax({
+        type: 'POST',
+        url: isDataValidAction,
+        data: formData,
+        processData: false,
+        contentType: false,
+        async: true
+    }).done(function (isValid) {
+        if (isValid) {
+            let path = $("#nodeHeader").text();
+
+            showConfirmationModal(
+                `Saving changes`,
+                `Do you want to save '${path}' changes?`,
+                () => {
+                    $.ajax({
+                        url: form.action,
+                        type: 'POST',
+                        data: formData,
+                        processData: false,
+                        contentType: false,
+                        async: true
+                    }).done(() => initSelectedNode(selectedId));
+                },
+                () => initSelectedNode(selectedId),
+                "Yes",
+                "No"
+            );
+        }
+    });
+}
+
+function initSelectedNode(selectedId) {
     currentSelectedNodeId = selectedId;
 
     // Show spinner only if selected tree node contains 20 children (nodes/sensors) or it is sensor (doesn't have children)

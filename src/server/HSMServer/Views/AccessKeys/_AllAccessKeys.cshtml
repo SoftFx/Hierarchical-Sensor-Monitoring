@@ -176,7 +176,7 @@
     </table>
 </div>
 
-@await Html.PartialAsync("~/Views/Shared/_DeletionConfirmationModal.cshtml")
+@await Html.PartialAsync("~/Views/Shared/_ConfirmationModal.cshtml")
 
 <script>
     var changeAccessKeyAction = "@Html.Raw(Url.Action(nameof(AccessKeysController.ModifyAccessKey), ViewConstants.AccessKeysController))";
