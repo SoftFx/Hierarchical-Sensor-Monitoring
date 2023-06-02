@@ -196,6 +196,8 @@
                                 .prop('title', `Status: ${dataObject.status}`)
         
         $('#status_name_' + id).empty().html(dataObject.status);
+
+        $("#newValuesCount").empty().html(dataObject.newValuesCount);
     }
     
     function updateGeneralInfo(selectedNodeId) {
