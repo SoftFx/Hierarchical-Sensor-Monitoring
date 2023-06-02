@@ -12,7 +12,7 @@ namespace HSMServer.BackgroundServices
         private readonly ITreeStateSnapshot _snapshot;
 
 
-        public override TimeSpan Delay { get; } = new TimeSpan(0, 5, 0);
+        public override TimeSpan Delay { get; } = new TimeSpan(0, 1, 0);
 
 
         public TreeSnapshotService(IHostApplicationLifetime lifetimeHost, ITreeStateSnapshot snapshot)
@@ -25,20 +25,21 @@ namespace HSMServer.BackgroundServices
         public override Task StartAsync(CancellationToken token)
         {
             _lifetimeHost.ApplicationStarted.Register(OnStarted);
-            _lifetimeHost.ApplicationStopping.Register(ServiceAction);
+            _lifetimeHost.ApplicationStopping.Register(async () => await SaveState(true));
 
             return base.StartAsync(token);
         }
 
-        protected override void ServiceAction()
+        protected override Task ServiceAction() => SaveState(false);
+
+
+        private async Task SaveState(bool isFinal)
         {
             _logger.Info($"Start state flushing");
 
-            _snapshot.FlushState();
+            await _snapshot.FlushState(isFinal);
 
             _logger.Info($"Stop state flushing");
-
-            Console.Write("Flush state");
         }
 
         private void OnStarted()

@@ -4,27 +4,21 @@ using System;
 
 namespace HSMServer.Core.TreeStateSnapshot
 {
-    public sealed class LastSensorState : ILastState
+    public sealed class LastSensorState : ILastState<SensorStateEntity>
     {
-        public LastHistoryPeriod History { get; set; } = new();
-
-
-        public LastSensorState() { }
-
-        internal LastSensorState(SensorStateEntity entity)
-        {
-            History = new()
-            {
-                From = new DateTime(entity.HistoryFrom),
-                To = entity.HistoryTo == 0L ? DateTime.MaxValue : new DateTime(entity.HistoryTo),
-            };
-        }
+        public LastHistoryPeriod History { get; } = new();
 
 
         public bool IsDefault => History.IsDefault;
 
 
-        internal SensorStateEntity ToEntity() =>
+        public void FromEntity(SensorStateEntity entity)
+        {
+            History.From = new DateTime(entity.HistoryFrom);
+            History.To = entity.HistoryTo == 0L ? DateTime.MaxValue : new DateTime(entity.HistoryTo);
+        }
+
+        public SensorStateEntity ToEntity() =>
             new()
             {
                 HistoryFrom = History.From.Ticks,

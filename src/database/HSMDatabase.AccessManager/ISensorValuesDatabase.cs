@@ -12,11 +12,17 @@ namespace HSMDatabase.AccessManager
         long To { get; }
 
 
-        void FillLatestValues(Dictionary<byte[], (Guid sensorId, byte[] latestValue)> keyValuePairs);
+        bool IsInclude(long time);
+
+        bool IsInclude(long from, long to);
+
+        void FillLatestValues(Dictionary<byte[], (long from, byte[] latestValue)> keyValuePairs);
 
         void PutSensorValue(byte[] key, object value);
 
         void RemoveSensorValues(byte[] from, byte[] to);
+
+        byte[] Get(byte[] key);
 
         IEnumerable<byte[]> GetValuesFrom(byte[] from, byte[] to);
 

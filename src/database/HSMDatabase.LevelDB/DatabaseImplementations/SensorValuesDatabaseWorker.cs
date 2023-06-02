@@ -1,5 +1,6 @@
 ﻿using HSMDatabase.AccessManager;
 using HSMDatabase.LevelDB.Extensions;
+using LevelDB;
 using NLog;
 using System;
 using System.Collections.Generic;
@@ -34,11 +35,17 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
 
         public void Dispose() => _openedDb.Dispose();
 
-        public void FillLatestValues(Dictionary<byte[], (Guid sensorId, byte[] latestValue)> keyValuePairs)
+
+        public bool IsInclude(long time) => From <= time && time <= To;
+
+        public bool IsInclude(long from, long to) => From <= to && To >= from;
+
+
+        public void FillLatestValues(Dictionary<byte[], (long, byte[])> keyValuePairs)
         {
             try
             {
-                _openedDb.FillLatestValues(keyValuePairs);
+                _openedDb.FillLatestValues(keyValuePairs, To);
             }
             catch (Exception e)
             {
@@ -68,6 +75,20 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             catch (Exception e)
             {
                 _logger.Error($"Failed remove values [{from.GetString()}, {to.GetString()}] - {e.Message}");
+            }
+        }
+
+        public byte[] Get(byte[] key)
+        {
+            try
+            {
+                return _openedDb.Get(key);
+            }
+            catch (Exception e)
+            {
+                _logger.Error($"Failed getting value {key.GetString()} - {e.Message}");
+
+                return Array.Empty<byte>();
             }
         }
 

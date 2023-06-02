@@ -1,10 +1,21 @@
-﻿namespace HSMServer.Core.TreeStateSnapshot
+﻿using System;
+using System.Collections.Generic;
+using System.Threading.Tasks;
+
+namespace HSMServer.Core.TreeStateSnapshot
 {
     public interface ITreeStateSnapshot
     {
-        public StateCollection<LastSensorState> Sensors { get; }
+        ISnapshotCollection<LastSensorState> Sensors { get; }
+
+        public bool HasData { get; }
+
+        public bool IsFinal { get; }
 
 
-        public void FlushState();
+        Task FlushState(bool isFinal);
     }
+
+
+    public interface ISnapshotCollection<T> : IDictionary<Guid, T> { }
 }
