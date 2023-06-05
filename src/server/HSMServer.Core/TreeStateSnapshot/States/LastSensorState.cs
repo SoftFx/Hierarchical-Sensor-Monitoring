@@ -8,12 +8,15 @@ namespace HSMServer.Core.TreeStateSnapshot
     {
         public LastHistoryPeriod History { get; } = new();
 
+        public bool IsExpired { get; set; } //TTL
 
-        public bool IsDefault => History.IsDefault;
+
+        public bool IsDefault => History.IsDefault && !IsExpired;
 
 
         public void FromEntity(SensorStateEntity entity)
         {
+            IsExpired = entity.IsExpired;
             History.From = new DateTime(entity.HistoryFrom);
             History.To = entity.HistoryTo == 0L ? DateTime.MaxValue : new DateTime(entity.HistoryTo);
         }
@@ -21,6 +24,7 @@ namespace HSMServer.Core.TreeStateSnapshot
         public SensorStateEntity ToEntity() =>
             new()
             {
+                IsExpired = IsExpired,
                 HistoryFrom = History.From.Ticks,
                 HistoryTo = History.To == DateTime.MaxValue ? 0L : History.To.Ticks,
             };

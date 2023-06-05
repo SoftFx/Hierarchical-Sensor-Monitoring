@@ -104,10 +104,10 @@ namespace HSMDatabase.DatabaseWorkCore
             var curDb = _sensorValuesDatabases.GetEnumerator();
             var maxBorder = DateTime.MaxValue.Ticks;
 
-            curDb.MoveNext();
+            curDb.MoveNext(); //go to first db
 
             foreach (var (sensorId, time) in orderedList)
-                if (time < maxBorder)
+                if (time < maxBorder) //skip no data sensors
                 {
                     while (curDb.Current != null && curDb.Current.To < time)
                         curDb.MoveNext();

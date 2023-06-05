@@ -466,7 +466,10 @@ namespace HSMServer.Core.Cache
             {
                 _database.AddSensorValue(sensor.LastDbValue.ToEntity(sensor.Id));
 
-                _snapshot.Sensors[sensor.Id].History.To = sensor.LastDbValue.ReceivingTime;
+                var snapshot = _snapshot.Sensors[sensor.Id];
+
+                snapshot.IsExpired = false;
+                snapshot.History.To = sensor.LastDbValue.ReceivingTime;
             }
 
             NotifyAboutChanges(sensor, oldStatus);
@@ -511,6 +514,8 @@ namespace HSMServer.Core.Cache
             _logger.Info($"{nameof(accessKeysEntities)} applied");
 
             _logger.Info($"{nameof(TreeValuesCache)} initialized");
+
+            UpdateCacheState();
         }
 
         private List<ProductEntity> RequestProducts()
@@ -839,9 +844,13 @@ namespace HSMServer.Core.Cache
             foreach (var sensor in GetSensors())
             {
                 var oldStatus = sensor.Status;
+                var snaphot = _snapshot.Sensors[sensor.Id];
 
-                if (sensor.HasUpdateTimeout())
+                if (sensor.HasUpdateTimeout() && !snaphot.IsExpired)
+                {
+                    snaphot.IsExpired = true;
                     NotifyAboutChanges(sensor, oldStatus);
+                }
             }
 
             foreach (var key in GetAccessKeys())
