@@ -248,6 +248,8 @@ namespace HSMServer.Core.Cache
 
             sensor.Update(update);
 
+            _snapshot.Sensors[sensor.Id].IsExpired = sensor.HasUpdateTimeout();
+
             _database.UpdateSensor(sensor.ToEntity());
             NotifyAboutChanges(sensor, oldStatus);
         }

@@ -72,7 +72,11 @@ namespace HSMDatabase.DatabaseWorkCore
 
         private static long GetDirectorySize(string directoryName)
         {
-            var directory = new DirectoryInfo(directoryName);
+            return GetDirectorySize(new DirectoryInfo(directoryName));
+        }
+
+        private static long GetDirectorySize(DirectoryInfo directory)
+        {
             var size = 0L;
 
             foreach (var file in directory.GetFiles())
@@ -86,7 +90,7 @@ namespace HSMDatabase.DatabaseWorkCore
 
             foreach (var dir in directory.GetDirectories())
             {
-                size += GetDirectorySize(dir.Name);
+                size += GetDirectorySize(dir);
             }
 
             return size;
