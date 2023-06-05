@@ -22,6 +22,7 @@ namespace HSMDatabase.SnapshotsDb
         internal SnapshotsDatabase(string mainFolder)
         {
             _mainDirectory = new DirectoryInfo(mainFolder);
+            _mainDirectory.Create();
 
             var folders = _mainDirectory.GetDirectories();
             
