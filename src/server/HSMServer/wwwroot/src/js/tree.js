@@ -6,6 +6,10 @@ var currentSelectedNodeId = "";
 window.initializeTree = function () {
     var sortingType = $("input[name='TreeSortType']:checked");
 
+    let initOpened = JSON.parse(window.localStorage.jstree).state.core.open.length;
+    if (initOpened > 1)
+        isRefreshing = true;
+    
     $('#jstree').jstree({
         "core": {
             "check_callback": true,

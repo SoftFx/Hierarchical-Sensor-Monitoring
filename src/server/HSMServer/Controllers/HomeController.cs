@@ -53,10 +53,7 @@ namespace HSMServer.Controllers
 
         public IActionResult Index()
         {
-             if (_treeViewModel.NodesToRender.TryGetValue(CurrentUser.Id, out var nodes)) 
-                 nodes.Clear();
-             
-             return View(_treeViewModel);
+            return View(_treeViewModel);
         }
 
         [HttpPost]

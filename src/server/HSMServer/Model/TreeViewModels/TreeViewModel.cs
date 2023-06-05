@@ -11,9 +11,6 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text.Json.Nodes;
-using Microsoft.AspNetCore.Localization;
-using Newtonsoft.Json.Converters;
 
 namespace HSMServer.Model.TreeViewModel
 {
@@ -77,9 +74,12 @@ namespace HSMServer.Model.TreeViewModel
                         if (depth <= 0)
                         {
                             if (nodeIds is not null && nodeIds.Contains(subNode.Data.Id)) continue;
+                            
                             if (subNode.Sensors.Count > 1)
                                 subNode.Sensors.RemoveRange(1, subNode.Sensors.Count - 1);
-                            subNode.Nodes.Clear();
+                            
+                            if (subNode.Nodes.Count > 1)
+                                subNode.Nodes.RemoveRange(1, subNode.Nodes.Count - 1);
                         }
                         
                         ReduceNesting(subNode, depth);
