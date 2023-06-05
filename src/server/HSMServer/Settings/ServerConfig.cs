@@ -26,10 +26,10 @@ namespace HSMServer.Model
 #endif
 
         [JsonIgnore]
-        public static string ConfigPath => Path.Combine(Environment.CurrentDirectory, "Config");
+        public static string ConfigPath { get; } = Path.Combine(Environment.CurrentDirectory, "Config");
 
         [JsonIgnore]
-        public static Version Version { get; }
+        public static string Version { get; }
 
         [JsonIgnore]
         public static string Name { get; }
@@ -50,7 +50,7 @@ namespace HSMServer.Model
             Name = assembly.Name;
             ExecutableDirectory = Path.GetDirectoryName(Assembly.GetEntryAssembly().Location);
 
-            Version = assembly.GetVersion();
+            Version = assembly.GetVersion().RemoveTailZeroes();
 
             if (!Directory.Exists(ConfigPath))
                 FileManager.SafeCreateDirectory(ConfigPath);

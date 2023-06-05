@@ -51,7 +51,7 @@ namespace HSMServer.Notifications
             IConfigurationProvider configurationProvider)
         {
             _userManager = userManager;
-            _userManager.Removed += RemoveUserEventHandler;
+            _userManager.Removed += _addressBook.RemoveAllChats;
 
             _tree = tree;
 
@@ -67,7 +67,7 @@ namespace HSMServer.Notifications
 
         public async ValueTask DisposeAsync()
         {
-            _userManager.Removed -= RemoveUserEventHandler;
+            _userManager.Removed -= _addressBook.RemoveAllChats;
 
             await StopBot();
         }
@@ -229,8 +229,6 @@ namespace HSMServer.Notifications
 
         private void SendMarkdownMessageAsync(ChatId chat, string message) =>
             _bot?.SendTextMessageAsync(chat, message, ParseMode.MarkdownV2, cancellationToken: _tokenSource.Token);
-
-        private void RemoveUserEventHandler(User user) => _addressBook.RemoveAllChats(user);
 
         private void RemoveProductEventHandler(ProductModel model, ActionType transaction)
         {
