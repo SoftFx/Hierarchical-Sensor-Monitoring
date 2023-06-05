@@ -184,12 +184,15 @@
                                   .prop('title', `Status: ${dataObject.status}`);
         
         $('#file_status_' + id).removeClass('tree-icon-offTime tree-icon-ok tree-icon-warning tree-icon-error')
-                                .addClass(dataObject.statusIconColorClass)
-                                .prop('title', `Status: ${dataObject.status}`)
+                               .addClass(dataObject.statusIconColorClass)
+                               .prop('title', `Status: ${dataObject.status}`)
         
         $('#status_name_' + id).empty().html(dataObject.status);
 
         $("#newValuesCount").empty().html(dataObject.newValuesCount);
+        if (dataObject.newValuesCount != null && $(`#link_table_${id}`).hasClass("active")) {
+            $("#tableHistoryRefreshButton").removeClass("d-none");
+        }
     }
     
     function updateGeneralInfo(selectedNodeId) {

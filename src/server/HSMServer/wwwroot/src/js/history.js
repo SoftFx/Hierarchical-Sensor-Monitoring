@@ -140,6 +140,9 @@ function Data(to, from, type, encodedId) {
             cache: false,
             async: true
         }).done(function (data) {
+            $("#newValuesCount").empty();
+            $("#tableHistoryRefreshButton").addClass("d-none");
+
             $(`#values_${encodedId}`).html(data);
 
             let noValuesElement = document.getElementById(`noTableValues_${encodedId}`);
@@ -173,6 +176,8 @@ function Data(to, from, type, encodedId) {
             cache: false,
             async: true
         }).done(function (data) {
+            $("#tableHistoryRefreshButton").addClass("d-none");
+
             let parsedData = JSON.parse(data);
 
             if (parsedData.length === 0) {
