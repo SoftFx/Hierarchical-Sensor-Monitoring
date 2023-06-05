@@ -727,7 +727,7 @@ namespace HSMServer.Controllers
 
             _treeValuesCache.UpdateProduct(update);
 
-            return PartialView("_MetaInfo", new ProductInfoViewModel(product));
+            return PartialView("_MetaInfo", new ProductInfoViewModel(product.RecalculateCharacteristics()));
         }
 
         [HttpGet]
