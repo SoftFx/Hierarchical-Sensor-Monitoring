@@ -135,7 +135,7 @@
         let userId = this.id.substring('delete_'.length, this.id.length);
         let userName = $(`#userName_${userId}`).val();
 
-        showDeletionConfirmationModal(
+        showConfirmationModal(
             `Removing user '${userName}' role`,
             `Do you really want to remove user '${userName}' role?`,
             function() {

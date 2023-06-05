@@ -37,7 +37,7 @@ import '@fortawesome/fontawesome-free/css/all.min.css';
 
 
 import './js/accessKey.js';
-import './js/deletionConfirmation.js';
+import './js/confirmation.js';
 import './js/file.js';
 import './js/history.js';
 import './js/plotting.js';
