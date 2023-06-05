@@ -12,7 +12,7 @@ namespace HSMServer.BackgroundServices
         private readonly ITreeStateSnapshot _snapshot;
 
 
-        public override TimeSpan Delay { get; } = new TimeSpan(0, 1, 0);
+        public override TimeSpan Delay { get; } = TimeSpan.FromMinutes(5);
 
 
         public TreeSnapshotService(IHostApplicationLifetime lifetimeHost, ITreeStateSnapshot snapshot)
