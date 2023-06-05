@@ -3,21 +3,19 @@ using HSMServer.Core.Cache;
 using HSMServer.Model.TreeViewModel;
 using HSMServer.Notification.Settings;
 using HSMServer.Notifications;
-using Microsoft.Extensions.Hosting;
 using System;
-using System.Threading;
 using System.Threading.Tasks;
 
 namespace HSMServer.BackgroundServices
 {
-    public sealed class MonitoringBackgroundService : BackgroundService
+    public sealed class MonitoringBackgroundService : BaseDelayedBackgroundService
     {
-        private const int Delay = 60000; // 1 minute
-
         private readonly NotificationsCenter _notifications;
         private readonly IUserManager _userManager;
         private readonly ITreeValuesCache _cache;
         private readonly TreeViewModel _tree;
+
+        public override TimeSpan Delay { get; } = new TimeSpan(0, 1, 1); // 1 extra second to apply all updates
 
 
         public MonitoringBackgroundService(ITreeValuesCache cache, TreeViewModel tree, IUserManager userManager, NotificationsCenter notifications)
@@ -29,22 +27,17 @@ namespace HSMServer.BackgroundServices
         }
 
 
-        protected override async Task ExecuteAsync(CancellationToken cToken)
+        protected override Task ServiceAction()
         {
-            await Task.Delay((60 - DateTime.UtcNow.Second + 1) * 1000, cToken); //task start time alignment
-
-            while (!cToken.IsCancellationRequested)
+            if (_cache.IsInitialized)
             {
-                if (_cache.IsInitialized)
-                {
-                    _cache.UpdateCacheState();
-                    _notifications.CheckNotificationCenterState();
+                _cache.UpdateCacheState();
+                _notifications.CheckNotificationCenterState();
 
-                    RemoveOutdatedIgnoredNotifications();
-                }
-
-                await Task.Delay(Delay, cToken);
+                RemoveOutdatedIgnoredNotifications();
             }
+
+            return Task.CompletedTask;
         }
 
 
