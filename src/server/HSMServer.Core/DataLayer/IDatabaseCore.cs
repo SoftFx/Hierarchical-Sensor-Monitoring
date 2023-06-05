@@ -12,13 +12,13 @@ namespace HSMServer.Core.DataLayer
     {
         ISnapshotDatabase Snapshots { get; }
 
-        #region Size
 
-        long GetDatabaseSize();
-        long GetSensorsHistoryDatabaseSize();
-        long GetEnvironmentDatabaseSize();
+        long TotalDbSize { get; }
 
-        #endregion
+        long SensorHistoryDbSize { get; }
+
+        long EnviromentDbSize { get; }
+
 
         #region Folders
 

@@ -1,4 +1,5 @@
 ﻿using HSMDatabase.AccessManager;
+using HSMDatabase.Extensions;
 using NLog;
 using System;
 using System.Collections.Generic;
@@ -12,14 +13,17 @@ namespace HSMDatabase.SnapshotsDb
         private readonly LinkedList<SnapshotNode> _nodes = new();
 
         private readonly Logger _logger = LogManager.GetCurrentClassLogger();
-        private readonly string _mainFolder;
+        private readonly DirectoryInfo _mainDirectory;
+
+
+        public long Size => _mainDirectory.GetSize();
 
 
         internal SnapshotsDatabase(string mainFolder)
         {
-            _mainFolder = mainFolder;
+            _mainDirectory = new DirectoryInfo(mainFolder);
 
-            var folders = new DirectoryInfo(mainFolder).GetDirectories();
+            var folders = _mainDirectory.GetDirectories();
             
             foreach (var folder in folders.OrderByDescending(u => u.Name))
             {
@@ -30,7 +34,7 @@ namespace HSMDatabase.SnapshotsDb
 
         public IEntitySnapshotNode BuildNode(bool isFinal)
         {
-            var newNode = new SnapshotNode(_mainFolder, isFinal);
+            var newNode = new SnapshotNode(_mainDirectory.FullName, isFinal);
 
             _nodes.AddFirst(newNode);
 

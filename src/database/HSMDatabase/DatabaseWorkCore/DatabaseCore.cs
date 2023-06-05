@@ -1,6 +1,7 @@
 ﻿using HSMCommon.Constants;
 using HSMDatabase.AccessManager;
 using HSMDatabase.AccessManager.DatabaseEntities;
+using HSMDatabase.Extensions;
 using HSMDatabase.LevelDB;
 using HSMDatabase.Settings;
 using HSMDatabase.SnapshotsDb;
@@ -11,7 +12,6 @@ using HSMServer.Core.Registration;
 using NLog;
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using System.Text;
 
@@ -31,6 +31,24 @@ namespace HSMDatabase.DatabaseWorkCore
         public ISnapshotDatabase Snapshots { get; }
 
 
+        public long TotalDbSize => _settings.DatabaseFolder.GetSize();
+
+        public long EnviromentDbSize => _settings.PathToEnvironmentDb.GetSize();
+
+        public long SensorHistoryDbSize
+        {
+            get
+            {
+                long size = 0;
+
+                foreach (var db in _sensorValuesDatabases)
+                    size += db.Name.GetSize();
+
+                return size;
+            }
+        }
+
+
         private delegate IEnumerable<byte[]> GetValuesFunc(ISensorValuesDatabase db);
 
 
@@ -47,56 +65,6 @@ namespace HSMDatabase.DatabaseWorkCore
             _logger.Info($"{nameof(DatabaseCore)} initialized");
         }
 
-
-        #region Database size
-
-        public long GetDatabaseSize()
-        {
-            return GetDirectorySize(_settings.DatabaseFolder);
-        }
-
-        public long GetSensorsHistoryDatabaseSize()
-        {
-            long size = 0;
-
-            foreach (var db in _sensorValuesDatabases)
-                size += GetDirectorySize(db.Name);
-
-            return size;
-        }
-
-        public long GetEnvironmentDatabaseSize()
-        {
-            return GetDirectorySize(_settings.PathToEnvironmentDb);
-        }
-
-        private static long GetDirectorySize(string directoryName)
-        {
-            return GetDirectorySize(new DirectoryInfo(directoryName));
-        }
-
-        private static long GetDirectorySize(DirectoryInfo directory)
-        {
-            var size = 0L;
-
-            foreach (var file in directory.GetFiles())
-            {
-                try
-                {
-                    size += file.Length;
-                }
-                catch { }
-            }
-
-            foreach (var dir in directory.GetDirectories())
-            {
-                size += GetDirectorySize(dir);
-            }
-
-            return size;
-        }
-
-        #endregion
 
         #region Fill Sensors (start app)
 

@@ -7,6 +7,9 @@ namespace HSMDatabase.AccessManager
 {
     public interface ISnapshotDatabase
     {
+        long Size { get; }
+
+
         IEntitySnapshotNode BuildNode(bool isFinal);
 
         bool TryGetLastNode(out IEntitySnapshotNode node);
