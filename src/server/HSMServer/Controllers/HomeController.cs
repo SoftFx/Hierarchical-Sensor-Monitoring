@@ -471,6 +471,9 @@ namespace HSMServer.Controllers
 
         #region Sensor info
 
+        [HttpPost]
+        public bool IsMetaInfoValid(NodeInfoBaseViewModel _) => ModelState.IsValid;
+
         [HttpGet]
         public IActionResult GetSensorInfo([FromQuery(Name = "Id")] string encodedId)
         {

@@ -45,6 +45,8 @@
     var enableNotificationsAction = "@Url.Action(nameof(HomeController.EnableNotifications), ViewConstants.HomeController)";
     var ignoreNotificationsAction = "@Url.Action(nameof(HomeController.IgnoreNotifications), ViewConstants.HomeController)";
     var unmuteAction = "@Url.Action(nameof(HomeController.RemoveMutedStateToSensor), ViewConstants.HomeController)";
+
+    var isDataValidAction = "@Url.Action(nameof(HomeController.IsMetaInfoValid), ViewConstants.HomeController)";
 </script>
 
 
@@ -67,8 +69,8 @@
 </div>
 
 @await Html.PartialAsync("~/Views/AccessKeys/_AccessKeysModal.cshtml")
-
 @await Html.PartialAsync("_AlertsModal", new EditAlertsViewModel())
+@await Html.PartialAsync("~/Views/Shared/_ConfirmationModal.cshtml")
 
 <div id="ignoreNotificatios_partial">@await Html.PartialAsync("_IgnoreNotificationsModal", (IgnoreNotificationsViewModel)null)</div>
 
@@ -158,16 +160,6 @@
 
     $("#mainSpinner").css("display", "none");
     $('#mainContainer').removeClass('hidden_element');
-
-    function getSelectedNodeId(selectedNode) {
-        let selectedNodeId = "";
-
-        if (selectedNode != undefined) {
-            selectedNodeId = selectedNode.id;
-        }
-
-        return selectedNodeId;
-    }
 
     function updateGridCell(dataObject) {
         var id = dataObject.id;
@@ -277,8 +269,7 @@
     function updateSelectedNodeData() {
         clearTimeout(updateSelectedNodeDataTimeoutId);
 
-        var selectedNode = $('#jstree').jstree().get_selected(true)[0];
-        var selectedNodeId = getSelectedNodeId(selectedNode);
+        var selectedNodeId = currentSelectedNodeId;
         if (selectedNodeId != "")
             $.ajax({
                 type: 'POST',
