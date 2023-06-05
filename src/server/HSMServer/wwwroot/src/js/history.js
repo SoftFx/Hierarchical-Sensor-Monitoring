@@ -158,10 +158,9 @@ function Data(to, from, type, encodedId) {
             if (needFillFromTo) {
                 let from = new Date($(`#oldest_date_${encodedId}`).val());
                 from.setMinutes(from.getMinutes() - from.getTimezoneOffset());
-                let to = new Date().getTime() + 60000;
 
                 $(`#from_${encodedId}`).val(datetimeLocal(from));
-                $(`#to_${encodedId}`).val(datetimeLocal(to));
+                $(`#to_${encodedId}`).val(datetimeLocal(getToDate()));
             }
         });
     }
@@ -191,10 +190,9 @@ function Data(to, from, type, encodedId) {
 
             if (needFillFromTo) {
                 let from = new Date(parsedData[0].time);
-                let to = new Date().getTime() + 60000;
 
                 $(`#from_${encodedId}`).val(datetimeLocal(from));
-                $(`#to_${encodedId}`).val(datetimeLocal(to));
+                $(`#to_${encodedId}`).val(datetimeLocal(getToDate()));
             }
 
             displayGraph(data, type, `graph_${encodedId}`, encodedId);
@@ -233,6 +231,14 @@ function Data(to, from, type, encodedId) {
         }
 
         return { from, to };
+    }
+
+    function getToDate() {
+        let now = new Date();
+
+        now.setFullYear(now.getFullYear() + 1);
+
+        return now.getTime();
     }
 
     function datetimeLocal(datetime) {

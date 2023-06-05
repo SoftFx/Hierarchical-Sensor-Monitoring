@@ -252,3 +252,8 @@ img .tree-png-icon {
     color: inherit;
     text-decoration: underline;
 }
+
+.badge-light {
+    background-color: rgba(175,184,193,0.2);
+    color: black;
+} 
