@@ -390,7 +390,7 @@ namespace HSMServer.Controllers
                     updatedSensorsData.Add(new UpdatedSensorDataViewModel(sensor));
             }
             else if (_treeViewModel.Sensors.TryGetValue(decodedId, out var sensor))
-                updatedSensorsData.Add(new UpdatedSensorDataViewModel(sensor));
+                updatedSensorsData.Add(new UpdatedSensorDataViewModel(sensor, CurrentUser));
 
             return Json(updatedSensorsData);
         }

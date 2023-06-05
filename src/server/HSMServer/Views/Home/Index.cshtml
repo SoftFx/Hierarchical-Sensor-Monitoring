@@ -69,7 +69,7 @@
 
 @await Html.PartialAsync("~/Views/AccessKeys/_AccessKeysModal.cshtml")
 
-@await Html.PartialAsync("_AlertsModal", new EditAlertsViewModel());
+@await Html.PartialAsync("_AlertsModal", new EditAlertsViewModel())
 
 <div id="ignoreNotificatios_partial">@await Html.PartialAsync("_IgnoreNotificationsModal", (IgnoreNotificationsViewModel)null)</div>
 
@@ -200,6 +200,8 @@
                                 .prop('title', `Status: ${dataObject.status}`)
         
         $('#status_name_' + id).empty().html(dataObject.status);
+
+        $("#newValuesCount").empty().html(dataObject.newValuesCount);
     }
     
     function updateGeneralInfo(selectedNodeId) {
