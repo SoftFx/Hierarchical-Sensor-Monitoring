@@ -24,6 +24,7 @@
     var selectNode = "@Url.Action(nameof(HomeController.SelectNode), ViewConstants.HomeController)";
     var refreshTree = "@Url.Action(nameof(HomeController.RefreshTree), ViewConstants.HomeController)";
     var openNode = "@Url.Action(nameof(HomeController.AddRenderingNode), ViewConstants.HomeController)";
+    var closeNode = "@Url.Action(nameof(HomeController.RemoveRenderingNode), ViewConstants.HomeController)";
 
     var historyLatestAction = "@Url.Action(nameof(SensorHistoryController.TabelHistoryLatest), ViewConstants.HistoryController)";
     var historyAction = "@Url.Action(nameof(SensorHistoryController.TableHistory), ViewConstants.HistoryController)";
@@ -135,9 +136,7 @@
     
     $(document).ready(() => {
         $('#updateTime').empty().append('Update Time: ' + new Date().toUTCString());
-           $('#updateTime').empty().append('Update Time: ' + new Date().toUTCString());
-           console.log($('#jstree').jstree(true))
-           console.log($('#jstree').jstree(true).get_json('#', {}))
+        $('#updateTime').empty().append('Update Time: ' + new Date().toUTCString());
     })
 
     $(window).on('load', function () {
@@ -271,7 +270,7 @@
             async: true
         }).done(function (treeData) {
             isRefreshing = true;
-            console.log($('#jstree').jstree(true))
+            
             $('#jstree').jstree(true).settings.core.data = treeData;
             $('#jstree').jstree(true).refresh(true);
             

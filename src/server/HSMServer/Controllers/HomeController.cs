@@ -24,6 +24,8 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
+using HSMServer.Model.History;
+using HSMServer.Model.Model.History;
 using SensorStatus = HSMSensorDataObjects.SensorStatus;
 using TimeInterval = HSMServer.Model.TimeInterval;
 
@@ -86,14 +88,20 @@ namespace HSMServer.Controllers
         {
             if (_treeViewModel.NodesToRender.TryGetValue(CurrentUser.Id, out var list))
             {
-                if (list is null)
-                    list = new List<Guid>();
+                list ??= new List<Guid>();
 
                 list.Add(nodeId);
             }
             else _treeViewModel.NodesToRender.TryAdd(CurrentUser.Id, new List<Guid>() {nodeId});
             
             return PartialView("_Tree", _treeViewModel.GetUserTree(CurrentUser));
+        }
+        
+        [HttpPut]
+        public void RemoveRenderingNode(Guid nodeId)
+        {
+            _treeViewModel.NodesToRender.TryGetValue(CurrentUser.Id, out var nodes);
+            nodes?.Remove(nodeId);
         }
         
         [HttpPost]

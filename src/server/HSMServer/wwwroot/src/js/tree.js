@@ -39,9 +39,6 @@ window.initializeTree = function () {
         }
     }).on("state_ready.jstree", function () {
         selectNodeAjax($(this).jstree('get_selected')[0]);
-    }).on('open_node.jstree', function () {
-        console.log($(this).jstree('get_selected'))
-        selectNodeAjax($(this).jstree('get_selected'));
     }).on('open_node.jstree', function (e, data) {
         if (isRefreshing != true) {
             let real = data.node.data.jstree.childrenCount;
@@ -50,7 +47,7 @@ window.initializeTree = function () {
             if (real != visible && isRefreshing !== undefined) {
                 $.ajax({
                     type: 'post',
-                    url: openNode + '?nodeId=' + data.node.id,
+                    url: `${openNode}?nodeId=${data.node.id}`,
                     datatype: 'html',
                     contenttype: 'application/json',
                     cache: false,
@@ -59,22 +56,18 @@ window.initializeTree = function () {
                         $('#jstree').jstree(true).settings.core.data = viewData;
                         $('#jstree').jstree(true).refresh(true);
                         isRefreshing = false;
-                      
                     }
                 })   
             }
         }
         isTreeCollapsed = false;
         $('#collapseIcon').removeClass('fa-regular fa-square-plus').addClass('fa-regular fa-square-minus').attr('title','Save and close tree');
-    }).on('select_node.jstree', function (e, data) {
-        if (isRefreshing != true) {
-            //console.log('node selected')
-        }
-        //console.log($(this));
-    }).on('activate_node.jstree', function (e , data) {
-        if (isRefreshing != true) {
-            //console.log('node activated')
-        }
+    }).on('close_node.jstree', function (e, data) {
+        $.ajax({
+            type: 'put',
+            url: `${closeNode}?nodeId=${data.node.id}`,
+            cache: false
+        })
     });
 
     initializeActivateNodeTree();
@@ -245,7 +238,6 @@ function buildContextMenu(node) {
                             hideAlertsModal();
                         },
                         error: function (jqXHR) {
-                            console.log(jqXHR);
                             $('#editMultipleInterval span.field-validation-valid').each(function () {
                                 let errFor = $(this).data('valmsgFor');
                                 if (jqXHR.responseJSON[errFor] !== undefined) {
