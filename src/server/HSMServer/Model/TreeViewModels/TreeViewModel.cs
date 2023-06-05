@@ -68,8 +68,6 @@ namespace HSMServer.Model.TreeViewModel
             NodesToRender.TryGetValue(user.Id, out var nodeIds);
             foreach (var product in GetUserProducts(user))
             {
-                if (product.Name != "depth") continue;
-                
                 var node = FilterNodes(product, user);
                 void ReduceNesting(NodeShallowModel node, int depth)
                 {
@@ -78,10 +76,9 @@ namespace HSMServer.Model.TreeViewModel
                     {
                         if (depth <= 0)
                         {
-                            
                             if (nodeIds is not null && nodeIds.Contains(subNode.Data.Id)) continue;
-                            
-                            subNode.Sensors.RemoveRange(1, subNode.Sensors.Count - 1);
+                            if (subNode.Sensors.Count > 1)
+                                subNode.Sensors.RemoveRange(1, subNode.Sensors.Count - 1);
                             subNode.Nodes.Clear();
                         }
                         
