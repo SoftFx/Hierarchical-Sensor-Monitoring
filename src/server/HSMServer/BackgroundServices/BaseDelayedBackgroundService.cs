@@ -9,10 +9,18 @@ namespace HSMServer.BackgroundServices
 {
     public abstract class BaseDelayedBackgroundService : BackgroundService
     {
-        protected readonly Logger _logger = LogManager.GetCurrentClassLogger();
+        protected readonly Logger _logger;
 
 
         public abstract TimeSpan Delay { get; }
+
+
+        protected BaseDelayedBackgroundService()
+        {
+            _logger = LogManager.GetLogger(GetType().Name);
+
+            _logger.Info($"{_logger.Name} is initialized!");
+        }
 
 
         protected abstract Task ServiceAction();

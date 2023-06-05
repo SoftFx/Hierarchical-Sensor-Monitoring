@@ -1,26 +1,21 @@
-﻿using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging;
-using System;
+﻿using System;
 using System.Threading;
 using System.Threading.Tasks;
 
 namespace HSMServer.BackgroundServices
 {
-    public class DatacollectorService : BackgroundService
+    public class DatacollectorService : BaseDelayedBackgroundService
     {
-        private readonly ILogger<DatacollectorService> _logger;
+        private readonly TimeSpan _initDelay = TimeSpan.FromSeconds(10);
         private readonly DataCollectorWrapper _collector;
 
-        private readonly TimeSpan _sleepPeriod = new(0, 0, 5, 0);
-        private readonly TimeSpan _initDelay = new(0, 0, 10);
+
+        public override TimeSpan Delay { get; } = TimeSpan.FromMinutes(5);
 
 
-        public DatacollectorService(DataCollectorWrapper collector, ILogger<DatacollectorService> logger)
+        public DatacollectorService(DataCollectorWrapper collector)
         {
             _collector = collector;
-
-            _logger = logger;
-            _logger.LogInformation($"{nameof(DatacollectorService)} initialized!");
         }
 
 
@@ -32,12 +27,14 @@ namespace HSMServer.BackgroundServices
             await Task.Delay(_initDelay, token); //small delay wait server initializing
             await _collector.Start();
 
-            while (!token.IsCancellationRequested)
-            {
-                await Task.Delay(_sleepPeriod, token);
+            await base.ExecuteAsync(token);
+        }
 
-                _collector.SendDbInfo();
-            }
+        protected override Task ServiceAction()
+        {
+            _collector.SendDbInfo();
+
+            return Task.CompletedTask;
         }
     }
 }
