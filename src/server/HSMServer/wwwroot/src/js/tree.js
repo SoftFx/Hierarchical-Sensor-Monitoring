@@ -117,6 +117,9 @@ function saveMetaData(selectedId) {
                 "No"
             );
         }
+        else {
+            initSelectedNode(selectedId);
+        }
     });
 }
 

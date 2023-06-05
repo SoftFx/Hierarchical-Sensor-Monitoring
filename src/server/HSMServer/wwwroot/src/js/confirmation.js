@@ -33,7 +33,7 @@ function setConfirmationModalBody(viewData) {
 
 function setConfirmationModalOkButton(okButtonAction, name) {
     $(`#${modalOkButton}`).html(name);
-    $(`#${modalOkButton}`).off('click').on('click', function () {
+    $(`#${modalOkButton}`).off('click').on('click', () => {
         hideConfirmationModal();
         okButtonAction();
     });
@@ -41,7 +41,7 @@ function setConfirmationModalOkButton(okButtonAction, name) {
 
 function setConfirmationModalCancelButton(cancelButtonAction, name) {
     $(`#${modalCancelButton}`).html(name);
-    $(`#${modalCancelButton}`).off('click').on('click', function () {
+    $(`#${modalCancelButton}`).off('click').on('click', () => {
         hideConfirmationModal();
 
         if (cancelButtonAction != undefined)
