@@ -7,6 +7,7 @@ namespace HSMServer.Model.History
 {
     public sealed class SelectedSensorHistoryViewModel
     {
+        private GetSensorHistoryModel _request;
         private BaseSensorModel _sensor;
 
 
@@ -30,9 +31,16 @@ namespace HSMServer.Model.History
 
         public Task Reload(ITreeValuesCache cache, GetSensorHistoryModel request)
         {
+            Reload(request);
+
             NewValuesCnt = 0;
 
             return Table.Reload(cache, request);
+        }
+
+        public void Reload(GetSensorHistoryModel request)
+        {
+            _request = request;
         }
 
 
@@ -62,6 +70,9 @@ namespace HSMServer.Model.History
 
         private void NewSensorValueHandler(BaseValue value)
         {
+            if (_request.FromUtc > value.ReceivingTime || _request.ToUtc < value.ReceivingTime)
+                return;
+
             NewValuesCnt++;
         }
     }
