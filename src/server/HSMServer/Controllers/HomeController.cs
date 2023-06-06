@@ -227,7 +227,7 @@ namespace HSMServer.Controllers
                 }
                 else if (_treeViewModel.Nodes.TryGetValue(id, out var product))
                 {
-                    if (CurrentUser.IsManager(product.RootProduct.Id))
+                    if (!CurrentUser.IsManager(product.RootProduct.Id))
                     {
                         toastViewModel.AddRoleError(product.Name, "edit");
                         continue;
