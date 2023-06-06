@@ -51,9 +51,9 @@ public static class ApplicationServiceExtensions
         {
             o.UseInlineDefinitionsForEnums();
             o.OperationFilter<DataRequestHeaderSwaggerFilter>();
-            o.SwaggerDoc(ServerConfig.Version.ToString(), new OpenApiInfo
+            o.SwaggerDoc(ServerConfig.Version, new OpenApiInfo
             {
-                Version = ServerConfig.Version.ToString(),
+                Version = ServerConfig.Version,
                 Title = ServerConfig.Name,
             });
 
@@ -89,14 +89,14 @@ public static class ApplicationServiceExtensions
         return services;
     }
 
-    public static ConfigureWebHostBuilder ConfigureWebHost(this ConfigureWebHostBuilder webHostBuilder, ServerConfig serverConfig)
+    public static ConfigureWebHostBuilder ConfigureWebHost(this ConfigureWebHostBuilder webHostBuilder, ServerConfig config)
     {
         webHostBuilder.ConfigureKestrel(options =>
         {
-            var kestrelListenAction = KestrelListenOptions(serverConfig.ServerCertificate);
+            var kestrelListenAction = KestrelListenOptions(config.ServerCertificate);
 
-            options.ListenAnyIP(serverConfig.Kestrel.SensorPort, kestrelListenAction);
-            options.ListenAnyIP(serverConfig.Kestrel.SitePort, kestrelListenAction);
+            options.ListenAnyIP(config.Kestrel.SensorPort, kestrelListenAction);
+            options.ListenAnyIP(config.Kestrel.SitePort, kestrelListenAction);
 
             options.Limits.MaxRequestBodySize = 52428800; // Set up to ~50MB
             options.Limits.MinRequestBodyDataRate = null; //???

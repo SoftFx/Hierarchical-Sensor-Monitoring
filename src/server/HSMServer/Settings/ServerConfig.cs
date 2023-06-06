@@ -1,4 +1,6 @@
 ﻿using HSMCommon;
+using HSMCommon.Extensions;
+using HSMServer.Extensions;
 using HSMServer.Settings;
 using Microsoft.Extensions.Configuration;
 using System;
@@ -6,7 +8,6 @@ using System.IO;
 using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using HSMCommon.Extensions;
 
 namespace HSMServer.Model
 {
@@ -29,13 +30,15 @@ namespace HSMServer.Model
         public static string ConfigPath { get; } = Path.Combine(Environment.CurrentDirectory, "Config");
 
         [JsonIgnore]
+        public static string ExecutableDirectory { get; }
+
+
+        [JsonIgnore]
         public static string Version { get; }
 
         [JsonIgnore]
         public static string Name { get; }
-        
-        [JsonIgnore]
-        public static string ExecutableDirectory { get; }
+
 
 
         public KestrelConfig Kestrel { get; }
@@ -72,7 +75,6 @@ namespace HSMServer.Model
             return _configuration.GetSection(sectionName).Get<T>() ?? new T();
         }
 
-        private void ResaveSettings() =>
-            File.WriteAllText(_settingsPath, JsonSerializer.Serialize(this, _options));
+        private void ResaveSettings() => File.WriteAllText(_settingsPath, JsonSerializer.Serialize(this, _options));
     }
 }
