@@ -9,7 +9,24 @@ window.initializeTree = function () {
     let initOpened = JSON.parse(window.localStorage.jstree).state.core.open.length;
     if (initOpened > 1)
         isRefreshing = true;
-    
+    // let a = $('#jstree').jstree(true).create_node('b7535564-1890-404b-8b4c-243f3d0bb769_anchor',{
+    //     "text": "test",
+    //     "id" : "qweqweqweqweqweqwe",
+    //     "icon" : "jstree-icon jstree-themeicon fas fa-circle tree-icon-ok jstree-themeicon-custom",
+    //     "data" : {
+    //         "jstree": {
+    //             "title": "System monitoring",
+    //             "icon": "fa-regular fa-circle",
+    //             "time": "0",
+    //             "isManager": "True",
+    //             "isGrafanaEnabled": "False",
+    //             "isAccountsEnable": "True",
+    //             "groups": {},
+    //             "isMutedState": "False",
+    //             "childrenCount": "3"
+    //         }
+    //     }
+    // })
     $('#jstree').jstree({
         "core": {
             "check_callback": true,
@@ -44,6 +61,8 @@ window.initializeTree = function () {
     }).on("state_ready.jstree", function () {
         selectNodeAjax($(this).jstree('get_selected')[0]);
     }).on('open_node.jstree', function (e, data) {
+        console.log(e)
+        console.log(data)
         if (isRefreshing != true) {
             let real = data.node.data.jstree.childrenCount;
             let visible = data.node.children.length;
@@ -55,10 +74,46 @@ window.initializeTree = function () {
                     datatype: 'html',
                     contenttype: 'application/json',
                     cache: false,
-                    success: function (viewData) {
+                    success: function (response) {
+                        console.log(response)
+                        // for (let i of response.nodes) {
+                        //     let jsonData = JSON.parse(i);
+                        // }
+                        let parent;
+                        for (let i of response.sensors) {
+                            let jsonData = JSON.parse(i);
+                            parent = jsonData.parentId;
+                            let alreadyExists = false;
+                            for (let j of data.node.children){
+                                if (j === jsonData.id) {
+                                    alreadyExists = true;
+                                    break;
+                                }
+                            }
+                            if (alreadyExists)
+                                continue;
+                            
+                            let childData = {
+                                    "text": jsonData.title,
+                                    "id" : jsonData.id,
+                                    "icon" : jsonData.icon,
+                                    "data" : {
+                                        "jstree" : jsonData
+                                    } 
+                            };
+
+                            isRefreshing = true;
+                           
+                            $('#jstree').jstree(true).create_node(parent, childData);
+                            isRefreshing = false;
+                            // $('#jstree').jstree(true).refresh_node($('#jstree').jstree(true).get_json(jsonData.parentId))
+                        }
+                        // sensors.forEach((el) => {
+                        //     $('#jstree').jstree(true).create_node(parent, el);
+                        // })
                         isRefreshing = true;
-                        $('#jstree').jstree(true).settings.core.data = viewData;
-                        $('#jstree').jstree(true).refresh(true);
+                        // $('#jstree').jstree(true).settings.core.data = viewData;
+                        // $('#jstree').jstree(true).refresh(true);
                         isRefreshing = false;
                     }
                 })   
@@ -72,6 +127,12 @@ window.initializeTree = function () {
             url: `${closeNode}?nodeId=${data.node.id}`,
             cache: false
         })
+    }).on('before_open.jstree', function (e, data) {
+        console.log('before')
+        $(`#${data.node.id}`).addClass('d-none')
+    }).on('after_open.jstree', function (e, data) {
+        console.log('after')
+        $(`#${data.node.id}`).removeClass('d-none')
     });
 
     initializeActivateNodeTree();

@@ -35,7 +35,9 @@ namespace HSMServer.Model.UserTreeShallowCopy
             "isAccountsEnable": "{{IsAccountsEnable}}",
             "groups": {{GroupsJsonDict}},
             "isMutedState": "{{_mutedValue}}",
-            "childrenCount": "{{ChildrenCount}}"
+            "childrenCount": "{{ChildrenCount}}",
+            "parentId" : "{{Data.Parent?.Id}}",
+            "id" : "{{Data.Id}}"
         }
         """;
     }

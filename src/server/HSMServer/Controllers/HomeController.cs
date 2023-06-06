@@ -26,6 +26,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using HSMServer.Model.History;
 using HSMServer.Model.Model.History;
+using HSMServer.Model.UserTreeShallowCopy;
 using SensorStatus = HSMSensorDataObjects.SensorStatus;
 using TimeInterval = HSMServer.Model.TimeInterval;
 
@@ -83,6 +84,7 @@ namespace HSMServer.Controllers
         [HttpPost]
         public IActionResult AddRenderingNode(Guid nodeId)
         {
+            
             if (_treeViewModel.NodesToRender.TryGetValue(CurrentUser.Id, out var list))
             {
                 list ??= new List<Guid>();
@@ -90,7 +92,17 @@ namespace HSMServer.Controllers
                 list.Add(nodeId);
             }
             else _treeViewModel.NodesToRender.TryAdd(CurrentUser.Id, new List<Guid>() {nodeId});
-            
+
+            _treeViewModel.Nodes.TryGetValue(nodeId, out var nodeViewModel);
+            var shallow = new NodeShallowModel(nodeViewModel, CurrentUser);
+            var nodes = shallow.Data.Nodes.Select(x => new NodeShallowModel(x.Value, CurrentUser));
+            var sensors = shallow.Data.Sensors.Select(x => new SensorShallowModel(x.Value, CurrentUser));
+          
+            return Json(new
+            {
+               nodes = nodes.Select(x => x.ToJSTree()).ToList(),
+               sensors = sensors.Select(x => x.ToJSTree()).ToList()
+            });
             return PartialView("_Tree", _treeViewModel.GetUserTree(CurrentUser));
         }
         
