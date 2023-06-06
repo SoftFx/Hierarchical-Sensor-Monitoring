@@ -145,7 +145,7 @@ namespace HSMServer.Controllers
         public ActionResult RemoveNode([FromBody] string[] ids)
         {
             var model = new MultiActionToastViewModel();
-            
+
             foreach (var id in ids)
             {
                 var decodedId = SensorPathHelper.DecodeGuid(id);
@@ -161,7 +161,7 @@ namespace HSMServer.Controllers
                         model.AddRoleError(node.Name, "remove");
                         continue;
                     }
-                    
+
                     _treeValuesCache.RemoveProduct(node.Id);
                     model.AddItem(node);
                 }
@@ -172,7 +172,7 @@ namespace HSMServer.Controllers
                         model.AddRoleError(sensor.FullPath, "remove");
                         continue;
                     }
-                   
+
                     _treeValuesCache.RemoveSensor(sensor.Id);
                     model.AddItem(sensor);
                 }
@@ -183,15 +183,15 @@ namespace HSMServer.Controllers
 
         [HttpGet]
         public IActionResult GetEditAlertsPartialView() => PartialView("_AlertsModal", new EditAlertsViewModel());
-        
+
         [HttpPost]
         public async Task<IActionResult> EditAlerts(EditAlertsViewModel model)
         {
             if (ModelState[nameof(model.SensorRestorePolicy)]?.Errors.Count > 0 || ModelState[nameof(model.ExpectedUpdateInterval)]?.Errors.Count > 0)
                 return BadRequest(ModelState);
-            
+
             model.Upload();
-            
+
             var toastViewModel = new MultiActionToastViewModel();
             var isExpectedFromParent = model.ExpectedUpdateInterval?.TimeInterval is TimeInterval.FromParent;
             var isRestoreFromParent = model.SensorRestorePolicy?.TimeInterval is TimeInterval.FromParent;
@@ -205,7 +205,7 @@ namespace HSMServer.Controllers
                         toastViewModel.AddRoleError(folder.Name, "edit");
                         continue;
                     }
-                    
+
                     var update = new FolderUpdate
                     {
                         Id = id,
@@ -218,7 +218,7 @@ namespace HSMServer.Controllers
 
                     if (isExpectedFromParent)
                         toastViewModel.AddCantChangeIntervalError(folder.Name, "Folder", "Time to live", TimeInterval.FromParent);
-                    
+
                     if (!isExpectedFromParent || !isRestoreFromParent)
                     {
                         toastViewModel.AddItem(folder);
@@ -232,26 +232,26 @@ namespace HSMServer.Controllers
                         toastViewModel.AddRoleError(product.Name, "edit");
                         continue;
                     }
-                    
+
                     var hasParent = product.Parent is not null || product.FolderId is not null;
                     var restoreUpdate = hasParent || !isRestoreFromParent;
                     var expectedUpdate = hasParent || !isExpectedFromParent;
-                    
+
                     var isProduct = product.RootProduct?.Id == product.Id;
-                    
+
                     var update = new ProductUpdate
                     {
                         Id = product.Id,
                         RestoreInterval = restoreUpdate ? model.SensorRestorePolicy?.ToModel((product.Parent as FolderModel)?.SensorRestorePolicy) : null,
                         ExpectedUpdateInterval = expectedUpdate ? model.ExpectedUpdateInterval?.ToModel((product.Parent as FolderModel)?.ExpectedUpdateInterval) : null
                     };
-                    
+
                     if (!restoreUpdate)
                         toastViewModel.AddCantChangeIntervalError(product.Name, !isProduct ? "Node" : "Product", "Sensitivity", TimeInterval.FromParent);
 
                     if (!expectedUpdate)
                         toastViewModel.AddCantChangeIntervalError(product.Name, !isProduct ? "Node" : "Product", "Time to live", TimeInterval.FromParent);
-                    
+
                     if (restoreUpdate || expectedUpdate)
                     {
                         toastViewModel.AddItem(product);
@@ -265,14 +265,14 @@ namespace HSMServer.Controllers
                         toastViewModel.AddRoleError(sensor.FullPath, "edit");
                         continue;
                     }
-                    
+
                     var update = new SensorUpdate
                     {
                         Id = sensor.Id,
                         ExpectedUpdateInterval = model.ExpectedUpdateInterval?.ToModel(),
                         RestoreInterval = model.SensorRestorePolicy?.ToModel(),
                     };
-                    
+
                     toastViewModel.AddItem(sensor);
                     _treeValuesCache.UpdateSensor(update);
                 }
