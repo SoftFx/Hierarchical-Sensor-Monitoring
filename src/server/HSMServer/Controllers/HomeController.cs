@@ -145,7 +145,7 @@ namespace HSMServer.Controllers
         public ActionResult RemoveNode([FromBody] string[] ids)
         {
             var model = new MultiActionToastViewModel();
-            
+
             foreach (var id in ids)
             {
                 var decodedId = SensorPathHelper.DecodeGuid(id);
@@ -174,9 +174,9 @@ namespace HSMServer.Controllers
         {
             if (ModelState[nameof(model.SensorRestorePolicy)]?.Errors.Count > 0 || ModelState[nameof(model.ExpectedUpdateInterval)]?.Errors.Count > 0)
                 return BadRequest(ModelState);
-            
+
             model.Upload();
-            
+
             var toastViewModel = new MultiActionToastViewModel();
             var isExpectedFromParent = model.ExpectedUpdateInterval?.TimeInterval is TimeInterval.FromParent;
             var isRestoreFromParent = model.SensorRestorePolicy?.TimeInterval is TimeInterval.FromParent;
@@ -186,7 +186,7 @@ namespace HSMServer.Controllers
                 {
                     var folderRestorePolicy = model.SensorRestorePolicy ?? folder.SensorRestorePolicy;
                     var folderExpectedUpdate = model.ExpectedUpdateInterval ?? folder.ExpectedUpdateInterval;
-                    
+
                     var update = new FolderUpdate
                     {
                         Id = id,
@@ -199,7 +199,7 @@ namespace HSMServer.Controllers
 
                     if (isExpectedFromParent)
                         toastViewModel.AddCantChangeIntervalError(folder.Name, "Folder", "Time to live", TimeInterval.FromParent);
-                    
+
                     if (!isExpectedFromParent || !isRestoreFromParent)
                     {
                         toastViewModel.AddItem(folder);
@@ -211,25 +211,25 @@ namespace HSMServer.Controllers
                     var hasParent = product.Parent is not null || product.FolderId is not null;
                     var restoreUpdate = hasParent || !isRestoreFromParent;
                     var expectedUpdate = hasParent || !isExpectedFromParent;
-                    
+
                     var productRestorePolicy = model.SensorRestorePolicy ?? product.SensorRestorePolicy;
                     var productExpectedUpdate = model.ExpectedUpdateInterval ?? product.ExpectedUpdateInterval;
-                    
+
                     var isProduct = product.RootProduct?.Id == product.Id;
-                    
+
                     var update = new ProductUpdate
                     {
                         Id = product.Id,
                         RestoreInterval = restoreUpdate ? productRestorePolicy.ToModel((product.Parent as FolderModel)?.SensorRestorePolicy) : null,
                         ExpectedUpdateInterval = expectedUpdate ? productExpectedUpdate.ToModel((product.Parent as FolderModel)?.ExpectedUpdateInterval) : null
                     };
-                    
+
                     if (!restoreUpdate)
                         toastViewModel.AddCantChangeIntervalError(product.Name, !isProduct ? "Node" : "Product", "Sensitivity", TimeInterval.FromParent);
 
                     if (!expectedUpdate)
                         toastViewModel.AddCantChangeIntervalError(product.Name, !isProduct ? "Node" : "Product", "Time to live", TimeInterval.FromParent);
-                    
+
                     if (restoreUpdate || expectedUpdate)
                     {
                         toastViewModel.AddItem(product);
@@ -244,7 +244,7 @@ namespace HSMServer.Controllers
                         ExpectedUpdateInterval = (model.ExpectedUpdateInterval ?? sensor.ExpectedUpdateInterval).ToModel(),
                         RestoreInterval = (model.SensorRestorePolicy ?? sensor.SensorRestorePolicy).ToModel(),
                     };
-                    
+
                     toastViewModel.AddItem(sensor);
                     _treeValuesCache.UpdateSensor(update);
                 }
