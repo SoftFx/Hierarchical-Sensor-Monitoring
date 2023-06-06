@@ -1,12 +1,14 @@
 ﻿@using HSMServer.Controllers
 @using Microsoft.AspNetCore.Mvc.TagHelpers
+
 @model HSMServer.Model.ViewModel.EditAlertsViewModel
+
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
+
 
 <form id="editMultipleInterval" method="post" asp-action="EditAlerts">
     <input class="d-none" asp-for="NodeIds" value="[]"/>
-    <input class="d-none" asp-for="IsChangedTimeout" value="false"/>
-    <input class="d-none" asp-for="IsChangedRestore" value="false"/>
+
     <div class="modal fade" tabindex="-1" role="dialog" id="editMultipleInterval_modal">
         <div class="modal-dialog modal-dialog-centered" role="document">
             <div class="modal-content" id="editMultipleIntervalContent" style="width: unset">
@@ -48,22 +50,8 @@
 
 <script>
     $(document).ready(function () {
-        $('#restoreSelectModal select')[0].append(new Option("", "", true, true));
-        $('#intervalSelectModal select')[0].append(new Option("", "", true, true));
-    });
-    
-    $('#restoreSelectModal select').on('change', '', function (e) {
-        let input = $('#@nameof(Model.IsChangedRestore)')[0];
-        let check = this.value !== '';
-        input.checked = check;
-        input.value = check;
-    });
-    
-    $('#intervalSelectModal select').on('change', '', function (e) {
-        let input = $('#@nameof(Model.IsChangedTimeout)')[0];
-        let check = this.value !== '';
-        input.checked = check;
-        input.value = check;
+        $('#intervalSelectModal select')[0].selectedIndex = -1;
+        $('#restoreSelectModal select')[0].selectedIndex = -1;
     });
 
     function hideAlertsModal () {
