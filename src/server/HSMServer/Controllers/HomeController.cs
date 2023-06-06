@@ -169,6 +169,9 @@ namespace HSMServer.Controllers
             return Json(model.BuildResponse("Removed"));
         }
 
+        [HttpGet]
+        public IActionResult GetEditAlertsPartialView() => PartialView("_AlertsModal", new EditAlertsViewModel());
+        
         [HttpPost]
         public async Task<IActionResult> EditAlerts(EditAlertsViewModel model)
         {

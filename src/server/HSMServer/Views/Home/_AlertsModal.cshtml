@@ -1,4 +1,5 @@
-﻿@using Microsoft.AspNetCore.Mvc.TagHelpers
+﻿@using HSMServer.Controllers
+@using Microsoft.AspNetCore.Mvc.TagHelpers
 @model HSMServer.Model.ViewModel.EditAlertsViewModel
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
 
@@ -67,5 +68,19 @@
 
     function hideAlertsModal () {
         $('#editMultipleInterval_modal').modal('hide');
+        rerenderModal();
+    }
+    
+    function rerenderModal() {
+        $.ajax({
+            type: 'get',
+            url: `@Url.Action(nameof(HomeController.GetEditAlertsPartialView))`,
+            dataType: 'html',
+            contentType: 'application/json',
+            cache: false,
+            async: true
+        }).done(function (viewdata) {
+            $('#editMultipleInterval').replaceWith(viewdata)
+        });
     }
 </script>
