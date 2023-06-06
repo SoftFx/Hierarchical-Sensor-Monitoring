@@ -1,4 +1,6 @@
 ﻿using HSMCommon;
+using HSMCommon.Extensions;
+using HSMServer.Extensions;
 using HSMServer.Settings;
 using Microsoft.Extensions.Configuration;
 using System;
@@ -6,11 +8,10 @@ using System.IO;
 using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using HSMCommon.Extensions;
 
 namespace HSMServer.Model
 {
-    public class ServerConfig
+    public class ServerConfig : IServerConfig
     {
         private static readonly JsonSerializerOptions _options = new() { WriteIndented = true };
 
@@ -26,21 +27,24 @@ namespace HSMServer.Model
 #endif
 
         [JsonIgnore]
-        public static string ConfigPath => Path.Combine(Environment.CurrentDirectory, "Config");
+        public static string ConfigPath { get; } = Path.Combine(Environment.CurrentDirectory, "Config");
 
-        [JsonIgnore]
-        public static Version Version { get; }
-
-        [JsonIgnore]
-        public static string Name { get; }
-        
         [JsonIgnore]
         public static string ExecutableDirectory { get; }
 
 
-        public KestrelConfig Kestrel { get; }
+        [JsonIgnore]
+        public static string Version { get; }
+
+        [JsonIgnore]
+        public static string Name { get; }
+
 
         public ServerCertificateConfig ServerCertificate { get; }
+
+        public KestrelConfig Kestrel { get; }
+
+        public TelegramConfig Telegram { get; }
 
 
         static ServerConfig()
@@ -50,7 +54,7 @@ namespace HSMServer.Model
             Name = assembly.Name;
             ExecutableDirectory = Path.GetDirectoryName(Assembly.GetEntryAssembly().Location);
 
-            Version = assembly.GetVersion();
+            Version = assembly.GetVersion().RemoveTailZeroes();
 
             if (!Directory.Exists(ConfigPath))
                 FileManager.SafeCreateDirectory(ConfigPath);
@@ -60,8 +64,9 @@ namespace HSMServer.Model
         {
             _configuration = configuration;
 
-            Kestrel = Register<KestrelConfig>(nameof(Kestrel));
             ServerCertificate = Register<ServerCertificateConfig>(nameof(ServerCertificate));
+            Telegram = Register<TelegramConfig>(nameof(Telegram));
+            Kestrel = Register<KestrelConfig>(nameof(Kestrel));
 
             ResaveSettings();
         }
@@ -72,7 +77,6 @@ namespace HSMServer.Model
             return _configuration.GetSection(sectionName).Get<T>() ?? new T();
         }
 
-        private void ResaveSettings() =>
-            File.WriteAllText(_settingsPath, JsonSerializer.Serialize(this, _options));
+        private void ResaveSettings() => File.WriteAllText(_settingsPath, JsonSerializer.Serialize(this, _options));
     }
 }

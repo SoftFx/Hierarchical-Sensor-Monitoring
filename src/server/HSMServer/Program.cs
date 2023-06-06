@@ -58,7 +58,7 @@ builder.Services.AddFluentValidationAutoValidation()
 
 builder.Services.AddHttpsRedirection(с => с.HttpsPort = serverConfig.Kestrel.SitePort);
 
-builder.Services.AddApplicationServices();
+builder.Services.AddApplicationServices(serverConfig);
 
 builder.Services.Configure<HostOptions>(hostOptions =>
 {

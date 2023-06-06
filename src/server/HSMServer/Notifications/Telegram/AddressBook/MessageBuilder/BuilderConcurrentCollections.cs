@@ -42,7 +42,7 @@ namespace HSMServer.Notifications.Telegram.AddressBook.MessageBuilder
     }
 
 
-    internal class CGuidHash : CHash<Guid> { };
+    internal sealed class CGuidHash : CHash<Guid> { };
 
 
     internal class CHash<T> : HashSet<T>, ICCollection
