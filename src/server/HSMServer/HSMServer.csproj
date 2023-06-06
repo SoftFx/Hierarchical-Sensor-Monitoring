@@ -69,7 +69,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <EmbeddedResource Include="Settings\DefaultCertificates\default.server.pfx">
+    <EmbeddedResource Include="ServerConfiguration\DefaultCertificates\default.server.pfx">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
       <TargetPath>default.server.pfx</TargetPath>
     </EmbeddedResource>

@@ -1,11 +1,10 @@
-﻿using HSMCommon.Constants;
-using HSMServer.Authentication;
+﻿using HSMServer.Authentication;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Model;
 using HSMServer.Extensions;
 using HSMServer.Model.TreeViewModel;
 using HSMServer.Notification.Settings;
-using HSMServer.Settings;
+using HSMServer.ServerConfiguration;
 using System;
 using System.Linq;
 using System.Threading;
@@ -144,8 +143,11 @@ namespace HSMServer.Notifications
 
             try
             {
-                await bot?.DeleteWebhookAsync();
-                await bot?.CloseAsync();
+                if (bot != null)
+                {
+                    await bot?.DeleteWebhookAsync();
+                    await bot?.CloseAsync();
+                }
             }
             catch (Exception exc)
             {

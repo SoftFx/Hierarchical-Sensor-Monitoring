@@ -1,4 +1,4 @@
-﻿namespace HSMServer.Settings
+﻿namespace HSMServer.ServerConfiguration
 {
     public interface IServerConfig
     {

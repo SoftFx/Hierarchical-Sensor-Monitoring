@@ -1,7 +1,6 @@
 ﻿using HSMCommon;
 using HSMCommon.Extensions;
 using HSMServer.Extensions;
-using HSMServer.Settings;
 using Microsoft.Extensions.Configuration;
 using System;
 using System.IO;
@@ -9,7 +8,7 @@ using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
-namespace HSMServer.Model
+namespace HSMServer.ServerConfiguration
 {
     public class ServerConfig : IServerConfig
     {

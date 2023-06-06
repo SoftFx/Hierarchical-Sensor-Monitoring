@@ -2,10 +2,9 @@
 using HSMServer.Core;
 using HSMServer.Core.Model.Policies;
 using HSMServer.Extensions;
-using HSMServer.Model;
 using HSMServer.Model.TreeViewModel;
 using HSMServer.Notification.Settings;
-using HSMServer.Settings;
+using HSMServer.ServerConfiguration;
 using NLog;
 using System;
 using System.Text;
@@ -32,8 +31,7 @@ namespace HSMServer.Notifications
         private string BotName => $"@{_config.BotName.ToLower()}";
 
 
-        internal TelegramUpdateHandler(AddressBook addressBook, IUserManager userManager,
-            TreeViewModel tree, TelegramConfig config)
+        internal TelegramUpdateHandler(AddressBook addressBook, IUserManager userManager, TreeViewModel tree, TelegramConfig config)
         {
             _addressBook = addressBook;
             _userManager = userManager;
