@@ -59,6 +59,8 @@ public sealed class MultiActionToastViewModel
     public void AddRemoveFolderError(string name) => AddError($"Folder {name} cannot be deleted");
 
     public void AddCantChangeIntervalError(string name, string type, string policy, TimeInterval interval) => AddError($"{type} {name} can't have {policy} {interval} interval");
+
+    public void AddRoleError(string name, string action) => AddError($"You should be Manager or Admin to {action} {name}");
 }
 
 internal sealed class LimitedQueue<T> : Queue<T>
