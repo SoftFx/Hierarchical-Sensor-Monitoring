@@ -16,24 +16,24 @@ namespace HSMServer.Notifications
 
         internal void AddMessage(BaseSensorModel sensor, SensorStatus firstStatus)
         {
-            var newStatus = sensor.Status.Icon;
-            var comment = sensor.Status.Message;
+            //var newStatus = sensor.Status.Icon;
+            //var comment = sensor.Status.Message;
 
-            var id = sensor.Id;
-            var branch = _messageTree[sensor.RootProductName];
+            //var id = sensor.Id;
+            //var branch = _messageTree[sensor.RootProductName];
 
-            if (_compressor.TryGetOrAdd(sensor, firstStatus, out var key))
-            {
-                newStatus = $"{key.oldStatus}->{newStatus}";
+            //if (_compressor.TryGetOrAdd(sensor, firstStatus, out var key))
+            //{
+            //    newStatus = $"{key.oldStatus}->{newStatus}";
 
-                branch[key].Remove(id);
-                branch.RemoveEmptyBranch(key);
-            }
+            //    branch[key].Remove(id);
+            //    branch.RemoveEmptyBranch(key);
+            //}
 
-            var newKey = (newStatus, comment);
+            //var newKey = (newStatus, comment);
 
-            branch[newKey].Add(id);
-            _compressor[id] = newKey;
+            //branch[newKey].Add(id);
+            //_compressor[id] = newKey;
         }
 
         internal string GetAggregateMessage(int notificationsDelay)
@@ -68,12 +68,12 @@ namespace HSMServer.Notifications
         {
             var builder = new StringBuilder(1 << 5);
 
-            var comment = sensor.Status.Message;
-            var result = sensor.Status.Icon;
-            var product = sensor.RootProductName;
-            var path = sensor.Path;
+            //var comment = sensor.Status.Message;
+            //var result = sensor.Status.Icon;
+            //var product = sensor.RootProductName;
+            //var path = sensor.Path;
 
-            BuildMessage(builder, product, result, comment, path);
+            //BuildMessage(builder, product, result, comment, path);
 
             return builder.ToString();
         }

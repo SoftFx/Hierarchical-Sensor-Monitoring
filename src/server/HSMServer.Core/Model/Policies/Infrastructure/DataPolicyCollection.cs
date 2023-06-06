@@ -33,9 +33,11 @@ namespace HSMServer.Core.Model.Policies
         {
             valueT = value as T;
 
-            Result = _typePolicy.Validate(valueT);
+            //Result = _typePolicy.Validate(valueT);
 
-            return Result.IsOk && CalculateStorageResult(valueT);
+            //return Result.IsOk && CalculateStorageResult(valueT);
+
+            return value is T;
         }
     }
 
@@ -54,10 +56,10 @@ namespace HSMServer.Core.Model.Policies
 
         protected override bool CalculateStorageResult(T value)
         {
-            foreach (var (_, policy) in _storage)
-                Result += policy.Validate(value, _sensor);
+            //foreach (var (_, policy) in _storage)
+            //    Result += policy.Validate(value, _sensor);
 
-            Result += PolicyResult.FromValue(value); //add user status
+            //Result += SensorResult.FromValue(value); //add user status
 
             return true;
         }

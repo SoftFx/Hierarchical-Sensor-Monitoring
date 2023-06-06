@@ -11,6 +11,9 @@ namespace HSMServer.Core.Model
         protected virtual int CacheSize => 100;
 
 
+        internal SensorResult? Result => LastValue != null ? new SensorResult(LastValue) : null;
+
+
         internal abstract BaseValue LastValue { get; }
 
         internal abstract bool HasData { get; }
@@ -32,9 +35,9 @@ namespace HSMServer.Core.Model
         private readonly ConcurrentQueue<T> _cache = new();
 
 
-        internal override bool HasData => !_cache.IsEmpty;
-
         internal override T LastValue => _cache.LastOrDefault();
+
+        internal override bool HasData => !_cache.IsEmpty;
 
 
         internal virtual void AddValue(T value) => AddValueBase(value);

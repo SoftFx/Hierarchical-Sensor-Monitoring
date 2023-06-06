@@ -25,7 +25,7 @@ namespace HSMServer.Core.Model.Policies
             Status = update.Status;
         }
 
-        internal abstract PolicyResult Validate(T value, BaseSensorModel sensor);
+        //internal abstract SensorResult Validate(T value, BaseSensorModel sensor);
 
         protected abstract string GetComment(T value, BaseSensorModel sensor);
     }

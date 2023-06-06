@@ -42,7 +42,7 @@ namespace HSMServer.Core.Cache
         public event Action<BaseSensorModel, ActionType> ChangeSensorEvent;
         public event Action<ProductModel, ActionType> ChangeProductEvent;
 
-        public event Action<BaseSensorModel, PolicyResult> NotifyAboutChangesEvent;
+        public event Action<BaseSensorModel, SensorResult> NotifyAboutChangesEvent;
 
 
         public TreeValuesCache(IDatabaseCore database, ITreeStateSnapshot snapshot, IUpdatesQueue updatesQueue)
@@ -94,7 +94,7 @@ namespace HSMServer.Core.Cache
             if (!_tree.TryGetValue(update.Id, out var product))
                 return;
 
-            var sensorsOldStatuses = new Dictionary<Guid, PolicyResult>();
+            var sensorsOldStatuses = new Dictionary<Guid, SensorResult>();
 
             GetProductSensorsStatuses(product, sensorsOldStatuses);
 
@@ -251,7 +251,7 @@ namespace HSMServer.Core.Cache
             _snapshot.Sensors[sensor.Id].IsExpired = sensor.HasUpdateTimeout();
 
             _database.UpdateSensor(sensor.ToEntity());
-            NotifyAboutChanges(sensor, oldStatus);
+            NotifyAboutChanges(sensor);
         }
 
         public void RemoveSensor(Guid sensorId)
@@ -329,9 +329,9 @@ namespace HSMServer.Core.Cache
 
         public BaseSensorModel GetSensor(Guid sensorId) => _sensors.GetValueOrDefault(sensorId);
 
-        public void NotifyAboutChanges(BaseSensorModel sensor, PolicyResult oldStatus)
+        public void NotifyAboutChanges(BaseSensorModel sensor)
         {
-            NotifyAboutChangesEvent?.Invoke(sensor, oldStatus);
+            //NotifyAboutChangesEvent?.Invoke(sensor, oldStatus);
             ChangeSensorEvent?.Invoke(sensor, ActionType.Update);
         }
 
@@ -480,17 +480,17 @@ namespace HSMServer.Core.Cache
                 snapshot.History.To = sensor.LastDbValue.ReceivingTime;
             }
 
-            NotifyAboutChanges(sensor, oldStatus);
+            NotifyAboutChanges(sensor);
         }
 
         private void NotifyAllProductChildrenAboutUpdate(ProductModel product,
-            Dictionary<Guid, PolicyResult> sensorsOldStatuses)
+            Dictionary<Guid, SensorResult> sensorsOldStatuses)
         {
             ChangeProductEvent(product, ActionType.Update);
 
             foreach (var (_, sensor) in product.Sensors)
                 if (sensorsOldStatuses.TryGetValue(sensor.Id, out var oldStatus))
-                    NotifyAboutChanges(sensor, oldStatus);
+                    NotifyAboutChanges(sensor);
                 else
                     ChangeSensorEvent(sensor, ActionType.Update);
 
@@ -786,10 +786,10 @@ namespace HSMServer.Core.Cache
             return accessKey.IsHasPermissions(permissions, out message);
         }
 
-        private static void GetProductSensorsStatuses(ProductModel product, Dictionary<Guid, PolicyResult> sensorsStatuses)
+        private static void GetProductSensorsStatuses(ProductModel product, Dictionary<Guid, SensorResult> sensorsStatuses)
         {
             foreach (var (sensorId, sensor) in product.Sensors)
-                sensorsStatuses.Add(sensorId, sensor.Status);
+                sensorsStatuses.Add(sensorId, default);
 
             foreach (var (_, subProduct) in product.SubProducts)
                 GetProductSensorsStatuses(subProduct, sensorsStatuses);
@@ -857,7 +857,7 @@ namespace HSMServer.Core.Cache
                 if (sensor.HasUpdateTimeout() && !snaphot.IsExpired)
                 {
                     snaphot.IsExpired = true;
-                    NotifyAboutChanges(sensor, oldStatus);
+                    NotifyAboutChanges(sensor);
                 }
             }
 

@@ -5,6 +5,11 @@ namespace HSMServer.Extensions
 {
     internal static class StatusExtensions
     {
+        internal static Client.SensorStatus ToClient(this Server.SensorResult? result)
+        {
+            return result?.Status.ToClient() ?? Client.SensorStatus.Empty;
+        }
+
         internal static Client.SensorStatus ToClient(this Server.SensorStatus status) =>
             status switch
             {
@@ -24,8 +29,8 @@ namespace HSMServer.Extensions
                 Client.SensorStatus.OffTime => Server.SensorStatus.OffTime,
                 _ => Server.SensorStatus.Ok,
             };
-        
-        
+
+
         public static string ToSelectIcon(this Client.SensorStatus status) => status switch
         {
             Client.SensorStatus.Ok => "🟢",

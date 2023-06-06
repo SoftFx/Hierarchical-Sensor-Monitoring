@@ -53,29 +53,31 @@ namespace HSMServer.Core.Model.Policies
         }
 
 
-        internal PolicyResult CheckRestorePolicies(SensorStatus status, DateTime lastUpdate)
-        {
-            var result = PolicyResult.Ok;
+        //internal SensorResult CheckRestorePolicies(SensorStatus status, DateTime lastUpdate)
+        //{
+        //    var result = SensorResult.Ok;
 
-            //result += RestoreOffTime.Policy.Validate(status, lastUpdate); //TODO uncomment after separate configucation
-            result += RestoreWarning.Policy.Validate(status, lastUpdate);
-            result += RestoreError.Policy.Validate(status, lastUpdate);
+        //    //result += RestoreOffTime.Policy.Validate(status, lastUpdate); //TODO uncomment after separate configucation
+        //    result += RestoreWarning.Policy.Validate(status, lastUpdate);
+        //    result += RestoreError.Policy.Validate(status, lastUpdate);
 
-            return result;
-        }
+        //    return result;
+        //}
 
         internal bool HasUpdateTimeout(DateTime? receivingTime)
         {
-            var oldResult = Result;
+            //var oldResult = Result;
 
-            Result -= ExpectedUpdate.Policy.Fail;
+            //Result -= ExpectedUpdate.Policy.Fail;
 
-            if (!receivingTime.HasValue)
-                return false;
+            //if (!receivingTime.HasValue)
+            //    return false;
 
-            Result += ExpectedUpdate.Policy.Validate(receivingTime.Value);
+            //Result += ExpectedUpdate.Policy.Validate(receivingTime.Value);
 
-            return Result != oldResult;
+            //return Result != oldResult;
+
+            return false;
         }
 
 

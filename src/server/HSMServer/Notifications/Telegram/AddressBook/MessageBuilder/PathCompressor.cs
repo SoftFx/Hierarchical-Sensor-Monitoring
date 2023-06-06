@@ -40,16 +40,16 @@ namespace HSMServer.Notifications.Telegram.AddressBook.MessageBuilder
                         hash.Remove(id);
                 }
 
-            foreach ((var id, (var sensor, var firstState)) in _inRestore)
-                if (hash.Contains(id) && !sensor.IsWaitRestore)
-                {
-                    if (sensor.Status.IsOk && firstState.IsOk())
-                        RemoveSensor(id);
-                    else
-                        ApplyToGroups(sensor);
+            //foreach ((var id, (var sensor, var firstState)) in _inRestore)
+            //    if (hash.Contains(id) && !sensor.IsWaitRestore)
+            //    {
+            //        if (sensor.Status.IsOk && firstState.IsOk())
+            //            RemoveSensor(id);
+            //        else
+            //            ApplyToGroups(sensor);
 
-                    hash.Remove(id);
-                }
+            //        hash.Remove(id);
+            //    }
 
             foreach (var group in _groups)
                 yield return group.ToString();
@@ -74,12 +74,14 @@ namespace HSMServer.Notifications.Telegram.AddressBook.MessageBuilder
 
         private bool TryAddInRestore(BaseSensorModel sensor, SensorStatus? firstStatus = null)
         {
-            var ok = !sensor.Status.IsOk && sensor.IsWaitRestore;
+            //var ok = !sensor.Status.IsOk && sensor.IsWaitRestore;
 
-            if (ok)
-                _inRestore.TryAdd(sensor.Id, (sensor, firstStatus ?? sensor.Status.Status));
+            //if (ok)
+            //    _inRestore.TryAdd(sensor.Id, (sensor, firstStatus ?? sensor.Status.Status));
 
-            return ok;
+            //return ok;
+
+            return false;
         }
 
 

@@ -62,11 +62,11 @@ namespace HSMServer.Core.Model.Policies
         protected abstract U GetConstTarget(string strValue);
 
 
-        internal override PolicyResult Validate(T value, BaseSensorModel sensor)
-        {
-            return _executeOperation(_getProperty(value), _targetValue)
-                ? new(Status, GetComment(value, sensor), "↕️")
-                : PolicyResult.Ok;
-        }
+        //internal override SensorResult Validate(T value, BaseSensorModel sensor)
+        //{
+        //    return _executeOperation(_getProperty(value), _targetValue)
+        //        ? new(Status, GetComment(value, sensor), "↕️")
+        //        : SensorResult.Ok;
+        //}
     }
 }

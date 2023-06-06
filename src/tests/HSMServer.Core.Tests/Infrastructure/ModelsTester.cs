@@ -158,11 +158,11 @@ namespace HSMServer.Core.Tests.Infrastructure
             Assert.True(actual.HasData);
             Assert.Equal(expectedSensorValue.ReceivingTime, actual.LastUpdateTime);
 
-            Assert.Equal(expectedSensorValue.Status, actual.Status.Status);
+            Assert.Equal(expectedSensorValue.Status, actual.Status?.Status);
             if (expectedSensorValue.Status != SensorStatus.Ok)
-                Assert.False(string.IsNullOrEmpty(actual.Status.Message));
+                Assert.False(string.IsNullOrEmpty(actual.Status?.Message));
             else
-                Assert.True(string.IsNullOrEmpty(actual.Status.Message));
+                Assert.True(string.IsNullOrEmpty(actual.Status?.Message));
 
             TestSensorValue(expectedSensorValue, actualSensorValue, actual.Type);
         }

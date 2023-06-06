@@ -24,7 +24,7 @@ namespace HSMServer.Core.Model.Policies
     [JsonDerivedType(typeof(FileDataPolicy), 2009)]
     public abstract class Policy
     {
-        protected static PolicyResult Ok => PolicyResult.Ok;
+        protected static SensorResult Ok => SensorResult.Ok;
 
 
         public Guid Id { get; init; }
@@ -54,7 +54,7 @@ namespace HSMServer.Core.Model.Policies
         protected virtual string FailIcon => FailStatus.ToIcon();
 
 
-        internal PolicyResult Fail { get; }
+        internal SensorResult Fail { get; }
 
 
         public TimeIntervalModel Interval { get; set; }
@@ -65,7 +65,7 @@ namespace HSMServer.Core.Model.Policies
 
         protected ServerPolicy() : base()
         {
-            Fail = new(FailStatus, FailMessage, FailIcon);
+            //Fail = new(FailStatus, FailMessage, FailIcon);
         }
 
         protected ServerPolicy(TimeIntervalModel interval) : this()
@@ -74,7 +74,7 @@ namespace HSMServer.Core.Model.Policies
         }
 
 
-        internal PolicyResult Validate(DateTime time)
+        internal SensorResult Validate(DateTime time)
         {
             return Interval != null && Interval.TimeIsUp(time) ? Fail : Ok;
         }

@@ -30,7 +30,7 @@ namespace HSMServer.Core.Model
 
     public abstract class BaseSensorModel : BaseNodeModel
     {
-        private static readonly PolicyResult _muteResult = new(SensorStatus.OffTime, "Muted");
+        private static readonly SensorResult _muteResult = new(SensorStatus.OffTime, "Muted");
 
 
         protected abstract ValuesStorage Storage { get; }
@@ -47,20 +47,21 @@ namespace HSMServer.Core.Model
         public SensorState State { get; private set; }
 
 
-        public PolicyResult Status => State == SensorState.Muted ? _muteResult : ServerPolicy.Result + DataPolicies.Result;
+        public SensorResult? Status => State == SensorState.Muted ? _muteResult : Storage.Result;
 
-        public bool IsWaitRestore => !ServerPolicy.CheckRestorePolicies(Status.Status, LastUpdateTime).IsOk;
+        //public bool IsWaitRestore => !ServerPolicy.CheckRestorePolicies(Status.Status, LastUpdateTime).IsOk;
+        public bool IsWaitRestore => false;
 
         public bool ShouldDestroy => ServerPolicy.SelfDestroy.Policy?.Validate(LastUpdateTime).IsOk ?? false;
 
 
-        public bool HasData => Storage.HasData;
-
-        public BaseValue LastValue => Storage.LastValue;
+        public DateTime LastUpdateTime => Storage.LastValue?.ReceivingTime ?? DateTime.MinValue;
 
         public BaseValue LastDbValue => Storage.LastDbValue;
 
-        public DateTime LastUpdateTime => Storage.LastValue?.ReceivingTime ?? DateTime.MinValue;
+        public BaseValue LastValue => Storage.LastValue;
+
+        public bool HasData => Storage.HasData;
 
 
         public Action<BaseValue> ReceivedNewValue;
@@ -104,8 +105,8 @@ namespace HSMServer.Core.Model
 
         internal void ResetSensor()
         {
-            ServerPolicy.Reset();
-            DataPolicies.Reset();
+            //ServerPolicy.Reset();
+            //DataPolicies.Reset();
 
             Storage.Clear();
         }
