@@ -156,11 +156,14 @@ function Data(to, from, type, encodedId) {
             $('#no_data_' + encodedId).hide();
 
             if (needFillFromTo) {
+                let to = getToDate();
                 let from = new Date($(`#oldest_date_${encodedId}`).val());
                 from.setMinutes(from.getMinutes() - from.getTimezoneOffset());
 
                 $(`#from_${encodedId}`).val(datetimeLocal(from));
-                $(`#to_${encodedId}`).val(datetimeLocal(getToDate()));
+                $(`#to_${encodedId}`).val(datetimeLocal(to.getTime()));
+
+                reloadHistoryRequest(from, to, body);
             }
         });
     }
@@ -190,12 +193,28 @@ function Data(to, from, type, encodedId) {
 
             if (needFillFromTo) {
                 let from = new Date(parsedData[0].time);
+                let to = getToDate();
 
                 $(`#from_${encodedId}`).val(datetimeLocal(from));
-                $(`#to_${encodedId}`).val(datetimeLocal(getToDate()));
+                $(`#to_${encodedId}`).val(datetimeLocal(to.getTime()));
+
+                reloadHistoryRequest(from, to, body);
             }
 
             displayGraph(data, type, `graph_${encodedId}`, encodedId);
+        });
+    }
+
+    function reloadHistoryRequest(from, to, body) {
+        let model = Data(to, from, body.Type, body.EncodedId);
+
+        $.ajax({
+            type: 'POST',
+            url: reloadRequest,
+            data: JSON.stringify(model),
+            contentType: 'application/json',
+            cache: false,
+            async: true
         });
     }
 }
@@ -238,7 +257,7 @@ function Data(to, from, type, encodedId) {
 
         now.setFullYear(now.getFullYear() + 1);
 
-        return now.getTime();
+        return now;
     }
 
     function datetimeLocal(datetime) {

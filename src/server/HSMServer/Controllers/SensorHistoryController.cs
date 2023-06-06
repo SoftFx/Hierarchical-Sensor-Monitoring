@@ -96,6 +96,13 @@ namespace HSMServer.Controllers
         }
 
 
+        [HttpPost]
+        public void ReloadHistoryRequest([FromBody] GetSensorHistoryModel model)
+        {
+            StoredUser.History.Reload(model);
+        }
+
+
         public async Task<FileResult> ExportHistory([FromQuery(Name = "EncodedId")] string encodedId, [FromQuery(Name = "Type")] int type,
             [FromQuery(Name = "From")] DateTime from, [FromQuery(Name = "To")] DateTime to)
         {

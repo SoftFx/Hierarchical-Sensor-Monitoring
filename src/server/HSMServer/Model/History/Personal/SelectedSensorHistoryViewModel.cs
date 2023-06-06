@@ -1,4 +1,5 @@
-﻿using HSMServer.Core.Cache;
+﻿using HSMServer.Core;
+using HSMServer.Core.Cache;
 using HSMServer.Core.Model;
 using HSMServer.Model.Model.History;
 using System.Threading.Tasks;
@@ -7,7 +8,9 @@ namespace HSMServer.Model.History
 {
     public sealed class SelectedSensorHistoryViewModel
     {
+        private GetSensorHistoryModel _request;
         private BaseSensorModel _sensor;
+        private BarBaseValue _lastBar;
 
 
         public ChartValuesViewModel Chart { get; private set; }
@@ -30,9 +33,16 @@ namespace HSMServer.Model.History
 
         public Task Reload(ITreeValuesCache cache, GetSensorHistoryModel request)
         {
+            Reload(request);
+
             NewValuesCnt = 0;
 
             return Table.Reload(cache, request);
+        }
+
+        public void Reload(GetSensorHistoryModel request)
+        {
+            _request = request;
         }
 
 
@@ -53,6 +63,9 @@ namespace HSMServer.Model.History
 
             _sensor = sensor;
 
+            if (_sensor.Type.IsBar())
+                _lastBar = _sensor.LastValue as BarBaseValue;
+
             Table = new HistoryTableViewModel(_sensor);
 
             NewValuesCnt = 0;
@@ -62,6 +75,19 @@ namespace HSMServer.Model.History
 
         private void NewSensorValueHandler(BaseValue value)
         {
+            if (_request.FromUtc > value.ReceivingTime || _request.ToUtc < value.ReceivingTime)
+                return;
+
+            if (_sensor.Type.IsBar())
+            {
+                var barValue = value as BarBaseValue;
+
+                if (_lastBar != null && _lastBar.OpenTime == barValue.OpenTime)
+                    return;
+
+                _lastBar = barValue;
+            }
+
             NewValuesCnt++;
         }
     }
