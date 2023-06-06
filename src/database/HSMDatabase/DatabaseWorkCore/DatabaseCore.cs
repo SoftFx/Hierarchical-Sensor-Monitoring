@@ -5,7 +5,6 @@ using HSMDatabase.Extensions;
 using HSMDatabase.LevelDB;
 using HSMDatabase.Settings;
 using HSMDatabase.SnapshotsDb;
-using HSMServer.Core.Configuration;
 using HSMServer.Core.Converters;
 using HSMServer.Core.DataLayer;
 using HSMServer.Core.Registration;
@@ -387,25 +386,6 @@ namespace HSMDatabase.DatabaseWorkCore
 
         public List<UserEntity> GetUsersPage(int page, int pageSize) =>
             _environmentDatabase.ReadUsersPage(page, pageSize).ToList();
-
-        #endregion
-
-        #region Environment database : Configuration
-
-        public ConfigurationObject GetConfigurationObject(string name)
-        {
-            ConfigurationEntity entity = _environmentDatabase.ReadConfigurationObject(name);
-            return entity != null ? new ConfigurationObject(entity) : null;
-        }
-
-        public void WriteConfigurationObject(ConfigurationObject obj)
-        {
-            ConfigurationEntity entity = obj.ConvertToEntity();
-            _environmentDatabase.WriteConfigurationObject(entity);
-        }
-
-        public void RemoveConfigurationObject(string name) =>
-            _environmentDatabase.RemoveConfigurationObject(name);
 
         #endregion
 

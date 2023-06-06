@@ -1,22 +1,20 @@
-﻿using HSMCommon.Constants;
-using HSMServer.Authentication;
-using HSMServer.Configuration;
+﻿using HSMServer.Authentication;
 using HSMServer.Core;
 using HSMServer.Core.Model.Policies;
+using HSMServer.Extensions;
 using HSMServer.Model;
 using HSMServer.Model.TreeViewModel;
 using HSMServer.Notification.Settings;
+using HSMServer.Settings;
 using NLog;
 using System;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using HSMServer.Extensions;
 using Telegram.Bot;
 using Telegram.Bot.Polling;
 using Telegram.Bot.Types;
 using Telegram.Bot.Types.Enums;
-using HSMServer.Settings;
 
 namespace HSMServer.Notifications
 {

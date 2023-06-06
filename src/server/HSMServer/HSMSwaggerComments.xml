@@ -23,23 +23,6 @@
             </summary>
             <param name="userName">Name of the user to remove.</param>
         </member>
-        <member name="M:HSMServer.Configuration.ConfigurationProvider.ReadOrDefault(System.String)">
-            Use 'name' from ConfigurationConstants! 
-        </member>
-        <member name="M:HSMServer.Configuration.IConfigurationProvider.ReadOrDefault(System.String)">
-            <summary>
-            Try reading the configuration object from the database. Return the obtained value if exists, default value otherwise.
-            </summary>
-            <param name="name">The parameter name, which MUST be a member of <see cref="!:ConfigurationConstants"/> class.</param>
-            <returns>A <see cref="T:HSMServer.Core.Configuration.ConfigurationObject"/> entity, containing the parameter value.</returns>
-        </member>
-        <member name="M:HSMServer.Configuration.IConfigurationProvider.GetAllConfigurationObjects">
-            <summary>
-            Get list of all configuration objects, which names are specified in <see cref="!:ConfigurationConstants"/> class.
-            Method <see cref="M:HSMServer.Configuration.IConfigurationProvider.ReadOrDefault(System.String)"/> is used to retrieve values.
-            </summary>
-            <returns>List of <see cref="T:HSMServer.Core.Configuration.ConfigurationObject"/>.</returns>
-        </member>
         <member name="M:HSMServer.Controllers.GrafanaDatasources.JsonSource.JsonDatasourceController.TestConnection">
             <summary>
             with 200 status code response. Used for "Test connection" on the datasource config page.

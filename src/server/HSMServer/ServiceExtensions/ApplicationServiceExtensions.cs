@@ -1,7 +1,6 @@
 using HSMDatabase.DatabaseWorkCore;
 using HSMServer.Authentication;
 using HSMServer.BackgroundServices;
-using HSMServer.Configuration;
 using HSMServer.Core.Cache;
 using HSMServer.Core.DataLayer;
 using HSMServer.Core.SensorsUpdatesQueue;
@@ -40,8 +39,7 @@ public static class ApplicationServiceExtensions
                 .AddSingleton<IUserManager, UserManager>()
                 .AddSingleton<IFolderManager, FolderManager>();
 
-        services.AddSingleton<IRegistrationTicketManager, RegistrationTicketManager>()
-                .AddSingleton<IConfigurationProvider, ConfigurationProvider>();
+        services.AddSingleton<IRegistrationTicketManager, RegistrationTicketManager>(); // obsolete
 
         services.AddSingleton<NotificationsCenter>()
                 .AddSingleton<DataCollectorWrapper>()

@@ -1,7 +1,7 @@
 ﻿namespace HSMServer.Settings
 {
-    public class IServerConfig
+    public interface IServerConfig
     {
-        public TelegramConfig Telegram { get; }
+        TelegramConfig Telegram { get; }
     }
 }

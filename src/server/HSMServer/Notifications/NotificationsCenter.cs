@@ -1,5 +1,4 @@
 ﻿using HSMServer.Authentication;
-using HSMServer.Configuration;
 using HSMServer.Core.Cache;
 using HSMServer.Model.TreeViewModel;
 using HSMServer.Settings;

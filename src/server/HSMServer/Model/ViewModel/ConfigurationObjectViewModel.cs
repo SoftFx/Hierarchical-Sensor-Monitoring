@@ -1,7 +1,4 @@
-﻿using HSMCommon.Constants;
-using HSMServer.Core.Configuration;
-
-namespace HSMServer.Model.ViewModel
+﻿namespace HSMServer.Model.ViewModel
 {
     public class ConfigurationObjectViewModel
     {
@@ -10,16 +7,16 @@ namespace HSMServer.Model.ViewModel
         public bool IsDefault { get; set; }
         public string Description { get; set; }
 
-        public ConfigurationObjectViewModel() {}
-        public ConfigurationObjectViewModel(ConfigurationObject obj, bool isDefault)
-        {
-            IsDefault = isDefault;
-            Name = obj.Name;
-            Value = obj.Value;
-            Description = obj.Description;
+        public ConfigurationObjectViewModel() { }
+        //public ConfigurationObjectViewModel(ConfigurationObject obj, bool isDefault)
+        //{
+        //    IsDefault = isDefault;
+        //    Name = obj.Name;
+        //    Value = obj.Value;
+        //    Description = obj.Description;
 
-            if (Name == ConfigurationConstants.SensorExpirationTime)
-                Name = "Remove sensor data after N days inactivity";
-        }
+        //    if (Name == ConfigurationConstants.SensorExpirationTime)
+        //        Name = "Remove sensor data after N days inactivity";
+        //}
     }
 }

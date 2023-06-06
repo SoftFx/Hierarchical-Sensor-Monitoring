@@ -1,6 +1,5 @@
 ﻿using HSMCommon;
 using HSMDatabase.AccessManager.DatabaseEntities;
-using HSMServer.Core.Configuration;
 using HSMServer.Core.Model;
 using HSMServer.Core.Registration;
 using HSMServer.Model.Authentication;
@@ -80,15 +79,6 @@ namespace HSMServer.Core.Tests.Infrastructure
                 Role = nameof(ProductRoleEnum.ProductManager),
                 ExpirationDate = DateTime.UtcNow.AddMinutes(30),
                 ProductKey = Guid.NewGuid().ToString()
-            };
-
-
-        internal static ConfigurationObject BuildConfiguration(string name) =>
-            new()
-            {
-                Name = name,
-                Value = RandomGenerator.GetRandomString(),
-                Description = RandomGenerator.GetRandomString()
             };
     }
 }

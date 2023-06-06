@@ -1,16 +1,14 @@
 ﻿using HSMCommon;
-using HSMCommon.Constants;
 using HSMServer.Attributes;
 using HSMServer.Authentication;
 using HSMServer.Constants;
-using HSMServer.Configuration;
 using HSMServer.Encryption;
-using HSMServer.Registration;
 using HSMServer.Filters;
 using HSMServer.Model.Authentication;
 using HSMServer.Model.TreeViewModel;
 using HSMServer.Model.Validators;
 using HSMServer.Model.ViewModel;
+using HSMServer.Registration;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authorization;
@@ -28,16 +26,13 @@ namespace HSMServer.Controllers
     public class AccountController : Controller
     {
         private readonly IUserManager _userManager;
-        private readonly IConfigurationProvider _configurationProvider;
         private readonly IRegistrationTicketManager _ticketManager;
         private readonly TreeViewModel _treeViewModel;
 
 
-        public AccountController(IUserManager userManager, IConfigurationProvider configurationProvider,
-            IRegistrationTicketManager ticketManager, TreeViewModel treeViewModel)
+        public AccountController(IUserManager userManager, IRegistrationTicketManager ticketManager, TreeViewModel treeViewModel)
         {
             _userManager = userManager;
-            _configurationProvider = configurationProvider;
             _ticketManager = ticketManager;
             _treeViewModel = treeViewModel;
         }
@@ -84,8 +79,9 @@ namespace HSMServer.Controllers
 
             if (!string.IsNullOrEmpty(cipher) && !string.IsNullOrEmpty(tag) && !string.IsNullOrEmpty(nonce))
             {
-                var key = _configurationProvider.ReadConfigurationObject(ConfigurationConstants.AesEncryptionKey);
-                byte[] keyBytes = AESCypher.ToBytes(key.Value);
+                // var key = _configurationProvider.ReadConfigurationObject(ConfigurationConstants.AesEncryptionKey);
+                var key = "sadasda";
+                byte[] keyBytes = AESCypher.ToBytes(key);
 
                 var result = AESCypher.Decrypt(cipher.Replace(' ', '+'), nonce.Replace(' ', '+'), tag.Replace(' ', '+'), keyBytes);
                 var ticketId = Guid.Parse(result);

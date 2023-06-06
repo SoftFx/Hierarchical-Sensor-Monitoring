@@ -1,7 +1,5 @@
 ﻿using HSMDatabase.AccessManager;
 using HSMDatabase.AccessManager.DatabaseEntities;
-using HSMServer.Core.Configuration;
-using HSMServer.Core.Model;
 using HSMServer.Core.Registration;
 using System;
 using System.Collections.Generic;
@@ -86,14 +84,6 @@ namespace HSMServer.Core.DataLayer
         void RemoveUser(UserEntity user);
         List<UserEntity> GetUsers();
         List<UserEntity> GetUsersPage(int page, int pageSize);
-
-        #endregion
-
-        #region Configuration
-
-        ConfigurationObject GetConfigurationObject(string name);
-        void WriteConfigurationObject(ConfigurationObject obj);
-        void RemoveConfigurationObject(string name);
 
         #endregion
 
