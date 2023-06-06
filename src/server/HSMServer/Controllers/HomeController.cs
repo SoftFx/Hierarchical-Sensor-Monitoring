@@ -145,22 +145,34 @@ namespace HSMServer.Controllers
         public ActionResult RemoveNode([FromBody] string[] ids)
         {
             var model = new MultiActionToastViewModel();
-            
+
             foreach (var id in ids)
             {
                 var decodedId = SensorPathHelper.DecodeGuid(id);
 
-                if (_folderManager[decodedId] is not null)
+                if (_folderManager.TryGetValue(decodedId, out var folder))
                 {
-                    model.AddRemoveFolderError(_folderManager[decodedId].Name);
+                    model.AddRemoveFolderError(folder.Name);
                 }
                 else if (_treeViewModel.Nodes.TryGetValue(decodedId, out var node))
                 {
+                    if (!CurrentUser.IsManager(node.RootProduct.Id))
+                    {
+                        model.AddRoleError(node.Name, "remove");
+                        continue;
+                    }
+                    
                     _treeValuesCache.RemoveProduct(node.Id);
                     model.AddItem(node);
                 }
                 else if (_treeViewModel.Sensors.TryGetValue(decodedId, out var sensor))
                 {
+                    if (!CurrentUser.IsManager(sensor.RootProduct.Id))
+                    {
+                        model.AddRoleError(sensor.FullPath, "remove");
+                        continue;
+                    }
+                   
                     _treeValuesCache.RemoveSensor(sensor.Id);
                     model.AddItem(sensor);
                 }
@@ -187,6 +199,12 @@ namespace HSMServer.Controllers
             {
                 if (_folderManager.TryGetValue(id, out var folder))
                 {
+                    if (!CurrentUser.IsFolderManager(folder.Id))
+                    {
+                        toastViewModel.AddRoleError(folder.Name, "edit");
+                        continue;
+                    }
+                    
                     var folderRestorePolicy = model.SensorRestorePolicy ?? folder.SensorRestorePolicy;
                     var folderExpectedUpdate = model.ExpectedUpdateInterval ?? folder.ExpectedUpdateInterval;
                     
@@ -211,6 +229,12 @@ namespace HSMServer.Controllers
                 }
                 else if (_treeViewModel.Nodes.TryGetValue(id, out var product))
                 {
+                    if (CurrentUser.IsManager(product.RootProduct.Id))
+                    {
+                        toastViewModel.AddRoleError(product.Name, "edit");
+                        continue;
+                    }
+                    
                     var hasParent = product.Parent is not null || product.FolderId is not null;
                     var restoreUpdate = hasParent || !isRestoreFromParent;
                     var expectedUpdate = hasParent || !isExpectedFromParent;
@@ -241,6 +265,12 @@ namespace HSMServer.Controllers
                 }
                 else if (_treeViewModel.Sensors.TryGetValue(id, out var sensor))
                 {
+                    if (!CurrentUser.IsManager(sensor.RootProduct.Id))
+                    {
+                        toastViewModel.AddRoleError(sensor.FullPath, "edit");
+                        continue;
+                    }
+                    
                     var update = new SensorUpdate
                     {
                         Id = sensor.Id,
