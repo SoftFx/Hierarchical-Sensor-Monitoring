@@ -11,7 +11,7 @@ using System.Text.Json.Serialization;
 
 namespace HSMServer.Model
 {
-    public class ServerConfig
+    public class ServerConfig : IServerConfig
     {
         private static readonly JsonSerializerOptions _options = new() { WriteIndented = true };
 
@@ -40,10 +40,11 @@ namespace HSMServer.Model
         public static string Name { get; }
 
 
+        public ServerCertificateConfig ServerCertificate { get; }
 
         public KestrelConfig Kestrel { get; }
 
-        public ServerCertificateConfig ServerCertificate { get; }
+        public TelegramConfig Telegram { get; }
 
 
         static ServerConfig()
@@ -63,8 +64,9 @@ namespace HSMServer.Model
         {
             _configuration = configuration;
 
-            Kestrel = Register<KestrelConfig>(nameof(Kestrel));
             ServerCertificate = Register<ServerCertificateConfig>(nameof(ServerCertificate));
+            Telegram = Register<TelegramConfig>(nameof(Telegram));
+            Kestrel = Register<KestrelConfig>(nameof(Kestrel));
 
             ResaveSettings();
         }

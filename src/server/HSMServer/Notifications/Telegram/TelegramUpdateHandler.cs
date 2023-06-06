@@ -16,6 +16,7 @@ using Telegram.Bot;
 using Telegram.Bot.Polling;
 using Telegram.Bot.Types;
 using Telegram.Bot.Types.Enums;
+using HSMServer.Settings;
 
 namespace HSMServer.Notifications
 {
@@ -28,18 +29,18 @@ namespace HSMServer.Notifications
         private readonly AddressBook _addressBook;
         private readonly IUserManager _userManager;
         private readonly TreeViewModel _tree;
-        private readonly IConfigurationProvider _config;
+        private readonly TelegramConfig _config;
 
-        private string BotName => $"@{_config.ReadOrDefault(ConfigurationConstants.BotName).Value.ToLower()}";
+        private string BotName => $"@{_config.BotName.ToLower()}";
 
 
         internal TelegramUpdateHandler(AddressBook addressBook, IUserManager userManager,
-            TreeViewModel tree, IConfigurationProvider config)
+            TreeViewModel tree, TelegramConfig config)
         {
             _addressBook = addressBook;
             _userManager = userManager;
-            _tree = tree;
             _config = config;
+            _tree = tree;
         }
 
 
@@ -147,6 +148,6 @@ namespace HSMServer.Notifications
                 "↕️" - sensor value alert
             """.EscapeMarkdownV2();
 
-        private static string ServerStatus() => $"HSM server {ServerConfig.Version.RemoveTailZeroes()} is alive.".EscapeMarkdownV2();
+        private static string ServerStatus() => $"HSM server {ServerConfig.Version} is alive.".EscapeMarkdownV2();
     }
 }

@@ -65,7 +65,7 @@ namespace HSMServer.Model.TreeViewModel
                 DataAlerts[Type] = model.DataPolicies.Select(p => BuildAlert(p, model)).ToList();
         }
 
-        private DataAlertViewModel BuildAlert(Policy policy, BaseSensorModel sensor) => policy switch
+        private static DataAlertViewModel BuildAlert(Policy policy, BaseSensorModel sensor) => policy switch
         {
             IntegerDataPolicy p => new SingleDataAlertViewModel<IntegerValue, int>(p, sensor),
             DoubleDataPolicy p => new SingleDataAlertViewModel<DoubleValue, double>(p, sensor),

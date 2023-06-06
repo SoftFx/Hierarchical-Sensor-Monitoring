@@ -1,11 +1,11 @@
 ﻿using HSMCommon.Constants;
 using HSMServer.Authentication;
-using HSMServer.Configuration;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Model;
 using HSMServer.Extensions;
 using HSMServer.Model.TreeViewModel;
 using HSMServer.Notification.Settings;
+using HSMServer.Settings;
 using System;
 using System.Linq;
 using System.Threading;
@@ -31,9 +31,9 @@ namespace HSMServer.Notifications
             AllowedUpdates = { }, // receive all update types
         };
 
-        private readonly IConfigurationProvider _configurationProvider;
         private readonly TelegramUpdateHandler _updateHandler;
         private readonly IUserManager _userManager;
+        private readonly TelegramConfig _config;
         private readonly TreeViewModel _tree;
 
         private CancellationTokenSource _tokenSource = new();
@@ -41,25 +41,23 @@ namespace HSMServer.Notifications
 
         private bool IsBotRunning => _bot is not null;
 
-        private string BotToken => _configurationProvider.ReadOrDefault(ConfigurationConstants.BotToken).Value;
+        private string BotToken => _config.BotToken;
 
-        private bool AreBotMessagesEnabled => bool.TryParse(_configurationProvider.ReadOrDefault(
-            ConfigurationConstants.AreBotMessagesEnabled).Value, out var result) && result;
+        private bool AreBotMessagesEnabled => _config.IsRunning;
 
 
-        internal TelegramBot(IUserManager userManager, ITreeValuesCache cache, TreeViewModel tree,
-            IConfigurationProvider configurationProvider)
+        internal TelegramBot(IUserManager userManager, ITreeValuesCache cache, TreeViewModel tree, TelegramConfig config)
         {
             _userManager = userManager;
             _userManager.Removed += _addressBook.RemoveAllChats;
 
+            _config = config;
             _tree = tree;
 
             cache.ChangeProductEvent += RemoveProductEventHandler;
             cache.NotifyAboutChangesEvent += SendMessage;
 
-            _configurationProvider = configurationProvider;
-            _updateHandler = new(_addressBook, _userManager, _tree, _configurationProvider);
+            _updateHandler = new(_addressBook, _userManager, _tree, config);
 
             FillAddressBook();
         }
@@ -72,7 +70,7 @@ namespace HSMServer.Notifications
             await StopBot();
         }
 
-        internal string BotName => _configurationProvider.ReadOrDefault(ConfigurationConstants.BotName).Value;
+        internal string BotName => _config.BotName;
 
         internal string GetInvitationLink(User user) =>
             $"https://t.me/{BotName}?start={_addressBook.BuildInvitationToken(user)}";

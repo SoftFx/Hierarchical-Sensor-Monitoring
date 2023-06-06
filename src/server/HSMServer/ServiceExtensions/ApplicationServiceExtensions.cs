@@ -28,8 +28,10 @@ namespace HSMServer.ServiceExtensions;
 
 public static class ApplicationServiceExtensions
 {
-    public static IServiceCollection AddApplicationServices(this IServiceCollection services)
+    public static IServiceCollection AddApplicationServices(this IServiceCollection services, IServerConfig config)
     {
+        services.AddSingleton(config);
+
         services.AddSingleton<IDatabaseCore, DatabaseCore>();
         services.AddSingleton<IUpdatesQueue, UpdatesQueue>();
         services.AddSingleton<ITreeValuesCache, TreeValuesCache>();
