@@ -23,6 +23,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text.Json;
 using System.Threading.Tasks;
 using HSMServer.Model.History;
 using HSMServer.Model.Model.History;
@@ -104,6 +105,33 @@ namespace HSMServer.Controllers
                sensors = sensors.Select(x => x.ToJSTree()).ToList()
             });
             return PartialView("_Tree", _treeViewModel.GetUserTree(CurrentUser));
+        }
+        
+        [HttpGet]
+        public IActionResult GetRootNodes()
+        {
+            // if (_treeViewModel.NodesToRender.TryGetValue(CurrentUser.Id, out var list))
+            // {
+            //     list ??= new List<Guid>();
+            //
+            //     list.Add(nodeId);
+            // }
+            // else _treeViewModel.NodesToRender.TryAdd(CurrentUser.Id, new List<Guid>() {nodeId});
+            //
+            // _treeViewModel.Nodes.TryGetValue(nodeId, out var nodeViewModel);
+            // var shallow = new NodeShallowModel(nodeViewModel, CurrentUser);
+            // var nodes = shallow.Data.Nodes.Select(x => new NodeShallowModel(x.Value, CurrentUser));
+            // var sensors = shallow.Data.Sensors.Select(x => new SensorShallowModel(x.Value, CurrentUser));
+
+
+            var test = _treeViewModel.Nodes.Where(x => x.Value.Parent is null).Select(x => new NodeShallowModel(x.Value, CurrentUser));
+            return Json(test.Select(x => JsonSerializer.Deserialize<object>(x.ToJSTree())).ToList());
+            // return Json(new
+            // {
+            //     nodes = nodes.Select(x => x.ToJSTree()).ToList(),
+            //     sensors = sensors.Select(x => x.ToJSTree()).ToList()
+            // });
+            // return PartialView("_Tree", _treeViewModel.GetUserTree(CurrentUser));
         }
         
         [HttpPut]
