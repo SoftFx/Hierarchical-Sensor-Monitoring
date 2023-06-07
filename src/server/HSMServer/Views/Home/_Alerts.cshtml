@@ -3,17 +3,22 @@
 @using HSMServer.Controllers
 @using HSMServer.Core.Model.Policies.Infrastructure
 @using HSMServer.Helpers
+@using HSMServer.Model.ViewModel
 
-@model HSMServer.Model.ViewModel.NodeInfoBaseViewModel
+@model NodeInfoBaseViewModel
 
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
+
+@{
+    var entity = Model is SensorInfoViewModel ? "sensor" : "sensor(s)";
+}
 
 
 <label class="col-form-label fw-bold">Alerts:</label>
 
 <div class="d-flex ms-3 text-nowrap align-self-center">
     <span class="d-flex align-items-center" style="min-width: 18rem">
-       Time to sensor(s) live <i class='fas fa-question-circle ps-1' title='Time format: dd.hh:mm:ss min value 00:01:00. If the sensor doesn`t receive new data within the specified time interval, a notification sends'></i>
+       Time to @entity live <i class='fas fa-question-circle ps-1' title='Time format: dd.hh:mm:ss min value 00:01:00. If the sensor doesn`t receive new data within the specified time interval, a notification sends'></i>
     </span>
     <div class="pb-0" style="width: 17rem;">
         <label id="labelInterval" class="col-form-label py-0">@Model.ExpectedUpdateInterval.DisplayInterval</label>
@@ -26,7 +31,7 @@
 
 <div class="d-flex mt-1 ms-3 text-nowrap">
     <span class="d-flex align-items-center" style="min-width: 18rem">
-        Sensitivity sensor(s) interval <i class='fas fa-question-circle ps-1' title='Time format: dd.hh:mm:ss min value 00:01:00. If the sensor doesn`t return to Ok status after the specified time inverval, a notification sends'></i>
+        Sensitivity @entity interval <i class='fas fa-question-circle ps-1' title='Time format: dd.hh:mm:ss min value 00:01:00. If the sensor doesn`t return to Ok status after the specified time inverval, a notification sends'></i>
     </span>
     <div class="pb-0" style="width: 17rem;">
         <label id="labelRestoreInterval" class="col-form-label py-0">@Model.SensorRestorePolicy.DisplayInterval</label>

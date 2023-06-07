@@ -58,11 +58,11 @@ namespace HSMServer.BackgroundServices
             {
                 var id = sensor.Id;
 
-                _logger.Info("Start clear: {id} product {product} path {path}", id, sensor.RootProductName, sensor.Path);
+                _logger.Info("Start clearing: {id} product {product} path {path}", id, sensor.RootProductName, sensor.Path);
 
                 _cache.CheckSensorHistory(id);
 
-                _logger.Info("Stop clear: {id} product {product} path {path}", id, sensor.RootProductName, sensor.Path);
+                _logger.Info("Stop clearing: {id} product {product} path {path}", id, sensor.RootProductName, sensor.Path);
             }
         }
     }

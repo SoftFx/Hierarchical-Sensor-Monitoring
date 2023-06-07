@@ -82,5 +82,15 @@ namespace HSMServer.Model
                 TimeInterval.Forever,
                 TimeInterval.Custom
             };
+
+        public static List<TimeInterval> ForCleanup { get; } =
+            new()
+            {
+                TimeInterval.FromParent,
+                TimeInterval.None,
+                TimeInterval.Week,
+                TimeInterval.Month,
+                TimeInterval.Custom
+            };
     }
 }

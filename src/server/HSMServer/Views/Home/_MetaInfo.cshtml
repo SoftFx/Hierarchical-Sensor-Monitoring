@@ -76,6 +76,7 @@
 
         <div class="collapse" id="metaInfoCollapse">
             @await Html.PartialAsync("_GeneralInfo", Model)
+            @await Html.PartialAsync("_CleanupSettings", Model)
             @await Html.PartialAsync("_Alerts", Model)
         </div>
 

@@ -42,6 +42,8 @@ namespace HSMServer.Model.Folders
 
             ExpectedUpdateInterval = GetPolicy(policies, 0, PredefinedIntervals.ForTimeout);
             SensorRestorePolicy = GetPolicy(policies, 1, PredefinedIntervals.ForRestore);
+            SavedHistoryPeriod = GetPolicy(policies, 2, PredefinedIntervals.ForCleanup);
+            SelfDestroyPeriod = GetPolicy(policies, 3, PredefinedIntervals.ForCleanup);
         }
 
         internal FolderModel(FolderAdd addModel)
@@ -58,6 +60,8 @@ namespace HSMServer.Model.Folders
 
             ExpectedUpdateInterval = GetDefaultPolicy(PredefinedIntervals.ForTimeout);
             SensorRestorePolicy = GetDefaultPolicy(PredefinedIntervals.ForRestore);
+            SavedHistoryPeriod = GetDefaultPolicy(PredefinedIntervals.ForCleanup);
+            SelfDestroyPeriod = GetDefaultPolicy(PredefinedIntervals.ForCleanup);
         }
 
 
@@ -103,6 +107,10 @@ namespace HSMServer.Model.Folders
                 policies.Add(ExpectedUpdateInterval.ToEntity());
             if (SensorRestorePolicy != null)
                 policies.Add(SensorRestorePolicy.ToEntity());
+            if (SavedHistoryPeriod != null)
+                policies.Add(SavedHistoryPeriod.ToEntity());
+            if (SelfDestroyPeriod != null)
+                policies.Add(SelfDestroyPeriod.ToEntity());
 
             return policies;
         }
