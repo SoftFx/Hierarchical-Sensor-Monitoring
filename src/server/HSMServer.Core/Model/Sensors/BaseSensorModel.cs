@@ -47,7 +47,7 @@ namespace HSMServer.Core.Model
         public SensorState State { get; private set; }
 
 
-        public SensorResult? Status => State == SensorState.Muted ? _muteResult : Storage.Result;
+        public SensorResult? Status => State == SensorState.Muted ? _muteResult : Storage.Result + DataPolicies.Result;
 
         //public bool IsWaitRestore => !ServerPolicy.CheckRestorePolicies(Status.Status, LastUpdateTime).IsOk;
         public bool IsWaitRestore => false;
@@ -106,7 +106,7 @@ namespace HSMServer.Core.Model
         internal void ResetSensor()
         {
             //ServerPolicy.Reset();
-            //DataPolicies.Reset();
+            DataPolicies.Reset();
 
             Storage.Clear();
         }

@@ -4,18 +4,18 @@
     {
         private const SensorStatus FailStatus = SensorStatus.Error;
 
-       // private readonly SensorResult _fail;
+        private readonly SensorResult _failResult;
 
 
         internal CorrectDataTypePolicy()
         {
-            //_fail = new(FailStatus, $"Sensor value type is not {typeof(T).Name}", FailStatus.ToIcon());
+            _failResult = new(FailStatus, $"Sensor value type is not {typeof(T).Name}");
         }
 
 
-        //internal SensorResult Validate(T value)
-        //{
-        //    return value is not null ? Ok : _fail;
-        //}
+        internal SensorResult Validate(T value)
+        {
+            return value is not null ? Ok : _failResult;
+        }
     }
 }

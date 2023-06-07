@@ -33,11 +33,9 @@ namespace HSMServer.Core.Model.Policies
         {
             valueT = value as T;
 
-            //Result = _typePolicy.Validate(valueT);
+            Result = _typePolicy.Validate(valueT);
 
-            //return Result.IsOk && CalculateStorageResult(valueT);
-
-            return value is T;
+            return Result.IsOk && CalculateStorageResult(valueT);
         }
     }
 
@@ -59,10 +57,10 @@ namespace HSMServer.Core.Model.Policies
             //foreach (var (_, policy) in _storage)
             //    Result += policy.Validate(value, _sensor);
 
-            //Result += SensorResult.FromValue(value); //add user status
-
             return true;
         }
+
+        internal override void Attach(BaseSensorModel sensor) => _sensor = sensor;
 
         internal override void Add(DataPolicy<T> policy) => _storage.TryAdd(policy.Id, (U)policy);
 
@@ -99,7 +97,6 @@ namespace HSMServer.Core.Model.Policies
                 }
         }
 
-        internal override void Attach(BaseSensorModel sensor) => _sensor = sensor;
 
         public override IEnumerator<Policy> GetEnumerator() => _storage.Values.GetEnumerator();
     }
