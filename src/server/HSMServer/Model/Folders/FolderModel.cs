@@ -40,10 +40,10 @@ namespace HSMServer.Model.Folders
 
             var policies = entity.ServerPolicies;
 
-            ExpectedUpdateInterval = GetPolicy(policies, 0, PredefinedIntervals.ForTimeout);
-            SensorRestorePolicy = GetPolicy(policies, 1, PredefinedIntervals.ForRestore);
-            SavedHistoryPeriod = GetPolicy(policies, 2, PredefinedIntervals.ForCleanup);
-            SelfDestroyPeriod = GetPolicy(policies, 3, PredefinedIntervals.ForCleanup);
+            ExpectedUpdateInterval = GetPolicy(policies, 0, PredefinedIntervals.ForTimeout, GetDefaultPolicy);
+            SensorRestorePolicy = GetPolicy(policies, 1, PredefinedIntervals.ForRestore, GetDefaultPolicy);
+            SavedHistoryPeriod = GetPolicy(policies, 2, PredefinedIntervals.ForCleanup, GetDefaultCleanup);
+            SelfDestroyPeriod = GetPolicy(policies, 3, PredefinedIntervals.ForCleanup, GetDefaultCleanup);
         }
 
         internal FolderModel(FolderAdd addModel)
@@ -60,8 +60,8 @@ namespace HSMServer.Model.Folders
 
             ExpectedUpdateInterval = GetDefaultPolicy(PredefinedIntervals.ForTimeout);
             SensorRestorePolicy = GetDefaultPolicy(PredefinedIntervals.ForRestore);
-            SavedHistoryPeriod = GetDefaultPolicy(PredefinedIntervals.ForCleanup);
-            SelfDestroyPeriod = GetDefaultPolicy(PredefinedIntervals.ForCleanup);
+            SavedHistoryPeriod = GetDefaultCleanup(PredefinedIntervals.ForCleanup);
+            SelfDestroyPeriod = GetDefaultCleanup(PredefinedIntervals.ForCleanup);
         }
 
 
@@ -115,14 +115,20 @@ namespace HSMServer.Model.Folders
             return policies;
         }
 
-        private static TimeIntervalViewModel GetPolicy(List<TimeIntervalEntity> entities, int index, List<TimeInterval> predefinedIntervals) =>
+        private static TimeIntervalViewModel GetPolicy(List<TimeIntervalEntity> entities, int index,
+            List<TimeInterval> predefinedIntervals, Func<List<TimeInterval>, TimeIntervalViewModel> getDefault) =>
             entities.Count > index
                 ? new TimeIntervalViewModel(entities[index], predefinedIntervals)
-                : GetDefaultPolicy(predefinedIntervals);
+                : getDefault(predefinedIntervals);
 
-        private static TimeIntervalViewModel GetDefaultPolicy(List<TimeInterval> predefinedIntervals) =>
+        private TimeIntervalViewModel GetDefaultPolicy(List<TimeInterval> predefinedIntervals) =>
             new(GetDefaultPolicyEntity(), predefinedIntervals);
 
+        private TimeIntervalViewModel GetDefaultCleanup(List<TimeInterval> predefinedIntervals) =>
+            new(GetDefaultCleanupEntity(), predefinedIntervals);
+
         private static TimeIntervalEntity GetDefaultPolicyEntity() => new((byte)Core.Model.TimeInterval.Custom, 0L);
+
+        private static TimeIntervalEntity GetDefaultCleanupEntity() => new((byte)Core.Model.TimeInterval.Month, 0L);
     }
 }
