@@ -15,8 +15,6 @@ namespace HSMServer.Model.UserTreeShallowCopy
 
         public bool IsMutedState => _mutedValue ?? false;
 
-        public virtual int ChildrenCount => 0;
-
 
         protected BaseNodeShallowModel(T data, User user) : base(data)
         {
@@ -34,10 +32,7 @@ namespace HSMServer.Model.UserTreeShallowCopy
             "isGrafanaEnabled": "{{IsGrafanaEnabled}}",
             "isAccountsEnable": "{{IsAccountsEnable}}",
             "groups": {{GroupsJsonDict}},
-            "isMutedState": "{{_mutedValue}}",
-            "childrenCount": "{{ChildrenCount}}",
-            "parent" : "{{(Data.Parent is null ? '#' : Data.Parent.Id)}}",
-            "id" : "{{Data.Id}}"
+            "isMutedState": "{{_mutedValue}}"
         }
         """;
     }

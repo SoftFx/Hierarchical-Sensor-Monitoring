@@ -10,7 +10,7 @@
 }
 
 
-<li class="jstree-closed" id='@data.EncodedId' title='@data.Tooltip' children="true" data-jstree='@Model.ToJSTree()'>
+<li class="jstree-closed" id='@data.EncodedId' title='@data.Tooltip' data-jstree='@Model.ToJSTree()'>
     <span class="@(Model.IsMutedState ? "muted-state-text" : "")"> @Html.Raw(data.Name.GetShortNodeName()) @Model.SensorsCountString </span>
 
     @if (!data.IsEmpty && !Model.IsMutedState && showIcons)

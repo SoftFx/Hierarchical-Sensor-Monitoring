@@ -133,7 +133,7 @@
 <script>
     initializeTree();
     initialize();
-    
+
     $(document).ready(() => {
         $('#updateTime').empty().append('Update Time: ' + new Date().toUTCString());
         $('#updateTime').empty().append('Update Time: ' + new Date().toUTCString());
@@ -260,7 +260,7 @@
     var isRefreshing = false;
     function updateTreeTimer() {
         clearTimeout(refreshTreeTimeoutId);
-        
+
         $.ajax({
             type: 'POST',
             url: refreshTree,
@@ -273,7 +273,7 @@
             
             $('#jstree').jstree(true).settings.core.data = treeData;
             $('#jstree').jstree(true).refresh(true);
-            
+
             refreshTreeTimeoutId = setTimeout(updateTreeTimer, interval);
             updateSelectedNodeDataTimeoutId = setTimeout(updateSelectedNodeData, interval);
             

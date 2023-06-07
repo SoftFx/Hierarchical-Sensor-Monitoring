@@ -23,7 +23,6 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Text.Json;
 using System.Threading.Tasks;
 using HSMServer.Model.History;
 using HSMServer.Model.Model.History;
@@ -89,18 +88,16 @@ namespace HSMServer.Controllers
             if (_treeViewModel.NodesToRender.TryGetValue(CurrentUser.Id, out var list))
             {
                 list ??= new List<Guid>();
-
                 list.Add(guid);
             }
             else _treeViewModel.NodesToRender.TryAdd(CurrentUser.Id, new List<Guid>() {guid});
             
             if (_treeViewModel.Nodes.TryGetValue(guid, out var node))
             {
-                var shallow = new NodeShallowModel(node, CurrentUser);
-                if ( _treeViewModel.GetUserNode(node, CurrentUser) is NodeShallowModel qwe)
-                    return PartialView("_TreeNode", qwe);
+                if ( _treeViewModel.GetUserNode(node, CurrentUser) is NodeShallowModel nodeShallowModel)
+                    return PartialView("_TreeNode", nodeShallowModel);
             }
-            var shallowCopy = new NodeShallowModel(node, CurrentUser);
+            
             return PartialView("_TreeNode", new NodeShallowModel(node, CurrentUser));
         }
        

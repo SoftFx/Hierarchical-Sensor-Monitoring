@@ -143,16 +143,6 @@ namespace HSMServer.Model.TreeViewModel
             return node;
         }
 
-        // public NodeShallowModel GetNodeRendered(ProductNodeViewModel product, User user)
-        // {
-        //     var node = FilterNodes(product, user);
-        //     
-        //     ReduceNesting(node, 1);
-        //
-        //     return node;
-        // }
-
-
         internal IEnumerable<ProductNodeViewModel> GetRootProducts() =>
             Nodes.Where(x => x.Value.Parent is null or FolderModel).Select(x => x.Value);
 
@@ -282,7 +272,6 @@ namespace HSMServer.Model.TreeViewModel
                             UpdateProductNotificationSettings(root);
                         }
                     }
-
                     break;
 
                 case ActionType.Update:
@@ -291,15 +280,13 @@ namespace HSMServer.Model.TreeViewModel
                     break;
 
                 case ActionType.Delete:
-                    if (Sensors.TryRemove(model.Id, out var removedSensor) &&
-                        Nodes.TryGetValue(model.Parent.Id, out var parentProduct))
+                    if (Sensors.TryRemove(model.Id, out var removedSensor) && Nodes.TryGetValue(model.Parent.Id, out var parentProduct))
                     {
                         parentProduct.Sensors.TryRemove(model.Id, out var _);
 
                         if (removedSensor.RootProduct.Notifications.RemoveSensor(model.Id))
                             UpdateProductNotificationSettings(removedSensor.RootProduct);
                     }
-
                     break;
             }
         }
@@ -319,8 +306,7 @@ namespace HSMServer.Model.TreeViewModel
                     break;
 
                 case ActionType.Delete:
-                    if (AccessKeys.TryRemove(model.Id, out _) &&
-                        Nodes.TryGetValue(model.ProductId, out var parentProduct))
+                    if (AccessKeys.TryRemove(model.Id, out _) && Nodes.TryGetValue(model.ProductId, out var parentProduct))
                         parentProduct.AccessKeys.TryRemove(model.Id, out var _);
                     break;
             }

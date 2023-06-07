@@ -33,26 +33,26 @@ window.initializeTree = function () {
         },
         "plugins": ["state", "contextmenu", "themes", "wholerow", "sort"],
         "sort": function (a, b) {
-            // let isTimeSort = sortingType.val() == "1";
-            //
-            // let nodeA = this.get_node(a).data.jstree;
-            // let nodeB = this.get_node(b).data.jstree;
-            //
-            // let aIsFolder = isFolder(nodeA);
-            // let bIsFolder = isFolder(nodeB);
-            //
-            // if (aIsFolder ^ bIsFolder) {
-            //     return aIsFolder ? -1 : 1;
-            // }
-            //
-            // if (isTimeSort) {
-            //     [a, b] = [nodeA.time, nodeB.time];
-            // }
-            // else {
-            //     [a, b] = [nodeB.title.toLowerCase(), nodeA.title.toLowerCase()];
-            // }
-            //
-            // return a < b ? 1 : -1;
+            let isTimeSort = sortingType.val() == "1";
+
+            let nodeA = this.get_node(a).data.jstree;
+            let nodeB = this.get_node(b).data.jstree;
+
+            let aIsFolder = isFolder(nodeA);
+            let bIsFolder = isFolder(nodeB);
+
+            if (aIsFolder ^ bIsFolder) {
+                return aIsFolder ? -1 : 1;
+            }
+
+            if (isTimeSort) {
+                [a, b] = [nodeA.time, nodeB.time];
+            }
+            else {
+                [a, b] = [nodeB.title.toLowerCase(), nodeA.title.toLowerCase()];
+            }
+
+            return a < b ? 1 : -1;
         }
     }).on("state_ready.jstree", function () {
         selectNodeAjax($(this).jstree('get_selected')[0]);

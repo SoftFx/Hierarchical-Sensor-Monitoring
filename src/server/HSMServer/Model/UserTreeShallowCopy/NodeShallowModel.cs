@@ -24,11 +24,7 @@ namespace HSMServer.Model.UserTreeShallowCopy
 
         public override bool IsAccountsIgnore => AccountState.IsAllIgnored;
         
-        public override int ChildrenCount => VisibleChildrenCount;
-
         public int VisibleSensorsCount { get; private set; }
-        
-        public int VisibleChildrenCount { get; private set; }
 
         public string SensorsCountString
         {
@@ -67,7 +63,6 @@ namespace HSMServer.Model.UserTreeShallowCopy
             if (user.IsSensorVisible(sensor))
             {
                 VisibleSensorsCount++;
-                VisibleChildrenCount++;
                 Sensors.Add(shallowSensor);
             }
         }
@@ -90,7 +85,6 @@ namespace HSMServer.Model.UserTreeShallowCopy
             GrafanaState.CalculateState(node.GrafanaState);
 
             VisibleSensorsCount += node.VisibleSensorsCount;
-            VisibleChildrenCount++;
             if (node.VisibleSensorsCount > 0 || user.IsEmptyProductVisible(node.Data))
                 Nodes.Add(node);
         }
