@@ -103,7 +103,7 @@ namespace HSMServer.Controllers
             var shallowCopy = new NodeShallowModel(node, CurrentUser);
             return PartialView("_TreeNode", new NodeShallowModel(node, CurrentUser));
         }
-        
+       
         [HttpPut]
         public void RemoveRenderingNode(Guid nodeId)
         {
@@ -113,6 +113,12 @@ namespace HSMServer.Controllers
         
         [HttpPost]
         public IActionResult RefreshTree()
+        {
+            return PartialView("_Tree", _treeViewModel.GetUserTree(CurrentUser));
+        }
+        
+        [HttpGet]
+        public IActionResult GetTree()
         {
             return PartialView("_Tree", _treeViewModel.GetUserTree(CurrentUser));
         }
