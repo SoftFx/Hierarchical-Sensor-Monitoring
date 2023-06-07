@@ -66,6 +66,7 @@ namespace HSMServer.Model.TreeViewModel
             foreach (var product in GetUserProducts(user))
             {
                 var node = FilterNodes(product, user);
+
                 void ReduceNesting(NodeShallowModel node, int depth)
                 {
                     depth--;
@@ -74,20 +75,16 @@ namespace HSMServer.Model.TreeViewModel
                         if (depth <= 0)
                         {
                             if (nodeIds is not null && nodeIds.Contains(subNode.Data.Id)) continue;
-                            
-                            if (subNode.Sensors.Count > 1)
-                                subNode.Sensors.RemoveRange(1, subNode.Sensors.Count - 1);
-                            
-                            if (subNode.Nodes.Count > 1)
-                                subNode.Nodes.RemoveRange(1, subNode.Nodes.Count - 1);
+                            subNode.Sensors.Clear();
+                            subNode.Nodes.Clear();
                         }
-                        
+
                         ReduceNesting(subNode, depth);
                     }
                 }
-                
+
                 ReduceNesting(node, product.RootProduct.DefinedRenderDepth);
-                
+
                 if (node.VisibleSensorsCount > 0 || user.IsEmptyProductVisible(product))
                 {
                     var folderId = node.Data.FolderId;
@@ -115,13 +112,31 @@ namespace HSMServer.Model.TreeViewModel
             return tree;
         }
 
+        public BaseShallowModel GetUserNode(ProductNodeViewModel node, User user)
+        {
+            var test = FilterNodes(node, user);
+           
+            if (test.VisibleSensorsCount > 0 || user.IsEmptyProductVisible(node))
+            {
+                foreach (var nestednode in test.Nodes)
+                {
+                    nestednode.Sensors.Clear();
+                    nestednode.Nodes.Clear();
+                }
+
+                return test;
+            }
+
+            return default;
+        }
+
         private NodeShallowModel FilterNodes(ProductNodeViewModel product, User user)
         {
             var node = new NodeShallowModel(product, user);
-                
+
             foreach (var (_, childNode) in product.Nodes)
                 node.AddChild(FilterNodes(childNode, user), user);
-                
+
             foreach (var (_, sensor) in product.Sensors)
                 node.AddChild(new SensorShallowModel(sensor, user), user);
 
@@ -267,6 +282,7 @@ namespace HSMServer.Model.TreeViewModel
                             UpdateProductNotificationSettings(root);
                         }
                     }
+
                     break;
 
                 case ActionType.Update:
@@ -275,13 +291,15 @@ namespace HSMServer.Model.TreeViewModel
                     break;
 
                 case ActionType.Delete:
-                    if (Sensors.TryRemove(model.Id, out var removedSensor) && Nodes.TryGetValue(model.Parent.Id, out var parentProduct))
+                    if (Sensors.TryRemove(model.Id, out var removedSensor) &&
+                        Nodes.TryGetValue(model.Parent.Id, out var parentProduct))
                     {
                         parentProduct.Sensors.TryRemove(model.Id, out var _);
 
                         if (removedSensor.RootProduct.Notifications.RemoveSensor(model.Id))
                             UpdateProductNotificationSettings(removedSensor.RootProduct);
                     }
+
                     break;
             }
         }

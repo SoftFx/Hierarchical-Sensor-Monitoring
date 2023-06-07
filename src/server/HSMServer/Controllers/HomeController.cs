@@ -81,57 +81,27 @@ namespace HSMServer.Controllers
 
             return PartialView("_NodeDataPanel", viewModel);
         }
-
-        [HttpPost]
-        public IActionResult AddRenderingNode(Guid nodeId)
+        
+        [HttpGet]
+        public IActionResult GetNode(string id)
         {
-            
+            var guid = Guid.Parse(id);
             if (_treeViewModel.NodesToRender.TryGetValue(CurrentUser.Id, out var list))
             {
                 list ??= new List<Guid>();
 
-                list.Add(nodeId);
+                list.Add(guid);
             }
-            else _treeViewModel.NodesToRender.TryAdd(CurrentUser.Id, new List<Guid>() {nodeId});
-
-            _treeViewModel.Nodes.TryGetValue(nodeId, out var nodeViewModel);
-            var shallow = new NodeShallowModel(nodeViewModel, CurrentUser);
-            var nodes = shallow.Data.Nodes.Select(x => new NodeShallowModel(x.Value, CurrentUser));
-            var sensors = shallow.Data.Sensors.Select(x => new SensorShallowModel(x.Value, CurrentUser));
-          
-            return Json(new
+            else _treeViewModel.NodesToRender.TryAdd(CurrentUser.Id, new List<Guid>() {guid});
+            
+            if (_treeViewModel.Nodes.TryGetValue(guid, out var node))
             {
-               nodes = nodes.Select(x => x.ToJSTree()).ToList(),
-               sensors = sensors.Select(x => x.ToJSTree()).ToList()
-            });
-            return PartialView("_Tree", _treeViewModel.GetUserTree(CurrentUser));
-        }
-        
-        [HttpGet]
-        public IActionResult GetRootNodes()
-        {
-            // if (_treeViewModel.NodesToRender.TryGetValue(CurrentUser.Id, out var list))
-            // {
-            //     list ??= new List<Guid>();
-            //
-            //     list.Add(nodeId);
-            // }
-            // else _treeViewModel.NodesToRender.TryAdd(CurrentUser.Id, new List<Guid>() {nodeId});
-            //
-            // _treeViewModel.Nodes.TryGetValue(nodeId, out var nodeViewModel);
-            // var shallow = new NodeShallowModel(nodeViewModel, CurrentUser);
-            // var nodes = shallow.Data.Nodes.Select(x => new NodeShallowModel(x.Value, CurrentUser));
-            // var sensors = shallow.Data.Sensors.Select(x => new SensorShallowModel(x.Value, CurrentUser));
-
-
-            var test = _treeViewModel.Nodes.Where(x => x.Value.Parent is null).Select(x => new NodeShallowModel(x.Value, CurrentUser));
-            return Json(test.Select(x => JsonSerializer.Deserialize<object>(x.ToJSTree())).ToList());
-            // return Json(new
-            // {
-            //     nodes = nodes.Select(x => x.ToJSTree()).ToList(),
-            //     sensors = sensors.Select(x => x.ToJSTree()).ToList()
-            // });
-            // return PartialView("_Tree", _treeViewModel.GetUserTree(CurrentUser));
+                var shallow = new NodeShallowModel(node, CurrentUser);
+                if ( _treeViewModel.GetUserNode(node, CurrentUser) is NodeShallowModel qwe)
+                    return PartialView("_TreeNode", qwe);
+            }
+            var shallowCopy = new NodeShallowModel(node, CurrentUser);
+            return PartialView("_TreeNode", new NodeShallowModel(node, CurrentUser));
         }
         
         [HttpPut]
