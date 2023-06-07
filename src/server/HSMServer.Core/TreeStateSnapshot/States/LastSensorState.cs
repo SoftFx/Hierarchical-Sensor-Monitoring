@@ -14,6 +14,13 @@ namespace HSMServer.Core.TreeStateSnapshot
         public bool IsDefault => History.IsDefault && !IsExpired;
 
 
+        public void SetLastUpdate(DateTime lastUpdate)
+        {
+            IsExpired = false;
+            History.To = lastUpdate;
+        }
+
+
         public void FromEntity(SensorStateEntity entity)
         {
             IsExpired = entity.IsExpired;

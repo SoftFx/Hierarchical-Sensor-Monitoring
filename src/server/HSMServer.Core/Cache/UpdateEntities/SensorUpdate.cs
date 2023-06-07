@@ -26,6 +26,6 @@ namespace HSMServer.Core.Cache.UpdateEntities
         PolicyOperation Operation,
         TargetValue Target,
         SensorStatus Status,
-        string Comment
+        string Template
     );
 }

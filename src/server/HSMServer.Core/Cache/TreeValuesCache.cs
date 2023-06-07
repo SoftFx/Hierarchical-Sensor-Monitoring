@@ -41,9 +41,7 @@ namespace HSMServer.Core.Cache
         public event Action<AccessKeyModel, ActionType> ChangeAccessKeyEvent;
         public event Action<BaseSensorModel, ActionType> ChangeSensorEvent;
         public event Action<ProductModel, ActionType> ChangeProductEvent;
-
-        public event Action<BaseSensorModel, SensorResult> NotifyAboutChangesEvent;
-
+        public event Action<PolicyResult> ChangePolicyResultEvent;
 
         public TreeValuesCache(IDatabaseCore database, ITreeStateSnapshot snapshot, IUpdatesQueue updatesQueue)
         {
@@ -331,7 +329,9 @@ namespace HSMServer.Core.Cache
 
         public void NotifyAboutChanges(BaseSensorModel sensor)
         {
-            //NotifyAboutChangesEvent?.Invoke(sensor, oldStatus);
+            if (!sensor.DataPolicies.PolicyResult.IsOk)
+                ChangePolicyResultEvent?.Invoke(sensor.DataPolicies.PolicyResult);
+
             ChangeSensorEvent?.Invoke(sensor, ActionType.Update);
         }
 
@@ -473,11 +473,7 @@ namespace HSMServer.Core.Cache
             if (sensor.TryAddValue(value) && sensor.LastDbValue != null)
             {
                 _database.AddSensorValue(sensor.LastDbValue.ToEntity(sensor.Id));
-
-                var snapshot = _snapshot.Sensors[sensor.Id];
-
-                snapshot.IsExpired = false;
-                snapshot.History.To = sensor.LastDbValue.ReceivingTime;
+                _snapshot.Sensors[sensor.Id].SetLastUpdate(sensor.LastDbValue.ReceivingTime);
             }
 
             NotifyAboutChanges(sensor);
@@ -826,7 +822,7 @@ namespace HSMServer.Core.Cache
             foreach (var (sensorId, value) in values)
                 if (value is not null && _sensors.TryGetValue(sensorId, out var sensor))
                 {
-                    sensor.TryAddValue(value);
+                    sensor.AddDbValue(value);
                     _snapshot.Sensors[sensorId].History.To = sensor.LastValue.ReceivingTime;
                 }
 

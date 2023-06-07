@@ -22,8 +22,7 @@ namespace HSMServer.Core.Cache
         event Action<BaseSensorModel, ActionType> ChangeSensorEvent;
         event Action<AccessKeyModel, ActionType> ChangeAccessKeyEvent;
 
-        //event Action<BaseSensorModel, SensorResult> NotifyAboutChangesEvent;
-
+        event Action<PolicyResult> ChangePolicyResultEvent;
 
         List<ProductModel> GetNodes();
         List<BaseSensorModel> GetSensors();
@@ -54,7 +53,6 @@ namespace HSMServer.Core.Cache
         void CheckSensorHistory(Guid sensorId);
         void ClearNodeHistory(Guid productId);
         BaseSensorModel GetSensor(Guid sensorId);
-        //void NotifyAboutChanges(BaseSensorModel model, SensorResult oldStatus);
 
         IAsyncEnumerable<List<BaseValue>> GetSensorValues(HistoryRequestModel request);
         IAsyncEnumerable<List<BaseValue>> GetSensorValuesPage(Guid sensorId, DateTime from, DateTime to, int count);

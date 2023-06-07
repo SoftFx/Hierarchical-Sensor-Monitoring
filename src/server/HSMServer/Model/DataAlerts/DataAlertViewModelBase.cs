@@ -82,7 +82,7 @@ namespace HSMServer.Model.DataAlerts
             Operation = policy.Operation;
             Value = policy.Target.Value;
             Status = policy.Status.ToClient();
-            Comment = policy.Comment;
+            Comment = policy.Template;
         }
     }
 }

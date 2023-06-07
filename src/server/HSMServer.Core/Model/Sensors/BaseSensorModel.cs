@@ -47,7 +47,7 @@ namespace HSMServer.Core.Model
         public SensorState State { get; private set; }
 
 
-        public SensorResult? Status => State == SensorState.Muted ? _muteResult : Storage.Result + DataPolicies.Result;
+        public SensorResult? Status => State == SensorState.Muted ? _muteResult : Storage.Result + DataPolicies.SensorResult;
 
         //public bool IsWaitRestore => !ServerPolicy.CheckRestorePolicies(Status.Status, LastUpdateTime).IsOk;
         public bool IsWaitRestore => false;
@@ -79,7 +79,7 @@ namespace HSMServer.Core.Model
 
         internal abstract bool TryAddValue(BaseValue value);
 
-        internal abstract bool TryAddValue(byte[] bytes);
+        internal abstract void AddDbValue(byte[] bytes);
 
         internal abstract List<BaseValue> ConvertValues(List<byte[]> valuesBytes);
 

@@ -43,7 +43,7 @@ namespace HSMServer.Core.Model.Policies.Infrastructure
         public static string GetSingleComment<T, U>(T value, BaseSensorModel sensor, DataPolicy<T, U> policy)
             where T : BaseValue<U>
         {
-            var template = GetTemplateString(policy.Comment);
+            var template = GetTemplateString(policy.Template);
 
             return string.Format(template, sensor.RootProductName, sensor.Path, sensor.DisplayName, policy.Operation.GetDisplayName(), policy.Target.Value,
                value.Status, value.Time, value.Comment, value.Value, null, null, null, null);
@@ -53,7 +53,7 @@ namespace HSMServer.Core.Model.Policies.Infrastructure
             where T : BarBaseValue<U>
             where U : struct
         {
-            var template = GetTemplateString(policy.Comment);
+            var template = GetTemplateString(policy.Template);
 
             return string.Format(template, sensor.RootProductName, sensor.Path, sensor.DisplayName, policy.Operation.GetDisplayName(), policy.Target.Value,
                 value.Status, value.Time, value.Comment, null, value.Min, value.Max, value.Mean, value.LastValue);

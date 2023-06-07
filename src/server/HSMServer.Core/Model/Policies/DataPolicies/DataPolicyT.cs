@@ -1,14 +1,29 @@
 ﻿using HSMServer.Core.Cache.UpdateEntities;
+using System.Text.Json.Serialization;
 
 namespace HSMServer.Core.Model.Policies
 {
-    public abstract class DataPolicy<T> : Policy where T : BaseValue
+    public abstract class DataPolicy : Policy
     {
-        public SensorStatus Status { get; set; }
+        internal protected SensorResult SensorResult { get; protected set; }
 
-        public string Comment { get; set; }
+        internal protected string AlertComment { get; protected set; }
 
 
+        internal protected (string, string) AlertKey => (Icon, Template);
+
+
+        public virtual SensorStatus Status { get; set; } = SensorStatus.Ok;
+
+        public string Icon { get; set; }
+
+        [JsonPropertyName("Comment")]
+        public string Template { get; set; }
+    }
+
+
+    public abstract class DataPolicy<T> : DataPolicy where T : BaseValue
+    {
         public abstract string Property { get; set; }
 
         public abstract PolicyOperation Operation { get; set; }
@@ -20,12 +35,12 @@ namespace HSMServer.Core.Model.Policies
         {
             Operation = update.Operation;
             Property = update.Property;
-            Comment = update.Comment;
+            Template = update.Template;
             Target = update.Target;
             Status = update.Status;
         }
 
-        //internal abstract SensorResult Validate(T value, BaseSensorModel sensor);
+        internal abstract bool Validate(T value, BaseSensorModel sensor);
 
         protected abstract string GetComment(T value, BaseSensorModel sensor);
     }

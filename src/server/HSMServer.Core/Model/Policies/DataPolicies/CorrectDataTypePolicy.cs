@@ -1,21 +1,26 @@
-﻿namespace HSMServer.Core.Model.Policies
+﻿using System;
+
+namespace HSMServer.Core.Model.Policies
 {
-    internal sealed class CorrectDataTypePolicy<T> : Policy where T : BaseValue
+    internal sealed class CorrectDataTypePolicy<T> : DataPolicy where T : BaseValue
     {
-        private const SensorStatus FailStatus = SensorStatus.Error;
-
-        private readonly SensorResult _failResult;
+        internal PolicyResult PolicyResult { get; }
 
 
-        internal CorrectDataTypePolicy()
+        public override SensorStatus Status { get; set; } = SensorStatus.Error;
+
+
+        internal CorrectDataTypePolicy(Guid sensorId)
         {
-            _failResult = new(FailStatus, $"Sensor value type is not {typeof(T).Name}");
+            Icon = Status.ToIcon();
+
+            AlertComment = $"Sensor value type is not {typeof(T).Name}";
+
+            SensorResult = new(Status, AlertComment);
+            PolicyResult = new PolicyResult(sensorId, this);
         }
 
 
-        internal SensorResult Validate(T value)
-        {
-            return value is not null ? Ok : _failResult;
-        }
+        internal static bool Validate(T value) => value is not null;
     }
 }

@@ -30,10 +30,9 @@ namespace HSMServer.Core.Model
             return canStore;
         }
 
-        internal override bool TryAddValue(byte[] bytes) => TryAddValue(bytes.ToValue<T>());
+        internal override void AddDbValue(byte[] bytes) => Storage.AddValue((T)Convert(bytes));
 
-        internal override List<BaseValue> ConvertValues(List<byte[]> bytesPages) =>
-            bytesPages.Select(v => v.ToValue<T>()).ToList();
+        internal override List<BaseValue> ConvertValues(List<byte[]> pages) => pages.Select(Convert).ToList();
 
         internal override void AddPolicy<U>(U policy)
         {
@@ -42,5 +41,8 @@ namespace HSMServer.Core.Model
             else
                 base.AddPolicy(policy);
         }
+
+
+        private BaseValue Convert(byte[] bytes) => bytes.ToValue<T>();
     }
 }

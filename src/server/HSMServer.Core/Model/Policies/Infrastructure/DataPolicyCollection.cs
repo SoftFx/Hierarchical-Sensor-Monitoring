@@ -10,19 +10,31 @@ namespace HSMServer.Core.Model.Policies
 {
     public abstract class DataPolicyCollection : PolicyCollectionBase<Policy>
     {
-        public Action<ActionType, Policy> Uploaded;
+        internal protected SensorResult SensorResult { get; protected set; } = SensorResult.Ok;
+
+        internal protected PolicyResult PolicyResult { get; protected set; } = PolicyResult.Ok;
+
+
+        internal Action<ActionType, Policy> Uploaded;
 
 
         internal abstract void Update(List<DataPolicyUpdate> updates);
 
         internal abstract void Attach(BaseSensorModel sensor);
+
+
+        internal void Reset()
+        {
+            SensorResult = SensorResult.Ok;
+            PolicyResult = PolicyResult.Ok;
+        }
     }
 
 
     public abstract class DataPolicyCollection<T> : DataPolicyCollection where T : BaseValue
     {
-        private readonly CorrectDataTypePolicy<T> _typePolicy = new();
-
+        private CorrectDataTypePolicy<T> _typePolicy;
+        protected BaseSensorModel _sensor;
 
         protected abstract bool CalculateStorageResult(T value);
 
@@ -31,11 +43,25 @@ namespace HSMServer.Core.Model.Policies
 
         internal bool TryValidate(BaseValue value, out T valueT)
         {
+            SensorResult = SensorResult.Ok;
+
             valueT = value as T;
 
-            Result = _typePolicy.Validate(valueT);
+            if (!CorrectDataTypePolicy<T>.Validate(valueT))
+            {
+                SensorResult = _typePolicy.SensorResult;
+                PolicyResult = _typePolicy.PolicyResult;
 
-            return Result.IsOk && CalculateStorageResult(valueT);
+                return false;
+            }
+
+            return CalculateStorageResult(valueT);
+        }
+
+        internal override void Attach(BaseSensorModel sensor)
+        {
+            _typePolicy = new CorrectDataTypePolicy<T>(sensor.Id);
+            _sensor = sensor;
         }
     }
 
@@ -46,21 +72,25 @@ namespace HSMServer.Core.Model.Policies
     {
         private readonly ConcurrentDictionary<Guid, U> _storage = new();
 
-        private BaseSensorModel _sensor;
-
 
         internal override IEnumerable<Guid> Ids => _storage.Keys;
 
 
         protected override bool CalculateStorageResult(T value)
         {
-            //foreach (var (_, policy) in _storage)
-            //    Result += policy.Validate(value, _sensor);
+            if (!PolicyResult.IsOk)
+                PolicyResult = new(_sensor.Id);
+
+            foreach (var (_, policy) in _storage)
+                if (!policy.Validate(value, _sensor))
+                {
+                    PolicyResult.AddAlert(policy);
+                    SensorResult += policy.SensorResult;
+                }
 
             return true;
         }
 
-        internal override void Attach(BaseSensorModel sensor) => _sensor = sensor;
 
         internal override void Add(DataPolicy<T> policy) => _storage.TryAdd(policy.Id, (U)policy);
 
