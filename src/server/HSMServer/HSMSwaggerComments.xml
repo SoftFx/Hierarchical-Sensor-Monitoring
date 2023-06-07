@@ -176,10 +176,5 @@
         <member name="M:HSMServer.Model.History.BarHistoryProcessor`1.CountQ3">
             <returns>Q3 from the percentiles list</returns>
         </member>
-        <member name="M:HSMServer.Registration.RegistrationTicketManager.GetTicket(System.Guid)">
-            <summary>
-            This method MUST be called when update from 2.1.4 or lower to 2.1.5 or higher
-            </summary>
-        </member>
     </members>
 </doc>

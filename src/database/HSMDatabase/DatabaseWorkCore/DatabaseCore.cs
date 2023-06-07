@@ -5,9 +5,7 @@ using HSMDatabase.Extensions;
 using HSMDatabase.LevelDB;
 using HSMDatabase.Settings;
 using HSMDatabase.SnapshotsDb;
-using HSMServer.Core.Converters;
 using HSMServer.Core.DataLayer;
-using HSMServer.Core.Registration;
 using NLog;
 using System;
 using System.Collections.Generic;
@@ -386,25 +384,6 @@ namespace HSMDatabase.DatabaseWorkCore
 
         public List<UserEntity> GetUsersPage(int page, int pageSize) =>
             _environmentDatabase.ReadUsersPage(page, pageSize).ToList();
-
-        #endregion
-
-        #region Environment database : Ticket
-
-        public RegistrationTicket ReadRegistrationTicket(Guid id)
-        {
-            var entity = _environmentDatabase.ReadRegistrationTicket(id);
-            return entity != null ? new RegistrationTicket(entity) : null;
-        }
-
-        public void RemoveRegistrationTicket(Guid id) =>
-            _environmentDatabase.RemoveRegistrationTicket(id);
-
-        public void WriteRegistrationTicket(RegistrationTicket ticket)
-        {
-            RegisterTicketEntity entity = ticket.ConvertToEntity();
-            _environmentDatabase.WriteRegistrationTicket(entity);
-        }
 
         #endregion
 

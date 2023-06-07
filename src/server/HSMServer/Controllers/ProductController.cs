@@ -11,7 +11,6 @@ using HSMServer.Model.Folders.ViewModels;
 using HSMServer.Model.TreeViewModel;
 using HSMServer.Model.Validators;
 using HSMServer.Model.ViewModel;
-using HSMServer.Registration;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
@@ -26,16 +25,14 @@ namespace HSMServer.Controllers
     [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
     public class ProductController : BaseController
     {
-        private readonly IRegistrationTicketManager _ticketManager;
         private readonly ITreeValuesCache _treeValuesCache;
         private readonly IFolderManager _folderManager;
         private readonly TreeViewModel _treeViewModel;
         private readonly ILogger<ProductController> _logger;
 
-        public ProductController(IUserManager userManager, IRegistrationTicketManager ticketManager, ITreeValuesCache treeValuesCache, IFolderManager folderManager,
+        public ProductController(IUserManager userManager, ITreeValuesCache treeValuesCache, IFolderManager folderManager,
             TreeViewModel treeViewModel, ILogger<ProductController> logger) : base(userManager)
         {
-            _ticketManager = ticketManager;
             _treeValuesCache = treeValuesCache;
             _folderManager = folderManager;
             _treeViewModel = treeViewModel;

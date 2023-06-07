@@ -1,6 +1,5 @@
 ﻿using HSMDatabase.AccessManager;
 using HSMDatabase.AccessManager.DatabaseEntities;
-using HSMServer.Core.Registration;
 using System;
 using System.Collections.Generic;
 
@@ -84,14 +83,6 @@ namespace HSMServer.Core.DataLayer
         void RemoveUser(UserEntity user);
         List<UserEntity> GetUsers();
         List<UserEntity> GetUsersPage(int page, int pageSize);
-
-        #endregion
-
-        #region Registration ticket
-
-        RegistrationTicket ReadRegistrationTicket(Guid id);
-        void RemoveRegistrationTicket(Guid id);
-        void WriteRegistrationTicket(RegistrationTicket ticket);
 
         #endregion
     }

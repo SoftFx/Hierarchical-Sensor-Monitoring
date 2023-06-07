@@ -1,6 +1,5 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Core.DataLayer;
-using HSMServer.Core.Registration;
 using HSMServer.Core.Tests.DatabaseTests;
 using HSMServer.Core.Tests.DatabaseTests.Fixture;
 using HSMServer.Core.Tests.Infrastructure;
@@ -366,74 +365,6 @@ namespace HSMServer.Core.Tests
 
         #endregion
 
-        #region [ Registration Ticket ]
-
-        [Fact]
-        [Trait("Category", "OneRegistrationTicket")]
-        public void AddRegistrationTicketTest()
-        {
-            var ticket = EntitiesFactory.BuildTicket();
-
-            _databaseCore.WriteRegistrationTicket(ticket);
-
-            FullTicketTest(ticket, _databaseCore.ReadRegistrationTicket(ticket.Id));
-        }
-
-        [Theory]
-        [InlineData(3)]
-        [InlineData(10)]
-        [InlineData(50)]
-        [InlineData(100)]
-        [InlineData(500)]
-        [InlineData(1000)]
-        [Trait("Category", "SeveralRegistrationTicket")]
-        public void SeveralRegistartionTicketTest(int count)
-        {
-            for (int i = 0; i < count; i++)
-            {
-                var ticket = EntitiesFactory.BuildTicket();
-
-                _databaseCore.WriteRegistrationTicket(ticket);
-
-                FullTicketTest(ticket, _databaseCore.ReadRegistrationTicket(ticket.Id));
-            }
-        }
-
-        [Fact]
-        [Trait("Category", "OneRemoveRegistrationTicket")]
-        public void RemoveRegistrationTicket()
-        {
-            var ticket = EntitiesFactory.BuildTicket();
-
-            _databaseCore.WriteRegistrationTicket(ticket);
-            _databaseCore.RemoveRegistrationTicket(ticket.Id);
-
-            Assert.Null(_databaseCore.ReadRegistrationTicket(ticket.Id));
-        }
-
-        [Theory]
-        [InlineData(3)]
-        [InlineData(10)]
-        [InlineData(50)]
-        [InlineData(100)]
-        [InlineData(500)]
-        [InlineData(1000)]
-        [Trait("Category", "SeveralRemoveRegistrationTickets")]
-        public void SeveralRemoveRegistrationTickets(int count)
-        {
-            for (int i = 0; i < count; i++)
-            {
-                var ticket = EntitiesFactory.BuildTicket();
-
-                _databaseCore.WriteRegistrationTicket(ticket);
-                _databaseCore.RemoveRegistrationTicket(ticket.Id);
-
-                Assert.Null(_databaseCore.ReadRegistrationTicket(ticket.Id));
-            }
-        }
-
-        #endregion
-
         #region [ Private methods ]
 
         private static void FullProductTest(ProductEntity expectedProduct, ProductEntity actualProduct)
@@ -495,15 +426,6 @@ namespace HSMServer.Core.Tests
             Assert.Equal(expectedFolder.Description, actualFolder.Description);
             Assert.Equal(expectedFolder.CreationDate, actualFolder.CreationDate);
             Assert.Equal(expectedFolder.Color, actualFolder.Color);
-        }
-
-        private static void FullTicketTest(RegistrationTicket expectedTicket, RegistrationTicket actualTicket)
-        {
-            Assert.NotNull(actualTicket);
-            Assert.Equal(expectedTicket.Id, actualTicket.Id);
-            Assert.Equal(expectedTicket.Role, actualTicket.Role);
-            Assert.Equal(expectedTicket.ProductKey, actualTicket.ProductKey);
-            Assert.Equal(expectedTicket.ExpirationDate, actualTicket.ExpirationDate);
         }
 
         private UserEntity GetUser(string username) =>

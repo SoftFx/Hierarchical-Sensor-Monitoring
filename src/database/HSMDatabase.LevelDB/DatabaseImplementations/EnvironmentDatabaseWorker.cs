@@ -576,57 +576,6 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
 
         #endregion
 
-        #region Registration ticket
-
-        public RegisterTicketEntity ReadRegistrationTicket(Guid id)
-        {
-            var key = PrefixConstants.GetRegistrationTicketKey(id);
-            byte[] bytesKey = Encoding.UTF8.GetBytes(key);
-            try
-            {
-                return _database.TryRead(bytesKey, out byte[] value)
-                    ? JsonSerializer.Deserialize<RegisterTicketEntity>(Encoding.UTF8.GetString(value))
-                    : null;
-            }
-            catch (Exception e)
-            {
-                _logger.Error(e, $"Failed to read registration ticket {id}");
-            }
-
-            return null;
-        }
-
-        public void RemoveRegistrationTicket(Guid id)
-        {
-            var key = PrefixConstants.GetRegistrationTicketKey(id);
-            byte[] bytesKey = Encoding.UTF8.GetBytes(key);
-            try
-            {
-                _database.Delete(bytesKey);
-            }
-            catch (Exception e)
-            {
-                _logger.Error(e, $"Failed to write registration ticket {id}");
-            }
-        }
-
-        public void WriteRegistrationTicket(RegisterTicketEntity ticket)
-        {
-            var key = PrefixConstants.GetRegistrationTicketKey(ticket.Id);
-            byte[] bytesKey = Encoding.UTF8.GetBytes(key);
-
-            try
-            {
-                _database.Put(bytesKey, JsonSerializer.SerializeToUtf8Bytes(ticket));
-            }
-            catch (Exception e)
-            {
-                _logger.Error(e, $"Failed to write registration ticket {ticket.Id}");
-            }
-        }
-
-        #endregion
-
         public void Dispose() => _database.Dispose();
 
         private List<string> GetListOfKeys(byte[] key, string error)

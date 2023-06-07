@@ -1,8 +1,6 @@
 ﻿using HSMCommon;
 using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Core.Model;
-using HSMServer.Core.Registration;
-using HSMServer.Model.Authentication;
 using System;
 using System.Drawing;
 
@@ -70,15 +68,6 @@ namespace HSMServer.Core.Tests.Infrastructure
                 DisplayName = RandomGenerator.GetRandomString(),
                 Description = RandomGenerator.GetRandomString(),
                 Color = Color.Red.ToArgb(),
-            };
-
-
-        internal static RegistrationTicket BuildTicket() =>
-            new()
-            {
-                Role = nameof(ProductRoleEnum.ProductManager),
-                ExpirationDate = DateTime.UtcNow.AddMinutes(30),
-                ProductKey = Guid.NewGuid().ToString()
             };
     }
 }

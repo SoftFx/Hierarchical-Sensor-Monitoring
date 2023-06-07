@@ -69,13 +69,5 @@ namespace HSMDatabase.AccessManager
         List<UserEntity> ReadUsersPage(int page, int pageSize);
 
         #endregion
-
-        #region Registration Ticket
-
-        RegisterTicketEntity ReadRegistrationTicket(Guid id);
-        void RemoveRegistrationTicket(Guid id);
-        void WriteRegistrationTicket(RegisterTicketEntity ticket);
-
-        #endregion
     }
 }
