@@ -249,8 +249,7 @@ namespace HSMServer.Model.TreeViewModel
                     break;
 
                 case ActionType.Delete:
-                    if (Nodes.TryRemove(model.Id, out _) && model.Parent != null &&
-                        Nodes.TryGetValue(model.Parent.Id, out var parentProduct))
+                    if (Nodes.TryRemove(model.Id, out _) && model.Parent != null && Nodes.TryGetValue(model.Parent.Id, out var parentProduct))
                         parentProduct.Nodes.TryRemove(model.Id, out var _);
                     break;
             }
