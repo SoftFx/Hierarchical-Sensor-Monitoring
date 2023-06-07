@@ -65,7 +65,7 @@ namespace HSMServer.Model.TreeViewModel
             NodesToRender.TryGetValue(user.Id, out var nodeIds);
             foreach (var product in GetUserProducts(user))
             {
-                var node = FilterNodes(product, user);
+                var node = FilterNodes(product, user); // full tree build O(n) n - count nodes
 
                 void ReduceNesting(NodeShallowModel node, int depth)
                 {
@@ -74,16 +74,20 @@ namespace HSMServer.Model.TreeViewModel
                     {
                         if (depth <= 0)
                         {
-                            if (nodeIds is not null && nodeIds.Contains(subNode.Data.Id)) continue;
+                            if (nodeIds is not null && nodeIds.Contains(subNode.Data.Id)) // O(m) - render list size
+                                continue;
+
                             subNode.Sensors.Clear();
                             subNode.Nodes.Clear();
                         }
 
-                        ReduceNesting(subNode, depth);
+                        ReduceNesting(subNode, depth); // without checking depth - O(n)
                     }
                 }
 
                 ReduceNesting(node, product.RootProduct.DefinedRenderDepth);
+
+                // total to current moment is O(n + n*m)
 
                 if (node.VisibleSensorsCount > 0 || user.IsEmptyProductVisible(product))
                 {

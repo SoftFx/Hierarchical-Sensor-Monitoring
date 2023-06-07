@@ -90,7 +90,8 @@ namespace HSMServer.Controllers
                 list ??= new List<Guid>();
                 list.Add(guid);
             }
-            else _treeViewModel.NodesToRender.TryAdd(CurrentUser.Id, new List<Guid>() {guid});
+            else 
+                _treeViewModel.NodesToRender.TryAdd(CurrentUser.Id, new List<Guid>() {guid});
             
             if (_treeViewModel.Nodes.TryGetValue(guid, out var node))
             {
