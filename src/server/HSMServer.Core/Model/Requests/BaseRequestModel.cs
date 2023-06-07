@@ -40,7 +40,7 @@ namespace HSMServer.Core.Model.Requests
                 return false;
             }
 
-            if (PathParts.Contains(string.Empty) || Path.Contains('\\'))
+            if (PathParts.Contains(string.Empty) || Path.Contains('\\') || Path.Contains('\t'))
             {
                 message = ErrorInvalidPath;
                 return false;
