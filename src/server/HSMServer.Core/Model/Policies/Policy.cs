@@ -9,6 +9,7 @@ namespace HSMServer.Core.Model.Policies
     [JsonPolymorphic(TypeDiscriminatorPropertyName = "$type", IgnoreUnrecognizedTypeDiscriminators = true)]
     [JsonDerivedType(typeof(ExpectedUpdateIntervalPolicy), 1000)]
     [JsonDerivedType(typeof(SelfDestroyPolicy), 1001)]
+    [JsonDerivedType(typeof(SavedIntervalPolicy), 1002)]
     [JsonDerivedType(typeof(RestoreErrorPolicy), 1100)]
     [JsonDerivedType(typeof(RestoreWarningPolicy), 1101)]
     [JsonDerivedType(typeof(RestoreOffTimePolicy), 1102)]
