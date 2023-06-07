@@ -34,6 +34,7 @@
     var rawHistoryLatestAction = "@Url.Action(nameof(SensorHistoryController.ChartHistoryLatest), ViewConstants.HistoryController)";
     var rawHistoryAction = "@Url.Action(nameof(SensorHistoryController.ChartHistory), ViewConstants.HistoryController)";
     var exportHistoryAction = "@Url.Action(nameof(SensorHistoryController.ExportHistory), ViewConstants.HistoryController)";
+    var reloadRequest = "@Url.Action(nameof(SensorHistoryController.ReloadHistoryRequest), ViewConstants.HistoryController)";
 
     var getNodePathAction = "@Url.Action(nameof(HomeController.GetNodePath), ViewConstants.HomeController)";
     var editProductAction = "@Url.Action(nameof(ProductController.EditProduct), ViewConstants.ProductController)";
@@ -47,6 +48,8 @@
     var enableNotificationsAction = "@Url.Action(nameof(HomeController.EnableNotifications), ViewConstants.HomeController)";
     var ignoreNotificationsAction = "@Url.Action(nameof(HomeController.IgnoreNotifications), ViewConstants.HomeController)";
     var unmuteAction = "@Url.Action(nameof(HomeController.RemoveMutedStateToSensor), ViewConstants.HomeController)";
+
+    var isDataValidAction = "@Url.Action(nameof(HomeController.IsMetaInfoValid), ViewConstants.HomeController)";
 </script>
 
 
@@ -69,8 +72,8 @@
 </div>
 
 @await Html.PartialAsync("~/Views/AccessKeys/_AccessKeysModal.cshtml")
-
 @await Html.PartialAsync("_AlertsModal", new EditAlertsViewModel())
+@await Html.PartialAsync("~/Views/Shared/_ConfirmationModal.cshtml")
 
 <div id="ignoreNotificatios_partial">@await Html.PartialAsync("_IgnoreNotificationsModal", (IgnoreNotificationsViewModel)null)</div>
 
@@ -162,16 +165,6 @@
     $("#mainSpinner").css("display", "none");
     $('#mainContainer').removeClass('hidden_element');
 
-    function getSelectedNodeId(selectedNode) {
-        let selectedNodeId = "";
-
-        if (selectedNode != undefined) {
-            selectedNodeId = selectedNode.id;
-        }
-
-        return selectedNodeId;
-    }
-
     function updateGridCell(dataObject) {
         var id = dataObject.id;
 
@@ -195,12 +188,15 @@
                                   .prop('title', `Status: ${dataObject.status}`);
         
         $('#file_status_' + id).removeClass('tree-icon-offTime tree-icon-ok tree-icon-warning tree-icon-error')
-                                .addClass(dataObject.statusIconColorClass)
-                                .prop('title', `Status: ${dataObject.status}`)
+                               .addClass(dataObject.statusIconColorClass)
+                               .prop('title', `Status: ${dataObject.status}`)
         
         $('#status_name_' + id).empty().html(dataObject.status);
 
         $("#newValuesCount").empty().html(dataObject.newValuesCount);
+        if (dataObject.newValuesCount != null && $(`#link_table_${id}`).hasClass("active")) {
+            $("#tableHistoryRefreshButton").removeClass("d-none");
+        }
     }
     
     function updateGeneralInfo(selectedNodeId) {
@@ -285,8 +281,7 @@
     function updateSelectedNodeData() {
         clearTimeout(updateSelectedNodeDataTimeoutId);
 
-        var selectedNode = $('#jstree').jstree().get_selected(true)[0];
-        var selectedNodeId = getSelectedNodeId(selectedNode);
+        var selectedNodeId = currentSelectedNodeId;
         if (selectedNodeId != "")
             $.ajax({
                 type: 'POST',

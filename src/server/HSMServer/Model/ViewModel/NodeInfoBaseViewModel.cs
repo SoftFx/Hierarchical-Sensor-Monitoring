@@ -10,7 +10,7 @@ using SensorType = HSMServer.Core.Model.SensorType;
 
 namespace HSMServer.Model.ViewModel
 {
-    public abstract class NodeInfoBaseViewModel
+    public class NodeInfoBaseViewModel
     {
         public string Header { get; }
 

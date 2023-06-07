@@ -505,6 +505,9 @@ namespace HSMServer.Controllers
 
         #region Sensor info
 
+        [HttpPost]
+        public bool IsMetaInfoValid(NodeInfoBaseViewModel _) => ModelState.IsValid;
+
         [HttpGet]
         public IActionResult GetSensorInfo([FromQuery(Name = "Id")] string encodedId)
         {
@@ -646,7 +649,7 @@ namespace HSMServer.Controllers
 
             _treeValuesCache.UpdateProduct(update);
 
-            return PartialView("_MetaInfo", new ProductInfoViewModel(product));
+            return PartialView("_MetaInfo", new ProductInfoViewModel(product.RecalculateCharacteristics()));
         }
 
         [HttpGet]

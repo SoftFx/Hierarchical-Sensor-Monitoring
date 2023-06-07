@@ -46,7 +46,7 @@
                 <span id='status_@Model.EncodedId' class='@Model.Status.ToIcon() my-1 align-self-center sensor-icon-with-margin' title='Status: @Model.Status'></span>
             }
 
-            <h5 class="d-flex my-1 align-self-top">@Html.Raw(Model.Header)</h5>
+            <h5 id="nodeHeader" class="d-flex my-1 align-self-top">@Html.Raw(Model.Header)</h5>
         </div>
 
         <div id='update_@Model.EncodedId' class='d-flex my-1 time-ago-div'>updated @Model.LastUpdateTime.GetTimeAgo()</div>

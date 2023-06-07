@@ -235,3 +235,25 @@ img .tree-png-icon {
     width: 1rem;
     height: 1rem;
 }
+
+.table-history-refresh {
+    padding: 4px 8px;
+    color: #bc4c00;
+    background-color: #fff1e5;
+    border-radius: 6px;
+}
+
+.table-history-refresh-link {
+    color: inherit;
+    text-decoration: none;
+}
+
+.table-history-refresh-link:hover {
+    color: inherit;
+    text-decoration: underline;
+}
+
+.badge-light {
+    background-color: rgba(175,184,193,0.2);
+    color: black;
+} 
