@@ -6,6 +6,7 @@ using HSMServer.Model.TreeViewModel;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 using System.Linq;
 
 namespace HSMServer.Model.DataAlerts
@@ -18,10 +19,12 @@ namespace HSMServer.Model.DataAlerts
 
         public string Property { get; set; }
 
+        [Required]
         public string Comment { get; set; }
 
         public Guid EntityId { get; set; }
 
+        [Required]
         public string Value { get; set; }
 
         public Guid Id { get; set; }
