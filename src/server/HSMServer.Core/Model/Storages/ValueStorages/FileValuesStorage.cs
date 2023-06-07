@@ -1,4 +1,4 @@
-﻿using HSMServer.Core.Helpers;
+﻿using HSMServer.Core.Extensions;
 
 namespace HSMServer.Core.Model
 {

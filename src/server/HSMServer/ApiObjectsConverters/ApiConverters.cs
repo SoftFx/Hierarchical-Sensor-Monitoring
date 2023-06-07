@@ -1,6 +1,6 @@
 ﻿using HSMSensorDataObjects.HistoryRequests;
 using HSMSensorDataObjects.SensorValueRequests;
-using HSMServer.Core.Helpers;
+using HSMServer.Core.Extensions;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.HistoryValues;
 using HSMServer.Core.Model.Requests;
