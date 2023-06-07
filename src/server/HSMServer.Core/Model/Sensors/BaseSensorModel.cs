@@ -33,7 +33,7 @@ namespace HSMServer.Core.Model
         private static readonly PolicyResult _muteResult = new(SensorStatus.OffTime, "Muted");
 
 
-        protected abstract ValuesStorage Storage { get; }
+        internal abstract ValuesStorage Storage { get; }
 
         public abstract DataPolicyCollection DataPolicies { get; }
 

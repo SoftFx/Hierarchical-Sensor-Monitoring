@@ -305,7 +305,7 @@ namespace HSMServer.Core.Cache
             var policy = sensor.ServerPolicy.SavedHistoryPeriod.Policy;
 
             if (!policy.Validate(from).IsOk)
-                ClearSensorHistory(sensorId, policy.Interval.GetShiftedTime(from));
+                ClearSensorHistory(sensorId, policy.Interval.GetShiftedTime(DateTime.UtcNow, -1));
         }
 
         public void ClearSensorHistory(Guid sensorId, DateTime to)
@@ -318,7 +318,10 @@ namespace HSMServer.Core.Cache
             if (from > to)
                 return;
 
-            sensor.ResetSensor();
+            sensor.Storage.Clear(to);
+
+            if (!sensor.HasData)
+                sensor.ResetSensor();
 
             _database.ClearSensorValues(sensor.Id.ToString(), from, to);
             _snapshot.Sensors[sensorId].History.From = to;

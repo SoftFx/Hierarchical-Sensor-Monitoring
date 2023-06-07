@@ -5,7 +5,7 @@ namespace HSMServer.Core.Model
 {
     public sealed class BooleanSensorModel : BaseSensorModel<BooleanValue>
     {
-        protected override BooleanValuesStorage Storage { get; } = new BooleanValuesStorage();
+        internal override BooleanValuesStorage Storage { get; } = new BooleanValuesStorage();
 
 
         public override DataPolicyCollection<BooleanValue, BooleanDataPolicy> DataPolicies { get; } = new();

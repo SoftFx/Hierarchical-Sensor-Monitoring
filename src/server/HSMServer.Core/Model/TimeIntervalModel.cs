@@ -53,15 +53,15 @@ namespace HSMServer.Core.Model
             return DateTime.UtcNow > GetShiftedTime(time);
         }
 
-        public DateTime GetShiftedTime(DateTime time) => TimeInterval switch
+        public DateTime GetShiftedTime(DateTime time, int coef = 1) => TimeInterval switch
         {
-            TimeInterval.OneMinute => time.AddMinutes(1),
-            TimeInterval.FiveMinutes => time.AddMinutes(5),
-            TimeInterval.TenMinutes => time.AddMinutes(10),
-            TimeInterval.Hour => time.AddHours(1),
-            TimeInterval.Day => time.AddDays(1),
-            TimeInterval.Week => time.AddDays(7),
-            TimeInterval.Month => time.AddMonths(1),
+            TimeInterval.OneMinute => time.AddMinutes(1 * coef),
+            TimeInterval.FiveMinutes => time.AddMinutes(5 * coef),
+            TimeInterval.TenMinutes => time.AddMinutes(10 * coef),
+            TimeInterval.Hour => time.AddHours(1 * coef),
+            TimeInterval.Day => time.AddDays(1 * coef),
+            TimeInterval.Week => time.AddDays(7 * coef),
+            TimeInterval.Month => time.AddMonths(1 * coef),
             TimeInterval.Custom or TimeInterval.FromFolder => DateTime.MaxValue, //for Never 
             _ => throw new NotImplementedException(),
         };
