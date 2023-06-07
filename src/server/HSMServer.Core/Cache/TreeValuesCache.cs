@@ -329,8 +329,8 @@ namespace HSMServer.Core.Cache
 
         public void NotifyAboutChanges(BaseSensorModel sensor)
         {
-            if (!sensor.DataPolicies.PolicyResult.IsOk)
-                ChangePolicyResultEvent?.Invoke(sensor.DataPolicies.PolicyResult);
+            if (!sensor.PolicyResult.IsOk)
+                ChangePolicyResultEvent?.Invoke(sensor.PolicyResult);
 
             ChangeSensorEvent?.Invoke(sensor, ActionType.Update);
         }
