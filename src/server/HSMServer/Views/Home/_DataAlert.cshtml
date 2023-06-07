@@ -50,6 +50,10 @@
         $("a.sendMessage").off("click").on("click", function () {
             var element = $(this).parents("div.dataAlertRow:first");
 
+            if (!tryValidate(element, "input", "Value") || !tryValidate(element, "input", "Comment")) {
+                return;
+            }
+
             var form = new FormData();
             appendProperty(form, element, "select", "Property");
             appendProperty(form, element, "select", "Operation");
@@ -71,5 +75,11 @@
 
     function appendProperty(form, element, propertyElement, propertyName) {
         form.append(`alert.${propertyName}`, element.find($(`${propertyElement}[name='${propertyName}']`)).val());
+    }
+
+    function tryValidate(element, propertyElement, propertyName) {
+        var input = element.find($(`${propertyElement}[name='${propertyName}']`));
+        
+        return input[0].reportValidity();
     }
 </script>

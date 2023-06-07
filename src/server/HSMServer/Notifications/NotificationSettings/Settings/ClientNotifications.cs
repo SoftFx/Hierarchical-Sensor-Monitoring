@@ -88,13 +88,13 @@ namespace HSMServer.Notification.Settings
             if (chatId is not null && !Telegram.Chats.ContainsKey(chatId))
                 return;
 
-            EnabledSensors.Add(sensorId);
+            var enabled = EnabledSensors.Add(sensorId);
 
             foreach (var (chat, ignoredSensors) in PartiallyIgnored)
             {
                 if (chatId is null || chat == chatId)
                     ignoredSensors.TryRemove(sensorId, out _);
-                else
+                else if (enabled)
                     ignoredSensors.TryAdd(sensorId, DateTime.MaxValue);
             }
         }
