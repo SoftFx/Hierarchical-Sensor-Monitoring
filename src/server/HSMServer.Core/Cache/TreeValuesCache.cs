@@ -431,6 +431,20 @@ namespace HSMServer.Core.Cache
                     Id = product.Id,
                     RestoreInterval = new TimeIntervalModel(0L),
                 });
+
+            if (product.ServerPolicy.SavedHistoryPeriod.Policy.FromParent)
+                product.Update(new ProductUpdate
+                {
+                    Id = product.Id,
+                    SavedHistoryPeriod = new TimeIntervalModel(TimeInterval.Month, 0L),
+                });
+
+            if (product.ServerPolicy.SelfDestroy.Policy.FromParent)
+                product.Update(new ProductUpdate
+                {
+                    Id = product.Id,
+                    SelfDestroy = new TimeIntervalModel(TimeInterval.Month, 0L),
+                });
         }
 
         private void UpdatesQueueNewItemsHandler(IEnumerable<StoreInfo> storeInfos)
@@ -580,6 +594,9 @@ namespace HSMServer.Core.Cache
                     if (_tree.TryGetValue(parentId, out var parent) && _tree.TryGetValue(productId, out var product))
                         parent.AddSubProduct(product);
                 }
+
+            foreach (var product in GetProducts()) // TODO remove after migration SelfDestroy and SavedHistoryPeriod
+                ResetServerPolicyForRootProduct(product);
 
             _logger.Info("Links between products are built");
         }
