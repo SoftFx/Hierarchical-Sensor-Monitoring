@@ -391,18 +391,26 @@ namespace HSMServer.Core.Cache
                 return;
 
             if (product.ServerPolicy.ExpectedUpdate.Policy.FromParent)
-                UpdateProduct(new ProductUpdate
+            {
+                var update = new ProductUpdate
                 {
                     Id = product.Id,
                     ExpectedUpdateInterval = new TimeIntervalModel(0L),
-                });
+                };
+
+                _databaseCore.UpdateProduct(product.Update(update).ToProductEntity());
+            }
 
             if (product.ServerPolicy.RestoreError.Policy.FromParent)
-                UpdateProduct(new ProductUpdate
+            {
+                var update = new ProductUpdate
                 {
                     Id = product.Id,
                     RestoreInterval = new TimeIntervalModel(0L),
-                });
+                };
+
+                _databaseCore.UpdateProduct(product.Update(update).ToProductEntity());
+            }
         }
 
         private void UpdatesQueueNewItemsHandler(IEnumerable<StoreInfo> storeInfos)
