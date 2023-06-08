@@ -36,12 +36,11 @@ namespace HSMServer.Core.Cache
         private readonly IDatabaseCore _database;
 
 
-        public bool IsInitialized { get; }
-
         public event Action<AccessKeyModel, ActionType> ChangeAccessKeyEvent;
         public event Action<BaseSensorModel, ActionType> ChangeSensorEvent;
         public event Action<ProductModel, ActionType> ChangeProductEvent;
         public event Action<PolicyResult> ChangePolicyResultEvent;
+
 
         public TreeValuesCache(IDatabaseCore database, ITreeStateSnapshot snapshot, IUpdatesQueue updatesQueue)
         {
@@ -52,8 +51,6 @@ namespace HSMServer.Core.Cache
             _updatesQueue.NewItemsEvent += UpdatesQueueNewItemsHandler;
 
             Initialize();
-
-            IsInitialized = true;
         }
 
 
@@ -147,8 +144,7 @@ namespace HSMServer.Core.Cache
 
         public bool TryCheckKeyWritePermissions(BaseRequestModel request, out string message)
         {
-            if (!TryCheckCacheInitialization(out message) ||
-                !TryGetProductByKey(request, out var product, out message))
+            if (!TryGetProductByKey(request, out var product, out message))
                 return false;
 
             // TODO: remove after refactoring sensors data storing
@@ -174,7 +170,6 @@ namespace HSMServer.Core.Cache
         }
 
         public bool TryCheckKeyReadPermissions(BaseRequestModel request, out string message) =>
-            TryCheckCacheInitialization(out message) &&
             TryGetProductByKey(request, out var product, out message) &&
             GetAccessKeyModel(request).IsValid(KeyPermissions.CanReadSensorData, out message) &&
             TryGetSensor(request, product, null, out _, out message);
@@ -706,13 +701,6 @@ namespace HSMServer.Core.Cache
             return isSuccess;
         }
 
-        private bool TryCheckCacheInitialization(out string message)
-        {
-            message = IsInitialized ? string.Empty : NotInitializedCacheError;
-
-            return string.IsNullOrEmpty(message);
-        }
-
         private bool TryGetProductByKey(BaseRequestModel request, out ProductModel product, out string message)
         {
             product = null;
@@ -847,7 +835,6 @@ namespace HSMServer.Core.Cache
         {
             foreach (var sensor in GetSensors())
             {
-                var oldStatus = sensor.Status;
                 var snaphot = _snapshot.Sensors[sensor.Id];
 
                 if (sensor.HasUpdateTimeout() && !snaphot.IsExpired)

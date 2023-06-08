@@ -26,6 +26,8 @@ namespace HSMServer.BackgroundServices
 
         protected override Task ServiceAction()
         {
+            _center.CheckState();
+
             return Task.CompletedTask;
         }
     }

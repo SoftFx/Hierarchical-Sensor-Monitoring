@@ -16,8 +16,6 @@ namespace HSMServer.Core.Cache
 
     public interface ITreeValuesCache
     {
-        bool IsInitialized { get; }
-
         event Action<ProductModel, ActionType> ChangeProductEvent;
         event Action<BaseSensorModel, ActionType> ChangeSensorEvent;
         event Action<AccessKeyModel, ActionType> ChangeAccessKeyEvent;

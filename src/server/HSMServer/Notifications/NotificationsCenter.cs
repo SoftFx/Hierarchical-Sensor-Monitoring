@@ -23,7 +23,7 @@ namespace HSMServer.Notifications
         public ValueTask DisposeAsync() => TelegramBot.DisposeAsync();
 
 
-        internal void CheckNotificationCenterState()
+        internal void CheckState()
         {
             TelegramBot.RemoveOldInvitationTokens();
         }
