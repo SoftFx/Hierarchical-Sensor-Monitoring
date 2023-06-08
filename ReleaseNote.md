@@ -36,3 +36,6 @@ $lastValue - Bar sensor lastValue value
 ## Other
 * New sensors subscribe to TG group if there is some telegram groups in product
 * Timespan chart default type has been changed from Bars to Line
+* Confirmation dialog before swithing from Edit general info tab has been added
+* '\t' has been disableed as available symbol for sensor path
+* Search user by name has been added in add user to folder modal window
