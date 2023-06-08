@@ -38,11 +38,11 @@ public class VisibleTreeViewModel
                 {
                     if (depth <= 0)
                     {
-                        if (NodesToRender is not null && NodesToRender.TryGetValue(subNode.Data.Id, out _)) // O(m) - render list size
-                            continue;
-
-                        subNode.Sensors.Clear();
-                        subNode.Nodes.Clear();
+                        if (!NodesToRender.TryGetValue(subNode.Data.Id, out _))
+                        {
+                            subNode.Sensors.Clear();
+                            subNode.Nodes.Clear();
+                        }
                     }
 
                     ReduceNesting(subNode, depth); // without checking depth - O(n)

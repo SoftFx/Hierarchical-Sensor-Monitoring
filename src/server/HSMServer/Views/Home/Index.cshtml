@@ -260,25 +260,14 @@
     var isRefreshing = false;
     function updateTreeTimer() {
         clearTimeout(refreshTreeTimeoutId);
+        isRefreshing = true;
+         
+        $('#jstree').jstree(true).refresh(true);
 
-        $.ajax({
-            type: 'POST',
-            url: refreshTree,
-            dataType: 'html',
-            contentType: 'application/json',
-            cache: false,
-            async: true
-        }).done(function (treeData) {
-            isRefreshing = true;
-            
-            $('#jstree').jstree(true).settings.core.data = treeData;
-            $('#jstree').jstree(true).refresh(true);
-
-            refreshTreeTimeoutId = setTimeout(updateTreeTimer, interval);
-            updateSelectedNodeDataTimeoutId = setTimeout(updateSelectedNodeData, interval);
-            
-            isRefreshing = false;
-        });
+        refreshTreeTimeoutId = setTimeout(updateTreeTimer, interval);
+        updateSelectedNodeDataTimeoutId = setTimeout(updateSelectedNodeData, interval);
+         
+        isRefreshing = false;
     }
 
     var updateSelectedNodeDataTimeoutId;

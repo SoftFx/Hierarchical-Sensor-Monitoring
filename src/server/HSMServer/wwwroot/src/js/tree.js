@@ -16,8 +16,7 @@ window.initializeTree = function () {
             "multiple": true,
             'data' : {
                 url : function (node) {
-                    if (node.id === '#')
-                    {
+                    if (node.id === '#') {
                         return getTree;
                     }
 
