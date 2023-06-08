@@ -6,7 +6,7 @@ using System.Collections.Generic;
 
 namespace HSMServer.Model.DataAlerts
 {
-    public sealed class SingleDataAlertViewModel<T, U> : DataAlertViewModelBase<T> where T : BaseValue<U>
+    public sealed class SingleDataAlertViewModel<T, U> : DataAlertViewModelBase<T> where T : BaseValue<U>, new()
     {
         public override string DisplayComment { get; }
 
