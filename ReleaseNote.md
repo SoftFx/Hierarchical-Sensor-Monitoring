@@ -39,3 +39,4 @@ $lastValue - Bar sensor lastValue value
 * Confirmation dialog before swithing from Edit general info tab has been added
 * '\t' has been disableed as available symbol for sensor path
 * Search user by name has been added in add user to folder modal window
+* Bugfixing
