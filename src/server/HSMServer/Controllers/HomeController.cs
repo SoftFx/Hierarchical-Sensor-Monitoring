@@ -100,14 +100,8 @@ namespace HSMServer.Controllers
         [HttpPut]
         public void RemoveRenderingNode(Guid nodeId) => CurrentUser.VisibleTreeViewModel.NodesToRender.Remove(nodeId);
 
-        [HttpPost]
-        public IActionResult RefreshTree()
-        {
-            return PartialView("_Tree", CurrentUser.VisibleTreeViewModel.GetUserTree(_folderManager, _treeViewModel));
-        }
-        
         [HttpGet]
-        public IActionResult GetTree()
+        public IActionResult RefreshTree()
         {
             return PartialView("_Tree", CurrentUser.VisibleTreeViewModel.GetUserTree(_folderManager, _treeViewModel));
         }

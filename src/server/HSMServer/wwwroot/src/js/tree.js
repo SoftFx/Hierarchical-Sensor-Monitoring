@@ -17,7 +17,7 @@ window.initializeTree = function () {
             'data' : {
                 url : function (node) {
                     if (node.id === '#') {
-                        return getTree;
+                        return refreshTree;
                     }
 
                     return '/Home/GetNode';

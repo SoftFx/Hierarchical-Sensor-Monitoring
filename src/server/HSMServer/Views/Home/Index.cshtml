@@ -27,7 +27,6 @@
 
     var selectNode = "@Url.Action(nameof(HomeController.SelectNode), ViewConstants.HomeController)";
     var refreshTree = "@Url.Action(nameof(HomeController.RefreshTree), ViewConstants.HomeController)";
-    var getTree = "@Url.Action(nameof(HomeController.GetTree), ViewConstants.HomeController)";
     var closeNode = "@Url.Action(nameof(HomeController.RemoveRenderingNode), ViewConstants.HomeController)";
 
     var historyLatestAction = "@Url.Action(nameof(SensorHistoryController.TabelHistoryLatest), ViewConstants.HistoryController)";
@@ -261,12 +260,12 @@
     function updateTreeTimer() {
         clearTimeout(refreshTreeTimeoutId);
         isRefreshing = true;
-         
+  
         $('#jstree').jstree(true).refresh(true);
 
         refreshTreeTimeoutId = setTimeout(updateTreeTimer, interval);
         updateSelectedNodeDataTimeoutId = setTimeout(updateSelectedNodeData, interval);
-         
+        
         isRefreshing = false;
     }
 
