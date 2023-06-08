@@ -416,38 +416,54 @@ namespace HSMServer.Core.Cache
                 _database.RemovePolicy(policyId);
         }
 
-        private static void ResetServerPolicyForRootProduct(ProductModel product)
+        private void ResetServerPolicyForRootProduct(ProductModel product)
         {
-            if (product.Parent != null)
+            if (product.Parent != null || product.FolderId.HasValue)
                 return;
 
             if (product.ServerPolicy.ExpectedUpdate.Policy.FromParent)
-                product.Update(new ProductUpdate
+            {
+                var update = new ProductUpdate
                 {
                     Id = product.Id,
                     ExpectedUpdateInterval = new TimeIntervalModel(0L),
-                });
+                };
+
+                _database.UpdateProduct(product.Update(update).ToProductEntity());
+            }
 
             if (product.ServerPolicy.RestoreError.Policy.FromParent)
-                product.Update(new ProductUpdate
+            {
+                var update = new ProductUpdate
                 {
                     Id = product.Id,
                     RestoreInterval = new TimeIntervalModel(0L),
-                });
+                };
+
+                _database.UpdateProduct(product.Update(update).ToProductEntity());
+            }
 
             if (product.ServerPolicy.SavedHistoryPeriod.Policy.FromParent)
-                product.Update(new ProductUpdate
+            {
+                var update = new ProductUpdate
                 {
                     Id = product.Id,
                     SavedHistoryPeriod = new TimeIntervalModel(TimeInterval.Month, 0L),
-                });
+                };
+
+                _database.UpdateProduct(product.Update(update).ToProductEntity());
+            }
 
             if (product.ServerPolicy.SelfDestroy.Policy.FromParent)
-                product.Update(new ProductUpdate
+            {
+                var update = new ProductUpdate
                 {
                     Id = product.Id,
                     SelfDestroy = new TimeIntervalModel(TimeInterval.Month, 0L),
-                });
+                };
+
+                _database.UpdateProduct(product.Update(update).ToProductEntity());
+            }
         }
 
         private void UpdatesQueueNewItemsHandler(IEnumerable<StoreInfo> storeInfos)
@@ -503,13 +519,13 @@ namespace HSMServer.Core.Cache
         private void NotifyAllProductChildrenAboutUpdate(ProductModel product,
             Dictionary<Guid, PolicyResult> sensorsOldStatuses)
         {
-            ChangeProductEvent(product, ActionType.Update);
+            ChangeProductEvent?.Invoke(product, ActionType.Update);
 
             foreach (var (_, sensor) in product.Sensors)
                 if (sensorsOldStatuses.TryGetValue(sensor.Id, out var oldStatus))
                     NotifyAboutChanges(sensor, oldStatus);
                 else
-                    ChangeSensorEvent(sensor, ActionType.Update);
+                    ChangeSensorEvent?.Invoke(sensor, ActionType.Update);
 
             foreach (var (_, subProduct) in product.SubProducts)
                 NotifyAllProductChildrenAboutUpdate(subProduct, sensorsOldStatuses);

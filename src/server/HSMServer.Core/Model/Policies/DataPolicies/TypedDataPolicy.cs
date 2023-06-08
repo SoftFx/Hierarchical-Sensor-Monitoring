@@ -5,7 +5,7 @@ using System.Text;
 
 namespace HSMServer.Core.Model.Policies
 {
-    public abstract class SingleSensorDataPolicy<T, U> : DataPolicy<T, U> where T : BaseValue<U>
+    public abstract class SingleSensorDataPolicy<T, U> : DataPolicy<T, U> where T : BaseValue<U>, new()
     {
         protected override Func<T, U> GetProperty(string property) => DataPolicyBuilder.GetSingleProperty<T, U>(property);
 
@@ -15,7 +15,7 @@ namespace HSMServer.Core.Model.Policies
 
 
     public abstract class BarSensorDataPolicy<T, U> : DataPolicy<T, U>
-        where T : BarBaseValue<U>
+        where T : BarBaseValue<U>, new()
         where U : struct, INumber<U>
     {
         protected override Func<T, U> GetProperty(string property) => DataPolicyBuilder.GetBarProperty<T, U>(property);

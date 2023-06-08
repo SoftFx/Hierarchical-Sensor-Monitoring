@@ -4,10 +4,10 @@
 
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
 
-
-<div class="d-grid">
+<div class="d-grid placeholder-wrapper">
     <select id="timeIntervalSelect_@Model.Id" class="timeIntervalSelect form-select" asp-for="Interval" asp-items="@Model.IntervalItems"></select>
     <input id="input_timeIntervalSelect_@Model.Id" class="customTimeInterval form-control" placeholder="@TimeIntervalViewModel.CustomTemplate" style="display:none" asp-for="CustomTimeInterval" />
+    <div id="placeholder_timeIntervalSelect_@Model.Id" class="placeholder d-none">@TimeIntervalViewModel.CustomTemplate</div>
 </div>
 
 <script>
@@ -19,12 +19,15 @@
 
         var select = select_obj.currentTarget;
         var custom_input_id = `#input_${select.id}`;
+        var placeHolder = `#placeholder_${select.id}`;
 
         if (select.options[select.selectedIndex].text == '@TimeInterval.Custom') {
             $(custom_input_id).show();
+            $(placeHolder).removeClass('d-none');
         }
         else {
             $(custom_input_id).hide();
+            $(placeHolder).addClass('d-none');
         }
     });
 
