@@ -63,7 +63,5 @@ namespace HSMServer.Core.Model
         }
 
         internal override void Clear() => _cache.Clear();
-
-
     }
 }

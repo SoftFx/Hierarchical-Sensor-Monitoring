@@ -275,3 +275,15 @@ img .tree-png-icon {
 .customTimeInterval:placeholder-shown + .placeholder {
     opacity: 0;
 }
+
+.meta-info-label {
+    min-width: 18rem;
+}
+
+.meta-info-value {
+    min-width: 12rem;
+}
+
+.meta-info-interval {
+    width: 17rem;
+}
