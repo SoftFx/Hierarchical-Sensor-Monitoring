@@ -81,7 +81,7 @@ namespace HSMServer.Folders
 
         public async override Task<bool> TryRemove(Guid folderId)
         {
-            var result = TryGetValue(folderId, out var folder) && await base.TryRemove(folderId);
+            var result = TryGetValue(folderId, out var folder);
 
             if (result)
             {
@@ -94,6 +94,8 @@ namespace HSMServer.Folders
 
                     await _userManager.UpdateUser(user);
                 }
+
+                result &= await base.TryRemove(folderId);
             }
 
             return result;
