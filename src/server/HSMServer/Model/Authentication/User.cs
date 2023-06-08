@@ -8,6 +8,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Security.Claims;
 using System.Text.Json;
+using HSMServer.Model.TreeViewModels;
 
 namespace HSMServer.Model.Authentication
 {
@@ -29,6 +30,8 @@ namespace HSMServer.Model.Authentication
 
         public TreeUserFilter TreeFilter { get; set; }
 
+        public VisibleTreeViewModel VisibleTreeViewModel { get; set; }
+
 
         public SelectedSensorHistoryViewModel History { get; } = new();
 
@@ -43,6 +46,7 @@ namespace HSMServer.Model.Authentication
             Id = Guid.NewGuid();
             Notifications = new();
             TreeFilter = new();
+            VisibleTreeViewModel = new VisibleTreeViewModel(this);
         }
 
         public User(UserEntity entity)
@@ -65,6 +69,8 @@ namespace HSMServer.Model.Authentication
             TreeFilter = entity.TreeFilter is null
                 ? new TreeUserFilter()
                 : JsonSerializer.Deserialize<TreeUserFilter>(((JsonElement)entity.TreeFilter).GetRawText())?.RestoreFilterNames();
+
+            VisibleTreeViewModel = new VisibleTreeViewModel(this);
         }
 
 

@@ -26,8 +26,6 @@ namespace HSMServer.Model.TreeViewModel
 
         public ConcurrentDictionary<Guid, ProductNodeViewModel> Nodes { get; } = new();
 
-        public ConcurrentDictionary<Guid, List<Guid>> NodesToRender { get; } = new();
-
 
         public TreeViewModel(ITreeValuesCache cache, IFolderManager folderManager)
         {
@@ -56,65 +54,6 @@ namespace HSMServer.Model.TreeViewModel
             return products.Where(p => user.IsProductAvailable(p.Id)).ToList();
         }
 
-        public List<BaseShallowModel> GetUserTree(User user)
-        {
-            var folders = _folderManager.GetUserFolders(user)
-                .ToDictionary(k => k.Id, v => new FolderShallowModel(v, user));
-            var tree = new List<BaseShallowModel>(1 << 4);
-
-            NodesToRender.TryGetValue(user.Id, out var nodeIds);
-            foreach (var product in GetUserProducts(user))
-            {
-                var node = FilterNodes(product, user); // full tree build O(n) n - count nodes
-
-                void ReduceNesting(NodeShallowModel node, int depth)
-                {
-                    depth--;
-                    foreach (var subNode in node.Nodes)
-                    {
-                        if (depth <= 0)
-                        {
-                            if (nodeIds is not null && nodeIds.Contains(subNode.Data.Id)) // O(m) - render list size
-                                continue;
-
-                            subNode.Sensors.Clear();
-                            subNode.Nodes.Clear();
-                        }
-
-                        ReduceNesting(subNode, depth); // without checking depth - O(n)
-                    }
-                }
-
-                ReduceNesting(node, product.RootProduct.DefinedRenderDepth);
-
-                // total to current moment is O(n + n*m)
-
-                if (node.VisibleSensorsCount > 0 || user.IsEmptyProductVisible(product))
-                {
-                    var folderId = node.Data.FolderId;
-
-                    if (folderId.HasValue)
-                    {
-                        if (!folders.TryGetValue(folderId.Value, out var folder))
-                        {
-                            folder = new FolderShallowModel(_folderManager[folderId], user);
-                            folders.Add(folderId.Value, folder);
-                        }
-
-                        folder.AddChild(node, user);
-                    }
-                    else
-                        tree.Add(node);
-                }
-            }
-
-            var isUserNoDataFilterEnabled = user.TreeFilter.ByVisibility.Empty.Value;
-            foreach (var folder in folders.Values)
-                if (folder.Nodes.Count > 0 || isUserNoDataFilterEnabled)
-                    tree.Add(folder);
-
-            return tree;
-        }
 
         public BaseShallowModel GetUserNode(ProductNodeViewModel node, User user)
         {
