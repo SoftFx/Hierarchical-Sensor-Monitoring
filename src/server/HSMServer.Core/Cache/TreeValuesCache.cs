@@ -385,20 +385,20 @@ namespace HSMServer.Core.Cache
                 _databaseCore.RemovePolicy(policyId);
         }
 
-        private static void ResetServerPolicyForRootProduct(ProductModel product)
+        private void ResetServerPolicyForRootProduct(ProductModel product)
         {
-            if (product.Parent != null)
+            if (product.Parent != null || product.FolderId.HasValue)
                 return;
 
             if (product.ServerPolicy.ExpectedUpdate.Policy.FromParent)
-                product.Update(new ProductUpdate
+                UpdateProduct(new ProductUpdate
                 {
                     Id = product.Id,
                     ExpectedUpdateInterval = new TimeIntervalModel(0L),
                 });
 
             if (product.ServerPolicy.RestoreError.Policy.FromParent)
-                product.Update(new ProductUpdate
+                UpdateProduct(new ProductUpdate
                 {
                     Id = product.Id,
                     RestoreInterval = new TimeIntervalModel(0L),
@@ -451,13 +451,13 @@ namespace HSMServer.Core.Cache
         private void NotifyAllProductChildrenAboutUpdate(ProductModel product,
             Dictionary<Guid, PolicyResult> sensorsOldStatuses)
         {
-            ChangeProductEvent(product, ActionType.Update);
+            ChangeProductEvent?.Invoke(product, ActionType.Update);
 
             foreach (var (_, sensor) in product.Sensors)
                 if (sensorsOldStatuses.TryGetValue(sensor.Id, out var oldStatus))
                     NotifyAboutChanges(sensor, oldStatus);
                 else
-                    ChangeSensorEvent(sensor, ActionType.Update);
+                    ChangeSensorEvent?.Invoke(sensor, ActionType.Update);
 
             foreach (var (_, subProduct) in product.SubProducts)
                 NotifyAllProductChildrenAboutUpdate(subProduct, sensorsOldStatuses);
@@ -543,6 +543,9 @@ namespace HSMServer.Core.Cache
                     if (_tree.TryGetValue(parentId, out var parent) && _tree.TryGetValue(productId, out var product))
                         parent.AddSubProduct(product);
                 }
+
+            foreach (var product in _tree.Values)
+                ResetServerPolicyForRootProduct(product);
 
             _logger.Info("Links between products are built");
         }
