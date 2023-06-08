@@ -15,12 +15,13 @@ namespace HSMServer.Notifications
         public NotificationsCenter(IUserManager userManager, TreeViewModel tree, ITreeValuesCache cache, IServerConfig config)
         {
             TelegramBot = new(userManager, cache, tree, config.Telegram);
-
-            _ = TelegramBot.StartBot();
         }
 
 
+        public Task Start() => TelegramBot.StartBot();
+
         public ValueTask DisposeAsync() => TelegramBot.DisposeAsync();
+
 
         internal void CheckNotificationCenterState()
         {
