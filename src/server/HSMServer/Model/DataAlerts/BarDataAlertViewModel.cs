@@ -6,7 +6,7 @@ using System.Collections.Generic;
 
 namespace HSMServer.Model.DataAlerts
 {
-    public sealed class BarDataAlertViewModel<T, U> : DataAlertViewModelBase<T> where T : BarBaseValue<U> where U : struct
+    public sealed class BarDataAlertViewModel<T, U> : DataAlertViewModelBase<T> where T : BarBaseValue<U>, new() where U : struct
     {
         public override string DisplayComment { get; }
 
