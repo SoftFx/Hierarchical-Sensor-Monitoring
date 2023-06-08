@@ -29,7 +29,7 @@ public class VisibleTreeViewModel
 
         foreach (var product in GetUserProducts(treeViewModel.GetRootProducts()))
         {
-            var node = FilterNodes(product); // full tree build O(n) n - count nodes
+            var node = FilterNodes(product);
 
             void ReduceNesting(NodeShallowModel node, int depth)
             {
@@ -43,15 +43,15 @@ public class VisibleTreeViewModel
                             subNode.Sensors.Clear();
                             subNode.Nodes.Clear();
                         }
+                        else 
+                            continue;
                     }
 
-                    ReduceNesting(subNode, depth); // without checking depth - O(n)
+                    ReduceNesting(subNode, depth);
                 }
             }
 
             ReduceNesting(node, product.RootProduct.DefinedRenderDepth);
-
-            // total to current moment is O(n + n*m)
 
             if (node.VisibleSensorsCount > 0 || _currentUser.IsEmptyProductVisible(product))
             {
