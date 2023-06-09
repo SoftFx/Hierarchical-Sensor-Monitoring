@@ -29,29 +29,7 @@ public class VisibleTreeViewModel
 
         foreach (var product in GetUserProducts(treeViewModel.GetRootProducts()))
         {
-            var node = FilterNodes(product);
-
-            void ReduceNesting(NodeShallowModel node, int depth)
-            {
-                depth--;
-                foreach (var subNode in node.Nodes)
-                {
-                    if (depth <= 0)
-                    {
-                        if (!NodesToRender.TryGetValue(subNode.Data.Id, out _))
-                        {
-                            subNode.Sensors.Clear();
-                            subNode.Nodes.Clear();
-                        }
-                        else 
-                            continue;
-                    }
-
-                    ReduceNesting(subNode, depth);
-                }
-            }
-
-            ReduceNesting(node, product.RootProduct.DefinedRenderDepth);
+            var node = FilterNodes(product, product.DefinedRenderDepth);
 
             if (node.VisibleSensorsCount > 0 || _currentUser.IsEmptyProductVisible(product))
             {
@@ -93,32 +71,33 @@ public class VisibleTreeViewModel
         return products.Where(p => _currentUser.IsProductAvailable(p.Id)).ToList();
     }
 
-    private NodeShallowModel FilterNodes(ProductNodeViewModel product)
+    private NodeShallowModel FilterNodes(ProductNodeViewModel product, int depth)
     {
         var node = new NodeShallowModel(product, _currentUser);
 
+        var toRender = _currentUser.VisibleTreeViewModel.NodesToRender.TryGetValue(product.Id, out _) || depth > 0;
         foreach (var (_, childNode) in product.Nodes)
-            node.AddChild(FilterNodes(childNode), _currentUser);
+            node.AddChild(FilterNodes(childNode, --depth), _currentUser, toRender);
 
         foreach (var (_, sensor) in product.Sensors)
-            node.AddChild(new SensorShallowModel(sensor, _currentUser), _currentUser);
+            node.AddChild(new SensorShallowModel(sensor, _currentUser), _currentUser, toRender);
 
         return node;
     }
 
     public BaseShallowModel GetUserNode(ProductNodeViewModel node)
     {
-        var test = FilterNodes(node);
+        var currentNode = FilterNodes(node, 1);
 
-        if (test.VisibleSensorsCount > 0 || _currentUser.IsEmptyProductVisible(node))
+        if (currentNode.VisibleSensorsCount > 0 || _currentUser.IsEmptyProductVisible(node))
         {
-            foreach (var nestedNode in test.Nodes)
+            foreach (var nestedNode in currentNode.Nodes)
             {
                 nestedNode.Sensors.Clear();
                 nestedNode.Nodes.Clear();
             }
 
-            return test;
+            return currentNode;
         }
 
         return default;
