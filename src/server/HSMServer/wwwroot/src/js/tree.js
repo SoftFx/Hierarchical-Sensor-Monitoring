@@ -441,14 +441,14 @@ function buildContextMenu(node) {
 
             if (groups[chatId].IsEnabled && !groups[chatId].IsIgnored) {
                 notificationSubmenu[`Groups ignore ${chatId}`] = {
-                    "label": `Ignore for '${group}''...`,
+                    "label": `Ignore for '${group}'...`,
                     "icon": "fab fa-telegram",
                     "action": _ => ignoreNotificationsRequest(node, TelegramTarget.Groups, false, chatId),
                 }
             }
             else {
                 notificationSubmenu[`Groups enable ${chatId}`] = {
-                    "label": `Enable for '${group}'...'`,
+                    "label": `Enable for '${group}'...`,
                     "icon": "fab fa-telegram",
                     "action": _ => enableNotificationsRequest(node, TelegramTarget.Groups, chatId),
                 }

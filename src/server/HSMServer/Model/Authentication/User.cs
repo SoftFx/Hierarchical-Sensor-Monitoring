@@ -32,7 +32,6 @@ namespace HSMServer.Model.Authentication
 
         public VisibleTreeViewModel VisibleTreeViewModel { get; set; }
 
-
         public SelectedSensorHistoryViewModel History { get; } = new();
 
 

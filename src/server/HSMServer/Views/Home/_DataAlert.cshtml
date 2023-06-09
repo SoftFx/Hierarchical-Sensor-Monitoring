@@ -20,7 +20,7 @@
         <label class="input-group-text">If</label>
         <select class="form-select" asp-for="Property" asp-items="@Model.PropertiesItems"></select>
         <select class="form-select" asp-for="Operation" asp-items="@Model.ActionsItems"></select>
-        <input type="text" class="form-control" asp-for="Value" value="@Model.Value" required>
+        <input type="text" class="form-control" placeholder="value" asp-for="Value" value="@Model.Value" required>
 
         <label class="input-group-text">then send</label>
 @*        <select class="form-select" asp-for="Status" asp-items="@Model.StatusesItems"></select>
@@ -50,6 +50,10 @@
         $("a.sendMessage").off("click").on("click", function () {
             var element = $(this).parents("div.dataAlertRow:first");
 
+            if (!tryValidate(element, "input", "Value") || !tryValidate(element, "input", "Comment")) {
+                return;
+            }
+
             var form = new FormData();
             appendProperty(form, element, "select", "Property");
             appendProperty(form, element, "select", "Operation");
@@ -71,5 +75,11 @@
 
     function appendProperty(form, element, propertyElement, propertyName) {
         form.append(`alert.${propertyName}`, element.find($(`${propertyElement}[name='${propertyName}']`)).val());
+    }
+
+    function tryValidate(element, propertyElement, propertyName) {
+        var input = element.find($(`${propertyElement}[name='${propertyName}']`));
+        
+        return input[0].reportValidity();
     }
 </script>
