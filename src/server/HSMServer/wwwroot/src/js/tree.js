@@ -61,6 +61,9 @@ window.initializeTree = function () {
             url: `${closeNode}?nodeId=${data.node.id}`,
             cache: false
         })
+    }).on('refresh.jstree', function (e, data){
+        refreshTreeTimeoutId = setTimeout(updateTreeTimer, interval);
+        updateSelectedNodeDataTimeoutId = setTimeout(updateSelectedNodeData, interval);
     });
 
     initializeActivateNodeTree();

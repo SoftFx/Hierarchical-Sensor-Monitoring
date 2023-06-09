@@ -259,12 +259,9 @@
     function updateTreeTimer() {
         clearTimeout(refreshTreeTimeoutId);
         isRefreshing = true;
-  
+
         $('#jstree').jstree(true).refresh(true);
 
-        refreshTreeTimeoutId = setTimeout(updateTreeTimer, interval);
-        updateSelectedNodeDataTimeoutId = setTimeout(updateSelectedNodeData, interval);
-        
         isRefreshing = false;
     }
 
