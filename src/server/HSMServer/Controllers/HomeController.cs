@@ -86,7 +86,7 @@ namespace HSMServer.Controllers
         {
             var guid = Guid.Parse(id);
             
-            CurrentUser.VisibleTreeViewModel.NodesToRender.TryAdd(guid, true);
+            CurrentUser.VisibleTreeViewModel.NodesToRender.Add(guid);
             
             if (_treeViewModel.Nodes.TryGetValue(guid, out var node))
             {

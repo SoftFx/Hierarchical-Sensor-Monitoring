@@ -12,7 +12,9 @@ namespace HSMServer.Model.TreeViewModels;
 public class VisibleTreeViewModel
 {
     private readonly User _currentUser;
-    public Dictionary<Guid, bool> NodesToRender { get; set; } = new();
+    
+    
+    public HashSet<Guid> NodesToRender { get; } = new();
 
 
     public VisibleTreeViewModel(User user)
@@ -58,7 +60,25 @@ public class VisibleTreeViewModel
         return tree;
     }
 
-    public List<ProductNodeViewModel> GetUserProducts(IEnumerable<ProductNodeViewModel> rootProducts)
+    public BaseShallowModel GetUserNode(ProductNodeViewModel node)
+    {
+        var currentNode = FilterNodes(node, 1);
+
+        if (currentNode.VisibleSensorsCount > 0 || _currentUser.IsEmptyProductVisible(node))
+        {
+            foreach (var nestedNode in currentNode.Nodes)
+            {
+                nestedNode.Sensors.Clear();
+                nestedNode.Nodes.Clear();
+            }
+
+            return currentNode;
+        }
+
+        return default;
+    }
+    
+    private List<ProductNodeViewModel> GetUserProducts(IEnumerable<ProductNodeViewModel> rootProducts)
     {
         var products = rootProducts.Select(x => x.RecalculateCharacteristics());
 
@@ -83,23 +103,5 @@ public class VisibleTreeViewModel
             node.AddChild(new SensorShallowModel(sensor, _currentUser), _currentUser, toRender);
 
         return node;
-    }
-
-    public BaseShallowModel GetUserNode(ProductNodeViewModel node)
-    {
-        var currentNode = FilterNodes(node, 1);
-
-        if (currentNode.VisibleSensorsCount > 0 || _currentUser.IsEmptyProductVisible(node))
-        {
-            foreach (var nestedNode in currentNode.Nodes)
-            {
-                nestedNode.Sensors.Clear();
-                nestedNode.Nodes.Clear();
-            }
-
-            return currentNode;
-        }
-
-        return default;
     }
 }
