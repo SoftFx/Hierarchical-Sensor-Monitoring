@@ -9,9 +9,12 @@ using HSMServer.Model.UserTreeShallowCopy;
 
 namespace HSMServer.Model.TreeViewModels;
 
-public class VisibleTreeViewModel
+public sealed class VisibleTreeViewModel
 {
-    private readonly User _currentUser;
+    public const int DefinedRenderDepth = 2;
+    
+    
+    private readonly User _user;
     
     
     public HashSet<Guid> NodesToRender { get; } = new();
@@ -19,21 +22,21 @@ public class VisibleTreeViewModel
 
     public VisibleTreeViewModel(User user)
     {
-        _currentUser = user;
+        _user = user;
     }
     
     
     public List<BaseShallowModel> GetUserTree(IFolderManager folderManager, TreeViewModel.TreeViewModel treeViewModel)
     {
-        var folders = folderManager.GetUserFolders(_currentUser)
-            .ToDictionary(k => k.Id, v => new FolderShallowModel(v, _currentUser));
+        var folders = folderManager.GetUserFolders(_user)
+            .ToDictionary(k => k.Id, v => new FolderShallowModel(v, _user));
         var tree = new List<BaseShallowModel>(1 << 4);
 
         foreach (var product in GetUserProducts(treeViewModel.GetRootProducts()))
         {
-            var node = FilterNodes(product, product.DefinedRenderDepth);
+            var node = FilterNodes(product, DefinedRenderDepth);
 
-            if (node.VisibleSensorsCount > 0 || _currentUser.IsEmptyProductVisible(product))
+            if (node.VisibleSensorsCount > 0 || _user.IsEmptyProductVisible(product))
             {
                 var folderId = node.Data.FolderId;
 
@@ -41,18 +44,18 @@ public class VisibleTreeViewModel
                 {
                     if (!folders.TryGetValue(folderId.Value, out var folder))
                     {
-                        folder = new FolderShallowModel(folderManager[folderId], _currentUser);
+                        folder = new FolderShallowModel(folderManager[folderId], _user);
                         folders.Add(folderId.Value, folder);
                     }
 
-                    folder.AddChild(node, _currentUser);
+                    folder.AddChild(node, _user);
                 }
                 else
                     tree.Add(node);
             }
         }
 
-        var isUserNoDataFilterEnabled = _currentUser.TreeFilter.ByVisibility.Empty.Value;
+        var isUserNoDataFilterEnabled = _user.TreeFilter.ByVisibility.Empty.Value;
         foreach (var folder in folders.Values)
             if (folder.Nodes.Count > 0 || isUserNoDataFilterEnabled)
                 tree.Add(folder);
@@ -64,7 +67,7 @@ public class VisibleTreeViewModel
     {
         var currentNode = FilterNodes(node, 1);
 
-        if (currentNode.VisibleSensorsCount > 0 || _currentUser.IsEmptyProductVisible(node))
+        if (IsVisibleNode(currentNode, node))
         {
             foreach (var nestedNode in currentNode.Nodes)
             {
@@ -82,26 +85,28 @@ public class VisibleTreeViewModel
     {
         var products = rootProducts.Select(x => x.RecalculateCharacteristics());
 
-        if (_currentUser == null || _currentUser.IsAdmin)
+        if (_user == null || _user.IsAdmin)
             return products.ToList();
 
-        if (_currentUser.ProductsRoles == null || _currentUser.ProductsRoles.Count == 0)
+        if (_user.ProductsRoles == null || _user.ProductsRoles.Count == 0)
             return new List<ProductNodeViewModel>();
 
-        return products.Where(p => _currentUser.IsProductAvailable(p.Id)).ToList();
+        return products.Where(p => _user.IsProductAvailable(p.Id)).ToList();
     }
 
     private NodeShallowModel FilterNodes(ProductNodeViewModel product, int depth)
     {
-        var node = new NodeShallowModel(product, _currentUser);
+        var node = new NodeShallowModel(product, _user);
 
-        var toRender = _currentUser.VisibleTreeViewModel.NodesToRender.TryGetValue(product.Id, out _) || depth > 0;
+        var toRender = NodesToRender.TryGetValue(product.Id, out _) || depth > 0;
         foreach (var (_, childNode) in product.Nodes)
-            node.AddChild(FilterNodes(childNode, --depth), _currentUser, toRender);
+            node.AddChild(FilterNodes(childNode, --depth), _user, toRender);
 
         foreach (var (_, sensor) in product.Sensors)
-            node.AddChild(new SensorShallowModel(sensor, _currentUser), _currentUser, toRender);
+            node.AddChild(new SensorShallowModel(sensor, _user), _user, toRender);
 
         return node;
     }
+
+    private bool IsVisibleNode(NodeShallowModel node, ProductNodeViewModel product) => node.VisibleSensorsCount > 0 || _user.IsEmptyProductVisible(product);
 }

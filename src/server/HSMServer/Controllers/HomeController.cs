@@ -86,11 +86,11 @@ namespace HSMServer.Controllers
         {
             var guid = Guid.Parse(id);
             
-            CurrentUser.VisibleTreeViewModel.NodesToRender.Add(guid);
+            CurrentUser.Tree.NodesToRender.Add(guid);
             
             if (_treeViewModel.Nodes.TryGetValue(guid, out var node))
             {
-                if (CurrentUser.VisibleTreeViewModel.GetUserNode(node) is NodeShallowModel nodeShallowModel)
+                if (CurrentUser.Tree.GetUserNode(node) is NodeShallowModel nodeShallowModel)
                     return PartialView("_TreeNode", nodeShallowModel);
             }
             
@@ -98,12 +98,12 @@ namespace HSMServer.Controllers
         }
        
         [HttpPut]
-        public void RemoveRenderingNode(Guid nodeId) => CurrentUser.VisibleTreeViewModel.NodesToRender.Remove(nodeId);
+        public void RemoveRenderingNode(Guid nodeId) => CurrentUser.Tree.NodesToRender.Remove(nodeId);
 
         [HttpGet]
         public IActionResult RefreshTree()
         {
-            return PartialView("_Tree", CurrentUser.VisibleTreeViewModel.GetUserTree(_folderManager, _treeViewModel));
+            return PartialView("_Tree", CurrentUser.Tree.GetUserTree(_folderManager, _treeViewModel));
         }
 
         [HttpGet]

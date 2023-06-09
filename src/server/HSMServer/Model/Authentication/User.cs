@@ -30,7 +30,7 @@ namespace HSMServer.Model.Authentication
 
         public TreeUserFilter TreeFilter { get; set; }
 
-        public VisibleTreeViewModel VisibleTreeViewModel { get; set; }
+        public VisibleTreeViewModel Tree { get; set; }
 
         public SelectedSensorHistoryViewModel History { get; } = new();
 
@@ -45,7 +45,7 @@ namespace HSMServer.Model.Authentication
             Id = Guid.NewGuid();
             Notifications = new();
             TreeFilter = new();
-            VisibleTreeViewModel = new VisibleTreeViewModel(this);
+            Tree = new VisibleTreeViewModel(this);
         }
 
         public User(UserEntity entity)
@@ -69,7 +69,7 @@ namespace HSMServer.Model.Authentication
                 ? new TreeUserFilter()
                 : JsonSerializer.Deserialize<TreeUserFilter>(((JsonElement)entity.TreeFilter).GetRawText())?.RestoreFilterNames();
 
-            VisibleTreeViewModel = new VisibleTreeViewModel(this);
+            Tree = new VisibleTreeViewModel(this);
         }
 
 
