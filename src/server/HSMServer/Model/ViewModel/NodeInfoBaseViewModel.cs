@@ -67,8 +67,8 @@ namespace HSMServer.Model.ViewModel
 
             ExpectedUpdateInterval = new(model.ExpectedUpdateInterval, PredefinedIntervals.ForTimeout);
             SensorRestorePolicy = new(model.SensorRestorePolicy, PredefinedIntervals.ForRestore);
-            SavedHistoryPeriod = new(model.SavedHistoryPeriod, PredefinedIntervals.ForCleanup);
-            SelfDestroyPeriod = new(model.SelfDestroyPeriod, PredefinedIntervals.ForCleanup);
+            SavedHistoryPeriod = new(model.SavedHistoryPeriod, PredefinedIntervals.ForKeepHistory);
+            SelfDestroyPeriod = new(model.SelfDestroyPeriod, PredefinedIntervals.ForSelfDestory);
 
             DataAlerts = model.DataAlerts;
         }

@@ -35,6 +35,12 @@ namespace HSMServer.Model
         Week,
         [Display(Name = "1 month")]
         Month,
+        [Display(Name = "3 months")]
+        ThreeMonths,
+        [Display(Name = "6 months")]
+        SixMonths,
+        [Display(Name = "1 year")]
+        Year,
         Forever,
         Custom,
     }
@@ -83,13 +89,29 @@ namespace HSMServer.Model
                 TimeInterval.Custom
             };
 
-        public static List<TimeInterval> ForCleanup { get; } =
+        public static List<TimeInterval> ForKeepHistory { get; } =
+            new()
+            {
+                TimeInterval.FromParent,
+                TimeInterval.Week,
+                TimeInterval.Month,
+                TimeInterval.ThreeMonths,
+                TimeInterval.SixMonths,
+                TimeInterval.Year,
+                TimeInterval.Forever,
+                TimeInterval.Custom
+            };
+
+        public static List<TimeInterval> ForSelfDestory { get; } =
             new()
             {
                 TimeInterval.FromParent,
                 TimeInterval.None,
                 TimeInterval.Week,
                 TimeInterval.Month,
+                TimeInterval.ThreeMonths,
+                TimeInterval.SixMonths,
+                TimeInterval.Year,
                 TimeInterval.Custom
             };
     }

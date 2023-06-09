@@ -42,8 +42,8 @@ namespace HSMServer.Model.Folders
 
             ExpectedUpdateInterval = GetPolicy(policies, 0, PredefinedIntervals.ForTimeout, GetDefaultPolicy);
             SensorRestorePolicy = GetPolicy(policies, 1, PredefinedIntervals.ForRestore, GetDefaultPolicy);
-            SavedHistoryPeriod = GetPolicy(policies, 2, PredefinedIntervals.ForCleanup, GetDefaultCleanup);
-            SelfDestroyPeriod = GetPolicy(policies, 3, PredefinedIntervals.ForCleanup, GetDefaultCleanup);
+            SavedHistoryPeriod = GetPolicy(policies, 2, PredefinedIntervals.ForKeepHistory, GetDefaultCleanup);
+            SelfDestroyPeriod = GetPolicy(policies, 3, PredefinedIntervals.ForSelfDestory, GetDefaultCleanup);
         }
 
         internal FolderModel(FolderAdd addModel)
@@ -60,8 +60,8 @@ namespace HSMServer.Model.Folders
 
             ExpectedUpdateInterval = GetDefaultPolicy(PredefinedIntervals.ForTimeout);
             SensorRestorePolicy = GetDefaultPolicy(PredefinedIntervals.ForRestore);
-            SavedHistoryPeriod = GetDefaultCleanup(PredefinedIntervals.ForCleanup);
-            SelfDestroyPeriod = GetDefaultCleanup(PredefinedIntervals.ForCleanup);
+            SavedHistoryPeriod = GetDefaultCleanup(PredefinedIntervals.ForKeepHistory);
+            SelfDestroyPeriod = GetDefaultCleanup(PredefinedIntervals.ForSelfDestory);
         }
 
 
@@ -77,9 +77,9 @@ namespace HSMServer.Model.Folders
             if (update.RestoreInterval != null)
                 SensorRestorePolicy = new TimeIntervalViewModel(update.RestoreInterval, PredefinedIntervals.ForRestore);
             if (update.SavedHistoryPeriod != null)
-                SavedHistoryPeriod = new TimeIntervalViewModel(update.SavedHistoryPeriod, PredefinedIntervals.ForCleanup);
+                SavedHistoryPeriod = new TimeIntervalViewModel(update.SavedHistoryPeriod, PredefinedIntervals.ForKeepHistory);
             if (update.SelfDestroy != null)
-                SelfDestroyPeriod = new TimeIntervalViewModel(update.SelfDestroy, PredefinedIntervals.ForCleanup);
+                SelfDestroyPeriod = new TimeIntervalViewModel(update.SelfDestroy, PredefinedIntervals.ForSelfDestory);
         }
 
         public FolderEntity ToEntity() =>

@@ -63,6 +63,7 @@ public sealed class MultiActionToastViewModel
     public void AddRoleError(string name, string action) => AddError($"You should be Manager or Admin to {action} {name}");
 }
 
+
 internal sealed class LimitedQueue<T> : Queue<T>
 {
     private readonly int _limit;
