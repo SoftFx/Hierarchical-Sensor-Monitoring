@@ -84,9 +84,9 @@ namespace HSMServer.Controllers
         [HttpGet]
         public IActionResult GetNode(string id)
         {
-            var guid = Guid.Parse(id);
+            var guid = id.ToGuid();
             
-            CurrentUser.Tree.NodesToRender.Add(guid);
+            CurrentUser.Tree.OpenedNodes.Add(guid);
             
             if (_treeViewModel.Nodes.TryGetValue(guid, out var node))
             {
@@ -98,7 +98,7 @@ namespace HSMServer.Controllers
         }
        
         [HttpPut]
-        public void RemoveRenderingNode(Guid nodeId) => CurrentUser.Tree.NodesToRender.Remove(nodeId);
+        public void RemoveRenderingNode(Guid nodeId) => CurrentUser.Tree.OpenedNodes.Remove(nodeId);
 
         [HttpGet]
         public IActionResult RefreshTree()

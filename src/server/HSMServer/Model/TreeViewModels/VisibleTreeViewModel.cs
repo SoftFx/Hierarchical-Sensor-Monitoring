@@ -18,7 +18,7 @@ public sealed class VisibleTreeViewModel
     private readonly User _user;
     
     
-    public HashSet<Guid> NodesToRender { get; } = new();
+    public HashSet<Guid> OpenedNodes { get; } = new();
 
     
     public event Func<User, List<FolderModel>> GetUserFolders;
@@ -91,7 +91,7 @@ public sealed class VisibleTreeViewModel
     {
         var node = new NodeShallowModel(product, _user);
 
-        var toRender = NodesToRender.TryGetValue(product.Id, out _) || depth > 0;
+        var toRender = OpenedNodes.TryGetValue(product.Id, out _) || depth > 0;
         foreach (var (_, childNode) in product.Nodes)
             node.AddChild(FilterNodes(childNode, --depth), _user, toRender);
 
