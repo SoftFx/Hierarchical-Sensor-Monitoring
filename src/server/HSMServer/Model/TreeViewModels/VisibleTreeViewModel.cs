@@ -20,14 +20,17 @@ public sealed class VisibleTreeViewModel
     
     public HashSet<Guid> NodesToRender { get; } = new();
 
+    
+    public event Func<User, List<FolderModel>> GetUserFolders;
+    
+    public event Func<User, List<ProductNodeViewModel>> GetUserProducts;
+    
 
     public VisibleTreeViewModel(User user)
     {
         _user = user;
     }
     
-    public event Func<User, List<FolderModel>> GetUserFolders;
-    public event Func<User, List<ProductNodeViewModel>> GetUserProducts;
     
     public List<BaseShallowModel> GetUserTree()
     {

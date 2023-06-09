@@ -41,6 +41,7 @@ namespace HSMServer.Folders
 
             _userManager = userManager;
             _userManager.Removed += RemoveUserHandler;
+            _userManager.Added += AddUserHandler;
         }
 
 
@@ -112,6 +113,7 @@ namespace HSMServer.Folders
             foreach (var user in _userManager.GetUsers())
             {
                 user.Tree.GetUserFolders += GetUserFolders;
+                
                 foreach (var (folderId, role) in user.FoldersRoles)
                     if (TryGetValue(folderId, out var folder))
                         folder.UserRoles.Add(user, role);
@@ -209,8 +211,12 @@ namespace HSMServer.Folders
             foreach (var folderId in user.FoldersRoles.Keys)
                 if (TryGetValue(folderId, out var folder))
                     folder.UserRoles.Remove(user);
+
+            user.Tree.GetUserFolders -= GetUserFolders;
         }
 
+        private void AddUserHandler(User user) => user.Tree.GetUserFolders += GetUserFolders;
+        
         private static TimeIntervalModel GetCorePolicy(TimeIntervalModel coreInterval, TimeIntervalViewModel folderInterval)
         {
             return coreInterval.IsFromFolder
