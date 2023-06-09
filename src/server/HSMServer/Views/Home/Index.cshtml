@@ -48,6 +48,8 @@
     var unmuteAction = "@Url.Action(nameof(HomeController.RemoveMutedStateToSensor), ViewConstants.HomeController)";
 
     var isDataValidAction = "@Url.Action(nameof(HomeController.IsMetaInfoValid), ViewConstants.HomeController)";
+    
+    var getGrid = `@Url.Action(nameof(HomeController.GetGrid))`;
 </script>
 
 
@@ -331,4 +333,18 @@
     var clipboard = new ClipboardJS('[id^="copy_"]', {
         container: document.getElementById('accessKeys_modal')
     });
+    
+    function getGridPage(pageNumber, pageSize){
+            $.ajax({
+                type: 'get',
+                url: `${getGrid}?selectedId=${$('#jstree').jstree('get_selected')[0]}&pageNumber=${pageNumber}&pageSize=${pageSize}`,
+                datatype: 'html',
+                contenttype: 'application/json',
+                cache: false,
+                success: function (viewData) {
+                    $('#grid_sensors').empty().replaceWith(viewData);
+                    $('#grid-accordion_gridSensors').click();
+                }
+            });
+        }
 </script>

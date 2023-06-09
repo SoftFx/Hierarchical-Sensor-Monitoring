@@ -1,12 +1,13 @@
+using System.Linq;
 using HSMCommon.Extensions;
+using HSMServer.Core.Helpers;
+using HSMServer.Extensions;
 using HSMServer.ApiObjectsConverters;
 using HSMServer.Authentication;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Cache.UpdateEntities;
-using HSMServer.Core.Helpers;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Policies.Infrastructure;
-using HSMServer.Extensions;
 using HSMServer.Folders;
 using HSMServer.Helpers;
 using HSMServer.Model;
@@ -24,7 +25,6 @@ using Microsoft.AspNetCore.Mvc;
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using System.Threading.Tasks;
 using SensorStatus = HSMSensorDataObjects.SensorStatus;
 using TimeInterval = HSMServer.Model.TimeInterval;
@@ -57,7 +57,7 @@ namespace HSMServer.Controllers
         }
 
         [HttpPost]
-        public IActionResult SelectNode(string selectedId)
+        public IActionResult SelectNode(string selectedId, int pageNumber = 0, int pageSize = 10)
         {
             BaseNodeViewModel viewModel = null;
 
@@ -68,7 +68,9 @@ namespace HSMServer.Controllers
                 if (_folderManager.TryGetValue(id, out var folder))
                     viewModel = folder;
                 else if (_treeViewModel.Nodes.TryGetValue(id, out var node))
-                    viewModel = node;
+                {
+                    viewModel = node.GetPaginated(pageNumber, pageSize);
+                }
                 else if (_treeViewModel.Sensors.TryGetValue(id, out var sensor))
                 {
                     viewModel = sensor;
@@ -78,6 +80,17 @@ namespace HSMServer.Controllers
             }
 
             return PartialView("_NodeDataPanel", viewModel);
+        }
+
+        [HttpGet]
+        public IActionResult GetGrid(string selectedId, int pageNumber = 0, int pageSize = 1000)
+        {
+            _treeViewModel.Nodes.TryGetValue(selectedId.ToGuid(), out var node);
+
+            if (node?.Sensors.Count <= pageNumber * pageSize || pageNumber < 0)
+                return NotFound(); 
+            
+            return PartialView("_GridAccordion", new GridViewModel(node, pageNumber, pageSize));
         }
 
         [HttpPost]

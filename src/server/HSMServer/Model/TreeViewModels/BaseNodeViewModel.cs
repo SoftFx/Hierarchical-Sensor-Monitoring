@@ -3,6 +3,7 @@ using HSMServer.Extensions;
 using HSMServer.Model.DataAlerts;
 using System;
 using System.Collections.Generic;
+using HSMServer.Model.ViewModel;
 
 namespace HSMServer.Model.TreeViewModel
 {
@@ -15,6 +16,11 @@ namespace HSMServer.Model.TreeViewModel
         public TimeIntervalViewModel SensorRestorePolicy { get; protected set; }
 
 
+        public GridViewModel GridSensors { get; } = new(true);
+        
+        public GridViewModel GridNodes { get; } = new();
+        
+        
         public Guid Id { get; protected set; }
 
         public string Name { get; protected set; }

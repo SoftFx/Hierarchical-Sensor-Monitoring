@@ -1,14 +1,11 @@
 ﻿@using HSMServer.Extensions
-@using HSMServer.Model.TreeViewModel
-@using HSMServer.Model.Folders
 
-@model List<NodeViewModel>
+@model HSMServer.Model.ViewModel.GridViewModel
 
-
-<div class="accordion">
-    @if (Model.Count > 0)
+<div id="grid_@(Model.IsSensorGrid ? "sensors": "nodes")" class="accordion">
+    @if (Model.VisibleItems.Count > 0)
     {
-        var title = Model.FirstOrDefault().GetChildrenAccordionTitle();
+        var title = Model.VisibleItems.FirstOrDefault().GetChildrenAccordionTitle();
         var accordionId = $"grid{title}";
 
         <div class="accordion-item custom-accordion-item">
@@ -20,7 +17,7 @@
             <div id="flush-collapse_@accordionId" class="accordion-collapse collapse">
                 <div class="accordion-body">
                     <div class="grid-container mw-100">
-                        @foreach (var element in Model)
+                        @foreach (var element in Model.VisibleItems)
                         {
                             <div id="gridCell_@element.EncodedId" class="@element.Status.ToCssGridCellClass() p-1 grid-cell clickable-node"
                                  title="@element.Tooltip" onclick="activateNode('@ViewBag.ParentId', '@element.EncodedId')">
@@ -30,6 +27,26 @@
                     </div>
                 </div>
             </div>
+        </div>
+    }
+    @if (Model.IsSensorGrid)
+    {
+        <div class="container d-flex justify-content-center mt-2">
+            <ul class="pagination">
+                <li id="prevPageButton" class="page-item button-link">
+                    <a class="page-link" aria-label="Previous" onclick="getGridPage(@(Model.PageNumber - 1), @Model.PageSize)">
+                        <span aria-hidden="true">&laquo;</span>
+                    </a>
+                </li>
+                <li class="page-item">
+                    <a id="pageNumber" class="page-link">@(Model.PageNumber + 1)</a>
+                </li>
+                <li id="nextPageButton" class="page-item button-link">
+                    <a class="page-link" aria-label="Next" onclick="getGridPage(@(Model.PageNumber + 1), @Model.PageSize)">
+                        <span aria-hidden="true">&raquo;</span>
+                    </a>
+                </li>
+            </ul>
         </div>
     }
 </div>

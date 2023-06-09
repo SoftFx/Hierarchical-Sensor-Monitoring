@@ -14,9 +14,9 @@ namespace HSMServer.Model.TreeViewModel
 {
     public class ProductNodeViewModel : NodeViewModel, INotificatable
     {
-        public ConcurrentDictionary<Guid, ProductNodeViewModel> Nodes { get; } = new();
+        public ConcurrentDictionary<Guid, ProductNodeViewModel> Nodes { get; set; } = new();
 
-        public ConcurrentDictionary<Guid, SensorNodeViewModel> Sensors { get; } = new();
+        public ConcurrentDictionary<Guid, SensorNodeViewModel> Sensors { get; set; } = new();
 
         public ConcurrentDictionary<Guid, AccessKeyViewModel> AccessKeys { get; } = new();
 
@@ -43,6 +43,16 @@ namespace HSMServer.Model.TreeViewModel
 
             if (folder != null)
                 AddFolder(folder);
+        }
+
+        public ProductNodeViewModel GetPaginated(int pageNumber, int pageSize)
+        {
+            GridSensors.VisibleItems = new (Sensors.Values.Where(n => n.HasData).OrderByDescending(n => n.Status).ThenBy(n => n.Name).Skip(pageNumber * pageSize).Take(pageSize));
+            GridSensors.IsSensorGrid = true;
+            
+            GridNodes.VisibleItems = new (Nodes.Values.Where(n => n.HasData).OrderByDescending(n => n.Status).ThenBy(n => n.Name));
+            
+            return this;
         }
 
 

@@ -1,7 +1,6 @@
 ﻿@using HSMServer.Model.Folders
 @using HSMServer.Model.TreeViewModel
 @using HSMServer.Model.Authentication
-@using HSMServer.UserFilters;
 
 @model BaseNodeViewModel
 
@@ -50,8 +49,8 @@
 </ul>
 <div class='tab-content'>
     <div class='tab-pane fade' id=@gridDivId role="tabpanel">
-        @await Html.PartialAsync("_GridAccordion", visibleNodes)
-        @await Html.PartialAsync("_GridAccordion", visibleSensors)
+        @await Html.PartialAsync("_GridAccordion", Model.GridNodes)
+        @await Html.PartialAsync("_GridAccordion", Model.GridSensors)
     </div>
 
     <div class='tab-pane fade' id=@listDivId role="tabpanel">

@@ -45,6 +45,7 @@ namespace HSMServer.Model.TreeViewModel
             SensorRestorePolicy = new(model.ServerPolicy.RestoreError.Policy.Interval, () => Parent?.SensorRestorePolicy, NodeHasFolder);
         }
 
+        protected NodeViewModel() {}
 
         internal void Update(BaseNodeModel model)
         {
