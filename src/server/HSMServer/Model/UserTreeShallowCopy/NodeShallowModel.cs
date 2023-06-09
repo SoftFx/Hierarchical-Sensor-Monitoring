@@ -23,7 +23,7 @@ namespace HSMServer.Model.UserTreeShallowCopy
         public override bool IsAccountsEnable => AccountState.IsAllEnabled;
 
         public override bool IsAccountsIgnore => AccountState.IsAllIgnored;
-        
+
 
         public int VisibleSensorsCount { get; private set; }
 
