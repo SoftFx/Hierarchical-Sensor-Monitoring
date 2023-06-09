@@ -140,6 +140,9 @@ function Data(to, from, type, encodedId) {
             cache: false,
             async: true
         }).done(function (data) {
+            $("#newValuesCount").empty();
+            $("#tableHistoryRefreshButton").addClass("d-none");
+
             $(`#values_${encodedId}`).html(data);
 
             let noValuesElement = document.getElementById(`noTableValues_${encodedId}`);
@@ -153,12 +156,14 @@ function Data(to, from, type, encodedId) {
             $('#no_data_' + encodedId).hide();
 
             if (needFillFromTo) {
+                let to = getToDate();
                 let from = new Date($(`#oldest_date_${encodedId}`).val());
                 from.setMinutes(from.getMinutes() - from.getTimezoneOffset());
-                let to = new Date().getTime() + 60000;
 
                 $(`#from_${encodedId}`).val(datetimeLocal(from));
-                $(`#to_${encodedId}`).val(datetimeLocal(to));
+                $(`#to_${encodedId}`).val(datetimeLocal(to.getTime()));
+
+                reloadHistoryRequest(from, to, body);
             }
         });
     }
@@ -173,6 +178,8 @@ function Data(to, from, type, encodedId) {
             cache: false,
             async: true
         }).done(function (data) {
+            $("#tableHistoryRefreshButton").addClass("d-none");
+
             let parsedData = JSON.parse(data);
 
             if (parsedData.length === 0) {
@@ -186,13 +193,28 @@ function Data(to, from, type, encodedId) {
 
             if (needFillFromTo) {
                 let from = new Date(parsedData[0].time);
-                let to = new Date().getTime() + 60000;
+                let to = getToDate();
 
                 $(`#from_${encodedId}`).val(datetimeLocal(from));
-                $(`#to_${encodedId}`).val(datetimeLocal(to));
+                $(`#to_${encodedId}`).val(datetimeLocal(to.getTime()));
+
+                reloadHistoryRequest(from, to, body);
             }
 
             displayGraph(data, type, `graph_${encodedId}`, encodedId);
+        });
+    }
+
+    function reloadHistoryRequest(from, to, body) {
+        let model = Data(to, from, body.Type, body.EncodedId);
+
+        $.ajax({
+            type: 'POST',
+            url: reloadRequest,
+            data: JSON.stringify(model),
+            contentType: 'application/json',
+            cache: false,
+            async: true
         });
     }
 }
@@ -228,6 +250,14 @@ function Data(to, from, type, encodedId) {
         }
 
         return { from, to };
+    }
+
+    function getToDate() {
+        let now = new Date();
+
+        now.setFullYear(now.getFullYear() + 1);
+
+        return now;
     }
 
     function datetimeLocal(datetime) {

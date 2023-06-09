@@ -18,16 +18,14 @@ namespace HSMServer.Controllers
     public class AccessKeysController : BaseController
     {
         private readonly TreeViewModel _treeViewModel;
-        private readonly IUserManager _userManager;
 
         internal ITreeValuesCache TreeValuesCache { get; }
 
 
-        public AccessKeysController(ITreeValuesCache treeValuesCache, IUserManager userManager, TreeViewModel treeViewModel)
+        public AccessKeysController(ITreeValuesCache treeValuesCache, IUserManager userManager, TreeViewModel treeViewModel) : base(userManager)
         {
             TreeValuesCache = treeValuesCache;
             _treeViewModel = treeViewModel;
-            _userManager = userManager;
         }
 
         public IActionResult Index() => View(GenerateFullViewModel());

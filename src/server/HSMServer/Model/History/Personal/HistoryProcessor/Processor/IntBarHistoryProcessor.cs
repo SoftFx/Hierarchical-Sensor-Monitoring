@@ -1,6 +1,6 @@
 ﻿using HSMServer.Core.Model;
 
-namespace HSMServer.Core.MonitoringHistoryProcessor.Processor
+namespace HSMServer.Model.History
 {
     internal sealed class IntBarHistoryProcessor : BarHistoryProcessor<int>
     {

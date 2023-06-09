@@ -1,7 +1,7 @@
 ﻿using HSMServer.Core.Model;
 using System.Globalization;
 
-namespace HSMServer.Core.MonitoringHistoryProcessor.Processor
+namespace HSMServer.Model.History
 {
     internal sealed class DoubleBarHistoryProcessor : BarHistoryProcessor<double>
     {
@@ -17,11 +17,6 @@ namespace HSMServer.Core.MonitoringHistoryProcessor.Processor
         {
             _format = new NumberFormatInfo { NumberDecimalSeparator = "." };
         }
-
-
-        protected override string GetCsvRow(BarBaseValue<double> value) =>
-            $"{value.OpenTime.ToUniversalTime():s},{value.CloseTime.ToUniversalTime():s},{value.Min.ToString(_format)}," +
-            $"{value.Max.ToString(_format)},{value.Mean.ToString(_format)},{value.Count},{value.LastValue.ToString(_format)}";
 
         protected override DoubleBarValue GetBarValue(SummaryBarItem<double> summary) =>
           new()

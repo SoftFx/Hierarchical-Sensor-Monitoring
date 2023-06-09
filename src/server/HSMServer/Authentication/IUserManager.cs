@@ -34,8 +34,11 @@ namespace HSMServer.Authentication
 
         bool TryGetIdByName(string name, out Guid id);
 
+
         List<User> GetViewers(Guid productId);
+
         List<User> GetManagers(Guid productId);
+
         IEnumerable<User> GetUsers(Func<User, bool> filter = null);
     }
 }

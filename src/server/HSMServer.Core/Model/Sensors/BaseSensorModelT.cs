@@ -21,7 +21,11 @@ namespace HSMServer.Core.Model
             var canStore = DataPolicies.TryValidate(value, out var valueT);
 
             if (canStore)
+            {
                 Storage.AddValue(valueT);
+
+                ReceivedNewValue?.Invoke(valueT);
+            }
 
             return canStore;
         }

@@ -4,6 +4,8 @@ namespace HSMServer.Core
 {
     public static class SensorExtensions
     {
+        public static bool IsBar(this SensorType type) => type is SensorType.IntegerBar or SensorType.DoubleBar;
+
         public static bool IsOk(this SensorStatus status) => status == SensorStatus.Ok;
 
         public static bool IsCustom(this TimeInterval interval) => interval == TimeInterval.Custom;

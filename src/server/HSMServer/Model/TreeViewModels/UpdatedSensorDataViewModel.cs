@@ -1,5 +1,6 @@
 ﻿using HSMServer.Core.Model;
 using HSMServer.Extensions;
+using HSMServer.Model.Authentication;
 
 namespace HSMServer.Model.TreeViewModel
 {
@@ -32,30 +33,35 @@ namespace HSMServer.Model.TreeViewModel
 
     public record UpdatedSensorDataViewModel : UpdatedNodeDataViewModel
     {
+        private const int MaxNewValuesCount = 99;
+
+
         public SensorType SensorType { get; }
-        
-        
+
+
         public string Value { get; }
+
+        public string NewValuesCount { get; }
 
         public string ValidationError { get; }
 
         public bool IsValidationErrorVisible { get; }
-        
-        
+
+
         public string FileNameString { get; }
-        
+
         public string Size { get; }
-        
+
         public string SendingTime { get; }
-        
+
         public string ReceivingTime { get; }
-        
+
         public string Comment { get; }
 
-        public UpdatedSensorDataViewModel(SensorNodeViewModel sensor) : base(sensor)
+        internal UpdatedSensorDataViewModel(SensorNodeViewModel sensor) : base(sensor)
         {
             SensorType = sensor.Type;
-            
+
             Value = sensor.ShortStringValue;
             ValidationError = sensor.ValidationError;
             IsValidationErrorVisible = sensor.IsValidationErrorVisible;
@@ -76,6 +82,16 @@ namespace HSMServer.Model.TreeViewModel
             {
                 Comment = sensor.LastValue?.Comment;
             }
+        }
+
+        internal UpdatedSensorDataViewModel(SensorNodeViewModel sensor, User user) : this(sensor)
+        {
+            var count = user.History.NewValuesCnt;
+
+            if (count > MaxNewValuesCount)
+                NewValuesCount = $"{MaxNewValuesCount}+";
+            else if (count > 0)
+                NewValuesCount = $"{count}";
         }
     }
 }

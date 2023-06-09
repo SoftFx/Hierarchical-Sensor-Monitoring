@@ -61,6 +61,9 @@ namespace HSMServer.Core.Model
         public DateTime LastUpdateTime => Storage.LastValue?.ReceivingTime ?? DateTime.MinValue;
 
 
+        public Action<BaseValue> ReceivedNewValue;
+
+
         public BaseSensorModel(SensorEntity entity) : base(entity)
         {
             State = (SensorState)entity.State;
