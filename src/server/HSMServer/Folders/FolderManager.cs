@@ -114,6 +114,8 @@ namespace HSMServer.Folders
                 foreach (var (folderId, role) in user.FoldersRoles)
                     if (TryGetValue(folderId, out var folder))
                         folder.UserRoles.Add(user, role);
+
+            ResetServerPolicyForFolderProducts();
         }
 
         public List<FolderModel> GetUserFolders(User user)
@@ -218,6 +220,59 @@ namespace HSMServer.Folders
             return coreInterval.IsFromFolder
                 ? folderInterval?.ToFolderModel() ?? new TimeIntervalModel(coreInterval.CustomPeriod)
                 : null;
+        }
+
+        private void ResetServerPolicyForFolderProducts()
+        {
+            foreach (var product in _cache.GetProducts())
+            {
+                if (!product.FolderId.HasValue || !TryGetValueById(product.FolderId, out var folder))
+                    return;
+
+                if (product.ServerPolicy.ExpectedUpdate.Policy.FromParent)
+                {
+                    var update = new ProductUpdate
+                    {
+                        Id = product.Id,
+                        ExpectedUpdateInterval = folder.ExpectedUpdateInterval.ToFolderModel(),
+                    };
+
+                    _cache.UpdateProduct(update);
+                }
+
+                if (product.ServerPolicy.RestoreError.Policy.FromParent)
+                {
+                    var update = new ProductUpdate
+                    {
+                        Id = product.Id,
+                        RestoreInterval = folder.SensorRestorePolicy.ToFolderModel(),
+                    };
+
+                    _cache.UpdateProduct(update);
+                }
+
+                if (product.ServerPolicy.SavedHistoryPeriod.Policy.FromParent)
+                {
+                    var update = new ProductUpdate
+                    {
+                        Id = product.Id,
+                        SavedHistoryPeriod = folder.SavedHistoryPeriod.ToFolderModel(),
+                    };
+
+                    _cache.UpdateProduct(update);
+                }
+
+                if (product.ServerPolicy.SelfDestroy.Policy.FromParent)
+                {
+                    var update = new ProductUpdate
+                    {
+                        Id = product.Id,
+                        SelfDestroy = folder.SelfDestroyPeriod.ToFolderModel(),
+                    };
+
+                    _cache.UpdateProduct(update);
+                }
+            }
         }
     }
 }
