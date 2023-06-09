@@ -1,12 +1,10 @@
 ﻿using HSMServer.Core.Cache;
 using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Model;
-using HSMServer.Extensions;
 using HSMServer.Folders;
 using HSMServer.Model.AccessKeysViewModels;
 using HSMServer.Model.Authentication;
 using HSMServer.Model.Folders;
-using HSMServer.Model.UserTreeShallowCopy;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -54,37 +52,6 @@ namespace HSMServer.Model.TreeViewModel
             return products.Where(p => user.IsProductAvailable(p.Id)).ToList();
         }
 
-
-        public BaseShallowModel GetUserNode(ProductNodeViewModel node, User user)
-        {
-            var test = FilterNodes(node, user);
-           
-            if (test.VisibleSensorsCount > 0 || user.IsEmptyProductVisible(node))
-            {
-                foreach (var nestednode in test.Nodes)
-                {
-                    nestednode.Sensors.Clear();
-                    nestednode.Nodes.Clear();
-                }
-
-                return test;
-            }
-
-            return default;
-        }
-
-        private NodeShallowModel FilterNodes(ProductNodeViewModel product, User user)
-        {
-            var node = new NodeShallowModel(product, user);
-
-            foreach (var (_, childNode) in product.Nodes)
-                node.AddChild(FilterNodes(childNode, user), user);
-
-            foreach (var (_, sensor) in product.Sensors)
-                node.AddChild(new SensorShallowModel(sensor, user), user);
-
-            return node;
-        }
 
         internal IEnumerable<ProductNodeViewModel> GetRootProducts() =>
             Nodes.Where(x => x.Value.Parent is null or FolderModel).Select(x => x.Value);
