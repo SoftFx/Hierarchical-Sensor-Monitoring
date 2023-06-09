@@ -29,10 +29,14 @@ $lastValue - Bar sensor lastValue value
 * **Edit** item for multiselect context menu has been added (multiedit for TTL and Sensetivity)
 
 ## Telegram
-* New icon ↕️ for Data alerts has been added
+* New icon ?? for Data alerts has been added
 * Partial ignore (for TG groups has been added)
 * Enable/ignore for different groups logic has been added in Tree context menu
 
 ## Other
 * New sensors subscribe to TG group if there is some telegram groups in product
 * Timespan chart default type has been changed from Bars to Line
+* Confirmation dialog before swithing from Edit general info tab has been added
+* '\t' has been disableed as available symbol for sensor path
+* Search user by name has been added in add user to folder modal window
+* Bugfixing
