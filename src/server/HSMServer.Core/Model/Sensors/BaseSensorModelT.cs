@@ -23,6 +23,7 @@ namespace HSMServer.Core.Model
             if (canStore)
             {
                 Storage.AddValue(valueT);
+                ServerPolicy.Reset();
 
                 ReceivedNewValue?.Invoke(valueT);
             }

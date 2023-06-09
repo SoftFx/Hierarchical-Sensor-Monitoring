@@ -85,7 +85,7 @@ namespace HSMServer.Core.Model
         internal virtual BaseSensorModel InitDataPolicy() => this;
 
 
-        internal override bool HasUpdateTimeout() => ServerPolicy.HasUpdateTimeout(LastValue?.ReceivingTime);
+        internal override bool HasUpdateTimeout() => !Status.HasOffTime && ServerPolicy.HasUpdateTimeout(LastValue?.ReceivingTime);
 
 
         internal void Update(SensorUpdate update)
