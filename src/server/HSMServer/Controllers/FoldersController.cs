@@ -93,6 +93,23 @@ namespace HSMServer.Controllers
 
 
         [HttpPost]
+        [FolderRoleFilterByEditCleanup(nameof(folderCleanup), ProductRoleEnum.ProductManager)]
+        public async Task<IActionResult> EditCleanup(FolderCleanupViewModel folderCleanup)
+        {
+            var update = new FolderUpdate()
+            {
+                Id = folderCleanup.Id,
+                SavedHistoryPeriod = folderCleanup.SavedHistoryPeriod,
+                SelfDestroy = folderCleanup.SelfDestoryPeriod,
+            };
+
+            await _folderManager.TryUpdate(update);
+
+            return PartialView("_Cleanup", new FolderCleanupViewModel(_folderManager[update.Id]));
+        }
+
+
+        [HttpPost]
         [FolderRoleFilterByEditAlerts(nameof(folderAlerts), ProductRoleEnum.ProductManager)]
         public async Task<IActionResult> EditAlerts(FolderAlertsViewModel folderAlerts)
         {
