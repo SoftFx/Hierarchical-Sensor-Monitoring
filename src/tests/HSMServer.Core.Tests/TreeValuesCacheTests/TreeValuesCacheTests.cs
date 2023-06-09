@@ -36,7 +36,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         {
             var folderManager = new Mock<IFolderManager>().Object;
 
-            _treeViewModel = new(_valuesCache, folderManager);
+            _treeViewModel = new(_valuesCache, folderManager, null);
         }
 
 

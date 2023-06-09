@@ -34,7 +34,7 @@ namespace HSMServer.Authentication
         protected override Func<List<UserEntity>> GetFromDb => _databaseCore.GetUsers;
 
 
-        public UserManager(IDatabaseCore databaseCore, ITreeValuesCache cache, ILogger<UserManager> logger, TreeViewModel treeViewModel)
+        public UserManager(IDatabaseCore databaseCore, ITreeValuesCache cache, ILogger<UserManager> logger)
         {
             _databaseCore = databaseCore;
             _logger = logger;
@@ -42,8 +42,6 @@ namespace HSMServer.Authentication
             _treeValuesCache = cache;
             _treeValuesCache.ChangeProductEvent += ChangeProductEventHandler;
             _treeValuesCache.ChangeSensorEvent += ChangeSensorEventHandler;
-            
-            _treeViewModel = treeViewModel;
         }
 
 

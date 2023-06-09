@@ -9,6 +9,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using HSMServer.Authentication;
 
 namespace HSMServer.Model.TreeViewModel
 {
@@ -16,6 +17,7 @@ namespace HSMServer.Model.TreeViewModel
     {
         private readonly IFolderManager _folderManager;
         private readonly ITreeValuesCache _cache;
+        private readonly IUserManager _userManager;
 
 
         public ConcurrentDictionary<Guid, AccessKeyViewModel> AccessKeys { get; } = new();
@@ -25,15 +27,22 @@ namespace HSMServer.Model.TreeViewModel
         public ConcurrentDictionary<Guid, ProductNodeViewModel> Nodes { get; } = new();
 
 
-        public TreeViewModel(ITreeValuesCache cache, IFolderManager folderManager)
+        public TreeViewModel(ITreeValuesCache cache, IFolderManager folderManager, IUserManager userManager)
         {
             _folderManager = folderManager;
+            _userManager = userManager;
             _cache = cache;
 
             _cache.ChangeProductEvent += ChangeProductHandler;
             _cache.ChangeSensorEvent += ChangeSensorHandler;
             _cache.ChangeAccessKeyEvent += ChangeAccessKeyHandler;
 
+            foreach (var user in _userManager.GetUsers())
+            {
+                user.Tree.GetUserProducts += GetUserProducts;
+                user.Tree.GetUserFolders += _folderManager.GetUserFolders;
+            }
+            
             foreach (var product in _cache.GetProducts())
                 AddNewProductViewModel(product);
         }
