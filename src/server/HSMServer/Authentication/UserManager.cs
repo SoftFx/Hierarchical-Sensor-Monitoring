@@ -11,6 +11,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using HSMServer.Model.TreeViewModel;
 
 namespace HSMServer.Authentication
 {
@@ -21,6 +22,7 @@ namespace HSMServer.Authentication
         private readonly IDatabaseCore _databaseCore;
         private readonly ITreeValuesCache _treeValuesCache;
         private readonly ILogger<UserManager> _logger;
+        private readonly TreeViewModel _treeViewModel;
 
 
         protected override Action<UserEntity> AddToDb => _databaseCore.AddUser;
@@ -32,7 +34,7 @@ namespace HSMServer.Authentication
         protected override Func<List<UserEntity>> GetFromDb => _databaseCore.GetUsers;
 
 
-        public UserManager(IDatabaseCore databaseCore, ITreeValuesCache cache, ILogger<UserManager> logger)
+        public UserManager(IDatabaseCore databaseCore, ITreeValuesCache cache, ILogger<UserManager> logger, TreeViewModel treeViewModel)
         {
             _databaseCore = databaseCore;
             _logger = logger;
@@ -40,6 +42,8 @@ namespace HSMServer.Authentication
             _treeValuesCache = cache;
             _treeValuesCache.ChangeProductEvent += ChangeProductEventHandler;
             _treeValuesCache.ChangeSensorEvent += ChangeSensorEventHandler;
+            
+            _treeViewModel = treeViewModel;
         }
 
 
@@ -85,7 +89,7 @@ namespace HSMServer.Authentication
             }
 
             var existingUser = this.SingleOrDefault(IsAskedUser);
-
+            existingUser.Value.Tree.GetUserProducts += _treeViewModel.GetUserProducts;
             return existingUser.Value != null;
         }
 

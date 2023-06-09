@@ -110,9 +110,12 @@ namespace HSMServer.Folders
                     folder.Author = author.Name;
 
             foreach (var user in _userManager.GetUsers())
+            {
+                user.Tree.GetUserFolders += GetUserFolders;
                 foreach (var (folderId, role) in user.FoldersRoles)
                     if (TryGetValue(folderId, out var folder))
                         folder.UserRoles.Add(user, role);
+            }
         }
 
         public List<FolderModel> GetUserFolders(User user)

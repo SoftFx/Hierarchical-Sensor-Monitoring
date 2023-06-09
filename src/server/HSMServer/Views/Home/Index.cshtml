@@ -9,9 +9,6 @@
 
 @model TreeViewModel
 
-@inject TreeViewModel TreeViewModel
-@inject IFolderManager FolderManager
-
 @{
     var user = User as User;
 
@@ -116,7 +113,7 @@
                 <div class="row justify-content-start mw-100 me-1">
                     <div class="tree-height-weight-parameters col-auto ms-2 pe-0">
                         <div class="col-md-auto">
-                            <div id="jstree">@await Html.PartialAsync("_Tree", user.Tree.GetUserTree(FolderManager, TreeViewModel))</div>
+                            <div id="jstree">@await Html.PartialAsync("_Tree", user.Tree.GetUserTree())</div>
                         </div>
                     </div>
                 </div>

@@ -36,7 +36,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
             _valuesCache = new TreeValuesCache(_databaseCoreManager.DatabaseCore, _updatesQueue);
 
             var userManagerLogger = CommonMoqs.CreateNullLogger<UserManager>();
-            _userManager = new UserManager(_databaseCoreManager.DatabaseCore, _valuesCache, userManagerLogger);
+            _userManager = new UserManager(_databaseCoreManager.DatabaseCore, _valuesCache, userManagerLogger, null);
         }
 
 

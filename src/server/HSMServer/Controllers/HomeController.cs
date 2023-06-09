@@ -103,7 +103,7 @@ namespace HSMServer.Controllers
         [HttpGet]
         public IActionResult RefreshTree()
         {
-            return PartialView("_Tree", CurrentUser.Tree.GetUserTree(_folderManager, _treeViewModel));
+            return PartialView("_Tree", CurrentUser.Tree.GetUserTree());
         }
 
         [HttpGet]

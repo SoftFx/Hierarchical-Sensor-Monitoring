@@ -4,6 +4,7 @@ using System.Linq;
 using HSMServer.Extensions;
 using HSMServer.Folders;
 using HSMServer.Model.Authentication;
+using HSMServer.Model.Folders;
 using HSMServer.Model.TreeViewModel;
 using HSMServer.Model.UserTreeShallowCopy;
 
@@ -25,14 +26,16 @@ public sealed class VisibleTreeViewModel
         _user = user;
     }
     
+    public event Func<User, List<FolderModel>> GetUserFolders;
+    public event Func<User, List<ProductNodeViewModel>> GetUserProducts;
     
-    public List<BaseShallowModel> GetUserTree(IFolderManager folderManager, TreeViewModel.TreeViewModel treeViewModel)
+    public List<BaseShallowModel> GetUserTree()
     {
-        var folders = folderManager.GetUserFolders(_user)
+        var folders = GetUserFolders?.Invoke(_user)
             .ToDictionary(k => k.Id, v => new FolderShallowModel(v, _user));
         var tree = new List<BaseShallowModel>(1 << 4);
 
-        foreach (var product in GetUserProducts(treeViewModel.GetRootProducts()))
+        foreach (var product in GetUserProducts?.Invoke(_user))
         {
             var node = FilterNodes(product, DefinedRenderDepth);
 
@@ -44,8 +47,8 @@ public sealed class VisibleTreeViewModel
                 {
                     if (!folders.TryGetValue(folderId.Value, out var folder))
                     {
-                        folder = new FolderShallowModel(folderManager[folderId], _user);
-                        folders.Add(folderId.Value, folder);
+                        //folder = new FolderShallowModel(folderManager[folderId], _user);
+                        //folders.Add(folderId.Value, folder);
                     }
 
                     folder.AddChild(node, _user);
@@ -79,19 +82,6 @@ public sealed class VisibleTreeViewModel
         }
 
         return default;
-    }
-    
-    private List<ProductNodeViewModel> GetUserProducts(IEnumerable<ProductNodeViewModel> rootProducts)
-    {
-        var products = rootProducts.Select(x => x.RecalculateCharacteristics());
-
-        if (_user == null || _user.IsAdmin)
-            return products.ToList();
-
-        if (_user.ProductsRoles == null || _user.ProductsRoles.Count == 0)
-            return new List<ProductNodeViewModel>();
-
-        return products.Where(p => _user.IsProductAvailable(p.Id)).ToList();
     }
 
     private NodeShallowModel FilterNodes(ProductNodeViewModel product, int depth)
