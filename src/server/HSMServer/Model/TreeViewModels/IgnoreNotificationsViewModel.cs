@@ -29,6 +29,8 @@ namespace HSMServer.Model
 
         public TimeIntervalViewModel IgnorePeriod { get; set; }
 
+        public long? Chat { get; set; }
+
         public int Days { get; set; }
 
         public int Hours { get; set; }

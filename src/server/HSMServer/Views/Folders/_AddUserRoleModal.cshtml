@@ -1,6 +1,6 @@
 ﻿@using HSMServer.Model.Authentication
 @using HSMServer.Model.Folders.ViewModels
-@using HSMServer.Extensions
+@using HSMCommon.Extensions
 
 @model FolderUsersViewModel
 
@@ -55,5 +55,7 @@
 <script>
     $(document).ready(function () {
         $("#userIdToAdd").selectpicker();
+        $('#userIdToAdd').val('@Model.NotAdminUsers.FirstOrDefault()?.Id');
+        $("#userIdToAdd").selectpicker('refresh');
     });
 </script>

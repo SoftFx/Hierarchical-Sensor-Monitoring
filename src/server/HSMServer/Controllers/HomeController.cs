@@ -1,19 +1,24 @@
+﻿using HSMCommon.Extensions;
+using HSMServer.ApiObjectsConverters;
 using HSMServer.Authentication;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Helpers;
 using HSMServer.Core.Model;
+using HSMServer.Core.Model.Policies.Infrastructure;
 using HSMServer.Core.MonitoringHistoryProcessor.Factory;
 using HSMServer.Extensions;
 using HSMServer.Folders;
 using HSMServer.Helpers;
 using HSMServer.Model;
 using HSMServer.Model.Authentication.History;
+using HSMServer.Model.DataAlerts;
 using HSMServer.Model.Folders;
 using HSMServer.Model.Folders.ViewModels;
 using HSMServer.Model.TreeViewModel;
 using HSMServer.Model.ViewModel;
 using HSMServer.Notification.Settings;
+using HSMServer.Notifications;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System;
@@ -22,8 +27,8 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using HSMServer.ApiObjectsConverters;
 using SensorStatus = HSMSensorDataObjects.SensorStatus;
+using TimeInterval = HSMServer.Model.TimeInterval;
 
 namespace HSMServer.Controllers
 {
@@ -41,11 +46,13 @@ namespace HSMServer.Controllers
         private readonly IFolderManager _folderManager;
         private readonly TreeViewModel _treeViewModel;
         private readonly IUserManager _userManager;
+        private readonly TelegramBot _telegramBot;
 
 
         public HomeController(ITreeValuesCache treeValuesCache, IFolderManager folderManager,
-            TreeViewModel treeViewModel, IUserManager userManager)
+            TreeViewModel treeViewModel, IUserManager userManager, NotificationsCenter notifications)
         {
+            _telegramBot = notifications.TelegramBot;
             _treeValuesCache = treeValuesCache;
             _treeViewModel = treeViewModel;
             _folderManager = folderManager;
@@ -135,14 +142,143 @@ namespace HSMServer.Controllers
         }
 
         [HttpPost]
-        public void RemoveNode([FromQuery] string selectedId)
+        public ActionResult RemoveNode([FromBody] string[] ids)
         {
-            var decodedId = SensorPathHelper.DecodeGuid(selectedId);
+            var model = new MultiActionToastViewModel();
 
-            if (_treeViewModel.Nodes.TryGetValue(decodedId, out var node))
-                _treeValuesCache.RemoveNode(node.Id);
-            else if (_treeViewModel.Sensors.TryGetValue(decodedId, out var sensor))
-                _treeValuesCache.RemoveSensor(sensor.Id);
+            foreach (var id in ids)
+            {
+                var decodedId = SensorPathHelper.DecodeGuid(id);
+
+                if (_folderManager.TryGetValue(decodedId, out var folder))
+                {
+                    model.AddRemoveFolderError(folder.Name);
+                }
+                else if (_treeViewModel.Nodes.TryGetValue(decodedId, out var node))
+                {
+                    if (!CurrentUser.IsManager(node.RootProduct.Id))
+                    {
+                        model.AddRoleError(node.Name, "remove");
+                        continue;
+                    }
+
+                    _treeValuesCache.RemoveProduct(node.Id);
+                    model.AddItem(node);
+                }
+                else if (_treeViewModel.Sensors.TryGetValue(decodedId, out var sensor))
+                {
+                    if (!CurrentUser.IsManager(sensor.RootProduct.Id))
+                    {
+                        model.AddRoleError(sensor.FullPath, "remove");
+                        continue;
+                    }
+
+                    _treeValuesCache.RemoveSensor(sensor.Id);
+                    model.AddItem(sensor);
+                }
+            }
+
+            return Json(model.BuildResponse("Removed"));
+        }
+
+        [HttpGet]
+        public IActionResult GetEditAlertsPartialView() => PartialView("_AlertsModal", new EditAlertsViewModel());
+
+        [HttpPost]
+        public async Task<IActionResult> EditAlerts(EditAlertsViewModel model)
+        {
+            if (ModelState[nameof(model.SensorRestorePolicy)]?.Errors.Count > 0 || ModelState[nameof(model.ExpectedUpdateInterval)]?.Errors.Count > 0)
+                return BadRequest(ModelState);
+
+            model.Upload();
+
+            var toastViewModel = new MultiActionToastViewModel();
+            var isExpectedFromParent = model.ExpectedUpdateInterval?.TimeInterval is TimeInterval.FromParent;
+            var isRestoreFromParent = model.SensorRestorePolicy?.TimeInterval is TimeInterval.FromParent;
+
+            foreach (var id in model.SelectedNodes)
+            {
+                if (_folderManager.TryGetValue(id, out var folder))
+                {
+                    if (!CurrentUser.IsFolderManager(folder.Id))
+                    {
+                        toastViewModel.AddRoleError(folder.Name, "edit");
+                        continue;
+                    }
+
+                    var update = new FolderUpdate
+                    {
+                        Id = id,
+                        RestoreInterval = !isRestoreFromParent ? model.SensorRestorePolicy?.ResaveCustomTicks(model.SensorRestorePolicy) : null,
+                        ExpectedUpdateInterval = !isExpectedFromParent ? model.ExpectedUpdateInterval?.ResaveCustomTicks(model.ExpectedUpdateInterval) : null
+                    };
+
+                    if (isRestoreFromParent)
+                        toastViewModel.AddCantChangeIntervalError(folder.Name, "Folder", "Sensitivity", TimeInterval.FromParent);
+
+                    if (isExpectedFromParent)
+                        toastViewModel.AddCantChangeIntervalError(folder.Name, "Folder", "Time to live", TimeInterval.FromParent);
+
+                    if (!isExpectedFromParent || !isRestoreFromParent)
+                    {
+                        toastViewModel.AddItem(folder);
+                        await _folderManager.TryUpdate(update);
+                    }
+                }
+                else if (_treeViewModel.Nodes.TryGetValue(id, out var product))
+                {
+                    if (!CurrentUser.IsManager(product.RootProduct.Id))
+                    {
+                        toastViewModel.AddRoleError(product.Name, "edit");
+                        continue;
+                    }
+
+                    var hasParent = product.Parent is not null || product.FolderId is not null;
+                    var restoreUpdate = hasParent || !isRestoreFromParent;
+                    var expectedUpdate = hasParent || !isExpectedFromParent;
+
+                    var isProduct = product.RootProduct?.Id == product.Id;
+
+                    var update = new ProductUpdate
+                    {
+                        Id = product.Id,
+                        RestoreInterval = restoreUpdate ? model.SensorRestorePolicy?.ToModel((product.Parent as FolderModel)?.SensorRestorePolicy) : null,
+                        ExpectedUpdateInterval = expectedUpdate ? model.ExpectedUpdateInterval?.ToModel((product.Parent as FolderModel)?.ExpectedUpdateInterval) : null
+                    };
+
+                    if (!restoreUpdate)
+                        toastViewModel.AddCantChangeIntervalError(product.Name, !isProduct ? "Node" : "Product", "Sensitivity", TimeInterval.FromParent);
+
+                    if (!expectedUpdate)
+                        toastViewModel.AddCantChangeIntervalError(product.Name, !isProduct ? "Node" : "Product", "Time to live", TimeInterval.FromParent);
+
+                    if (restoreUpdate || expectedUpdate)
+                    {
+                        toastViewModel.AddItem(product);
+                        _treeValuesCache.UpdateProduct(update);
+                    }
+                }
+                else if (_treeViewModel.Sensors.TryGetValue(id, out var sensor))
+                {
+                    if (!CurrentUser.IsManager(sensor.RootProduct.Id))
+                    {
+                        toastViewModel.AddRoleError(sensor.FullPath, "edit");
+                        continue;
+                    }
+
+                    var update = new SensorUpdate
+                    {
+                        Id = sensor.Id,
+                        ExpectedUpdateInterval = model.ExpectedUpdateInterval?.ToModel(),
+                        RestoreInterval = model.SensorRestorePolicy?.ToModel(),
+                    };
+
+                    toastViewModel.AddItem(sensor);
+                    _treeValuesCache.UpdateSensor(update);
+                }
+            }
+
+            return Json(toastViewModel.BuildResponse("Edited"));
         }
 
         [HttpPost]
@@ -157,7 +293,7 @@ namespace HSMServer.Controllers
         }
 
         [HttpGet]
-        public IActionResult IgnoreNotifications(string selectedId, NotificationsTarget target, bool isOffTimeModal)
+        public IActionResult IgnoreNotifications(string selectedId, NotificationsTarget target, bool isOffTimeModal, long? chat)
         {
             var decodedId = SensorPathHelper.DecodeGuid(selectedId);
 
@@ -170,22 +306,18 @@ namespace HSMServer.Controllers
             else if (_folderManager.TryGetValue(decodedId, out var folder))
                 viewModel = new IgnoreNotificationsViewModel(folder, target, isOffTimeModal);
 
+            viewModel.Chat = chat;
+
             return PartialView("_IgnoreNotificationsModal", viewModel);
         }
 
         [HttpPost]
-        public void EnableNotifications([FromQuery] string selectedId, [FromQuery] NotificationsTarget target) =>
-            GetHandler(target)(SensorPathHelper.DecodeGuid(selectedId), (s, g) => s.Enable(g));
+        public void EnableNotifications(string selectedId, NotificationsTarget target, long? chat) =>
+            GetHandler(target)(SensorPathHelper.DecodeGuid(selectedId), (s, g) => s.Enable(g, chat));
 
         [HttpPost]
         public void IgnoreNotifications(IgnoreNotificationsViewModel model) =>
-            GetHandler(model.NotificationsTarget)(SensorPathHelper.DecodeGuid(model.EncodedId), (s, g) =>
-            {
-                if (model.IgnorePeriod.TimeInterval == Model.TimeInterval.Forever)
-                    s.Disable(g);
-                else
-                    s.Ignore(g, model.EndOfIgnorePeriod);
-            });
+            GetHandler(model.NotificationsTarget)(SensorPathHelper.DecodeGuid(model.EncodedId), (s, g) => s.Ignore(g, model.EndOfIgnorePeriod, model.Chat));
 
         [HttpPost]
         public string GetNodePath([FromQuery] string selectedId, [FromQuery] bool isFullPath = false)
@@ -288,16 +420,16 @@ namespace HSMServer.Controllers
 
             if (_treeViewModel.Nodes.TryGetValue(id, out var node))
                 return PartialView("_GeneralInfo", new ProductInfoViewModel(node));
-            
+
             if (_folderManager[id] is not null)
                 return PartialView("_GeneralInfo", new FolderInfoViewModel(_folderManager[id]));
-            
+
             if (_treeViewModel.Sensors.TryGetValue(id, out var sensor))
                 return PartialView("_GeneralInfo", new SensorInfoViewModel(sensor));
 
             return _emptyResult;
         }
-        
+
         #endregion
 
         #region SensorsHistory
@@ -466,7 +598,7 @@ namespace HSMServer.Controllers
         private FileValue GetFileSensorValue(string encodedId) =>
             _treeValuesCache.GetSensor(SensorPathHelper.DecodeGuid(encodedId)).LastValue as FileValue;
 
-        private async Task<FileValue> GetFileByReceivingTimeOrDefault(string encodedId, long ticks = default) => 
+        private async Task<FileValue> GetFileByReceivingTimeOrDefault(string encodedId, long ticks = default) =>
             (ticks == default ? GetFileSensorValue(encodedId) : (await GetFileHistory(encodedId)).Pages[0].Cast<FileValue>().FirstOrDefault(file => file.ReceivingTime.Ticks == ticks)).DecompressContent();
 
         private Task<HistoryValuesViewModel> GetFileHistory(string encodedId)
@@ -478,6 +610,9 @@ namespace HSMServer.Controllers
         #endregion
 
         #region Sensor info
+
+        [HttpPost]
+        public bool IsMetaInfoValid(NodeInfoBaseViewModel _) => ModelState.IsValid;
 
         [HttpGet]
         public IActionResult GetSensorInfo([FromQuery(Name = "Id")] string encodedId)
@@ -503,6 +638,7 @@ namespace HSMServer.Controllers
                 Description = newModel.Description ?? string.Empty,
                 ExpectedUpdateInterval = newModel.ExpectedUpdateInterval.ToModel(),
                 RestoreInterval = newModel.SensorRestorePolicy.ToModel(),
+                DataPolicies = newModel.DataAlerts?[sensor.Type].Select(a => a.ToUpdate()).ToList() ?? new(),
             };
 
             _treeValuesCache.UpdateSensor(update);
@@ -510,15 +646,49 @@ namespace HSMServer.Controllers
             return PartialView("_MetaInfo", new SensorInfoViewModel(sensor));
         }
 
+
+        public IActionResult AddDataPolicy(SensorType type, Guid sensorId)
+        {
+            DataAlertViewModelBase viewModel = type switch
+            {
+                SensorType.Integer => new SingleDataAlertViewModel<IntegerValue, int>(sensorId),
+                SensorType.Double => new SingleDataAlertViewModel<DoubleValue, double>(sensorId),
+                SensorType.IntegerBar => new BarDataAlertViewModel<IntegerBarValue, int>(sensorId),
+                SensorType.DoubleBar => new BarDataAlertViewModel<DoubleBarValue, double>(sensorId),
+                _ => null,
+            };
+
+            return PartialView("_DataAlert", viewModel);
+        }
+
+        [HttpPost]
+        public void SendTestMessage(DataAlertViewModel alert)
+        {
+            if (!_treeViewModel.Sensors.TryGetValue(alert.EntityId, out var sensor) ||
+                !_treeViewModel.Nodes.TryGetValue(sensor.RootProduct.Id, out var product))
+                return;
+
+            var template = CommentBuilder.GetTemplateString(alert.Comment);
+            var comment = string.Format(template, product.Name, sensor.Path, sensor.Name,
+                alert.Operation.GetDisplayName(), alert.Value, SensorStatus.Ok, DateTime.UtcNow, "value comment", 0, 0, 0, 0, 0);
+            var testMessage = $"↕️ [{product.Name}]{sensor.Path} = {comment}";
+
+            var notifications = product.Notifications;
+            foreach (var (chat, _) in notifications.Telegram.Chats)
+                if (notifications.IsSensorEnabled(sensor.Id) && !notifications.IsSensorIgnored(sensor.Id, chat))
+                    _telegramBot.SendTestMessage(chat, testMessage);
+        }
+
+
         [HttpGet]
         public IActionResult GetSensorEditModal(Guid sensorId)
         {
             _treeViewModel.Sensors.TryGetValue(sensorId, out var sensorNodeViewModel);
             var isAccessKeyExist = GetKeyOrDefaultWithPermissions(sensorNodeViewModel?.RootProduct.Id ?? Guid.Empty, KeyPermissions.CanSendSensorData) is not null;
-            
+
             if (!isAccessKeyExist)
                 ModelState.AddModelError(nameof(EditSensorStatusViewModal.RootProductId), EditSensorStatusViewModal.AccessKeyValidationErrorMessage);
-            
+
             return PartialView("_EditSensorStatusModal", new EditSensorStatusViewModal(sensorNodeViewModel, isAccessKeyExist));
         }
 
@@ -535,15 +705,15 @@ namespace HSMServer.Controllers
                 ModelState.AddModelError(nameof(EditSensorStatusViewModal.RootProductId), EditSensorStatusViewModal.AccessKeyValidationErrorMessage);
                 return BadRequest(ModelState);
             }
-            
+
             var sensor = _treeValuesCache.GetSensor(modal.SensorId);
             var comment = $"User: {CurrentUser.Name}. Reason: {modal.Reason}";
 
             var sensorValue = ApiConverters.CreateNewSensorValue(sensor.Type);
-            
+
             if (sensorValue is null)
                 return BadRequest();
-            
+
             sensorValue.Comment = comment;
             sensorValue.Path = sensor.Path;
             sensorValue.Status = (SensorStatus)modal.NewStatus;
@@ -574,7 +744,7 @@ namespace HSMServer.Controllers
 
             if (!ModelState.IsValid)
                 return PartialView("_MetaInfo", new ProductInfoViewModel(product));
-            
+
             var update = new ProductUpdate
             {
                 Id = product.Id,
@@ -585,7 +755,7 @@ namespace HSMServer.Controllers
 
             _treeValuesCache.UpdateProduct(update);
 
-            return PartialView("_MetaInfo", new ProductInfoViewModel(product));
+            return PartialView("_MetaInfo", new ProductInfoViewModel(product.RecalculateCharacteristics()));
         }
 
         [HttpGet]
@@ -632,7 +802,7 @@ namespace HSMServer.Controllers
 
             return localValue?.ReceivingTime >= from && localValue?.ReceivingTime <= to ? localValue : null;
         }
-        
+
         private AccessKeyModel GetKeyOrDefaultWithPermissions(Guid productId, KeyPermissions permissions) =>
             _treeValuesCache.GetProduct(productId).AccessKeys.Values.FirstOrDefault(x => x.IsValid(permissions, out _));
     }

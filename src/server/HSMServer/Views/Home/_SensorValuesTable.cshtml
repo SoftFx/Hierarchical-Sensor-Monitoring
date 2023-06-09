@@ -67,9 +67,7 @@ else
                                 <td>@simpleValue.Value</td>
                             }
                         }
-                        <td>
-                            <span class="@value.Status.ToIcon()"></span> @value.Status
-                        </td>
+                        <td>@value.Status.ToIconStatus()</td>
                         <td>@value.Comment</td>
                     </tr>
                 }

@@ -1,0 +1,74 @@
+﻿@using HSMServer.Controllers
+@using Microsoft.AspNetCore.Mvc.TagHelpers
+
+@model HSMServer.Model.ViewModel.EditAlertsViewModel
+
+@addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
+
+
+<form id="editMultipleInterval" method="post" asp-action="EditAlerts">
+    <input class="d-none" asp-for="NodeIds" value="[]"/>
+
+    <div class="modal fade" tabindex="-1" role="dialog" id="editMultipleInterval_modal">
+        <div class="modal-dialog modal-dialog-centered" role="document">
+            <div class="modal-content" id="editMultipleIntervalContent" style="width: unset">
+                <div class="modal-header">
+                    <div class="text-break">
+                        <h5 class="modal-title">Edit Alerts for selected items</h5>
+                    </div>
+                </div>
+                <div class="d-flex ms-3 text-nowrap mt-2">
+                    <span class="d-flex pt-2" style="min-width: 18rem">
+                        Time to sensor(s) live <i class='fas fa-question-circle ps-1 pt-1' title='Time format: dd.hh:mm:ss min value 00:01:00. If the sensor doesn`t receive new data within the specified time interval, a notification sends'></i>
+                    </span>
+                    <div class="pb-0 me-2" style="width: 17rem;">
+                        <div id="intervalSelectModal">
+                            <partial name="_TimeIntervalSelect" for="ExpectedUpdateInterval"/>
+                        </div>
+                        <span asp-validation-for="ExpectedUpdateInterval"></span>
+                    </div>
+                </div>
+                <div class="d-flex mt-1 ms-3 text-nowrap mt-2">
+                    <span class="d-flex pt-2" style="min-width: 18rem">
+                        Sensitivity sensor(s) interval <i class='fas fa-question-circle ps-1 pt-1' title='Time format: dd.hh:mm:ss min value 00:01:00. If the sensor doesn`t return to Ok status after the specified time inverval, a notification sends'></i>
+                    </span>
+                    <div class="pb-0 me-2" style="width: 17rem;">
+                        <div id="restoreSelectModal">
+                            <partial name="_TimeIntervalSelect" for="SensorRestorePolicy"/>
+                        </div>
+                        <span asp-validation-for="SensorRestorePolicy"></span>
+                    </div>
+                </div>
+                <div class="modal-footer mt-2">
+                    <button class="btn btn-secondary col-2" type="submit">Save</button>
+                    <button class="btn btn-secondary col-2" type="button" onclick="hideAlertsModal()">Cancel</button>
+                </div>
+            </div>
+        </div>
+    </div>
+</form>
+
+<script>
+    $(document).ready(function () {
+        $('#intervalSelectModal select')[0].selectedIndex = -1;
+        $('#restoreSelectModal select')[0].selectedIndex = -1;
+    });
+
+    function hideAlertsModal () {
+        $('#editMultipleInterval_modal').modal('hide');
+        rerenderModal();
+    }
+    
+    function rerenderModal() {
+        $.ajax({
+            type: 'get',
+            url: `@Url.Action(nameof(HomeController.GetEditAlertsPartialView))`,
+            dataType: 'html',
+            contentType: 'application/json',
+            cache: false,
+            async: true
+        }).done(function (viewdata) {
+            $('#editMultipleInterval').replaceWith(viewdata)
+        });
+    }
+</script>

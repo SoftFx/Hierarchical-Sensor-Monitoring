@@ -203,15 +203,6 @@ img .tree-png-icon {
     height: 1rem !important;
 }
 
-.naked-text{
-    background: rgba(0, 0, 0, 0)!important;
-    border: none;
-    outline: 0;
-    cursor: text;
-    padding-top: 0;
-    padding-left: 0;
-}
-
 .reserved-scroll-y{
     scrollbar-gutter: stable
 }
@@ -243,4 +234,22 @@ img .tree-png-icon {
 .small-icon{
     width: 1rem;
     height: 1rem;
+}
+
+.placeholder-wrapper {
+    position: relative;
+}
+
+.placeholder {
+    position: absolute;
+    right: 2.25rem;
+    top: 0.5rem;
+    pointer-events: none;
+    opacity: .5;
+    color: black;
+    background-color: white;
+}
+
+.customTimeInterval:placeholder-shown + .placeholder {
+    opacity: 0;
 }

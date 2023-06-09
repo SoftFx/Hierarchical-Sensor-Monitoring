@@ -1,13 +1,16 @@
-﻿using System;
-using System.Collections;
+﻿using HSMServer.Core.Model.Policies.Infrastructure;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 
 namespace HSMServer.Core.Model.Policies
 {
-    public sealed class ServerPolicyCollection : IEnumerable<CollectionProperty>
+    public sealed class ServerPolicyCollection : PolicyCollectionBase<CollectionProperty>
     {
         private readonly Dictionary<Type, CollectionProperty> _properties = new();
+
+
+        internal override IEnumerable<Guid> Ids => _properties.Values.Where(p => p.IsSet).Select(p => p.PolicyGuid);
 
 
         public CollectionProperty<ExpectedUpdateIntervalPolicy> ExpectedUpdate { get; }
@@ -42,7 +45,8 @@ namespace HSMServer.Core.Model.Policies
                 property.ParentProperty = parentCollection._properties[policyType];
         }
 
-        public PolicyResult CheckRestorePolicies(SensorStatus status, DateTime lastUpdate)
+
+        internal PolicyResult CheckRestorePolicies(SensorStatus status, DateTime lastUpdate)
         {
             var result = PolicyResult.Ok;
 
@@ -53,13 +57,22 @@ namespace HSMServer.Core.Model.Policies
             return result;
         }
 
+        internal bool HasUpdateTimeout(DateTime? receivingTime)
+        {
+            var oldResult = Result;
 
-        IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
+            Result -= ExpectedUpdate.Policy.Fail;
 
-        public IEnumerator<CollectionProperty> GetEnumerator() => _properties.Values.GetEnumerator();
+            if (!receivingTime.HasValue)
+                return false;
 
-        public IEnumerable<Guid> GetIds() => _properties.Values.Where(p => p.IsSet)
-                                                               .Select(p => p.PolicyGuid);
+            Result += ExpectedUpdate.Policy.Validate(receivingTime.Value);
+
+            return Result != oldResult;
+        }
+
+
+        public override IEnumerator<CollectionProperty> GetEnumerator() => _properties.Values.GetEnumerator();
 
 
         private CollectionProperty<T> Register<T>() where T : ServerPolicy, new()

@@ -14,24 +14,9 @@ namespace HSMServer.Core.Model.Policies
         protected override string FailIcon => PolicyIcon;
 
 
-        [JsonPropertyName("ExpectedUpdateInterval")]
-        public long CustomPeriod { get; set; } // TODO: remove after migration
-
-        public TimeInterval ExpectedUpdatePeriod { get; set; } // TODO: remove after migration
-
-
-        [JsonConstructor] // TODO: remove after migration
-        public ExpectedUpdateIntervalPolicy(TimeInterval expectedUpdatePeriod, long customPeriod) :
-            base(new TimeIntervalModel(expectedUpdatePeriod, customPeriod))
-        {
-            ExpectedUpdatePeriod = expectedUpdatePeriod;
-            CustomPeriod = customPeriod;
-        }
-
-
         public ExpectedUpdateIntervalPolicy() : base() { }
 
-        //[JsonConstructor] //TODO uncomment after migration and removed previos constructor
+        [JsonConstructor]
         public ExpectedUpdateIntervalPolicy(TimeIntervalModel interval) : base(interval) { }
 
         public ExpectedUpdateIntervalPolicy(long period) : base(new TimeIntervalModel(period)) { }

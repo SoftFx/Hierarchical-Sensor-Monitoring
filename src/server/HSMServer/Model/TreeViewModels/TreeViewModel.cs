@@ -1,5 +1,4 @@
-﻿using HSMServer.Authentication;
-using HSMServer.Core.Cache;
+﻿using HSMServer.Core.Cache;
 using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Model;
 using HSMServer.Extensions;
@@ -18,7 +17,6 @@ namespace HSMServer.Model.TreeViewModel
     public sealed class TreeViewModel
     {
         private readonly IFolderManager _folderManager;
-        private readonly IUserManager _userManager;
         private readonly ITreeValuesCache _cache;
 
 
@@ -29,10 +27,9 @@ namespace HSMServer.Model.TreeViewModel
         public ConcurrentDictionary<Guid, ProductNodeViewModel> Nodes { get; } = new();
 
 
-        public TreeViewModel(ITreeValuesCache cache, IUserManager userManager, IFolderManager folderManager)
+        public TreeViewModel(ITreeValuesCache cache, IFolderManager folderManager)
         {
             _folderManager = folderManager;
-            _userManager = userManager;
             _cache = cache;
 
             _cache.ChangeProductEvent += ChangeProductHandler;
@@ -159,6 +156,8 @@ namespace HSMServer.Model.TreeViewModel
             TryGetParentFolder(product, out var folder);
 
             var node = new ProductNodeViewModel(product, parent, folder);
+            if (node.Notifications.Migrated)
+                UpdateProductNotificationSettings(node);
 
             Nodes.TryAdd(node.Id, node);
 
@@ -222,7 +221,16 @@ namespace HSMServer.Model.TreeViewModel
             {
                 case ActionType.Add:
                     if (Nodes.TryGetValue(model.Parent.Id, out var parent))
+                    {
                         AddNewSensorViewModel(model, parent);
+
+                        var root = parent.RootProduct;
+                        if (!root.Notifications.Telegram.Chats.IsEmpty)
+                        {
+                            root.Notifications.Enable(model.Id);
+                            UpdateProductNotificationSettings(root);
+                        }
+                    }
                     break;
 
                 case ActionType.Update:
@@ -231,8 +239,13 @@ namespace HSMServer.Model.TreeViewModel
                     break;
 
                 case ActionType.Delete:
-                    if (Sensors.TryRemove(model.Id, out _) && Nodes.TryGetValue(model.Parent.Id, out var parentProduct))
+                    if (Sensors.TryRemove(model.Id, out var removedSensor) && Nodes.TryGetValue(model.Parent.Id, out var parentProduct))
+                    {
                         parentProduct.Sensors.TryRemove(model.Id, out var _);
+
+                        if (removedSensor.RootProduct.Notifications.RemoveSensor(model.Id))
+                            UpdateProductNotificationSettings(removedSensor.RootProduct);
+                    }
                     break;
             }
         }

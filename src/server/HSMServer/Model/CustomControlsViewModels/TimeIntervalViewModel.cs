@@ -1,4 +1,5 @@
-﻿using HSMDatabase.AccessManager.DatabaseEntities;
+﻿using HSMCommon.Extensions;
+using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Core.Model;
 using HSMServer.Extensions;
 using Microsoft.AspNetCore.Mvc.Rendering;
@@ -40,9 +41,11 @@ namespace HSMServer.Model
         public string DisplayInterval => TimeInterval.IsParent() ? $"From parent ({UsedInterval})" : UsedInterval;
 
 
-        public TimeInterval TimeInterval { get; set; }
+        public TimeInterval? Interval { get; set; }
 
         public string CustomTimeInterval { get; set; }
+
+        internal TimeInterval TimeInterval => Interval ?? default;
 
 
         // public constructor without parameters for post actions
@@ -67,7 +70,7 @@ namespace HSMServer.Model
             _getParentValue = model._getParentValue;
             _hasFolder = model._hasFolder;
 
-            TimeInterval = model.TimeInterval;
+            Interval = model.Interval;
             CustomTimeInterval = model.CustomTimeInterval;
 
             if (!HasParentValue)
@@ -104,7 +107,7 @@ namespace HSMServer.Model
 
         private void SetInterval(CoreTimeInterval interval, long customPeriod)
         {
-            TimeInterval = interval.ToServer(customPeriod);
+            Interval = interval.ToServer(customPeriod);
             CustomTimeInterval = customPeriod.TicksToString();
         }
 

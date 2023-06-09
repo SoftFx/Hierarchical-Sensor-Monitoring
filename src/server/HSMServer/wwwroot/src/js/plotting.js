@@ -118,7 +118,7 @@ function convertToGraphData(graphData, graphType, graphName) {
                 return new TimeSpan.TimeSpan(0, seconds, minutes, hours, days).totalMilliseconds();
             })
             
-            return getTimeSpanGraphData(timeList, data, "bar")
+            return getTimeSpanGraphData(timeList, data, "lines")
         default:
             return undefined;
     }

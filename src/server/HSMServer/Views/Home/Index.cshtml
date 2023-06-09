@@ -45,6 +45,8 @@
     var enableNotificationsAction = "@Url.Action(nameof(HomeController.EnableNotifications), ViewConstants.HomeController)";
     var ignoreNotificationsAction = "@Url.Action(nameof(HomeController.IgnoreNotifications), ViewConstants.HomeController)";
     var unmuteAction = "@Url.Action(nameof(HomeController.RemoveMutedStateToSensor), ViewConstants.HomeController)";
+
+    var isDataValidAction = "@Url.Action(nameof(HomeController.IsMetaInfoValid), ViewConstants.HomeController)";
 </script>
 
 
@@ -67,6 +69,8 @@
 </div>
 
 @await Html.PartialAsync("~/Views/AccessKeys/_AccessKeysModal.cshtml")
+@await Html.PartialAsync("_AlertsModal", new EditAlertsViewModel())
+@await Html.PartialAsync("~/Views/Shared/_ConfirmationModal.cshtml")
 
 <div id="ignoreNotificatios_partial">@await Html.PartialAsync("_IgnoreNotificationsModal", (IgnoreNotificationsViewModel)null)</div>
 
@@ -271,10 +275,9 @@
     var updateSelectedNodeDataTimeoutId;
     function updateSelectedNodeData() {
         clearTimeout(updateSelectedNodeDataTimeoutId);
-            
-        var selectedNode = $('#jstree').jstree().get_selected(true)[0];
-        var selectedNodeId = getSelectedNodeId(selectedNode);
-        if (selectedNodeId != "")
+
+        var selectedNodeId = currentSelectedNodeId;
+        if (selectedNodeId != "" && selectedNodeId !== undefined)
             $.ajax({
                 type: 'POST',
                 url: updateSelectedNode + '?Selected=' + selectedNodeId,

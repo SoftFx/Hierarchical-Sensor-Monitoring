@@ -1,31 +1,95 @@
-@using Microsoft.AspNetCore.Mvc.TagHelpers
+@using HSMServer.Model.DataAlerts
+@using HSMServer.Constants
+@using HSMServer.Controllers
+@using HSMServer.Core.Model.Policies.Infrastructure
+@using HSMServer.Helpers
+
 @model HSMServer.Model.ViewModel.NodeInfoBaseViewModel
+
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
 
-<div class="form-control border-0 fw-bold px-0" style="max-width: 15rem;">
-    Alerts:
-</div>
+
+<label class="col-form-label fw-bold">Alerts:</label>
+
 <div class="d-flex ms-3 text-nowrap align-self-center">
     <span class="d-flex align-items-center" style="min-width: 18rem">
        Time to sensor(s) live <i class='fas fa-question-circle ps-1' title='Time format: dd.hh:mm:ss min value 00:01:00. If the sensor doesn`t receive new data within the specified time interval, a notification sends'></i>
     </span>
     <div class="pb-0" style="width: 17rem;">
-        <label id="labelInterval" class="form-control naked-text pb-0">@Model.ExpectedUpdateInterval.DisplayInterval</label>
+        <label id="labelInterval" class="col-form-label py-0">@Model.ExpectedUpdateInterval.DisplayInterval</label>
         <div id="partialIntervalSelect" class="d-none">
             <partial name="_TimeIntervalSelect" for="ExpectedUpdateInterval"/>
         </div>
     </div>
     <span class="d-flex align-self-center ms-2" asp-validation-for="ExpectedUpdateInterval"></span>
 </div>
+
 <div class="d-flex mt-1 ms-3 text-nowrap">
     <span class="d-flex align-items-center" style="min-width: 18rem">
         Sensitivity sensor(s) interval <i class='fas fa-question-circle ps-1' title='Time format: dd.hh:mm:ss min value 00:01:00. If the sensor doesn`t return to Ok status after the specified time inverval, a notification sends'></i>
     </span>
     <div class="pb-0" style="width: 17rem;">
-        <label id="labelRestoreInterval" class="form-control naked-text pb-0">@Model.SensorRestorePolicy.DisplayInterval</label>
+        <label id="labelRestoreInterval" class="col-form-label py-0">@Model.SensorRestorePolicy.DisplayInterval</label>
         <div id="partialRestoreSelect" class="d-none">
             <partial name="_TimeIntervalSelect" for="SensorRestorePolicy"/>
         </div>
     </div>
-     <span class="d-flex align-self-center ms-2" asp-validation-for="SensorRestorePolicy"></span>
+    <span class="d-flex align-self-center ms-2" asp-validation-for="SensorRestorePolicy"></span>
 </div>
+
+
+@foreach (var (type, alerts) in Model.DataAlerts)
+{
+    <div id="dataAlertsList_@type" class="@(alerts.Count == 0 ? "d-none" : string.Empty)">
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <label class="col-form-label fw-bold">@type data alerts:</label>
+                <a id="addDataAlert" href="javascript:addDataAlert('@type', '@Model.EncodedId');" class="d-none mx-2">
+                    <i class="fa-solid fa-plus"></i> Add
+                </a>
+            </div>
+            <a id="commentHelp" data-bs-toggle="popover" title="Custom comment variables" data-bs-html="true" data-bs-content="@DataAlertCommentHelper.CreateCommentHelp()"
+               class="d-none" style="color: #0366d6; cursor: pointer; text-decoration: underline;">
+                Comment help
+            </a>
+        </div>
+
+        @foreach (var alert in alerts)
+        {
+            @await Html.PartialAsync("_DataAlert", alert)
+        }
+    </div>
+}
+
+
+<script>
+    $(document).ready(function() {
+        var popoverTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="popover"]'));
+        var popoverList = popoverTriggerList.map(function(popoverTriggerEl) {
+            return new bootstrap.Popover(popoverTriggerEl);
+        });
+    });
+
+    $('#commentHelp').on('show.bs.popover', () => {
+        $('html').on('click', hideNotFocusedHelp);
+    });
+
+    $('#commentHelp').on('hide.bs.popover', () => {
+        $('html').off('click', hideNotFocusedHelp);
+    });
+
+    function hideNotFocusedHelp(e) {
+        if (!$(e.target).parents().is('.popover')) {
+            $('#commentHelp').popover('hide');
+        }
+    }
+
+    function addDataAlert(type, entityId) {
+        $.ajax({
+            url: `@Url.Action(nameof(HomeController.AddDataPolicy), ViewConstants.HomeController)?type=${type}&sensorId=${entityId}`,
+            cache: false
+        }).done(function (viewData) {
+            $(`#dataAlertsList_${type}`).append(viewData);
+        });
+    }
+</script>

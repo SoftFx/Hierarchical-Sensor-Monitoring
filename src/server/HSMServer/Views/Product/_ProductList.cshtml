@@ -196,7 +196,7 @@
             key = this.id.substring("delete_@(Model.Id)_".length, this.id.length);
             name = $('#inputName_' + key).text().trim().substring(0, 100);
 
-            showDeletionConfirmationModal(
+            showConfirmationModal(
                 `Removing '${name}' product`,
                 `Do you really want to remove '${name}' product?`,
                 function () {
