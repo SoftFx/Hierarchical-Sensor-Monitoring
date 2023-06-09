@@ -72,7 +72,8 @@ namespace HSMServer.Folders
         {
             var result = TryGetValue(update.Id, out var folder) && await base.TryUpdate(update);
 
-            if (result && (update.ExpectedUpdateInterval != null || update.RestoreInterval != null))
+            if (result && (update.ExpectedUpdateInterval != null || update.RestoreInterval != null ||
+                           update.SavedHistoryPeriod != null || update.SelfDestroy != null))
                 foreach (var productId in folder.Products.Keys)
                     TryUpdateProductInFolder(productId, folder);
 
@@ -172,6 +173,8 @@ namespace HSMServer.Folders
             {
                 var expectedUpdateInterval = product.ServerPolicy.ExpectedUpdate.Policy.Interval;
                 var restoreInterval = product.ServerPolicy.RestoreError.Policy.Interval;
+                var savedHistory = product.ServerPolicy.SavedHistoryPeriod.Policy.Interval;
+                var selfDestroy = product.ServerPolicy.SelfDestroy.Policy.Interval;
 
                 var update = new ProductUpdate()
                 {
@@ -179,6 +182,8 @@ namespace HSMServer.Folders
                     FolderId = folder?.Id ?? Guid.Empty,
                     ExpectedUpdateInterval = GetCorePolicy(expectedUpdateInterval, folder?.ExpectedUpdateInterval),
                     RestoreInterval = GetCorePolicy(restoreInterval, folder?.SensorRestorePolicy),
+                    SavedHistoryPeriod = GetCorePolicy(savedHistory, folder?.SavedHistoryPeriod),
+                    SelfDestroy = GetCorePolicy(selfDestroy, folder?.SelfDestroyPeriod),
                 };
 
                 _cache.UpdateProduct(update);

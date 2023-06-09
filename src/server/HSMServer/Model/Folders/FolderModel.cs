@@ -76,6 +76,10 @@ namespace HSMServer.Model.Folders
                 ExpectedUpdateInterval = new TimeIntervalViewModel(update.ExpectedUpdateInterval, PredefinedIntervals.ForTimeout);
             if (update.RestoreInterval != null)
                 SensorRestorePolicy = new TimeIntervalViewModel(update.RestoreInterval, PredefinedIntervals.ForRestore);
+            if (update.SavedHistoryPeriod != null)
+                SavedHistoryPeriod = new TimeIntervalViewModel(update.SavedHistoryPeriod, PredefinedIntervals.ForCleanup);
+            if (update.SelfDestroy != null)
+                SelfDestroyPeriod = new TimeIntervalViewModel(update.SelfDestroy, PredefinedIntervals.ForCleanup);
         }
 
         public FolderEntity ToEntity() =>
