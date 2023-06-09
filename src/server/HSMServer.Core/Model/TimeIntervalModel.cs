@@ -62,7 +62,7 @@ namespace HSMServer.Core.Model
             TimeInterval.Day => time.AddDays(1 * coef),
             TimeInterval.Week => time.AddDays(7 * coef),
             TimeInterval.Month => time.AddMonths(1 * coef),
-            TimeInterval.Custom or TimeInterval.FromFolder => DateTime.MaxValue, //for Never 
+            TimeInterval.Custom or TimeInterval.FromFolder => IsNever ? DateTime.MinValue : time.AddTicks(CustomPeriod * coef),
             _ => throw new NotImplementedException(),
         };
 

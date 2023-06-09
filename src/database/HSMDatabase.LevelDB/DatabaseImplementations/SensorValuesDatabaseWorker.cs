@@ -77,11 +77,11 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             }
         }
 
-        public byte[] Get(byte[] key)
+        public byte[] Get(byte[] key, byte[] sensorId)
         {
             try
             {
-                return _openedDb.Get(key);
+                return _openedDb.Get(key, sensorId);
             }
             catch (Exception e)
             {
