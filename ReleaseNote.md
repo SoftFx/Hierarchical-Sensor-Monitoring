@@ -29,7 +29,7 @@ $lastValue - Bar sensor lastValue value
 * **Edit** item for multiselect context menu has been added (multiedit for TTL and Sensetivity)
 
 ## Telegram
-* New icon ↕️ for Data alerts has been added
+* New icon ?? for Data alerts has been added
 * Partial ignore (for TG groups has been added)
 * Enable/ignore for different groups logic has been added in Tree context menu
 
