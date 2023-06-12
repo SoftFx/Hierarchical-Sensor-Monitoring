@@ -40,6 +40,9 @@ namespace HSMServer.Model.TreeViewModel
             foreach (var user in _userManager.GetUsers())
                 user.Tree.GetUserProducts += GetUserProducts;
 
+            userManager.Added += AddUserHandler;
+            userManager.Removed += RemoveUserHandler;
+
             foreach (var product in _cache.GetProducts())
                 AddNewProductViewModel(product);
         }
@@ -227,6 +230,10 @@ namespace HSMServer.Model.TreeViewModel
             }
         }
 
+        private void AddUserHandler(User user) => user.Tree.GetUserProducts += GetUserProducts;
+        
+        private void RemoveUserHandler(User user) => user.Tree.GetUserProducts -= GetUserProducts;
+        
         private bool TryGetParentProduct(ProductModel product, out ProductNodeViewModel parent)
         {
             parent = default;

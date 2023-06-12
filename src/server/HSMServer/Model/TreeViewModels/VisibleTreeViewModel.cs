@@ -42,7 +42,7 @@ public sealed class VisibleTreeViewModel
         {
             var node = FilterNodes(product);
 
-            if (node.VisibleSensorsCount > 0 || _user.IsEmptyProductVisible(product))
+            if (IsVisibleNode(node, product))
             {
                 var folderId = node.Data.FolderId;
 
@@ -66,7 +66,7 @@ public sealed class VisibleTreeViewModel
 
         var isUserNoDataFilterEnabled = _user.TreeFilter.ByVisibility.Empty.Value;
         foreach (var folder in folders.Values)
-            if (folder.Nodes.Count > 0 || isUserNoDataFilterEnabled)
+            if (folder.IsEmpty || (_user.IsFolderAvailable(folder.Data.Id) && isUserNoDataFilterEnabled))
                 tree.Add(folder);
 
         return tree;
