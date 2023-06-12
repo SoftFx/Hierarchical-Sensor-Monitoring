@@ -10,6 +10,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Reflection;
+using HSMServer.Extensions;
 using Xunit;
 
 namespace HSMServer.Core.Tests.Infrastructure
@@ -81,7 +82,7 @@ namespace HSMServer.Core.Tests.Infrastructure
             Assert.Equal(expected.Count, actual.Count);
 
             foreach (var expectedProduct in expected)
-                TestProductModel(expectedProduct, actualDict[Guid.Parse(expectedProduct.Id)]);
+                TestProductModel(expectedProduct, actualDict[expectedProduct.Id.ToGuid()]);
         }
 
 

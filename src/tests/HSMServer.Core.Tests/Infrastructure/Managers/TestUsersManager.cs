@@ -2,6 +2,7 @@
 using HSMServer.Model.Authentication;
 using System;
 using System.Collections.Generic;
+using HSMServer.Extensions;
 
 namespace HSMServer.Core.Tests.Infrastructure
 {
@@ -54,7 +55,7 @@ namespace HSMServer.Core.Tests.Infrastructure
 
             user.ProductsRoles = new List<(Guid, ProductRoleEnum)>()
             {
-                (Guid.Parse(productId), productRole),
+                (productId.ToGuid(), productRole),
             };
 
             return user;
@@ -74,7 +75,7 @@ namespace HSMServer.Core.Tests.Infrastructure
                 Password = HashComputer.ComputePasswordHash(name),
                 ProductsRoles = new List<(Guid, ProductRoleEnum)>()
                 {
-                    (Guid.Parse(TestProductsManager.TestProduct.Id), productRole)
+                    (TestProductsManager.TestProduct.Id.ToGuid(), productRole)
                 },
             };
 

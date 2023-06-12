@@ -8,6 +8,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Security.Claims;
 using System.Text.Json;
+using HSMServer.Extensions;
 using HSMServer.Model.TreeViewModels;
 
 namespace HSMServer.Model.Authentication
@@ -30,7 +31,7 @@ namespace HSMServer.Model.Authentication
 
         public TreeUserFilter TreeFilter { get; set; }
 
-        public VisibleTreeViewModel Tree { get; set; }
+        public VisibleTreeViewModel Tree { get; }
 
         public SelectedSensorHistoryViewModel History { get; } = new();
 
@@ -60,10 +61,10 @@ namespace HSMServer.Model.Authentication
             Notifications = new(entity.NotificationSettings);
 
             if (entity.ProductsRoles != null)
-                ProductsRoles.AddRange(entity.ProductsRoles.Select(r => (Guid.Parse(r.Key), (ProductRoleEnum)r.Value)));
+                ProductsRoles.AddRange(entity.ProductsRoles.Select(r => (r.Key.ToGuid(), (ProductRoleEnum)r.Value)));
 
             foreach (var (folderId, role) in entity.FolderRoles)
-                FoldersRoles.Add(Guid.Parse(folderId), (ProductRoleEnum)role);
+                FoldersRoles.Add(folderId.ToGuid(), (ProductRoleEnum)role);
 
             TreeFilter = entity.TreeFilter is null
                 ? new TreeUserFilter()

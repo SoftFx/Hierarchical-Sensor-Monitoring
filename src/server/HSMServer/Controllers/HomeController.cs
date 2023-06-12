@@ -430,7 +430,7 @@ namespace HSMServer.Controllers
         [HttpGet]
         public ActionResult GetGeneralInfo(string selectedId)
         {
-            var id = Guid.Parse(selectedId);
+            var id = selectedId.ToGuid();
 
             if (_treeViewModel.Nodes.TryGetValue(id, out var node))
                 return PartialView("_GeneralInfo", new ProductInfoViewModel(node));
@@ -678,7 +678,7 @@ namespace HSMServer.Controllers
         public async Task<IActionResult> UpdateFolderInfo(FolderInfoViewModel newModel)
         {
             if (!ModelState.IsValid)
-                return PartialView("_MetaInfo", new FolderInfoViewModel(_folderManager[Guid.Parse(newModel.EncodedId)]));
+                return PartialView("_MetaInfo", new FolderInfoViewModel(_folderManager[newModel.EncodedId.ToGuid()]));
 
             var update = new FolderUpdate
             {
