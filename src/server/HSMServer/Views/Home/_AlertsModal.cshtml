@@ -17,28 +17,33 @@
                         <h5 class="modal-title">Edit Alerts for selected items</h5>
                     </div>
                 </div>
-                <div class="d-flex ms-3 text-nowrap mt-2">
-                    <span class="d-flex pt-2" style="min-width: 18rem">
-                        Time to sensor(s) live <i class='fas fa-question-circle ps-1 pt-1' title='Time format: dd.hh:mm:ss min value 00:01:00. If the sensor doesn`t receive new data within the specified time interval, a notification sends'></i>
-                    </span>
-                    <div class="pb-0 me-2" style="width: 17rem;">
+
+                <div class="d-flex flex-row text-nowrap align-items-center ms-3 mt-1">
+                    <span class="meta-info-label">Time to sensor(s) live</span>
+
+                    <div class="meta-info-interval">
                         <div id="intervalSelectModal">
                             <partial name="_TimeIntervalSelect" for="ExpectedUpdateInterval"/>
                         </div>
                         <span asp-validation-for="ExpectedUpdateInterval"></span>
                     </div>
+
+                    <i class='fas fa-question-circle mx-2' title='Time format: dd.hh:mm:ss min value 00:01:00. If the sensor doesn`t receive new data within the specified time interval, a notification sends'></i>
                 </div>
-                <div class="d-flex mt-1 ms-3 text-nowrap mt-2">
-                    <span class="d-flex pt-2" style="min-width: 18rem">
-                        Sensitivity sensor(s) interval <i class='fas fa-question-circle ps-1 pt-1' title='Time format: dd.hh:mm:ss min value 00:01:00. If the sensor doesn`t return to Ok status after the specified time inverval, a notification sends'></i>
-                    </span>
-                    <div class="pb-0 me-2" style="width: 17rem;">
+
+                <div class="d-flex flex-row text-nowrap align-items-center ms-3 mt-1">
+                    <span class="meta-info-label">Sensitivity sensor(s) interval</span>
+
+                    <div class="meta-info-interval">
                         <div id="restoreSelectModal">
                             <partial name="_TimeIntervalSelect" for="SensorRestorePolicy"/>
                         </div>
                         <span asp-validation-for="SensorRestorePolicy"></span>
                     </div>
+
+                    <i class='fas fa-question-circle mx-2' title='Time format: dd.hh:mm:ss min value 00:01:00. If the sensor doesn`t return to Ok status after the specified time inverval, a notification sends'></i>
                 </div>
+
                 <div class="modal-footer mt-2">
                     <button class="btn btn-secondary col-2" type="submit">Save</button>
                     <button class="btn btn-secondary col-2" type="button" onclick="hideAlertsModal()">Cancel</button>
@@ -47,6 +52,7 @@
         </div>
     </div>
 </form>
+
 
 <script>
     $(document).ready(function () {

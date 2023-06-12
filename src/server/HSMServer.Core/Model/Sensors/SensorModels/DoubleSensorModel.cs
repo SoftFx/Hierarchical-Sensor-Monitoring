@@ -5,7 +5,7 @@ namespace HSMServer.Core.Model
 {
     public sealed class DoubleSensorModel : BaseSensorModel<DoubleValue>
     {
-        protected override DoubleValuesStorage Storage { get; } = new DoubleValuesStorage();
+        internal override DoubleValuesStorage Storage { get; } = new DoubleValuesStorage();
 
 
         public override DataPolicyCollection<DoubleValue, DoubleDataPolicy> DataPolicies { get; } = new();

@@ -73,6 +73,10 @@ namespace HSMDatabase.LevelDB
                 for (iterator.Seek(from); iterator.IsValid && iterator.Key().IsSmallerOrEquals(to); iterator.Next())
                     _database.Delete(iterator.Key());
             }
+            catch (Exception e)
+            {
+                throw new ServerDatabaseException(e.Message, e);
+            }
             finally
             {
                 iterator?.Dispose();
@@ -104,7 +108,7 @@ namespace HSMDatabase.LevelDB
             }
         }
 
-        public byte[] Get(byte[] key)
+        public byte[] Get(byte[] key, byte[] prefix)
         {
             Iterator iterator = null;
 
@@ -114,7 +118,11 @@ namespace HSMDatabase.LevelDB
 
                 iterator.Seek(key);
 
-                return iterator.IsValid ? iterator.Value() : Array.Empty<byte>();
+                return iterator.IsValid && iterator.Key().StartsWith(prefix) ? iterator.Value() : null;
+            }
+            catch (Exception e)
+            {
+                throw new ServerDatabaseException(e.Message, e);
             }
             finally
             {
