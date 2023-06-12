@@ -11,7 +11,7 @@ namespace HSMServer.Model.TreeViewModels;
 
 public sealed class VisibleTreeViewModel
 {
-    public const int DefinedRenderDepth = 2;
+    public const int DefinedRenderDepth = 1;
     
     
     private readonly User _user;
@@ -95,7 +95,7 @@ public sealed class VisibleTreeViewModel
             var filterNodes = FilterNodes(childNode, --depth);
             node.AddChildState(filterNodes, _user);
 
-            if (toRender && (node.VisibleSensorsCount > 0 || _user.IsEmptyProductVisible(node.Data)))
+            if (toRender && IsVisibleNode(node, node.Data))
                 node.AddChild(filterNodes);
         }
 
