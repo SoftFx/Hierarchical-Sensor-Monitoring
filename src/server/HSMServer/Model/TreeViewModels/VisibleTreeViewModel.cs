@@ -80,16 +80,8 @@ public sealed class VisibleTreeViewModel
         var currentNode = FilterNodes(node, 1);
 
         if (IsVisibleNode(currentNode, node))
-        {
-            foreach (var nestedNode in currentNode.Nodes)
-            {
-                nestedNode.Sensors.Clear();
-                nestedNode.Nodes.Clear();
-            }
-
             return currentNode;
-        }
-
+        
         return default;
     }
 
