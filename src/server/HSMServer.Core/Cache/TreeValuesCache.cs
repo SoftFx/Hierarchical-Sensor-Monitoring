@@ -74,8 +74,6 @@ namespace HSMServer.Core.Cache
 
         public List<ProductModel> GetAllNodes() => _tree.Values.ToList();
 
-        public List<ProductModel> GetNodes() => _tree.Values.Where(p => p.Parent != null).ToList();
-
         public List<BaseSensorModel> GetSensors() => _sensors.Values.ToList();
 
         public List<AccessKeyModel> GetAccessKeys() => _keys.Values.ToList();
@@ -426,7 +424,7 @@ namespace HSMServer.Core.Cache
                     ExpectedUpdateInterval = new TimeIntervalModel(0L),
                 };
 
-                _databaseCore.UpdateProduct(product.Update(update).ToProductEntity());
+                _database.UpdateProduct(product.Update(update).ToProductEntity());
             }
 
             if (product.ServerPolicy.RestoreError.Policy.FromParent)
@@ -437,7 +435,7 @@ namespace HSMServer.Core.Cache
                     RestoreInterval = new TimeIntervalModel(0L),
                 };
 
-                _databaseCore.UpdateProduct(product.Update(update).ToProductEntity());
+                _database.UpdateProduct(product.Update(update).ToProductEntity());
             }
         }
 
