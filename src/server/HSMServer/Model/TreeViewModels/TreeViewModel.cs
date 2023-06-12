@@ -38,11 +38,8 @@ namespace HSMServer.Model.TreeViewModel
             _cache.ChangeAccessKeyEvent += ChangeAccessKeyHandler;
 
             foreach (var user in _userManager.GetUsers())
-            {
                 user.Tree.GetUserProducts += GetUserProducts;
-                user.Tree.GetUserFolders += _folderManager.GetUserFolders;
-            }
-            
+
             foreach (var product in _cache.GetProducts())
                 AddNewProductViewModel(product);
         }

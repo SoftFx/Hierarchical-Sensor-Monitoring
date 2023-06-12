@@ -87,7 +87,7 @@ namespace HSMServer.Authentication
             }
 
             var existingUser = this.SingleOrDefault(IsAskedUser);
-            existingUser.Value.Tree.GetUserProducts += _treeViewModel.GetUserProducts;
+
             return existingUser.Value != null;
         }
 
