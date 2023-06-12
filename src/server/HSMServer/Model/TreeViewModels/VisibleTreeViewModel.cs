@@ -11,9 +11,6 @@ namespace HSMServer.Model.TreeViewModels;
 
 public sealed class VisibleTreeViewModel
 {
-    public const int DefinedRenderDepth = 1;
-    
-    
     private readonly User _user;
     
     
@@ -43,7 +40,7 @@ public sealed class VisibleTreeViewModel
 
         foreach (var product in GetUserProducts?.Invoke(_user))
         {
-            var node = FilterNodes(product, DefinedRenderDepth);
+            var node = FilterNodes(product);
 
             if (node.VisibleSensorsCount > 0 || _user.IsEmptyProductVisible(product))
             {
@@ -77,19 +74,16 @@ public sealed class VisibleTreeViewModel
 
     public BaseShallowModel GetUserNode(ProductNodeViewModel node)
     {
-        var currentNode = FilterNodes(node, 1);
+        var currentNode = FilterNodes(node);
 
-        if (IsVisibleNode(currentNode, node))
-            return currentNode;
-        
-        return default;
+        return IsVisibleNode(currentNode, node) ? currentNode : default;
     }
 
-    private NodeShallowModel FilterNodes(ProductNodeViewModel product, int depth)
+    private NodeShallowModel FilterNodes(ProductNodeViewModel product, int depth = 1)
     {
         var node = new NodeShallowModel(product, _user);
 
-        var toRender = OpenedNodes.TryGetValue(product.Id, out _) || depth > 0;
+        var toRender = OpenedNodes.Contains(product.Id) || depth > 0;
         foreach (var (_, childNode) in product.Nodes)
         {
             var filterNodes = FilterNodes(childNode, --depth);
