@@ -9,12 +9,13 @@ namespace HSMServer.Attributes;
 public class MinTimeIntervalAttribute : ValidationAttribute
 {
     private readonly TimeInterval _interval;
-    
-    
+
+
     public MinTimeIntervalAttribute(TimeInterval interval)
     {
         _interval = interval;
     }
+
 
     public override bool IsValid(object value)
     {
@@ -23,6 +24,6 @@ public class MinTimeIntervalAttribute : ValidationAttribute
 
         return true;
     }
-    
+
     public override string FormatErrorMessage(string name) => string.Format(CultureInfo.CurrentCulture, ErrorMessageString, name, _interval.GetDisplayName());
 }

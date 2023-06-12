@@ -1,9 +1,12 @@
-﻿using HSMServer.Authentication;
+﻿using HSMDatabase.AccessManager.DatabaseEntities.SnapshotEntity;
+using HSMServer.Authentication;
 using HSMServer.Core.Cache;
 using HSMServer.Core.SensorsUpdatesQueue;
 using HSMServer.Core.Tests.Infrastructure;
 using HSMServer.Core.Tests.MonitoringCoreTests.Fixture;
+using HSMServer.Core.TreeStateSnapshot;
 using Moq;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using Xunit;
 
@@ -25,15 +28,20 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         protected MonitoringCoreTestsBase(DatabaseFixture fixture, DatabaseRegisterFixture dbRegisterFixture, bool addTestProduct = true)
         {
             _databaseCoreManager = new DatabaseCoreManager(fixture.DatabasePath);
+
             if (addTestProduct)
                 _databaseCoreManager.AddTestProduct();
+
             dbRegisterFixture.RegisterDatabase(_databaseCoreManager);
 
             fixture.InitializeDatabase(_databaseCoreManager.DatabaseCore);
 
-            _updatesQueue = new Mock<IUpdatesQueue>().Object;
+            var snaphot = new Mock<ITreeStateSnapshot>();
 
-            _valuesCache = new TreeValuesCache(_databaseCoreManager.DatabaseCore, _updatesQueue);
+            snaphot.Setup(a => a.Sensors).Returns(new StateCollection<LastSensorState, SensorStateEntity>());
+
+            _updatesQueue = new Mock<IUpdatesQueue>().Object;
+            _valuesCache = new TreeValuesCache(_databaseCoreManager.DatabaseCore, snaphot.Object, _updatesQueue);
 
             var userManagerLogger = CommonMoqs.CreateNullLogger<UserManager>();
             _userManager = new UserManager(_databaseCoreManager.DatabaseCore, _valuesCache, userManagerLogger);

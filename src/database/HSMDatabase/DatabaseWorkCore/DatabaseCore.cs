@@ -1,17 +1,17 @@
 ﻿using HSMCommon.Constants;
 using HSMDatabase.AccessManager;
 using HSMDatabase.AccessManager.DatabaseEntities;
+using HSMDatabase.Extensions;
 using HSMDatabase.LevelDB;
 using HSMDatabase.Settings;
+using HSMDatabase.SnapshotsDb;
 using HSMServer.Core.Configuration;
 using HSMServer.Core.Converters;
 using HSMServer.Core.DataLayer;
-using HSMServer.Core.Model;
 using HSMServer.Core.Registration;
 using NLog;
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using System.Text;
 
@@ -23,9 +23,31 @@ namespace HSMDatabase.DatabaseWorkCore
 
         private static readonly Logger _logger = LogManager.GetLogger(CommonConstants.InfrastructureLoggerName);
 
-        private readonly IEnvironmentDatabase _environmentDatabase;
         private readonly SensorValuesDatabaseDictionary _sensorValuesDatabases;
-        private readonly IDatabaseSettings _databaseSettings;
+        private readonly IEnvironmentDatabase _environmentDatabase;
+        private readonly IDatabaseSettings _settings;
+
+
+        public ISnapshotDatabase Snapshots { get; }
+
+
+        public long TotalDbSize => _settings.DatabaseFolder.GetSize();
+
+        public long EnviromentDbSize => _settings.PathToEnvironmentDb.GetSize();
+
+        public long SensorHistoryDbSize
+        {
+            get
+            {
+                long size = 0;
+
+                foreach (var db in _sensorValuesDatabases)
+                    size += db.Name.GetSize();
+
+                return size;
+            }
+        }
+
 
         private delegate IEnumerable<byte[]> GetValuesFunc(ISensorValuesDatabase db);
 
@@ -34,93 +56,66 @@ namespace HSMDatabase.DatabaseWorkCore
         {
             _logger.Info($"{nameof(DatabaseCore)} is initializing");
 
-            _databaseSettings = dbSettings ?? new DatabaseSettings();
-            _environmentDatabase = LevelDBManager.GetEnvitonmentDatabaseInstance(_databaseSettings.GetPathToEnvironmentDatabase());
-            _sensorValuesDatabases = new SensorValuesDatabaseDictionary(_databaseSettings);
+            _settings = dbSettings ?? new DatabaseSettings();
+            _environmentDatabase = LevelDBManager.GetEnvitonmentDatabaseInstance(_settings.PathToEnvironmentDb);
+            _sensorValuesDatabases = new SensorValuesDatabaseDictionary(_settings);
+
+            Snapshots = new SnapshotsDatabase(_settings.PathToSnaphotsDb);
 
             _logger.Info($"{nameof(DatabaseCore)} initialized");
         }
 
 
-        #region Database size
-
-        public long GetDatabaseSize()
-        {
-            var databasesDir = new DirectoryInfo(_databaseSettings.DatabaseFolder);
-            return GetDirectorySize(databasesDir);
-        }
-
-        public long GetSensorsHistoryDatabaseSize()
-        {
-            long size = 0;
-
-            foreach (var db in _sensorValuesDatabases)
-                size += GetDirectorySize(new DirectoryInfo(db.Name));
-
-            return size;
-        }
-
-        public long GetEnvironmentDatabaseSize()
-        {
-            DirectoryInfo environmentDatabaseDir = new DirectoryInfo(_databaseSettings.GetPathToEnvironmentDatabase());
-            return GetDirectorySize(environmentDatabaseDir);
-        }
-
-        private static long GetDirectorySize(DirectoryInfo directory)
-        {
-            long size = 0;
-            FileInfo[] files = directory.GetFiles();
-            foreach (var file in files)
-            {
-                try
-                {
-                    size += file.Length;
-                }
-                catch { }
-            }
-
-            DirectoryInfo[] directories = directory.GetDirectories();
-            foreach (var dir in directories)
-            {
-                size += GetDirectorySize(dir);
-            }
-
-            return size;
-        }
-
-        #endregion
-
         #region Fill Sensors (start app)
 
-        public Dictionary<Guid, byte[]> GetLatestValues(List<BaseSensorModel> sensors)
+        public Dictionary<Guid, byte[]> GetLatestValues(Dictionary<Guid, long> sensors)
         {
-            var result = new Dictionary<Guid, byte[]>(sensors.Count);
+            var orderedList = sensors.OrderBy(u => u.Value).ToList();
+            var result = GetResult(sensors.Keys.ToList());
 
-            foreach (var sensor in sensors)
-                result.Add(sensor.Id, null);
+            var curDb = _sensorValuesDatabases.GetEnumerator();
+            var maxBorder = DateTime.MaxValue.Ticks;
 
-            var tempResult = new Dictionary<byte[], (Guid sensorId, byte[] value)>(sensors.Count);
+            curDb.MoveNext(); //go to first db
 
-            foreach (var sensor in sensors)
-            {
-                if (result[sensor.Id] != null)
-                    continue;
+            foreach (var (sensorId, time) in orderedList)
+                if (time < maxBorder) //skip no data sensors
+                {
+                    while (curDb.Current != null && curDb.Current.To < time)
+                        curDb.MoveNext();
 
-                byte[] key = Encoding.UTF8.GetBytes(sensor.Id.ToString());
-                (Guid sensorId, byte[] latestValue) value = (sensor.Id, null);
+                    if (curDb.Current != null)
+                    {
+                        var id = sensorId.ToString();
 
-                tempResult.Add(key, value);
-            }
+                        result[sensorId] = curDb.Current.Get(BuildSensorValueKey(id, time), Encoding.UTF8.GetBytes(id));
+                    }
+                    else
+                        break;
+                }
+
+            return result;
+        }
+
+        public Dictionary<Guid, byte[]> GetLatestValuesFrom(Dictionary<Guid, long> sensors)
+        {
+            var result = GetResult(sensors.Keys.ToList());
+
+            var tempResult = new Dictionary<byte[], (long from, byte[] value)>(sensors.Count);
+
+            foreach (var (id, from) in sensors)
+                tempResult.Add(Encoding.UTF8.GetBytes(id.ToString()), (from, null));
 
             foreach (var database in _sensorValuesDatabases.Reverse())
                 database.FillLatestValues(tempResult);
 
-            foreach (var (_, (sensorId, value)) in tempResult)
-                if (value != null)
-                    result[sensorId] = value;
+            foreach (var (key, (_, value)) in tempResult)
+                result[Guid.Parse(Encoding.UTF8.GetString(key))] = value;
 
             return result;
         }
+
+        private static Dictionary<Guid, byte[]> GetResult(List<Guid> ids) => ids.ToDictionary(k => k, v => (byte[])null);
 
         #endregion
 
@@ -135,15 +130,25 @@ namespace HSMDatabase.DatabaseWorkCore
         public void UpdateSensor(SensorEntity entity) =>
             _environmentDatabase.AddSensor(entity);
 
-        public void ClearSensorValues(string sensorId) =>
-            RemoveSensorValues(sensorId);
+        public void ClearSensorValues(string sensorId, DateTime from, DateTime to)
+        {
+            var fromTicks = from.ToUniversalTime().Ticks;
+            var toTicks = to.ToUniversalTime().Ticks;
+
+            var fromBytes = BuildSensorValueKey(sensorId, fromTicks);
+            var toBytes = BuildSensorValueKey(sensorId, toTicks);
+
+            foreach (var db in _sensorValuesDatabases)
+                if (db.IsInclude(fromTicks, toTicks))
+                    db.RemoveSensorValues(fromBytes, toBytes);
+        }
 
         public void RemoveSensorWithMetadata(string sensorId)
         {
             _environmentDatabase.RemoveSensor(sensorId);
             _environmentDatabase.RemoveSensorIdFromList(sensorId);
 
-            RemoveSensorValues(sensorId);
+            ClearSensorValues(sensorId, DateTime.MinValue, DateTime.MaxValue);
         }
 
         public void AddSensorValue(SensorValueEntity valueEntity)
@@ -177,7 +182,7 @@ namespace HSMDatabase.DatabaseWorkCore
             var fromBytes = BuildSensorValueKey(sensorId, fromTicks);
             var toBytes = BuildSensorValueKey(sensorId, toTicks);
 
-            var databases = _sensorValuesDatabases.Where(db => fromTicks <= db.To && toTicks >= db.From).ToList();
+            var databases = _sensorValuesDatabases.Where(db => db.IsInclude(fromTicks, toTicks)).ToList();
             GetValuesFunc getValues = (db) => db.GetValuesFrom(fromBytes, toBytes);
 
             if (count < 0)
@@ -222,12 +227,6 @@ namespace HSMDatabase.DatabaseWorkCore
         // "D19" string format is for inserting leading zeros (long.MaxValue has 19 symbols)
         private static byte[] BuildSensorValueKey(string sensorId, long time) =>
             Encoding.UTF8.GetBytes($"{sensorId}_{time:D19}");
-
-        private void RemoveSensorValues(string sensorId)
-        {
-            foreach (var db in _sensorValuesDatabases)
-                db.RemoveSensorValues(sensorId);
-        }
 
         #endregion
 

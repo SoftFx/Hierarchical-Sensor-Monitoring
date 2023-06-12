@@ -8,7 +8,7 @@ using System.Text.Json;
 
 namespace HSMDatabase.LevelDB.DatabaseImplementations
 {
-    internal class EnvironmentDatabaseWorker : IEnvironmentDatabase
+    internal sealed class EnvironmentDatabaseWorker : IEnvironmentDatabase
     {
         private readonly byte[] _productListKey = "ProductsNames"u8.ToArray();
         private readonly byte[] _accessKeyListKey = "AccessKeys"u8.ToArray();

@@ -14,6 +14,8 @@ namespace HSMServer.Model.Folders.ViewModels
     {
         public TelegramSettingsViewModel Telegram { get; }
 
+        public FolderCleanupViewModel Cleanup { get; }
+
         public FolderAlertsViewModel Alerts { get; }
 
         public FolderUsersViewModel Users { get; }
@@ -64,6 +66,7 @@ namespace HSMServer.Model.Folders.ViewModels
 
             Telegram = new(folder.Notifications.Telegram, Id);
             Products.InitFolderProducts(folder.Products);
+            Cleanup = new FolderCleanupViewModel(folder);
             Alerts = new FolderAlertsViewModel(folder);
             Users = users;
         }

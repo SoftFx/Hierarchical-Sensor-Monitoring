@@ -50,7 +50,7 @@ namespace HSMDatabase.AccessManager
 
         #endregion
 
-        #region
+        #region Policy
 
         void AddPolicyIdToList(string policyId);
         void RemovePolicyFromList(string policyId);
