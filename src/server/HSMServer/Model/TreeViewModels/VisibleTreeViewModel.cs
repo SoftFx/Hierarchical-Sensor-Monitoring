@@ -93,10 +93,23 @@ public sealed class VisibleTreeViewModel
 
         var toRender = OpenedNodes.TryGetValue(product.Id, out _) || depth > 0;
         foreach (var (_, childNode) in product.Nodes)
-            node.AddChild(FilterNodes(childNode, --depth), _user, toRender);
+        {
+            var filterNodes = FilterNodes(childNode, --depth);
+            node.AddChildState(filterNodes, _user);
+
+            if (toRender)
+                node.AddChild(filterNodes, _user);
+        }
 
         foreach (var (_, sensor) in product.Sensors)
-            node.AddChild(new SensorShallowModel(sensor, _user), _user, toRender);
+        {
+            var shallowSensor = new SensorShallowModel(sensor, _user);
+            
+            node.AddChildState(shallowSensor, _user);
+            
+            if (toRender)
+                node.AddChild(shallowSensor, _user);
+        }
 
         return node;
     }

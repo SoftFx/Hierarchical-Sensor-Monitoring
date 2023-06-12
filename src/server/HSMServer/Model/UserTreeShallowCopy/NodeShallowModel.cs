@@ -43,7 +43,7 @@ namespace HSMServer.Model.UserTreeShallowCopy
         internal NodeShallowModel(ProductNodeViewModel data, User user) : base(data, user) { }
 
 
-        internal void AddChild(SensorShallowModel shallowSensor, User user, bool toRender = true)
+        internal BaseNodeShallowModel<SensorNodeViewModel> AddChildState(SensorShallowModel shallowSensor, User user)
         {
             shallowSensor.Parent = this;
 
@@ -62,14 +62,20 @@ namespace HSMServer.Model.UserTreeShallowCopy
             GrafanaState.CalculateState(shallowSensor);
 
             if (user.IsSensorVisible(sensor))
-            {
                 VisibleSensorsCount++;
-                if (toRender)
-                    Sensors.Add(shallowSensor);
-            }
+
+            return shallowSensor;
         }
 
-        internal void AddChild(NodeShallowModel node, User user, bool toRender = true)
+        internal BaseNodeShallowModel<SensorNodeViewModel> AddChild(SensorShallowModel shallowSensor, User user)
+        {
+            if (user.IsSensorVisible(shallowSensor.Data))
+                Sensors.Add(shallowSensor);
+
+            return shallowSensor;
+        }
+
+        internal NodeShallowModel AddChildState(NodeShallowModel node, User user)
         {
             node.Parent = this;
 
@@ -87,8 +93,16 @@ namespace HSMServer.Model.UserTreeShallowCopy
             GrafanaState.CalculateState(node.GrafanaState);
 
             VisibleSensorsCount += node.VisibleSensorsCount;
-            if ((node.VisibleSensorsCount > 0 || user.IsEmptyProductVisible(node.Data)) && toRender)
+
+            return node;
+        }
+
+        internal NodeShallowModel AddChild(NodeShallowModel node, User user)
+        {
+            if (node.VisibleSensorsCount > 0 || user.IsEmptyProductVisible(node.Data))
                 Nodes.Add(node);
+
+            return node;
         }
     }
 }
