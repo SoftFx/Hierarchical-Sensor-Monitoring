@@ -73,7 +73,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             }
             catch (Exception e)
             {
-                _logger.Error($"Failed remove values [{from.GetString()}, {to.GetString()}] - {e.Message}");
+                _logger.Error($"Failed removing values [{from.GetString()}, {to.GetString()}] - {e.Message}");
             }
         }
 

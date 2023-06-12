@@ -421,49 +421,26 @@ namespace HSMServer.Core.Cache
             if (product.Parent != null || product.FolderId.HasValue)
                 return;
 
-            if (product.ServerPolicy.ExpectedUpdate.Policy.FromParent)
-            {
-                var update = new ProductUpdate
-                {
-                    Id = product.Id,
-                    ExpectedUpdateInterval = new TimeIntervalModel(0L),
-                };
 
-                _database.UpdateProduct(product.Update(update).ToProductEntity());
+            static TimeIntervalModel SetDefault<T>(CollectionProperty<T> property, TimeIntervalModel interval)
+                where T : ServerPolicy, new()
+            {
+                return property.Policy.FromParent ? interval : null;
             }
 
-            if (product.ServerPolicy.RestoreError.Policy.FromParent)
+
+            var update = new ProductUpdate
             {
-                var update = new ProductUpdate
-                {
-                    Id = product.Id,
-                    RestoreInterval = new TimeIntervalModel(0L),
-                };
+                Id = product.Id,
+                ExpectedUpdateInterval = SetDefault(product.ServerPolicy.ExpectedUpdate, new TimeIntervalModel(0L)),
+                RestoreInterval = SetDefault(product.ServerPolicy.RestoreError, new TimeIntervalModel(0L)),
+                SavedHistoryPeriod = SetDefault(product.ServerPolicy.SavedHistoryPeriod, new TimeIntervalModel(TimeInterval.Month, 0L)),
+                SelfDestroy = SetDefault(product.ServerPolicy.SelfDestroy, new TimeIntervalModel(TimeInterval.Month, 0L)),
+            };
 
+            if (update.ExpectedUpdateInterval != null || update.RestoreInterval != null ||
+                update.SavedHistoryPeriod != null || update.SelfDestroy != null)
                 _database.UpdateProduct(product.Update(update).ToProductEntity());
-            }
-
-            if (product.ServerPolicy.SavedHistoryPeriod.Policy.FromParent)
-            {
-                var update = new ProductUpdate
-                {
-                    Id = product.Id,
-                    SavedHistoryPeriod = new TimeIntervalModel(TimeInterval.Month, 0L),
-                };
-
-                _database.UpdateProduct(product.Update(update).ToProductEntity());
-            }
-
-            if (product.ServerPolicy.SelfDestroy.Policy.FromParent)
-            {
-                var update = new ProductUpdate
-                {
-                    Id = product.Id,
-                    SelfDestroy = new TimeIntervalModel(TimeInterval.Month, 0L),
-                };
-
-                _database.UpdateProduct(product.Update(update).ToProductEntity());
-            }
         }
 
         private void UpdatesQueueNewItemsHandler(IEnumerable<StoreInfo> storeInfos)

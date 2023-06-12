@@ -2,7 +2,7 @@
 
 namespace HSMServer.Model.Folders.ViewModels
 {
-    public class FolderCleanupViewModel
+    public sealed class FolderCleanupViewModel
     {
         public Guid Id { get; set; }
 

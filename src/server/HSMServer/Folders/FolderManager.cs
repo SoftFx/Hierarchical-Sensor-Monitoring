@@ -5,6 +5,7 @@ using HSMServer.Core.Cache;
 using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.DataLayer;
 using HSMServer.Core.Model;
+using HSMServer.Core.Model.Policies;
 using HSMServer.Model;
 using HSMServer.Model.Authentication;
 using HSMServer.Model.Folders;
@@ -224,54 +225,30 @@ namespace HSMServer.Folders
 
         private void ResetServerPolicyForFolderProducts()
         {
+            static TimeIntervalModel IsFromFolder<T>(CollectionProperty<T> property, TimeIntervalViewModel interval)
+                where T : ServerPolicy, new()
+            {
+                return property.Policy.FromParent ? interval.ToFolderModel() : null;
+            }
+
+
             foreach (var product in _cache.GetProducts())
             {
                 if (!product.FolderId.HasValue || !TryGetValueById(product.FolderId, out var folder))
                     return;
 
-                if (product.ServerPolicy.ExpectedUpdate.Policy.FromParent)
+                var update = new ProductUpdate
                 {
-                    var update = new ProductUpdate
-                    {
-                        Id = product.Id,
-                        ExpectedUpdateInterval = folder.ExpectedUpdateInterval.ToFolderModel(),
-                    };
+                    Id = product.Id,
+                    ExpectedUpdateInterval = IsFromFolder(product.ServerPolicy.ExpectedUpdate, folder.ExpectedUpdateInterval),
+                    RestoreInterval = IsFromFolder(product.ServerPolicy.RestoreError, folder.SensorRestorePolicy),
+                    SavedHistoryPeriod = IsFromFolder(product.ServerPolicy.SavedHistoryPeriod, folder.SavedHistoryPeriod),
+                    SelfDestroy = IsFromFolder(product.ServerPolicy.SelfDestroy, folder.SelfDestroyPeriod),
+                };
 
+                if (update.ExpectedUpdateInterval != null || update.RestoreInterval != null ||
+                    update.SavedHistoryPeriod != null || update.SelfDestroy != null)
                     _cache.UpdateProduct(update);
-                }
-
-                if (product.ServerPolicy.RestoreError.Policy.FromParent)
-                {
-                    var update = new ProductUpdate
-                    {
-                        Id = product.Id,
-                        RestoreInterval = folder.SensorRestorePolicy.ToFolderModel(),
-                    };
-
-                    _cache.UpdateProduct(update);
-                }
-
-                if (product.ServerPolicy.SavedHistoryPeriod.Policy.FromParent)
-                {
-                    var update = new ProductUpdate
-                    {
-                        Id = product.Id,
-                        SavedHistoryPeriod = folder.SavedHistoryPeriod.ToFolderModel(),
-                    };
-
-                    _cache.UpdateProduct(update);
-                }
-
-                if (product.ServerPolicy.SelfDestroy.Policy.FromParent)
-                {
-                    var update = new ProductUpdate
-                    {
-                        Id = product.Id,
-                        SelfDestroy = folder.SelfDestroyPeriod.ToFolderModel(),
-                    };
-
-                    _cache.UpdateProduct(update);
-                }
             }
         }
     }
