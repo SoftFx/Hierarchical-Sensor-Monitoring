@@ -215,8 +215,12 @@ namespace HSMServer.Folders
             user.Tree.GetUserFolders -= GetUserFolders;
         }
 
-        private void AddUserHandler(User user) => user.Tree.GetUserFolders += GetUserFolders;
-        
+        private void AddUserHandler(User user)
+        {
+            user.Tree.GetUserFolders += GetUserFolders;
+            user.Tree.GetFolder += TryGetValue;
+        }
+
         private static TimeIntervalModel GetCorePolicy(TimeIntervalModel coreInterval, TimeIntervalViewModel folderInterval)
         {
             return coreInterval.IsFromFolder

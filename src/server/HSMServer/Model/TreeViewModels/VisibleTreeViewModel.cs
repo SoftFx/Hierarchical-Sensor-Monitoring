@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using HSMServer.Extensions;
-using HSMServer.Folders;
 using HSMServer.Model.Authentication;
 using HSMServer.Model.Folders;
 using HSMServer.Model.TreeViewModel;
@@ -21,10 +20,14 @@ public sealed class VisibleTreeViewModel
     public HashSet<Guid> OpenedNodes { get; } = new();
 
     
+    public delegate bool OutTryGetModel<TGuid, TFolderModel>(TGuid guid, out TFolderModel model);
+    
     public event Func<User, List<FolderModel>> GetUserFolders;
     
     public event Func<User, List<ProductNodeViewModel>> GetUserProducts;
-    
+
+    public event OutTryGetModel<Guid, FolderModel> GetFolder; 
+
 
     public VisibleTreeViewModel(User user)
     {
@@ -50,8 +53,11 @@ public sealed class VisibleTreeViewModel
                 {
                     if (!folders.TryGetValue(folderId.Value, out var folder))
                     {
-                        //folder = new FolderShallowModel(folderManager[folderId], _user);
-                        //folders.Add(folderId.Value, folder);
+                        if (GetFolder?.Invoke(folderId.Value, out var model) is not null)
+                        {
+                            folder = new FolderShallowModel(model, _user);
+                            folders.Add(folderId.Value, folder);
+                        }
                     }
 
                     folder.AddChild(node, _user);
