@@ -103,8 +103,8 @@ public sealed class VisibleTreeViewModel
             var filterNodes = FilterNodes(childNode, --depth);
             node.AddChildState(filterNodes, _user);
 
-            if (toRender)
-                node.AddChild(filterNodes, _user);
+            if (toRender && (node.VisibleSensorsCount > 0 || _user.IsEmptyProductVisible(node.Data)))
+                node.AddChild(filterNodes);
         }
 
         foreach (var (_, sensor) in product.Sensors)
@@ -113,8 +113,8 @@ public sealed class VisibleTreeViewModel
             
             node.AddChildState(shallowSensor, _user);
             
-            if (toRender)
-                node.AddChild(shallowSensor, _user);
+            if (toRender && _user.IsSensorVisible(shallowSensor.Data))
+                node.AddChild(shallowSensor);
         }
 
         return node;

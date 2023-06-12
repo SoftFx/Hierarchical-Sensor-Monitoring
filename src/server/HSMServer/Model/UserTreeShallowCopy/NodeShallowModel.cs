@@ -45,8 +45,6 @@ namespace HSMServer.Model.UserTreeShallowCopy
 
         internal BaseNodeShallowModel<SensorNodeViewModel> AddChildState(SensorShallowModel shallowSensor, User user)
         {
-            shallowSensor.Parent = this;
-
             var sensor = shallowSensor.Data;
 
             if (sensor.State != SensorState.Muted)
@@ -67,18 +65,16 @@ namespace HSMServer.Model.UserTreeShallowCopy
             return shallowSensor;
         }
 
-        internal BaseNodeShallowModel<SensorNodeViewModel> AddChild(SensorShallowModel shallowSensor, User user)
+        internal BaseNodeShallowModel<SensorNodeViewModel> AddChild(SensorShallowModel shallowSensor)
         {
-            if (user.IsSensorVisible(shallowSensor.Data))
-                Sensors.Add(shallowSensor);
+            shallowSensor.Parent = this;
+            Sensors.Add(shallowSensor);
 
             return shallowSensor;
         }
 
         internal NodeShallowModel AddChildState(NodeShallowModel node, User user)
         {
-            node.Parent = this;
-
             if (node._mutedValue.HasValue)
             {
                 if (!node._mutedValue.Value)
@@ -97,10 +93,10 @@ namespace HSMServer.Model.UserTreeShallowCopy
             return node;
         }
 
-        internal NodeShallowModel AddChild(NodeShallowModel node, User user)
+        internal NodeShallowModel AddChild(NodeShallowModel node)
         {
-            if (node.VisibleSensorsCount > 0 || user.IsEmptyProductVisible(node.Data))
-                Nodes.Add(node);
+            node.Parent = this;
+            Nodes.Add(node);
 
             return node;
         }

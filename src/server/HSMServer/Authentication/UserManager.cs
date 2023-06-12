@@ -11,7 +11,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using HSMServer.Model.TreeViewModel;
 
 namespace HSMServer.Authentication
 {
@@ -22,7 +21,6 @@ namespace HSMServer.Authentication
         private readonly IDatabaseCore _databaseCore;
         private readonly ITreeValuesCache _treeValuesCache;
         private readonly ILogger<UserManager> _logger;
-        private readonly TreeViewModel _treeViewModel;
 
 
         protected override Action<UserEntity> AddToDb => _databaseCore.AddUser;
