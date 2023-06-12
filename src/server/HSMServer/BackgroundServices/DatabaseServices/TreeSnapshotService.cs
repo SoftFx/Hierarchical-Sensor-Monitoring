@@ -24,7 +24,6 @@ namespace HSMServer.BackgroundServices
 
         public override Task StartAsync(CancellationToken token)
         {
-            _lifetimeHost.ApplicationStarted.Register(OnStarted);
             _lifetimeHost.ApplicationStopping.Register(async () => await SaveState(true));
 
             return base.StartAsync(token);
@@ -40,11 +39,6 @@ namespace HSMServer.BackgroundServices
             await _snapshot.FlushState(isFinal);
 
             _logger.Info($"Stop state flushing");
-        }
-
-        private void OnStarted()
-        {
-            Console.WriteLine("SNAPSHOT START!");
         }
     }
 }
