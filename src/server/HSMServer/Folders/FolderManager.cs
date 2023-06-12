@@ -113,6 +113,7 @@ namespace HSMServer.Folders
             foreach (var user in _userManager.GetUsers())
             {
                 user.Tree.GetUserFolders += GetUserFolders;
+                user.Tree.GetFolder += TryGetValue;
                 
                 foreach (var (folderId, role) in user.FoldersRoles)
                     if (TryGetValue(folderId, out var folder))
@@ -213,6 +214,7 @@ namespace HSMServer.Folders
                     folder.UserRoles.Remove(user);
 
             user.Tree.GetUserFolders -= GetUserFolders;
+            user.Tree.GetFolder -= TryGetValue;
         }
 
         private void AddUserHandler(User user)
