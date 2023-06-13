@@ -208,7 +208,7 @@ function selectNodeInfoTab(tab, selectedId) {
 }
 
 const TelegramTarget = { Groups: 0, Accounts: 1 };
-const NodeType = { Folder: 0, Product: 1, Node: 2, Sensor: 3 };
+const NodeType = { Folder: 0, Product: 1, Node: 2, Sensor: 3, Disabled: 4 };
 
 const AjaxPost = {
     type: 'POST',
@@ -220,6 +220,10 @@ function buildContextMenu(node) {
     var contextMenu = {};
     
     let curType = getCurrentElementType(node);
+    
+    if (curType === NodeType.Disabled)
+        return contextMenu;
+    
     let isManager = node.data.jstree.isManager === "True";
     
     let selectedNodes = $('#jstree').jstree(true).get_selected();
@@ -500,6 +504,9 @@ function getFullPathAction(nodeId) {
 }
 
 function getCurrentElementType(node) {
+    if (node.id.includes('disabled'))
+        return NodeType.Disabled;
+    
     if (node.parents.length === 1 && isFolder(node))
         return NodeType.Folder;
 
