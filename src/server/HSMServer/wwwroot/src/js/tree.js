@@ -6,10 +6,26 @@ window.currentSelectedNodeId = "";
 window.initializeTree = function () {
     var sortingType = $("input[name='TreeSortType']:checked");
 
+    let initOpened = JSON.parse(window.localStorage.jstree).state.core.open.length;
+    if (initOpened > 1)
+        isRefreshing = true;
+    
     $('#jstree').jstree({
         "core": {
             "check_callback": true,
-            "multiple": true
+            "multiple": true,
+            'data' : {
+                url : function (node) {
+                    if (node.id === '#') {
+                        return refreshTree;
+                    }
+
+                    return getNode;
+                },
+                data: function (node) {
+                    return { 'id' : node.id };
+                }
+            }
         },
         "contextmenu": {
             "items": buildContextMenu
@@ -34,14 +50,20 @@ window.initializeTree = function () {
             else {
                 [a, b] = [nodeB.title.toLowerCase(), nodeA.title.toLowerCase()];
             }
-            
+
             return a < b ? 1 : -1;
         }
     }).on("state_ready.jstree", function () {
         selectNodeAjax($(this).jstree('get_selected')[0]);
-    }).on('open_node.jstree', function () {
-        isTreeCollapsed = false;
-        $('#collapseIcon').removeClass('fa-regular fa-square-plus').addClass('fa-regular fa-square-minus').attr('title','Save and close tree');
+    }).on('close_node.jstree', function (e, data) {
+        $.ajax({
+            type: 'put',
+            url: `${closeNode}?nodeId=${data.node.id}`,
+            cache: false
+        })
+    }).on('refresh.jstree', function (e, data){
+        refreshTreeTimeoutId = setTimeout(updateTreeTimer, interval);
+        updateSelectedNodeDataTimeoutId = setTimeout(updateSelectedNodeData, interval);
     });
 
     initializeActivateNodeTree();
@@ -150,7 +172,6 @@ function initSelectedNode(selectedId) {
 
         if (needToActivateListTab) {
             selectNodeInfoTab("list", selectedId);
-
             needToActivateListTab = false;
         }
         else {

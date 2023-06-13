@@ -42,6 +42,7 @@ namespace HSMServer.Folders
 
             _userManager = userManager;
             _userManager.Removed += RemoveUserHandler;
+            _userManager.Added += AddUserHandler;
         }
 
 
@@ -112,16 +113,20 @@ namespace HSMServer.Folders
                     folder.Author = author.Name;
 
             foreach (var user in _userManager.GetUsers())
+            {
+                AddUserHandler(user);
+                
                 foreach (var (folderId, role) in user.FoldersRoles)
                     if (TryGetValue(folderId, out var folder))
                         folder.UserRoles.Add(user, role);
+            }
 
             ResetServerPolicyForFolderProducts();
         }
 
         public List<FolderModel> GetUserFolders(User user)
         {
-            var folders = Values.Select(f => f.RecalculateState()).ToList();
+            var folders = GetFolders();
 
             if (user == null || user.IsAdmin)
                 return folders;
@@ -209,12 +214,17 @@ namespace HSMServer.Folders
                 folder.Products.Remove(product.Id);
         }
 
+        private void AddUserHandler(User user) => user.Tree.GetFolders += GetFolders;
+
         private void RemoveUserHandler(User user)
         {
             foreach (var folderId in user.FoldersRoles.Keys)
                 if (TryGetValue(folderId, out var folder))
                     folder.UserRoles.Remove(user);
+
+            user.Tree.GetFolders -= GetFolders;
         }
+
 
         private static TimeIntervalModel GetCorePolicy(TimeIntervalModel coreInterval, TimeIntervalViewModel folderInterval)
         {
@@ -251,5 +261,7 @@ namespace HSMServer.Folders
                     _cache.UpdateProduct(update);
             }
         }
+
+        private List<FolderModel> GetFolders() => Values.Select(x => x.RecalculateState()).ToList();
     }
 }

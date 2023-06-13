@@ -2,6 +2,7 @@
 using HSMServer.Model.Authentication;
 using Microsoft.AspNetCore.Mvc.Filters;
 using System;
+using HSMServer.Extensions;
 
 namespace HSMServer.Filters.ProductRoleFilters
 {
@@ -14,7 +15,7 @@ namespace HSMServer.Filters.ProductRoleFilters
         {
             if (arg is string selectedKey)
             {
-                var accessKey = (context.Controller as AccessKeysController).TreeValuesCache.GetAccessKey(Guid.Parse(selectedKey));
+                var accessKey = (context.Controller as AccessKeysController).TreeValuesCache.GetAccessKey(selectedKey.ToGuid());
                 return accessKey.ProductId;
             }
 
