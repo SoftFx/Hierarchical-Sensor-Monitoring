@@ -1,37 +1,36 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using HSMServer.Extensions;
 using HSMServer.Model.Authentication;
 using HSMServer.Model.Folders;
 using HSMServer.Model.TreeViewModel;
 using HSMServer.Model.UserTreeShallowCopy;
+using System;
+using System.Collections.Generic;
+using System.Linq;
 
 namespace HSMServer.Model.TreeViewModels;
 
 public sealed class VisibleTreeViewModel
 {
     private readonly User _user;
-    
-    
+
+
     public HashSet<Guid> OpenedNodes { get; } = new();
-    
-    
+
+
     public event Func<List<FolderModel>> GetFolders;
-    
+
     public event Func<User, List<ProductNodeViewModel>> GetUserProducts;
 
-    
+
     public VisibleTreeViewModel(User user)
     {
         _user = user;
     }
-    
-    
+
+
     public List<BaseShallowModel> GetUserTree()
     {
-        var folders = GetFolders?.Invoke().Where(f => _user.IsFolderAvailable(f.Id) || f.Products.Any(x => _user.IsProductAvailable(x.Key)))
-                                                                       .ToDictionary(k => k.Id, v => new FolderShallowModel(v, _user));
+        var folders = GetFolders?.Invoke().ToDictionary(k => k.Id, v => new FolderShallowModel(v, _user));
 
         var tree = new List<BaseShallowModel>(1 << 4);
 
@@ -50,10 +49,13 @@ public sealed class VisibleTreeViewModel
             }
         }
 
-        var isUserNoDataFilterEnabled = _user.TreeFilter.ByVisibility.Empty.Value;
         foreach (var folder in folders.Values)
-            if (!folder.IsEmpty || isUserNoDataFilterEnabled)
+        {
+            var viewEmptyFolder = _user.IsFolderAvailable(folder.Data.Id) && _user.TreeFilter.ByVisibility.Empty.Value;
+
+            if (!folder.IsEmpty || viewEmptyFolder)
                 tree.Add(folder);
+        }
 
         return tree;
     }
@@ -82,9 +84,9 @@ public sealed class VisibleTreeViewModel
         foreach (var (_, sensor) in product.Sensors)
         {
             var shallowSensor = new SensorShallowModel(sensor, _user);
-            
+
             node.AddChildState(shallowSensor, _user);
-            
+
             if (toRender && _user.IsSensorVisible(shallowSensor.Data))
                 node.AddChild(shallowSensor);
         }
