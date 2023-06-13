@@ -29,6 +29,22 @@ public sealed class VisibleTreeViewModel
     }
 
 
+    public static string GetDisabledJSTree() => 
+        $$"""
+        {
+            "title": "disabled",
+            "icon": "disabled",
+            "time": "disabled",
+            "isManager": "disabled",
+            "isGrafanaEnabled": "disabled",
+            "isAccountsEnable": "disabled",
+            "groups": "disabled",
+            "isMutedState": "disabled",
+            "disabled": {{true.ToString().ToLower()}}
+        }
+        """;
+    
+
     public void AddRenderingNode(Guid id)
     {
         lock (_user)
