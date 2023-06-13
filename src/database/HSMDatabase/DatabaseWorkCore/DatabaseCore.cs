@@ -82,7 +82,11 @@ namespace HSMDatabase.DatabaseWorkCore
                         curDb.MoveNext();
 
                     if (curDb.Current != null)
-                        result[sensorId] = curDb.Current.Get(BuildSensorValueKey(sensorId.ToString(), time));
+                    {
+                        var id = sensorId.ToString();
+
+                        result[sensorId] = curDb.Current.Get(BuildSensorValueKey(id, time), Encoding.UTF8.GetBytes(id));
+                    }
                     else
                         break;
                 }

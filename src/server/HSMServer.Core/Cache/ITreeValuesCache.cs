@@ -22,7 +22,6 @@ namespace HSMServer.Core.Cache
 
         event Action<PolicyResult> ChangePolicyResultEvent;
 
-        List<ProductModel> GetNodes();
         List<BaseSensorModel> GetSensors();
         List<AccessKeyModel> GetAccessKeys();
 

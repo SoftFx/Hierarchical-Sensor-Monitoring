@@ -69,8 +69,6 @@ namespace HSMServer.Core.Cache
 
         public List<ProductModel> GetAllNodes() => _tree.Values.ToList();
 
-        public List<ProductModel> GetNodes() => _tree.Values.Where(p => p.Parent != null).ToList();
-
         public List<BaseSensorModel> GetSensors() => _sensors.Values.ToList();
 
         public List<AccessKeyModel> GetAccessKeys() => _keys.Values.ToList();
@@ -298,7 +296,7 @@ namespace HSMServer.Core.Cache
             var policy = sensor.ServerPolicy.SavedHistoryPeriod.Policy;
 
             if (!policy.Validate(from).IsOk)
-                ClearSensorHistory(sensorId, policy.Interval.GetShiftedTime(from));
+                ClearSensorHistory(sensorId, policy.Interval.GetShiftedTime(DateTime.UtcNow, -1));
         }
 
         public void ClearSensorHistory(Guid sensorId, DateTime to)
@@ -311,7 +309,10 @@ namespace HSMServer.Core.Cache
             if (from > to)
                 return;
 
-            sensor.ResetSensor();
+            sensor.Storage.Clear(to);
+
+            if (!sensor.HasData)
+                sensor.ResetSensor();
 
             _database.ClearSensorValues(sensor.Id.ToString(), from, to);
             _snapshot.Sensors[sensorId].History.From = to;
@@ -413,27 +414,26 @@ namespace HSMServer.Core.Cache
             if (product.Parent != null || product.FolderId.HasValue)
                 return;
 
-            if (product.ServerPolicy.ExpectedUpdate.Policy.FromParent)
-            {
-                var update = new ProductUpdate
-                {
-                    Id = product.Id,
-                    ExpectedUpdateInterval = new TimeIntervalModel(0L),
-                };
 
-                _databaseCore.UpdateProduct(product.Update(update).ToProductEntity());
+            static TimeIntervalModel SetDefault<T>(CollectionProperty<T> property, TimeIntervalModel interval)
+                where T : ServerPolicy, new()
+            {
+                return property.Policy.FromParent ? interval : null;
             }
 
-            if (product.ServerPolicy.RestoreError.Policy.FromParent)
-            {
-                var update = new ProductUpdate
-                {
-                    Id = product.Id,
-                    RestoreInterval = new TimeIntervalModel(0L),
-                };
 
-                _databaseCore.UpdateProduct(product.Update(update).ToProductEntity());
-            }
+            var update = new ProductUpdate
+            {
+                Id = product.Id,
+                ExpectedUpdateInterval = SetDefault(product.ServerPolicy.ExpectedUpdate, new TimeIntervalModel(0L)),
+                RestoreInterval = SetDefault(product.ServerPolicy.RestoreError, new TimeIntervalModel(0L)),
+                SavedHistoryPeriod = SetDefault(product.ServerPolicy.SavedHistoryPeriod, new TimeIntervalModel(TimeInterval.Month, 0L)),
+                SelfDestroy = SetDefault(product.ServerPolicy.SelfDestroy, new TimeIntervalModel(TimeInterval.Month, 0L)),
+            };
+
+            if (update.ExpectedUpdateInterval != null || update.RestoreInterval != null ||
+                update.SavedHistoryPeriod != null || update.SelfDestroy != null)
+                _database.UpdateProduct(product.Update(update).ToProductEntity());
         }
 
         private void UpdatesQueueNewItemsHandler(IEnumerable<StoreInfo> storeInfos)
@@ -580,7 +580,7 @@ namespace HSMServer.Core.Cache
                         parent.AddSubProduct(product);
                 }
 
-            foreach (var product in _tree.Values)
+            foreach (var product in GetProducts()) // TODO remove after migration SelfDestroy and SavedHistoryPeriod
                 ResetServerPolicyForRootProduct(product);
 
             _logger.Info("Links between products are built");

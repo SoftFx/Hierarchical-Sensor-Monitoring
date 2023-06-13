@@ -10,7 +10,7 @@ namespace HSMServer.Core.Model
         private readonly SortedSet<(SensorStatus status, string comment)> _results;
 
 
-        internal static SensorResult Ok { get; } = new(SensorStatus.Ok, string.Empty);
+        internal static SensorResult Ok { get; } = new(SensorStatus.Ok, null);
 
         internal (SensorStatus, string) ToTuple => _results.Count > 0 ? _results.Max : Ok.ToTuple;
 

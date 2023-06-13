@@ -26,6 +26,8 @@ namespace HSMServer.Core.Model
 
         internal abstract List<BaseValue> GetValues(int count);
 
+        internal abstract void Clear(DateTime to);
+
         internal abstract void Clear();
     }
 
@@ -56,6 +58,12 @@ namespace HSMServer.Core.Model
 
         internal override List<BaseValue> GetValues(DateTime from, DateTime to) =>
             _cache.Where(v => v.InRange(from, to)).Select(u => (BaseValue)u).ToList();
+
+        internal override void Clear(DateTime to)
+        {
+            while (_cache.FirstOrDefault()?.ReceivingTime <= to)
+                _cache.TryDequeue(out _);
+        }
 
         internal override void Clear() => _cache.Clear();
     }
