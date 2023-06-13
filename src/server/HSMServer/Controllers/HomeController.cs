@@ -26,7 +26,6 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
-using HSMServer.Model.UserTreeShallowCopy;
 using SensorStatus = HSMSensorDataObjects.SensorStatus;
 using TimeInterval = HSMServer.Model.TimeInterval;
 
@@ -80,14 +79,14 @@ namespace HSMServer.Controllers
 
             return PartialView("_NodeDataPanel", viewModel);
         }
-        
+
         [HttpGet]
         public IActionResult GetNode(string id)
         {
             var guid = id.ToGuid();
-            
+
             CurrentUser.Tree.OpenedNodes.Add(guid);
-            
+
             if (_treeViewModel.Nodes.TryGetValue(guid, out var node))
                 return PartialView("_TreeNode", CurrentUser.Tree.GetUserNode(node));
 
