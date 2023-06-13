@@ -11,8 +11,10 @@ namespace HSMServer.Model.TreeViewModels;
 
 public sealed class VisibleTreeViewModel
 {
+    private const int RenderWidth = 100;
+    
+    
     private readonly User _user;
-
 
     public HashSet<Guid> OpenedNodes { get; } = new();
 
@@ -51,7 +53,7 @@ public sealed class VisibleTreeViewModel
 
         foreach (var product in GetUserProducts?.Invoke(_user))
         {
-            var node = FilterNodes(product);
+            var node = FilterNodes(product, RenderWidth);
 
             if (IsVisibleNode(node, product))
             {
@@ -77,23 +79,27 @@ public sealed class VisibleTreeViewModel
 
     public NodeShallowModel GetUserNode(ProductNodeViewModel node)
     {
-        var currentNode = FilterNodes(node);
+        var currentNode = FilterNodes(node, RenderWidth);
 
         return IsVisibleNode(currentNode, node) ? currentNode : default;
     }
 
-    private NodeShallowModel FilterNodes(ProductNodeViewModel product, int depth = 1)
+    private NodeShallowModel FilterNodes(ProductNodeViewModel product, int width, int depth = 1)
     {
         var node = new NodeShallowModel(product, _user);
+        var currentWidth = 0;
 
         var toRender = OpenedNodes.Contains(product.Id) || depth > 0;
         foreach (var (_, childNode) in product.Nodes)
         {
-            var filterNodes = FilterNodes(childNode, --depth);
+            var filterNodes = FilterNodes(childNode, RenderWidth, --depth);
             node.AddChildState(filterNodes, _user);
 
-            if (toRender && IsVisibleNode(filterNodes, filterNodes.Data))
+            if (toRender && IsVisibleNode(filterNodes, filterNodes.Data) && currentWidth <= RenderWidth)
+            {
                 node.AddChild(filterNodes);
+                currentWidth++;
+            }
         }
 
         foreach (var (_, sensor) in product.Sensors)
@@ -102,8 +108,11 @@ public sealed class VisibleTreeViewModel
 
             node.AddChildState(shallowSensor, _user);
 
-            if (toRender && _user.IsSensorVisible(shallowSensor.Data))
+            if (toRender && _user.IsSensorVisible(shallowSensor.Data) && currentWidth <= RenderWidth)
+            {
                 node.AddChild(shallowSensor);
+                currentWidth++;
+            }
         }
 
         return node;
