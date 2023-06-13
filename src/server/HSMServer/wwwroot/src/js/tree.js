@@ -70,7 +70,7 @@ function initializeActivateNodeTree() {
 }
 
 function selectNodeAjax(selectedId) {
-    if (currentSelectedNodeId == selectedId)
+    if (currentSelectedNodeId == selectedId || selectedId == undefined)
         return;
 
     let isEditMode = !$("#description").hasClass("d-none") && currentSelectedNodeId !== "";
@@ -264,7 +264,6 @@ function buildContextMenu(node) {
                             hideAlertsModal();
                         },
                         error: function (jqXHR) {
-                            console.log(jqXHR);
                             $('#editMultipleInterval span.field-validation-valid').each(function () {
                                 let errFor = $(this).data('valmsgFor');
                                 if (jqXHR.responseJSON[errFor] !== undefined) {

@@ -5,7 +5,7 @@ namespace HSMServer.Core.Model;
 
 public class TimeSpanSensorModel : BaseSensorModel<TimeSpanValue>
 {
-    protected override TimeSpanValueStorage Storage { get; } = new TimeSpanValueStorage();
+    internal override TimeSpanValueStorage Storage { get; } = new TimeSpanValueStorage();
 
 
     public override DataPolicyCollection<TimeSpanValue, TimeSpanDataPolicy> DataPolicies { get; } = new();

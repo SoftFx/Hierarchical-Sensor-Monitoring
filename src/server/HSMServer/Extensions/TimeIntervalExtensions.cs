@@ -8,6 +8,8 @@ namespace HSMServer.Extensions
     {
         public static bool IsParent(this TimeInterval interval) => interval == TimeInterval.FromParent;
 
+        public static bool IsForever(this TimeInterval interval) => interval == TimeInterval.Forever;
+
         public static bool IsCustom(this TimeInterval interval) => interval == TimeInterval.Custom;
 
         public static long ToCustomTicks(this TimeInterval interval, string customInterval)
@@ -29,7 +31,11 @@ namespace HSMServer.Extensions
                 TimeInterval.SixtyHours => time.AddHours(60),
                 TimeInterval.Week => time.AddDays(7),
                 TimeInterval.Month => time.AddMonths(1),
+                TimeInterval.ThreeMonths => time.AddMonths(3),
+                TimeInterval.SixMonths => time.AddMonths(6),
+                TimeInterval.Year => time.AddYears(1),
                 TimeInterval.Custom => customInterval.TryParse(out var ticks) ? new DateTime(ticks) : time,
+                TimeInterval.Forever => DateTime.MaxValue,
                 _ => time,
             }).Ticks;
         }
@@ -44,8 +50,11 @@ namespace HSMServer.Extensions
                 CoreTimeInterval.Day => TimeInterval.Day,
                 CoreTimeInterval.Week => TimeInterval.Week,
                 CoreTimeInterval.Month => TimeInterval.Month,
+                CoreTimeInterval.ThreeMonths => TimeInterval.ThreeMonths,
+                CoreTimeInterval.SixMonths => TimeInterval.SixMonths,
+                CoreTimeInterval.Year => TimeInterval.Year,
                 CoreTimeInterval.FromFolder or CoreTimeInterval.FromParent => TimeInterval.FromParent,
-                CoreTimeInterval.Custom => ticks == 0L ? TimeInterval.None : TimeInterval.Custom,
+                CoreTimeInterval.Custom => ticks == 0L ? TimeInterval.None : ticks == DateTime.MaxValue.Ticks ? TimeInterval.Forever : TimeInterval.Custom,
                 _ => TimeInterval.None,
             };
 
@@ -59,6 +68,9 @@ namespace HSMServer.Extensions
                 TimeInterval.Day => CoreTimeInterval.Day,
                 TimeInterval.Week => CoreTimeInterval.Week,
                 TimeInterval.Month => CoreTimeInterval.Month,
+                TimeInterval.ThreeMonths => CoreTimeInterval.ThreeMonths,
+                TimeInterval.SixMonths => CoreTimeInterval.SixMonths,
+                TimeInterval.Year => CoreTimeInterval.Year,
                 TimeInterval.FromParent => parentIsFolder ? CoreTimeInterval.FromFolder : CoreTimeInterval.FromParent,
                 _ => CoreTimeInterval.Custom,
             };

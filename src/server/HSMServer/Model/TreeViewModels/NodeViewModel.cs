@@ -43,6 +43,8 @@ namespace HSMServer.Model.TreeViewModel
 
             ExpectedUpdateInterval = new(model.ServerPolicy.ExpectedUpdate.Policy.Interval, () => Parent?.ExpectedUpdateInterval, NodeHasFolder);
             SensorRestorePolicy = new(model.ServerPolicy.RestoreError.Policy.Interval, () => Parent?.SensorRestorePolicy, NodeHasFolder);
+            SavedHistoryPeriod = new(model.ServerPolicy.SavedHistoryPeriod.Policy.Interval, () => Parent?.SavedHistoryPeriod, NodeHasFolder);
+            SelfDestroyPeriod = new(model.ServerPolicy.SelfDestroy.Policy.Interval, () => Parent?.SelfDestroyPeriod, NodeHasFolder);
         }
 
         protected NodeViewModel() {}
@@ -55,6 +57,8 @@ namespace HSMServer.Model.TreeViewModel
 
             UpdatePolicyView(model.ServerPolicy.ExpectedUpdate, ExpectedUpdateInterval);
             UpdatePolicyView(model.ServerPolicy.RestoreError, SensorRestorePolicy);
+            UpdatePolicyView(model.ServerPolicy.SavedHistoryPeriod, SavedHistoryPeriod);
+            UpdatePolicyView(model.ServerPolicy.SelfDestroy, SelfDestroyPeriod);
         }
 
 

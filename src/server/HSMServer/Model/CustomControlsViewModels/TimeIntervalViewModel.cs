@@ -116,6 +116,9 @@ namespace HSMServer.Model
             if (TimeInterval.IsCustom() && CustomTimeInterval.TryParse(out var ticks))
                 return ticks;
 
+            if (TimeInterval.IsForever())
+                return TimeInterval.ToCustomTicks(null);
+
             if (TimeInterval.IsParent() && folderInterval != null)
                 return folderInterval.TimeInterval.ToCustomTicks(folderInterval.CustomTimeInterval);
 

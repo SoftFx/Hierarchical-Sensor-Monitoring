@@ -276,7 +276,7 @@
         clearTimeout(updateSelectedNodeDataTimeoutId);
 
         var selectedNodeId = currentSelectedNodeId;
-        if (selectedNodeId != "" && selectedNodeId !== undefined)
+        if (selectedNodeId != "")
             $.ajax({
                 type: 'POST',
                 url: updateSelectedNode + '?Selected=' + selectedNodeId,
