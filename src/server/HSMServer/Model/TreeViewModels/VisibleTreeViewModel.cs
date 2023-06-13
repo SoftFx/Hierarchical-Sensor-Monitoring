@@ -15,17 +15,13 @@ public sealed class VisibleTreeViewModel
     
     
     public HashSet<Guid> OpenedNodes { get; } = new();
-
     
-    public delegate bool OutTryGetModel<TGuid, TFolderModel>(TGuid guid, out TFolderModel model);
     
-    public event Func<User, List<FolderModel>> GetUserFolders;
+    public event Func<List<FolderModel>> GetFolders;
     
     public event Func<User, List<ProductNodeViewModel>> GetUserProducts;
 
-    public event OutTryGetModel<Guid, FolderModel> GetFolder; 
-
-
+    
     public VisibleTreeViewModel(User user)
     {
         _user = user;
@@ -34,8 +30,10 @@ public sealed class VisibleTreeViewModel
     
     public List<BaseShallowModel> GetUserTree()
     {
-        var folders = GetUserFolders?.Invoke(_user)
-            .ToDictionary(k => k.Id, v => new FolderShallowModel(v, _user));
+        var folders = GetFolders?.Invoke().ToDictionary(k => k.Id, v => new FolderShallowModel(v, _user));
+        
+        var userFolders = GetUserFolders(folders);
+        
         var tree = new List<BaseShallowModel>(1 << 4);
 
         foreach (var product in GetUserProducts?.Invoke(_user))
@@ -48,14 +46,8 @@ public sealed class VisibleTreeViewModel
 
                 if (folderId.HasValue)
                 {
-                    if (!folders.TryGetValue(folderId.Value, out var folder))
-                    {
-                        if (GetFolder?.Invoke(folderId.Value, out var model) is not null)
-                        {
-                            folder = new FolderShallowModel(model, _user);
-                            folders.Add(folderId.Value, folder);
-                        }
-                    }
+                    if (!userFolders.TryGetValue(folderId.Value, out var folder) && folders.TryGetValue(folderId.Value, out var model)) 
+                        userFolders.Add(folderId.Value, model);
 
                     folder.AddChild(node, _user);
                 }
@@ -65,14 +57,14 @@ public sealed class VisibleTreeViewModel
         }
 
         var isUserNoDataFilterEnabled = _user.TreeFilter.ByVisibility.Empty.Value;
-        foreach (var folder in folders.Values)
+        foreach (var folder in userFolders.Values)
             if (folder.IsEmpty || (_user.IsFolderAvailable(folder.Data.Id) && isUserNoDataFilterEnabled))
                 tree.Add(folder);
 
         return tree;
     }
 
-    public BaseShallowModel GetUserNode(ProductNodeViewModel node)
+    public NodeShallowModel GetUserNode(ProductNodeViewModel node)
     {
         var currentNode = FilterNodes(node);
 
@@ -104,6 +96,17 @@ public sealed class VisibleTreeViewModel
         }
 
         return node;
+    }
+
+    private Dictionary<Guid, FolderShallowModel> GetUserFolders(Dictionary<Guid, FolderShallowModel> folders)
+    {
+        if (_user == null || _user.IsAdmin)
+            return folders;
+
+        if (_user.FoldersRoles.Count == 0)
+            return new();
+
+        return folders.Where(f => _user.IsFolderAvailable(f.Key)).ToDictionary(k => k.Key, v => v.Value);;
     }
 
     private bool IsVisibleNode(NodeShallowModel node, ProductNodeViewModel product) => node.VisibleSensorsCount > 0 || _user.IsEmptyProductVisible(product);

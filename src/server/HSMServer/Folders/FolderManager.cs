@@ -114,8 +114,7 @@ namespace HSMServer.Folders
 
             foreach (var user in _userManager.GetUsers())
             {
-                user.Tree.GetUserFolders += GetUserFolders;
-                user.Tree.GetFolder += TryGetValue;
+                user.Tree.GetFolders += GetFolders;
                 
                 foreach (var (folderId, role) in user.FoldersRoles)
                     if (TryGetValue(folderId, out var folder))
@@ -221,14 +220,12 @@ namespace HSMServer.Folders
                 if (TryGetValue(folderId, out var folder))
                     folder.UserRoles.Remove(user);
 
-            user.Tree.GetUserFolders -= GetUserFolders;
-            user.Tree.GetFolder -= TryGetValue;
+            user.Tree.GetFolders -= GetFolders;
         }
 
         private void AddUserHandler(User user)
         {
-            user.Tree.GetUserFolders += GetUserFolders;
-            user.Tree.GetFolder += TryGetValue;
+            user.Tree.GetFolders += GetFolders;
         }
 
         private static TimeIntervalModel GetCorePolicy(TimeIntervalModel coreInterval, TimeIntervalViewModel folderInterval)
@@ -266,5 +263,7 @@ namespace HSMServer.Folders
                     _cache.UpdateProduct(update);
             }
         }
+
+        private List<FolderModel> GetFolders() => Values.Select(x => x.RecalculateState()).ToList();
     }
 }
