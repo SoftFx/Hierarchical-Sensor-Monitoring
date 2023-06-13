@@ -11,7 +11,8 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
 {
     internal sealed class SensorValuesDatabaseWorker : ISensorValuesDatabase
     {
-        private readonly JsonSerializerOptions _options = new() { IgnoreReadOnlyProperties = true };
+        private static readonly JsonSerializerOptions _options = new() { IgnoreReadOnlyProperties = true };
+
         private readonly Logger _logger = LogManager.GetCurrentClassLogger();
         private readonly LevelDBDatabaseAdapter _openedDb;
 
