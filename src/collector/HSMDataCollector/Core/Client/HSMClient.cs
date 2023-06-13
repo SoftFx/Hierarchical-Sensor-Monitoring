@@ -91,7 +91,7 @@ namespace HSMDataCollector.Core
             {
                 var connect = await _client.GetAsync(_endpoints.Test, _tokenSource.Token);
 
-                return connect.IsSuccessStatusCode ? null : connect.ReasonPhrase;
+                return connect.IsSuccessStatusCode ? null : $"{connect.ReasonPhrase} ({await connect.Content.ReadAsStringAsync()})";
             }
             catch (Exception ex)
             {

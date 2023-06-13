@@ -65,6 +65,9 @@ namespace HSMDataCollector.Core
         [Obsolete]
         public event EventHandler ValuesQueueOverflow;
 
+
+        public DataCollector() { }
+
         /// <summary>
         /// Creates new instance of <see cref="DataCollector"/> class, initializing main parameters
         /// </summary>

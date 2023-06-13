@@ -48,6 +48,11 @@ namespace HSMServer.Controllers
             _cache = cache;
         }
 
+
+        [HttpGet("test")]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        public ActionResult<bool> TestConnection() => TryCheckKey(out var message) ? true : BadRequest(message);
+
         /// <summary>
         /// Receives value of bool sensor
         /// </summary>
@@ -486,6 +491,17 @@ namespace HSMServer.Controllers
                 key = valueBase.Key;
 
             return new(key, valueBase.Path) { BaseValue = baseValue };
+        }
+
+        private bool TryCheckKey(out string message)
+        {
+            message = Request.Headers.TryGetValue(nameof(BaseRequest.Key), out var keyStr)
+                   && Guid.TryParse(keyStr, out var keyId)
+                   && _cache.GetAccessKey(keyId) != null
+                ? null
+                : "Ivalid key";
+
+            return message == null;
         }
     }
 }
