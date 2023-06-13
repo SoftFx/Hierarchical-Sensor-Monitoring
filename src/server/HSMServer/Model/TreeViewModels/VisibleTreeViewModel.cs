@@ -18,7 +18,6 @@ public sealed class VisibleTreeViewModel
 
 
     public event Func<List<FolderModel>> GetFolders;
-
     public event Func<User, List<ProductNodeViewModel>> GetUserProducts;
 
 

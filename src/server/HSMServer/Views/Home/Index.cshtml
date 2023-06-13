@@ -1,6 +1,5 @@
 ﻿@using HSMServer.Constants
 @using HSMServer.Controllers
-@using HSMServer.Folders
 @using HSMServer.Model.Authentication
 @using HSMServer.Model
 @using HSMServer.Model.ViewModel
@@ -24,6 +23,7 @@
 
     var selectNode = "@Url.Action(nameof(HomeController.SelectNode), ViewConstants.HomeController)";
     var refreshTree = "@Url.Action(nameof(HomeController.RefreshTree), ViewConstants.HomeController)";
+    var getNode = "@Url.Action(nameof(HomeController.GetNode), ViewConstants.HomeController)";
     var closeNode = "@Url.Action(nameof(HomeController.RemoveRenderingNode), ViewConstants.HomeController)";
 
     var historyLatestAction = "@Url.Action(nameof(SensorHistoryController.TabelHistoryLatest), ViewConstants.HistoryController)";

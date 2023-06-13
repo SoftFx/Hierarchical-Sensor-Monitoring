@@ -20,7 +20,7 @@ window.initializeTree = function () {
                         return refreshTree;
                     }
 
-                    return '/Home/GetNode';
+                    return getNode;
                 },
                 data: function (node) {
                     return { 'id' : node.id };
