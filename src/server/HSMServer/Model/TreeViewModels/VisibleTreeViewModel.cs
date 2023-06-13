@@ -30,10 +30,9 @@ public sealed class VisibleTreeViewModel
     
     public List<BaseShallowModel> GetUserTree()
     {
-        var folders = GetFolders?.Invoke().ToDictionary(k => k.Id, v => new FolderShallowModel(v, _user));
-        
-        var userFolders = GetUserFolders(folders);
-        
+        var folders = GetFolders?.Invoke().Where(f => _user.IsFolderAvailable(f.Id) || f.Products.Any(x => _user.IsProductAvailable(x.Key)))
+                                                                       .ToDictionary(k => k.Id, v => new FolderShallowModel(v, _user));
+
         var tree = new List<BaseShallowModel>(1 << 4);
 
         foreach (var product in GetUserProducts?.Invoke(_user))
@@ -44,20 +43,15 @@ public sealed class VisibleTreeViewModel
             {
                 var folderId = node.Data.FolderId;
 
-                if (folderId.HasValue)
-                {
-                    if (!userFolders.TryGetValue(folderId.Value, out var folder) && folders.TryGetValue(folderId.Value, out var model)) 
-                        userFolders.Add(folderId.Value, model);
-
+                if (folderId.HasValue && folders.TryGetValue(folderId.Value, out var folder))
                     folder.AddChild(node, _user);
-                }
                 else
                     tree.Add(node);
             }
         }
 
         var isUserNoDataFilterEnabled = _user.TreeFilter.ByVisibility.Empty.Value;
-        foreach (var folder in userFolders.Values)
+        foreach (var folder in folders.Values)
             if (folder.IsEmpty || (_user.IsFolderAvailable(folder.Data.Id) && isUserNoDataFilterEnabled))
                 tree.Add(folder);
 
@@ -96,17 +90,6 @@ public sealed class VisibleTreeViewModel
         }
 
         return node;
-    }
-
-    private Dictionary<Guid, FolderShallowModel> GetUserFolders(Dictionary<Guid, FolderShallowModel> folders)
-    {
-        if (_user == null || _user.IsAdmin)
-            return folders;
-
-        if (_user.FoldersRoles.Count == 0)
-            return new();
-
-        return folders.Where(f => _user.IsFolderAvailable(f.Key)).ToDictionary(k => k.Key, v => v.Value);;
     }
 
     private bool IsVisibleNode(NodeShallowModel node, ProductNodeViewModel product) => node.VisibleSensorsCount > 0 || _user.IsEmptyProductVisible(product);

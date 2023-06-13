@@ -93,7 +93,7 @@ namespace HSMServer.Controllers
 
             return NotFound();
         }
-       
+
         [HttpPut]
         public void RemoveRenderingNode(Guid nodeId) => CurrentUser.Tree.OpenedNodes.Remove(nodeId);
 
