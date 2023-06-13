@@ -11,6 +11,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
 {
     internal sealed class SensorValuesDatabaseWorker : ISensorValuesDatabase
     {
+        private readonly JsonSerializerOptions _options = new() { IgnoreReadOnlyProperties = true };
         private readonly Logger _logger = LogManager.GetCurrentClassLogger();
         private readonly LevelDBDatabaseAdapter _openedDb;
 
@@ -56,7 +57,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
         {
             try
             {
-                var valueBytes = JsonSerializer.SerializeToUtf8Bytes(value);
+                var valueBytes = JsonSerializer.SerializeToUtf8Bytes(value, _options);
                 _openedDb.Put(key, valueBytes);
             }
             catch (Exception e)
