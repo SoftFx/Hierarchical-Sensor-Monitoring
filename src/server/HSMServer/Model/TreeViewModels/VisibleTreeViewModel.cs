@@ -53,7 +53,7 @@ public sealed class VisibleTreeViewModel
 
         foreach (var product in GetUserProducts?.Invoke(_user))
         {
-            var node = FilterNodes(product, RenderWidth);
+            var node = FilterNodes(product);
 
             if (IsVisibleNode(node, product))
             {
@@ -79,12 +79,12 @@ public sealed class VisibleTreeViewModel
 
     public NodeShallowModel GetUserNode(ProductNodeViewModel node)
     {
-        var currentNode = FilterNodes(node, RenderWidth);
+        var currentNode = FilterNodes(node);
 
         return IsVisibleNode(currentNode, node) ? currentNode : default;
     }
 
-    private NodeShallowModel FilterNodes(ProductNodeViewModel product, int width, int depth = 1)
+    private NodeShallowModel FilterNodes(ProductNodeViewModel product, int depth = 1)
     {
         var node = new NodeShallowModel(product, _user);
         var currentWidth = 0;
@@ -92,7 +92,7 @@ public sealed class VisibleTreeViewModel
         var toRender = OpenedNodes.Contains(product.Id) || depth > 0;
         foreach (var (_, childNode) in product.Nodes)
         {
-            var filterNodes = FilterNodes(childNode, RenderWidth, --depth);
+            var filterNodes = FilterNodes(childNode, --depth);
             node.AddChildState(filterNodes, _user);
 
             if (toRender && IsVisibleNode(filterNodes, filterNodes.Data) && currentWidth <= RenderWidth)
