@@ -47,8 +47,8 @@
                     </li>
                 </ul>
                 <div class="d-flex align-self-baseline gap-1">
-                    <input class="form-control" type="number" value="@Model.PageSize" style="width: 5rem"/>
-                    <button class="btn btn-secondary">Apply</button>
+                    <input class="form-control" id="pageSize" type="number" value="@Model.PageSize" style="width: 5rem"/>
+                    <button class="btn btn-secondary" onclick="getGridPage(@(Model.PageNumber), $('#pageSize')[0].value, '@accordionId')">Apply</button>
                 </div>
             </div>
         }
