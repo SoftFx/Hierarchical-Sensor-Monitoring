@@ -37,6 +37,13 @@ window.initializeTree = function () {
             let nodeA = this.get_node(a).data.jstree;
             let nodeB = this.get_node(b).data.jstree;
 
+            let aIsDisabled = typeof nodeA.disabled === 'undefined';
+            let bIsDisabled = typeof nodeB.disabled === 'undefined';
+
+            if (aIsDisabled ^ bIsDisabled) {
+                return aIsDisabled ? -1 : 1;
+            }
+            
             let aIsFolder = isFolder(nodeA);
             let bIsFolder = isFolder(nodeB);
 

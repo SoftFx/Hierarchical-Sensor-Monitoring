@@ -11,7 +11,7 @@ namespace HSMServer.Model.TreeViewModels;
 
 public sealed class VisibleTreeViewModel
 {
-    private const int RenderWidth = 100;
+    public const int RenderWidth = 100;
     
     
     private readonly User _user;

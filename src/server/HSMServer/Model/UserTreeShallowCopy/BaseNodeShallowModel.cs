@@ -35,5 +35,20 @@ namespace HSMServer.Model.UserTreeShallowCopy
             "isMutedState": "{{_mutedValue}}"
         }
         """;
+
+        public string ToDisabledJSTree() => 
+        $$"""
+        {
+            "title": "{{Data.Title}}",
+            "icon": "disabled",
+            "time": "disabled",
+            "isManager": "disabled",
+            "isGrafanaEnabled": "disabled",
+            "isAccountsEnable": "disabled",
+            "groups": "disabled",
+            "isMutedState": "disabled",
+            "disabled": {{true.ToString().ToLower()}}
+        }
+        """;
     }
 }
