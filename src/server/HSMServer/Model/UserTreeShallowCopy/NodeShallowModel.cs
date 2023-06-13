@@ -3,6 +3,7 @@ using HSMServer.Extensions;
 using HSMServer.Model.Authentication;
 using HSMServer.Model.TreeViewModel;
 using System.Collections.Generic;
+using HSMServer.Model.TreeViewModels;
 
 namespace HSMServer.Model.UserTreeShallowCopy
 {
@@ -25,6 +26,11 @@ namespace HSMServer.Model.UserTreeShallowCopy
         public override bool IsAccountsIgnore => AccountState.IsAllIgnored;
 
 
+        public int WidthDifference => Data.Sensors.Count + Data.Nodes.Count - VisibleTreeViewModel.RenderWidth;
+        
+        public bool IsDisabledNodeShown => WidthDifference > 0 && (Sensors.Count > 0 || Nodes.Count > 0);
+        
+        
         public int VisibleSensorsCount { get; private set; }
 
         public string SensorsCountString

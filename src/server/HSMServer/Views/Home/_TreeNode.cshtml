@@ -1,6 +1,5 @@
 ﻿@using HSMServer.Extensions
 @using HSMServer.Model.Authentication
-@using HSMServer.Model.TreeViewModels
 @using HSMServer.Model.UserTreeShallowCopy
 
 @model NodeShallowModel
@@ -9,11 +8,6 @@
     var data = Model.Data;
 
     var showIcons = (User as User).TreeFilter.ByVisibility.Icons.Value;
-
-    var sum = Model.Data.Sensors.Count + Model.Data.Nodes.Count;
-    var diff = sum - VisibleTreeViewModel.RenderWidth;
-    
-    var showLimitLeaf = diff > 0 && (Model.Sensors.Count > 0 || Model.Nodes.Count > 0);
 
     var arrowIcon = Model.VisibleSensorsCount > 0 ? "jstree-closed" : string.Empty;
 }
@@ -72,11 +66,11 @@
             }
         </ul>
     }
-    @if (showLimitLeaf)
+    @if (Model.IsDisabledNodeShown)
     {
         <ul>
-            <li class="jstree-last" id='disabled_@data.EncodedId' title='...and @diff more' data-jstree='@Model.ToDisabledJSTree()'>
-                <span>... and @diff more</span>
+            <li class="jstree-last" id='disabled_@data.EncodedId' title='...and @Model.WidthDifference more' data-jstree='@Model.ToDisabledJSTree()'>
+                <span>... and @Model.WidthDifference more</span>
             </li>
         </ul>
     }
