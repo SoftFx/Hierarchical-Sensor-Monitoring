@@ -222,7 +222,7 @@ namespace HSMServer.Folders
                 if (TryGetValue(folderId, out var folder))
                     folder.UserRoles.Remove(user);
 
-            RemoveUserHandler(user);
+            user.Tree.GetFolders -= GetFolders;
         }
 
 
