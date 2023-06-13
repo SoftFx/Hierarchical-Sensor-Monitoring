@@ -127,6 +127,7 @@ namespace HSMServer.Model.History
                 Time = value.Time,
                 Status = value.Status.ToClient(),
                 Comment = value.Comment,
+                ReceivingTime = value.ReceivingTime,
             };
 
         private static BarSensorValueViewModel Build<T>(BarBaseValue<T> value) where T : struct =>
@@ -140,6 +141,7 @@ namespace HSMServer.Model.History
                 Time = value.Time,
                 Status = value.Status.ToClient(),
                 Comment = value.Comment,
+                ReceivingTime = value.ReceivingTime,
             };
 
         private static string GetTableValue<T>(BaseValue<T> value) => value switch
