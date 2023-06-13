@@ -172,7 +172,7 @@ namespace HSMServer.Controllers.GrafanaDatasources.JsonSource
             if (Request.Headers.TryGetValue(nameof(HSMSensorDataObjects.BaseRequest.Key), out var keyStr) && Guid.TryParse(keyStr, out var keyId))
                 key = _cache.GetAccessKey(keyId);
             else
-                message = "Ivalid key";
+                message = "Invalid key";
 
             return key != null;
         }

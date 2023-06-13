@@ -49,7 +49,7 @@ namespace HSMServer.Controllers
         }
 
 
-        [HttpGet("test")]
+        [HttpGet("testConnection")]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         public ActionResult<bool> TestConnection() => TryCheckKey(out var message) ? true : BadRequest(message);
 
@@ -499,7 +499,7 @@ namespace HSMServer.Controllers
                    && Guid.TryParse(keyStr, out var keyId)
                    && _cache.GetAccessKey(keyId) != null
                 ? null
-                : "Ivalid key";
+                : "Invalid key";
 
             return message == null;
         }
