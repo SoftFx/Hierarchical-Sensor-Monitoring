@@ -52,7 +52,7 @@ public sealed class VisibleTreeViewModel
 
         var isUserNoDataFilterEnabled = _user.TreeFilter.ByVisibility.Empty.Value;
         foreach (var folder in folders.Values)
-            if (folder.IsEmpty || isUserNoDataFilterEnabled)
+            if (!folder.IsEmpty || isUserNoDataFilterEnabled)
                 tree.Add(folder);
 
         return tree;
