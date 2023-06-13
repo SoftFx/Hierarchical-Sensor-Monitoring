@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc.Rendering;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using HSMServer.Extensions;
 
 namespace HSMServer.Model.Folders.ViewModels
 {
@@ -36,7 +37,7 @@ namespace HSMServer.Model.Folders.ViewModels
         {
             var folderProducts = new List<ProductNodeViewModel>(1 << 3);
 
-            foreach (var productId in Products.Union(SelectedProducts.Select(Guid.Parse)))
+            foreach (var productId in Products.Union(SelectedProducts.Select(x => x.ToGuid())))
                 if (treeViewModel.Nodes.TryGetValue(productId, out var product))
                     folderProducts.Add(product);
 
