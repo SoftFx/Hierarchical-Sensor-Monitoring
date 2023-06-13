@@ -89,11 +89,8 @@ namespace HSMServer.Controllers
             CurrentUser.Tree.OpenedNodes.Add(guid);
             
             if (_treeViewModel.Nodes.TryGetValue(guid, out var node))
-            {
-                if (CurrentUser.Tree.GetUserNode(node) is NodeShallowModel nodeShallowModel)
-                    return PartialView("_TreeNode", nodeShallowModel);
-            }
-            
+                return PartialView("_TreeNode", (NodeShallowModel)CurrentUser.Tree.GetUserNode(node));
+
             return PartialView("_TreeNode", new NodeShallowModel(node, CurrentUser));
         }
        
