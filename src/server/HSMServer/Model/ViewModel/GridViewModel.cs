@@ -12,26 +12,31 @@ public sealed class GridViewModel
     
     public int PageNumber { get; init; } = 0;
 
-    public bool IsSensorGrid { get; set; }
-    
-    
-    public GridViewModel(ProductNodeViewModel productNodeViewModel, int pageNumber, int pageSize)
+    public bool IsPaginated { get; set; } = false;
+
+
+    public GridViewModel() { }
+
+    public GridViewModel(int pageNumber, int pageSize)
     {
         PageNumber = pageNumber;
         PageSize = pageSize;
-        IsSensorGrid = true;
-        
-        VisibleItems = new List<NodeViewModel>(productNodeViewModel.Sensors.Values.Where(n => n.HasData)
-            .OrderByDescending(n => n.Status)
-            .ThenBy(n => n.Name)
-            .Skip(PageNumber * PageSize)
-            .Take(PageSize));
+        IsPaginated = true;
     }
 
-    public GridViewModel(bool isSensorGrid)
+    public GridViewModel InitializeItems<T>(ICollection<T> collection) where T : NodeViewModel
     {
-        IsSensorGrid = isSensorGrid;
+        VisibleItems = new List<NodeViewModel>(collection.Where(n => n.HasData).OrderByDescending(n => n.Status).ThenBy(n => n.Name)
+            .Skip(PageNumber * PageSize).Take(PageSize));
+
+        return this;
     }
+
     
-    public GridViewModel() { }
+    public GridViewModel TurnOnPagination()
+    {
+        IsPaginated = true;
+
+        return this;
+    }
 }

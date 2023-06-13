@@ -334,7 +334,7 @@
         container: document.getElementById('accessKeys_modal')
     });
     
-    function getGridPage(pageNumber, pageSize){
+    function getGridPage(pageNumber, pageSize, accordionId){
             $.ajax({
                 type: 'get',
                 url: `${getGrid}?selectedId=${$('#jstree').jstree('get_selected')[0]}&pageNumber=${pageNumber}&pageSize=${pageSize}`,
@@ -342,7 +342,7 @@
                 contenttype: 'application/json',
                 cache: false,
                 success: function (viewData) {
-                    $('#grid_sensors').empty().replaceWith(viewData);
+                    $(`#grid-accordion_${accordionId}`).parents('div.accordion').empty().replaceWith(viewData);
                     $('#grid-accordion_gridSensors').click();
                 }
             });

@@ -20,7 +20,7 @@ namespace HSMServer.Model.TreeViewModel
         public TimeIntervalViewModel SelfDestroyPeriod { get; protected set; }
 
 
-        public GridViewModel GridSensors { get; } = new(true);
+        public GridViewModel GridSensors { get; } = new();
         
         public GridViewModel GridNodes { get; } = new();
         

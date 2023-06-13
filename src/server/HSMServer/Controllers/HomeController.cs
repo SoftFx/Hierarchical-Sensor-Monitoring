@@ -57,7 +57,7 @@ namespace HSMServer.Controllers
         }
 
         [HttpPost]
-        public IActionResult SelectNode(string selectedId, int pageNumber = 0, int pageSize = 10)
+        public IActionResult SelectNode(string selectedId, int pageNumber = 0, int pageSize = 1000)
         {
             BaseNodeViewModel viewModel = null;
 
@@ -90,7 +90,7 @@ namespace HSMServer.Controllers
             if (node?.Sensors.Count <= pageNumber * pageSize || pageNumber < 0)
                 return NotFound(); 
             
-            return PartialView("_GridAccordion", new GridViewModel(node, pageNumber, pageSize));
+            return PartialView("_GridAccordion", new GridViewModel(pageNumber, pageSize).InitializeItems(node.Sensors.Values));
         }
 
         [HttpPost]

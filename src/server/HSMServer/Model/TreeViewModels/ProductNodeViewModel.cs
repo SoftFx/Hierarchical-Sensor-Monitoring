@@ -47,11 +47,9 @@ namespace HSMServer.Model.TreeViewModel
 
         public ProductNodeViewModel GetPaginated(int pageNumber, int pageSize)
         {
-            GridSensors.VisibleItems = new (Sensors.Values.Where(n => n.HasData).OrderByDescending(n => n.Status).ThenBy(n => n.Name).Skip(pageNumber * pageSize).Take(pageSize));
-            GridSensors.IsSensorGrid = true;
-            
-            GridNodes.VisibleItems = new (Nodes.Values.Where(n => n.HasData).OrderByDescending(n => n.Status).ThenBy(n => n.Name));
-            
+            GridSensors.InitializeItems(Sensors.Values).TurnOnPagination();
+            GridNodes.InitializeItems(Nodes.Values);
+          
             return this;
         }
 
