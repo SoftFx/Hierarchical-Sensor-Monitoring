@@ -14,9 +14,9 @@ namespace HSMServer.Model.TreeViewModel
 {
     public class ProductNodeViewModel : NodeViewModel, INotificatable
     {
-        public ConcurrentDictionary<Guid, ProductNodeViewModel> Nodes { get; set; } = new();
+        public ConcurrentDictionary<Guid, ProductNodeViewModel> Nodes { get; } = new();
 
-        public ConcurrentDictionary<Guid, SensorNodeViewModel> Sensors { get; set; } = new();
+        public ConcurrentDictionary<Guid, SensorNodeViewModel> Sensors { get; } = new();
 
         public ConcurrentDictionary<Guid, AccessKeyViewModel> AccessKeys { get; } = new();
 
