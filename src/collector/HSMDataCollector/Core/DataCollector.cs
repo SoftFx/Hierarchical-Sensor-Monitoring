@@ -95,6 +95,17 @@ namespace HSMDataCollector.Core
         { }
 
 
+        public async Task<string> TestConnection(CollectorOptions options)
+        {
+            var client = new HSMClient(options);
+
+            var hasConnection = await client.TestConnection();
+
+            client.Dispose();
+
+            return hasConnection;
+        }
+
         public IDataCollector AddNLog(LoggerOptions options = null)
         {
             _logManager.InitializeLogger(options);

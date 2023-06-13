@@ -23,6 +23,8 @@ namespace HSMDataCollector.Core
         event Action ToStopped;
 
 
+        Task<string> TestConnection(CollectorOptions options);
+
         Task Start();
 
         Task Start(Task customStartingTask);

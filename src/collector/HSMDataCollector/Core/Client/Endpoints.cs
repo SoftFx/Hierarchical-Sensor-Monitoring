@@ -28,6 +28,9 @@
         internal string File => $"{ConnectionAddress}/file";
 
 
+        internal string Test => $"{ConnectionAddress}/test";
+
+
         internal Endpoints(CollectorOptions options)
         {
             ConnectionAddress = $"{options.ServerAddress}:{options.Port}/api/sensors";

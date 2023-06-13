@@ -23,11 +23,8 @@ namespace HSMDataCollector.Core
         private readonly HttpClient _client;
 
 
-        internal HSMClient(CollectorOptions options, IDataQueue dataQueue, LoggerManager logger)
+        internal HSMClient(CollectorOptions options)
         {
-            _dataQueue = dataQueue;
-            _logManager = logger;
-
             _endpoints = new Endpoints(options);
 
             ServicePointManager.ServerCertificateValidationCallback += (sender, cert, chain, error) => true;
@@ -39,10 +36,17 @@ namespace HSMDataCollector.Core
             });
 
             _client.DefaultRequestHeaders.Add(nameof(BaseRequest.Key), options.AccessKey);
+        }
+
+        internal HSMClient(CollectorOptions options, IDataQueue dataQueue, LoggerManager logger) : this(options)
+        {
+            _dataQueue = dataQueue;
+            _logManager = logger;
 
             _dataQueue.NewValueEvent += RecieveQueueData;
             _dataQueue.NewValuesEvent += RecieveQueueData;
         }
+
 
         internal async Task SendFileAsync(FileInfo fileInfo, string sensorPath, SensorStatus sensorStatus = SensorStatus.Ok, string comment = "")
         {
@@ -71,12 +75,29 @@ namespace HSMDataCollector.Core
         {
             _tokenSource.Cancel();
 
-            _dataQueue.NewValueEvent -= RecieveQueueData;
-            _dataQueue.NewValuesEvent -= RecieveQueueData;
+            if (_dataQueue != null)
+            {
+                _dataQueue.NewValueEvent -= RecieveQueueData;
+                _dataQueue.NewValuesEvent -= RecieveQueueData;
+            }
 
             _client.Dispose();
         }
 
+
+        internal async Task<string> TestConnection()
+        {
+            try
+            {
+                var connect = await _client.GetAsync(_endpoints.Test, _tokenSource.Token);
+
+                return connect.IsSuccessStatusCode ? null : connect.ReasonPhrase;
+            }
+            catch (Exception ex)
+            {
+                return ex.Message;
+            }
+        }
 
         internal Task SendData(List<SensorValueBase> values) => RequestToServer(values.Cast<object>().ToList(), _endpoints.List);
 
