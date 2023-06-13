@@ -27,6 +27,22 @@ public sealed class VisibleTreeViewModel
     }
 
 
+    public void AddRenderingNode(Guid id)
+    {
+        lock (_user)
+        {
+            OpenedNodes.Add(id);
+        }
+    }
+
+    public void RemoveRenderingNode(Guid id)
+    {
+        lock (_user)
+        {
+            OpenedNodes.Remove(id);
+        }
+    }
+    
     public List<BaseShallowModel> GetUserTree()
     {
         var folders = GetFolders?.Invoke().ToDictionary(k => k.Id, v => new FolderShallowModel(v, _user));

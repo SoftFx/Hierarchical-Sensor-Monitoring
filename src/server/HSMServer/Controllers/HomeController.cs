@@ -85,7 +85,7 @@ namespace HSMServer.Controllers
         {
             var guid = id.ToGuid();
 
-            CurrentUser.Tree.OpenedNodes.Add(guid);
+            CurrentUser.Tree.AddRenderingNode(guid);
 
             if (_treeViewModel.Nodes.TryGetValue(guid, out var node))
                 return PartialView("_TreeNode", CurrentUser.Tree.GetUserNode(node));
@@ -94,7 +94,7 @@ namespace HSMServer.Controllers
         }
 
         [HttpPut]
-        public void RemoveRenderingNode(Guid nodeId) => CurrentUser.Tree.OpenedNodes.Remove(nodeId);
+        public void RemoveRenderingNode(Guid nodeId) => CurrentUser.Tree.RemoveRenderingNode(nodeId);
 
         [HttpGet]
         public IActionResult RefreshTree()
