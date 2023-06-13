@@ -18,10 +18,14 @@
 
     $('#partialIntervalSelect').removeClass('d-none');
     $('#partialRestoreSelect').removeClass('d-none');
+    $('#partialSavedHistorySelect').removeClass('d-none');
+    $('#partialSelfDestroySelect').removeClass('d-none');
     $('[id^="dataAlertInputGroupd_"]').removeClass('d-none');
 
     $('#labelInterval').addClass('d-none');
     $('#labelRestoreInterval').addClass('d-none');
+    $('#labelSavedHistory').addClass('d-none');
+    $('#labelSelfDestroy').addClass('d-none');
     $('[id^="dataAlertLabel_"]').addClass('d-none');
 }
 

@@ -81,6 +81,12 @@ namespace HSMServer.Core.Model
                 ServerPolicy.RestoreWarning.SetPolicy(restoreInterval);
                 ServerPolicy.RestoreOffTime.SetPolicy(restoreInterval);
             }
+
+            if (update.SavedHistoryPeriod != null)
+                ServerPolicy.SavedHistoryPeriod.SetPolicy(update.SavedHistoryPeriod);
+
+            if (update.SelfDestroy != null)
+                ServerPolicy.SelfDestroy.SetPolicy(update.SelfDestroy);
         }
 
 

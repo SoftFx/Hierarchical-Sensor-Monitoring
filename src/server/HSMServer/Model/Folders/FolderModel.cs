@@ -40,8 +40,10 @@ namespace HSMServer.Model.Folders
 
             var policies = entity.ServerPolicies;
 
-            ExpectedUpdateInterval = GetPolicy(policies, 0, PredefinedIntervals.ForTimeout);
-            SensorRestorePolicy = GetPolicy(policies, 1, PredefinedIntervals.ForRestore);
+            ExpectedUpdateInterval = GetPolicy(policies, 0, PredefinedIntervals.ForTimeout, GetDefaultPolicy);
+            SensorRestorePolicy = GetPolicy(policies, 1, PredefinedIntervals.ForRestore, GetDefaultPolicy);
+            SavedHistoryPeriod = GetPolicy(policies, 2, PredefinedIntervals.ForKeepHistory, GetDefaultCleanup);
+            SelfDestroyPeriod = GetPolicy(policies, 3, PredefinedIntervals.ForSelfDestory, GetDefaultCleanup);
         }
 
         internal FolderModel(FolderAdd addModel)
@@ -58,6 +60,8 @@ namespace HSMServer.Model.Folders
 
             ExpectedUpdateInterval = GetDefaultPolicy(PredefinedIntervals.ForTimeout);
             SensorRestorePolicy = GetDefaultPolicy(PredefinedIntervals.ForRestore);
+            SavedHistoryPeriod = GetDefaultCleanup(PredefinedIntervals.ForKeepHistory);
+            SelfDestroyPeriod = GetDefaultCleanup(PredefinedIntervals.ForSelfDestory);
         }
 
 
@@ -72,6 +76,10 @@ namespace HSMServer.Model.Folders
                 ExpectedUpdateInterval = new TimeIntervalViewModel(update.ExpectedUpdateInterval, PredefinedIntervals.ForTimeout);
             if (update.RestoreInterval != null)
                 SensorRestorePolicy = new TimeIntervalViewModel(update.RestoreInterval, PredefinedIntervals.ForRestore);
+            if (update.SavedHistoryPeriod != null)
+                SavedHistoryPeriod = new TimeIntervalViewModel(update.SavedHistoryPeriod, PredefinedIntervals.ForKeepHistory);
+            if (update.SelfDestroy != null)
+                SelfDestroyPeriod = new TimeIntervalViewModel(update.SelfDestroy, PredefinedIntervals.ForSelfDestory);
         }
 
         public FolderEntity ToEntity() =>
@@ -103,18 +111,28 @@ namespace HSMServer.Model.Folders
                 policies.Add(ExpectedUpdateInterval.ToEntity());
             if (SensorRestorePolicy != null)
                 policies.Add(SensorRestorePolicy.ToEntity());
+            if (SavedHistoryPeriod != null)
+                policies.Add(SavedHistoryPeriod.ToEntity());
+            if (SelfDestroyPeriod != null)
+                policies.Add(SelfDestroyPeriod.ToEntity());
 
             return policies;
         }
 
-        private static TimeIntervalViewModel GetPolicy(List<TimeIntervalEntity> entities, int index, List<TimeInterval> predefinedIntervals) =>
+        private static TimeIntervalViewModel GetPolicy(List<TimeIntervalEntity> entities, int index,
+            List<TimeInterval> predefinedIntervals, Func<List<TimeInterval>, TimeIntervalViewModel> getDefault) =>
             entities.Count > index
                 ? new TimeIntervalViewModel(entities[index], predefinedIntervals)
-                : GetDefaultPolicy(predefinedIntervals);
+                : getDefault(predefinedIntervals);
 
-        private static TimeIntervalViewModel GetDefaultPolicy(List<TimeInterval> predefinedIntervals) =>
+        private TimeIntervalViewModel GetDefaultPolicy(List<TimeInterval> predefinedIntervals) =>
             new(GetDefaultPolicyEntity(), predefinedIntervals);
 
+        private TimeIntervalViewModel GetDefaultCleanup(List<TimeInterval> predefinedIntervals) =>
+            new(GetDefaultCleanupEntity(), predefinedIntervals);
+
         private static TimeIntervalEntity GetDefaultPolicyEntity() => new((byte)Core.Model.TimeInterval.Custom, 0L);
+
+        private static TimeIntervalEntity GetDefaultCleanupEntity() => new((byte)Core.Model.TimeInterval.Month, 0L);
     }
 }

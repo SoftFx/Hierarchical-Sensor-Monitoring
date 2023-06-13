@@ -73,15 +73,15 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             }
             catch (Exception e)
             {
-                _logger.Error($"Failed remove values [{from.GetString()}, {to.GetString()}] - {e.Message}");
+                _logger.Error($"Failed removing values [{from.GetString()}, {to.GetString()}] - {e.Message}");
             }
         }
 
-        public byte[] Get(byte[] key)
+        public byte[] Get(byte[] key, byte[] sensorId)
         {
             try
             {
-                return _openedDb.Get(key);
+                return _openedDb.Get(key, sensorId);
             }
             catch (Exception e)
             {

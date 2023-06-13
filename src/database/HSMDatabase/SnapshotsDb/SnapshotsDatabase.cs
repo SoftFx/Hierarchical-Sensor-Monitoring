@@ -25,7 +25,7 @@ namespace HSMDatabase.SnapshotsDb
             _mainDirectory.Create();
 
             var folders = _mainDirectory.GetDirectories();
-            
+
             foreach (var folder in folders.OrderByDescending(u => u.Name))
             {
                 _nodes.AddLast(new SnapshotNode(folder.FullName));

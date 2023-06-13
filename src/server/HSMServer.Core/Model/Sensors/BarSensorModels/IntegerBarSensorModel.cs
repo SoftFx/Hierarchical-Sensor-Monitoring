@@ -5,7 +5,7 @@ namespace HSMServer.Core.Model
 {
     public sealed class IntegerBarSensorModel : BaseSensorModel<IntegerBarValue>, IBarSensor
     {
-        protected override IntegerBarValuesStorage Storage { get; } = new IntegerBarValuesStorage();
+        internal override IntegerBarValuesStorage Storage { get; } = new IntegerBarValuesStorage();
 
 
         public override DataPolicyCollection<IntegerBarValue, IntegerBarDataPolicy> DataPolicies { get; } = new();

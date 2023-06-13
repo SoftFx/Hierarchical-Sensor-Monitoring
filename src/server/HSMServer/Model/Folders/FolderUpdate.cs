@@ -12,7 +12,12 @@ namespace HSMServer.Model.Folders
 
         public TimeIntervalViewModel ExpectedUpdateInterval { get; init; }
 
+        public TimeIntervalViewModel SavedHistoryPeriod { get; init; }
+
         public TimeIntervalViewModel RestoreInterval { get; init; }
+
+        public TimeIntervalViewModel SelfDestroy { get; init; }
+
 
         public NotificationSettings Notifications { get; init; }
 
