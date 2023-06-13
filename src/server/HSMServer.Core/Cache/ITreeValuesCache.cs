@@ -58,5 +58,7 @@ namespace HSMServer.Core.Cache
         IAsyncEnumerable<List<BaseValue>> GetSensorValuesPage(Guid sensorId, DateTime from, DateTime to, int count);
 
         void UpdateCacheState();
+
+        void SaveLastStateToDb();
     }
 }
