@@ -19,6 +19,7 @@ using System;
 const string NLogConfigFileName = "nlog.config";
 
 var builder = WebApplication.CreateBuilder(args);
+
 builder.Configuration.SetBasePath(ServerConfig.ConfigPath)
                      .AddJsonFile(ServerConfig.ConfigName, true);
 

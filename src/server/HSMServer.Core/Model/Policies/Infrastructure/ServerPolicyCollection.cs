@@ -1,4 +1,5 @@
-﻿using HSMServer.Core.Model.Policies.Infrastructure;
+using HSMServer.Core.Model.Policies.Infrastructure;
+using HSMServer.Core.Model.Policies.ServerPolicies;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -15,6 +16,10 @@ namespace HSMServer.Core.Model.Policies
 
         public CollectionProperty<ExpectedUpdateIntervalPolicy> ExpectedUpdate { get; }
 
+        public CollectionProperty<SavedIntervalPolicy> SavedHistoryPeriod { get; }
+
+        public CollectionProperty<SelfDestroyPolicy> SelfDestroy { get; }
+
 
         public CollectionProperty<RestoreOffTimePolicy> RestoreOffTime { get; }
 
@@ -26,6 +31,8 @@ namespace HSMServer.Core.Model.Policies
         internal ServerPolicyCollection()
         {
             ExpectedUpdate = Register<ExpectedUpdateIntervalPolicy>();
+            SavedHistoryPeriod = Register<SavedIntervalPolicy>();
+            SelfDestroy = Register<SelfDestroyPolicy>();
 
             RestoreOffTime = Register<RestoreOffTimePolicy>();
             RestoreWarning = Register<RestoreWarningPolicy>();

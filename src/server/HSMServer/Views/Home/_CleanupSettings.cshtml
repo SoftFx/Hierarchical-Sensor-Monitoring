@@ -1,0 +1,36 @@
+﻿@using HSMServer.Model.ViewModel
+
+@model NodeInfoBaseViewModel
+
+@addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
+
+@{
+    var entity = Model is SensorInfoViewModel ? "sensor" : "sensor(s)";
+}
+
+
+<label class="col-form-label fw-bold">Cleanup:</label>
+
+<div class="d-flex flex-row text-nowrap align-items-center ms-3">
+    <span class="meta-info-label">Keep @entity history</span>
+
+    <span id="labelSavedHistory" class="meta-info-value">@Model.SavedHistoryPeriod.DisplayInterval</span>
+    <div id="partialSavedHistorySelect" class="d-none meta-info-interval">
+        <partial name="_TimeIntervalSelect" for="SavedHistoryPeriod" />
+    </div>
+
+    <i class='fas fa-question-circle mx-2' title='Time format: dd.hh:mm:ss (min value 01:00:00). The history of sensor values ​​is stored only for the specified period'></i>
+    <span asp-validation-for="SavedHistoryPeriod"></span>
+</div>
+
+<div class="d-flex flex-row text-nowrap align-items-center ms-3 mt-1">
+    <span class="meta-info-label">Remove @entity after inactivity</span>
+
+    <span id="labelSelfDestroy" class="meta-info-value">@Model.SelfDestroyPeriod.DisplayInterval</span>
+    <div id="partialSelfDestroySelect" class="d-none meta-info-interval">
+        <partial name="_TimeIntervalSelect" for="SelfDestroyPeriod" />
+    </div>
+
+    <i class='fas fa-question-circle mx-2' title='Time format: dd.hh:mm:ss (min value 01:00:00). If the sensor does not receive values ​​within the specified period, the sensor is deleted'></i>
+    <span asp-validation-for="SelfDestroyPeriod"></span>
+</div>

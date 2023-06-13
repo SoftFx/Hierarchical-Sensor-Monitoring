@@ -42,5 +42,19 @@ namespace HSMServer.Extensions
         internal static DateTime RoundToMin(this DateTime time) => time.AddSeconds(-time.Second).AddMicroseconds(-time.Millisecond);
 
         internal static long ToUnixMilliseconds(this DateTime time) => new DateTimeOffset(time).ToUnixTimeMilliseconds();
+
+        internal static DateTime Ceil(this DateTime time, TimeSpan span)
+        {
+            var roundTicks = span.Ticks;
+
+            return new DateTime(time.Ticks / roundTicks * roundTicks + roundTicks);
+        }
+
+        internal static DateTime Floor(this DateTime time, TimeSpan span)
+        {
+            var roundTicks = span.Ticks;
+
+            return new DateTime(time.Ticks / roundTicks * roundTicks);
+        }
     }
 }

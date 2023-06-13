@@ -8,7 +8,7 @@ namespace HSMServer.Core.Model
 {
     public abstract class BaseSensorModel<T> : BaseSensorModel where T : BaseValue
     {
-        protected override ValuesStorage<T> Storage { get; }
+        internal override ValuesStorage<T> Storage { get; }
 
         public override DataPolicyCollection<T> DataPolicies { get; }
 

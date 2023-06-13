@@ -32,6 +32,9 @@
                 <button class="nav-link active" id="general-tab" data-bs-toggle="tab" data-bs-target="#general" type="button" role="tab" aria-controls="general" aria-selected="true">General</button>
             </li>
             <li class="nav-item" role="presentation">
+                <button class="nav-link @disabledTab" id="cleanup-tab" data-bs-toggle="tab" data-bs-target="#cleanup" type="button" role="tab" aria-controls="cleanup" aria-selected="false">Cleanup</button>
+            </li>
+            <li class="nav-item" role="presentation">
                 <button class="nav-link @disabledTab" id="alerts-tab" data-bs-toggle="tab" data-bs-target="#alerts" type="button" role="tab" aria-controls="alerts" aria-selected="false">Alerts</button>
             </li>
             <li class="nav-item" role="presentation">
@@ -45,6 +48,12 @@
             <div class="tab-pane fade show active" id="general" role="tabpanel" aria-labelledby="general-tab">
                 <form method="post" asp-action="@(isAdd ? nameof(FoldersController.AddFolder) : nameof(FoldersController.EditFolder))">
                     @await Html.PartialAsync("_General", Model)
+                </form>
+            </div>
+
+            <div class="tab-pane fade" id="cleanup" role="tabpanel" aria-labelledby="cleanup-tab">
+                <form id="folderCleanup_form" method="post" asp-action="@nameof(FoldersController.EditCleanup)">
+                    @await Html.PartialAsync("_Cleanup", Model.Cleanup)
                 </form>
             </div>
 

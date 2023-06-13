@@ -23,12 +23,6 @@
             </summary>
             <param name="userName">Name of the user to remove.</param>
         </member>
-        <member name="T:HSMServer.BackgroundTask.OutdatedSensorService">
-            <summary>
-            This class is derived from BackgroundService. Every day, all sensors are checked. Sensors with latest updated older
-            than a specified parameter value are deleted
-            </summary>
-        </member>
         <member name="M:HSMServer.Configuration.ConfigurationProvider.ReadOrDefault(System.String)">
             Use 'name' from ConfigurationConstants! 
         </member>

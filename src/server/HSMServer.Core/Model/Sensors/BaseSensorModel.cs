@@ -33,7 +33,7 @@ namespace HSMServer.Core.Model
         private static readonly PolicyResult _muteResult = new(SensorStatus.OffTime, "Muted");
 
 
-        protected abstract ValuesStorage Storage { get; }
+        internal abstract ValuesStorage Storage { get; }
 
         public abstract DataPolicyCollection DataPolicies { get; }
 
@@ -47,9 +47,11 @@ namespace HSMServer.Core.Model
         public SensorState State { get; private set; }
 
 
+        public PolicyResult Status => State == SensorState.Muted ? _muteResult : ServerPolicy.Result + DataPolicies.Result;
+
         public bool IsWaitRestore => !ServerPolicy.CheckRestorePolicies(Status.Status, LastUpdateTime).IsOk;
 
-        public PolicyResult Status => State == SensorState.Muted ? _muteResult : ServerPolicy.Result + DataPolicies.Result;
+        public bool ShouldDestroy => ServerPolicy.SelfDestroy.Policy?.Validate(LastUpdateTime).IsOk ?? false;
 
 
         public bool HasData => Storage.HasData;
