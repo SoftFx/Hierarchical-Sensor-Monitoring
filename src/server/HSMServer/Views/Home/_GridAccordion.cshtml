@@ -31,31 +31,26 @@
         @if (Model.IsPaginated)
         {
             <div class="container d-flex mt-2 justify-content-between">
-                <div class="position-relative" style="left: 50%; right: 50%">
-                    <ul class="pagination">
-                        <li id="prevPageButton" class="page-item button-link">
-                            <a class="page-link" aria-label="Previous" onclick="getGridPage(@(Model.PageNumber - 1), @Model.PageSize, '@accordionId')">
-                                <span aria-hidden="true">&laquo;</span>
-                            </a>
-                        </li>
-                        <li class="page-item">
-                            <a id="pageNumber" class="page-link">@(Model.PageNumber + 1)</a>
-                        </li>
-                        <li id="nextPageButton" class="page-item button-link">
-                            <a class="page-link" aria-label="Next" onclick="getGridPage(@(Model.PageNumber + 1), @Model.PageSize, '@accordionId')">
-                                <span aria-hidden="true">&raquo;</span>
-                            </a>
-                        </li>
-                    </ul>
+                <ul class="pagination position-relative" style="left: 45%;">
+                    <li id="prevPageButton" class="page-item button-link">
+                        <a class="page-link" aria-label="Previous" onclick="getGridPage(@(Model.PageNumber - 1), @Model.PageSize, '@accordionId')">
+                            <span aria-hidden="true">&laquo;</span>
+                        </a>
+                    </li>
+                    <li class="page-item">
+                        <a id="pageNumber" class="page-link">@(Model.PageNumber + 1)</a>
+                    </li>
+                    <li id="nextPageButton" class="page-item button-link">
+                        <a class="page-link" aria-label="Next" onclick="getGridPage(@(Model.PageNumber + 1), @Model.PageSize, '@accordionId')">
+                            <span aria-hidden="true">&raquo;</span>
+                        </a>
+                    </li>
+                </ul>
+                <div class="d-flex align-self-baseline gap-1">
+                    <input class="form-control" type="number" value="@Model.PageSize" style="width: 5rem"/>
+                    <button class="btn btn-secondary">Apply</button>
                 </div>
-                <div class="align-self-baseline gap-1">
-                                    <input class="form-control" type="number" value="@Model.PageSize" style="width: 5rem"/>
-                                    <button class="btn btn-secondary">Apply</button>
-                                </div>
-
             </div>
-           
-           
         }
     }
 </div>
