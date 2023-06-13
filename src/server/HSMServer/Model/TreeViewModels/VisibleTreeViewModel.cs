@@ -81,7 +81,7 @@ public sealed class VisibleTreeViewModel
             var filterNodes = FilterNodes(childNode, --depth);
             node.AddChildState(filterNodes, _user);
 
-            if (toRender && IsVisibleNode(node, node.Data))
+            if (toRender && IsVisibleNode(filterNodes, filterNodes.Data))
                 node.AddChild(filterNodes);
         }
 
