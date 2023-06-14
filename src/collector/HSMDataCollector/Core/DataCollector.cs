@@ -34,13 +34,13 @@ namespace HSMDataCollector.Core
     /// </summary>
     public sealed class DataCollector : IDataCollector
     {
-        private readonly LoggerManager _logManager = new LoggerManager();
-
         private readonly ConcurrentDictionary<string, ISensor> _nameToSensor = new ConcurrentDictionary<string, ISensor>();
         private readonly SensorsPrototype _sensorsPrototype = new SensorsPrototype();
         private readonly SensorsStorage _sensorsStorage;
         private readonly IDataQueue _dataQueue;
         private readonly HSMClient _hsmClient;
+
+        private ICollectorLogger _logger;
 
 
         internal static bool IsWindowsOS { get; } = RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
@@ -73,12 +73,12 @@ namespace HSMDataCollector.Core
         public DataCollector(CollectorOptions options)
         {
             _dataQueue = new DataQueue(options);
-            _sensorsStorage = new SensorsStorage(_dataQueue as IValuesQueue, _logManager);
+            _sensorsStorage = new SensorsStorage(_dataQueue as IValuesQueue, _logger);
 
             Windows = new WindowsSensorsCollection(_sensorsStorage, _sensorsPrototype);
             Unix = new UnixSensorsCollection(_sensorsStorage, _sensorsPrototype);
 
-            _hsmClient = new HSMClient(options, _dataQueue, _logManager);
+            _hsmClient = new HSMClient(options, _dataQueue, _logger);
 
             ToRunning += ToStartingCollector;
             ToStopped += ToStoppedCollector;
@@ -100,7 +100,14 @@ namespace HSMDataCollector.Core
 
         public IDataCollector AddNLog(LoggerOptions options = null)
         {
-            _logManager.InitializeLogger(options);
+            _logger = new LoggerManager().InitializeLogger(options);
+
+            return this;
+        }
+
+        public IDataCollector AddCustomLogger(ICollectorLogger logger)
+        {
+            _logger = logger;
 
             return this;
         }
@@ -111,7 +118,7 @@ namespace HSMDataCollector.Core
             if (useLogging)
                 AddNLog();
 
-            _logManager.Logger?.Info("Initialize timer...");
+            _logger?.Info("Initialize timer...");
             _dataQueue.Init();
         }
 
@@ -142,7 +149,7 @@ namespace HSMDataCollector.Core
             }
             catch (Exception ex)
             {
-                _logManager.Logger?.Error(ex);
+                _logger?.Error(ex);
 
                 StopSensors(ex.Message);
             }
@@ -166,7 +173,7 @@ namespace HSMDataCollector.Core
             }
             catch (Exception ex)
             {
-                _logManager.Logger?.Error(ex);
+                _logger?.Error(ex);
 
                 StopSensors(ex.Message);
             }
@@ -209,7 +216,7 @@ namespace HSMDataCollector.Core
         {
             Status = newStatus;
 
-            _logManager.Logger?.Info($"DataCollector (v. {DataCollectorExtensions.Version}) -> {newStatus}");
+            _logger?.Info($"DataCollector (v. {DataCollectorExtensions.Version}) -> {newStatus}");
 
             CurrentCollection.StatusSensor?.BuildAndSendValue(_hsmClient, newStatus, error);
 
@@ -573,7 +580,7 @@ namespace HSMDataCollector.Core
             if (existingSensor is IParamsFuncSensor<T, U> typedSensor)
                 return typedSensor;
 
-            OneParamFuncSensor<T, U> sensor = new OneParamFuncSensor<T, U>(path, _dataQueue as IValuesQueue, description, interval, function, _logManager.Logger);
+            OneParamFuncSensor<T, U> sensor = new OneParamFuncSensor<T, U>(path, _dataQueue as IValuesQueue, description, interval, function, _logger);
             AddNewSensor(sensor, path);
 
             return sensor;
@@ -586,7 +593,7 @@ namespace HSMDataCollector.Core
             if (existingSensor is INoParamsFuncSensor<T> typedSensor)
                 return typedSensor;
 
-            NoParamsFuncSensor<T> sensor = new NoParamsFuncSensor<T>(path, _dataQueue as IValuesQueue, description, interval, function, _logManager.Logger);
+            NoParamsFuncSensor<T> sensor = new NoParamsFuncSensor<T>(path, _dataQueue as IValuesQueue, description, interval, function, _logger);
             AddNewSensor(sensor, path);
 
             return sensor;
@@ -599,7 +606,7 @@ namespace HSMDataCollector.Core
             if (_sensorsStorage.ContainsKey(path))
             {
                 var message = $"Path {path} is used by standard performance sensor!";
-                _logManager.Logger?.Error(message);
+                _logger?.Error(message);
 
                 throw new InvalidSensorPathException(message);
             }
@@ -614,7 +621,7 @@ namespace HSMDataCollector.Core
         {
             _nameToSensor[path] = sensor;
 
-            _logManager.Logger?.Info($"Added new sensor {path}");
+            _logger?.Info($"Added new sensor {path}");
         }
     }
 }

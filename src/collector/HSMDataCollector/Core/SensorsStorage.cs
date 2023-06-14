@@ -10,13 +10,13 @@ namespace HSMDataCollector.Core
     internal sealed class SensorsStorage : ConcurrentDictionary<string, SensorBase>, IDisposable
     {
         private readonly IValuesQueue _valuesQueue;
-        private readonly LoggerManager _logManager;
+        private readonly ICollectorLogger _logger;
 
 
-        internal SensorsStorage(IValuesQueue queue, LoggerManager logManager)
+        internal SensorsStorage(IValuesQueue queue, ICollectorLogger logger)
         {
             _valuesQueue = queue;
-            _logManager = logManager;
+            _logger = logger;
         }
 
 
@@ -44,14 +44,14 @@ namespace HSMDataCollector.Core
                 value.ReceiveSensorValue += _valuesQueue.Push;
                 value.ExceptionThrowing += WriteSensorException;
 
-                _logManager.Logger?.Info($"Added new default sensor {key}");
+                _logger?.Info($"Added new default sensor {key}");
             }
         }
 
 
         private void WriteSensorException(string sensorPath, Exception ex)
         {
-            _logManager.Logger?.Error($"Sensor: {sensorPath}, {ex}");
+            _logger?.Error($"Sensor: {sensorPath}, {ex}");
         }
     }
 }
