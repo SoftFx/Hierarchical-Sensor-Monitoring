@@ -32,6 +32,7 @@ namespace HSMDataCollector.Logging
         internal void AddCustomLogger(ICollectorLogger logger)
         {
             _customLogger = logger;
+            _writeDebug = false;
         }
 
 

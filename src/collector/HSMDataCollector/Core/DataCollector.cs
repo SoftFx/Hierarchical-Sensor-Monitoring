@@ -118,7 +118,7 @@ namespace HSMDataCollector.Core
             if (useLogging)
                 AddNLog();
 
-            _logger?.Info("Initialize timer...");
+            _logger.Info("Initialize timer...");
             _dataQueue.Init();
         }
 
@@ -149,7 +149,7 @@ namespace HSMDataCollector.Core
             }
             catch (Exception ex)
             {
-                _logger?.Error(ex);
+                _logger.Error(ex);
 
                 StopSensors(ex.Message);
             }
@@ -173,7 +173,7 @@ namespace HSMDataCollector.Core
             }
             catch (Exception ex)
             {
-                _logger?.Error(ex);
+                _logger.Error(ex);
 
                 StopSensors(ex.Message);
             }
@@ -216,7 +216,7 @@ namespace HSMDataCollector.Core
         {
             Status = newStatus;
 
-            _logger?.Info($"DataCollector (v. {DataCollectorExtensions.Version}) -> {newStatus}");
+            _logger.Info($"DataCollector (v. {DataCollectorExtensions.Version}) -> {newStatus}");
 
             CurrentCollection.StatusSensor?.BuildAndSendValue(_hsmClient, newStatus, error);
 
@@ -606,7 +606,7 @@ namespace HSMDataCollector.Core
             if (_sensorsStorage.ContainsKey(path))
             {
                 var message = $"Path {path} is used by standard performance sensor!";
-                _logger?.Error(message);
+                _logger.Error(message);
 
                 throw new InvalidSensorPathException(message);
             }
@@ -621,7 +621,7 @@ namespace HSMDataCollector.Core
         {
             _nameToSensor[path] = sensor;
 
-            _logger?.Info($"Added new sensor {path}");
+            _logger.Info($"Added new sensor {path}");
         }
     }
 }

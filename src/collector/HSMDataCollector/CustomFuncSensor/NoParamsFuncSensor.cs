@@ -54,7 +54,7 @@ namespace HSMDataCollector.CustomFuncSensor
             }
             catch (Exception e)
             {
-                _logger?.Error(e);
+                _logger.Error(e);
                 return CreateErrorDataObject(default(T), e);
             }
         }

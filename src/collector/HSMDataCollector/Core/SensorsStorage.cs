@@ -44,14 +44,14 @@ namespace HSMDataCollector.Core
                 value.ReceiveSensorValue += _valuesQueue.Push;
                 value.ExceptionThrowing += WriteSensorException;
 
-                _logger?.Info($"Added new default sensor {key}");
+                _logger.Info($"Added new default sensor {key}");
             }
         }
 
 
         private void WriteSensorException(string sensorPath, Exception ex)
         {
-            _logger?.Error($"Sensor: {sensorPath}, {ex}");
+            _logger.Error($"Sensor: {sensorPath}, {ex}");
         }
     }
 }
