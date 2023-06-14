@@ -328,12 +328,9 @@
     });
     
     function getGridPage(pageNumber, pageSize, accordionId){
-            console.log(pageNumber, pageSize, accordionId)
-            console.log($('#jstree').jstree('get_selected')[0])
-            console.log(currentSelectedNodeId)
             $.ajax({
                 type: 'get',
-                url: `${getGrid}?selectedId=${currentSelectedNodeId}&pageNumber=${pageNumber}&pageSize=${pageSize}`,
+                url: `${getGrid}?selectedId=${currentSelectedNodeId}&accordionId=${accordionId}&pageNumber=${pageNumber}&pageSize=${pageSize}`,
                 datatype: 'html',
                 contenttype: 'application/json',
                 cache: false,

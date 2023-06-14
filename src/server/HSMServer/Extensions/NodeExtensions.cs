@@ -1,4 +1,5 @@
-﻿using HSMServer.Model.Folders;
+﻿using System.Collections.Generic;
+using HSMServer.Model.Folders;
 using HSMServer.Model.TreeViewModel;
 using Microsoft.AspNetCore.Html;
 
@@ -44,6 +45,13 @@ namespace HSMServer.Extensions
                 SensorStatus.Error => "grid-cell-error",
                 _ => "grid-cell-offTime",
             };
+
+        internal static List<NodeViewModel> GetAccordionChildren(this ProductNodeViewModel node, string accordionId) => accordionId switch
+        {
+            "gridNodes" => new List<NodeViewModel>(node.Nodes.Values),
+            "gridSensors" => new List<NodeViewModel>(node.Sensors.Values),
+            _ => null
+        };
 
         internal static string GetChildrenAccordionTitle(this NodeViewModel node) =>
             node is ProductNodeViewModel product
