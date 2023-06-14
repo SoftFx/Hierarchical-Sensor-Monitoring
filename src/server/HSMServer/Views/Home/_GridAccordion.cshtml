@@ -28,29 +28,26 @@
                 </div>
             </div>
         </div>
-        @if (Model.IsPaginationDisplayed)
-        {
-            <div class="container d-flex mt-2 justify-content-between">
-                <ul class="pagination position-relative" style="left: 45%;">
-                    <li id="prevPageButton" class="page-item button-link">
-                        <a class="page-link" aria-label="Previous" onclick="getGridPage(@(Model.PageNumber - 1), @Model.PageSize, '@accordionId')">
-                            <span aria-hidden="true">&laquo;</span>
-                        </a>
-                    </li>
-                    <li class="page-item">
-                        <a id="pageNumber" class="page-link">@(Model.PageNumber + 1)</a>
-                    </li>
-                    <li id="nextPageButton" class="page-item button-link">
-                        <a class="page-link" aria-label="Next" onclick="getGridPage(@(Model.PageNumber + 1), @Model.PageSize, '@accordionId')">
-                            <span aria-hidden="true">&raquo;</span>
-                        </a>
-                    </li>
-                </ul>
-                <div class="d-flex align-self-baseline gap-1">
-                    <input class="form-control" id="pageSize" type="number" value="@Model.PageSize" style="width: 5rem"/>
-                    <button class="btn btn-secondary" onclick="getGridPage(@(Model.PageNumber), $('#pageSize')[0].value, '@accordionId')">Apply</button>
-                </div>
+        <div class="container d-flex mt-2 justify-content-between @(Model.IsPaginationDisplayed ? "" : "d-none")">
+            <ul class="pagination position-relative" style="left: 45%;">
+                <li id="prevPageButton" class="page-item button-link">
+                    <a class="page-link" aria-label="Previous" onclick="getGridPage(@(Model.PageNumber - 1), @Model.PageSize, '@accordionId')">
+                        <span aria-hidden="true">&laquo;</span>
+                    </a>
+                </li>
+                <li class="page-item">
+                    <a id="pageNumber_@accordionId" class="page-link">@(Model.PageNumber + 1)</a>
+                </li>
+                <li id="nextPageButton" class="page-item button-link">
+                    <a class="page-link" aria-label="Next" onclick="getGridPage(@(Model.PageNumber + 1), @Model.PageSize, '@accordionId')">
+                        <span aria-hidden="true">&raquo;</span>
+                    </a>
+                </li>
+            </ul>
+            <div class="d-flex align-self-baseline gap-1">
+                <input class="form-control" id="pageSize_@accordionId" type="number" value="@Model.PageSize" style="width: 5rem"/>
+                <button class="btn btn-secondary" onclick="getGridPage(@(Model.PageNumber), $('#pageSize_@accordionId')[0].value, '@accordionId')">Apply</button>
             </div>
-        }
+        </div>
     }
 </div>

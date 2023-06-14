@@ -9,7 +9,7 @@ public sealed class GridViewModel
     public List<NodeViewModel> VisibleItems { get; set; } = new();
     
     
-    public int PageSize { get; init; } = 1000;
+    public int PageSize { get; init; } = 150;
     
     public int PageNumber { get; init; } = 0;
     

@@ -284,7 +284,6 @@
                 for (let i = 0; i < array.length; i++) {
                     let dataObject = array[i];
 
-                    updateGridCell(dataObject);
                     updateNodeData(dataObject);
 
                     if (dataObject.value !== null && dataObject.value !== undefined)
@@ -294,6 +293,10 @@
                         updateSpecificSensorData(dataObject);
                     }
                 }
+                
+                
+                getGridPage($('#pageNumber_gridSensors')[0].innerText - 1, $('#pageSize_gridSensors')[0].value, "gridSensors")
+                getGridPage($('#pageNumber_gridNodes')[0].innerText - 1, $('#pageSize_gridNodes')[0].value, "gridNodes")
                 
                 updateGeneralInfo(selectedNodeId);
                 

@@ -45,12 +45,12 @@
 </ul>
 <div class='tab-content'>
     <div class='tab-pane fade' id=@gridDivId role="tabpanel">
-        @await Html.PartialAsync("_GridAccordion", Model.GridNodes)
-        @await Html.PartialAsync("_GridAccordion", Model.GridSensors)
+         @await Html.PartialAsync("_GridAccordion", Model.GridNodes) 
+         @await Html.PartialAsync("_GridAccordion", Model.GridSensors) 
     </div>
 
     <div class='tab-pane fade' id=@listDivId role="tabpanel">
-        @await Html.PartialAsync("_ListAccordion", visibleNodes)
-        @await Html.PartialAsync("_ListAccordion", visibleSensors)
+         @await Html.PartialAsync("_ListAccordion", visibleNodes) 
+         @await Html.PartialAsync("_ListAccordion", visibleSensors) 
     </div>
 </div>

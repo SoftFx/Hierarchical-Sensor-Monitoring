@@ -102,16 +102,24 @@ namespace HSMServer.Controllers
         public void RemoveRenderingNode(Guid nodeId) => CurrentUser.Tree.RemoveRenderingNode(nodeId);
 
         [HttpGet]
-        public IActionResult GetGrid(string selectedId, string accordionId, int pageNumber = 0, int pageSize = 1000)
+        public IActionResult GetGrid(string selectedId, string accordionId, int pageNumber = 0, int pageSize = 150)
         {
             _treeViewModel.Nodes.TryGetValue(selectedId.ToGuid(), out var node);
-
+            
             var items = node.GetAccordionChildren(accordionId);
             
             if (items?.Count <= pageNumber * pageSize || pageNumber < 0 || pageSize <= 0)
                 return NotFound(); 
             
             return PartialView("_GridAccordion", new GridViewModel(pageNumber, pageSize).InitializeItems(items));
+        }
+
+        [HttpGet]
+        public IActionResult GetGridAccordion(string selectedId)
+        {
+            
+            
+            return default;
         }
 
         [HttpGet]
