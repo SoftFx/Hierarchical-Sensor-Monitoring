@@ -23,6 +23,11 @@ namespace HSMDataCollector.Core
         event Action ToStopped;
 
 
+        /// <summary>
+        /// Check connection via client that was created in DataCollector constructor with CollectorOptions parameter
+        /// </summary>
+        Task<ConnectionResult> TestConnection();
+
         Task Start();
 
         Task Start(Task customStartingTask);
@@ -37,6 +42,8 @@ namespace HSMDataCollector.Core
 
 
         IDataCollector AddNLog(LoggerOptions options = null);
+
+        IDataCollector AddCustomLogger(ICollectorLogger logger);
 
         #region Common methods
 
