@@ -108,7 +108,7 @@ namespace HSMServer.Controllers
 
             var items = node.GetAccordionChildren(accordionId);
             
-            if (items?.Count <= pageNumber * pageSize || pageNumber < 0)
+            if (items?.Count <= pageNumber * pageSize || pageNumber < 0 || pageSize <= 0)
                 return NotFound(); 
             
             return PartialView("_GridAccordion", new GridViewModel(pageNumber, pageSize).InitializeItems(items));
