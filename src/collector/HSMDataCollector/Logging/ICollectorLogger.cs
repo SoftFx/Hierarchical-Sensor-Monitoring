@@ -1,11 +1,15 @@
-﻿namespace HSMDataCollector.Logging
+﻿using System;
+
+namespace HSMDataCollector.Logging
 {
     public interface ICollectorLogger
     {
-        void Debug<T>(T value);
+        void Debug(string message);
 
-        void Info<T>(T value);
+        void Info(string message);
 
-        void Error<T>(T value);
+        void Error(string message);
+
+        void Error(Exception ex);
     }
 }

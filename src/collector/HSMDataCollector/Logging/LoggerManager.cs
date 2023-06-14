@@ -36,15 +36,17 @@ namespace HSMDataCollector.Logging
         }
 
 
-        public void Debug<T>(T value)
+        public void Debug(string message)
         {
             if (_writeDebug)
-                Logger?.Debug(value);
+                Logger?.Debug(message);
         }
 
-        public void Info<T>(T value) => Logger?.Info(value);
+        public void Info(string message) => Logger?.Info(message);
 
-        public void Error<T>(T value) => Logger?.Error(value);
+        public void Error(string message) => Logger?.Error(message);
+
+        public void Error(Exception ex) => Logger?.Error(ex);
     }
 
 
