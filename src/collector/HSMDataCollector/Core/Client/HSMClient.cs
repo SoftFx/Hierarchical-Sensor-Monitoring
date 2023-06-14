@@ -72,11 +72,8 @@ namespace HSMDataCollector.Core
         {
             _tokenSource.Cancel();
 
-            if (_dataQueue != null)
-            {
-                _dataQueue.NewValueEvent -= RecieveQueueData;
-                _dataQueue.NewValuesEvent -= RecieveQueueData;
-            }
+            _dataQueue.NewValueEvent -= RecieveQueueData;
+            _dataQueue.NewValuesEvent -= RecieveQueueData;
 
             _client.Dispose();
         }
