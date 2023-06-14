@@ -7,18 +7,14 @@
 @{
     var user = User as User;
 
-    string nodeId = null;
+    string nodeId = Model.Id.ToString();
     List<NodeViewModel> visibleNodes = new();
     List<NodeViewModel> visibleSensors = new();
 
     if (Model is FolderModel folder)
-    {
-        nodeId = folder.Id.ToString();
         visibleNodes = GetSortedNodes(folder.Products.Values);
-    }
     else if (Model is ProductNodeViewModel product)
     {
-        nodeId = product.EncodedId;
         visibleNodes = GetSortedNodes(product.Nodes.Values);
         visibleSensors = GetSortedNodes(product.Sensors.Values);
     }

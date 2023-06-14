@@ -19,7 +19,7 @@ public sealed class GridViewModel
     private int OriginalSize { get; set; } = 0;
 
 
-    public bool IsPaginationDisplayed => IsPaginated && OriginalSize > (PageNumber + 1) * PageSize;
+    public bool IsPaginationDisplayed => IsPaginated && OriginalSize > PageSize;
     
     
     public GridViewModel() { }
@@ -31,6 +31,7 @@ public sealed class GridViewModel
         IsPaginated = true;
     }
 
+    
     public GridViewModel InitializeItems<T>(ICollection<T> collection) where T : NodeViewModel
     {
         VisibleItems = new List<NodeViewModel>(collection.Where(n => n.HasData).OrderByDescending(n => n.Status).ThenBy(n => n.Name)
@@ -40,7 +41,6 @@ public sealed class GridViewModel
         
         return this;
     }
-
     
     public GridViewModel TurnOnPagination()
     {
