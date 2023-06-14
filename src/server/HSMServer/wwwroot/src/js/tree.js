@@ -37,8 +37,8 @@ window.initializeTree = function () {
             let nodeA = this.get_node(a).data.jstree;
             let nodeB = this.get_node(b).data.jstree;
 
-            let aIsDisabled = typeof nodeA.disabled === 'undefined';
-            let bIsDisabled = typeof nodeB.disabled === 'undefined';
+            let aIsDisabled = isDisabled(nodeA);
+            let bIsDisabled = isDisabled(nodeB);
 
             if (aIsDisabled ^ bIsDisabled) {
                 return aIsDisabled ? -1 : 1;
@@ -84,6 +84,10 @@ window.activateNode = function (currentNodeId, nodeIdToActivate) {
     if (currentSelectedNodeId != nodeIdToActivate) {
         selectNodeAjax(nodeIdToActivate);
     }
+}
+
+function isDisabled(node) {
+    return typeof node.disabled === 'undefined';
 }
 
 function isFolder(node) {
