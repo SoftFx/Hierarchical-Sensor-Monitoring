@@ -48,7 +48,7 @@ namespace HSMServer.Model.TreeViewModel
         public ProductNodeViewModel GetPaginated(int pageNumber, int pageSize)
         {
             GridSensors.InitializeItems(Sensors.Values).TurnOnPagination();
-            GridNodes.InitializeItems(Nodes.Values);
+            GridNodes.InitializeItems(Nodes.Values).TurnOnPagination();
           
             return this;
         }

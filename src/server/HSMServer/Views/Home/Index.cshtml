@@ -328,15 +328,18 @@
     });
     
     function getGridPage(pageNumber, pageSize, accordionId){
+            console.log(pageNumber, pageSize, accordionId)
+            console.log($('#jstree').jstree('get_selected')[0])
+            console.log(currentSelectedNodeId)
             $.ajax({
                 type: 'get',
-                url: `${getGrid}?selectedId=${$('#jstree').jstree('get_selected')[0]}&pageNumber=${pageNumber}&pageSize=${pageSize}`,
+                url: `${getGrid}?selectedId=${currentSelectedNodeId}&pageNumber=${pageNumber}&pageSize=${pageSize}`,
                 datatype: 'html',
                 contenttype: 'application/json',
                 cache: false,
                 success: function (viewData) {
                     $(`#grid-accordion_${accordionId}`).parents('div.accordion').empty().replaceWith(viewData);
-                    $('#grid-accordion_gridSensors').click();
+                    $(`#grid-accordion_${accordionId}`).click();
                 }
             });
         }
