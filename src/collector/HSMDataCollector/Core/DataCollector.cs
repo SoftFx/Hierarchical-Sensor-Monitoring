@@ -100,14 +100,14 @@ namespace HSMDataCollector.Core
 
         public IDataCollector AddNLog(LoggerOptions options = null)
         {
-            _logger.InitializeLogger(options);
+            _logger.AddLogger(new NLogLogger(options));
 
             return this;
         }
 
         public IDataCollector AddCustomLogger(ICollectorLogger logger)
         {
-            _logger.AddCustomLogger(logger);
+            _logger.AddLogger(logger);
 
             return this;
         }
