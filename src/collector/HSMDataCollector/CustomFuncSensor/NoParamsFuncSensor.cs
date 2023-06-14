@@ -1,18 +1,18 @@
 ﻿using HSMDataCollector.Core;
+using HSMDataCollector.Logging;
 using HSMDataCollector.PublicInterface;
 using HSMSensorDataObjects.SensorValueRequests;
-using NLog;
 using System;
 
 namespace HSMDataCollector.CustomFuncSensor
 {
     internal sealed class NoParamsFuncSensor<T> : CustomFuncSensorBase, INoParamsFuncSensor<T>
     {
+        private readonly ICollectorLogger _logger;
         private readonly Func<T> _funcToInvoke;
-        private readonly Logger _logger;
 
 
-        public NoParamsFuncSensor(string path, IValuesQueue queue, string description, TimeSpan timerSpan, Func<T> funcToInvoke, Logger logger)
+        public NoParamsFuncSensor(string path, IValuesQueue queue, string description, TimeSpan timerSpan, Func<T> funcToInvoke, ICollectorLogger logger)
             : base(path, queue, description, timerSpan)
         {
             _funcToInvoke = funcToInvoke;
@@ -54,7 +54,7 @@ namespace HSMDataCollector.CustomFuncSensor
             }
             catch (Exception e)
             {
-                _logger?.Error(e);
+                _logger.Error(e);
                 return CreateErrorDataObject(default(T), e);
             }
         }

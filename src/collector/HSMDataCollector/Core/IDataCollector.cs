@@ -43,6 +43,8 @@ namespace HSMDataCollector.Core
 
         IDataCollector AddNLog(LoggerOptions options = null);
 
+        IDataCollector AddCustomLogger(ICollectorLogger logger);
+
         #region Common methods
 
         /// <summary>
