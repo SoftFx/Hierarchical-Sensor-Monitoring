@@ -66,7 +66,10 @@ namespace HSMServer.Controllers
                 var id = selectedId.ToGuid();
 
                 if (_folderManager.TryGetValue(id, out var folder))
+                {
                     viewModel = folder;
+                    viewModel.GridNodes.InitializeItems(folder.Products.Values).TurnOnPagination();
+                }
                 else if (_treeViewModel.Nodes.TryGetValue(id, out var node))
                 {
                     viewModel = node.GetPaginated(pageNumber, pageSize);
