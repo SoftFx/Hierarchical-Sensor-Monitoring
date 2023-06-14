@@ -21,7 +21,7 @@ namespace HSMServer.Model.History
 
         public List<TableValueViewModel> CurrentTablePage => CurrentPage.Select(Build).OrderByDescending(u => u.Time).ToList();
 
-        public List<BaseValue> CurrentPage => Pages[CurrentIndex];
+        public List<BaseValue> CurrentPage => Pages.Count > CurrentIndex ? Pages[CurrentIndex] : new();
 
         public List<List<BaseValue>> Pages { get; } = new();
 
