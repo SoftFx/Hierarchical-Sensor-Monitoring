@@ -59,7 +59,7 @@ namespace HSMServer.Extensions
             {
                 TreeSortType.ByName => collection.OrderBy(x => x.Name),
                 TreeSortType.ByTime => collection.OrderByDescending(x => x.UpdateTime),
-                _ => null
+                _ => collection.OrderBy(x => x.Name)
             };
 
         internal static string GetEmptySensorIcon() => "fa-regular fa-circle";
