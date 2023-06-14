@@ -34,13 +34,13 @@ namespace HSMDataCollector.Core
     /// </summary>
     public sealed class DataCollector : IDataCollector
     {
+        private readonly LoggerManager _logger = new LoggerManager();
+
         private readonly ConcurrentDictionary<string, ISensor> _nameToSensor = new ConcurrentDictionary<string, ISensor>();
         private readonly SensorsPrototype _sensorsPrototype = new SensorsPrototype();
         private readonly SensorsStorage _sensorsStorage;
         private readonly IDataQueue _dataQueue;
         private readonly HSMClient _hsmClient;
-
-        private ICollectorLogger _logger;
 
 
         internal static bool IsWindowsOS { get; } = RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
@@ -100,14 +100,14 @@ namespace HSMDataCollector.Core
 
         public IDataCollector AddNLog(LoggerOptions options = null)
         {
-            _logger = new LoggerManager().InitializeLogger(options);
+            _logger.InitializeLogger(options);
 
             return this;
         }
 
         public IDataCollector AddCustomLogger(ICollectorLogger logger)
         {
-            _logger = logger;
+            _logger.AddCustomLogger(logger);
 
             return this;
         }

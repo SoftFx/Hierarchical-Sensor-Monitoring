@@ -12,32 +12,38 @@ namespace HSMDataCollector.Logging
 
         private static readonly LoggerOptions _defaultOptions = new LoggerOptions().FillConfigPath();
 
-        private Logger _logger;
+        private ICollectorLogger _customLogger;
+        private Logger _collectorLogger;
         private bool _writeDebug;
 
+        private ICollectorLogger Logger => _customLogger ?? this;
 
-        internal ICollectorLogger InitializeLogger(LoggerOptions options)
+
+        internal void InitializeLogger(LoggerOptions options)
         {
             options = options?.FillConfigPath() ?? _defaultOptions;
 
             var factory = new LogFactory(new XmlLoggingConfiguration(options.ConfigPath));
 
-            _logger = factory.GetLogger(nameof(DataCollector));
+            _collectorLogger = factory.GetLogger(nameof(DataCollector));
             _writeDebug = options.WriteDebug;
+        }
 
-            return this;
+        internal void AddCustomLogger(ICollectorLogger logger)
+        {
+            _customLogger = logger;
         }
 
 
         public void Debug<T>(T value)
         {
             if (_writeDebug)
-                _logger.Debug(value);
+                Logger?.Debug(value);
         }
 
-        public void Info<T>(T value) => _logger.Info(value);
+        public void Info<T>(T value) => Logger?.Info(value);
 
-        public void Error<T>(T value) => _logger.Error(value);
+        public void Error<T>(T value) => Logger?.Error(value);
     }
 
 
