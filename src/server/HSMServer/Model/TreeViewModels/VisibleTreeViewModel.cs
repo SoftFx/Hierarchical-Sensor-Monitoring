@@ -28,7 +28,7 @@ public sealed class VisibleTreeViewModel
         _user = user;
     }
 
-    
+
     public void AddRenderingNode(Guid id)
     {
         lock (_user)
