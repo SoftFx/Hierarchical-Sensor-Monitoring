@@ -70,7 +70,7 @@
     @if (Model.IsDisabledNodeShown)
     {
         <ul>
-            <li class="jstree-last jstree-no-icons" id='disabled_@data.EncodedId' data-jstree='@VisibleTreeViewModel.GetDisabledJSTree()'>
+            <li class="jstree-last jstree-no-icons noHover" id='disabled_@data.EncodedId' data-jstree='@VisibleTreeViewModel.GetDisabledJSTree()'>
                 <span>... and @Model.WidthDifference more</span>
             </li>
         </ul>
