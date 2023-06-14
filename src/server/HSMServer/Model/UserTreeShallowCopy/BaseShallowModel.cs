@@ -29,6 +29,22 @@ namespace HSMServer.Model.UserTreeShallowCopy
         public abstract string ToJSTree();
 
 
+        public static string GetDisabledJSTree() => 
+            $$"""
+            {
+                "title": "disabled",
+                "icon": "disabled",
+                "time": "disabled",
+                "isManager": "disabled",
+                "isGrafanaEnabled": "disabled",
+                "isAccountsEnable": "disabled",
+                "groups": "disabled",
+                "isMutedState": "disabled",
+                "disabled": {{true.ToString().ToLower()}}
+            }
+            """;
+        
+        
         protected void UpdateGroupsState(BaseShallowModel model)
         {
             foreach (var (chatId, groupInfo) in model.GroupsState)

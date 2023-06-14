@@ -6,6 +6,7 @@
 
 @{
     var data = Model.Data;
+
     var showIcons = (User as User).TreeFilter.ByVisibility.Icons.Value;
 
     var arrowIcon = Model.VisibleSensorsCount > 0 ? "jstree-closed" : string.Empty;
@@ -65,4 +66,13 @@
             }
         </ul>
     }
+    @if (Model.IsDisabledNodeShown)
+    {
+        <ul>
+            <li class="jstree-last jstree-no-icons noHover" id='disabled_@data.EncodedId' data-jstree='@BaseShallowModel.GetDisabledJSTree()'>
+                <span>... and @Model.WidthDifference more</span>
+            </li>
+        </ul>
+    }
+    
 </li>

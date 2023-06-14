@@ -11,8 +11,10 @@ namespace HSMServer.Model.TreeViewModels;
 
 public sealed class VisibleTreeViewModel
 {
+    public const int RenderWidth = 100;
+    
+    
     private readonly User _user;
-
 
     public HashSet<Guid> OpenedNodes { get; } = new();
 
@@ -85,6 +87,7 @@ public sealed class VisibleTreeViewModel
     private NodeShallowModel FilterNodes(ProductNodeViewModel product, int depth = 1)
     {
         var node = new NodeShallowModel(product, _user);
+        var currentWidth = 0;
 
         var toRender = OpenedNodes.Contains(product.Id) || depth > 0;
         foreach (var (_, childNode) in product.Nodes)
@@ -92,7 +95,7 @@ public sealed class VisibleTreeViewModel
             var filterNodes = FilterNodes(childNode, --depth);
             node.AddChildState(filterNodes, _user);
 
-            if (toRender && IsVisibleNode(filterNodes, filterNodes.Data))
+            if (toRender && IsVisibleNode(filterNodes, filterNodes.Data) && currentWidth++ <= RenderWidth)
                 node.AddChild(filterNodes);
         }
 
@@ -102,7 +105,7 @@ public sealed class VisibleTreeViewModel
 
             node.AddChildState(shallowSensor, _user);
 
-            if (toRender && _user.IsSensorVisible(shallowSensor.Data))
+            if (toRender && _user.IsSensorVisible(shallowSensor.Data) && currentWidth++ <= RenderWidth)
                 node.AddChild(shallowSensor);
         }
 
