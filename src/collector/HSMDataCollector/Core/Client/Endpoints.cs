@@ -28,7 +28,7 @@
         internal string File => $"{ConnectionAddress}/file";
 
 
-        internal string Test => $"{ConnectionAddress}/test";
+        internal string TestConnection => $"{ConnectionAddress}/testConnection";
 
 
         internal Endpoints(CollectorOptions options)

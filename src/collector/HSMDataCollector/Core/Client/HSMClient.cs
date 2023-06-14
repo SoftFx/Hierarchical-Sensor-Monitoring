@@ -23,8 +23,11 @@ namespace HSMDataCollector.Core
         private readonly HttpClient _client;
 
 
-        internal HSMClient(CollectorOptions options)
+        internal HSMClient(CollectorOptions options, IDataQueue dataQueue, LoggerManager logger)
         {
+            _dataQueue = dataQueue;
+            _logManager = logger;
+
             _endpoints = new Endpoints(options);
 
             ServicePointManager.ServerCertificateValidationCallback += (sender, cert, chain, error) => true;
@@ -36,12 +39,6 @@ namespace HSMDataCollector.Core
             });
 
             _client.DefaultRequestHeaders.Add(nameof(BaseRequest.Key), options.AccessKey);
-        }
-
-        internal HSMClient(CollectorOptions options, IDataQueue dataQueue, LoggerManager logger) : this(options)
-        {
-            _dataQueue = dataQueue;
-            _logManager = logger;
 
             _dataQueue.NewValueEvent += RecieveQueueData;
             _dataQueue.NewValuesEvent += RecieveQueueData;
@@ -75,27 +72,26 @@ namespace HSMDataCollector.Core
         {
             _tokenSource.Cancel();
 
-            if (_dataQueue != null)
-            {
-                _dataQueue.NewValueEvent -= RecieveQueueData;
-                _dataQueue.NewValuesEvent -= RecieveQueueData;
-            }
+            _dataQueue.NewValueEvent -= RecieveQueueData;
+            _dataQueue.NewValuesEvent -= RecieveQueueData;
 
             _client.Dispose();
         }
 
 
-        internal async Task<string> TestConnection()
+        internal async Task<ConnectionResult> TestConnection()
         {
             try
             {
-                var connect = await _client.GetAsync(_endpoints.Test, _tokenSource.Token);
+                var connect = await _client.GetAsync(_endpoints.TestConnection, _tokenSource.Token);
 
-                return connect.IsSuccessStatusCode ? null : $"{connect.ReasonPhrase} ({await connect.Content.ReadAsStringAsync()})";
+                return connect.IsSuccessStatusCode
+                    ? ConnectionResult.Ok
+                    : new ConnectionResult($"{connect.ReasonPhrase} ({await connect.Content.ReadAsStringAsync()})");
             }
             catch (Exception ex)
             {
-                return ex.Message;
+                return new ConnectionResult(ex.Message);
             }
         }
 

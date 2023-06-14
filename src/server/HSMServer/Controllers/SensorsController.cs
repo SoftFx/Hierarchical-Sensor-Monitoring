@@ -38,6 +38,8 @@ namespace HSMServer.Controllers
         private readonly DataCollectorWrapper _dataCollector;
         private readonly ITreeValuesCache _cache;
 
+        protected static readonly EmptyResult _emptyResult = new();
+
 
         public SensorsController(IUpdatesQueue updatesQueue, DataCollectorWrapper dataCollector,
             ILogger<SensorsController> logger, ITreeValuesCache cache)
@@ -49,9 +51,9 @@ namespace HSMServer.Controllers
         }
 
 
-        [HttpGet("test")]
+        [HttpGet("testConnection")]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
-        public ActionResult<bool> TestConnection() => TryCheckKey(out var message) ? true : BadRequest(message);
+        public ActionResult TestConnection() => TryCheckKey(out var message) ? _emptyResult : BadRequest(message);
 
         /// <summary>
         /// Receives value of bool sensor
@@ -499,7 +501,7 @@ namespace HSMServer.Controllers
                    && Guid.TryParse(keyStr, out var keyId)
                    && _cache.GetAccessKey(keyId) != null
                 ? null
-                : "Ivalid key";
+                : "Invalid key";
 
             return message == null;
         }
