@@ -57,7 +57,6 @@ namespace HSMServer.Extensions
         internal static IOrderedEnumerable<T> GetOrdered<T>(this IEnumerable<T> collection, User user) where T : BaseNodeViewModel =>
             user.TreeFilter.TreeSortType switch
             {
-                TreeSortType.ByName => collection.OrderBy(x => x.Name),
                 TreeSortType.ByTime => collection.OrderByDescending(x => x.UpdateTime),
                 _ => collection.OrderBy(x => x.Name)
             };
