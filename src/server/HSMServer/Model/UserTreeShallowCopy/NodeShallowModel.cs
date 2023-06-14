@@ -28,7 +28,7 @@ namespace HSMServer.Model.UserTreeShallowCopy
 
         public int WidthDifference => Data.Sensors.Count + Data.Nodes.Count - VisibleTreeViewModel.RenderWidth;
         
-        public bool IsDisabledNodeShown => WidthDifference > 0 && (Sensors.Count > 0 || Nodes.Count > 0);
+        public bool IsDisabledNodeShown => WidthDifference > 0 && Sensors.Count + Nodes.Count > 0;
         
         
         public int VisibleSensorsCount { get; private set; }

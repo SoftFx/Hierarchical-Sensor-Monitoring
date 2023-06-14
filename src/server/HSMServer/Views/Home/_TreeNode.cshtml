@@ -1,6 +1,5 @@
 ﻿@using HSMServer.Extensions
 @using HSMServer.Model.Authentication
-@using HSMServer.Model.TreeViewModels
 @using HSMServer.Model.UserTreeShallowCopy
 
 @model NodeShallowModel
@@ -70,7 +69,7 @@
     @if (Model.IsDisabledNodeShown)
     {
         <ul>
-            <li class="jstree-last jstree-no-icons noHover" id='disabled_@data.EncodedId' data-jstree='@VisibleTreeViewModel.GetDisabledJSTree()'>
+            <li class="jstree-last jstree-no-icons noHover" id='disabled_@data.EncodedId' data-jstree='@BaseShallowModel.GetDisabledJSTree()'>
                 <span>... and @Model.WidthDifference more</span>
             </li>
         </ul>

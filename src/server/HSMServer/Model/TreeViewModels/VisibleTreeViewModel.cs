@@ -28,23 +28,7 @@ public sealed class VisibleTreeViewModel
         _user = user;
     }
 
-
-    public static string GetDisabledJSTree() => 
-        $$"""
-        {
-            "title": "disabled",
-            "icon": "disabled",
-            "time": "disabled",
-            "isManager": "disabled",
-            "isGrafanaEnabled": "disabled",
-            "isAccountsEnable": "disabled",
-            "groups": "disabled",
-            "isMutedState": "disabled",
-            "disabled": {{true.ToString().ToLower()}}
-        }
-        """;
     
-
     public void AddRenderingNode(Guid id)
     {
         lock (_user)
@@ -111,11 +95,8 @@ public sealed class VisibleTreeViewModel
             var filterNodes = FilterNodes(childNode, --depth);
             node.AddChildState(filterNodes, _user);
 
-            if (toRender && IsVisibleNode(filterNodes, filterNodes.Data) && currentWidth <= RenderWidth)
-            {
+            if (toRender && IsVisibleNode(filterNodes, filterNodes.Data) && currentWidth++ <= RenderWidth)
                 node.AddChild(filterNodes);
-                currentWidth++;
-            }
         }
 
         foreach (var (_, sensor) in product.Sensors)
@@ -124,11 +105,8 @@ public sealed class VisibleTreeViewModel
 
             node.AddChildState(shallowSensor, _user);
 
-            if (toRender && _user.IsSensorVisible(shallowSensor.Data) && currentWidth <= RenderWidth)
-            {
+            if (toRender && _user.IsSensorVisible(shallowSensor.Data) && currentWidth++ <= RenderWidth)
                 node.AddChild(shallowSensor);
-                currentWidth++;
-            }
         }
 
         return node;
