@@ -144,14 +144,17 @@ namespace HSMServer.Notifications
             var bot = _bot;
             _bot = null;
 
-            try
+            if (bot is not null)
             {
-                await bot?.DeleteWebhookAsync();
-                await bot?.CloseAsync();
-            }
-            catch (Exception exc)
-            {
-                return $"An error ({exc.Message}) has been occurred while stopping the Bot. The current state of the Bot is stopped. Try to restart Bot again.";
+                try
+                {
+                    await bot?.DeleteWebhookAsync();
+                    await bot?.CloseAsync();
+                }
+                catch (Exception exc)
+                {
+                    return $"An error ({exc.Message}) has been occurred while stopping the Bot. The current state of the Bot is stopped. Try to restart Bot again.";
+                }
             }
 
             return string.Empty;

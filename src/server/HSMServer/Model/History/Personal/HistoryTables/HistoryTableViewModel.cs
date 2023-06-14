@@ -19,8 +19,9 @@ namespace HSMServer.Model.History
         private IAsyncEnumerator<List<BaseValue>> _pagesEnumerator;
 
 
+        public List<TableValueViewModel> CurrentTablePage => CurrentPage.Select(Build).OrderByDescending(u => u.Time).ToList();
 
-        public List<TableValueViewModel> CurrentPage => Pages[CurrentIndex].Select(Build).OrderByDescending(u => u.Time).ToList();
+        public List<BaseValue> CurrentPage => Pages[CurrentIndex];
 
         public List<List<BaseValue>> Pages { get; } = new();
 
@@ -95,10 +96,12 @@ namespace HSMServer.Model.History
         {
             if (IsBarSensor && _model is IBarSensor sensor && sensor.LocalLastValue != null)
             {
-                if (Pages.Count == 0)
-                    Pages.Add(new());
+                var value = sensor.LocalLastValue;
 
-                Pages[0].Insert(0, sensor.LocalLastValue);
+                if (Pages.Count == 0)
+                    Pages.Add(new() { value });
+                else if (CurrentPage.Count == 0 || CurrentPage.First().Time != value.Time)
+                    CurrentPage.Insert(0, value);
             }
         }
 

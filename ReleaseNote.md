@@ -51,3 +51,4 @@
 * Timeout notifications after applying OffTime->Ok has been fixed
 * Timeout notifications after server restart (if sensor has Expired state before server stopping) has been fixed
 * **No data** for first user login after server restart has been fixed
+* Duplicates bar sensor last values for charts have been fixed

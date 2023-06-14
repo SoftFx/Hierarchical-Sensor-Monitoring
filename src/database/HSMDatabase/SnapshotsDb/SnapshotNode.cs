@@ -37,7 +37,12 @@ namespace HSMDatabase.SnapshotsDb
         }
 
 
-        public Task Save() => Task.WhenAll(_collections.Select(u => u.Save()));
+        public Task Save()
+        {
+            Directory.CreateDirectory(FolderName);
+
+            return Task.WhenAll(_collections.Select(u => u.Save()));
+        }
 
 
         private SnapshotCollection<T> Register<T>(string name)
