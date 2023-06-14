@@ -96,8 +96,7 @@ namespace HSMDataCollector.Core
         { }
 
 
-        public async Task<ConnectionResult> TestConnection() =>
-            _hsmClient == null ? new ConnectionResult("Client is not initialized") : await _hsmClient?.TestConnection();
+        public Task<ConnectionResult> TestConnection() => _hsmClient.TestConnection();
 
         public IDataCollector AddNLog(LoggerOptions options = null)
         {

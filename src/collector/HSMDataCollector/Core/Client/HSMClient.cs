@@ -23,8 +23,11 @@ namespace HSMDataCollector.Core
         private readonly HttpClient _client;
 
 
-        internal HSMClient(CollectorOptions options)
+        internal HSMClient(CollectorOptions options, IDataQueue dataQueue, LoggerManager logger)
         {
+            _dataQueue = dataQueue;
+            _logManager = logger;
+
             _endpoints = new Endpoints(options);
 
             ServicePointManager.ServerCertificateValidationCallback += (sender, cert, chain, error) => true;
@@ -36,12 +39,6 @@ namespace HSMDataCollector.Core
             });
 
             _client.DefaultRequestHeaders.Add(nameof(BaseRequest.Key), options.AccessKey);
-        }
-
-        internal HSMClient(CollectorOptions options, IDataQueue dataQueue, LoggerManager logger) : this(options)
-        {
-            _dataQueue = dataQueue;
-            _logManager = logger;
 
             _dataQueue.NewValueEvent += RecieveQueueData;
             _dataQueue.NewValuesEvent += RecieveQueueData;
