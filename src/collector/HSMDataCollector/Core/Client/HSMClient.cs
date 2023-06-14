@@ -85,17 +85,19 @@ namespace HSMDataCollector.Core
         }
 
 
-        internal async Task<string> TestConnection()
+        internal async Task<ConnectionResult> TestConnection()
         {
             try
             {
                 var connect = await _client.GetAsync(_endpoints.TestConnection, _tokenSource.Token);
 
-                return connect.IsSuccessStatusCode ? null : $"{connect.ReasonPhrase} ({await connect.Content.ReadAsStringAsync()})";
+                return connect.IsSuccessStatusCode
+                    ? ConnectionResult.Ok
+                    : new ConnectionResult($"{connect.ReasonPhrase} ({await connect.Content.ReadAsStringAsync()})");
             }
             catch (Exception ex)
             {
-                return ex.Message;
+                return new ConnectionResult(ex.Message);
             }
         }
 

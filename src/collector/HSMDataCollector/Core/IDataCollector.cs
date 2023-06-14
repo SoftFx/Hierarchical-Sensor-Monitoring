@@ -26,14 +26,7 @@ namespace HSMDataCollector.Core
         /// <summary>
         /// Check connection via client that was created in DataCollector constructor with CollectorOptions parameter
         /// </summary>
-        /// <returns>Error message or null if connection was succeeded</returns>
-        Task<string> TestConnection();
-
-        /// <summary>
-        /// Check connection via client which is created with the settings in the options parameter
-        /// </summary>
-        /// <returns>Error message or null if connection was succeeded</returns>
-        Task<string> TestConnection(CollectorOptions options);
+        Task<ConnectionResult> TestConnection();
 
         Task Start();
 

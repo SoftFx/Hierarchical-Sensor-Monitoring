@@ -66,8 +66,6 @@ namespace HSMDataCollector.Core
         public event EventHandler ValuesQueueOverflow;
 
 
-        public DataCollector() { }
-
         /// <summary>
         /// Creates new instance of <see cref="DataCollector"/> class, initializing main parameters
         /// </summary>
@@ -98,19 +96,8 @@ namespace HSMDataCollector.Core
         { }
 
 
-        public async Task<string> TestConnection() =>
-            _hsmClient == null ? "Client is not initialized" : await _hsmClient?.TestConnection();
-
-        public async Task<string> TestConnection(CollectorOptions options)
-        {
-            var client = new HSMClient(options);
-
-            var hasConnection = await client.TestConnection();
-
-            client.Dispose();
-
-            return hasConnection;
-        }
+        public async Task<ConnectionResult> TestConnection() =>
+            _hsmClient == null ? new ConnectionResult("Client is not initialized") : await _hsmClient?.TestConnection();
 
         public IDataCollector AddNLog(LoggerOptions options = null)
         {
