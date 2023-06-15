@@ -6,42 +6,42 @@ window.currentSelectedNodeId = "";
 window.initializeTree = function () {
     var sortingType = $("input[name='TreeSortType']:checked");
 
+    let initOpened = JSON.parse(window.localStorage.jstree).state.core.open.length;
+    if (initOpened > 1)
+        isRefreshing = true;
+    
     $('#jstree').jstree({
         "core": {
             "check_callback": true,
-            "multiple": true
+            "multiple": true,
+            'data' : {
+                url : function (node) {
+                    if (node.id === '#') {
+                        return refreshTree;
+                    }
+
+                    return getNode;
+                },
+                data: function (node) {
+                    return { 'id' : node.id };
+                }
+            }
         },
         "contextmenu": {
             "items": buildContextMenu
         },
-        "plugins": ["state", "contextmenu", "themes", "wholerow", "sort"],
-        "sort": function (a, b) {
-            let isTimeSort = sortingType.val() == "1";
-
-            let nodeA = this.get_node(a).data.jstree;
-            let nodeB = this.get_node(b).data.jstree;
-
-            let aIsFolder = isFolder(nodeA);
-            let bIsFolder = isFolder(nodeB);
-
-            if (aIsFolder ^ bIsFolder) {
-                return aIsFolder ? -1 : 1;
-            }
-
-            if (isTimeSort) {
-                [a, b] = [nodeA.time, nodeB.time];
-            }
-            else {
-                [a, b] = [nodeB.title.toLowerCase(), nodeA.title.toLowerCase()];
-            }
-            
-            return a < b ? 1 : -1;
-        }
+        "plugins": ["state", "contextmenu", "themes", "wholerow"],
     }).on("state_ready.jstree", function () {
         selectNodeAjax($(this).jstree('get_selected')[0]);
-    }).on('open_node.jstree', function () {
-        isTreeCollapsed = false;
-        $('#collapseIcon').removeClass('fa-regular fa-square-plus').addClass('fa-regular fa-square-minus').attr('title','Save and close tree');
+    }).on('close_node.jstree', function (e, data) {
+        $.ajax({
+            type: 'put',
+            url: `${closeNode}?nodeId=${data.node.id}`,
+            cache: false
+        })
+    }).on('refresh.jstree', function (e, data){
+        refreshTreeTimeoutId = setTimeout(updateTreeTimer, interval);
+        updateSelectedNodeDataTimeoutId = setTimeout(updateSelectedNodeData, interval);
     });
 
     initializeActivateNodeTree();
@@ -57,6 +57,10 @@ window.activateNode = function (currentNodeId, nodeIdToActivate) {
     }
 }
 
+function isDisabled(node) {
+    return typeof node.disabled === 'undefined';
+}
+
 function isFolder(node) {
     return node.icon.includes("fa-folder");
 }
@@ -70,7 +74,7 @@ function initializeActivateNodeTree() {
 }
 
 function selectNodeAjax(selectedId) {
-    if (currentSelectedNodeId == selectedId)
+    if (currentSelectedNodeId == selectedId || selectedId == undefined)
         return;
 
     let isEditMode = !$("#description").hasClass("d-none") && currentSelectedNodeId !== "";
@@ -150,7 +154,6 @@ function initSelectedNode(selectedId) {
 
         if (needToActivateListTab) {
             selectNodeInfoTab("list", selectedId);
-
             needToActivateListTab = false;
         }
         else {
@@ -180,7 +183,7 @@ function selectNodeInfoTab(tab, selectedId) {
 }
 
 const TelegramTarget = { Groups: 0, Accounts: 1 };
-const NodeType = { Folder: 0, Product: 1, Node: 2, Sensor: 3 };
+const NodeType = { Folder: 0, Product: 1, Node: 2, Sensor: 3, Disabled: 4 };
 
 const AjaxPost = {
     type: 'POST',
@@ -192,6 +195,10 @@ function buildContextMenu(node) {
     var contextMenu = {};
     
     let curType = getCurrentElementType(node);
+    
+    if (curType === NodeType.Disabled)
+        return contextMenu;
+    
     let isManager = node.data.jstree.isManager === "True";
     
     let selectedNodes = $('#jstree').jstree(true).get_selected();
@@ -264,7 +271,6 @@ function buildContextMenu(node) {
                             hideAlertsModal();
                         },
                         error: function (jqXHR) {
-                            console.log(jqXHR);
                             $('#editMultipleInterval span.field-validation-valid').each(function () {
                                 let errFor = $(this).data('valmsgFor');
                                 if (jqXHR.responseJSON[errFor] !== undefined) {
@@ -473,6 +479,9 @@ function getFullPathAction(nodeId) {
 }
 
 function getCurrentElementType(node) {
+    if (node.id.includes('disabled'))
+        return NodeType.Disabled;
+    
     if (node.parents.length === 1 && isFolder(node))
         return NodeType.Folder;
 

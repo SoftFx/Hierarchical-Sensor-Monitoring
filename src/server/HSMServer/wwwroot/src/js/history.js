@@ -192,7 +192,7 @@ function Data(to, from, type, encodedId) {
             $('#no_data_' + encodedId).hide();
 
             if (needFillFromTo) {
-                let from = new Date(parsedData[0].time);
+                let from = new Date(parsedData[0].receivingTime);
                 let to = getToDate();
 
                 $(`#from_${encodedId}`).val(datetimeLocal(from));

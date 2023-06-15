@@ -1,5 +1,6 @@
 using System;
 using System.ComponentModel.DataAnnotations;
+using HSMServer.Extensions;
 using HSMServer.Model.TreeViewModel;
 using SensorStatus = HSMServer.Model.TreeViewModel.SensorStatus;
 
@@ -35,7 +36,7 @@ public class EditSensorStatusViewModal
     {
         Path = model.FullPath;
         RootProductId = model.RootProduct.Id;
-        SensorId = Guid.Parse(model.EncodedId);
+        SensorId = model.EncodedId.ToGuid();
         IsAccessKeyExist = isAccessKeyExist;
 
         Status = model.Status;

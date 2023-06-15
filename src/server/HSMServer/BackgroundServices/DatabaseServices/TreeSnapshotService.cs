@@ -1,4 +1,5 @@
-﻿using HSMServer.Core.TreeStateSnapshot;
+﻿using HSMServer.Core.Cache;
+using HSMServer.Core.TreeStateSnapshot;
 using Microsoft.Extensions.Hosting;
 using System;
 using System.Threading;
@@ -10,21 +11,24 @@ namespace HSMServer.BackgroundServices
     {
         private readonly IHostApplicationLifetime _lifetimeHost;
         private readonly ITreeStateSnapshot _snapshot;
+        private readonly ITreeValuesCache _cache;
 
 
         public override TimeSpan Delay { get; } = TimeSpan.FromMinutes(5);
 
 
-        public TreeSnapshotService(IHostApplicationLifetime lifetimeHost, ITreeStateSnapshot snapshot)
+        public TreeSnapshotService(IHostApplicationLifetime lifetimeHost, ITreeStateSnapshot snapshot,
+                                   ITreeValuesCache cache)
         {
             _lifetimeHost = lifetimeHost;
             _snapshot = snapshot;
+            _cache = cache;
         }
 
 
         public override Task StartAsync(CancellationToken token)
         {
-            _lifetimeHost.ApplicationStopping.Register(async () => await SaveState(true));
+            _lifetimeHost.ApplicationStopping.Register(async () => await StopHandler());
 
             return base.StartAsync(token);
         }
@@ -39,6 +43,13 @@ namespace HSMServer.BackgroundServices
             await _snapshot.FlushState(isFinal);
 
             _logger.Info($"Stop state flushing");
+        }
+
+        private Task StopHandler()
+        {
+            _cache.SaveLastStateToDb();
+
+            return SaveState(true);
         }
     }
 }

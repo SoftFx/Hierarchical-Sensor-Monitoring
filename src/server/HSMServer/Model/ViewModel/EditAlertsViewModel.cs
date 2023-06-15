@@ -3,12 +3,13 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.Linq;
+using HSMServer.Extensions;
 
 namespace HSMServer.Model.ViewModel;
 
 public sealed class EditAlertsViewModel
 {
-    public List<Guid> SelectedNodes => string.IsNullOrEmpty(NodeIds) ? new() : NodeIds.Split(',').Select(Guid.Parse).ToList();
+    public List<Guid> SelectedNodes => string.IsNullOrEmpty(NodeIds) ? new() : NodeIds.Split(',').Select(x => x.ToGuid()).ToList();
 
 
     [Display(Name = "Time to live interval")]

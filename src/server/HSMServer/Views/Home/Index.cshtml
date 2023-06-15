@@ -23,6 +23,8 @@
 
     var selectNode = "@Url.Action(nameof(HomeController.SelectNode), ViewConstants.HomeController)";
     var refreshTree = "@Url.Action(nameof(HomeController.RefreshTree), ViewConstants.HomeController)";
+    var getNode = "@Url.Action(nameof(HomeController.GetNode), ViewConstants.HomeController)";
+    var closeNode = "@Url.Action(nameof(HomeController.RemoveRenderingNode), ViewConstants.HomeController)";
 
     var historyLatestAction = "@Url.Action(nameof(SensorHistoryController.TabelHistoryLatest), ViewConstants.HistoryController)";
     var historyAction = "@Url.Action(nameof(SensorHistoryController.TableHistory), ViewConstants.HistoryController)";
@@ -111,7 +113,7 @@
                 <div class="row justify-content-start mw-100 me-1">
                     <div class="tree-height-weight-parameters col-auto ms-2 pe-0">
                         <div class="col-md-auto">
-                            <div id="jstree">@await Html.PartialAsync("_Tree", Model.GetUserTree(user))</div>
+                            <div id="jstree">@await Html.PartialAsync("_Tree", user.Tree.GetUserTree())</div>
                         </div>
                     </div>
                 </div>
@@ -250,23 +252,14 @@
     }
 
     var refreshTreeTimeoutId;
+    var isRefreshing = false;
     function updateTreeTimer() {
         clearTimeout(refreshTreeTimeoutId);
+        isRefreshing = true;
 
-        $.ajax({
-            type: 'POST',
-            url: refreshTree,
-            dataType: 'html',
-            contentType: 'application/json',
-            cache: false,
-            async: true
-        }).done(function (treeData) {
-            $('#jstree').jstree(true).settings.core.data = treeData;
-            $('#jstree').jstree(true).refresh(true);
+        $('#jstree').jstree(true).refresh(true);
 
-            refreshTreeTimeoutId = setTimeout(updateTreeTimer, interval);
-            updateSelectedNodeDataTimeoutId = setTimeout(updateSelectedNodeData, interval);
-        });
+        isRefreshing = false;
     }
 
     var updateSelectedNodeDataTimeoutId;
@@ -274,7 +267,7 @@
         clearTimeout(updateSelectedNodeDataTimeoutId);
 
         var selectedNodeId = currentSelectedNodeId;
-        if (selectedNodeId != "" && selectedNodeId !== undefined)
+        if (selectedNodeId != "")
             $.ajax({
                 type: 'POST',
                 url: updateSelectedNode + '?Selected=' + selectedNodeId,

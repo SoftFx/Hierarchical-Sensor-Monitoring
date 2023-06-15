@@ -9,6 +9,7 @@ using HSMServer.Model.Authentication;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using HSMServer.Extensions;
 using Xunit;
 
 namespace HSMServer.Core.Tests
@@ -110,7 +111,7 @@ namespace HSMServer.Core.Tests
             {
                 var key = AddKey(_databaseCore.AddAccessKey);
 
-                FullKeyTest(key, _databaseCore.GetAccessKey(Guid.Parse(key.Id)));
+                FullKeyTest(key, _databaseCore.GetAccessKey(key.Id.ToGuid()));
             }
         }
 
@@ -128,7 +129,7 @@ namespace HSMServer.Core.Tests
             for (int i = 0; i < count; i++)
             {
                 var key = AddKey(_databaseCore.AddAccessKey);
-                var id = Guid.Parse(key.Id);
+                var id = key.Id.ToGuid();
 
                 Assert.NotNull(_databaseCore.GetAccessKey(id));
 
@@ -155,7 +156,7 @@ namespace HSMServer.Core.Tests
                 var updated = EntitiesFactory.BuildAccessKeyEntity(id: key.Id);
                 _databaseCore.UpdateAccessKey(updated);
 
-                FullKeyTest(updated, _databaseCore.GetAccessKey(Guid.Parse(key.Id)));
+                FullKeyTest(updated, _databaseCore.GetAccessKey(key.Id.ToGuid()));
             }
         }
 

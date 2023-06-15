@@ -89,7 +89,7 @@ namespace HSMServer.Controllers
 
             var localValue = GetLocalLastValue(model.EncodedId, model.FromUtc, model.ToUtc);
 
-            if (localValue is not null)
+            if (localValue is not null && (values.Count == 0 || values[0].Time != localValue.Time))
                 values.Add(localValue);
 
             return new(HistoryProcessorFactory.BuildProcessor(model.Type).ProcessingAndCompression(values, model.BarsCount).Select(v => (object)v));

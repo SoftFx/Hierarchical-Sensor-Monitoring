@@ -18,6 +18,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Security.Claims;
 using System.Threading.Tasks;
+using HSMServer.Extensions;
 
 namespace HSMServer.Controllers
 {
@@ -84,7 +85,7 @@ namespace HSMServer.Controllers
                 byte[] keyBytes = AESCypher.ToBytes(key);
 
                 var result = AESCypher.Decrypt(cipher.Replace(' ', '+'), nonce.Replace(' ', '+'), tag.Replace(' ', '+'), keyBytes);
-                var ticketId = Guid.Parse(result);
+                var ticketId = result.ToGuid();
                 var ticket = _ticketManager.GetTicket(ticketId);
                 if (ticket == null)
                 {
@@ -127,7 +128,7 @@ namespace HSMServer.Controllers
             {
                 products = new List<(Guid, ProductRoleEnum)>()
                 {
-                    (Guid.Parse(model.ProductKey), (ProductRoleEnum)int.Parse(model.Role))
+                    (model.ProductKey.ToGuid(), (ProductRoleEnum)int.Parse(model.Role))
                 };
             }
 
@@ -135,7 +136,7 @@ namespace HSMServer.Controllers
             await Authenticate(model.Username, true);
 
             if (!string.IsNullOrEmpty(model.TicketId))
-                _ticketManager.RemoveTicket(Guid.Parse(model.TicketId));
+                _ticketManager.RemoveTicket(model.TicketId.ToGuid());
 
             return RedirectToAction("Index", "Home");
         }
