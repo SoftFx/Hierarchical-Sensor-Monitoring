@@ -52,14 +52,14 @@ public sealed class NodeChildrenViewModel
 
     public NodeChildrenViewModel ChangePageSize(int pageSize)
     {
-        PageSize = pageSize;
+        PageSize = pageSize <= 0 ? PageSize : pageSize;
 
         return this;
     }
 
     public NodeChildrenViewModel ChangePageNumber(int pageNumber)
     {
-        PageNumber = pageNumber;
+        PageNumber = pageNumber < 0 ? PageNumber : pageNumber;
 
         return this;
     }

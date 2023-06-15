@@ -103,20 +103,20 @@ namespace HSMServer.Controllers
         public void RemoveRenderingNode(Guid nodeId) => CurrentUser.Tree.RemoveRenderingNode(nodeId);
 
         [HttpGet]
-        public IActionResult GetGrid(string selectedId, string accordionId, int pageNumber = 0, int pageSize = 150)
+        public IActionResult GetGrid(string accordionId, int pageNumber = 0, int pageSize = 150)
         {
             var model = CurrentUser.SelectedNode.ReloadPage(accordionId.Replace("grid", string.Empty), pageNumber, pageSize);
-            if (model.OriginalSize <= pageNumber * pageSize || pageNumber < 0 || pageSize <= 0)
+            if (model.OriginalSize <= model.PageNumber * model.PageSize || model.PageNumber < 0 || model.PageSize <= 0)
                 return NotFound(); 
             
             return PartialView("_GridAccordion", model);
         }
 
         [HttpGet]
-        public IActionResult GetList(string selectedId, string accordionId, int pageNumber = 0, int pageSize = 150)
+        public IActionResult GetList(string accordionId, int pageNumber = 0, int pageSize = 150)
         {
             var model = CurrentUser.SelectedNode.ReloadPage(accordionId.Replace("list", string.Empty), pageNumber, pageSize);
-            if (model.OriginalSize <= pageNumber * pageSize || pageNumber < 0 || pageSize <= 0)
+            if (model.OriginalSize <= model.PageNumber * model.PageSize || model.PageNumber < 0 || model.PageSize <= 0)
                 return NotFound(); 
             
             return PartialView("_ListAccordion", model);

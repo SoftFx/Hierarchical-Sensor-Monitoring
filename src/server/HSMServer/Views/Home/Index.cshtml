@@ -298,16 +298,16 @@
                 let accordionName = "";
                 if ($('#dataPanel li a.active')[0].innerText === ' Grid') {
                     accordionName = "grid"
-                    getGridPage($(`#pageNumber_${accordionName}Sensors`)[0].innerText - 1, $(`#pageSize_${accordionName}Sensors`)[0].value, `${accordionName}Sensors`)
-                    getGridPage($(`#pageNumber_${accordionName}Nodes`)[0].innerText - 1, $(`#pageSize_${accordionName}Nodes`)[0].value, `${accordionName}Nodes`)
+                    getGridPage(`${accordionName}Sensors`)
+                    getGridPage(`${accordionName}Nodes`)
                 }
                 else {
                     accordionName = "list";
-                    getListPage($(`#pageNumber_${accordionName}Sensors`)[0].innerText - 1, $(`#pageSize_${accordionName}Sensors`)[0].value, `${accordionName}Sensors`)
-                    getListPage($(`#pageNumber_${accordionName}Nodes`)[0].innerText - 1, $(`#pageSize_${accordionName}Nodes`)[0].value, `${accordionName}Nodes`)
+                    getListPage(`${accordionName}Sensors`)
+                    getListPage(`${accordionName}Nodes`)
                 }
-                
-                updateGeneralInfo(selectedNodeId);
+
+               updateGeneralInfo(selectedNodeId);
                 
                 if (displayChildrenInfo)
                     $('#dataPanel').removeClass('d-none');
@@ -339,10 +339,10 @@
         container: document.getElementById('accessKeys_modal')
     });
     
-    function getGridPage(pageNumber, pageSize, accordionId){
+    function getGridPage(accordionId, pageNumber = -1, pageSize = -1){
         $.ajax({
             type: 'get',
-            url: `${getGrid}?selectedId=${currentSelectedNodeId}&accordionId=${accordionId}&pageNumber=${pageNumber}&pageSize=${pageSize}`,
+            url: `${getGrid}?accordionId=${accordionId}&pageNumber=${pageNumber}&pageSize=${pageSize}`,
             datatype: 'html',
             contenttype: 'application/json',
             cache: false,
@@ -352,10 +352,10 @@
         });
     }
     
-    function getListPage(pageNumber, pageSize, accordionId){
+    function getListPage(accordionId, pageNumber = -1, pageSize = -1){
         $.ajax({
             type: 'get',
-            url: `${getList}?selectedId=${currentSelectedNodeId}&accordionId=${accordionId}&pageNumber=${pageNumber}&pageSize=${pageSize}`,
+            url: `${getList}?&accordionId=${accordionId}&pageNumber=${pageNumber}&pageSize=${pageSize}`,
             datatype: 'html',
             contenttype: 'application/json',
             cache: false,
