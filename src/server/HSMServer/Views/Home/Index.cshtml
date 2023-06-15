@@ -347,9 +347,9 @@
             contenttype: 'application/json',
             cache: false,
             success: function (viewData) {
-                $(`#grid-accordion_${accordionId}`).parents('div.accordion').empty().replaceWith(viewData);
-            },
-            error: function (_){}
+                if (viewData !== '')
+                    $(`#grid-accordion_${accordionId}`).parents('div.accordion').empty().replaceWith(viewData);
+            }
         });
     }
     
@@ -361,7 +361,8 @@
             contenttype: 'application/json',
             cache: false,
             success: function (viewData) {
-                $(`#list-accordion_${accordionId}`).parents('div.accordion').empty().replaceWith(viewData);
+                if (viewData !== '')
+                    $(`#list-accordion_${accordionId}`).parents('div.accordion').empty().replaceWith(viewData);
             }
         });
     }

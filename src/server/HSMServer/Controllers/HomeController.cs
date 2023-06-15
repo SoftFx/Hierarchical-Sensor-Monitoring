@@ -108,7 +108,7 @@ namespace HSMServer.Controllers
         {
             var model = StoredUser.SelectedNode.ReloadPage(pageRequest.Id.Replace("grid", string.Empty), pageRequest.CurrentPage, pageRequest.PageSize);
             if (model.OriginalSize <= model.PageNumber * model.PageSize || model.PageNumber < 0 || model.PageSize <= 0)
-                return NotFound(); 
+                return _emptyResult; 
             
             return PartialView("_GridAccordion", model);
         }
@@ -118,7 +118,7 @@ namespace HSMServer.Controllers
         {
             var model = StoredUser.SelectedNode.ReloadPage(pageRequest.Id.Replace("list", string.Empty), pageRequest.CurrentPage, pageRequest.PageSize);
             if (model.OriginalSize <= model.PageNumber * model.PageSize || model.PageNumber < 0 || model.PageSize <= 0)
-                return NotFound(); 
+                return _emptyResult; 
             
             return PartialView("_ListAccordion", model);
         }
