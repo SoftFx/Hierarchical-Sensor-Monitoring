@@ -20,37 +20,21 @@ public sealed class NodeChildrenViewModel
 
 
     public bool IsPaginationDisplayed => _isPaginated && OriginalSize > PageSize;
-    
-    
-    public NodeChildrenViewModel() { }
 
-    public NodeChildrenViewModel(int pageNumber, int pageSize)
-    {
-        PageNumber = pageNumber;
-        PageSize = pageSize;
-        _isPaginated = true;
-    }
 
-    
-    public NodeChildrenViewModel InitializeItems<T>(ICollection<T> collection) where T : NodeViewModel
+    public NodeChildrenViewModel Load<T>(ICollection<T> collection) where T : NodeViewModel
     {
         if (collection is not null)
         {         
             VisibleItems.Clear();    
             VisibleItems.AddRange(collection.OrderByDescending(n => n.Status).ThenBy(n => n.Name).Skip(PageNumber * PageSize).Take(PageSize));
+            _isPaginated = true;
             OriginalSize = collection.Count;
         }
         
         return this;
     }
     
-    public NodeChildrenViewModel TurnOnPagination()
-    {
-        _isPaginated = true;
-
-        return this;
-    }
-
     public NodeChildrenViewModel ChangePageSize(int pageSize)
     {
         PageSize = pageSize <= 0 ? PageSize : pageSize;

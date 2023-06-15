@@ -11,6 +11,7 @@ public class SelectedNodeViewModel
 
     public string Id => _selectedNode?.Id.ToString();
     
+    
     public NodeChildrenViewModel Sensors { get; } = new();
         
     public NodeChildrenViewModel Nodes { get; } = new();
@@ -34,17 +35,17 @@ public class SelectedNodeViewModel
                 Nodes.ChangePageNumber(pageNumber).ChangePageSize(pageSize);
                 
                 if (_selectedNode is ProductNodeViewModel productNodeViewModel)
-                    return Nodes.InitializeItems(productNodeViewModel.Nodes.Values).TurnOnPagination();
+                    return Nodes.Load(productNodeViewModel.Nodes.Values);
 
-                return Nodes.InitializeItems((_selectedNode as FolderModel)?.Products.Values).TurnOnPagination();
+                return Nodes.Load((_selectedNode as FolderModel)?.Products.Values);
             case "Sensors":
                 return Sensors.ChangePageNumber(pageNumber)
                                           .ChangePageSize(pageSize)
-                                          .InitializeItems((_selectedNode as ProductNodeViewModel)?.Sensors.Values).TurnOnPagination();
+                                          .Load((_selectedNode as ProductNodeViewModel)?.Sensors.Values);
             default:
                 return Nodes.ChangePageNumber(pageNumber)
                                         .ChangePageSize(pageSize)
-                                        .InitializeItems((_selectedNode as FolderModel)?.Products.Values).TurnOnPagination();;
+                                        .Load((_selectedNode as FolderModel)?.Products.Values);;
         }
     }
     
@@ -55,11 +56,11 @@ public class SelectedNodeViewModel
         
         if (node is ProductNodeViewModel productNodeViewModel)
         {
-            Nodes.InitializeItems(productNodeViewModel.Nodes.Values).TurnOnPagination();
-            Sensors.InitializeItems(productNodeViewModel.Sensors.Values).TurnOnPagination();
+            Nodes.Load(productNodeViewModel.Nodes.Values);
+            Sensors.Load(productNodeViewModel.Sensors.Values);
         }
         else if (node is FolderModel folder)
-            Nodes.InitializeItems(folder.Products.Values).TurnOnPagination();
+            Nodes.Load(folder.Products.Values);
     }
 
     private void Reset()
