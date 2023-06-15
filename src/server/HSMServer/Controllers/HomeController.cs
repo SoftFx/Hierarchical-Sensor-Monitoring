@@ -68,11 +68,12 @@ namespace HSMServer.Controllers
                 if (_folderManager.TryGetValue(id, out var folder))
                 {
                     viewModel = folder;
-                    viewModel.GridNodes.InitializeItems(folder.Products.Values).TurnOnPagination();
+                    StoredUser.SelectedNode.ConnectNode(folder);
                 }
                 else if (_treeViewModel.Nodes.TryGetValue(id, out var node))
                 {
-                    viewModel = node.GetPaginated();
+                    viewModel = node;
+                    StoredUser.SelectedNode.ConnectNode(node);
                 }
                 else if (_treeViewModel.Sensors.TryGetValue(id, out var sensor))
                 {
@@ -104,27 +105,21 @@ namespace HSMServer.Controllers
         [HttpGet]
         public IActionResult GetGrid(string selectedId, string accordionId, int pageNumber = 0, int pageSize = 150)
         {
-            _treeViewModel.Nodes.TryGetValue(selectedId.ToGuid(), out var node);
-            
-            var items = node.GetAccordionChildren(accordionId.Replace("grid", string.Empty));
-            
-            if (items?.Count <= pageNumber * pageSize || pageNumber < 0 || pageSize <= 0)
+            var model = CurrentUser.SelectedNode.ReloadPage(accordionId.Replace("grid", string.Empty), pageNumber, pageSize);
+            if (model.OriginalSize <= pageNumber * pageSize || pageNumber < 0 || pageSize <= 0)
                 return NotFound(); 
             
-            return PartialView("_GridAccordion", new GridViewModel(pageNumber, pageSize).InitializeItems(items));
+            return PartialView("_GridAccordion", model);
         }
 
         [HttpGet]
         public IActionResult GetList(string selectedId, string accordionId, int pageNumber = 0, int pageSize = 150)
         {
-            _treeViewModel.Nodes.TryGetValue(selectedId.ToGuid(), out var node);
-            
-            var items = node.GetAccordionChildren(accordionId.Replace("list", string.Empty));
-            
-            if (items?.Count <= pageNumber * pageSize || pageNumber < 0 || pageSize <= 0)
+            var model = CurrentUser.SelectedNode.ReloadPage(accordionId.Replace("list", string.Empty), pageNumber, pageSize);
+            if (model.OriginalSize <= pageNumber * pageSize || pageNumber < 0 || pageSize <= 0)
                 return NotFound(); 
             
-            return PartialView("_ListAccordion", new GridViewModel(pageNumber, pageSize).InitializeItems(items));
+            return PartialView("_ListAccordion", model);
         }
 
         [HttpGet]

@@ -18,11 +18,6 @@ namespace HSMServer.Model.TreeViewModel
         public TimeIntervalViewModel SavedHistoryPeriod { get; protected set; }
 
         public TimeIntervalViewModel SelfDestroyPeriod { get; protected set; }
-
-
-        public GridViewModel GridSensors { get; } = new();
-        
-        public GridViewModel GridNodes { get; } = new();
         
         
         public Guid Id { get; protected set; }

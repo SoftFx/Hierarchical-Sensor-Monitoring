@@ -44,16 +44,7 @@ namespace HSMServer.Model.TreeViewModel
             if (folder != null)
                 AddFolder(folder);
         }
-
-        public ProductNodeViewModel GetPaginated()
-        {
-            GridSensors.InitializeItems(Sensors.Values).TurnOnPagination();
-            GridNodes.InitializeItems(Nodes.Values).TurnOnPagination();
-          
-            return this;
-        }
-
-
+        
         public bool IsChangingAccessKeysAvailable(User user) =>
             user.IsAdmin || ProductRoleHelper.IsManager(Id, user.ProductsRoles);
 
