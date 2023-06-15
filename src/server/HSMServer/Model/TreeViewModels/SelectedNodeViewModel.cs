@@ -49,13 +49,15 @@ public class SelectedNodeViewModel
             case "Nodes":
                 return NodeChildrenNodes.ChangePageNumber(pageNumber)
                                         .ChangePageSize(pageSize)
-                                        .InitializeItems((SelectedNode as ProductNodeViewModel).Nodes.Values).TurnOnPagination();
+                                        .InitializeItems((SelectedNode as ProductNodeViewModel)?.Nodes.Values).TurnOnPagination();
             case "Sensors":
                 return NodeChildrenSensors.ChangePageNumber(pageNumber)
                                           .ChangePageSize(pageSize)
-                                          .InitializeItems((SelectedNode as ProductNodeViewModel).Sensors.Values).TurnOnPagination();
+                                          .InitializeItems((SelectedNode as ProductNodeViewModel)?.Sensors.Values).TurnOnPagination();
             default:
-                return null;
+                return NodeChildrenSensors.ChangePageNumber(pageNumber)
+                                          .ChangePageSize(pageSize)
+                                          .InitializeItems((SelectedNode as FolderModel)?.Products.Values).TurnOnPagination();;
         }
     }
 }
