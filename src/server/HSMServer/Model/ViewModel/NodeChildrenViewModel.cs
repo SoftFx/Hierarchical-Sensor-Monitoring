@@ -34,11 +34,12 @@ public sealed class NodeChildrenViewModel
     
     public NodeChildrenViewModel InitializeItems<T>(ICollection<T> collection) where T : NodeViewModel
     {
-        VisibleItems.Clear();
-        VisibleItems.AddRange(collection.OrderByDescending(n => n.Status).ThenBy(n => n.Name)
-            .Skip(PageNumber * PageSize).Take(PageSize));
-
-        OriginalSize = collection.Count;
+        if (collection is not null)
+        {         
+            VisibleItems.Clear();    
+            VisibleItems.AddRange(collection.OrderByDescending(n => n.Status).ThenBy(n => n.Name).Skip(PageNumber * PageSize).Take(PageSize));
+            OriginalSize = collection.Count;
+        }
         
         return this;
     }
@@ -68,5 +69,6 @@ public sealed class NodeChildrenViewModel
     {
         PageNumber = 0;
         PageSize = 150;
+        VisibleItems.Clear();
     }
 }

@@ -348,7 +348,8 @@
             cache: false,
             success: function (viewData) {
                 $(`#grid-accordion_${accordionId}`).parents('div.accordion').empty().replaceWith(viewData);
-            }
+            },
+            error: function (_){}
         });
     }
     

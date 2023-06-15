@@ -68,12 +68,12 @@ namespace HSMServer.Controllers
                 if (_folderManager.TryGetValue(id, out var folder))
                 {
                     viewModel = folder;
-                    StoredUser.SelectedNode.ConnectNode(folder);
+                    StoredUser.SelectedNode.ConnectNode(folder, _treeViewModel, _folderManager, _treeValuesCache);
                 }
                 else if (_treeViewModel.Nodes.TryGetValue(id, out var node))
                 {
                     viewModel = node;
-                    StoredUser.SelectedNode.ConnectNode(node);
+                    StoredUser.SelectedNode.ConnectNode(node, _treeViewModel, _folderManager, _treeValuesCache);
                 }
                 else if (_treeViewModel.Sensors.TryGetValue(id, out var sensor))
                 {
