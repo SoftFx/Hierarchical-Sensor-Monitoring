@@ -348,7 +348,7 @@
             cache: false,
             success: function (viewData) {
                 if (viewData !== '')
-                    $(`#grid-accordion_${accordionId}`).parents('div.accordion').empty().replaceWith(viewData);
+                    $(`#grid-accordion_${accordionId}`).empty().replaceWith(viewData);
             }
         });
     }
@@ -362,7 +362,7 @@
             cache: false,
             success: function (viewData) {
                 if (viewData !== '')
-                    $(`#list-accordion_${accordionId}`).parents('div.accordion').empty().replaceWith(viewData);
+                    $(`#list-accordion_${accordionId}`).empty().replaceWith(viewData);
             }
         });
     }

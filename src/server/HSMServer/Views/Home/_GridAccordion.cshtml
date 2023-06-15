@@ -2,15 +2,17 @@
 
 @model HSMServer.Model.ViewModel.NodeChildrenViewModel
 
-<div class="accordion">
+@{
+    var title = Model.VisibleItems.FirstOrDefault().GetChildrenAccordionTitle();
+    var accordionId = $"grid{title}";
+}
+
+<div class="accordion" id='grid-accordion_@accordionId'>
     @if (Model.VisibleItems.Count > 0)
     {
-        var title = Model.VisibleItems.FirstOrDefault().GetChildrenAccordionTitle();
-        var accordionId = $"grid{title}";
-
         <div class="accordion-item custom-accordion-item">
             <h2 class="accordion-header" id="custom_accordion_header">
-                <button id='grid-accordion_@accordionId' class="accordion-button fw-bold" type="button" data-bs-toggle="collapse" data-bs-target="#flush-collapse_@accordionId" aria-expanded='true'>
+                <button class="accordion-button fw-bold" type="button" data-bs-toggle="collapse" data-bs-target="#flush-collapse_@accordionId" aria-expanded='true'>
                     @title
                 </button>
             </h2>

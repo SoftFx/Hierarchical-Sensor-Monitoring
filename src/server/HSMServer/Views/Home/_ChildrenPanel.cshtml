@@ -11,20 +11,19 @@
 
 <ul id="dataPanel" class='nav nav-tabs @visibilityClass' role="tablist">
     <li class='nav-item'>
-        <a id="gridLink_@nodeId" class='nav-link' data-bs-toggle='tab' href='#@gridDivId' role="tab"><i class="fa-solid fa-table-cells-large"></i> Grid</a>
+        <a id="gridLink_@nodeId" class='nav-link' data-bs-toggle='tab' onclick="getGridPage(`gridSensors`);getGridPage(`gridNodes`)" href='#@gridDivId' role="tab"><i class="fa-solid fa-table-cells-large"></i> Grid</a>
     </li>
     <li class='nav-item'>
-        <a id="listLink_@nodeId" class='nav-link' data-bs-toggle='tab' href='#@listDivId' role="tab"><i class="fa-solid fa-list"></i> List</a>
+        <a id="listLink_@nodeId" class='nav-link' data-bs-toggle='tab' onclick="getListPage(`listSensors`);getListPage(`listNodes`)" href='#@listDivId' role="tab"><i class="fa-solid fa-list"></i> List</a>
     </li>
 </ul>
 <div class='tab-content'>
     <div class='tab-pane fade' id=@gridDivId role="tabpanel">
-         @await Html.PartialAsync("_GridAccordion", Model.Nodes) 
-         @await Html.PartialAsync("_GridAccordion", Model.Sensors) 
+         <div class="accordion" id="grid-accordion_gridNodes"></div>
+         <div class="accordion" id="grid-accordion_gridSensors"></div>
     </div>
-
     <div class='tab-pane fade' id=@listDivId role="tabpanel">
-         @await Html.PartialAsync("_ListAccordion", Model.Nodes) 
-         @await Html.PartialAsync("_ListAccordion", Model.Sensors) 
+         <div class="accordion" id="list-accordion_listNodes"></div>
+         <div class="accordion" id="list-accordion_listSensors"></div>
     </div>
 </div>
