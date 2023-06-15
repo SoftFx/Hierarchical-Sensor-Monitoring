@@ -8,6 +8,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using HSMServer.Extensions;
 using Xunit;
 
 namespace HSMServer.Core.Tests.TreeValuesCacheTests
@@ -158,7 +159,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
                 var sensorEntity = EntitiesFactory.BuildSensorEntity(parent: TestProductsManager.TestProduct.Id, type: (byte)type);
 
                 var sensor = Infrastructure.SensorModelFactory.Build(sensorEntity);
-                sensor.AddParent(_valuesCache.GetProduct(Guid.Parse(sensorEntity.ProductId)));
+                sensor.AddParent(_valuesCache.GetProduct(sensorEntity.ProductId.ToGuid()));
 
                 var info = new SensorModelInfo()
                 {

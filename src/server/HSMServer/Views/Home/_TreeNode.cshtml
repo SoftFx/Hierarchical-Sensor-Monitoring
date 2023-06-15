@@ -6,11 +6,14 @@
 
 @{
     var data = Model.Data;
+
     var showIcons = (User as User).TreeFilter.ByVisibility.Icons.Value;
+
+    var arrowIcon = Model.VisibleSensorsCount > 0 ? "jstree-closed" : string.Empty;
 }
 
 
-<li id='@data.EncodedId' title='@data.Tooltip' data-jstree='@Model.ToJSTree()'>
+<li class="@arrowIcon" id='@data.EncodedId' title='@data.Tooltip' data-jstree='@Model.ToJSTree()'>
     <span class="@(Model.IsMutedState ? "muted-state-text" : "")"> @Html.Raw(data.Name.GetShortNodeName()) @Model.SensorsCountString </span>
 
     @if (!data.IsEmpty && !Model.IsMutedState && showIcons)
@@ -27,7 +30,7 @@
                 <img class="tree-png-icon" src="~/dist/user-crossed.png" alt="!"/>
             </span>
         }
-        
+
         @if (Model.IsGroupsEnable && !(Model.Parent?.IsGroupsEnable ?? false))
         {
             <span>
@@ -44,7 +47,7 @@
         @if (Model.IsGrafanaEnabled && !(Model.Parent?.IsGrafanaEnabled ?? false))
         {
             <span>
-                <img class="tree-png-icon" src="~/dist/grafana.svg" alt="!" title="Grafana" />
+                <img class="tree-png-icon" src="~/dist/grafana.svg" alt="!" title="Grafana"/>
             </span>
         }
     }
@@ -63,4 +66,13 @@
             }
         </ul>
     }
+    @if (Model.IsDisabledNodeShown)
+    {
+        <ul>
+            <li class="jstree-last jstree-no-icons noHover" id='disabled_@data.EncodedId' data-jstree='@BaseShallowModel.GetDisabledJSTree()'>
+                <span>... and @Model.WidthDifference more</span>
+            </li>
+        </ul>
+    }
+    
 </li>

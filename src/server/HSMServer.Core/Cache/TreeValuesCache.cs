@@ -54,14 +54,19 @@ namespace HSMServer.Core.Cache
         }
 
 
+
+        public void SaveLastStateToDb()
+        {
+            foreach (var sensor in _sensors.Values)
+                if (sensor is IBarSensor barModel && barModel.LocalLastValue != default)
+                    SaveSensorValueToDb(barModel.LocalLastValue, sensor.Id);
+        }
+
         public void Dispose()
         {
             _updatesQueue.NewItemsEvent -= UpdatesQueueNewItemsHandler;
             _updatesQueue?.Dispose();
 
-            foreach (var sensor in _sensors.Values)
-                if (sensor is IBarSensor barModel && barModel.LocalLastValue != default)
-                    _database.AddSensorValue(barModel.LocalLastValue.ToEntity(sensor.Id));
 
             _database.Dispose();
         }
@@ -474,12 +479,15 @@ namespace HSMServer.Core.Cache
             var oldStatus = sensor.Status;
 
             if (sensor.TryAddValue(value) && sensor.LastDbValue != null)
-            {
-                _database.AddSensorValue(sensor.LastDbValue.ToEntity(sensor.Id));
-                _snapshot.Sensors[sensor.Id].SetLastUpdate(sensor.LastDbValue.ReceivingTime);
-            }
+                SaveSensorValueToDb(sensor.LastDbValue, sensor.Id);
 
             NotifyAboutChanges(sensor);
+        }
+
+        private void SaveSensorValueToDb(BaseValue value, Guid sensorId)
+        {
+            _database.AddSensorValue(value.ToEntity(sensorId));
+            _snapshot.Sensors[sensorId].SetLastUpdate(value.ReceivingTime);
         }
 
         private void NotifyAllProductChildrenAboutUpdate(ProductModel product,

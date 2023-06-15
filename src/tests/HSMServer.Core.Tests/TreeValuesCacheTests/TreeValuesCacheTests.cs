@@ -17,6 +17,7 @@ using System.Linq;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
+using HSMServer.Extensions;
 using Xunit;
 using SensorModelFactory = HSMServer.Core.Tests.Infrastructure.SensorModelFactory;
 
@@ -36,7 +37,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         {
             var folderManager = new Mock<IFolderManager>().Object;
 
-            _treeViewModel = new(_valuesCache, folderManager);
+            _treeViewModel = new(_valuesCache, folderManager, _userManager);
         }
 
 
@@ -569,7 +570,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
 
             foreach (var expectedSensor in expected)
             {
-                var sensorId = Guid.Parse(expectedSensor.Id);
+                var sensorId = expectedSensor.Id.ToGuid();
                 var actualSensor = actualDict[sensorId];
 
                 ModelsTester.TestSensorModel(expectedSensor, actualSensor);

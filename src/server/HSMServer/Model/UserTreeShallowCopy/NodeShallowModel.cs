@@ -3,6 +3,7 @@ using HSMServer.Extensions;
 using HSMServer.Model.Authentication;
 using HSMServer.Model.TreeViewModel;
 using System.Collections.Generic;
+using HSMServer.Model.TreeViewModels;
 
 namespace HSMServer.Model.UserTreeShallowCopy
 {
@@ -25,6 +26,11 @@ namespace HSMServer.Model.UserTreeShallowCopy
         public override bool IsAccountsIgnore => AccountState.IsAllIgnored;
 
 
+        public int WidthDifference => Data.Sensors.Count + Data.Nodes.Count - VisibleTreeViewModel.RenderWidth;
+        
+        public bool IsDisabledNodeShown => WidthDifference > 0 && Sensors.Count + Nodes.Count > 0;
+        
+        
         public int VisibleSensorsCount { get; private set; }
 
         public string SensorsCountString
@@ -43,10 +49,8 @@ namespace HSMServer.Model.UserTreeShallowCopy
         internal NodeShallowModel(ProductNodeViewModel data, User user) : base(data, user) { }
 
 
-        internal void AddChild(SensorShallowModel shallowSensor, User user)
+        internal BaseNodeShallowModel<SensorNodeViewModel> AddChildState(SensorShallowModel shallowSensor, User user)
         {
-            shallowSensor.Parent = this;
-
             var sensor = shallowSensor.Data;
 
             if (sensor.State != SensorState.Muted)
@@ -62,16 +66,21 @@ namespace HSMServer.Model.UserTreeShallowCopy
             GrafanaState.CalculateState(shallowSensor);
 
             if (user.IsSensorVisible(sensor))
-            {
                 VisibleSensorsCount++;
-                Sensors.Add(shallowSensor);
-            }
+
+            return shallowSensor;
         }
 
-        internal void AddChild(NodeShallowModel node, User user)
+        internal BaseNodeShallowModel<SensorNodeViewModel> AddChild(SensorShallowModel shallowSensor)
         {
-            node.Parent = this;
+            shallowSensor.Parent = this;
+            Sensors.Add(shallowSensor);
 
+            return shallowSensor;
+        }
+
+        internal NodeShallowModel AddChildState(NodeShallowModel node, User user)
+        {
             if (node._mutedValue.HasValue)
             {
                 if (!node._mutedValue.Value)
@@ -87,8 +96,15 @@ namespace HSMServer.Model.UserTreeShallowCopy
 
             VisibleSensorsCount += node.VisibleSensorsCount;
 
-            if (node.VisibleSensorsCount > 0 || user.IsEmptyProductVisible(node.Data))
-                Nodes.Add(node);
+            return node;
+        }
+
+        internal NodeShallowModel AddChild(NodeShallowModel node)
+        {
+            node.Parent = this;
+            Nodes.Add(node);
+
+            return node;
         }
     }
 }

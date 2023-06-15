@@ -80,10 +80,26 @@ namespace HSMServer.Controllers
             return PartialView("_NodeDataPanel", viewModel);
         }
 
-        [HttpPost]
+        [HttpGet]
+        public IActionResult GetNode(string id)
+        {
+            var guid = id.ToGuid();
+
+            CurrentUser.Tree.AddRenderingNode(guid);
+
+            if (_treeViewModel.Nodes.TryGetValue(guid, out var node))
+                return PartialView("_TreeNode", CurrentUser.Tree.GetUserNode(node));
+
+            return NotFound();
+        }
+
+        [HttpPut]
+        public void RemoveRenderingNode(Guid nodeId) => CurrentUser.Tree.RemoveRenderingNode(nodeId);
+
+        [HttpGet]
         public IActionResult RefreshTree()
         {
-            return PartialView("_Tree", _treeViewModel.GetUserTree(CurrentUser));
+            return PartialView("_Tree", CurrentUser.Tree.GetUserTree());
         }
 
         [HttpGet]
@@ -410,7 +426,7 @@ namespace HSMServer.Controllers
         [HttpGet]
         public ActionResult GetGeneralInfo(string selectedId)
         {
-            var id = Guid.Parse(selectedId);
+            var id = selectedId.ToGuid();
 
             if (_treeViewModel.Nodes.TryGetValue(id, out var node))
                 return PartialView("_GeneralInfo", new ProductInfoViewModel(node));
@@ -662,7 +678,7 @@ namespace HSMServer.Controllers
         public async Task<IActionResult> UpdateFolderInfo(FolderInfoViewModel newModel)
         {
             if (!ModelState.IsValid)
-                return PartialView("_MetaInfo", new FolderInfoViewModel(_folderManager[Guid.Parse(newModel.EncodedId)]));
+                return PartialView("_MetaInfo", new FolderInfoViewModel(_folderManager[newModel.EncodedId.ToGuid()]));
 
             var update = new FolderUpdate
             {

@@ -17,6 +17,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Security.Claims;
 using System.Threading.Tasks;
+using HSMServer.Extensions;
 
 namespace HSMServer.Controllers
 {
@@ -124,7 +125,7 @@ namespace HSMServer.Controllers
             {
                 products = new List<(Guid, ProductRoleEnum)>()
                 {
-                    (Guid.Parse(model.ProductKey), (ProductRoleEnum)int.Parse(model.Role))
+                    (model.ProductKey.ToGuid(), (ProductRoleEnum)int.Parse(model.Role))
                 };
             }
 

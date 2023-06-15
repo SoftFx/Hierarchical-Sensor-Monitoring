@@ -206,3 +206,7 @@ input.input-validation-error {
 .body-content{
     padding-bottom: var(--footer-height)
 }
+
+.noHover{
+    pointer-events: none;
+}

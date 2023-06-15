@@ -10,6 +10,8 @@ namespace HSMServer.Model.History
         public string Comment { get; init; }
 
         public SensorStatus Status { get; init; }
+
+        public DateTime ReceivingTime { get; init; }
     }
 
 
