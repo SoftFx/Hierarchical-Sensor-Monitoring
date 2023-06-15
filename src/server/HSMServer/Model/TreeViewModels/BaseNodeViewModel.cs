@@ -18,8 +18,8 @@ namespace HSMServer.Model.TreeViewModel
         public TimeIntervalViewModel SavedHistoryPeriod { get; protected set; }
 
         public TimeIntervalViewModel SelfDestroyPeriod { get; protected set; }
-        
-        
+
+
         public Guid Id { get; protected set; }
 
         public string Name { get; protected set; }

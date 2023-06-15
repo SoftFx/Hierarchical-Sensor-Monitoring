@@ -24,24 +24,7 @@ public class SelectedNodeViewModel
         Reset();
         ReloadVisibleItems(SelectedNode);
     }
-    
-    private void ReloadVisibleItems(BaseNodeViewModel node)
-    {
-        if (node is ProductNodeViewModel productNodeViewModel)
-        {
-            NodeChildrenNodes.InitializeItems(productNodeViewModel.Nodes.Values).TurnOnPagination();
-            NodeChildrenSensors.InitializeItems(productNodeViewModel.Sensors.Values).TurnOnPagination();
-        }
-        else if (node is FolderModel folder)
-            NodeChildrenNodes.InitializeItems(folder.Products.Values).TurnOnPagination();
-    }
 
-    private void Reset()
-    {
-        NodeChildrenNodes.Reset();
-        NodeChildrenNodes.Reset();
-    }
-    
     public NodeChildrenViewModel ReloadPage(string accordionId, int pageNumber, int pageSize)
     {
         switch (accordionId)
@@ -59,5 +42,23 @@ public class SelectedNodeViewModel
                                           .ChangePageSize(pageSize)
                                           .InitializeItems((SelectedNode as FolderModel)?.Products.Values).TurnOnPagination();;
         }
+    }
+    
+    
+    private void ReloadVisibleItems(BaseNodeViewModel node)
+    {
+        if (node is ProductNodeViewModel productNodeViewModel)
+        {
+            NodeChildrenNodes.InitializeItems(productNodeViewModel.Nodes.Values).TurnOnPagination();
+            NodeChildrenSensors.InitializeItems(productNodeViewModel.Sensors.Values).TurnOnPagination();
+        }
+        else if (node is FolderModel folder)
+            NodeChildrenNodes.InitializeItems(folder.Products.Values).TurnOnPagination();
+    }
+
+    private void Reset()
+    {
+        NodeChildrenNodes.Reset();
+        NodeChildrenNodes.Reset();
     }
 }

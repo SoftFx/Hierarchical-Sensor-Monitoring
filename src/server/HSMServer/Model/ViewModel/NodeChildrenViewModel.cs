@@ -6,7 +6,7 @@ namespace HSMServer.Model.ViewModel;
 
 public sealed class NodeChildrenViewModel
 {
-    private bool _isPaginated  = false;
+    private bool _isPaginated = false;
     
     
     public List<NodeViewModel> VisibleItems { get; set; } = new(1 << 8);
