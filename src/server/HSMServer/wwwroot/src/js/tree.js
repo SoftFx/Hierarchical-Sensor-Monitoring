@@ -167,8 +167,8 @@ function initSelectedNode(selectedId) {
     }).done(function () {
         initialize();
 
-        openAccordions('[id^="grid-accordion_"]');
-        openAccordions('[id^="list-accordion_"]');
+        //openAccordions('[id^="grid-accordion_"]');
+        //openAccordions('[id^="list-accordion_"]');
 
         if (needToActivateListTab) {
             selectNodeInfoTab("list", selectedId);

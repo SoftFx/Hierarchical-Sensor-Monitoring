@@ -1,37 +1,14 @@
-﻿@using HSMServer.Model.Folders
-@using HSMServer.Model.TreeViewModel
-@using HSMServer.Model.Authentication
+﻿@using HSMServer.Model.TreeViewModel
 
 @model BaseNodeViewModel
 
 @{
-    var user = User as User;
-
     string nodeId = Model.Id.ToString();
-    List<NodeViewModel> visibleNodes = new();
-    List<NodeViewModel> visibleSensors = new();
-
-    if (Model is FolderModel folder)
-        visibleNodes = GetSortedNodes(folder.Products.Values);
-    else if (Model is ProductNodeViewModel product)
-    {
-        visibleNodes = GetSortedNodes(product.Nodes.Values);
-        visibleSensors = GetSortedNodes(product.Sensors.Values);
-    }
-
+   
     var listDivId = $"list_{nodeId}";
     var gridDivId = $"grid_{nodeId}";
 
-    var visibilityClass = visibleNodes.Count > 0 || visibleSensors.Count > 0 ? string.Empty : "d-none";
-    
-    List<NodeViewModel> GetSortedNodes<T>(IEnumerable<T> nodes) where T : NodeViewModel
-    {
-        return nodes.Where(n => n.HasData)
-                    .OrderByDescending(n => n.Status)
-                    .ThenBy(n => n.Name)
-                    .Take(1000)
-                    .Cast<NodeViewModel>().ToList();
-    }
+    var visibilityClass = Model.GridNodes.VisibleItems.Count > 0 || Model.GridSensors.VisibleItems.Count > 0 ? string.Empty : "d-none";
 }
 
 
@@ -50,7 +27,7 @@
     </div>
 
     <div class='tab-pane fade' id=@listDivId role="tabpanel">
-         @await Html.PartialAsync("_ListAccordion", visibleNodes) 
-         @await Html.PartialAsync("_ListAccordion", visibleSensors) 
+         @await Html.PartialAsync("_ListAccordion", Model.GridNodes.VisibleItems) 
+         @await Html.PartialAsync("_ListAccordion", Model.GridSensors.VisibleItems) 
     </div>
 </div>
