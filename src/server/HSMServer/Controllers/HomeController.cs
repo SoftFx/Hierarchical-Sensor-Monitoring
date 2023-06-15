@@ -57,7 +57,7 @@ namespace HSMServer.Controllers
         }
 
         [HttpPost]
-        public IActionResult SelectNode(string selectedId, int pageNumber = 0, int pageSize = 1000)
+        public IActionResult SelectNode(string selectedId)
         {
             BaseNodeViewModel viewModel = null;
 
@@ -72,7 +72,7 @@ namespace HSMServer.Controllers
                 }
                 else if (_treeViewModel.Nodes.TryGetValue(id, out var node))
                 {
-                    viewModel = node.GetPaginated(pageNumber, pageSize);
+                    viewModel = node.GetPaginated();
                 }
                 else if (_treeViewModel.Sensors.TryGetValue(id, out var sensor))
                 {
