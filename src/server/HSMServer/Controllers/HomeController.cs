@@ -26,6 +26,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Threading.Tasks;
+using HSMServer.Model.TreeViewModels;
 using SensorStatus = HSMSensorDataObjects.SensorStatus;
 using TimeInterval = HSMServer.Model.TimeInterval;
 
@@ -103,9 +104,9 @@ namespace HSMServer.Controllers
         public void RemoveRenderingNode(Guid nodeId) => CurrentUser.Tree.RemoveRenderingNode(nodeId);
 
         [HttpGet]
-        public IActionResult GetGrid(string accordionId, int pageNumber = 0, int pageSize = 150)
+        public IActionResult GetGrid(ChildrenPageRequest pageRequest)
         {
-            var model = StoredUser.SelectedNode.ReloadPage(accordionId.Replace("grid", string.Empty), pageNumber, pageSize);
+            var model = StoredUser.SelectedNode.ReloadPage(pageRequest.Id.Replace("grid", string.Empty), pageRequest.CurrentPage, pageRequest.PageSize);
             if (model.OriginalSize <= model.PageNumber * model.PageSize || model.PageNumber < 0 || model.PageSize <= 0)
                 return NotFound(); 
             
@@ -113,9 +114,9 @@ namespace HSMServer.Controllers
         }
 
         [HttpGet]
-        public IActionResult GetList(string accordionId, int pageNumber = 0, int pageSize = 150)
+        public IActionResult GetList(ChildrenPageRequest pageRequest)
         {
-            var model = StoredUser.SelectedNode.ReloadPage(accordionId.Replace("list", string.Empty), pageNumber, pageSize);
+            var model = StoredUser.SelectedNode.ReloadPage(pageRequest.Id.Replace("list", string.Empty), pageRequest.CurrentPage, pageRequest.PageSize);
             if (model.OriginalSize <= model.PageNumber * model.PageSize || model.PageNumber < 0 || model.PageSize <= 0)
                 return NotFound(); 
             
