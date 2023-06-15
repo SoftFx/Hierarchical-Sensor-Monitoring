@@ -21,6 +21,8 @@ public sealed class NodeChildrenViewModel
 
     public bool IsPaginationDisplayed => _isPaginated && OriginalSize > PageSize;
 
+    public bool IsPageValid => OriginalSize <= PageNumber * PageSize || PageNumber < 0 || PageSize <= 0;
+    
 
     public NodeChildrenViewModel Load<T>(ICollection<T> collection) where T : NodeViewModel
     {

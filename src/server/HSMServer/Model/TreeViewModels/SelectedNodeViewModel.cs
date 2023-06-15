@@ -17,50 +17,51 @@ public class SelectedNodeViewModel
     public NodeChildrenViewModel Nodes { get; } = new();
     
     
-    public void ConnectNode(BaseNodeViewModel newNode)
+    public void ConnectNode(ProductNodeViewModel newNode)
     {
         if (_selectedNode?.Id == newNode.Id)
             return;
 
         _selectedNode = newNode;
         
-        ReloadVisibleItems(_selectedNode);
+        Reset();
+        
+        Nodes.Load(newNode.Nodes.Values);
+        Sensors.Load(newNode.Sensors.Values);
     }
 
-    public NodeChildrenViewModel ReloadPage(string accordionId, int pageNumber, int pageSize)
+    public void ConnectFolder(FolderModel newFolder)
     {
-        switch (accordionId)
+        if (_selectedNode?.Id == newFolder.Id)
+            return;
+
+        _selectedNode = newFolder;
+        
+        Reset();
+        
+        Nodes.Load(newFolder.Products.Values);
+    }
+
+    public NodeChildrenViewModel ReloadPage(ChildrenPageRequest pageRequest)
+    {
+        switch (pageRequest.Id)
         {
             case "Nodes":
-                Nodes.ChangePageNumber(pageNumber).ChangePageSize(pageSize);
+                Nodes.ChangePageNumber(pageRequest.CurrentPage).ChangePageSize(pageRequest.PageSize);
                 
                 if (_selectedNode is ProductNodeViewModel productNodeViewModel)
                     return Nodes.Load(productNodeViewModel.Nodes.Values);
 
                 return Nodes.Load((_selectedNode as FolderModel)?.Products.Values);
             case "Sensors":
-                return Sensors.ChangePageNumber(pageNumber)
-                              .ChangePageSize(pageSize)
+                return Sensors.ChangePageNumber(pageRequest.CurrentPage)
+                              .ChangePageSize(pageRequest.PageSize)
                               .Load((_selectedNode as ProductNodeViewModel)?.Sensors.Values);
             default:
-                return Nodes.ChangePageNumber(pageNumber)
-                            .ChangePageSize(pageSize)
+                return Nodes.ChangePageNumber(pageRequest.CurrentPage)
+                            .ChangePageSize(pageRequest.PageSize)
                             .Load((_selectedNode as FolderModel)?.Products.Values);;
         }
-    }
-    
-    
-    private void ReloadVisibleItems(BaseNodeViewModel node)
-    {
-        Reset();
-        
-        if (node is ProductNodeViewModel productNodeViewModel)
-        {
-            Nodes.Load(productNodeViewModel.Nodes.Values);
-            Sensors.Load(productNodeViewModel.Sensors.Values);
-        }
-        else if (node is FolderModel folder)
-            Nodes.Load(folder.Products.Values);
     }
 
     private void Reset()

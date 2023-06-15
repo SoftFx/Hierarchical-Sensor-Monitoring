@@ -69,7 +69,7 @@ namespace HSMServer.Controllers
                 if (_folderManager.TryGetValue(id, out var folder))
                 {
                     viewModel = folder;
-                    StoredUser.SelectedNode.ConnectNode(folder);
+                    StoredUser.SelectedNode.ConnectFolder(folder);
                 }
                 else if (_treeViewModel.Nodes.TryGetValue(id, out var node))
                 {
@@ -106,8 +106,8 @@ namespace HSMServer.Controllers
         [HttpGet]
         public IActionResult GetGrid(ChildrenPageRequest pageRequest)
         {
-            var model = StoredUser.SelectedNode.ReloadPage(pageRequest.Id.Replace("grid", string.Empty), pageRequest.CurrentPage, pageRequest.PageSize);
-            if (model.OriginalSize <= model.PageNumber * model.PageSize || model.PageNumber < 0 || model.PageSize <= 0)
+            var model = StoredUser.SelectedNode.ReloadPage(pageRequest with { Id = pageRequest.Id.Replace("grid", string.Empty) });
+            if (model.IsPageValid)
                 return _emptyResult; 
             
             return PartialView("_GridAccordion", model);
@@ -116,8 +116,8 @@ namespace HSMServer.Controllers
         [HttpGet]
         public IActionResult GetList(ChildrenPageRequest pageRequest)
         {
-            var model = StoredUser.SelectedNode.ReloadPage(pageRequest.Id.Replace("list", string.Empty), pageRequest.CurrentPage, pageRequest.PageSize);
-            if (model.OriginalSize <= model.PageNumber * model.PageSize || model.PageNumber < 0 || model.PageSize <= 0)
+            var model = StoredUser.SelectedNode.ReloadPage(pageRequest with { Id = pageRequest.Id.Replace("list", string.Empty) });
+            if (model.IsPageValid)
                 return _emptyResult; 
             
             return PartialView("_ListAccordion", model);
