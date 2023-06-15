@@ -7,7 +7,8 @@
 @model HistoryTableViewModel
 
 @{
-    var olderTime = Model.CurrentTablePage?.LastOrDefault()?.Time;
+    var currentPage = Model.CurrentTablePage;
+    var olderTime = currentPage.LastOrDefault()?.ReceivingTime;
 }
 
 
@@ -40,7 +41,7 @@ else
                 </tr>
             </thead>
             <tbody>
-                @foreach (var value in Model.CurrentTablePage)
+                @foreach (var value in currentPage)
                 {
                     <tr>
                         <td>@value.Time.ToDefaultFormat()</td>

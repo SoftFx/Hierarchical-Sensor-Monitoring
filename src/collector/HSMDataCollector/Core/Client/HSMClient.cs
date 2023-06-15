@@ -17,16 +17,16 @@ namespace HSMDataCollector.Core
     internal sealed class HSMClient : IDisposable
     {
         private readonly CancellationTokenSource _tokenSource = new CancellationTokenSource();
-        private readonly LoggerManager _logManager;
+        private readonly ICollectorLogger _logger;
         private readonly IDataQueue _dataQueue;
         private readonly Endpoints _endpoints;
         private readonly HttpClient _client;
 
 
-        internal HSMClient(CollectorOptions options, IDataQueue dataQueue, LoggerManager logger)
+        internal HSMClient(CollectorOptions options, IDataQueue dataQueue, ICollectorLogger logger)
         {
             _dataQueue = dataQueue;
-            _logManager = logger;
+            _logger = logger;
 
             _endpoints = new Endpoints(options);
 
@@ -43,6 +43,7 @@ namespace HSMDataCollector.Core
             _dataQueue.NewValueEvent += RecieveQueueData;
             _dataQueue.NewValuesEvent += RecieveQueueData;
         }
+
 
         internal async Task SendFileAsync(FileInfo fileInfo, string sensorPath, SensorStatus sensorStatus = SensorStatus.Ok, string comment = "")
         {
@@ -78,6 +79,22 @@ namespace HSMDataCollector.Core
         }
 
 
+        internal async Task<ConnectionResult> TestConnection()
+        {
+            try
+            {
+                var connect = await _client.GetAsync(_endpoints.TestConnection, _tokenSource.Token);
+
+                return connect.IsSuccessStatusCode
+                    ? ConnectionResult.Ok
+                    : new ConnectionResult($"{connect.ReasonPhrase} ({await connect.Content.ReadAsStringAsync()})");
+            }
+            catch (Exception ex)
+            {
+                return new ConnectionResult(ex.Message);
+            }
+        }
+
         internal Task SendData(List<SensorValueBase> values) => RequestToServer(values.Cast<object>().ToList(), _endpoints.List);
 
         internal Task SendData(SensorValueBase value)
@@ -103,7 +120,7 @@ namespace HSMDataCollector.Core
                 case VersionSensorValue versionV:
                     return RequestToServer(versionV, _endpoints.Version);
                 default:
-                    _logManager.Logger?.Error($"Unsupported sensor type: {value.Path}");
+                    _logger.Error($"Unsupported sensor type: {value.Path}");
                     return Task.CompletedTask;
             }
         }
@@ -118,18 +135,17 @@ namespace HSMDataCollector.Core
             {
                 string json = JsonConvert.SerializeObject(value);
 
-                if (_logManager.WriteDebug)
-                    _logManager.Logger?.Debug($"{nameof(RequestToServer)}: {json}");
+                _logger.Debug($"{nameof(RequestToServer)}: {json}");
 
                 var data = new StringContent(json, Encoding.UTF8, "application/json");
                 var res = await _client.PostAsync(uri, data, _tokenSource.Token);
 
                 if (!res.IsSuccessStatusCode)
-                    _logManager.Logger?.Error($"Failed to send data. StatusCode={res.StatusCode}");
+                    _logger.Error($"Failed to send data. StatusCode={res.StatusCode}");
             }
             catch (Exception ex)
             {
-                _logManager.Logger?.Error($"Failed to send: {ex}");
+                _logger.Error($"Failed to send: {ex}");
 
                 if (value is IEnumerable<SensorValueBase> list)
                     foreach (var data in list)

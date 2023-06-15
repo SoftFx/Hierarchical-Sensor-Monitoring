@@ -36,6 +36,7 @@
 * New **Cleanup** section (with *Keep sensor history* and *Remove sensor after inactivity*) has been added in folder/product/node/sensor info
 * **Cleanup** section has been added in Folder edit
 * Right horizontal alignment for ? icons have been added in entities meta info
+* New endpoint **/testConnection** has been added
 
 ## Table history
 * Subscription for table updates has been added
@@ -52,3 +53,8 @@
 * Timeout notifications after server restart (if sensor has Expired state before server stopping) has been fixed
 * **No data** for first user login after server restart has been fixed
 * Duplicates bar sensor last values for charts have been fixed
+
+# HSM Datacollector
+* Collector version has been increased to 3.1.6
+* New method TestConnection() has been added
+* New method [AddCustomLogger](https://github.com/SoftFx/Hierarchical-Sensor-Monitoring/wiki/DataCollector-logging) has been added

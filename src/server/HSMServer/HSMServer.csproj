@@ -5,7 +5,7 @@
     <DocumentationFile>HSMSwaggerComments.xml</DocumentationFile>
     <NoWarn>$(NoWarn);1591</NoWarn>
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
-    <Version>3.19.4</Version>
+    <Version>3.19.5</Version>
     <Authors>HSM team</Authors>
     <Company>Soft-FX</Company>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
@@ -35,7 +35,6 @@
 
   <ItemGroup>
     <PackageReference Include="FluentValidation.AspNetCore" Version="11.2.2" />
-    <PackageReference Include="HSMDataCollector.HSMDataCollector" Version="3.1.5" />
     <PackageReference Include="Microsoft.NET.Build.Containers" Version="0.4.0" />
     <PackageReference Include="NLog.Web.AspNetCore" Version="5.2.2" />
     <PackageReference Include="Swashbuckle.AspNetCore" Version="6.4.0" />
@@ -44,6 +43,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\collector\HSMDataCollector\HSMDataCollector.csproj" />
     <ProjectReference Include="..\..\database\HSMDatabase\HSMDatabase.csproj" />
     <ProjectReference Include="..\HSMCommon\HSMCommon.csproj" />
     <ProjectReference Include="..\HSMServer.Core\HSMServer.Core.csproj" />

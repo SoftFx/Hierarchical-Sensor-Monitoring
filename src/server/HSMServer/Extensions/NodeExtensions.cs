@@ -1,6 +1,9 @@
 ﻿using System.Collections.Generic;
+using System.Linq;
+using HSMServer.Model.Authentication;
 using HSMServer.Model.Folders;
 using HSMServer.Model.TreeViewModel;
+using HSMServer.UserFilters;
 using Microsoft.AspNetCore.Html;
 
 namespace HSMServer.Extensions
@@ -57,6 +60,13 @@ namespace HSMServer.Extensions
             node is ProductNodeViewModel product
                 ? product.Parent is FolderModel ? "Products" : "Nodes"
                 : "Sensors";
+
+        internal static IOrderedEnumerable<T> GetOrdered<T>(this IEnumerable<T> collection, User user) where T : BaseNodeViewModel =>
+            user.TreeFilter.TreeSortType switch
+            {
+                TreeSortType.ByTime => collection.OrderByDescending(x => x.UpdateTime),
+                _ => collection.OrderBy(x => x.Name)
+            };
 
         internal static string GetEmptySensorIcon() => "fa-regular fa-circle";
         
