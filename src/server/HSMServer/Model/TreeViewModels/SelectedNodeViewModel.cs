@@ -12,19 +12,14 @@ public class SelectedNodeViewModel
     public string Id => _selectedNode?.Id.ToString();
     
     
-    public NodeChildrenViewModel Sensors { get; } = new();
+    public NodeChildrenViewModel Sensors { get; } = new(nameof(Sensors));
         
-    public NodeChildrenViewModel Nodes { get; } = new();
+    public NodeChildrenViewModel Nodes { get; } = new(nameof(Nodes));
     
     
     public void ConnectNode(ProductNodeViewModel newNode)
     {
-        if (_selectedNode?.Id == newNode.Id)
-            return;
-
-        _selectedNode = newNode;
-        
-        Reset();
+        Subscribe(newNode);
         
         Nodes.Load(newNode.Nodes.Values);
         Sensors.Load(newNode.Sensors.Values);
@@ -32,13 +27,8 @@ public class SelectedNodeViewModel
 
     public void ConnectFolder(FolderModel newFolder)
     {
-        if (_selectedNode?.Id == newFolder.Id)
-            return;
+        Subscribe(newFolder);
 
-        _selectedNode = newFolder;
-        
-        Reset();
-        
         Nodes.Load(newFolder.Products.Values);
     }
 
@@ -60,12 +50,18 @@ public class SelectedNodeViewModel
             default:
                 return Nodes.ChangePageNumber(pageRequest.CurrentPage)
                             .ChangePageSize(pageRequest.PageSize)
-                            .Load((_selectedNode as FolderModel)?.Products.Values);;
+                            .Load((_selectedNode as FolderModel)?.Products.Values);
         }
     }
 
-    private void Reset()
+    
+    private void Subscribe(BaseNodeViewModel newSelected)
     {
+        if (_selectedNode?.Id == newSelected.Id)
+            return;
+
+        _selectedNode = newSelected;
+        
         Nodes.Reset();
         Sensors.Reset();
     }

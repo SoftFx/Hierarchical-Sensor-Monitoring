@@ -48,16 +48,6 @@ namespace HSMServer.Extensions
                 _ => "grid-cell-offTime",
             };
 
-        internal static List<NodeViewModel> GetAccordionChildren(this ProductNodeViewModel node, string accordionId) => accordionId switch
-        {
-            "Nodes" => new List<NodeViewModel>(node.Nodes.Values),
-            "Sensors" => new List<NodeViewModel>(node.Sensors.Values),
-            _ => null
-        };
-
-        internal static string GetChildrenAccordionTitle(this NodeViewModel node) =>
-            node is ProductNodeViewModel ? "Nodes" : "Sensors";
-
         internal static IOrderedEnumerable<T> GetOrdered<T>(this IEnumerable<T> collection, User user) where T : BaseNodeViewModel =>
             user.TreeFilter.TreeSortType switch
             {

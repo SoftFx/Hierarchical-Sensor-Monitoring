@@ -3,8 +3,7 @@
 @model HSMServer.Model.ViewModel.NodeChildrenViewModel
 
 @{
-    var title = Model.VisibleItems.FirstOrDefault().GetChildrenAccordionTitle();
-    var accordionId = $"grid{title}";
+    var accordionId = $"grid{Model.Title}";
 }
 
 <div class="accordion" id='grid-accordion_@accordionId'>
@@ -13,7 +12,7 @@
         <div class="accordion-item custom-accordion-item">
             <h2 class="accordion-header" id="custom_accordion_header">
                 <button class="accordion-button fw-bold" type="button" data-bs-toggle="collapse" data-bs-target="#flush-collapse_@accordionId" aria-expanded='true'>
-                    @title
+                    @Model.Title
                 </button>
             </h2>
             <div id="flush-collapse_@accordionId" class="accordion-collapse collapse show">

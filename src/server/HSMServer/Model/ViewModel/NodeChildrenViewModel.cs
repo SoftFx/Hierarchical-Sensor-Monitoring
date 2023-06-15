@@ -18,11 +18,20 @@ public sealed class NodeChildrenViewModel
 
     public int OriginalSize { get; private set; } = 0;
 
+    
+    public string Title { get; set; }
+    
 
     public bool IsPaginationDisplayed => _isPaginated && OriginalSize > PageSize;
 
     public bool IsPageValid => OriginalSize <= PageNumber * PageSize || PageNumber < 0 || PageSize <= 0;
-    
+
+
+    public NodeChildrenViewModel(string title)
+    {
+        Title = title;
+    }
+
 
     public NodeChildrenViewModel Load<T>(ICollection<T> collection) where T : NodeViewModel
     {
