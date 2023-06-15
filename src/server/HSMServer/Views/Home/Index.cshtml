@@ -52,6 +52,7 @@
     var isDataValidAction = "@Url.Action(nameof(HomeController.IsMetaInfoValid), ViewConstants.HomeController)";
     
     var getGrid = `@Url.Action(nameof(HomeController.GetGrid))`;
+    var getList = `@Url.Action(nameof(HomeController.GetList))`;
 </script>
 
 
@@ -294,9 +295,17 @@
                     }
                 }
                 
-                
-                getGridPage($('#pageNumber_gridSensors')[0].innerText - 1, $('#pageSize_gridSensors')[0].value, "gridSensors")
-                getGridPage($('#pageNumber_gridNodes')[0].innerText - 1, $('#pageSize_gridNodes')[0].value, "gridNodes")
+                let accordionName = "";
+                if ($('#dataPanel li a.active')[0].innerText === ' Grid') {
+                    accordionName = "grid"
+                    getGridPage($(`#pageNumber_${accordionName}Sensors`)[0].innerText - 1, $(`#pageSize_${accordionName}Sensors`)[0].value, `${accordionName}Sensors`)
+                    getGridPage($(`#pageNumber_${accordionName}Nodes`)[0].innerText - 1, $(`#pageSize_${accordionName}Nodes`)[0].value, `${accordionName}Nodes`)
+                }
+                else {
+                    accordionName = "list";
+                    getListPage($(`#pageNumber_${accordionName}Sensors`)[0].innerText - 1, $(`#pageSize_${accordionName}Sensors`)[0].value, `${accordionName}Sensors`)
+                    getListPage($(`#pageNumber_${accordionName}Nodes`)[0].innerText - 1, $(`#pageSize_${accordionName}Nodes`)[0].value, `${accordionName}Nodes`)
+                }
                 
                 updateGeneralInfo(selectedNodeId);
                 
@@ -331,16 +340,28 @@
     });
     
     function getGridPage(pageNumber, pageSize, accordionId){
-            $.ajax({
-                type: 'get',
-                url: `${getGrid}?selectedId=${currentSelectedNodeId}&accordionId=${accordionId}&pageNumber=${pageNumber}&pageSize=${pageSize}`,
-                datatype: 'html',
-                contenttype: 'application/json',
-                cache: false,
-                success: function (viewData) {
-                    $(`#grid-accordion_${accordionId}`).parents('div.accordion').empty().replaceWith(viewData);
-                    //$(`#grid-accordion_${accordionId}`).click();
-                }
-            });
-        }
+        $.ajax({
+            type: 'get',
+            url: `${getGrid}?selectedId=${currentSelectedNodeId}&accordionId=${accordionId}&pageNumber=${pageNumber}&pageSize=${pageSize}`,
+            datatype: 'html',
+            contenttype: 'application/json',
+            cache: false,
+            success: function (viewData) {
+                $(`#grid-accordion_${accordionId}`).parents('div.accordion').empty().replaceWith(viewData);
+            }
+        });
+    }
+    
+    function getListPage(pageNumber, pageSize, accordionId){
+        $.ajax({
+            type: 'get',
+            url: `${getList}?selectedId=${currentSelectedNodeId}&accordionId=${accordionId}&pageNumber=${pageNumber}&pageSize=${pageSize}`,
+            datatype: 'html',
+            contenttype: 'application/json',
+            cache: false,
+            success: function (viewData) {
+                $(`#list-accordion_${accordionId}`).parents('div.accordion').empty().replaceWith(viewData);
+            }
+        });
+    }
 </script>

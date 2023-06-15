@@ -51,8 +51,8 @@ namespace HSMServer.Extensions
 
         internal static List<NodeViewModel> GetAccordionChildren(this ProductNodeViewModel node, string accordionId) => accordionId switch
         {
-            "gridNodes" => new List<NodeViewModel>(node.Nodes.Values),
-            "gridSensors" => new List<NodeViewModel>(node.Sensors.Values),
+            "Nodes" => new List<NodeViewModel>(node.Nodes.Values),
+            "Sensors" => new List<NodeViewModel>(node.Sensors.Values),
             _ => null
         };
 

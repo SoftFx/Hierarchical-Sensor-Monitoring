@@ -27,7 +27,7 @@
     </div>
 
     <div class='tab-pane fade' id=@listDivId role="tabpanel">
-         @await Html.PartialAsync("_ListAccordion", Model.GridNodes.VisibleItems) 
-         @await Html.PartialAsync("_ListAccordion", Model.GridSensors.VisibleItems) 
+         @await Html.PartialAsync("_ListAccordion", Model.GridNodes) 
+         @await Html.PartialAsync("_ListAccordion", Model.GridSensors) 
     </div>
 </div>

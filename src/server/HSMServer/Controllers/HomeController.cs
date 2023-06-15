@@ -106,7 +106,7 @@ namespace HSMServer.Controllers
         {
             _treeViewModel.Nodes.TryGetValue(selectedId.ToGuid(), out var node);
             
-            var items = node.GetAccordionChildren(accordionId);
+            var items = node.GetAccordionChildren(accordionId.Replace("grid", string.Empty));
             
             if (items?.Count <= pageNumber * pageSize || pageNumber < 0 || pageSize <= 0)
                 return NotFound(); 
@@ -115,11 +115,16 @@ namespace HSMServer.Controllers
         }
 
         [HttpGet]
-        public IActionResult GetGridAccordion(string selectedId)
+        public IActionResult GetList(string selectedId, string accordionId, int pageNumber = 0, int pageSize = 150)
         {
+            _treeViewModel.Nodes.TryGetValue(selectedId.ToGuid(), out var node);
             
+            var items = node.GetAccordionChildren(accordionId.Replace("list", string.Empty));
             
-            return default;
+            if (items?.Count <= pageNumber * pageSize || pageNumber < 0 || pageSize <= 0)
+                return NotFound(); 
+            
+            return PartialView("_ListAccordion", new GridViewModel(pageNumber, pageSize).InitializeItems(items));
         }
 
         [HttpGet]
