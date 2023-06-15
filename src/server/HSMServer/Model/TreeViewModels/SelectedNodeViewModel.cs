@@ -1,7 +1,3 @@
-using System;
-using HSMServer.Core.Cache;
-using HSMServer.Core.Model;
-using HSMServer.Folders;
 using HSMServer.Model.Folders;
 using HSMServer.Model.TreeViewModel;
 using HSMServer.Model.ViewModel;
@@ -10,10 +6,6 @@ namespace HSMServer.Model.TreeViewModels;
 
 public class SelectedNodeViewModel
 {
-    private TreeViewModel.TreeViewModel _treeViewModel;
-    private IFolderManager _folderManager;
-    private ITreeValuesCache _cache;
-    
     public BaseNodeViewModel SelectedNode { get; private set; }
     
     
@@ -22,19 +14,13 @@ public class SelectedNodeViewModel
     public NodeChildrenViewModel NodeChildrenNodes { get; } = new();
     
     
-    public void ConnectNode(BaseNodeViewModel newNode, TreeViewModel.TreeViewModel treeViewModel, IFolderManager folderManager, ITreeValuesCache cache)
+    public void ConnectNode(BaseNodeViewModel newNode)
     {
-        _treeViewModel = treeViewModel;
-        _folderManager = folderManager;
-        _cache = cache;
-        
         if (SelectedNode?.Id == newNode.Id)
             return;
 
         SelectedNode = newNode;
         
-        _cache.ChangeProductEvent -= ChangeProductHandler;
-        Subscribe();
         ReloadVisibleItems(SelectedNode);
     }
 
@@ -78,22 +64,5 @@ public class SelectedNodeViewModel
     {
         NodeChildrenNodes.Reset();
         NodeChildrenSensors.Reset();
-    }
-
-    private void Subscribe()
-    {
-        _cache.ChangeProductEvent += ChangeProductHandler;
-    }
-  
-    private void ChangeProductHandler(ProductModel model, ActionType action)
-    {
-        if (_folderManager.TryGetValue(SelectedNode.Id, out var folder))
-        {
-            SelectedNode = folder;
-        }
-        else if (_treeViewModel.Nodes.TryGetValue(SelectedNode.Id, out var node))
-        {
-            SelectedNode = node;
-        }
     }
 }

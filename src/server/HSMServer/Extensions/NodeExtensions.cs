@@ -57,9 +57,7 @@ namespace HSMServer.Extensions
         };
 
         internal static string GetChildrenAccordionTitle(this NodeViewModel node) =>
-            node is ProductNodeViewModel product
-                ? product.Parent is FolderModel ? "Products" : "Nodes"
-                : "Sensors";
+            node is ProductNodeViewModel ? "Nodes" : "Sensors";
 
         internal static IOrderedEnumerable<T> GetOrdered<T>(this IEnumerable<T> collection, User user) where T : BaseNodeViewModel =>
             user.TreeFilter.TreeSortType switch

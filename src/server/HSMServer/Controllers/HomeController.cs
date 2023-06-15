@@ -68,12 +68,12 @@ namespace HSMServer.Controllers
                 if (_folderManager.TryGetValue(id, out var folder))
                 {
                     viewModel = folder;
-                    StoredUser.SelectedNode.ConnectNode(folder, _treeViewModel, _folderManager, _treeValuesCache);
+                    StoredUser.SelectedNode.ConnectNode(folder);
                 }
                 else if (_treeViewModel.Nodes.TryGetValue(id, out var node))
                 {
                     viewModel = node;
-                    StoredUser.SelectedNode.ConnectNode(node, _treeViewModel, _folderManager, _treeValuesCache);
+                    StoredUser.SelectedNode.ConnectNode(node);
                 }
                 else if (_treeViewModel.Sensors.TryGetValue(id, out var sensor))
                 {
@@ -105,7 +105,7 @@ namespace HSMServer.Controllers
         [HttpGet]
         public IActionResult GetGrid(string accordionId, int pageNumber = 0, int pageSize = 150)
         {
-            var model = CurrentUser.SelectedNode.ReloadPage(accordionId.Replace("grid", string.Empty), pageNumber, pageSize);
+            var model = StoredUser.SelectedNode.ReloadPage(accordionId.Replace("grid", string.Empty), pageNumber, pageSize);
             if (model.OriginalSize <= model.PageNumber * model.PageSize || model.PageNumber < 0 || model.PageSize <= 0)
                 return NotFound(); 
             
@@ -115,7 +115,7 @@ namespace HSMServer.Controllers
         [HttpGet]
         public IActionResult GetList(string accordionId, int pageNumber = 0, int pageSize = 150)
         {
-            var model = CurrentUser.SelectedNode.ReloadPage(accordionId.Replace("list", string.Empty), pageNumber, pageSize);
+            var model = StoredUser.SelectedNode.ReloadPage(accordionId.Replace("list", string.Empty), pageNumber, pageSize);
             if (model.OriginalSize <= model.PageNumber * model.PageSize || model.PageNumber < 0 || model.PageSize <= 0)
                 return NotFound(); 
             
