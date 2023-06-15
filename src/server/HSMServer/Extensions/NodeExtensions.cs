@@ -1,7 +1,6 @@
 ﻿using System.Collections.Generic;
 using System.Linq;
 using HSMServer.Model.Authentication;
-using HSMServer.Model.Folders;
 using HSMServer.Model.TreeViewModel;
 using HSMServer.UserFilters;
 using Microsoft.AspNetCore.Html;

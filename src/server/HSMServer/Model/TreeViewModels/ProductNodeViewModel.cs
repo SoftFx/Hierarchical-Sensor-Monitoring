@@ -44,7 +44,8 @@ namespace HSMServer.Model.TreeViewModel
             if (folder != null)
                 AddFolder(folder);
         }
-        
+
+
         public bool IsChangingAccessKeysAvailable(User user) =>
             user.IsAdmin || ProductRoleHelper.IsManager(Id, user.ProductsRoles);
 

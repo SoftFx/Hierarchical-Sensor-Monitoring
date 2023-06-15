@@ -47,7 +47,6 @@ namespace HSMServer.Model.TreeViewModel
             SelfDestroyPeriod = new(model.ServerPolicy.SelfDestroy.Policy.Interval, () => Parent?.SelfDestroyPeriod, NodeHasFolder);
         }
 
-        protected NodeViewModel() {}
 
         internal void Update(BaseNodeModel model)
         {

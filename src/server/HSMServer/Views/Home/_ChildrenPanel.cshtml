@@ -1,11 +1,11 @@
 ﻿@model HSMServer.Model.TreeViewModels.SelectedNodeViewModel
 
 @{
-    string nodeId = Model.SelectedNode.Id.ToString();
+    string nodeId = Model.Id;
     var listDivId = $"list_{nodeId}";
     var gridDivId = $"grid_{nodeId}";
 
-    var visibilityClass = Model.NodeChildrenNodes.VisibleItems.Count > 0 || Model.NodeChildrenSensors.VisibleItems.Count > 0 ? string.Empty : "d-none";
+    var visibilityClass = Model.Nodes.VisibleItems.Count > 0 || Model.Sensors.VisibleItems.Count > 0 ? string.Empty : "d-none";
 }
 
 
@@ -19,12 +19,12 @@
 </ul>
 <div class='tab-content'>
     <div class='tab-pane fade' id=@gridDivId role="tabpanel">
-         @await Html.PartialAsync("_GridAccordion", Model.NodeChildrenNodes) 
-         @await Html.PartialAsync("_GridAccordion", Model.NodeChildrenSensors) 
+         @await Html.PartialAsync("_GridAccordion", Model.Nodes) 
+         @await Html.PartialAsync("_GridAccordion", Model.Sensors) 
     </div>
 
     <div class='tab-pane fade' id=@listDivId role="tabpanel">
-         @await Html.PartialAsync("_ListAccordion", Model.NodeChildrenNodes) 
-         @await Html.PartialAsync("_ListAccordion", Model.NodeChildrenSensors) 
+         @await Html.PartialAsync("_ListAccordion", Model.Nodes) 
+         @await Html.PartialAsync("_ListAccordion", Model.Sensors) 
     </div>
 </div>

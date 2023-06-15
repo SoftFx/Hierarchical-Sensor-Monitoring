@@ -3,7 +3,6 @@ using HSMServer.Extensions;
 using HSMServer.Model.DataAlerts;
 using System;
 using System.Collections.Generic;
-using HSMServer.Model.ViewModel;
 
 namespace HSMServer.Model.TreeViewModel
 {
