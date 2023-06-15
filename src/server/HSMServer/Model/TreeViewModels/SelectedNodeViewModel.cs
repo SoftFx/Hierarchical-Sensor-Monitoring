@@ -40,12 +40,12 @@ public class SelectedNodeViewModel
                 return Nodes.Load((_selectedNode as FolderModel)?.Products.Values);
             case "Sensors":
                 return Sensors.ChangePageNumber(pageNumber)
-                                          .ChangePageSize(pageSize)
-                                          .Load((_selectedNode as ProductNodeViewModel)?.Sensors.Values);
+                              .ChangePageSize(pageSize)
+                              .Load((_selectedNode as ProductNodeViewModel)?.Sensors.Values);
             default:
                 return Nodes.ChangePageNumber(pageNumber)
-                                        .ChangePageSize(pageSize)
-                                        .Load((_selectedNode as FolderModel)?.Products.Values);;
+                            .ChangePageSize(pageSize)
+                            .Load((_selectedNode as FolderModel)?.Products.Values);;
         }
     }
     
