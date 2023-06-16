@@ -23,8 +23,8 @@ public class SelectedNodeViewModel
     {
         Subscribe(newNode);
         
-        Nodes.Load(newNode.Nodes);
-        Sensors.Load(newNode.Sensors);
+        Nodes.Load(newNode.Nodes).SetCustomTitle(nameof(newNode.Nodes));
+        Sensors.Load(newNode.Sensors).SetCustomTitle(nameof(newNode.Sensors));
     }
 
     public void ConnectFolder(FolderModel newFolder)
