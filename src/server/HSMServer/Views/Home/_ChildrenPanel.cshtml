@@ -5,7 +5,7 @@
     var listDivId = $"list_{nodeId}";
     var gridDivId = $"grid_{nodeId}";
 
-    var visibilityClass = Model.Nodes.VisibleItems.Count > 0 || Model.Sensors.VisibleItems.Count > 0 ? string.Empty : "d-none";
+    var visibilityClass = Model.HasChildren ? string.Empty : "d-none";
 }
 
 

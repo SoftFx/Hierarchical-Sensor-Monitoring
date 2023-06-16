@@ -10,13 +10,15 @@ public class SelectedNodeViewModel
 
 
     public string Id => _selectedNode?.Id.ToString();
-    
-    
+
+    public bool HasChildren => Nodes.VisibleItems.Count + Sensors.VisibleItems.Count > 0;
+
+
     public NodeChildrenViewModel<SensorNodeViewModel> Sensors { get; } = new(nameof(Sensors));
-        
+  
     public NodeChildrenViewModel<ProductNodeViewModel> Nodes { get; } = new(nameof(Nodes));
-    
-    
+
+
     public void ConnectNode(ProductNodeViewModel newNode)
     {
         Subscribe(newNode);
@@ -40,7 +42,7 @@ public class SelectedNodeViewModel
         
         return Sensors.Reload(pageRequest.CurrentPage, pageRequest.PageSize);
     }
-    
+
     private void Subscribe(BaseNodeViewModel newSelected)
     {
         if (_selectedNode?.Id == newSelected.Id)

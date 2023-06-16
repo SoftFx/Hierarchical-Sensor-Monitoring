@@ -2,10 +2,11 @@
 
 @{
     var accordionId = $"list{Model.Title}";
+    var items = Model.VisibleItems;
 }
 
 <div class="accordion" id='list-accordion_@accordionId'>
-    @if (Model.VisibleItems.Count > 0)
+    @if (items.Count > 0)
     {
         <div class="accordion-item custom-accordion-item">
             <h2 class="accordion-header" id="custom_accordion_header">
@@ -16,7 +17,7 @@
             <div id="flush-collapse_@accordionId" class="accordion-collapse collapse show">
                 <div class="accordion-body">
                     <div>
-                        @foreach (var element in Model.VisibleItems)
+                        @foreach (var element in items)
                         {
                             @await Html.PartialAsync("_NodeAccordion", element)
                         }
