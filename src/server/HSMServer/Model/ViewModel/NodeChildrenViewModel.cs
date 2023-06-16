@@ -9,23 +9,30 @@ public interface INodeChildrenViewModel
 {
     public List<NodeViewModel> VisibleItems { get; }
 
+
     public string Title { get; }
-    
+
     public string CustomTitle { get; }
-    
-    public bool IsPaginationDisplayed { get; }
-    
-    public bool IsPageValid { get; }
+
 
     public int PageSize { get; }
 
     public int PageNumber { get; }
+
+
+    public bool IsPaginationDisplayed { get; }
     
+    public bool IsPageValid { get; }
 }
+
 
 public sealed class NodeChildrenViewModel<T> : INodeChildrenViewModel where T : NodeViewModel
 {
-    public List<NodeViewModel> VisibleItems => Items?.Values.OrderByDescending(n => n.Status).ThenBy(n => n.Name).Skip(PageNumber * PageSize).Select(x => (NodeViewModel)x).Take(PageSize).ToList();
+    public List<NodeViewModel> VisibleItems => Items?.Values.OrderByDescending(n => n.Status)
+                                                            .ThenBy(n => n.Name)
+                                                            .Skip(PageNumber * PageSize)
+                                                            .Take(PageSize)
+                                                            .Select(x => (NodeViewModel)x).ToList();
     
     public IDictionary<Guid, T> Items { get; private set; } 
     
@@ -34,7 +41,7 @@ public sealed class NodeChildrenViewModel<T> : INodeChildrenViewModel where T : 
 
     public int PageNumber { get; private set; } = 0;
 
-    public int OriginalSize { get; private set; } = 0;
+    public int OriginalSize => Items.Count;
 
     
     public string Title { get; }
@@ -44,7 +51,7 @@ public sealed class NodeChildrenViewModel<T> : INodeChildrenViewModel where T : 
 
     public bool IsPaginationDisplayed => OriginalSize > PageSize;
 
-    public bool IsPageValid => !(OriginalSize <= PageNumber * PageSize || PageNumber < 0 || PageSize <= 0);
+    public bool IsPageValid => OriginalSize > PageNumber * PageSize && PageNumber >= 0;
 
 
     public NodeChildrenViewModel(string title)
@@ -56,11 +63,8 @@ public sealed class NodeChildrenViewModel<T> : INodeChildrenViewModel where T : 
     public NodeChildrenViewModel<T> Load(IDictionary<Guid, T> collection)
     {
         if (collection is not null)
-        {
             Items = collection;
-            OriginalSize = Items.Count;
-        }
-        
+
         return this;
     }
 
