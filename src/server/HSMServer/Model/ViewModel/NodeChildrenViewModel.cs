@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using HSMServer.Model.TreeViewModel;
+using HSMServer.Model.TreeViewModels;
 
 namespace HSMServer.Model.ViewModel;
 
@@ -41,7 +42,7 @@ public sealed class NodeChildrenViewModel<T> : INodeChildrenViewModel where T : 
 
     public int PageNumber { get; private set; } = 0;
 
-    public int OriginalSize => Items.Count;
+    public int OriginalSize => Items?.Count ?? 0;
 
     
     public string Title { get; }
@@ -60,40 +61,24 @@ public sealed class NodeChildrenViewModel<T> : INodeChildrenViewModel where T : 
     }
 
 
-    public NodeChildrenViewModel<T> Load(IDictionary<Guid, T> collection)
+    public void Load(IDictionary<Guid, T> collection, string customTitle = null)
     {
-        if (collection is not null)
-            Items = collection;
-
-        return this;
-    }
-
-    public NodeChildrenViewModel<T> SetCustomTitle(string title)
-    {
-        CustomTitle = title;
-        
-        return this;
+        Items = collection ?? Items;
+        CustomTitle = customTitle;
     }
 
     public void Reset()
     {
         PageNumber = 0;
         PageSize = 150;
+
+        Items = null;
     }
     
-    public NodeChildrenViewModel<T> Reload(int pageNumber, int pageSize) => ChangePageNumber(pageNumber).ChangePageSize(pageSize);
-
-
-    private NodeChildrenViewModel<T> ChangePageSize(int pageSize)
+    public NodeChildrenViewModel<T> Reload(ChildrenPageRequest pageRequest)
     {
-        PageSize = pageSize <= 0 ? PageSize : pageSize;
-
-        return this;
-    }
-
-    private NodeChildrenViewModel<T> ChangePageNumber(int pageNumber)
-    {
-        PageNumber = pageNumber < 0 ? PageNumber : pageNumber;
+        PageSize = pageRequest.PageSize <= 0 ? PageSize : pageRequest.PageSize;
+        PageNumber = pageRequest.CurrentPage < 0 ? PageNumber : pageRequest.CurrentPage;
 
         return this;
     }

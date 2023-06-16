@@ -11,7 +11,7 @@ public class SelectedNodeViewModel
 
     public string Id => _selectedNode?.Id.ToString();
 
-    public bool HasChildren => Nodes.VisibleItems.Count + Sensors.VisibleItems.Count > 0;
+    public bool HasChildren => Nodes.VisibleItems?.Count + Sensors.VisibleItems?.Count > 0;
 
 
     public NodeChildrenViewModel<SensorNodeViewModel> Sensors { get; } = new(nameof(Sensors));
@@ -23,25 +23,20 @@ public class SelectedNodeViewModel
     {
         Subscribe(newNode);
         
-        Nodes.Load(newNode.Nodes).SetCustomTitle(nameof(newNode.Nodes));
-        Sensors.Load(newNode.Sensors).SetCustomTitle(nameof(newNode.Sensors));
+        Nodes.Load(newNode.Nodes);
+        Sensors.Load(newNode.Sensors);
     }
 
     public void ConnectFolder(FolderModel newFolder)
     {
         Subscribe(newFolder);
 
-        Nodes.Load(newFolder.Products).SetCustomTitle(nameof(newFolder.Products));
-        Sensors.Items?.Clear();
+        Nodes.Load(newFolder.Products, nameof(newFolder.Products));
+        Sensors.Reset();
     }
 
-    public INodeChildrenViewModel GetNextPage(ChildrenPageRequest pageRequest)
-    {
-        if (pageRequest.Id == "Nodes")
-            return Nodes.Reload(pageRequest.CurrentPage, pageRequest.PageSize);
-        
-        return Sensors.Reload(pageRequest.CurrentPage, pageRequest.PageSize);
-    }
+    public INodeChildrenViewModel GetNextPage(ChildrenPageRequest pageRequest) => pageRequest.IsNodes ? Nodes.Reload(pageRequest) : Sensors.Reload(pageRequest);
+    
 
     private void Subscribe(BaseNodeViewModel newSelected)
     {
