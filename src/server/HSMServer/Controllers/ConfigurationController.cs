@@ -28,7 +28,6 @@ namespace HSMServer.Controllers
 
         public IActionResult Index()
         {
-            var viewModels = new List<ConfigurationObjectViewModel>();
             //var paramNames = _config.GetAllParameterNames();
             //foreach (var paramName in paramNames)
             //{
@@ -43,10 +42,17 @@ namespace HSMServer.Controllers
             //    viewModels.Add(new ConfigurationObjectViewModel(value, true));
             //}
             //viewModels.Sort((vm1, vm2) => vm1.Name.CompareTo(vm2.Name));
-
-            return View(viewModels);
+            var model = new ConfigurationViewModel();
+            model.Telegram = new TelegramConfigurationViewModel(_config.Telegram);
+            return View(model);
         }
 
+        [HttpPost]
+        public void SaveConfig(string propertyName, string newValue)
+        {
+            
+        }
+        
         [HttpPost]
         public void SaveConfigObject([FromBody] ConfigurationObjectViewModel viewModel)
         {
