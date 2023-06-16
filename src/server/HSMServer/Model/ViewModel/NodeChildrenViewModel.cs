@@ -11,10 +11,12 @@ public interface INodeChildrenViewModel
 
     public string Title { get; }
     
+    public string CustomTitle { get; }
+    
     public bool IsPaginationDisplayed { get; }
     
     public bool IsPageValid { get; }
-    
+
     public int PageSize { get; }
 
     public int PageNumber { get; }
@@ -36,6 +38,8 @@ public sealed class NodeChildrenViewModel<T> : INodeChildrenViewModel where T : 
 
     
     public string Title { get; }
+
+    public string CustomTitle { get; private set; }
     
 
     public bool IsPaginationDisplayed => OriginalSize > PageSize;
@@ -59,7 +63,14 @@ public sealed class NodeChildrenViewModel<T> : INodeChildrenViewModel where T : 
         
         return this;
     }
-    
+
+    public NodeChildrenViewModel<T> SetCustomTitle(string title)
+    {
+        CustomTitle = title;
+        
+        return this;
+    }
+
     public void Reset()
     {
         PageNumber = 0;

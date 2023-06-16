@@ -116,7 +116,7 @@ namespace HSMServer.Controllers
         {
             var model = StoredUser.SelectedNode.GetNextPage(pageRequest);
                 
-            return model.IsPageValid ? PartialView("_ListAccordion", model) : _emptyResult;;
+            return model.IsPageValid ? PartialView("_ListAccordion", model) : _emptyResult;
         }
 
         [HttpGet]

@@ -31,7 +31,7 @@ public class SelectedNodeViewModel
     {
         Subscribe(newFolder);
 
-        Nodes.Load(newFolder.Products);
+        Nodes.Load(newFolder.Products).SetCustomTitle(nameof(newFolder.Products));
         Sensors.Items?.Clear();
     }
 
