@@ -8,7 +8,7 @@ namespace HSMServer.Model.ViewModel;
 public interface INodeChildrenViewModel
 {
     public List<NodeViewModel> VisibleItems { get; }
-    
+
     public string Title { get; }
     
     public bool IsPaginationDisplayed { get; }
@@ -23,12 +23,9 @@ public interface INodeChildrenViewModel
 
 public sealed class NodeChildrenViewModel<T> : INodeChildrenViewModel where T : NodeViewModel
 {
-    private bool _isPaginated = false;
-    
-    
     public List<NodeViewModel> VisibleItems => Items?.Values.OrderByDescending(n => n.Status).ThenBy(n => n.Name).Skip(PageNumber * PageSize).Select(x => (NodeViewModel)x).Take(PageSize).ToList();
     
-    public IDictionary<Guid, T> Items { get; set; } 
+    public IDictionary<Guid, T> Items { get; private set; } 
     
     
     public int PageSize { get; private set; } = 150;
@@ -38,12 +35,12 @@ public sealed class NodeChildrenViewModel<T> : INodeChildrenViewModel where T : 
     public int OriginalSize { get; private set; } = 0;
 
     
-    public string Title { get; set; }
+    public string Title { get; }
     
 
-    public bool IsPaginationDisplayed => _isPaginated && OriginalSize > PageSize;
+    public bool IsPaginationDisplayed => OriginalSize > PageSize;
 
-    public bool IsPageValid => OriginalSize <= PageNumber * PageSize || PageNumber < 0 || PageSize <= 0;
+    public bool IsPageValid => !(OriginalSize <= PageNumber * PageSize || PageNumber < 0 || PageSize <= 0);
 
 
     public NodeChildrenViewModel(string title)
@@ -57,30 +54,32 @@ public sealed class NodeChildrenViewModel<T> : INodeChildrenViewModel where T : 
         if (collection is not null)
         {
             Items = collection;
-            _isPaginated = true;
             OriginalSize = Items.Count;
         }
         
         return this;
     }
+    
+    public void Reset()
+    {
+        PageNumber = 0;
+        PageSize = 150;
+    }
+    
+    public NodeChildrenViewModel<T> Reload(int pageNumber, int pageSize) => ChangePageNumber(pageNumber).ChangePageSize(pageSize);
 
-    public NodeChildrenViewModel<T> ChangePageSize(int pageSize)
+
+    private NodeChildrenViewModel<T> ChangePageSize(int pageSize)
     {
         PageSize = pageSize <= 0 ? PageSize : pageSize;
 
         return this;
     }
 
-    public NodeChildrenViewModel<T> ChangePageNumber(int pageNumber)
+    private NodeChildrenViewModel<T> ChangePageNumber(int pageNumber)
     {
         PageNumber = pageNumber < 0 ? PageNumber : pageNumber;
 
         return this;
-    }
-
-    public void Reset()
-    {
-        PageNumber = 0;
-        PageSize = 150;
     }
 }

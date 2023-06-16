@@ -106,25 +106,17 @@ namespace HSMServer.Controllers
         [HttpGet]
         public IActionResult GetGrid(ChildrenPageRequest pageRequest)
         {
-            INodeChildrenViewModel model;
-            
-            if (pageRequest.Id == "Nodes")
-                model = StoredUser.SelectedNode.Nodes.ChangePageNumber(pageRequest.CurrentPage).ChangePageSize(pageRequest.PageSize);
-            else model = StoredUser.SelectedNode.Sensors.ChangePageNumber(pageRequest.CurrentPage).ChangePageSize(pageRequest.PageSize);
-            
-            return model.IsPageValid ? _emptyResult : PartialView("_GridAccordion", model);
+            var model = StoredUser.SelectedNode.GetNextPage(pageRequest);
+
+            return model.IsPageValid ? PartialView("_GridAccordion", model) : _emptyResult;
         }
 
         [HttpGet]
         public IActionResult GetList(ChildrenPageRequest pageRequest)
         {
-            INodeChildrenViewModel model;
-            
-            if (pageRequest.Id == "Nodes")
-                model = StoredUser.SelectedNode.Nodes.ChangePageNumber(pageRequest.CurrentPage).ChangePageSize(pageRequest.PageSize);
-            else model = StoredUser.SelectedNode.Sensors.ChangePageNumber(pageRequest.CurrentPage).ChangePageSize(pageRequest.PageSize);
+            var model = StoredUser.SelectedNode.GetNextPage(pageRequest);
                 
-            return model.IsPageValid ? _emptyResult : PartialView("_ListAccordion", model);;
+            return model.IsPageValid ? PartialView("_ListAccordion", model) : _emptyResult;;
         }
 
         [HttpGet]

@@ -33,6 +33,13 @@ public class SelectedNodeViewModel
         Sensors.Items?.Clear();
     }
 
+    public INodeChildrenViewModel GetNextPage(ChildrenPageRequest pageRequest)
+    {
+        if (pageRequest.Id == "Nodes")
+            return Nodes.Reload(pageRequest.CurrentPage, pageRequest.PageSize);
+        
+        return Sensors.Reload(pageRequest.CurrentPage, pageRequest.PageSize);
+    }
     
     private void Subscribe(BaseNodeViewModel newSelected)
     {
