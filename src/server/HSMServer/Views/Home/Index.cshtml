@@ -342,7 +342,7 @@
     function getGridPage(accordionId, pageNumber = -1, pageSize = -1){
         $.ajax({
             type: 'get',
-            url: `${getGrid}?id=${accordionId}&currentPage=${pageNumber}&pageSize=${pageSize}`,
+            url: `${getGrid}?typeId=${accordionId}&currentPage=${pageNumber}&pageSize=${pageSize}`,
             datatype: 'html',
             contenttype: 'application/json',
             cache: false,
@@ -356,7 +356,7 @@
     function getListPage(accordionId, pageNumber = -1, pageSize = -1){
         $.ajax({
             type: 'get',
-            url: `${getList}?id=${accordionId}&currentPage=${pageNumber}&pageSize=${pageSize}`,
+            url: `${getList}?typeId=${accordionId}&currentPage=${pageNumber}&pageSize=${pageSize}`,
             datatype: 'html',
             contenttype: 'application/json',
             cache: false,

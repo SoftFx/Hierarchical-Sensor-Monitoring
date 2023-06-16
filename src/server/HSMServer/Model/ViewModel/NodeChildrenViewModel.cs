@@ -1,15 +1,34 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using HSMServer.Model.TreeViewModel;
 
 namespace HSMServer.Model.ViewModel;
 
-public sealed class NodeChildrenViewModel
+public interface INodeChildrenViewModel
+{
+    public List<NodeViewModel> VisibleItems { get; }
+    
+    public string Title { get; }
+    
+    public bool IsPaginationDisplayed { get; }
+    
+    public bool IsPageValid { get; }
+    
+    public int PageSize { get; }
+
+    public int PageNumber { get; }
+    
+}
+
+public sealed class NodeChildrenViewModel<T> : INodeChildrenViewModel where T : NodeViewModel
 {
     private bool _isPaginated = false;
     
     
-    public List<NodeViewModel> VisibleItems { get; set; } = new(1 << 8);
+    public List<NodeViewModel> VisibleItems => Items?.Values.OrderByDescending(n => n.Status).ThenBy(n => n.Name).Skip(PageNumber * PageSize).Select(x => (NodeViewModel)x).Take(PageSize).ToList();
+    
+    public IDictionary<Guid, T> Items { get; set; } 
     
     
     public int PageSize { get; private set; } = 150;
@@ -33,27 +52,26 @@ public sealed class NodeChildrenViewModel
     }
 
 
-    public NodeChildrenViewModel Load<T>(ICollection<T> collection) where T : NodeViewModel
+    public NodeChildrenViewModel<T> Load(IDictionary<Guid, T> collection)
     {
         if (collection is not null)
-        {         
-            VisibleItems.Clear();    
-            VisibleItems.AddRange(collection.OrderByDescending(n => n.Status).ThenBy(n => n.Name).Skip(PageNumber * PageSize).Take(PageSize));
+        {
+            Items = collection;
             _isPaginated = true;
-            OriginalSize = collection.Count;
+            OriginalSize = Items.Count;
         }
         
         return this;
     }
-    
-    public NodeChildrenViewModel ChangePageSize(int pageSize)
+
+    public NodeChildrenViewModel<T> ChangePageSize(int pageSize)
     {
         PageSize = pageSize <= 0 ? PageSize : pageSize;
 
         return this;
     }
 
-    public NodeChildrenViewModel ChangePageNumber(int pageNumber)
+    public NodeChildrenViewModel<T> ChangePageNumber(int pageNumber)
     {
         PageNumber = pageNumber < 0 ? PageNumber : pageNumber;
 
@@ -64,6 +82,5 @@ public sealed class NodeChildrenViewModel
     {
         PageNumber = 0;
         PageSize = 150;
-        VisibleItems.Clear();
     }
 }

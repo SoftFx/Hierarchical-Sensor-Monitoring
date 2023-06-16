@@ -12,46 +12,25 @@ public class SelectedNodeViewModel
     public string Id => _selectedNode?.Id.ToString();
     
     
-    public NodeChildrenViewModel Sensors { get; } = new(nameof(Sensors));
+    public NodeChildrenViewModel<SensorNodeViewModel> Sensors { get; } = new(nameof(Sensors));
         
-    public NodeChildrenViewModel Nodes { get; } = new(nameof(Nodes));
+    public NodeChildrenViewModel<ProductNodeViewModel> Nodes { get; } = new(nameof(Nodes));
     
     
     public void ConnectNode(ProductNodeViewModel newNode)
     {
         Subscribe(newNode);
         
-        Nodes.Load(newNode.Nodes.Values);
-        Sensors.Load(newNode.Sensors.Values);
+        Nodes.Load(newNode.Nodes);
+        Sensors.Load(newNode.Sensors);
     }
 
     public void ConnectFolder(FolderModel newFolder)
     {
         Subscribe(newFolder);
 
-        Nodes.Load(newFolder.Products.Values);
-    }
-
-    public NodeChildrenViewModel ReloadPage(ChildrenPageRequest pageRequest)
-    {
-        switch (pageRequest.Id)
-        {
-            case "Nodes":
-                Nodes.ChangePageNumber(pageRequest.CurrentPage).ChangePageSize(pageRequest.PageSize);
-                
-                if (_selectedNode is ProductNodeViewModel productNodeViewModel)
-                    return Nodes.Load(productNodeViewModel.Nodes.Values);
-
-                return Nodes.Load((_selectedNode as FolderModel)?.Products.Values);
-            case "Sensors":
-                return Sensors.ChangePageNumber(pageRequest.CurrentPage)
-                              .ChangePageSize(pageRequest.PageSize)
-                              .Load((_selectedNode as ProductNodeViewModel)?.Sensors.Values);
-            default:
-                return Nodes.ChangePageNumber(pageRequest.CurrentPage)
-                            .ChangePageSize(pageRequest.PageSize)
-                            .Load((_selectedNode as FolderModel)?.Products.Values);
-        }
+        Nodes.Load(newFolder.Products);
+        Sensors.Items?.Clear();
     }
 
     

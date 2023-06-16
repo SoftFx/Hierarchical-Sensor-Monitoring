@@ -106,7 +106,11 @@ namespace HSMServer.Controllers
         [HttpGet]
         public IActionResult GetGrid(ChildrenPageRequest pageRequest)
         {
-            var model = StoredUser.SelectedNode.ReloadPage(pageRequest with { TypeId = pageRequest.TypeId.Replace("grid", string.Empty) });
+            INodeChildrenViewModel model;
+            
+            if (pageRequest.Id == "Nodes")
+                model = StoredUser.SelectedNode.Nodes.ChangePageNumber(pageRequest.CurrentPage).ChangePageSize(pageRequest.PageSize);
+            else model = StoredUser.SelectedNode.Sensors.ChangePageNumber(pageRequest.CurrentPage).ChangePageSize(pageRequest.PageSize);
             
             return model.IsPageValid ? _emptyResult : PartialView("_GridAccordion", model);
         }
@@ -114,9 +118,13 @@ namespace HSMServer.Controllers
         [HttpGet]
         public IActionResult GetList(ChildrenPageRequest pageRequest)
         {
-            var model = StoredUser.SelectedNode.ReloadPage(pageRequest with { TypeId = pageRequest.TypeId.Replace("list", string.Empty) });
+            INodeChildrenViewModel model;
             
-            return model.IsPageValid ? _emptyResult : PartialView("_ListAccordion", model);
+            if (pageRequest.Id == "Nodes")
+                model = StoredUser.SelectedNode.Nodes.ChangePageNumber(pageRequest.CurrentPage).ChangePageSize(pageRequest.PageSize);
+            else model = StoredUser.SelectedNode.Sensors.ChangePageNumber(pageRequest.CurrentPage).ChangePageSize(pageRequest.PageSize);
+                
+            return model.IsPageValid ? _emptyResult : PartialView("_ListAccordion", model);;
         }
 
         [HttpGet]
