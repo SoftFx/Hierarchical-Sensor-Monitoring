@@ -106,21 +106,17 @@ namespace HSMServer.Controllers
         [HttpGet]
         public IActionResult GetGrid(ChildrenPageRequest pageRequest)
         {
-            var model = StoredUser.SelectedNode.ReloadPage(pageRequest with { Id = pageRequest.Id.Replace("grid", string.Empty) });
-            if (model.IsPageValid)
-                return _emptyResult; 
+            var model = StoredUser.SelectedNode.ReloadPage(pageRequest with { TypeId = pageRequest.TypeId.Replace("grid", string.Empty) });
             
-            return PartialView("_GridAccordion", model);
+            return model.IsPageValid ? _emptyResult : PartialView("_GridAccordion", model);
         }
 
         [HttpGet]
         public IActionResult GetList(ChildrenPageRequest pageRequest)
         {
-            var model = StoredUser.SelectedNode.ReloadPage(pageRequest with { Id = pageRequest.Id.Replace("list", string.Empty) });
-            if (model.IsPageValid)
-                return _emptyResult; 
+            var model = StoredUser.SelectedNode.ReloadPage(pageRequest with { TypeId = pageRequest.TypeId.Replace("list", string.Empty) });
             
-            return PartialView("_ListAccordion", model);
+            return model.IsPageValid ? _emptyResult : PartialView("_ListAccordion", model);
         }
 
         [HttpGet]
