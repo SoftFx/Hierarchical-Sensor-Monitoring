@@ -2,7 +2,6 @@
 
 @{
     var accordionId = $"list{Model.Title}";
-    var title = string.IsNullOrEmpty(Model.CustomTitle) ? Model.Title : Model.CustomTitle;
     var items = Model.VisibleItems;
 }
 
@@ -12,7 +11,7 @@
         <div class="accordion-item custom-accordion-item">
             <h2 class="accordion-header" id="custom_accordion_header">
                 <button class="accordion-button fw-bold" type="button" data-bs-toggle="collapse" data-bs-target="#flush-collapse_@accordionId" aria-expanded='true'>
-                   @title
+                   @Model.Title
                 </button>
             </h2>
             <div id="flush-collapse_@accordionId" class="accordion-collapse collapse show">

@@ -6,36 +6,37 @@ namespace HSMServer.Model.TreeViewModels;
 
 public class SelectedNodeViewModel
 {
+    private readonly NodeChildrenViewModel<SensorNodeViewModel> _sensors = new("Sensors");
+
+    private readonly NodeChildrenViewModel<ProductNodeViewModel> _nodes = new("Nodes");
+
+    
     private BaseNodeViewModel _selectedNode;
 
 
     public string Id => _selectedNode?.Id.ToString();
 
-    public bool HasChildren => Nodes.VisibleItems?.Count + Sensors.VisibleItems?.Count > 0;
-
-
-    public NodeChildrenViewModel<SensorNodeViewModel> Sensors { get; } = new(nameof(Sensors));
-  
-    public NodeChildrenViewModel<ProductNodeViewModel> Nodes { get; } = new(nameof(Nodes));
+    public bool HasChildren => _nodes.VisibleItems?.Count + _sensors.VisibleItems?.Count > 0;
 
 
     public void ConnectNode(ProductNodeViewModel newNode)
     {
         Subscribe(newNode);
         
-        Nodes.Load(newNode.Nodes);
-        Sensors.Load(newNode.Sensors);
+        _nodes.Load(newNode.Nodes);
+        _sensors.Load(newNode.Sensors);
     }
 
     public void ConnectFolder(FolderModel newFolder)
     {
         Subscribe(newFolder);
 
-        Nodes.Load(newFolder.Products, nameof(newFolder.Products));
-        Sensors.Reset();
+        _nodes.Title = "Products";
+        _nodes.Load(newFolder.Products);
+        _sensors.Reset();
     }
 
-    public INodeChildrenViewModel GetNextPage(ChildrenPageRequest pageRequest) => pageRequest.IsNodes ? Nodes.Reload(pageRequest) : Sensors.Reload(pageRequest);
+    public INodeChildrenViewModel GetNextPage(ChildrenPageRequest pageRequest) => pageRequest.IsNodes ? _nodes.Reload(pageRequest) : _sensors.Reload(pageRequest);
     
 
     private void Subscribe(BaseNodeViewModel newSelected)
@@ -45,7 +46,9 @@ public class SelectedNodeViewModel
 
         _selectedNode = newSelected;
         
-        Nodes.Reset();
-        Sensors.Reset();
+        _nodes.Reset();
+        _nodes.Title = "Nodes";
+        _sensors.Reset();
+        _sensors.Title = "Sensors";
     }
 }

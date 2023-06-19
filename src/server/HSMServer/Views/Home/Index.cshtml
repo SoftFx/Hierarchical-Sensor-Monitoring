@@ -340,6 +340,8 @@
     });
     
     function getGridPage(accordionId, pageNumber = -1, pageSize = -1){
+        let accordion  = $(`#grid-accordion_${accordionId}`);
+        
         $.ajax({
             type: 'get',
             url: `${getGrid}?typeId=${accordionId}&currentPage=${pageNumber}&pageSize=${pageSize}`,
@@ -347,13 +349,19 @@
             contenttype: 'application/json',
             cache: false,
             success: function (viewData) {
-                if (viewData !== '')
-                    $(`#grid-accordion_${accordionId}`).empty().replaceWith(viewData);
+                if (viewData !== '') {
+                    if (accordion.length !== 0)
+                        $(`#grid-accordion_${accordionId}`).empty().replaceWith(viewData);
+                    else 
+                        $(`#grid-accordion_gridProducts`).empty().replaceWith(viewData);
+                }
             }
         });
     }
     
     function getListPage(accordionId, pageNumber = -1, pageSize = -1){
+        let accordion  = $(`#list-accordion_${accordionId}`);
+        
         $.ajax({
             type: 'get',
             url: `${getList}?typeId=${accordionId}&currentPage=${pageNumber}&pageSize=${pageSize}`,
@@ -361,8 +369,12 @@
             contenttype: 'application/json',
             cache: false,
             success: function (viewData) {
-                if (viewData !== '')
-                    $(`#list-accordion_${accordionId}`).empty().replaceWith(viewData);
+                if (viewData !== '') {
+                    if (accordion.length !== 0)
+                        $(`#list-accordion_${accordionId}`).empty().replaceWith(viewData);
+                    else 
+                        $(`#list-accordion_listProducts`).empty().replaceWith(viewData);
+                }
             }
         });
     }

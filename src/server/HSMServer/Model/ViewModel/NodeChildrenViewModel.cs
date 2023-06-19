@@ -13,9 +13,6 @@ public interface INodeChildrenViewModel
 
     public string Title { get; }
 
-    public string CustomTitle { get; }
-
-
     public int PageSize { get; }
 
     public int PageNumber { get; }
@@ -29,26 +26,25 @@ public interface INodeChildrenViewModel
 
 public sealed class NodeChildrenViewModel<T> : INodeChildrenViewModel where T : NodeViewModel
 {
-    public List<NodeViewModel> VisibleItems => Items?.Values.OrderByDescending(n => n.Status)
+    private IDictionary<Guid, T> _items;
+
+
+    public List<NodeViewModel> VisibleItems => _items?.Values.OrderByDescending(n => n.Status)
                                                             .ThenBy(n => n.Name)
                                                             .Skip(PageNumber * PageSize)
                                                             .Take(PageSize)
                                                             .Select(x => (NodeViewModel)x).ToList();
-    
-    public IDictionary<Guid, T> Items { get; private set; } 
-    
-    
-    public int PageSize { get; private set; } = 150;
+
+
+    public int PageSize { get; private set; } = 169;
 
     public int PageNumber { get; private set; } = 0;
 
-    public int OriginalSize => Items?.Count ?? 0;
+    public int OriginalSize => _items?.Count ?? 0;
 
     
-    public string Title { get; }
+    public string Title { get; set; }
 
-    public string CustomTitle { get; private set; }
-    
 
     public bool IsPaginationDisplayed => OriginalSize > PageSize;
 
@@ -61,18 +57,17 @@ public sealed class NodeChildrenViewModel<T> : INodeChildrenViewModel where T : 
     }
 
 
-    public void Load(IDictionary<Guid, T> collection, string customTitle = null)
+    public void Load(IDictionary<Guid, T> collection)
     {
-        Items = collection ?? Items;
-        CustomTitle = customTitle;
+        _items = collection ?? _items;
     }
 
     public void Reset()
     {
         PageNumber = 0;
-        PageSize = 150;
+        PageSize = 169;
 
-        Items = null;
+        _items = null;
     }
     
     public NodeChildrenViewModel<T> Reload(ChildrenPageRequest pageRequest)
