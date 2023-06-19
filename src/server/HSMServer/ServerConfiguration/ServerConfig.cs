@@ -76,6 +76,6 @@ namespace HSMServer.ServerConfiguration
             return _configuration.GetSection(sectionName).Get<T>() ?? new T();
         }
 
-        private void ResaveSettings() => File.WriteAllText(_settingsPath, JsonSerializer.Serialize(this, _options));
+        public void ResaveSettings() => File.WriteAllText(_settingsPath, JsonSerializer.Serialize(this, _options));
     }
 }
