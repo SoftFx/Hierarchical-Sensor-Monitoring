@@ -1,6 +1,4 @@
-using Xunit;
-
-namespace HSMDatabase.Tests
+namespace HSMDatabase.LevelDB.Tests
 {
     public class UnitTest1
     {
