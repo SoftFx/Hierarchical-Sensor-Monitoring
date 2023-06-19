@@ -16,6 +16,7 @@ using HSMServer.Model.Folders.ViewModels;
 using HSMServer.Model.History;
 using HSMServer.Model.Model.History;
 using HSMServer.Model.TreeViewModel;
+using HSMServer.Model.TreeViewModels;
 using HSMServer.Model.ViewModel;
 using HSMServer.Notification.Settings;
 using HSMServer.Notifications;
@@ -66,9 +67,15 @@ namespace HSMServer.Controllers
                 var id = selectedId.ToGuid();
 
                 if (_folderManager.TryGetValue(id, out var folder))
+                {
                     viewModel = folder;
+                    StoredUser.SelectedNode.ConnectFolder(folder);
+                }
                 else if (_treeViewModel.Nodes.TryGetValue(id, out var node))
+                {
                     viewModel = node;
+                    StoredUser.SelectedNode.ConnectNode(node);
+                }
                 else if (_treeViewModel.Sensors.TryGetValue(id, out var sensor))
                 {
                     viewModel = sensor;
@@ -95,6 +102,22 @@ namespace HSMServer.Controllers
 
         [HttpPut]
         public void RemoveRenderingNode(Guid nodeId) => CurrentUser.Tree.RemoveRenderingNode(nodeId);
+
+        [HttpGet]
+        public IActionResult GetGrid(ChildrenPageRequest pageRequest)
+        {
+            var model = StoredUser.SelectedNode.GetNextPage(pageRequest);
+
+            return model.IsPageValid ? PartialView("_GridAccordion", model) : _emptyResult;
+        }
+
+        [HttpGet]
+        public IActionResult GetList(ChildrenPageRequest pageRequest)
+        {
+            var model = StoredUser.SelectedNode.GetNextPage(pageRequest);
+
+            return model.IsPageValid ? PartialView("_ListAccordion", model) : _emptyResult;
+        }
 
         [HttpGet]
         public IActionResult RefreshTree()

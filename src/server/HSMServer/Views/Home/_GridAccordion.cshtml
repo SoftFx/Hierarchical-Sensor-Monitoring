@@ -1,26 +1,25 @@
 ﻿@using HSMServer.Extensions
-@using HSMServer.Model.TreeViewModel
-@using HSMServer.Model.Folders
 
-@model List<NodeViewModel>
+@model HSMServer.Model.ViewModel.INodeChildrenViewModel
 
+@{
+    var accordionId = $"grid{Model.Title}";
+    var items = Model.VisibleItems;
+}
 
-<div class="accordion">
-    @if (Model.Count > 0)
+<div class="accordion" id='grid-accordion_@accordionId'>
+    @if (items.Count > 0)
     {
-        var title = Model.FirstOrDefault().GetChildrenAccordionTitle();
-        var accordionId = $"grid{title}";
-
         <div class="accordion-item custom-accordion-item">
             <h2 class="accordion-header" id="custom_accordion_header">
-                <button id='grid-accordion_@accordionId' class="accordion-button collapsed fw-bold" type="button" data-bs-toggle="collapse" data-bs-target="#flush-collapse_@accordionId" aria-expanded='false'>
-                    @title
+                <button class="accordion-button fw-bold" type="button" data-bs-toggle="collapse" data-bs-target="#flush-collapse_@accordionId" aria-expanded='true'>
+                    @Model.Title
                 </button>
             </h2>
-            <div id="flush-collapse_@accordionId" class="accordion-collapse collapse">
+            <div id="flush-collapse_@accordionId" class="accordion-collapse collapse show">
                 <div class="accordion-body">
                     <div class="grid-container mw-100">
-                        @foreach (var element in Model)
+                        @foreach (var element in items)
                         {
                             <div id="gridCell_@element.EncodedId" class="@element.Status.ToCssGridCellClass() p-1 grid-cell clickable-node"
                                  title="@element.Tooltip" onclick="activateNode('@ViewBag.ParentId', '@element.EncodedId')">
@@ -29,6 +28,29 @@
                         }
                     </div>
                 </div>
+            </div>
+        </div>
+        <div class="container d-flex mt-2 pe-0 me-0 justify-content-between">
+            <ul class="pagination position-relative" style="left: 40%">
+                <div class="@(Model.IsPaginationDisplayed ? "d-flex" : "d-none")">
+                    <li id="prevPageButton" class="page-item button-link">
+                        <a class="page-link" aria-label="Previous" onclick="getGridPage('@accordionId', @(Model.PageNumber - 1), @Model.PageSize)">
+                            <span aria-hidden="true">&laquo;</span>
+                        </a>
+                    </li>
+                    <li class="page-item">
+                        <a id="pageNumber_@accordionId" class="page-link">@(Model.PageNumber + 1)</a>
+                    </li>
+                    <li id="nextPageButton" class="page-item button-link">
+                        <a class="page-link" aria-label="Next" onclick="getGridPage('@accordionId', @(Model.PageNumber + 1), @Model.PageSize)">
+                            <span aria-hidden="true">&raquo;</span>
+                        </a>
+                    </li>
+                </div>
+            </ul>
+            <div class="d-flex align-self-baseline gap-1 my-1">
+                <input class="form-control" id="pageSize_@accordionId" type="number" value="@Model.PageSize" style="width: 5rem"/>
+                <button class="btn btn-secondary" onclick="getGridPage('@accordionId', @(Model.PageNumber), $('#pageSize_@accordionId')[0].value)">Apply</button>
             </div>
         </div>
     }

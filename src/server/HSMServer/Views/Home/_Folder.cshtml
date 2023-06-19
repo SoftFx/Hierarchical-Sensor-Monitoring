@@ -1,7 +1,6 @@
 ﻿@using HSMServer.Model.Folders
 @using HSMServer.Model.Folders.ViewModels
-@using HSMServer.Constants
-@using HSMServer.Controllers
+@using HSMServer.Model.Authentication
 
 @model FolderModel
 
@@ -10,4 +9,4 @@
 
 @await Html.PartialAsync("_MetaInfo", new FolderInfoViewModel(Model))
 
-@await Html.PartialAsync("_ChildrenPanel", Model)
+@await Html.PartialAsync("_ChildrenPanel", (User as User).SelectedNode)
