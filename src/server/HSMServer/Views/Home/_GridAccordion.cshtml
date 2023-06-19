@@ -30,8 +30,8 @@
                 </div>
             </div>
         </div>
-        <div class="container d-flex mt-2 justify-content-between">
-            <ul class="pagination position-relative" style="left: 45%;">
+        <div class="container d-flex mt-2 pe-0 me-0 justify-content-between">
+            <ul class="pagination position-relative" style="left: 40%">
                 <div class="@(Model.IsPaginationDisplayed ? "d-flex" : "d-none")">
                     <li id="prevPageButton" class="page-item button-link">
                         <a class="page-link" aria-label="Previous" onclick="getGridPage('@accordionId', @(Model.PageNumber - 1), @Model.PageSize)">
