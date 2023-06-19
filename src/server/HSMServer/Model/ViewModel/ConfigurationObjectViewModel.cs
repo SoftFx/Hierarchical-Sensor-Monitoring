@@ -8,15 +8,17 @@ namespace HSMServer.Model.ViewModel
     {
         public string Name { get; private set; }
 
-        public string PropertyName { get; private set; }
-
-        public string Value { get; private set; }
-
         public bool IsDefault { get; private set; }
 
-        public object DefaultValue { get; private set; }
+        public string DefaultValue { get; private set; }
 
         public string Description { get; private set; }
+
+
+        public string PropertyName { get; set; }
+
+        public string Value { get; set; }
+
 
         public static Dictionary<string, ConfigurationViewModel> TelegramSettings(TelegramConfigurationViewModel telegramConfig)
         {
@@ -54,7 +56,7 @@ namespace HSMServer.Model.ViewModel
                         Description = "Can bot send messages",
                         Value = telegramConfig.IsRunning.ToString(),
                         IsDefault = telegramConfig.IsRunning == false,
-                        DefaultValue = false
+                        DefaultValue = bool.FalseString
                     }
                 },
             };

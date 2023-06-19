@@ -183,7 +183,7 @@
         name = this.id.substring("reset_".length);
 
         $.ajax({
-            type: 'GET',
+            type: 'POST',
             url: setToDefaultAction + "?Name=" + name,
             cache: false,
             async: true,

@@ -33,40 +33,32 @@ namespace HSMServer.Controllers
         }
 
         [HttpPost]
-        public void SaveConfig([FromBody] ConfigurationViewModel viewModel)
-        {
-            var item = _configViewModel[viewModel.PropertyName];
-            
-            if (item.PropertyName == nameof(_config.Telegram.BotName))
-                _config.Telegram.BotName = viewModel.Value;
-            
-            if (item.PropertyName == nameof(_config.Telegram.BotToken))
-                _config.Telegram.BotToken = viewModel.Value;
-
-            if (item.PropertyName == nameof(_config.Telegram.IsRunning) && bool.TryParse(viewModel.Value, out var boolValue))
-                _config.Telegram.IsRunning = boolValue;
-            
-            _config.ResaveSettings();
-        }
-
-        public void SetToDefault([FromQuery] string name)
-        {
-            var item = _configViewModel[name];
-            var defaultValue = item.DefaultValue;
-
-            if (item.PropertyName == nameof(_config.Telegram.BotName))
-                _config.Telegram.BotName = defaultValue.ToString();
-            
-            if (item.PropertyName == nameof(_config.Telegram.BotToken))
-                _config.Telegram.BotToken = defaultValue.ToString();
-
-            if (item.PropertyName == nameof(_config.Telegram.IsRunning))
-                _config.Telegram.IsRunning = (bool) defaultValue;
-            
-            _config.ResaveSettings();
-        }
+        public void SaveConfig([FromBody] ConfigurationViewModel viewModel) => ChangeConfigValue(viewModel.PropertyName, viewModel.Value);
+        
+        [HttpPost]
+        public void SetToDefault([FromQuery] string name) => ChangeConfigValue(name, _configViewModel[name].DefaultValue);
 
         [HttpGet]
         public Task<string> RestartTelegramBot() => _telegramBot.StartBot();
+
+        
+        private void ChangeConfigValue(string propertyName, string newValue)
+        {
+            switch (propertyName)
+            {
+                case nameof(_config.Telegram.BotName):
+                    _config.Telegram.BotName = newValue;
+                    break;
+                case nameof(_config.Telegram.BotToken):
+                    _config.Telegram.BotToken = newValue;
+                    break;
+                case nameof(_config.Telegram.IsRunning) when bool.TryParse(newValue, out var boolValue):
+                    _config.Telegram.IsRunning = boolValue;
+                    break;
+            }
+
+            _config.ResaveSettings();
+        }
+        
     }
 }
