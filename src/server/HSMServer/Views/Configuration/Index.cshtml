@@ -127,14 +127,6 @@
 
 
 <script>
-    function getInputType(type) {
-        console.log(type)
-        if (type === 'bool')
-            return 'checkbox'
-        
-        return 'text';    
-    } 
-
     //Description popovers
     $(document).ready(function() {
         var popoverTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="popover"]'));
@@ -214,5 +206,4 @@
             }
         });
     });
-
 </script>

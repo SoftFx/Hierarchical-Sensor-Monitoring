@@ -65,7 +65,7 @@ namespace HSMServer.Model.ViewModel
         }
     }
 
-    public class TelegramConfigurationViewModel
+    public sealed class TelegramConfigurationViewModel
     {
         [Display(Name = "Bot Name")] 
         public string BotName { get; set; }

@@ -14,14 +14,16 @@ namespace HSMServer.Controllers
     [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
     public class ConfigurationController : Controller
     {
+        private static Dictionary<string, ConfigurationViewModel> _configViewModel = new ();
+
         private readonly IServerConfig _config;
         private readonly TelegramBot _telegramBot;
-        private static Dictionary<string, ConfigurationViewModel> _configViewModel = new ();
+  
 
         public ConfigurationController(IServerConfig config, NotificationsCenter notifications)
         {
             _config = config;
-            _configViewModel = (ConfigurationViewModel.TelegramSettings(new TelegramConfigurationViewModel(_config.Telegram)));
+            _configViewModel = ConfigurationViewModel.TelegramSettings(new TelegramConfigurationViewModel(_config.Telegram));
             
             _telegramBot = notifications.TelegramBot;
         }
