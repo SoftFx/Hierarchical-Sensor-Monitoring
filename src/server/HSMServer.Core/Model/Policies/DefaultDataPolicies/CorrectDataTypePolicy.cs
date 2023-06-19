@@ -4,15 +4,16 @@ namespace HSMServer.Core.Model.Policies
 {
     internal sealed class CorrectDataTypePolicy<T> : DataPolicy where T : BaseValue
     {
+        private const SensorStatus PolicyStatus = SensorStatus.Error;
+
+
         internal PolicyResult PolicyResult { get; }
-
-
-        public override SensorStatus Status { get; set; } = SensorStatus.Error;
 
 
         internal CorrectDataTypePolicy(Guid sensorId)
         {
-            Icon = Status.ToIcon();
+            Status = PolicyStatus;
+            Icon = PolicyStatus.ToIcon();
 
             AlertComment = $"Sensor value type is not {typeof(T).Name}";
 

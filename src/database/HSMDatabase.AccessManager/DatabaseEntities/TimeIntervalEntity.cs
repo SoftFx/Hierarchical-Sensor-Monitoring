@@ -8,5 +8,14 @@ namespace HSMDatabase.AccessManager.DatabaseEntities
 
         [JsonPropertyName("CustomPeriod")]
         public long Ticks { get; init; }
+
+
+        public TimeIntervalEntity() { }
+
+        public TimeIntervalEntity(long interval, long ticks)
+        {
+            Interval = interval;
+            Ticks = ticks;
+        }
     }
 }

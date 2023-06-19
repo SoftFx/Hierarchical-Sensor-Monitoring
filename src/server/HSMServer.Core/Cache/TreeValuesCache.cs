@@ -301,8 +301,8 @@ namespace HSMServer.Core.Cache
             var from = _snapshot.Sensors[sensorId].History.From;
             var policy = sensor.Settings.KeepHistory.Value;
 
-            if (!policy.Validate(from).IsOk)
-                ClearSensorHistory(sensorId, policy.Interval.GetShiftedTime(DateTime.UtcNow, -1));
+            if (!policy.TimeIsUp(from))
+                ClearSensorHistory(sensorId, policy.GetShiftedTime(DateTime.UtcNow, -1));
         }
 
         public void ClearSensorHistory(Guid sensorId, DateTime to)
@@ -364,7 +364,7 @@ namespace HSMServer.Core.Cache
             }
         }
 
-        private void UpdatePolicy(ActionType type, Policy policy)
+        private void UpdatePolicy(ActionType type, DataPolicy policy)
         {
             switch (type)
             {
@@ -383,20 +383,7 @@ namespace HSMServer.Core.Cache
 
         private void SubscribeSensorToPolicyUpdate(BaseSensorModel sensor)
         {
-            SubscribeToServerPolicyUpdate(sensor.Settings);
-
             sensor.DataPolicies.Uploaded += UpdatePolicy;
-        }
-
-        private void SubscribeProductToPolicyUpdate(ProductModel product)
-        {
-            SubscribeToServerPolicyUpdate(product.Settings);
-        }
-
-        private void SubscribeToServerPolicyUpdate(SettingsCollection collection)
-        {
-            foreach (var serverPolicy in collection)
-                serverPolicy.Uploaded += UpdatePolicy;
         }
 
         private void RemoveSensorPolicies(BaseSensorModel sensor)
@@ -408,9 +395,6 @@ namespace HSMServer.Core.Cache
 
         private void RemoveEntityPolicies(BaseNodeModel entity)
         {
-            foreach (var serverPolicy in entity.Settings)
-                serverPolicy.Uploaded -= UpdatePolicy;
-
             foreach (var policyId in entity.GetPolicyIds())
                 _database.RemovePolicy(policyId);
         }
@@ -421,10 +405,9 @@ namespace HSMServer.Core.Cache
                 return;
 
 
-            static TimeIntervalModel SetDefault<T>(SettingProperty<T> property, TimeIntervalModel interval)
-                where T : ServerPolicy, new()
+            static TimeIntervalModel SetDefault(SettingProperty<TimeIntervalModel> property, TimeIntervalModel interval)
             {
-                return property.Value.FromParent ? interval : null;
+                return property.Value.IsFromParent ? interval : null;
             }
 
 
@@ -432,9 +415,8 @@ namespace HSMServer.Core.Cache
             {
                 Id = product.Id,
                 TTL = SetDefault(product.Settings.TTL, new TimeIntervalModel(0L)),
-                RestoreInterval = SetDefault(product.Settings.RestoreError, new TimeIntervalModel(0L)),
-                KeepHistory = SetDefault(product.Settings.KeepHistory, new TimeIntervalModel(TimeInterval.Month, 0L)),
-                SelfDestroy = SetDefault(product.Settings.SelfDestroy, new TimeIntervalModel(TimeInterval.Month, 0L)),
+                KeepHistory = SetDefault(product.Settings.KeepHistory, new TimeIntervalModel(TimeIntervalCorrect.Month, 0L)),
+                SelfDestroy = SetDefault(product.Settings.SelfDestroy, new TimeIntervalModel(TimeIntervalCorrect.Month, 0L)),
             };
 
             if (update.TTL != null || update.RestoreInterval != null ||
@@ -561,7 +543,7 @@ namespace HSMServer.Core.Cache
             return policyEntities;
         }
 
-        private void ApplyProducts(List<ProductEntity> productEntities, Dictionary<string, Policy> policies)
+        private void ApplyProducts(List<ProductEntity> productEntities, Dictionary<string, DataPolicy> policies)
         {
             _logger.Info($"{nameof(productEntities)} are applying");
 
@@ -569,8 +551,6 @@ namespace HSMServer.Core.Cache
             {
                 var product = new ProductModel(productEntity);
                 product.ApplyPolicies(productEntity.Policies, policies);
-
-                SubscribeProductToPolicyUpdate(product);
 
                 _tree.TryAdd(product.Id, product);
             }
@@ -596,7 +576,7 @@ namespace HSMServer.Core.Cache
         }
 
         private void ApplySensors(List<ProductEntity> productEntities, List<SensorEntity> sensorEntities,
-            Dictionary<string, Policy> policies)
+            Dictionary<string, DataPolicy> policies)
         {
             _logger.Info($"{nameof(sensorEntities)} are applying");
             ApplySensors(sensorEntities, policies);
@@ -619,7 +599,7 @@ namespace HSMServer.Core.Cache
             _logger.Info($"{nameof(TreeValuesCache.FillSensorsData)} is finished");
         }
 
-        private void ApplySensors(List<SensorEntity> entities, Dictionary<string, Policy> policies)
+        private void ApplySensors(List<SensorEntity> entities, Dictionary<string, DataPolicy> policies)
         {
             foreach (var entity in entities)
             {
@@ -679,8 +659,6 @@ namespace HSMServer.Core.Cache
         {
             if (_tree.TryAdd(product.Id, product))
             {
-                SubscribeProductToPolicyUpdate(product);
-
                 if (product.Parent == null)
                     ResetServerPolicyForRootProduct(product);
 
@@ -838,13 +816,13 @@ namespace HSMServer.Core.Cache
                 _snapshot.FlushState(true);
         }
 
-        private static Dictionary<string, Policy> GetPolicyModels(List<byte[]> policyEntities)
+        private static Dictionary<string, DataPolicy> GetPolicyModels(List<byte[]> policyEntities)
         {
-            Dictionary<string, Policy> policies = new(policyEntities.Count);
+            Dictionary<string, DataPolicy> policies = new(policyEntities.Count);
 
             foreach (var entity in policyEntities)
             {
-                var policy = JsonSerializer.Deserialize<Policy>(entity);
+                var policy = JsonSerializer.Deserialize<DataPolicy>(entity);
                 policies.Add(policy.Id.ToString(), policy);
             }
 

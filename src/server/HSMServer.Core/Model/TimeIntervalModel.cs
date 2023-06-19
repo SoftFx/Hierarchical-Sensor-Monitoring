@@ -102,10 +102,6 @@ namespace HSMServer.Core.Model
             _ => throw new NotImplementedException(),
         };
 
-        internal TimeIntervalEntity ToEntity() => new()
-        {
-            Interval = (long)Interval,
-            Ticks = Ticks,
-        };
+        internal TimeIntervalEntity ToEntity() => new((long)Interval, Ticks);
     }
 }

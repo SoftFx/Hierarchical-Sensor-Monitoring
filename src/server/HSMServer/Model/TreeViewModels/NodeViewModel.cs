@@ -42,10 +42,10 @@ namespace HSMServer.Model.TreeViewModel
 
             bool NodeHasFolder() => Parent is FolderModel;
 
-            ExpectedUpdateInterval = new(model.Settings.TTL.Value.Interval, () => Parent?.ExpectedUpdateInterval, NodeHasFolder);
-            SensorRestorePolicy = new(model.Settings.RestoreError.Policy.Interval, () => Parent?.SensorRestorePolicy, NodeHasFolder);
-            SavedHistoryPeriod = new(model.Settings.KeepHistory.Value.Interval, () => Parent?.SavedHistoryPeriod, NodeHasFolder);
-            SelfDestroyPeriod = new(model.Settings.SelfDestroy.Value.Interval, () => Parent?.SelfDestroyPeriod, NodeHasFolder);
+            //ExpectedUpdateInterval = new(model.Settings.TTL.Value.Interval, () => Parent?.ExpectedUpdateInterval, NodeHasFolder);
+            //SensorRestorePolicy = new(model.Settings.RestoreError.Policy.Interval, () => Parent?.SensorRestorePolicy, NodeHasFolder);
+            //SavedHistoryPeriod = new(model.Settings.KeepHistory.Value.Interval, () => Parent?.SavedHistoryPeriod, NodeHasFolder);
+            //SelfDestroyPeriod = new(model.Settings.SelfDestroy.Value.Interval, () => Parent?.SelfDestroyPeriod, NodeHasFolder);
         }
 
 
@@ -55,16 +55,16 @@ namespace HSMServer.Model.TreeViewModel
             Name = model.DisplayName;
             Description = model.Description;
 
-            UpdatePolicyView(model.Settings.TTL, ExpectedUpdateInterval);
-            UpdatePolicyView(model.Settings.RestoreError, SensorRestorePolicy);
-            UpdatePolicyView(model.Settings.KeepHistory, SavedHistoryPeriod);
-            UpdatePolicyView(model.Settings.SelfDestroy, SelfDestroyPeriod);
+            //UpdatePolicyView(model.Settings.TTL, ExpectedUpdateInterval);
+            //UpdatePolicyView(model.Settings.RestoreError, SensorRestorePolicy);
+            //UpdatePolicyView(model.Settings.KeepHistory, SavedHistoryPeriod);
+            //UpdatePolicyView(model.Settings.SelfDestroy, SelfDestroyPeriod);
         }
 
 
-        private static void UpdatePolicyView<T>(SettingProperty<T> property, TimeIntervalViewModel targetView) where T : ServerPolicy, new()
-        {
-            targetView.Update(property.IsSet ? property.Value.Interval : null);
-        }
+        //private static void UpdatePolicyView<T>(SettingProperty<T> property, TimeIntervalViewModel targetView) where T : ServerPolicy, new()
+        //{
+        //    targetView.Update(property.IsSet ? property.Value.Interval : null);
+        //}
     }
 }

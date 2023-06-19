@@ -55,7 +55,7 @@ namespace HSMServer.Core.Model
         //public bool IsWaitRestore => !ServerPolicy.CheckRestorePolicies(Status.Status, LastUpdateTime).IsOk;
         public bool IsWaitRestore => false;
 
-        public bool ShouldDestroy => !(Settings.SelfDestroy.Value?.Validate(LastUpdateTime).IsOk ?? true);
+        public bool ShouldDestroy => !(Settings.SelfDestroy.Value?.TimeIsUp(LastUpdateTime) ?? true);
 
 
         public DateTime LastUpdateTime => Storage.LastValue?.ReceivingTime ?? DateTime.MinValue;
@@ -114,7 +114,7 @@ namespace HSMServer.Core.Model
             Storage.Clear();
         }
 
-        internal override List<Guid> GetPolicyIds() => base.GetPolicyIds().AddRangeFluent(DataPolicies.Ids);
+        internal override List<Guid> GetPolicyIds() => DataPolicies.Ids.ToList();
 
         internal SensorEntity ToEntity() => new()
         {

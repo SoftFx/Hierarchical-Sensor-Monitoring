@@ -38,8 +38,6 @@ namespace HSMServer.Core.Model
         {
             if (policy is DataPolicy<T> dataPolicy)
                 DataPolicies.Add(dataPolicy);
-            else
-                base.AddPolicy(policy);
         }
 
 

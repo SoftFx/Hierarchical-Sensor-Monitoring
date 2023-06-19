@@ -1,11 +1,12 @@
 using HSMDatabase.AccessManager.DatabaseEntities;
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 
 namespace HSMServer.Core.Model.NodeSettings
 {
-    public sealed class SettingsCollection
+    public sealed class SettingsCollection : IEnumerable<SettingProperty>
     {
         private readonly Dictionary<string, SettingProperty> _properties = new();
 
@@ -66,5 +67,10 @@ namespace HSMServer.Core.Model.NodeSettings
 
             return property;
         }
+
+
+        public IEnumerator<SettingProperty> GetEnumerator() => _properties.Values.GetEnumerator();
+
+        IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
     }
 }

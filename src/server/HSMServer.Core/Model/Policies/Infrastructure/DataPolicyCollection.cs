@@ -1,21 +1,24 @@
 ﻿using HSMServer.Core.Cache;
 using HSMServer.Core.Cache.UpdateEntities;
-using HSMServer.Core.Model.Policies.Infrastructure;
 using System;
+using System.Collections;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 
 namespace HSMServer.Core.Model.Policies
 {
-    public abstract class DataPolicyCollection : PolicyCollectionBase<Policy>
+    public abstract class DataPolicyCollection : IEnumerable<DataPolicy>
     {
         internal protected SensorResult SensorResult { get; protected set; } = SensorResult.Ok;
 
         internal protected PolicyResult PolicyResult { get; protected set; } = PolicyResult.Ok;
 
 
-        internal Action<ActionType, Policy> Uploaded;
+        internal abstract IEnumerable<Guid> Ids { get; }
+
+
+        internal Action<ActionType, DataPolicy> Uploaded;
 
 
         internal abstract void Update(List<DataPolicyUpdate> updates);
@@ -28,13 +31,18 @@ namespace HSMServer.Core.Model.Policies
             SensorResult = SensorResult.Ok;
             PolicyResult = PolicyResult.Ok;
         }
+
+
+        public abstract IEnumerator<DataPolicy> GetEnumerator();
+
+        IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
     }
 
 
     public abstract class DataPolicyCollection<T> : DataPolicyCollection where T : BaseValue
     {
         private CorrectDataTypePolicy<T> _typePolicy;
-        protected BaseSensorModel _sensor;
+        private protected BaseSensorModel _sensor;
 
         protected abstract bool CalculateStorageResult(T value);
 
@@ -128,6 +136,6 @@ namespace HSMServer.Core.Model.Policies
         }
 
 
-        public override IEnumerator<Policy> GetEnumerator() => _storage.Values.GetEnumerator();
+        public override IEnumerator<DataPolicy> GetEnumerator() => _storage.Values.GetEnumerator();
     }
 }

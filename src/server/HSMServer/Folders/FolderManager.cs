@@ -182,17 +182,15 @@ namespace HSMServer.Folders
 
             if (product is not null)
             {
-                var expectedUpdateInterval = product.Settings.TTL.Value.Interval;
-                var restoreInterval = product.Settings.RestoreError.Policy.Interval;
-                var savedHistory = product.Settings.KeepHistory.Value.Interval;
-                var selfDestroy = product.Settings.SelfDestroy.Value.Interval;
+                var ttl = product.Settings.TTL.Value;
+                var savedHistory = product.Settings.KeepHistory.Value;
+                var selfDestroy = product.Settings.SelfDestroy.Value;
 
                 var update = new ProductUpdate()
                 {
                     Id = productId,
                     FolderId = folder?.Id ?? Guid.Empty,
-                    TTL = GetCorePolicy(expectedUpdateInterval, folder?.ExpectedUpdateInterval),
-                    RestoreInterval = GetCorePolicy(restoreInterval, folder?.SensorRestorePolicy),
+                    TTL = GetCorePolicy(ttl, folder?.ExpectedUpdateInterval),
                     KeepHistory = GetCorePolicy(savedHistory, folder?.SavedHistoryPeriod),
                     SelfDestroy = GetCorePolicy(selfDestroy, folder?.SelfDestroyPeriod),
                 };
@@ -237,9 +235,9 @@ namespace HSMServer.Folders
         private void ResetServerPolicyForFolderProducts()
         {
             static TimeIntervalModel IsFromFolder<T>(SettingProperty<T> property, TimeIntervalViewModel interval)
-                where T : ServerPolicy, new()
+                where T : TimeIntervalModel, new()
             {
-                return property.Value.FromParent ? interval.ToFolderModel() : null;
+                return property.Value.IsFromParent ? interval.ToFolderModel() : null;
             }
 
 
@@ -252,7 +250,6 @@ namespace HSMServer.Folders
                 {
                     Id = product.Id,
                     TTL = IsFromFolder(product.Settings.TTL, folder.ExpectedUpdateInterval),
-                    RestoreInterval = IsFromFolder(product.Settings.RestoreError, folder.SensorRestorePolicy),
                     KeepHistory = IsFromFolder(product.Settings.KeepHistory, folder.SavedHistoryPeriod),
                     SelfDestroy = IsFromFolder(product.Settings.SelfDestroy, folder.SelfDestroyPeriod),
                 };

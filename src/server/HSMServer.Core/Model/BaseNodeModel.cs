@@ -95,11 +95,12 @@ namespace HSMServer.Core.Model
 
         internal abstract bool HasUpdateTimeout();
 
-        internal abstract void AddPolicy<T>(T policy) where T : Policy;
+        internal abstract List<Guid> GetPolicyIds();
 
-        //internal virtual List<Guid> GetPolicyIds() => ServerPolicy.Ids.ToList();
+        internal abstract void AddPolicy<T>(T policy) where T : DataPolicy;
 
-        internal void ApplyPolicies(List<string> policyIds, Dictionary<string, Policy> allPolicies)
+
+        internal void ApplyPolicies(List<string> policyIds, Dictionary<string, DataPolicy> allPolicies)
         {
             foreach (var id in policyIds ?? Enumerable.Empty<string>())
                 if (allPolicies.TryGetValue(id, out var policy))

@@ -2,6 +2,7 @@
 using HSMServer.Core.Cache.UpdateEntities;
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Linq;
 
 namespace HSMServer.Core.Model
@@ -94,5 +95,15 @@ namespace HSMServer.Core.Model
             Policies = GetPolicyIds().Select(u => $"{u}").ToList(),
             Settings = Settings.ToEntity(),
         };
+
+        internal override List<Guid> GetPolicyIds()
+        {
+            throw new NotImplementedException();
+        }
+
+        internal override void AddPolicy<T>(T policy)
+        {
+            throw new NotImplementedException();
+        }
     }
 }
