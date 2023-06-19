@@ -14,17 +14,17 @@ namespace HSMServer.Controllers
     [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
     public class ConfigurationController : Controller
     {
-        private static Dictionary<string, ConfigurationViewModel> _configViewModel = new ();
+        private static Dictionary<string, ConfigurationViewModel> _configViewModel = new();
 
         private readonly IServerConfig _config;
         private readonly TelegramBot _telegramBot;
-  
+
 
         public ConfigurationController(IServerConfig config, NotificationsCenter notifications)
         {
             _config = config;
             _configViewModel = ConfigurationViewModel.TelegramSettings(new TelegramConfigurationViewModel(_config.Telegram));
-            
+
             _telegramBot = notifications.TelegramBot;
         }
 
@@ -36,14 +36,14 @@ namespace HSMServer.Controllers
 
         [HttpPost]
         public void SaveConfig([FromBody] ConfigurationViewModel viewModel) => ChangeConfigValue(viewModel.PropertyName, viewModel.Value);
-        
+
         [HttpPost]
         public void SetToDefault([FromQuery] string name) => ChangeConfigValue(name, _configViewModel[name].DefaultValue);
 
         [HttpGet]
         public Task<string> RestartTelegramBot() => _telegramBot.StartBot();
 
-        
+
         private void ChangeConfigValue(string propertyName, string newValue)
         {
             switch (propertyName)
@@ -61,6 +61,5 @@ namespace HSMServer.Controllers
 
             _config.ResaveSettings();
         }
-        
     }
 }
