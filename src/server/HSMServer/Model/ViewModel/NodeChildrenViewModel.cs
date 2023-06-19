@@ -40,7 +40,7 @@ public sealed class NodeChildrenViewModel<T> : INodeChildrenViewModel where T : 
     public string Title { get; private set; }
 
 
-    public int PageSize { get; private set; } = 169;
+    public int PageSize { get; private set; } = 168;
 
     public int PageNumber { get; private set; } = 0;
 
@@ -72,7 +72,7 @@ public sealed class NodeChildrenViewModel<T> : INodeChildrenViewModel where T : 
         Title = _originTitle;
 
         PageNumber = 0;
-        PageSize = 169;
+        PageSize = 168;
 
         _items = null;
     }
