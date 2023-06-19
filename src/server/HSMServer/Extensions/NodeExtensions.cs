@@ -1,7 +1,6 @@
 ﻿using System.Collections.Generic;
 using System.Linq;
 using HSMServer.Model.Authentication;
-using HSMServer.Model.Folders;
 using HSMServer.Model.TreeViewModel;
 using HSMServer.UserFilters;
 using Microsoft.AspNetCore.Html;
@@ -48,11 +47,6 @@ namespace HSMServer.Extensions
                 SensorStatus.Error => "grid-cell-error",
                 _ => "grid-cell-offTime",
             };
-
-        internal static string GetChildrenAccordionTitle(this NodeViewModel node) =>
-            node is ProductNodeViewModel product
-                ? product.Parent is FolderModel ? "Products" : "Nodes"
-                : "Sensors";
 
         internal static IOrderedEnumerable<T> GetOrdered<T>(this IEnumerable<T> collection, User user) where T : BaseNodeViewModel =>
             user.TreeFilter.TreeSortType switch

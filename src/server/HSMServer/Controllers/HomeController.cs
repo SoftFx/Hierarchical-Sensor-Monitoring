@@ -1,12 +1,13 @@
+using System.Linq;
 using HSMCommon.Extensions;
+using HSMServer.Core.Helpers;
+using HSMServer.Extensions;
 using HSMServer.ApiObjectsConverters;
 using HSMServer.Authentication;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Cache.UpdateEntities;
-using HSMServer.Core.Helpers;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Policies.Infrastructure;
-using HSMServer.Extensions;
 using HSMServer.Folders;
 using HSMServer.Helpers;
 using HSMServer.Model;
@@ -24,8 +25,8 @@ using Microsoft.AspNetCore.Mvc;
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using System.Threading.Tasks;
+using HSMServer.Model.TreeViewModels;
 using SensorStatus = HSMSensorDataObjects.SensorStatus;
 using TimeInterval = HSMServer.Model.TimeInterval;
 
@@ -66,9 +67,15 @@ namespace HSMServer.Controllers
                 var id = selectedId.ToGuid();
 
                 if (_folderManager.TryGetValue(id, out var folder))
+                {
                     viewModel = folder;
+                    StoredUser.SelectedNode.ConnectFolder(folder);
+                }
                 else if (_treeViewModel.Nodes.TryGetValue(id, out var node))
+                {
                     viewModel = node;
+                    StoredUser.SelectedNode.ConnectNode(node);
+                }
                 else if (_treeViewModel.Sensors.TryGetValue(id, out var sensor))
                 {
                     viewModel = sensor;
@@ -95,6 +102,22 @@ namespace HSMServer.Controllers
 
         [HttpPut]
         public void RemoveRenderingNode(Guid nodeId) => CurrentUser.Tree.RemoveRenderingNode(nodeId);
+
+        [HttpGet]
+        public IActionResult GetGrid(ChildrenPageRequest pageRequest)
+        {
+            var model = StoredUser.SelectedNode.GetNextPage(pageRequest);
+
+            return model.IsPageValid ? PartialView("_GridAccordion", model) : _emptyResult;
+        }
+
+        [HttpGet]
+        public IActionResult GetList(ChildrenPageRequest pageRequest)
+        {
+            var model = StoredUser.SelectedNode.GetNextPage(pageRequest);
+                
+            return model.IsPageValid ? PartialView("_ListAccordion", model) : _emptyResult;
+        }
 
         [HttpGet]
         public IActionResult RefreshTree()
