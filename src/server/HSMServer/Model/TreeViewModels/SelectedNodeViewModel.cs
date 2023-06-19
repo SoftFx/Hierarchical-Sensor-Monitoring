@@ -7,7 +7,6 @@ namespace HSMServer.Model.TreeViewModels;
 public class SelectedNodeViewModel
 {
     private readonly NodeChildrenViewModel<SensorNodeViewModel> _sensors = new("Sensors");
-
     private readonly NodeChildrenViewModel<ProductNodeViewModel> _nodes = new("Nodes");
 
     
@@ -31,8 +30,7 @@ public class SelectedNodeViewModel
     {
         Subscribe(newFolder);
 
-        _nodes.Title = "Products";
-        _nodes.Load(newFolder.Products);
+        _nodes.Load(newFolder.Products, "Products");
         _sensors.Reset();
     }
 
@@ -47,8 +45,6 @@ public class SelectedNodeViewModel
         _selectedNode = newSelected;
         
         _nodes.Reset();
-        _nodes.Title = "Nodes";
         _sensors.Reset();
-        _sensors.Title = "Sensors";
     }
 }

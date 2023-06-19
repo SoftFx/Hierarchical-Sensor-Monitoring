@@ -19,21 +19,25 @@ public interface INodeChildrenViewModel
 
 
     public bool IsPaginationDisplayed { get; }
-    
+
     public bool IsPageValid { get; }
 }
 
 
 public sealed class NodeChildrenViewModel<T> : INodeChildrenViewModel where T : NodeViewModel
 {
+    private readonly string _originTitle;
+
     private IDictionary<Guid, T> _items;
 
 
     public List<NodeViewModel> VisibleItems => _items?.Values.OrderByDescending(n => n.Status)
-                                                            .ThenBy(n => n.Name)
-                                                            .Skip(PageNumber * PageSize)
-                                                            .Take(PageSize)
-                                                            .Select(x => (NodeViewModel)x).ToList();
+                                                             .ThenBy(n => n.Name)
+                                                             .Skip(PageNumber * PageSize)
+                                                             .Take(PageSize)
+                                                             .Select(x => (NodeViewModel)x).ToList();
+
+    public string Title { get; private set; }
 
 
     public int PageSize { get; private set; } = 169;
@@ -41,9 +45,6 @@ public sealed class NodeChildrenViewModel<T> : INodeChildrenViewModel where T : 
     public int PageNumber { get; private set; } = 0;
 
     public int OriginalSize => _items?.Count ?? 0;
-
-    
-    public string Title { get; set; }
 
 
     public bool IsPaginationDisplayed => OriginalSize > PageSize;
@@ -53,23 +54,29 @@ public sealed class NodeChildrenViewModel<T> : INodeChildrenViewModel where T : 
 
     public NodeChildrenViewModel(string title)
     {
+        _originTitle = title;
+
         Title = title;
     }
 
 
-    public void Load(IDictionary<Guid, T> collection)
+    public void Load(IDictionary<Guid, T> collection, string customTitle = null)
     {
         _items = collection ?? _items;
+
+        Title = customTitle ?? _originTitle;
     }
 
     public void Reset()
     {
+        Title = _originTitle;
+
         PageNumber = 0;
         PageSize = 169;
 
         _items = null;
     }
-    
+
     public NodeChildrenViewModel<T> Reload(ChildrenPageRequest pageRequest)
     {
         PageSize = pageRequest.PageSize <= 0 ? PageSize : pageRequest.PageSize;
