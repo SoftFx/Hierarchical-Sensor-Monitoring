@@ -12,7 +12,7 @@
 
 <script>
     var setToDefaultAction = "@Html.Raw(Url.Action(nameof(ConfigurationController.SetToDefault), ViewConstants.ConfigurationController))";
-    var saveAction = "@Html.Raw(Url.Action(nameof(ConfigurationController.SaveConfigObject), ViewConstants.ConfigurationController))";
+    var saveAction = "@Html.Raw(Url.Action(nameof(ConfigurationController.SaveConfig), ViewConstants.ConfigurationController))";
     var restartBotAction = "@Html.Raw(Url.Action(nameof(ConfigurationController.RestartTelegramBot), ViewConstants.ConfigurationController))";
 </script>
 
@@ -62,7 +62,7 @@
                             <th scope="row">@i</th>
                             <td>
                                 <label class="config-name">@item.Name</label>
-                                <a data-bs-toggle="popover" title="Description" data-bs-content="@item.Description" data-bs-html="true">
+                                <a tabindex="0" data-bs-toggle="popover" data-bs-trigger="focus"  title="Description" data-bs-content="@item.Description" data-bs-html="true">
                                     <i class="fas fa-question-circle"></i>
                                 </a>
                             </td>
@@ -143,11 +143,10 @@
         });
     });
 
-    function createData(name, value, isDefault) {
+    function createData(name, value) {
         return {
             "PropertyName": name,
-            "Value": value,
-            "IsDefault": isDefault
+            "Value": value
         }
     }
 
@@ -166,7 +165,7 @@
         name = this.id.substring("ok_".length);
 
         let value = $('#value_' + name).val();
-        let data = createData(name, value, false);
+        let data = createData(name, value);
 
         $.ajax({
             type: 'POST',
@@ -203,17 +202,14 @@
             cache: false,
             async: true,
             success: function(data) {
-                $("#message").css("display", "block");
+                let message = $("#message");
+                message.css("display", "block");
 
                 if (data == "") {
-                    $("#message").empty();
-                    $("#message").css("color", "green");
-                    $("#message").append("Success.");
+                    message.empty().css("color", "green").append("Success.");
                 }
                 else {
-                    $("#message").empty();
-                    $("#message").css("color", "red");
-                    $("#message").append(data);
+                    message.empty().css("color", "red").append(data);
                 }
             }
         });
