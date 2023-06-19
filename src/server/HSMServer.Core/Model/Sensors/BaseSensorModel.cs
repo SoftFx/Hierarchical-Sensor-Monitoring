@@ -51,7 +51,7 @@ namespace HSMServer.Core.Model
 
         public bool IsWaitRestore => !ServerPolicy.CheckRestorePolicies(Status.Status, LastUpdateTime).IsOk;
 
-        public bool ShouldDestroy => ServerPolicy.SelfDestroy.Policy?.Validate(LastUpdateTime).IsOk ?? false;
+        public bool ShouldDestroy => !(ServerPolicy.SelfDestroy.Policy?.Validate(LastUpdateTime).IsOk ?? true);
 
 
         public bool HasData => Storage.HasData;
