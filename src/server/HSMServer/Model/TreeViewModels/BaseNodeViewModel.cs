@@ -2,6 +2,7 @@
 using HSMServer.Extensions;
 using HSMServer.Model.DataAlerts;
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 
 namespace HSMServer.Model.TreeViewModel
@@ -9,6 +10,9 @@ namespace HSMServer.Model.TreeViewModel
     public abstract class BaseNodeViewModel
     {
         public Dictionary<SensorType, List<DataAlertViewModel>> DataAlerts { get; protected set; } = new();
+
+        public ConcurrentDictionary<string, int> AlertIcons { get; } = new();
+
 
         public TimeIntervalViewModel ExpectedUpdateInterval { get; protected set; }
 

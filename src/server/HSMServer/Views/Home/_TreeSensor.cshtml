@@ -11,7 +11,11 @@
 
 
 <li id='@data.EncodedId' title='@data.Tooltip' data-jstree='@Model.ToJSTree()'>
-    <span class="@data.State.ToCssClass()"> @Html.Raw(@data.Icons) @Html.Raw(data.Name.GetShortNodeName())</span>
+    <span class="@data.State.ToCssClass()">
+        @await Html.PartialAsync("_TreeAlertIcons", data.AlertIcons)
+        @Html.Raw(data.Name.GetShortNodeName())
+    </span>
+
     @if (showIcons)
     {
         @if (Model.IsAccountsEnable && !Model.Parent.IsAccountsEnable)

@@ -29,16 +29,12 @@ namespace HSMServer.Extensions
         internal static string ToIcon(this SensorStatus status) =>
             $"fas fa-circle {status.ToCssIconClass()}";
 
-        internal static HtmlString ToIcon(this string icon)
-        {
-            var iconClass = icon switch
+        internal static string ToIcon(this string icon) =>
+            icon switch
             {
                 "↕️" => "fa-solid fa-arrows-up-down",
-                _ => string.Empty
+                _ => string.Empty,
             };
-
-            return new($"<i class='{iconClass}'></i>");
-        }
 
         internal static HtmlString ToIconStatus(this SensorStatus status) =>
             new($"<span class='{status.ToIcon()}'></span> {status}");
