@@ -202,7 +202,7 @@ namespace HSMServer.Core.Tests.Infrastructure
             TestImmutableSensorData(expected, actual);
 
             Assert.Equal(expected.Description, actual.Description);
-            Assert.Equal(expected.ServerPolicy.ExpectedUpdate.Policy, actual.ServerPolicy.ExpectedUpdate.Policy);
+            Assert.Equal(expected.Settings.TTL.Value, actual.Settings.TTL.Value);
         }
 
         internal static void TestSensorModel(StoreInfo expected, BaseSensorModel actual, ProductModel parentProduct = null)
@@ -239,8 +239,8 @@ namespace HSMServer.Core.Tests.Infrastructure
 
         internal static void TestExpectedUpdateIntervalPolicy(SensorUpdate expected, Policy actual)
         {
-            Assert.Equal(expected.ExpectedUpdateInterval.CustomPeriod, (actual as ExpectedUpdateIntervalPolicy).Interval.CustomPeriod);
-            Assert.Equal(expected.ExpectedUpdateInterval.TimeInterval, (actual as ExpectedUpdateIntervalPolicy).Interval.TimeInterval);
+            Assert.Equal(expected.TTL.Ticks, (actual as ExpectedUpdateIntervalPolicy).Interval.Ticks);
+            Assert.Equal(expected.TTL.Interval, (actual as ExpectedUpdateIntervalPolicy).Interval.Interval);
         }
 
 

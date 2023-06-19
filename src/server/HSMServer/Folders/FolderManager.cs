@@ -5,6 +5,7 @@ using HSMServer.Core.Cache;
 using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.DataLayer;
 using HSMServer.Core.Model;
+using HSMServer.Core.Model.NodeSettings;
 using HSMServer.Core.Model.Policies;
 using HSMServer.Model;
 using HSMServer.Model.Authentication;
@@ -181,18 +182,18 @@ namespace HSMServer.Folders
 
             if (product is not null)
             {
-                var expectedUpdateInterval = product.ServerPolicy.ExpectedUpdate.Policy.Interval;
-                var restoreInterval = product.ServerPolicy.RestoreError.Policy.Interval;
-                var savedHistory = product.ServerPolicy.SavedHistoryPeriod.Policy.Interval;
-                var selfDestroy = product.ServerPolicy.SelfDestroy.Policy.Interval;
+                var expectedUpdateInterval = product.Settings.TTL.Value.Interval;
+                var restoreInterval = product.Settings.RestoreError.Policy.Interval;
+                var savedHistory = product.Settings.KeepHistory.Value.Interval;
+                var selfDestroy = product.Settings.SelfDestroy.Value.Interval;
 
                 var update = new ProductUpdate()
                 {
                     Id = productId,
                     FolderId = folder?.Id ?? Guid.Empty,
-                    ExpectedUpdateInterval = GetCorePolicy(expectedUpdateInterval, folder?.ExpectedUpdateInterval),
+                    TTL = GetCorePolicy(expectedUpdateInterval, folder?.ExpectedUpdateInterval),
                     RestoreInterval = GetCorePolicy(restoreInterval, folder?.SensorRestorePolicy),
-                    SavedHistoryPeriod = GetCorePolicy(savedHistory, folder?.SavedHistoryPeriod),
+                    KeepHistory = GetCorePolicy(savedHistory, folder?.SavedHistoryPeriod),
                     SelfDestroy = GetCorePolicy(selfDestroy, folder?.SelfDestroyPeriod),
                 };
 
@@ -229,16 +230,16 @@ namespace HSMServer.Folders
         private static TimeIntervalModel GetCorePolicy(TimeIntervalModel coreInterval, TimeIntervalViewModel folderInterval)
         {
             return coreInterval.IsFromFolder
-                ? folderInterval?.ToFolderModel() ?? new TimeIntervalModel(coreInterval.CustomPeriod)
+                ? folderInterval?.ToFolderModel() ?? new TimeIntervalModel(coreInterval.Ticks)
                 : null;
         }
 
         private void ResetServerPolicyForFolderProducts()
         {
-            static TimeIntervalModel IsFromFolder<T>(CollectionProperty<T> property, TimeIntervalViewModel interval)
+            static TimeIntervalModel IsFromFolder<T>(SettingProperty<T> property, TimeIntervalViewModel interval)
                 where T : ServerPolicy, new()
             {
-                return property.Policy.FromParent ? interval.ToFolderModel() : null;
+                return property.Value.FromParent ? interval.ToFolderModel() : null;
             }
 
 
@@ -250,14 +251,14 @@ namespace HSMServer.Folders
                 var update = new ProductUpdate
                 {
                     Id = product.Id,
-                    ExpectedUpdateInterval = IsFromFolder(product.ServerPolicy.ExpectedUpdate, folder.ExpectedUpdateInterval),
-                    RestoreInterval = IsFromFolder(product.ServerPolicy.RestoreError, folder.SensorRestorePolicy),
-                    SavedHistoryPeriod = IsFromFolder(product.ServerPolicy.SavedHistoryPeriod, folder.SavedHistoryPeriod),
-                    SelfDestroy = IsFromFolder(product.ServerPolicy.SelfDestroy, folder.SelfDestroyPeriod),
+                    TTL = IsFromFolder(product.Settings.TTL, folder.ExpectedUpdateInterval),
+                    RestoreInterval = IsFromFolder(product.Settings.RestoreError, folder.SensorRestorePolicy),
+                    KeepHistory = IsFromFolder(product.Settings.KeepHistory, folder.SavedHistoryPeriod),
+                    SelfDestroy = IsFromFolder(product.Settings.SelfDestroy, folder.SelfDestroyPeriod),
                 };
 
-                if (update.ExpectedUpdateInterval != null || update.RestoreInterval != null ||
-                    update.SavedHistoryPeriod != null || update.SelfDestroy != null)
+                if (update.TTL != null || update.RestoreInterval != null ||
+                    update.KeepHistory != null || update.SelfDestroy != null)
                     _cache.UpdateProduct(update);
             }
         }

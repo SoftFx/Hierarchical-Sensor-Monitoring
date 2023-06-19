@@ -588,10 +588,10 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             ModelsTester.TestSensorModelWithoutUpdatedMetadata(actualSensorFromCache, sensor);
             ModelsTester.TestSensorModelWithoutUpdatedMetadata(actualSensorFromDb, sensor);
 
-            var actualExpectedUpdateIntervalPolicy = GetPolicyByIdFromDb(actualSensorFromCache.ServerPolicy.ExpectedUpdate.Policy.Id);
+            var actualExpectedUpdateIntervalPolicy = GetPolicyByIdFromDb(actualSensorFromCache.Settings.TTL.Value.Id);
 
             ModelsTester.TestExpectedUpdateIntervalPolicy(sensorUpdate, actualExpectedUpdateIntervalPolicy);
-            ModelsTester.AssertModels(actualSensorFromCache.ServerPolicy.ExpectedUpdate.Policy, actualExpectedUpdateIntervalPolicy);
+            ModelsTester.AssertModels(actualSensorFromCache.Settings.TTL.Value, actualExpectedUpdateIntervalPolicy);
         }
 
         private Policy GetPolicyByIdFromDb(Guid id)

@@ -30,7 +30,7 @@ namespace HSMServer.Core.Model
 
         public NotificationSettingsEntity NotificationsSettings { get; private set; }
 
-        
+
         public ProductModel(string name, Guid? authorId = default) : base(name.Trim(), authorId)
         {
             State = ProductState.FullAccess;
@@ -80,19 +80,19 @@ namespace HSMServer.Core.Model
             return result;
         }
 
-        internal ProductEntity ToProductEntity() =>
-            new()
-            {
-                Id = Id.ToString(),
-                AuthorId = AuthorId.ToString(),
-                ParentProductId = Parent?.Id.ToString(),
-                FolderId = FolderId?.ToString(),
-                State = (int)State,
-                DisplayName = DisplayName,
-                Description = Description,
-                CreationDate = CreationDate.Ticks,
-                NotificationSettings = NotificationsSettings,
-                Policies = GetPolicyIds().Select(u => $"{u}").ToList(),
-            };
+        internal ProductEntity ToEntity() => new()
+        {
+            Id = Id.ToString(),
+            AuthorId = AuthorId.ToString(),
+            ParentProductId = Parent?.Id.ToString(),
+            FolderId = FolderId?.ToString(),
+            State = (int)State,
+            DisplayName = DisplayName,
+            Description = Description,
+            CreationDate = CreationDate.Ticks,
+            NotificationSettings = NotificationsSettings,
+            Policies = GetPolicyIds().Select(u => $"{u}").ToList(),
+            Settings = Settings.ToEntity(),
+        };
     }
 }

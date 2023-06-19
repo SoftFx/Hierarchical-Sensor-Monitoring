@@ -87,7 +87,7 @@ namespace HSMServer.Model
 
 
         internal void Update(TimeIntervalModel model) =>
-            SetInterval(model?.TimeInterval ?? CoreTimeInterval.FromParent, model?.CustomPeriod ?? 0L);
+            SetInterval(model?.Interval ?? CoreTimeInterval.FromParent, model?.Ticks ?? 0L);
 
 
         internal TimeIntervalModel ToModel(TimeIntervalViewModel folderInterval = null) =>

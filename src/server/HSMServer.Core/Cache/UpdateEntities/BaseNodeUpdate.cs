@@ -8,9 +8,9 @@ namespace HSMServer.Core.Cache.UpdateEntities
         public required Guid Id { get; init; }
 
 
-        public TimeIntervalModel ExpectedUpdateInterval { get; init; }
+        public TimeIntervalModel TTL { get; init; }
 
-        public TimeIntervalModel SavedHistoryPeriod { get; init; }
+        public TimeIntervalModel KeepHistory { get; init; }
 
         public TimeIntervalModel RestoreInterval { get; init; }
 

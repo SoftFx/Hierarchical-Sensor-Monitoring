@@ -1,6 +1,7 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Extensions;
+using HSMServer.Core.Model.NodeSettings;
 using HSMServer.Core.Model.Policies;
 using System;
 using System.Collections.Generic;
@@ -54,7 +55,7 @@ namespace HSMServer.Core.Model
         //public bool IsWaitRestore => !ServerPolicy.CheckRestorePolicies(Status.Status, LastUpdateTime).IsOk;
         public bool IsWaitRestore => false;
 
-        public bool ShouldDestroy => !(ServerPolicy.SelfDestroy.Policy?.Validate(LastUpdateTime).IsOk ?? true);
+        public bool ShouldDestroy => !(Settings.SelfDestroy.Value?.Validate(LastUpdateTime).IsOk ?? true);
 
 
         public DateTime LastUpdateTime => Storage.LastValue?.ReceivingTime ?? DateTime.MinValue;
@@ -88,7 +89,7 @@ namespace HSMServer.Core.Model
         internal virtual BaseSensorModel InitDataPolicy() => this;
 
 
-        internal override bool HasUpdateTimeout() => ServerPolicy.HasUpdateTimeout(LastValue?.ReceivingTime);
+        internal override bool HasUpdateTimeout() => Settings.HasUpdateTimeout(LastValue?.ReceivingTime);
 
 
         internal void Update(SensorUpdate update)
@@ -128,6 +129,7 @@ namespace HSMServer.Core.Model
             Integration = (int)Integration,
             Policies = GetPolicyIds().Select(u => u.ToString()).ToList(),
             EndOfMuting = EndOfMuting?.Ticks ?? 0L,
+            Settings = Settings.ToEntity(),
         };
     }
 }

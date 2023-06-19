@@ -1,5 +1,6 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Core.Cache.UpdateEntities;
+using HSMServer.Core.Model.NodeSettings;
 using HSMServer.Core.Model.Policies;
 using System;
 using System.Collections.Generic;
@@ -9,7 +10,7 @@ namespace HSMServer.Core.Model
 {
     public abstract class BaseNodeModel
     {
-        public ServerPolicyCollection ServerPolicy { get; } = new();
+        public SettingsCollection Settings { get; } = new();
 
 
         public Guid Id { get; }
@@ -37,7 +38,7 @@ namespace HSMServer.Core.Model
             Id = Guid.NewGuid();
             CreationDate = DateTime.UtcNow;
 
-            ServerPolicy.ExpectedUpdate.Uploaded += (_, _) => HasUpdateTimeout();
+            Settings.TTL.Uploaded += (_, _) => HasUpdateTimeout();
         }
 
         protected BaseNodeModel(string name, Guid? authorId) : this()
@@ -54,6 +55,8 @@ namespace HSMServer.Core.Model
 
             DisplayName = entity.DisplayName;
             Description = entity.Description;
+
+            Settings.SetSettings(entity.Settings);
         }
 
 
@@ -61,7 +64,7 @@ namespace HSMServer.Core.Model
         {
             Parent = parent;
 
-            ServerPolicy.ApplyParentPolicies(parent.ServerPolicy);
+            Settings.SetParentSettings(parent.Settings);
 
             return this;
         }
@@ -70,31 +73,31 @@ namespace HSMServer.Core.Model
         {
             Description = update.Description ?? Description;
 
-            if (update.ExpectedUpdateInterval != null)
-                ServerPolicy.ExpectedUpdate.SetPolicy(update.ExpectedUpdateInterval);
+            if (update.TTL != null)
+                Settings.TTL.SetValue(update.TTL);
+
+            if (update.KeepHistory != null)
+                Settings.KeepHistory.SetValue(update.KeepHistory);
+
+            if (update.SelfDestroy != null)
+                Settings.SelfDestroy.SetValue(update.SelfDestroy);
 
             var restoreInterval = update.RestoreInterval;
 
-            if (restoreInterval != null)
-            {
-                ServerPolicy.RestoreError.SetPolicy(restoreInterval);
-                ServerPolicy.RestoreWarning.SetPolicy(restoreInterval);
-                ServerPolicy.RestoreOffTime.SetPolicy(restoreInterval);
-            }
-
-            if (update.SavedHistoryPeriod != null)
-                ServerPolicy.SavedHistoryPeriod.SetPolicy(update.SavedHistoryPeriod);
-
-            if (update.SelfDestroy != null)
-                ServerPolicy.SelfDestroy.SetPolicy(update.SelfDestroy);
+            //if (restoreInterval != null)
+            //{
+            //    ServerPolicy.RestoreError.SetPolicy(restoreInterval);
+            //    ServerPolicy.RestoreWarning.SetPolicy(restoreInterval);
+            //    ServerPolicy.RestoreOffTime.SetPolicy(restoreInterval);
+            //}
         }
 
 
         internal abstract bool HasUpdateTimeout();
 
-        internal virtual void AddPolicy<T>(T policy) where T : Policy => ServerPolicy.ApplyPolicy(policy);
+        internal abstract void AddPolicy<T>(T policy) where T : Policy;
 
-        internal virtual List<Guid> GetPolicyIds() => ServerPolicy.Ids.ToList();
+        //internal virtual List<Guid> GetPolicyIds() => ServerPolicy.Ids.ToList();
 
         internal void ApplyPolicies(List<string> policyIds, Dictionary<string, Policy> allPolicies)
         {

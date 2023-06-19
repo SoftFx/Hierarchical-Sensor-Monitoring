@@ -3,6 +3,7 @@ using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.DataLayer;
 using HSMServer.Core.Model;
+using HSMServer.Core.Model.NodeSettings;
 using HSMServer.Core.Model.Policies;
 using HSMServer.Core.Model.Requests;
 using HSMServer.Core.SensorsUpdatesQueue;
@@ -82,7 +83,7 @@ namespace HSMServer.Core.Cache
 
         private void UpdateProduct(ProductModel product)
         {
-            _database.UpdateProduct(product.ToProductEntity());
+            _database.UpdateProduct(product.ToEntity());
 
             ChangeProductEvent?.Invoke(product, ActionType.Update);
         }
@@ -96,7 +97,7 @@ namespace HSMServer.Core.Cache
 
             GetProductSensorsStatuses(product, sensorsOldStatuses);
 
-            _database.UpdateProduct(product.Update(update).ToProductEntity());
+            _database.UpdateProduct(product.Update(update).ToEntity());
 
             NotifyAllProductChildrenAboutUpdate(product, sensorsOldStatuses);
         }
@@ -298,7 +299,7 @@ namespace HSMServer.Core.Cache
                 return;
 
             var from = _snapshot.Sensors[sensorId].History.From;
-            var policy = sensor.ServerPolicy.SavedHistoryPeriod.Policy;
+            var policy = sensor.Settings.KeepHistory.Value;
 
             if (!policy.Validate(from).IsOk)
                 ClearSensorHistory(sensorId, policy.Interval.GetShiftedTime(DateTime.UtcNow, -1));
@@ -382,17 +383,17 @@ namespace HSMServer.Core.Cache
 
         private void SubscribeSensorToPolicyUpdate(BaseSensorModel sensor)
         {
-            SubscribeToServerPolicyUpdate(sensor.ServerPolicy);
+            SubscribeToServerPolicyUpdate(sensor.Settings);
 
             sensor.DataPolicies.Uploaded += UpdatePolicy;
         }
 
         private void SubscribeProductToPolicyUpdate(ProductModel product)
         {
-            SubscribeToServerPolicyUpdate(product.ServerPolicy);
+            SubscribeToServerPolicyUpdate(product.Settings);
         }
 
-        private void SubscribeToServerPolicyUpdate(ServerPolicyCollection collection)
+        private void SubscribeToServerPolicyUpdate(SettingsCollection collection)
         {
             foreach (var serverPolicy in collection)
                 serverPolicy.Uploaded += UpdatePolicy;
@@ -407,7 +408,7 @@ namespace HSMServer.Core.Cache
 
         private void RemoveEntityPolicies(BaseNodeModel entity)
         {
-            foreach (var serverPolicy in entity.ServerPolicy)
+            foreach (var serverPolicy in entity.Settings)
                 serverPolicy.Uploaded -= UpdatePolicy;
 
             foreach (var policyId in entity.GetPolicyIds())
@@ -420,25 +421,25 @@ namespace HSMServer.Core.Cache
                 return;
 
 
-            static TimeIntervalModel SetDefault<T>(CollectionProperty<T> property, TimeIntervalModel interval)
+            static TimeIntervalModel SetDefault<T>(SettingProperty<T> property, TimeIntervalModel interval)
                 where T : ServerPolicy, new()
             {
-                return property.Policy.FromParent ? interval : null;
+                return property.Value.FromParent ? interval : null;
             }
 
 
             var update = new ProductUpdate
             {
                 Id = product.Id,
-                ExpectedUpdateInterval = SetDefault(product.ServerPolicy.ExpectedUpdate, new TimeIntervalModel(0L)),
-                RestoreInterval = SetDefault(product.ServerPolicy.RestoreError, new TimeIntervalModel(0L)),
-                SavedHistoryPeriod = SetDefault(product.ServerPolicy.SavedHistoryPeriod, new TimeIntervalModel(TimeInterval.Month, 0L)),
-                SelfDestroy = SetDefault(product.ServerPolicy.SelfDestroy, new TimeIntervalModel(TimeInterval.Month, 0L)),
+                TTL = SetDefault(product.Settings.TTL, new TimeIntervalModel(0L)),
+                RestoreInterval = SetDefault(product.Settings.RestoreError, new TimeIntervalModel(0L)),
+                KeepHistory = SetDefault(product.Settings.KeepHistory, new TimeIntervalModel(TimeInterval.Month, 0L)),
+                SelfDestroy = SetDefault(product.Settings.SelfDestroy, new TimeIntervalModel(TimeInterval.Month, 0L)),
             };
 
-            if (update.ExpectedUpdateInterval != null || update.RestoreInterval != null ||
-                update.SavedHistoryPeriod != null || update.SelfDestroy != null)
-                _database.UpdateProduct(product.Update(update).ToProductEntity());
+            if (update.TTL != null || update.RestoreInterval != null ||
+                update.KeepHistory != null || update.SelfDestroy != null)
+                _database.UpdateProduct(product.Update(update).ToEntity());
         }
 
         private void UpdatesQueueNewItemsHandler(IEnumerable<StoreInfo> storeInfos)
@@ -683,7 +684,7 @@ namespace HSMServer.Core.Cache
                 if (product.Parent == null)
                     ResetServerPolicyForRootProduct(product);
 
-                _database.AddProduct(product.ToProductEntity());
+                _database.AddProduct(product.ToEntity());
 
                 ChangeProductEvent?.Invoke(product, ActionType.Add);
 
