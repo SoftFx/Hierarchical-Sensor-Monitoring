@@ -27,6 +27,8 @@ namespace HSMServer.Model.TreeViewModel
 
         public string ValidationError { get; private set; }
 
+        public string Icons { get; private set; }
+
 
         public bool IsValidationErrorVisible => !string.IsNullOrEmpty(ValidationError);
 
@@ -54,6 +56,7 @@ namespace HSMServer.Model.TreeViewModel
             UpdateTime = model.LastUpdateTime;
             Status = model.Status.ToClient();
             ValidationError = State == SensorState.Muted ? GetMutedErrorTooltip(model.EndOfMuting) : model.Status?.Message;
+            Icons = string.Join(string.Empty, model.PolicyResult.Icons.Select(i => i.ToIcon()));
 
             LastValue = model.LastValue;
             HasData = model.HasData;

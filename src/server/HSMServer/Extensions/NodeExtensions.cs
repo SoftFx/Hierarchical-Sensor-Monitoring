@@ -1,10 +1,10 @@
-﻿using System.Collections.Generic;
-using System.Linq;
-using HSMServer.Model.Authentication;
+﻿using HSMServer.Model.Authentication;
 using HSMServer.Model.Folders;
 using HSMServer.Model.TreeViewModel;
 using HSMServer.UserFilters;
 using Microsoft.AspNetCore.Html;
+using System.Collections.Generic;
+using System.Linq;
 
 namespace HSMServer.Extensions
 {
@@ -30,8 +30,19 @@ namespace HSMServer.Extensions
         internal static string ToIcon(this SensorStatus status) =>
             $"fas fa-circle {status.ToCssIconClass()}";
 
+        internal static HtmlString ToIcon(this string icon)
+        {
+            var iconClass = icon switch
+            {
+                "↕️" => "fa-solid fa-arrows-up-down",
+                _ => string.Empty
+            };
+
+            return new($"<i class='{iconClass}'></i>");
+        }
+
         internal static HtmlString ToIconStatus(this SensorStatus status) =>
-            new HtmlString($"<span class='{status.ToIcon()}'></span> {status}");
+            new($"<span class='{status.ToIcon()}'></span> {status}");
 
         internal static string ToCssClass(this Core.Model.SensorState state) =>
             state switch
@@ -62,7 +73,7 @@ namespace HSMServer.Extensions
             };
 
         internal static string GetEmptySensorIcon() => "fa-regular fa-circle";
-        
+
         internal static string GetShortNodeName(this string name) => name.Cut(NodeNameMaxLength);
 
         internal static string GetShortCellName(this string name) => name.Cut(CellNameMaxLength);

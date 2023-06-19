@@ -64,7 +64,7 @@ namespace HSMServer.Core.Model.Policies
 
         internal override bool Validate(T value, BaseSensorModel sensor)
         {
-            if (!_executeOperation(_getProperty(value), _targetValue))
+            if (_executeOperation(_getProperty(value), _targetValue))
             {
                 AlertComment = GetComment(value, sensor);
                 SensorResult = new SensorResult(Status, AlertComment);
