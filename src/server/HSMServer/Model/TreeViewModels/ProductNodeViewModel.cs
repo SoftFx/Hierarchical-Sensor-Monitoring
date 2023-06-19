@@ -117,17 +117,5 @@ namespace HSMServer.Model.TreeViewModel
             ModifyAlertIcons(Sensors.Values);
             ModifyAlertIcons(Nodes.Values);
         }
-
-        private void ModifyAlertIcons(IEnumerable<NodeViewModel> nodes)
-        {
-            foreach (var sensor in nodes)
-                foreach (var (icon, count) in sensor.AlertIcons)
-                {
-                    if (!AlertIcons.ContainsKey(icon))
-                        AlertIcons.TryAdd(icon, 0);
-
-                    AlertIcons[icon] += count;
-                }
-        }
     }
 }
