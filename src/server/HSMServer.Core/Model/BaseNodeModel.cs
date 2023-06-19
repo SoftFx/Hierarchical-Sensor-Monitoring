@@ -81,15 +81,6 @@ namespace HSMServer.Core.Model
 
             if (update.SelfDestroy != null)
                 Settings.SelfDestroy.SetValue(update.SelfDestroy);
-
-            var restoreInterval = update.RestoreInterval;
-
-            //if (restoreInterval != null)
-            //{
-            //    ServerPolicy.RestoreError.SetPolicy(restoreInterval);
-            //    ServerPolicy.RestoreWarning.SetPolicy(restoreInterval);
-            //    ServerPolicy.RestoreOffTime.SetPolicy(restoreInterval);
-            //}
         }
 
 

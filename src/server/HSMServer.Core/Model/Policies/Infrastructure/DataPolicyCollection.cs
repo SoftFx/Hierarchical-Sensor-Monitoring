@@ -104,9 +104,6 @@ namespace HSMServer.Core.Model.Policies
 
         internal override void Update(List<DataPolicyUpdate> updatesList)
         {
-            if (updatesList == null)
-                return;
-
             var updates = updatesList.Where(u => u.Id != Guid.Empty).ToDictionary(u => u.Id);
 
             foreach (var (id, policy) in _storage)

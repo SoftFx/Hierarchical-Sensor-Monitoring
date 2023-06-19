@@ -241,8 +241,6 @@ namespace HSMServer.Core.Cache
             if (!_sensors.TryGetValue(update.Id, out var sensor))
                 return;
 
-            var oldStatus = sensor.Status;
-
             sensor.Update(update);
 
             _snapshot.Sensors[sensor.Id].IsExpired = sensor.HasUpdateTimeout();
