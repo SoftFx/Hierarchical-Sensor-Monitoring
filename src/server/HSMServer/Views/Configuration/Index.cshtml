@@ -2,7 +2,9 @@
 @using HSMServer.Constants
 @using HSMServer.Controllers
 @using HSMServer.Model.ViewModel
-@model List<ConfigurationObjectViewModel>
+@model Dictionary<string, ConfigurationViewModel>
+
+@addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
 
 @{
     ViewData["Title"] = "Configuration";
@@ -10,7 +12,7 @@
 
 <script>
     var setToDefaultAction = "@Html.Raw(Url.Action(nameof(ConfigurationController.SetToDefault), ViewConstants.ConfigurationController))";
-    var saveAction = "@Html.Raw(Url.Action(nameof(ConfigurationController.SaveConfigObject), ViewConstants.ConfigurationController))";
+    var saveAction = "@Html.Raw(Url.Action(nameof(ConfigurationController.SaveConfig), ViewConstants.ConfigurationController))";
     var restartBotAction = "@Html.Raw(Url.Action(nameof(ConfigurationController.RestartTelegramBot), ViewConstants.ConfigurationController))";
 </script>
 
@@ -41,59 +43,59 @@
         <div class="col-xxl">
             <table class="table table-striped">
                 <thead>
-                    <tr>
-                        <th scope="col">#</th>
-                        <th scope="col">Parameter name</th>
-                        <th scope="col">Parameter value</th>
-                        <th scope="col">Is Default</th>
-                        <th scope="col">Action</th>
-                    </tr>
+                <tr>
+                    <th scope="col">#</th>
+                    <th scope="col">Parameter name</th>
+                    <th scope="col">Parameter value</th>
+                    <th scope="col">Is Default</th>
+                    <th scope="col">Action</th>
+                </tr>
                 </thead>
                 <tbody>
-                    @for (int i = 0; i < Model.Count; i++)
-                    {
+                @{
+                    var i = 0;
+                }
+                @foreach (var (propertyName, item) in Model)
+                {
+                    <form method="post">
                         <tr>
                             <th scope="row">@i</th>
                             <td>
-                                <label class="config-name">@Model[i].Name</label>
-                                <a data-bs-toggle="popover" title="Description"
-                               data-bs-content="@Model[i].Description"
-                               data-bs-html="true">
+                                <label class="config-name">@item.Name</label>
+                                <a tabindex="0" data-bs-toggle="popover" data-bs-trigger="focus"  title="Description" data-bs-content="@item.Description" data-bs-html="true">
                                     <i class="fas fa-question-circle"></i>
                                 </a>
                             </td>
 
                             <td>
                                 <div style="display: flex">
-                                    <input type="text" class="form-control mw-25" value="@Model[i].Value"
-                                       id="value_@Model[i].Name">
+                                    <input type="text" class="form-control mw-25" value="@item.Value" id="value_@propertyName">
                                 </div>
                             </td>
                             <td>
-                                <label class="default-text-field">@Model[i].IsDefault</label>
+                                <label class="default-text-field">@item.IsDefault</label>
                             </td>
 
                             <td>
-                                @if (!Model[i].IsDefault)
+                                @if (!item.IsDefault)
                                 {
-                                    <button id="reset_@Model[i].Name" type="button" class="btn btn-secondary ms-1"
-                                    data-bs-toggle="tooltip" title="reset value to default">
+                                    <button id="reset_@propertyName" type="button" class="btn btn-secondary ms-1"data-bs-toggle="tooltip" title="reset value to default">
                                         <i class="fas fa-undo-alt"></i>
                                     </button>
                                 }
 
-                                <button disabled id="ok_@Model[i].Name" type="button" class="btn btn-secondary ms-1"
-                                    data-bs-toggle="tooltip" title="ok">
+                                <button disabled id="ok_@propertyName" type="button" class="btn btn-secondary ms-1"data-bs-toggle="tooltip" title="ok">
                                     <i class="fas fa-check"></i>
                                 </button>
 
-                                <button disabled id="cancel_@Model[i].Name" type="button"
-                                    class="btn btn-secondary ms-1" data-bs-toggle="tooltip" title="revert changes">
+                                <button disabled id="cancel_@propertyName" type="button"class="btn btn-secondary ms-1" data-bs-toggle="tooltip" title="revert changes">
                                     <i class="fas fa-times"></i>
                                 </button>
                             </td>
                         </tr>
-                    }
+                    </form>
+                    i++;
+                }
                 </tbody>
             </table>
         </div>
@@ -133,11 +135,10 @@
         });
     });
 
-    function createData(name, value, isDefault) {
+    function createData(name, value) {
         return {
-            "Name": name,
-            "Value": value,
-            "IsDefault": isDefault
+            "PropertyName": name,
+            "Value": value
         }
     }
 
@@ -156,7 +157,7 @@
         name = this.id.substring("ok_".length);
 
         let value = $('#value_' + name).val();
-        let data = createData(name, value, false);
+        let data = createData(name, value);
 
         $.ajax({
             type: 'POST',
@@ -174,7 +175,7 @@
         name = this.id.substring("reset_".length);
 
         $.ajax({
-            type: 'GET',
+            type: 'POST',
             url: setToDefaultAction + "?Name=" + name,
             cache: false,
             async: true,
@@ -193,20 +194,16 @@
             cache: false,
             async: true,
             success: function(data) {
-                $("#message").css("display", "block");
+                let message = $("#message");
+                message.css("display", "block");
 
                 if (data == "") {
-                    $("#message").empty();
-                    $("#message").css("color", "green");
-                    $("#message").append("Success.");
+                    message.empty().css("color", "green").append("Success.");
                 }
                 else {
-                    $("#message").empty();
-                    $("#message").css("color", "red");
-                    $("#message").append(data);
+                    message.empty().css("color", "red").append(data);
                 }
             }
         });
     });
-
 </script>

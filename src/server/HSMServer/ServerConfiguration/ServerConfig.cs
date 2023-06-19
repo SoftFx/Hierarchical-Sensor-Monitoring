@@ -70,12 +70,12 @@ namespace HSMServer.ServerConfiguration
             ResaveSettings();
         }
 
+        public void ResaveSettings() => File.WriteAllText(_settingsPath, JsonSerializer.Serialize(this, _options));
+
 
         private T Register<T>(string sectionName) where T : class, new()
         {
             return _configuration.GetSection(sectionName).Get<T>() ?? new T();
         }
-
-        private void ResaveSettings() => File.WriteAllText(_settingsPath, JsonSerializer.Serialize(this, _options));
     }
 }
