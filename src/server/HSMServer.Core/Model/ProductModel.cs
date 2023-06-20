@@ -1,8 +1,8 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Core.Cache.UpdateEntities;
+using HSMServer.Core.Model.Policies;
 using System;
 using System.Collections.Concurrent;
-using System.Collections.Generic;
 using System.Linq;
 
 namespace HSMServer.Core.Model
@@ -22,6 +22,9 @@ namespace HSMServer.Core.Model
         public ConcurrentDictionary<Guid, ProductModel> SubProducts { get; } = new();
 
         public ConcurrentDictionary<Guid, BaseSensorModel> Sensors { get; } = new();
+
+
+        public override ProductPolicyCollection Policies { get; } = new();
 
 
         public ProductState State { get; }
@@ -59,24 +62,24 @@ namespace HSMServer.Core.Model
         {
             base.Update(update);
 
-            FolderId = update.FolderId.HasValue
-                ? update.FolderId != Guid.Empty ? update.FolderId : null
-                : FolderId;
+            if (update.FolderId is not null)
+                FolderId = update.FolderId != Guid.Empty ? update.FolderId : null;
+
             NotificationsSettings = update?.NotificationSettings ?? NotificationsSettings;
 
             return this;
         }
 
 
-        internal override bool HasUpdateTimeout()
+        internal override bool CheckTimeout()
         {
             var result = false;
 
             foreach (var (_, sensor) in Sensors)
-                result |= sensor.HasUpdateTimeout();
+                result |= sensor.CheckTimeout();
 
             foreach (var (_, subProduct) in SubProducts)
-                result |= subProduct.HasUpdateTimeout();
+                result |= subProduct.CheckTimeout();
 
             return result;
         }
@@ -92,18 +95,8 @@ namespace HSMServer.Core.Model
             Description = Description,
             CreationDate = CreationDate.Ticks,
             NotificationSettings = NotificationsSettings,
-            Policies = GetPolicyIds().Select(u => $"{u}").ToList(),
+            Policies = Policies.Ids.Select(u => $"{u}").ToList(),
             Settings = Settings.ToEntity(),
         };
-
-        internal override List<Guid> GetPolicyIds()
-        {
-            throw new NotImplementedException();
-        }
-
-        internal override void AddPolicy<T>(T policy)
-        {
-            throw new NotImplementedException();
-        }
     }
 }

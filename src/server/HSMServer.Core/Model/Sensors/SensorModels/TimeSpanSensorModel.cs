@@ -8,7 +8,7 @@ public class TimeSpanSensorModel : BaseSensorModel<TimeSpanValue>
     internal override TimeSpanValueStorage Storage { get; } = new TimeSpanValueStorage();
 
 
-    public override SensorPolicyCollection<TimeSpanValue, TimeSpanPolicy> DataPolicies { get; } = new();
+    public override SensorPolicyCollection<TimeSpanValue, TimeSpanPolicy> Policies { get; } = new();
 
     public override SensorType Type { get; } = SensorType.TimeSpan;
 

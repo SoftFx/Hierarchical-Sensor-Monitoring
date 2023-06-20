@@ -8,7 +8,7 @@ namespace HSMServer.Core.Model
         internal override DoubleValuesStorage Storage { get; } = new DoubleValuesStorage();
 
 
-        public override SensorPolicyCollection<DoubleValue, DoublePolicy> DataPolicies { get; } = new();
+        public override SensorPolicyCollection<DoubleValue, DoublePolicy> Policies { get; } = new();
 
         public override SensorType Type { get; } = SensorType.Double;
 

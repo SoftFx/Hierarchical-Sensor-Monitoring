@@ -141,7 +141,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
                 { ReceivingTime = new DateTime(DateTime.UtcNow.Ticks - ticks) };
 
                 Assert.True(sensor.TryAddValue(baseValue));
-                Assert.True(sensor.HasUpdateTimeout());
+                Assert.True(sensor.CheckTimeout());
                 Assert.True(sensor.Status?.HasWarning);
                 Assert.Equal(SensorStatus.Warning, sensor.Status?.Status);
                 Assert.Equal(SensorValueOutdated, sensor.Status?.Message);
@@ -191,7 +191,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
                 };
 
                 Assert.True(sensor.TryAddValue(baseValue));
-                Assert.True(sensor.HasUpdateTimeout());
+                Assert.True(sensor.CheckTimeout());
                 Assert.True(sensor.Status?.HasWarning);
                 Assert.Equal(GetFinalStatus(status, SensorStatus.Warning), sensor.Status?.Status);
 

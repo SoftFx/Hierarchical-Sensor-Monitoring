@@ -3,13 +3,13 @@ using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Model.NodeSettings;
 using HSMServer.Core.Model.Policies;
 using System;
-using System.Collections.Generic;
-using System.Linq;
 
 namespace HSMServer.Core.Model
 {
     public abstract class BaseNodeModel
     {
+        public abstract PolicyCollectionBase Policies { get; }
+
         public SettingsCollection Settings { get; } = new();
 
 
@@ -38,7 +38,7 @@ namespace HSMServer.Core.Model
             Id = Guid.NewGuid();
             CreationDate = DateTime.UtcNow;
 
-            Settings.TTL.Uploaded += (_, _) => HasUpdateTimeout();
+            Settings.TTL.Uploaded += (_, _) => CheckTimeout();
         }
 
         protected BaseNodeModel(string name, Guid? authorId) : this()
@@ -58,6 +58,9 @@ namespace HSMServer.Core.Model
 
             Settings.SetSettings(entity.Settings);
         }
+
+
+        internal abstract bool CheckTimeout();
 
 
         protected internal BaseNodeModel AddParent(ProductModel parent)
@@ -81,21 +84,6 @@ namespace HSMServer.Core.Model
 
             if (update.SelfDestroy != null)
                 Settings.SelfDestroy.SetValue(update.SelfDestroy);
-        }
-
-
-        internal abstract bool HasUpdateTimeout();
-
-        internal abstract List<Guid> GetPolicyIds();
-
-        internal abstract void AddPolicy<T>(T policy) where T : Policy;
-
-
-        internal void ApplyPolicies(List<string> policyIds, Dictionary<string, Policy> allPolicies)
-        {
-            foreach (var id in policyIds ?? Enumerable.Empty<string>())
-                if (allPolicies.TryGetValue(id, out var policy))
-                    AddPolicy(policy);
         }
     }
 }

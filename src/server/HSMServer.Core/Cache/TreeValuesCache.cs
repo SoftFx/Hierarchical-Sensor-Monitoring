@@ -55,7 +55,6 @@ namespace HSMServer.Core.Cache
         }
 
 
-
         public void SaveLastStateToDb()
         {
             foreach (var sensor in _sensors.Values)
@@ -243,7 +242,7 @@ namespace HSMServer.Core.Cache
 
             sensor.Update(update);
 
-            _snapshot.Sensors[sensor.Id].IsExpired = sensor.HasUpdateTimeout();
+            _snapshot.Sensors[sensor.Id].IsExpired = sensor.CheckTimeout();
 
             _database.UpdateSensor(sensor.ToEntity());
             NotifyAboutChanges(sensor);
@@ -381,19 +380,19 @@ namespace HSMServer.Core.Cache
 
         private void SubscribeSensorToPolicyUpdate(BaseSensorModel sensor)
         {
-            sensor.DataPolicies.Uploaded += UpdatePolicy;
+            sensor.Policies.Uploaded += UpdatePolicy;
         }
 
         private void RemoveSensorPolicies(BaseSensorModel sensor)
         {
-            sensor.DataPolicies.Uploaded -= UpdatePolicy;
+            sensor.Policies.Uploaded -= UpdatePolicy;
 
             RemoveEntityPolicies(sensor);
         }
 
         private void RemoveEntityPolicies(BaseNodeModel entity)
         {
-            foreach (var policyId in entity.GetPolicyIds())
+            foreach (var policyId in entity.Policies.Ids)
                 _database.RemovePolicy(policyId);
         }
 
@@ -548,7 +547,7 @@ namespace HSMServer.Core.Cache
             foreach (var productEntity in productEntities)
             {
                 var product = new ProductModel(productEntity);
-                product.ApplyPolicies(productEntity.Policies, policies);
+                product.Policies.ApplyPolicies(productEntity.Policies, policies);
 
                 _tree.TryAdd(product.Id, product);
             }
@@ -592,9 +591,9 @@ namespace HSMServer.Core.Cache
                 }
             _logger.Info("Links between products and their sensors are built");
 
-            _logger.Info($"{nameof(TreeValuesCache.FillSensorsData)} is started");
+            _logger.Info($"{nameof(FillSensorsData)} is started");
             FillSensorsData();
-            _logger.Info($"{nameof(TreeValuesCache.FillSensorsData)} is finished");
+            _logger.Info($"{nameof(FillSensorsData)} is finished");
         }
 
         private void ApplySensors(List<SensorEntity> entities, Dictionary<string, Policy> policies)
@@ -604,7 +603,7 @@ namespace HSMServer.Core.Cache
                 try
                 {
                     var sensor = SensorModelFactory.Build(entity);
-                    sensor.ApplyPolicies(entity.Policies, policies);
+                    sensor.Policies.ApplyPolicies(entity.Policies, policies);
 
                     _sensors.TryAdd(sensor.Id, sensor);
 
@@ -833,7 +832,7 @@ namespace HSMServer.Core.Cache
             {
                 var snaphot = _snapshot.Sensors[sensor.Id];
 
-                if (sensor.HasUpdateTimeout() && !snaphot.IsExpired)
+                if (sensor.CheckTimeout() && !snaphot.IsExpired)
                 {
                     snaphot.IsExpired = true;
                     NotifyAboutChanges(sensor);

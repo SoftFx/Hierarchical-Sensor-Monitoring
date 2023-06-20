@@ -8,7 +8,7 @@ namespace HSMServer.Core.Model
         internal override StringValuesStorage Storage { get; } = new StringValuesStorage();
 
 
-        public override SensorPolicyCollection<StringValue, StringPolicy> DataPolicies { get; } = new();
+        public override SensorPolicyCollection<StringValue, StringPolicy> Policies { get; } = new();
 
         public override SensorType Type { get; } = SensorType.String;
 

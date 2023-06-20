@@ -8,7 +8,7 @@ namespace HSMServer.Core.Model
         internal override IntegerValuesStorage Storage { get; } = new IntegerValuesStorage();
 
 
-        public override SensorPolicyCollection<IntegerValue, IntegerPolicy> DataPolicies { get; } = new();
+        public override SensorPolicyCollection<IntegerValue, IntegerPolicy> Policies { get; } = new();
 
         public override SensorType Type { get; } = SensorType.Integer;
 

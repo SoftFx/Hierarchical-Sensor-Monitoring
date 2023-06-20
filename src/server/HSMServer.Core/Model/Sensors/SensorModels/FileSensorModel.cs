@@ -8,7 +8,7 @@ namespace HSMServer.Core.Model
         internal override FileValuesStorage Storage { get; } = new FileValuesStorage();
 
 
-        public override SensorPolicyCollection<FileValue, FilePolicy> DataPolicies { get; } = new();
+        public override SensorPolicyCollection<FileValue, FilePolicy> Policies { get; } = new();
 
         public override SensorType Type { get; } = SensorType.File;
 
