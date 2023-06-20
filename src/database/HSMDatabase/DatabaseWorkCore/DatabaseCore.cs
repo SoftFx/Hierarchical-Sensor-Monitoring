@@ -395,7 +395,7 @@ namespace HSMDatabase.DatabaseWorkCore
 
         public void AddJournal(JournalEntity journal)
         {
-            _environmentDatabase.AddJournalKeyToList(journal.Key);
+            _environmentDatabase.AddJournalKeyToList(journal.Id);
             _environmentDatabase.AddJournal(journal);
         }
 
@@ -406,7 +406,7 @@ namespace HSMDatabase.DatabaseWorkCore
             var journalEntities = new List<JournalEntity>(keys.Count);
             foreach (var key in keys)
             {
-                var journal = _environmentDatabase.GetJournal(key);
+                var journal = _environmentDatabase.GetJournal(Key.FromBytes(key));
                 if (journal != null)
                     journalEntities.Add(journal);
             }

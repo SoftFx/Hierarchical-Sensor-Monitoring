@@ -11,9 +11,9 @@ public class JournalModel
     
     public string Name { get; set; }
 
-    internal JournalEntity ToJournalEntiry() => new()
+    internal JournalEntity ToJournalEntity() => new()
     {
-        Key = new Key(Id, Time),
+        Id = new Key(Id, Time).GetBytes(),
         Name = Name
     };
 }

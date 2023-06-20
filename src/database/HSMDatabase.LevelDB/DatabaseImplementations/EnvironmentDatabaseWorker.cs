@@ -582,7 +582,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
         
         public void AddJournal(JournalEntity journal)
         {
-            var keyBytes = journal.Key.GetBytes();
+            var keyBytes = journal.Id;
 
             try
             {
@@ -610,19 +610,19 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             return null;
         }
 
-        public void AddJournalKeyToList(Key journalKey)
+        public void AddJournalKeyToList(byte[] journalKey)
         {
-            void AddJournalKeyToListIfNotExist(List<Key> journalIds)
+            void AddJournalKeyToListIfNotExist(List<byte[]> journalIds)
             {
                 if (!journalIds.Contains(journalKey))
                     journalIds.Add(journalKey);
             }
 
-            UpdateJournalKeysList(AddJournalKeyToListIfNotExist, $"Failed to add journak id {journalKey.Id} to list");
+            UpdateJournalKeysList(AddJournalKeyToListIfNotExist, $"Failed to add journak id {Key.FromBytes(journalKey).Id} to list");
         }
 
         
-        private void UpdateJournalKeysList(Action<List<Key>> updateListAction, string errorMessage)
+        private void UpdateJournalKeysList(Action<List<byte[]>> updateListAction, string errorMessage)
         {
             try
             {
@@ -638,15 +638,15 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             }
         }
         
-        public List<Key> GetAllJournalsKeys() => GetListOfJournalKeys(_journalsKeys, "Failed to get journal ids list");
+        public List<byte[]> GetAllJournalsKeys() => GetListOfJournalKeys(_journalsKeys, "Failed to get journal ids list");
         
-        private List<Key> GetListOfJournalKeys(byte[] key, string error)
+        private List<byte[]> GetListOfJournalKeys(byte[] key, string error)
         {
             try
             {
                 return _database.TryRead(key, out byte[] value) ?
-                    JsonSerializer.Deserialize<List<Key>>(Encoding.UTF8.GetString(value))
-                    : new List<Key>();
+                    JsonSerializer.Deserialize<List<byte[]>>(Encoding.UTF8.GetString(value))
+                    : new List<byte[]>();
             }
             catch (Exception e)
             {
@@ -674,7 +674,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             {
                 var currentList = GetAllJournalsKeys();
 
-                currentList.Remove(key);
+                currentList.Remove(key.GetBytes());
 
                 _database.Put(_journalsKeys, JsonSerializer.SerializeToUtf8Bytes(currentList));
             }

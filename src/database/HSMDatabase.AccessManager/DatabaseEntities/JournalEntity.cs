@@ -1,20 +1,12 @@
 using System;
-using System.Diagnostics.Metrics;
 
 namespace HSMDatabase.AccessManager.DatabaseEntities;
 
 public sealed class JournalEntity
 {
-    public Key Key { get; set; }
+    public byte[] Id { get; set; }
 
     public string Name { get; set; }
-}
-
-public sealed class JournalEntityTest
-{
-    public string Key;
-
-    public string Name;
 }
 
 public readonly struct Key
