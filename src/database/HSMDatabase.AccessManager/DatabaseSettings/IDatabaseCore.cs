@@ -89,10 +89,10 @@ namespace HSMServer.Core.DataLayer
         #region Journal
 
         void AddJournal(JournalEntity journal);
-        
         List<JournalEntity> GetJournals();
-
         JournalEntity GetJournal(Key key);
+        void RemoveJournal(Key key);
+            
         #endregion
     }
 }

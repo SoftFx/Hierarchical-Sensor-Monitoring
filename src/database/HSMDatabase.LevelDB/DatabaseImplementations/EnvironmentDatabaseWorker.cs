@@ -638,8 +638,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             }
         }
         
-        public List<Key> GetAllJournalsKeys() =>
-            GetListOfJournalKeys(_journalsKeys, "Failed to get sensors ids list");
+        public List<Key> GetAllJournalsKeys() => GetListOfJournalKeys(_journalsKeys, "Failed to get journal ids list");
         
         private List<Key> GetListOfJournalKeys(byte[] key, string error)
         {
@@ -657,6 +656,33 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             return new();
         }
         
+        public void RemoveJournal(Key key)
+        {
+            try
+            {
+                _database.Delete(key.GetBytes());
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, $"Failed to remove info for journal {key.Id}");
+            }
+        }
+        
+        public void RemoveJournalFromList(Key key)
+        {
+            try
+            {
+                var currentList = GetAllJournalsKeys();
+
+                currentList.Remove(key);
+
+                _database.Put(_journalsKeys, JsonSerializer.SerializeToUtf8Bytes(currentList));
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, $"Failed to remove journal {key.Id} from list");
+            }
+        }
 
         #endregion
         

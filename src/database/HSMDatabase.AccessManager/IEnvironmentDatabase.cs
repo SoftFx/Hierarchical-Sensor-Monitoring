@@ -74,9 +74,10 @@ namespace HSMDatabase.AccessManager
 
         void AddJournal(JournalEntity journal);
         void AddJournalKeyToList(Key journalKey);
-
         List<Key> GetAllJournalsKeys();
         JournalEntity GetJournal(Key key);
+        public void RemoveJournal(Key key);
+        void RemoveJournalFromList(Key key);
 
         #endregion
     }

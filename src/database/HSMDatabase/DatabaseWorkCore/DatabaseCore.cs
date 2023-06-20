@@ -415,6 +415,13 @@ namespace HSMDatabase.DatabaseWorkCore
         }
 
         public JournalEntity GetJournal(Key key) => _environmentDatabase.GetJournal(key);
+        
+        public void RemoveJournal(Key key)
+        {
+            _environmentDatabase.RemoveJournal(key);
+            _environmentDatabase.RemoveJournalFromList(key);
+        }
+        
         #endregion
 
         public void Dispose()
