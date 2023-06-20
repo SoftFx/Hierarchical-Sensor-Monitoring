@@ -69,12 +69,12 @@ namespace HSMServer.Model.TreeViewModel
                 AlertIcons.TryAdd(alertIcon, 1);
         }
 
-        private static DataAlertViewModel BuildAlert(DataPolicy policy, BaseSensorModel sensor) => policy switch
+        private static DataAlertViewModel BuildAlert(Policy policy, BaseSensorModel sensor) => policy switch
         {
-            IntegerDataPolicy p => new SingleDataAlertViewModel<IntegerValue, int>(p, sensor),
-            DoubleDataPolicy p => new SingleDataAlertViewModel<DoubleValue, double>(p, sensor),
-            IntegerBarDataPolicy p => new BarDataAlertViewModel<IntegerBarValue, int>(p, sensor),
-            DoubleBarDataPolicy p => new BarDataAlertViewModel<DoubleBarValue, double>(p, sensor),
+            IntegerPolicy p => new SingleDataAlertViewModel<IntegerValue, int>(p, sensor),
+            DoublePolicy p => new SingleDataAlertViewModel<DoubleValue, double>(p, sensor),
+            IntegerBarPolicy p => new BarDataAlertViewModel<IntegerBarValue, int>(p, sensor),
+            DoubleBarPolicy p => new BarDataAlertViewModel<DoubleBarValue, double>(p, sensor),
         };
 
         private static string GetFileNameString(SensorType sensorType, string value)

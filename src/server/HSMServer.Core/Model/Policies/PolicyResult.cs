@@ -30,13 +30,13 @@ namespace HSMServer.Core.Model
             SensorId = sensorId;
         }
 
-        internal PolicyResult(Guid sensorId, DataPolicy policy) : this(sensorId)
+        internal PolicyResult(Guid sensorId, Policy policy) : this(sensorId)
         {
             AddAlert(policy);
         }
 
 
-        internal void AddAlert(DataPolicy policy)
+        internal void AddAlert(Policy policy)
         {
             var key = policy.AlertKey;
             var comment = policy.AlertComment;

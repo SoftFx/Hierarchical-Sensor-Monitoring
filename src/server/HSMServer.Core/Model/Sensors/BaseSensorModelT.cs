@@ -10,7 +10,7 @@ namespace HSMServer.Core.Model
     {
         internal override ValuesStorage<T> Storage { get; }
 
-        public override DataPolicyCollection<T> DataPolicies { get; }
+        public override SensorPolicyCollection<T> DataPolicies { get; }
 
 
         protected BaseSensorModel(SensorEntity entity) : base(entity) { }
@@ -36,8 +36,8 @@ namespace HSMServer.Core.Model
 
         internal override void AddPolicy<U>(U policy)
         {
-            if (policy is DataPolicy<T> dataPolicy)
-                DataPolicies.Add(dataPolicy);
+            if (policy is Policy<T> dataPolicy)
+                DataPolicies.AddPolicy(dataPolicy);
         }
 
 

@@ -88,10 +88,10 @@ namespace HSMServer.Core.Model
 
         internal abstract List<Guid> GetPolicyIds();
 
-        internal abstract void AddPolicy<T>(T policy) where T : DataPolicy;
+        internal abstract void AddPolicy<T>(T policy) where T : Policy;
 
 
-        internal void ApplyPolicies(List<string> policyIds, Dictionary<string, DataPolicy> allPolicies)
+        internal void ApplyPolicies(List<string> policyIds, Dictionary<string, Policy> allPolicies)
         {
             foreach (var id in policyIds ?? Enumerable.Empty<string>())
                 if (allPolicies.TryGetValue(id, out var policy))

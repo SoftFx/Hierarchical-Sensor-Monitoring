@@ -362,7 +362,7 @@ namespace HSMServer.Core.Cache
             }
         }
 
-        private void UpdatePolicy(ActionType type, DataPolicy policy)
+        private void UpdatePolicy(ActionType type, Policy policy)
         {
             switch (type)
             {
@@ -541,7 +541,7 @@ namespace HSMServer.Core.Cache
             return policyEntities;
         }
 
-        private void ApplyProducts(List<ProductEntity> productEntities, Dictionary<string, DataPolicy> policies)
+        private void ApplyProducts(List<ProductEntity> productEntities, Dictionary<string, Policy> policies)
         {
             _logger.Info($"{nameof(productEntities)} are applying");
 
@@ -574,7 +574,7 @@ namespace HSMServer.Core.Cache
         }
 
         private void ApplySensors(List<ProductEntity> productEntities, List<SensorEntity> sensorEntities,
-            Dictionary<string, DataPolicy> policies)
+            Dictionary<string, Policy> policies)
         {
             _logger.Info($"{nameof(sensorEntities)} are applying");
             ApplySensors(sensorEntities, policies);
@@ -597,7 +597,7 @@ namespace HSMServer.Core.Cache
             _logger.Info($"{nameof(TreeValuesCache.FillSensorsData)} is finished");
         }
 
-        private void ApplySensors(List<SensorEntity> entities, Dictionary<string, DataPolicy> policies)
+        private void ApplySensors(List<SensorEntity> entities, Dictionary<string, Policy> policies)
         {
             foreach (var entity in entities)
             {
@@ -814,13 +814,13 @@ namespace HSMServer.Core.Cache
                 _snapshot.FlushState(true);
         }
 
-        private static Dictionary<string, DataPolicy> GetPolicyModels(List<byte[]> policyEntities)
+        private static Dictionary<string, Policy> GetPolicyModels(List<byte[]> policyEntities)
         {
-            Dictionary<string, DataPolicy> policies = new(policyEntities.Count);
+            Dictionary<string, Policy> policies = new(policyEntities.Count);
 
             foreach (var entity in policyEntities)
             {
-                var policy = JsonSerializer.Deserialize<DataPolicy>(entity);
+                var policy = JsonSerializer.Deserialize<Policy>(entity);
                 policies.Add(policy.Id.ToString(), policy);
             }
 

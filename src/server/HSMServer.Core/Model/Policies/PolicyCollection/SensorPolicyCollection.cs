@@ -1,24 +1,20 @@
 ﻿using HSMServer.Core.Cache;
 using HSMServer.Core.Cache.UpdateEntities;
 using System;
-using System.Collections;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 
 namespace HSMServer.Core.Model.Policies
 {
-    public abstract class DataPolicyCollection : IEnumerable<DataPolicy>
+    public abstract class SensorPolicyCollection : PolicyCollectionBase
     {
         internal protected SensorResult SensorResult { get; protected set; } = SensorResult.Ok;
 
         internal protected PolicyResult PolicyResult { get; protected set; } = PolicyResult.Ok;
 
 
-        internal abstract IEnumerable<Guid> Ids { get; }
-
-
-        internal Action<ActionType, DataPolicy> Uploaded;
+        internal Action<ActionType, Policy> Uploaded;
 
 
         internal abstract void Update(List<DataPolicyUpdate> updates);
@@ -31,22 +27,15 @@ namespace HSMServer.Core.Model.Policies
             SensorResult = SensorResult.Ok;
             PolicyResult = PolicyResult.Ok;
         }
-
-
-        public abstract IEnumerator<DataPolicy> GetEnumerator();
-
-        IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
     }
 
 
-    public abstract class DataPolicyCollection<T> : DataPolicyCollection where T : BaseValue
+    public abstract class SensorPolicyCollection<T> : SensorPolicyCollection where T : BaseValue
     {
-        private CorrectDataTypePolicy<T> _typePolicy;
+        private CorrectTypePolicy<T> _typePolicy;
         private protected BaseSensorModel _sensor;
 
         protected abstract bool CalculateStorageResult(T value);
-
-        internal abstract void Add(DataPolicy<T> policy);
 
 
         internal bool TryValidate(BaseValue value, out T valueT)
@@ -55,7 +44,7 @@ namespace HSMServer.Core.Model.Policies
 
             valueT = value as T;
 
-            if (!CorrectDataTypePolicy<T>.Validate(valueT))
+            if (!CorrectTypePolicy<T>.Validate(valueT))
             {
                 SensorResult = _typePolicy.SensorResult;
                 PolicyResult = _typePolicy.PolicyResult;
@@ -68,26 +57,25 @@ namespace HSMServer.Core.Model.Policies
 
         internal override void Attach(BaseSensorModel sensor)
         {
-            _typePolicy = new CorrectDataTypePolicy<T>(sensor.Id);
+            _typePolicy = new CorrectTypePolicy<T>(sensor.Id);
             _sensor = sensor;
         }
     }
 
 
-    public sealed class DataPolicyCollection<T, U> : DataPolicyCollection<T>
-        where T : BaseValue
-        where U : DataPolicy<T>, new()
+    public sealed class SensorPolicyCollection<ValueType, PolicyType> : SensorPolicyCollection<ValueType>
+        where ValueType  : BaseValue
+        where PolicyType : Policy<ValueType>, new()
     {
-        private readonly ConcurrentDictionary<Guid, U> _storage = new();
+        private readonly ConcurrentDictionary<Guid, PolicyType> _storage = new();
 
 
         internal override IEnumerable<Guid> Ids => _storage.Keys;
 
 
-        protected override bool CalculateStorageResult(T value)
+        protected override bool CalculateStorageResult(ValueType value)
         {
-            if (!PolicyResult.IsOk)
-                PolicyResult = new(_sensor.Id);
+            PolicyResult = new(_sensor.Id);
 
             foreach (var (_, policy) in _storage)
                 if (!policy.Validate(value, _sensor))
@@ -100,7 +88,11 @@ namespace HSMServer.Core.Model.Policies
         }
 
 
-        internal override void Add(DataPolicy<T> policy) => _storage.TryAdd(policy.Id, (U)policy);
+        internal override void AddPolicy<Y>(Y policy)
+        {
+            if (policy is PolicyType typedPolicy)
+                _storage.TryAdd(policy.Id, typedPolicy);
+        }
 
         internal override void Update(List<DataPolicyUpdate> updatesList)
         {
@@ -123,16 +115,16 @@ namespace HSMServer.Core.Model.Policies
             foreach (var update in updatesList)
                 if (update.Id == Guid.Empty)
                 {
-                    var policy = new U();
+                    var policy = new PolicyType();
 
                     policy.Update(update);
 
-                    Add(policy);
+                    AddPolicy(policy);
                     Uploaded?.Invoke(ActionType.Add, policy);
                 }
         }
 
 
-        public override IEnumerator<DataPolicy> GetEnumerator() => _storage.Values.GetEnumerator();
+        public override IEnumerator<Policy> GetEnumerator() => _storage.Values.GetEnumerator();
     }
 }

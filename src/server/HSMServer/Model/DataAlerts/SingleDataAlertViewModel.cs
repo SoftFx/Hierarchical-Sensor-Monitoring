@@ -23,7 +23,7 @@ namespace HSMServer.Model.DataAlerts
 
         public SingleDataAlertViewModel(Guid entityId) : base(entityId) { }
 
-        public SingleDataAlertViewModel(DataPolicy<T, U> policy, BaseSensorModel sensor) : base(policy, sensor)
+        public SingleDataAlertViewModel(Policy<T, U> policy, BaseSensorModel sensor) : base(policy, sensor)
         {
             DisplayComment = CommentBuilder.GetSingleComment(sensor.LastValue as T, sensor, policy);
         }

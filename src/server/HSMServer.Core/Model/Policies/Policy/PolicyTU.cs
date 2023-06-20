@@ -2,7 +2,7 @@
 
 namespace HSMServer.Core.Model.Policies
 {
-    public abstract class DataPolicy<T, U> : DataPolicy<T> where T : BaseValue
+    public abstract class Policy<T, U> : Policy<T> where T : BaseValue
     {
         private Func<U, U, bool> _executeOperation;
         private Func<T, U> _getProperty;

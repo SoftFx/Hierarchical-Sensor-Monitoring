@@ -2,7 +2,7 @@
 
 namespace HSMServer.Core.Model.Policies
 {
-    internal sealed class CorrectDataTypePolicy<T> : DataPolicy where T : BaseValue
+    internal sealed class CorrectTypePolicy<T> : Policy where T : BaseValue
     {
         private const SensorStatus PolicyStatus = SensorStatus.Error;
 
@@ -10,7 +10,7 @@ namespace HSMServer.Core.Model.Policies
         internal PolicyResult PolicyResult { get; }
 
 
-        internal CorrectDataTypePolicy(Guid sensorId)
+        internal CorrectTypePolicy(Guid sensorId)
         {
             Status = PolicyStatus;
             Icon = PolicyStatus.ToIcon();

@@ -237,7 +237,7 @@ namespace HSMServer.Core.Tests.Infrastructure
             Assert.Equal(expected.Integration, (Integration)actual.Integration);
         }
 
-        internal static void TestExpectedUpdateIntervalPolicy(SensorUpdate expected, DataPolicy actual)
+        internal static void TestExpectedUpdateIntervalPolicy(SensorUpdate expected, Policy actual)
         {
             //Assert.Equal(expected.TTL.Ticks, (actual as ExpectedUpdateIntervalPolicy).Interval.Ticks);
             //Assert.Equal(expected.TTL.Interval, (actual as ExpectedUpdateIntervalPolicy).Interval.Interval);

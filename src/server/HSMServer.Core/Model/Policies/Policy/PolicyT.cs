@@ -4,7 +4,7 @@ using System;
 
 namespace HSMServer.Core.Model.Policies
 {
-    public abstract class DataPolicy
+    public abstract class Policy
     {
         public Guid Id { get; }
 
@@ -31,7 +31,7 @@ namespace HSMServer.Core.Model.Policies
         public virtual string Property { get; set; }
 
 
-        protected DataPolicy()
+        protected Policy()
         {
             Id = Guid.NewGuid();
         }
@@ -63,7 +63,7 @@ namespace HSMServer.Core.Model.Policies
     }
 
 
-    public abstract class DataPolicy<T> : DataPolicy where T : BaseValue
+    public abstract class Policy<T> : Policy where T : BaseValue
     {
         internal abstract bool Validate(T value, BaseSensorModel sensor);
 

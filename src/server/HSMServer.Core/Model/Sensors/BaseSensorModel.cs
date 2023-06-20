@@ -34,7 +34,7 @@ namespace HSMServer.Core.Model
 
         internal abstract ValuesStorage Storage { get; }
 
-        public abstract DataPolicyCollection DataPolicies { get; }
+        public abstract SensorPolicyCollection DataPolicies { get; }
 
         public abstract SensorType Type { get; }
 
@@ -107,9 +107,7 @@ namespace HSMServer.Core.Model
 
         internal void ResetSensor()
         {
-            //ServerPolicy.Reset();
             DataPolicies.Reset();
-
             Storage.Clear();
         }
 

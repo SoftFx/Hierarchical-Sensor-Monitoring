@@ -74,7 +74,7 @@ namespace HSMServer.Model.DataAlerts
             IsModify = true;
         }
 
-        public DataAlertViewModelBase(DataPolicy<T> policy, Core.Model.BaseSensorModel sensor) : base()
+        public DataAlertViewModelBase(Policy<T> policy, Core.Model.BaseSensorModel sensor) : base()
         {
             EntityId = sensor.Id;
             Id = policy.Id;
