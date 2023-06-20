@@ -27,15 +27,16 @@ namespace HSMServer.Core.Model.Policies
             SensorResult = SensorResult.Ok;
             PolicyResult = PolicyResult.Ok;
         }
-
-        internal bool SensorTimeout(DateTime? time) => false;
     }
 
 
     public abstract class SensorPolicyCollection<T> : SensorPolicyCollection where T : BaseValue
     {
         private CorrectTypePolicy<T> _typePolicy;
+        private TTLPolicy _ttlPolicy;
+
         private protected BaseSensorModel _sensor;
+
 
         protected abstract bool CalculateStorageResult(T value);
 
@@ -59,8 +60,21 @@ namespace HSMServer.Core.Model.Policies
 
         internal override void Attach(BaseSensorModel sensor)
         {
+            _ttlPolicy = new TTLPolicy(sensor.Id, sensor.Settings.TTL);
             _typePolicy = new CorrectTypePolicy<T>(sensor.Id);
+
             _sensor = sensor;
+        }
+
+
+        internal bool SensorTimeout(DateTime? time)
+        {
+            var timeout = _ttlPolicy.HasTimeout(time);
+
+            if (timeout)
+                PolicyResult = _ttlPolicy.PolicyResult;
+
+            return timeout;
         }
     }
 

@@ -2,15 +2,12 @@
 
 namespace HSMServer.Core.Model.Policies
 {
-    internal sealed class CorrectTypePolicy<T> : Policy where T : BaseValue
+    internal sealed class CorrectTypePolicy<T> : DefaultPolicyBase where T : BaseValue
     {
         private const SensorStatus PolicyStatus = SensorStatus.Error;
 
 
-        internal PolicyResult PolicyResult { get; }
-
-
-        internal CorrectTypePolicy(Guid sensorId)
+        internal CorrectTypePolicy(Guid sensorId) : base(sensorId)
         {
             Status = PolicyStatus;
             Icon = PolicyStatus.ToIcon();
@@ -18,7 +15,6 @@ namespace HSMServer.Core.Model.Policies
             AlertComment = $"Sensor value type is not {typeof(T).Name}";
 
             SensorResult = new(Status, AlertComment);
-            PolicyResult = new PolicyResult(sensorId, this);
         }
 
 

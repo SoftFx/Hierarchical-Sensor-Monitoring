@@ -30,6 +30,9 @@ namespace HSMServer.Core.Model
             return canStore;
         }
 
+
+        internal override bool CheckTimeout() => Policies.SensorTimeout(LastValue?.ReceivingTime);
+
         internal override void AddDbValue(byte[] bytes) => Storage.AddValue((T)Convert(bytes));
 
         internal override List<BaseValue> ConvertValues(List<byte[]> pages) => pages.Select(Convert).ToList();

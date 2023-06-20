@@ -82,9 +82,6 @@ namespace HSMServer.Core.Model
         internal abstract List<BaseValue> ConvertValues(List<byte[]> valuesBytes);
 
 
-        internal override bool CheckTimeout() => Policies.SensorTimeout(LastValue?.ReceivingTime);
-
-
         internal void Update(SensorUpdate update)
         {
             base.Update(update);

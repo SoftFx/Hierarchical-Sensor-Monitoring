@@ -447,7 +447,7 @@ namespace HSMServer.Core.Cache
                     Type = (byte)value.Type,
                 };
 
-                sensor = SensorModelFactory.Build(entity).InitDataPolicy();
+                sensor = SensorModelFactory.Build(entity);
                 parentProduct.AddSensor(sensor);
 
                 AddSensor(sensor);
