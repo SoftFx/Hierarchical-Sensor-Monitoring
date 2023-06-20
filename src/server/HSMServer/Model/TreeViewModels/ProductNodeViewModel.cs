@@ -1,5 +1,5 @@
-﻿using HSMCommon.Extensions;
-using HSMServer.Core.Model;
+﻿using HSMServer.Core.Model;
+using HSMServer.Extensions;
 using HSMServer.Helpers;
 using HSMServer.Model.AccessKeysViewModels;
 using HSMServer.Model.Authentication;

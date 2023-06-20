@@ -2,7 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 
-namespace HSMCommon.Extensions
+namespace HSMServer.Extensions
 {
     public static class CollectionExtensions
     {
