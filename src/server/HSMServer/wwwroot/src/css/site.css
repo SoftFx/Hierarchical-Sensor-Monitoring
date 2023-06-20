@@ -188,6 +188,10 @@ input.input-validation-error {
     width: 20%;
 }
 
+.w-40 {
+    width: 40% !important;
+}
+
 .no-transition {
     transition: none!important;
     -webkit-transition: none!important;

@@ -27,17 +27,26 @@ namespace HSMServer.Model.DataAlerts
         [Required]
         public string Value { get; set; }
 
+        public string Icon { get; set; }
+
         public Guid Id { get; set; }
 
 
         internal DataPolicyUpdate ToUpdate() =>
-            new(Id, Property, Operation, new TargetValue(TargetType.Const, Value), Core.Model.SensorStatus.Ok, Comment, "↕️");
+            new(Id, Property, Operation, new TargetValue(TargetType.Const, Value), Status.ToCore(), Comment, Icon);
     }
 
 
     public abstract class DataAlertViewModelBase : DataAlertViewModel
     {
-        private readonly List<SensorStatus> _statuses = new() { SensorStatus.Error, SensorStatus.Warning };
+        private readonly List<string> _icons = new() { "⬆️", "⏫", "🔼", "↕️", "🔽", "⏬", "⬇️" };
+        private readonly List<SensorStatus> _statuses = new()
+        {
+            SensorStatus.OffTime,
+            SensorStatus.Ok,
+            SensorStatus.Warning,
+            SensorStatus.Error
+        };
 
 
         public abstract string DisplayComment { get; }
@@ -56,11 +65,15 @@ namespace HSMServer.Model.DataAlerts
 
         public List<SelectListItem> StatusesItems { get; }
 
+        public List<SelectListItem> IconsItems { get; }
+
 
         public DataAlertViewModelBase()
         {
             PropertiesItems = Properties.Select(p => new SelectListItem(p, p)).ToList();
             ActionsItems = Actions.Select(a => new SelectListItem(a.GetDisplayName(), $"{a}")).ToList();
+
+            IconsItems = _icons.Select(i => new SelectListItem(i.ToIconUnicode(), i)).ToList();
             StatusesItems = _statuses.Select(s => new SelectListItem($"{s.ToSelectIcon()} {s.GetDisplayName()}", $"{s}")).ToList();
         }
     }
@@ -83,6 +96,7 @@ namespace HSMServer.Model.DataAlerts
             Value = policy.Target.Value;
             Status = policy.Status.ToClient();
             Comment = policy.Template;
+            Icon = policy.Icon;
         }
     }
 }
