@@ -22,4 +22,9 @@
     </PackageReference>
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\..\database\HSMDatabase.AccessManager\HSMDatabase.AccessManager.csproj" />
+    <ProjectReference Include="..\HSMServer.Core.Tests\HSMServer.Core.Tests.csproj" />
+  </ItemGroup>
+
 </Project>

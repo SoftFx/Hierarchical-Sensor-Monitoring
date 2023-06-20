@@ -15,6 +15,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
         private readonly byte[] _sensorIdsKey = "SensorIds"u8.ToArray();
         private readonly byte[] _policyIdsKey = "PolicyIds"u8.ToArray();
         private readonly byte[] _folderIdsKey = "FolderIds"u8.ToArray();
+        private readonly byte[] _journalsKeys = "JournalKey"u8.ToArray();
 
         private readonly LevelDBDatabaseAdapter _database;
         private readonly Logger _logger;
@@ -576,6 +577,89 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
 
         #endregion
 
+        #region Journals
+        
+        
+        public void AddJournal(JournalEntity journal)
+        {
+            var keyBytes = journal.Key.GetBytes();
+
+            try
+            {
+                _database.Put(keyBytes, JsonSerializer.SerializeToUtf8Bytes(journal));
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, $"Failed to save user {journal.Name}");
+            }
+        }
+        
+        public JournalEntity GetJournal(Key key)
+        {
+            var bytesKey = key.GetBytes();
+            try
+            {
+                return _database.TryRead(bytesKey, out byte[] value)
+                    ? JsonSerializer.Deserialize<JournalEntity>(Encoding.UTF8.GetString(value)) : null;
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, $"Failed to read info for journal {key.Id}");
+            }
+
+            return null;
+        }
+
+        public void AddJournalKeyToList(Key journalKey)
+        {
+            void AddJournalKeyToListIfNotExist(List<Key> journalIds)
+            {
+                if (!journalIds.Contains(journalKey))
+                    journalIds.Add(journalKey);
+            }
+
+            UpdateJournalKeysList(AddJournalKeyToListIfNotExist, $"Failed to add journak id {journalKey.Id} to list");
+        }
+
+        
+        private void UpdateJournalKeysList(Action<List<Key>> updateListAction, string errorMessage)
+        {
+            try
+            {
+                var journalsKeys = GetAllJournalsKeys();
+
+                updateListAction?.Invoke(journalsKeys);
+
+                _database.Put(_journalsKeys, JsonSerializer.SerializeToUtf8Bytes(journalsKeys));
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, errorMessage);
+            }
+        }
+        
+        public List<Key> GetAllJournalsKeys() =>
+            GetListOfJournalKeys(_journalsKeys, "Failed to get sensors ids list");
+        
+        private List<Key> GetListOfJournalKeys(byte[] key, string error)
+        {
+            try
+            {
+                return _database.TryRead(key, out byte[] value) ?
+                    JsonSerializer.Deserialize<List<Key>>(Encoding.UTF8.GetString(value))
+                    : new List<Key>();
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, error);
+            }
+
+            return new();
+        }
+        
+
+        #endregion
+        
         public void Dispose() => _database.Dispose();
 
         private List<string> GetListOfKeys(byte[] key, string error)

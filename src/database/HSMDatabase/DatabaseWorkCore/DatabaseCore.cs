@@ -391,6 +391,32 @@ namespace HSMDatabase.DatabaseWorkCore
 
         #endregion
 
+        #region Journal
+
+        public void AddJournal(JournalEntity journal)
+        {
+            _environmentDatabase.AddJournalKeyToList(journal.Key);
+            _environmentDatabase.AddJournal(journal);
+        }
+
+        public List<JournalEntity> GetJournals()
+        {
+            var keys = _environmentDatabase.GetAllJournalsKeys();
+
+            var journalEntities = new List<JournalEntity>(keys.Count);
+            foreach (var key in keys)
+            {
+                var journal = _environmentDatabase.GetJournal(key);
+                if (journal != null)
+                    journalEntities.Add(journal);
+            }
+
+            return journalEntities;
+        }
+
+        public JournalEntity GetJournal(Key key) => _environmentDatabase.GetJournal(key);
+        #endregion
+
         public void Dispose()
         {
             _environmentDatabase.Dispose();

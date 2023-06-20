@@ -85,5 +85,14 @@ namespace HSMServer.Core.DataLayer
         List<UserEntity> GetUsersPage(int page, int pageSize);
 
         #endregion
+
+        #region Journal
+
+        void AddJournal(JournalEntity journal);
+        
+        List<JournalEntity> GetJournals();
+
+        JournalEntity GetJournal(Key key);
+        #endregion
     }
 }

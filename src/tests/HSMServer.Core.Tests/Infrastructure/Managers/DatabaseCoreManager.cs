@@ -7,7 +7,7 @@ using System.Threading;
 
 namespace HSMServer.Core.Tests.Infrastructure
 {
-    internal sealed class DatabaseCoreManager
+    public sealed class DatabaseCoreManager
     {
         private static int _dbNumber;
 
