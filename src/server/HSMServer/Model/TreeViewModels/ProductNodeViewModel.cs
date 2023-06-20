@@ -76,7 +76,6 @@ namespace HSMServer.Model.TreeViewModel
         internal ProductNodeViewModel RecalculateCharacteristics()
         {
             int allSensorsCount = 0;
-            AlertIcons.Clear();
 
             if (Nodes != null && !Nodes.IsEmpty)
             {
@@ -91,7 +90,7 @@ namespace HSMServer.Model.TreeViewModel
 
             ModifyUpdateTime();
             ModifyStatus();
-            ModifyAlertIcons();
+            RecalculateAlerts(Sensors.Values, Nodes.Values);
 
             return this;
         }
@@ -110,12 +109,6 @@ namespace HSMServer.Model.TreeViewModel
             var sensorStatus = Nodes.Values.MaxOrDefault(n => n.Status);
 
             Status = sensorStatus > nodesStatus ? sensorStatus : nodesStatus;
-        }
-
-        private void ModifyAlertIcons()
-        {
-            ModifyAlertIcons(Sensors.Values);
-            ModifyAlertIcons(Nodes.Values);
         }
     }
 }

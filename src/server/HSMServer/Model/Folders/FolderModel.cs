@@ -99,8 +99,7 @@ namespace HSMServer.Model.Folders
         {
             UpdateTime = Products.Values.MaxOrDefault(x => x.UpdateTime);
 
-            AlertIcons.Clear();
-            ModifyAlertIcons(Products.Values);
+            RecalculateAlerts(Products.Values);
 
             return this;
         }
