@@ -1,10 +1,9 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities;
 using System;
-using System.Text.Json.Serialization;
 
 namespace HSMServer.Core.Model
 {
-    public enum TimeInterval : byte
+    public enum OldTimeInterval : byte
     {
         TenMinutes,
         Hour,
@@ -21,7 +20,7 @@ namespace HSMServer.Core.Model
         Custom = byte.MaxValue,
     }
 
-    public enum TimeIntervalCorrect : long
+    public enum TimeInterval : long
     {
         FromFolder = -100,
         FromParent = -10,
@@ -49,18 +48,18 @@ namespace HSMServer.Core.Model
 
     public class TimeIntervalModel
     {
-        public TimeIntervalCorrect Interval { get; } = TimeIntervalCorrect.FromParent;
+        public TimeInterval Interval { get; } = TimeInterval.FromParent;
 
         public long Ticks { get; }
 
 
-        public bool IsNever => Interval == TimeIntervalCorrect.Never;
+        public bool IsNever => Interval == TimeInterval.Never;
 
-        public bool IsFromFolder => Interval == TimeIntervalCorrect.FromFolder;
+        public bool IsFromFolder => Interval == TimeInterval.FromFolder;
 
-        public bool IsFromParent => Interval == TimeIntervalCorrect.FromParent;
+        public bool IsFromParent => Interval == TimeInterval.FromParent;
 
-        public bool UseCustom => Interval is TimeIntervalCorrect.Custom or TimeIntervalCorrect.FromFolder;
+        public bool UseCustom => Interval is TimeInterval.Custom or TimeInterval.FromFolder;
 
 
         public TimeIntervalModel() { }
@@ -68,36 +67,36 @@ namespace HSMServer.Core.Model
         public TimeIntervalModel(long ticks)
         {
             Ticks = ticks;
-            Interval = TimeIntervalCorrect.Custom;
+            Interval = TimeInterval.Custom;
         }
 
-        public TimeIntervalModel(TimeIntervalEntity entity) : this((TimeIntervalCorrect)entity.Interval, entity.Ticks) { }
+        public TimeIntervalModel(TimeIntervalEntity entity) : this((TimeInterval)entity.Interval, entity.Ticks) { }
 
-        public TimeIntervalModel(TimeIntervalCorrect interval, long ticks)
+        public TimeIntervalModel(TimeInterval interval, long ticks)
         {
             Interval = interval;
             Ticks = ticks;
         }
 
 
-        internal bool TimeIsUp(DateTime time) => 
-            UseCustom ? (DateTime.UtcNow - time).Ticks > Ticks 
+        internal bool TimeIsUp(DateTime time) =>
+            UseCustom ? (DateTime.UtcNow - time).Ticks > Ticks
                       : DateTime.UtcNow > GetShiftedTime(time);
 
         public DateTime GetShiftedTime(DateTime time, int coef = 1) => Interval switch
         {
-            TimeIntervalCorrect.OneMinute or TimeIntervalCorrect.FiveMinutes or
-            TimeIntervalCorrect.TenMinutes or TimeIntervalCorrect.Hour or
-            TimeIntervalCorrect.Day or TimeIntervalCorrect.Week => time.AddTicks(coef * (long)Interval),
+            TimeInterval.OneMinute or TimeInterval.FiveMinutes or
+            TimeInterval.TenMinutes or TimeInterval.Hour or
+            TimeInterval.Day or TimeInterval.Week => time.AddTicks((long)Interval * coef),
 
-            TimeIntervalCorrect.Month => time.AddMonths(coef),
-            TimeIntervalCorrect.ThreeMonths => time.AddMonths(3 * coef),
-            TimeIntervalCorrect.SixMonths => time.AddMonths(6 * coef),
+            TimeInterval.Month => time.AddMonths(coef),
+            TimeInterval.ThreeMonths => time.AddMonths(3 * coef),
+            TimeInterval.SixMonths => time.AddMonths(6 * coef),
 
-            TimeIntervalCorrect.Year => time.AddYears(coef),
+            TimeInterval.Year => time.AddYears(coef),
 
-            TimeIntervalCorrect.Custom or TimeIntervalCorrect.FromFolder => time.AddTicks(Ticks * coef),
-            TimeIntervalCorrect.Never or TimeIntervalCorrect.Forever => DateTime.MaxValue,
+            TimeInterval.Custom or TimeInterval.FromFolder => time.AddTicks(Ticks * coef),
+            TimeInterval.Never or TimeInterval.Forever => DateTime.MaxValue,
 
             _ => throw new NotImplementedException(),
         };

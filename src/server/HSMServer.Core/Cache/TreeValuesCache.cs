@@ -413,8 +413,8 @@ namespace HSMServer.Core.Cache
             {
                 Id = product.Id,
                 TTL = SetDefault(product.Settings.TTL, new TimeIntervalModel(0L)),
-                KeepHistory = SetDefault(product.Settings.KeepHistory, new TimeIntervalModel(TimeIntervalCorrect.Month, 0L)),
-                SelfDestroy = SetDefault(product.Settings.SelfDestroy, new TimeIntervalModel(TimeIntervalCorrect.Month, 0L)),
+                KeepHistory = SetDefault(product.Settings.KeepHistory, new TimeIntervalModel(TimeInterval.Month, 0L)),
+                SelfDestroy = SetDefault(product.Settings.SelfDestroy, new TimeIntervalModel(TimeInterval.Month, 0L)),
             };
 
             if (update.TTL != null || update.RestoreInterval != null ||

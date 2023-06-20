@@ -1,6 +1,6 @@
 ﻿using HSMServer.Model;
 using System;
-using CoreTimeInterval = HSMServer.Core.Model.TimeInterval;
+using CoreTimeInterval = HSMServer.Core.Model.OldTimeInterval;
 
 namespace HSMServer.Extensions
 {

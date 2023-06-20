@@ -6,7 +6,7 @@ using Microsoft.AspNetCore.Mvc.Rendering;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using CoreTimeInterval = HSMServer.Core.Model.TimeInterval;
+using CoreTimeInterval = HSMServer.Core.Model.OldTimeInterval;
 
 namespace HSMServer.Model
 {
