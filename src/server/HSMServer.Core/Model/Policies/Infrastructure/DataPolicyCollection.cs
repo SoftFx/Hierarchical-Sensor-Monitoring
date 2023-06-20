@@ -78,8 +78,7 @@ namespace HSMServer.Core.Model.Policies
 
         protected override bool CalculateStorageResult(T value)
         {
-            if (!PolicyResult.IsOk)
-                PolicyResult = new(_sensor.Id);
+            PolicyResult = new(_sensor.Id);
 
             foreach (var (_, policy) in _storage)
                 if (!policy.Validate(value, _sensor))
