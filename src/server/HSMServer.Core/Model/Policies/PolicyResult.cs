@@ -17,7 +17,7 @@ namespace HSMServer.Core.Model
 
         public bool IsOk => _alerts.Count == 0;
 
-        public List<string> Icons => _alerts.Keys.Select(k => k.icon).ToList();
+        public List<(string icon, int count)> Icons => _alerts.Select(a => (a.Key.icon, a.Value.count)).ToList();
 
 
         public PolicyResult()
@@ -45,6 +45,19 @@ namespace HSMServer.Core.Model
                 _alerts[key] = (alert.count + 1, comment);
             else
                 _alerts.Add(key, (1, comment));
+        }
+
+        internal void RemoveAlert(DataPolicy policy)
+        {
+            var key = policy.AlertKey;
+
+            if (_alerts.TryGetValue(key, out var alert))
+            {
+                if (alert.count > 1)
+                    _alerts[key] = (alert.count - 1, policy.AlertComment);
+                else
+                    _alerts.Remove(key);
+            }
         }
     }
 }

@@ -65,12 +65,12 @@ namespace HSMServer.Model.TreeViewModel
                 DataAlerts[Type] = model.DataPolicies.Select(p => BuildAlert(p, model)).ToList();
 
             AlertIcons.Clear();
-            foreach (var icon in model.PolicyResult.Icons)
+            foreach (var (icon, count) in model.PolicyResult.Icons)
             {
                 if (!AlertIcons.ContainsKey(icon))
                     AlertIcons.TryAdd(icon, 0);
 
-                AlertIcons[icon]++;
+                AlertIcons[icon] += count;
             }
         }
 
