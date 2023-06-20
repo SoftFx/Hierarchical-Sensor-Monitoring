@@ -8,7 +8,6 @@ namespace HSMServer.Core.Model.NodeSettings
     {
         internal SettingProperty ParentProperty { get; set; }
 
-        //public abstract Guid PolicyGuid { get; }
 
         public abstract bool IsEmpty { get; }
 

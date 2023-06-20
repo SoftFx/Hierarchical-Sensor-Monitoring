@@ -1,5 +1,4 @@
 using HSMDatabase.AccessManager.DatabaseEntities;
-using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
@@ -37,22 +36,6 @@ namespace HSMServer.Core.Model.NodeSettings
         {
             foreach (var (policyType, property) in _properties)
                 property.ParentProperty = parentCollection._properties[policyType];
-        }
-
-        internal bool HasUpdateTimeout(DateTime? receivingTime)
-        {
-            //var oldResult = Result;
-
-            //Result -= ExpectedUpdate.Policy.Fail;
-
-            //if (!receivingTime.HasValue)
-            //    return false;
-
-            //Result += ExpectedUpdate.Policy.Validate(receivingTime.Value);
-
-            //return Result != oldResult;
-
-            return false;
         }
 
         internal Dictionary<string, TimeIntervalEntity> ToEntity() =>

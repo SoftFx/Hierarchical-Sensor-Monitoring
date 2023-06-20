@@ -156,7 +156,7 @@ namespace HSMServer.Core.Tests.Infrastructure
             Assert.NotNull(expectedSensorValue);
 
             Assert.True(actual.HasData);
-            Assert.Equal(expectedSensorValue.ReceivingTime, actual.LastUpdateTime);
+            Assert.Equal(expectedSensorValue.ReceivingTime, actual.LastUpdate);
 
             Assert.Equal(expectedSensorValue.Status, actual.Status?.Status);
             if (expectedSensorValue.Status != SensorStatus.Ok)
@@ -193,7 +193,7 @@ namespace HSMServer.Core.Tests.Infrastructure
             TestImmutableSensorData(expected, actual);
 
             AssertModels(expected.LastValue, actual.LastValue);
-            Assert.Equal(expected.LastUpdateTime, actual.LastUpdateTime);
+            Assert.Equal(expected.LastUpdate, actual.LastUpdate);
             Assert.Equal(expected.HasData, actual.HasData);
         }
 

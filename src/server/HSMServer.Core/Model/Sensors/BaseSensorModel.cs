@@ -50,10 +50,10 @@ namespace HSMServer.Core.Model
 
         public PolicyResult PolicyResult => Policies.PolicyResult;
 
-        public bool ShouldDestroy => !(Settings.SelfDestroy.Value?.TimeIsUp(LastUpdateTime) ?? true);
+        public bool ShouldDestroy => !(Settings.SelfDestroy.Value?.TimeIsUp(LastUpdate) ?? true);
 
 
-        public DateTime LastUpdateTime => Storage.LastValue?.ReceivingTime ?? DateTime.MinValue;
+        public DateTime LastUpdate => Storage.LastValue?.ReceivingTime ?? DateTime.MinValue;
 
         public BaseValue LastDbValue => Storage.LastDbValue;
 
@@ -81,10 +81,8 @@ namespace HSMServer.Core.Model
 
         internal abstract List<BaseValue> ConvertValues(List<byte[]> valuesBytes);
 
-        internal virtual BaseSensorModel InitDataPolicy() => this;
 
-
-        internal override bool CheckTimeout() => Settings.HasUpdateTimeout(LastValue?.ReceivingTime);
+        internal override bool CheckTimeout() => Policies.SensorTimeout(LastValue?.ReceivingTime);
 
 
         internal void Update(SensorUpdate update)
@@ -107,7 +105,6 @@ namespace HSMServer.Core.Model
             Policies.Reset();
             Storage.Clear();
         }
-
 
         internal SensorEntity ToEntity() => new()
         {

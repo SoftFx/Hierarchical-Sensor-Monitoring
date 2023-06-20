@@ -27,6 +27,8 @@ namespace HSMServer.Core.Model.Policies
             SensorResult = SensorResult.Ok;
             PolicyResult = PolicyResult.Ok;
         }
+
+        internal bool SensorTimeout(DateTime? time) => false;
     }
 
 
@@ -64,7 +66,7 @@ namespace HSMServer.Core.Model.Policies
 
 
     public sealed class SensorPolicyCollection<ValueType, PolicyType> : SensorPolicyCollection<ValueType>
-        where ValueType  : BaseValue
+        where ValueType : BaseValue
         where PolicyType : Policy<ValueType>, new()
     {
         private readonly ConcurrentDictionary<Guid, PolicyType> _storage = new();
@@ -88,7 +90,7 @@ namespace HSMServer.Core.Model.Policies
         }
 
 
-        internal override void AddPolicy<Y>(Y policy)
+        internal override void AddPolicy<T>(T policy)
         {
             if (policy is PolicyType typedPolicy)
                 _storage.TryAdd(policy.Id, typedPolicy);
@@ -123,7 +125,6 @@ namespace HSMServer.Core.Model.Policies
                     Uploaded?.Invoke(ActionType.Add, policy);
                 }
         }
-
 
         public override IEnumerator<Policy> GetEnumerator() => _storage.Values.GetEnumerator();
     }

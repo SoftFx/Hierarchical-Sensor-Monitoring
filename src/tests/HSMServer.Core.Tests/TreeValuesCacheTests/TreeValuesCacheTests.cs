@@ -625,7 +625,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             var sensor = GetSensorByIdFromCache(clearedSensorId);
 
             Assert.NotNull(sensor);
-            Assert.Equal(DateTime.MinValue, sensor.LastUpdateTime);
+            Assert.Equal(DateTime.MinValue, sensor.LastUpdate);
             Assert.Equal(default, sensor.LastValue);
             Assert.False(sensor.HasData);
 
