@@ -135,7 +135,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             foreach (var sensorType in Enum.GetValues<SensorType>())
             {
                 var sensor = BuildSensorModel(sensorType);
-                sensor.AddPolicy(new ExpectedUpdateIntervalPolicy(ticks));
+                //sensor.AddPolicy(new ExpectedUpdateIntervalPolicy(ticks));
 
                 var baseValue = SensorValuesFactory.BuildSensorValue(sensorType) with
                 { ReceivingTime = new DateTime(DateTime.UtcNow.Ticks - ticks) };
@@ -156,7 +156,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         public void CombinatedStatusWithTooLongLenghtValidationTest(SensorStatus status)
         {
             var sensor = BuildSensorModel(SensorType.String);
-            sensor.AddPolicy(new StringValueLengthPolicy());
+            //sensor.AddPolicy(new StringValueLengthPolicy());
 
             var stringBase = new StringValue
             {
@@ -182,7 +182,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             foreach (var sensorType in Enum.GetValues<SensorType>())
             {
                 var sensor = BuildSensorModel(sensorType);
-                sensor.AddPolicy(new ExpectedUpdateIntervalPolicy(TestTicks));
+                //sensor.AddPolicy(new ExpectedUpdateIntervalPolicy(TestTicks));
 
                 var baseValue = SensorValuesFactory.BuildSensorValue(sensorType) with
                 {

@@ -6,7 +6,7 @@ using Microsoft.AspNetCore.Mvc.Rendering;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using CoreTimeInterval = HSMServer.Core.Model.OldTimeInterval;
+using CoreTimeInterval = HSMServer.Core.Model.TimeInterval;
 
 namespace HSMServer.Model
 {
@@ -79,7 +79,7 @@ namespace HSMServer.Model
 
         internal TimeIntervalViewModel(TimeIntervalEntity entity, List<TimeInterval> intervals) : this(intervals)
         {
-            SetInterval((CoreTimeInterval)entity.Interval, entity.CustomPeriod);
+            SetInterval((CoreTimeInterval)entity.Interval, entity.Ticks);
 
             if (!HasParentValue)
                 IntervalItems.RemoveAt(0);
