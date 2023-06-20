@@ -1,0 +1,16 @@
+﻿@using System.Collections.Concurrent
+@using HSMServer.Extensions
+
+@model ConcurrentDictionary<string, int>
+
+
+@foreach (var (icon, count) in Model)
+{
+    <span class='tree-alert-icon'>
+        <i class='@icon.ToIcon()'></i>
+        @if (count > 1)
+        {
+            <span class='badge'>@(count > 9 ? "9+" : count)</span>
+        }
+    </span>
+}

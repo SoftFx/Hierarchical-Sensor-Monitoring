@@ -31,7 +31,7 @@ namespace HSMServer.Model.DataAlerts
 
 
         internal DataPolicyUpdate ToUpdate() =>
-            new(Id, Property, Operation, new TargetValue(TargetType.Const, Value), Core.Model.SensorStatus.Error, Comment, string.Empty);
+            new(Id, Property, Operation, new TargetValue(TargetType.Const, Value), Core.Model.SensorStatus.Ok, Comment, "↕️");
     }
 
 

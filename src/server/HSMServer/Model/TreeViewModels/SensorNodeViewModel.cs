@@ -63,6 +63,10 @@ namespace HSMServer.Model.TreeViewModel
 
             if (model is DoubleSensorModel or IntegerSensorModel or DoubleBarSensorModel or IntegerBarSensorModel)
                 DataAlerts[Type] = model.DataPolicies.Select(p => BuildAlert(p, model)).ToList();
+
+            AlertIcons.Clear();
+            foreach (var alertIcon in model.PolicyResult.Icons)
+                AlertIcons.TryAdd(alertIcon, 1);
         }
 
         private static DataAlertViewModel BuildAlert(DataPolicy policy, BaseSensorModel sensor) => policy switch

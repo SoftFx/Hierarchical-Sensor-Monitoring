@@ -1,6 +1,7 @@
 ﻿using HSMServer.Core.Model.Policies;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace HSMServer.Core.Model
 {
@@ -15,6 +16,8 @@ namespace HSMServer.Core.Model
         public Guid SensorId { get; }
 
         public bool IsOk => _alerts.Count == 0;
+
+        public List<string> Icons => _alerts.Keys.Select(k => k.icon).ToList();
 
 
         public PolicyResult()

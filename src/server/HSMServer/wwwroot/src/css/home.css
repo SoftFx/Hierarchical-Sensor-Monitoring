@@ -256,7 +256,21 @@ img .tree-png-icon {
 .badge-light {
     background-color: rgba(175,184,193,0.2);
     color: black;
-} 
+}
+
+.tree-alert-icon {
+    position: relative;
+    margin-right: 3px;
+}
+
+.tree-alert-icon span {
+    position: absolute;
+    padding: 0px;
+    top: -2px;
+    left: 9px;
+    display: block;
+    color: black;
+}
 
 .placeholder-wrapper {
     position: relative;

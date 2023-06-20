@@ -47,12 +47,13 @@ public sealed class VisibleTreeViewModel
     
     public List<BaseShallowModel> GetUserTree()
     {
+        var products = GetUserProducts?.Invoke(_user).GetOrdered(_user);
         var folders = GetFolders?.Invoke().GetOrdered(_user).ToDictionary(k => k.Id, v => new FolderShallowModel(v, _user));
 
         var tree = new List<BaseShallowModel>(1 << 4);
         var folderTree = new List<BaseShallowModel>(1 << 4);
 
-        foreach (var product in GetUserProducts?.Invoke(_user).GetOrdered(_user))
+        foreach (var product in products)
         {
             var node = FilterNodes(product);
 
