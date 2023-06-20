@@ -5,7 +5,6 @@ using HSMServer.Core.Tests.DatabaseTests.Fixture;
 using HSMServer.Core.Tests.Infrastructure;
 using HSMServer.Core.Tests.MonitoringCoreTests.Fixture;
 using HSMServer.Model.Authentication;
-using System;
 using System.Collections.Generic;
 using System.Linq;
 using HSMServer.Extensions;

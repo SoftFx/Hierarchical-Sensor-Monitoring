@@ -7,7 +7,7 @@ namespace HSMServer.Core.Tests.DatabaseTests
     [Collection("Database collection")]
     public abstract class DatabaseCoreTestsBase<T> : IClassFixture<T> where T : DatabaseFixture
     {
-        private protected readonly DatabaseCoreManager _databaseCoreManager;
+        protected readonly DatabaseCoreManager _databaseCoreManager;
 
         protected DatabaseCoreTestsBase(DatabaseFixture fixture, DatabaseRegisterFixture dbRegisterFixture)
         {

@@ -1,28 +1,28 @@
 using HSMDatabase.AccessManager.DatabaseEntities;
-using HSMDatabase.DatabaseWorkCore;
-using HSMDatabase.Settings;
 using HSMServer.Core.DataLayer;
+using HSMServer.Core.Tests.DatabaseTests;
+using HSMServer.Core.Tests.MonitoringCoreTests.Fixture;
 using Xunit;
 
 namespace HSMDatabase.LevelDB.Tests
 {
-    public class JournalDatabaseTest 
+    public class JournalDatabaseTest : DatabaseCoreTestsBase<JournalDatabaseFixture>, IClassFixture<DatabaseRegisterFixture>
     {
         private readonly IDatabaseCore _databaseCore;
 
-        public JournalDatabaseTest()
+        public JournalDatabaseTest(JournalDatabaseFixture fixture, DatabaseRegisterFixture registerFixture) : base(fixture, registerFixture)
         {
-            _databaseCore = new DatabaseCore(new DatabaseSettings());
+            _databaseCore = _databaseCoreManager.DatabaseCore;
         }
         
         [Fact]
         public void Test1()
         {
             var guid = Guid.NewGuid();
-            
+            var key = new Key(guid, 323333);
             var journal = new JournalEntity()
             {
-                Key = new Key(guid, 323333),
+                Key = key,
                 Name = "Test1"
             };
             
@@ -30,9 +30,10 @@ namespace HSMDatabase.LevelDB.Tests
 
             var actuals = _databaseCore.GetJournals();
 
-            var actual = _databaseCore.GetJournal(new Key(guid, 123123));
+            var actual = _databaseCore.GetJournal(key);
 
-            var a = 1;
+            Assert.Equal(journal.Key, actual.Key);
+            Assert.Equal(journal.Name, actual.Name);
         }
     }
 }
