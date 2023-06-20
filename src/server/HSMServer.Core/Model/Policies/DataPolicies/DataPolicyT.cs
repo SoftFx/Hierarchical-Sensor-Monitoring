@@ -38,6 +38,7 @@ namespace HSMServer.Core.Model.Policies
             Template = update.Template;
             Target = update.Target;
             Status = update.Status;
+            Icon = update.Icon;
         }
 
         internal abstract bool Validate(T value, BaseSensorModel sensor);
