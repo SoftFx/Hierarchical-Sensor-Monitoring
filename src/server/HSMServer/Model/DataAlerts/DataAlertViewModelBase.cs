@@ -75,6 +75,8 @@ namespace HSMServer.Model.DataAlerts
 
             IconsItems = _icons.Select(i => new SelectListItem(i.ToIconUnicode(), i)).ToList();
             StatusesItems = _statuses.Select(s => new SelectListItem($"{s.ToSelectIcon()} {s.GetDisplayName()}", $"{s}")).ToList();
+
+            Status = SensorStatus.Ok;
         }
     }
 
