@@ -10,6 +10,8 @@ namespace HSMServer.Model.DataAlerts
     {
         public override string DisplayComment { get; }
 
+        protected override List<string> Icons { get; } = AlertPredefined.BorderIcons;
+
         protected override List<string> Properties { get; } = new() { nameof(BaseValue<U>.Value) };
 
         protected override List<PolicyOperation> Actions { get; } = new()
