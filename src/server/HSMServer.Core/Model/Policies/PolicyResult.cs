@@ -17,7 +17,7 @@ namespace HSMServer.Core.Model
 
         public bool IsOk => _alerts.Count == 0;
 
-        public List<string> Icons => _alerts.Keys.Select(k => k.icon).ToList();
+        public List<(string icon, int count)> Icons => _alerts.Select(a => (a.Key.icon, a.Value.count)).ToList();
 
 
         public PolicyResult()

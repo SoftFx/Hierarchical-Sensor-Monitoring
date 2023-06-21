@@ -123,8 +123,11 @@ namespace HSMServer.Core.Model.Policies
                 }
                 else
                 {
-                    _storage.TryRemove(id, out var oldPolicy);
-                    Uploaded?.Invoke(ActionType.Delete, oldPolicy);
+                    if (_storage.TryRemove(id, out var oldPolicy))
+                    {
+                        CalculateStorageResult((T)_sensor.LastValue);
+                        Uploaded?.Invoke(ActionType.Delete, oldPolicy);
+                    }
                 }
             }
 

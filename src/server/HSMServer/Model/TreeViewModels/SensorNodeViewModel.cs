@@ -65,8 +65,13 @@ namespace HSMServer.Model.TreeViewModel
                 DataAlerts[Type] = model.Policies.Select(p => BuildAlert(p, model)).ToList();
 
             AlertIcons.Clear();
-            foreach (var alertIcon in model.PolicyResult.Icons)
-                AlertIcons.TryAdd(alertIcon, 1);
+            foreach (var (icon, count) in model.PolicyResult.Icons)
+            {
+                if (!AlertIcons.ContainsKey(icon))
+                    AlertIcons.TryAdd(icon, 0);
+
+                AlertIcons[icon] += count;
+            }
         }
 
         private static DataAlertViewModel BuildAlert(Policy policy, BaseSensorModel sensor) => policy switch

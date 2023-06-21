@@ -260,7 +260,6 @@ img .tree-png-icon {
 
 .tree-alert-icon {
     position: relative;
-    margin-right: 3px;
 }
 
 .tree-alert-icon span {
@@ -300,4 +299,13 @@ img .tree-png-icon {
 
 .meta-info-interval {
     width: 17rem;
+}
+
+.icons-select {
+    font-family: 'FontAwesome', 'Second Font name';
+    padding: 0 1rem 0 0;
+}
+
+.icons-select option {
+    text-align: center;
 }

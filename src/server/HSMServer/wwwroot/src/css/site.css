@@ -181,11 +181,15 @@ input.input-validation-error {
 }
 
 .w-10 {
-    width: 10%;
+    width: 10% !important;
 }
 
 .w-20 {
-    width: 20%;
+    width: 20% !important;
+}
+
+.w-40 {
+    width: 40% !important;
 }
 
 .no-transition {
