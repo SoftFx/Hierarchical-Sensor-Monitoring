@@ -39,10 +39,9 @@ namespace HSMServer.Model.DataAlerts
 
     public abstract class DataAlertViewModelBase : DataAlertViewModel
     {
-        private readonly List<string> _icons = new() { "⬆️", "⏫", "🔼", "↕️", "🔽", "⏬", "⬇️" };
-
-
         public abstract string DisplayComment { get; }
+
+        protected abstract List<string> Icons { get; }
 
         protected abstract List<string> Properties { get; }
 
@@ -64,9 +63,8 @@ namespace HSMServer.Model.DataAlerts
         public DataAlertViewModelBase()
         {
             PropertiesItems = Properties.Select(p => new SelectListItem(p, p)).ToList();
+            IconsItems = Icons.Select(i => new SelectListItem(i.ToIconUnicode(), i)).ToList();
             ActionsItems = Actions.Select(a => new SelectListItem(a.GetDisplayName(), $"{a}")).ToList();
-
-            IconsItems = _icons.Select(i => new SelectListItem(i.ToIconUnicode(), i)).ToList();
             StatusesItems = AlertPredefined.Statuses.Select(s => new SelectListItem(s.Value, $"{s.Key}")).ToList();
 
             Status = SensorStatus.Ok;

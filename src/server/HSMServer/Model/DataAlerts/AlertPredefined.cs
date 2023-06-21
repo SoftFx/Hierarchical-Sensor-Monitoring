@@ -13,5 +13,7 @@ namespace HSMServer.Model.DataAlerts
             { SensorStatus.Warning, $"set {SensorStatus.Warning.ToSelectIcon()} {SensorStatus.Warning.GetDisplayName()}" },
             { SensorStatus.Error, $"set {SensorStatus.Error.ToSelectIcon()} {SensorStatus.Error.GetDisplayName()}" },
         };
+
+        public static List<string> BorderIcons { get; } = new() { "⬆️", "⏫", "🔼", "↕️", "🔽", "⏬", "⬇️" };
     }
 }
