@@ -46,18 +46,5 @@ namespace HSMServer.Core.Model
             else
                 _alerts.Add(key, (1, comment));
         }
-
-        internal void RemoveAlert(DataPolicy policy)
-        {
-            var key = policy.AlertKey;
-
-            if (_alerts.TryGetValue(key, out var alert))
-            {
-                if (alert.count > 1)
-                    _alerts[key] = (alert.count - 1, policy.AlertComment);
-                else
-                    _alerts.Remove(key);
-            }
-        }
     }
 }

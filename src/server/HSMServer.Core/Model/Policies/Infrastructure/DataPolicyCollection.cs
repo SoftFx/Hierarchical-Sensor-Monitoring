@@ -111,7 +111,7 @@ namespace HSMServer.Core.Model.Policies
                 {
                     if (_storage.TryRemove(id, out var oldPolicy))
                     {
-                        PolicyResult.RemoveAlert(policy);
+                        CalculateStorageResult((T)_sensor.LastValue);
                         Uploaded?.Invoke(ActionType.Delete, oldPolicy);
                     }
                 }
