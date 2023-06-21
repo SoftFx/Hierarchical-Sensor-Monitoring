@@ -7,12 +7,12 @@ namespace HSMServer.Core.Model.Policies
     {
         private readonly SettingProperty<TimeIntervalModel> _ttl;
 
+        public override string Icon { get; protected set; } = "⌛️";
+
 
         internal TTLPolicy(Guid sensorId, SettingProperty<TimeIntervalModel> ttlSetting) : base(sensorId)
         {
             _ttl = ttlSetting;
-
-            Icon = "⌛️";
         }
 
 

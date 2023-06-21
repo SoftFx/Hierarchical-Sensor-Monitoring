@@ -16,8 +16,6 @@ namespace HSMServer.Model.TreeViewModel
 
         public TimeIntervalViewModel ExpectedUpdateInterval { get; protected set; }
 
-        public TimeIntervalViewModel SensorRestorePolicy { get; protected set; }
-
         public TimeIntervalViewModel SavedHistoryPeriod { get; protected set; }
 
         public TimeIntervalViewModel SelfDestroyPeriod { get; protected set; }

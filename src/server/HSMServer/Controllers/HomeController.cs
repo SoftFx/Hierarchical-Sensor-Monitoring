@@ -276,7 +276,7 @@ namespace HSMServer.Controllers
                     var update = new ProductUpdate
                     {
                         Id = product.Id,
-                        RestoreInterval = restoreUpdate ? model.SensorRestorePolicy?.ToModel((product.Parent as FolderModel)?.SensorRestorePolicy) : null,
+                        //RestoreInterval = restoreUpdate ? model.SensorRestorePolicy?.ToModel((product.Parent as FolderModel)?.SensorRestorePolicy) : null,
                         TTL = expectedUpdate ? model.ExpectedUpdateInterval?.ToModel((product.Parent as FolderModel)?.ExpectedUpdateInterval) : null
                     };
 
@@ -564,7 +564,7 @@ namespace HSMServer.Controllers
                 Id = sensor.Id,
                 Description = newModel.Description ?? string.Empty,
                 TTL = newModel.ExpectedUpdateInterval.ToModel(),
-                RestoreInterval = newModel.SensorRestorePolicy.ToModel(),
+                //RestoreInterval = newModel.SensorRestorePolicy.ToModel(),
                 KeepHistory = newModel.SavedHistoryPeriod.ToModel(),
                 SelfDestroy = newModel.SelfDestroyPeriod.ToModel(),
                 DataPolicies = newModel.DataAlerts?[sensor.Type].Select(a => a.ToUpdate()).ToList() ?? new(),
@@ -678,7 +678,7 @@ namespace HSMServer.Controllers
             {
                 Id = product.Id,
                 TTL = newModel.ExpectedUpdateInterval.ToModel((product.Parent as FolderModel)?.ExpectedUpdateInterval),
-                RestoreInterval = newModel.SensorRestorePolicy.ToModel((product.Parent as FolderModel)?.SensorRestorePolicy),
+                //RestoreInterval = newModel.SensorRestorePolicy.ToModel((product.Parent as FolderModel)?.SensorRestorePolicy),
                 KeepHistory = newModel.SavedHistoryPeriod.ToModel((product.Parent as FolderModel)?.SavedHistoryPeriod),
                 SelfDestroy = newModel.SelfDestroyPeriod.ToModel((product.Parent as FolderModel)?.SelfDestroyPeriod),
                 Description = newModel.Description ?? string.Empty
@@ -708,7 +708,7 @@ namespace HSMServer.Controllers
                 Id = SensorPathHelper.DecodeGuid(newModel.EncodedId),
                 Description = newModel.Description ?? string.Empty,
                 ExpectedUpdateInterval = newModel.ExpectedUpdateInterval.ResaveCustomTicks(newModel.ExpectedUpdateInterval),
-                RestoreInterval = newModel.SensorRestorePolicy.ResaveCustomTicks(newModel.SensorRestorePolicy),
+                //RestoreInterval = newModel.SensorRestorePolicy.ResaveCustomTicks(newModel.SensorRestorePolicy),
                 SavedHistoryPeriod = newModel.SavedHistoryPeriod.ResaveCustomTicks(newModel.SavedHistoryPeriod),
                 SelfDestroy = newModel.SelfDestroyPeriod.ResaveCustomTicks(newModel.SelfDestroyPeriod),
             };

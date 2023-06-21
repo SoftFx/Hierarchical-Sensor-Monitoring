@@ -9,19 +9,16 @@ namespace HSMServer.Core.Model.Policies
         public Guid Id { get; }
 
 
-        internal protected SensorResult SensorResult { get; protected set; }
+        internal protected virtual SensorResult SensorResult { get; protected set; }
 
-        internal protected string AlertComment { get; protected set; }
-
-
-        public SensorStatus Status { get; protected set; }
-
-        public string Template { get; protected set; }
-
-        public string Icon { get; protected set; }
+        internal protected virtual string AlertComment { get; protected set; }
 
 
-        internal (string, string) AlertKey => (Icon, Template);
+        public virtual SensorStatus Status { get; protected set; }
+
+        public virtual string Template { get; protected set; }
+
+        public virtual string Icon { get; protected set; }
 
 
         public virtual PolicyOperation Operation { get; set; }
@@ -29,6 +26,9 @@ namespace HSMServer.Core.Model.Policies
         public virtual TargetValue Target { get; set; }
 
         public virtual string Property { get; set; }
+
+
+        internal (string, string) AlertKey => (Icon, Template);
 
 
         protected Policy()

@@ -41,7 +41,7 @@ namespace HSMServer.Model.Folders
             var policies = entity.ServerPolicies;
 
             ExpectedUpdateInterval = GetPolicy(policies, 0, PredefinedIntervals.ForTimeout, GetDefaultPolicy);
-            SensorRestorePolicy = GetPolicy(policies, 1, PredefinedIntervals.ForRestore, GetDefaultPolicy);
+            //SensorRestorePolicy = GetPolicy(policies, 1, PredefinedIntervals.ForRestore, GetDefaultPolicy);
             SavedHistoryPeriod = GetPolicy(policies, 2, PredefinedIntervals.ForKeepHistory, GetDefaultCleanup);
             SelfDestroyPeriod = GetPolicy(policies, 3, PredefinedIntervals.ForSelfDestory, GetDefaultCleanup);
         }
@@ -59,7 +59,7 @@ namespace HSMServer.Model.Folders
             Description = addModel.Description;
 
             ExpectedUpdateInterval = GetDefaultPolicy(PredefinedIntervals.ForTimeout);
-            SensorRestorePolicy = GetDefaultPolicy(PredefinedIntervals.ForRestore);
+            //SensorRestorePolicy = GetDefaultPolicy(PredefinedIntervals.ForRestore);
             SavedHistoryPeriod = GetDefaultCleanup(PredefinedIntervals.ForKeepHistory);
             SelfDestroyPeriod = GetDefaultCleanup(PredefinedIntervals.ForSelfDestory);
         }
@@ -74,8 +74,8 @@ namespace HSMServer.Model.Folders
 
             if (update.ExpectedUpdateInterval != null)
                 ExpectedUpdateInterval = new TimeIntervalViewModel(update.ExpectedUpdateInterval, PredefinedIntervals.ForTimeout);
-            if (update.RestoreInterval != null)
-                SensorRestorePolicy = new TimeIntervalViewModel(update.RestoreInterval, PredefinedIntervals.ForRestore);
+            //if (update.RestoreInterval != null)
+            //    SensorRestorePolicy = new TimeIntervalViewModel(update.RestoreInterval, PredefinedIntervals.ForRestore);
             if (update.SavedHistoryPeriod != null)
                 SavedHistoryPeriod = new TimeIntervalViewModel(update.SavedHistoryPeriod, PredefinedIntervals.ForKeepHistory);
             if (update.SelfDestroy != null)
@@ -111,8 +111,8 @@ namespace HSMServer.Model.Folders
 
             if (ExpectedUpdateInterval != null)
                 policies.Add(ExpectedUpdateInterval.ToEntity());
-            if (SensorRestorePolicy != null)
-                policies.Add(SensorRestorePolicy.ToEntity());
+            //if (SensorRestorePolicy != null)
+            //    policies.Add(SensorRestorePolicy.ToEntity());
             if (SavedHistoryPeriod != null)
                 policies.Add(SavedHistoryPeriod.ToEntity());
             if (SelfDestroyPeriod != null)
