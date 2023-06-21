@@ -56,7 +56,8 @@ namespace HSMServer.Core.Model
             DisplayName = entity.DisplayName;
             Description = entity.Description;
 
-            Settings.SetSettings(entity.Settings);
+            if (entity.Settings != null)
+                Settings.SetSettings(entity.Settings);
         }
 
 
