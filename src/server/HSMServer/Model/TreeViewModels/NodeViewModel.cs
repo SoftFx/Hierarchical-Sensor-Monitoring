@@ -60,7 +60,7 @@ namespace HSMServer.Model.TreeViewModel
         }
 
 
-        private static void UpdatePolicyView<T>(SettingProperty<T> property, TimeIntervalViewModel targetView) where T : TimeIntervalModel, new()
+        private static void UpdatePolicyView<T>(SettingProperty<T> property, TimeIntervalViewModel targetView) where T : TimeIntervalModel
         {
             targetView.Update(property.IsSet ? property.Value : null);
         }

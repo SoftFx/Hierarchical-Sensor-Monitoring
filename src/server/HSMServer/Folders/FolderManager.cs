@@ -235,7 +235,7 @@ namespace HSMServer.Folders
         private void ResetServerPolicyForFolderProducts()
         {
             static TimeIntervalModel IsFromFolder<T>(SettingProperty<T> property, TimeIntervalViewModel interval)
-                where T : TimeIntervalModel, new()
+                where T : TimeIntervalModel
             {
                 return property.Value.IsFromParent ? interval.ToFolderModel() : null;
             }

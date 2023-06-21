@@ -48,6 +48,9 @@ namespace HSMServer.Core.Model
 
     public class TimeIntervalModel
     {
+        public static TimeIntervalModel Never { get; } = new(TimeInterval.Never);
+
+
         public TimeInterval Interval { get; } = TimeInterval.FromParent;
 
         public long Ticks { get; }
@@ -62,13 +65,9 @@ namespace HSMServer.Core.Model
         public bool UseCustom => Interval is TimeInterval.Custom or TimeInterval.FromFolder;
 
 
-        public TimeIntervalModel() { }
+        public TimeIntervalModel(long ticks) : this(TimeInterval.Custom, ticks) { }
 
-        public TimeIntervalModel(long ticks)
-        {
-            Ticks = ticks;
-            Interval = TimeInterval.Custom;
-        }
+        public TimeIntervalModel(TimeInterval interval) : this(interval, 0L) { }
 
         public TimeIntervalModel(TimeIntervalEntity entity) : this((TimeInterval)entity.Interval, entity.Ticks) { }
 
@@ -79,9 +78,8 @@ namespace HSMServer.Core.Model
         }
 
 
-        internal bool TimeIsUp(DateTime time) =>
-            UseCustom ? (DateTime.UtcNow - time).Ticks > Ticks
-                      : DateTime.UtcNow > GetShiftedTime(time);
+        internal bool TimeIsUp(DateTime time) => UseCustom ? (DateTime.UtcNow - time).Ticks > Ticks
+                                                           : DateTime.UtcNow > GetShiftedTime(time);
 
         public DateTime GetShiftedTime(DateTime time, int coef = 1) => Interval switch
         {

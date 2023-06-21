@@ -396,31 +396,6 @@ namespace HSMServer.Core.Cache
                 _database.RemovePolicy(policyId);
         }
 
-        private void ResetServerPolicyForRootProduct(ProductModel product)
-        {
-            if (product.Parent != null || product.FolderId.HasValue)
-                return;
-
-
-            static TimeIntervalModel SetDefault(SettingProperty<TimeIntervalModel> property, TimeIntervalModel interval)
-            {
-                return property.Value.IsFromParent ? interval : null;
-            }
-
-
-            var update = new ProductUpdate
-            {
-                Id = product.Id,
-                TTL = SetDefault(product.Settings.TTL, new TimeIntervalModel(0L)),
-                KeepHistory = SetDefault(product.Settings.KeepHistory, new TimeIntervalModel(TimeInterval.Month, 0L)),
-                SelfDestroy = SetDefault(product.Settings.SelfDestroy, new TimeIntervalModel(TimeInterval.Month, 0L)),
-            };
-
-            if (update.TTL != null || update.RestoreInterval != null ||
-                update.KeepHistory != null || update.SelfDestroy != null)
-                _database.UpdateProduct(product.Update(update).ToEntity());
-        }
-
         private void UpdatesQueueNewItemsHandler(IEnumerable<StoreInfo> storeInfos)
         {
             foreach (var store in storeInfos)
@@ -566,8 +541,8 @@ namespace HSMServer.Core.Cache
                         parent.AddSubProduct(product);
                 }
 
-            foreach (var product in GetProducts()) // TODO remove after migration SelfDestroy and SavedHistoryPeriod
-                ResetServerPolicyForRootProduct(product);
+            //foreach (var product in GetProducts()) // TODO remove after migration SelfDestroy and SavedHistoryPeriod
+            //    ResetServerPolicyForRootProduct(product);
 
             _logger.Info("Links between products are built");
         }
@@ -657,7 +632,17 @@ namespace HSMServer.Core.Cache
             if (_tree.TryAdd(product.Id, product))
             {
                 if (product.Parent == null)
-                    ResetServerPolicyForRootProduct(product);
+                {
+                    var update = new ProductUpdate
+                    {
+                        Id = product.Id,
+                        TTL = new TimeIntervalModel(TimeInterval.Never),
+                        KeepHistory = new TimeIntervalModel(TimeInterval.Month),
+                        SelfDestroy = new TimeIntervalModel(TimeInterval.Month),
+                    };
+
+                    product.Update(update);
+                }
 
                 _database.AddProduct(product.ToEntity());
 
@@ -832,7 +817,7 @@ namespace HSMServer.Core.Cache
             {
                 var snaphot = _snapshot.Sensors[sensor.Id];
 
-                if (sensor.CheckTimeout() && !snaphot.IsExpired)
+                if (!snaphot.IsExpired && sensor.CheckTimeout())
                 {
                     snaphot.IsExpired = true;
                     NotifyAboutChanges(sensor);

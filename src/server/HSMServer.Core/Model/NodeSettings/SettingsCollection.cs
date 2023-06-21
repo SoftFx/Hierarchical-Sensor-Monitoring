@@ -1,11 +1,10 @@
 using HSMDatabase.AccessManager.DatabaseEntities;
-using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 
 namespace HSMServer.Core.Model.NodeSettings
 {
-    public sealed class SettingsCollection : IEnumerable<SettingProperty>
+    public sealed class SettingsCollection
     {
         private readonly Dictionary<string, SettingProperty> _properties = new();
 
@@ -19,9 +18,9 @@ namespace HSMServer.Core.Model.NodeSettings
 
         internal SettingsCollection()
         {
-            KeepHistory = Register<TimeIntervalModel>();
-            SelfDestroy = Register<TimeIntervalModel>();
-            TTL = Register<TimeIntervalModel>();
+            KeepHistory = Register<TimeIntervalModel>(nameof(KeepHistory));
+            SelfDestroy = Register<TimeIntervalModel>(nameof(SelfDestroy));
+            TTL = Register<TimeIntervalModel>(nameof(TTL));
         }
 
 
@@ -34,26 +33,21 @@ namespace HSMServer.Core.Model.NodeSettings
 
         internal void SetParentSettings(SettingsCollection parentCollection)
         {
-            foreach (var (policyType, property) in _properties)
-                property.ParentProperty = parentCollection._properties[policyType];
+            foreach (var (name, property) in _properties)
+                property.ParentProperty = parentCollection._properties[name];
         }
 
         internal Dictionary<string, TimeIntervalEntity> ToEntity() =>
             _properties.Where(p => p.Value.IsSet).ToDictionary(k => k.Key, v => v.Value.ToEntity());
 
 
-        private SettingProperty<T> Register<T>() where T : TimeIntervalModel, new()
+        private SettingProperty<T> Register<T>(string name) where T : TimeIntervalModel
         {
             var property = new SettingProperty<T>();
 
-            _properties[typeof(T).Name] = property;
+            _properties[name] = property;
 
             return property;
         }
-
-
-        public IEnumerator<SettingProperty> GetEnumerator() => _properties.Values.GetEnumerator();
-
-        IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
     }
 }
