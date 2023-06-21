@@ -54,24 +54,31 @@ namespace HSMServer.Extensions
                 CoreTimeInterval.SixMonths => TimeInterval.SixMonths,
                 CoreTimeInterval.Year => TimeInterval.Year,
                 CoreTimeInterval.FromFolder or CoreTimeInterval.FromParent => TimeInterval.FromParent,
-                CoreTimeInterval.Custom => ticks == 0L ? TimeInterval.None : ticks == DateTime.MaxValue.Ticks ? TimeInterval.Forever : TimeInterval.Custom,
-                _ => TimeInterval.None,
+                CoreTimeInterval.Never => TimeInterval.None,
+                CoreTimeInterval.Forever => TimeInterval.Forever,
+                _ => TimeInterval.Custom,
             };
 
         public static CoreTimeInterval ToCore(this TimeInterval interval, bool parentIsFolder = false) =>
             interval switch
             {
+                TimeInterval.None => CoreTimeInterval.Never,
+                TimeInterval.Forever => CoreTimeInterval.Forever,
+
                 TimeInterval.OneMinute => CoreTimeInterval.OneMinute,
                 TimeInterval.FiveMinutes => CoreTimeInterval.FiveMinutes,
                 TimeInterval.TenMinutes => CoreTimeInterval.TenMinutes,
                 TimeInterval.Hour => CoreTimeInterval.Hour,
                 TimeInterval.Day => CoreTimeInterval.Day,
                 TimeInterval.Week => CoreTimeInterval.Week,
+
                 TimeInterval.Month => CoreTimeInterval.Month,
                 TimeInterval.ThreeMonths => CoreTimeInterval.ThreeMonths,
                 TimeInterval.SixMonths => CoreTimeInterval.SixMonths,
                 TimeInterval.Year => CoreTimeInterval.Year,
+
                 TimeInterval.FromParent => parentIsFolder ? CoreTimeInterval.FromFolder : CoreTimeInterval.FromParent,
+
                 _ => CoreTimeInterval.Custom,
             };
     }

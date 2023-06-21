@@ -50,7 +50,7 @@ namespace HSMServer.Core.Model
 
         public PolicyResult PolicyResult => Policies.PolicyResult;
 
-        public bool ShouldDestroy => !(Settings.SelfDestroy.Value?.TimeIsUp(LastUpdate) ?? true);
+        public bool ShouldDestroy => Settings.SelfDestroy.Value?.TimeIsUp(LastUpdate) ?? false;
 
 
         public DateTime LastUpdate => Storage.LastValue?.ReceivingTime ?? DateTime.MinValue;
@@ -78,6 +78,8 @@ namespace HSMServer.Core.Model
         internal abstract bool TryAddValue(BaseValue value);
 
         internal abstract void AddDbValue(byte[] bytes);
+
+        internal abstract void RecalculatePolicy();
 
         internal abstract List<BaseValue> ConvertValues(List<byte[]> valuesBytes);
 

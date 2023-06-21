@@ -69,10 +69,15 @@ namespace HSMServer.Core.Model.Policies
 
         internal bool SensorTimeout(DateTime? time)
         {
-            var timeout = _ttlPolicy?.HasTimeout(time) ?? false;
+            if (_ttlPolicy is null)
+                return false;
+
+            var timeout = _ttlPolicy.HasTimeout(time);
 
             if (timeout)
                 PolicyResult = _ttlPolicy.PolicyResult;
+            else
+                PolicyResult = PolicyResult.Ok;
 
             return timeout;
         }

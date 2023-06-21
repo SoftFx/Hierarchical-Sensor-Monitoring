@@ -14,9 +14,9 @@ namespace HSMServer.Core.TreeStateSnapshot
         public bool IsDefault => History.IsDefault && !IsExpired;
 
 
-        public void SetLastUpdate(DateTime lastUpdate)
+        public void SetLastUpdate(DateTime lastUpdate, bool isExpired = false)
         {
-            IsExpired = false;
+            IsExpired = isExpired;
             History.To = lastUpdate;
         }
 

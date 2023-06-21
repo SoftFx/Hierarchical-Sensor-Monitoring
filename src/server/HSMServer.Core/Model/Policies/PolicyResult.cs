@@ -13,11 +13,11 @@ namespace HSMServer.Core.Model
         internal static PolicyResult Ok { get; } = new();
 
 
-        public Guid SensorId { get; }
+        public List<(string icon, int count)> Icons => _alerts.Select(a => (a.Key.icon, a.Value.count)).ToList();
 
         public bool IsOk => _alerts.Count == 0;
 
-        public List<(string icon, int count)> Icons => _alerts.Select(a => (a.Key.icon, a.Value.count)).ToList();
+        public Guid SensorId { get; }
 
 
         public PolicyResult()

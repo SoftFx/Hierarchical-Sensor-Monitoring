@@ -3,7 +3,6 @@ using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.DataLayer;
 using HSMServer.Core.Model;
-using HSMServer.Core.Model.NodeSettings;
 using HSMServer.Core.Model.Policies;
 using HSMServer.Core.Model.Requests;
 using HSMServer.Core.SensorsUpdatesQueue;
@@ -242,7 +241,11 @@ namespace HSMServer.Core.Cache
 
             sensor.Update(update);
 
-            _snapshot.Sensors[sensor.Id].IsExpired = sensor.CheckTimeout();
+            var timeout = sensor.CheckTimeout();
+            _snapshot.Sensors[sensor.Id].IsExpired = timeout;
+
+            if (!timeout)
+                sensor.RecalculatePolicy();
 
             _database.UpdateSensor(sensor.ToEntity());
             NotifyAboutChanges(sensor);
@@ -581,7 +584,6 @@ namespace HSMServer.Core.Cache
                     sensor.Policies.ApplyPolicies(entity.Policies, policies);
 
                     _sensors.TryAdd(sensor.Id, sensor);
-
                     SubscribeSensorToPolicyUpdate(sensor);
                 }
                 catch (Exception ex)
@@ -791,7 +793,7 @@ namespace HSMServer.Core.Cache
                 if (value is not null && _sensors.TryGetValue(sensorId, out var sensor))
                 {
                     sensor.AddDbValue(value);
-                    _snapshot.Sensors[sensorId].History.To = sensor.LastValue.ReceivingTime;
+                    _snapshot.Sensors[sensorId].SetLastUpdate(sensor.LastValue.ReceivingTime, sensor.CheckTimeout());
                 }
 
             if (!_snapshot.IsFinal)

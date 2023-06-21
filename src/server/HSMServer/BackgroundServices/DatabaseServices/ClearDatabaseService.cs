@@ -44,11 +44,11 @@ namespace HSMServer.BackgroundServices
             {
                 var id = sensor.Id;
 
-                _logger.Info("Start removing: {id} product {product} path {path}", id, sensor.RootProductName, sensor.Path);
+                _logger.Info("Start removing: {id} {product}/{path}", id, sensor.RootProductName, sensor.Path);
 
                 _cache.RemoveSensor(id);
 
-                _logger.Info("Stop removing: {id} product {product} path {path}", id, sensor.RootProductName, sensor.Path);
+                _logger.Info("Stop removing: {id} {product}/{path}", id, sensor.RootProductName, sensor.Path);
             }
         }
 
@@ -58,11 +58,11 @@ namespace HSMServer.BackgroundServices
             {
                 var id = sensor.Id;
 
-                _logger.Info("Start clear: {id} product {product} path {path}", id, sensor.RootProductName, sensor.Path);
+                _logger.Info("Start clear: {id} {product}/{path}", id, sensor.RootProductName, sensor.Path);
 
                 _cache.CheckSensorHistory(id);
 
-                _logger.Info("Stop clear: {id} product {product} path {path}", id, sensor.RootProductName, sensor.Path);
+                _logger.Info("Stop clear: {id} {product}/{path}", id, sensor.RootProductName, sensor.Path);
             }
         }
     }
