@@ -13,7 +13,7 @@
     <input class="d-none" asp-for="EntityId" value="@Model.EntityId" />
 
     <div id="dataAlertLabel_@Model.Id" class="ms-3 @(Model.IsModify ? "d-none" : string.Empty)">
-        If <b>@Model.Property @Model.Operation.GetDisplayName() @Model.Value</b> then send <i class='@Model.Icon.ToIconClass()'></i> with message <i>@Model.DisplayComment</i> and set @Model.Status.ToIconStatus()
+        If <b>@Model.Property @Model.Operation.GetDisplayName() @Model.Value</b> then send <i class='@Model.Icon.ToIconClass()'></i> with message <i>@Model.DisplayComment</i> and @AlertPredefined.Statuses[Model.Status] sensor status
     </div>
 
     <div id="dataAlertInputGroupd_@Model.Id" class="input-group mb-1 @(!Model.IsModify ? "d-none" : string.Empty)">
@@ -23,7 +23,7 @@
         <input type="text" class="form-control" placeholder="value" asp-for="Value" value="@Model.Value" required>
 
         <label class="input-group-text">then send</label>
-        <select class="form-select icons-select" asp-for="Icon">
+        <select class="form-select icons-select w-10" asp-for="Icon">
             @foreach (var item in Model.IconsItems)
             {
                 <option value="@item.Value">@Html.Raw(item.Text)</option>
@@ -33,8 +33,9 @@
         <label class="input-group-text">with</label>
         <input type="text" class="form-control w-40" placeholder="custom comment" asp-for="Comment" value="@Model.Comment" required>
 
-        <label class="input-group-text">and set</label>
-        <select class="form-select" asp-for="Status" asp-items="@Model.StatusesItems"></select>
+        <label class="input-group-text">and</label>
+        <select class="form-select w-20" asp-for="Status" asp-items="@Model.StatusesItems"></select>
+        <label class="input-group-text">sensor status</label>
 
         <button id="actionButton" class="btn" data-bs-toggle="dropdown" data-bs-auto-close="true" aria-haspopup="true" aria-expanded="false">
             <i class="fa-solid fa-ellipsis-vertical button-link"></i>
