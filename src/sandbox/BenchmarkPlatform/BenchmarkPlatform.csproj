@@ -10,4 +10,8 @@
     <PackageReference Include="BenchmarkDotNet.Annotations" Version="0.13.1" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\..\database\HSMDatabase.AccessManager\HSMDatabase.AccessManager.csproj" />
+  </ItemGroup>
+
 </Project>
