@@ -32,6 +32,7 @@ namespace HSMServer.Extensions
             Client.SensorStatus.Warning => "️🟡",
             Client.SensorStatus.Error => "🔴",
             Client.SensorStatus.OffTime => "⚪️",
+            Client.SensorStatus.Empty => "🔘"
         };
     }
 }
