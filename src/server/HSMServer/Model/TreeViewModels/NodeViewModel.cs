@@ -8,11 +8,11 @@ namespace HSMServer.Model.TreeViewModel
 {
     public enum SensorStatus
     {
+        Empty,
         OffTime,
         Ok,
         Warning,
-        Error,
-        Empty,
+        Error
     }
 
 

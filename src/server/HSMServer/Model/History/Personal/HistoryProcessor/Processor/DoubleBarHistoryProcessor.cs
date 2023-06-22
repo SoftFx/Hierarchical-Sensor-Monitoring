@@ -29,6 +29,7 @@ namespace HSMServer.Model.History
               Mean = summary.Mean,
               Percentiles = summary.Percentiles,
               Time = summary.CloseTime,
+              ReceivingTime = summary.CloseTime,
           };
 
         protected override double Average(double value1, double value2) =>
