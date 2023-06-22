@@ -4,8 +4,8 @@ using NLog;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
 using System.Text.Json;
+using HSMDatabase.AccessManager.DatabaseEntities;
 
 namespace HSMDatabase.LevelDB.DatabaseImplementations
 {
@@ -54,7 +54,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             }
         }
 
-        public void PutJournalValue(byte[] key, object value)
+        public void PutJournalValue(byte[] key, JournalEntity value)
         {
             try
             {
@@ -63,7 +63,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             }
             catch (Exception e)
             {
-                _logger.Error(e, $"Failed to write data for {key.GetString()}");
+                _logger.Error(e, $"Failed to write data for {value.Id.Id}");
             }
         }
 

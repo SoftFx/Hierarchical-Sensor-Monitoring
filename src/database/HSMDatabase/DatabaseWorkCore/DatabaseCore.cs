@@ -48,6 +48,7 @@ namespace HSMDatabase.DatabaseWorkCore
 
 
         private delegate IEnumerable<byte[]> GetValuesFunc(ISensorValuesDatabase db);
+        private delegate IEnumerable<byte[]> GetJournalValuesFunc(IJournalValuesDatabase db);
 
 
         public DatabaseCore(IDatabaseSettings dbSettings = null)
@@ -156,6 +157,14 @@ namespace HSMDatabase.DatabaseWorkCore
 
             dbs.PutSensorValue(key, valueEntity.Value);
         }
+        
+        public void AddJournalValue(JournalEntity valueEntity)
+        {
+            var dbs = _journalValuesDatabases.GetNewestDatabases(valueEntity.Id.Time);
+            var key = valueEntity.Id.GetBytes();
+
+            dbs.PutJournalValue(key, valueEntity);
+        }
 
         public List<SensorEntity> GetAllSensors()
         {
@@ -190,6 +199,56 @@ namespace HSMDatabase.DatabaseWorkCore
             }
 
             return GetSensorValuesPage(databases, count, getValues);
+        }
+        
+        public IAsyncEnumerable<List<byte[]>> GetJournalValuesPage(Guid sensorId, DateTime from, DateTime to, int count)
+        {
+            var fromTicks = from.Ticks;
+            var toTicks = to.Ticks;
+
+            var fromBytes = new Key(sensorId, fromTicks).GetBytes();
+            var toBytes = new Key(sensorId, toTicks).GetBytes();
+
+            var databases = _journalValuesDatabases.Where(db => db.IsInclude(fromTicks, toTicks)).ToList();
+            GetJournalValuesFunc getValues = (db) => db.GetValuesFrom(fromBytes, toBytes);
+
+            if (count < 0)
+            {
+                databases.Reverse();
+                getValues = (db) => db.GetValuesTo(fromBytes, toBytes);
+            }
+
+            return GetJournalValuesPage(databases, count, getValues);
+        }
+        
+        private async IAsyncEnumerable<List<byte[]>> GetJournalValuesPage(List<IJournalValuesDatabase> databases, int count, GetJournalValuesFunc getValues)
+        {
+            var result = new List<byte[]>(SensorValuesPageCount);
+            var totalCount = 0;
+
+            foreach (var database in databases)
+            {
+                foreach (var value in getValues(database))
+                {
+                    result.Add(value);
+                    totalCount++;
+
+                    if (result.Count == SensorValuesPageCount)
+                    {
+                        yield return result;
+
+                        result.Clear();
+                    }
+
+                    if (Math.Abs(count) == totalCount)
+                    {
+                        yield return result;
+                        yield break;
+                    }
+                }
+            }
+
+            yield return result;
         }
 
         private async IAsyncEnumerable<List<byte[]>> GetSensorValuesPage(List<ISensorValuesDatabase> databases, int count, GetValuesFunc getValues)

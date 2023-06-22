@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using HSMDatabase.AccessManager.DatabaseEntities;
 
 namespace HSMDatabase.AccessManager
 {
@@ -44,7 +45,7 @@ namespace HSMDatabase.AccessManager
 
         void FillLatestValues(Dictionary<byte[], (long from, byte[] latestValue)> keyValuePairs);
 
-        void PutJournalValue(byte[] key, object value);
+        void PutJournalValue(byte[] key, JournalEntity value);
 
         void RemoveJournalValues(byte[] from, byte[] to);
 
