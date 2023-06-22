@@ -57,14 +57,12 @@ namespace HSMDatabase.LevelDB.Tests
             }
         }
         
-        [Theory]
-        [InlineData(5)]
-        [InlineData(11)]
-        public async Task GetValues_Count_Test(int sensorsCount = 5)
+        [Fact]
+        public async Task GetValues_Count_Test()
         {
-            const int historyValuesCount = 101;
+            const int historyValuesCount = 11;
             var sensorId = Guid.NewGuid();
-            var journals = GenerateJournalEntities(sensorId, sensorsCount);
+            var journals = GenerateJournalEntities(sensorId, historyValuesCount);
 
             foreach (var journal in journals)
             {
@@ -72,11 +70,11 @@ namespace HSMDatabase.LevelDB.Tests
             }
 
             var actualJournals = (await _databaseCore.GetJournalValuesPage(sensorId, DateTime.MinValue, DateTime.MaxValue, historyValuesCount)
-                .Flatten()).Select(x => JsonSerializer.Deserialize<JournalEntity>(x)).OrderBy(x => x.Id.Time).ToList();
+                .Flatten()).Select(x => JsonSerializer.Deserialize<JournalEntity>(x)).ToList();
             
             Assert.Equal(journals.Count, actualJournals.Count);
 
-            for (int i = 0; i < sensorsCount; i++)
+            for (int i = 0; i < historyValuesCount; i++)
             {
                 var actual = actualJournals[i];
                 var expected = journals[i];
