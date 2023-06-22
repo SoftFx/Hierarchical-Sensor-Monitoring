@@ -157,14 +157,7 @@ namespace HSMDatabase.DatabaseWorkCore
 
             dbs.PutSensorValue(key, valueEntity.Value);
         }
-        
-        public void AddJournalValue(JournalEntity valueEntity)
-        {
-            var dbs = _journalValuesDatabases.GetNewestDatabases(valueEntity.Id.Time);
-            var key = valueEntity.Id.GetBytes();
 
-            dbs.PutJournalValue(key, valueEntity);
-        }
 
         public List<SensorEntity> GetAllSensors()
         {
@@ -199,56 +192,6 @@ namespace HSMDatabase.DatabaseWorkCore
             }
 
             return GetSensorValuesPage(databases, count, getValues);
-        }
-        
-        public IAsyncEnumerable<List<byte[]>> GetJournalValuesPage(Guid sensorId, DateTime from, DateTime to, int count)
-        {
-            var fromTicks = from.Ticks;
-            var toTicks = to.Ticks;
-
-            var fromBytes = new Key(sensorId, fromTicks).GetBytes();
-            var toBytes = new Key(sensorId, toTicks).GetBytes();
-
-            var databases = _journalValuesDatabases.Where(db => db.IsInclude(fromTicks, toTicks)).ToList();
-            GetJournalValuesFunc getValues = (db) => db.GetValuesFrom(fromBytes, toBytes);
-
-            if (count < 0)
-            {
-                databases.Reverse();
-                getValues = (db) => db.GetValuesTo(fromBytes, toBytes);
-            }
-
-            return GetJournalValuesPage(databases, count, getValues);
-        }
-        
-        private async IAsyncEnumerable<List<byte[]>> GetJournalValuesPage(List<IJournalValuesDatabase> databases, int count, GetJournalValuesFunc getValues)
-        {
-            var result = new List<byte[]>(SensorValuesPageCount);
-            var totalCount = 0;
-
-            foreach (var database in databases)
-            {
-                foreach (var value in getValues(database))
-                {
-                    result.Add(value);
-                    totalCount++;
-
-                    if (result.Count == SensorValuesPageCount)
-                    {
-                        yield return result;
-
-                        result.Clear();
-                    }
-
-                    if (Math.Abs(count) == totalCount)
-                    {
-                        yield return result;
-                        yield break;
-                    }
-                }
-            }
-
-            yield return result;
         }
 
         private async IAsyncEnumerable<List<byte[]>> GetSensorValuesPage(List<ISensorValuesDatabase> databases, int count, GetValuesFunc getValues)
@@ -330,8 +273,7 @@ namespace HSMDatabase.DatabaseWorkCore
             _environmentDatabase.PutFolder(entity);
         }
 
-        public void UpdateFolder(FolderEntity entity) =>
-            _environmentDatabase.PutFolder(entity);
+        public void UpdateFolder(FolderEntity entity) => _environmentDatabase.PutFolder(entity);
 
         public void RemoveFolder(string id)
         {
@@ -367,8 +309,7 @@ namespace HSMDatabase.DatabaseWorkCore
             _environmentDatabase.PutProduct(entity);
         }
 
-        public void UpdateProduct(ProductEntity entity) =>
-            _environmentDatabase.PutProduct(entity);
+        public void UpdateProduct(ProductEntity entity) => _environmentDatabase.PutProduct(entity);
 
         public void RemoveProduct(string id)
         {
@@ -376,8 +317,7 @@ namespace HSMDatabase.DatabaseWorkCore
             _environmentDatabase.RemoveProductFromList(id);
         }
 
-        public ProductEntity GetProduct(string id) =>
-            _environmentDatabase.GetProduct(id);
+        public ProductEntity GetProduct(string id) => _environmentDatabase.GetProduct(id);
 
         public List<ProductEntity> GetAllProducts()
         {
@@ -414,8 +354,7 @@ namespace HSMDatabase.DatabaseWorkCore
 
         public void UpdateAccessKey(AccessKeyEntity entity) => AddAccessKey(entity);
 
-        public AccessKeyEntity GetAccessKey(Guid id) =>
-            _environmentDatabase.GetAccessKey(id.ToString());
+        public AccessKeyEntity GetAccessKey(Guid id) => _environmentDatabase.GetAccessKey(id.ToString());
 
         public List<AccessKeyEntity> GetAccessKeys()
         {
@@ -436,52 +375,78 @@ namespace HSMDatabase.DatabaseWorkCore
 
         #region Environment database : User
 
-        public void AddUser(UserEntity entity) =>
-            _environmentDatabase.AddUser(entity);
+        public void AddUser(UserEntity entity) => _environmentDatabase.AddUser(entity);
 
-        public void RemoveUser(UserEntity entity) =>
-            _environmentDatabase.RemoveUser(entity);
+        public void RemoveUser(UserEntity entity) => _environmentDatabase.RemoveUser(entity);
 
         public void UpdateUser(UserEntity entity) => AddUser(entity);
 
         public List<UserEntity> GetUsers() => _environmentDatabase.ReadUsers().ToList();
 
-        public List<UserEntity> GetUsersPage(int page, int pageSize) =>
-            _environmentDatabase.ReadUsersPage(page, pageSize).ToList();
+        public List<UserEntity> GetUsersPage(int page, int pageSize) => _environmentDatabase.ReadUsersPage(page, pageSize).ToList();
 
         #endregion
 
         #region Journal
 
-        public void AddJournal(JournalEntity journal)
+        public void AddJournalValue(JournalEntity valueEntity)
         {
-            _environmentDatabase.AddJournalKeyToList(journal.Id.GetBytes());
-            _environmentDatabase.AddJournal(journal);
+            var dbs = _journalValuesDatabases.GetNewestDatabases(valueEntity.Id.Time);
+            var key = valueEntity.Id.GetBytes();
+
+            dbs.PutJournalValue(key, valueEntity);
         }
 
-        public List<JournalEntity> GetJournals()
+        public IAsyncEnumerable<List<byte[]>> GetJournalValuesPage(Guid sensorId, DateTime from, DateTime to, int count)
         {
-            var keys = _environmentDatabase.GetAllJournalsKeys();
+            var fromTicks = from.Ticks;
+            var toTicks = to.Ticks;
 
-            var journalEntities = new List<JournalEntity>(keys.Count);
-            foreach (var key in keys)
+            var fromBytes = new Key(sensorId, fromTicks).GetBytes();
+            var toBytes = new Key(sensorId, toTicks).GetBytes();
+
+            var databases = _journalValuesDatabases.Where(db => db.IsInclude(fromTicks, toTicks)).ToList();
+            GetJournalValuesFunc getValues = (db) => db.GetValuesFrom(fromBytes, toBytes);
+
+            if (count < 0)
             {
-                var journal = _environmentDatabase.GetJournal(Key.FromBytes(key));
-                if (journal != null)
-                    journalEntities.Add(journal);
+                databases.Reverse();
+                getValues = (db) => db.GetValuesTo(fromBytes, toBytes);
             }
 
-            return journalEntities;
+            return GetJournalValuesPage(databases, count, getValues);
         }
 
-        public JournalEntity GetJournal(Key key) => _environmentDatabase.GetJournal(key);
-        
-        public void RemoveJournal(Key key)
+        private async IAsyncEnumerable<List<byte[]>> GetJournalValuesPage(List<IJournalValuesDatabase> databases, int count, GetJournalValuesFunc getValues)
         {
-            _environmentDatabase.RemoveJournal(key);
-            _environmentDatabase.RemoveJournalFromList(key);
+            var result = new List<byte[]>(SensorValuesPageCount);
+            var totalCount = 0;
+
+            foreach (var database in databases)
+            {
+                foreach (var value in getValues(database))
+                {
+                    result.Add(value);
+                    totalCount++;
+
+                    if (result.Count == SensorValuesPageCount)
+                    {
+                        yield return result;
+
+                        result.Clear();
+                    }
+
+                    if (Math.Abs(count) == totalCount)
+                    {
+                        yield return result;
+                        yield break;
+                    }
+                }
+            }
+
+            yield return result;
         }
-        
+
         #endregion
 
         public void Dispose()
