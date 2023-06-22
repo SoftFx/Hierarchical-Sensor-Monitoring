@@ -79,6 +79,8 @@ namespace HSMServer.Core.Model.Policies
             else
                 PolicyResult = PolicyResult.Ok;
 
+            SensorExpired?.Invoke(_sensor, timeout);
+
             return timeout;
         }
     }

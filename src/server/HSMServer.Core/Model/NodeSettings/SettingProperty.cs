@@ -17,7 +17,7 @@ namespace HSMServer.Core.Model.NodeSettings
         public Action<ActionType, TimeIntervalModel> Uploaded;
 
 
-        internal abstract void SetValue(TimeIntervalModel policy);
+        internal abstract bool TrySetValue(TimeIntervalModel policy);
 
         internal abstract TimeIntervalEntity ToEntity();
     }
@@ -37,8 +37,11 @@ namespace HSMServer.Core.Model.NodeSettings
         public T Value => _curValue ?? ((SettingProperty<T>)ParentProperty)?.Value ?? _emptyValue;
 
 
-        internal override void SetValue(TimeIntervalModel update)
+        internal override bool TrySetValue(TimeIntervalModel update)
         {
+            if (update is null)
+                return false;
+
             var action = ActionType.Add;
             var newValue = (T)update;
 
@@ -58,9 +61,11 @@ namespace HSMServer.Core.Model.NodeSettings
             else if (!newValue.IsFromParent)
                 _curValue = newValue;
             else
-                return;
+                return true;
 
             Uploaded?.Invoke(action, newValue);
+
+            return true;
         }
 
         internal override TimeIntervalEntity ToEntity() => _curValue?.ToEntity();

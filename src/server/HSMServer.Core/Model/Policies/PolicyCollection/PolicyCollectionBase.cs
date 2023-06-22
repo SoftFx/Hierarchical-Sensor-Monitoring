@@ -10,8 +10,10 @@ namespace HSMServer.Core.Model.Policies
         internal abstract IEnumerable<Guid> Ids { get; }
 
 
-        internal abstract void AddPolicy<T>(T policy) where T : Policy;
+        internal Action<BaseSensorModel, bool> SensorExpired;
 
+
+        internal abstract void AddPolicy<T>(T policy) where T : Policy;
 
         internal void ApplyPolicies(List<string> policyIds, Dictionary<string, Policy> allPolicies)
         {

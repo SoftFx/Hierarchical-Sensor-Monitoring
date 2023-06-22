@@ -37,8 +37,6 @@ namespace HSMServer.Core.Model
         {
             Id = Guid.NewGuid();
             CreationDate = DateTime.UtcNow;
-
-            Settings.TTL.Uploaded += (_, _) => CheckTimeout();
         }
 
         protected BaseNodeModel(string name, Guid? authorId) : this()
@@ -77,14 +75,11 @@ namespace HSMServer.Core.Model
         {
             Description = update.Description ?? Description;
 
-            if (update.TTL != null)
-                Settings.TTL.SetValue(update.TTL);
+            Settings.KeepHistory.TrySetValue(update.KeepHistory);
+            Settings.SelfDestroy.TrySetValue(update.SelfDestroy);
 
-            if (update.KeepHistory != null)
-                Settings.KeepHistory.SetValue(update.KeepHistory);
-
-            if (update.SelfDestroy != null)
-                Settings.SelfDestroy.SetValue(update.SelfDestroy);
+            if (Settings.TTL.TrySetValue(update.TTL))
+                CheckTimeout();
         }
     }
 }

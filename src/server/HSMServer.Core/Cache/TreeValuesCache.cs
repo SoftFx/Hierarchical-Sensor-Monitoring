@@ -113,6 +113,8 @@ namespace HSMServer.Core.Cache
                 foreach (var (sensorId, _) in product.Sensors)
                     RemoveSensor(sensorId);
 
+                product.Policies.SensorExpired -= SetExpiredSnapshot;
+
                 product.Parent?.SubProducts.TryRemove(productId, out _);
                 _database.RemoveProduct(product.Id.ToString());
 
@@ -221,12 +223,9 @@ namespace HSMServer.Core.Cache
             return key;
         }
 
-        public AccessKeyModel UpdateAccessKeyState(Guid id, KeyState updatedState)
+        public AccessKeyModel UpdateAccessKeyState(Guid id, KeyState newState)
         {
-            if (!_keys.TryGetValue(id, out var key))
-                return null;
-
-            return UpdateAccessKey(new AccessKeyUpdate(key.Id, updatedState));
+            return !_keys.TryGetValue(id, out var key) ? null : UpdateAccessKey(new AccessKeyUpdate(key.Id, newState));
         }
 
         public AccessKeyModel GetAccessKey(Guid id) => _keys.GetValueOrDefault(id);
@@ -240,12 +239,6 @@ namespace HSMServer.Core.Cache
                 return;
 
             sensor.Update(update);
-
-            var timeout = sensor.CheckTimeout();
-            _snapshot.Sensors[sensor.Id].IsExpired = timeout;
-
-            if (!timeout)
-                sensor.RecalculatePolicy();
 
             _database.UpdateSensor(sensor.ToEntity());
             NotifyAboutChanges(sensor);
@@ -383,11 +376,13 @@ namespace HSMServer.Core.Cache
 
         private void SubscribeSensorToPolicyUpdate(BaseSensorModel sensor)
         {
+            sensor.Policies.SensorExpired += SetExpiredSnapshot;
             sensor.Policies.Uploaded += UpdatePolicy;
         }
 
         private void RemoveSensorPolicies(BaseSensorModel sensor)
         {
+            sensor.Policies.SensorExpired -= SetExpiredSnapshot;
             sensor.Policies.Uploaded -= UpdatePolicy;
 
             RemoveEntityPolicies(sensor);
@@ -525,6 +520,9 @@ namespace HSMServer.Core.Cache
             foreach (var productEntity in productEntities)
             {
                 var product = new ProductModel(productEntity);
+
+                product.Policies.SensorExpired += SetExpiredSnapshot;
+
                 product.Policies.ApplyPolicies(productEntity.Policies, policies);
 
                 _tree.TryAdd(product.Id, product);
@@ -543,9 +541,6 @@ namespace HSMServer.Core.Cache
                     if (_tree.TryGetValue(parentId, out var parent) && _tree.TryGetValue(productId, out var product))
                         parent.AddSubProduct(product);
                 }
-
-            //foreach (var product in GetProducts()) // TODO remove after migration SelfDestroy and SavedHistoryPeriod
-            //    ResetServerPolicyForRootProduct(product);
 
             _logger.Info("Links between products are built");
         }
@@ -617,6 +612,7 @@ namespace HSMServer.Core.Cache
                 if (subProduct == null)
                 {
                     subProduct = new ProductModel(subProductName, authorId);
+
                     parentProduct.AddSubProduct(subProduct);
 
                     AddProduct(subProduct);
@@ -645,6 +641,8 @@ namespace HSMServer.Core.Cache
 
                     product.Update(update);
                 }
+
+                product.Policies.SensorExpired += SetExpiredSnapshot;
 
                 _database.AddProduct(product.ToEntity());
 
@@ -771,9 +769,7 @@ namespace HSMServer.Core.Cache
         }
 
         private AccessKeyModel GetAccessKeyModel(BaseRequestModel request) =>
-            _keys.TryGetValue(request.KeyGuid, out var keyModel)
-                ? keyModel
-                : AccessKeyModel.InvalidKey;
+            _keys.TryGetValue(request.KeyGuid, out var keyModel) ? keyModel : AccessKeyModel.InvalidKey;
 
         private void FillSensorsData()
         {
@@ -793,7 +789,9 @@ namespace HSMServer.Core.Cache
                 if (value is not null && _sensors.TryGetValue(sensorId, out var sensor))
                 {
                     sensor.AddDbValue(value);
-                    _snapshot.Sensors[sensorId].SetLastUpdate(sensor.LastValue.ReceivingTime, sensor.CheckTimeout());
+
+                    if (!_snapshot.IsFinal)
+                        _snapshot.Sensors[sensorId].SetLastUpdate(sensor.LastValue.ReceivingTime, sensor.CheckTimeout());
                 }
 
             if (!_snapshot.IsFinal)
@@ -816,15 +814,7 @@ namespace HSMServer.Core.Cache
         public void UpdateCacheState()
         {
             foreach (var sensor in GetSensors())
-            {
-                var snaphot = _snapshot.Sensors[sensor.Id];
-
-                if (!snaphot.IsExpired && sensor.CheckTimeout())
-                {
-                    snaphot.IsExpired = true;
-                    NotifyAboutChanges(sensor);
-                }
-            }
+                sensor.CheckTimeout();
 
             foreach (var key in GetAccessKeys())
                 if (key.IsExpired && key.State < KeyState.Expired)
@@ -833,6 +823,21 @@ namespace HSMServer.Core.Cache
             foreach (var sensor in GetSensors())
                 if (sensor.EndOfMuting <= DateTime.UtcNow)
                     UpdateMutedSensorState(sensor.Id);
+        }
+
+        private void SetExpiredSnapshot(BaseSensorModel sensor, bool timeout)
+        {
+            var snapshot = _snapshot.Sensors[sensor.Id];
+
+            if (snapshot.IsExpired != timeout)
+            {
+                snapshot.IsExpired = timeout;
+
+                if (!timeout)
+                    sensor.RecalculatePolicy();
+
+                NotifyAboutChanges(sensor);
+            }
         }
     }
 }
