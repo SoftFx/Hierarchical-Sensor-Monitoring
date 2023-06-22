@@ -6,14 +6,13 @@ namespace HSMServer.Core.Model.Policies
 {
     public sealed class ProductPolicyCollection : PolicyCollectionBase
     {
-        private readonly Dictionary<SensorType, SensorPolicyCollection> _collectionsBySensorType = new();
-        private readonly Dictionary<Type, SensorPolicyCollection> _collectionByPolicyType = new();
+        private readonly Dictionary<SensorType, SensorPolicyCollection> _bySensorType = new();
+        private readonly Dictionary<Type, SensorPolicyCollection> _byPolicyType = new();
 
         private readonly List<Policy> _basePolicies = new(1 << 4);
 
 
-        public SensorPolicyCollection this[SensorType type] => _collectionsBySensorType[type];
-
+        internal SensorPolicyCollection this[SensorType type] => _bySensorType[type];
 
         internal override IEnumerable<Guid> Ids => _basePolicies.Select(u => u.Id);
 
@@ -37,13 +36,14 @@ namespace HSMServer.Core.Model.Policies
 
         internal override void AddPolicy<T>(T policy)
         {
-            if (_collectionByPolicyType.TryGetValue(typeof(T), out var collection))
+            if (_byPolicyType.TryGetValue(typeof(T), out var collection))
             {
                 collection.AddPolicy(policy);
 
                 _basePolicies.Add(policy);
             }
         }
+
 
         public override IEnumerator<Policy> GetEnumerator() => _basePolicies.GetEnumerator();
 
@@ -54,8 +54,8 @@ namespace HSMServer.Core.Model.Policies
         {
             var collection = new SensorPolicyCollection<ValueType, PolicyType>();
 
-            _collectionsBySensorType.Add(type, collection);
-            _collectionByPolicyType.Add(typeof(PolicyType), collection);
+            _bySensorType.Add(type, collection);
+            _byPolicyType.Add(typeof(PolicyType), collection);
         }
     }
 }

@@ -22,6 +22,7 @@ namespace HSMServer.Core.Model.Policies
                     AddPolicy(policy);
         }
 
+
         public abstract IEnumerator<Policy> GetEnumerator();
 
         IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();

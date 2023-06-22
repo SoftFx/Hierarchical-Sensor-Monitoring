@@ -95,12 +95,14 @@ namespace HSMServer.Core.Model.Policies
 
         internal override IEnumerable<Guid> Ids => _storage.Keys;
 
+        internal IEnumerable<Policy<ValueType>> Policies => _sensor.UseParentPolicies ? _sensor.Parent.GetPolicies<PolicyType>(_sensor.Type) : _storage.Values;
+
 
         protected override bool CalculateStorageResult(ValueType value)
         {
             PolicyResult = new(_sensor.Id);
 
-            foreach (var (_, policy) in _storage)
+            foreach (var policy in Policies ?? Enumerable.Empty<PolicyType>())
                 if (!policy.Validate(value, _sensor))
                 {
                     PolicyResult.AddAlert(policy);

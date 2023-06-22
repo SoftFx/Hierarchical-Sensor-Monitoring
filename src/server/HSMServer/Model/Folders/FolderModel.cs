@@ -107,7 +107,7 @@ namespace HSMServer.Model.Folders
 
         private List<TimeIntervalEntity> GetPolicyEntities()
         {
-            var policies = new List<TimeIntervalEntity>(1 << 1);
+            var policies = new List<TimeIntervalEntity>(1 << 2);
 
             if (ExpectedUpdateInterval != null)
                 policies.Add(ExpectedUpdateInterval.ToEntity());

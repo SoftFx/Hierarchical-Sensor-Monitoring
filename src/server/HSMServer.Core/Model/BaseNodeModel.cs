@@ -27,6 +27,8 @@ namespace HSMServer.Core.Model
 
         public string Description { get; private set; }
 
+        public bool UseParentPolicies { get; private set; }
+
 
         public string RootProductName => Parent?.RootProductName ?? DisplayName;
 

@@ -3,6 +3,7 @@ using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Model.Policies;
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Linq;
 
 namespace HSMServer.Core.Model
@@ -68,6 +69,11 @@ namespace HSMServer.Core.Model
             NotificationsSettings = update?.NotificationSettings ?? NotificationsSettings;
 
             return this;
+        }
+
+        internal List<T> GetPolicies<T>(SensorType type) where T : Policy
+        {
+            return !UseParentPolicies ? Policies[type].Select(u => (T)u).ToList() : Parent?.GetPolicies<T>(type);
         }
 
 
