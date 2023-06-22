@@ -8,10 +8,6 @@ namespace HSMServer.Core
 
         public static bool IsOk(this SensorStatus status) => status == SensorStatus.Ok;
 
-        public static bool IsCustom(this OldTimeInterval interval) => interval == OldTimeInterval.Custom;
-
-        public static bool UseCustomPeriod(this OldTimeInterval interval) => interval is OldTimeInterval.Custom or OldTimeInterval.FromFolder;
-
         public static string ToIcon(this SensorStatus status) => status switch
         {
             SensorStatus.Ok => "✅",

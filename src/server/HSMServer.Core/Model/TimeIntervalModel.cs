@@ -26,8 +26,6 @@ namespace HSMServer.Core.Model
         FromParent = -10,
         Custom = -1,
 
-        Never = 0,
-
         OneMinute = 600_000_000,
         FiveMinutes = 3_000_000_000,
         TenMinutes = 6_000_000_000,
@@ -42,6 +40,7 @@ namespace HSMServer.Core.Model
 
         Year = 315_360_000_000_000, //365 days
 
+        Never = 0L,
         Forever = long.MaxValue - 1,
     }
 
@@ -56,11 +55,9 @@ namespace HSMServer.Core.Model
         public long Ticks { get; }
 
 
-        public bool IsNever => Interval == TimeInterval.Never;
+        public bool IsFromFolder => Interval is TimeInterval.FromFolder;
 
-        public bool IsFromFolder => Interval == TimeInterval.FromFolder;
-
-        public bool IsFromParent => Interval == TimeInterval.FromParent;
+        public bool IsFromParent => Interval is TimeInterval.FromParent;
 
         public bool UseCustom => Interval is TimeInterval.Custom or TimeInterval.FromFolder;
 
