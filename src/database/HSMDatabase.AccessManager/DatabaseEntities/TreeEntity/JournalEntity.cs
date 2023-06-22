@@ -11,9 +11,9 @@ public sealed class JournalEntity
 
 public readonly struct Key
 {
-    public Guid Id { get; }
+    public Guid Id { get; init; }
 
-    public long Time { get; }
+    public long Time { get; init; }
 
     
     public Key(Guid guid, long time)

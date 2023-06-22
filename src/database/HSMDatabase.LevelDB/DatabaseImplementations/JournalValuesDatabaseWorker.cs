@@ -58,7 +58,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
         {
             try
             {
-                var valueBytes = JsonSerializer.SerializeToUtf8Bytes(value, _options);
+                var valueBytes = JsonSerializer.SerializeToUtf8Bytes(value);
                 _openedDb.Put(key, valueBytes);
             }
             catch (Exception e)
