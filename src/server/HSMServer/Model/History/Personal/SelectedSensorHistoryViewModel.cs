@@ -75,7 +75,7 @@ namespace HSMServer.Model.History
 
         private void NewSensorValueHandler(BaseValue value)
         {
-            if (_request.FromUtc > value.ReceivingTime || _request.ToUtc < value.ReceivingTime)
+            if (_request == null || _request.FromUtc > value.ReceivingTime || _request.ToUtc < value.ReceivingTime)
                 return;
 
             if (_sensor.Type.IsBar())
