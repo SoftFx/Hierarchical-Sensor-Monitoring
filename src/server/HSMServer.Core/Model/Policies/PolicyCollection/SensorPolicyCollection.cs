@@ -126,13 +126,10 @@ namespace HSMServer.Core.Model.Policies
                     policy.Update(update);
                     Uploaded?.Invoke(ActionType.Update, policy);
                 }
-                else
+                else if (_storage.TryRemove(id, out var oldPolicy))
                 {
-                    if (_storage.TryRemove(id, out var oldPolicy))
-                    {
-                        CalculateStorageResult((ValueType)_sensor.LastValue);
-                        Uploaded?.Invoke(ActionType.Delete, oldPolicy);
-                    }
+                    CalculateStorageResult((ValueType)_sensor.LastValue);
+                    Uploaded?.Invoke(ActionType.Delete, oldPolicy);
                 }
             }
 
