@@ -582,7 +582,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
         
         public void AddJournal(JournalEntity journal)
         {
-            var keyBytes = journal.Id;
+            var keyBytes = journal.Id.GetBytes();
 
             try
             {
@@ -593,7 +593,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
                 _logger.Error(e, $"Failed to save user {journal.Name}");
             }
         }
-        
+
         public JournalEntity GetJournal(Key key)
         {
             var bytesKey = key.GetBytes();
@@ -618,7 +618,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
                     journalIds.Add(journalKey);
             }
 
-            UpdateJournalKeysList(AddJournalKeyToListIfNotExist, $"Failed to add journak id {Key.FromBytes(journalKey).Id} to list");
+            UpdateJournalKeysList(AddJournalKeyToListIfNotExist, $"Failed to add journal id {Key.FromBytes(journalKey).Id} to list");
         }
 
         

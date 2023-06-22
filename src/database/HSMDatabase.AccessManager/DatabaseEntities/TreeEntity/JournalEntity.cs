@@ -4,9 +4,11 @@ namespace HSMDatabase.AccessManager.DatabaseEntities;
 
 public sealed class JournalEntity
 {
-    public byte[] Id { get; set; }
-
+    public Key Id { get; set; }
+    
     public string Name { get; set; }
+    
+    public string Value { get; set; }
 }
 
 public readonly struct Key
@@ -15,6 +17,7 @@ public readonly struct Key
 
     public long Time { get; init; }
 
+    
     public Key(Guid guid, long time)
     {
         Id = guid;
@@ -23,14 +26,11 @@ public readonly struct Key
 
     public byte[] GetBytes()
     {
-        var guidBytes = Id.ToByteArray();
-        var timeBytes = BitConverter.GetBytes(Time);
-        var result = new byte[guidBytes.Length + timeBytes.Length];
+        Span<byte> result = stackalloc byte[16 + sizeof(long)];
+        Id.TryWriteBytes(result);
+        BitConverter.TryWriteBytes(result[16..], Time);
         
-        Buffer.BlockCopy(guidBytes, 0, result, 0, guidBytes.Length);
-        Buffer.BlockCopy(timeBytes, 0, result, guidBytes.Length, timeBytes.Length);
-        
-        return result;
+        return result.ToArray();
     }
     
     public static Key FromBytes(byte[] bytes)

@@ -21,6 +21,7 @@ namespace HSMDatabase.DatabaseWorkCore
         private static readonly Logger _logger = LogManager.GetLogger(CommonConstants.InfrastructureLoggerName);
 
         private readonly SensorValuesDatabaseDictionary _sensorValuesDatabases;
+        private readonly JournalValuesDatabaseDictionary _journalValuesDatabases;
         private readonly IEnvironmentDatabase _environmentDatabase;
         private readonly IDatabaseSettings _settings;
 
@@ -56,7 +57,7 @@ namespace HSMDatabase.DatabaseWorkCore
             _settings = dbSettings ?? new DatabaseSettings();
             _environmentDatabase = LevelDBManager.GetEnvitonmentDatabaseInstance(_settings.PathToEnvironmentDb);
             _sensorValuesDatabases = new SensorValuesDatabaseDictionary(_settings);
-
+            _journalValuesDatabases = new JournalValuesDatabaseDictionary(_settings);
             Snapshots = new SnapshotsDatabase(_settings.PathToSnaphotsDb);
 
             _logger.Info($"{nameof(DatabaseCore)} initialized");
@@ -395,7 +396,7 @@ namespace HSMDatabase.DatabaseWorkCore
 
         public void AddJournal(JournalEntity journal)
         {
-            _environmentDatabase.AddJournalKeyToList(journal.Id);
+            _environmentDatabase.AddJournalKeyToList(journal.Id.GetBytes());
             _environmentDatabase.AddJournal(journal);
         }
 

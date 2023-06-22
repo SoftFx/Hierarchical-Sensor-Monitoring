@@ -22,7 +22,7 @@ namespace HSMDatabase.LevelDB.Tests
             var key = new Key(guid, 323333);
             var journal = new JournalEntity()
             {
-                Id = key.GetBytes(),
+                Id = key,
                 Name = "Test1"
             };
             
@@ -50,7 +50,7 @@ namespace HSMDatabase.LevelDB.Tests
                 var expectedJournal = JournalFactory.BuildJournalEntity();
                 _databaseCore.AddJournal(expectedJournal);
 
-                var actual = _databaseCore.GetJournal(Key.FromBytes(expectedJournal.Id));
+                var actual = _databaseCore.GetJournal(expectedJournal.Id);
 
                 Assert.Equal(expectedJournal.Id, actual.Id);
                 Assert.Equal(expectedJournal.Name, actual.Name);
@@ -70,9 +70,9 @@ namespace HSMDatabase.LevelDB.Tests
                 var expectedJournal = JournalFactory.BuildJournalEntity();
 
                 _databaseCore.AddJournal(expectedJournal);
-                _databaseCore.RemoveJournal(Key.FromBytes(expectedJournal.Id));
+                _databaseCore.RemoveJournal(expectedJournal.Id);
 
-                Assert.Null(_databaseCore.GetJournal(Key.FromBytes(expectedJournal.Id)));
+                Assert.Null(_databaseCore.GetJournal(expectedJournal.Id));
             }
 
             Assert.Empty(_databaseCore.GetJournals());

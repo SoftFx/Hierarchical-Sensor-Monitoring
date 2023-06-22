@@ -8,6 +8,7 @@ namespace HSMDatabase.Settings
         private const string DefaultSnaphotsDatabaseName = "Shapshots";
         private const string DefaultEnvironmentDatabaseName = "EnvironmentData";
         private const string DefaultSensorValuesDatabaseName = "SensorValues";
+        private const string DefaultJournalValuesDatabaseName = "JournalValues";
 
 
         public string DatabaseFolder { get; init; } = DefaultDatabaseFolder;
@@ -17,5 +18,7 @@ namespace HSMDatabase.Settings
         public string EnvironmentDatabaseName { get; init; } = DefaultEnvironmentDatabaseName;
 
         public string SensorValuesDatabaseName { get; init; } = DefaultSensorValuesDatabaseName;
+        
+        public string JournalValuesDatabaseName { get; init; } = DefaultJournalValuesDatabaseName;
     }
 }
