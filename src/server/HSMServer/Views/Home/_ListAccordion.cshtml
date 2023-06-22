@@ -25,10 +25,9 @@
                 </div>
             </div>
         </div>
-        <div class="container d-flex mt-2 justify-content-between ">
-
+        <div class="container d-flex mt-2 justify-content-between @(Model.IsPaginationDisplayed ? "d-flex" : "d-none")">
             <ul class="pagination position-relative" style="left: 45%;">
-                <div class="@(Model.IsPaginationDisplayed ? "d-flex" : "d-none")">
+                <div class="d-flex">
                     <li id="prevPageButton" class="page-item button-link">
                         <a class="page-link" aria-label="Previous" onclick="getListPage('@accordionId', @(Model.PageNumber - 1), @Model.PageSize)">
                             <span aria-hidden="true">&laquo;</span>
