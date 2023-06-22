@@ -69,16 +69,5 @@ namespace HSMDatabase.AccessManager
         List<UserEntity> ReadUsersPage(int page, int pageSize);
 
         #endregion
-        
-        #region Journal
-
-        void AddJournal(JournalEntity journal);
-        void AddJournalKeyToList(byte[] journalKey);
-        List<byte[]> GetAllJournalsKeys();
-        JournalEntity GetJournal(Key key);
-        public void RemoveJournal(Key key);
-        void RemoveJournalFromList(Key key);
-
-        #endregion
     }
 }
