@@ -9,7 +9,7 @@ internal static class JournalFactory
         new()
         {
             Id = BuildKey(),
-            Name = RandomGenerator.GetRandomString()
+            Value = RandomGenerator.GetRandomString()
         };
 
     internal static Key BuildKey() => new Key(Guid.NewGuid(), RandomGenerator.GetRandomInt());

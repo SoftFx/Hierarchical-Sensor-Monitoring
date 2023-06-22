@@ -14,6 +14,6 @@ public class JournalModel
     internal JournalEntity ToJournalEntity() => new()
     {
         Id = new Key(Id, Time),
-        Name = Name
+        Value = Name
     };
 }

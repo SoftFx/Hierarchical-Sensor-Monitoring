@@ -590,7 +590,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             }
             catch (Exception e)
             {
-                _logger.Error(e, $"Failed to save user {journal.Name}");
+                _logger.Error(e, $"Failed to save user {journal.Value}");
             }
         }
 

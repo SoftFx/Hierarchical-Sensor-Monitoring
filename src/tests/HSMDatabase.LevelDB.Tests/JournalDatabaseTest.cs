@@ -26,19 +26,19 @@ namespace HSMDatabase.LevelDB.Tests
             var journal = new JournalEntity()
             {
                 Id = key,
-                Name = "Test1"
+                Value = "Test1"
             };
             
             var journal2 = new JournalEntity()
             {
                 Id = new Key(guid, 599509728340000000),
-                Name = "Test2"
+                Value = "Test2"
             };
             
             var journal3 = new JournalEntity()
             {
                 Id = new Key(guid, 599527872510000000),
-                Name = "Test3"
+                Value = "Test3"
             };
 
             var start = new DateTime(599506272170000000).AddMilliseconds(-100);
@@ -68,7 +68,7 @@ namespace HSMDatabase.LevelDB.Tests
             var journal = new JournalEntity()
             {
                 Id = key,
-                Name = "Test1"
+                Value = "Test1"
             };
             
             _databaseCore.AddJournal(journal);
@@ -78,7 +78,7 @@ namespace HSMDatabase.LevelDB.Tests
             var actual = _databaseCore.GetJournal(key);
 
             Assert.Equal(journal.Id, actual.Id);
-            Assert.Equal(journal.Name, actual.Name);
+            Assert.Equal(journal.Value, actual.Value);
         }
 
         [Theory]
@@ -98,7 +98,7 @@ namespace HSMDatabase.LevelDB.Tests
                 var actual = _databaseCore.GetJournal(expectedJournal.Id);
 
                 Assert.Equal(expectedJournal.Id, actual.Id);
-                Assert.Equal(expectedJournal.Name, actual.Name);
+                Assert.Equal(expectedJournal.Value, actual.Value);
             }
         }
         [Theory]

@@ -6,16 +6,14 @@ public sealed class JournalEntity
 {
     public Key Id { get; set; }
     
-    public string Name { get; set; }
-    
     public string Value { get; set; }
 }
 
 public readonly struct Key
 {
-    public Guid Id { get; init; }
+    public Guid Id { get; }
 
-    public long Time { get; init; }
+    public long Time { get; }
 
     
     public Key(Guid guid, long time)
