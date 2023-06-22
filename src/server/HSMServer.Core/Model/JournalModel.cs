@@ -9,11 +9,11 @@ public class JournalModel
     
     public long Time { get; set; }
     
-    public string Name { get; set; }
+    public string Value { get; set; }
 
     internal JournalEntity ToJournalEntity() => new()
     {
         Id = new Key(Id, Time),
-        Value = Name
+        Value = Value
     };
 }
