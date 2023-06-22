@@ -91,13 +91,9 @@ namespace HSMServer.Core.Cache
             if (!_tree.TryGetValue(update.Id, out var product))
                 return;
 
-            var sensorsOldStatuses = new Dictionary<Guid, SensorResult>();
-
-            GetProductSensorsStatuses(product, sensorsOldStatuses);
-
             _database.UpdateProduct(product.Update(update).ToEntity());
 
-            NotifyAllProductChildrenAboutUpdate(product, sensorsOldStatuses);
+            NotifyAboutProductChange(product);
         }
 
         public void RemoveProduct(Guid productId)
@@ -443,19 +439,18 @@ namespace HSMServer.Core.Cache
             _snapshot.Sensors[sensorId].SetLastUpdate(value.ReceivingTime);
         }
 
-        private void NotifyAllProductChildrenAboutUpdate(ProductModel product,
-            Dictionary<Guid, SensorResult> sensorsOldStatuses)
+        private void NotifyAboutProductChange(ProductModel product)
         {
             ChangeProductEvent?.Invoke(product, ActionType.Update);
 
             foreach (var (_, sensor) in product.Sensors)
-                if (sensorsOldStatuses.TryGetValue(sensor.Id, out var oldStatus))
-                    NotifyAboutChanges(sensor);
-                else
-                    ChangeSensorEvent?.Invoke(sensor, ActionType.Update);
+                //if (sensorsOldStatuses.TryGetValue(sensor.Id, out var oldStatus))
+                //    NotifyAboutChanges(sensor);
+                //else
+                ChangeSensorEvent?.Invoke(sensor, ActionType.Update);
 
             foreach (var (_, subProduct) in product.SubProducts)
-                NotifyAllProductChildrenAboutUpdate(subProduct, sensorsOldStatuses);
+                NotifyAboutProductChange(subProduct);
         }
 
         private void Initialize()
@@ -748,15 +743,6 @@ namespace HSMServer.Core.Cache
             }
 
             return accessKey.IsHasPermissions(permissions, out message);
-        }
-
-        private static void GetProductSensorsStatuses(ProductModel product, Dictionary<Guid, SensorResult> sensorsStatuses)
-        {
-            foreach (var (sensorId, sensor) in product.Sensors)
-                sensorsStatuses.Add(sensorId, default);
-
-            foreach (var (_, subProduct) in product.SubProducts)
-                GetProductSensorsStatuses(subProduct, sensorsStatuses);
         }
 
         private BaseSensorModel GetSensor(BaseRequestModel request)
