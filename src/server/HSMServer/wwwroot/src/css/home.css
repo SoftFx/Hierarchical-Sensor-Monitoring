@@ -197,7 +197,11 @@
     line-height: 18px;
 }
 
-.enabled-filters-message{
+.jstree-icon:empty {
+    margin: -2px 0px;
+}
+
+.enabled-filters-message {
     font-size: smaller;
     font-weight: 500;
     min-width: 1rem;
