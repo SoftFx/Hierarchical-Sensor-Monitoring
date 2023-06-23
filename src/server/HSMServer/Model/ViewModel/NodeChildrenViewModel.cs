@@ -27,6 +27,9 @@ public interface INodeChildrenViewModel
 
 public sealed class NodeChildrenViewModel<T> : INodeChildrenViewModel where T : NodeViewModel
 {
+    private const int MaxPageSize = 1000;
+
+
     private readonly string _originTitle;
 
     private IDictionary<Guid, T> _items;
@@ -80,7 +83,7 @@ public sealed class NodeChildrenViewModel<T> : INodeChildrenViewModel where T : 
 
     public NodeChildrenViewModel<T> Reload(ChildrenPageRequest pageRequest)
     {
-        PageSize = pageRequest.PageSize <= 0 ? PageSize : pageRequest.PageSize > 1000 ? 1000 : pageRequest.PageSize;
+        PageSize = Math.Min(Math.Max(pageRequest.PageSize, 0), MaxPageSize);
         PageNumber = pageRequest.CurrentPage < 0 ? PageNumber : IsPageAvailable(pageRequest.CurrentPage) ? pageRequest.CurrentPage : 0;
 
         return this;
