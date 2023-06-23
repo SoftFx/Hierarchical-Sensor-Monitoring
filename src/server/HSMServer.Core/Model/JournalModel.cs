@@ -16,4 +16,11 @@ public class JournalModel
         Id = new Key(Id, Time),
         Value = Value
     };
+
+    public JournalModel(JournalEntity entity)
+    {
+        Id = entity.Id.Id;
+        Time = entity.Id.Time;
+        Value = entity.Value;
+    }
 }

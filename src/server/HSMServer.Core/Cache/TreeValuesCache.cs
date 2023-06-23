@@ -362,6 +362,22 @@ namespace HSMServer.Core.Cache
                     yield return sensor.ConvertValues(page);
             }
         }
+        
+        public async IAsyncEnumerable<List<JournalModel>> GetJournalValuesPage(Guid sensorId, DateTime from, DateTime to, int count)
+        {
+            var pages = _database.GetJournalValuesPage(sensorId, from, to, count);
+
+            await foreach (var page in pages)
+            {
+                var currPage = new List<JournalModel>(1 << 4);
+                foreach (var item in page)
+                {
+                    currPage.Add(new JournalModel(JsonSerializer.Deserialize<JournalEntity>(item)));
+                }
+                
+                yield return currPage;
+            }
+        }
 
         private void UpdatePolicy(ActionType type, Policy policy)
         {
