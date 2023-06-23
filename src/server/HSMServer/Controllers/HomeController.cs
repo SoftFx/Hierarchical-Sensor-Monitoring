@@ -645,7 +645,7 @@ namespace HSMServer.Controllers
 
             sensorValue.Comment = comment;
             sensorValue.Path = sensor.Path;
-            sensorValue.Status = (SensorStatus)modal.NewStatus;
+            sensorValue.Status = modal.NewStatus.ToDataObjects();
 
             return Ok(new
             {
