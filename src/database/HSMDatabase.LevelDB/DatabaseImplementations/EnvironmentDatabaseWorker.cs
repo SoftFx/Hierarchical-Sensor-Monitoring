@@ -5,11 +5,18 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace HSMDatabase.LevelDB.DatabaseImplementations
 {
     internal sealed class EnvironmentDatabaseWorker : IEnvironmentDatabase
     {
+        private static readonly JsonSerializerOptions _options = new()
+        {
+            DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingDefault,
+            IgnoreReadOnlyProperties = true,
+        };
+
         private readonly byte[] _productListKey = "ProductsNames"u8.ToArray();
         private readonly byte[] _accessKeyListKey = "AccessKeys"u8.ToArray();
         private readonly byte[] _sensorIdsKey = "SensorIds"u8.ToArray();
@@ -441,11 +448,11 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
 
         public void AddPolicy(PolicyEntity entity)
         {
-            var bytesKey = Encoding.UTF8.GetBytes(entity.Id);
+            var value = JsonSerializer.SerializeToUtf8Bytes(entity, _options);
 
             try
             {
-                _database.Put(bytesKey, entity.Policy);
+                _database.Put(entity.Id, value);
             }
             catch (Exception e)
             {

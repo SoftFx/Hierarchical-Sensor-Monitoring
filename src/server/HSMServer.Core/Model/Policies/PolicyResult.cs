@@ -13,11 +13,11 @@ namespace HSMServer.Core.Model
         internal static PolicyResult Ok { get; } = new();
 
 
-        public Guid SensorId { get; }
+        public List<(string icon, int count)> Icons => _alerts.Select(a => (a.Key.icon, a.Value.count)).ToList();
 
         public bool IsOk => _alerts.Count == 0;
 
-        public List<(string icon, int count)> Icons => _alerts.Select(a => (a.Key.icon, a.Value.count)).ToList();
+        public Guid SensorId { get; }
 
 
         public PolicyResult()
@@ -30,13 +30,13 @@ namespace HSMServer.Core.Model
             SensorId = sensorId;
         }
 
-        internal PolicyResult(Guid sensorId, DataPolicy policy) : this(sensorId)
+        internal PolicyResult(Guid sensorId, Policy policy) : this(sensorId)
         {
             AddAlert(policy);
         }
 
 
-        internal void AddAlert(DataPolicy policy)
+        internal void AddAlert(Policy policy)
         {
             var key = policy.AlertKey;
             var comment = policy.AlertComment;

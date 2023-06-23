@@ -79,7 +79,7 @@ namespace HSMServer.Model
 
         internal TimeIntervalViewModel(TimeIntervalEntity entity, List<TimeInterval> intervals) : this(intervals)
         {
-            SetInterval((CoreTimeInterval)entity.Interval, entity.CustomPeriod);
+            SetInterval((CoreTimeInterval)entity.Interval, entity.Ticks);
 
             if (!HasParentValue)
                 IntervalItems.RemoveAt(0);
@@ -87,7 +87,7 @@ namespace HSMServer.Model
 
 
         internal void Update(TimeIntervalModel model) =>
-            SetInterval(model?.TimeInterval ?? CoreTimeInterval.FromParent, model?.CustomPeriod ?? 0L);
+            SetInterval(model?.Interval ?? CoreTimeInterval.FromParent, model?.Ticks ?? 0L);
 
 
         internal TimeIntervalModel ToModel(TimeIntervalViewModel folderInterval = null) =>

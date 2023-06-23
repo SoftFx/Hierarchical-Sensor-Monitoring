@@ -4,10 +4,13 @@ namespace HSMDatabase.AccessManager.DatabaseEntities
 {
     public abstract record BaseNodeEntity
     {
+        public Dictionary<string, TimeIntervalEntity> Settings { get; init; }
+
         public List<string> Policies { get; init; }
 
 
         public required string Id { get; init; }
+
 
         public string AuthorId { get; init; }
 

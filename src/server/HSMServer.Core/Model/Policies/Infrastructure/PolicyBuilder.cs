@@ -30,7 +30,7 @@ namespace HSMServer.Core.Model.Policies
     public sealed record TargetValue(TargetType Type, string Value);
 
 
-    internal static class DataPolicyBuilder
+    internal static class PolicyBuilder
     {
         internal static Func<U, U, bool> GetNumberOperation<U>(PolicyOperation action) where U : INumber<U> =>
             action switch

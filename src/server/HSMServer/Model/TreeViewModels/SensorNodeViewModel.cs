@@ -51,7 +51,7 @@ namespace HSMServer.Model.TreeViewModel
             Type = model.Type;
             State = model.State;
             Integration = model.Integration;
-            UpdateTime = model.LastUpdateTime;
+            UpdateTime = model.LastUpdate;
             Status = model.Status.ToClient();
             ValidationError = State == SensorState.Muted ? GetMutedErrorTooltip(model.EndOfMuting) : model.Status?.Message;
 
@@ -62,7 +62,7 @@ namespace HSMServer.Model.TreeViewModel
             FileNameString = GetFileNameString(model.Type, ShortStringValue);
 
             if (model is DoubleSensorModel or IntegerSensorModel or DoubleBarSensorModel or IntegerBarSensorModel)
-                DataAlerts[Type] = model.DataPolicies.Select(p => BuildAlert(p, model)).ToList();
+                DataAlerts[Type] = model.Policies.Select(p => BuildAlert(p, model)).ToList();
 
             AlertIcons.Clear();
             foreach (var (icon, count) in model.PolicyResult.Icons)
@@ -76,10 +76,10 @@ namespace HSMServer.Model.TreeViewModel
 
         private static DataAlertViewModel BuildAlert(Policy policy, BaseSensorModel sensor) => policy switch
         {
-            IntegerDataPolicy p => new SingleDataAlertViewModel<IntegerValue, int>(p, sensor),
-            DoubleDataPolicy p => new SingleDataAlertViewModel<DoubleValue, double>(p, sensor),
-            IntegerBarDataPolicy p => new BarDataAlertViewModel<IntegerBarValue, int>(p, sensor),
-            DoubleBarDataPolicy p => new BarDataAlertViewModel<DoubleBarValue, double>(p, sensor),
+            IntegerPolicy p => new SingleDataAlertViewModel<IntegerValue, int>(p, sensor),
+            DoublePolicy p => new SingleDataAlertViewModel<DoubleValue, double>(p, sensor),
+            IntegerBarPolicy p => new BarDataAlertViewModel<IntegerBarValue, int>(p, sensor),
+            DoubleBarPolicy p => new BarDataAlertViewModel<DoubleBarValue, double>(p, sensor),
         };
 
         private static string GetFileNameString(SensorType sensorType, string value)

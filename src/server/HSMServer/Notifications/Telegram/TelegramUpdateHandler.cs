@@ -1,6 +1,5 @@
 ﻿using HSMServer.Authentication;
 using HSMServer.Core;
-using HSMServer.Core.Model.Policies;
 using HSMServer.Extensions;
 using HSMServer.Model.TreeViewModel;
 using HSMServer.Notification.Settings;
@@ -140,7 +139,7 @@ namespace HSMServer.Notifications
             Statuses: 
                 {Core.OffTime.ToIcon()} (OffTime) -> {Core.Ok.ToIcon()} (Ok) -> {Core.Warning.ToIcon()} (Warning) -> {Core.Error.ToIcon()} (Error)
             Alerts: 
-                {ExpectedUpdateIntervalPolicy.PolicyIcon} - sensor update timeout
+                 - sensor update timeout
                 "↕️" - sensor value alert
             """.EscapeMarkdownV2();
 

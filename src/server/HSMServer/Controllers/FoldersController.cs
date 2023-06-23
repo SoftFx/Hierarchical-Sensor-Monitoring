@@ -117,7 +117,7 @@ namespace HSMServer.Controllers
             {
                 Id = folderAlerts.Id,
                 ExpectedUpdateInterval = folderAlerts.ExpectedUpdateInterval,
-                RestoreInterval = folderAlerts.SensorRestorePolicy
+                //RestoreInterval = folderAlerts.SensorRestorePolicy
             };
 
             await _folderManager.TryUpdate(update);

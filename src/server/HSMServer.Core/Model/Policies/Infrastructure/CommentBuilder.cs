@@ -40,7 +40,7 @@ namespace HSMServer.Core.Model.Policies.Infrastructure
         }
 
 
-        public static string GetSingleComment<T, U>(T value, BaseSensorModel sensor, DataPolicy<T, U> policy)
+        public static string GetSingleComment<T, U>(T value, BaseSensorModel sensor, Policy<T, U> policy)
             where T : BaseValue<U>, new()
         {
             value ??= new();
@@ -51,7 +51,7 @@ namespace HSMServer.Core.Model.Policies.Infrastructure
                value.Status, value.Time, value.Comment, value.Value, null, null, null, null);
         }
 
-        public static string GetBarComment<T, U>(T value, BaseSensorModel sensor, DataPolicy<T, U> policy)
+        public static string GetBarComment<T, U>(T value, BaseSensorModel sensor, Policy<T, U> policy)
             where T : BarBaseValue<U>, new()
             where U : struct
         {
