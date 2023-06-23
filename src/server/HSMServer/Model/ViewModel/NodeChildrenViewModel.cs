@@ -83,7 +83,7 @@ public sealed class NodeChildrenViewModel<T> : INodeChildrenViewModel where T : 
 
     public NodeChildrenViewModel<T> Reload(ChildrenPageRequest pageRequest)
     {
-        PageSize = Math.Min(Math.Max(pageRequest.PageSize, 0), MaxPageSize);
+        PageSize =  pageRequest.PageSize <= 0 ? PageSize : Math.Min(pageRequest.PageSize, MaxPageSize);
         PageNumber = pageRequest.CurrentPage < 0 ? PageNumber : IsPageAvailable(pageRequest.CurrentPage) ? pageRequest.CurrentPage : 0;
 
         return this;
