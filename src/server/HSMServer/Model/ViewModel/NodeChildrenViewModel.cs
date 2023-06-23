@@ -21,6 +21,8 @@ public interface INodeChildrenViewModel
     public bool IsPaginationDisplayed { get; }
 
     public bool IsPageValid { get; }
+
+    bool IsPageAvailable(int pageNumber);
 }
 
 
@@ -49,7 +51,8 @@ public sealed class NodeChildrenViewModel<T> : INodeChildrenViewModel where T : 
 
     public bool IsPaginationDisplayed => OriginalSize > PageSize;
 
-    public bool IsPageValid => OriginalSize > PageNumber * PageSize && PageNumber >= 0;
+    public bool IsPageValid => IsPageAvailable(PageNumber);
+
 
 
     public NodeChildrenViewModel(string title)
@@ -84,4 +87,6 @@ public sealed class NodeChildrenViewModel<T> : INodeChildrenViewModel where T : 
 
         return this;
     }
+
+    public bool IsPageAvailable(int pageNumber) => OriginalSize > pageNumber * PageSize && pageNumber >= 0;
 }
