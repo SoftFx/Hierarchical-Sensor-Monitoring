@@ -24,6 +24,10 @@ namespace HSMServer.Model.ViewModel
         [MinTimeInterval(TimeInterval.OneMinute, ErrorMessage = "{0} minimal value is {1}.")]
         public TimeIntervalViewModel ExpectedUpdateInterval { get; set; }
 
+        public string TTLCommentTemplate { get; set; }
+
+        public SensorStatus TTLStatus { get; set; } = SensorStatus.Ok;
+
         //[Display(Name = "Sensitivity interval")]
         //[MinTimeInterval(TimeInterval.OneMinute, ErrorMessage = "{0} minimal value is {1}.")]
         //public TimeIntervalViewModel SensorRestorePolicy { get; set; }

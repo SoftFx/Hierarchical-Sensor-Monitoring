@@ -24,7 +24,7 @@
             <input type="text" class="form-control" placeholder="value" asp-for="Value" value="@Model.Value" required>
 
             <label class="input-group-text">and sensitivity<i class='fas fa-question-circle mx-2' title='Time format: dd.hh:mm:ss min value 00:01:00. If the sensor doesn`t return to Ok status after the specified time inverval, a notification sends'></i></label>
-            <div id="partialRestoreSelect" class="w-30">
+            <div class="w-30">
                 <partial name="_TimeIntervalSelect" for="Sensitivity" />
             </div>
             <label class="input-group-text">than</label>
