@@ -378,6 +378,8 @@
                     let [wasFocused, lastValue] = getFocusAndVal(currInput);
                     accordionId = accordion.length !== 0 ? accordionId : 'listProducts';
 
+                    $(`#list-accordion_${accordionId}`).empty().replaceWith(viewData);
+                    
                     if (pageNumber === -1 || pageSize === -1)
                         setPaginationFocus(accordionId, wasFocused, lastValue, $(`#pageSize_${accordionId}`))
                 }
