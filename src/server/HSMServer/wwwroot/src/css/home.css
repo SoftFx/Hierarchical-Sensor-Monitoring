@@ -169,14 +169,36 @@
 }
 
 .jstree-anchor > .jstree-themeicon {
+    width: 12px;
+    height: 12px;
+    line-height: 14px;
+    margin: 3px 0px 0px 0px;
+}
+
+.jstree-default .jstree-node {
+    min-height: 18px;
+    line-height: 18px;
+    margin-left: 16px;
+    min-width: 18px;
+}
+
+.jstree-default .jstree-anchor {
+    line-height: 18px;
+    height: 18px;
+}
+
+.jstree-default .jstree-wholerow {
+    height: 18px;
+}
+
+.jstree-default .jstree-icon:empty {
     width: 18px;
     height: 18px;
     line-height: 18px;
-    margin: 3px 2px 3px 0px;
 }
 
 .enabled-filters-message{
-    font-size: small;
+    font-size: smaller;
     font-weight: 500;
     min-width: 1rem;
     max-width: 15rem;
@@ -260,12 +282,14 @@ img .tree-png-icon {
 
 .tree-alert-icon {
     position: relative;
+    margin: 0px 1px;
 }
 
 .tree-alert-icon span {
     position: absolute;
     padding: 0px;
-    top: -2px;
+    font-size: 8px;
+    top: 10px;
     left: 9px;
     display: block;
     color: black;
