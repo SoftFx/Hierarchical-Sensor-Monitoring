@@ -29,20 +29,10 @@ a {
     border-color: #1861ac;
 }
 
-/* Sticky footer styles
--------------------------------------------------- */
 html {
-    font-size: 14px;
+    font-size: 12px;
     height: 100%;
     width: 100%;
-}
-
-@media (min-width: 768px) {
-    html {
-        font-size: 16px;
-        height: 100%;
-        width: 100%;
-    }
 }
 
 body {
@@ -67,13 +57,6 @@ body {
 button.accept-policy {
     font-size: 1rem;
     line-height: inherit;
-}
-
-/* Sticky footer styles
--------------------------------------------------- */
-html {
-    position: relative;
-    min-height: 100%;
 }
 
 .header{

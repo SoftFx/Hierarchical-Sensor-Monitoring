@@ -40,6 +40,7 @@ namespace HSMServer.Extensions
                 "⏬" => "fa-solid fa-angles-down",
                 "⬇️" => "fa-solid fa-arrow-down",
                 "⌛️" => "fa-solid fa-hourglass-end",
+                "❌" => "fa-solid fa-xmark",
                 _ => string.Empty,
             };
 

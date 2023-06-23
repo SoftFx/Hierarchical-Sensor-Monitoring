@@ -290,7 +290,7 @@ namespace HSMServer.Core.Cache
             var from = _snapshot.Sensors[sensorId].History.From;
             var policy = sensor.Settings.KeepHistory.Value;
 
-            if (!policy.TimeIsUp(from))
+            if (policy.TimeIsUp(from))
                 ClearSensorHistory(sensorId, policy.GetShiftedTime(DateTime.UtcNow, -1));
         }
 
