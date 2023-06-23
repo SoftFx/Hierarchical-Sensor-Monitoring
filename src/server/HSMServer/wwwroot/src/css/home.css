@@ -329,9 +329,14 @@ img .tree-png-icon {
     width: 17rem;
 }
 
+.input-group > .form-select.icons-select {
+    flex: none !important;
+    width: 50px;
+}
+
 .icons-select {
     font-family: 'FontAwesome', 'Second Font name';
-    padding: 0 1rem 0 0;
+    padding: 0 2rem 0 0;
 }
 
 .icons-select option {

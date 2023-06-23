@@ -31,6 +31,8 @@ namespace HSMServer.Model.DataAlerts
 
         public Guid Id { get; set; }
 
+        public TimeIntervalViewModel Sensitivity { get; set; }
+
 
         internal DataPolicyUpdate ToUpdate() =>
             new(Id, Property, Operation, new TargetValue(TargetType.Const, Value), Status.ToCore(), Comment, Icon);
@@ -68,6 +70,7 @@ namespace HSMServer.Model.DataAlerts
             StatusesItems = AlertPredefined.Statuses.Select(s => new SelectListItem(s.Value, $"{s.Key}")).ToList();
 
             Status = SensorStatus.Ok;
+            Sensitivity = new TimeIntervalViewModel(PredefinedIntervals.ForRestore);
         }
     }
 

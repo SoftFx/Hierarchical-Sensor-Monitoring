@@ -64,7 +64,6 @@ namespace HSMServer.Model
         public static List<TimeInterval> ForRestore { get; } =
             new()
             {
-                TimeInterval.FromParent,
                 TimeInterval.None,
                 TimeInterval.OneMinute,
                 TimeInterval.FiveMinutes,
