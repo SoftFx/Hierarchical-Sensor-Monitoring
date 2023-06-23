@@ -363,9 +363,9 @@ namespace HSMServer.Core.Cache
             }
         }
         
-        public async IAsyncEnumerable<List<JournalModel>> GetJournalValuesPage(Guid sensorId, DateTime from, DateTime to, int count)
+        public async IAsyncEnumerable<List<JournalModel>> GetJournalValuesPage(Guid id, DateTime from, DateTime to, int count)
         {
-            var pages = _database.GetJournalValuesPage(sensorId, from, to, count);
+            var pages = _database.GetJournalValuesPage(id, from, to, count);
 
             await foreach (var page in pages)
             {
