@@ -379,6 +379,24 @@ namespace HSMServer.Core.Cache
             }
         }
 
+        public void AddJournalRecord(Guid id, ActionType type)
+        {
+            var key = new Key(id, DateTime.UtcNow.Ticks);
+            
+            switch (type)
+            {
+                case ActionType.Update:
+                    _database.AddJournalValue(key, new JournalEntity(){Value = "Entity updated"});
+                    return;
+                case ActionType.Init:
+                    _database.AddJournalValue(key, new JournalEntity(){Value = "Entity initialized"});
+                    return;
+                case ActionType.Clear:
+                    _database.AddJournalValue(key, new JournalEntity(){Value = "Entity cleared"});
+                    return;
+            }
+        }
+
         private void UpdatePolicy(ActionType type, Policy policy)
         {
             switch (type)
