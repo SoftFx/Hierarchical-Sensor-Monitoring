@@ -22,7 +22,7 @@ namespace HSMServer.BackgroundServices
 
         protected override Task ExecuteAsync(CancellationToken token)
         {
-            //ServiceAction();
+            ServiceAction();
 
             return base.ExecuteAsync(token);
         }
