@@ -25,17 +25,6 @@ namespace HSMServer.Extensions
                 Client.SensorStatus.OffTime => Server.SensorStatus.OffTime,
                 _ => Server.SensorStatus.Ok,
             };
-
-        internal static SensorStatus ToDataObjects(this Client.SensorStatus status) =>
-            status switch
-            {
-                Client.SensorStatus.Ok => SensorStatus.Ok,
-                Client.SensorStatus.Warning => SensorStatus.Warning,
-                Client.SensorStatus.Error => SensorStatus.Error,
-                Client.SensorStatus.OffTime => SensorStatus.OffTime,
-                _ => SensorStatus.Ok,
-            };
-        
         
         public static string ToSelectIcon(this Client.SensorStatus status) => status switch
         {
