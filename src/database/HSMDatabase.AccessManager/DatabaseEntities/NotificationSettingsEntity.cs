@@ -14,7 +14,7 @@ namespace HSMDatabase.AccessManager.DatabaseEntities
 
         public List<string> EnabledSensors { get; init; }
 
-        public bool AutoSubscription { get; init; }
+        public bool AutoSubscription { get; init; } = true;
     }
 
 
