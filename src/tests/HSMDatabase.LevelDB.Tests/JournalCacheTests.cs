@@ -12,6 +12,4 @@ public class JournalCacheTests : MonitoringCoreTestsBase<TreeValuesCacheFixture>
         : base(fixture, registerFixture)
     {
     }
-    
-    
 }

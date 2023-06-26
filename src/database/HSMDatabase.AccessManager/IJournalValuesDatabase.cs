@@ -17,11 +17,9 @@ public interface IJournalValuesDatabase : IDisposable
 
     bool IsInclude(long from, long to);
 
-    void FillLatestValues(Dictionary<byte[], (long from, byte[] latestValue)> keyValuePairs);
+    void Put(byte[] key, JournalEntity value);
 
-    void PutJournalValue(byte[] key, JournalEntity value);
-
-    void RemoveJournalValues(byte[] from, byte[] to);
+    void Remove(byte[] from, byte[] to);
 
     byte[] Get(byte[] key, byte[] sensorId);
 

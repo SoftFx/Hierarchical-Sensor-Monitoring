@@ -38,21 +38,8 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
         public bool IsInclude(long time) => From <= time && time <= To;
 
         public bool IsInclude(long from, long to) => From <= to && To >= from;
-
-
-        public void FillLatestValues(Dictionary<byte[], (long, byte[])> keyValuePairs)
-        {
-            try
-            {
-                _openedDb.FillLatestValues(keyValuePairs, To);
-            }
-            catch (Exception e)
-            {
-                _logger.Error(e, "Failed to fill sensors latest values");
-            }
-        }
-
-        public void PutJournalValue(byte[] key, JournalEntity value)
+        
+        public void Put(byte[] key, JournalEntity value)
         {
             try
             {
@@ -61,11 +48,11 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             }
             catch (Exception e)
             {
-                _logger.Error(e, $"Failed to write data for {value.Id.Id}");
+                _logger.Error(e, $"Failed to write data for {Key.FromBytes(key).Id}");
             }
         }
 
-        public void RemoveJournalValues(byte[] from, byte[] to)
+        public void Remove(byte[] from, byte[] to)
         {
             try
             {

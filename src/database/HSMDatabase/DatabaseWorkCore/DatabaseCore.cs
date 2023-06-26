@@ -389,12 +389,11 @@ namespace HSMDatabase.DatabaseWorkCore
 
         #region Journal
 
-        public void AddJournalValue(JournalEntity valueEntity)
+        public void AddJournalValue(Key key, JournalEntity valueEntity)
         {
-            var dbs = _journalValuesDatabases.GetNewestDatabases(valueEntity.Id.Time);
-            var key = valueEntity.Id.GetBytes();
-
-            dbs.PutJournalValue(key, valueEntity);
+            var dbs = _journalValuesDatabases.GetNewestDatabases(key.Time);
+            
+            dbs.Put(key.GetBytes(), valueEntity);
         }
 
         public IAsyncEnumerable<List<byte[]>> GetJournalValuesPage(Guid sensorId, DateTime from, DateTime to, int count)

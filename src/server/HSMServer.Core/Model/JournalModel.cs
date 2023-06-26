@@ -13,14 +13,13 @@ public class JournalModel
 
     internal JournalEntity ToJournalEntity() => new()
     {
-        Id = new Key(Id, Time),
         Value = Value
     };
 
-    public JournalModel(JournalEntity entity)
+    public JournalModel(JournalEntity entity, Key key)
     {
-        Id = entity.Id.Id;
-        Time = entity.Id.Time;
+        Id = key.Id;
+        Time = key.Time;
         Value = entity.Value;
     }
 }

@@ -4,8 +4,6 @@ namespace HSMDatabase.AccessManager.DatabaseEntities;
 
 public sealed class JournalEntity
 {
-    public Key Id { get; set; }
-    
     public string Value { get; set; }
 }
 
