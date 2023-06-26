@@ -1,0 +1,100 @@
+﻿@using HSMServer.Core.Model
+@using HSMServer.Model.History;
+@using HSMServer.Extensions;
+
+@addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
+
+@model HistoryTableViewModel
+
+@{
+    var currentPage = Model.CurrentTablePage;
+    var olderTime = currentPage.LastOrDefault()?.ReceivingTime;
+}
+
+
+@if (Model.Pages.Count == 0)
+{
+    <div id="noTableValues_@Model.SensorId"></div>
+}
+else
+{
+    <input id="oldest_date_@Model.SensorId" style='display: none' value="@olderTime" />
+    <div>
+        <table class='table table-striped'>
+            <thead>
+                <tr class="text-nowrap">
+                    <th>Date</th>
+                    @if (Model.IsBarSensor)
+                    {
+                        <th>Min</th>
+                        <th>Mean</th>
+                        <th>Max</th>
+                        <th>Count</th>
+                        <th>Last value</th>
+                    }
+                    else
+                    {
+                        <th>Value</th>
+                    }
+                    <th>Status</th>
+                    <th>Comment</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var value in currentPage)
+                {
+                    <tr>
+                        <td>@value.Time.ToDefaultFormat()</td>
+                        @if (Model.IsBarSensor)
+                        {
+                            var barValue = value as BarSensorValueViewModel;
+
+                            <td>@barValue.Min</td>
+                            <td>@barValue.Mean</td>
+                            <td>@barValue.Max</td>
+                            <td>@barValue.Count</td>
+                            <td>@barValue.LastValue</td>
+                        }
+                        else
+                        {
+                            var simpleValue = value as SimpleSensorValueViewModel;
+
+                            <td>@simpleValue.Value</td>
+                        }
+                        <td>@value.Status.ToIconStatus()</td>
+                        <td>@value.Comment</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+
+        <div class="container d-flex justify-content-center">
+            <ul class="pagination">
+                <li id="prevPageButton" class="page-item button-link">
+                    <a class="page-link" aria-label="Previous" onclick="showPage(prevPageAction, '@(Model.SensorId)')">
+                        <span aria-hidden="true">&laquo;</span>
+                    </a>
+                </li>
+                <li class="page-item">
+                    <a class="page-link">@(Model.CurrentIndex + 1)</a>
+                </li>
+                <li id="nextPageButton" class="page-item button-link">
+                    <a class="page-link" aria-label="Next" onclick="showPage(nextPageAction, '@(Model.SensorId)')">
+                        <span aria-hidden="true">&raquo;</span>
+                    </a>
+                </li>
+            </ul>
+        </div>
+    </div>
+}
+
+
+<script>
+    if (@Model.CurrentIndex === @Model.LastIndex) {
+        $('#nextPageButton').addClass('disabled');
+    }
+
+    if (@Model.CurrentIndex === 0) {
+        $('#prevPageButton').addClass('disabled');
+    }
+</script>

@@ -14,6 +14,10 @@ namespace HSMServer.Model.TreeViewModel
 
         public TimeIntervalViewModel SensorRestorePolicy { get; protected set; }
 
+        public TimeIntervalViewModel SavedHistoryPeriod { get; protected set; }
+
+        public TimeIntervalViewModel SelfDestroyPeriod { get; protected set; }
+
 
         public Guid Id { get; protected set; }
 

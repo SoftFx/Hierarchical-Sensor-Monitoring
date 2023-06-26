@@ -11,6 +11,7 @@ using System.Collections.Generic;
 using System.Linq;
 using HSMServer.Attributes;
 using HSMServer.Authentication;
+using HSMServer.Extensions;
 
 namespace HSMServer.Controllers
 {
@@ -18,16 +19,14 @@ namespace HSMServer.Controllers
     public class AccessKeysController : BaseController
     {
         private readonly TreeViewModel _treeViewModel;
-        private readonly IUserManager _userManager;
 
         internal ITreeValuesCache TreeValuesCache { get; }
 
 
-        public AccessKeysController(ITreeValuesCache treeValuesCache, IUserManager userManager, TreeViewModel treeViewModel)
+        public AccessKeysController(ITreeValuesCache treeValuesCache, IUserManager userManager, TreeViewModel treeViewModel) : base(userManager)
         {
             TreeValuesCache = treeValuesCache;
             _treeViewModel = treeViewModel;
-            _userManager = userManager;
         }
 
         public IActionResult Index() => View(GenerateFullViewModel());
@@ -44,7 +43,7 @@ namespace HSMServer.Controllers
 
         [HttpGet]
         public IActionResult AccessKeysForProduct(string productId) => 
-            GetPartialProductAccessKeys(Guid.Parse(productId));
+            GetPartialProductAccessKeys(productId.ToGuid());
         
         [HttpGet]
         [AuthorizeIsAdmin]
@@ -65,12 +64,12 @@ namespace HSMServer.Controllers
         {
             var key = new EditAccessKeyViewModel()
             {
-                SelectedProductId = Guid.Parse(selectedId),
+                SelectedProductId = selectedId.ToGuid(),
                 CloseModal = closeModal,
                 ReturnType = returnType,
                 Products = new List<ProductModel>()
                 {
-                    TreeValuesCache.GetProduct(Guid.Parse(selectedId))
+                    TreeValuesCache.GetProduct(selectedId.ToGuid())
                 }
             };
 
@@ -104,7 +103,7 @@ namespace HSMServer.Controllers
         [ProductRoleFilterBySelectedKey(nameof(selectedKey), ProductRoleEnum.ProductManager)]
         public IActionResult ModifyAccessKey(string selectedKey, bool closeModal = false)
         {
-            var key = TreeValuesCache.GetAccessKey(Guid.Parse(selectedKey));
+            var key = TreeValuesCache.GetAccessKey(selectedKey.ToGuid());
 
             return GetPartialNewAccessKey(new EditAccessKeyViewModel(key).ToModify(key.IsMaster ? null : TreeValuesCache.GetProduct(key.ProductId), closeModal));
         }
@@ -128,7 +127,7 @@ namespace HSMServer.Controllers
         [ProductRoleFilterBySelectedKey(nameof(selectedKey), ProductRoleEnum.ProductManager)]
         public IActionResult RemoveAccessKeyFromAllTable(string selectedKey, bool fullTable)
         {
-            var key = TreeValuesCache.RemoveAccessKey(Guid.Parse(selectedKey));
+            var key = TreeValuesCache.RemoveAccessKey(selectedKey.ToGuid());
 
             if (fullTable)
                 return AvailableAccessKeys();
@@ -140,11 +139,11 @@ namespace HSMServer.Controllers
         [ProductRoleFilterBySelectedKey(nameof(selectedKey), ProductRoleEnum.ProductManager)]
         public IActionResult BlockAccessKeyFromAllTable(string selectedKey, KeyState updatedState, bool fullTable)
         {
-            var key = TreeValuesCache.GetAccessKey(Guid.Parse(selectedKey));
+            var key = TreeValuesCache.GetAccessKey(selectedKey.ToGuid());
             if (updatedState == KeyState.Active && key.IsExpired)
                 updatedState = KeyState.Expired;
 
-            TreeValuesCache.UpdateAccessKeyState(Guid.Parse(selectedKey), updatedState);
+            TreeValuesCache.UpdateAccessKeyState(selectedKey.ToGuid(), updatedState);
 
             if (fullTable)
                 return AvailableAccessKeys();

@@ -2,7 +2,7 @@
 using HSMSensorDataObjects.HistoryRequests;
 using HSMSensorDataObjects.SensorValueRequests;
 using HSMServer.ApiObjectsConverters;
-using HSMServer.BackgroundTask;
+using HSMServer.BackgroundServices;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Requests;
@@ -38,6 +38,8 @@ namespace HSMServer.Controllers
         private readonly DataCollectorWrapper _dataCollector;
         private readonly ITreeValuesCache _cache;
 
+        protected static readonly EmptyResult _emptyResult = new();
+
 
         public SensorsController(IUpdatesQueue updatesQueue, DataCollectorWrapper dataCollector,
             ILogger<SensorsController> logger, ITreeValuesCache cache)
@@ -47,6 +49,11 @@ namespace HSMServer.Controllers
             _logger = logger;
             _cache = cache;
         }
+
+
+        [HttpGet("testConnection")]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        public ActionResult TestConnection() => TryCheckKey(out var message) ? _emptyResult : BadRequest(message);
 
         /// <summary>
         /// Receives value of bool sensor
@@ -431,7 +438,7 @@ namespace HSMServer.Controllers
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status406NotAcceptable)]
-        public async Task<IActionResult> Get([FromBody] FileHistoryRequest request)
+        public async Task<IActionResult> Get([FromBody] FileHistoryRequest request) //TODO merge with ExportHistory History controller
         {
             try
             {
@@ -486,6 +493,17 @@ namespace HSMServer.Controllers
                 key = valueBase.Key;
 
             return new(key, valueBase.Path) { BaseValue = baseValue };
+        }
+
+        private bool TryCheckKey(out string message)
+        {
+            message = Request.Headers.TryGetValue(nameof(BaseRequest.Key), out var keyStr)
+                   && Guid.TryParse(keyStr, out var keyId)
+                   && _cache.GetAccessKey(keyId) != null
+                ? null
+                : "Invalid key";
+
+            return message == null;
         }
     }
 }

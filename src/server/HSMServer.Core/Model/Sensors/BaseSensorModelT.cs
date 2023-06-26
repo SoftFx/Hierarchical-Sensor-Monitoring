@@ -8,7 +8,7 @@ namespace HSMServer.Core.Model
 {
     public abstract class BaseSensorModel<T> : BaseSensorModel where T : BaseValue
     {
-        protected override ValuesStorage<T> Storage { get; }
+        internal override ValuesStorage<T> Storage { get; }
 
         public override DataPolicyCollection<T> DataPolicies { get; }
 
@@ -21,7 +21,12 @@ namespace HSMServer.Core.Model
             var canStore = DataPolicies.TryValidate(value, out var valueT);
 
             if (canStore)
+            {
                 Storage.AddValue(valueT);
+                ServerPolicy.Reset();
+
+                ReceivedNewValue?.Invoke(valueT);
+            }
 
             return canStore;
         }

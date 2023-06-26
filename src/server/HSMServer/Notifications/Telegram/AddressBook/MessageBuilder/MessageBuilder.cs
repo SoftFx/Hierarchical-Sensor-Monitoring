@@ -2,7 +2,6 @@
 using HSMServer.Notification.Settings;
 using HSMServer.Notifications.Telegram.AddressBook.MessageBuilder;
 using System;
-using System.Linq;
 using System.Text;
 
 namespace HSMServer.Notifications

@@ -8,6 +8,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
 using System.Threading.Tasks;
+using HSMServer.Extensions;
 
 namespace HSMServer.Controllers.GrafanaDatasources.JsonSource
 {
@@ -69,7 +70,7 @@ namespace HSMServer.Controllers.GrafanaDatasources.JsonSource
 
             var options = request.Name switch
             {
-                Metric.SensorsPayloadName => GetSensorsOptions(Guid.Parse(request.Metric)),
+                Metric.SensorsPayloadName => GetSensorsOptions(request.Metric.ToGuid()),
                 Metric.TypePayloadName => GetDataTypeOptions(request.Payload.Sensor),
                 _ => throw new Exception($"Usupported option {request.Name}")
             };
@@ -171,7 +172,7 @@ namespace HSMServer.Controllers.GrafanaDatasources.JsonSource
             if (Request.Headers.TryGetValue(nameof(HSMSensorDataObjects.BaseRequest.Key), out var keyStr) && Guid.TryParse(keyStr, out var keyId))
                 key = _cache.GetAccessKey(keyId);
             else
-                message = "Ivalid key";
+                message = "Invalid key";
 
             return key != null;
         }

@@ -5,6 +5,7 @@ using HSMServer.Core.Cache;
 using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.DataLayer;
 using HSMServer.Core.Model;
+using HSMServer.Core.Model.Policies;
 using HSMServer.Model;
 using HSMServer.Model.Authentication;
 using HSMServer.Model.Folders;
@@ -41,6 +42,7 @@ namespace HSMServer.Folders
 
             _userManager = userManager;
             _userManager.Removed += RemoveUserHandler;
+            _userManager.Added += AddUserHandler;
         }
 
 
@@ -72,7 +74,8 @@ namespace HSMServer.Folders
         {
             var result = TryGetValue(update.Id, out var folder) && await base.TryUpdate(update);
 
-            if (result && (update.ExpectedUpdateInterval != null || update.RestoreInterval != null))
+            if (result && (update.ExpectedUpdateInterval != null || update.RestoreInterval != null ||
+                           update.SavedHistoryPeriod != null || update.SelfDestroy != null))
                 foreach (var productId in folder.Products.Keys)
                     TryUpdateProductInFolder(productId, folder);
 
@@ -110,14 +113,20 @@ namespace HSMServer.Folders
                     folder.Author = author.Name;
 
             foreach (var user in _userManager.GetUsers())
+            {
+                AddUserHandler(user);
+                
                 foreach (var (folderId, role) in user.FoldersRoles)
                     if (TryGetValue(folderId, out var folder))
                         folder.UserRoles.Add(user, role);
+            }
+
+            ResetServerPolicyForFolderProducts();
         }
 
         public List<FolderModel> GetUserFolders(User user)
         {
-            var folders = Values.Select(f => f.RecalculateState()).ToList();
+            var folders = GetFolders();
 
             if (user == null || user.IsAdmin)
                 return folders;
@@ -174,6 +183,8 @@ namespace HSMServer.Folders
             {
                 var expectedUpdateInterval = product.ServerPolicy.ExpectedUpdate.Policy.Interval;
                 var restoreInterval = product.ServerPolicy.RestoreError.Policy.Interval;
+                var savedHistory = product.ServerPolicy.SavedHistoryPeriod.Policy.Interval;
+                var selfDestroy = product.ServerPolicy.SelfDestroy.Policy.Interval;
 
                 var update = new ProductUpdate()
                 {
@@ -181,6 +192,8 @@ namespace HSMServer.Folders
                     FolderId = folder?.Id ?? Guid.Empty,
                     ExpectedUpdateInterval = GetCorePolicy(expectedUpdateInterval, folder?.ExpectedUpdateInterval),
                     RestoreInterval = GetCorePolicy(restoreInterval, folder?.SensorRestorePolicy),
+                    SavedHistoryPeriod = GetCorePolicy(savedHistory, folder?.SavedHistoryPeriod),
+                    SelfDestroy = GetCorePolicy(selfDestroy, folder?.SelfDestroyPeriod),
                 };
 
                 _cache.UpdateProduct(update);
@@ -201,12 +214,17 @@ namespace HSMServer.Folders
                 folder.Products.Remove(product.Id);
         }
 
+        private void AddUserHandler(User user) => user.Tree.GetFolders += GetFolders;
+
         private void RemoveUserHandler(User user)
         {
             foreach (var folderId in user.FoldersRoles.Keys)
                 if (TryGetValue(folderId, out var folder))
                     folder.UserRoles.Remove(user);
+
+            user.Tree.GetFolders -= GetFolders;
         }
+
 
         private static TimeIntervalModel GetCorePolicy(TimeIntervalModel coreInterval, TimeIntervalViewModel folderInterval)
         {
@@ -214,5 +232,36 @@ namespace HSMServer.Folders
                 ? folderInterval?.ToFolderModel() ?? new TimeIntervalModel(coreInterval.CustomPeriod)
                 : null;
         }
+
+        private void ResetServerPolicyForFolderProducts()
+        {
+            static TimeIntervalModel IsFromFolder<T>(CollectionProperty<T> property, TimeIntervalViewModel interval)
+                where T : ServerPolicy, new()
+            {
+                return property.Policy.FromParent ? interval.ToFolderModel() : null;
+            }
+
+
+            foreach (var product in _cache.GetProducts())
+            {
+                if (!product.FolderId.HasValue || !TryGetValueById(product.FolderId, out var folder))
+                    continue;
+
+                var update = new ProductUpdate
+                {
+                    Id = product.Id,
+                    ExpectedUpdateInterval = IsFromFolder(product.ServerPolicy.ExpectedUpdate, folder.ExpectedUpdateInterval),
+                    RestoreInterval = IsFromFolder(product.ServerPolicy.RestoreError, folder.SensorRestorePolicy),
+                    SavedHistoryPeriod = IsFromFolder(product.ServerPolicy.SavedHistoryPeriod, folder.SavedHistoryPeriod),
+                    SelfDestroy = IsFromFolder(product.ServerPolicy.SelfDestroy, folder.SelfDestroyPeriod),
+                };
+
+                if (update.ExpectedUpdateInterval != null || update.RestoreInterval != null ||
+                    update.SavedHistoryPeriod != null || update.SelfDestroy != null)
+                    _cache.UpdateProduct(update);
+            }
+        }
+
+        private List<FolderModel> GetFolders() => Values.Select(x => x.RecalculateState()).ToList();
     }
 }

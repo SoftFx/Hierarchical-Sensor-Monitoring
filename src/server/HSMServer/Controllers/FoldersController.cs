@@ -16,18 +16,14 @@ namespace HSMServer.Controllers
 {
     public class FoldersController : BaseController
     {
-        private static readonly EmptyResult _emptyResult = new();
-
-        private readonly TreeViewModel _tree;
-        private readonly IUserManager _userManager;
         private readonly IFolderManager _folderManager;
+        private readonly TreeViewModel _tree;
 
 
-        public FoldersController(IFolderManager folderManager, IUserManager userManager, TreeViewModel treeViewModel)
+        public FoldersController(IFolderManager folderManager, IUserManager userManager, TreeViewModel treeViewModel) : base(userManager)
         {
-            _tree = treeViewModel;
-            _userManager = userManager;
             _folderManager = folderManager;
+            _tree = treeViewModel;
         }
 
 
@@ -94,6 +90,23 @@ namespace HSMServer.Controllers
         [HttpPost]
         [FolderRoleFilterByFolderId(nameof(folderId), ProductRoleEnum.ProductManager)]
         public Task RemoveFolder(Guid folderId) => _folderManager.TryRemove(folderId);
+
+
+        [HttpPost]
+        [FolderRoleFilterByEditCleanup(nameof(folderCleanup), ProductRoleEnum.ProductManager)]
+        public async Task<IActionResult> EditCleanup(FolderCleanupViewModel folderCleanup)
+        {
+            var update = new FolderUpdate()
+            {
+                Id = folderCleanup.Id,
+                SavedHistoryPeriod = folderCleanup.SavedHistoryPeriod,
+                SelfDestroy = folderCleanup.SelfDestoryPeriod,
+            };
+
+            await _folderManager.TryUpdate(update);
+
+            return PartialView("_Cleanup", new FolderCleanupViewModel(_folderManager[update.Id]));
+        }
 
 
         [HttpPost]

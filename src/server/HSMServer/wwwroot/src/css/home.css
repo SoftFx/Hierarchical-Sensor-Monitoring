@@ -92,6 +92,12 @@
     background-color: #f2f2f2;
 }
 
+.grid-cell-empty {
+    color: black;
+    background-color: white;
+    border: 1px solid black;
+}
+
 .grid-cell-ok {
     color: green;
     background-color: #c6efce;
@@ -236,6 +242,28 @@ img .tree-png-icon {
     height: 1rem;
 }
 
+.table-history-refresh {
+    padding: 4px 8px;
+    color: #bc4c00;
+    background-color: #fff1e5;
+    border-radius: 6px;
+}
+
+.table-history-refresh-link {
+    color: inherit;
+    text-decoration: none;
+}
+
+.table-history-refresh-link:hover {
+    color: inherit;
+    text-decoration: underline;
+}
+
+.badge-light {
+    background-color: rgba(175,184,193,0.2);
+    color: black;
+} 
+
 .placeholder-wrapper {
     position: relative;
 }
@@ -252,4 +280,16 @@ img .tree-png-icon {
 
 .customTimeInterval:placeholder-shown + .placeholder {
     opacity: 0;
+}
+
+.meta-info-label {
+    min-width: 18rem;
+}
+
+.meta-info-value {
+    min-width: 12rem;
+}
+
+.meta-info-interval {
+    width: 17rem;
 }

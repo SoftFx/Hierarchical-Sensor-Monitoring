@@ -17,6 +17,7 @@ using System.Linq;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
+using HSMServer.Extensions;
 using Xunit;
 using SensorModelFactory = HSMServer.Core.Tests.Infrastructure.SensorModelFactory;
 
@@ -36,7 +37,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         {
             var folderManager = new Mock<IFolderManager>().Object;
 
-            _treeViewModel = new(_valuesCache, folderManager);
+            _treeViewModel = new(_valuesCache, folderManager, _userManager);
         }
 
 
@@ -47,14 +48,14 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             await Task.Delay(1000);
 
             var expectedProducts = _databaseCoreManager.DatabaseCore.GetAllProducts();
-            var actualProducts = _valuesCache.GetNodes();
+            var actualProducts = _valuesCache.GetAllNodes();
 
             ModelsTester.TestProducts(expectedProducts, actualProducts);
         }
 
         [Fact]
         [Trait("Category", "Initialization")]
-        public async void SensorsInitializationTest()
+        public async Task SensorsInitializationTest()
         {
             await Task.Delay(1000);
 
@@ -389,7 +390,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         {
             var sensor = GetSensorByNameFromCache("sensor0");
 
-            _valuesCache.ClearSensorHistory(sensor.Id);
+            _valuesCache.ClearSensorHistory(sensor.Id, DateTime.MaxValue);
 
             await TestClearedSensor(sensor.Id);
             ModelsTester.TestSensorDataWithoutClearedData(sensor, GetSensorByIdFromCache(sensor.Id));
@@ -452,7 +453,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             var subProduct = GetProductByName(subProductName);
             var subSubProduct = GetProductByName(subSubProductName);
             var sensor = GetSensorByNameFromCache(sensorName);
-            var sensorDataFromDb = _databaseCoreManager.DatabaseCore.GetLatestValues(new(1) { sensor }).FirstOrDefault().Value;
+            var sensorDataFromDb = _databaseCoreManager.DatabaseCore.GetLatestValuesFrom(new(1) { [sensor.Id] = DateTime.MinValue.Ticks }).FirstOrDefault().Value;
 
             Assert.Equal(2, addedProductsCount);
             Assert.Equal(5, updatedProductsCount);
@@ -521,7 +522,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
 
             var product = _valuesCache.GetProduct(productId);
             var sensor = GetSensorByNameFromCache(sensorName);
-            var sensorDataFromDb = _databaseCoreManager.DatabaseCore.GetLatestValues(new(1) { sensor }).FirstOrDefault().Value;
+            var sensorDataFromDb = _databaseCoreManager.DatabaseCore.GetLatestValuesFrom(new(1) { [sensor.Id] = DateTime.MinValue.Ticks }).FirstOrDefault().Value;
 
             Assert.Equal(1, updatedSensorsCount);
             Assert.NotEmpty(product.Sensors);
@@ -546,7 +547,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         }
 
         private ProductModel GetProductByName(string name) =>
-            _valuesCache.GetNodes().FirstOrDefault(p => p.DisplayName == name);
+            _valuesCache.GetAllNodes().FirstOrDefault(p => p.DisplayName == name);
 
         private BaseSensorModel GetSensorByNameFromCache(string name) =>
             _valuesCache.GetSensors().FirstOrDefault(s => s.DisplayName == name);
@@ -564,12 +565,12 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         {
             Assert.Equal(expected.Count, actual.Count);
 
-            var expectedSensorValues = _databaseCoreManager.DatabaseCore.GetLatestValues(actual);
+            var expectedSensorValues = _databaseCoreManager.DatabaseCore.GetLatestValuesFrom(actual.ToDictionary(s => s.Id, _ => DateTime.MinValue.Ticks));
             var actualDict = actual.ToDictionary(s => s.Id);
 
             foreach (var expectedSensor in expected)
             {
-                var sensorId = Guid.Parse(expectedSensor.Id);
+                var sensorId = expectedSensor.Id.ToGuid();
                 var actualSensor = actualDict[sensorId];
 
                 ModelsTester.TestSensorModel(expectedSensor, actualSensor);

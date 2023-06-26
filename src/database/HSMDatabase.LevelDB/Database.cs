@@ -62,7 +62,7 @@ namespace HSMDatabase.LevelDB
             }
         }
 
-        public void DeleteAllStartingWith(byte[] startWithKey)
+        public void DeleteValueFromTo(byte[] from, byte[] to)
         {
             Iterator iterator = null;
 
@@ -70,7 +70,7 @@ namespace HSMDatabase.LevelDB
             {
                 iterator = _database.CreateIterator(_iteratorOptions);
 
-                for (iterator.Seek(startWithKey); iterator.IsValid && iterator.Key().StartsWith(startWithKey); iterator.Next())
+                for (iterator.Seek(from); iterator.IsValid && iterator.Key().IsSmallerOrEquals(to); iterator.Next())
                     _database.Delete(iterator.Key());
             }
             catch (Exception e)
@@ -105,6 +105,28 @@ namespace HSMDatabase.LevelDB
             catch (Exception e)
             {
                 throw new ServerDatabaseException(e.Message, e);
+            }
+        }
+
+        public byte[] Get(byte[] key, byte[] prefix)
+        {
+            Iterator iterator = null;
+
+            try
+            {
+                iterator = _database.CreateIterator(_iteratorOptions);
+
+                iterator.Seek(key);
+
+                return iterator.IsValid && iterator.Key().StartsWith(prefix) ? iterator.Value() : null;
+            }
+            catch (Exception e)
+            {
+                throw new ServerDatabaseException(e.Message, e);
+            }
+            finally
+            {
+                iterator?.Dispose();
             }
         }
 
@@ -179,7 +201,7 @@ namespace HSMDatabase.LevelDB
             }
         }
 
-        public void FillLatestValues(Dictionary<byte[], (Guid sensorId, byte[] latestValue)> keyValuePairs)
+        public void FillLatestValues(Dictionary<byte[], (long from, byte[] latestValue)> keyValuePairs, long endBase)
         {
             Iterator iterator = null;
 
@@ -189,10 +211,10 @@ namespace HSMDatabase.LevelDB
 
                 foreach (var (key, value) in keyValuePairs)
                 {
-                    if (value.latestValue == null)
+                    if (value.latestValue == null && endBase >= value.from)
                     {
                         for (iterator.Seek(key); iterator.IsValid && iterator.Key().StartsWith(key); iterator.Next())
-                            keyValuePairs[key] = (value.sensorId, iterator.Value());
+                            keyValuePairs[key] = (value.from, iterator.Value());
                     }
                 }
             }

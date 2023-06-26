@@ -23,12 +23,6 @@
             </summary>
             <param name="userName">Name of the user to remove.</param>
         </member>
-        <member name="T:HSMServer.BackgroundTask.OutdatedSensorService">
-            <summary>
-            This class is derived from BackgroundService. Every day, all sensors are checked. Sensors with latest updated older
-            than a specified parameter value are deleted
-            </summary>
-        </member>
         <member name="M:HSMServer.Configuration.ConfigurationProvider.ReadOrDefault(System.String)">
             Use 'name' from ConfigurationConstants! 
         </member>
@@ -169,6 +163,35 @@
             <summary>
             The attribute denies access to some actions for a user who is neither admin or has role from _roles
             </summary>
+        </member>
+        <member name="M:HSMServer.Model.History.BarHistoryProcessor`1.AddValueFromLists(HSMServer.Model.History.SummaryBarItem{`0})">
+            <summary>
+            Set fields, for which collecting lists of values is required
+            </summary>
+            <param name="summary"></param>
+        </member>
+        <member name="M:HSMServer.Model.History.BarHistoryProcessor`1.ProcessItem(HSMServer.Core.Model.BarBaseValue{`0},HSMServer.Model.History.SummaryBarItem{`0})">
+            <summary>
+            This method applies possible changes to the current data item for fields, for which collecting datas is not required
+            </summary>
+            <param name="value">Currently processed data item</param>
+            <param name="summary">Current summary item</param>
+        </member>
+        <member name="M:HSMServer.Model.History.BarHistoryProcessor`1.CountMean(System.Collections.Generic.List{System.ValueTuple{`0,System.Int32}})">
+            <summary>
+            Count mean from the list of all means
+            </summary>
+            <param name="means"></param>
+            <returns></returns>
+        </member>
+        <member name="M:HSMServer.Model.History.BarHistoryProcessor`1.CountMedian">
+            <returns>median from the percentiles list</returns>
+        </member>
+        <member name="M:HSMServer.Model.History.BarHistoryProcessor`1.CountQ1">
+            <returns>Q1 from the percentiles list</returns>
+        </member>
+        <member name="M:HSMServer.Model.History.BarHistoryProcessor`1.CountQ3">
+            <returns>Q3 from the percentiles list</returns>
         </member>
         <member name="M:HSMServer.Registration.RegistrationTicketManager.GetTicket(System.Guid)">
             <summary>

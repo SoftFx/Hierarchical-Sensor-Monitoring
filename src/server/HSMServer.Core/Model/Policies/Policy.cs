@@ -1,4 +1,5 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities;
+using HSMServer.Core.Model.Policies.ServerPolicies;
 using System;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -7,6 +8,8 @@ namespace HSMServer.Core.Model.Policies
 {
     [JsonPolymorphic(TypeDiscriminatorPropertyName = "$type", IgnoreUnrecognizedTypeDiscriminators = true)]
     [JsonDerivedType(typeof(ExpectedUpdateIntervalPolicy), 1000)]
+    [JsonDerivedType(typeof(SelfDestroyPolicy), 1001)]
+    [JsonDerivedType(typeof(SavedIntervalPolicy), 1002)]
     [JsonDerivedType(typeof(RestoreErrorPolicy), 1100)]
     [JsonDerivedType(typeof(RestoreWarningPolicy), 1101)]
     [JsonDerivedType(typeof(RestoreOffTimePolicy), 1102)]
@@ -58,7 +61,7 @@ namespace HSMServer.Core.Model.Policies
         public TimeIntervalModel Interval { get; set; }
 
 
-        internal bool FromParent => Interval == null || Interval?.TimeInterval == TimeInterval.FromParent;
+        public bool FromParent => Interval == null || Interval?.TimeInterval == TimeInterval.FromParent;
 
 
         protected ServerPolicy() : base()

@@ -1,0 +1,58 @@
+﻿@using HSMServer.Model.Folders.ViewModels
+
+@model FolderCleanupViewModel
+
+@addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
+
+
+@if (Model != null)
+{
+    <input asp-for="Id" value="@Model.Id" class="d-none" />
+
+    <div class="row mt-2">
+        <label class="col-3 col-form-label">Keep sensor(s) history</label>
+        <div class="col-3">
+            <partial name="_TimeIntervalSelect" for="SavedHistoryPeriod" />
+        </div>
+        <label class="col-1 col-form-label">
+            <i class='fas fa-question-circle' title='Time format: dd.hh:mm:ss (min value 01:00:00). The history of sensor values ​​is stored only for the specified period'></i>
+        </label>
+    </div>
+
+    <div class="row mt-2">
+        <label class="col-3 col-form-label">Remove sensor(s) after inactivity</label>
+        <div class="col-3">
+            <partial name="_TimeIntervalSelect" for="SelfDestoryPeriod" />
+        </div>
+        <label class="col-1 col-form-label">
+            <i class='fas fa-question-circle' title='Time format: dd.hh:mm:ss (min value 01:00:00). If the sensor does not receive values ​​within the specified period, the sensor is deleted'></i>
+        </label>
+    </div>
+
+    <div class="d-flex justify-content-end my-2">
+        <button type="submit" class="btn btn-secondary independentSizeButton">Save</button>
+    </div>
+}
+
+
+<script>
+    $(document).on("submit", "#folderCleanup_form", function (event) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+
+        $.ajax({
+            type: 'POST',
+            url: $("#folderCleanup_form").attr("action"),
+            data: new FormData(this),
+            datatype: 'html',
+            processData: false,
+            contentType: false,
+            cache: false,
+            async: true,
+            success: function (viewData) {
+                $("#folderCleanup_form").html(viewData);
+                showToast("Folder cleanup settings have been succesfully saved!");
+            }
+        });
+    });
+</script>

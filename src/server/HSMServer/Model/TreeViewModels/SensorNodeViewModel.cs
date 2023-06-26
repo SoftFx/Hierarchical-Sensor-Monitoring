@@ -52,7 +52,7 @@ namespace HSMServer.Model.TreeViewModel
             State = model.State;
             Integration = model.Integration;
             UpdateTime = model.LastUpdateTime;
-            Status = model.Status.Status.ToClient();
+            Status = model.Status.Status.ToClient().ToEmpty(model.HasData);
             ValidationError = State == SensorState.Muted ? GetMutedErrorTooltip(model.EndOfMuting) : model.Status.Message;
 
             LastValue = model.LastValue;

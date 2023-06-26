@@ -4,7 +4,7 @@ namespace HSMServer.Extensions;
 
 public static class TimeSpanExtensions
 {
-    public static string ToToolTip(this TimeSpan time)
+    public static string ToTableView(this TimeSpan time)
     {
         var tooltip = new StringBuilder(1 << 4);
 
@@ -18,7 +18,7 @@ public static class TimeSpanExtensions
     }
 
     public static string ToTableView(this string timeSpanStr) =>
-        TimeSpan.TryParse(timeSpanStr, out var timeSpan) ? timeSpan.ToToolTip() : string.Empty;
+        TimeSpan.TryParse(timeSpanStr, out var timeSpan) ? timeSpan.ToTableView() : string.Empty;
 
     public static string TicksToString(this long ticks)
     {

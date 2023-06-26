@@ -1,12 +1,11 @@
-﻿using HSMServer.Core.Cache;
+﻿using HSMServer.Authentication;
+using HSMServer.Core.Cache;
 using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Model;
-using HSMServer.Extensions;
 using HSMServer.Folders;
 using HSMServer.Model.AccessKeysViewModels;
 using HSMServer.Model.Authentication;
 using HSMServer.Model.Folders;
-using HSMServer.Model.UserTreeShallowCopy;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -18,6 +17,7 @@ namespace HSMServer.Model.TreeViewModel
     {
         private readonly IFolderManager _folderManager;
         private readonly ITreeValuesCache _cache;
+        private readonly IUserManager _userManager;
 
 
         public ConcurrentDictionary<Guid, AccessKeyViewModel> AccessKeys { get; } = new();
@@ -27,14 +27,21 @@ namespace HSMServer.Model.TreeViewModel
         public ConcurrentDictionary<Guid, ProductNodeViewModel> Nodes { get; } = new();
 
 
-        public TreeViewModel(ITreeValuesCache cache, IFolderManager folderManager)
+        public TreeViewModel(ITreeValuesCache cache, IFolderManager folderManager, IUserManager userManager)
         {
             _folderManager = folderManager;
+            _userManager = userManager;
             _cache = cache;
 
             _cache.ChangeProductEvent += ChangeProductHandler;
             _cache.ChangeSensorEvent += ChangeSensorHandler;
             _cache.ChangeAccessKeyEvent += ChangeAccessKeyHandler;
+
+            foreach (var user in _userManager.GetUsers())
+                user.Tree.GetUserProducts += GetUserProducts;
+
+            userManager.Added += AddUserHandler;
+            userManager.Removed += RemoveUserHandler;
 
             foreach (var product in _cache.GetProducts())
                 AddNewProductViewModel(product);
@@ -52,55 +59,6 @@ namespace HSMServer.Model.TreeViewModel
                 return new List<ProductNodeViewModel>();
 
             return products.Where(p => user.IsProductAvailable(p.Id)).ToList();
-        }
-
-        public List<BaseShallowModel> GetUserTree(User user)
-        {
-            NodeShallowModel FilterNodes(ProductNodeViewModel product)
-            {
-                var node = new NodeShallowModel(product, user);
-
-                foreach (var (_, childNode) in product.Nodes)
-                    node.AddChild(FilterNodes(childNode), user);
-
-                foreach (var (_, sensor) in product.Sensors)
-                    node.AddChild(new SensorShallowModel(sensor, user), user);
-
-                return node;
-            }
-
-            var folders = _folderManager.GetUserFolders(user).ToDictionary(k => k.Id, v => new FolderShallowModel(v, user));
-            var tree = new List<BaseShallowModel>(1 << 4);
-
-            foreach (var product in GetUserProducts(user))
-            {
-                var node = FilterNodes(product);
-
-                if (node.VisibleSensorsCount > 0 || user.IsEmptyProductVisible(product))
-                {
-                    var folderId = node.Data.FolderId;
-
-                    if (folderId.HasValue)
-                    {
-                        if (!folders.TryGetValue(folderId.Value, out var folder))
-                        {
-                            folder = new FolderShallowModel(_folderManager[folderId], user);
-                            folders.Add(folderId.Value, folder);
-                        }
-
-                        folder.AddChild(node, user);
-                    }
-                    else
-                        tree.Add(node);
-                }
-            }
-
-            var isUserNoDataFilterEnabled = user.TreeFilter.ByVisibility.Empty.Value;
-            foreach (var folder in folders.Values)
-                if (folder.Nodes.Count > 0 || isUserNoDataFilterEnabled)
-                    tree.Add(folder);
-
-            return tree;
         }
 
 
@@ -206,6 +164,7 @@ namespace HSMServer.Model.TreeViewModel
                         if (product.FolderId != model.FolderId)
                             product.UpdateFolder(_folderManager[model.FolderId]);
                     }
+
                     break;
 
                 case ActionType.Delete:
@@ -225,7 +184,7 @@ namespace HSMServer.Model.TreeViewModel
                         AddNewSensorViewModel(model, parent);
 
                         var root = parent.RootProduct;
-                        if (!root.Notifications.Telegram.Chats.IsEmpty)
+                        if (!root.Notifications.Telegram.Chats.IsEmpty && root.Notifications.AutoSubscription)
                         {
                             root.Notifications.Enable(model.Id);
                             UpdateProductNotificationSettings(root);
@@ -270,6 +229,10 @@ namespace HSMServer.Model.TreeViewModel
                     break;
             }
         }
+
+        private void AddUserHandler(User user) => user.Tree.GetUserProducts += GetUserProducts;
+
+        private void RemoveUserHandler(User user) => user.Tree.GetUserProducts -= GetUserProducts;
 
         private bool TryGetParentProduct(ProductModel product, out ProductNodeViewModel parent)
         {

@@ -32,7 +32,6 @@ namespace HSMServer.Controllers
     [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
     public class ProductController : BaseController
     {
-        private readonly IUserManager _userManager;
         private readonly IConfigurationProvider _configurationProvider;
         private readonly IRegistrationTicketManager _ticketManager;
         private readonly ITreeValuesCache _treeValuesCache;
@@ -42,9 +41,8 @@ namespace HSMServer.Controllers
 
         public ProductController(IUserManager userManager, IConfigurationProvider configurationProvider,
             IRegistrationTicketManager ticketManager, ITreeValuesCache treeValuesCache, IFolderManager folderManager,
-            TreeViewModel treeViewModel, ILogger<ProductController> logger)
+            TreeViewModel treeViewModel, ILogger<ProductController> logger) : base(userManager)
         {
-            _userManager = userManager;
             _ticketManager = ticketManager;
             _configurationProvider = configurationProvider;
             _treeValuesCache = treeValuesCache;

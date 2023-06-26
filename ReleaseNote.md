@@ -1,42 +1,61 @@
 # HSM Server
 
-## New entity **Data alerts** has been added
-* Data alerts check new sensor data and send Telegram notification after certain conditions
-* Data alerts are available for Integer, Double, IntegerBar and DoubleBar sensors
-* Integer and Double alerts can check **Value** data property
-* IntegerBar and DoubleBar alerts can check **Min**, **Max**, **Mean**, **Last value** data properties
-* **If Data alert triggers then Sensor status is changed to Error**
-* Send test message logic has been added for Data alerts
-* Custom comment constructor has been added for Data alerts with the next variables:
-```
-$product - Parent product name
-$path - Sensor path
-$sensor - Sensor name
-$action - Alert binary operation
-$target - Alert constant to compare
-$status - Sensor status
-$time - Sensor value sending time
-$comment - Sensor value comment
-$value - Sensor value
-$min - Bar sensor min value
-$max - Bar sensor max value
-$mean - Bar sensor mean value
-$lastValue - Bar sensor lastValue value
-```
+## New sensor setting **Keep sensor history**
+* The history of sensor values is stored only for this specified period
+* For folders and root products default value is **1 month**
+* For nodes and sensors default value is **From parent**
+* Special service is scanning the database every 1 hour and removing old values
 
-## Multiselect for Tree node has been added (shift + RMB, ctrl + RMB)
-* **Remove** item for multiselect context menu has been added
-* **Edit** item for multiselect context menu has been added (multiedit for TTL and Sensetivity)
+## New sensor setting **Remove sensor after inactivity**
+* If the sensor does not receive values within the specified period, the sensor is deleted
+* For folders and root products default value is **1 month**
+* For nodes and sensors default value is **From parent**
+* Special service is scanning the database every 1 hour and removing old values
 
-## Telegram
-* New icon ?? for Data alerts has been added
-* Partial ignore (for TG groups has been added)
-* Enable/ignore for different groups logic has been added in Tree context menu
+## Snapshot logic has been added
 
-## Other
-* New sensors subscribe to TG group if there is some telegram groups in product
-* Timespan chart default type has been changed from Bars to Line
-* Confirmation dialog before swithing from Edit general info tab has been added
-* '\t' has been disableed as available symbol for sensor path
-* Search user by name has been added in add user to folder modal window
-* Bugfixing
+* Snapshot contains information about previous state of sensor for faster initializing and removing sensor history
+* Tree shapshot is saved on disk every 5 mins
+* Tree shapshot is saved on disk before server stopping (final snapshot)
+* Shaphot helps initializing global state of tree after server starting. If snaphot is not found all databases are scanned
+
+## Tree
+
+* Only visible part of tree is rendered now
+* On click loading subnodes has been added
+* 200 elements limit per level has been added
+
+## Grid/List
+
+* Pagination has been added
+* On click grid and list loading has been added
+* Auto add for new sensors has been added
+* Auto remove for deleted sensors has been added
+
+## Site
+* New **Cleanup** section (with *Keep sensor history* and *Remove sensor after inactivity*) has been added in folder/product/node/sensor info
+* **Cleanup** section has been added in Folder edit
+* Right horizontal alignment for ? icons have been added in entities meta info
+* New endpoint **/testConnection** has been added
+* New setting **Auto subscription for new sensors** has been added for product
+
+## Table history
+* Subscription for table updates has been added
+* Default **TO** value has been changed to UtcNow + 1 year
+* Label with new values count and button **Refresh** has been added
+* Export csv has the same order and columns like in Rest API methods
+* **Last value** column has been added for Bar sensors
+* Invalid **Time** order has been fixed
+* Duplication for rows has been fixed
+
+## Bugfixing
+
+* Timeout notifications after applying OffTime->Ok has been fixed
+* Timeout notifications after server restart (if sensor has Expired state before server stopping) has been fixed
+* **No data** for first user login after server restart has been fixed
+* Duplicates bar sensor last values for charts have been fixed
+
+# HSM Datacollector
+* Collector version has been increased to 3.1.6
+* New method TestConnection() has been added
+* New method [AddCustomLogger](https://github.com/SoftFx/Hierarchical-Sensor-Monitoring/wiki/DataCollector-logging) has been added

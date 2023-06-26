@@ -11,6 +11,8 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
 {
     internal sealed class SensorValuesDatabaseWorker : ISensorValuesDatabase
     {
+        private static readonly JsonSerializerOptions _options = new() { IgnoreReadOnlyProperties = true };
+
         private readonly Logger _logger = LogManager.GetCurrentClassLogger();
         private readonly LevelDBDatabaseAdapter _openedDb;
 
@@ -34,11 +36,17 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
 
         public void Dispose() => _openedDb.Dispose();
 
-        public void FillLatestValues(Dictionary<byte[], (Guid sensorId, byte[] latestValue)> keyValuePairs)
+
+        public bool IsInclude(long time) => From <= time && time <= To;
+
+        public bool IsInclude(long from, long to) => From <= to && To >= from;
+
+
+        public void FillLatestValues(Dictionary<byte[], (long, byte[])> keyValuePairs)
         {
             try
             {
-                _openedDb.FillLatestValues(keyValuePairs);
+                _openedDb.FillLatestValues(keyValuePairs, To);
             }
             catch (Exception e)
             {
@@ -50,7 +58,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
         {
             try
             {
-                var valueBytes = JsonSerializer.SerializeToUtf8Bytes(value);
+                var valueBytes = JsonSerializer.SerializeToUtf8Bytes(value, _options);
                 _openedDb.Put(key, valueBytes);
             }
             catch (Exception e)
@@ -59,17 +67,29 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             }
         }
 
-        public void RemoveSensorValues(string sensorId)
+        public void RemoveSensorValues(byte[] from, byte[] to)
         {
-            var key = Encoding.UTF8.GetBytes(sensorId);
-
             try
             {
-                _openedDb.DeleteAllStartingWith(key);
+                _openedDb.DeleteValueFromTo(from, to);
             }
             catch (Exception e)
             {
-                _logger.Error(e, $"Failed to remove values for sensor {sensorId}");
+                _logger.Error($"Failed removing values [{from.GetString()}, {to.GetString()}] - {e.Message}");
+            }
+        }
+
+        public byte[] Get(byte[] key, byte[] sensorId)
+        {
+            try
+            {
+                return _openedDb.Get(key, sensorId);
+            }
+            catch (Exception e)
+            {
+                _logger.Error($"Failed getting value {key.GetString()} - {e.Message}");
+
+                return Array.Empty<byte>();
             }
         }
 
