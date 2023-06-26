@@ -23,7 +23,7 @@ internal sealed class JournalValuesDatabaseDictionary : IEnumerable<IJournalValu
             var journalValuesDirectories = GetJournalValuesDirectories();
             foreach (var directory in journalValuesDirectories)
             {
-                (var from, var to) = GetDatesFromFolderName(directory);
+                var (from, to) = GetDatesFromFolderName(directory);
                 AddNewDb(directory, from, to);
             }
         }

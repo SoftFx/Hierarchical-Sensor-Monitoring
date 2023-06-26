@@ -24,6 +24,6 @@ namespace HSMDatabase.AccessManager
             Path.Combine(DatabaseFolder, $"{SensorValuesDatabaseName}_{from}_{to}");
         
         public string GetPathToJournalValueDatabase(long from, long to) =>
-            Path.Combine(DatabaseFolder, $"{JournalValuesDatabaseName}_{from}_{to}");
+            Path.Combine(Path.Combine(DatabaseFolder, "Journals"), $"{JournalValuesDatabaseName}_{from}_{to}");
     }
 }
