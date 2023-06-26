@@ -45,7 +45,8 @@ namespace HSMServer.Extensions
                 SensorStatus.Ok => "grid-cell-ok",
                 SensorStatus.Warning => "grid-cell-warning",
                 SensorStatus.Error => "grid-cell-error",
-                _ => "grid-cell-offTime",
+                SensorStatus.OffTime => "grid-cell-offTime",
+                _ => "grid-cell-empty",
             };
 
         internal static IOrderedEnumerable<T> GetOrdered<T>(this IEnumerable<T> collection, User user) where T : BaseNodeViewModel =>
