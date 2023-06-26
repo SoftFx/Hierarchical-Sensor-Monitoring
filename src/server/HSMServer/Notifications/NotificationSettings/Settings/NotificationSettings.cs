@@ -12,7 +12,7 @@ namespace HSMServer.Notification.Settings
 
         public TelegramSettings Telegram { get; }
 
-        public bool AutoSubscription { get; set; }
+        public bool AutoSubscription { get; set; } = true;
 
 
         internal bool IsCustom => Telegram.Inheritance == InheritedSettings.Custom;
