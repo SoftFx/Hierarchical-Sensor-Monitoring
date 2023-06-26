@@ -58,10 +58,8 @@ namespace HSMServer.Core.Model
         {
             base.Update(update);
 
-            FolderId = update.FolderId.HasValue
-                ? update.FolderId != Guid.Empty ? update.FolderId : null
-                : FolderId;
-            NotificationsSettings = update?.NotificationSettings ?? NotificationsSettings;
+            FolderId = ApplyUpdate(FolderId, update.FolderId.HasValue ? update.FolderId != Guid.Empty ? update.FolderId : null : FolderId);
+            NotificationsSettings = ApplyUpdate(NotificationsSettings, update.NotificationSettings);
 
             return this;
         }

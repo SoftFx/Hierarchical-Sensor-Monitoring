@@ -91,13 +91,13 @@ namespace HSMServer.Core.Model
         internal override bool HasUpdateTimeout() => ServerPolicy.HasUpdateTimeout(LastValue?.ReceivingTime);
 
 
-        internal void Update(SensorUpdate update)
+        public void Update(SensorUpdate update)
         {
             base.Update(update);
 
-            State = update?.State ?? State;
-            Integration = update?.Integration ?? Integration;
-            EndOfMuting = update?.EndOfMutingPeriod ?? EndOfMuting;
+            State = ApplyUpdate(State, update?.State ?? State);
+            Integration = ApplyUpdate(Integration, update?.Integration ?? Integration);
+            EndOfMuting = ApplyUpdate(EndOfMuting, update?.EndOfMutingPeriod ?? EndOfMuting);
 
             if (State == SensorState.Available)
                 EndOfMuting = null;

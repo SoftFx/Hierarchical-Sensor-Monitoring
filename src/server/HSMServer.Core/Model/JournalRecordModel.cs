@@ -6,9 +6,9 @@ namespace HSMServer.Core.Model;
 public sealed class JournalRecordModel
 {
     public Guid Id { get; set; }
-    
+
     public long Time { get; set; }
-    
+
     public string Value { get; set; }
 
     internal JournalEntity ToJournalEntity() => new()
@@ -21,4 +21,6 @@ public sealed class JournalRecordModel
         Id = id;
         Value = entity.Value;
     }
+
+    public JournalRecordModel(){}
 }
