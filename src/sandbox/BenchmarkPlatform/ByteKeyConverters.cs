@@ -8,59 +8,70 @@ namespace TestLevelDB;
 [MemoryDiagnoser]
 public class ByteKeyConverters
 {
-    [Params(1_000_000, 10_000_000)] 
-    public int N;
+    private List<Guid> _guids;
+
+    private List<byte[]> _results;
+    
+    
+    [Params(100, 1000, 10000, 100000)] 
+    public int N { get; set; }
+
 
     [Benchmark]
     public List<byte[]> SpanConverter()
     {
-        List<byte[]> results = new(N);
         Span<byte> result = stackalloc byte[16 + sizeof(long)];
+        
         for (long i = 0; i < N; i++)
         {
-            var guid = Guid.NewGuid();
-            guid.TryWriteBytes(result);
-            BitConverter.TryWriteBytes(result[16..], N);
+            _guids[(int)i].TryWriteBytes(result);
+            BitConverter.TryWriteBytes(result[16..], i);
 
-            results.Add(result.ToArray());
-            result.Clear();
+            _results.Add(result.ToArray());
         }
 
-        return results;
+        return _results;
     }
 
     [Benchmark]
     public List<byte[]> BlockCopyConverter()
     {
-        List<byte[]> results = new(N);
-
         for (long i = 0; i < N; i++)
         {
-            var guid = Guid.NewGuid();
-
-            var guidBytes = guid.ToByteArray();
-            var timeBytes = BitConverter.GetBytes(N);
+            var guidBytes = _guids[(int)i].ToByteArray();
+            var timeBytes = BitConverter.GetBytes(i);
             var result = new byte[guidBytes.Length + timeBytes.Length];
 
             Buffer.BlockCopy(guidBytes, 0, result, 0, guidBytes.Length);
             Buffer.BlockCopy(timeBytes, 0, result, guidBytes.Length, timeBytes.Length);
 
-            results.Add(result);
+            _results.Add(result);
         }
 
-        return results;
+        return _results;
     }
 
     [Benchmark]
     public List<byte[]> StringConverter()
     {
-        List<byte[]> results = new(N);
         for (long i = 0; i < N; i++)
         {
-            var guid = Guid.NewGuid();
-            results.Add(Encoding.UTF8.GetBytes($"{guid.ToString()}_{N:D19}"));
+            var guid = _guids[(int)i];
+            _results.Add(Encoding.UTF8.GetBytes($"{guid.ToString()}_{i:D19}"));
         }
 
-        return results;
+        return _results;
     }
+    
+    [GlobalSetup]
+    public void GenerateGuids()
+    {
+        _guids = new List<Guid>(N);
+        
+        for (long i = 0; i < N; i++)
+            _guids.Add(Guid.NewGuid());
+    }
+
+    [IterationSetup]
+    public void ResultInit() => _results = new (N);
 }
