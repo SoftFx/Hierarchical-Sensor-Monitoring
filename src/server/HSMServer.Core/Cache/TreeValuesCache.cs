@@ -363,16 +363,16 @@ namespace HSMServer.Core.Cache
             }
         }
         
-        public async IAsyncEnumerable<List<JournalModel>> GetJournalValuesPage(Guid id, DateTime from, DateTime to, int count)
+        public async IAsyncEnumerable<List<JournalRecordModel>> GetJournalValuesPage(Guid id, DateTime from, DateTime to, int count)
         {
             var pages = _database.GetJournalValuesPage(id, from, to, count);
 
             await foreach (var page in pages)
             {
-                var currPage = new List<JournalModel>(1 << 4);
+                var currPage = new List<JournalRecordModel>(1 << 4);
                 foreach (var item in page)
                 {
-                    currPage.Add(new JournalModel(JsonSerializer.Deserialize<JournalEntity>(item)));
+                    currPage.Add(new JournalRecordModel(JsonSerializer.Deserialize<JournalEntity>(item), id));
                 }
                 
                 yield return currPage;

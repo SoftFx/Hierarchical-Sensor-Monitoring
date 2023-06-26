@@ -3,7 +3,7 @@ using HSMDatabase.AccessManager.DatabaseEntities;
 
 namespace HSMServer.Core.Model;
 
-public class JournalModel
+public sealed class JournalRecordModel
 {
     public Guid Id { get; set; }
     
@@ -16,10 +16,9 @@ public class JournalModel
         Value = Value
     };
 
-    public JournalModel(JournalEntity entity, Key key)
+    public JournalRecordModel(JournalEntity entity, Guid id)
     {
-        Id = key.Id;
-        Time = key.Time;
+        Id = id;
         Value = entity.Value;
     }
 }
