@@ -25,9 +25,9 @@
                 </div>
             </div>
         </div>
-        <div class="container d-flex mt-2 justify-content-between">
+        <div class="container d-flex mt-2 justify-content-between @(Model.IsPaginationDisplayed ? "" : "d-none")">
             <ul class="pagination position-relative" style="left: 45%;">
-                <div class="@(Model.IsPaginationDisplayed ? "d-flex" : "d-none")">
+                <div class="d-flex">
                     @{
                         var nextPageDisplay = Model.IsPageAvailable(Model.PageNumber + 1);
                         var prevPageDisplay = Model.IsPageAvailable(Model.PageNumber - 1);
@@ -71,7 +71,7 @@
 
             <div class="d-flex align-self-baseline gap-1">
                 <input class="form-control" id="pageSize_@accordionId" type="number" value="@Model.PageSize" style="width: 5rem"/>
-                <button class="btn btn-secondary" onclick="getListPage('@accordionId', @(Model.PageNumber), $('#pageSize_@accordionId')[0].value)">Apply</button>
+                <button class="btn btn-secondary" onclick="getListPage('@accordionId', 0, $('#pageSize_@accordionId')[0].value)">Apply</button>
             </div>
         </div>
     }
