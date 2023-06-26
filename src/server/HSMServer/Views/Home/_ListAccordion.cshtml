@@ -11,7 +11,7 @@
         <div class="accordion-item custom-accordion-item">
             <h2 class="accordion-header" id="custom_accordion_header">
                 <button class="accordion-button fw-bold" type="button" data-bs-toggle="collapse" data-bs-target="#flush-collapse_@accordionId" aria-expanded='true'>
-                   @Model.Title
+                    @Model.Title
                 </button>
             </h2>
             <div id="flush-collapse_@accordionId" class="accordion-collapse collapse show">
@@ -25,18 +25,43 @@
                 </div>
             </div>
         </div>
-        <div class="container d-flex mt-2 justify-content-between @(Model.IsPaginationDisplayed ? "d-flex" : "d-none")">
+        <div class="container d-flex mt-2 justify-content-between">
             <ul class="pagination position-relative" style="left: 45%;">
-                <div class="d-flex">
-                    <li id="prevPageButton" class="page-item button-link">
+                <div class="@(Model.IsPaginationDisplayed ? "d-flex" : "d-none")">
+                    @{
+                        var nextPageDisplay = Model.IsPageAvailable(Model.PageNumber + 1);
+                        var prevPageDisplay = Model.IsPageAvailable(Model.PageNumber - 1);
+                    }
+
+                    <li id="prevPageButton" class="page-item button-link @(prevPageDisplay ? "" : "disabled")">
                         <a class="page-link" aria-label="Previous" onclick="getListPage('@accordionId', @(Model.PageNumber - 1), @Model.PageSize)">
                             <span aria-hidden="true">&laquo;</span>
                         </a>
                     </li>
-                    <li class="page-item">
-                        <a id="pageNumber_@accordionId" class="page-link">@(Model.PageNumber + 1)</a>
+                    @if (prevPageDisplay)
+                    {
+                        <li class="page-item button-link">
+                            <a class="page-link" aria-label="Previous" onclick="getListPage('@accordionId', @(Model.PageNumber - 1), @Model.PageSize)">
+                                <span aria-hidden="true">@(Model.PageNumber)</span>
+                            </a>
+                        </li>
+                    }
+
+                    <li class="page-item button-link">
+                        <a class="page-link active" aria-label="Next" onclick="getListPage('@accordionId', @(Model.PageNumber), @Model.PageSize)">
+                            <span id="pageNumber_@accordionId" aria-hidden="true">@(Model.PageNumber + 1)</span>
+                        </a>
                     </li>
-                    <li id="nextPageButton" class="page-item button-link">
+
+                    @if (nextPageDisplay)
+                    {
+                        <li class="page-item button-link">
+                            <a class="page-link" aria-label="Previous" onclick="getListPage('@accordionId', @(Model.PageNumber + 1), @Model.PageSize)">
+                                <span aria-hidden="true">@(Model.PageNumber + 2)</span>
+                            </a>
+                        </li>
+                    }
+                    <li id="nextPageButton" class="page-item button-link @(nextPageDisplay ? "" : "disabled")">
                         <a class="page-link" aria-label="Next" onclick="getListPage('@accordionId', @(Model.PageNumber + 1), @Model.PageSize)">
                             <span aria-hidden="true">&raquo;</span>
                         </a>
