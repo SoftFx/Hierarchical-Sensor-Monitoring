@@ -23,6 +23,7 @@
     "clipboard": "2.0.11",
     "datatables": "1.10.18",
     "dompurify": "3.0.1",
+    "emojionearea": "3.4.2",
     "jquery": "3.6.3",
     "jstree": "3.3.12",
     "marked": "4.3.0",

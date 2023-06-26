@@ -47,12 +47,13 @@
 
             <div class="input-group ms-3">
                 <label class="input-group-text">show icon</label>
-                <select class="form-select icons-select" asp-for="Icon">
+                <textarea id="emoji" class="w-20" maxlength="1" cols="1" style="min-height: 1rem"></textarea>
+                @*<select class="form-select icons-select" asp-for="Icon">
                     @foreach (var item in Model.IconsItems)
                     {
                         <option value="@item.Value">@Html.Raw(item.Text)</option>
                     }
-                </select>
+                </select>*@
                 <label class="input-group-text">in tree</label>
             </div>
 
@@ -66,6 +67,13 @@
 
 
 <script>
+    $(document).ready(function () {
+        $("#emoji").emojioneArea({
+            filtersPosition: "bottom",
+            inline: true
+        });
+    });
+
     $(document).ready(function () {
         $("a.deleteRow").off("click").on("click", function () {
             $(this).parents("div.dataAlertRow:first").remove();
