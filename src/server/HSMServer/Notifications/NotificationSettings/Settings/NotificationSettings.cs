@@ -12,6 +12,9 @@ namespace HSMServer.Notification.Settings
 
         public TelegramSettings Telegram { get; }
 
+        public bool AutoSubscription { get; set; }
+
+
         internal bool IsCustom => Telegram.Inheritance == InheritedSettings.Custom;
 
 
@@ -24,7 +27,11 @@ namespace HSMServer.Notification.Settings
         {
             _getParent = getParent;
             Telegram = new(entity?.TelegramSettings);
+
+            if (entity != null)
+                AutoSubscription = entity.AutoSubscription;
         }
+
 
         public NotificationSettingsEntity ToEntity() =>
             new()
