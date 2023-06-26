@@ -30,7 +30,7 @@ namespace HSMServer.Core.Model
 
         public NotificationSettingsEntity NotificationsSettings { get; private set; }
 
-        
+
         public ProductModel(string name, Guid? authorId = default) : base(name.Trim(), authorId)
         {
             State = ProductState.FullAccess;

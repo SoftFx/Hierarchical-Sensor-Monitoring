@@ -49,6 +49,17 @@ namespace HSMServer.Controllers
         }
 
         [HttpPost]
+        public void ChangeAutoSubscription(string productId, bool autoSubscription)
+        {
+            if (_tree.Nodes.TryGetValue(SensorPathHelper.DecodeGuid(productId), out var product))
+            {
+                product.Notifications.AutoSubscription = autoSubscription;
+
+                _tree.UpdateProductNotificationSettings(product);
+            }
+        }
+
+        [HttpPost]
         public IActionResult UpdateTelegramSettings(TelegramSettingsViewModel telegramSettings, string entityId)
         {
             var update = telegramSettings.GetUpdateModel();

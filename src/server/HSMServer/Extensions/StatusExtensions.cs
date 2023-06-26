@@ -1,4 +1,5 @@
-﻿using Client = HSMServer.Model.TreeViewModel;
+﻿using HSMSensorDataObjects;
+using Client = HSMServer.Model.TreeViewModel;
 using Server = HSMServer.Core.Model;
 
 namespace HSMServer.Extensions
@@ -24,7 +25,6 @@ namespace HSMServer.Extensions
                 Client.SensorStatus.OffTime => Server.SensorStatus.OffTime,
                 _ => Server.SensorStatus.Ok,
             };
-        
         
         public static string ToSelectIcon(this Client.SensorStatus status) => status switch
         {

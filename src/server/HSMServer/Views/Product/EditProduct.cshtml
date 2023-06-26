@@ -21,6 +21,7 @@
     var invite = "@Html.Raw(Url.Action(ViewConstants.InviteAction, ViewConstants.ProductController))";
 
     var changeInheritance = "@Url.Action(nameof(NotificationsController.ChangeInheritance), ViewConstants.NotificationsController)"
+    var changeAutoSubscription = "@Url.Action(nameof(NotificationsController.ChangeAutoSubscription), ViewConstants.NotificationsController)"
 </script>
 
 <div class="modal fade" id="modalDelete" tabindex="-1" aria-labelledby="modalDeleteLabel" aria-hidden="true">
@@ -203,6 +204,13 @@
 
             <div class="mx-4 my-2">
                 @await Html.PartialAsync("~/Views/Notifications/_MessagesSettings.cshtml", Model.Telegram)
+            </div>
+
+            <div class="d-flex flex-row bd-highlight mb-3">
+                <h6 class="fw-bold">Auto subscription for new sensors</h6>
+                <div class="form-check form-switch m-0 p-1">
+                    <input id="notificationsAutoSubscription" class="form-check-input m-0" type="checkbox" asp-for="NotificationsAutoSubscribe">
+                </div>
             </div>
 
             @await Html.PartialAsync("~/Views/Notifications/_Chats.cshtml", Model.Telegram)
@@ -388,6 +396,21 @@
         $.ajax({
             type: 'POST',
             url: `${changeInheritance}?productId=${productId}&fromParent=${this.checked}`,
+            datatype: 'html',
+            contenttype: 'application/json',
+            cache: false,
+            success: function () {
+                document.location.reload();
+            }
+        });
+    });
+
+    $("#notificationsAutoSubscription").change(function () {
+        let productId = $('#encodedProductId').val();
+
+        $.ajax({
+            type: 'POST',
+            url: `${changeAutoSubscription}?productId=${productId}&autoSubscription=${this.checked}`,
             datatype: 'html',
             contenttype: 'application/json',
             cache: false,

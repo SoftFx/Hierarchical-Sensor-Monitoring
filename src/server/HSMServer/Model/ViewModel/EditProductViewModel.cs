@@ -20,6 +20,8 @@ namespace HSMServer.Model.ViewModel
 
         public TelegramSettingsViewModel Telegram { get; }
 
+        public bool NotificationsAutoSubscribe { get; }
+
         public bool IsNotificationsInherited { get; }
 
         public string ProductName { get; }
@@ -41,6 +43,7 @@ namespace HSMServer.Model.ViewModel
             AccessKeys = product.GetAccessKeys();
             Telegram = new(product.Notifications.UsedTelegram, ProductId);
             IsNotificationsInherited = !product.Notifications.IsCustom;
+            NotificationsAutoSubscribe = product.Notifications.AutoSubscription;
 
             _usedUsers = UsersRights.Select(ur => ur.Item1).ToList();
             NotAdminUsers = notAdminUsers.Select(x => new UserViewModel(x)).ToHashSet();
