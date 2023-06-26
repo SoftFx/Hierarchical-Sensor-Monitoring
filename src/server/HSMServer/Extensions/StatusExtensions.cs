@@ -30,7 +30,6 @@ namespace HSMServer.Extensions
                 _ => Server.SensorStatus.Ok,
             };
 
-
         public static string ToSelectIcon(this Client.SensorStatus status) => status switch
         {
             Client.SensorStatus.Ok => "🟢",

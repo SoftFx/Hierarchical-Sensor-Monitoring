@@ -37,6 +37,7 @@
 * **Cleanup** section has been added in Folder edit
 * Right horizontal alignment for ? icons have been added in entities meta info
 * New endpoint **/testConnection** has been added
+* New setting **Auto subscription for new sensors** has been added for product
 
 ## Table history
 * Subscription for table updates has been added

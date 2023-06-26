@@ -13,6 +13,8 @@ namespace HSMDatabase.AccessManager.DatabaseEntities
         public Dictionary<string, long> IgnoredSensors { get; init; }
 
         public List<string> EnabledSensors { get; init; }
+
+        public bool AutoSubscription { get; init; } = true;
     }
 
 

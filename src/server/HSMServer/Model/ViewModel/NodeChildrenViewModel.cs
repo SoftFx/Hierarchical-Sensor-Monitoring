@@ -21,11 +21,15 @@ public interface INodeChildrenViewModel
     public bool IsPaginationDisplayed { get; }
 
     public bool IsPageValid { get; }
-}
 
+    bool IsPageAvailable(int pageNumber);
+}
 
 public sealed class NodeChildrenViewModel<T> : INodeChildrenViewModel where T : NodeViewModel
 {
+    private const int MaxPageSize = 1000;
+
+
     private readonly string _originTitle;
 
     private IDictionary<Guid, T> _items;
@@ -49,7 +53,7 @@ public sealed class NodeChildrenViewModel<T> : INodeChildrenViewModel where T : 
 
     public bool IsPaginationDisplayed => OriginalSize > PageSize;
 
-    public bool IsPageValid => OriginalSize > PageNumber * PageSize && PageNumber >= 0;
+    public bool IsPageValid => IsPageAvailable(PageNumber);
 
 
     public NodeChildrenViewModel(string title)
@@ -79,9 +83,11 @@ public sealed class NodeChildrenViewModel<T> : INodeChildrenViewModel where T : 
 
     public NodeChildrenViewModel<T> Reload(ChildrenPageRequest pageRequest)
     {
-        PageSize = pageRequest.PageSize <= 0 ? PageSize : pageRequest.PageSize;
-        PageNumber = pageRequest.CurrentPage < 0 ? PageNumber : pageRequest.CurrentPage;
+        PageSize = pageRequest.PageSize <= 0 ? PageSize : Math.Min(pageRequest.PageSize, MaxPageSize);
+        PageNumber = IsPageAvailable(pageRequest.CurrentPage) ? pageRequest.CurrentPage : PageNumber;
 
         return this;
     }
+
+    public bool IsPageAvailable(int pageNumber) => OriginalSize > pageNumber * PageSize && pageNumber >= 0;
 }
