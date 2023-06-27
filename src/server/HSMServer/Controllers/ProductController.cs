@@ -30,6 +30,7 @@ namespace HSMServer.Controllers
         private readonly TreeViewModel _treeViewModel;
         private readonly ILogger<ProductController> _logger;
 
+
         public ProductController(IUserManager userManager, ITreeValuesCache treeValuesCache, IFolderManager folderManager,
             TreeViewModel treeViewModel, ILogger<ProductController> logger) : base(userManager)
         {

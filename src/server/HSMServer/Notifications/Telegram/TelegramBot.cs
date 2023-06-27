@@ -48,7 +48,6 @@ namespace HSMServer.Notifications
 
         private bool IsBotRunning => _bot is not null;
 
-
         internal TelegramBot(IUserManager userManager, ITreeValuesCache cache, TreeViewModel tree, TelegramConfig config)
         {
             _userManager = userManager;
@@ -73,7 +72,6 @@ namespace HSMServer.Notifications
             await StopBot();
         }
 
-        
         internal string GetInvitationLink(User user) =>
             $"https://t.me/{BotName}?start={_addressBook.BuildInvitationToken(user)}";
 
