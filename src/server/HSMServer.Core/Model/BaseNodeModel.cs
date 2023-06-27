@@ -73,22 +73,36 @@ namespace HSMServer.Core.Model
             Description = ApplyUpdate(Description, update.Description);
 
             if (update.ExpectedUpdateInterval != null)
+            {
+                ApplyUpdate(ServerPolicy.ExpectedUpdate.Policy.Interval, update.ExpectedUpdateInterval);
                 ServerPolicy.ExpectedUpdate.SetPolicy(update.ExpectedUpdateInterval);
+            }
             
             var restoreInterval = update.RestoreInterval;
 
             if (restoreInterval != null)
             {
+                ApplyUpdate(ServerPolicy.RestoreError.Policy.Interval, update.ExpectedUpdateInterval);
                 ServerPolicy.RestoreError.SetPolicy(restoreInterval);
+                
+                ApplyUpdate(ServerPolicy.RestoreWarning.Policy.Interval, update.ExpectedUpdateInterval);
                 ServerPolicy.RestoreWarning.SetPolicy(restoreInterval);
+                
+                ApplyUpdate(ServerPolicy.RestoreOffTime.Policy.Interval, update.ExpectedUpdateInterval);
                 ServerPolicy.RestoreOffTime.SetPolicy(restoreInterval);
             }
 
             if (update.SavedHistoryPeriod != null)
+            {
+                ApplyUpdate(ServerPolicy.SavedHistoryPeriod.Policy.Interval, update.ExpectedUpdateInterval);
                 ServerPolicy.SavedHistoryPeriod.SetPolicy(update.SavedHistoryPeriod);
+            }
 
             if (update.SelfDestroy != null)
+            {
+                ApplyUpdate(ServerPolicy.SelfDestroy.Policy.Interval, update.ExpectedUpdateInterval);
                 ServerPolicy.SelfDestroy.SetPolicy(update.SelfDestroy);
+            }
         }
 
 
@@ -108,14 +122,37 @@ namespace HSMServer.Core.Model
         
         internal T ApplyUpdate<T>(T property, T update, [CallerArgumentExpression("property")] string propertyName = null)
         {
-            if (update is not null && !update.Equals(property))
+            if (property is not null && update is not null && !update.Equals(property))
             {
-                JournalRecordModels.Add(new JournalRecordModel()
+                if (update is TimeIntervalModel updateTimeInterval && property is TimeIntervalModel propertyTimeInterval)
                 {
-                    Id = Id,
-                    Time = DateTime.UtcNow.Ticks,
-                    Value = $"{propertyName}: {property} -> {update}"
-                });
+                    string newValue;
+                    string oldValue;
+                    
+                    if (updateTimeInterval.TimeInterval is TimeInterval.Custom)
+                        newValue = new TimeSpan(updateTimeInterval.CustomPeriod).ToString();
+                    else
+                        newValue = updateTimeInterval.TimeInterval.ToString();
+                    
+                    if (propertyTimeInterval.TimeInterval is TimeInterval.Custom)
+                        oldValue = new TimeSpan(propertyTimeInterval.CustomPeriod).ToString();
+                    else
+                        oldValue = propertyTimeInterval.TimeInterval.ToString();
+                    
+                    JournalRecordModels.Add(new JournalRecordModel()
+                    {
+                        Id = Id,
+                        Time = DateTime.UtcNow.Ticks,
+                        Value = $"{propertyName}: {oldValue} -> {newValue}"
+                    });
+                }
+                else
+                    JournalRecordModels.Add(new JournalRecordModel()
+                    {
+                        Id = Id,
+                        Time = DateTime.UtcNow.Ticks,
+                        Value = $"{propertyName}: {property} -> {update}"
+                    });
                 
                 return update;   
             }

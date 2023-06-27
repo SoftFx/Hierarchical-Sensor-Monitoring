@@ -24,7 +24,7 @@ public class JournalCacheTests : MonitoringCoreTestsBase<TreeValuesCacheFixture>
         var productUpdate = new ProductUpdate()
         {
             Id = expectedProduct.Id, 
-            Description = "qweqwe",
+            Description = "qweqwe"
         };
         
         _valuesCache.UpdateProduct(productUpdate);
@@ -32,5 +32,24 @@ public class JournalCacheTests : MonitoringCoreTestsBase<TreeValuesCacheFixture>
         Assert.Single(expectedProduct.JournalRecordModels);
         var journals = await _valuesCache.GetJournalValuesPage(expectedProduct.Id, DateTime.MinValue, DateTime.MaxValue, JournalType.Changes, 1).Flatten();
         Assert.Single(journals);
+    }
+    
+    [Fact]
+    public async Task JournalUpdateTest()
+    {
+        var expectedProduct = _valuesCache.GetProducts().First();
+        
+        var productUpdate = new ProductUpdate()
+        {
+            Id = expectedProduct.Id, 
+            Description = "qweqwe",
+            ExpectedUpdateInterval = new TimeIntervalModel(321123213123321)
+        };
+        
+        _valuesCache.UpdateProduct(productUpdate);
+
+        Assert.NotEmpty(expectedProduct.JournalRecordModels);
+        var journals = await _valuesCache.GetJournalValuesPage(expectedProduct.Id, DateTime.MinValue, DateTime.MaxValue, JournalType.Changes, 1123123).Flatten();
+        Assert.NotEmpty(journals);
     }
 }
