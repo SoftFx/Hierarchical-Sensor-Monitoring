@@ -1,7 +1,6 @@
 using HSMDatabase.DatabaseWorkCore;
 using HSMServer.Authentication;
 using HSMServer.BackgroundServices;
-using HSMServer.Configuration;
 using HSMServer.Core.Cache;
 using HSMServer.Core.DataLayer;
 using HSMServer.Core.SensorsUpdatesQueue;
@@ -9,11 +8,10 @@ using HSMServer.Core.TreeStateSnapshot;
 using HSMServer.Filters;
 using HSMServer.Folders;
 using HSMServer.Middleware;
-using HSMServer.Model;
 using HSMServer.Model.TreeViewModel;
 using HSMServer.Notifications;
 using HSMServer.Registration;
-using HSMServer.Settings;
+using HSMServer.ServerConfiguration;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Controllers;
@@ -29,8 +27,10 @@ namespace HSMServer.ServiceExtensions;
 
 public static class ApplicationServiceExtensions
 {
-    public static IServiceCollection AddApplicationServices(this IServiceCollection services)
+    public static IServiceCollection AddApplicationServices(this IServiceCollection services, IServerConfig config)
     {
+        services.AddSingleton(config);
+
         services.AddSingleton<IDatabaseCore, DatabaseCore>()
                 .AddSingleton<ITreeStateSnapshot, TreeStateSnapshot>()
                 .AddSingleton<IUpdatesQueue, UpdatesQueue>()
@@ -38,8 +38,7 @@ public static class ApplicationServiceExtensions
                 .AddSingleton<IUserManager, UserManager>()
                 .AddSingleton<IFolderManager, FolderManager>();
 
-        services.AddSingleton<IRegistrationTicketManager, RegistrationTicketManager>()
-                .AddSingleton<IConfigurationProvider, ConfigurationProvider>();
+        services.AddSingleton<IRegistrationTicketManager, RegistrationTicketManager>(); // obsolete
 
         services.AddSingleton<NotificationsCenter>()
                 .AddSingleton<DataCollectorWrapper>()
@@ -54,9 +53,9 @@ public static class ApplicationServiceExtensions
         {
             o.UseInlineDefinitionsForEnums();
             o.OperationFilter<DataRequestHeaderSwaggerFilter>();
-            o.SwaggerDoc(ServerConfig.Version.ToString(), new OpenApiInfo
+            o.SwaggerDoc(ServerConfig.Version, new OpenApiInfo
             {
-                Version = ServerConfig.Version.ToString(),
+                Version = ServerConfig.Version,
                 Title = ServerConfig.Name,
             });
 
@@ -92,14 +91,14 @@ public static class ApplicationServiceExtensions
         return services;
     }
 
-    public static ConfigureWebHostBuilder ConfigureWebHost(this ConfigureWebHostBuilder webHostBuilder, ServerConfig serverConfig)
+    public static ConfigureWebHostBuilder ConfigureWebHost(this ConfigureWebHostBuilder webHostBuilder, ServerConfig config)
     {
         webHostBuilder.ConfigureKestrel(options =>
         {
-            var kestrelListenAction = KestrelListenOptions(serverConfig.ServerCertificate);
+            var kestrelListenAction = KestrelListenOptions(config.ServerCertificate);
 
-            options.ListenAnyIP(serverConfig.Kestrel.SensorPort, kestrelListenAction);
-            options.ListenAnyIP(serverConfig.Kestrel.SitePort, kestrelListenAction);
+            options.ListenAnyIP(config.Kestrel.SensorPort, kestrelListenAction);
+            options.ListenAnyIP(config.Kestrel.SitePort, kestrelListenAction);
 
             options.Limits.MaxRequestBodySize = 52428800; // Set up to ~50MB
             options.Limits.MinRequestBodyDataRate = null; //???

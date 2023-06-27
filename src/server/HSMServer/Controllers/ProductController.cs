@@ -1,12 +1,7 @@
-﻿using HSMCommon.Constants;
-using HSMServer.Authentication;
-using HSMServer.Configuration;
+﻿using HSMServer.Authentication;
 using HSMServer.Constants;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Extensions;
-using HSMServer.Core.Registration;
-using HSMServer.Email;
-using HSMServer.Encryption;
 using HSMServer.Extensions;
 using HSMServer.Filters.ProductRoleFilters;
 using HSMServer.Folders;
@@ -23,7 +18,6 @@ using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Security.Cryptography;
 using System.Threading.Tasks;
 
 namespace HSMServer.Controllers
@@ -32,19 +26,16 @@ namespace HSMServer.Controllers
     [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
     public class ProductController : BaseController
     {
-        private readonly IConfigurationProvider _configurationProvider;
         private readonly IRegistrationTicketManager _ticketManager;
         private readonly ITreeValuesCache _treeValuesCache;
         private readonly IFolderManager _folderManager;
         private readonly TreeViewModel _treeViewModel;
         private readonly ILogger<ProductController> _logger;
 
-        public ProductController(IUserManager userManager, IConfigurationProvider configurationProvider,
-            IRegistrationTicketManager ticketManager, ITreeValuesCache treeValuesCache, IFolderManager folderManager,
+        public ProductController(IUserManager userManager, IRegistrationTicketManager ticketManager, ITreeValuesCache treeValuesCache, IFolderManager folderManager,
             TreeViewModel treeViewModel, ILogger<ProductController> logger) : base(userManager)
         {
             _ticketManager = ticketManager;
-            _configurationProvider = configurationProvider;
             _treeValuesCache = treeValuesCache;
             _folderManager = folderManager;
             _treeViewModel = treeViewModel;
@@ -217,35 +208,35 @@ namespace HSMServer.Controllers
             _userManager.UpdateUser(user);
         }
 
-        [HttpPost]
-        public async void Invite([FromBody] InviteViewModel model)
-        {
-            InviteValidator validator = new InviteValidator();
-            var results = await validator.ValidateAsync(model);
-            if (!results.IsValid)
-            {
-                TempData[TextConstants.TempDataInviteErrorText] = ValidatorHelper.GetErrorString(results.Errors);
-                return;
-            }
+        //[HttpPost]
+        //public async void Invite([FromBody] InviteViewModel model)
+        //{
+        //    InviteValidator validator = new InviteValidator();
+        //    var results = await validator.ValidateAsync(model);
+        //    if (!results.IsValid)
+        //    {
+        //        TempData[TextConstants.TempDataInviteErrorText] = ValidatorHelper.GetErrorString(results.Errors);
+        //        return;
+        //    }
 
-            var ticket = new RegistrationTicket()
-            {
-                ExpirationDate = DateTime.UtcNow + TimeSpan.FromMinutes(30),
-                ProductKey = model.ProductKey,
-                Role = model.Role
-            };
-            _ticketManager.AddTicket(ticket);
+        //    var ticket = new RegistrationTicket()
+        //    {
+        //        ExpirationDate = DateTime.UtcNow + TimeSpan.FromMinutes(30),
+        //        ProductKey = model.ProductKey,
+        //        Role = model.Role
+        //    };
+        //    _ticketManager.AddTicket(ticket);
 
-            var (server, port, login, password, fromEmail) = GetMailConfiguration();
+        //    var (server, port, login, password, fromEmail) = GetMailConfiguration();
 
-            EmailSender sender = new EmailSender(server,
-                string.IsNullOrEmpty(port) ? null : int.Parse(port),
-                login, password, fromEmail, model.Email);
+        //    EmailSender sender = new EmailSender(server,
+        //        string.IsNullOrEmpty(port) ? null : int.Parse(port),
+        //        login, password, fromEmail, model.Email);
 
-            var link = GetLink(ticket.Id.ToString());
+        //    var link = GetLink(ticket.Id.ToString());
 
-            Task.Run(() => sender.Send("Invitation link HSM", link));
-        }
+        //    Task.Run(() => sender.Send("Invitation link HSM", link));
+        //}
 
         #endregion
 
@@ -274,47 +265,47 @@ namespace HSMServer.Controllers
             return folders.ToDictionary(f => f.Id?.ToString() ?? string.Empty, f => f.Name);
         }
 
-        private (string, string, string, string, string) GetMailConfiguration()
-        {
-            var server = _configurationProvider.ReadOrDefault(ConfigurationConstants.SMTPServer).Value;
-            var port = _configurationProvider.ReadOrDefault(ConfigurationConstants.SMTPPort).Value;
-            var login = _configurationProvider.ReadOrDefault(ConfigurationConstants.SMTPLogin).Value;
-            var password = _configurationProvider.ReadOrDefault(ConfigurationConstants.SMTPPassword).Value;
-            var fromEmail = _configurationProvider.ReadOrDefault(ConfigurationConstants.SMTPFromEmail).Value;
+        //private (string, string, string, string, string) GetMailConfiguration()
+        //{
+        //    var server = _configurationProvider.ReadOrDefault(ConfigurationConstants.SMTPServer).Value;
+        //    var port = _configurationProvider.ReadOrDefault(ConfigurationConstants.SMTPPort).Value;
+        //    var login = _configurationProvider.ReadOrDefault(ConfigurationConstants.SMTPLogin).Value;
+        //    var password = _configurationProvider.ReadOrDefault(ConfigurationConstants.SMTPPassword).Value;
+        //    var fromEmail = _configurationProvider.ReadOrDefault(ConfigurationConstants.SMTPFromEmail).Value;
 
-            return (server, port, login, password, fromEmail);
-        }
+        //    return (server, port, login, password, fromEmail);
+        //}
 
-        private string GetLink(string id)
-        {
-            try
-            {
-                var key = _configurationProvider.ReadConfigurationObject(ConfigurationConstants.AesEncryptionKey);
-                byte[] keyBytes;
-                if (key == null)
-                {
-                    var bytes = new byte[32];
-                    RandomNumberGenerator.Fill(bytes);
+        //private string GetLink(string id)
+        //{
+        //    try
+        //    {
+        //        var key = _configurationProvider.ReadConfigurationObject(ConfigurationConstants.AesEncryptionKey);
+        //        byte[] keyBytes;
+        //        if (key == null)
+        //        {
+        //            var bytes = new byte[32];
+        //            RandomNumberGenerator.Fill(bytes);
 
-                    _configurationProvider.AddConfigurationObject(ConfigurationConstants.AesEncryptionKey,
-                        AESCypher.ToString(bytes));
-                    keyBytes = bytes;
-                }
-                else
-                    keyBytes = AESCypher.ToBytes(key.Value);
+        //            _configurationProvider.AddConfigurationObject(ConfigurationConstants.AesEncryptionKey,
+        //                AESCypher.ToString(bytes));
+        //            keyBytes = bytes;
+        //        }
+        //        else
+        //            keyBytes = AESCypher.ToBytes(key.Value);
 
-                var (cipher, nonce, tag) = AESCypher.Encrypt(id, keyBytes);
+        //        var (cipher, nonce, tag) = AESCypher.Encrypt(id, keyBytes);
 
-                return $"{Request.Scheme}://{Request.Host}/" +
-                       $"{ViewConstants.AccountController}/{ViewConstants.RegistrationAction}" +
-                       $"?Cipher={cipher}&Tag={tag}&Nonce={nonce}";
-            }
-            catch (Exception e)
-            {
-                _logger.LogError(e, "Failed to create invitation link.");
-            }
+        //        return $"{Request.Scheme}://{Request.Host}/" +
+        //               $"{ViewConstants.AccountController}/{ViewConstants.RegistrationAction}" +
+        //               $"?Cipher={cipher}&Tag={tag}&Nonce={nonce}";
+        //    }
+        //    catch (Exception e)
+        //    {
+        //        _logger.LogError(e, "Failed to create invitation link.");
+        //    }
 
-            return string.Empty;
-        }
+        //    return string.Empty;
+        //}
     }
 }

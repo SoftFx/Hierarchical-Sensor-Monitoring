@@ -1,11 +1,10 @@
-﻿using HSMCommon.Constants;
-using HSMServer.Authentication;
-using HSMServer.Configuration;
+﻿using HSMServer.Authentication;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Model;
 using HSMServer.Extensions;
 using HSMServer.Model.TreeViewModel;
 using HSMServer.Notification.Settings;
+using HSMServer.ServerConfiguration;
 using System;
 using System.Linq;
 using System.Threading;
@@ -31,9 +30,9 @@ namespace HSMServer.Notifications
             AllowedUpdates = { }, // receive all update types
         };
 
-        private readonly IConfigurationProvider _configurationProvider;
         private readonly TelegramUpdateHandler _updateHandler;
         private readonly IUserManager _userManager;
+        private readonly TelegramConfig _config;
         private readonly TreeViewModel _tree;
 
         private CancellationTokenSource _tokenSource = new();
@@ -41,25 +40,23 @@ namespace HSMServer.Notifications
 
         private bool IsBotRunning => _bot is not null;
 
-        private string BotToken => _configurationProvider.ReadOrDefault(ConfigurationConstants.BotToken).Value;
+        private string BotToken => _config.BotToken;
 
-        private bool AreBotMessagesEnabled => bool.TryParse(_configurationProvider.ReadOrDefault(
-            ConfigurationConstants.AreBotMessagesEnabled).Value, out var result) && result;
+        private bool AreBotMessagesEnabled => _config.IsRunning;
 
 
-        internal TelegramBot(IUserManager userManager, ITreeValuesCache cache, TreeViewModel tree,
-            IConfigurationProvider configurationProvider)
+        internal TelegramBot(IUserManager userManager, ITreeValuesCache cache, TreeViewModel tree, TelegramConfig config)
         {
             _userManager = userManager;
-            _userManager.Removed += RemoveUserEventHandler;
+            _userManager.Removed += _addressBook.RemoveAllChats;
 
+            _config = config;
             _tree = tree;
 
             cache.ChangeProductEvent += RemoveProductEventHandler;
             cache.NotifyAboutChangesEvent += SendMessage;
 
-            _configurationProvider = configurationProvider;
-            _updateHandler = new(_addressBook, _userManager, _tree, _configurationProvider);
+            _updateHandler = new(_addressBook, _userManager, _tree, config);
 
             FillAddressBook();
         }
@@ -67,12 +64,12 @@ namespace HSMServer.Notifications
 
         public async ValueTask DisposeAsync()
         {
-            _userManager.Removed -= RemoveUserEventHandler;
+            _userManager.Removed -= _addressBook.RemoveAllChats;
 
             await StopBot();
         }
 
-        internal string BotName => _configurationProvider.ReadOrDefault(ConfigurationConstants.BotName).Value;
+        internal string BotName => _config.BotName;
 
         internal string GetInvitationLink(User user) =>
             $"https://t.me/{BotName}?start={_addressBook.BuildInvitationToken(user)}";
@@ -151,9 +148,9 @@ namespace HSMServer.Notifications
                     await bot?.DeleteWebhookAsync();
                     await bot?.CloseAsync();
                 }
-                catch (Exception exc)
+                catch (Exception ex)
                 {
-                    return $"An error ({exc.Message}) has been occurred while stopping the Bot. The current state of the Bot is stopped. Try to restart Bot again.";
+                    return $"An error ({ex.Message}) has been occurred while stopping the Bot. The current state of the Bot is stopped. Try to restart Bot again.";
                 }
             }
 
@@ -232,8 +229,6 @@ namespace HSMServer.Notifications
 
         private void SendMarkdownMessageAsync(ChatId chat, string message) =>
             _bot?.SendTextMessageAsync(chat, message, ParseMode.MarkdownV2, cancellationToken: _tokenSource.Token);
-
-        private void RemoveUserEventHandler(User user) => _addressBook.RemoveAllChats(user);
 
         private void RemoveProductEventHandler(ProductModel model, ActionType transaction)
         {

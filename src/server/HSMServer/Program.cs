@@ -3,6 +3,7 @@ using HSMCommon.Constants;
 using HSMServer.Authentication;
 using HSMServer.Folders;
 using HSMServer.Model;
+using HSMServer.ServerConfiguration;
 using HSMServer.ServiceExtensions;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Builder;
@@ -58,7 +59,7 @@ builder.Services.AddFluentValidationAutoValidation()
 
 builder.Services.AddHttpsRedirection(с => с.HttpsPort = serverConfig.Kestrel.SitePort);
 
-builder.Services.AddApplicationServices();
+builder.Services.AddApplicationServices(serverConfig);
 
 builder.Services.Configure<HostOptions>(hostOptions =>
 {

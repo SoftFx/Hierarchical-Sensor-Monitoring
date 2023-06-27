@@ -26,8 +26,8 @@ namespace HSMDatabase.SnapshotsDb
         public Dictionary<Guid, SensorStateEntity> Read()
         {
             Data = File.Exists(FilePath)
-                ? JsonSerializer.Deserialize<Dictionary<Guid, SensorStateEntity>>(File.ReadAllBytes(FilePath))
-                : new();
+                   ? JsonSerializer.Deserialize<Dictionary<Guid, SensorStateEntity>>(File.ReadAllBytes(FilePath))
+                   : new();
 
             return Data;
         }

@@ -1,8 +1,7 @@
 ﻿using HSMServer.Attributes;
-using HSMServer.Configuration;
-using HSMServer.Core.Configuration;
 using HSMServer.Model.ViewModel;
 using HSMServer.Notifications;
+using HSMServer.ServerConfiguration;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Collections.Generic;
@@ -15,60 +14,52 @@ namespace HSMServer.Controllers
     [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
     public class ConfigurationController : Controller
     {
-        private readonly IConfigurationProvider _configurationProvider;
+        private static Dictionary<string, ConfigurationViewModel> _configViewModel = new();
+
+        private readonly IServerConfig _config;
         private readonly TelegramBot _telegramBot;
 
 
-        public ConfigurationController(IConfigurationProvider configurationProvider, NotificationsCenter notifications)
+        public ConfigurationController(IServerConfig config, NotificationsCenter notifications)
         {
-            _configurationProvider = configurationProvider;
+            _config = config;
+            _configViewModel = ConfigurationViewModel.TelegramSettings(new TelegramConfigurationViewModel(_config.Telegram));
+
             _telegramBot = notifications.TelegramBot;
         }
 
 
         public IActionResult Index()
         {
-            List<ConfigurationObjectViewModel> viewModels = new List<ConfigurationObjectViewModel>();
-            var paramNames = _configurationProvider.GetAllParameterNames();
-            foreach (var paramName in paramNames)
-            {
-                var valueFromDB = _configurationProvider.ReadConfigurationObject(paramName);
-                if (valueFromDB != null)
-                {
-                    viewModels.Add(new ConfigurationObjectViewModel(valueFromDB, false));
-                    continue;
-                }
-
-                var value = _configurationProvider.ReadOrDefault(paramName);
-                viewModels.Add(new ConfigurationObjectViewModel(value, true));
-            }
-            viewModels.Sort((vm1, vm2) => vm1.Name.CompareTo(vm2.Name));
-
-            return View(viewModels);
+            return View(_configViewModel);
         }
 
         [HttpPost]
-        public void SaveConfigObject([FromBody] ConfigurationObjectViewModel viewModel)
-        {
-            ConfigurationObject model = GetModelFromViewModel(viewModel);
-            _configurationProvider.AddConfigurationObject(model.Name, model.Value);
-        }
+        public void SaveConfig([FromBody] ConfigurationViewModel viewModel) => ChangeConfigValue(viewModel.PropertyName, viewModel.Value);
 
-        public void SetToDefault([FromQuery(Name = "Name")] string configObjName)
-        {
-            _configurationProvider.SetConfigurationObjectToDefault(configObjName);
-        }
+        [HttpPost]
+        public void SetToDefault([FromQuery] string name) => ChangeConfigValue(name, _configViewModel[name].DefaultValue);
 
         [HttpGet]
         public Task<string> RestartTelegramBot() => _telegramBot.StartBot();
 
 
-        private ConfigurationObject GetModelFromViewModel(ConfigurationObjectViewModel viewModel)
+        private void ChangeConfigValue(string propertyName, string newValue)
         {
-            ConfigurationObject result = new ConfigurationObject();
-            result.Value = viewModel.Value;
-            result.Name = viewModel.Name;
-            return result;
+            switch (propertyName)
+            {
+                case nameof(_config.Telegram.BotName):
+                    _config.Telegram.BotName = newValue;
+                    break;
+                case nameof(_config.Telegram.BotToken):
+                    _config.Telegram.BotToken = newValue;
+                    break;
+                case nameof(_config.Telegram.IsRunning) when bool.TryParse(newValue, out var boolValue):
+                    _config.Telegram.IsRunning = boolValue;
+                    break;
+            }
+
+            _config.ResaveSettings();
         }
     }
 }

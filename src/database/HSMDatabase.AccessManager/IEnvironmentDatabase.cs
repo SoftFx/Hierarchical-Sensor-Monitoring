@@ -70,14 +70,6 @@ namespace HSMDatabase.AccessManager
 
         #endregion
 
-        #region Configuration
-
-        ConfigurationEntity ReadConfigurationObject(string name);
-        void WriteConfigurationObject(ConfigurationEntity obj);
-        void RemoveConfigurationObject(string name);
-
-        #endregion
-
         #region Registration Ticket
 
         RegisterTicketEntity ReadRegistrationTicket(Guid id);

@@ -10,8 +10,9 @@ namespace HSMDatabase.SnapshotsDb
 {
     internal sealed class SnapshotsDatabase : ISnapshotDatabase
     {
-        private readonly Logger _logger = LogManager.GetCurrentClassLogger();
         private readonly LinkedList<SnapshotNode> _nodes = new();
+
+        private readonly Logger _logger = LogManager.GetCurrentClassLogger();
         private readonly DirectoryInfo _mainDirectory;
 
 

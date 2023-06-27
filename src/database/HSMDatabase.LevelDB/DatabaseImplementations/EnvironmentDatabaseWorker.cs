@@ -576,57 +576,6 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
 
         #endregion
 
-        #region Configuration objects
-
-        public ConfigurationEntity ReadConfigurationObject(string name)
-        {
-            var key = PrefixConstants.GetUniqueConfigurationObjectKey(name);
-            byte[] bytesKey = Encoding.UTF8.GetBytes(key);
-            try
-            {
-                return _database.TryRead(bytesKey, out byte[] value)
-                    ? JsonSerializer.Deserialize<ConfigurationEntity>(Encoding.UTF8.GetString(value))
-                    : null;
-            }
-            catch (Exception e)
-            {
-                _logger.Error(e, $"Failed to read configuration object {name}");
-            }
-
-            return null;
-        }
-
-        public void WriteConfigurationObject(ConfigurationEntity obj)
-        {
-            var key = PrefixConstants.GetUniqueConfigurationObjectKey(obj.Name);
-            byte[] bytesKey = Encoding.UTF8.GetBytes(key);
-
-            try
-            {
-                _database.Put(bytesKey, JsonSerializer.SerializeToUtf8Bytes(obj));
-            }
-            catch (Exception e)
-            {
-                _logger.Error(e, $"Failed to write configuration object {obj.Name}");
-            }
-        }
-
-        public void RemoveConfigurationObject(string name)
-        {
-            var key = PrefixConstants.GetUniqueConfigurationObjectKey(name);
-            byte[] bytesKey = Encoding.UTF8.GetBytes(key);
-            try
-            {
-                _database.Delete(bytesKey);
-            }
-            catch (Exception e)
-            {
-                _logger.Error(e, $"Failed to write configuration object {name}");
-            }
-        }
-
-        #endregion
-
         #region Registration ticket
 
         public RegisterTicketEntity ReadRegistrationTicket(Guid id)

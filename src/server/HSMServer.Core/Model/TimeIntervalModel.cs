@@ -58,16 +58,16 @@ namespace HSMServer.Core.Model
 
         public DateTime GetShiftedTime(DateTime time, int coef = 1) => TimeInterval switch
         {
-            TimeInterval.OneMinute => time.AddMinutes(1 * coef),
+            TimeInterval.OneMinute => time.AddMinutes(coef),
             TimeInterval.FiveMinutes => time.AddMinutes(5 * coef),
             TimeInterval.TenMinutes => time.AddMinutes(10 * coef),
-            TimeInterval.Hour => time.AddHours(1 * coef),
-            TimeInterval.Day => time.AddDays(1 * coef),
+            TimeInterval.Hour => time.AddHours(coef),
+            TimeInterval.Day => time.AddDays(coef),
             TimeInterval.Week => time.AddDays(7 * coef),
-            TimeInterval.Month => time.AddMonths(1 * coef),
+            TimeInterval.Month => time.AddMonths(coef),
             TimeInterval.ThreeMonths => time.AddMonths(3 * coef),
             TimeInterval.SixMonths => time.AddMonths(6 * coef),
-            TimeInterval.Year => time.AddYears(1 * coef),
+            TimeInterval.Year => time.AddYears(coef),
             TimeInterval.Custom or TimeInterval.FromFolder => CustomPeriod == 0L ? DateTime.MaxValue : time.AddTicks(CustomPeriod * coef),
             _ => throw new NotImplementedException(),
         };
