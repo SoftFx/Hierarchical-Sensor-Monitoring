@@ -1,7 +1,6 @@
 ﻿using HSMServer.Authentication;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Model;
-using HSMServer.Extensions;
 using HSMServer.Model.TreeViewModel;
 using HSMServer.Notification.Settings;
 using HSMServer.ServerConfiguration;
@@ -43,10 +42,8 @@ namespace HSMServer.Notifications
 
         private string BotToken => _config.BotToken;
 
-        private bool AreBotMessagesEnabled => _config.IsRunning;
-
-
         private bool IsBotRunning => _bot is not null;
+
 
         internal TelegramBot(IUserManager userManager, ITreeValuesCache cache, TreeViewModel tree, TelegramConfig config)
         {
@@ -57,13 +54,12 @@ namespace HSMServer.Notifications
             _tree = tree;
 
             cache.ChangeProductEvent += RemoveProductEventHandler;
-            //cache.NotifyAboutChangesEvent += SendMessage;
+            cache.ChangePolicyResultEvent += SendMessage;
 
             _updateHandler = new(_addressBook, _userManager, _tree, config);
 
             FillAddressBook();
         }
-
 
         public async ValueTask DisposeAsync()
         {
@@ -169,35 +165,30 @@ namespace HSMServer.Notifications
                     _addressBook.RegisterChat(product, chat);
         }
 
-        //private static bool ShouldSendMessage(INotificatable entity, BaseSensorModel sensor, SensorResult oldStatus, ChatId chatId)
-        //{
-        //    var newStatus = sensor.Status;
-        //    var minWebStatus = entity.Notifications.UsedTelegram.MessagesMinStatus.ToClient();
+        private void SendMessage(PolicyResult result)
+        {
+            try
+            {
+                if (IsBotRunning && _config.IsRunning)
+                    foreach (var (entity, chats) in _addressBook.ServerBook)
+                        foreach (var (_, chat) in chats)
+                            if (entity.CanSendData(result.SensorId, chat.ChatId))
+                            {
+                                if (entity.Notifications.UsedTelegram.MessagesDelaySec == 0)
+                                {
+                                    foreach (var alert in result)
+                                        SendMarkdownMessageAsync(chat.ChatId, alert.ToString().EscapeMarkdownV2());
+                                }
 
-        //    return entity.CanSendData(sensor, chatId) && newStatus != oldStatus && sensor.State != SensorState.Muted &&
-        //           (newStatus.Status.ToClient() >= minWebStatus || oldStatus.Status.ToClient() >= minWebStatus);
-        //}
-
-        //private void SendMessage(BaseSensorModel sensor, SensorResult oldStatus)
-        //{
-        //    try
-        //    {
-        //        if (IsBotRunning && AreBotMessagesEnabled)
-        //            foreach (var (entity, chats) in _addressBook.ServerBook)
-        //                foreach (var (_, chat) in chats)
-        //                    if (ShouldSendMessage(entity, sensor, oldStatus, chat.ChatId))
-        //                    {
-        //                        if (entity.Notifications.UsedTelegram.MessagesDelaySec > 0)
-        //                            chat.MessageBuilder.AddMessage(sensor, oldStatus.Status);
-        //                        else
-        //                            SendMarkdownMessageAsync(chat.ChatId, MessageBuilder.GetSingleMessage(sensor));
-        //                    }
-        //    }
-        //    catch (Exception ex)
-        //    {
-        //        _logger.Error(ex);
-        //    }
-        //}
+                                //else
+                                //    chat.MessageBuilder.AddMessage(sensor, oldStatus.Status);
+                            }
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex);
+            }
+        }
 
         private async Task MessageReceiver()
         {
