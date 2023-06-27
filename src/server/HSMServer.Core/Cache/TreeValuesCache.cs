@@ -286,16 +286,16 @@ namespace HSMServer.Core.Cache
                 });
         }
 
-        public void ClearNodeHistory(Guid productId)
+        public void ClearNodeHistory(Guid productId, string caller = "")
         {
             if (!_tree.TryGetValue(productId, out var product))
                 return;
 
             foreach (var (subProductId, _) in product.SubProducts)
-                ClearNodeHistory(subProductId);
+                ClearNodeHistory(subProductId, caller);
 
             foreach (var (sensorId, _) in product.Sensors)
-                ClearSensorHistory(sensorId, DateTime.MaxValue);
+                ClearSensorHistory(sensorId, DateTime.MaxValue, caller);
         }
 
         public void CheckSensorHistory(Guid sensorId)
