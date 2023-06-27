@@ -8,7 +8,7 @@ internal static class JournalFactory
     internal static JournalEntity BuildJournalEntity() =>
         new()
         {
-            Id = BuildKey(),
+            //Id = BuildKey(),
             Value = RandomGenerator.GetRandomString()
         };
 

@@ -98,6 +98,11 @@ namespace HSMServer.Core.Cache
 
             _database.UpdateProduct(product.Update(update).ToProductEntity());
 
+            foreach (var journal in product.JournalRecordModels)
+            {
+                _database.AddJournalValue(new Key(journal.Id, journal.Time, JournalType.Changes), journal.ToJournalEntity());
+            }
+            
             NotifyAllProductChildrenAboutUpdate(product, sensorsOldStatuses);
         }
 

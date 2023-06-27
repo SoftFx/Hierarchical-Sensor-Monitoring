@@ -17,7 +17,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
     {
         protected const int MaxHistoryCount = -TreeValuesCache.MaxHistoryCount;
 
-        private protected readonly DatabaseCoreManager _databaseCoreManager;
+        protected readonly DatabaseCoreManager _databaseCoreManager;
 
 
         protected readonly IUpdatesQueue _updatesQueue;

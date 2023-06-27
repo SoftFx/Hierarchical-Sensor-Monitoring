@@ -24,13 +24,14 @@ namespace HSMDatabase.LevelDB.Tests
             const int historyValuesCount = 11;
             var sensorId = Guid.NewGuid();
             var journals = GenerateJournalEntities(sensorId, historyValuesCount);
+            var journalType = JournalType.Actions;
 
             foreach (var journal in journals)
             {
                 _databaseCore.AddJournalValue(journal.Item1, journal.Item2);
             }
 
-            var actualJournals = (await _databaseCore.GetJournalValuesPage(sensorId, DateTime.MinValue, DateTime.MaxValue, historyValuesCount)
+            var actualJournals = (await _databaseCore.GetJournalValuesPage(sensorId, DateTime.MinValue, DateTime.MaxValue, journalType, historyValuesCount)
                 .Flatten()).Select(x => JsonSerializer.Deserialize<JournalEntity>(x)).ToList();
 
             Assert.Equal(journals.Count, actualJournals.Count);
@@ -49,7 +50,7 @@ namespace HSMDatabase.LevelDB.Tests
 
             for (int i = 0; i < count; i++)
             {
-                var key = new Key(sensorId, DateTime.UtcNow.Ticks);
+                var key = new Key(sensorId, DateTime.UtcNow.Ticks, JournalType.Actions);
                 result.Add((key, new JournalEntity()
                 {
                     Value = $"TEST_{i}"
