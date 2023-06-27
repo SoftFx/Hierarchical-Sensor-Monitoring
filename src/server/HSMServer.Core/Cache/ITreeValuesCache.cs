@@ -3,6 +3,7 @@ using HSMServer.Core.Model;
 using HSMServer.Core.Model.Requests;
 using System;
 using System.Collections.Generic;
+using HSMDatabase.AccessManager.DatabaseEntities;
 
 namespace HSMServer.Core.Cache
 {
@@ -56,7 +57,7 @@ namespace HSMServer.Core.Cache
         IAsyncEnumerable<List<BaseValue>> GetSensorValues(HistoryRequestModel request);
         IAsyncEnumerable<List<BaseValue>> GetSensorValuesPage(Guid sensorId, DateTime from, DateTime to, int count);
 
-        IAsyncEnumerable<List<JournalRecordModel>> GetJournalValuesPage(Guid id, DateTime from, DateTime to, int count);
+        IAsyncEnumerable<List<JournalRecordModel>> GetJournalValuesPage(Guid id, DateTime from, DateTime to, JournalType journalType, int count);
 
         void AddJournalRecord(Guid id, ActionType actionType);
 

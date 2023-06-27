@@ -396,13 +396,13 @@ namespace HSMDatabase.DatabaseWorkCore
             dbs.Put(key.GetBytes(), valueEntity);
         }
 
-        public IAsyncEnumerable<List<byte[]>> GetJournalValuesPage(Guid sensorId, DateTime from, DateTime to, int count)
+        public IAsyncEnumerable<List<byte[]>> GetJournalValuesPage(Guid sensorId, DateTime from, DateTime to, JournalType journalType, int count)
         {
             var fromTicks = from.Ticks;
             var toTicks = to.Ticks;
 
-            var fromBytes = new Key(sensorId, fromTicks).GetBytes();
-            var toBytes = new Key(sensorId, toTicks).GetBytes();
+            var fromBytes = new Key(sensorId, fromTicks, journalType).GetBytes();
+            var toBytes = new Key(sensorId, toTicks, journalType).GetBytes();
 
             var databases = _journalValuesDatabases.Where(db => db.IsInclude(fromTicks, toTicks)).ToList();
             GetJournalValuesFunc getValues = (db) => db.GetValuesFrom(fromBytes, toBytes);

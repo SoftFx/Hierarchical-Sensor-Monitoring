@@ -11,14 +11,14 @@ public readonly struct Key
 {
     private const int GuidSize = 16;
 
-    private const int StructSize = GuidSize + sizeof(long) + sizeof(UpdateType);
+    private const int StructSize = GuidSize + sizeof(long) + sizeof(JournalType);
 
 
     public Guid Id { get; init; }
 
     public long Time { get; init; }
 
-    public UpdateType UpdateType { get; init; }
+    public JournalType JournalType { get; init; }
     
     
     public Key(Guid id, long time)
@@ -27,17 +27,17 @@ public readonly struct Key
         Time = time;
     }
 
-    public Key(Guid id, long time, UpdateType updateType)
+    public Key(Guid id, long time, JournalType journalType)
     {
         Id = id;
         Time = time;
-        UpdateType = updateType;
+        JournalType = journalType;
     }
 
     public byte[] GetBytes()
     {
         Span<byte> result = stackalloc byte[StructSize];
-        result[^1] = (byte)UpdateType;
+        result[^1] = (byte)JournalType;
 
         return Id.TryWriteBytes(result) && BitConverter.TryWriteBytes(result[16..], Time) ? result.ToArray() : Array.Empty<byte>();
     }
@@ -49,13 +49,13 @@ public readonly struct Key
 
         var id = new Guid(new ReadOnlySpan<byte>(bytes[..16]));
         var time = BitConverter.ToInt64(bytes, 16);
-        var updateType = bytes[^1];
+        var journalType = bytes[^1];
         
-        return new Key(id, time, (UpdateType)updateType);
+        return new Key(id, time, (JournalType)journalType);
     }
 }
 
-public enum UpdateType : byte
+public enum JournalType : byte
 {
     Changes,
     Actions
