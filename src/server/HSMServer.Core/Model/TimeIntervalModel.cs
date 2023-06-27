@@ -65,7 +65,10 @@ namespace HSMServer.Core.Model
             TimeInterval.Day => time.AddDays(coef),
             TimeInterval.Week => time.AddDays(7 * coef),
             TimeInterval.Month => time.AddMonths(coef),
-            TimeInterval.Custom or TimeInterval.FromFolder => IsNever ? DateTime.MaxValue : time.AddTicks(CustomPeriod * coef),
+            TimeInterval.ThreeMonths => time.AddMonths(3 * coef),
+            TimeInterval.SixMonths => time.AddMonths(6 * coef),
+            TimeInterval.Year => time.AddYears(coef),
+            TimeInterval.Custom or TimeInterval.FromFolder => CustomPeriod == 0L ? DateTime.MaxValue : time.AddTicks(CustomPeriod * coef),
             _ => throw new NotImplementedException(),
         };
 
