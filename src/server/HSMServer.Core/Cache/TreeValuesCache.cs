@@ -100,7 +100,8 @@ namespace HSMServer.Core.Cache
 
             foreach (var journal in product.JournalRecordModels)
             {
-                _database.AddJournalValue(new Key(journal.Id, journal.Time, JournalType.Changes), journal.ToJournalEntity());
+                AddJournal(new Key(journal.Id, journal.Time, JournalType.Changes), journal.ToJournalEntity());
+                product.JournalRecordModels.Clear();
             }
             
             NotifyAllProductChildrenAboutUpdate(product, sensorsOldStatuses);
@@ -252,6 +253,11 @@ namespace HSMServer.Core.Cache
             _snapshot.Sensors[sensor.Id].IsExpired = sensor.HasUpdateTimeout();
 
             _database.UpdateSensor(sensor.ToEntity());
+            foreach (var journal in sensor.JournalRecordModels)
+            {
+                AddJournal(new Key(journal.Id, journal.Time, JournalType.Changes), journal.ToJournalEntity());
+                sensor.JournalRecordModels.Clear();
+            }
             NotifyAboutChanges(sensor);
         }
 
@@ -384,22 +390,9 @@ namespace HSMServer.Core.Cache
             }
         }
 
-        public void AddJournalRecord(Guid id, ActionType type)
+        public void AddJournal(Key key, JournalEntity journalEntity)
         {
-            var key = new Key(id, DateTime.UtcNow.Ticks);
-            
-            switch (type)
-            {
-                case ActionType.Update:
-                    _database.AddJournalValue(key, new JournalEntity(){Value = "Entity updated"});
-                    return;
-                case ActionType.Init:
-                    _database.AddJournalValue(key, new JournalEntity(){Value = "Entity initialized"});
-                    return;
-                case ActionType.Clear:
-                    _database.AddJournalValue(key, new JournalEntity(){Value = "Entity cleared"});
-                    return;
-            }
+            _database.AddJournalValue(key, journalEntity);
         }
 
         private void UpdatePolicy(ActionType type, Policy policy)

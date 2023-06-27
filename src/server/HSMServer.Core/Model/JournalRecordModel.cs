@@ -11,7 +11,7 @@ public sealed class JournalRecordModel
 
     public string Value { get; set; }
 
-    internal JournalEntity ToJournalEntity() => new()
+    public JournalEntity ToJournalEntity() => new()
     {
         Value = Value
     };

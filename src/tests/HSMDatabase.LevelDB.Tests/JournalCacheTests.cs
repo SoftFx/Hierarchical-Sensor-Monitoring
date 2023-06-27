@@ -49,7 +49,30 @@ public class JournalCacheTests : MonitoringCoreTestsBase<TreeValuesCacheFixture>
         _valuesCache.UpdateProduct(productUpdate);
 
         Assert.NotEmpty(expectedProduct.JournalRecordModels);
-        var journals = await _valuesCache.GetJournalValuesPage(expectedProduct.Id, DateTime.MinValue, DateTime.MaxValue, JournalType.Changes, 1123123).Flatten();
+        var journals = await _valuesCache.GetJournalValuesPage(expectedProduct.Id, DateTime.MinValue, DateTime.MaxValue, JournalType.Changes, MaxHistoryCount).Flatten();
         Assert.NotEmpty(journals);
+    }
+
+    [Theory]
+    [InlineData(100)]
+    [InlineData(1000)]
+    public async Task SensorUpdateTest(int n)
+    {
+        for (int i = 0; i < n; i++)
+        {
+            var updating = SensorModelFactory.BuildSensorUpdate();
+            var sensor = SensorModelFactory.Build(EntitiesFactory.BuildSensorEntity());
+            
+            sensor.Update(updating);
+
+            foreach (var journal in sensor.JournalRecordModels)
+            {
+                _valuesCache.AddJournal(new Key(journal.Id, journal.Time, JournalType.Changes), journal.ToJournalEntity());
+            }
+            
+            var journals = await _valuesCache.GetJournalValuesPage(sensor.Id, DateTime.MinValue, DateTime.MaxValue, JournalType.Changes, -MaxHistoryCount).Flatten();
+           
+            Assert.Equal(journals.Count, sensor.JournalRecordModels.Count);
+        }
     }
 }
