@@ -242,7 +242,7 @@ namespace HSMServer.Folders
             foreach (var product in _cache.GetProducts())
             {
                 if (!product.FolderId.HasValue || !TryGetValueById(product.FolderId, out var folder))
-                    return;
+                    continue;
 
                 var update = new ProductUpdate
                 {
