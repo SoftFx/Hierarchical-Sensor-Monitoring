@@ -77,7 +77,7 @@ public class JournalCacheTests : MonitoringCoreTestsBase<TreeValuesCacheFixture>
             sensors.Add(sensor);
             foreach (var journal in sensor.JournalRecordModels)
             {
-                _valuesCache.AddJournal(new Key(journal.Id, journal.Time, JournalType.Changes), journal.ToJournalEntity());
+                _valuesCache.AddJournal(journal);
             }
         }
 

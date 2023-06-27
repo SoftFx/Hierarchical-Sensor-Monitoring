@@ -325,6 +325,8 @@ namespace HSMServer.Core.Cache
                 sensor.ResetSensor();
 
             _database.ClearSensorValues(sensor.Id.ToString(), from, to);
+            //TODO: Change message
+            AddJournal(new JournalRecordModel(sensorId, DateTime.UtcNow, "Sensor was cleared(TEMP MESSAGE)", JournalType.Actions));
             _snapshot.Sensors[sensorId].History.From = to;
 
             ChangeSensorEvent?.Invoke(sensor, ActionType.Update);
@@ -384,9 +386,9 @@ namespace HSMServer.Core.Cache
             }
         }
 
-        public void AddJournal(Key key, JournalEntity journalEntity)
+        public void AddJournal(JournalRecordModel journalRecordModel)
         {
-            _database.AddJournalValue(key, journalEntity);
+            _database.AddJournalValue(journalRecordModel.GetKey(), journalRecordModel.ToJournalEntity());
         }
 
         private void UpdatePolicy(ActionType type, Policy policy)
@@ -866,7 +868,7 @@ namespace HSMServer.Core.Cache
         private void AddJournals(List<JournalRecordModel> journalRecordModels)
         {
             foreach (var journal in journalRecordModels)
-                AddJournal(new Key(journal.Id, journal.Time, JournalType.Changes), journal.ToJournalEntity());
+                AddJournal(journal);
             
             journalRecordModels.Clear();
         }
