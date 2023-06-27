@@ -122,7 +122,7 @@ namespace HSMServer.Core.Model
         
         internal T ApplyUpdate<T>(T property, T update, [CallerArgumentExpression("property")] string propertyName = null)
         {
-            if (property is not null && update is not null && !update.Equals(property))
+            if (update is not null && !update.Equals(property))
             {
                 if (update is TimeIntervalModel updateTimeInterval && property is TimeIntervalModel propertyTimeInterval)
                 {
