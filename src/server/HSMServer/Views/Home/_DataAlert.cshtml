@@ -9,6 +9,48 @@
 
 
 <div class="dataAlertRow">
+    <div class="card ms-3 mb-2">
+        <div class="card-body py-2">
+            <div class="d-flex flex-row align-items-center">
+                <div class="alert-text-block alert-add">If</div>
+
+                <div class="d-flex flex-row align-items-center alert-blocks-group ms-3">
+                    <select class="alert-block alert-select property-select" asp-for="Property" asp-items="@Model.PropertiesItems"></select>
+
+                    <div id="valueCondition" class="d-flex flex-row align-items-center">
+                        <select class="alert-block alert-select operation-select" asp-for="Operation" asp-items="@Model.ActionsItems"></select>
+                        <input class="alert-block target-input" type="text" placeholder="<enter a value>" asp-for="Value" value="@Model.Value" required>
+                    </div>
+
+                    <div id="sensitivityCondition" class="d-flex flex-row align-items-center">
+                        <div class="alert-text-block operation-select">more than</div>
+                        <div class="alert-block target-input">
+                            <partial name="_TimeIntervalSelect" for="Sensitivity" />
+                        </div>
+                    </div>
+
+                    <div id="ttlCondition" class="d-flex flex-row align-items-center">
+                        <div class="alert-text-block operation-select">is</div>
+                        <div>
+                            <partial name="_TimeIntervalSelect" for="Sensitivity" />
+                        </div>
+                    </div>
+
+                    <a><i class="fa-solid fa-xmark alert-delete-button"></i></a>
+                </div>
+
+                <a><i class="fa-solid fa-plus alert-add-button"></i></a>
+            </div>
+
+            <div class="d-flex flex-row align-items-center">
+                <div class="d-flex flex-row align-items-center alert-blocks-group">
+                    <div class="alert-text-block alert-add">then</div>
+                    <i class="fa-solid fa-plus alert-add-button"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <input class="d-none" asp-for="Id" value="@Model.Id" />
     <input class="d-none" asp-for="EntityId" value="@Model.EntityId" />
 

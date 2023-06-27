@@ -348,3 +348,94 @@ img .tree-png-icon {
 .icons-select option {
     text-align: center;
 }
+
+
+.alert-blocks-group {
+    white-space: nowrap;
+    box-sizing: border-box;
+}
+
+.alert-add {
+    background-color: rgba(217,83,79,.3);
+}
+
+.alert-add-button {
+    cursor: pointer;
+    color: rgba(92,184,92,.5);
+    padding: 5px 8px;
+}
+
+.alert-add-button:hover {
+    color: rgba(92,184,92,1);
+}
+
+
+.alert-delete-button {
+    cursor: pointer;
+    color: rgba(217,83,79,.5);
+    padding: 5px 8px;
+}
+
+.alert-delete-button:hover {
+    color: rgba(217,83,79,1);
+}
+
+
+.alert-block {
+    border-radius: 5px;
+    height: 2rem;
+    border: none;
+    margin-right: 2px;
+    display: inline-block;
+}
+
+.alert-text-block {
+    padding: 2px 7px 3px;
+    border-radius: 5px;
+    height: 2rem;
+    margin-right: 2px;
+}
+
+
+.alert-select {
+    cursor: pointer;
+    display: inline-block;
+}
+
+.alert-select:focus {
+    outline: none;
+}
+
+.alert-select option {
+    background-color: white;
+}
+
+
+.property-select {
+    background-color: rgba(51,122,183,.3);
+}
+
+.property-select:hover {
+    background-color: rgba(51,122,183,.5);
+}
+
+
+.operation-select {
+    background-color: rgba(92,184,92,.3);
+}
+
+.operation-select:hover {
+    background-color: rgba(92,184,92,.5);
+}
+
+
+.target-input {
+    background-color: rgba(221,221,221,.5);
+    max-width: 94px;
+    padding: 0px 5px;
+    display: inline-block;
+}
+
+.target-input:focus {
+    outline: none;
+}
