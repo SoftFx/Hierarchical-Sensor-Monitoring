@@ -396,6 +396,25 @@ namespace HSMDatabase.DatabaseWorkCore
             dbs.Put(key.GetBytes(), valueEntity);
         }
 
+        public void RemoveJournal(Guid id)
+        {
+            var fromTicks = DateTime.MinValue.Ticks;
+            var toTicks = DateTime.MaxValue.Ticks;
+
+            RemoveJournal(id, fromTicks, toTicks, JournalType.Actions);
+            RemoveJournal(id, fromTicks, toTicks, JournalType.Changes);
+        }
+
+        private void RemoveJournal(Guid id, long fromTicks, long toTicks, JournalType type)
+        {
+            var fromBytes = new Key(id, fromTicks, type).GetBytes();
+            var toBytes = new Key(id, toTicks, type).GetBytes();
+
+            foreach (var db in _journalValuesDatabases)
+                if (db.IsInclude(fromTicks, toTicks))
+                    db.Remove(fromBytes, toBytes);
+        }
+
         public IAsyncEnumerable<List<byte[]>> GetJournalValuesPage(Guid sensorId, DateTime from, DateTime to, JournalType journalType, int count)
         {
             var fromTicks = from.Ticks;

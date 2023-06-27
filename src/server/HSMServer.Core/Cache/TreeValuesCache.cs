@@ -266,6 +266,7 @@ namespace HSMServer.Core.Cache
             RemoveSensorPolicies(sensor);
 
             _database.RemoveSensorWithMetadata(sensorId.ToString());
+            RemoveJournal(sensorId);
             _snapshot.Sensors.Remove(sensorId);
 
             ChangeSensorEvent?.Invoke(sensor, ActionType.Delete);
@@ -306,10 +307,10 @@ namespace HSMServer.Core.Cache
             var policy = sensor.ServerPolicy.SavedHistoryPeriod.Policy;
 
             if (!policy.Validate(from).IsOk)
-                ClearSensorHistory(sensorId, policy.Interval.GetShiftedTime(DateTime.UtcNow, -1));
+                ClearSensorHistory(sensorId, policy.Interval.GetShiftedTime(DateTime.UtcNow, -1), "System");
         }
 
-        public void ClearSensorHistory(Guid sensorId, DateTime to)
+        public void ClearSensorHistory(Guid sensorId, DateTime to, string caller = "")
         {
             if (!_sensors.TryGetValue(sensorId, out var sensor))
                 return;
@@ -325,8 +326,7 @@ namespace HSMServer.Core.Cache
                 sensor.ResetSensor();
 
             _database.ClearSensorValues(sensor.Id.ToString(), from, to);
-            //TODO: Change message
-            AddJournal(new JournalRecordModel(sensorId, DateTime.UtcNow, "Sensor was cleared(TEMP MESSAGE)", JournalType.Actions));
+            AddJournal(new JournalRecordModel(sensorId, DateTime.UtcNow, $"{DateTime.UtcNow} - {caller} - clear", JournalType.Actions));
             _snapshot.Sensors[sensorId].History.From = to;
 
             ChangeSensorEvent?.Invoke(sensor, ActionType.Update);
@@ -391,6 +391,8 @@ namespace HSMServer.Core.Cache
             _database.AddJournalValue(journalRecordModel.GetKey(), journalRecordModel.ToJournalEntity());
         }
 
+        public void RemoveJournal(Guid id) => _database.RemoveJournal(id);
+        
         private void UpdatePolicy(ActionType type, Policy policy)
         {
             switch (type)
