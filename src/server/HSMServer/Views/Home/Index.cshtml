@@ -350,10 +350,14 @@
             cache: false,
             success: function (viewData) {
                 if (viewData !== '') {
-                    if (accordion.length !== 0)
-                        $(`#grid-accordion_${accordionId}`).empty().replaceWith(viewData);
-                    else 
-                        $(`#grid-accordion_gridProducts`).empty().replaceWith(viewData);
+                    let currInput = $(`#pageSize_${accordionId}`);
+                    let [wasFocused, lastValue] = getFocusAndVal(currInput);
+                    accordionId = accordion.length !== 0 ? accordionId : 'gridProducts';
+ 
+                    $(`#grid-accordion_${accordionId}`).empty().replaceWith(viewData);
+                    
+                    if (pageNumber === -1 || pageSize === -1)
+                        setPaginationFocus(accordionId, wasFocused, lastValue, $(`#pageSize_${accordionId}`))
                 }
             }
         });
@@ -370,12 +374,28 @@
             cache: false,
             success: function (viewData) {
                 if (viewData !== '') {
-                    if (accordion.length !== 0)
-                        $(`#list-accordion_${accordionId}`).empty().replaceWith(viewData);
-                    else 
-                        $(`#list-accordion_listProducts`).empty().replaceWith(viewData);
+                    let currInput = $(`#pageSize_${accordionId}`);
+                    let [wasFocused, lastValue] = getFocusAndVal(currInput);
+                    accordionId = accordion.length !== 0 ? accordionId : 'listProducts';
+
+                    $(`#list-accordion_${accordionId}`).empty().replaceWith(viewData);
+                    
+                    if (pageNumber === -1 || pageSize === -1)
+                        setPaginationFocus(accordionId, wasFocused, lastValue, $(`#pageSize_${accordionId}`))
                 }
             }
         });
+    }
+    
+    function setPaginationFocus(accordionId, wasFocused, lastValue, currInput) {
+        if (wasFocused)
+           currInput.focus();
+        
+        if (lastValue !== undefined)
+           currInput.val(lastValue)
+    }
+    
+    function getFocusAndVal(input) {
+        return [input.is(':focus'), input.val()]
     }
 </script>

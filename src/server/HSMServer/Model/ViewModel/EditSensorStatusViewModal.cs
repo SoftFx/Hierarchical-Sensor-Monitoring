@@ -39,6 +39,6 @@ public class EditSensorStatusViewModal
         SensorId = model.EncodedId.ToGuid();
         IsAccessKeyExist = isAccessKeyExist;
 
-        Status = model.Status;
+        Status = model.Status.ToEmpty(model.HasData);
     }
 }

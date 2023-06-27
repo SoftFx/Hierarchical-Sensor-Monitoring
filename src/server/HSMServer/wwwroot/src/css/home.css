@@ -92,6 +92,12 @@
     background-color: #f2f2f2;
 }
 
+.grid-cell-empty {
+    color: black;
+    background-color: white;
+    border: 1px solid black;
+}
+
 .grid-cell-ok {
     color: green;
     background-color: #c6efce;
