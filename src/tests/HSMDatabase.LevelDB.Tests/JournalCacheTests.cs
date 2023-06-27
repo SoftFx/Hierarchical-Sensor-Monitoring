@@ -29,7 +29,6 @@ public class JournalCacheTests : MonitoringCoreTestsBase<TreeValuesCacheFixture>
         
         _valuesCache.UpdateProduct(productUpdate);
 
-        Assert.Single(expectedProduct.JournalRecordModels);
         var journals = await _valuesCache.GetJournalValuesPage(expectedProduct.Id, DateTime.MinValue, DateTime.MaxValue, JournalType.Changes, 1).Flatten();
         Assert.Single(journals);
     }

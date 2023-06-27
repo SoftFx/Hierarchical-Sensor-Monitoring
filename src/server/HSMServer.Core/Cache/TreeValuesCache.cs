@@ -101,8 +101,8 @@ namespace HSMServer.Core.Cache
             foreach (var journal in product.JournalRecordModels)
             {
                 AddJournal(new Key(journal.Id, journal.Time, JournalType.Changes), journal.ToJournalEntity());
-                product.JournalRecordModels.Clear();
             }
+            product.JournalRecordModels.Clear();
             
             NotifyAllProductChildrenAboutUpdate(product, sensorsOldStatuses);
         }
@@ -256,8 +256,8 @@ namespace HSMServer.Core.Cache
             foreach (var journal in sensor.JournalRecordModels)
             {
                 AddJournal(new Key(journal.Id, journal.Time, JournalType.Changes), journal.ToJournalEntity());
-                sensor.JournalRecordModels.Clear();
             }
+            sensor.JournalRecordModels.Clear();
             NotifyAboutChanges(sensor);
         }
 
