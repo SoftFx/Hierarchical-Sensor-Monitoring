@@ -98,12 +98,8 @@ namespace HSMServer.Core.Cache
 
             _database.UpdateProduct(product.Update(update).ToProductEntity());
 
-            foreach (var journal in product.JournalRecordModels)
-            {
-                AddJournal(new Key(journal.Id, journal.Time, JournalType.Changes), journal.ToJournalEntity());
-            }
-            product.JournalRecordModels.Clear();
-            
+            AddJournals(product.JournalRecordModels);
+
             NotifyAllProductChildrenAboutUpdate(product, sensorsOldStatuses);
         }
 
@@ -253,11 +249,9 @@ namespace HSMServer.Core.Cache
             _snapshot.Sensors[sensor.Id].IsExpired = sensor.HasUpdateTimeout();
 
             _database.UpdateSensor(sensor.ToEntity());
-            foreach (var journal in sensor.JournalRecordModels)
-            {
-                AddJournal(new Key(journal.Id, journal.Time, JournalType.Changes), journal.ToJournalEntity());
-            }
-            sensor.JournalRecordModels.Clear();
+
+            AddJournals(sensor.JournalRecordModels);
+
             NotifyAboutChanges(sensor);
         }
 
@@ -867,6 +861,14 @@ namespace HSMServer.Core.Cache
 
             if (!_snapshot.IsFinal)
                 _snapshot.FlushState(true);
+        }
+
+        private void AddJournals(List<JournalRecordModel> journalRecordModels)
+        {
+            foreach (var journal in journalRecordModels)
+                AddJournal(new Key(journal.Id, journal.Time, JournalType.Changes), journal.ToJournalEntity());
+            
+            journalRecordModels.Clear();
         }
 
         private static Dictionary<string, Policy> GetPolicyModels(List<byte[]> policyEntities)

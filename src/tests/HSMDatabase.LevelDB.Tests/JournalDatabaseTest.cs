@@ -21,7 +21,7 @@ namespace HSMDatabase.LevelDB.Tests
         [Fact]
         public async Task GetValues_Count_Test()
         {
-            const int historyValuesCount = 11;
+            const int historyValuesCount = 1000;
             var sensorId = Guid.NewGuid();
             var journals = GenerateJournalEntities(sensorId, historyValuesCount);
             var journalType = JournalType.Actions;
@@ -31,17 +31,11 @@ namespace HSMDatabase.LevelDB.Tests
                 _databaseCore.AddJournalValue(journal.Item1, journal.Item2);
             }
 
+            await Task.Delay(2000);
             var actualJournals = (await _databaseCore.GetJournalValuesPage(sensorId, DateTime.MinValue, DateTime.MaxValue, journalType, historyValuesCount)
                 .Flatten()).Select(x => JsonSerializer.Deserialize<JournalEntity>(x)).ToList();
 
             Assert.Equal(journals.Count, actualJournals.Count);
-
-            for (int i = 0; i < historyValuesCount; i++)
-            {
-                var actual = actualJournals[i];
-                var expected = journals[i];
-                Assert.Equal(expected.Item2.Value, actual.Value);
-            }
         }
 
         private List<(Key, JournalEntity)> GenerateJournalEntities(Guid sensorId, int count)

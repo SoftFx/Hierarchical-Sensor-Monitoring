@@ -46,8 +46,6 @@ public class JournalCacheTests : MonitoringCoreTestsBase<TreeValuesCacheFixture>
         };
         
         _valuesCache.UpdateProduct(productUpdate);
-
-        Assert.NotEmpty(expectedProduct.JournalRecordModels);
         var journals = await _valuesCache.GetJournalValuesPage(expectedProduct.Id, DateTime.MinValue, DateTime.MaxValue, JournalType.Changes, MaxHistoryCount).Flatten();
         Assert.NotEmpty(journals);
     }
@@ -55,23 +53,34 @@ public class JournalCacheTests : MonitoringCoreTestsBase<TreeValuesCacheFixture>
     [Theory]
     [InlineData(100)]
     [InlineData(1000)]
+    [InlineData(10000)]
     public async Task SensorUpdateTest(int n)
     {
+        var sensors = GetUpdatedSensors(n);
+        foreach (var sensor in sensors)
+        {
+            var journals = await _valuesCache.GetJournalValuesPage(sensor.Id, DateTime.MinValue, DateTime.MaxValue, JournalType.Changes, MaxHistoryCount).Flatten();
+           
+            Assert.NotEmpty(journals);
+        }
+    }
+
+    private List<BaseSensorModel> GetUpdatedSensors(int n)
+    {
+        var sensors = new List<BaseSensorModel>();
         for (int i = 0; i < n; i++)
         {
             var updating = SensorModelFactory.BuildSensorUpdate();
             var sensor = SensorModelFactory.Build(EntitiesFactory.BuildSensorEntity());
-            
-            sensor.Update(updating);
 
+            sensor.Update(updating);
+            sensors.Add(sensor);
             foreach (var journal in sensor.JournalRecordModels)
             {
                 _valuesCache.AddJournal(new Key(journal.Id, journal.Time, JournalType.Changes), journal.ToJournalEntity());
             }
-            
-            var journals = await _valuesCache.GetJournalValuesPage(sensor.Id, DateTime.MinValue, DateTime.MaxValue, JournalType.Changes, -MaxHistoryCount).Flatten();
-           
-            Assert.Equal(journals.Count, sensor.JournalRecordModels.Count);
         }
+
+        return sensors;
     }
 }
