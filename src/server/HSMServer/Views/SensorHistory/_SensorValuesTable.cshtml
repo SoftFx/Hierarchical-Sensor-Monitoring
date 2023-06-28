@@ -94,6 +94,13 @@ else
 
 
 <script>
+    $(document).ready(function () {
+        if ($('#showAllTableColumns_@Model.SensorId').is(':checked')) {
+            $("#receivingTime_header").removeClass('d-none');
+            $('[id^="receivingTime_value"]').removeClass('d-none');
+        }
+    });
+
     if (@Model.CurrentIndex === @Model.LastIndex) {
         $('#nextPageButton').addClass('disabled');
     }
