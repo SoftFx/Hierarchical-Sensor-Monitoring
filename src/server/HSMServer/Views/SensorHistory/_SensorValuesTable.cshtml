@@ -24,6 +24,7 @@ else
             <thead>
                 <tr class="text-nowrap">
                     <th>Date</th>
+                    <th id="receivingTime_header" class="d-none">Receiving time</th>
                     @if (Model.IsBarSensor)
                     {
                         <th>Min</th>
@@ -41,10 +42,13 @@ else
                 </tr>
             </thead>
             <tbody>
-                @foreach (var value in currentPage)
+                @for (int i = 0; i < currentPage.Count; ++i)
                 {
+                    var value = currentPage[i];
+
                     <tr>
                         <td>@value.Time.ToDefaultFormat()</td>
+                        <td id="receivingTime_value@(i)" class="d-none">@value.ReceivingTime.ToDefaultFormat()</td>
                         @if (Model.IsBarSensor)
                         {
                             var barValue = value as BarSensorValueViewModel;

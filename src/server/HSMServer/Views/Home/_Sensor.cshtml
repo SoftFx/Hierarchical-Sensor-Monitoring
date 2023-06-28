@@ -163,22 +163,30 @@
                 <div id='history_@sensorId'>
                     @if (Model.IsChartSupported)
                     {
-                        <ul class='nav nav-tabs'>
-                            <li class='nav-item'>
-                                <a id='link_graph_@sensorId' class='nav-link active' data-bs-toggle='tab' href='#@graphParentDivId'>Graph</a>
-                            </li>
-                            <li class='nav-item'>
-                                <div class="d-flex flex-row align-items-center">
-                                    <a id='link_table_@sensorId' class='nav-link' data-bs-toggle='tab' href='#@valuesParentDivId'>
-                                        Table
-                                        <span id="newValuesCount" class="badge rounded-pill badge-light fw-semibold"></span>
-                                    </a>
-                                    <div id="tableHistoryRefreshButton" class="table-history-refresh ms-3 d-none">
-                                        <a class='table-history-refresh-link fw-semibold' href="javascript:refreshTable();">Refresh</a>
+                        <div class="d-flex justify-content-between align-items-center">
+                            <ul class='nav nav-tabs flex-fill'>
+                                <li class='nav-item'>
+                                    <a id='link_graph_@sensorId' class='nav-link active' data-bs-toggle='tab' href='#@graphParentDivId'>Graph</a>
+                                </li>
+                                <li class='nav-item'>
+                                    <div class="d-flex flex-row align-items-center">
+                                        <a id='link_table_@sensorId' class='nav-link' data-bs-toggle='tab' href='#@valuesParentDivId'>
+                                            Table
+                                            <span id="newValuesCount" class="badge rounded-pill badge-light fw-semibold"></span>
+                                        </a>
+                                        <div id="tableHistoryRefreshButton" class="table-history-refresh ms-3 d-none">
+                                            <a class='table-history-refresh-link fw-semibold' href="javascript:refreshTable();">Refresh</a>
+                                        </div>
                                     </div>
-                                </div>
-                            </li>
-                        </ul>
+                                </li>
+                            </ul>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" value="" id="showAllTableColumns_@sensorId">
+                                <label class="form-check-label" for="showAllTableColumns_@sensorId">
+                                    Show all columns
+                                </label>
+                            </div>
+                        </div>
                         <div class='tab-content'>
                             <div class='tab-pane fade show active' id=@graphParentDivId>
                                 <div id='@graphElementId'></div>
@@ -190,6 +198,12 @@
                     }
                     else
                     {
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" value="" id="showAllTableColumns_@sensorId">
+                            <label class="form-check-label" for="showAllTableColumns_@sensorId">
+                                Show all columns
+                            </label>
+                        </div>
                         <div id='values_@sensorId'></div>
                     }
                 </div>
@@ -203,6 +217,17 @@
 
 <script>
     var previousReceivedTime = undefined;
+
+    $('#showAllTableColumns_@sensorId').off('change').on('change', function (e) {
+        if (this.checked) {
+            $("#receivingTime_header").removeClass('d-none');
+            $('[id^="receivingTime_value"]').removeClass('d-none');
+        }
+        else {
+            $("#receivingTime_header").addClass('d-none');
+            $('[id^="receivingTime_value"]').addClass('d-none');
+        }
+    });
 
     $(document).ready(function () {
         if ('@(Model.Type is SensorType.File)' === 'True') {
