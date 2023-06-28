@@ -1,10 +1,9 @@
-﻿using System.Collections.Generic;
-using System.Linq;
 using HSMServer.Model.Authentication;
-using HSMServer.Model.Folders;
 using HSMServer.Model.TreeViewModel;
 using HSMServer.UserFilters;
 using Microsoft.AspNetCore.Html;
+using System.Collections.Generic;
+using System.Linq;
 
 namespace HSMServer.Extensions
 {
@@ -30,8 +29,36 @@ namespace HSMServer.Extensions
         internal static string ToIcon(this SensorStatus status) =>
             $"fas fa-circle {status.ToCssIconClass()}";
 
+        internal static string ToIconClass(this string icon) =>
+            icon switch
+            {
+                "⬆️" => "fa-solid fa-arrow-up",
+                "⏫" => "fa-solid fa-angles-up",
+                "🔼" => "fa-solid fa-angle-up",
+                "↕️" => "fa-solid fa-arrows-up-down",
+                "🔽" => "fa-solid fa-angle-down",
+                "⏬" => "fa-solid fa-angles-down",
+                "⬇️" => "fa-solid fa-arrow-down",
+                "⌛️" => "fa-solid fa-hourglass-end",
+                "❌" => "fa-solid fa-xmark",
+                _ => string.Empty,
+            };
+
+        internal static string ToIconUnicode(this string icon) =>
+            icon switch
+            {
+                "⬆️" => "&#xf062;",
+                "⏫" => "&#xf102;",
+                "🔼" => "&#xf106;",
+                "↕️" => "&#xf338;",
+                "🔽" => "&#xf107;",
+                "⏬" => "&#xf103;",
+                "⬇️" => "&#xf063;",
+                _ => string.Empty,
+            };
+
         internal static HtmlString ToIconStatus(this SensorStatus status) =>
-            new HtmlString($"<span class='{status.ToIcon()}'></span> {status}");
+            new($"<span class='{status.ToIcon()}'></span> {status}");
 
         internal static string ToCssClass(this Core.Model.SensorState state) =>
             state switch
@@ -46,13 +73,9 @@ namespace HSMServer.Extensions
                 SensorStatus.Ok => "grid-cell-ok",
                 SensorStatus.Warning => "grid-cell-warning",
                 SensorStatus.Error => "grid-cell-error",
-                _ => "grid-cell-offTime",
+                SensorStatus.OffTime => "grid-cell-offTime",
+                _ => "grid-cell-empty",
             };
-
-        internal static string GetChildrenAccordionTitle(this NodeViewModel node) =>
-            node is ProductNodeViewModel product
-                ? product.Parent is FolderModel ? "Products" : "Nodes"
-                : "Sensors";
 
         internal static IOrderedEnumerable<T> GetOrdered<T>(this IEnumerable<T> collection, User user) where T : BaseNodeViewModel =>
             user.TreeFilter.TreeSortType switch
@@ -62,7 +85,7 @@ namespace HSMServer.Extensions
             };
 
         internal static string GetEmptySensorIcon() => "fa-regular fa-circle";
-        
+
         internal static string GetShortNodeName(this string name) => name.Cut(NodeNameMaxLength);
 
         internal static string GetShortCellName(this string name) => name.Cut(CellNameMaxLength);

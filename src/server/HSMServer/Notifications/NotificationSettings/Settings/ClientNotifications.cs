@@ -130,6 +130,7 @@ namespace HSMServer.Notification.Settings
 
         public new NotificationSettingsEntity ToEntity() => new()
         {
+            AutoSubscription = AutoSubscription,
             TelegramSettings = Telegram.ToEntity(),
             EnabledSensors = EnabledSensors.Select(s => s.ToString()).ToList(),
             PartiallyIgnored = PartiallyIgnored.ToDictionary(s => s.Key.Identifier ?? 0L, s => s.Value.ToDictionary(i => i.Key.ToString(), i => i.Value.Ticks)),

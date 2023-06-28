@@ -8,7 +8,7 @@ public class VersionSensorModel : BaseSensorModel<VersionValue>
     internal override VersionValueStorage Storage { get; } = new VersionValueStorage();
 
 
-    public override DataPolicyCollection<VersionValue, VersionDataPolicy> DataPolicies { get; } = new();
+    public override SensorPolicyCollection<VersionValue, VersionPolicy> Policies { get; } = new();
 
     public override SensorType Type { get; } = SensorType.Version;
 

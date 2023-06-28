@@ -50,6 +50,9 @@
     var unmuteAction = "@Url.Action(nameof(HomeController.RemoveMutedStateToSensor), ViewConstants.HomeController)";
 
     var isDataValidAction = "@Url.Action(nameof(HomeController.IsMetaInfoValid), ViewConstants.HomeController)";
+    
+    var getGrid = `@Url.Action(nameof(HomeController.GetGrid))`;
+    var getList = `@Url.Action(nameof(HomeController.GetList))`;
 </script>
 
 
@@ -282,7 +285,6 @@
                 for (let i = 0; i < array.length; i++) {
                     let dataObject = array[i];
 
-                    updateGridCell(dataObject);
                     updateNodeData(dataObject);
 
                     if (dataObject.value !== null && dataObject.value !== undefined)
@@ -293,7 +295,19 @@
                     }
                 }
                 
-                updateGeneralInfo(selectedNodeId);
+                let accordionName = "";
+                if ($('#dataPanel li a.active')[0].innerText === ' Grid') {
+                    accordionName = "grid"
+                    getGridPage(`${accordionName}Sensors`)
+                    getGridPage(`${accordionName}Nodes`)
+                }
+                else {
+                    accordionName = "list";
+                    getListPage(`${accordionName}Sensors`)
+                    getListPage(`${accordionName}Nodes`)
+                }
+
+               updateGeneralInfo(selectedNodeId);
                 
                 if (displayChildrenInfo)
                     $('#dataPanel').removeClass('d-none');
@@ -324,4 +338,64 @@
     var clipboard = new ClipboardJS('[id^="copy_"]', {
         container: document.getElementById('accessKeys_modal')
     });
+    
+    function getGridPage(accordionId, pageNumber = -1, pageSize = -1){
+        let accordion  = $(`#grid-accordion_${accordionId}`);
+        
+        $.ajax({
+            type: 'get',
+            url: `${getGrid}?typeId=${accordionId}&currentPage=${pageNumber}&pageSize=${pageSize}`,
+            datatype: 'html',
+            contenttype: 'application/json',
+            cache: false,
+            success: function (viewData) {
+                if (viewData !== '') {
+                    let currInput = $(`#pageSize_${accordionId}`);
+                    let [wasFocused, lastValue] = getFocusAndVal(currInput);
+                    accordionId = accordion.length !== 0 ? accordionId : 'gridProducts';
+ 
+                    $(`#grid-accordion_${accordionId}`).empty().replaceWith(viewData);
+                    
+                    if (pageNumber === -1 || pageSize === -1)
+                        setPaginationFocus(accordionId, wasFocused, lastValue, $(`#pageSize_${accordionId}`))
+                }
+            }
+        });
+    }
+    
+    function getListPage(accordionId, pageNumber = -1, pageSize = -1){
+        let accordion  = $(`#list-accordion_${accordionId}`);
+        
+        $.ajax({
+            type: 'get',
+            url: `${getList}?typeId=${accordionId}&currentPage=${pageNumber}&pageSize=${pageSize}`,
+            datatype: 'html',
+            contenttype: 'application/json',
+            cache: false,
+            success: function (viewData) {
+                if (viewData !== '') {
+                    let currInput = $(`#pageSize_${accordionId}`);
+                    let [wasFocused, lastValue] = getFocusAndVal(currInput);
+                    accordionId = accordion.length !== 0 ? accordionId : 'listProducts';
+
+                    $(`#list-accordion_${accordionId}`).empty().replaceWith(viewData);
+                    
+                    if (pageNumber === -1 || pageSize === -1)
+                        setPaginationFocus(accordionId, wasFocused, lastValue, $(`#pageSize_${accordionId}`))
+                }
+            }
+        });
+    }
+    
+    function setPaginationFocus(accordionId, wasFocused, lastValue, currInput) {
+        if (wasFocused)
+           currInput.focus();
+        
+        if (lastValue !== undefined)
+           currInput.val(lastValue)
+    }
+    
+    function getFocusAndVal(input) {
+        return [input.is(':focus'), input.val()]
+    }
 </script>

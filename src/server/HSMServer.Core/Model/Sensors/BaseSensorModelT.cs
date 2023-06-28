@@ -8,9 +8,9 @@ namespace HSMServer.Core.Model
 {
     public abstract class BaseSensorModel<T> : BaseSensorModel where T : BaseValue
     {
-        internal override ValuesStorage<T> Storage { get; }
+        public override SensorPolicyCollection<T> Policies { get; }
 
-        public override DataPolicyCollection<T> DataPolicies { get; }
+        internal override ValuesStorage<T> Storage { get; }
 
 
         protected BaseSensorModel(SensorEntity entity) : base(entity) { }
@@ -18,7 +18,7 @@ namespace HSMServer.Core.Model
 
         internal override bool TryAddValue(BaseValue value)
         {
-            var canStore = DataPolicies.TryValidate(value, out var valueT);
+            var canStore = Policies.TryValidate(value, out var valueT);
 
             if (canStore)
             {
@@ -30,17 +30,13 @@ namespace HSMServer.Core.Model
             return canStore;
         }
 
-        internal override void AddDbValue(byte[] bytes) => Storage.AddValue((T)Convert(bytes));
-
         internal override List<BaseValue> ConvertValues(List<byte[]> pages) => pages.Select(Convert).ToList();
 
-        internal override void AddPolicy<U>(U policy)
-        {
-            if (policy is DataPolicy<T> dataPolicy)
-                DataPolicies.Add(dataPolicy);
-            else
-                base.AddPolicy(policy);
-        }
+        internal override void AddDbValue(byte[] bytes) => Storage.AddValue((T)Convert(bytes));
+
+        internal override bool CheckTimeout() => Policies.SensorTimeout(LastValue?.ReceivingTime);
+
+        internal override void RecalculatePolicy() => Policies.TryValidate(LastValue, out _);
 
 
         private BaseValue Convert(byte[] bytes) => bytes.ToValue<T>();

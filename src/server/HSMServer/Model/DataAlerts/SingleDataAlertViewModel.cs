@@ -10,6 +10,8 @@ namespace HSMServer.Model.DataAlerts
     {
         public override string DisplayComment { get; }
 
+        protected override List<string> Icons { get; } = AlertPredefined.BorderIcons;
+
         protected override List<string> Properties { get; } = new() { nameof(BaseValue<U>.Value) };
 
         protected override List<PolicyOperation> Actions { get; } = new()
@@ -23,7 +25,7 @@ namespace HSMServer.Model.DataAlerts
 
         public SingleDataAlertViewModel(Guid entityId) : base(entityId) { }
 
-        public SingleDataAlertViewModel(DataPolicy<T, U> policy, BaseSensorModel sensor) : base(policy, sensor)
+        public SingleDataAlertViewModel(Policy<T, U> policy, BaseSensorModel sensor) : base(policy, sensor)
         {
             DisplayComment = CommentBuilder.GetSingleComment(sensor.LastValue as T, sensor, policy);
         }

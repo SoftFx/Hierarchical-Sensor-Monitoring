@@ -1,61 +1,29 @@
-﻿@using HSMServer.Model.Folders
-@using HSMServer.Model.TreeViewModel
-@using HSMServer.Model.Authentication
-@using HSMServer.UserFilters;
-
-@model BaseNodeViewModel
+﻿@model HSMServer.Model.TreeViewModels.SelectedNodeViewModel
 
 @{
-    var user = User as User;
-
-    string nodeId = null;
-    List<NodeViewModel> visibleNodes = new();
-    List<NodeViewModel> visibleSensors = new();
-
-    if (Model is FolderModel folder)
-    {
-        nodeId = folder.Id.ToString();
-        visibleNodes = GetSortedNodes(folder.Products.Values);
-    }
-    else if (Model is ProductNodeViewModel product)
-    {
-        nodeId = product.EncodedId;
-        visibleNodes = GetSortedNodes(product.Nodes.Values);
-        visibleSensors = GetSortedNodes(product.Sensors.Values);
-    }
-
+    string nodeId = Model.Id;
     var listDivId = $"list_{nodeId}";
     var gridDivId = $"grid_{nodeId}";
 
-    var visibilityClass = visibleNodes.Count > 0 || visibleSensors.Count > 0 ? string.Empty : "d-none";
-    
-    List<NodeViewModel> GetSortedNodes<T>(IEnumerable<T> nodes) where T : NodeViewModel
-    {
-        return nodes.Where(n => n.HasData)
-                    .OrderByDescending(n => n.Status)
-                    .ThenBy(n => n.Name)
-                    .Take(1000)
-                    .Cast<NodeViewModel>().ToList();
-    }
+    var visibilityClass = Model.HasChildren ? string.Empty : "d-none";
 }
 
 
 <ul id="dataPanel" class='nav nav-tabs @visibilityClass' role="tablist">
     <li class='nav-item'>
-        <a id="gridLink_@nodeId" class='nav-link' data-bs-toggle='tab' href='#@gridDivId' role="tab"><i class="fa-solid fa-table-cells-large"></i> Grid</a>
+        <a id="gridLink_@nodeId" class='nav-link' data-bs-toggle='tab' onclick="getGridPage(`gridSensors`);getGridPage(`gridNodes`)" href='#@gridDivId' role="tab"><i class="fa-solid fa-table-cells-large"></i> Grid</a>
     </li>
     <li class='nav-item'>
-        <a id="listLink_@nodeId" class='nav-link' data-bs-toggle='tab' href='#@listDivId' role="tab"><i class="fa-solid fa-list"></i> List</a>
+        <a id="listLink_@nodeId" class='nav-link' data-bs-toggle='tab' onclick="getListPage(`listSensors`);getListPage(`listNodes`)" href='#@listDivId' role="tab"><i class="fa-solid fa-list"></i> List</a>
     </li>
 </ul>
 <div class='tab-content'>
     <div class='tab-pane fade' id=@gridDivId role="tabpanel">
-        @await Html.PartialAsync("_GridAccordion", visibleNodes)
-        @await Html.PartialAsync("_GridAccordion", visibleSensors)
+        <div class="accordion" id="grid-accordion_gridNodes"></div>
+        <div class="accordion" id="grid-accordion_gridSensors"></div>
     </div>
-
     <div class='tab-pane fade' id=@listDivId role="tabpanel">
-        @await Html.PartialAsync("_ListAccordion", visibleNodes)
-        @await Html.PartialAsync("_ListAccordion", visibleSensors)
+        <div class="accordion" id="list-accordion_listNodes"></div>
+        <div class="accordion" id="list-accordion_listSensors"></div>
     </div>
 </div>

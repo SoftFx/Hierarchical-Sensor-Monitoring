@@ -42,7 +42,7 @@ public class JournalCacheTests : MonitoringCoreTestsBase<TreeValuesCacheFixture>
         {
             Id = expectedProduct.Id, 
             Description = "qweqwe",
-            ExpectedUpdateInterval = new TimeIntervalModel(321123213123321)
+            TTL = new TimeIntervalModel(321123213123321)
         };
         
         _valuesCache.UpdateProduct(productUpdate);

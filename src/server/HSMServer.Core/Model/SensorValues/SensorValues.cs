@@ -34,12 +34,14 @@ namespace HSMServer.Core.Model
         public override object RawValue => Value.Ticks;
     }
 
+
     public record VersionValue : BaseValue<Version>
     {
         public override SensorType Type => SensorType.Version;
 
         public override string ShortInfo => Value.Revision == 0 ? Value.ToString(3) : Value.ToString();
     }
+
 
     public record FileValue : BaseValue<byte[]>
     {

@@ -2,7 +2,6 @@
 using HSMServer.Attributes;
 using HSMServer.Authentication;
 using HSMServer.Constants;
-using HSMServer.Encryption;
 using HSMServer.Filters;
 using HSMServer.Model.Authentication;
 using HSMServer.Model.TreeViewModel;
@@ -80,7 +79,6 @@ namespace HSMServer.Controllers
             //    // var key = _configurationProvider.ReadConfigurationObject(ConfigurationConstants.AesEncryptionKey);
             //    var key = "sadasda";
             //    byte[] keyBytes = AESCypher.ToBytes(key);
-
             //    var result = AESCypher.Decrypt(cipher.Replace(' ', '+'), nonce.Replace(' ', '+'), tag.Replace(' ', '+'), keyBytes);
             //    var ticketId = Guid.Parse(result);
             //    var ticket = _ticketManager.GetTicket(ticketId);

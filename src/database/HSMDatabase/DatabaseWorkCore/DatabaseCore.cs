@@ -234,7 +234,7 @@ namespace HSMDatabase.DatabaseWorkCore
 
         public void AddPolicy(PolicyEntity entity)
         {
-            _environmentDatabase.AddPolicyIdToList(entity.Id);
+            _environmentDatabase.AddPolicyIdToList(new Guid(entity.Id).ToString());
             _environmentDatabase.AddPolicy(entity);
         }
 

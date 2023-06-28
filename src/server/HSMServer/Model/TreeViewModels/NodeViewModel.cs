@@ -1,4 +1,5 @@
 ﻿using HSMServer.Core.Model;
+using HSMServer.Core.Model.NodeSettings;
 using HSMServer.Core.Model.Policies;
 using HSMServer.Helpers;
 using HSMServer.Model.Folders;
@@ -7,11 +8,11 @@ namespace HSMServer.Model.TreeViewModel
 {
     public enum SensorStatus
     {
+        Empty,
         OffTime,
         Ok,
         Warning,
-        Error,
-        Empty,
+        Error
     }
 
 
@@ -41,10 +42,9 @@ namespace HSMServer.Model.TreeViewModel
 
             bool NodeHasFolder() => Parent is FolderModel;
 
-            ExpectedUpdateInterval = new(model.ServerPolicy.ExpectedUpdate.Policy.Interval, () => Parent?.ExpectedUpdateInterval, NodeHasFolder);
-            SensorRestorePolicy = new(model.ServerPolicy.RestoreError.Policy.Interval, () => Parent?.SensorRestorePolicy, NodeHasFolder);
-            SavedHistoryPeriod = new(model.ServerPolicy.SavedHistoryPeriod.Policy.Interval, () => Parent?.SavedHistoryPeriod, NodeHasFolder);
-            SelfDestroyPeriod = new(model.ServerPolicy.SelfDestroy.Policy.Interval, () => Parent?.SelfDestroyPeriod, NodeHasFolder);
+            ExpectedUpdateInterval = new(model.Settings.TTL.Value, () => Parent?.ExpectedUpdateInterval, NodeHasFolder);
+            SavedHistoryPeriod = new(model.Settings.KeepHistory.Value, () => Parent?.SavedHistoryPeriod, NodeHasFolder);
+            SelfDestroyPeriod = new(model.Settings.SelfDestroy.Value, () => Parent?.SelfDestroyPeriod, NodeHasFolder);
         }
 
 
@@ -54,16 +54,15 @@ namespace HSMServer.Model.TreeViewModel
             Name = model.DisplayName;
             Description = model.Description;
 
-            UpdatePolicyView(model.ServerPolicy.ExpectedUpdate, ExpectedUpdateInterval);
-            UpdatePolicyView(model.ServerPolicy.RestoreError, SensorRestorePolicy);
-            UpdatePolicyView(model.ServerPolicy.SavedHistoryPeriod, SavedHistoryPeriod);
-            UpdatePolicyView(model.ServerPolicy.SelfDestroy, SelfDestroyPeriod);
+            UpdatePolicyView(model.Settings.TTL, ExpectedUpdateInterval);
+            UpdatePolicyView(model.Settings.KeepHistory, SavedHistoryPeriod);
+            UpdatePolicyView(model.Settings.SelfDestroy, SelfDestroyPeriod);
         }
 
 
-        private static void UpdatePolicyView<T>(CollectionProperty<T> property, TimeIntervalViewModel targetView) where T : ServerPolicy, new()
+        private static void UpdatePolicyView<T>(SettingProperty<T> property, TimeIntervalViewModel targetView) where T : TimeIntervalModel
         {
-            targetView.Update(property.IsSet ? property.Policy.Interval : null);
+            targetView.Update(property.IsSet ? property.Value : null);
         }
     }
 }

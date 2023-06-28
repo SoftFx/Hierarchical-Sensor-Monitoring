@@ -220,6 +220,16 @@ namespace HSMServer.ApiObjectsConverters
             _ => null
         };
 
+        public static ApiSensorStatus ToApi(this Model.TreeViewModel.SensorStatus status) =>
+            status switch
+            {
+                Model.TreeViewModel.SensorStatus.Ok => ApiSensorStatus.Ok,
+                Model.TreeViewModel.SensorStatus.Warning => ApiSensorStatus.Warning,
+                Model.TreeViewModel.SensorStatus.Error => ApiSensorStatus.Error,
+                Model.TreeViewModel.SensorStatus.OffTime => ApiSensorStatus.OffTime,
+                _ => ApiSensorStatus.Ok,
+            };
+
 
         private static SensorStatus Convert(this ApiSensorStatus status) =>
             status switch

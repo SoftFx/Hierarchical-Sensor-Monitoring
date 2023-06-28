@@ -1,9 +1,9 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Core.Cache.UpdateEntities;
+using HSMServer.Core.Model.NodeSettings;
 using HSMServer.Core.Model.Policies;
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Runtime.CompilerServices;
 
 namespace HSMServer.Core.Model
@@ -12,7 +12,10 @@ namespace HSMServer.Core.Model
     {
         public List<JournalRecordModel> JournalRecordModels { get; set; } = new();
 
-        public ServerPolicyCollection ServerPolicy { get; } = new();
+        public abstract PolicyCollectionBase Policies { get; }
+
+        public SettingsCollection Settings { get; } = new();
+
 
         public Guid Id { get; }
 
@@ -28,6 +31,8 @@ namespace HSMServer.Core.Model
 
         public string Description { get; private set; }
 
+        public bool UseParentPolicies { get; private set; }
+
 
         public string RootProductName => Parent?.RootProductName ?? DisplayName;
 
@@ -38,8 +43,6 @@ namespace HSMServer.Core.Model
         {
             Id = Guid.NewGuid();
             CreationDate = DateTime.UtcNow;
-
-            ServerPolicy.ExpectedUpdate.Uploaded += (_, _) => HasUpdateTimeout();
         }
 
         protected BaseNodeModel(string name, Guid? authorId) : this()
@@ -56,14 +59,20 @@ namespace HSMServer.Core.Model
 
             DisplayName = entity.DisplayName;
             Description = entity.Description;
+
+            if (entity.Settings != null)
+                Settings.SetSettings(entity.Settings);
         }
+
+
+        internal abstract bool CheckTimeout();
 
 
         protected internal BaseNodeModel AddParent(ProductModel parent)
         {
             Parent = parent;
 
-            ServerPolicy.ApplyParentPolicies(parent.ServerPolicy);
+            Settings.SetParentSettings(parent.Settings);
 
             return this;
         }
@@ -72,54 +81,14 @@ namespace HSMServer.Core.Model
         {
             Description = ApplyUpdate(Description, update.Description);
 
-            if (update.ExpectedUpdateInterval != null)
-            {
-                ApplyUpdate(ServerPolicy.ExpectedUpdate.Policy.Interval, update.ExpectedUpdateInterval);
-                ServerPolicy.ExpectedUpdate.SetPolicy(update.ExpectedUpdateInterval);
-            }
-            
-            var restoreInterval = update.RestoreInterval;
+            Settings.KeepHistory.TrySetValue(update.KeepHistory);
+            Settings.SelfDestroy.TrySetValue(update.SelfDestroy);
 
-            if (restoreInterval != null)
-            {
-                ApplyUpdate(ServerPolicy.RestoreError.Policy.Interval, update.ExpectedUpdateInterval);
-                ServerPolicy.RestoreError.SetPolicy(restoreInterval);
-                
-                ApplyUpdate(ServerPolicy.RestoreWarning.Policy.Interval, update.ExpectedUpdateInterval);
-                ServerPolicy.RestoreWarning.SetPolicy(restoreInterval);
-                
-                ApplyUpdate(ServerPolicy.RestoreOffTime.Policy.Interval, update.ExpectedUpdateInterval);
-                ServerPolicy.RestoreOffTime.SetPolicy(restoreInterval);
-            }
-
-            if (update.SavedHistoryPeriod != null)
-            {
-                ApplyUpdate(ServerPolicy.SavedHistoryPeriod.Policy.Interval, update.ExpectedUpdateInterval);
-                ServerPolicy.SavedHistoryPeriod.SetPolicy(update.SavedHistoryPeriod);
-            }
-
-            if (update.SelfDestroy != null)
-            {
-                ApplyUpdate(ServerPolicy.SelfDestroy.Policy.Interval, update.ExpectedUpdateInterval);
-                ServerPolicy.SelfDestroy.SetPolicy(update.SelfDestroy);
-            }
+            if (Settings.TTL.TrySetValue(update.TTL))
+                CheckTimeout();
         }
 
 
-        internal abstract bool HasUpdateTimeout();
-
-        internal virtual void AddPolicy<T>(T policy) where T : Policy => ServerPolicy.ApplyPolicy(policy);
-
-        internal virtual List<Guid> GetPolicyIds() => ServerPolicy.Ids.ToList();
-
-        internal void ApplyPolicies(List<string> policyIds, Dictionary<string, Policy> allPolicies)
-        {
-            foreach (var id in policyIds ?? Enumerable.Empty<string>())
-                if (allPolicies.TryGetValue(id, out var policy))
-                    AddPolicy(policy);
-        }
-        
-        
         internal T ApplyUpdate<T>(T property, T update, [CallerArgumentExpression("property")] string propertyName = null)
         {
             if (update is not null && !update.Equals(property))
@@ -128,17 +97,17 @@ namespace HSMServer.Core.Model
                 {
                     string newValue;
                     string oldValue;
-                    
-                    if (updateTimeInterval.TimeInterval is TimeInterval.Custom)
-                        newValue = new TimeSpan(updateTimeInterval.CustomPeriod).ToString();
+
+                    if (updateTimeInterval.Interval is TimeInterval.Custom)
+                        newValue = new TimeSpan(updateTimeInterval.Ticks).ToString();
                     else
-                        newValue = updateTimeInterval.TimeInterval.ToString();
-                    
-                    if (propertyTimeInterval.TimeInterval is TimeInterval.Custom)
-                        oldValue = new TimeSpan(propertyTimeInterval.CustomPeriod).ToString();
+                        newValue = updateTimeInterval.Interval.ToString();
+
+                    if (propertyTimeInterval.Interval is TimeInterval.Custom)
+                        oldValue = new TimeSpan(propertyTimeInterval.Ticks).ToString();
                     else
-                        oldValue = propertyTimeInterval.TimeInterval.ToString();
-                    
+                        oldValue = propertyTimeInterval.Interval.ToString();
+
                     JournalRecordModels.Add(new JournalRecordModel()
                     {
                         Id = Id,
@@ -153,8 +122,8 @@ namespace HSMServer.Core.Model
                         Time = DateTime.UtcNow.Ticks,
                         Value = $"{propertyName}: {property} -> {update}"
                     });
-                
-                return update;   
+
+                return update;
             }
 
             return property;

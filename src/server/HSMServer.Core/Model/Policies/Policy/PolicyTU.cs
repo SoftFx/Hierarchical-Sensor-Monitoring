@@ -2,7 +2,7 @@
 
 namespace HSMServer.Core.Model.Policies
 {
-    public abstract class DataPolicy<T, U> : DataPolicy<T> where T : BaseValue
+    public abstract class Policy<T, U> : Policy<T> where T : BaseValue
     {
         private Func<U, U, bool> _executeOperation;
         private Func<T, U> _getProperty;
@@ -64,7 +64,7 @@ namespace HSMServer.Core.Model.Policies
 
         internal override bool Validate(T value, BaseSensorModel sensor)
         {
-            if (!_executeOperation(_getProperty(value), _targetValue))
+            if (_executeOperation(_getProperty(value), _targetValue))
             {
                 AlertComment = GetComment(value, sensor);
                 SensorResult = new SensorResult(Status, AlertComment);

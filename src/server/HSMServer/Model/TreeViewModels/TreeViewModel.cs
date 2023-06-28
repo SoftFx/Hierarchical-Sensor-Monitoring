@@ -1,4 +1,5 @@
-﻿using HSMServer.Core.Cache;
+﻿using HSMServer.Authentication;
+using HSMServer.Core.Cache;
 using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Model;
 using HSMServer.Folders;
@@ -9,7 +10,6 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
-using HSMServer.Authentication;
 
 namespace HSMServer.Model.TreeViewModel
 {
@@ -184,7 +184,7 @@ namespace HSMServer.Model.TreeViewModel
                         AddNewSensorViewModel(model, parent);
 
                         var root = parent.RootProduct;
-                        if (!root.Notifications.Telegram.Chats.IsEmpty)
+                        if (!root.Notifications.Telegram.Chats.IsEmpty && root.Notifications.AutoSubscription)
                         {
                             root.Notifications.Enable(model.Id);
                             UpdateProductNotificationSettings(root);
@@ -231,9 +231,9 @@ namespace HSMServer.Model.TreeViewModel
         }
 
         private void AddUserHandler(User user) => user.Tree.GetUserProducts += GetUserProducts;
-        
+
         private void RemoveUserHandler(User user) => user.Tree.GetUserProducts -= GetUserProducts;
-        
+
         private bool TryGetParentProduct(ProductModel product, out ProductNodeViewModel parent)
         {
             parent = default;

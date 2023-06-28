@@ -5,45 +5,45 @@ using System.Text;
 
 namespace HSMServer.Core.Model.Policies
 {
-    public abstract class SingleSensorDataPolicy<T, U> : DataPolicy<T, U> where T : BaseValue<U>, new()
+    public abstract class SingleSensorPolicy<T, U> : Policy<T, U> where T : BaseValue<U>, new()
     {
-        protected override Func<T, U> GetProperty(string property) => DataPolicyBuilder.GetSingleProperty<T, U>(property);
+        protected override Func<T, U> GetProperty(string property) => PolicyBuilder.GetSingleProperty<T, U>(property);
 
         protected override string GetComment(T value, BaseSensorModel sensor) =>
             CommentBuilder.GetSingleComment(value, sensor, this);
     }
 
 
-    public abstract class BarSensorDataPolicy<T, U> : DataPolicy<T, U>
+    public abstract class BarSensorPolicy<T, U> : Policy<T, U>
         where T : BarBaseValue<U>, new()
         where U : struct, INumber<U>
     {
-        protected override Func<T, U> GetProperty(string property) => DataPolicyBuilder.GetBarProperty<T, U>(property);
+        protected override Func<T, U> GetProperty(string property) => PolicyBuilder.GetBarProperty<T, U>(property);
 
-        protected override Func<U, U, bool> GetOperation(PolicyOperation operation) => DataPolicyBuilder.GetNumberOperation<U>(operation);
+        protected override Func<U, U, bool> GetOperation(PolicyOperation operation) => PolicyBuilder.GetNumberOperation<U>(operation);
 
         protected override string GetComment(T value, BaseSensorModel sensor) =>
             CommentBuilder.GetBarComment(value, sensor, this);
     }
 
 
-    public sealed class IntegerDataPolicy : SingleSensorDataPolicy<IntegerValue, int>
+    public sealed class IntegerPolicy : SingleSensorPolicy<IntegerValue, int>
     {
         protected override int GetConstTarget(string strValue) => int.Parse(strValue);
 
-        protected override Func<int, int, bool> GetOperation(PolicyOperation operation) => DataPolicyBuilder.GetNumberOperation<int>(operation);
+        protected override Func<int, int, bool> GetOperation(PolicyOperation operation) => PolicyBuilder.GetNumberOperation<int>(operation);
     }
 
 
-    public sealed class DoubleDataPolicy : SingleSensorDataPolicy<DoubleValue, double>
+    public sealed class DoublePolicy : SingleSensorPolicy<DoubleValue, double>
     {
         protected override double GetConstTarget(string strValue) => double.Parse(strValue);
 
-        protected override Func<double, double, bool> GetOperation(PolicyOperation operation) => DataPolicyBuilder.GetNumberOperation<double>(operation);
+        protected override Func<double, double, bool> GetOperation(PolicyOperation operation) => PolicyBuilder.GetNumberOperation<double>(operation);
     }
 
 
-    public sealed class BooleanDataPolicy : SingleSensorDataPolicy<BooleanValue, bool>
+    public sealed class BooleanPolicy : SingleSensorPolicy<BooleanValue, bool>
     {
         protected override bool GetConstTarget(string strValue) => bool.Parse(strValue);
 
@@ -51,7 +51,7 @@ namespace HSMServer.Core.Model.Policies
     }
 
 
-    public sealed class StringDataPolicy : SingleSensorDataPolicy<StringValue, string>
+    public sealed class StringPolicy : SingleSensorPolicy<StringValue, string>
     {
         protected override string GetConstTarget(string strValue) => strValue;
 
@@ -59,7 +59,7 @@ namespace HSMServer.Core.Model.Policies
     }
 
 
-    public sealed class TimeSpanDataPolicy : SingleSensorDataPolicy<TimeSpanValue, TimeSpan>
+    public sealed class TimeSpanPolicy : SingleSensorPolicy<TimeSpanValue, TimeSpan>
     {
         protected override TimeSpan GetConstTarget(string strValue) => TimeSpan.Parse(strValue);
 
@@ -67,7 +67,7 @@ namespace HSMServer.Core.Model.Policies
     }
 
 
-    public sealed class VersionDataPolicy : SingleSensorDataPolicy<VersionValue, Version>
+    public sealed class VersionPolicy : SingleSensorPolicy<VersionValue, Version>
     {
         protected override Version GetConstTarget(string strValue) => Version.Parse(strValue);
 
@@ -75,7 +75,7 @@ namespace HSMServer.Core.Model.Policies
     }
 
 
-    public sealed class FileDataPolicy : SingleSensorDataPolicy<FileValue, byte[]>
+    public sealed class FilePolicy : SingleSensorPolicy<FileValue, byte[]>
     {
         protected override byte[] GetConstTarget(string strValue) => Encoding.UTF8.GetBytes(strValue);
 
@@ -83,13 +83,13 @@ namespace HSMServer.Core.Model.Policies
     }
 
 
-    public sealed class IntegerBarDataPolicy : BarSensorDataPolicy<IntegerBarValue, int>
+    public sealed class IntegerBarPolicy : BarSensorPolicy<IntegerBarValue, int>
     {
         protected override int GetConstTarget(string strValue) => int.Parse(strValue);
     }
 
 
-    public sealed class DoubleBarDataPolicy : BarSensorDataPolicy<DoubleBarValue, double>
+    public sealed class DoubleBarPolicy : BarSensorPolicy<DoubleBarValue, double>
     {
         protected override double GetConstTarget(string strValue) => double.Parse(strValue);
     }

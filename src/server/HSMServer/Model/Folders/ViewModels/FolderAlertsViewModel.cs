@@ -17,7 +17,7 @@ namespace HSMServer.Model.Folders.ViewModels
         {
             Id = folder.Id;
             ExpectedUpdateInterval = folder.ExpectedUpdateInterval;
-            SensorRestorePolicy = folder.SensorRestorePolicy;
+            //SensorRestorePolicy = folder.SensorRestorePolicy;
         }
     }
 }

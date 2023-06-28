@@ -14,6 +14,8 @@ namespace HSMServer.Controllers
     [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
     public class ConfigurationController : Controller
     {
+        private static Dictionary<string, ConfigurationViewModel> _configViewModel = new();
+
         private readonly IServerConfig _config;
         private readonly TelegramBot _telegramBot;
 
@@ -21,6 +23,7 @@ namespace HSMServer.Controllers
         public ConfigurationController(IServerConfig config, NotificationsCenter notifications)
         {
             _config = config;
+            _configViewModel = ConfigurationViewModel.TelegramSettings(new TelegramConfigurationViewModel(_config.Telegram));
 
             _telegramBot = notifications.TelegramBot;
         }
@@ -28,47 +31,35 @@ namespace HSMServer.Controllers
 
         public IActionResult Index()
         {
-            var viewModels = new List<ConfigurationObjectViewModel>();
-            //var paramNames = _config.GetAllParameterNames();
-            //foreach (var paramName in paramNames)
-            //{
-            //    var valueFromDB = _config.ReadConfigurationObject(paramName);
-            //    if (valueFromDB != null)
-            //    {
-            //        viewModels.Add(new ConfigurationObjectViewModel(valueFromDB, false));
-            //        continue;
-            //    }
-
-            //    var value = _config.ReadOrDefault(paramName);
-            //    viewModels.Add(new ConfigurationObjectViewModel(value, true));
-            //}
-            //viewModels.Sort((vm1, vm2) => vm1.Name.CompareTo(vm2.Name));
-
-            return View(viewModels);
+            return View(_configViewModel);
         }
 
         [HttpPost]
-        public void SaveConfigObject([FromBody] ConfigurationObjectViewModel viewModel)
-        {
-            //ConfigurationObject model = GetModelFromViewModel(viewModel);
-            //_config.AddConfigurationObject(model.Name, model.Value);
-        }
+        public void SaveConfig([FromBody] ConfigurationViewModel viewModel) => ChangeConfigValue(viewModel.PropertyName, viewModel.Value);
 
-        public void SetToDefault([FromQuery(Name = "Name")] string configObjName)
-        {
-            //_config.SetConfigurationObjectToDefault(configObjName);
-        }
+        [HttpPost]
+        public void SetToDefault([FromQuery] string name) => ChangeConfigValue(name, _configViewModel[name].DefaultValue);
 
         [HttpGet]
         public Task<string> RestartTelegramBot() => _telegramBot.StartBot();
 
 
-        //private ConfigurationObject GetModelFromViewModel(ConfigurationObjectViewModel viewModel)
-        //{
-        //    ConfigurationObject result = new ConfigurationObject();
-        //    result.Value = viewModel.Value;
-        //    result.Name = viewModel.Name;
-        //    return result;
-        //}
+        private void ChangeConfigValue(string propertyName, string newValue)
+        {
+            switch (propertyName)
+            {
+                case nameof(_config.Telegram.BotName):
+                    _config.Telegram.BotName = newValue;
+                    break;
+                case nameof(_config.Telegram.BotToken):
+                    _config.Telegram.BotToken = newValue;
+                    break;
+                case nameof(_config.Telegram.IsRunning) when bool.TryParse(newValue, out var boolValue):
+                    _config.Telegram.IsRunning = boolValue;
+                    break;
+            }
+
+            _config.ResaveSettings();
+        }
     }
 }

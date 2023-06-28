@@ -16,6 +16,7 @@ using HSMServer.Model.Folders.ViewModels;
 using HSMServer.Model.History;
 using HSMServer.Model.Model.History;
 using HSMServer.Model.TreeViewModel;
+using HSMServer.Model.TreeViewModels;
 using HSMServer.Model.ViewModel;
 using HSMServer.Notification.Settings;
 using HSMServer.Notifications;
@@ -66,9 +67,15 @@ namespace HSMServer.Controllers
                 var id = selectedId.ToGuid();
 
                 if (_folderManager.TryGetValue(id, out var folder))
+                {
                     viewModel = folder;
+                    StoredUser.SelectedNode.ConnectFolder(folder);
+                }
                 else if (_treeViewModel.Nodes.TryGetValue(id, out var node))
+                {
                     viewModel = node;
+                    StoredUser.SelectedNode.ConnectNode(node);
+                }
                 else if (_treeViewModel.Sensors.TryGetValue(id, out var sensor))
                 {
                     viewModel = sensor;
@@ -95,6 +102,22 @@ namespace HSMServer.Controllers
 
         [HttpPut]
         public void RemoveRenderingNode(Guid nodeId) => CurrentUser.Tree.RemoveRenderingNode(nodeId);
+
+        [HttpGet]
+        public IActionResult GetGrid(ChildrenPageRequest pageRequest)
+        {
+            var model = StoredUser.SelectedNode.GetNextPage(pageRequest);
+
+            return model.IsPageValid ? PartialView("_GridAccordion", model) : _emptyResult;
+        }
+
+        [HttpGet]
+        public IActionResult GetList(ChildrenPageRequest pageRequest)
+        {
+            var model = StoredUser.SelectedNode.GetNextPage(pageRequest);
+
+            return model.IsPageValid ? PartialView("_ListAccordion", model) : _emptyResult;
+        }
 
         [HttpGet]
         public IActionResult RefreshTree()
@@ -253,8 +276,8 @@ namespace HSMServer.Controllers
                     var update = new ProductUpdate
                     {
                         Id = product.Id,
-                        RestoreInterval = restoreUpdate ? model.SensorRestorePolicy?.ToModel((product.Parent as FolderModel)?.SensorRestorePolicy) : null,
-                        ExpectedUpdateInterval = expectedUpdate ? model.ExpectedUpdateInterval?.ToModel((product.Parent as FolderModel)?.ExpectedUpdateInterval) : null
+                        //RestoreInterval = restoreUpdate ? model.SensorRestorePolicy?.ToModel((product.Parent as FolderModel)?.SensorRestorePolicy) : null,
+                        TTL = expectedUpdate ? model.ExpectedUpdateInterval?.ToModel((product.Parent as FolderModel)?.ExpectedUpdateInterval) : null
                     };
 
                     if (!restoreUpdate)
@@ -280,7 +303,7 @@ namespace HSMServer.Controllers
                     var update = new SensorUpdate
                     {
                         Id = sensor.Id,
-                        ExpectedUpdateInterval = model.ExpectedUpdateInterval?.ToModel(),
+                        TTL = model.ExpectedUpdateInterval?.ToModel(),
                         RestoreInterval = model.SensorRestorePolicy?.ToModel(),
                     };
 
@@ -540,9 +563,9 @@ namespace HSMServer.Controllers
             {
                 Id = sensor.Id,
                 Description = newModel.Description ?? string.Empty,
-                ExpectedUpdateInterval = newModel.ExpectedUpdateInterval.ToModel(),
-                RestoreInterval = newModel.SensorRestorePolicy.ToModel(),
-                SavedHistoryPeriod = newModel.SavedHistoryPeriod.ToModel(),
+                TTL = newModel.ExpectedUpdateInterval.ToModel(),
+                //RestoreInterval = newModel.SensorRestorePolicy.ToModel(),
+                KeepHistory = newModel.SavedHistoryPeriod.ToModel(),
                 SelfDestroy = newModel.SelfDestroyPeriod.ToModel(),
                 DataPolicies = newModel.DataAlerts?[sensor.Type].Select(a => a.ToUpdate()).ToList() ?? new(),
             };
@@ -622,7 +645,7 @@ namespace HSMServer.Controllers
 
             sensorValue.Comment = comment;
             sensorValue.Path = sensor.Path;
-            sensorValue.Status = (SensorStatus)modal.NewStatus;
+            sensorValue.Status = modal.NewStatus.ToApi();
 
             return Ok(new
             {
@@ -654,9 +677,9 @@ namespace HSMServer.Controllers
             var update = new ProductUpdate
             {
                 Id = product.Id,
-                ExpectedUpdateInterval = newModel.ExpectedUpdateInterval.ToModel((product.Parent as FolderModel)?.ExpectedUpdateInterval),
-                RestoreInterval = newModel.SensorRestorePolicy.ToModel((product.Parent as FolderModel)?.SensorRestorePolicy),
-                SavedHistoryPeriod = newModel.SavedHistoryPeriod.ToModel((product.Parent as FolderModel)?.SavedHistoryPeriod),
+                TTL = newModel.ExpectedUpdateInterval.ToModel((product.Parent as FolderModel)?.ExpectedUpdateInterval),
+                //RestoreInterval = newModel.SensorRestorePolicy.ToModel((product.Parent as FolderModel)?.SensorRestorePolicy),
+                KeepHistory = newModel.SavedHistoryPeriod.ToModel((product.Parent as FolderModel)?.SavedHistoryPeriod),
                 SelfDestroy = newModel.SelfDestroyPeriod.ToModel((product.Parent as FolderModel)?.SelfDestroyPeriod),
                 Description = newModel.Description ?? string.Empty
             };
@@ -685,7 +708,7 @@ namespace HSMServer.Controllers
                 Id = SensorPathHelper.DecodeGuid(newModel.EncodedId),
                 Description = newModel.Description ?? string.Empty,
                 ExpectedUpdateInterval = newModel.ExpectedUpdateInterval.ResaveCustomTicks(newModel.ExpectedUpdateInterval),
-                RestoreInterval = newModel.SensorRestorePolicy.ResaveCustomTicks(newModel.SensorRestorePolicy),
+                //RestoreInterval = newModel.SensorRestorePolicy.ResaveCustomTicks(newModel.SensorRestorePolicy),
                 SavedHistoryPeriod = newModel.SavedHistoryPeriod.ResaveCustomTicks(newModel.SavedHistoryPeriod),
                 SelfDestroy = newModel.SelfDestroyPeriod.ResaveCustomTicks(newModel.SelfDestroyPeriod),
             };

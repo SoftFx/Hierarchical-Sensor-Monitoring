@@ -5,6 +5,7 @@ using HSMDataCollector.Options;
 using HSMDataCollector.PublicInterface;
 using HSMServer.Core.Cache;
 using HSMServer.Core.DataLayer;
+using HSMServer.Extensions;
 using System;
 using System.Collections.Generic;
 using System.Linq;

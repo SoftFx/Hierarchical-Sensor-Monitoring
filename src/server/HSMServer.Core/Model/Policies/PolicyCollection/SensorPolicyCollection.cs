@@ -1,6 +1,5 @@
 ﻿using HSMServer.Core.Cache;
 using HSMServer.Core.Cache.UpdateEntities;
-using HSMServer.Core.Model.Policies.Infrastructure;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -8,7 +7,7 @@ using System.Linq;
 
 namespace HSMServer.Core.Model.Policies
 {
-    public abstract class DataPolicyCollection : PolicyCollectionBase<Policy>
+    public abstract class SensorPolicyCollection : PolicyCollectionBase
     {
         internal protected SensorResult SensorResult { get; protected set; } = SensorResult.Ok;
 
@@ -31,14 +30,15 @@ namespace HSMServer.Core.Model.Policies
     }
 
 
-    public abstract class DataPolicyCollection<T> : DataPolicyCollection where T : BaseValue
+    public abstract class SensorPolicyCollection<T> : SensorPolicyCollection where T : BaseValue
     {
-        private CorrectDataTypePolicy<T> _typePolicy;
-        protected BaseSensorModel _sensor;
+        private CorrectTypePolicy<T> _typePolicy;
+        private TTLPolicy _ttlPolicy;
+
+        private protected BaseSensorModel _sensor;
+
 
         protected abstract bool CalculateStorageResult(T value);
-
-        internal abstract void Add(DataPolicy<T> policy);
 
 
         internal bool TryValidate(BaseValue value, out T valueT)
@@ -47,7 +47,7 @@ namespace HSMServer.Core.Model.Policies
 
             valueT = value as T;
 
-            if (!CorrectDataTypePolicy<T>.Validate(valueT))
+            if (!CorrectTypePolicy<T>.Validate(valueT))
             {
                 SensorResult = _typePolicy.SensorResult;
                 PolicyResult = _typePolicy.PolicyResult;
@@ -60,28 +60,49 @@ namespace HSMServer.Core.Model.Policies
 
         internal override void Attach(BaseSensorModel sensor)
         {
-            _typePolicy = new CorrectDataTypePolicy<T>(sensor.Id);
+            _ttlPolicy = new TTLPolicy(sensor.Id, sensor.Settings.TTL);
+            _typePolicy = new CorrectTypePolicy<T>(sensor.Id);
+
             _sensor = sensor;
+        }
+
+
+        internal bool SensorTimeout(DateTime? time)
+        {
+            if (_ttlPolicy is null)
+                return false;
+
+            var timeout = _ttlPolicy.HasTimeout(time);
+
+            if (timeout)
+                PolicyResult = _ttlPolicy.PolicyResult;
+            else
+                PolicyResult = PolicyResult.Ok;
+
+            SensorExpired?.Invoke(_sensor, timeout);
+
+            return timeout;
         }
     }
 
 
-    public sealed class DataPolicyCollection<T, U> : DataPolicyCollection<T>
-        where T : BaseValue
-        where U : DataPolicy<T>, new()
+    public sealed class SensorPolicyCollection<ValueType, PolicyType> : SensorPolicyCollection<ValueType>
+        where ValueType : BaseValue
+        where PolicyType : Policy<ValueType>, new()
     {
-        private readonly ConcurrentDictionary<Guid, U> _storage = new();
+        private readonly ConcurrentDictionary<Guid, PolicyType> _storage = new();
 
 
         internal override IEnumerable<Guid> Ids => _storage.Keys;
 
+        internal IEnumerable<Policy<ValueType>> Policies => _sensor.UseParentPolicies ? _sensor.Parent.GetPolicies<PolicyType>(_sensor.Type) : _storage.Values;
 
-        protected override bool CalculateStorageResult(T value)
+
+        protected override bool CalculateStorageResult(ValueType value)
         {
-            if (!PolicyResult.IsOk)
-                PolicyResult = new(_sensor.Id);
+            PolicyResult = new(_sensor.Id);
 
-            foreach (var (_, policy) in _storage)
+            foreach (var policy in Policies ?? Enumerable.Empty<PolicyType>())
                 if (!policy.Validate(value, _sensor))
                 {
                     PolicyResult.AddAlert(policy);
@@ -92,13 +113,14 @@ namespace HSMServer.Core.Model.Policies
         }
 
 
-        internal override void Add(DataPolicy<T> policy) => _storage.TryAdd(policy.Id, (U)policy);
+        internal override void AddPolicy<T>(T policy)
+        {
+            if (policy is PolicyType typedPolicy)
+                _storage.TryAdd(policy.Id, typedPolicy);
+        }
 
         internal override void Update(List<DataPolicyUpdate> updatesList)
         {
-            if (updatesList == null)
-                return;
-
             var updates = updatesList.Where(u => u.Id != Guid.Empty).ToDictionary(u => u.Id);
 
             foreach (var (id, policy) in _storage)
@@ -108,9 +130,9 @@ namespace HSMServer.Core.Model.Policies
                     policy.Update(update);
                     Uploaded?.Invoke(ActionType.Update, policy);
                 }
-                else
+                else if (_storage.TryRemove(id, out var oldPolicy))
                 {
-                    _storage.TryRemove(id, out var oldPolicy);
+                    CalculateStorageResult((ValueType)_sensor.LastValue);
                     Uploaded?.Invoke(ActionType.Delete, oldPolicy);
                 }
             }
@@ -118,15 +140,14 @@ namespace HSMServer.Core.Model.Policies
             foreach (var update in updatesList)
                 if (update.Id == Guid.Empty)
                 {
-                    var policy = new U();
+                    var policy = new PolicyType();
 
                     policy.Update(update);
 
-                    Add(policy);
+                    AddPolicy(policy);
                     Uploaded?.Invoke(ActionType.Add, policy);
                 }
         }
-
 
         public override IEnumerator<Policy> GetEnumerator() => _storage.Values.GetEnumerator();
     }

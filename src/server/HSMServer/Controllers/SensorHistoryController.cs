@@ -21,7 +21,7 @@ namespace HSMServer.Controllers
     public class SensorHistoryController : BaseController
     {
         internal const int MaxHistoryCount = -TreeValuesCache.MaxHistoryCount;
-        private const int LatestHistoryCount = -100;
+        private const int LatestHistoryCount = -300;
 
         private readonly ITreeValuesCache _cache;
         private readonly TreeViewModel _tree;
