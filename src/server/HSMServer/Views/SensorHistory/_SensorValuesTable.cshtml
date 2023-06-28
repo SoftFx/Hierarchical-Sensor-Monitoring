@@ -24,6 +24,7 @@ else
             <thead>
                 <tr class="text-nowrap">
                     <th>Date</th>
+                    <th id="receivingTime_header" class="d-none">Receiving time</th>
                     @if (Model.IsBarSensor)
                     {
                         <th>Min</th>
@@ -41,10 +42,13 @@ else
                 </tr>
             </thead>
             <tbody>
-                @foreach (var value in currentPage)
+                @for (int i = 0; i < currentPage.Count; ++i)
                 {
+                    var value = currentPage[i];
+
                     <tr>
                         <td>@value.Time.ToDefaultFormat()</td>
+                        <td id="receivingTime_value@(i)" class="d-none">@value.ReceivingTime.ToDefaultFormat()</td>
                         @if (Model.IsBarSensor)
                         {
                             var barValue = value as BarSensorValueViewModel;
@@ -90,6 +94,13 @@ else
 
 
 <script>
+    $(document).ready(function () {
+        if ($('#showAllTableColumns_@Model.SensorId').is(':checked')) {
+            $("#receivingTime_header").removeClass('d-none');
+            $('[id^="receivingTime_value"]').removeClass('d-none');
+        }
+    });
+
     if (@Model.CurrentIndex === @Model.LastIndex) {
         $('#nextPageButton').addClass('disabled');
     }
