@@ -5,10 +5,12 @@ window.currentSelectedNodeId = "";
 
 window.initializeTree = function () {
     var sortingType = $("input[name='TreeSortType']:checked");
-
-    let initOpened = JSON.parse(window.localStorage.jstree).state.core.open.length;
-    if (initOpened > 1)
-        isRefreshing = true;
+    
+    if (window.localStorage.jstree) {
+        let initOpened = JSON.parse(window.localStorage.jstree).state.core.open.length;
+        if (initOpened > 1)
+            isRefreshing = true;
+    }
     
     $('#jstree').jstree({
         "core": {
