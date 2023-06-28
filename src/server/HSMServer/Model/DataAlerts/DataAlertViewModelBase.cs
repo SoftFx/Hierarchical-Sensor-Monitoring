@@ -37,6 +37,8 @@ namespace HSMServer.Model.DataAlerts
 
     public abstract class DataAlertViewModelBase : DataAlertViewModel
     {
+        private const string DefaultCommentTemplate = "$sensor $action $target";
+
         private readonly List<SensorStatus> _statuses = new() { SensorStatus.Error, SensorStatus.Warning };
 
 
@@ -59,6 +61,8 @@ namespace HSMServer.Model.DataAlerts
 
         public DataAlertViewModelBase()
         {
+            Comment = DefaultCommentTemplate;
+
             PropertiesItems = Properties.Select(p => new SelectListItem(p, p)).ToList();
             ActionsItems = Actions.Select(a => new SelectListItem(a.GetDisplayName(), $"{a}")).ToList();
             StatusesItems = _statuses.Select(s => new SelectListItem($"{s.ToSelectIcon()} {s.GetDisplayName()}", $"{s}")).ToList();
