@@ -9,7 +9,7 @@
 
     var showIcons = (User as User).TreeFilter.ByVisibility.Icons.Value;
 
-    var arrowIcon = Model.VisibleSensorsCount > 0 ? "jstree-closed" : string.Empty;
+    var arrowIcon = Model.VisibleSensorsCount > 0 || Model.Data.Nodes.Count > 0 ? "jstree-closed" : string.Empty;
 }
 
 
