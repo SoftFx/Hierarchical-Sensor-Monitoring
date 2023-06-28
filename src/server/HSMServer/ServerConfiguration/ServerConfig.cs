@@ -12,7 +12,11 @@ namespace HSMServer.ServerConfiguration
 {
     public class ServerConfig : IServerConfig
     {
-        private static readonly JsonSerializerOptions _options = new() { WriteIndented = true };
+        private static readonly JsonSerializerOptions _options = new()
+        {
+            WriteIndented = true,
+            IgnoreReadOnlyProperties = true,
+        };
 
         private readonly string _settingsPath = Path.Combine(ConfigPath, ConfigName);
 

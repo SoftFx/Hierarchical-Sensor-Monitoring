@@ -104,7 +104,7 @@ namespace HSMServer.Notifications
                     return message;
             }
 
-            if (!IsValidBotConfigurations())
+            if (!_config.IsValid)
                 return ConfigurationsError;
 
             _tokenSource = new CancellationTokenSource();
@@ -232,8 +232,5 @@ namespace HSMServer.Notifications
                     _addressBook.RemoveAllChats(product);
             }
         }
-
-        private bool IsValidBotConfigurations() =>
-            !string.IsNullOrEmpty(BotName) && !string.IsNullOrEmpty(BotToken);
     }
 }
