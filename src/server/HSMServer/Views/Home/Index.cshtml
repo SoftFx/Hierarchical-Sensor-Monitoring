@@ -296,7 +296,8 @@
                 }
                 
                 let accordionName = "";
-                if ($('#dataPanel li a.active')[0].innerText === ' Grid') {
+                let dataPanel = $('#dataPanel li a.active');
+                if (dataPanel.length > 0 && dataPanel[0].innerText === ' Grid') {
                     accordionName = "grid"
                     getGridPage(`${accordionName}Sensors`)
                     getGridPage(`${accordionName}Nodes`)

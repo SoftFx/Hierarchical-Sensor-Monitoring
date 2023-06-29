@@ -74,7 +74,7 @@ function convertToGraphData(graphData, graphType, graphName) {
         case "1":
             data = getNumbersData(escapedData);
             timeList = getTimeList(escapedData);
-            return getSimpleGraphData(timeList, data, "scatter");
+            return getIntGraphData(timeList, data);
         case "2":
             data = getNumbersData(escapedData);
             timeList = getTimeList(escapedData);
@@ -140,6 +140,21 @@ function convertToGraphData(graphData, graphType, graphName) {
 
 //Simple plots: integer, double and bool
 {
+    function getIntGraphData(timeList, dataList) {
+        let data = [
+            {
+                x: timeList,
+                y: dataList,
+                mode: 'lines+markers',
+                line: {
+                        shape: 'vh'
+                    },
+                type: 'scatter'
+            }
+        ];
+        return data;
+    }
+    
     function getBoolGraphData(timeList, dataList){
         return [
             {
