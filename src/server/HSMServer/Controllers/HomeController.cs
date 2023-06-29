@@ -70,11 +70,13 @@ namespace HSMServer.Controllers
                 {
                     viewModel = folder;
                     StoredUser.SelectedNode.ConnectFolder(folder);
+                    CurrentUser.Tree.AddRenderingNode(id);
                 }
                 else if (_treeViewModel.Nodes.TryGetValue(id, out var node))
                 {
                     viewModel = node;
                     StoredUser.SelectedNode.ConnectNode(node);
+                    CurrentUser.Tree.AddRenderingNode(id);
                 }
                 else if (_treeViewModel.Sensors.TryGetValue(id, out var sensor))
                 {
