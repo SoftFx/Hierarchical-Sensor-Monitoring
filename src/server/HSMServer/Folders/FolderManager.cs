@@ -10,6 +10,7 @@ using HSMServer.Model;
 using HSMServer.Model.Authentication;
 using HSMServer.Model.Folders;
 using HSMServer.Model.TreeViewModel;
+using HSMServer.Notification.Settings;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -22,6 +23,9 @@ namespace HSMServer.Folders
         private readonly ITreeValuesCache _cache;
         private readonly IUserManager _userManager;
         private readonly IDatabaseCore _databaseCore;
+
+
+        public event Action<Guid> ResetProductTelegramInheritance;
 
 
         protected override Action<FolderEntity> AddToDb => _databaseCore.AddFolder;
@@ -115,7 +119,7 @@ namespace HSMServer.Folders
             foreach (var user in _userManager.GetUsers())
             {
                 AddUserHandler(user);
-                
+
                 foreach (var (folderId, role) in user.FoldersRoles)
                     if (TryGetValue(folderId, out var folder))
                         folder.UserRoles.Add(user, role);
@@ -169,6 +173,9 @@ namespace HSMServer.Folders
         {
             if (TryGetValue(folderId, out var folder) && TryUpdateProductInFolder(productId, null))
             {
+                if (_cache.GetProduct(productId).NotificationsSettings.TelegramSettings.Inheritance == (byte)InheritedSettings.FromParent)
+                    ResetProductTelegramInheritance?.Invoke(productId);
+
                 foreach (var (user, role) in folder.UserRoles)
                     if (user.ProductsRoles.Remove((productId, role)))
                         await _userManager.UpdateUser(user);

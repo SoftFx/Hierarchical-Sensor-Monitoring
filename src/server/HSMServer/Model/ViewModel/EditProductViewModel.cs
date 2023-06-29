@@ -24,11 +24,13 @@ namespace HSMServer.Model.ViewModel
 
         public bool IsNotificationsInherited { get; }
 
+        public string EncodedProductId { get; }
+
         public string ProductName { get; }
 
         public Guid ProductId { get; }
 
-        public string EncodedProductId { get; }
+        public bool HasFolder { get; }
 
 
         public EditProductViewModel(ProductNodeViewModel product,
@@ -38,6 +40,7 @@ namespace HSMServer.Model.ViewModel
             ProductName = product.Name;
             ProductId = product.Id;
             EncodedProductId = product.EncodedId;
+            HasFolder = product.FolderId.HasValue;
 
             UsersRights = usersRights.Select(x => (new UserViewModel(x.Item1), x.Item2)).ToList();
             AccessKeys = product.GetAccessKeys();
