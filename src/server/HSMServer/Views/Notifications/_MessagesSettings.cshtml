@@ -46,7 +46,7 @@
             else
             {
                 <div class="col-auto p-0">
-                    <select id="statusSelect" class="form-select" asp-for="MinStatusLevel" asp-items="Html.GetEnumSelectList<SensorStatus>()"></select>
+                    <select id="statusSelect" class="form-select" asp-for="MinStatusLevel" asp-items='Html.GetEnumSelectList<SensorStatus>().Where(x => x.Text != SensorStatus.Empty.ToString())'></select>
                 </div>
             }
 
