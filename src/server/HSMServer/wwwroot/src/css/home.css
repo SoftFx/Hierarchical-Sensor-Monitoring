@@ -170,6 +170,12 @@
     height: 100vh;
 }
 
+.center-relative-noData {
+    height: 30vh;
+    color: rgba(210,210,216,1);
+    font-size: 40px;
+}
+
 .hidden_element {
     visibility : hidden;
 }
