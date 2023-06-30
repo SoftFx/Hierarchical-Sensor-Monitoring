@@ -28,7 +28,7 @@
 
     @if (Model.UpdateTime == DateTime.MinValue)
     {
-        <div class="d-flex justify-content-center align-items-end center-relative-noData">
+        <div class="d-flex justify-content-center align-items-end noData-label">
             <label>No data</label>
         </div>
     }
@@ -133,7 +133,11 @@
         }
         else
         {
-            <div id='dataPanel' class='pt-3 text-break'>
+            <div id="sensorHistorySpinner" class="center-relative-history-spinner">
+                <div class="spinner-border normal_spinner text-secondary" role="status"></div>
+            </div>
+
+            <div id='historyDataPanel' class='pt-3 text-break hidden_element'>
                 <div class="d-flex justify-content-between">
                     <div>
                         <label class="me-1" for="from_@sensorId">From:</label>
