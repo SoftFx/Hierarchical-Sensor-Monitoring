@@ -51,7 +51,7 @@ namespace HSMServer.Core.Model
             if (_cache.Count > CacheSize)
                 _cache.TryDequeue(out _);
 
-            if (_lastValue == null || value.Time >= _lastValue.Time)
+            if (_lastValue is null || value.Time >= _lastValue.Time)
                 _lastValue = value;
         }
 
