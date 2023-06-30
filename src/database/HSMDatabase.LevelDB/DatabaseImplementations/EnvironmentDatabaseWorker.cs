@@ -3,6 +3,7 @@ using HSMDatabase.AccessManager.DatabaseEntities;
 using NLog;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -20,7 +21,8 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
         private readonly byte[] _productListKey = "ProductsNames"u8.ToArray();
         private readonly byte[] _accessKeyListKey = "AccessKeys"u8.ToArray();
         private readonly byte[] _sensorIdsKey = "SensorIds"u8.ToArray();
-        private readonly byte[] _policyIdsKey = "PolicyIds"u8.ToArray();
+        private readonly byte[] _oldPolicyIdsKey = "PolicyIds"u8.ToArray();
+        private readonly byte[] _policyIdsKey = "NewPolicyIds"u8.ToArray();
         private readonly byte[] _folderIdsKey = "FolderIds"u8.ToArray();
 
         private readonly LevelDBDatabaseAdapter _database;
@@ -414,14 +416,14 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
 
         #region Policies
 
-        public void AddPolicyIdToList(string policyId)
+        public void AddPolicyIdToList(Guid policyId)
         {
             try
             {
                 var policyIds = GetAllPoliciesIds();
 
-                if (!policyIds.Contains(policyId))
-                    policyIds.Add(policyId);
+                if (!policyIds.Select(g => new Guid(g)).Contains(policyId))
+                    policyIds.Add(policyId.ToByteArray());
 
                 _database.Put(_policyIdsKey, JsonSerializer.SerializeToUtf8Bytes(policyIds));
             }
@@ -431,18 +433,15 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             }
         }
 
-        public void RemovePolicyFromList(string id)
+        public void DropOldPolicyIdsList()
         {
             try
             {
-                var policyIds = GetAllPoliciesIds();
-                policyIds.Remove(id);
-
-                _database.Put(_policyIdsKey, JsonSerializer.SerializeToUtf8Bytes(policyIds));
+                _database.Delete(_oldPolicyIdsKey);
             }
             catch (Exception e)
             {
-                _logger.Error(e, $"Failed to remove Policy {id} from list");
+                _logger.Error(e, $"Failed to remove Old Policy list");
             }
         }
 
@@ -460,9 +459,32 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             }
         }
 
-        public void RemovePolicy(string id)
+        public void RemovePolicy(Guid policyId)
+        {
+            try
+            {
+                var policyIds = GetAllPoliciesIds();
+
+                for (int i = 0; i < policyIds.Count; i++)
+                    if (new Guid(policyIds[i]) == policyId)
+                    {
+                        policyIds.RemoveAt(i);
+                        break;
+                    }
+
+                _database.Put(_policyIdsKey, JsonSerializer.SerializeToUtf8Bytes(policyIds));
+                _database.Delete(policyId.ToByteArray());
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, $"Failed to remove Policy by {policyId}");
+            }
+        }
+
+        public void RemoveOldPolicy(string id)
         {
             var bytesKey = Encoding.UTF8.GetBytes(id);
+
             try
             {
                 _database.Delete(bytesKey);
@@ -473,10 +495,11 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             }
         }
 
-        public List<string> GetAllPoliciesIds() =>
-            GetListOfKeys(_policyIdsKey, "Failed to get all policy ids");
+        public List<string> GetAllOldPoliciesIds() => GetListOfKeys(_oldPolicyIdsKey, "Failed to get all old policy ids");
 
-        public byte[] GetPolicy(string policyId)
+        public List<byte[]> GetAllPoliciesIds() => GetListOfBytes(_policyIdsKey, "Failed to get all policy ids");
+
+        public byte[] GetOldPolicy(string policyId)
         {
             var bytesKey = Encoding.UTF8.GetBytes(policyId);
 
@@ -486,13 +509,29 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             }
             catch (Exception e)
             {
-                _logger.Error(e, $"Failed to read info for sensor {policyId}");
+                _logger.Error(e, $"Failed to read info for old policy {policyId}");
             }
 
             return null;
         }
 
-        #endregion 
+        public PolicyEntity GetPolicy(byte[] policyId)
+        {
+            try
+            {
+                return _database.TryRead(policyId, out byte[] value)
+                       ? JsonSerializer.Deserialize<PolicyEntity>(value)
+                       : null;
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, $"Failed to read info for policy {policyId}");
+            }
+
+            return null;
+        }
+
+        #endregion
 
         #region User
 
@@ -592,6 +631,22 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
                 return _database.TryRead(key, out byte[] value) ?
                     JsonSerializer.Deserialize<List<string>>(Encoding.UTF8.GetString(value))
                     : new List<string>();
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, error);
+            }
+
+            return new();
+        }
+
+        private List<byte[]> GetListOfBytes(byte[] key, string error)
+        {
+            try
+            {
+                return _database.TryRead(key, out byte[] value) ?
+                    JsonSerializer.Deserialize<List<byte[]>>(Encoding.UTF8.GetString(value))
+                    : new List<byte[]>();
             }
             catch (Exception e)
             {

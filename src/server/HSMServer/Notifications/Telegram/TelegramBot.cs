@@ -205,7 +205,8 @@ namespace HSMServer.Notifications
                             {
                                 var message = chat.MessageBuilder.GetAggregateMessage(entity.Notifications.UsedTelegram.MessagesDelaySec);
                                 if (!string.IsNullOrEmpty(message))
-                                    SendMarkdownMessageAsync(chat.ChatId, message);
+                                    _bot?.SendTextMessageAsync(chat.ChatId, message, cancellationToken: _tokenSource.Token);
+                                //SendMarkdownMessageAsync(chat.ChatId, message);
                             }
                     }
 

@@ -50,7 +50,7 @@ namespace HSMServer.Core.Model.Policies
             sb.Append(Icon);
 
             if (Count > 1)
-                sb.Append($"({Count})");
+                sb.Append($"({Count} times)");
 
             sb.Append($" {LastComment}");
 

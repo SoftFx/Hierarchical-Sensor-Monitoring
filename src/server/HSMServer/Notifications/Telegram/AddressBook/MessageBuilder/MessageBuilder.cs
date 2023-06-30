@@ -80,7 +80,7 @@ namespace HSMServer.Notifications
             //    _messageTree.RemoveEmptyBranch(product);
             //}
 
-            ExpectedSendingTime = DateTime.UtcNow.Floor(TimeSpan.FromSeconds(notificationsDelay));
+            ExpectedSendingTime = DateTime.UtcNow.Ceil(TimeSpan.FromSeconds(notificationsDelay));
 
             return builder.ToString();
         }

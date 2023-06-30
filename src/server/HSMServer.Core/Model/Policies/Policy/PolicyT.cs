@@ -6,7 +6,7 @@ namespace HSMServer.Core.Model.Policies
 {
     public abstract class Policy
     {
-        public Guid Id { get; }
+        public Guid Id { get; private set; }
 
 
         internal protected virtual SensorResult SensorResult { get; protected set; }
@@ -28,7 +28,7 @@ namespace HSMServer.Core.Model.Policies
         public virtual string Property { get; set; }
 
 
-        protected Policy()
+        public Policy()
         {
             Id = Guid.NewGuid();
         }
@@ -42,6 +42,20 @@ namespace HSMServer.Core.Model.Policies
             Target = update.Target;
             Status = update.Status;
             Icon = update.Icon;
+        }
+
+        internal void Apply(PolicyEntity entity)
+        {
+            Id = new Guid(entity.Id);
+
+            Operation = (PolicyOperation)entity.Operation;
+            Status = (SensorStatus)entity.SensorStatus;
+
+            Property = entity.Property;
+            Template = entity.Template;
+            Icon = entity.Icon;
+
+            Target = new TargetValue((TargetType)entity.Target.Type, entity.Target.Value);
         }
 
         internal PolicyEntity ToEntity() => new()
