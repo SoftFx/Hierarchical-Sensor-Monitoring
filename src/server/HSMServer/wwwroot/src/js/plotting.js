@@ -147,7 +147,7 @@ function convertToGraphData(graphData, graphType, graphName) {
                 y: dataList,
                 mode: 'lines+markers',
                 line: {
-                        shape: 'vh'
+                        shape: 'hv'
                     },
                 type: 'scatter'
             }

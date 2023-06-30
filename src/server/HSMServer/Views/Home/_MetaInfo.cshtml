@@ -99,7 +99,7 @@
     <hr id="metainfo_separator" class="d-none"/>
 </div>
 
-@if (Model is SensorInfoViewModel sensor && !sensor.IsMuted)
+@if (Model is SensorInfoViewModel sensor)
 {
     @await Html.PartialAsync("_EditSensorStatusModal", new EditSensorStatusViewModal())
 }
