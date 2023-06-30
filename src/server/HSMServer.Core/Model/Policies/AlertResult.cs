@@ -1,4 +1,5 @@
-﻿using System.Text;
+﻿using System;
+using System.Text;
 
 namespace HSMServer.Core.Model.Policies
 {
@@ -7,6 +8,8 @@ namespace HSMServer.Core.Model.Policies
         public string Icon { get; }
 
         public string Template { get; }
+
+        public Guid PolicyId { get; }
 
 
         public int Count { get; private set; } = 1;
@@ -17,10 +20,22 @@ namespace HSMServer.Core.Model.Policies
         internal AlertResult(Policy policy)
         {
             Icon = policy.Icon;
+            PolicyId = policy.Id;
             Template = policy.Template;
             LastComment = policy.AlertComment;
         }
 
+
+        public bool TryAddResult(AlertResult alertResult)
+        {
+            if (PolicyId != alertResult.PolicyId)
+                return false;
+
+            Count += alertResult.Count;
+            LastComment = alertResult.LastComment;
+
+            return true;
+        }
 
         internal void AddComment(string comment)
         {

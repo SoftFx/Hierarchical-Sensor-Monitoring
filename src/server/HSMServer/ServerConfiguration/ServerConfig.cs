@@ -15,7 +15,6 @@ namespace HSMServer.ServerConfiguration
         private static readonly JsonSerializerOptions _options = new()
         {
             WriteIndented = true,
-            IgnoreReadOnlyProperties = true,
         };
 
         private readonly string _settingsPath = Path.Combine(ConfigPath, ConfigName);

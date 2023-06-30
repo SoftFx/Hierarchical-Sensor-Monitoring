@@ -28,9 +28,6 @@ namespace HSMServer.Core.Model.Policies
         public virtual string Property { get; set; }
 
 
-        internal (string, string) AlertKey => (Icon, Template);
-
-
         protected Policy()
         {
             Id = Guid.NewGuid();

@@ -179,9 +179,11 @@ namespace HSMServer.Notifications
                                     foreach (var alert in result)
                                         SendMarkdownMessageAsync(chat.ChatId, alert.ToString().EscapeMarkdownV2());
                                 }
-
-                                //else
-                                //    chat.MessageBuilder.AddMessage(sensor, oldStatus.Status);
+                                else
+                                {
+                                    foreach (var alert in result)
+                                        chat.MessageBuilder.AddMessage(alert);
+                                }
                             }
             }
             catch (Exception ex)
