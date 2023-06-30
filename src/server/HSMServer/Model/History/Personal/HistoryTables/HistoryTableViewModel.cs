@@ -124,7 +124,7 @@ namespace HSMServer.Model.History
             new()
             {
                 Value = GetTableValue(value),
-                Time = value.Time,
+                Time = value.Time.ToUniversalTime(),
                 Status = value.Status.ToClient(),
                 Comment = value.Comment,
                 ReceivingTime = value.ReceivingTime,
@@ -138,7 +138,7 @@ namespace HSMServer.Model.History
                 Max = value.Max.ToString(),
                 Mean = value.Mean.ToString(),
                 LastValue = value.LastValue.ToString(),
-                Time = value.Time,
+                Time = value.Time.ToUniversalTime(),
                 Status = value.Status.ToClient(),
                 Comment = value.Comment,
                 ReceivingTime = value.ReceivingTime,
