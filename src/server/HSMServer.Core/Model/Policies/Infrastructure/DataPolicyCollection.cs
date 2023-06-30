@@ -24,18 +24,18 @@ namespace HSMServer.Core.Model.Policies
         private readonly CorrectDataTypePolicy<T> _typePolicy = new();
 
 
-        protected abstract bool CalculateStorageResult(T value);
+        protected abstract bool CalculateStorageResult(T value, bool applyUserStatus);
 
         internal abstract void Add(DataPolicy<T> policy);
 
 
-        internal bool TryValidate(BaseValue value, out T valueT)
+        internal bool TryValidate(BaseValue value, out T valueT, bool applyUserStatus)
         {
             valueT = value as T;
 
             Result = _typePolicy.Validate(valueT);
 
-            return Result.IsOk && CalculateStorageResult(valueT);
+            return Result.IsOk && CalculateStorageResult(valueT, applyUserStatus);
         }
     }
 
@@ -52,12 +52,13 @@ namespace HSMServer.Core.Model.Policies
         internal override IEnumerable<Guid> Ids => _storage.Keys;
 
 
-        protected override bool CalculateStorageResult(T value)
+        protected override bool CalculateStorageResult(T value, bool applyUserStatus)
         {
             foreach (var (_, policy) in _storage)
                 Result += policy.Validate(value, _sensor);
 
-            Result += PolicyResult.FromValue(value); //add user status
+            if (applyUserStatus)
+                Result += PolicyResult.FromValue(value); //add user status
 
             return true;
         }
