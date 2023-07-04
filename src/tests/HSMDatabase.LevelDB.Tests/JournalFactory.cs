@@ -5,12 +5,7 @@ namespace HSMDatabase.LevelDB.Tests;
 
 internal static class JournalFactory
 {
-    internal static JournalEntity BuildJournalEntity() =>
-        new()
-        {
-            //Id = BuildKey(),
-            Value = RandomGenerator.GetRandomString()
-        };
+    internal static JournalEntity BuildJournalEntity() => new(RandomGenerator.GetRandomString());
 
     internal static JournalKey BuildKey() => new JournalKey(Guid.NewGuid(), RandomGenerator.GetRandomInt());
 }

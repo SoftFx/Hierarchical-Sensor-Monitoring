@@ -31,10 +31,7 @@ public sealed class JournalRecordModel
     }
     
     
-    public JournalEntity ToJournalEntity() => new()
-    {
-        Value = Value
-    };
+    public JournalEntity ToJournalEntity() => new(Value);
 
     public JournalKey GetKey() => new JournalKey(Id, Time, Type);
 }

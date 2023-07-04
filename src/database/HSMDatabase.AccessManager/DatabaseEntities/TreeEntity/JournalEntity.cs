@@ -9,10 +9,7 @@ public enum RecordType : byte
 }
 
 
-public sealed class JournalEntity
-{
-    public string Value { get; set; }
-}
+public sealed record JournalEntity(string Value);
 
 
 public readonly struct JournalKey

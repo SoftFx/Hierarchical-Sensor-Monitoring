@@ -45,10 +45,7 @@ namespace HSMDatabase.LevelDB.Tests
             for (int i = 0; i < count; i++)
             {
                 var key = new JournalKey(sensorId, DateTime.UtcNow.Ticks, RecordType.Actions);
-                result.Add((key, new JournalEntity()
-                {
-                    Value = $"TEST_{i}"
-                }));
+                result.Add((key, new JournalEntity($"TEST_{i}")));
             }
 
             return result;
