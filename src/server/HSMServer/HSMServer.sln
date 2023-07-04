@@ -34,6 +34,7 @@ EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "TestLevelDB", "..\..\sandbox\TestLevelDB\TestLevelDB.csproj", "{C839B0F6-3DE7-4732-AF27-A0B0C9A58467}"
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "HSMDatabase.LevelDB.Tests", "..\..\tests\HSMDatabase.LevelDB.Tests\HSMDatabase.LevelDB.Tests.csproj", "{04411C26-84E6-4178-B8DB-DE86EBCA7062}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
