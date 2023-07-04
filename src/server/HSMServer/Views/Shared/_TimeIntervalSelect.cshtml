@@ -4,11 +4,19 @@
 
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
 
+@{
+    var isIgnoreInterval = !Model.UseCustomInputTemplate;
+}
+
+
 <div class="d-grid placeholder-wrapper">
-    <select id="timeIntervalSelect_@Model.Id" class="timeIntervalSelect form-select" asp-for="Interval" asp-items="@Model.IntervalItems"></select>
-    <input id="input_timeIntervalSelect_@Model.Id" class="customTimeInterval form-control" placeholder="@TimeIntervalViewModel.CustomTemplate" style="display:none" asp-for="CustomTimeInterval" />
+    <select id="timeIntervalSelect_@Model.Id" class="timeIntervalSelect @(isIgnoreInterval ? "form-select" : "alert-block alert-select target-input target-period")"
+            asp-for="Interval" asp-items="@Model.IntervalItems"></select>
+    <input id="input_timeIntervalSelect_@Model.Id" style="display:none" class="customTimeInterval @(isIgnoreInterval ? "form-control" : "target-custom-period")"
+           placeholder="@TimeIntervalViewModel.CustomTemplate" asp-for="CustomTimeInterval" />
     <div id="placeholder_timeIntervalSelect_@Model.Id" class="placeholder d-none">@TimeIntervalViewModel.CustomTemplate</div>
 </div>
+
 
 <script>
     var interval_id = '#timeIntervalSelect_' + '@Model.Id';

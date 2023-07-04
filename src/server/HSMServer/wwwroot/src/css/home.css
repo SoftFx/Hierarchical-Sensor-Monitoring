@@ -45,14 +45,18 @@
     grid-column: 1;
 }
 
+.timeIntervalSelect:focus {
+    outline: none;
+}
+
 .customTimeInterval {
     grid-row: 1;
     grid-column: 1;
     position: relative;
-    width: 90%;
-    height: 95%;
+    width: 85%;
+    height: 92%;
     top: 1px;
-    left: 1px;
+    left: 2px;
     border-width: 0;
     border-color: transparent;
 }
@@ -60,9 +64,27 @@
 .customTimeInterval:hover,
 .customTimeInterval:active,
 .customTimeInterval:focus {
-    outline: 0px !important;
+    outline: none;
     -webkit-appearance: none;
     box-shadow: none !important;
+}
+
+.placeholder-wrapper {
+    position: relative;
+}
+
+.placeholder {
+    position: absolute;
+    right: 1.5rem;
+    top: 0.2rem;
+    pointer-events: none;
+    opacity: .5;
+    color: black;
+    background-color: transparent;
+}
+
+.customTimeInterval:placeholder-shown + .placeholder {
+    opacity: 0;
 }
 
 .muted-state-text {
@@ -321,24 +343,6 @@ img .tree-png-icon {
     color: black;
 }
 
-.placeholder-wrapper {
-    position: relative;
-}
-
-.placeholder {
-    position: absolute;
-    right: 2.25rem;
-    top: 0.5rem;
-    pointer-events: none;
-    opacity: .5;
-    color: black;
-    background-color: white;
-}
-
-.customTimeInterval:placeholder-shown + .placeholder {
-    opacity: 0;
-}
-
 .meta-info-label {
     min-width: 18rem;
 }
@@ -447,11 +451,50 @@ img .tree-png-icon {
 
 .target-input {
     background-color: rgba(221,221,221,.5);
-    max-width: 94px;
     padding: 0px 5px;
     display: inline-block;
 }
 
 .target-input:focus {
+    outline: none;
+}
+
+
+.target-value {
+    max-width: 94px;
+}
+
+.target-period {
+    max-width: 180px;
+    padding: 0px 2px;
+}
+
+.target-custom-period {
+    background-color: rgba(238,238,238,1);
+}
+
+
+.emojionearea.emojionearea-inline > .emojionearea-editor {
+    height: 2rem;
+    left: 4px;
+    padding: 2px 0;
+}
+
+.emojionearea.emojionearea-inline {
+    height: 2rem;
+    width: 60px;
+}
+
+.emojionearea .emojionearea-button > div.emojionearea-button-open {
+    background-position: 2px -28px;
+}
+
+.emojionearea .emojionearea-button > div.emojionearea-button-close {
+    top: -4px;
+}
+
+.emojionearea:hover,
+.emojionearea:active,
+.emojionearea:focus {
     outline: none;
 }

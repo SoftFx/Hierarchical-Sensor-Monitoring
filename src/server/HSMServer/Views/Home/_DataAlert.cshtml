@@ -19,21 +19,17 @@
 
                     <div id="valueCondition" class="d-flex flex-row align-items-center">
                         <select class="alert-block alert-select operation-select" asp-for="Operation" asp-items="@Model.ActionsItems"></select>
-                        <input class="alert-block target-input" type="text" placeholder="<enter a value>" asp-for="Value" value="@Model.Value" required>
+                        <input class="alert-block target-input target-value" type="text" placeholder="<enter a value>" asp-for="Value" value="@Model.Value" required>
                     </div>
 
                     <div id="sensitivityCondition" class="d-flex flex-row align-items-center">
                         <div class="alert-text-block operation-select">more than</div>
-                        <div class="alert-block target-input">
-                            <partial name="_TimeIntervalSelect" for="Sensitivity" />
-                        </div>
+                        <partial name="_TimeIntervalSelect" for="Sensitivity" />
                     </div>
 
                     <div id="ttlCondition" class="d-flex flex-row align-items-center">
                         <div class="alert-text-block operation-select">is</div>
-                        <div>
-                            <partial name="_TimeIntervalSelect" for="Sensitivity" />
-                        </div>
+                        <partial name="_TimeIntervalSelect" for="Sensitivity" />
                     </div>
 
                     <a><i class="fa-solid fa-xmark alert-delete-button"></i></a>
@@ -45,6 +41,23 @@
             <div class="d-flex flex-row align-items-center">
                 <div class="d-flex flex-row align-items-center alert-blocks-group">
                     <div class="alert-text-block alert-add">then</div>
+
+                    <div class="d-flex flex-row align-items-center alert-blocks-group ms-3">
+                        <select class="alert-block alert-select property-select">
+                            <option>send notification</option>
+                            <option>show icon</option>
+                            <option>set sensor status</option>
+                        </select>
+
+                        <input type="text" class="alert-block target-input" placeholder="message template" asp-for="Comment" value="@Model.Comment" required>
+
+                        <textarea id="emoji" class="alert-block target-input"></textarea>
+
+                        <select class="alert-block alert-select target-input" asp-for="Status" asp-items="@Model.StatusesItems"></select>
+
+                        <a><i class="fa-solid fa-xmark alert-delete-button"></i></a>
+                    </div>
+
                     <i class="fa-solid fa-plus alert-add-button"></i>
                 </div>
             </div>
