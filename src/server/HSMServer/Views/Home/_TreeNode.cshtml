@@ -9,7 +9,7 @@
 
     var showIcons = (User as User).TreeFilter.ByVisibility.Icons.Value;
 
-    var arrowIcon = Model.VisibleSensorsCount > 0 || Model.Data.Nodes.Count > 0 ? "jstree-closed" : string.Empty;
+    var arrowIcon = Model.VisibleSubtreeSensorsCount > 0 || Model.Data.Nodes.Count > 0 ? "jstree-closed" : string.Empty;
 }
 
 
@@ -55,15 +55,15 @@
         }
     }
 
-    @foreach (var child in Model.Nodes)
+    @foreach (var child in Model.RenderedNodes)
     {
         <ul>@await Html.PartialAsync("_TreeNode", child)</ul>
     }
 
-    @if (Model.Sensors.Count > 0)
+    @if (Model.RenderedSensors.Count > 0)
     {
         <ul>
-            @foreach (var sensor in Model.Sensors)
+            @foreach (var sensor in Model.RenderedSensors)
             {
                 @await Html.PartialAsync("_TreeSensor", sensor)
             }
