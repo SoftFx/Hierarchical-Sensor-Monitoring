@@ -90,7 +90,7 @@ namespace HSMServer.Core.Model
 
             State = ApplyUpdate(State, update?.State ?? State);
             Integration = ApplyUpdate(Integration, update?.Integration ?? Integration);
-            EndOfMuting = ApplyUpdate(EndOfMuting, update?.EndOfMutingPeriod ?? EndOfMuting);
+            EndOfMuting = ApplyUpdate(EndOfMuting, update?.EndOfMutingPeriod);
 
             if (State == SensorState.Available)
                 EndOfMuting = null;

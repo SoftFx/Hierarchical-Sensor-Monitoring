@@ -321,9 +321,9 @@ namespace HSMServer.Controllers
             var decodedId = SensorPathHelper.DecodeGuid(selectedId);
 
             if (_treeViewModel.Nodes.TryGetValue(decodedId, out var node))
-                _treeValuesCache.ClearNodeHistory(node.Id, $"{CurrentUser.Name}({CurrentUser.Id})");
+                _treeValuesCache.ClearNodeHistory(node.Id, CurrentUser.Name);
             else if (_treeViewModel.Sensors.TryGetValue(decodedId, out var sensor))
-                _treeValuesCache.ClearSensorHistory(sensor.Id, DateTime.MaxValue, $"{CurrentUser.Name}({CurrentUser.Id})");
+                _treeValuesCache.ClearSensorHistory(sensor.Id, DateTime.MaxValue, CurrentUser.Name);
         }
 
         [HttpGet]
