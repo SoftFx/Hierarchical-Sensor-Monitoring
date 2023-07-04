@@ -380,7 +380,7 @@ namespace HSMServer.Core.Cache
             _database.AddJournalValue(journalRecordModel.GetKey(), journalRecordModel.ToJournalEntity());
         }
 
-        public void RemoveJournal(Guid id) => _database.RemoveJournal(id);
+        public void RemoveJournal(Guid id) => _database.RemoveJournalValue(id);
         
         private void UpdatePolicy(ActionType type, Policy policy)
         {

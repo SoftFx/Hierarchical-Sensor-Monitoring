@@ -389,14 +389,14 @@ namespace HSMDatabase.DatabaseWorkCore
 
         #region Journal
 
-        public void AddJournalValue(JournalKey journalKey, JournalEntity valueEntity)
+        public void AddJournalValue(JournalKey journalKey, JournalEntity value)
         {
             var dbs = _journalValuesDatabases.GetNewestDatabases(journalKey.Time);
             
-            dbs.Put(journalKey.GetBytes(), valueEntity);
+            dbs.Put(journalKey.GetBytes(), value);
         }
 
-        public void RemoveJournal(Guid id)
+        public void RemoveJournalValue(Guid id)
         {
             var fromTicks = DateTime.MinValue.Ticks;
             var toTicks = DateTime.MaxValue.Ticks;
