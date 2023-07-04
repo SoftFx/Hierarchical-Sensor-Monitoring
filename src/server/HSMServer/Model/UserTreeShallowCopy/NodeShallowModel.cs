@@ -2,16 +2,22 @@
 using HSMServer.Extensions;
 using HSMServer.Model.Authentication;
 using HSMServer.Model.TreeViewModel;
+using System;
 using System.Collections.Generic;
-using HSMServer.Model.TreeViewModels;
 
 namespace HSMServer.Model.UserTreeShallowCopy
 {
     public sealed class NodeShallowModel : BaseNodeShallowModel<ProductNodeViewModel>
     {
-        public List<NodeShallowModel> Nodes { get; } = new(1 << 4);
+        private const int MaxRenderWidth = 100;
 
-        public List<SensorShallowModel> Sensors { get; } = new(1 << 4);
+        private readonly Dictionary<Guid, NodeShallowModel> _subNodes = new(1 << 2);
+        private readonly Dictionary<Guid, SensorShallowModel> _sensors = new(1 << 2);
+
+
+        public List<NodeShallowModel> RenderedNodes { get; } = new(1 << 4);
+
+        public List<SensorShallowModel> RenderedSensors { get; } = new(1 << 4);
 
 
         public IntegrationState GrafanaState { get; } = new();
@@ -26,20 +32,22 @@ namespace HSMServer.Model.UserTreeShallowCopy
         public override bool IsAccountsIgnore => AccountState.IsAllIgnored;
 
 
-        public int WidthDifference => Data.Sensors.Count + Data.Nodes.Count - VisibleTreeViewModel.RenderWidth;
-        
-        public bool IsDisabledNodeShown => WidthDifference > 0 && Sensors.Count + Nodes.Count > 0;
-        
-        
-        public int VisibleSensorsCount { get; private set; }
+        public int RenderedSize => RenderedNodes.Count + RenderedSensors.Count;
+
+        public int WidthDifference => _subNodes.Count + _sensors.Count - MaxRenderWidth;
+
+        public bool IsDisabledNodeShown => WidthDifference > 0 && RenderedSize > 0;
+
+
+        public int VisibleSubtreeSensorsCount { get; private set; }
 
         public string SensorsCountString
         {
             get
             {
-                var sensorsCount = VisibleSensorsCount == Data.AllSensorsCount
+                var sensorsCount = VisibleSubtreeSensorsCount == Data.AllSensorsCount
                     ? $"{Data.AllSensorsCount}"
-                    : $"{VisibleSensorsCount}/{Data.AllSensorsCount}";
+                    : $"{VisibleSubtreeSensorsCount}/{Data.AllSensorsCount}";
 
                 return $"({sensorsCount} sensors)";
             }
@@ -49,10 +57,12 @@ namespace HSMServer.Model.UserTreeShallowCopy
         internal NodeShallowModel(ProductNodeViewModel data, User user) : base(data, user) { }
 
 
-        internal BaseNodeShallowModel<SensorNodeViewModel> AddChildState(SensorShallowModel shallowSensor, User user)
+        internal SensorShallowModel AddChildState(SensorShallowModel shallowSensor, User user)
         {
             shallowSensor.Parent = this;
-            
+
+            _sensors.Add(shallowSensor.Id, shallowSensor);
+
             var sensor = shallowSensor.Data;
 
             if (sensor.State != SensorState.Muted)
@@ -68,22 +78,17 @@ namespace HSMServer.Model.UserTreeShallowCopy
             GrafanaState.CalculateState(shallowSensor);
 
             if (user.IsSensorVisible(sensor))
-                VisibleSensorsCount++;
+                VisibleSubtreeSensorsCount++;
 
             return shallowSensor;
         }
 
-        internal BaseNodeShallowModel<SensorNodeViewModel> AddChild(SensorShallowModel shallowSensor)
-        {
-            Sensors.Add(shallowSensor);
-
-            return shallowSensor;
-        }
-
-        internal NodeShallowModel AddChildState(NodeShallowModel node, User user)
+        internal NodeShallowModel AddChildState(NodeShallowModel node)
         {
             node.Parent = this;
-            
+
+            _subNodes.Add(node.Data.Id, node);
+
             if (node._mutedValue.HasValue)
             {
                 if (!node._mutedValue.Value)
@@ -97,16 +102,43 @@ namespace HSMServer.Model.UserTreeShallowCopy
 
             GrafanaState.CalculateState(node.GrafanaState);
 
-            VisibleSensorsCount += node.VisibleSensorsCount;
+            VisibleSubtreeSensorsCount += node.VisibleSubtreeSensorsCount;
 
             return node;
         }
 
-        internal NodeShallowModel AddChild(NodeShallowModel node)
+        internal NodeShallowModel ToRenderNode(Guid nodeId)
         {
-            Nodes.Add(node);
+            if (_subNodes.TryGetValue(nodeId, out var subNode))
+            {
+                RenderedNodes.Add(subNode);
+                _subNodes.Remove(nodeId);
+            }
 
-            return node;
+            if (_sensors.TryGetValue(nodeId, out var sensor))
+            {
+                RenderedSensors.Add(sensor);
+                _sensors.Remove(nodeId);
+            }
+
+            return this;
+        }
+
+        internal NodeShallowModel LoadRenderingNodes()
+        {
+            void LoadNodes<T>(Dictionary<Guid, T> nodes) where T: BaseShallowModel
+            {
+                foreach (var id in nodes.Keys)
+                    if (RenderedSize < MaxRenderWidth)
+                        ToRenderNode(id);
+                    else
+                        break;
+            }
+
+            LoadNodes(_subNodes);
+            LoadNodes(_sensors);
+
+            return this;
         }
     }
 }
