@@ -35,8 +35,6 @@ namespace HSMServer.Model.UserTreeShallowCopy
         public override bool IsAccountsIgnore => AccountState.IsAllIgnored;
 
 
-        public bool CanAddRender => RenderedNodes.Count + RenderedSensors.Count < MaxRenderWidth;
-
         public int RenderWidthDifference { get; private set; }
 
         public int VisibleSubtreeSensorsCount { get; private set; }
@@ -53,6 +51,8 @@ namespace HSMServer.Model.UserTreeShallowCopy
                 return $"({sensorsCount} sensors)";
             }
         }
+
+        private bool CanAddToRender => RenderedNodes.Count + RenderedSensors.Count < MaxRenderWidth;
 
 
         internal NodeShallowModel(ProductNodeViewModel data, User user, Predicate<NodeShallowModel> nodeFilter, Predicate<SensorShallowModel> sensorFilter) : base(data, user)
@@ -114,27 +114,22 @@ namespace HSMServer.Model.UserTreeShallowCopy
 
         internal void ToRenderNode(Guid nodeId)
         {
-            if (_subNodes.TryGetValue(nodeId, out var subNode) && _nodeFilter(subNode))
+            void Recalculate<T>(Dictionary<Guid, T> total, List<T> render, Predicate<T> filter)
             {
-                if (CanAddRender)
+                if (total.TryGetValue(nodeId, out var item) && filter(item))
                 {
-                    RenderedNodes.Add(subNode);
-                    _subNodes.Remove(nodeId);
+                    if (CanAddToRender)
+                    {
+                        render.Add(item);
+                        total.Remove(nodeId);
+                    }
+                    else
+                        RenderWidthDifference++;
                 }
-                else
-                    RenderWidthDifference++;
             }
 
-            if (_sensors.TryGetValue(nodeId, out var sensor) && _sensorFilter(sensor))
-            {
-                if (CanAddRender)
-                {
-                    RenderedSensors.Add(sensor);
-                    _sensors.Remove(nodeId);
-                }
-                else
-                    RenderWidthDifference++;
-            }
+            Recalculate(_subNodes, RenderedNodes, _nodeFilter);
+            Recalculate(_sensors, RenderedSensors, _sensorFilter);
         }
 
         internal void LoadRenderingNodes()
