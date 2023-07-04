@@ -170,6 +170,22 @@
     height: 100vh;
 }
 
+.center-relative-history-spinner {
+    position: relative;
+    left: 47%;
+    padding-top: 15rem;
+}
+
+.center_relative_data_panel {
+    height: 30vh;
+}
+
+.noData-label {
+    height: 30vh;
+    color: rgba(210,210,216,1);
+    font-size: 40px;
+}
+
 .hidden_element {
     visibility : hidden;
 }

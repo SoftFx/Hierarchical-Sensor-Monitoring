@@ -9,6 +9,6 @@ docker run -d --user 0 --name $GrafanaContainerName -p 3000:3000 -v /usr/HSM/gra
 
 docker network create $ConnectionNetworkName
 
-docker network connect $ConnectionNetworkName "HSMServer_$Version" --alias hsm.dev.soft-fx.eu
+docker network connect $ConnectionNetworkName "HSMServer_$Version"
 
 docker network connect $ConnectionNetworkName $GrafanaContainerName

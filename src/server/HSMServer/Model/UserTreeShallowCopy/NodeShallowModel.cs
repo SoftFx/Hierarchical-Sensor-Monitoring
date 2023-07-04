@@ -51,6 +51,8 @@ namespace HSMServer.Model.UserTreeShallowCopy
 
         internal BaseNodeShallowModel<SensorNodeViewModel> AddChildState(SensorShallowModel shallowSensor, User user)
         {
+            shallowSensor.Parent = this;
+            
             var sensor = shallowSensor.Data;
 
             if (sensor.State != SensorState.Muted)
@@ -73,7 +75,6 @@ namespace HSMServer.Model.UserTreeShallowCopy
 
         internal BaseNodeShallowModel<SensorNodeViewModel> AddChild(SensorShallowModel shallowSensor)
         {
-            shallowSensor.Parent = this;
             Sensors.Add(shallowSensor);
 
             return shallowSensor;
@@ -81,6 +82,8 @@ namespace HSMServer.Model.UserTreeShallowCopy
 
         internal NodeShallowModel AddChildState(NodeShallowModel node, User user)
         {
+            node.Parent = this;
+            
             if (node._mutedValue.HasValue)
             {
                 if (!node._mutedValue.Value)
@@ -101,7 +104,6 @@ namespace HSMServer.Model.UserTreeShallowCopy
 
         internal NodeShallowModel AddChild(NodeShallowModel node)
         {
-            node.Parent = this;
             Nodes.Add(node);
 
             return node;

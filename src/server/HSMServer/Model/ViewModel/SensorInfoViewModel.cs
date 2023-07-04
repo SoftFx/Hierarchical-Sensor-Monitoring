@@ -12,6 +12,8 @@ namespace HSMServer.Model.ViewModel
 
         public bool HasGrafana { get; }
 
+        public bool IsMuted { get; }
+
 
         // public constructor without parameters for action Home/UpdateSensorInfo
         public SensorInfoViewModel() : base() { }
@@ -21,6 +23,7 @@ namespace HSMServer.Model.ViewModel
             SensorType = sensor.Type;
             StatusComment = sensor.ValidationError;
             HasGrafana = sensor.Integration.HasGrafana();
+            IsMuted = sensor.State == SensorState.Muted;
         }
     }
 }

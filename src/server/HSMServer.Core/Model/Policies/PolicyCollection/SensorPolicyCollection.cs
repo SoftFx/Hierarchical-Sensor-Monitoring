@@ -38,10 +38,10 @@ namespace HSMServer.Core.Model.Policies
         private protected BaseSensorModel _sensor;
 
 
-        protected abstract bool CalculateStorageResult(T value);
+        protected abstract bool CalculateStorageResult(T value, bool updateSensor);
 
 
-        internal bool TryValidate(BaseValue value, out T valueT)
+        internal bool TryValidate(BaseValue value, out T valueT, bool updateSensor = true)
         {
             SensorResult = SensorResult.Ok;
 
@@ -55,7 +55,7 @@ namespace HSMServer.Core.Model.Policies
                 return false;
             }
 
-            return CalculateStorageResult(valueT);
+            return CalculateStorageResult(valueT, updateSensor);
         }
 
         internal override void Attach(BaseSensorModel sensor)
@@ -98,7 +98,7 @@ namespace HSMServer.Core.Model.Policies
         internal IEnumerable<Policy<ValueType>> Policies => _sensor.UseParentPolicies ? _sensor.Parent.GetPolicies<PolicyType>(_sensor.Type) : _storage.Values;
 
 
-        protected override bool CalculateStorageResult(ValueType value)
+        protected override bool CalculateStorageResult(ValueType value, bool updateStatus = true)
         {
             PolicyResult = new(_sensor.Id);
 
@@ -106,7 +106,9 @@ namespace HSMServer.Core.Model.Policies
                 if (!policy.Validate(value, _sensor))
                 {
                     PolicyResult.AddAlert(policy);
-                    SensorResult += policy.SensorResult;
+
+                    if (updateStatus)
+                        SensorResult += policy.SensorResult;
                 }
 
             return true;
