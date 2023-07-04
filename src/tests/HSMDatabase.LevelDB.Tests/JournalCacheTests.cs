@@ -29,7 +29,7 @@ public class JournalCacheTests : MonitoringCoreTestsBase<TreeValuesCacheFixture>
         
         _valuesCache.UpdateProduct(productUpdate);
 
-        var journals = await _valuesCache.GetJournalValuesPage(expectedProduct.Id, DateTime.MinValue, DateTime.MaxValue, JournalType.Changes, 1).Flatten();
+        var journals = await _valuesCache.GetJournalValuesPage(expectedProduct.Id, DateTime.MinValue, DateTime.MaxValue, RecordType.Changes, 1).Flatten();
         Assert.Single(journals);
     }
     
@@ -46,7 +46,7 @@ public class JournalCacheTests : MonitoringCoreTestsBase<TreeValuesCacheFixture>
         };
         
         _valuesCache.UpdateProduct(productUpdate);
-        var journals = await _valuesCache.GetJournalValuesPage(expectedProduct.Id, DateTime.MinValue, DateTime.MaxValue, JournalType.Changes, MaxHistoryCount).Flatten();
+        var journals = await _valuesCache.GetJournalValuesPage(expectedProduct.Id, DateTime.MinValue, DateTime.MaxValue, RecordType.Changes, MaxHistoryCount).Flatten();
         Assert.NotEmpty(journals);
     }
 
@@ -59,7 +59,7 @@ public class JournalCacheTests : MonitoringCoreTestsBase<TreeValuesCacheFixture>
         var sensors = GetUpdatedSensors(n);
         foreach (var sensor in sensors)
         {
-            var journals = await _valuesCache.GetJournalValuesPage(sensor.Id, DateTime.MinValue, DateTime.MaxValue, JournalType.Changes, MaxHistoryCount).Flatten();
+            var journals = await _valuesCache.GetJournalValuesPage(sensor.Id, DateTime.MinValue, DateTime.MaxValue, RecordType.Changes, MaxHistoryCount).Flatten();
            
             Assert.NotEmpty(journals);
         }

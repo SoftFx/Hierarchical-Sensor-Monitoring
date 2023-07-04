@@ -12,5 +12,5 @@ internal static class JournalFactory
             Value = RandomGenerator.GetRandomString()
         };
 
-    internal static Key BuildKey() => new Key(Guid.NewGuid(), RandomGenerator.GetRandomInt());
+    internal static JournalKey BuildKey() => new JournalKey(Guid.NewGuid(), RandomGenerator.GetRandomInt());
 }

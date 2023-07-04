@@ -57,7 +57,7 @@ namespace HSMServer.Core.Cache
         IAsyncEnumerable<List<BaseValue>> GetSensorValues(HistoryRequestModel request);
         IAsyncEnumerable<List<BaseValue>> GetSensorValuesPage(Guid sensorId, DateTime from, DateTime to, int count);
 
-        IAsyncEnumerable<List<JournalRecordModel>> GetJournalValuesPage(Guid id, DateTime from, DateTime to, JournalType journalType, int count);
+        IAsyncEnumerable<List<JournalRecordModel>> GetJournalValuesPage(Guid id, DateTime from, DateTime to, RecordType recordType, int count);
         void AddJournal(JournalRecordModel journalRecordModel);
 
         void UpdateCacheState();

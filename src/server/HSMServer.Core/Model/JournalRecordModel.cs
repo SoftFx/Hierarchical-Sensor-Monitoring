@@ -11,7 +11,7 @@ public sealed class JournalRecordModel
 
     public string Value { get; set; }
     
-    public JournalType Type { get; set; }
+    public RecordType Type { get; set; }
     
 
     public JournalRecordModel(){}
@@ -22,7 +22,7 @@ public sealed class JournalRecordModel
         Value = entity.Value;
     }
 
-    public JournalRecordModel(Guid id, DateTime date, string message, JournalType type)
+    public JournalRecordModel(Guid id, DateTime date, string message, RecordType type)
     {
         Id = id;
         Time = date.Ticks;
@@ -36,5 +36,5 @@ public sealed class JournalRecordModel
         Value = Value
     };
 
-    public Key GetKey() => new Key(Id, Time, Type);
+    public JournalKey GetKey() => new JournalKey(Id, Time, Type);
 }

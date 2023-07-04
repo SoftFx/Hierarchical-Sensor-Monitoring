@@ -389,11 +389,11 @@ namespace HSMDatabase.DatabaseWorkCore
 
         #region Journal
 
-        public void AddJournalValue(Key key, JournalEntity valueEntity)
+        public void AddJournalValue(JournalKey journalKey, JournalEntity valueEntity)
         {
-            var dbs = _journalValuesDatabases.GetNewestDatabases(key.Time);
+            var dbs = _journalValuesDatabases.GetNewestDatabases(journalKey.Time);
             
-            dbs.Put(key.GetBytes(), valueEntity);
+            dbs.Put(journalKey.GetBytes(), valueEntity);
         }
 
         public void RemoveJournal(Guid id)
@@ -401,27 +401,27 @@ namespace HSMDatabase.DatabaseWorkCore
             var fromTicks = DateTime.MinValue.Ticks;
             var toTicks = DateTime.MaxValue.Ticks;
 
-            RemoveJournal(id, fromTicks, toTicks, JournalType.Actions);
-            RemoveJournal(id, fromTicks, toTicks, JournalType.Changes);
+            RemoveJournal(id, fromTicks, toTicks, RecordType.Actions);
+            RemoveJournal(id, fromTicks, toTicks, RecordType.Changes);
         }
 
-        private void RemoveJournal(Guid id, long fromTicks, long toTicks, JournalType type)
+        private void RemoveJournal(Guid id, long fromTicks, long toTicks, RecordType type)
         {
-            var fromBytes = new Key(id, fromTicks, type).GetBytes();
-            var toBytes = new Key(id, toTicks, type).GetBytes();
+            var fromBytes = new JournalKey(id, fromTicks, type).GetBytes();
+            var toBytes = new JournalKey(id, toTicks, type).GetBytes();
 
             foreach (var db in _journalValuesDatabases)
                 if (db.IsInclude(fromTicks, toTicks))
                     db.Remove(fromBytes, toBytes);
         }
 
-        public IAsyncEnumerable<List<byte[]>> GetJournalValuesPage(Guid sensorId, DateTime from, DateTime to, JournalType journalType, int count)
+        public IAsyncEnumerable<List<byte[]>> GetJournalValuesPage(Guid sensorId, DateTime from, DateTime to, RecordType recordType, int count)
         {
             var fromTicks = from.Ticks;
             var toTicks = to.Ticks;
 
-            var fromBytes = new Key(sensorId, fromTicks, journalType).GetBytes();
-            var toBytes = new Key(sensorId, toTicks, journalType).GetBytes();
+            var fromBytes = new JournalKey(sensorId, fromTicks, recordType).GetBytes();
+            var toBytes = new JournalKey(sensorId, toTicks, recordType).GetBytes();
 
             var databases = _journalValuesDatabases.Where(db => db.IsInclude(fromTicks, toTicks)).ToList();
             GetJournalValuesFunc getValues = (db) => db.GetValuesFrom(fromBytes, toBytes);

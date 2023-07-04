@@ -315,7 +315,7 @@ namespace HSMServer.Core.Cache
                 sensor.ResetSensor();
 
             _database.ClearSensorValues(sensor.Id.ToString(), from, to);
-            AddJournal(new JournalRecordModel(sensorId, DateTime.UtcNow, $"{DateTime.UtcNow} - {caller} - clear", JournalType.Actions));
+            AddJournal(new JournalRecordModel(sensorId, DateTime.UtcNow, $"{DateTime.UtcNow} - {caller} - clear", RecordType.Actions));
             _snapshot.Sensors[sensorId].History.From = to;
 
             ChangeSensorEvent?.Invoke(sensor, ActionType.Update);
@@ -359,9 +359,9 @@ namespace HSMServer.Core.Cache
             }
         }
         
-        public async IAsyncEnumerable<List<JournalRecordModel>> GetJournalValuesPage(Guid id, DateTime from, DateTime to, JournalType journalType, int count)
+        public async IAsyncEnumerable<List<JournalRecordModel>> GetJournalValuesPage(Guid id, DateTime from, DateTime to, RecordType recordType, int count)
         {
-            var pages = _database.GetJournalValuesPage(id, from, to, journalType, count);
+            var pages = _database.GetJournalValuesPage(id, from, to, recordType, count);
 
             await foreach (var page in pages)
             {

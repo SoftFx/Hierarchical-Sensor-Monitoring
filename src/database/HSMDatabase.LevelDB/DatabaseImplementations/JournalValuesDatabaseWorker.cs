@@ -48,7 +48,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             }
             catch (Exception e)
             {
-                _logger.Error(e, $"Failed to write data for {Key.FromBytes(key).Id}");
+                _logger.Error(e, $"Failed to write data for {JournalKey.FromBytes(key).Id}");
             }
         }
 
