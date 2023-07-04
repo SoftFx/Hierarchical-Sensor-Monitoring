@@ -57,7 +57,7 @@ namespace HSMServer.Model.UserTreeShallowCopy
         internal NodeShallowModel(ProductNodeViewModel data, User user) : base(data, user) { }
 
 
-        internal SensorShallowModel AddChildState(SensorShallowModel shallowSensor, User user)
+        internal SensorShallowModel AddChild(SensorShallowModel shallowSensor, User user)
         {
             shallowSensor.Parent = this;
 
@@ -83,7 +83,7 @@ namespace HSMServer.Model.UserTreeShallowCopy
             return shallowSensor;
         }
 
-        internal NodeShallowModel AddChildState(NodeShallowModel node)
+        internal NodeShallowModel AddChild(NodeShallowModel node)
         {
             node.Parent = this;
 
@@ -107,8 +107,11 @@ namespace HSMServer.Model.UserTreeShallowCopy
             return node;
         }
 
-        internal NodeShallowModel ToRenderNode(Guid nodeId)
+        internal bool ToRenderNode(Guid nodeId)
         {
+            if (RenderedSize == MaxRenderWidth)
+                return false;
+
             if (_subNodes.TryGetValue(nodeId, out var subNode))
             {
                 RenderedNodes.Add(subNode);
@@ -121,22 +124,23 @@ namespace HSMServer.Model.UserTreeShallowCopy
                 _sensors.Remove(nodeId);
             }
 
-            return this;
+            return true;
         }
 
-        internal NodeShallowModel LoadRenderingNodes()
+        internal NodeShallowModel LoadRenderingNodes(Predicate<NodeShallowModel> nodeFilter, Predicate<SensorShallowModel> sensorFilter)
         {
-            void LoadNodes<T>(Dictionary<Guid, T> nodes) where T: BaseShallowModel
+            void LoadNodes<T>(Dictionary<Guid, T> nodes, Predicate<T> filter) where T : BaseShallowModel
             {
-                foreach (var id in nodes.Keys)
-                    if (RenderedSize < MaxRenderWidth)
-                        ToRenderNode(id);
-                    else
-                        break;
+                foreach (var (id, node) in nodes)
+                    if (filter(node))
+                    {
+                        if (!ToRenderNode(id))
+                            break;
+                    }
             }
 
-            LoadNodes(_subNodes);
-            LoadNodes(_sensors);
+            LoadNodes(_subNodes, nodeFilter);
+            LoadNodes(_sensors, sensorFilter);
 
             return this;
         }

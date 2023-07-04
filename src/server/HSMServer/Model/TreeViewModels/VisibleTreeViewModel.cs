@@ -56,7 +56,7 @@ public sealed class VisibleTreeViewModel
         {
             var node = FilterNodes(product);
 
-            if (IsVisibleNode(node, product))
+            if (IsVisibleNode(node))
             {
                 var folderId = node.Data.FolderId;
 
@@ -80,13 +80,13 @@ public sealed class VisibleTreeViewModel
         return folderTree;
     }
 
-    public NodeShallowModel LoadNode(ProductNodeViewModel globalNode)
+    public NodeShallowModel LoadNode(ProductNodeViewModel globalModel)
     {
-        var id = globalNode.Id;
+        var id = globalModel.Id;
 
-        if (_allTree.TryGetValue(id, out var node) && IsVisibleNode(node, globalNode))
+        if (_allTree.TryGetValue(id, out var node) && IsVisibleNode(node))
         {
-            node.LoadRenderingNodes();
+            node.LoadRenderingNodes(IsVisibleNode, IsVisibleSensor);
             AddOpenedNode(id);
         }
 
@@ -105,9 +105,9 @@ public sealed class VisibleTreeViewModel
         {
             var subNode = FilterNodes(nodeModel, --depth);
 
-            node.AddChildState(subNode);
+            node.AddChild(subNode);
 
-            if (toRender && IsVisibleNode(subNode, subNode.Data))
+            if (toRender && IsVisibleNode(subNode))
                 node.ToRenderNode(subNode.Id);
         }
 
@@ -115,14 +115,17 @@ public sealed class VisibleTreeViewModel
         {
             var sensor = new SensorShallowModel(sensorModel, _user);
 
-            node.AddChildState(sensor, _user);
+            node.AddChild(sensor, _user);
 
-            if (toRender && _user.IsSensorVisible(sensor.Data))
+            if (toRender && IsVisibleSensor(sensor))
                 node.ToRenderNode(sensor.Id);
         }
 
         return node;
     }
 
-    private bool IsVisibleNode(NodeShallowModel node, ProductNodeViewModel product) => node.VisibleSubtreeSensorsCount > 0 || _user.IsEmptyProductVisible(product);
+
+    private bool IsVisibleNode(NodeShallowModel node) => node.VisibleSubtreeSensorsCount > 0 || _user.IsEmptyProductVisible(node.Data);
+
+    private bool IsVisibleSensor(SensorShallowModel sensor) => _user.IsSensorVisible(sensor.Data);
 }
