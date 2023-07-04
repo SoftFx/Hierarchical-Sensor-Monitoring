@@ -11,17 +11,31 @@ public class ByteKeyConverters
     private List<Guid> _guids;
 
     private List<byte[]> _results;
-    
-    
+
+
     [Params(100, 1000, 10000, 100000)] 
     public int N { get; set; }
+
+
+    [GlobalSetup]
+    public void GenerateGuids()
+    {
+        _guids = new List<Guid>(N);
+        
+        for (long i = 0; i < N; i++)
+            _guids.Add(Guid.NewGuid());
+    }
+
+    [IterationSetup]
+    public void ResultInit() => _results = new (N);
+
 
 
     [Benchmark]
     public List<byte[]> SpanConverter()
     {
         Span<byte> result = stackalloc byte[16 + sizeof(long)];
-        
+
         for (long i = 0; i < N; i++)
         {
             _guids[(int)i].TryWriteBytes(result);
@@ -57,21 +71,9 @@ public class ByteKeyConverters
         for (long i = 0; i < N; i++)
         {
             var guid = _guids[(int)i];
-            _results.Add(Encoding.UTF8.GetBytes($"{guid.ToString()}_{i:D19}"));
+            _results.Add(Encoding.UTF8.GetBytes($"{guid}_{i:D19}"));
         }
 
         return _results;
     }
-    
-    [GlobalSetup]
-    public void GenerateGuids()
-    {
-        _guids = new List<Guid>(N);
-        
-        for (long i = 0; i < N; i++)
-            _guids.Add(Guid.NewGuid());
-    }
-
-    [IterationSetup]
-    public void ResultInit() => _results = new (N);
 }
