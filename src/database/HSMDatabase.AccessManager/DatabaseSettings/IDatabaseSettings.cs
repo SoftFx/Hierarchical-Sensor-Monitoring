@@ -21,9 +21,12 @@ namespace HSMDatabase.AccessManager
 
 
         public string GetPathToSensorValueDatabase(long from, long to) =>
-            Path.Combine(DatabaseFolder, $"{SensorValuesDatabaseName}_{from}_{to}");
+            Path.Combine(DatabaseFolder, BuildValueDataBaseName(SensorValuesDatabaseName, from, to));
         
         public string GetPathToJournalValueDatabase(long from, long to) =>
-            Path.Combine(Path.Combine(DatabaseFolder, "Journals"), $"{JournalValuesDatabaseName}_{from}_{to}");
+            Path.Combine(Path.Combine(DatabaseFolder, "Journals"), BuildValueDataBaseName(JournalValuesDatabaseName, from, to));
+
+
+        private static string BuildValueDataBaseName(string dbName, long from, long to) => $"{dbName}_{from}_{to}";
     }
 }
