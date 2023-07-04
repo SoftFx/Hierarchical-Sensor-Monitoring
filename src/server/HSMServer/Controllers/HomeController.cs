@@ -70,11 +70,13 @@ namespace HSMServer.Controllers
                 {
                     viewModel = folder;
                     StoredUser.SelectedNode.ConnectFolder(folder);
+                    CurrentUser.Tree.AddOpenedNode(id);
                 }
                 else if (_treeViewModel.Nodes.TryGetValue(id, out var node))
                 {
                     viewModel = node;
                     StoredUser.SelectedNode.ConnectNode(node);
+                    CurrentUser.Tree.AddOpenedNode(id);
                 }
                 else if (_treeViewModel.Sensors.TryGetValue(id, out var sensor))
                 {
@@ -88,20 +90,13 @@ namespace HSMServer.Controllers
         }
 
         [HttpGet]
-        public IActionResult GetNode(string id)
-        {
-            var guid = id.ToGuid();
-
-            CurrentUser.Tree.AddRenderingNode(guid);
-
-            if (_treeViewModel.Nodes.TryGetValue(guid, out var node))
-                return PartialView("_TreeNode", CurrentUser.Tree.GetUserNode(node));
-
-            return NotFound();
-        }
+        public IActionResult GetNode(string id) =>
+            _treeViewModel.Nodes.TryGetValue(id.ToGuid(), out var node)
+                ? PartialView("_TreeNode", CurrentUser.Tree.LoadNode(node))
+                : NotFound();
 
         [HttpPut]
-        public void RemoveRenderingNode(Guid nodeId) => CurrentUser.Tree.RemoveRenderingNode(nodeId);
+        public void RemoveRenderingNode(Guid nodeId) => CurrentUser.Tree.RemoveOpenedNode(nodeId);
 
         [HttpGet]
         public IActionResult GetGrid(ChildrenPageRequest pageRequest)

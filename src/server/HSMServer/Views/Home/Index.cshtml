@@ -296,16 +296,21 @@
                 }
                 
                 let accordionName = "";
-                if ($('#dataPanel li a.active')[0].innerText === ' Grid') {
-                    accordionName = "grid"
-                    getGridPage(`${accordionName}Sensors`)
-                    getGridPage(`${accordionName}Nodes`)
+                let dataPanel = $('#dataPanel li a.active');
+                if (dataPanel.length > 0) {
+                    if (dataPanel[0].innerText === ' Grid') {
+                        accordionName = "grid"
+                        getGridPage(`${accordionName}Sensors`)
+                        getGridPage(`${accordionName}Nodes`)
+                    }
+
+                    if (dataPanel[0].innerText === ' List') {
+                        accordionName = "list";
+                        getListPage(`${accordionName}Sensors`)
+                        getListPage(`${accordionName}Nodes`)
+                    }
                 }
-                else {
-                    accordionName = "list";
-                    getListPage(`${accordionName}Sensors`)
-                    getListPage(`${accordionName}Nodes`)
-                }
+                
 
                updateGeneralInfo(selectedNodeId);
                 

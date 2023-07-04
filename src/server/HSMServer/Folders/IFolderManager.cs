@@ -11,6 +11,9 @@ namespace HSMServer.Folders
 {
     public interface IFolderManager : IConcurrentStorage<FolderModel, FolderEntity, FolderUpdate>
     {
+        event Action<Guid> ResetProductTelegramInheritance;
+
+
         Task<bool> TryAdd(FolderAdd folderAdd, out FolderModel folder);
 
         Task MoveProduct(ProductNodeViewModel product, Guid? fromFolderId, Guid? toFolderId);

@@ -39,6 +39,9 @@ namespace HSMServer.Model.DataAlerts
 
     public abstract class DataAlertViewModelBase : DataAlertViewModel
     {
+        private const string DefaultCommentTemplate = "$sensor $action $target";
+
+
         public abstract string DisplayComment { get; }
 
         protected abstract List<string> Icons { get; }
@@ -62,6 +65,8 @@ namespace HSMServer.Model.DataAlerts
 
         public DataAlertViewModelBase()
         {
+            Comment = DefaultCommentTemplate;
+
             PropertiesItems = Properties.Select(p => new SelectListItem(p, p)).ToList();
             IconsItems = Icons.Select(i => new SelectListItem(i.ToIconUnicode(), i)).ToList();
             ActionsItems = Actions.Select(a => new SelectListItem(a.GetDisplayName(), $"{a}")).ToList();

@@ -8,7 +8,7 @@ namespace HSMServer.Model.UserTreeShallowCopy
 {
     public sealed class FolderShallowModel : BaseShallowModel<FolderModel>
     {
-        public List<NodeShallowModel> Nodes { get; } = new(1 << 4);
+        public List<NodeShallowModel> Products { get; } = new(1 << 4);
 
 
         public IntegrationState GrafanaState { get; } = new();
@@ -26,13 +26,14 @@ namespace HSMServer.Model.UserTreeShallowCopy
         public override bool IsAccountsIgnore => AccountState.IsAllIgnored;
 
 
-        public bool IsEmpty => Nodes.All(n => n.Data.IsEmpty);
+        public bool IsEmpty => Products.All(n => n.Data.IsEmpty);
 
 
         public FolderShallowModel(FolderModel data, User user) : base(data)
         {
             CurUserIsManager = user.IsFolderManager(user.Id);
         }
+
 
         internal void AddChild(NodeShallowModel node, User user)
         {
@@ -46,8 +47,8 @@ namespace HSMServer.Model.UserTreeShallowCopy
 
             GrafanaState.CalculateState(node.GrafanaState);
 
-            if (node.VisibleSensorsCount > 0 || user.IsEmptyProductVisible(node.Data))
-                Nodes.Add(node);
+            if (node.VisibleSubtreeSensorsCount > 0 || user.IsEmptyProductVisible(node.Data))
+                Products.Add(node);
         }
 
         public override string ToJSTree() =>

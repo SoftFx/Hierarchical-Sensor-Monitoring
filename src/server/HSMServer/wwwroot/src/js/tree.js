@@ -5,10 +5,12 @@ window.currentSelectedNodeId = "";
 
 window.initializeTree = function () {
     var sortingType = $("input[name='TreeSortType']:checked");
-
-    let initOpened = JSON.parse(window.localStorage.jstree).state.core.open.length;
-    if (initOpened > 1)
-        isRefreshing = true;
+    
+    if (window.localStorage.jstree) {
+        let initOpened = JSON.parse(window.localStorage.jstree).state.core.open.length;
+        if (initOpened > 1)
+            isRefreshing = true;
+    }
     
     $('#jstree').jstree({
         "core": {
@@ -380,6 +382,16 @@ function buildContextMenu(node) {
                 }
             }
         }
+        
+        if (curType === NodeType.Sensor && !(isMutedState === "True")) {
+            contextMenu["ChangeStatus"] = {
+                "label": `Edit status`,
+                "icon": "/dist/edit.svg",
+                "action": _ => {
+                    loadEditSensorStatusModal();
+                }
+            }
+        }
 
         let isGrafanaEnabled = node.data.jstree.isGrafanaEnabled === "True";
         if (isGrafanaEnabled) {
@@ -486,7 +498,7 @@ function getCurrentElementType(node) {
         (node.parents.length === 2 && isFolder($('#jstree').jstree().get_node(node.parents[0]))))
         return NodeType.Product;
     
-    if (node.children.length === 0)
+    if (typeof node.li_attr.class === 'undefined')
         return NodeType.Sensor;
     
     return NodeType.Node;
