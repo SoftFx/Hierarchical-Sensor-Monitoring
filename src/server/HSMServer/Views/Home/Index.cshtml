@@ -297,16 +297,20 @@
                 
                 let accordionName = "";
                 let dataPanel = $('#dataPanel li a.active');
-                if (dataPanel.length > 0 && dataPanel[0].innerText === ' Grid') {
-                    accordionName = "grid"
-                    getGridPage(`${accordionName}Sensors`)
-                    getGridPage(`${accordionName}Nodes`)
+                if (dataPanel.length > 0) {
+                    if (dataPanel[0].innerText === ' Grid') {
+                        accordionName = "grid"
+                        getGridPage(`${accordionName}Sensors`)
+                        getGridPage(`${accordionName}Nodes`)
+                    }
+
+                    if (dataPanel[0].innerText === ' List') {
+                        accordionName = "list";
+                        getListPage(`${accordionName}Sensors`)
+                        getListPage(`${accordionName}Nodes`)
+                    }
                 }
-                else {
-                    accordionName = "list";
-                    getListPage(`${accordionName}Sensors`)
-                    getListPage(`${accordionName}Nodes`)
-                }
+                
 
                updateGeneralInfo(selectedNodeId);
                 

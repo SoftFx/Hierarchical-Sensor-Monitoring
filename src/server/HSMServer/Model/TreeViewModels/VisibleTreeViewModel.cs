@@ -4,6 +4,7 @@ using HSMServer.Model.Folders;
 using HSMServer.Model.TreeViewModel;
 using HSMServer.Model.UserTreeShallowCopy;
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -17,6 +18,8 @@ public sealed class VisibleTreeViewModel
     private readonly User _user;
 
     public HashSet<Guid> OpenedNodes { get; } = new();
+
+    public ConcurrentDictionary<Guid, NodeShallowModel> TreeState { get; } = new();
 
 
     public event Func<List<FolderModel>> GetFolders;
@@ -47,6 +50,8 @@ public sealed class VisibleTreeViewModel
     
     public List<BaseShallowModel> GetUserTree()
     {
+        TreeState.Clear();
+        
         var folders = GetFolders?.Invoke().GetOrdered(_user).ToDictionary(k => k.Id, v => new FolderShallowModel(v, _user));
 
         var tree = new List<BaseShallowModel>(1 << 4);
@@ -84,6 +89,9 @@ public sealed class VisibleTreeViewModel
     {
         var currentNode = FilterNodes(node);
 
+        TreeState.TryGetValue(node.Id, out var nodeWithParent);
+        currentNode.Parent = nodeWithParent?.Parent ?? currentNode.Parent;
+        
         return IsVisibleNode(currentNode, node) ? currentNode : default;
     }
 
@@ -111,6 +119,8 @@ public sealed class VisibleTreeViewModel
             if (toRender && _user.IsSensorVisible(shallowSensor.Data) && currentWidth++ <= RenderWidth)
                 node.AddChild(shallowSensor);
         }
+
+        TreeState.TryAdd(node.Data.Id, node);
 
         return node;
     }
