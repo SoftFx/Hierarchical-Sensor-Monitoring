@@ -21,6 +21,7 @@ using Microsoft.OpenApi.Models;
 using System;
 using System.IO;
 using System.Security.Authentication;
+using HSMDatabase.AccessManager.DatabaseEntities;
 
 namespace HSMServer.ServiceExtensions;
 
@@ -35,7 +36,8 @@ public static class ApplicationServiceExtensions
                 .AddSingleton<IUpdatesQueue, UpdatesQueue>()
                 .AddSingleton<ITreeValuesCache, TreeValuesCache>()
                 .AddSingleton<IUserManager, UserManager>()
-                .AddSingleton<IFolderManager, FolderManager>();
+                .AddSingleton<IFolderManager, FolderManager>()
+                .AddSingleton<IJournalService, JournalService>();
 
         services.AddSingleton<NotificationsCenter>()
                 .AddSingleton<DataCollectorWrapper>()

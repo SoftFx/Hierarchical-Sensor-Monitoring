@@ -33,6 +33,7 @@ namespace HSMServer.Core.Cache
 
         private readonly ITreeStateSnapshot _snapshot;
         private readonly IUpdatesQueue _updatesQueue;
+        private readonly IJournalService _journalService;
         private readonly IDatabaseCore _database;
 
 
@@ -42,12 +43,13 @@ namespace HSMServer.Core.Cache
         public event Action<PolicyResult> ChangePolicyResultEvent;
 
 
-        public TreeValuesCache(IDatabaseCore database, ITreeStateSnapshot snapshot, IUpdatesQueue updatesQueue)
+        public TreeValuesCache(IDatabaseCore database, ITreeStateSnapshot snapshot, IUpdatesQueue updatesQueue, IJournalService journalService)
         {
             _database = database;
             _snapshot = snapshot;
 
             _updatesQueue = updatesQueue;
+            _journalService = journalService;
             _updatesQueue.NewItemsEvent += UpdatesQueueNewItemsHandler;
 
             Initialize();
@@ -92,8 +94,8 @@ namespace HSMServer.Core.Cache
                 return;
 
             _database.UpdateProduct(product.Update(update).ToEntity());
-
-            AddJournals(product.JournalRecordModels);
+            _journalService.AddJournals(product.JournalRecordModels);
+            
             NotifyAboutProductChange(product);
         }
 
@@ -236,10 +238,9 @@ namespace HSMServer.Core.Cache
                 return;
 
             sensor.Update(update);
-
             _database.UpdateSensor(sensor.ToEntity());
 
-            AddJournals(sensor.JournalRecordModels);
+            _journalService.AddJournals(sensor.JournalRecordModels);
 
             NotifyAboutChanges(sensor);
         }
@@ -255,7 +256,7 @@ namespace HSMServer.Core.Cache
             RemoveSensorPolicies(sensor);
 
             _database.RemoveSensorWithMetadata(sensorId.ToString());
-            RemoveJournal(sensorId);
+            _journalService.RemoveJournal(sensorId);
             _snapshot.Sensors.Remove(sensorId);
 
             ChangeSensorEvent?.Invoke(sensor, ActionType.Delete);
@@ -315,7 +316,7 @@ namespace HSMServer.Core.Cache
                 sensor.ResetSensor();
 
             _database.ClearSensorValues(sensor.Id.ToString(), from, to);
-            AddJournal(new JournalRecordModel(sensorId, DateTime.UtcNow, $"{DateTime.UtcNow} - {caller} - clear", RecordType.Actions));
+            _journalService.AddJournal(new JournalRecordModel(sensorId, DateTime.UtcNow, $"{DateTime.UtcNow} - {caller} - clear", RecordType.Actions));
             _snapshot.Sensors[sensorId].History.From = to;
 
             ChangeSensorEvent?.Invoke(sensor, ActionType.Update);
