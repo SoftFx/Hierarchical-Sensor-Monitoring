@@ -14,48 +14,54 @@
             <div class="d-flex flex-row align-items-center">
                 <div class="alert-text-block alert-add">If</div>
 
-                <div class="d-flex flex-row align-items-center alert-blocks-group ms-3">
-                    <select class="alert-block alert-select property-select" asp-for="Property" asp-items="@Model.PropertiesItems"></select>
+                <div id="alertCondition" class="d-flex flex-row align-items-center alert-blocks-group ms-3">
+                    <select id="conditionsSelect" class="alert-block alert-select property-select" asp-for="Property" asp-items="@Model.PropertiesItems"></select>
 
                     <div id="valueCondition" class="d-flex flex-row align-items-center">
                         <select class="alert-block alert-select operation-select" asp-for="Operation" asp-items="@Model.ActionsItems"></select>
                         <input class="alert-block target-input target-value" type="text" placeholder="<enter a value>" asp-for="Value" value="@Model.Value" required>
                     </div>
 
-                    <div id="sensitivityCondition" class="d-flex flex-row align-items-center">
+                    <div id="sensitivityCondition" class="d-none flex-row align-items-center">
                         <div class="alert-text-block operation-select">more than</div>
                         <partial name="_TimeIntervalSelect" for="Sensitivity" />
                     </div>
 
-                    <div id="ttlCondition" class="d-flex flex-row align-items-center">
+                    <div id="ttlCondition" class="d-none flex-row align-items-center">
                         <div class="alert-text-block operation-select">is</div>
                         <partial name="_TimeIntervalSelect" for="Sensitivity" />
                     </div>
 
-                    <a><i class="fa-solid fa-xmark alert-delete-button"></i></a>
+                    <a><i class="d-none fa-solid fa-xmark alert-delete-button"></i></a>
                 </div>
 
                 <a><i class="fa-solid fa-plus alert-add-button"></i></a>
             </div>
 
-            <div class="d-flex flex-row align-items-center">
+            <div id="alertAction" class="d-flex flex-row align-items-center pt-1">
                 <div class="d-flex flex-row align-items-center alert-blocks-group">
                     <div class="alert-text-block alert-add">then</div>
 
                     <div class="d-flex flex-row align-items-center alert-blocks-group ms-3">
-                        <select class="alert-block alert-select property-select">
-                            <option>send notification</option>
-                            <option>show icon</option>
-                            <option>set sensor status</option>
+                        <select id="actionsSelect" class="alert-block alert-select property-select">
+                            <option value="@DataAlertViewModelBase.SendNotifyAction">send notification</option>
+                            <option value="@DataAlertViewModelBase.ShowIconAction">show icon</option>
+                            <option value="@DataAlertViewModelBase.SetStatusAction">set sensor status</option>
                         </select>
 
-                        <input type="text" class="alert-block target-input" placeholder="message template" asp-for="Comment" value="@Model.Comment" required>
+                        <div id="sendNotificationAction">
+                            <input type="text" class="alert-block target-input" placeholder="message template" asp-for="Comment" value="@Model.Comment" required>
+                        </div>
 
-                        <textarea id="emoji" class="alert-block target-input"></textarea>
+                        <div id="showIconAction" class="d-none" style="height:2rem;">
+                            <textarea id="emoji" class="alert-block target-input"></textarea>
+                        </div>
 
-                        <select class="alert-block alert-select target-input" asp-for="Status" asp-items="@Model.StatusesItems"></select>
+                        <div id="setStatusAction" class="d-none">
+                            <select class="alert-block alert-select target-input" asp-for="Status" asp-items="@Model.StatusesItems"></select>
+                        </div>
 
-                        <a><i class="fa-solid fa-xmark alert-delete-button"></i></a>
+                        <a><i class="d-none fa-solid fa-xmark alert-delete-button"></i></a>
                     </div>
 
                     <i class="fa-solid fa-plus alert-add-button"></i>
@@ -71,7 +77,7 @@
         If <b>@Model.Property @Model.Operation.GetDisplayName() @Model.Value</b> then send <i class='@Model.Icon.ToIconClass()'></i> with message <i>@Model.DisplayComment</i> and @AlertPredefined.Statuses[Model.Status] sensor status
     </div>
 
-    <div id="dataAlertInputGroupd_@Model.Id" class="mb-2 @(!Model.IsModify ? "d-none" : string.Empty)">
+    @*<div id="dataAlertInputGroupd_@Model.Id" class="mb-2 @(!Model.IsModify ? "d-none" : string.Empty)">
         <div class="input-group">
             <label class="input-group-text">If</label>
             <select class="form-select" asp-for="Property" asp-items="@Model.PropertiesItems"></select>
@@ -103,12 +109,6 @@
             <div class="input-group ms-3">
                 <label class="input-group-text">show icon</label>
                 <textarea id="emoji" class="w-20" maxlength="1" cols="1" style="min-height: 1rem"></textarea>
-                @*<select class="form-select icons-select" asp-for="Icon">
-                    @foreach (var item in Model.IconsItems)
-                    {
-                        <option value="@item.Value">@Html.Raw(item.Text)</option>
-                    }
-                </select>*@
                 <label class="input-group-text">in tree</label>
             </div>
 
@@ -117,7 +117,7 @@
                 <label class="input-group-text">sensor status</label>
             </div>
         </div>
-    </div>
+    </div>*@
 </div>
 
 
@@ -130,12 +130,71 @@
     });
 
     $(document).ready(function () {
-        $("a.deleteRow").off("click").on("click", function () {
-            $(this).parents("div.dataAlertRow:first").remove();
+        let conditions = document.getElementById('conditionsSelect');
+        conditions.options.add(new Option('Inactivity period', '@DataAlertViewModelBase.TimeToLiveCondition'));
+
+        $('#conditionsSelect').off("change").on("change", function () {
+            let conditionBlock = $(this).parents("div[id='alertCondition']:first");
+
+            let value = conditionBlock.find($(`div[id='valueCondition']`));
+            let timeToLive = conditionBlock.find($(`div[id='ttlCondition']`));
+            let sensitivity = conditionBlock.find($(`div[id='sensitivityCondition']`));
+
+            let condition = $(this).val();
+            if (condition === '@DataAlertViewModelBase.TimeToLiveCondition') {
+                value.removeClass("d-flex").addClass('d-none');
+                sensitivity.removeClass("d-flex").addClass('d-none');
+
+                timeToLive.removeClass("d-none").addClass('d-flex');
+            }
+            else if (condition === '@DataAlertViewModelBase.SensitivityCondition') {
+                value.removeClass("d-flex").addClass('d-none');
+                timeToLive.removeClass("d-flex").addClass('d-none');
+
+                sensitivity.removeClass("d-none").addClass('d-flex');
+            }
+            else {
+                sensitivity.removeClass("d-flex").addClass('d-none');
+                timeToLive.removeClass("d-flex").addClass('d-none');
+
+                value.removeClass("d-none").addClass('d-flex');
+            }
+        });
+
+        $('#actionsSelect').off("change").on("change", function () {
+            let actionBlock = $(this).parents("div[id='alertAction']:first");
+
+            let send = actionBlock.find($(`div[id='sendNotificationAction']`));
+            let show = actionBlock.find($(`div[id='showIconAction']`));
+            let set = actionBlock.find($(`div[id='setStatusAction']`));
+
+            let action = $(this).val();
+            if (action === '@DataAlertViewModelBase.SendNotifyAction') {
+                show.removeClass("d-block").addClass('d-none');
+                set.removeClass("d-block").addClass('d-none');
+
+                send.removeClass("d-none").addClass('d-block');
+            }
+            else if (action === '@DataAlertViewModelBase.ShowIconAction') {
+                send.removeClass("d-block").addClass('d-none');
+                set.removeClass("d-block").addClass('d-none');
+
+                show.removeClass("d-none").addClass('d-block');
+            }
+            else if (action === '@DataAlertViewModelBase.SetStatusAction') {
+                send.removeClass("d-block").addClass('d-none');
+                show.removeClass("d-block").addClass('d-none');
+
+                set.removeClass("d-none").addClass('d-block');
+            }
         });
     });
 
     $(document).ready(function () {
+        $("a.deleteRow").off("click").on("click", function () {
+            $(this).parents("div.dataAlertRow:first").remove();
+        });
+
         $("a.advancedMode").off("click").on("click", function () {
             let element = $(this).parents("div.dataAlertRow:first");
             let advancedPanel = element.find($(`div[id='alertActions']`));
@@ -150,9 +209,7 @@
                 advancedPanel.addClass("d-none");
             }
         });
-    });
 
-    $(document).ready(function () {
         $("a.sendMessage").off("click").on("click", function () {
             var element = $(this).parents("div.dataAlertRow:first");
 

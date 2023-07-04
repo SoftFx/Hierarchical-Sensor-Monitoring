@@ -43,6 +43,13 @@ namespace HSMServer.Model.DataAlerts
     {
         private const string DefaultCommentTemplate = "$sensor $action $target";
 
+        public const string TimeToLiveCondition = "TTL";
+        public const string SensitivityCondition = "Sensitivity";
+
+        public const string ShowIconAction = "Show icon";
+        public const string SetStatusAction = "Set status";
+        public const string SendNotifyAction = "Send notification";
+
 
         public abstract string DisplayComment { get; }
 

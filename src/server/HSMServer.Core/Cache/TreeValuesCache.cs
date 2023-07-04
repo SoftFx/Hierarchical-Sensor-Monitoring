@@ -790,8 +790,8 @@ namespace HSMServer.Core.Cache
 
             foreach (var entity in policyEntities)
             {
-                var policy = JsonSerializer.Deserialize<Policy>(entity);
-                policies.Add(policy.Id.ToString(), policy);
+                //var policy = JsonSerializer.Deserialize<Policy>(entity);
+                //policies.Add(policy.Id.ToString(), policy);
             }
 
             return policies;
