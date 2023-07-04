@@ -66,11 +66,11 @@
             }
         </ul>
     }
-    @if (Model.IsDisabledNodeShown)
+    @if (Model.RenderWidthDifference > 0)
     {
         <ul>
             <li class="jstree-last jstree-no-icons noHover" id='disabled_@data.EncodedId' data-jstree='@BaseShallowModel.GetDisabledJSTree()'>
-                <span>... and @Model.WidthDifference more</span>
+                <span>... and @Model.RenderWidthDifference more</span>
             </li>
         </ul>
     }

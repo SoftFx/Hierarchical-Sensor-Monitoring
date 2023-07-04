@@ -14,6 +14,9 @@ namespace HSMServer.Model.UserTreeShallowCopy
         private readonly Dictionary<Guid, NodeShallowModel> _subNodes = new(1 << 2);
         private readonly Dictionary<Guid, SensorShallowModel> _sensors = new(1 << 2);
 
+        private readonly Predicate<NodeShallowModel> _nodeFilter;
+        private readonly Predicate<SensorShallowModel> _sensorFilter;
+
 
         public List<NodeShallowModel> RenderedNodes { get; } = new(1 << 4);
 
@@ -32,14 +35,12 @@ namespace HSMServer.Model.UserTreeShallowCopy
         public override bool IsAccountsIgnore => AccountState.IsAllIgnored;
 
 
-        public int RenderedSize => RenderedNodes.Count + RenderedSensors.Count;
+        public bool CanAddRender => RenderedNodes.Count + RenderedSensors.Count < MaxRenderWidth;
 
-        public int WidthDifference => _subNodes.Count + _sensors.Count - MaxRenderWidth;
-
-        public bool IsDisabledNodeShown => WidthDifference > 0 && RenderedSize > 0;
-
+        public int RenderWidthDifference { get; private set; }
 
         public int VisibleSubtreeSensorsCount { get; private set; }
+
 
         public string SensorsCountString
         {
@@ -54,7 +55,11 @@ namespace HSMServer.Model.UserTreeShallowCopy
         }
 
 
-        internal NodeShallowModel(ProductNodeViewModel data, User user) : base(data, user) { }
+        internal NodeShallowModel(ProductNodeViewModel data, User user, Predicate<NodeShallowModel> nodeFilter, Predicate<SensorShallowModel> sensorFilter) : base(data, user)
+        {
+            _nodeFilter = nodeFilter;
+            _sensorFilter = sensorFilter;
+        }
 
 
         internal SensorShallowModel AddChild(SensorShallowModel shallowSensor, User user)
@@ -107,42 +112,38 @@ namespace HSMServer.Model.UserTreeShallowCopy
             return node;
         }
 
-        internal bool ToRenderNode(Guid nodeId)
+        internal void ToRenderNode(Guid nodeId)
         {
-            if (RenderedSize == MaxRenderWidth)
-                return false;
-
-            if (_subNodes.TryGetValue(nodeId, out var subNode))
+            if (_subNodes.TryGetValue(nodeId, out var subNode) && _nodeFilter(subNode))
             {
-                RenderedNodes.Add(subNode);
-                _subNodes.Remove(nodeId);
+                if (CanAddRender)
+                {
+                    RenderedNodes.Add(subNode);
+                    _subNodes.Remove(nodeId);
+                }
+                else
+                    RenderWidthDifference++;
             }
 
-            if (_sensors.TryGetValue(nodeId, out var sensor))
+            if (_sensors.TryGetValue(nodeId, out var sensor) && _sensorFilter(sensor))
             {
-                RenderedSensors.Add(sensor);
-                _sensors.Remove(nodeId);
+                if (CanAddRender)
+                {
+                    RenderedSensors.Add(sensor);
+                    _sensors.Remove(nodeId);
+                }
+                else
+                    RenderWidthDifference++;
             }
-
-            return true;
         }
 
-        internal NodeShallowModel LoadRenderingNodes(Predicate<NodeShallowModel> nodeFilter, Predicate<SensorShallowModel> sensorFilter)
+        internal void LoadRenderingNodes()
         {
-            void LoadNodes<T>(Dictionary<Guid, T> nodes, Predicate<T> filter) where T : BaseShallowModel
-            {
-                foreach (var (id, node) in nodes)
-                    if (filter(node))
-                    {
-                        if (!ToRenderNode(id))
-                            break;
-                    }
-            }
+            foreach (var id in _subNodes.Keys)
+                ToRenderNode(id);
 
-            LoadNodes(_subNodes, nodeFilter);
-            LoadNodes(_sensors, sensorFilter);
-
-            return this;
+            foreach (var id in _sensors.Keys)
+                ToRenderNode(id);
         }
     }
 }
