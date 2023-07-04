@@ -14,12 +14,11 @@ namespace HSMServer.Core.Model
         internal SensorResult? Result => LastValue != null ? new SensorResult(LastValue) : null;
 
 
+        internal abstract BaseValue LastDbValue { get; }
+
         internal abstract BaseValue LastValue { get; }
 
         internal abstract bool HasData { get; }
-
-
-        internal virtual BaseValue LastDbValue => LastValue;
 
 
         internal abstract List<BaseValue> GetValues(DateTime from, DateTime to);
@@ -36,8 +35,12 @@ namespace HSMServer.Core.Model
     {
         private readonly ConcurrentQueue<T> _cache = new();
 
+        private T _lastValue;
 
-        internal override T LastValue => _cache.LastOrDefault();
+
+        internal override T LastDbValue => _cache.LastOrDefault();
+
+        internal override T LastValue => _lastValue;
 
         internal override bool HasData => !_cache.IsEmpty;
 
@@ -50,6 +53,9 @@ namespace HSMServer.Core.Model
 
             if (_cache.Count > CacheSize)
                 _cache.TryDequeue(out _);
+
+            if (_lastValue is null || value.Time >= _lastValue.Time)
+                _lastValue = value;
         }
 
 
@@ -63,8 +69,16 @@ namespace HSMServer.Core.Model
         {
             while (_cache.FirstOrDefault()?.ReceivingTime <= to)
                 _cache.TryDequeue(out _);
+
+            if (_cache.IsEmpty)
+                _lastValue = null;
         }
 
-        internal override void Clear() => _cache.Clear();
+        internal override void Clear()
+        {
+            _cache.Clear();
+
+            _lastValue = null;
+        }
     }
 }

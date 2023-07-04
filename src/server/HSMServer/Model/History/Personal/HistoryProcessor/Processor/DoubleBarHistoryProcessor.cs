@@ -22,14 +22,14 @@ namespace HSMServer.Model.History
           new()
           {
               Count = summary.Count,
-              OpenTime = summary.OpenTime,
-              CloseTime = summary.CloseTime,
+              OpenTime = summary.OpenTime.ToUniversalTime(),
+              CloseTime = summary.CloseTime.ToUniversalTime(),
               Min = summary.Min,
               Max = summary.Max,
               Mean = summary.Mean,
               Percentiles = summary.Percentiles,
-              Time = summary.CloseTime,
-              ReceivingTime = summary.CloseTime,
+              Time = summary.CloseTime.ToUniversalTime(),
+              ReceivingTime = summary.CloseTime.ToUniversalTime(),
           };
 
         protected override double Average(double value1, double value2) =>
