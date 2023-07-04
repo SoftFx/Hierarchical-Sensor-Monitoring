@@ -18,20 +18,14 @@ public readonly struct JournalKey
     private const int StructSize = GuidSize + sizeof(RecordType) + sizeof(long);
 
 
-    public Guid Id { get; init; }
+    public Guid Id { get; }
 
-    public long Time { get; init; }
+    public long Time { get; }
 
-    public RecordType Type { get; init; }
-    
-    
-    public JournalKey(Guid id, long time)
-    {
-        Id = id;
-        Time = time;
-    }
+    public RecordType Type { get; }
 
-    public JournalKey(Guid id, long time, RecordType type)
+
+    public JournalKey(Guid id, long time, RecordType type = RecordType.Actions)
     {
         Id = id;
         Time = time;
@@ -51,7 +45,7 @@ public readonly struct JournalKey
         if (bytes == null || bytes.Length != StructSize)
             return default;
 
-        var id = new Guid(new ReadOnlySpan<byte>(bytes[..GuidSize]));
+        var id = new Guid(bytes[..GuidSize]);
         var journalType = bytes[GuidSize];
         var time = BitConverter.ToInt64(bytes, GuidSize + 1);
 
