@@ -177,7 +177,7 @@ namespace HSMServer.Notifications
                                 if (entity.Notifications.UsedTelegram.MessagesDelaySec == 0)
                                 {
                                     foreach (var alert in result)
-                                        SendMarkdownMessageAsync(chat.ChatId, alert.ToString().EscapeMarkdownV2());
+                                        SendMessage(chat.ChatId, alert.ToString());
                                 }
                                 else
                                 {
@@ -204,8 +204,9 @@ namespace HSMServer.Notifications
                             if (chat.MessageBuilder.ExpectedSendingTime <= DateTime.UtcNow)
                             {
                                 var message = chat.MessageBuilder.GetAggregateMessage(entity.Notifications.UsedTelegram.MessagesDelaySec);
+
                                 if (!string.IsNullOrEmpty(message))
-                                    _bot?.SendTextMessageAsync(chat.ChatId, message, cancellationToken: _tokenSource.Token);
+                                    SendMessage(chat.ChatId, message);
                                 //SendMarkdownMessageAsync(chat.ChatId, message);
                             }
                     }
@@ -222,8 +223,11 @@ namespace HSMServer.Notifications
             }
         }
 
-        private void SendMarkdownMessageAsync(ChatId chat, string message) =>
-            _bot?.SendTextMessageAsync(chat, message, ParseMode.MarkdownV2, cancellationToken: _tokenSource.Token);
+        //private void SendMarkdownMessageAsync(ChatId chat, string message) =>
+        //    _bot?.SendTextMessageAsync(chat, message, ParseMode.MarkdownV2, cancellationToken: _tokenSource.Token);
+
+        private void SendMessage(ChatId chat, string message) =>
+            _bot?.SendTextMessageAsync(chat, message, cancellationToken: _tokenSource.Token);
 
         private void RemoveProductEventHandler(ProductModel model, ActionType transaction)
         {

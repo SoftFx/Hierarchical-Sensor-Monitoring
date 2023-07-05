@@ -1,8 +1,9 @@
-﻿using System.Collections.Concurrent;
+﻿using HSMServer.Core.Model.Policies;
+using System.Collections.Concurrent;
 
 namespace HSMServer.Notifications.Telegram.AddressBook.MessageBuilder
 {
-    internal sealed class GroupedPath
+    internal sealed class GroupedNotification
     {
         private const int MaxGroupedItemsCount = 9; //plus 1 main total 10
         internal const char Separator = '/';
@@ -10,13 +11,26 @@ namespace HSMServer.Notifications.Telegram.AddressBook.MessageBuilder
         private readonly ConcurrentQueue<string> _groupedNodes = new();
         private readonly string[] _templatePath;
 
+        private readonly AlertResult _baseAlert;
+
         private int _totalGroupedItems = 1; //main item
         private int _groupedIndex = -1;
 
 
-        internal GroupedPath(string[] path)
+        internal GroupedNotification(AlertResult alert)
+        {
+            _baseAlert = alert;
+        }
+
+        internal GroupedNotification(string[] path)
         {
             _templatePath = path;
+        }
+
+
+        internal bool TryApply(AlertResult alert)
+        {
+            return true;
         }
 
 

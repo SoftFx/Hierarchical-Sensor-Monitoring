@@ -11,8 +11,8 @@ namespace HSMServer.Notifications
     internal sealed class MessageBuilder
     {
         //private readonly CDict<CTupleDict<CGuidHash>> _messageTree = new();
-        private readonly CDict<ConcurrentDictionary<Guid, AlertResult>> _alertsTree = new();
-        private readonly PathCompressor _compressor = new();
+        private readonly CDict<ConcurrentDictionary<Guid, AlertResult>> _alertsTree = new(); //template -> policyId -> AlertResult
+        private readonly AlertsCompressor _compressor = new();
 
         internal DateTime ExpectedSendingTime { get; private set; } = DateTime.UtcNow;
 
@@ -47,19 +47,26 @@ namespace HSMServer.Notifications
             //_compressor[id] = newKey;
         }
 
-        internal string GetAggregateMessage(int notificationsDelay)
+        internal string GetAggregateMessage(int delay)
         {
-            var builder = new StringBuilder(1 << 10);
-
             foreach (var (_, alerts) in _alertsTree)
             {
                 foreach (var (_, aggrAlert) in alerts)
-                    builder.AppendLine(aggrAlert.ToString());
+                    _compressor.ApplyToGroup(aggrAlert);
 
                 alerts.Clear();
             }
 
             _alertsTree.Clear();
+
+            var builder = new StringBuilder(1 << 10);
+
+            foreach (var line in _compressor.GetGroups())
+                builder.AppendLine(line);
+
+            ExpectedSendingTime = DateTime.UtcNow.Ceil(TimeSpan.FromSeconds(delay));
+
+            return builder.ToString();
 
             //foreach (var (product, changePaths) in _messageTree)
             //{
@@ -79,10 +86,6 @@ namespace HSMServer.Notifications
 
             //    _messageTree.RemoveEmptyBranch(product);
             //}
-
-            ExpectedSendingTime = DateTime.UtcNow.Ceil(TimeSpan.FromSeconds(notificationsDelay));
-
-            return builder.ToString();
         }
 
         private static void BuildMessage(StringBuilder builder, string productName, string statusPath, string comment, string path)

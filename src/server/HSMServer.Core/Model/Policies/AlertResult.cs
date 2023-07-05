@@ -17,6 +17,9 @@ namespace HSMServer.Core.Model.Policies
         public string LastComment { get; private set; }
 
 
+        public (string, int) Key => (Icon, Count);
+
+
         internal AlertResult(Policy policy)
         {
             Icon = policy.Icon;
