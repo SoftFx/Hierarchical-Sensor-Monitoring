@@ -1,23 +1,12 @@
-﻿using System;
-using System.Collections.Concurrent;
+﻿using System.Collections.Concurrent;
 using System.Collections.Generic;
 
 namespace HSMServer.Notifications.Telegram.AddressBook.MessageBuilder
 {
-    interface ICCollection
-    {
-        bool IsEmpty { get; }
-    }
-
-
     internal sealed class CDict<T> : CDictBase<string, T> where T : new() { }
 
 
-    internal sealed class CGuidDict<T> : CDictBase<Guid, T> where T : new() { }
-
-
-    internal abstract class CDictBase<T, U> : ConcurrentDictionary<T, U>, ICCollection 
-        where U : new()
+    internal abstract class CDictBase<T, U> : ConcurrentDictionary<T, U> where U : new()
     {
         public new U this[T key] => GetOrAdd(key);
 
@@ -33,28 +22,12 @@ namespace HSMServer.Notifications.Telegram.AddressBook.MessageBuilder
 
             return value;
         }
-
-
-        //internal void RemoveEmptyBranch(T key)
-        //{
-        //    if (TryGetValue(key, out U value) && value.IsEmpty)
-        //        TryRemove(key, out _);
-        //}
     }
 
 
-    internal sealed class CGuidHash : CHash<Guid> { };
-
-    internal sealed class CStringHash : CHash<string> { };
-
-
-    internal class CHash<T> : HashSet<T>, ICCollection
+    internal class CHash<T> : HashSet<T>
     {
         private readonly object _lock = new();
-
-
-        public bool IsEmpty => Count == 0;
-
 
         internal CHash() : base() { }
 
