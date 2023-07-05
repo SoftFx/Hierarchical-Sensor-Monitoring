@@ -52,7 +52,7 @@
         }
     }
 
-    @foreach (var child in Model.Nodes)
+    @foreach (var child in Model.Products)
     {
         <ul>@await Html.PartialAsync("_TreeNode", child)</ul>
     }
