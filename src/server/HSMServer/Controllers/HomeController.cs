@@ -53,17 +53,25 @@ namespace HSMServer.Controllers
             _folderManager = folderManager;
             _journalService = journalService;
         }
-
         
         //TODO remove after refactoring
+        #region test
         [AllowAnonymous]
         public async Task<JsonResult> GetJournals(string id)
         {
             return Json(
-                 await _journalService.GetJournalValuesPage(Guid.Parse(id), DateTime.MinValue, DateTime.MaxValue, RecordType.Actions, 5000).Flatten());
+                await _journalService.GetJournalValuesPage(Guid.Parse(id), DateTime.MinValue, DateTime.MaxValue, RecordType.Actions, 5000).Flatten());
         }
         
+        [AllowAnonymous]
+        public void DeleteJournals(string id)
+        { 
+            _journalService.RemoveJournal(Guid.Parse(id));
+        }
 
+        #endregion
+        
+        
         public IActionResult Index()
         {
             return View(_treeViewModel);
