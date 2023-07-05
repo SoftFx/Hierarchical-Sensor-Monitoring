@@ -382,6 +382,16 @@ function buildContextMenu(node) {
                 }
             }
         }
+        
+        if (curType === NodeType.Sensor && !(isMutedState === "True")) {
+            contextMenu["ChangeStatus"] = {
+                "label": `Edit status`,
+                "icon": "/dist/edit.svg",
+                "action": _ => {
+                    loadEditSensorStatusModal();
+                }
+            }
+        }
 
         let isGrafanaEnabled = node.data.jstree.isGrafanaEnabled === "True";
         if (isGrafanaEnabled) {

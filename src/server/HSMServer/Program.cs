@@ -16,6 +16,7 @@ using NLog.Extensions.Logging;
 using NLog.LayoutRenderers;
 using NLog.Web;
 using System;
+using HSMServer.Middleware;
 
 const string NLogConfigFileName = "nlog.config";
 
@@ -42,9 +43,15 @@ builder.Logging.ClearProviders()
 builder.Host.UseNLog()
             .UseConsoleLifetime();
 
+builder.Services.AddOptions<CookieAuthenticationOptions>(CookieAuthenticationDefaults.AuthenticationScheme).Configure<IUserManager>(
+    async (options, context) =>
+    {
+        options.LoginPath = new PathString("/Account/Index");
+        options.Events = new MyCookieAuthenticationEvents(context);
+    });
 
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
-                .AddCookie(options => options.LoginPath = new PathString("/Account/Index"));
+                .AddCookie(CookieAuthenticationDefaults.AuthenticationScheme);
 
 builder.Services.AddHsts(options =>
 {

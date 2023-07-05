@@ -166,6 +166,9 @@ function Data(to, from, type, encodedId) {
 
                 reloadHistoryRequest(from, to, body);
             }
+
+            $("#sensorHistorySpinner").addClass("d-none");
+            $('#historyDataPanel').removeClass('hidden_element');
         });
     }
 
@@ -204,6 +207,9 @@ function Data(to, from, type, encodedId) {
             }
 
             displayGraph(data, type, `graph_${encodedId}`, encodedId);
+
+            $("#sensorHistorySpinner").addClass("d-none");
+            $('#historyDataPanel').removeClass('hidden_element');
         });
     }
 
