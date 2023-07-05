@@ -1,4 +1,5 @@
 using HSMDatabase.AccessManager.DatabaseEntities;
+using HSMServer.Core.Cache;
 using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Model;
 using HSMServer.Core.Tests.Infrastructure;
@@ -11,9 +12,12 @@ namespace HSMDatabase.LevelDB.Tests;
 
 public class JournalCacheTests : MonitoringCoreTestsBase<TreeValuesCacheFixture>, IClassFixture<DatabaseRegisterFixture>
 {
+    private IJournalService _journalService;
+    
     public JournalCacheTests(TreeValuesCacheFixture fixture, DatabaseRegisterFixture registerFixture)
         : base(fixture, registerFixture)
     {
+        _journalService = new JournalService(_databaseCoreManager.DatabaseCore);
     }
 
     [Fact]
@@ -29,7 +33,7 @@ public class JournalCacheTests : MonitoringCoreTestsBase<TreeValuesCacheFixture>
         
         _valuesCache.UpdateProduct(productUpdate);
 
-        var journals = await _valuesCache.GetJournalValuesPage(expectedProduct.Id, DateTime.MinValue, DateTime.MaxValue, RecordType.Changes, 1).Flatten();
+        var journals = await _journalService.GetJournalValuesPage(expectedProduct.Id, DateTime.MinValue, DateTime.MaxValue, RecordType.Changes, 1).Flatten();
         Assert.Single(journals);
     }
     
@@ -46,7 +50,7 @@ public class JournalCacheTests : MonitoringCoreTestsBase<TreeValuesCacheFixture>
         };
         
         _valuesCache.UpdateProduct(productUpdate);
-        var journals = await _valuesCache.GetJournalValuesPage(expectedProduct.Id, DateTime.MinValue, DateTime.MaxValue, RecordType.Changes, MaxHistoryCount).Flatten();
+        var journals = await _journalService.GetJournalValuesPage(expectedProduct.Id, DateTime.MinValue, DateTime.MaxValue, RecordType.Changes, MaxHistoryCount).Flatten();
         Assert.NotEmpty(journals);
     }
 
@@ -59,7 +63,7 @@ public class JournalCacheTests : MonitoringCoreTestsBase<TreeValuesCacheFixture>
         var sensors = GetUpdatedSensors(n);
         foreach (var sensor in sensors)
         {
-            var journals = await _valuesCache.GetJournalValuesPage(sensor.Id, DateTime.MinValue, DateTime.MaxValue, RecordType.Changes, MaxHistoryCount).Flatten();
+            var journals = await _journalService.GetJournalValuesPage(sensor.Id, DateTime.MinValue, DateTime.MaxValue, RecordType.Changes, MaxHistoryCount).Flatten();
            
             Assert.NotEmpty(journals);
         }
@@ -77,7 +81,7 @@ public class JournalCacheTests : MonitoringCoreTestsBase<TreeValuesCacheFixture>
             sensors.Add(sensor);
             foreach (var journal in sensor.JournalRecordModels)
             {
-                _valuesCache.AddJournal(journal);
+                _journalService.AddJournal(journal);
             }
         }
 

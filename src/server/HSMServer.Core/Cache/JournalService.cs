@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Text.Json;
 using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Core.DataLayer;
 using HSMServer.Core.Model;
@@ -29,4 +30,20 @@ public class JournalService : IJournalService
     }
     
     public void RemoveJournal(Guid id) => _database.RemoveJournalValue(id);
+    
+    public async IAsyncEnumerable<List<JournalRecordModel>> GetJournalValuesPage(Guid id, DateTime from, DateTime to, RecordType recordType, int count)
+    {
+        var pages = _database.GetJournalValuesPage(id, from, to, recordType, count);
+
+        await foreach (var page in pages)
+        {
+            var currPage = new List<JournalRecordModel>(1 << 4);
+            foreach (var item in page)
+            {
+                currPage.Add(new JournalRecordModel(JsonSerializer.Deserialize<JournalEntity>(item), id));
+            }
+                
+            yield return currPage;
+        }
+    }
 }

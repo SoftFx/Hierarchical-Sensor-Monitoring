@@ -360,29 +360,7 @@ namespace HSMServer.Core.Cache
             }
         }
         
-        public async IAsyncEnumerable<List<JournalRecordModel>> GetJournalValuesPage(Guid id, DateTime from, DateTime to, RecordType recordType, int count)
-        {
-            var pages = _database.GetJournalValuesPage(id, from, to, recordType, count);
 
-            await foreach (var page in pages)
-            {
-                var currPage = new List<JournalRecordModel>(1 << 4);
-                foreach (var item in page)
-                {
-                    currPage.Add(new JournalRecordModel(JsonSerializer.Deserialize<JournalEntity>(item), id));
-                }
-                
-                yield return currPage;
-            }
-        }
-
-        public void AddJournal(JournalRecordModel journalRecordModel)
-        {
-            _database.AddJournalValue(journalRecordModel.GetKey(), journalRecordModel.ToJournalEntity());
-        }
-
-        public void RemoveJournal(Guid id) => _database.RemoveJournalValue(id);
-        
         private void UpdatePolicy(ActionType type, Policy policy)
         {
             switch (type)
@@ -812,14 +790,6 @@ namespace HSMServer.Core.Cache
 
             if (!_snapshot.IsFinal)
                 _snapshot.FlushState(true);
-        }
-
-        private void AddJournals(List<JournalRecordModel> journalRecordModels)
-        {
-            foreach (var journal in journalRecordModels)
-                AddJournal(journal);
-            
-            journalRecordModels.Clear();
         }
 
         private static Dictionary<string, Policy> GetPolicyModels(List<byte[]> policyEntities)
