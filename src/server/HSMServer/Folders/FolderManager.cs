@@ -173,7 +173,7 @@ namespace HSMServer.Folders
         {
             if (TryGetValue(folderId, out var folder) && TryUpdateProductInFolder(productId, null))
             {
-                if (_cache.GetProduct(productId).NotificationsSettings.TelegramSettings.Inheritance == (byte)InheritedSettings.FromParent)
+                if (_cache.GetProduct(productId).NotificationsSettings?.TelegramSettings?.Inheritance == (byte)InheritedSettings.FromParent)
                     ResetProductTelegramInheritance?.Invoke(productId);
 
                 foreach (var (user, role) in folder.UserRoles)
