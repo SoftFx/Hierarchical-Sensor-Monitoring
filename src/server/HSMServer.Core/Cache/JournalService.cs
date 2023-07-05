@@ -65,8 +65,7 @@ public class JournalService : IJournalService
         CheckUpdate(model.Settings.SelfDestroy, update.SelfDestroy, "Self destroy");
         CheckUpdate(model.Settings.TTL, update.TTL, "TTL");
         
-        //TODO change this condition
-        if (update.DataPolicies != null)
+        if (update.DataPolicies?.Count != 0)
             journals.Add(new JournalRecordModel(model.Id, DateTime.UtcNow, "Data policy update", RecordType.Actions));
         
         return journals;
@@ -80,7 +79,7 @@ public class JournalService : IJournalService
                     var newValue = updatedValue.GetValue();
                     var oldValue = value.GetValue();
                     if (newValue != oldValue)
-                        journals.Add(new JournalRecordModel(model.Id, DateTime.UtcNow, $"{DateTime.UtcNow} {propertyName}: {oldValue} -> {newValue}"));
+                        journals.Add(new JournalRecordModel(model.Id, DateTime.UtcNow, $"{propertyName}: {oldValue} -> {newValue}"));
                 }
                 else journals.Add(new JournalRecordModel(model.Id, DateTime.UtcNow, $"{propertyName}: {property} -> {updatedProperty}"));
             }
