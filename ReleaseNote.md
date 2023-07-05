@@ -9,11 +9,11 @@
 * Line type for **Integer** chart has been changed
 
 ## Tree
-* **Change status** item has been added in context menu for sensors
+* **Edit status** item has been added in context menu for sensors
 
 ## Sensors
 
-* **No data** has been added on Chart tab if it's empty sensor
+* **No data** label has been added for empty nodes and sensors
 * Muted sensor status change logic has been removed
 
 ## Table history
@@ -26,10 +26,10 @@
 * Empty subnodes visibility for rendering tree has been fixed
 * Tree context menu items naming has been fixed
 * Node state recalculating (notifications, Grafana) has been fixed
-* Precalculated period for Double Bar hisotry has been fixed
+* Precalculated period for IntBar history has been fixed
 * Site login with empty local storage has been fixed
 * ... and other minor bugfixing
 
 ## Other
-* Redirect or login page has been added if request has invalid cookie user identity
+* Redirect to login page has been added if request has invalid cookie user identity
 * Order checking for sensor last value has been added
