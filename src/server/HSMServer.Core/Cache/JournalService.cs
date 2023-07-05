@@ -63,10 +63,10 @@ public class JournalService : IJournalService
         CheckUpdate(model.Description, update.Description, "Description");
         CheckUpdate(model.Settings.KeepHistory, update.KeepHistory, "Keep history");
         CheckUpdate(model.Settings.SelfDestroy, update.SelfDestroy, "Self destroy");
-        CheckUpdate(model.Settings.TTL, update.TTL, "TTL");
+        CheckUpdate(model.Settings.TTL, update.TTL, "Time to sensor live");
         
         if (update.DataPolicies?.Count != 0)
-            journals.Add(new JournalRecordModel(model.Id, DateTime.UtcNow, "Data policy update", RecordType.Actions));
+            journals.Add(new JournalRecordModel(model.Id, DateTime.UtcNow, "Data policy update"));
         
         return journals;
         
