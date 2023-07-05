@@ -77,12 +77,9 @@ public class JournalCacheTests : MonitoringCoreTestsBase<TreeValuesCacheFixture>
             var updating = SensorModelFactory.BuildSensorUpdate();
             var sensor = SensorModelFactory.Build(EntitiesFactory.BuildSensorEntity());
 
+            _journalService.AddJournals(sensor, updating);
             sensor.Update(updating);
             sensors.Add(sensor);
-            foreach (var journal in sensor.JournalRecordModels)
-            {
-                _journalService.AddJournal(journal);
-            }
         }
 
         return sensors;

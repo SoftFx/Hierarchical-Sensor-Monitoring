@@ -94,8 +94,7 @@ namespace HSMServer.Core.Cache
                 return;
 
             _database.UpdateProduct(product.Update(update).ToEntity());
-            _journalService.AddJournals(product.JournalRecordModels);
-            
+
             NotifyAboutProductChange(product);
         }
 
