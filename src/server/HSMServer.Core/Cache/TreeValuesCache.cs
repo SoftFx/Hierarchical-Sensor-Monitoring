@@ -237,10 +237,11 @@ namespace HSMServer.Core.Cache
             if (!_sensors.TryGetValue(update.Id, out var sensor))
                 return;
 
+            _journalService.AddJournals(sensor, update);
+            
             sensor.Update(update);
             _database.UpdateSensor(sensor.ToEntity());
 
-            _journalService.AddJournals(sensor.JournalRecordModels);
 
             NotifyAboutChanges(sensor);
         }

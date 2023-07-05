@@ -27,6 +27,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
+using HSMDatabase.AccessManager.DatabaseEntities;
 using SensorStatus = HSMSensorDataObjects.SensorStatus;
 using TimeInterval = HSMServer.Model.TimeInterval;
 
@@ -40,17 +41,28 @@ namespace HSMServer.Controllers
         private readonly IFolderManager _folderManager;
         private readonly TreeViewModel _treeViewModel;
         private readonly TelegramBot _telegramBot;
+        private readonly IJournalService _journalService;
 
 
         public HomeController(ITreeValuesCache treeValuesCache, IFolderManager folderManager, TreeViewModel treeViewModel,
-                              IUserManager userManager, NotificationsCenter notifications) : base(userManager)
+                              IUserManager userManager, NotificationsCenter notifications, IJournalService journalService) : base(userManager)
         {
             _telegramBot = notifications.TelegramBot;
             _treeValuesCache = treeValuesCache;
             _treeViewModel = treeViewModel;
             _folderManager = folderManager;
+            _journalService = journalService;
         }
 
+        
+        //TODO remove after refactoring
+        [AllowAnonymous]
+        public async Task<JsonResult> GetJournals(string id)
+        {
+            return Json(
+                 await _journalService.GetJournalValuesPage(Guid.Parse(id), DateTime.MinValue, DateTime.MaxValue, RecordType.Actions, 5000).Flatten());
+        }
+        
 
         public IActionResult Index()
         {

@@ -22,7 +22,7 @@ public sealed class JournalRecordModel
         Value = entity.Value;
     }
 
-    public JournalRecordModel(Guid id, DateTime date, string message, RecordType type)
+    public JournalRecordModel(Guid id, DateTime date, string message, RecordType type = RecordType.Actions)
     {
         Id = id;
         Time = date.Ticks;
