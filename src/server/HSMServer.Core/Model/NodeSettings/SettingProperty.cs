@@ -4,7 +4,7 @@ using System;
 
 namespace HSMServer.Core.Model.NodeSettings
 {
-    public abstract class SettingProperty
+    public abstract class SettingProperty : IJournalValue
     {
         internal SettingProperty ParentProperty { get; set; }
 
@@ -20,6 +20,8 @@ namespace HSMServer.Core.Model.NodeSettings
         internal abstract bool TrySetValue(TimeIntervalModel policy);
 
         internal abstract TimeIntervalEntity ToEntity();
+        
+        public virtual string GetValue() => string.Empty;
     }
 
 
@@ -66,6 +68,20 @@ namespace HSMServer.Core.Model.NodeSettings
             Uploaded?.Invoke(action, newValue);
 
             return true;
+        }
+
+        public override string GetValue()
+        {
+            if (!IsSet)
+                return TimeInterval.FromParent.ToString();
+            
+            if (_curValue.IsFromParent)
+                return TimeInterval.FromParent.ToString();
+
+            if (_curValue.UseCustom)
+                return _curValue.Ticks.ToString();
+            
+            return _curValue.Interval.ToString();
         }
 
         internal override TimeIntervalEntity ToEntity() => _curValue?.ToEntity();

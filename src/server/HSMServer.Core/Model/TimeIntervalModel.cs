@@ -1,5 +1,6 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities;
 using System;
+using HSMServer.Core.Cache;
 
 namespace HSMServer.Core.Model
 {
@@ -45,7 +46,7 @@ namespace HSMServer.Core.Model
     }
 
 
-    public class TimeIntervalModel
+    public class TimeIntervalModel : IJournalValue
     {
         public static TimeIntervalModel Never { get; } = new(TimeInterval.Never);
 
@@ -97,5 +98,16 @@ namespace HSMServer.Core.Model
         };
 
         internal TimeIntervalEntity ToEntity() => new((long)Interval, Ticks);
+
+        public string GetValue()
+        {
+            if (IsFromParent)
+                return TimeInterval.FromParent.ToString();
+
+            if (UseCustom)
+                return Ticks.ToString();
+            
+            return Interval.ToString();
+        }
     }
 }

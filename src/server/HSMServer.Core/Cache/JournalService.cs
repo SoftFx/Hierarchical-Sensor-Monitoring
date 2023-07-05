@@ -61,28 +61,28 @@ public class JournalService : IJournalService
         CheckUpdate(model.Integration, update.Integration, "Integration");
         CheckUpdate(model.EndOfMuting, update.EndOfMutingPeriod, "End of muting");
         CheckUpdate(model.Description, update.Description, "Description");
-        CheckUpdate(model.Settings.KeepHistory.Value, update.KeepHistory, "Keep history");
-        CheckUpdate(model.Settings.SelfDestroy.Value, update.SelfDestroy, "Self destroy");
-        CheckUpdate(model.Settings.TTL.Value, update.TTL, "TTL");
+        CheckUpdate(model.Settings.KeepHistory, update.KeepHistory, "Keep history");
+        CheckUpdate(model.Settings.SelfDestroy, update.SelfDestroy, "Self destroy");
+        CheckUpdate(model.Settings.TTL, update.TTL, "TTL");
         
+        //TODO change this condition
         if (update.DataPolicies != null)
             journals.Add(new JournalRecordModel(model.Id, DateTime.UtcNow, "Data policy update", RecordType.Actions));
         
         return journals;
         
-        void CheckUpdate<T>(T property, T update, string propertyName = null)
+        void CheckUpdate<T, U>(T property, U updatedProperty, string propertyName = null)
         {
-            if (update is not null && !update.Equals(property))
+            if (updatedProperty is not null && !updatedProperty.Equals(property))
             {
-                if (update is TimeIntervalModel updateTimeInterval && property is TimeIntervalModel propertyTimeInterval)
+                if (updatedProperty is IJournalValue updatedValue && property is IJournalValue value)
                 {
-                    var newValue = updateTimeInterval.Interval is TimeInterval.Custom ? new TimeSpan(updateTimeInterval.Ticks).ToString() : updateTimeInterval.Interval.ToString();
-
-                    var oldValue = propertyTimeInterval.Interval is TimeInterval.Custom ? new TimeSpan(propertyTimeInterval.Ticks).ToString() : propertyTimeInterval.Interval.ToString();
-
-                    journals.Add(new JournalRecordModel(model.Id, DateTime.UtcNow, $"{propertyName}: {oldValue} -> {newValue}"));
+                    var newValue = updatedValue.GetValue();
+                    var oldValue = value.GetValue();
+                    if (newValue != oldValue)
+                        journals.Add(new JournalRecordModel(model.Id, DateTime.UtcNow, $"{DateTime.UtcNow} {propertyName}: {oldValue} -> {newValue}"));
                 }
-                else journals.Add(new JournalRecordModel(model.Id, DateTime.UtcNow, $"{propertyName}: {property} -> {update}"));
+                else journals.Add(new JournalRecordModel(model.Id, DateTime.UtcNow, $"{propertyName}: {property} -> {updatedProperty}"));
             }
         }
     }
