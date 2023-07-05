@@ -241,7 +241,6 @@ namespace HSMServer.Core.Cache
             sensor.Update(update);
             _database.UpdateSensor(sensor.ToEntity());
 
-
             NotifyAboutChanges(sensor);
         }
 
@@ -316,7 +315,7 @@ namespace HSMServer.Core.Cache
                 sensor.ResetSensor();
 
             _database.ClearSensorValues(sensor.Id.ToString(), from, to);
-            _journalService.AddJournal(new JournalRecordModel(sensorId, DateTime.UtcNow, $"{DateTime.UtcNow} - {caller} - clear", RecordType.Actions));
+            _journalService.AddJournal(new JournalRecordModel(sensorId, DateTime.UtcNow, $"{DateTime.UtcNow} - {caller} - clear", RecordType.Changes));
             _snapshot.Sensors[sensorId].History.From = to;
 
             ChangeSensorEvent?.Invoke(sensor, ActionType.Update);
@@ -359,7 +358,7 @@ namespace HSMServer.Core.Cache
                     yield return sensor.ConvertValues(page);
             }
         }
-        
+
 
         private void UpdatePolicy(ActionType type, Policy policy)
         {
