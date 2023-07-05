@@ -5,11 +5,12 @@ namespace HSMServer.Notifications.Telegram.AddressBook.MessageBuilder
 {
     internal sealed class AlertsCompressor : CDictBase<(string, int), List<GroupedNotification>>
     {
+        //TODO: renove after creating Restore module
         //private readonly ConcurrentDictionary<Guid, (BaseSensorModel, SensorStatus)> _inRestore = new();
         //private readonly ConcurrentDictionary<Guid, BaseSensorModel> _sensors = new();
         //private readonly ConcurrentQueue<GroupedPath> _groups = new();
 
-
+        //TODO: renove after creating Restore module
         //internal bool TryGetOrAdd(BaseSensorModel sensor, out string oldStatus)
         //{
         //    var id = sensor.Id;
@@ -30,7 +31,7 @@ namespace HSMServer.Notifications.Telegram.AddressBook.MessageBuilder
             var groups = GetOrAdd(result.Key);
 
             foreach (var group in groups)
-                if (group.TryApply(result))
+                if (group.TryApply(result.LastState))
                     return;
 
             groups.Add(new GroupedNotification(result));
@@ -44,6 +45,7 @@ namespace HSMServer.Notifications.Telegram.AddressBook.MessageBuilder
             Clear();
         }
 
+        //TODO: renove after creating Restore module
         //internal IEnumerable<string> GetGroupedPaths(CGuidHash hash)
         //{
         //    //foreach (var id in hash)
@@ -73,21 +75,7 @@ namespace HSMServer.Notifications.Telegram.AddressBook.MessageBuilder
         //    //_groups.Clear();
         //}
 
-
-        //private void ApplyToGroups(BaseSensorModel sensor)
-        //{
-        //    RemoveSensor(sensor.Id);
-
-        //    var path = sensor.Path.Split(GroupedPath.Separator, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-
-        //    foreach (var group in _groups)
-        //        if (group.Apply(path))
-        //            return;
-
-        //    _groups.Enqueue(new GroupedPath(path));
-        //}
-
-
+        //TODO: renove after creating Restore module
         //private bool TryAddInRestore(BaseSensorModel sensor, SensorStatus? firstStatus = null)
         //{
         //    //var ok = !sensor.Status.IsOk && sensor.IsWaitRestore;
@@ -98,14 +86,6 @@ namespace HSMServer.Notifications.Telegram.AddressBook.MessageBuilder
         //    //return ok;
 
         //    return false;
-        //}
-
-
-        //private void RemoveSensor(Guid id)
-        //{
-        //    _inRestore.Remove(id, out _);
-        //    _sensors.Remove(id, out _);
-        //    this.Remove(id, out _);
         //}
     }
 }

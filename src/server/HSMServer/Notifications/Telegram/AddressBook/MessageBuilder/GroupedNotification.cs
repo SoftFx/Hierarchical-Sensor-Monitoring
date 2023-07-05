@@ -5,83 +5,61 @@ namespace HSMServer.Notifications.Telegram.AddressBook.MessageBuilder
 {
     internal sealed class GroupedNotification
     {
-        private const int MaxGroupedItemsCount = 9; //plus 1 main total 10
-        internal const char Separator = '/';
+        private const int MaxGroupedItemsCount = 10;
 
-        private readonly ConcurrentQueue<string> _groupedNodes = new();
-        private readonly string[] _templatePath;
+        private readonly ConcurrentQueue<string> _groupedItems = new();
 
         private readonly AlertResult _baseAlert;
+        private readonly AlertState _baseState;
 
+        private string _groupDiffPropertyName;
         private int _totalGroupedItems = 1; //main item
-        private int _groupedIndex = -1;
 
 
         internal GroupedNotification(AlertResult alert)
         {
+            _baseState = alert.LastState;
             _baseAlert = alert;
         }
 
-        internal GroupedNotification(string[] path)
+
+        internal bool TryApply(AlertState alert)
         {
-            _templatePath = path;
-        }
+            var apply = _baseState.HasLessThanTwoDiff(alert, out var diffName);
 
+            apply &= string.IsNullOrEmpty(diffName) || diffName == _groupDiffPropertyName;
 
-        internal bool TryApply(AlertResult alert)
-        {
-            return true;
-        }
-
-
-        internal bool Apply(string[] newPath)
-        {
-            if (_templatePath.Length != newPath.Length)
-                return false;
-
-            bool hasDiff = false;
-            int diffIndex = -1;
-
-            for (int i = 0; i < _templatePath.Length; ++i)
-                if (_templatePath[i] != newPath[i])
-                {
-                    if (hasDiff)
-                        return false;
-
-                    hasDiff = true;
-                    diffIndex = i;
-                }
-
-            if (hasDiff && (_groupedIndex == -1 || diffIndex == _groupedIndex))
+            if (apply)
             {
-                if (_groupedNodes.Count < MaxGroupedItemsCount)
-                    _groupedNodes.Enqueue(newPath[diffIndex]);
+                if (_groupedItems.IsEmpty)
+                    _groupedItems.Enqueue(_baseState[diffName]);
 
-                _groupedIndex = diffIndex;
+                if (_groupedItems.Count < MaxGroupedItemsCount)
+                    _groupedItems.Enqueue(alert[diffName]);
+
+                _groupDiffPropertyName = diffName;
                 _totalGroupedItems++;
-
-                return true;
             }
 
-            return false;
+            return apply;
         }
+
 
         public override string ToString()
         {
-            if (_groupedIndex != -1)
+            if (_groupedItems.IsEmpty)
+                return _baseAlert.ToString();
+            else
             {
-                _groupedNodes.Enqueue(_templatePath[_groupedIndex]);
+                var hiddenItemsCnt = _totalGroupedItems - _groupedItems.Count;
 
-                var hiddenNodes = _totalGroupedItems - _groupedNodes.Count;
-                var group = string.Join(", ", _groupedNodes);
+                var group = string.Join(", ", _groupedItems);
 
-                if (hiddenNodes > 0)
-                    group = $"{group} ... and {hiddenNodes} more";
+                if (hiddenItemsCnt > 0)
+                    group = $"{group} ... and {hiddenItemsCnt} more";
 
-                _templatePath[_groupedIndex] = $"[{group}]";
+                return _baseAlert.BuildFullComment($"[{group}]");
             }
-
-            return $"{Separator}{string.Join(Separator, _templatePath)}";
         }
     }
 }

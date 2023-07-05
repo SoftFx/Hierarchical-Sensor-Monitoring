@@ -12,9 +12,11 @@ namespace HSMServer.Core.Model.Policies
         public Guid PolicyId { get; }
 
 
-        public int Count { get; private set; } = 1;
+        public AlertState LastState { get; private set; }
 
         public string LastComment { get; private set; }
+
+        public int Count { get; private set; } = 1;
 
 
         public (string, int) Key => (Icon, Count);
@@ -36,17 +38,20 @@ namespace HSMServer.Core.Model.Policies
 
             Count += alertResult.Count;
             LastComment = alertResult.LastComment;
+            LastState = alertResult.LastState;
 
             return true;
         }
 
-        internal void AddComment(string comment)
+        internal void AddPolicyResult(Policy policy)
         {
             Count++;
-            LastComment = comment;
+            LastComment = policy.AlertComment;
+            LastState = policy.State;
         }
 
-        public override string ToString()
+
+        public string BuildFullComment(string comment)
         {
             var sb = new StringBuilder(1 << 5);
 
@@ -55,9 +60,11 @@ namespace HSMServer.Core.Model.Policies
             if (Count > 1)
                 sb.Append($"({Count} times)");
 
-            sb.Append($" {LastComment}");
+            sb.Append($" {comment}");
 
             return sb.ToString();
         }
+
+        public override string ToString() => BuildFullComment(LastComment);
     }
 }

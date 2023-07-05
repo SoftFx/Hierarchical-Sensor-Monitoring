@@ -12,9 +12,19 @@ namespace HSMServer.Core.Model.Policies
         private const StringSplitOptions SplitOptions = StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries;
         private const char Separator = ' ';
 
+        private readonly static Dictionary<string, PropertyInfo> _publicProperties = typeof(AlertState).GetProperties(BindingFlags.Public)
+                                                                                                       .ToDictionary(k => k.Name, v => v);
         private readonly static ConcurrentDictionary<string, string> _variableTemplates = new();
 
         public static Dictionary<string, string> Variables { get; } = new();
+
+
+        public string this[string propertyName]
+        {
+            get => _publicProperties[propertyName].GetValue(this, null).ToString();
+
+            set => _publicProperties[propertyName].SetValue(this, value);
+        }
 
 
         [CommentVariable("$product", "Parent product name")]
@@ -62,7 +72,7 @@ namespace HSMServer.Core.Model.Policies
 
         static AlertState()
         {
-            foreach (var prop in typeof(AlertState).GetProperties(BindingFlags.Public))
+            foreach (var prop in _publicProperties.Values)
             {
                 var attr = prop.GetCustomAttribute<CommentVariableAttribute>();
 
@@ -74,6 +84,31 @@ namespace HSMServer.Core.Model.Policies
 
             for (int i = 0; i < variables.Count; ++i)
                 _variableTemplates.TryAdd(variables[i], $"{{{i}}}");
+        }
+
+
+        public bool HasLessThanTwoDiff(AlertState other, out string diffProp)
+        {
+            bool hasDiff = false;
+
+            diffProp = string.Empty;
+
+            foreach (var prop in _publicProperties.Values)
+            {
+                var curValue = prop.GetValue(this, null);
+                var otherValue = prop.GetValue(other, null);
+
+                if (!curValue.Equals(otherValue))
+                {
+                    diffProp = prop.Name;
+                    hasDiff = !hasDiff; // true -> false mean find 2 diff
+
+                    if (!hasDiff)
+                        return false;
+                }
+            }
+
+            return true;
         }
 
 

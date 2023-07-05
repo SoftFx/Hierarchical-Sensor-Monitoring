@@ -39,7 +39,7 @@ namespace HSMServer.Core.Model
             var key = policy.Id;
 
             if (Alerts.TryGetValue(key, out var alert))
-                alert.AddComment(policy.AlertComment);
+                alert.AddPolicyResult(policy);
             else
                 Alerts.Add(key, new AlertResult(policy));
         }
