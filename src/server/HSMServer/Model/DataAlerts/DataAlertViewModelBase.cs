@@ -31,7 +31,7 @@ namespace HSMServer.Model.DataAlerts
 
         public Guid Id { get; set; }
 
-        public TimeIntervalViewModel Sensitivity { get; set; }
+        //public TimeIntervalViewModel Sensitivity { get; set; }
 
 
         internal DataPolicyUpdate ToUpdate() =>
@@ -70,6 +70,10 @@ namespace HSMServer.Model.DataAlerts
         public List<SelectListItem> StatusesItems { get; }
 
         public List<SelectListItem> IconsItems { get; }
+
+        public TimeIntervalViewModel Sensitivity { get; } = new TimeIntervalViewModel(PredefinedIntervals.ForRestore);
+
+        public TimeIntervalViewModel TimeToLive { get; } = new TimeIntervalViewModel(PredefinedIntervals.ForTimeout);
 
 
         public DataAlertViewModelBase()

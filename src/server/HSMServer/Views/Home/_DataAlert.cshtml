@@ -2,6 +2,7 @@
 @using HSMServer.Extensions
 @using HSMCommon.Extensions
 @using HSMServer.Controllers
+@using HSMServer.Constants
 
 @model DataAlertViewModelBase
 
@@ -11,53 +12,36 @@
 <div class="dataAlertRow">
     <div class="card ms-3 mb-2">
         <div class="card-body py-2">
-            <div class="d-flex flex-row align-items-center">
+            <div class="d-flex flex-row align-items-center fullCondition">
                 <div class="alert-text-block alert-add">If</div>
 
-                <div id="alertCondition" class="d-flex flex-row align-items-center alert-blocks-group ms-3">
-                    <select id="conditionsSelect" class="alert-block alert-select property-select" asp-for="Property" asp-items="@Model.PropertiesItems"></select>
-
-                    <div id="valueCondition" class="d-flex flex-row align-items-center">
-                        <select class="alert-block alert-select operation-select" asp-for="Operation" asp-items="@Model.ActionsItems"></select>
-                        <input class="alert-block target-input target-value" type="text" placeholder="<enter a value>" asp-for="Value" value="@Model.Value" required>
-                    </div>
-
-                    <div id="sensitivityCondition" class="d-none flex-row align-items-center">
-                        <div class="alert-text-block operation-select">more than</div>
-                        <partial name="_TimeIntervalSelect" for="Sensitivity" />
-                    </div>
-
-                    <div id="ttlCondition" class="d-none flex-row align-items-center">
-                        <div class="alert-text-block operation-select">is</div>
-                        <partial name="_TimeIntervalSelect" for="Sensitivity" />
-                    </div>
-
-                    <a><i class="d-none fa-solid fa-xmark alert-delete-button"></i></a>
+                <div name="conditionsBlock" class="d-flex flex-row align-items-center">
+                    @await Html.PartialAsync("~/Views/Home/Alerts/_ConditionBlock.cshtml", Model)
                 </div>
 
-                <a><i class="fa-solid fa-plus alert-add-button"></i></a>
+                <a class="d-none addCondition"><i class="fa-solid fa-plus alert-add-button"></i></a>
             </div>
 
-            <div id="alertAction" class="d-flex flex-row align-items-center pt-1">
+            <div name="alertAction" class="d-flex flex-row align-items-center pt-1">
                 <div class="d-flex flex-row align-items-center alert-blocks-group">
                     <div class="alert-text-block alert-add">then</div>
 
                     <div class="d-flex flex-row align-items-center alert-blocks-group ms-3">
-                        <select id="actionsSelect" class="alert-block alert-select property-select">
+                        <select name="actionsSelect" class="alert-block alert-select property-select">
                             <option value="@DataAlertViewModelBase.SendNotifyAction">send notification</option>
                             <option value="@DataAlertViewModelBase.ShowIconAction">show icon</option>
                             <option value="@DataAlertViewModelBase.SetStatusAction">set sensor status</option>
                         </select>
 
-                        <div id="sendNotificationAction">
+                        <div name="sendNotificationAction">
                             <input type="text" class="alert-block target-input" placeholder="message template" asp-for="Comment" value="@Model.Comment" required>
                         </div>
 
-                        <div id="showIconAction" class="d-none" style="height:2rem;">
-                            <textarea id="emoji" class="alert-block target-input"></textarea>
+                        <div name="showIconAction" class="d-none" style="height:2rem;">
+                            <textarea name="emoji" class="alert-block target-input"></textarea>
                         </div>
 
-                        <div id="setStatusAction" class="d-none">
+                        <div name="setStatusAction" class="d-none">
                             <select class="alert-block alert-select target-input" asp-for="Status" asp-items="@Model.StatusesItems"></select>
                         </div>
 
@@ -123,50 +107,19 @@
 
 <script>
     $(document).ready(function () {
-        $("#emoji").emojioneArea({
+        $("textarea[name='emoji']").emojioneArea({
             filtersPosition: "bottom",
             inline: true
         });
     });
 
     $(document).ready(function () {
-        let conditions = document.getElementById('conditionsSelect');
-        conditions.options.add(new Option('Inactivity period', '@DataAlertViewModelBase.TimeToLiveCondition'));
+        $('select[name="actionsSelect"]').off("change").on("change", function () {
+            let actionBlock = $(this).parents("div[name='alertAction']:first");
 
-        $('#conditionsSelect').off("change").on("change", function () {
-            let conditionBlock = $(this).parents("div[id='alertCondition']:first");
-
-            let value = conditionBlock.find($(`div[id='valueCondition']`));
-            let timeToLive = conditionBlock.find($(`div[id='ttlCondition']`));
-            let sensitivity = conditionBlock.find($(`div[id='sensitivityCondition']`));
-
-            let condition = $(this).val();
-            if (condition === '@DataAlertViewModelBase.TimeToLiveCondition') {
-                value.removeClass("d-flex").addClass('d-none');
-                sensitivity.removeClass("d-flex").addClass('d-none');
-
-                timeToLive.removeClass("d-none").addClass('d-flex');
-            }
-            else if (condition === '@DataAlertViewModelBase.SensitivityCondition') {
-                value.removeClass("d-flex").addClass('d-none');
-                timeToLive.removeClass("d-flex").addClass('d-none');
-
-                sensitivity.removeClass("d-none").addClass('d-flex');
-            }
-            else {
-                sensitivity.removeClass("d-flex").addClass('d-none');
-                timeToLive.removeClass("d-flex").addClass('d-none');
-
-                value.removeClass("d-none").addClass('d-flex');
-            }
-        });
-
-        $('#actionsSelect').off("change").on("change", function () {
-            let actionBlock = $(this).parents("div[id='alertAction']:first");
-
-            let send = actionBlock.find($(`div[id='sendNotificationAction']`));
-            let show = actionBlock.find($(`div[id='showIconAction']`));
-            let set = actionBlock.find($(`div[id='setStatusAction']`));
+            let send = actionBlock.find($(`div[name='sendNotificationAction']`));
+            let show = actionBlock.find($(`div[name='showIconAction']`));
+            let set = actionBlock.find($(`div[name='setStatusAction']`));
 
             let action = $(this).val();
             if (action === '@DataAlertViewModelBase.SendNotifyAction') {
@@ -191,6 +144,18 @@
     });
 
     $(document).ready(function () {
+        $("a.addCondition").off("click").on("click", function () {
+            let element = $(this).parents("div.fullCondition:first");
+
+            $.ajax({
+                url: `@Url.Action(nameof(HomeController.AddAlertCondition), ViewConstants.HomeController)?sensorId=@Model.EntityId`,
+                cache: false
+            }).done(function (viewData) {
+                var conditionsBlock = element.find($(`div[name='conditionsBlock']`));
+                conditionsBlock.append(viewData);
+            });
+        });
+
         $("a.deleteRow").off("click").on("click", function () {
             $(this).parents("div.dataAlertRow:first").remove();
         });

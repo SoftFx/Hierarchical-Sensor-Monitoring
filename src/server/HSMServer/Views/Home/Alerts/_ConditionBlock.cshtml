@@ -1,0 +1,87 @@
+﻿@using HSMServer.Model.DataAlerts
+
+@model DataAlertViewModelBase
+
+@addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
+
+
+<div name="alertCondition" class="d-flex flex-row align-items-center alert-blocks-group ms-3">
+    <select name="conditionsSelect" class="alert-block alert-select property-select" asp-items="@Model.PropertiesItems"></select> @*old name  asp-for="Property"*@
+
+    <div name="valueCondition" class="d-none flex-row align-items-center">
+        <select class="alert-block alert-select operation-select" asp-items="@Model.ActionsItems"></select> @*old name  asp-for="Operation"*@
+        <input class="alert-block target-input target-value" type="text" placeholder="<enter a value>" required> @*old name  asp-for="Value" value="@Model.Value"*@
+    </div>
+
+    <div name="sensitivityCondition" class="d-none flex-row align-items-center">
+        <div class="alert-text-block operation-select">more than</div>
+        <partial name="_TimeIntervalSelect" for="Sensitivity" /> @*old name  for="Sensitivity"*@
+    </div>
+
+    <div name="ttlCondition" class="d-none flex-row align-items-center">
+        <div class="alert-text-block operation-select">is</div>
+        <partial name="_TimeIntervalSelect" for="TimeToLive" /> @*old name  for="Sensitivity"*@
+    </div>
+
+    <a><i class="d-none fa-solid fa-xmark alert-delete-button"></i></a>
+</div>
+
+
+<script>
+    $(document).ready(function () {
+        addTtlConditionIfNeed();
+
+
+        $('select[name="conditionsSelect"]').off("change").on("change", function () {
+            let conditionBlock = $(this).parents("div[name='alertCondition']:first");
+
+            let value = conditionBlock.find($(`div[name='valueCondition']`));
+            let timeToLive = conditionBlock.find($(`div[name='ttlCondition']`));
+            let sensitivity = conditionBlock.find($(`div[name='sensitivityCondition']`));
+
+            let addButton = $(this).parents("div.fullCondition:first").find($(`a.addCondition`));
+
+            let condition = $(this).val();
+            if (condition === '@DataAlertViewModelBase.TimeToLiveCondition') {
+                value.removeClass("d-flex").addClass('d-none');
+                sensitivity.removeClass("d-flex").addClass('d-none');
+                addButton.removeClass("d-block").addClass('d-none');
+
+                timeToLive.removeClass("d-none").addClass('d-flex');
+            }
+            else if (condition === '@DataAlertViewModelBase.SensitivityCondition') {
+                value.removeClass("d-flex").addClass('d-none');
+                timeToLive.removeClass("d-flex").addClass('d-none');
+
+                sensitivity.removeClass("d-none").addClass('d-flex');
+                addButton.removeClass("d-none").addClass('d-block');
+            }
+            else {
+                sensitivity.removeClass("d-flex").addClass('d-none');
+                timeToLive.removeClass("d-flex").addClass('d-none');
+
+                value.removeClass("d-none").addClass('d-flex');
+                addButton.removeClass("d-none").addClass('d-block');
+            }
+        });
+    });
+
+    function addTtlConditionIfNeed() {
+        let allConditions = document.getElementsByName('conditionsSelect');
+
+        let needTtlCondition = true;
+        for (let conditions of allConditions.values()) {
+            if (conditions.value === '@DataAlertViewModelBase.TimeToLiveCondition') {
+                needTtlCondition = false;
+                break;
+            }
+        }
+
+        let lastConditions = allConditions[allConditions.length - 1];
+        if (needTtlCondition) {
+            lastConditions.options.add(new Option('Inactivity period', '@DataAlertViewModelBase.TimeToLiveCondition'));
+        }
+
+        lastConditions.selectedIndex = -1;
+    }
+</script>

@@ -571,9 +571,16 @@ namespace HSMServer.Controllers
         }
 
 
-        public IActionResult AddDataPolicy(SensorType type, Guid sensorId)
-        {
-            DataAlertViewModelBase viewModel = type switch
+        public IActionResult AddDataPolicy(SensorType type, Guid sensorId) =>
+            PartialView("_DataAlert", BuildAlertViewModel(type, sensorId));
+
+        public IActionResult AddAlertCondition(Guid sensorId) =>
+            _treeViewModel.Sensors.TryGetValue(sensorId, out var sensor)
+                ? PartialView("~/Views/Home/Alerts/_ConditionBlock.cshtml", BuildAlertViewModel(sensor.Type, sensorId))
+                : _emptyResult;
+
+        private static DataAlertViewModelBase BuildAlertViewModel(SensorType type, Guid sensorId) =>
+            type switch
             {
                 SensorType.Integer => new SingleDataAlertViewModel<IntegerValue, int>(sensorId),
                 SensorType.Double => new SingleDataAlertViewModel<DoubleValue, double>(sensorId),
@@ -581,9 +588,6 @@ namespace HSMServer.Controllers
                 SensorType.DoubleBar => new BarDataAlertViewModel<DoubleBarValue, double>(sensorId),
                 _ => null,
             };
-
-            return PartialView("_DataAlert", viewModel);
-        }
 
         [HttpPost]
         public void SendTestMessage(DataAlertViewModel alert)
