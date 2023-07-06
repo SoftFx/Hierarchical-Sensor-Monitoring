@@ -49,7 +49,7 @@ public class JournalCacheTests : MonitoringCoreTestsBase<TreeValuesCacheFixture>
         }
 
         await Task.Delay(1000);
-        var expected = journals.OrderBy(x => x.Time).ToList();
+        var expected = journals.OrderBy(x => x.Key.Time).ToList();
         var actual = await _journalService.GetJournalValuesPage(id, DateTime.MinValue, DateTime.MaxValue, RecordType.Actions, 50000).Flatten();
 
         for (int i = 0; i < n; i++)

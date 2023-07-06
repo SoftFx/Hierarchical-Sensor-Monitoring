@@ -33,31 +33,31 @@ public readonly struct JournalKey
         Type = type;
     }
 
-    // public byte[] GetBytes()
-    // {
-    //     Span<byte> result = stackalloc byte[StructSize];
-    //     result[GuidSize] = (byte)Type;
-    //     return Id.TryWriteBytes(result) && BitConverter.TryWriteBytes(result[(GuidSize + 1)..], Time) ? result.ToArray() : Array.Empty<byte>();
-    // }
     public byte[] GetBytes()
     {
         Span<byte> result = stackalloc byte[StructSize];
         result[GuidSize] = (byte)Type;
-    
-        var timeBytes = BitConverter.GetBytes(Time);
-    
-        var size = sizeof(long);
-        var j = 0;
-        for (int i = 0; i < size; i++)
-        {
-            if (timeBytes[size - i - 1] != 0 || j == i)
-            {
-                result[GuidSize + 1 + i] = timeBytes[j++];
-            }
-        }
-        
-        return Id.TryWriteBytes(result) ? result.ToArray() : Array.Empty<byte>();
+        return Id.TryWriteBytes(result) && BitConverter.TryWriteBytes(result[(GuidSize + 1)..], Time) ? result.ToArray() : Array.Empty<byte>();
     }
+    // public byte[] GetBytes()
+    // {
+    //     Span<byte> result = stackalloc byte[StructSize];
+    //     result[GuidSize] = (byte)Type;
+    //
+    //     var timeBytes = BitConverter.GetBytes(Time);
+    //
+    //     var size = sizeof(long);
+    //     var j = 0;
+    //     for (int i = 0; i < size; i++)
+    //     {
+    //         if (timeBytes[size - i - 1] != 0 || j == i)
+    //         {
+    //             result[GuidSize + 1 + i] = timeBytes[j++];
+    //         }
+    //     }
+    //     
+    //     return Id.TryWriteBytes(result) ? result.ToArray() : Array.Empty<byte>();
+    // }
     
     // public byte[] GetBytes()
     // {

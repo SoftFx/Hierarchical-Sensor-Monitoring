@@ -19,7 +19,7 @@ public class JournalService : IJournalService
 
     public void AddJournal(JournalRecordModel record)
     {
-        _database.AddJournalValue(record.GetKey(), record.ToJournalEntity());
+        _database.AddJournalValue(record.Key, record.ToJournalEntity());
     }
     
     public void AddJournals(List<JournalRecordModel> records)
