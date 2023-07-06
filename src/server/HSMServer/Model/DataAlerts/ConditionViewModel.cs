@@ -23,9 +23,9 @@ namespace HSMServer.Model.DataAlerts
         public List<SelectListItem> ActionsItems { get; }
 
 
-        public TimeIntervalViewModel Sensitivity { get; } = new TimeIntervalViewModel(PredefinedIntervals.ForRestore);
+        public TimeIntervalViewModel Sensitivity { get; } = new TimeIntervalViewModel(PredefinedIntervals.ForRestore) { IsAlertBlock = true };
 
-        public TimeIntervalViewModel TimeToLive { get; } = new TimeIntervalViewModel(PredefinedIntervals.ForTimeout);
+        public TimeIntervalViewModel TimeToLive { get; } = new TimeIntervalViewModel(PredefinedIntervals.ForTimeout) { IsAlertBlock = true };
 
 
         public ConditionViewModel(bool isFirst)

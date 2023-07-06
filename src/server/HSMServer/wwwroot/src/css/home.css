@@ -75,7 +75,7 @@
 
 .placeholder {
     position: absolute;
-    right: 1.5rem;
+    right: 1.25rem;
     top: 0.2rem;
     pointer-events: none;
     opacity: .5;

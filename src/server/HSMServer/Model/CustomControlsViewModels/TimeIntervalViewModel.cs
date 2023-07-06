@@ -26,6 +26,8 @@ namespace HSMServer.Model
 
         public bool UseCustomInputTemplate { get; }
 
+        public bool IsAlertBlock { get; init; }
+
 
         private bool HasParentValue => _getParentValue?.Invoke() is not null || HasFolder;
 

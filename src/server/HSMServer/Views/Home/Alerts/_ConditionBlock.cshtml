@@ -42,7 +42,6 @@
 
 <script>
     $('select[name="conditionsSelect"]').off("change").on("change", function () {
-        console.log("change event!");
         let conditionBlock = $(this).parents("div[name='alertCondition']:first");
 
         let value = conditionBlock.find($(`div[name='valueCondition']`));
@@ -76,7 +75,6 @@
     });
 
     $("a.deleteCondition").off("click").on("click", function () {
-        console.log("delete");
         $(this).parents("div[name='alertCondition']:first").remove();
     });
 </script>
