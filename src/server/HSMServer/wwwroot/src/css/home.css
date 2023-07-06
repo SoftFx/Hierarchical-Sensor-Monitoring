@@ -382,7 +382,7 @@ img .tree-png-icon {
 .alert-add-button {
     cursor: pointer;
     color: rgba(92,184,92,.5);
-    padding: 5px 8px;
+    padding: 0px 8px;
 }
 
 .alert-add-button:hover {
@@ -393,7 +393,7 @@ img .tree-png-icon {
 .alert-delete-button {
     cursor: pointer;
     color: rgba(217,83,79,.5);
-    padding: 5px 8px;
+    padding: 0px 8px;
 }
 
 .alert-delete-button:hover {
@@ -461,7 +461,7 @@ img .tree-png-icon {
 
 
 .target-value {
-    max-width: 94px;
+    max-width: 108px;
 }
 
 .target-period {

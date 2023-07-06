@@ -15,7 +15,7 @@
             <div class="d-flex flex-row align-items-center fullCondition">
                 <div class="alert-text-block alert-add">If</div>
 
-                <div name="conditionsBlock" class="d-flex flex-row align-items-center">
+                <div name="conditionsBlock" class="d-flex flex-row flex-wrap align-items-center">
                     @foreach (var condition in Model.Conditions) 
                     {
                         @await Html.PartialAsync("~/Views/Home/Alerts/_ConditionBlock.cshtml", condition)
@@ -25,10 +25,10 @@
                 <a class="addCondition"><i class="fa-solid fa-plus alert-add-button"></i></a>
             </div>
 
-            <div class="d-flex flex-row align-items-center alert-blocks-group pt-1 fullAction">
+            <div class="d-flex flex-row align-items-center alert-blocks-group fullAction">
                 <div class="alert-text-block alert-add">then</div>
 
-                <div name="actionsBlock" class="d-flex flex-row align-items-center">
+                <div name="actionsBlock" class="d-flex flex-row flex-wrap align-items-center">
                     @foreach (var action in Model.Actions)
                     {
                         @await Html.PartialAsync("~/Views/Home/Alerts/_ActionBlock.cshtml", action)

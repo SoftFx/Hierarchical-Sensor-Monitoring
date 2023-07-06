@@ -16,7 +16,7 @@
 }
 
 
-<div name="alertCondition" class="d-flex flex-row align-items-center alert-blocks-group ms-3">
+<div name="alertCondition" class="d-flex flex-row align-items-center alert-blocks-group ms-3 py-1">
     <div class="@(isMainCondition ? "d-none" : "d-flex") alert-text-block alert-add me-3">and</div>
 
     <select name="conditionsSelect" class="alert-block alert-select property-select" asp-items="@Model.PropertiesItems"></select> @*old name  asp-for="Property"*@
