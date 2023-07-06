@@ -30,7 +30,10 @@ namespace HSMServer.Model.DataAlerts
         };
 
 
-        public BarDataAlertViewModel(Guid entityId) : base(entityId) { }
+        public BarDataAlertViewModel(Guid entityId) : base(entityId)
+        {
+            Conditions.Add(new BarConditionViewModel<T, U>(true));
+        }
 
         public BarDataAlertViewModel(Policy<T, U> policy, BaseSensorModel sensor) : base(policy, sensor)
         {

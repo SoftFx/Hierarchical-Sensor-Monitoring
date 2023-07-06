@@ -23,7 +23,10 @@ namespace HSMServer.Model.DataAlerts
         };
 
 
-        public SingleDataAlertViewModel(Guid entityId) : base(entityId) { }
+        public SingleDataAlertViewModel(Guid entityId) : base(entityId)
+        {
+            Conditions.Add(new SingleConditionViewModel<T, U>(true));
+        }
 
         public SingleDataAlertViewModel(Policy<T, U> policy, BaseSensorModel sensor) : base(policy, sensor)
         {

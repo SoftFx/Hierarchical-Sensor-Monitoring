@@ -10,16 +10,19 @@
 
 
 <div class="dataAlertRow">
-    <div class="card ms-3 mb-2">
+    <div class="card mb-2">
         <div class="card-body py-2">
             <div class="d-flex flex-row align-items-center fullCondition">
                 <div class="alert-text-block alert-add">If</div>
 
                 <div name="conditionsBlock" class="d-flex flex-row align-items-center">
-                    @await Html.PartialAsync("~/Views/Home/Alerts/_ConditionBlock.cshtml", Model)
+                    @foreach (var condition in Model.Conditions) 
+                    {
+                        @await Html.PartialAsync("~/Views/Home/Alerts/_ConditionBlock.cshtml", condition)
+                    }
                 </div>
 
-                <a class="d-none addCondition"><i class="fa-solid fa-plus alert-add-button"></i></a>
+                <a class="addCondition"><i class="fa-solid fa-plus alert-add-button"></i></a>
             </div>
 
             <div name="alertAction" class="d-flex flex-row align-items-center pt-1">

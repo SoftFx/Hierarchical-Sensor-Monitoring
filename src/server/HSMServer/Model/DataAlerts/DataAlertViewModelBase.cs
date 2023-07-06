@@ -76,17 +76,19 @@ namespace HSMServer.Model.DataAlerts
         public TimeIntervalViewModel TimeToLive { get; } = new TimeIntervalViewModel(PredefinedIntervals.ForTimeout);
 
 
+        public List<ConditionViewModel> Conditions { get; } = new();
+
+
         public DataAlertViewModelBase()
         {
             Comment = DefaultCommentTemplate;
 
-            PropertiesItems = Properties.Select(p => new SelectListItem(p, p)).ToList();
+            PropertiesItems = Properties.Select(p => new SelectListItem(p, p, false)).ToList();
             IconsItems = Icons.Select(i => new SelectListItem(i.ToIconUnicode(), i)).ToList();
             ActionsItems = Actions.Select(a => new SelectListItem(a.GetDisplayName(), $"{a}")).ToList();
             StatusesItems = AlertPredefined.Statuses.Select(s => new SelectListItem(s.Value, $"{s.Key}")).ToList();
 
             Status = SensorStatus.Ok;
-            Sensitivity = new TimeIntervalViewModel(PredefinedIntervals.ForRestore);
         }
     }
 
