@@ -26,7 +26,7 @@
         <select class="alert-block alert-select target-input" asp-items="@Model.StatusesItems"></select> @*old name  asp-for="Status"*@
     </div>
 
-    <a><i class="@(Model.IsMain ? "d-none" : "d-flex") fa-solid fa-xmark alert-delete-button"></i></a>
+    <a class="deleteAction"><i class="@(Model.IsMain ? "d-none" : "d-flex") fa-solid fa-xmark alert-delete-button"></i></a>
 </div>
 
 
@@ -64,5 +64,9 @@
 
             set.removeClass("d-none").addClass('d-block');
         }
+    });
+
+    $("a.deleteAction").off("click").on("click", function () {
+        $(this).parents("div[name='alertAction']:first").remove();
     });
 </script>

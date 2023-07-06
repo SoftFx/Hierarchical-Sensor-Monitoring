@@ -36,7 +36,7 @@
         <partial name="_TimeIntervalSelect" for="TimeToLive" /> @*old name  for="Sensitivity"*@
     </div>
 
-    <a><i class="@(isMainCondition ? "d-none" : "d-flex") fa-solid fa-xmark alert-delete-button"></i></a>
+    <a class="deleteCondition"><i class="@(isMainCondition ? "d-none" : "d-flex") fa-solid fa-xmark alert-delete-button"></i></a>
 </div>
 
 
@@ -73,5 +73,10 @@
             value.removeClass("d-none").addClass('d-flex');
             addButton.removeClass("d-none").addClass('d-block');
         }
+    });
+
+    $("a.deleteCondition").off("click").on("click", function () {
+        console.log("delete");
+        $(this).parents("div[name='alertCondition']:first").remove();
     });
 </script>
