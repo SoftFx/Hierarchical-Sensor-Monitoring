@@ -23,7 +23,7 @@ public interface IJournalValuesDatabase : IDisposable
 
     byte[] Get(byte[] key, byte[] sensorId);
 
-    IEnumerable<byte[]> GetValuesFrom(byte[] from, byte[] to);
+    IEnumerable<(byte[], byte[])> GetValuesFrom(byte[] from, byte[] to);
 
-    IEnumerable<byte[]> GetValuesTo(byte[] from, byte[] to);
+    IEnumerable<(byte[], byte[])> GetValuesTo(byte[] from, byte[] to);
 }

@@ -1,0 +1,46 @@
+﻿@using HSMServer.Core.Model
+@using HSMServer.Extensions
+
+@addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
+
+@model List<JournalRecordModel>
+
+<div>
+    <table class='table table-striped'>
+        <thead>
+            <tr class="text-nowrap">
+                <th>Date</th>
+                <th></th>
+                <th>Type</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach(var journal in Model)
+            {
+                <tr>
+                    <td>@(new DateTime(journal.Key.Time).ToDefaultFormat())</td>
+                    <td>@journal.Value</td>
+                    <td>@journal.Key.Type</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+
+    @* <div class="container d-flex justify-content-center"> *@
+    @*     <ul class="pagination"> *@
+    @*         <li id="prevPageButton" class="page-item button-link"> *@
+    @*             <a class="page-link" aria-label="Previous" onclick="showPage(prevPageAction, '@(Model.SensorId)')"> *@
+    @*                 <span aria-hidden="true">&laquo;</span> *@
+    @*             </a> *@
+    @*         </li> *@
+    @*         <li class="page-item"> *@
+    @*             <a class="page-link">@(Model.CurrentIndex + 1)</a> *@
+    @*         </li> *@
+    @*         <li id="nextPageButton" class="page-item button-link"> *@
+    @*             <a class="page-link" aria-label="Next" onclick="showPage(nextPageAction, '@(Model.SensorId)')"> *@
+    @*                 <span aria-hidden="true">&raquo;</span> *@
+    @*             </a> *@
+    @*         </li> *@
+    @*     </ul> *@
+    @* </div> *@
+</div>

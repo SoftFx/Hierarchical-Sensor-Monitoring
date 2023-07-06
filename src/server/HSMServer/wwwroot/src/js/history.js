@@ -80,6 +80,7 @@ function Data(to, from, type, encodedId) {
     function initializeTabLinksRequests() {
         $('[id^="link_graph_"]').off("click").on("click", requestGraph);
         $('[id^="link_table_"]').off("click").on("click", requestTable);
+        $('[id^="link_journal_"]').off("click").on("click", requestJournal);
     }
 
     function requestGraph() {
@@ -100,6 +101,57 @@ function Data(to, from, type, encodedId) {
 
         hideBarsCount(encodedId);
         initializeTable(encodedId, historyAction, type, body);
+    }
+
+    function requestJournal() {
+        let encodedId = this.id.substring("link_journal_".length);
+        let type = getTypeForSensor(encodedId);
+        const { from, to } = getFromAndTo(encodedId);
+        let body = Data(to, from, type, encodedId);
+
+        hideBarsCount(encodedId);
+
+        $.ajax({
+            type: 'POST',
+            data: JSON.stringify(body),
+            url: journalAction + "?id=" + encodedId,
+            contentType: 'application/json',
+            dataType: 'html',
+            cache: false,
+            async: true
+        }).done(function (data) {
+            $("#newValuesCount").empty();
+            $("#tableHistoryRefreshButton").addClass("d-none");
+            $("#showAllTableColumnsCheckbox").removeClass("d-none");
+
+            $(`#journal_${encodedId}`).html(data);
+            //
+            // let noValuesElement = document.getElementById(`noTableValues_${encodedId}`);
+            // if (noValuesElement != null) {
+            //     $('#history_' + encodedId).hide();
+            //     $('#no_data_' + encodedId).show();
+            //     return;
+            // }
+            //
+            // $('#history_' + encodedId).show();
+            // $('#no_data_' + encodedId).hide();
+            //
+            // if (needFillFromTo) {
+            //     let to = getToDate();
+            //     let from = new Date($(`#oldest_date_${encodedId}`).val());
+            //     from.setMinutes(from.getMinutes() - from.getTimezoneOffset());
+            //
+            //     $(`#from_${encodedId}`).val(datetimeLocal(from));
+            //     $(`#to_${encodedId}`).val(datetimeLocal(to.getTime()));
+            //
+            //     reloadHistoryRequest(from, to, body);
+            // }
+            //
+            // $("#sensorHistorySpinner").addClass("d-none");
+            // $('#historyDataPanel').removeClass('hidden_element');
+        });
+        
+        //initializeTable(encodedId, historyAction, type, body);
     }
 
     function InitializePeriodRequests() {

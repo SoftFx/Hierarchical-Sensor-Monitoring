@@ -33,7 +33,7 @@ namespace HSMDatabase.LevelDB.Tests
 
             await Task.Delay(2000);
             var actualJournals = (await _databaseCore.GetJournalValuesPage(sensorId, DateTime.MinValue, DateTime.MaxValue, journalType, historyValuesCount)
-                .Flatten()).Select(x => JsonSerializer.Deserialize<JournalEntity>(x)).ToList();
+                .Flatten()).Select(x => JsonSerializer.Deserialize<JournalEntity>(x.Entity)).ToList();
 
             Assert.Equal(journals.Count, actualJournals.Count);
         }
@@ -100,7 +100,7 @@ namespace HSMDatabase.LevelDB.Tests
         }
 
         private async Task<List<JournalEntity?>> GetJournalValues(Guid guid, DateTime from, DateTime to, RecordType type = RecordType.Actions, int count = 5000) => 
-            (await _databaseCore.GetJournalValuesPage(guid, from, to, type, count).Flatten()).Select(x => JsonSerializer.Deserialize<JournalEntity>(x)).ToList();
+            (await _databaseCore.GetJournalValuesPage(guid, from, to, type, count).Flatten()).Select(x => JsonSerializer.Deserialize<JournalEntity>(x.Entity)).ToList();
 
         private List<(JournalKey, JournalEntity)> GenerateJournalEntities(Guid sensorId, int count)
         {

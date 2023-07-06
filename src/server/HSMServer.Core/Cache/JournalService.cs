@@ -17,14 +17,14 @@ public class JournalService : IJournalService
         _database = database;
     }
 
-    public void AddJournal(JournalRecordModel journalRecordModel)
+    public void AddJournal(JournalRecordModel record)
     {
-        _database.AddJournalValue(journalRecordModel.GetKey(), journalRecordModel.ToJournalEntity());
+        _database.AddJournalValue(record.GetKey(), record.ToJournalEntity());
     }
     
-    public void AddJournals(List<JournalRecordModel> journalRecordModels)
+    public void AddJournals(List<JournalRecordModel> records)
     {
-        foreach (var journal in journalRecordModels)
+        foreach (var journal in records)
             AddJournal(journal);
     }
     
@@ -39,7 +39,7 @@ public class JournalService : IJournalService
             var currPage = new List<JournalRecordModel>(1 << 4);
             foreach (var item in page)
             {
-                currPage.Add(new JournalRecordModel(JsonSerializer.Deserialize<JournalEntity>(item), id));
+                currPage.Add(new JournalRecordModel(JsonSerializer.Deserialize<JournalEntity>(item.Entity), item.Key));
             }
                 
             yield return currPage;

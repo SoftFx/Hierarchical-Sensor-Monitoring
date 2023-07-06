@@ -18,6 +18,8 @@
 
     var graphElementId = $"graph_{sensorId}";
     var graphParentDivId = $"graph_parent_{sensorId}";
+    var journalElementId = $"journal_{sensorId}";
+    var journalParentDivId = $"journal_parent_{sensorId}";
     var valuesElementId = $"values_{sensorId}";
     var valuesParentDivId = $"values_parent_{sensorId}";
 }
@@ -189,6 +191,9 @@
                                             </div>
                                         </div>
                                     </li>
+                                    <li class='nav-item'>
+                                        <a id='link_journal_@sensorId' class='nav-link' data-bs-toggle='tab' href='#@journalParentDivId'>Journal</a>
+                                    </li>
                                 </ul>
                                 <div id="showAllTableColumnsCheckbox" class="form-check d-none">
                                     <input class="form-check-input" type="checkbox" value="" id="showAllTableColumns_@sensorId">
@@ -203,6 +208,9 @@
                                 </div>
                                 <div class='tab-pane fade' id=@valuesParentDivId>
                                     <div id='@valuesElementId'></div>
+                                </div>
+                                <div class='tab-pane fade' id=@journalParentDivId>
+                                    <div id='@journalElementId'></div>
                                 </div>
                             </div>
                         }

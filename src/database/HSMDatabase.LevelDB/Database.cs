@@ -142,6 +142,23 @@ namespace HSMDatabase.LevelDB
                 iterator?.Dispose();
             }
         }
+        
+        public IEnumerable<(byte[], byte[])> GetValueKeyPairFromTo(byte[] from, byte[] to)
+        {
+            Iterator iterator = null;
+
+            try
+            {
+                iterator = _database.CreateIterator(_iteratorOptions);
+
+                for (iterator.Seek(from); iterator.IsValid && iterator.Key().IsSmallerOrEquals(to); iterator.Next())
+                    yield return (iterator.Key(), iterator.Value());
+            }
+            finally
+            {
+                iterator?.Dispose();
+            }
+        }
 
         public IEnumerable<byte[]> GetValueToFrom(byte[] from, byte[] to)
         {
@@ -166,6 +183,36 @@ namespace HSMDatabase.LevelDB
 
                 for (; iterator.IsValid && iterator.Key().IsGreaterOrEquals(from); iterator.Prev())
                     yield return iterator.Value();
+            }
+            finally
+            {
+                iterator?.Dispose();
+            }
+        }
+        
+        public IEnumerable<(byte[], byte[])> GetValueKeyPairToFrom(byte[] from, byte[] to)
+        {
+            Iterator iterator = null;
+
+            try
+            {
+                iterator = _database.CreateIterator(_iteratorOptions);
+
+                iterator.Seek(to);
+
+                if (!iterator.IsValid)
+                    iterator.SeekToLast();
+
+                while (iterator.IsValid && iterator.Key().IsGreater(to))
+                {
+                    iterator.Prev();
+
+                    if (!iterator.IsValid || iterator.Key().IsSmaller(from))
+                        yield break;
+                }
+
+                for (; iterator.IsValid && iterator.Key().IsGreaterOrEquals(from); iterator.Prev())
+                    yield return (iterator.Key(), iterator.Value());
             }
             finally
             {

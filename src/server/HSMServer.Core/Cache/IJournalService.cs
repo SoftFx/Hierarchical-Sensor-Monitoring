@@ -8,9 +8,9 @@ namespace HSMServer.Core.Cache;
 
 public interface IJournalService
 {
-    void AddJournal(JournalRecordModel journalRecordModel);
+    void AddJournal(JournalRecordModel record);
 
-    void AddJournals(List<JournalRecordModel> journalRecordModels);
+    void AddJournals(List<JournalRecordModel> records);
     void AddJournals(BaseSensorModel model, SensorUpdate update);
     
     void RemoveJournal(Guid id);

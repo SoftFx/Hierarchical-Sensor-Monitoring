@@ -59,8 +59,16 @@ namespace HSMServer.Controllers
         [AllowAnonymous]
         public async Task<JsonResult> GetJournals(string id)
         {
-            return Json(
-                await _journalService.GetJournalValuesPage(Guid.Parse(id), DateTime.MinValue, DateTime.MaxValue, RecordType.Actions, 5000).Flatten());
+            var journals = await _journalService.GetJournalValuesPage(Guid.Parse(id), DateTime.MinValue, DateTime.MaxValue, RecordType.Actions, -100)
+                .Flatten();
+            return Json(journals);
+        }
+        
+        public async Task<IActionResult> GetJournalsPage(string id)
+        {
+            var journals = await _journalService.GetJournalValuesPage(Guid.Parse(id), DateTime.MinValue, DateTime.MaxValue, RecordType.Actions, -100)
+                .Flatten();
+            return PartialView("_JournalsTable", journals);
         }
         
         [AllowAnonymous]

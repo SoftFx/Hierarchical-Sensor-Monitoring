@@ -78,31 +78,32 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             }
         }
 
-        public IEnumerable<byte[]> GetValuesFrom(byte[] from, byte[] to)
+        public IEnumerable<(byte[], byte[])> GetValuesFrom(byte[] from, byte[] to)
         {
             try
             {
-                return _openedDb.GetValueFromTo(from, to);
+                return _openedDb.GetValueKeyPairFromTo(from, to);
+                //return _openedDb.GetValueFromTo(from, to);
             }
             catch (Exception e)
             {
                 _logger.Error($"Failed getting value [{from.GetString()}, {to.GetString()}] - {e.Message}");
 
-                return Enumerable.Empty<byte[]>();
+                return Enumerable.Empty<(byte[], byte[])>();
             }
         }
 
-        public IEnumerable<byte[]> GetValuesTo(byte[] from, byte[] to)
+        public IEnumerable<(byte[], byte[])> GetValuesTo(byte[] from, byte[] to)
         {
             try
             {
-                return _openedDb.GetValueToFrom(from, to);
+                return _openedDb.GetValueKeyPairToFrom(from, to);
             }
             catch (Exception e)
             {
                 _logger.Error($"Failed getting value [{to.GetString()}, {from.GetString()}] - {e.Message}");
 
-                return Enumerable.Empty<byte[]>();
+                return Enumerable.Empty<(byte[], byte[])>();
             }
         }
     }

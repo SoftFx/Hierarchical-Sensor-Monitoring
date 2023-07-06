@@ -34,6 +34,30 @@ public class JournalCacheTests : MonitoringCoreTestsBase<TreeValuesCacheFixture>
         }
     }
 
+    [Theory]
+    [InlineData(5)]
+    public async Task BorderTest(int n)
+    {
+        var id = Guid.NewGuid();
+        var journals = new List<JournalRecordModel>();
+        for (int i = 0; i < n; i++)
+        {
+            string value = RandomGenerator.GetRandomString();
+            var journal = new JournalRecordModel(id, new DateTime(RandomGenerator.GetRandomTimeSpan(DateTime.MaxValue.Ticks).Ticks), value);
+            journals.Add(journal);
+            _journalService.AddJournal(journal);
+        }
+
+        await Task.Delay(1000);
+        var expected = journals.OrderBy(x => x.Time).ToList();
+        var actual = await _journalService.GetJournalValuesPage(id, DateTime.MinValue, DateTime.MaxValue, RecordType.Actions, 50000).Flatten();
+
+        for (int i = 0; i < n; i++)
+        {
+            Assert.Equal(expected[i].Value, actual[i].Value);
+        }
+    }
+
     private List<BaseSensorModel> GetUpdatedSensors(int n)
     {
         var sensors = new List<BaseSensorModel>();

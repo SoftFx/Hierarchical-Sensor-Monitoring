@@ -48,7 +48,7 @@ namespace HSMDatabase.DatabaseWorkCore
 
 
         private delegate IEnumerable<byte[]> GetValuesFunc(ISensorValuesDatabase db);
-        private delegate IEnumerable<byte[]> GetJournalValuesFunc(IJournalValuesDatabase db);
+        private delegate IEnumerable<(byte[], byte[])> GetJournalValuesFunc(IJournalValuesDatabase db);
 
 
         public DatabaseCore(IDatabaseSettings dbSettings = null)
@@ -415,7 +415,7 @@ namespace HSMDatabase.DatabaseWorkCore
                     db.Remove(fromBytes, toBytes);
         }
 
-        public IAsyncEnumerable<List<byte[]>> GetJournalValuesPage(Guid sensorId, DateTime from, DateTime to, RecordType recordType, int count)
+        public IAsyncEnumerable<List<(byte[] Key, byte[] Entity)>> GetJournalValuesPage(Guid sensorId, DateTime from, DateTime to, RecordType recordType, int count)
         {
             var fromTicks = from.Ticks;
             var toTicks = to.Ticks;
@@ -435,9 +435,9 @@ namespace HSMDatabase.DatabaseWorkCore
             return GetJournalValuesPage(databases, count, getValues);
         }
 
-        private async IAsyncEnumerable<List<byte[]>> GetJournalValuesPage(List<IJournalValuesDatabase> databases, int count, GetJournalValuesFunc getValues)
+        private async IAsyncEnumerable<List<(byte[], byte[])>> GetJournalValuesPage(List<IJournalValuesDatabase> databases, int count, GetJournalValuesFunc getValues)
         {
-            var result = new List<byte[]>(SensorValuesPageCount);
+            var result = new List<(byte[], byte[])>(SensorValuesPageCount);
             var totalCount = 0;
 
             foreach (var database in databases)
