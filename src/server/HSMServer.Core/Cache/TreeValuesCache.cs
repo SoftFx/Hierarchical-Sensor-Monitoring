@@ -501,6 +501,7 @@ namespace HSMServer.Core.Cache
 
         private List<PolicyEntity> RequestPolicies()
         {
+            //TODO: remove after migration old policies to new style
             //_logger.Info($"{nameof(IDatabaseCore.GetAllOldPolicies)} is requesting");
             //var policyEntities = _database.GetAllOldPolicies();
             //_logger.Info($"{nameof(IDatabaseCore.GetAllOldPolicies)} requested");

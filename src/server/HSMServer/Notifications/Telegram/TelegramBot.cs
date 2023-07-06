@@ -12,7 +12,6 @@ using Telegram.Bot;
 using Telegram.Bot.Exceptions;
 using Telegram.Bot.Polling;
 using Telegram.Bot.Types;
-using Telegram.Bot.Types.Enums;
 using User = HSMServer.Model.Authentication.User;
 
 namespace HSMServer.Notifications
@@ -174,16 +173,13 @@ namespace HSMServer.Notifications
                         foreach (var (_, chat) in chats)
                             if (entity.CanSendData(result.SensorId, chat.ChatId))
                             {
-                                if (entity.Notifications.UsedTelegram.MessagesDelaySec == 0)
-                                {
-                                    foreach (var alert in result)
+                                var isInstant = entity.Notifications.UsedTelegram.MessagesDelaySec == 0;
+
+                                foreach (var alert in result)
+                                    if (isInstant)
                                         SendMessage(chat.ChatId, alert.ToString());
-                                }
-                                else
-                                {
-                                    foreach (var alert in result)
+                                    else
                                         chat.MessageBuilder.AddMessage(alert);
-                                }
                             }
             }
             catch (Exception ex)
@@ -205,9 +201,7 @@ namespace HSMServer.Notifications
                             {
                                 var message = chat.MessageBuilder.GetAggregateMessage(entity.Notifications.UsedTelegram.MessagesDelaySec);
 
-                                if (!string.IsNullOrEmpty(message))
-                                    SendMessage(chat.ChatId, message);
-                                //SendMarkdownMessageAsync(chat.ChatId, message);
+                                SendMessage(chat.ChatId, message);
                             }
                     }
 
@@ -226,8 +220,11 @@ namespace HSMServer.Notifications
         //private void SendMarkdownMessageAsync(ChatId chat, string message) =>
         //    _bot?.SendTextMessageAsync(chat, message, ParseMode.MarkdownV2, cancellationToken: _tokenSource.Token);
 
-        private void SendMessage(ChatId chat, string message) =>
-            _bot?.SendTextMessageAsync(chat, message, cancellationToken: _tokenSource.Token);
+        private void SendMessage(ChatId chat, string message)
+        {
+            if (!string.IsNullOrEmpty(message))
+                _bot?.SendTextMessageAsync(chat, message, cancellationToken: _tokenSource.Token);
+        }
 
         private void RemoveProductEventHandler(ProductModel model, ActionType transaction)
         {
