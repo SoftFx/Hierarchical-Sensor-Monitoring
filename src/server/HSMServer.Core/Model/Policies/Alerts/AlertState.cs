@@ -12,11 +12,12 @@ namespace HSMServer.Core.Model.Policies
         private const StringSplitOptions SplitOptions = StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries;
         private const char Separator = ' ';
 
-        private readonly static Dictionary<string, PropertyInfo> _publicProperties = typeof(AlertState).GetProperties(BindingFlags.Public)
-                                                                                                       .ToDictionary(k => k.Name, v => v);
-        private readonly static ConcurrentDictionary<string, string> _variableTemplates = new();
+        private readonly static Dictionary<string, PropertyInfo> _publicProperties = typeof(AlertState).GetProperties()
+            .Where(u => Attribute.IsDefined(u, typeof(CommentVariableAttribute))).ToDictionary(k => k.Name, v => v);
 
-        public static Dictionary<string, string> Variables { get; } = new();
+        private readonly static ConcurrentDictionary<string, (string index, string property)> _variables = new();
+
+        public static Dictionary<string, string> VariablesHelp { get; } = new();
 
 
         public string this[string propertyName]
@@ -25,6 +26,9 @@ namespace HSMServer.Core.Model.Policies
 
             set => _publicProperties[propertyName].SetValue(this, value);
         }
+
+
+        internal AlertSystemTemplate Template { get; set; }
 
 
         [CommentVariable("$product", "Parent product name")]
@@ -72,18 +76,22 @@ namespace HSMServer.Core.Model.Policies
 
         static AlertState()
         {
+            int index = 0;
+
             foreach (var prop in _publicProperties.Values)
             {
                 var attr = prop.GetCustomAttribute<CommentVariableAttribute>();
 
                 if (attr is not null)
-                    Variables.Add(attr.Variable, attr.Description);
+                {
+                    var variable = attr.Variable;
+
+                    _variables.TryAdd(variable, ($"{{{index++}}}", prop.Name));
+
+                    VariablesHelp.Add(variable, attr.Description);
+                }
             }
 
-            var variables = Variables.Keys.ToList();
-
-            for (int i = 0; i < variables.Count; ++i)
-                _variableTemplates.TryAdd(variables[i], $"{{{i}}}");
         }
 
 
@@ -95,16 +103,21 @@ namespace HSMServer.Core.Model.Policies
 
             foreach (var prop in _publicProperties.Values)
             {
-                var curValue = prop.GetValue(this, null);
-                var otherValue = prop.GetValue(other, null);
+                var propName = prop.Name;
 
-                if (!curValue.Equals(otherValue))
+                if (UseProperty(propName) && other.UseProperty(propName))
                 {
-                    diffProp = prop.Name;
-                    hasDiff = !hasDiff; // true -> false mean find 2 diff
+                    var curValue = prop.GetValue(this, null);
+                    var otherValue = prop.GetValue(other, null);
 
-                    if (!hasDiff)
-                        return false;
+                    if (!curValue.Equals(otherValue))
+                    {
+                        diffProp = prop.Name;
+                        hasDiff = !hasDiff; // true -> false mean find 2 diff
+
+                        if (!hasDiff)
+                            return false;
+                    }
                 }
             }
 
@@ -112,25 +125,36 @@ namespace HSMServer.Core.Model.Policies
         }
 
 
-        internal string BuildComment(string template) => string.Format(template, Product, Path, Sensor,
-            Operation, Target, Status, Time, Comment, ValueSingle, MinValueBar, MaxValueBar, MeanValueBar,
-            LastValueBar);
+        public string BuildComment(string template = null) => string.Format(template ?? Template.Template,
+            Product, Path, Sensor, Status, Time, Comment, ValueSingle, MinValueBar, MaxValueBar, MeanValueBar,
+            LastValueBar, Operation, Target);
 
 
-        internal static string BuildSystemTemplate(string raw)
+        private bool UseProperty(string name) => Template?.UsedVariables.Contains(name) ?? false;
+
+
+        internal static AlertSystemTemplate BuildSystemTemplate(string raw)
         {
             var words = raw?.Split(Separator, SplitOptions) ?? Array.Empty<string>();
+            var hash = new HashSet<string>();
 
             for (int i = 0; i < words.Length; ++i)
             {
                 ref string word = ref words[i];
 
-                foreach (var (property, index) in _variableTemplates)
-                    if (word.Contains(property))
-                        word = word.Replace(property, index);
+                foreach (var (variable, (index, property)) in _variables)
+                    if (word.Contains(variable))
+                    {
+                        word = word.Replace(variable, index);
+                        hash.Add(property);
+                    }
             }
 
-            return string.Join(Separator, words);
+            return new()
+            {
+                UsedVariables = hash,
+                Template = string.Join(Separator, words),
+            };
         }
 
         internal static AlertState Build<T>(BaseValue<T> value, BaseSensorModel sensor)

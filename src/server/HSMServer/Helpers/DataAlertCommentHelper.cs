@@ -7,6 +7,6 @@ namespace HSMServer.Helpers
     public static class DataAlertCommentHelper
     {
         public static HtmlString CreateCommentHelp() =>
-            new($"There is the next variables:<br/>{string.Join("<br/>", AlertState.Variables.Select(p => $"<b>{p.Key} -</b> {p.Value}"))}");
+            new($"There is the next variables:<br/>{string.Join("<br/>", AlertState.VariablesHelp.Select(p => $"<b>{p.Key} -</b> {p.Value}"))}");
     }
 }

@@ -27,7 +27,7 @@ namespace HSMServer.Notifications.Telegram.AddressBook.MessageBuilder
         {
             var apply = _baseState.HasLessThanTwoDiff(alert, out var diffName);
 
-            apply &= string.IsNullOrEmpty(diffName) || diffName == _groupDiffPropertyName;
+            apply &= string.IsNullOrEmpty(_groupDiffPropertyName) || diffName == _groupDiffPropertyName;
 
             if (apply)
             {
@@ -58,7 +58,9 @@ namespace HSMServer.Notifications.Telegram.AddressBook.MessageBuilder
                 if (hiddenItemsCnt > 0)
                     group = $"{group} ... and {hiddenItemsCnt} more";
 
-                return _baseAlert.BuildFullComment($"[{group}]");
+                _baseState[_groupDiffPropertyName] = $"[{group}]";
+
+                return _baseAlert.BuildFullComment(_baseState.BuildComment());
             }
         }
     }

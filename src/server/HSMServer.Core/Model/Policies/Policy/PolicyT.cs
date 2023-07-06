@@ -79,7 +79,8 @@ namespace HSMServer.Core.Model.Policies
 
     public abstract class Policy<T> : Policy where T : BaseValue
     {
-        private string _userTemplate, _systemTemplate;
+        private AlertSystemTemplate _systemTemplate;
+        private string _userTemplate;
 
 
         public override string Template
@@ -105,7 +106,7 @@ namespace HSMServer.Core.Model.Policies
         public string BuildStateAndComment(T value, BaseSensorModel sensor)
         {
             State = GetState(value, sensor);
-            AlertComment = State.BuildComment(_systemTemplate);
+            AlertComment = State.BuildComment();
 
             return AlertComment;
         }
@@ -114,6 +115,8 @@ namespace HSMServer.Core.Model.Policies
         {
             state.Operation = Operation.GetDisplayName();
             state.Target = Target.Value;
+
+            state.Template = _systemTemplate;
 
             return state;
         }

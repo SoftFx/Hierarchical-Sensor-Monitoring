@@ -16,7 +16,7 @@ namespace HSMServer.Core.Model.Policies
 
         public string LastComment { get; private set; }
 
-        public int Count { get; private set; } = 1;
+        public int Count { get; private set; }
 
 
         public (string, int) Key => (Icon, Count);
@@ -27,7 +27,8 @@ namespace HSMServer.Core.Model.Policies
             Icon = policy.Icon;
             PolicyId = policy.Id;
             Template = policy.Template;
-            LastComment = policy.AlertComment;
+
+            AddPolicyResult(policy);
         }
 
 

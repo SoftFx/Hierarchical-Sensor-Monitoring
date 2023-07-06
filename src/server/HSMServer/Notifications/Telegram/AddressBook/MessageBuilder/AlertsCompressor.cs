@@ -39,8 +39,9 @@ namespace HSMServer.Notifications.Telegram.AddressBook.MessageBuilder
 
         internal IEnumerable<string> GetGroups()
         {
-            foreach (var group in this)
-                yield return group.Value.ToString();
+            foreach (var (_, groups) in this)
+                foreach (var group in groups)
+                    yield return group.ToString();
 
             Clear();
         }
