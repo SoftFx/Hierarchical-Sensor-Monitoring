@@ -43,14 +43,15 @@ public class JournalCacheTests : MonitoringCoreTestsBase<TreeValuesCacheFixture>
         for (int i = 0; i < n; i++)
         {
             string value = RandomGenerator.GetRandomString();
-            var journal = new JournalRecordModel(id, new DateTime(RandomGenerator.GetRandomTimeSpan(DateTime.MaxValue.Ticks).Ticks), value);
+            var journal = new JournalRecordModel(id, new DateTime(RandomGenerator.GetRandomTimeSpan(3155368608000005611, 3155362560000005611).Ticks), value);
             journals.Add(journal);
             _journalService.AddJournal(journal);
         }
 
         await Task.Delay(1000);
-        var expected = journals.OrderBy(x => x.Key.Time).ToList();
-        var actual = await _journalService.GetJournalValuesPage(id, DateTime.MinValue, DateTime.MaxValue, RecordType.Actions, 50000).Flatten();
+        var expected = journals.OrderByDescending(x => x.Key.Time).ToList();
+        var actual = new List<JournalRecordModel>();
+        actual = await _journalService.GetJournalValuesPage(id, DateTime.MinValue, DateTime.MaxValue, RecordType.Actions, 50000).Flatten();
 
         for (int i = 0; i < n; i++)
         {
@@ -72,5 +73,26 @@ public class JournalCacheTests : MonitoringCoreTestsBase<TreeValuesCacheFixture>
         }
 
         return sensors;
+    }
+
+    [Theory]
+    [InlineData(100)]
+    public void CHeckKeys(int n)
+    {
+        for (int i = 0; i < n; i++)
+        {
+            var id = Guid.NewGuid();
+            var value = RandomGenerator.GetRandomString();
+            var record = new JournalRecordModel(id, new DateTime(RandomGenerator.GetRandomTimeSpan(DateTime.MaxValue.Ticks, DateTime.MinValue.Ticks).Ticks), value);
+
+            var key = record.Key;
+
+            var desKey = JournalKey.FromBytes(key.GetBytes());
+            
+            Assert.Equal(key.Id, desKey.Id);
+            Assert.Equal(key.Time, desKey.Time);
+            Assert.Equal(key.Type, desKey.Type);
+            
+        }
     }
 }

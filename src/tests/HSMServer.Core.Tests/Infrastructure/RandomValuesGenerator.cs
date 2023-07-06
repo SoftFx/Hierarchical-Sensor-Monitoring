@@ -32,8 +32,8 @@ namespace HSMServer.Core.Tests.Infrastructure
             return new string(stringChars);
         }
 
-        public static TimeSpan GetRandomTimeSpan(long maxValue = long.MaxValue) =>
-            TimeSpan.FromTicks(_random.Value.NextInt64(0L, maxValue));
+        public static TimeSpan GetRandomTimeSpan(long maxValue = long.MaxValue, long minValue = 0L) =>
+            TimeSpan.FromTicks(_random.Value.NextInt64(minValue, maxValue));
 
         internal static byte[] GetRandomBytes(int size = 8)
         {
