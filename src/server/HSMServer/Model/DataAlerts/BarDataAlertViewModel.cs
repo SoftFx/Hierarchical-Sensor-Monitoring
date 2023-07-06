@@ -21,7 +21,7 @@ namespace HSMServer.Model.DataAlerts
             nameof(BarBaseValue<U>.LastValue),
         };
 
-        protected override List<PolicyOperation> Actions { get; } = new()
+        protected override List<PolicyOperation> Operations { get; } = new()
         {
             PolicyOperation.LessThanOrEqual,
             PolicyOperation.LessThan,

@@ -1,0 +1,68 @@
+﻿@using HSMServer.Model.DataAlerts
+
+@model ActionViewModel
+
+@addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
+
+
+<div name="alertAction" class="d-flex flex-row align-items-center alert-blocks-group ms-3">
+    <div class="@(Model.IsMain ? "d-none" : "d-flex") alert-text-block alert-add me-3">and</div>
+
+    <select name="actionsSelect" class="alert-block alert-select property-select">
+        <option value="@ActionViewModel.SendNotifyAction">send notification</option>
+        <option value="@ActionViewModel.ShowIconAction">show icon</option>
+        <option value="@ActionViewModel.SetStatusAction">set sensor status</option>
+    </select>
+
+    <div name="sendNotificationAction">
+        <input type="text" class="alert-block target-input" placeholder="message template" asp-for="Comment" value="@Model.Comment" required>
+    </div>
+
+    <div name="showIconAction" class="d-none" style="height:2rem;">
+        <textarea name="emoji" class="alert-block target-input"></textarea>
+    </div>
+
+    <div name="setStatusAction" class="d-none">
+        <select class="alert-block alert-select target-input" asp-items="@Model.StatusesItems"></select> @*old name  asp-for="Status"*@
+    </div>
+
+    <a><i class="@(Model.IsMain ? "d-none" : "d-flex") fa-solid fa-xmark alert-delete-button"></i></a>
+</div>
+
+
+<script>
+    $(document).ready(function () {
+        $("textarea[name='emoji']").emojioneArea({
+            filtersPosition: "bottom",
+            inline: true
+        });
+    });
+
+    $('select[name="actionsSelect"]').off("change").on("change", function () {
+        let actionBlock = $(this).parents("div[name='alertAction']:first");
+
+        let send = actionBlock.find($(`div[name='sendNotificationAction']`));
+        let show = actionBlock.find($(`div[name='showIconAction']`));
+        let set = actionBlock.find($(`div[name='setStatusAction']`));
+
+        let action = $(this).val();
+        if (action === '@ActionViewModel.SendNotifyAction') {
+            show.removeClass("d-block").addClass('d-none');
+            set.removeClass("d-block").addClass('d-none');
+
+            send.removeClass("d-none").addClass('d-block');
+        }
+        else if (action === '@ActionViewModel.ShowIconAction') {
+            send.removeClass("d-block").addClass('d-none');
+            set.removeClass("d-block").addClass('d-none');
+
+            show.removeClass("d-none").addClass('d-block');
+        }
+        else if (action === '@ActionViewModel.SetStatusAction') {
+            send.removeClass("d-block").addClass('d-none');
+            show.removeClass("d-block").addClass('d-none');
+
+            set.removeClass("d-none").addClass('d-block');
+        }
+    });
+</script>

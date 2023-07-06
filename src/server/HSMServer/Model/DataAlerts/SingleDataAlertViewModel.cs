@@ -14,7 +14,7 @@ namespace HSMServer.Model.DataAlerts
 
         protected override List<string> Properties { get; } = new() { nameof(BaseValue<U>.Value) };
 
-        protected override List<PolicyOperation> Actions { get; } = new()
+        protected override List<PolicyOperation> Operations { get; } = new()
         {
             PolicyOperation.LessThanOrEqual,
             PolicyOperation.LessThan,

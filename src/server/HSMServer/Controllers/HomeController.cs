@@ -602,6 +602,9 @@ namespace HSMServer.Controllers
             return PartialView("~/Views/Home/Alerts/_ConditionBlock.cshtml", viewModel);
         }
 
+        public IActionResult AddAlertAction() =>
+            PartialView("~/Views/Home/Alerts/_ActionBlock.cshtml", new ActionViewModel(false));
+
 
         [HttpPost]
         public void SendTestMessage(DataAlertViewModel alert)

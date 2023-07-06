@@ -57,7 +57,7 @@ namespace HSMServer.Model.DataAlerts
 
         protected abstract List<string> Properties { get; }
 
-        protected abstract List<PolicyOperation> Actions { get; }
+        protected abstract List<PolicyOperation> Operations { get; }
 
 
         public bool IsModify { get; protected set; }
@@ -77,6 +77,7 @@ namespace HSMServer.Model.DataAlerts
 
 
         public List<ConditionViewModel> Conditions { get; } = new();
+        public List<ActionViewModel> Actions { get; } = new() { new ActionViewModel(true) };
 
 
         public DataAlertViewModelBase()
@@ -85,10 +86,10 @@ namespace HSMServer.Model.DataAlerts
 
             PropertiesItems = Properties.Select(p => new SelectListItem(p, p, false)).ToList();
             IconsItems = Icons.Select(i => new SelectListItem(i.ToIconUnicode(), i)).ToList();
-            ActionsItems = Actions.Select(a => new SelectListItem(a.GetDisplayName(), $"{a}")).ToList();
+            ActionsItems = Operations.Select(a => new SelectListItem(a.GetDisplayName(), $"{a}")).ToList();
             StatusesItems = AlertPredefined.Statuses.Select(s => new SelectListItem(s.Value, $"{s.Key}")).ToList();
 
-            Status = SensorStatus.Ok;
+            //Status = SensorStatus.Ok;
         }
     }
 
