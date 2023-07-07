@@ -1,7 +1,6 @@
 ﻿using HSMServer.Authentication;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Model;
-using HSMServer.Extensions;
 using HSMServer.Model.TreeViewModel;
 using HSMServer.Notification.Settings;
 using HSMServer.ServerConfiguration;
@@ -13,7 +12,6 @@ using Telegram.Bot;
 using Telegram.Bot.Exceptions;
 using Telegram.Bot.Polling;
 using Telegram.Bot.Types;
-using Telegram.Bot.Types.Enums;
 using User = HSMServer.Model.Authentication.User;
 
 namespace HSMServer.Notifications
@@ -43,10 +41,8 @@ namespace HSMServer.Notifications
 
         private string BotToken => _config.BotToken;
 
-        private bool AreBotMessagesEnabled => _config.IsRunning;
-
-
         private bool IsBotRunning => _bot is not null;
+
 
         internal TelegramBot(IUserManager userManager, ITreeValuesCache cache, TreeViewModel tree, TelegramConfig config)
         {
@@ -57,13 +53,12 @@ namespace HSMServer.Notifications
             _tree = tree;
 
             cache.ChangeProductEvent += RemoveProductEventHandler;
-            //cache.NotifyAboutChangesEvent += SendMessage;
+            cache.ChangePolicyResultEvent += SendMessage;
 
             _updateHandler = new(_addressBook, _userManager, _tree, config);
 
             FillAddressBook();
         }
-
 
         public async ValueTask DisposeAsync()
         {
@@ -108,7 +103,7 @@ namespace HSMServer.Notifications
                     return message;
             }
 
-            if (!IsValidBotConfigurations())
+            if (!_config.IsValid)
                 return ConfigurationsError;
 
             _tokenSource = new CancellationTokenSource();
@@ -169,35 +164,29 @@ namespace HSMServer.Notifications
                     _addressBook.RegisterChat(product, chat);
         }
 
-        //private static bool ShouldSendMessage(INotificatable entity, BaseSensorModel sensor, SensorResult oldStatus, ChatId chatId)
-        //{
-        //    var newStatus = sensor.Status;
-        //    var minWebStatus = entity.Notifications.UsedTelegram.MessagesMinStatus.ToClient();
+        private void SendMessage(PolicyResult result)
+        {
+            try
+            {
+                if (IsBotRunning && _config.IsRunning)
+                    foreach (var (entity, chats) in _addressBook.ServerBook)
+                        foreach (var (_, chat) in chats)
+                            if (entity.CanSendData(result.SensorId, chat.ChatId))
+                            {
+                                var isInstant = entity.Notifications.UsedTelegram.MessagesDelaySec == 0;
 
-        //    return entity.CanSendData(sensor, chatId) && newStatus != oldStatus && sensor.State != SensorState.Muted &&
-        //           (newStatus.Status.ToClient() >= minWebStatus || oldStatus.Status.ToClient() >= minWebStatus);
-        //}
-
-        //private void SendMessage(BaseSensorModel sensor, SensorResult oldStatus)
-        //{
-        //    try
-        //    {
-        //        if (IsBotRunning && AreBotMessagesEnabled)
-        //            foreach (var (entity, chats) in _addressBook.ServerBook)
-        //                foreach (var (_, chat) in chats)
-        //                    if (ShouldSendMessage(entity, sensor, oldStatus, chat.ChatId))
-        //                    {
-        //                        if (entity.Notifications.UsedTelegram.MessagesDelaySec > 0)
-        //                            chat.MessageBuilder.AddMessage(sensor, oldStatus.Status);
-        //                        else
-        //                            SendMarkdownMessageAsync(chat.ChatId, MessageBuilder.GetSingleMessage(sensor));
-        //                    }
-        //    }
-        //    catch (Exception ex)
-        //    {
-        //        _logger.Error(ex);
-        //    }
-        //}
+                                foreach (var alert in result)
+                                    if (isInstant)
+                                        SendMessage(chat.ChatId, alert.ToString());
+                                    else
+                                        chat.MessageBuilder.AddMessage(alert);
+                            }
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex);
+            }
+        }
 
         private async Task MessageReceiver()
         {
@@ -211,8 +200,8 @@ namespace HSMServer.Notifications
                             if (chat.MessageBuilder.ExpectedSendingTime <= DateTime.UtcNow)
                             {
                                 var message = chat.MessageBuilder.GetAggregateMessage(entity.Notifications.UsedTelegram.MessagesDelaySec);
-                                if (!string.IsNullOrEmpty(message))
-                                    SendMarkdownMessageAsync(chat.ChatId, message);
+
+                                SendMessage(chat.ChatId, message);
                             }
                     }
 
@@ -228,8 +217,15 @@ namespace HSMServer.Notifications
             }
         }
 
-        private void SendMarkdownMessageAsync(ChatId chat, string message) =>
-            _bot?.SendTextMessageAsync(chat, message, ParseMode.MarkdownV2, cancellationToken: _tokenSource.Token);
+        //remove after telegram settings migration
+        //private void SendMarkdownMessageAsync(ChatId chat, string message) =>
+        //    _bot?.SendTextMessageAsync(chat, message, ParseMode.MarkdownV2, cancellationToken: _tokenSource.Token);
+
+        private void SendMessage(ChatId chat, string message)
+        {
+            if (!string.IsNullOrEmpty(message))
+                _bot?.SendTextMessageAsync(chat, message, cancellationToken: _tokenSource.Token);
+        }
 
         private void RemoveProductEventHandler(ProductModel model, ActionType transaction)
         {
@@ -241,8 +237,5 @@ namespace HSMServer.Notifications
                     _addressBook.RemoveAllChats(product);
             }
         }
-
-        private bool IsValidBotConfigurations() =>
-            !string.IsNullOrEmpty(BotName) && !string.IsNullOrEmpty(BotToken);
     }
 }

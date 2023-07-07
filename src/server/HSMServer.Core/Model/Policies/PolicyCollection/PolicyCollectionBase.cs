@@ -1,7 +1,7 @@
-﻿using System;
+﻿using HSMDatabase.AccessManager.DatabaseEntities;
+using System;
 using System.Collections;
 using System.Collections.Generic;
-using System.Linq;
 
 namespace HSMServer.Core.Model.Policies
 {
@@ -15,12 +15,7 @@ namespace HSMServer.Core.Model.Policies
 
         internal abstract void AddPolicy<T>(T policy) where T : Policy;
 
-        internal void ApplyPolicies(List<string> policyIds, Dictionary<string, Policy> allPolicies)
-        {
-            foreach (var id in policyIds ?? Enumerable.Empty<string>())
-                if (allPolicies.TryGetValue(id, out var policy))
-                    AddPolicy(policy);
-        }
+        internal abstract void ApplyPolicies(List<string> policyIds, Dictionary<string, PolicyEntity> allPolicies);
 
 
         public abstract IEnumerator<Policy> GetEnumerator();

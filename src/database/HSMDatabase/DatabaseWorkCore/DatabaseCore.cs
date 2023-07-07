@@ -234,29 +234,50 @@ namespace HSMDatabase.DatabaseWorkCore
 
         public void AddPolicy(PolicyEntity entity)
         {
-            _environmentDatabase.AddPolicyIdToList(new Guid(entity.Id).ToString());
+            _environmentDatabase.AddPolicyIdToList(new Guid(entity.Id));
             _environmentDatabase.AddPolicy(entity);
         }
 
         public void UpdatePolicy(PolicyEntity entity) => _environmentDatabase.AddPolicy(entity);
 
-        public void RemovePolicy(Guid id)
-        {
-            var strId = id.ToString();
+        public void RemovePolicy(Guid id) => _environmentDatabase.RemovePolicy(id);
 
-            _environmentDatabase.RemovePolicyFromList(strId);
-            _environmentDatabase.RemovePolicy(strId);
-        }
-
-        public List<byte[]> GetAllPolicies()
+        public List<byte[]> GetAllOldPolicies()
         {
-            var policiesIds = _environmentDatabase.GetAllPoliciesIds();
+            var policiesIds = _environmentDatabase.GetAllOldPoliciesIds();
 
             var policies = new List<byte[]>(policiesIds.Count);
             foreach (var policyId in policiesIds)
             {
-                var policy = _environmentDatabase.GetPolicy(policyId);
+                var policy = _environmentDatabase.GetOldPolicy(policyId);
                 if (policy != null && policy.Length != 0)
+                    policies.Add(policy);
+            }
+
+            return policies;
+        }
+
+        public void RemoveAllOldPolicies()
+        {
+            var policiesIds = _environmentDatabase.GetAllOldPoliciesIds();
+
+            foreach (var id in policiesIds)
+                _environmentDatabase.RemoveOldPolicy(id);
+
+            _environmentDatabase.DropOldPolicyIdsList();
+        }
+
+        public List<PolicyEntity> GetAllPolicies()
+        {
+            var policiesIds = _environmentDatabase.GetAllPoliciesIds();
+
+            var policies = new List<PolicyEntity>(policiesIds.Count);
+
+            foreach (var policyId in policiesIds)
+            {
+                var policy = _environmentDatabase.GetPolicy(policyId);
+
+                if (policy != null)
                     policies.Add(policy);
             }
 

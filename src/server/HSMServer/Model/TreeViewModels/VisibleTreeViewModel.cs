@@ -87,7 +87,7 @@ public sealed class VisibleTreeViewModel
 
         if (_allTree.TryGetValue(id, out var node) && IsVisibleNode(node))
         {
-            node.LoadRenderingNodes(IsVisibleNode, IsVisibleSensor);
+            node.LoadRenderingNodes();
             AddOpenedNode(id);
         }
 
@@ -96,7 +96,7 @@ public sealed class VisibleTreeViewModel
 
     private NodeShallowModel FilterNodes(ProductNodeViewModel product, int depth = 1)
     {
-        var node = new NodeShallowModel(product, _user);
+        var node = new NodeShallowModel(product, _user, IsVisibleNode, IsVisibleSensor);
 
         _allTree.TryAdd(product.Id, node);
 
@@ -108,7 +108,7 @@ public sealed class VisibleTreeViewModel
 
             node.AddChild(subNode);
 
-            if (toRender && IsVisibleNode(subNode))
+            if (toRender)
                 node.ToRenderNode(subNode.Id);
         }
 
@@ -118,7 +118,7 @@ public sealed class VisibleTreeViewModel
 
             node.AddChild(sensor, _user);
 
-            if (toRender && IsVisibleSensor(sensor))
+            if (toRender)
                 node.ToRenderNode(sensor.Id);
         }
 

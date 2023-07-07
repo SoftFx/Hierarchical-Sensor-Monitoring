@@ -326,7 +326,7 @@ namespace HSMServer.Core.Cache
 
         public void NotifyAboutChanges(BaseSensorModel sensor)
         {
-            if (!sensor.PolicyResult.IsOk)
+            if (!sensor.PolicyResult.IsOk && sensor.State != SensorState.Muted)
                 ChangePolicyResultEvent?.Invoke(sensor.PolicyResult);
 
             ChangeSensorEvent?.Invoke(sensor, ActionType.Update);
@@ -506,8 +506,13 @@ namespace HSMServer.Core.Cache
             return sensorEntities;
         }
 
-        private List<byte[]> RequestPolicies()
+        private List<PolicyEntity> RequestPolicies()
         {
+            //TODO: remove after migration old policies to new style
+            //_logger.Info($"{nameof(IDatabaseCore.GetAllOldPolicies)} is requesting");
+            //var policyEntities = _database.GetAllOldPolicies();
+            //_logger.Info($"{nameof(IDatabaseCore.GetAllOldPolicies)} requested");
+
             _logger.Info($"{nameof(IDatabaseCore.GetAllPolicies)} is requesting");
             var policyEntities = _database.GetAllPolicies();
             _logger.Info($"{nameof(IDatabaseCore.GetAllPolicies)} requested");
@@ -515,7 +520,7 @@ namespace HSMServer.Core.Cache
             return policyEntities;
         }
 
-        private void ApplyProducts(List<ProductEntity> productEntities, Dictionary<string, Policy> policies)
+        private void ApplyProducts(List<ProductEntity> productEntities, Dictionary<string, PolicyEntity> policies)
         {
             _logger.Info($"{nameof(productEntities)} are applying");
 
@@ -525,7 +530,7 @@ namespace HSMServer.Core.Cache
 
                 product.Policies.SensorExpired += SetExpiredSnapshot;
 
-                product.Policies.ApplyPolicies(productEntity.Policies, policies);
+                //product.Policies.ApplyPolicies(productEntity.Policies, policies);
 
                 _tree.TryAdd(product.Id, product);
             }
@@ -548,7 +553,7 @@ namespace HSMServer.Core.Cache
         }
 
         private void ApplySensors(List<ProductEntity> productEntities, List<SensorEntity> sensorEntities,
-            Dictionary<string, Policy> policies)
+            Dictionary<string, PolicyEntity> policies)
         {
             _logger.Info($"{nameof(sensorEntities)} are applying");
             ApplySensors(sensorEntities, policies);
@@ -571,7 +576,7 @@ namespace HSMServer.Core.Cache
             _logger.Info($"{nameof(FillSensorsData)} is finished");
         }
 
-        private void ApplySensors(List<SensorEntity> entities, Dictionary<string, Policy> policies)
+        private void ApplySensors(List<SensorEntity> entities, Dictionary<string, PolicyEntity> policies)
         {
             foreach (var entity in entities)
             {
@@ -791,14 +796,14 @@ namespace HSMServer.Core.Cache
                 _snapshot.FlushState(true);
         }
 
-        private static Dictionary<string, Policy> GetPolicyModels(List<byte[]> policyEntities)
+        private static Dictionary<string, PolicyEntity> GetPolicyModels(List<PolicyEntity> policyEntities)
         {
-            Dictionary<string, Policy> policies = new(policyEntities.Count);
+            Dictionary<string, PolicyEntity> policies = new(policyEntities.Count);
 
             foreach (var entity in policyEntities)
             {
-                var policy = JsonSerializer.Deserialize<Policy>(entity);
-                policies.Add(policy.Id.ToString(), policy);
+                //var policy = JsonSerializer.Deserialize<Policy>(entity);
+                policies.Add(new Guid(entity.Id).ToString(), entity);
             }
 
             return policies;

@@ -1,5 +1,4 @@
-﻿using HSMServer.Core.Model.Policies.Infrastructure;
-using System;
+﻿using System;
 using System.Numerics;
 using System.Text;
 
@@ -9,8 +8,7 @@ namespace HSMServer.Core.Model.Policies
     {
         protected override Func<T, U> GetProperty(string property) => PolicyBuilder.GetSingleProperty<T, U>(property);
 
-        protected override string GetComment(T value, BaseSensorModel sensor) =>
-            CommentBuilder.GetSingleComment(value, sensor, this);
+        protected override AlertState GetState(T value, BaseSensorModel sensor) => FillPolicyState(AlertState.Build(value, sensor));
     }
 
 
@@ -22,8 +20,7 @@ namespace HSMServer.Core.Model.Policies
 
         protected override Func<U, U, bool> GetOperation(PolicyOperation operation) => PolicyBuilder.GetNumberOperation<U>(operation);
 
-        protected override string GetComment(T value, BaseSensorModel sensor) =>
-            CommentBuilder.GetBarComment(value, sensor, this);
+        protected override AlertState GetState(T value, BaseSensorModel sensor) => FillPolicyState(AlertState.Build(value, sensor));
     }
 
 
