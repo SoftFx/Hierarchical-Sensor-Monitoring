@@ -1,11 +1,9 @@
-using HSMCommon.Extensions;
 using HSMServer.ApiObjectsConverters;
 using HSMServer.Authentication;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Extensions;
 using HSMServer.Core.Model;
-using HSMServer.Core.Model.Policies.Infrastructure;
 using HSMServer.Extensions;
 using HSMServer.Folders;
 using HSMServer.Helpers;
@@ -27,7 +25,6 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
-using SensorStatus = HSMSensorDataObjects.SensorStatus;
 using TimeInterval = HSMServer.Model.TimeInterval;
 
 namespace HSMServer.Controllers
@@ -613,15 +610,16 @@ namespace HSMServer.Controllers
                 !_treeViewModel.Nodes.TryGetValue(sensor.RootProduct.Id, out var product))
                 return;
 
-            var template = CommentBuilder.GetTemplateString(alert.Comment);
-            var comment = string.Format(template, product.Name, sensor.Path, sensor.Name,
-                alert.Operation.GetDisplayName(), alert.Value, SensorStatus.Ok, DateTime.UtcNow, "value comment", 0, 0, 0, 0, 0);
-            var testMessage = $"↕️ [{product.Name}]{sensor.Path} = {comment}";
+            //TODO fix after creating alert constructor and merge AlertState
+            //var template = CommentBuilder.GetTemplateString(alert.Comment);
+            //var comment = string.Format(template, product.Name, sensor.Path, sensor.Name,
+            //    alert.Operation.GetDisplayName(), alert.Value, SensorStatus.Ok, DateTime.UtcNow, "value comment", 0, 0, 0, 0, 0);
+            //var testMessage = $"↕️ [{product.Name}]{sensor.Path} = {comment}";
 
-            var notifications = product.Notifications;
-            foreach (var (chat, _) in notifications.Telegram.Chats)
-                if (notifications.IsSensorEnabled(sensor.Id) && !notifications.IsSensorIgnored(sensor.Id, chat))
-                    _telegramBot.SendTestMessage(chat, testMessage);
+            //var notifications = product.Notifications;
+            //foreach (var (chat, _) in notifications.Telegram.Chats)
+            //    if (notifications.IsSensorEnabled(sensor.Id) && !notifications.IsSensorIgnored(sensor.Id, chat))
+            //        _telegramBot.SendTestMessage(chat, testMessage);
         }
 
 

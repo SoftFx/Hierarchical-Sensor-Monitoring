@@ -51,16 +51,11 @@ namespace HSMServer.Model.DataAlerts
         public const string SendNotifyAction = "Send notification";
 
 
-        public abstract string DisplayComment { get; }
-
-        protected abstract List<string> Icons { get; }
+        protected abstract List<PolicyOperation> Operations { get; }
 
         protected abstract List<string> Properties { get; }
 
-        protected abstract List<PolicyOperation> Operations { get; }
-
-
-        public bool IsModify { get; protected set; }
+        protected abstract List<string> Icons { get; }
 
 
         public List<SelectListItem> PropertiesItems { get; }
@@ -78,6 +73,11 @@ namespace HSMServer.Model.DataAlerts
 
         public List<ConditionViewModel> Conditions { get; } = new();
         public List<ActionViewModel> Actions { get; } = new() { new ActionViewModel(true) };
+
+
+        public string DisplayComment { get; protected set; }
+
+        public bool IsModify { get; protected set; }
 
 
         public DataAlertViewModelBase()
@@ -112,6 +112,8 @@ namespace HSMServer.Model.DataAlerts
             Status = policy.Status.ToClient();
             Comment = policy.Template;
             Icon = policy.Icon;
+
+            DisplayComment = policy.BuildStateAndComment(sensor.LastValue as T, sensor);
         }
     }
 }

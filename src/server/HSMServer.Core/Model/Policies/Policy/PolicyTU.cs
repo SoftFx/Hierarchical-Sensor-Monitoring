@@ -66,7 +66,8 @@ namespace HSMServer.Core.Model.Policies
         {
             if (_executeOperation(_getProperty(value), _targetValue))
             {
-                AlertComment = GetComment(value, sensor);
+                BuildStateAndComment(value, sensor);
+
                 SensorResult = new SensorResult(Status, AlertComment);
 
                 return false;

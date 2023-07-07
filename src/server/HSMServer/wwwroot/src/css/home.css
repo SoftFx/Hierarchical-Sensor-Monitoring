@@ -403,16 +403,16 @@ img .tree-png-icon {
 
 .alert-block {
     border-radius: 5px;
-    height: 2rem;
+    height: 1.5rem;
     border: none;
     margin-right: 2px;
     display: inline-block;
 }
 
 .alert-text-block {
-    padding: 2px 7px 3px;
+    padding: 0px 7px;
     border-radius: 5px;
-    height: 2rem;
+    height: 1.5rem;
     margin-right: 2px;
 }
 
@@ -475,13 +475,13 @@ img .tree-png-icon {
 
 
 .emojionearea.emojionearea-inline > .emojionearea-editor {
-    height: 2rem;
+    height: 1.5rem;
     left: 4px;
     padding: 2px 0;
 }
 
 .emojionearea.emojionearea-inline {
-    height: 2rem;
+    height: 1.5rem;
     width: 60px;
 }
 
