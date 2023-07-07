@@ -11,15 +11,14 @@ namespace HSMServer.Core.Model.Policies
         public Guid Id { get; private set; }
 
 
-        public List<PolicyCondition> Conditions { get; }
-
-
         internal protected virtual SensorResult SensorResult { get; protected set; }
 
         internal protected virtual AlertState State { get; protected set; }
 
         internal protected virtual string AlertComment { get; protected set; }
 
+
+        public List<PolicyCondition> Conditions { get; } = new();
 
 
         public virtual SensorStatus Status { get; protected set; }
@@ -39,45 +38,34 @@ namespace HSMServer.Core.Model.Policies
 
         internal void Update(DataPolicyUpdate update)
         {
-            if (update.Conditions != null)
+            PolicyCondition Update(PolicyCondition condition, PolicyConditionUpdate update)
             {
-                Conditions.Clear();
+                condition.Combination = update.Combination;
+                condition.Operation = update.Operation;
+                condition.Target = update.Target;
+                condition.Property = update.Property;
 
-                foreach (var condUpdate in update.Conditions)
-                {
-                    var newCond = GetCondition();
-
-                    newCond.Combination = condUpdate.Combination;
-                    newCond.Operation = condUpdate.Operation;
-                    newCond.Target = condUpdate.Target;
-                    newCond.Property = condUpdate.Property;
-
-                    Conditions.Add(newCond);
-                }
+                return condition;
             }
 
             Template = update.Template;
             Status = update.Status;
             Icon = update.Icon;
+
+            UpdateConditions(update.Conditions, Update);
         }
 
         internal void Apply(PolicyEntity entity)
         {
+            PolicyCondition Update(PolicyCondition condition, PolicyConditionEntity entity) => condition.FromEntity(entity);
+
             Id = new Guid(entity.Id);
-
-
-            if (entity.Conditions != null)
-            {
-                Conditions.Clear();
-
-                foreach (var condEntity in entity.Conditions)
-                    Conditions.Add(GetCondition().FromEntity(condEntity));
-            }
-
             Status = (SensorStatus)entity.SensorStatus;
 
             Template = entity.Template;
             Icon = entity.Icon;
+
+            UpdateConditions(entity.Conditions, Update);
         }
 
         internal PolicyEntity ToEntity() => new()
@@ -90,5 +78,16 @@ namespace HSMServer.Core.Model.Policies
             Template = Template,
             Icon = Icon,
         };
+
+        private void UpdateConditions<T>(List<T> updates, Func<PolicyCondition, T, PolicyCondition> updateHandler)
+        {
+            if (updates?.Count > 0)
+            {
+                Conditions.Clear();
+
+                foreach (var update in updates)
+                    Conditions.Add(updateHandler(GetCondition(), update));
+            }
+        }
     }
 }
