@@ -596,7 +596,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
 
         private Policy GetPolicyByIdFromDb(Guid id)
         {
-            var policyEntities = _databaseCoreManager.DatabaseCore.GetAllPolicies();
+            var policyEntities = _databaseCoreManager.DatabaseCore.GetAllOldPolicies();
 
             foreach (var entity in policyEntities)
             {

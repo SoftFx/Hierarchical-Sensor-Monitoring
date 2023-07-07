@@ -1,4 +1,5 @@
-﻿using HSMServer.Core.Cache;
+﻿using HSMDatabase.AccessManager.DatabaseEntities;
+using HSMServer.Core.Cache;
 using HSMServer.Core.Cache.UpdateEntities;
 using System;
 using System.Collections.Concurrent;
@@ -152,5 +153,18 @@ namespace HSMServer.Core.Model.Policies
         }
 
         public override IEnumerator<Policy> GetEnumerator() => _storage.Values.GetEnumerator();
+
+        internal override void ApplyPolicies(List<string> policyIds, Dictionary<string, PolicyEntity> allPolicies)
+        {
+            foreach (var id in policyIds ?? Enumerable.Empty<string>())
+                if (allPolicies.TryGetValue(id, out var entity))
+                {
+                    var policy = new PolicyType();
+
+                    policy.Apply(entity);
+
+                    _storage.TryAdd(policy.Id, policy);
+                }
+        }
     }
 }

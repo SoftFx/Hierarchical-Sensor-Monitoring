@@ -1,4 +1,5 @@
-﻿using System;
+﻿using HSMDatabase.AccessManager.DatabaseEntities;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -56,6 +57,11 @@ namespace HSMServer.Core.Model.Policies
 
             _bySensorType.Add(type, collection);
             _byPolicyType.Add(typeof(PolicyType), collection);
+        }
+
+        internal override void ApplyPolicies(List<string> policyIds, Dictionary<string, PolicyEntity> allPolicies)
+        {
+            throw new NotImplementedException();
         }
     }
 }
