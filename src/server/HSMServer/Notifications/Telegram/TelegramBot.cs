@@ -217,6 +217,7 @@ namespace HSMServer.Notifications
             }
         }
 
+        //remove after telegram settings migration
         //private void SendMarkdownMessageAsync(ChatId chat, string message) =>
         //    _bot?.SendTextMessageAsync(chat, message, ParseMode.MarkdownV2, cancellationToken: _tokenSource.Token);
 

@@ -86,7 +86,6 @@ namespace HSMServer.Core.Model.Policies
         public override string Template
         {
             get => _userTemplate;
-
             protected set
             {
                 if (_userTemplate == value)

@@ -441,7 +441,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             }
             catch (Exception e)
             {
-                _logger.Error(e, $"Failed to remove Old Policy list");
+                _logger.Error(e, $"Failed to remove Old Policy Ids list");
             }
         }
 
@@ -491,7 +491,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             }
             catch (Exception e)
             {
-                _logger.Error(e, $"Failed to remove Policy by {id}");
+                _logger.Error(e, $"Failed to remove old Policy by {id}");
             }
         }
 
@@ -630,7 +630,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             {
                 return _database.TryRead(key, out byte[] value) ?
                     JsonSerializer.Deserialize<List<string>>(Encoding.UTF8.GetString(value))
-                    : new List<string>();
+                    : new();
             }
             catch (Exception e)
             {
@@ -646,7 +646,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             {
                 return _database.TryRead(key, out byte[] value) ?
                     JsonSerializer.Deserialize<List<byte[]>>(Encoding.UTF8.GetString(value))
-                    : new List<byte[]>();
+                    : new();
             }
             catch (Exception e)
             {

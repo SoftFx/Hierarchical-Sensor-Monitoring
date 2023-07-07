@@ -23,7 +23,6 @@ namespace HSMServer.Core.Model.Policies
         public string this[string propertyName]
         {
             get => _publicProperties[propertyName].GetValue(this, null).ToString();
-
             set => _publicProperties[propertyName].SetValue(this, value);
         }
 
