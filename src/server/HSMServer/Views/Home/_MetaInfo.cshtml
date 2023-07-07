@@ -121,6 +121,7 @@
     })
 
     $(document).on("submit", "#editMetaInfo_form", function (event) {
+        console.log("submit");
         event.preventDefault();
         event.stopImmediatePropagation();
 
@@ -168,8 +169,11 @@
         $(`div.dataAlertRow`).each(function (i) {
             $(this).find(`div[name='alertCondition']`).each(function (j) {
                 setFormDataAlertsConditionProperty(formData, type, i, j, $(this), "Conditions", "select", "Property");
-                setFormDataAlertsConditionProperty(formData, type, i, j, $(this), "Conditions", "select", "Action");
-                setFormDataAlertsConditionProperty(formData, type, i, j, $(this), "Conditions", "input", "Target");
+
+                if (!$(this).find('div[name="valueCondition"]').hasClass('d-none')) {
+                    setFormDataAlertsConditionProperty(formData, type, i, j, $(this), "Conditions", "select", "Action");
+                    setFormDataAlertsConditionProperty(formData, type, i, j, $(this), "Conditions", "input", "Target");
+                }
             });
         });
     }

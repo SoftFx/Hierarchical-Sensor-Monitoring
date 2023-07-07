@@ -43,15 +43,17 @@
 <script>
     $('select[name="Property"]').off("change").on("change", function () {
         let conditionBlock = $(this).parents("div[name='alertCondition']:first");
-
+        
         let value = conditionBlock.find($(`div[name='valueCondition']`));
         let timeToLive = conditionBlock.find($(`div[name='ttlCondition']`));
         let sensitivity = conditionBlock.find($(`div[name='sensitivityCondition']`));
 
+        let targetInput = value.find($(`input[name='Target']`));
         let addButton = $(this).parents("div.fullCondition:first").find($(`a.addCondition`));
 
         let condition = $(this).val();
         if (condition === '@ConditionViewModel.TimeToLiveCondition') {
+            targetInput.attr('required', false);
             value.removeClass("d-flex").addClass('d-none');
             sensitivity.removeClass("d-flex").addClass('d-none');
             addButton.removeClass("d-block").addClass('d-none');
@@ -59,6 +61,7 @@
             timeToLive.removeClass("d-none").addClass('d-flex');
         }
         else if (condition === '@ConditionViewModel.SensitivityCondition') {
+            targetInput.attr('required', false);
             value.removeClass("d-flex").addClass('d-none');
             timeToLive.removeClass("d-flex").addClass('d-none');
 
@@ -69,6 +72,7 @@
             sensitivity.removeClass("d-flex").addClass('d-none');
             timeToLive.removeClass("d-flex").addClass('d-none');
 
+            targetInput.attr('required', true);
             value.removeClass("d-none").addClass('d-flex');
             addButton.removeClass("d-none").addClass('d-block');
         }
