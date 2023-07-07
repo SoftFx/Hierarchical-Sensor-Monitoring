@@ -1,6 +1,7 @@
 ﻿using HSMServer.Core.Cache;
 using System;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 
 namespace HSMServer.BackgroundServices
@@ -18,6 +19,12 @@ namespace HSMServer.BackgroundServices
             _cache = cache;
         }
 
+        // uncomment for immediately running
+        //protected override Task ExecuteAsync(CancellationToken token) 
+        //{
+        //    ServiceAction();
+        //    return base.ExecuteAsync(token);
+        //}
 
         protected override Task ServiceAction()
         {

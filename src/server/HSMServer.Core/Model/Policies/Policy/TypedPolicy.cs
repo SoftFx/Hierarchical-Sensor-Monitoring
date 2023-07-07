@@ -8,7 +8,7 @@ namespace HSMServer.Core.Model.Policies
     {
         protected override Func<T, U> GetProperty(string property) => PolicyBuilder.GetSingleProperty<T, U>(property);
 
-        protected override AlertState GetState(T value, BaseSensorModel sensor) => FillPolicyState(AlertState.Build(value, sensor));
+        protected override AlertState GetState(T value, BaseSensorModel sensor) => AlertState.Build(value, sensor);
     }
 
 
@@ -20,7 +20,7 @@ namespace HSMServer.Core.Model.Policies
 
         protected override Func<U, U, bool> GetOperation(PolicyOperation operation) => PolicyBuilder.GetNumberOperation<U>(operation);
 
-        protected override AlertState GetState(T value, BaseSensorModel sensor) => FillPolicyState(AlertState.Build(value, sensor));
+        protected override AlertState GetState(T value, BaseSensorModel sensor) => AlertState.Build(value, sensor);
     }
 
 

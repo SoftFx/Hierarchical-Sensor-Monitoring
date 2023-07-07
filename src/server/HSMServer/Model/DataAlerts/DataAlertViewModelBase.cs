@@ -32,8 +32,8 @@ namespace HSMServer.Model.DataAlerts
         public Guid Id { get; set; }
 
 
-        internal DataPolicyUpdate ToUpdate() =>
-            new(Id, Property, Operation, new TargetValue(TargetType.Const, Value), Status.ToCore(), Comment, Icon);
+        internal DataPolicyUpdate ToUpdate() => new(Id, null, Status.ToCore(), Comment, Icon);
+        //new(Id, Property, Operation, new TargetValue(TargetType.Const, Value), Status.ToCore(), Comment, Icon);
     }
 
 
@@ -89,14 +89,16 @@ namespace HSMServer.Model.DataAlerts
         {
             EntityId = sensor.Id;
             Id = policy.Id;
-            Property = policy.Property;
-            Operation = policy.Operation;
-            Value = policy.Target.Value;
+
             Status = policy.Status.ToClient();
             Comment = policy.Template;
             Icon = policy.Icon;
 
-            DisplayComment = policy.BuildStateAndComment(sensor.LastValue as T, sensor);
+            //Property = policy.Property; //should be added as indexed condition block
+            //Operation = policy.Operation;
+            //Value = policy.Target.Value;
+
+            DisplayComment = policy.BuildStateAndComment(sensor.LastValue as T, sensor, policy.Conditions[0]);
         }
     }
 }

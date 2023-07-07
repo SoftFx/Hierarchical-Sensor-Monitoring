@@ -11,5 +11,8 @@ namespace HSMServer.Core.Model.Policies
         {
             PolicyResult = new PolicyResult(sensorId, this);
         }
+
+
+        protected override PolicyCondition GetCondition() => throw new NotImplementedException();
     }
 }
