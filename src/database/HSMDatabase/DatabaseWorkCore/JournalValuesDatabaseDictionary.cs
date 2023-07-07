@@ -15,6 +15,8 @@ internal sealed class JournalValuesDatabaseDictionary : IEnumerable<IJournalValu
 
         private IJournalValuesDatabase _lastDb;
 
+        private string _dataBasePath => Path.Combine(_dbSettings.DatabaseFolder, "Journals");
+
 
         internal JournalValuesDatabaseDictionary(IDatabaseSettings dbSettings)
         {
@@ -53,8 +55,7 @@ internal sealed class JournalValuesDatabaseDictionary : IEnumerable<IJournalValu
 
         private List<string> GetJournalValuesDirectories()
         {
-            var journalValuesDirectories =
-               Directory.GetDirectories(_dbSettings.DatabaseFolder, $"{_dbSettings.JournalValuesDatabaseName}*", SearchOption.TopDirectoryOnly);
+            var journalValuesDirectories = Directory.GetDirectories(_dataBasePath, $"{_dbSettings.JournalValuesDatabaseName}*", SearchOption.TopDirectoryOnly);
 
             return journalValuesDirectories.OrderBy(d => d).ToList();
         }
