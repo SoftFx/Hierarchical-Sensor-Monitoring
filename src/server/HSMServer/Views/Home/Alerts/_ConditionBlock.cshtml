@@ -19,11 +19,11 @@
 <div name="alertCondition" class="d-flex flex-row align-items-center alert-blocks-group ms-3 py-1">
     <div class="@(isMainCondition ? "d-none" : "d-flex") alert-text-block alert-add me-3">and</div>
 
-    <select name="conditionsSelect" class="alert-block alert-select property-select" asp-items="@Model.PropertiesItems"></select> @*old name  asp-for="Property"*@
+    <select class="alert-block alert-select property-select" asp-for="Property" asp-items="@Model.PropertiesItems"></select>
 
     <div name="valueCondition" class="@(isValueCondition ? "d-flex" : "d-none") flex-row align-items-center">
-        <select class="alert-block alert-select operation-select" asp-items="@Model.ActionsItems"></select> @*old name  asp-for="Operation"*@
-        <input class="alert-block target-input target-value" type="text" placeholder="<enter a value>" required> @*old name  asp-for="Value" value="@Model.Value"*@
+        <select class="alert-block alert-select operation-select" asp-for="Action" asp-items="@Model.ActionsItems"></select>
+        <input class="alert-block target-input target-value" type="text" placeholder="<enter a value>" asp-for="Target" value="@Model.Target" required>
     </div>
 
     <div name="sensitivityCondition" class="@(isSensitivityCondition ? "d-flex" : "d-none") flex-row align-items-center">
@@ -41,7 +41,7 @@
 
 
 <script>
-    $('select[name="conditionsSelect"]').off("change").on("change", function () {
+    $('select[name="Property"]').off("change").on("change", function () {
         let conditionBlock = $(this).parents("div[name='alertCondition']:first");
 
         let value = conditionBlock.find($(`div[name='valueCondition']`));

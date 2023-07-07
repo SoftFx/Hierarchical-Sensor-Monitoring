@@ -3,11 +3,23 @@ using HSMServer.Core.Model;
 using HSMServer.Core.Model.Policies;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 using System.Linq;
 
 namespace HSMServer.Model.DataAlerts
 {
-    public abstract class ConditionViewModel
+    public class AlertCondition
+    {
+        public PolicyOperation Action { get; set; }
+
+        public string Property { get; set; }
+
+        [Required]
+        public string Target { get; set; }
+    }
+
+
+    public abstract class ConditionViewModel : AlertCondition
     {
         public const string TimeToLiveCondition = "TTL";
         public const string SensitivityCondition = "Sensitivity";

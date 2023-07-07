@@ -1,11 +1,23 @@
-﻿using Microsoft.AspNetCore.Mvc.Rendering;
+﻿using HSMServer.Model.TreeViewModel;
+using Microsoft.AspNetCore.Mvc.Rendering;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.Linq;
 
 namespace HSMServer.Model.DataAlerts
 {
-    public class ActionViewModel
+    public class AlertAction
+    {
+        public SensorStatus Status { get; set; } = SensorStatus.Ok;
+
+        [Required]
+        public string Comment { get; set; }
+
+        public string Icon { get; set; }
+    }
+
+
+    public class ActionViewModel : AlertAction
     {
         private const string DefaultCommentTemplate = "$sensor $action $target";
 

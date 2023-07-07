@@ -13,6 +13,12 @@ namespace HSMServer.Model.DataAlerts
 {
     public class DataAlertViewModel
     {
+        public List<AlertCondition> Conditions { get; set; } = new();
+
+        public List<AlertAction> Actions { get; set; } = new();
+
+
+
         public PolicyOperation Operation { get; set; }
 
         public SensorStatus Status { get; set; }
@@ -71,10 +77,6 @@ namespace HSMServer.Model.DataAlerts
         public TimeIntervalViewModel TimeToLive { get; } = new TimeIntervalViewModel(PredefinedIntervals.ForTimeout);
 
 
-        public List<ConditionViewModel> Conditions { get; } = new();
-        public List<ActionViewModel> Actions { get; } = new() { new ActionViewModel(true) };
-
-
         public string DisplayComment { get; protected set; }
 
         public bool IsModify { get; protected set; }
@@ -90,6 +92,7 @@ namespace HSMServer.Model.DataAlerts
             StatusesItems = AlertPredefined.Statuses.Select(s => new SelectListItem(s.Value, $"{s.Key}")).ToList();
 
             //Status = SensorStatus.Ok;
+            Actions.Add(new ActionViewModel(true));
         }
     }
 

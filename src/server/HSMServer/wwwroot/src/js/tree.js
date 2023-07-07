@@ -92,7 +92,7 @@ function selectNodeAjax(selectedId) {
 function saveMetaData(selectedId) {
     let form = document.getElementById("editMetaInfo_form");
     let formData = new FormData(form);
-    collectDataAlerts(formData);
+    collectAlerts(formData);
 
     $.ajax({
         type: 'POST',

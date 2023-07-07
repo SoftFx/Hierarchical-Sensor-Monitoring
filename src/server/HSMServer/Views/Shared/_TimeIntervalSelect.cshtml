@@ -10,7 +10,7 @@
             asp-for="Interval" asp-items="@Model.IntervalItems"></select>
     <input id="input_timeIntervalSelect_@Model.Id" style="display:none" class="customTimeInterval @(Model.IsAlertBlock ? "target-custom-period" : "form-control")"
            placeholder="@TimeIntervalViewModel.CustomTemplate" asp-for="CustomTimeInterval" />
-    <div id="placeholder_timeIntervalSelect_@Model.Id" class="placeholder d-none">@TimeIntervalViewModel.CustomTemplate</div>
+    <div id="placeholder_timeIntervalSelect_@Model.Id" class="placeholder @(Model.IsAlertBlock ? "placeholder-alert-block" : "placeholder-form-control") d-none">@TimeIntervalViewModel.CustomTemplate</div>
 </div>
 
 

@@ -75,11 +75,19 @@
 
 .placeholder {
     position: absolute;
-    right: 1.25rem;
-    top: 0.2rem;
     pointer-events: none;
     opacity: .5;
     color: black;
+}
+
+.placeholder-form-control {
+    right: 2.25rem;
+    top: 0.5rem;
+    background-color: white;
+}
+
+.placeholder-alert-block {
+    right: 1.15rem;
     background-color: transparent;
 }
 

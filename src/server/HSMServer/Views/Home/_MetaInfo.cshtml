@@ -125,7 +125,7 @@
         event.stopImmediatePropagation();
 
         var formData = new FormData(this);
-        collectDataAlerts(formData);
+        collectAlerts(formData);
 
         $.ajax({
             url: $("#editMetaInfo_form").attr("action"),
@@ -143,23 +143,41 @@
         });
     });
 
-    function collectDataAlerts(formData) {
+    function collectAlerts(formData) {
         $("[id^='dataAlertsList_']").each(function () {
             const type = this.id.substring("dataAlertsList_".length, this.id.length);
 
             setFormDataAlertsProperty(formData, "input", type, "Id");
-            setFormDataAlertsProperty(formData, "select", type, "Property");
-            setFormDataAlertsProperty(formData, "select", type, "Operation");
-            setFormDataAlertsProperty(formData, "input", type, "Value");
-            setFormDataAlertsProperty(formData, "select", type, "Icon");
-            setFormDataAlertsProperty(formData, "input", type, "Comment");
-            setFormDataAlertsProperty(formData, "select", type, "Status");
+            //setFormDataAlertsProperty(formData, "select", type, "Property");
+            //setFormDataAlertsProperty(formData, "select", type, "Operation");
+            //setFormDataAlertsProperty(formData, "input", type, "Value");
+            setFormDataAlertsConditions(formData, type);
+            //setFormDataAlertsProperty(formData, "select", type, "Icon");
+            //setFormDataAlertsProperty(formData, "input", type, "Comment");
+            //setFormDataAlertsProperty(formData, "select", type, "Status");
         });
     }
 
     function setFormDataAlertsProperty(formData, element, type, propertyName) {
         $(`${element}[name='${propertyName}']`).each(function (i) {
             formData.append(`DataAlerts[${type}][${i}].${propertyName}`, $(this).val());
+        });
+    }
+
+    function setFormDataAlertsConditions(formData, type) {
+        $(`div.dataAlertRow`).each(function (i) {
+            $(this).find(`div[name='alertCondition']`).each(function (j) {
+                setFormDataAlertsConditionProperty(formData, type, i, j, $(this), "Conditions", "select", "Property");
+                setFormDataAlertsConditionProperty(formData, type, i, j, $(this), "Conditions", "select", "Action");
+                setFormDataAlertsConditionProperty(formData, type, i, j, $(this), "Conditions", "input", "Target");
+            });
+        });
+    }
+
+    function setFormDataAlertsConditionProperty(formData, type, i, j, block, listName, element, propertyName) {
+        block.find(`${element}[name='${propertyName}']`).each(function () {
+            console.log(`DataAlerts[${type}][${i}].${listName}[${j}].${propertyName}`);
+            formData.append(`DataAlerts[${type}][${i}].${listName}[${j}].${propertyName}`, $(this).val());
         });
     }
 
