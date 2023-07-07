@@ -5,10 +5,11 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using HSMServer.Core.Journal;
 
 namespace HSMServer.Core.Model.Policies
 {
-    public abstract class SensorPolicyCollection : PolicyCollectionBase
+    public abstract class SensorPolicyCollection : PolicyCollectionBase, IJournal
     {
         internal protected SensorResult SensorResult { get; protected set; } = SensorResult.Ok;
 
@@ -17,6 +18,7 @@ namespace HSMServer.Core.Model.Policies
 
         internal Action<ActionType, Policy> Uploaded;
 
+        public virtual event Action<JournalRecordModel> CreateJournal;
 
         internal abstract void Update(List<DataPolicyUpdate> updates);
 
@@ -28,6 +30,7 @@ namespace HSMServer.Core.Model.Policies
             SensorResult = SensorResult.Ok;
             PolicyResult = PolicyResult.Ok;
         }
+
     }
 
 
@@ -93,6 +96,7 @@ namespace HSMServer.Core.Model.Policies
     {
         private readonly ConcurrentDictionary<Guid, PolicyType> _storage = new();
 
+        public override event Action<JournalRecordModel> CreateJournal;
 
         internal override IEnumerable<Guid> Ids => _storage.Keys;
 
@@ -130,6 +134,7 @@ namespace HSMServer.Core.Model.Policies
             {
                 if (updates.TryGetValue(id, out var update))
                 {
+                    CreateJournal?.Invoke(new JournalRecordModel(_sensor.Id, DateTime.UtcNow, "Test"));
                     policy.Update(update);
                     Uploaded?.Invoke(ActionType.Update, policy);
                 }

@@ -381,12 +381,14 @@ namespace HSMServer.Core.Cache
         {
             sensor.Policies.SensorExpired += SetExpiredSnapshot;
             sensor.Policies.Uploaded += UpdatePolicy;
+            sensor.Policies.CreateJournal += _journalService.AddJournal;
         }
 
         private void RemoveSensorPolicies(BaseSensorModel sensor)
         {
             sensor.Policies.SensorExpired -= SetExpiredSnapshot;
             sensor.Policies.Uploaded -= UpdatePolicy;
+            sensor.Policies.CreateJournal -= _journalService.AddJournal;
 
             RemoveEntityPolicies(sensor);
         }
