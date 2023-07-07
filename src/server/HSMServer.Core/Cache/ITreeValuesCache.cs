@@ -49,9 +49,9 @@ namespace HSMServer.Core.Cache
         void UpdateSensor(SensorUpdate updatedSensor);
         void RemoveSensor(Guid sensorId);
         void UpdateMutedSensorState(Guid sensorId, DateTime? endOfMuting = null);
-        void ClearSensorHistory(Guid sensorId, DateTime to, string caller);
+        void ClearSensorHistory(ClearHistoryRequest request);
         void CheckSensorHistory(Guid sensorId);
-        void ClearNodeHistory(Guid productId, string caller);
+        void ClearNodeHistory(ClearHistoryRequest request);
         BaseSensorModel GetSensor(Guid sensorId);
 
         IAsyncEnumerable<List<BaseValue>> GetSensorValues(HistoryRequestModel request);

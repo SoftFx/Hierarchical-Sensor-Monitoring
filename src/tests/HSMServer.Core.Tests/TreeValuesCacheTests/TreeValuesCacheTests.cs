@@ -375,7 +375,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
 
             _valuesCache.ChangeSensorEvent += UpdateSensorEventHandler;
 
-            _valuesCache.ClearNodeHistory(product.Id);
+            _valuesCache.ClearNodeHistory(new (product.Id));
 
             _valuesCache.ChangeSensorEvent -= UpdateSensorEventHandler;
 
@@ -390,7 +390,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         {
             var sensor = GetSensorByNameFromCache("sensor0");
 
-            _valuesCache.ClearSensorHistory(sensor.Id, DateTime.MaxValue);
+            _valuesCache.ClearSensorHistory(new (sensor.Id, To: DateTime.MaxValue));
 
             await TestClearedSensor(sensor.Id);
             ModelsTester.TestSensorDataWithoutClearedData(sensor, GetSensorByIdFromCache(sensor.Id));

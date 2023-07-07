@@ -12,7 +12,6 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text.Json;
 
 namespace HSMServer.Core.Cache
 {
@@ -275,16 +274,16 @@ namespace HSMServer.Core.Cache
                 });
         }
 
-        public void ClearNodeHistory(Guid productId, string caller = "")
+        public void ClearNodeHistory(ClearHistoryRequest request)
         {
-            if (!_tree.TryGetValue(productId, out var product))
+            if (!_tree.TryGetValue(request.Id, out var product))
                 return;
 
             foreach (var (subProductId, _) in product.SubProducts)
-                ClearNodeHistory(subProductId, caller);
+                ClearNodeHistory(request with { Id = subProductId });
 
             foreach (var (sensorId, _) in product.Sensors)
-                ClearSensorHistory(sensorId, DateTime.MaxValue, caller);
+                ClearSensorHistory(request with { Id = sensorId, To = DateTime.MaxValue});
         }
 
         public void CheckSensorHistory(Guid sensorId)
@@ -296,27 +295,27 @@ namespace HSMServer.Core.Cache
             var policy = sensor.Settings.KeepHistory.Value;
 
             if (policy.TimeIsUp(from))
-                ClearSensorHistory(sensorId, policy.GetShiftedTime(DateTime.UtcNow, -1), "System");
+                ClearSensorHistory(new (sensorId, "System", policy.GetShiftedTime(DateTime.UtcNow, -1)));
         }
 
-        public void ClearSensorHistory(Guid sensorId, DateTime to, string caller = "")
+        public void ClearSensorHistory(ClearHistoryRequest request)
         {
-            if (!_sensors.TryGetValue(sensorId, out var sensor))
+            if (!_sensors.TryGetValue(request.Id, out var sensor))
                 return;
 
-            var from = _snapshot.Sensors[sensorId].History.From;
+            var from = _snapshot.Sensors[request.Id].History.From;
 
-            if (from > to)
+            if (from > request.To)
                 return;
 
-            sensor.Storage.Clear(to);
+            sensor.Storage.Clear(request.To);
 
             if (!sensor.HasData)
                 sensor.ResetSensor();
 
-            _database.ClearSensorValues(sensor.Id.ToString(), from, to);
-            _journalService.AddJournal(new JournalRecordModel(sensorId, DateTime.UtcNow, $"{DateTime.UtcNow} - {caller} - clear", RecordType.Changes));
-            _snapshot.Sensors[sensorId].History.From = to;
+            _database.ClearSensorValues(sensor.Id.ToString(), from, request.To);
+            _journalService.AddJournal(new JournalRecordModel(request.Id, DateTime.UtcNow, $"{DateTime.UtcNow} - {request.Caller} - clear", RecordType.Changes));
+            _snapshot.Sensors[request.Id].History.From = request.To;
 
             ChangeSensorEvent?.Invoke(sensor, ActionType.Update);
         }
