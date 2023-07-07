@@ -12,6 +12,7 @@ public class JournalService : IJournalService
 {
     private readonly IDatabaseCore _database;
 
+
     public JournalService(IDatabaseCore database)
     {
         _database = database;
@@ -30,9 +31,9 @@ public class JournalService : IJournalService
     
     public void RemoveJournal(Guid id) => _database.RemoveJournalValue(id);
     
-    public async IAsyncEnumerable<List<JournalRecordModel>> GetJournalValuesPage(Guid id, DateTime from, DateTime to, RecordType recordType, int count)
+    public async IAsyncEnumerable<List<JournalRecordModel>> GetJournalValuesPage(Guid id, DateTime from, DateTime to, RecordType type, int count)
     {
-        var pages = _database.GetJournalValuesPage(id, from, to, recordType, count);
+        var pages = _database.GetJournalValuesPage(id, from, to, type, count);
 
         await foreach (var page in pages)
         {

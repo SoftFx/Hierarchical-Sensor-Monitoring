@@ -15,5 +15,5 @@ public interface IJournalService
     
     void RemoveJournal(Guid id);
 
-    IAsyncEnumerable<List<JournalRecordModel>> GetJournalValuesPage(Guid id, DateTime from, DateTime to, RecordType recordType, int count);
+    IAsyncEnumerable<List<JournalRecordModel>> GetJournalValuesPage(Guid id, DateTime from, DateTime to, RecordType type, int count);
 }
