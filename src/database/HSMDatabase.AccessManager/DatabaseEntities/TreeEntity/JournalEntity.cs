@@ -16,7 +16,8 @@ public sealed record JournalEntity(string Value);
 public readonly struct JournalKey
 {
     private const int GuidSize = 16;
-    private const int StructSize = GuidSize + sizeof(RecordType) + sizeof(long);
+    private const int TypeSize = sizeof(RecordType);
+    private const int StructSize = GuidSize + TypeSize + sizeof(long);
 
 
     public Guid Id { get; }
@@ -37,44 +38,8 @@ public readonly struct JournalKey
     {
         Span<byte> result = stackalloc byte[StructSize];
         result[GuidSize] = (byte)Type;
-        return Id.TryWriteBytes(result) && BitConverter.TryWriteBytes(result[(GuidSize + 1)..], Time) ? result.ToArray() : Array.Empty<byte>();
+        return Id.TryWriteBytes(result) && BitConverter.TryWriteBytes(result[(GuidSize + TypeSize)..], Time) ? result.ToArray() : Array.Empty<byte>();
     }
-    // public byte[] GetBytes()
-    // {
-    //     Span<byte> result = stackalloc byte[StructSize];
-    //     result[GuidSize] = (byte)Type;
-    //
-    //     var timeBytes = BitConverter.GetBytes(Time);
-    //
-    //     var size = sizeof(long);
-    //     var j = 0;
-    //     for (int i = 0; i < size; i++)
-    //     {
-    //         if (timeBytes[size - i - 1] != 0 || j == i)
-    //         {
-    //             result[GuidSize + 1 + i] = timeBytes[j++];
-    //         }
-    //     }
-    //     
-    //     return Id.TryWriteBytes(result) ? result.ToArray() : Array.Empty<byte>();
-    // }
-    
-    // public byte[] GetBytes()
-    // {
-    //     Span<byte> result = stackalloc byte[StructSize];
-    //     result[GuidSize] = (byte)Type;
-    //
-    //     var timeBytes = BitConverter.GetBytes(Time);
-    //     for (int i = 0; i < sizeof(long); i++)
-    //     {
-    //         if (timeBytes[i] != 0)
-    //         {
-    //             result[GuidSize + 1 + i] = timeBytes[i];
-    //         }
-    //     }
-    //     
-    //     return Id.TryWriteBytes(result) ? result.ToArray() : Array.Empty<byte>();
-    // }
 
     public static JournalKey FromBytes(byte[] bytes)
     {
@@ -83,7 +48,7 @@ public readonly struct JournalKey
 
         var id = new Guid(bytes[..GuidSize]);
         var journalType = bytes[GuidSize];
-        var time = BitConverter.ToInt64(bytes, GuidSize + 1);
+        var time = BitConverter.ToInt64(bytes, GuidSize + TypeSize);
 
         return new JournalKey(id, time, (RecordType)journalType);
     }
