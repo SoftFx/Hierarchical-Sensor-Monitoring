@@ -2,14 +2,18 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 using BenchmarkDotNet.Attributes;
+using HSMDatabase.AccessManager.DatabaseEntities;
 
 namespace TestLevelDB;
 
 [MemoryDiagnoser]
 public class ByteKeyConverters
 {
-    private List<Guid> _guids;
+    private const int GuidSize = 16;
+    private const int TypeSize = sizeof(RecordType);
+    private const int StructSize = GuidSize + TypeSize + sizeof(long);
 
+    private List<Guid> _guids;
     private List<byte[]> _results;
 
 
@@ -30,16 +34,16 @@ public class ByteKeyConverters
     public void ResultInit() => _results = new (N);
 
 
-
     [Benchmark]
     public List<byte[]> SpanConverter()
     {
-        Span<byte> result = stackalloc byte[16 + sizeof(long)];
+        Span<byte> result = stackalloc byte[StructSize];
 
         for (long i = 0; i < N; i++)
         {
             _guids[(int)i].TryWriteBytes(result);
-            BitConverter.TryWriteBytes(result[16..], i);
+            result[GuidSize] = 1;
+            BitConverter.TryWriteBytes(result[(GuidSize + TypeSize)..], i);
 
             _results.Add(result.ToArray());
         }
