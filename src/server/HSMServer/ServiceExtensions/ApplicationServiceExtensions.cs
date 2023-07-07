@@ -21,7 +21,7 @@ using Microsoft.OpenApi.Models;
 using System;
 using System.IO;
 using System.Security.Authentication;
-using HSMDatabase.AccessManager.DatabaseEntities;
+using HSMServer.Core.Journal;
 
 namespace HSMServer.ServiceExtensions;
 

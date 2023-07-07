@@ -1,4 +1,4 @@
-namespace HSMServer.Core.Cache;
+namespace HSMServer.Core.Journal;
 
 public interface IJournalValue
 {

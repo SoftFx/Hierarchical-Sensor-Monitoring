@@ -1,5 +1,5 @@
 using HSMDatabase.AccessManager.DatabaseEntities;
-using HSMServer.Core.Cache;
+using HSMServer.Core.Journal;
 using HSMServer.Core.Model;
 using HSMServer.Core.Tests.Infrastructure;
 using HSMServer.Core.Tests.MonitoringCoreTests;
@@ -76,7 +76,7 @@ public class JournalCacheTests : MonitoringCoreTestsBase<TreeValuesCacheFixture>
     }
 
     [Theory]
-    [InlineData(100)]
+    [InlineData(1000)]
     public void CHeckKeys(int n)
     {
         for (int i = 0; i < n; i++)
@@ -92,7 +92,6 @@ public class JournalCacheTests : MonitoringCoreTestsBase<TreeValuesCacheFixture>
             Assert.Equal(key.Id, desKey.Id);
             Assert.Equal(key.Time, desKey.Time);
             Assert.Equal(key.Type, desKey.Type);
-            
         }
     }
 }

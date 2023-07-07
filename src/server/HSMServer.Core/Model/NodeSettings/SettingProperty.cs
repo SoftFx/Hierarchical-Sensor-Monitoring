@@ -1,6 +1,7 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Core.Cache;
 using System;
+using HSMServer.Core.Journal;
 
 namespace HSMServer.Core.Model.NodeSettings
 {

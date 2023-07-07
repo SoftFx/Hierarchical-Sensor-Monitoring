@@ -12,6 +12,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using HSMServer.Core.Journal;
 
 namespace HSMServer.Core.Cache
 {

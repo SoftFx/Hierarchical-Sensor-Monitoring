@@ -6,7 +6,7 @@ using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.DataLayer;
 using HSMServer.Core.Model;
 
-namespace HSMServer.Core.Cache;
+namespace HSMServer.Core.Journal;
 
 public class JournalService : IJournalService
 {

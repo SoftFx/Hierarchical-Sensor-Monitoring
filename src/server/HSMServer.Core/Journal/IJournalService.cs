@@ -4,7 +4,7 @@ using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Model;
 
-namespace HSMServer.Core.Cache;
+namespace HSMServer.Core.Journal;
 
 public interface IJournalService
 {

@@ -6,8 +6,8 @@ using HSMServer.Core.Tests.Infrastructure;
 using HSMServer.Core.Tests.MonitoringCoreTests.Fixture;
 using HSMServer.Core.TreeStateSnapshot;
 using Moq;
-using System.Collections.Generic;
 using System.Threading.Tasks;
+using HSMServer.Core.Journal;
 using Xunit;
 
 namespace HSMServer.Core.Tests.MonitoringCoreTests
