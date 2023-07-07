@@ -1,30 +1,16 @@
-﻿@using HSMServer.Core.Model
+﻿
 @using HSMServer.Extensions
 
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
 
-@model List<JournalRecordModel>
+@model List<HSMServer.Model.ViewModel.JournalViewModel>
 
 <div>
-    <table class='table table-striped'>
-        <thead>
-            <tr class="text-nowrap">
-                <th>Date</th>
-                <th></th>
-                <th>Type</th>
-            </tr>
-        </thead>
-        <tbody>
-            @foreach(var journal in Model)
-            {
-                <tr>
-                    <td>@(new DateTime(journal.Key.Time).ToDefaultFormat())</td>
-                    <td>@journal.Value</td>
-                    <td>@journal.Key.Type</td>
-                </tr>
-            }
-        </tbody>
-    </table>
+    @foreach (var journal in Model)
+    {
+        <span>@journal.GenerateStatements()</span>
+                                           <br/>
+    }
 
     @* <div class="container d-flex justify-content-center"> *@
     @*     <ul class="pagination"> *@

@@ -5,7 +5,6 @@ using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.DataLayer;
 using HSMServer.Core.Model;
-
 namespace HSMServer.Core.Journal;
 
 public class JournalService : IJournalService
