@@ -1,3 +1,4 @@
+using System;
 using HSMDatabase.AccessManager.DatabaseEntities;
 using System.Collections.Generic;
 using System.Linq;
@@ -28,7 +29,7 @@ namespace HSMServer.Core.Model.NodeSettings
         {
             foreach (var (name, setting) in entity)
                 if (_properties.TryGetValue(name, out var property))
-                    property.TrySetValue(new TimeIntervalModel(setting));
+                    property.TrySetValue(new TimeIntervalModel(setting), Guid.Empty);
         }
 
         internal void SetParentSettings(SettingsCollection parentCollection)
@@ -43,7 +44,7 @@ namespace HSMServer.Core.Model.NodeSettings
 
         private SettingProperty<T> Register<T>(string name) where T : TimeIntervalModel
         {
-            var property = new SettingProperty<T>();
+            var property = new SettingProperty<T>(){Name = name};
 
             _properties[name] = property;
 

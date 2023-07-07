@@ -77,10 +77,10 @@ namespace HSMServer.Core.Model
         {
             Description = update.Description ?? Description;
 
-            Settings.KeepHistory.TrySetValue(update.KeepHistory);
-            Settings.SelfDestroy.TrySetValue(update.SelfDestroy);
+            Settings.KeepHistory.TrySetValue(update.KeepHistory, Id);
+            Settings.SelfDestroy.TrySetValue(update.SelfDestroy, Id);
 
-            if (Settings.TTL.TrySetValue(update.TTL))
+            if (Settings.TTL.TrySetValue(update.TTL, Id))
                 CheckTimeout();
         }
     }

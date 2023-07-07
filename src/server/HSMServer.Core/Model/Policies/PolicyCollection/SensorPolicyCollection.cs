@@ -11,14 +11,17 @@ namespace HSMServer.Core.Model.Policies
 {
     public abstract class SensorPolicyCollection : PolicyCollectionBase, IJournal
     {
+        public event Action<JournalRecordModel> CreateJournal;
+        
         internal protected SensorResult SensorResult { get; protected set; } = SensorResult.Ok;
 
         internal protected PolicyResult PolicyResult { get; protected set; } = PolicyResult.Ok;
 
 
-        internal Action<ActionType, Policy> Uploaded;
+        protected void CallJournal(JournalRecordModel journal) => CreateJournal?.Invoke(journal);
 
-        public virtual event Action<JournalRecordModel> CreateJournal;
+
+        internal Action<ActionType, Policy> Uploaded;
 
         internal abstract void Update(List<DataPolicyUpdate> updates);
 
@@ -96,12 +99,9 @@ namespace HSMServer.Core.Model.Policies
     {
         private readonly ConcurrentDictionary<Guid, PolicyType> _storage = new();
 
-        public override event Action<JournalRecordModel> CreateJournal;
-
         internal override IEnumerable<Guid> Ids => _storage.Keys;
 
         internal IEnumerable<Policy<ValueType>> Policies => _sensor.UseParentPolicies ? _sensor.Parent.GetPolicies<PolicyType>(_sensor.Type) : _storage.Values;
-
 
         protected override bool CalculateStorageResult(ValueType value, bool updateStatus = true)
         {
@@ -134,7 +134,9 @@ namespace HSMServer.Core.Model.Policies
             {
                 if (updates.TryGetValue(id, out var update))
                 {
-                    CreateJournal?.Invoke(new JournalRecordModel(_sensor.Id, DateTime.UtcNow, "Test"));
+                    //TODO: Implement comparison for current and update
+                    if (policy.Icon != update.Icon)
+                        CallJournal(new JournalRecordModel(_sensor.Id, DateTime.UtcNow, $"{policy.Id} - {policy.Icon} -> {update.Icon}"));
                     policy.Update(update);
                     Uploaded?.Invoke(ActionType.Update, policy);
                 }

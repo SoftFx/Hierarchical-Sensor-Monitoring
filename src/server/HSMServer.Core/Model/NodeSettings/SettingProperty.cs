@@ -18,7 +18,7 @@ namespace HSMServer.Core.Model.NodeSettings
         public Action<ActionType, TimeIntervalModel> Uploaded;
 
 
-        internal abstract bool TrySetValue(TimeIntervalModel policy);
+        internal abstract bool TrySetValue(TimeIntervalModel policy, Guid id);
 
         internal abstract TimeIntervalEntity ToEntity();
         
@@ -26,21 +26,26 @@ namespace HSMServer.Core.Model.NodeSettings
     }
 
 
-    public sealed class SettingProperty<T> : SettingProperty where T : TimeIntervalModel
+    public sealed class SettingProperty<T> : SettingProperty, IJournal where T : TimeIntervalModel
     {
         private readonly T _emptyValue = (T)TimeIntervalModel.Never;
         private T _curValue;
+
+
+        public event Action<JournalRecordModel> CreateJournal;
 
 
         public override bool IsEmpty => Value is null;
 
         public override bool IsSet => _curValue is not null;
 
+        
+        public required string Name { get; set; }
 
         public T Value => _curValue ?? ((SettingProperty<T>)ParentProperty)?.Value ?? _emptyValue;
 
 
-        internal override bool TrySetValue(TimeIntervalModel update)
+        internal override bool TrySetValue(TimeIntervalModel update, Guid id)
         {
             if (update is null)
                 return false;
@@ -48,6 +53,8 @@ namespace HSMServer.Core.Model.NodeSettings
             var action = ActionType.Add;
             var newValue = (T)update;
 
+            var copyValue = _curValue;
+            
             if (IsSet)
             {
                 if (newValue.IsFromParent)
@@ -66,8 +73,15 @@ namespace HSMServer.Core.Model.NodeSettings
             else
                 return true;
 
+            // if (id != Guid.Empty)
+            // {
+            //     var val1 = copyValue.GetValue();
+            //     var val2 = GetValue();
+            //     if (val1 != val2)
+            //         CreateJournal?.Invoke(new JournalRecordModel(id, DateTime.UtcNow, $"{Name}: {val1} -> {val2}"));
+            // }
+            
             Uploaded?.Invoke(action, newValue);
-
             return true;
         }
 

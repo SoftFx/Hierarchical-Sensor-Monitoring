@@ -382,6 +382,9 @@ namespace HSMServer.Core.Cache
             sensor.Policies.SensorExpired += SetExpiredSnapshot;
             sensor.Policies.Uploaded += UpdatePolicy;
             sensor.Policies.CreateJournal += _journalService.AddJournal;
+            sensor.Settings.KeepHistory.CreateJournal += _journalService.AddJournal;
+            sensor.Settings.SelfDestroy.CreateJournal += _journalService.AddJournal;
+            sensor.Settings.TTL.CreateJournal += _journalService.AddJournal;
         }
 
         private void RemoveSensorPolicies(BaseSensorModel sensor)
@@ -389,7 +392,9 @@ namespace HSMServer.Core.Cache
             sensor.Policies.SensorExpired -= SetExpiredSnapshot;
             sensor.Policies.Uploaded -= UpdatePolicy;
             sensor.Policies.CreateJournal -= _journalService.AddJournal;
-
+            sensor.Settings.KeepHistory.CreateJournal -= _journalService.AddJournal;
+            sensor.Settings.SelfDestroy.CreateJournal -= _journalService.AddJournal;
+            sensor.Settings.TTL.CreateJournal -= _journalService.AddJournal;
             RemoveEntityPolicies(sensor);
         }
 
