@@ -8,7 +8,7 @@ namespace HSMServer.Core.Cache.UpdateEntities
     /// <summary>
     /// If properties are null - there's no updates for that properties
     /// </summary>
-    public record SensorUpdate : BaseNodeUpdate
+    public record SensorUpdate : BaseNodeUpdate, IUpdateComparer<BaseSensorModel, SensorUpdate>
     {
         public SensorState? State { get; init; }
 
@@ -17,6 +17,11 @@ namespace HSMServer.Core.Cache.UpdateEntities
         public DateTime? EndOfMutingPeriod { get; init; }
 
         public List<DataPolicyUpdate> DataPolicies { get; init; }
+        
+        public string GetComparisonString(BaseSensorModel entity, SensorUpdate update)
+        {
+            return "";
+        }
     }
 
 
