@@ -1,35 +1,8 @@
 ﻿using System;
-using System.ComponentModel.DataAnnotations;
 using System.Numerics;
 
 namespace HSMServer.Core.Model.Policies
 {
-    public enum PolicyOperation : byte
-    {
-        [Display(Name = "<=")]
-        LessThanOrEqual,
-        [Display(Name = "<")]
-        LessThan,
-        [Display(Name = ">")]
-        GreaterThan,
-        [Display(Name = ">=")]
-        GreaterThanOrEqual,
-        [Display(Name = "==")]
-        Equal,
-        [Display(Name = "!=")]
-        NotEqual,
-    }
-
-    public enum TargetType : byte
-    {
-        Const,
-        Sensor,
-    }
-
-
-    public sealed record TargetValue(TargetType Type, string Value);
-
-
     internal static class PolicyBuilder
     {
         internal static Func<U, U, bool> GetNumberOperation<U>(PolicyOperation action) where U : INumber<U> =>
