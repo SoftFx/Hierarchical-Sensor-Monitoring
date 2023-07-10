@@ -37,8 +37,6 @@ namespace HSMServer.Model.DataAlerts
 
         public Guid Id { get; set; }
 
-        //public TimeIntervalViewModel Sensitivity { get; set; }
-
 
         internal DataPolicyUpdate ToUpdate() => new(
             Id,
@@ -55,36 +53,6 @@ namespace HSMServer.Model.DataAlerts
 
     public abstract class DataAlertViewModelBase : DataAlertViewModel
     {
-        private const string DefaultCommentTemplate = "$sensor $action $target";
-
-        public const string TimeToLiveCondition = "TTL";
-        public const string SensitivityCondition = "Sensitivity";
-
-        public const string ShowIconAction = "Show icon";
-        public const string SetStatusAction = "Set status";
-        public const string SendNotifyAction = "Send notification";
-
-
-        protected abstract List<PolicyOperation> Operations { get; }
-
-        protected abstract List<string> Properties { get; }
-
-        protected abstract List<string> Icons { get; }
-
-
-        public List<SelectListItem> PropertiesItems { get; }
-
-        public List<SelectListItem> ActionsItems { get; }
-
-        public List<SelectListItem> StatusesItems { get; }
-
-        public List<SelectListItem> IconsItems { get; }
-
-        public TimeIntervalViewModel Sensitivity { get; } = new TimeIntervalViewModel(PredefinedIntervals.ForRestore);
-
-        public TimeIntervalViewModel TimeToLive { get; } = new TimeIntervalViewModel(PredefinedIntervals.ForTimeout);
-
-
         public string DisplayComment { get; protected set; }
 
         public bool IsModify { get; protected set; }
@@ -92,14 +60,6 @@ namespace HSMServer.Model.DataAlerts
 
         public DataAlertViewModelBase()
         {
-            Comment = DefaultCommentTemplate;
-
-            PropertiesItems = Properties.Select(p => new SelectListItem(p, p, false)).ToList();
-            IconsItems = Icons.Select(i => new SelectListItem(i.ToIconUnicode(), i)).ToList();
-            ActionsItems = Operations.Select(a => new SelectListItem(a.GetDisplayName(), $"{a}")).ToList();
-            StatusesItems = AlertPredefined.Statuses.Select(s => new SelectListItem(s.Value, $"{s.Key}")).ToList();
-
-            //Status = SensorStatus.Ok;
             Actions.Add(new ActionViewModel(true));
         }
     }

@@ -15,7 +15,7 @@
     </div>
 
     <div name="showIconAction" class="d-none alert-block">
-        <textarea class="target-input" asp-for="Icon"></textarea>
+        <input class="target-input" asp-for="Icon" />
     </div>
 
     <div name="setStatusAction" class="d-none">
@@ -28,9 +28,8 @@
 
 <script>
     $(document).ready(function () {
-        $("textarea[name='Icon']").emojioneArea({
+        $("input[name='Icon']").emojioneArea({
             filtersPosition: "bottom",
-            //standalone: true
             inline: true
         });
     });
