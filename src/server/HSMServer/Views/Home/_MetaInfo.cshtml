@@ -121,7 +121,6 @@
     })
 
     $(document).on("submit", "#editMetaInfo_form", function (event) {
-        console.log("submit");
         event.preventDefault();
         event.stopImmediatePropagation();
 
@@ -168,20 +167,35 @@
     function setFormDataAlertsConditions(formData, type) {
         $(`div.dataAlertRow`).each(function (i) {
             $(this).find(`div[name='alertCondition']`).each(function (j) {
-                setFormDataAlertsConditionProperty(formData, type, i, j, $(this), "Conditions", "select", "Property");
+                setFormDataAlertsConditionProperty(formData, type, i, j, $(this), "select", "Property");
 
-                if (!$(this).find('div[name="valueCondition"]').hasClass('d-none')) {
-                    setFormDataAlertsConditionProperty(formData, type, i, j, $(this), "Conditions", "select", "Action");
-                    setFormDataAlertsConditionProperty(formData, type, i, j, $(this), "Conditions", "input", "Target");
+                if ($(this).find('div[name="valueCondition"]').hasClass('d-flex')) {
+                    setFormDataAlertsConditionProperty(formData, type, i, j, $(this), "select", "Action");
+                    setFormDataAlertsConditionProperty(formData, type, i, j, $(this), "input", "Target");
+                }
+
+                if ($(this).find('div[name="sensitivityCondition"]').hasClass('d-flex')) {
+                    setFormDataAlertsConditionIntervals(formData, type, i, j, $(this), "Sensitivity", "select", "Interval");
+                    setFormDataAlertsConditionIntervals(formData, type, i, j, $(this), "Sensitivity", "input", "CustomTimeInterval");
+                }
+
+                if ($(this).find('div[name="ttlCondition"]').hasClass('d-flex')) {
+                    setFormDataAlertsConditionIntervals(formData, type, i, j, $(this), "TimeToLive", "select", "Interval");
+                    setFormDataAlertsConditionIntervals(formData, type, i, j, $(this), "TimeToLive", "input", "CustomTimeInterval");
                 }
             });
         });
     }
 
-    function setFormDataAlertsConditionProperty(formData, type, i, j, block, listName, element, propertyName) {
+    function setFormDataAlertsConditionProperty(formData, type, i, j, block, element, propertyName) {
         block.find(`${element}[name='${propertyName}']`).each(function () {
-            console.log(`DataAlerts[${type}][${i}].${listName}[${j}].${propertyName}`);
-            formData.append(`DataAlerts[${type}][${i}].${listName}[${j}].${propertyName}`, $(this).val());
+            formData.append(`DataAlerts[${type}][${i}].Conditions[${j}].${propertyName}`, $(this).val());
+        });
+    }
+
+    function setFormDataAlertsConditionIntervals(formData, type, i, j, block, intervalName, element, propertyName) {
+        block.find(`${element}[name='${intervalName}.${propertyName}']`).each(function () {
+            formData.append(`DataAlerts[${type}][${i}].Conditions[${j}].${intervalName}.${propertyName}`, $(this).val());
         });
     }
 
