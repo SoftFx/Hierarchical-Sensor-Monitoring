@@ -22,6 +22,9 @@ internal sealed class JournalValuesDatabaseDictionary : IEnumerable<IJournalValu
         {
             _dbSettings = dbSettings;
 
+            if (!Directory.Exists(_dataBasePath))
+                Directory.CreateDirectory(_dataBasePath);
+            
             var journalValuesDirectories = GetJournalValuesDirectories();
             foreach (var directory in journalValuesDirectories)
             {
