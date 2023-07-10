@@ -50,9 +50,11 @@ namespace HSMServer.Model.Folders
                         0 => nameof(TTL),
                         2 => nameof(KeepHistory),
                         3 => nameof(SelfDestroy),
+                        _ => null,
                     };
 
-                    entity.Settings.Add(name, newEntity);
+                    if (name != null)
+                        entity.Settings.Add(name, newEntity);
                 }
             }
 
