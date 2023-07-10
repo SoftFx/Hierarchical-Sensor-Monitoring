@@ -235,8 +235,7 @@ namespace HSMServer.Controllers
                     var update = new FolderUpdate
                     {
                         Id = id,
-                        RestoreInterval = !isRestoreFromParent ? model.SensorRestorePolicy : null,
-                        ExpectedUpdateInterval = !isExpectedFromParent ? model.ExpectedUpdateInterval : null
+                        TTL = !isExpectedFromParent ? model.ExpectedUpdateInterval : null
                     };
 
                     if (isRestoreFromParent)
@@ -700,9 +699,9 @@ namespace HSMServer.Controllers
             {
                 Id = SensorPathHelper.DecodeGuid(newModel.EncodedId),
                 Description = newModel.Description ?? string.Empty,
-                ExpectedUpdateInterval = newModel.ExpectedUpdateInterval,
+                TTL = newModel.ExpectedUpdateInterval,
                 //RestoreInterval = newModel.SensorRestorePolicy.ResaveCustomTicks(newModel.SensorRestorePolicy),
-                SavedHistoryPeriod = newModel.SavedHistoryPeriod,
+                KeepHistory = newModel.SavedHistoryPeriod,
                 SelfDestroy = newModel.SelfDestroyPeriod,
             };
 

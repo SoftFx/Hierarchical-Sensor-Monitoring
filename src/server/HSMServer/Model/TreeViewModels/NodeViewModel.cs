@@ -41,9 +41,9 @@ namespace HSMServer.Model.TreeViewModel
 
             bool ParentIsFolder() => Parent is FolderModel;
 
-            ExpectedUpdateInterval = new(model.Settings.TTL.Value, () => Parent?.ExpectedUpdateInterval, ParentIsFolder);
-            SavedHistoryPeriod = new(model.Settings.KeepHistory.Value, () => Parent?.SavedHistoryPeriod, ParentIsFolder);
-            SelfDestroyPeriod = new(model.Settings.SelfDestroy.Value, () => Parent?.SelfDestroyPeriod, ParentIsFolder);
+            TTL = new(model.Settings.TTL.Value, () => Parent?.TTL, ParentIsFolder);
+            KeepHistory = new(model.Settings.KeepHistory.Value, () => Parent?.KeepHistory, ParentIsFolder);
+            SelfDestroy = new(model.Settings.SelfDestroy.Value, () => Parent?.SelfDestroy, ParentIsFolder);
         }
 
 
@@ -53,9 +53,9 @@ namespace HSMServer.Model.TreeViewModel
             Name = model.DisplayName;
             Description = model.Description;
 
-            UpdatePolicyView(model.Settings.TTL, ExpectedUpdateInterval);
-            UpdatePolicyView(model.Settings.KeepHistory, SavedHistoryPeriod);
-            UpdatePolicyView(model.Settings.SelfDestroy, SelfDestroyPeriod);
+            UpdatePolicyView(model.Settings.TTL, TTL);
+            UpdatePolicyView(model.Settings.KeepHistory, KeepHistory);
+            UpdatePolicyView(model.Settings.SelfDestroy, SelfDestroy);
         }
 
 

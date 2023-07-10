@@ -6,7 +6,6 @@ using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.DataLayer;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.NodeSettings;
-using HSMServer.Core.Model.Policies;
 using HSMServer.Model;
 using HSMServer.Model.Authentication;
 using HSMServer.Model.Folders;
@@ -79,8 +78,7 @@ namespace HSMServer.Folders
         {
             var result = TryGetValue(update.Id, out var folder) && await base.TryUpdate(update);
 
-            if (result && (update.ExpectedUpdateInterval != null || update.RestoreInterval != null ||
-                           update.SavedHistoryPeriod != null || update.SelfDestroy != null))
+            if (result && (update.TTL != null || update.KeepHistory != null || update.SelfDestroy != null))
                 foreach (var productId in folder.Products.Keys)
                     TryUpdateProductInFolder(productId, folder);
 
@@ -197,9 +195,9 @@ namespace HSMServer.Folders
                 {
                     Id = productId,
                     FolderId = folder?.Id ?? Guid.Empty,
-                    TTL = GetCorePolicy(ttl, folder?.ExpectedUpdateInterval),
-                    KeepHistory = GetCorePolicy(savedHistory, folder?.SavedHistoryPeriod),
-                    SelfDestroy = GetCorePolicy(selfDestroy, folder?.SelfDestroyPeriod),
+                    TTL = GetCorePolicy(ttl, folder?.TTL),
+                    KeepHistory = GetCorePolicy(savedHistory, folder?.KeepHistory),
+                    SelfDestroy = GetCorePolicy(selfDestroy, folder?.SelfDestroy),
                 };
 
                 _cache.UpdateProduct(update);
@@ -245,7 +243,6 @@ namespace HSMServer.Folders
                 return property.Value.IsFromParent ? interval.ToModel() : null;
             }
 
-
             foreach (var product in _cache.GetProducts())
             {
                 if (!product.FolderId.HasValue || !TryGetValueById(product.FolderId, out var folder))
@@ -254,9 +251,9 @@ namespace HSMServer.Folders
                 var update = new ProductUpdate
                 {
                     Id = product.Id,
-                    TTL = IsFromFolder(product.Settings.TTL, folder.ExpectedUpdateInterval),
-                    KeepHistory = IsFromFolder(product.Settings.KeepHistory, folder.SavedHistoryPeriod),
-                    SelfDestroy = IsFromFolder(product.Settings.SelfDestroy, folder.SelfDestroyPeriod),
+                    TTL = IsFromFolder(product.Settings.TTL, folder.TTL),
+                    KeepHistory = IsFromFolder(product.Settings.KeepHistory, folder.KeepHistory),
+                    SelfDestroy = IsFromFolder(product.Settings.SelfDestroy, folder.SelfDestroy),
                 };
 
                 if (update.TTL != null || update.RestoreInterval != null ||
