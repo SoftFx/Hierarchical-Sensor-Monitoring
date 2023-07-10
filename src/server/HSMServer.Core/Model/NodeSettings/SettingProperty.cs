@@ -25,7 +25,7 @@ namespace HSMServer.Core.Model.NodeSettings
 
     public sealed class SettingProperty<T> : SettingProperty where T : TimeIntervalModel
     {
-        private readonly T _emptyValue = (T)TimeIntervalModel.Never;
+        private readonly T _emptyValue = (T)TimeIntervalModel.None;
         private T _curValue;
 
 

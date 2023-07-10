@@ -40,46 +40,46 @@ namespace HSMServer.Extensions
             }).Ticks;
         }
 
-        public static TimeInterval ToServer(this CoreTimeInterval interval, long ticks) =>
-            interval switch
-            {
-                CoreTimeInterval.OneMinute => TimeInterval.OneMinute,
-                CoreTimeInterval.FiveMinutes => TimeInterval.FiveMinutes,
-                CoreTimeInterval.TenMinutes => TimeInterval.TenMinutes,
-                CoreTimeInterval.Hour => TimeInterval.Hour,
-                CoreTimeInterval.Day => TimeInterval.Day,
-                CoreTimeInterval.Week => TimeInterval.Week,
-                CoreTimeInterval.Month => TimeInterval.Month,
-                CoreTimeInterval.ThreeMonths => TimeInterval.ThreeMonths,
-                CoreTimeInterval.SixMonths => TimeInterval.SixMonths,
-                CoreTimeInterval.Year => TimeInterval.Year,
-                CoreTimeInterval.FromFolder or CoreTimeInterval.FromParent => TimeInterval.FromParent,
-                CoreTimeInterval.Never => TimeInterval.None,
-                CoreTimeInterval.Forever => TimeInterval.Forever,
-                _ => TimeInterval.Custom,
-            };
+        //public static TimeInterval ToServer(this CoreTimeInterval interval, long ticks) =>
+        //    interval switch
+        //    {
+        //        CoreTimeInterval.OneMinute => TimeInterval.OneMinute,
+        //        CoreTimeInterval.FiveMinutes => TimeInterval.FiveMinutes,
+        //        CoreTimeInterval.TenMinutes => TimeInterval.TenMinutes,
+        //        CoreTimeInterval.Hour => TimeInterval.Hour,
+        //        CoreTimeInterval.Day => TimeInterval.Day,
+        //        CoreTimeInterval.Week => TimeInterval.Week,
+        //        CoreTimeInterval.Month => TimeInterval.Month,
+        //        CoreTimeInterval.ThreeMonths => TimeInterval.ThreeMonths,
+        //        CoreTimeInterval.SixMonths => TimeInterval.SixMonths,
+        //        CoreTimeInterval.Year => TimeInterval.Year,
+        //        CoreTimeInterval.FromFolder or CoreTimeInterval.FromParent => TimeInterval.FromParent,
+        //        CoreTimeInterval.None => TimeInterval.None,
+        //        CoreTimeInterval.Forever => TimeInterval.Forever,
+        //        _ => TimeInterval.Custom,
+        //    };
 
-        public static CoreTimeInterval ToCore(this TimeInterval interval, bool parentIsFolder = false) =>
-            interval switch
-            {
-                TimeInterval.None => CoreTimeInterval.Never,
-                TimeInterval.Forever => CoreTimeInterval.Forever,
+        //public static CoreTimeInterval ToCore(this TimeInterval interval, bool parentIsFolder = false) =>
+        //    interval switch
+        //    {
+        //        TimeInterval.None => CoreTimeInterval.None,
+        //        TimeInterval.Forever => CoreTimeInterval.Forever,
 
-                TimeInterval.OneMinute => CoreTimeInterval.OneMinute,
-                TimeInterval.FiveMinutes => CoreTimeInterval.FiveMinutes,
-                TimeInterval.TenMinutes => CoreTimeInterval.TenMinutes,
-                TimeInterval.Hour => CoreTimeInterval.Hour,
-                TimeInterval.Day => CoreTimeInterval.Day,
-                TimeInterval.Week => CoreTimeInterval.Week,
+        //        TimeInterval.OneMinute => CoreTimeInterval.OneMinute,
+        //        TimeInterval.FiveMinutes => CoreTimeInterval.FiveMinutes,
+        //        TimeInterval.TenMinutes => CoreTimeInterval.TenMinutes,
+        //        TimeInterval.Hour => CoreTimeInterval.Hour,
+        //        TimeInterval.Day => CoreTimeInterval.Day,
+        //        TimeInterval.Week => CoreTimeInterval.Week,
 
-                TimeInterval.Month => CoreTimeInterval.Month,
-                TimeInterval.ThreeMonths => CoreTimeInterval.ThreeMonths,
-                TimeInterval.SixMonths => CoreTimeInterval.SixMonths,
-                TimeInterval.Year => CoreTimeInterval.Year,
+        //        TimeInterval.Month => CoreTimeInterval.Month,
+        //        TimeInterval.ThreeMonths => CoreTimeInterval.ThreeMonths,
+        //        TimeInterval.SixMonths => CoreTimeInterval.SixMonths,
+        //        TimeInterval.Year => CoreTimeInterval.Year,
 
-                TimeInterval.FromParent => parentIsFolder ? CoreTimeInterval.FromFolder : CoreTimeInterval.FromParent,
+        //        TimeInterval.FromParent => parentIsFolder ? CoreTimeInterval.FromFolder : CoreTimeInterval.FromParent,
 
-                _ => CoreTimeInterval.Custom,
-            };
+        //        _ => CoreTimeInterval.Custom,
+        //    };
     }
 }

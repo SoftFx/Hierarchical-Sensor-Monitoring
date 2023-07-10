@@ -1,6 +1,5 @@
 ﻿using HSMServer.Core.Model;
 using HSMServer.Core.Model.NodeSettings;
-using HSMServer.Core.Model.Policies;
 using HSMServer.Helpers;
 using HSMServer.Model.Folders;
 
@@ -40,11 +39,11 @@ namespace HSMServer.Model.TreeViewModel
             Path = model.Path;
             EncodedId = SensorPathHelper.EncodeGuid(model.Id);
 
-            bool NodeHasFolder() => Parent is FolderModel;
+            bool ParentIsFolder() => Parent is FolderModel;
 
-            ExpectedUpdateInterval = new(model.Settings.TTL.Value, () => Parent?.ExpectedUpdateInterval, NodeHasFolder);
-            SavedHistoryPeriod = new(model.Settings.KeepHistory.Value, () => Parent?.SavedHistoryPeriod, NodeHasFolder);
-            SelfDestroyPeriod = new(model.Settings.SelfDestroy.Value, () => Parent?.SelfDestroyPeriod, NodeHasFolder);
+            ExpectedUpdateInterval = new(model.Settings.TTL.Value, () => Parent?.ExpectedUpdateInterval, ParentIsFolder);
+            SavedHistoryPeriod = new(model.Settings.KeepHistory.Value, () => Parent?.SavedHistoryPeriod, ParentIsFolder);
+            SelfDestroyPeriod = new(model.Settings.SelfDestroy.Value, () => Parent?.SelfDestroyPeriod, ParentIsFolder);
         }
 
 
@@ -62,7 +61,8 @@ namespace HSMServer.Model.TreeViewModel
 
         private static void UpdatePolicyView<T>(SettingProperty<T> property, TimeIntervalViewModel targetView) where T : TimeIntervalModel
         {
-            targetView.Update(property.IsSet ? property.Value : null);
+            if (property.IsSet)
+                targetView.FromModel(property.Value);
         }
     }
 }

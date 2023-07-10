@@ -634,7 +634,7 @@ namespace HSMServer.Core.Cache
                     var update = new ProductUpdate
                     {
                         Id = product.Id,
-                        TTL = new TimeIntervalModel(TimeInterval.Never),
+                        TTL = new TimeIntervalModel(TimeInterval.None),
                         KeepHistory = new TimeIntervalModel(TimeInterval.Month),
                         SelfDestroy = new TimeIntervalModel(TimeInterval.Month),
                     };

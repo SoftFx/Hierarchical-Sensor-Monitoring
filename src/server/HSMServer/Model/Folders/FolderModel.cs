@@ -133,7 +133,7 @@ namespace HSMServer.Model.Folders
         private TimeIntervalViewModel GetDefaultCleanup(List<TimeInterval> predefinedIntervals) =>
             new(GetDefaultCleanupEntity(), predefinedIntervals);
 
-        private static TimeIntervalEntity GetDefaultPolicyEntity() => new((long)Core.Model.TimeInterval.Custom, 0L);
+        private static TimeIntervalEntity GetDefaultPolicyEntity() => new((long)Core.Model.TimeInterval.None, 0L);
 
         private static TimeIntervalEntity GetDefaultCleanupEntity() => new((long)Core.Model.TimeInterval.Month, 0L);
     }
