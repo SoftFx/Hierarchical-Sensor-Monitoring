@@ -49,7 +49,7 @@ namespace HSMServer.Core.Model.Policies
                 return condition;
             }
 
-            Sensitivity = update.Sensativity;
+            Sensitivity = update.Sensitivity;
             Template = update.Template;
             Status = update.Status;
             Icon = update.Icon;
