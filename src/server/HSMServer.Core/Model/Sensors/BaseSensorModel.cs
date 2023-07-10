@@ -86,6 +86,8 @@ namespace HSMServer.Core.Model
 
         public void Update(SensorUpdate update)
         {
+            CallJournal(new JournalRecordModel(Id, DateTime.UtcNow, update.Compare(this, update)));
+
             base.Update(update);
 
             State = update?.State ?? State;

@@ -236,8 +236,6 @@ namespace HSMServer.Core.Cache
             if (!_sensors.TryGetValue(update.Id, out var sensor))
                 return;
 
-            _journalService.AddJournals(sensor, update);
-            
             sensor.Update(update);
             _database.UpdateSensor(sensor.ToEntity());
 
@@ -385,6 +383,7 @@ namespace HSMServer.Core.Cache
             sensor.Settings.KeepHistory.CreateJournal += _journalService.AddJournal;
             sensor.Settings.SelfDestroy.CreateJournal += _journalService.AddJournal;
             sensor.Settings.TTL.CreateJournal += _journalService.AddJournal;
+            sensor.CreateJournal += _journalService.AddJournal;
         }
 
         private void RemoveSensorPolicies(BaseSensorModel sensor)
@@ -395,6 +394,7 @@ namespace HSMServer.Core.Cache
             sensor.Settings.KeepHistory.CreateJournal -= _journalService.AddJournal;
             sensor.Settings.SelfDestroy.CreateJournal -= _journalService.AddJournal;
             sensor.Settings.TTL.CreateJournal -= _journalService.AddJournal;
+            sensor.CreateJournal -= _journalService.AddJournal;
             RemoveEntityPolicies(sensor);
         }
 

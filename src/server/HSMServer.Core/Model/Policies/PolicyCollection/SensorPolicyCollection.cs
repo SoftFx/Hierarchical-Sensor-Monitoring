@@ -134,9 +134,7 @@ namespace HSMServer.Core.Model.Policies
             {
                 if (updates.TryGetValue(id, out var update))
                 {
-                    //TODO: Implement comparison for current and update
-                    if (policy.Icon != update.Icon)
-                        CallJournal(new JournalRecordModel(_sensor.Id, DateTime.UtcNow, $"{policy.Id} - {policy.Icon} -> {update.Icon}"));
+                    CallJournal(new JournalRecordModel(_sensor.Id, DateTime.UtcNow, update.Compare(policy, update)));
                     policy.Update(update);
                     Uploaded?.Invoke(ActionType.Update, policy);
                 }

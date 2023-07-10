@@ -3,11 +3,15 @@ using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Model.NodeSettings;
 using HSMServer.Core.Model.Policies;
 using System;
+using HSMServer.Core.Journal;
 
 namespace HSMServer.Core.Model
 {
-    public abstract class BaseNodeModel
+    public abstract class BaseNodeModel : IJournal
     {
+        public event Action<JournalRecordModel> CreateJournal;
+
+
         public abstract PolicyCollectionBase Policies { get; }
 
         public SettingsCollection Settings { get; } = new();
@@ -75,6 +79,8 @@ namespace HSMServer.Core.Model
 
         protected internal void Update(BaseNodeUpdate update)
         {
+            CallJournal(new JournalRecordModel(Id, DateTime.UtcNow, update.Compare(this, update)));
+
             Description = update.Description ?? Description;
 
             Settings.KeepHistory.TrySetValue(update.KeepHistory, Id);
@@ -83,5 +89,7 @@ namespace HSMServer.Core.Model
             if (Settings.TTL.TrySetValue(update.TTL, Id))
                 CheckTimeout();
         }
+        
+        protected void CallJournal(JournalRecordModel journal) => CreateJournal?.Invoke(journal);
     }
 }

@@ -2,6 +2,7 @@
 using HSMServer.Core.Model.Policies;
 using System;
 using System.Collections.Generic;
+using System.Text;
 
 namespace HSMServer.Core.Cache.UpdateEntities
 {
@@ -18,9 +19,23 @@ namespace HSMServer.Core.Cache.UpdateEntities
 
         public List<DataPolicyUpdate> DataPolicies { get; init; }
         
-        public string GetComparisonString(BaseSensorModel entity, SensorUpdate update)
+        public string Compare(BaseSensorModel entity, SensorUpdate update)
         {
-            return "";
+            var builder = new StringBuilder();
+
+            if (entity.State != State && State is not null)
+                builder.AppendLine($"State: {entity.State} -> {State}");
+
+            if (entity.Integration != Integration && Integration is not null)
+                builder.AppendLine($"State: {entity.Integration} -> {Integration}");
+
+            if (entity.EndOfMuting != EndOfMutingPeriod && EndOfMutingPeriod is not null)
+                builder.AppendLine($"End of muting: {entity.EndOfMuting} -> {EndOfMutingPeriod}");
+
+            if (update.DataPolicies != null)
+                entity.Policies.Update(update.DataPolicies);
+            
+            return builder.ToString();
         }
     }
 
@@ -32,11 +47,51 @@ namespace HSMServer.Core.Cache.UpdateEntities
         PolicyCombination Combination = PolicyCombination.And);
 
 
-    public sealed record DataPolicyUpdate(
-        Guid Id,
-        List<PolicyConditionUpdate> Conditions,
-        SensorStatus Status,
-        string Template,
-        string Icon
-    );
+    public sealed class DataPolicyUpdate : IUpdateComparer<Policy, DataPolicyUpdate>
+    {
+        public Guid Id { get; init; }
+
+        public List<PolicyConditionUpdate> Conditions { get; init; }
+
+        public SensorStatus Status { get; init; }
+
+        public string Template { get; init; }
+
+        public string Icon { get; init; }
+
+
+        public DataPolicyUpdate(Guid id, List<PolicyConditionUpdate> conditions, SensorStatus status, string template, string icon)
+        {
+            Id = id;
+            Conditions = conditions;
+            Status = status;
+            Template = template;
+            Icon = icon;
+        }
+
+        public string Compare(Policy entity, DataPolicyUpdate update)
+        {
+            var builder = new StringBuilder();
+
+            if (entity.Icon != update.Icon)
+            {
+                builder.AppendLine($"Icon: {entity.Icon} -> {update.Icon}");
+            }
+            
+            if (entity.Template != update.Template)
+            {
+                builder.AppendLine($"Template: {entity.Template} -> {update.Template}");
+            }
+            
+            if (entity.Status != update.Status)
+            {
+                builder.AppendLine($"Status: {entity.Status} -> {update.Status}");
+            }
+
+            if (update.Conditions?.Count > 0)
+                builder.AppendLine("Conditions updated.");
+            
+            return builder.ToString();
+        }
+    }
 }

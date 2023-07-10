@@ -44,7 +44,7 @@ namespace HSMServer.Core.Model.NodeSettings
 
         private SettingProperty<T> Register<T>(string name) where T : TimeIntervalModel
         {
-            var property = new SettingProperty<T>(){Name = name};
+            var property = new SettingProperty<T>(){ Name = name };
 
             _properties[name] = property;
 

@@ -19,7 +19,8 @@ public class JournalService : IJournalService
 
     public void AddJournal(JournalRecordModel record)
     {
-        _database.AddJournalValue(record.Key, record.ToJournalEntity());
+        if (!string.IsNullOrEmpty(record.Value))
+            _database.AddJournalValue(record.Key, record.ToJournalEntity());
     }
     
     public void AddJournals(List<JournalRecordModel> records)

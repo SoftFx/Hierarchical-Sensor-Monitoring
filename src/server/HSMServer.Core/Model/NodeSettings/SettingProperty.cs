@@ -73,13 +73,13 @@ namespace HSMServer.Core.Model.NodeSettings
             else
                 return true;
 
-            // if (id != Guid.Empty)
-            // {
-            //     var val1 = copyValue.GetValue();
-            //     var val2 = GetValue();
-            //     if (val1 != val2)
-            //         CreateJournal?.Invoke(new JournalRecordModel(id, DateTime.UtcNow, $"{Name}: {val1} -> {val2}"));
-            // }
+            if (id != Guid.Empty)
+            {
+                var val1 = copyValue?.GetValue() ?? TimeInterval.FromParent.ToString();
+                var val2 = GetValue();
+                if (val1 != val2)
+                    CreateJournal?.Invoke(new JournalRecordModel(id, DateTime.UtcNow, $"{Name}: {val1} -> {val2}"));
+            }
             
             Uploaded?.Invoke(action, newValue);
             return true;
