@@ -1,8 +1,8 @@
 using System;
 using System.Collections.Generic;
-using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Model;
+using HSMServer.Core.Model.Requests;
 
 namespace HSMServer.Core.Journal;
 
@@ -15,5 +15,5 @@ public interface IJournalService
     
     void RemoveJournal(Guid id);
 
-    IAsyncEnumerable<List<JournalRecordModel>> GetJournalValuesPage(Guid id, DateTime from, DateTime to, RecordType type, int count);
+    IAsyncEnumerable<List<JournalRecordModel>> GetJournalValuesPage(JournalHistoryRequestModel request);
 }

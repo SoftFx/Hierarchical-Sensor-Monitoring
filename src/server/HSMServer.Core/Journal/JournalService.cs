@@ -5,6 +5,8 @@ using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.DataLayer;
 using HSMServer.Core.Model;
+using HSMServer.Core.Model.Requests;
+
 namespace HSMServer.Core.Journal;
 
 public class JournalService : IJournalService
@@ -31,9 +33,9 @@ public class JournalService : IJournalService
     
     public void RemoveJournal(Guid id) => _database.RemoveJournalValue(id);
     
-    public async IAsyncEnumerable<List<JournalRecordModel>> GetJournalValuesPage(Guid id, DateTime from, DateTime to, RecordType type, int count)
+    public async IAsyncEnumerable<List<JournalRecordModel>> GetJournalValuesPage(JournalHistoryRequestModel request)
     {
-        var pages = _database.GetJournalValuesPage(id, from, to, type, count);
+        var pages = _database.GetJournalValuesPage(request.Id, request.From, request.To, request.Type, request.Count);
 
         await foreach (var page in pages)
         {
