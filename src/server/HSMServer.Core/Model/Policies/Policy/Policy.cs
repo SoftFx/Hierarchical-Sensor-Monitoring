@@ -64,9 +64,11 @@ namespace HSMServer.Core.Model.Policies
             Id = new Guid(entity.Id);
             Status = (SensorStatus)entity.SensorStatus;
 
-            Sensativity = new TimeIntervalModel(entity.Sensativity);
             Template = entity.Template;
             Icon = entity.Icon;
+
+            if (entity.Sensativity is not null)
+                Sensativity = new TimeIntervalModel(entity.Sensativity);
 
             UpdateConditions(entity.Conditions, Update);
         }
