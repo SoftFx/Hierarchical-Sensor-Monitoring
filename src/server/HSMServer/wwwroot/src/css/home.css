@@ -339,14 +339,16 @@ img .tree-png-icon {
 .tree-alert-icon {
     position: relative;
     margin: 0px 1px;
+    font-size: smaller;
+    top: -1px;
 }
 
 .tree-alert-icon span {
     position: absolute;
     padding: 0px;
     font-size: 8px;
-    top: 10px;
-    left: 9px;
+    top: 11px;
+    left: 14px;
     display: block;
     color: black;
 }
