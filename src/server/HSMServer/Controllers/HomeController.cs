@@ -55,15 +55,6 @@ namespace HSMServer.Controllers
         //TODO remove after refactoring
         #region test
         [AllowAnonymous]
-        public async Task<JsonResult> GetJournals(string id)
-        {
-            var journals = await _journalService.GetJournalValuesPage(Guid.Parse(id), DateTime.MinValue, DateTime.MaxValue, RecordType.Actions, -100)
-                .Flatten();
-            return Json(journals);
-        }
-        
-        
-        [AllowAnonymous]
         public void DeleteJournals(string id)
         { 
             _journalService.RemoveJournal(Guid.Parse(id));

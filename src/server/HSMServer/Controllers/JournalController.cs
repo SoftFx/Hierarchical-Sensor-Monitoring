@@ -24,7 +24,7 @@ public class JournalController : BaseController
     
     public async Task<IActionResult> GetJournalsPage(string id)
     {
-        var journals = (await _journalService.GetJournalValuesPage(Guid.Parse(id), DateTime.MinValue, DateTime.MaxValue, RecordType.Actions, -100)
+        var journals = (await _journalService.GetJournalValuesPage(new(Guid.Parse(id), DateTime.MinValue, DateTime.MaxValue, RecordType.Actions, -100))
             .Flatten()).Select(x => new JournalViewModel(x)).ToList();
         return PartialView("_JournalsTable", journals);
     }
