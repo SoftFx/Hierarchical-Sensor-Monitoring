@@ -8,22 +8,18 @@
 <div name="alertAction" class="d-flex flex-row align-items-center alert-blocks-group py-1 ms-3">
     <div class="@(Model.IsMain ? "d-none" : "d-flex") alert-text-block alert-add me-3">and</div>
 
-    <select name="actionsSelect" class="alert-block alert-select property-select">
-        <option value="@ActionViewModel.SendNotifyAction">send notification</option>
-        <option value="@ActionViewModel.ShowIconAction">show icon</option>
-        <option value="@ActionViewModel.SetStatusAction">set sensor status</option>
-    </select>
+    <select class="alert-block alert-select property-select" asp-for="Action" asp-items="Model.Actions"></select>
 
-    <div name="sendNotificationAction">
+    <div name="sendNotificationAction" class="d-block">
         <input type="text" class="alert-block target-input" placeholder="message template" asp-for="Comment" value="@Model.Comment" required>
     </div>
 
-    <div name="showIconAction" class="d-none" style="height:2rem;">
-        <textarea name="emoji" class="alert-block target-input"></textarea>
+    <div name="showIconAction" class="d-none alert-block">
+        <textarea class="target-input" asp-for="Icon"></textarea>
     </div>
 
     <div name="setStatusAction" class="d-none">
-        <select class="alert-block alert-select target-input" asp-items="@Model.StatusesItems"></select> @*old name  asp-for="Status"*@
+        <select class="alert-block alert-select target-input" asp-for="Status" asp-items="@Model.StatusesItems"></select>
     </div>
 
     <a class="deleteAction"><i class="@(Model.IsMain ? "d-none" : "d-flex") fa-solid fa-xmark alert-delete-button"></i></a>
@@ -32,13 +28,14 @@
 
 <script>
     $(document).ready(function () {
-        $("textarea[name='emoji']").emojioneArea({
+        $("textarea[name='Icon']").emojioneArea({
             filtersPosition: "bottom",
+            //standalone: true
             inline: true
         });
     });
 
-    $('select[name="actionsSelect"]').off("change").on("change", function () {
+    $('select[name="Action"]').off("change").on("change", function () {
         let actionBlock = $(this).parents("div[name='alertAction']:first");
 
         let send = actionBlock.find($(`div[name='sendNotificationAction']`));

@@ -485,7 +485,7 @@ img .tree-png-icon {
 .emojionearea.emojionearea-inline > .emojionearea-editor {
     height: 1.5rem;
     left: 4px;
-    padding: 2px 0;
+    padding: 0;
 }
 
 .emojionearea.emojionearea-inline {
@@ -493,12 +493,27 @@ img .tree-png-icon {
     width: 60px;
 }
 
+.emojionearea.emojionearea-inline > .emojionearea-button {
+    top: 2px;
+    right: -6px;
+}
+
+.emojionearea .emojionearea-button > div {
+    width: 18px;
+    height: 18px;
+}
+
 .emojionearea .emojionearea-button > div.emojionearea-button-open {
-    background-position: 2px -28px;
+    background-position: -4px -28px;
 }
 
 .emojionearea .emojionearea-button > div.emojionearea-button-close {
     top: -4px;
+    right: 10px;
+}
+
+.emojionearea .emojionearea-editor .emojioneemoji, .emojionearea .emojionearea-editor [class*=emojione-] {
+    margin: -2px 2px 2px;
 }
 
 .emojionearea:hover,

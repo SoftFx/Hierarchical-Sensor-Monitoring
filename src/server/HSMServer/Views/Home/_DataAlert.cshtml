@@ -93,13 +93,6 @@
 
 <script>
     $(document).ready(function () {
-        $("textarea[name='emoji']").emojioneArea({
-            filtersPosition: "bottom",
-            inline: true
-        });
-    });
-
-    $(document).ready(function () {
         $("a.addCondition").off("click").on("click", function () {
             let element = $(this).parents("div.fullCondition:first");
 

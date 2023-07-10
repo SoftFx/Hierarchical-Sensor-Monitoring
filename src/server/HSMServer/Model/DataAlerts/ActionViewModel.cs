@@ -8,6 +8,9 @@ namespace HSMServer.Model.DataAlerts
 {
     public class AlertAction
     {
+        public string Action { get; set; }
+
+
         public SensorStatus Status { get; set; } = SensorStatus.Ok;
 
         [Required]
@@ -21,18 +24,21 @@ namespace HSMServer.Model.DataAlerts
     {
         private const string DefaultCommentTemplate = "$sensor $action $target";
 
-        public const string ShowIconAction = "Show icon";
-        public const string SetStatusAction = "Set status";
-        public const string SendNotifyAction = "Send notification";
+        public const string ShowIconAction = "show icon";
+        public const string SetStatusAction = "set sensor status";
+        public const string SendNotifyAction = "send notification";
 
+
+        public List<SelectListItem> Actions { get; } = new()
+        {
+            new SelectListItem(SendNotifyAction, SendNotifyAction),
+            new SelectListItem(ShowIconAction, ShowIconAction),
+            new SelectListItem(SetStatusAction, SetStatusAction),
+        };
 
         public List<SelectListItem> StatusesItems { get; }
 
         public bool IsMain { get; }
-
-
-        [Required]
-        public string Comment { get; set; }
 
 
         public ActionViewModel(bool isMain)

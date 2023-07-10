@@ -148,13 +148,7 @@
             const type = this.id.substring("dataAlertsList_".length, this.id.length);
 
             setFormDataAlertsProperty(formData, "input", type, "Id");
-            //setFormDataAlertsProperty(formData, "select", type, "Property");
-            //setFormDataAlertsProperty(formData, "select", type, "Operation");
-            //setFormDataAlertsProperty(formData, "input", type, "Value");
-            setFormDataAlertsConditions(formData, type);
-            //setFormDataAlertsProperty(formData, "select", type, "Icon");
-            //setFormDataAlertsProperty(formData, "input", type, "Comment");
-            //setFormDataAlertsProperty(formData, "select", type, "Status");
+            setFormDataAlerts(formData, type);
         });
     }
 
@@ -164,14 +158,14 @@
         });
     }
 
-    function setFormDataAlertsConditions(formData, type) {
+    function setFormDataAlerts(formData, type) {
         $(`div.dataAlertRow`).each(function (i) {
             $(this).find(`div[name='alertCondition']`).each(function (j) {
-                setFormDataAlertsConditionProperty(formData, type, i, j, $(this), "select", "Property");
+                setFormDataAlertsListProperty(formData, type, i, j, $(this), "Conditions", "select", "Property");
 
                 if ($(this).find('div[name="valueCondition"]').hasClass('d-flex')) {
-                    setFormDataAlertsConditionProperty(formData, type, i, j, $(this), "select", "Action");
-                    setFormDataAlertsConditionProperty(formData, type, i, j, $(this), "input", "Target");
+                    setFormDataAlertsListProperty(formData, type, i, j, $(this), "Conditions", "select", "Action");
+                    setFormDataAlertsListProperty(formData, type, i, j, $(this), "Conditions", "input", "Target");
                 }
 
                 if ($(this).find('div[name="sensitivityCondition"]').hasClass('d-flex')) {
@@ -184,12 +178,28 @@
                     setFormDataAlertsConditionIntervals(formData, type, i, j, $(this), "TimeToLive", "input", "CustomTimeInterval");
                 }
             });
+
+            $(this).find(`div[name='alertAction']`).each(function (j) {
+                setFormDataAlertsListProperty(formData, type, i, j, $(this), "Actions", "select", "Action");
+
+                if ($(this).find('div[name="sendNotificationAction"]').hasClass('d-block')) {
+                    setFormDataAlertsListProperty(formData, type, i, j, $(this), "Actions", "input", "Comment");
+                }
+
+                if ($(this).find('div[name="showIconAction"]').hasClass('d-block')) {
+                    setFormDataAlertsListProperty(formData, type, i, j, $(this), "Actions", "textarea", "Icon");
+                }
+
+                if ($(this).find('div[name="setStatusAction"]').hasClass('d-block')) {
+                    setFormDataAlertsListProperty(formData, type, i, j, $(this), "Actions", "select", "Status");
+                }
+            });
         });
     }
 
-    function setFormDataAlertsConditionProperty(formData, type, i, j, block, element, propertyName) {
+    function setFormDataAlertsListProperty(formData, type, i, j, block, list, element, propertyName) {
         block.find(`${element}[name='${propertyName}']`).each(function () {
-            formData.append(`DataAlerts[${type}][${i}].Conditions[${j}].${propertyName}`, $(this).val());
+            formData.append(`DataAlerts[${type}][${i}].${list}[${j}].${propertyName}`, $(this).val());
         });
     }
 
