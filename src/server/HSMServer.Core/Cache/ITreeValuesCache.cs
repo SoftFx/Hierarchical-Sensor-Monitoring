@@ -12,8 +12,6 @@ namespace HSMServer.Core.Cache
         Add,
         Update,
         Delete,
-        Init,
-        Clear
     }
 
 
