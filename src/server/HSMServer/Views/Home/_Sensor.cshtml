@@ -192,7 +192,7 @@
                                         </div>
                                     </li>
                                     <li class='nav-item'>
-                                        <a id='link_journal_@sensorId' class='nav-link' data-bs-toggle='tab' href='#@journalParentDivId'>Journal</a>
+                                        <a class='nav-link' data-bs-toggle='tab' href='#@journalParentDivId'>Journal</a>
                                     </li>
                                 </ul>
                                 <div id="showAllTableColumnsCheckbox" class="form-check d-none">
@@ -210,7 +210,15 @@
                                     <div id='@valuesElementId'></div>
                                 </div>
                                 <div class='tab-pane fade' id=@journalParentDivId>
-                                    <div id='@journalElementId'></div>
+                                    <table class="display w-100" id="journal_table_@sensorId">
+                                        <thead>
+                                                <tr>
+                                                    <th>Date</th>
+                                                    <th>Type</th>
+                                                    <th>QWE</th>
+                                                </tr>
+                                            </thead>
+                                    </table>
                                 </div>
                             </div>
                         }
@@ -254,6 +262,19 @@
         if ('@(Model.Type is SensorType.File)' === 'True') {
             setContentPreview('@Model.EncodedId');
         }
+        
+         $('[id^="journal_table_"]').dataTable({
+                    processing: true,
+                    serverSide: true,
+                    ajax: {
+                        type: "POST",
+                        contentType: "application/json; charset=utf-8",
+                        url: "/Journal/GetPage",
+                        data: function (d) {
+                            return JSON.stringify({ parameters: d });
+                        }
+                    }
+         });
     });
 
     function setContentPreview(encodedId) {

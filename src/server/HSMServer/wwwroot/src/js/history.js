@@ -80,7 +80,8 @@ function Data(to, from, type, encodedId) {
     function initializeTabLinksRequests() {
         $('[id^="link_graph_"]').off("click").on("click", requestGraph);
         $('[id^="link_table_"]').off("click").on("click", requestTable);
-        $('[id^="link_journal_"]').off("click").on("click", requestJournal);
+        //$('[id^="link_journal_"]').off("click").on("click", requestJournal);
+       
     }
 
     function requestGraph() {
@@ -123,7 +124,11 @@ function Data(to, from, type, encodedId) {
             $("#newValuesCount").empty();
             $("#tableHistoryRefreshButton").addClass("d-none");
             $("#showAllTableColumnsCheckbox").removeClass("d-none");
-
+            
+            console.log(data);
+            
+            
+            
             $(`#journal_${encodedId}`).html(data);
             //
             // let noValuesElement = document.getElementById(`noTableValues_${encodedId}`);
