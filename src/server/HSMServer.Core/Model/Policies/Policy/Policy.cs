@@ -20,7 +20,7 @@ namespace HSMServer.Core.Model.Policies
 
         public List<PolicyCondition> Conditions { get; } = new();
 
-        public virtual TimeIntervalModel Sensativity { get; protected set; }
+        public virtual TimeIntervalModel Sensitivity { get; protected set; }
 
         public virtual SensorStatus Status { get; protected set; }
 
@@ -49,7 +49,7 @@ namespace HSMServer.Core.Model.Policies
                 return condition;
             }
 
-            Sensativity = update.Sensativity;
+            Sensitivity = update.Sensativity;
             Template = update.Template;
             Status = update.Status;
             Icon = update.Icon;
@@ -67,8 +67,8 @@ namespace HSMServer.Core.Model.Policies
             Template = entity.Template;
             Icon = entity.Icon;
 
-            if (entity.Sensativity is not null)
-                Sensativity = new TimeIntervalModel(entity.Sensativity);
+            if (entity.Sensitivity is not null)
+                Sensitivity = new TimeIntervalModel(entity.Sensitivity);
 
             UpdateConditions(entity.Conditions, Update);
         }
@@ -79,7 +79,7 @@ namespace HSMServer.Core.Model.Policies
 
             Conditions = Conditions?.Select(u => u.ToEntity()).ToList(),
 
-            Sensativity = Sensativity?.ToEntity(),
+            Sensitivity = Sensitivity?.ToEntity(),
             SensorStatus = (byte)Status,
             Template = Template,
             Icon = Icon,
