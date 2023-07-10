@@ -164,7 +164,7 @@
                 setFormDataAlertsListProperty(formData, type, i, j, $(this), "Conditions", "select", "Property");
 
                 if ($(this).find('div[name="valueCondition"]').hasClass('d-flex')) {
-                    setFormDataAlertsListProperty(formData, type, i, j, $(this), "Conditions", "select", "Action");
+                    setFormDataAlertsListProperty(formData, type, i, j, $(this), "Conditions", "select", "Operation");
                     setFormDataAlertsListProperty(formData, type, i, j, $(this), "Conditions", "input", "Target");
                 }
 
@@ -187,7 +187,7 @@
                 }
 
                 if ($(this).find('div[name="showIconAction"]').hasClass('d-block')) {
-                    setFormDataAlertsListProperty(formData, type, i, j, $(this), "Actions", "textarea", "Icon");
+                    setFormDataAlertsListProperty(formData, type, i, j, $(this), "Actions", "input", "Icon");
                 }
 
                 if ($(this).find('div[name="setStatusAction"]').hasClass('d-block')) {

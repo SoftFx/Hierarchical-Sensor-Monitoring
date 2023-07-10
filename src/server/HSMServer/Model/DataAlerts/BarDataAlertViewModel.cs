@@ -12,5 +12,8 @@ namespace HSMServer.Model.DataAlerts
         }
 
         public BarDataAlertViewModel(Policy<T, U> policy, BaseSensorModel sensor) : base(policy, sensor) { }
+
+
+        protected override ConditionViewModel CreateCondition(bool isFirst) => new BarConditionViewModel<T, U>(isFirst);
     }
 }

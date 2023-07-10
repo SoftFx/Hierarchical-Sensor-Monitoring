@@ -555,7 +555,7 @@ namespace HSMServer.Controllers
             {
                 Id = sensor.Id,
                 Description = newModel.Description ?? string.Empty,
-                TTL = newModel.ExpectedUpdateInterval.ToModel(),
+                //TTL = newModel.ExpectedUpdateInterval.ToModel(),
                 //RestoreInterval = newModel.SensorRestorePolicy.ToModel(),
                 KeepHistory = newModel.SavedHistoryPeriod.ToModel(),
                 SelfDestroy = newModel.SelfDestroyPeriod.ToModel(),

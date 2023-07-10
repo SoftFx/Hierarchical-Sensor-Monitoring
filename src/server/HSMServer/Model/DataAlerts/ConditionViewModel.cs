@@ -13,7 +13,7 @@ namespace HSMServer.Model.DataAlerts
         public string Property { get; set; }
 
 
-        public PolicyOperation Action { get; set; }
+        public PolicyOperation Operation { get; set; }
 
         [Required]
         public string Target { get; set; }
@@ -38,7 +38,7 @@ namespace HSMServer.Model.DataAlerts
 
         public List<SelectListItem> PropertiesItems { get; }
 
-        public List<SelectListItem> ActionsItems { get; }
+        public List<SelectListItem> OperationsItems { get; }
 
 
         public ConditionViewModel(bool isFirst)
@@ -46,7 +46,7 @@ namespace HSMServer.Model.DataAlerts
             Sensitivity = new TimeIntervalViewModel(PredefinedIntervals.ForRestore) { IsAlertBlock = true };
             TimeToLive = new TimeIntervalViewModel(PredefinedIntervals.ForRestore) { IsAlertBlock = true };
 
-            ActionsItems = Actions.Select(a => new SelectListItem(a.GetDisplayName(), $"{a}")).ToList();
+            OperationsItems = Actions.Select(a => new SelectListItem(a.GetDisplayName(), $"{a}")).ToList();
             PropertiesItems = Properties.Select(p => new SelectListItem(p, p, false)).ToList();
 
             if (isFirst)

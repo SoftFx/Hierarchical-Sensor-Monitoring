@@ -22,7 +22,7 @@
     <select class="alert-block alert-select property-select" asp-for="Property" asp-items="@Model.PropertiesItems"></select>
 
     <div name="valueCondition" class="@(isValueCondition ? "d-flex" : "d-none") flex-row align-items-center">
-        <select class="alert-block alert-select operation-select" asp-for="Action" asp-items="@Model.ActionsItems"></select>
+        <select class="alert-block alert-select operation-select" asp-for="Operation" asp-items="@Model.OperationsItems"></select>
         <input class="alert-block target-input target-value" type="text" placeholder="<enter a value>" asp-for="Target" value="@Model.Target" required>
     </div>
 
