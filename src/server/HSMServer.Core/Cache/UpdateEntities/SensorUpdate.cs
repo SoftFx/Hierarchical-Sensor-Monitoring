@@ -30,6 +30,7 @@ namespace HSMServer.Core.Cache.UpdateEntities
     public sealed record DataPolicyUpdate(
         Guid Id,
         List<PolicyConditionUpdate> Conditions,
+        TimeIntervalModel Sensitivity,
         SensorStatus Status,
         string Template,
         string Icon

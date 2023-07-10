@@ -46,6 +46,7 @@ namespace HSMServer.Model.DataAlerts
             {
                 new PolicyConditionUpdate(Operation, new TargetValue(TargetType.Const, Value), Property)
             },
+            null,
             Status.ToCore(),
             Comment,
             Icon);
