@@ -25,28 +25,13 @@ namespace HSMServer.Core.Model
         FromFolder = -100,
         FromParent = -10,
         Ticks = -1,
-
-
-        //OneMinute = 600_000_000,
-        //FiveMinutes = 3_000_000_000,
-        //TenMinutes = 6_000_000_000,
-
-        //Hour = 36_000_000_000,
-        //Day = 864_000_000_000,
-        //Week = 6_048_000_000_000,
-
-
-
         None = 0L,
-        //Ticks,
 
         Month = 26_784_000_000_000, // 31 days
         ThreeMonths = 80_352_000_000_000, // 31 * 3
         SixMonths = 160_704_000_000_000, // 31 * 6
 
-        Year = 315_360_000_000_000, //365 days
-
-        //Forever = long.MaxValue - 1,
+        Year = 315_360_000_000_000,
     }
 
 
