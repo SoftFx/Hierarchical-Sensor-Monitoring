@@ -1,28 +1,7 @@
 using System;
 using HSMDatabase.AccessManager.DatabaseEntities;
+using HSMServer.Core.Cache;
 
 namespace HSMServer.Core.Model.Requests;
 
-public class JournalHistoryRequestModel
-{
-    public Guid Id { get; set; }
-    
-    public DateTime From { get; set; } = DateTime.MinValue;
-
-    public DateTime To { get; set; } = DateTime.MaxValue;
-
-    public int Count { get; set; } = 100;
-
-    public RecordType Type { get; set; } = RecordType.Changes;
-    
-    public JournalHistoryRequestModel() { }
-
-    public JournalHistoryRequestModel(Guid id, DateTime from, DateTime to, RecordType type, int count)
-    {
-        Id = id;
-        Count = count;
-        Type = type;
-        From = from;
-        To = to;
-    }
-}
+public record JournalHistoryRequestModel(Guid Id, DateTime From = default, DateTime To = default, RecordType FromType = RecordType.Actions, RecordType ToType = RecordType.Changes, int Count = TreeValuesCache.MaxHistoryCount);

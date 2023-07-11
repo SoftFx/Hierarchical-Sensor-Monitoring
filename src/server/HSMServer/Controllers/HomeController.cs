@@ -69,7 +69,7 @@ namespace HSMServer.Controllers
         }
 
         [HttpPost]
-        public IActionResult SelectNode(string selectedId)
+        public async Task<PartialViewResult> SelectNode(string selectedId)
         {
             BaseNodeViewModel viewModel = null;
 
@@ -94,6 +94,7 @@ namespace HSMServer.Controllers
                     viewModel = sensor;
 
                     StoredUser.History.ConnectSensor(_treeValuesCache.GetSensor(id));
+                    await StoredUser.Journal.ConnectJournal(id, _journalService);
                 }
             }
 

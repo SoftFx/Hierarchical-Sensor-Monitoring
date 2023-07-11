@@ -35,6 +35,8 @@ namespace HSMServer.Model.Authentication
 
         public SelectedSensorHistoryViewModel History { get; } = new();
 
+        public SelectedJournalViewModel Journal { get; } = new();
+
         public SelectedNodeViewModel SelectedNode { get; } = new();
         
 

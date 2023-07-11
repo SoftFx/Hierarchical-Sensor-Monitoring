@@ -436,13 +436,13 @@ namespace HSMDatabase.DatabaseWorkCore
                     db.Remove(fromBytes, toBytes);
         }
 
-        public IAsyncEnumerable<List<(byte[] Key, byte[] Entity)>> GetJournalValuesPage(Guid sensorId, DateTime from, DateTime to, RecordType recordType, int count)
+        public IAsyncEnumerable<List<(byte[] Key, byte[] Entity)>> GetJournalValuesPage(Guid sensorId, DateTime from, DateTime to, RecordType fromRecordType, RecordType toRecordType, int count)
         {
             var fromTicks = from.Ticks;
             var toTicks = to.Ticks;
 
-            var fromBytes = new JournalKey(sensorId, fromTicks, recordType).GetBytes();
-            var toBytes = new JournalKey(sensorId, toTicks, recordType).GetBytes();
+            var fromBytes = new JournalKey(sensorId, fromTicks, fromRecordType).GetBytes();
+            var toBytes = new JournalKey(sensorId, toTicks, toRecordType).GetBytes();
 
             var databases = _journalValuesDatabases.Where(db => db.IsInclude(fromTicks, toTicks)).ToList();
             GetJournalValuesFunc getValues = (db) => db.GetValuesFrom(fromBytes, toBytes);

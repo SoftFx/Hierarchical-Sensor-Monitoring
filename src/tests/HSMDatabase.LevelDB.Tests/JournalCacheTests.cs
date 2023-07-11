@@ -29,7 +29,7 @@ public class JournalCacheTests : MonitoringCoreTestsBase<TreeValuesCacheFixture>
         var sensors = GetUpdatedSensors(n);
         foreach (var sensor in sensors)
         {
-            var journals = await _journalService.GetJournalValuesPage(new(sensor.Id, DateTime.MinValue, DateTime.MaxValue, RecordType.Changes, MaxHistoryCount)).Flatten();
+            var journals = await _journalService.GetJournalValuesPage(new(sensor.Id, DateTime.MinValue, DateTime.MaxValue, RecordType.Changes, RecordType.Changes, MaxHistoryCount)).Flatten();
            
             Assert.NotEmpty(journals);
         }
@@ -51,7 +51,7 @@ public class JournalCacheTests : MonitoringCoreTestsBase<TreeValuesCacheFixture>
 
         await Task.Delay(1000);
         var expected = journals.OrderBy(x => x.Key.Time).ToList();
-        var actual = await _journalService.GetJournalValuesPage(new(id, DateTime.MinValue, DateTime.MaxValue, RecordType.Changes, 50000)).Flatten();
+        var actual = await _journalService.GetJournalValuesPage(new(id, DateTime.MinValue, DateTime.MaxValue, RecordType.Changes, RecordType.Changes, 50000)).Flatten();
 
         for (int i = 0; i < n; i++)
         {
