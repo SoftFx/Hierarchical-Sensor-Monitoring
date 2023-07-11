@@ -3,7 +3,6 @@ using HSMServer.Core.Model;
 using HSMServer.Core.Model.Policies;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using System.Collections.Generic;
-using System.ComponentModel.DataAnnotations;
 using System.Linq;
 
 namespace HSMServer.Model.DataAlerts
@@ -15,7 +14,6 @@ namespace HSMServer.Model.DataAlerts
 
         public PolicyOperation Operation { get; set; }
 
-        [Required]
         public string Target { get; set; }
 
 

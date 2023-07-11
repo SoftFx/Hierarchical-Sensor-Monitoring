@@ -102,7 +102,18 @@ function saveMetaData(selectedId) {
         contentType: false,
         async: true
     }).done(function (isValid) {
-        if (isValid) {
+        let isAlertsValid = true;
+        $("#editMetaInfo_form").find("div.dataAlertRow").each(function () {
+            $(this).find(`input[name='Comment']`).each(function () {
+                isAlertsValid &= $(this)[0].checkValidity();
+            });
+
+            $(this).find('input[name="Target"]').each(function () {
+                isAlertsValid &= $(this)[0].checkValidity();
+            });
+        });
+
+        if (isValid && isAlertsValid) {
             let path = $("#nodeHeader").text();
 
             showConfirmationModal(

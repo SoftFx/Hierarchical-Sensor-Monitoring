@@ -1,7 +1,6 @@
 ﻿using HSMServer.Model.TreeViewModel;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using System.Collections.Generic;
-using System.ComponentModel.DataAnnotations;
 using System.Linq;
 
 namespace HSMServer.Model.DataAlerts
@@ -13,7 +12,6 @@ namespace HSMServer.Model.DataAlerts
 
         public SensorStatus Status { get; set; } = SensorStatus.Ok;
 
-        [Required]
         public string Comment { get; set; }
 
         public string Icon { get; set; }
