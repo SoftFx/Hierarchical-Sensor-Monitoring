@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Authentication;
 using HSMServer.Controllers.DataTables;
+using HSMServer.Core.Cache;
 using HSMServer.Core.Journal;
 using HSMServer.Extensions;
 using HSMServer.Model.ViewModel;
@@ -30,16 +31,45 @@ public class JournalController : BaseController
         var req = parameters.Parameters;
         var resultSet = new DataTableResultSet
         {
-            Draw = req.Draw,
-            RecordsTotal = 5, 
-            RecordsFiltered = 5
+            Draw = req.Draw
         };
 
-        var items = (await _journalService
-            .GetJournalValuesPage(new(Guid.Parse(id), DateTime.MinValue, DateTime.MaxValue, RecordType.Actions, -100))
-            .Flatten()).Select(x => new JournalViewModel(x)).ToList();
+        var journals = await _journalService
+            .GetJournalValuesPage(new(Guid.Parse(id), DateTime.MinValue, DateTime.MaxValue, RecordType.Actions, TreeValuesCache.MaxHistoryCount)).Flatten();
         
-        foreach (var recordFromDb in items) { /* this is pseudocode */
+        var changesJournals = (await _journalService
+            .GetJournalValuesPage(new(Guid.Parse(id), DateTime.MinValue, DateTime.MaxValue, RecordType.Changes, TreeValuesCache.MaxHistoryCount))
+            .Flatten()).ToList();
+        
+        journals.AddRange(changesJournals);
+        var searched = journals.Where(x => x.Value.Contains(req.Search.Value, StringComparison.OrdinalIgnoreCase));
+        
+        if (req.Order is not null && req.Order.Count > 0)
+        {
+            if (req.Order[0].Dir == "asc")
+            {
+                searched = req.Order[0].Column switch
+                {
+                    0 => searched.OrderBy(x => x.Key.Time),
+                    1 => searched.OrderBy(x => x.Key.Type),
+                    2 => searched.OrderBy(x => x.Value),
+                    _ => searched
+                };
+            }
+            else
+            {
+                searched = req.Order[0].Column switch
+                {
+                    0 => searched.OrderByDescending(x => x.Key.Time),
+                    1 => searched.OrderByDescending(x => x.Key.Type),
+                    2 => searched.OrderByDescending(x => x.Value),
+                    _ => searched
+                };
+            }
+        }
+
+        var length = 0;
+        foreach (var recordFromDb in searched.Skip(req.Start).Take(req.Length).Select(x => new JournalViewModel(x))) {
             var data = new List<string>
             {
                 recordFromDb.TimeAsString,
@@ -47,7 +77,11 @@ public class JournalController : BaseController
                 recordFromDb.Value
             };
             resultSet.Data.Add(data);
+            length++;
         }
+
+        resultSet.RecordsTotal = journals.Count;
+        resultSet.RecordsFiltered = journals.Count;
 
         return Json( new
         {
