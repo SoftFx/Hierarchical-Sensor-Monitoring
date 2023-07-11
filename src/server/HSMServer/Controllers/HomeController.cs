@@ -139,12 +139,12 @@ namespace HSMServer.Controllers
             if (_treeViewModel.Nodes.TryGetValue(decodedId, out _))
             {
                 foreach (var sensorId in GetNodeSensors(decodedId))
-                    _treeValuesCache.UpdateMutedSensorState(sensorId, newMutingPeriod);
+                    _treeValuesCache.UpdateMutedSensorState(sensorId, newMutingPeriod, CurrentUser.Name);
             }
             else
             {
                 if (_treeViewModel.Sensors.TryGetValue(decodedId, out var sensor))
-                    _treeValuesCache.UpdateMutedSensorState(sensor.Id, newMutingPeriod);
+                    _treeValuesCache.UpdateMutedSensorState(sensor.Id, newMutingPeriod, CurrentUser.Name);
             }
 
             UpdateUserNotificationSettings(decodedId, (s, g) => s.Ignore(g, model.EndOfIgnorePeriod));
@@ -159,12 +159,12 @@ namespace HSMServer.Controllers
             if (_treeViewModel.Nodes.TryGetValue(decodedId, out _))
             {
                 foreach (var sensorId in GetNodeSensors(decodedId))
-                    _treeValuesCache.UpdateMutedSensorState(sensorId);
+                    _treeValuesCache.UpdateMutedSensorState(sensorId, initiator: CurrentUser.Name);
             }
             else
             {
                 if (_treeViewModel.Sensors.TryGetValue(decodedId, out var sensor))
-                    _treeValuesCache.UpdateMutedSensorState(sensor.Id);
+                    _treeValuesCache.UpdateMutedSensorState(sensor.Id, initiator: CurrentUser.Name);
             }
 
             UpdateUserNotificationSettings(decodedId, (s, g) => s.RemoveIgnore(g));
@@ -304,7 +304,7 @@ namespace HSMServer.Controllers
                     };
 
                     toastViewModel.AddItem(sensor);
-                    _treeValuesCache.UpdateSensor(update);
+                    _treeValuesCache.UpdateSensor(update, CurrentUser.Name);
                 }
             }
 
@@ -378,7 +378,7 @@ namespace HSMServer.Controllers
                     Integration = integration,
                 };
 
-                _treeValuesCache.UpdateSensor(update);
+                _treeValuesCache.UpdateSensor(update, CurrentUser.Name);
             }
         }
 
@@ -566,7 +566,7 @@ namespace HSMServer.Controllers
                 DataPolicies = newModel.DataAlerts?[sensor.Type].Select(a => a.ToUpdate()).ToList() ?? new(),
             };
 
-            _treeValuesCache.UpdateSensor(update);
+            _treeValuesCache.UpdateSensor(update, CurrentUser.Name);
 
             return PartialView("_MetaInfo", new SensorInfoViewModel(sensor));
         }

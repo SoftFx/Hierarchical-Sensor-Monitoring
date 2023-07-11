@@ -84,11 +84,11 @@ namespace HSMServer.Core.Model
         internal abstract List<BaseValue> ConvertValues(List<byte[]> valuesBytes);
 
 
-        internal void Update(SensorUpdate update)
+        internal void Update(SensorUpdate update, string initiator = null)
         {
-            CallJournal(new JournalRecordModel(Id, DateTime.UtcNow, update.Compare(this, update)));
+            CallJournal(new JournalRecordModel(Id, DateTime.UtcNow, update.Compare(this, update), RecordType.Changes, initiator));
 
-            base.Update(update);
+            base.Update(update, initiator);
 
             State = update?.State ?? State;
             Integration = update?.Integration ?? Integration;
@@ -98,7 +98,7 @@ namespace HSMServer.Core.Model
                 EndOfMuting = null;
 
             if (update.DataPolicies != null)
-                Policies.Update(update.DataPolicies);
+                Policies.Update(update.DataPolicies, initiator);
         }
 
         internal void ResetSensor()

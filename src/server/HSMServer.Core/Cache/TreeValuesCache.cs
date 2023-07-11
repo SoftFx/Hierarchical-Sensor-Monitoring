@@ -231,12 +231,12 @@ namespace HSMServer.Core.Cache
         public List<AccessKeyModel> GetMasterKeys() => GetAccessKeys().Where(x => x.IsMaster).ToList();
 
 
-        public void UpdateSensor(SensorUpdate update)
+        public void UpdateSensor(SensorUpdate update, string initiator = null)
         {
             if (!_sensors.TryGetValue(update.Id, out var sensor))
                 return;
 
-            sensor.Update(update);
+            sensor.Update(update, initiator);
             _database.UpdateSensor(sensor.ToEntity());
 
             NotifyAboutChanges(sensor);
@@ -259,7 +259,7 @@ namespace HSMServer.Core.Cache
             ChangeSensorEvent?.Invoke(sensor, ActionType.Delete);
         }
 
-        public void UpdateMutedSensorState(Guid sensorId, DateTime? endOfMuting = null)
+        public void UpdateMutedSensorState(Guid sensorId, DateTime? endOfMuting = null, string initiator = null)
         {
             if (!_sensors.TryGetValue(sensorId, out var sensor) || sensor.State == SensorState.Blocked)
                 return;
@@ -270,7 +270,7 @@ namespace HSMServer.Core.Cache
                     Id = sensorId,
                     State = endOfMuting is null ? SensorState.Available : SensorState.Muted,
                     EndOfMutingPeriod = endOfMuting,
-                });
+                }, initiator);
         }
 
         public void ClearNodeHistory(ClearHistoryRequest request)

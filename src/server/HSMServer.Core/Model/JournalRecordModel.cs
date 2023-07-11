@@ -12,7 +12,6 @@ public sealed class JournalRecordModel
     public string Initiator { get; set; }
 
 
-
     public JournalRecordModel(){}
     
     public JournalRecordModel(JournalEntity entity, byte[] key)
@@ -22,11 +21,11 @@ public sealed class JournalRecordModel
         Key = JournalKey.FromBytes(key);
     }
 
-    public JournalRecordModel(Guid id, DateTime date, string message, RecordType type = RecordType.Changes, string initiator = "System")
+    public JournalRecordModel(Guid id, DateTime date, string message, RecordType type = RecordType.Changes, string initiator = "")
     {
         Value = message;
         Key = new JournalKey(id, date.Ticks, type);
-        Initiator = initiator;
+        Initiator = initiator ?? "System";
     }
     
     

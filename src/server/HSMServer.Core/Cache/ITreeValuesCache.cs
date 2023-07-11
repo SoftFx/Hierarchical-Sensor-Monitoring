@@ -44,9 +44,9 @@ namespace HSMServer.Core.Cache
         AccessKeyModel GetAccessKey(Guid id);
         List<AccessKeyModel> GetMasterKeys();
 
-        void UpdateSensor(SensorUpdate updatedSensor);
+        void UpdateSensor(SensorUpdate updatedSensor, string initiator = null);
         void RemoveSensor(Guid sensorId);
-        void UpdateMutedSensorState(Guid sensorId, DateTime? endOfMuting = null);
+        void UpdateMutedSensorState(Guid sensorId, DateTime? endOfMuting = null, string initiator = null);
         void ClearSensorHistory(ClearHistoryRequest request);
         void CheckSensorHistory(Guid sensorId);
         void ClearNodeHistory(ClearHistoryRequest request);

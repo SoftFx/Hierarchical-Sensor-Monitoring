@@ -23,7 +23,7 @@ namespace HSMServer.Core.Model.Policies
 
         internal Action<ActionType, Policy> Uploaded;
 
-        internal abstract void Update(List<DataPolicyUpdate> updates);
+        internal abstract void Update(List<DataPolicyUpdate> updates, string initiator = null);
 
         internal abstract void Attach(BaseSensorModel sensor);
 
@@ -126,7 +126,7 @@ namespace HSMServer.Core.Model.Policies
                 _storage.TryAdd(policy.Id, typedPolicy);
         }
 
-        internal override void Update(List<DataPolicyUpdate> updatesList)
+        internal override void Update(List<DataPolicyUpdate> updatesList, string initiator = null)
         {
             var updates = updatesList.Where(u => u.Id != Guid.Empty).ToDictionary(u => u.Id);
 
@@ -134,7 +134,7 @@ namespace HSMServer.Core.Model.Policies
             {
                 if (updates.TryGetValue(id, out var update))
                 {
-                    CallJournal(new JournalRecordModel(_sensor.Id, DateTime.UtcNow, update.Compare(policy, update)));
+                    CallJournal(new JournalRecordModel(_sensor.Id, DateTime.UtcNow, update.Compare(policy, update), RecordType.Changes, initiator));
                     policy.Update(update);
                     Uploaded?.Invoke(ActionType.Update, policy);
                 }

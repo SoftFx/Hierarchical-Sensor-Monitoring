@@ -77,9 +77,9 @@ namespace HSMServer.Core.Model
             return this;
         }
 
-        protected internal void Update(BaseNodeUpdate update)
+        protected internal void Update(BaseNodeUpdate update, string initiator = null)
         {
-            CallJournal(new JournalRecordModel(Id, DateTime.UtcNow, update.Compare(this, update)));
+            CallJournal(new JournalRecordModel(Id, DateTime.UtcNow, update.Compare(this, update), RecordType.Changes, initiator));
 
             Description = update.Description ?? Description;
 

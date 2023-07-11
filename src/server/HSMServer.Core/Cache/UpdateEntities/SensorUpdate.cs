@@ -27,14 +27,11 @@ namespace HSMServer.Core.Cache.UpdateEntities
                 builder.AppendLine($"State: {entity.State} -> {State}");
 
             if (entity.Integration != Integration && Integration is not null)
-                builder.AppendLine($"State: {entity.Integration} -> {Integration}");
+                builder.AppendLine($"Integration: {entity.Integration} -> {Integration}");
 
             if (entity.EndOfMuting != EndOfMutingPeriod && EndOfMutingPeriod is not null)
                 builder.AppendLine($"End of muting: {entity.EndOfMuting} -> {EndOfMutingPeriod}");
 
-            if (update.DataPolicies != null)
-                entity.Policies.Update(update.DataPolicies);
-            
             return builder.ToString();
         }
     }
@@ -78,7 +75,6 @@ namespace HSMServer.Core.Cache.UpdateEntities
             
             if (entity.Template != update.Template)
                 builder.AppendLine($"Template: {entity.Template} -> {update.Template}");
-            
             
             if (entity.Status != update.Status)
                 builder.AppendLine($"Status: {entity.Status} -> {update.Status}");

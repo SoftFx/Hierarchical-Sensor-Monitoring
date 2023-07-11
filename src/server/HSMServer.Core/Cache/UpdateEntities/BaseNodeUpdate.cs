@@ -23,7 +23,7 @@ namespace HSMServer.Core.Cache.UpdateEntities
         {
             var builder = new StringBuilder();
 
-            if (entity.Description != update.Description)
+            if (entity.Description != update.Description && update.Description is not null)
                 builder.AppendLine($"Description: {entity.Description} -> {update.Description}");
             
             return builder.ToString();
