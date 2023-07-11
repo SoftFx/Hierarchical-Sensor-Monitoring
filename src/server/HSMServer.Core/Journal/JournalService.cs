@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Text.Json;
 using HSMDatabase.AccessManager.DatabaseEntities;
-using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.DataLayer;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Requests;
@@ -48,46 +47,4 @@ public class JournalService : IJournalService
             yield return currPage;
         }
     }
-
-    public void AddJournals(BaseSensorModel model, SensorUpdate update)
-    {
-        foreach (var journal in BuildUpdateJournals(model, update))
-            AddJournal(journal);
-    }
-
-
-    private List<JournalRecordModel> BuildUpdateJournals(BaseSensorModel model, SensorUpdate update)
-    {
-        var journals = new List<JournalRecordModel>(1 << 4);
-        
-        CheckUpdate(model.State, update.State, "State");
-        CheckUpdate(model.Integration, update.Integration, "Integration");
-        CheckUpdate(model.EndOfMuting, update.EndOfMutingPeriod, "End of muting");
-        CheckUpdate(model.Description, update.Description, "Description");
-        CheckUpdate(model.Settings.KeepHistory, update.KeepHistory, "Keep history");
-        CheckUpdate(model.Settings.SelfDestroy, update.SelfDestroy, "Self destroy");
-        CheckUpdate(model.Settings.TTL, update.TTL, "Time to sensor live");
-        
-        if (update.DataPolicies?.Count != 0)
-            journals.Add(new JournalRecordModel(model.Id, DateTime.UtcNow, "Data policy update"));
-        
-        return journals;
-        
-        void CheckUpdate<T, U>(T property, U updatedProperty, string propertyName = null)
-        {
-            if (updatedProperty is not null && !updatedProperty.Equals(property))
-            {
-                if (updatedProperty is IJournalValue updatedValue && property is IJournalValue value)
-                {
-                    var newValue = updatedValue.GetValue();
-                    var oldValue = value.GetValue();
-                    if (newValue != oldValue)
-                        journals.Add(new JournalRecordModel(model.Id, DateTime.UtcNow, $"{propertyName}: {oldValue} -> {newValue}"));
-                }
-                else journals.Add(new JournalRecordModel(model.Id, DateTime.UtcNow, $"{propertyName}: {property} -> {updatedProperty}"));
-            }
-        }
-    }
-    
-    
 }

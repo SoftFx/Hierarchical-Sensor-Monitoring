@@ -5,7 +5,7 @@ using HSMServer.Core.Journal;
 
 namespace HSMServer.Core.Model.NodeSettings
 {
-    public abstract class SettingProperty : IJournalValue
+    public abstract class SettingProperty
     {
         internal SettingProperty ParentProperty { get; set; }
 
@@ -21,8 +21,6 @@ namespace HSMServer.Core.Model.NodeSettings
         internal abstract bool TrySetValue(TimeIntervalModel policy, Guid id);
 
         internal abstract TimeIntervalEntity ToEntity();
-        
-        public virtual string GetValue() => string.Empty;
     }
 
 
@@ -75,8 +73,8 @@ namespace HSMServer.Core.Model.NodeSettings
 
             if (id != Guid.Empty)
             {
-                var val1 = copyValue?.GetValue() ?? TimeInterval.FromParent.ToString();
-                var val2 = GetValue();
+                var val1 = GetValue(copyValue);
+                var val2 = GetValue(_curValue);
                 if (val1 != val2)
                     CreateJournal?.Invoke(new JournalRecordModel(id, DateTime.UtcNow, $"{Name}: {val1} -> {val2}"));
             }
@@ -85,18 +83,18 @@ namespace HSMServer.Core.Model.NodeSettings
             return true;
         }
 
-        public override string GetValue()
+        private static string GetValue(T value)
         {
-            if (!IsSet)
-                return TimeInterval.FromParent.ToString();
-            
-            if (_curValue.IsFromParent)
+            if (value is null)
                 return TimeInterval.FromParent.ToString();
 
-            if (_curValue.UseCustom)
-                return _curValue.Ticks.ToString();
-            
-            return _curValue.Interval.ToString();
+            if (value.IsFromParent) 
+                return TimeInterval.FromParent.ToString();
+
+            if (value.UseCustom)
+                return value.Ticks.ToString();
+
+            return value.Interval.ToString();
         }
 
         internal override TimeIntervalEntity ToEntity() => _curValue?.ToEntity();

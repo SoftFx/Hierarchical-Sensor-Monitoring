@@ -11,7 +11,6 @@ public interface IJournalService
     void AddJournal(JournalRecordModel record);
 
     void AddJournals(List<JournalRecordModel> records);
-    void AddJournals(BaseSensorModel model, SensorUpdate update);
     
     void RemoveJournal(Guid id);
 

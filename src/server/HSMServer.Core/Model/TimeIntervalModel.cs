@@ -46,7 +46,7 @@ namespace HSMServer.Core.Model
     }
 
 
-    public class TimeIntervalModel : IJournalValue
+    public class TimeIntervalModel
     {
         public static TimeIntervalModel Never { get; } = new(TimeInterval.Never);
 
@@ -98,16 +98,5 @@ namespace HSMServer.Core.Model
         };
 
         internal TimeIntervalEntity ToEntity() => new((long)Interval, Ticks);
-
-        public string GetValue()
-        {
-            if (IsFromParent)
-                return TimeInterval.FromParent.ToString();
-
-            if (UseCustom)
-                return Ticks.ToString();
-            
-            return Interval.ToString();
-        }
     }
 }
