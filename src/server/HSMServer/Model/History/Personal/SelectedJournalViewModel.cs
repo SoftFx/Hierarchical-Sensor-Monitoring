@@ -27,6 +27,7 @@ public class SelectedJournalViewModel
     {
         if (_id == id)
             return;
+        
         _id = id;
         journalService.NewJournalEvent += AddNewJournals;
         _journalHistoryRequestModel = new JournalHistoryRequestModel(_id, To: DateTime.MaxValue);
