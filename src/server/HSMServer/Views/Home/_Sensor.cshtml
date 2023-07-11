@@ -303,7 +303,7 @@
             ajax: {
                 type: "POST",
                 contentType: "application/json; charset=utf-8",
-                url: "/Journal/GetPage?id=@sensorId",
+                url: getJournalPage,
                 data: function (d) {
                     return JSON.stringify({ parameters: d });
                 }

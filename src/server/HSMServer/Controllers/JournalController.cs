@@ -21,7 +21,7 @@ public class JournalController : BaseController
     }
 
     [HttpPost]
-    public JsonResult GetPage([FromQuery] string id, [FromBody] TableParameters parameters)
+    public JsonResult GetPage([FromBody] TableParameters parameters)
     {
         var resultSet = new DataTableResultSet
         {
