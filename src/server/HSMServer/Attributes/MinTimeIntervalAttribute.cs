@@ -20,7 +20,7 @@ public class MinTimeIntervalAttribute : ValidationAttribute
     public override bool IsValid(object value)
     {
         if (value is TimeIntervalViewModel model && model.TimeInterval.IsCustom())
-            return model.TimeInterval.ToCustomTicks(model.CustomTimeInterval) >= _interval.ToCustomTicks(string.Empty);
+            return model.CustomSpan.Ticks >= (long)_interval;
 
         return true;
     }

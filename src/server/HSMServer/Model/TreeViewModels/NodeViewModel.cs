@@ -41,9 +41,9 @@ namespace HSMServer.Model.TreeViewModel
 
             bool ParentIsFolder() => Parent is FolderModel;
 
-            TTL = new(model.Settings.TTL.Value, () => Parent?.TTL, ParentIsFolder);
-            KeepHistory = new(model.Settings.KeepHistory.Value, () => Parent?.KeepHistory, ParentIsFolder);
-            SelfDestroy = new(model.Settings.SelfDestroy.Value, () => Parent?.SelfDestroy, ParentIsFolder);
+            TTL = new(model.Settings.TTL.Value, () => (Parent?.TTL, ParentIsFolder()));
+            KeepHistory = new(model.Settings.KeepHistory.Value, () => (Parent?.KeepHistory, ParentIsFolder()));
+            SelfDestroy = new(model.Settings.SelfDestroy.Value, () => (Parent?.SelfDestroy, ParentIsFolder()));
         }
 
 
@@ -59,7 +59,8 @@ namespace HSMServer.Model.TreeViewModel
         }
 
 
-        private static void UpdatePolicyView<T>(SettingProperty<T> property, TimeIntervalViewModel targetView) where T : TimeIntervalModel
+        private static void UpdatePolicyView<T>(SettingProperty<T> property, TimeIntervalViewModel targetView)
+            where T : TimeIntervalModel
         {
             if (property.IsSet)
                 targetView.FromModel(property.Value);
