@@ -50,7 +50,7 @@
 
         @foreach (var alert in alerts)
         {
-            @await Html.PartialAsync("_DataAlert", alert)
+            @await Html.PartialAsync("~/Views/Home/Alerts/_DataAlert.cshtml", alert)
         }
     </div>
 }

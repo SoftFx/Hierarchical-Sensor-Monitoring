@@ -77,7 +77,7 @@
         <div class="collapse" id="metaInfoCollapse">
             @await Html.PartialAsync("_GeneralInfo", Model)
             @await Html.PartialAsync("_CleanupSettings", Model)
-            @await Html.PartialAsync("_Alerts", Model)
+            @await Html.PartialAsync("~/Views/Home/Alerts/_Alerts.cshtml", Model)
         </div>
 
         <button class="btn btn-outline-secondary w-100 border-start-0 border-end-0 border-top-0 rounded-0 border-bottom-1"

@@ -579,7 +579,7 @@ namespace HSMServer.Controllers
                 _ => null,
             };
 
-            return PartialView("_DataAlert", viewModel);
+            return PartialView("~/Views/Home/Alerts/_DataAlert.cshtml", viewModel);
         }
 
         public IActionResult AddAlertCondition(Guid sensorId)
