@@ -31,7 +31,7 @@ namespace HSMServer.Core.Model
         ThreeMonths = 80_352_000_000_000, // 31 * 3
         SixMonths = 160_704_000_000_000, // 31 * 6
 
-        Year = 315_360_000_000_000,
+        Year = 315_360_000_000_000, // 365 days
     }
 
 

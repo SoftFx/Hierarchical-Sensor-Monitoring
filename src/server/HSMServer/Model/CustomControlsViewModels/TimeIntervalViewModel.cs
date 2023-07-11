@@ -5,7 +5,6 @@ using HSMServer.Extensions;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using CoreTimeInterval = HSMServer.Core.Model.TimeInterval;
 
 namespace HSMServer.Model
@@ -17,6 +16,8 @@ namespace HSMServer.Model
         private static long _id = 0L;
 
         private readonly Func<(TimeIntervalViewModel Value, bool IsFolder)> _getParentValue;
+        private TimeSpan _customSpan;
+        private string _customString;
 
 
         private bool HasParentValue => _getParentValue?.Invoke().Value is not null;
@@ -48,9 +49,27 @@ namespace HSMServer.Model
             }
         }
 
-        public TimeInterval? Interval { get; set; }
+        public TimeSpan CustomSpan
+        {
+            get => _customSpan;
+            set
+            {
+                _customSpan = value;
+                _customString = value.ToString();
+            }
+        }
 
-        public TimeSpan CustomSpan { get; set; }
+        public string CustomString
+        {
+            get => _customString;
+            set
+            {
+                _customString = value;
+                _customSpan = TimeSpan.Parse(value);
+            }
+        }
+
+        public TimeInterval? Interval { get; set; }
 
         internal TimeInterval TimeInterval => Interval ?? default;
 
@@ -67,7 +86,7 @@ namespace HSMServer.Model
 
         internal TimeIntervalViewModel(List<TimeInterval> intervals, bool useCustomTemplate = true)
         {
-            IntervalItems = GetIntrevalItems(intervals);
+            IntervalItems = intervals.ToSelectedItems(k => k.GetDisplayName());
             UseCustomInputTemplate = useCustomTemplate;
 
             if (!HasParentValue)
@@ -120,11 +139,5 @@ namespace HSMServer.Model
         }
 
         internal TimeIntervalEntity ToEntity() => ToModel().ToEntity();
-
-
-        private static List<SelectListItem> GetIntrevalItems(List<TimeInterval> intervals)
-        {
-            return intervals.Select(u => new SelectListItem(u.GetDisplayName(), $"{u}")).ToList();
-        }
     }
 }
