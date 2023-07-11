@@ -84,7 +84,7 @@ namespace HSMServer.Core.Model
         internal abstract List<BaseValue> ConvertValues(List<byte[]> valuesBytes);
 
 
-        public void Update(SensorUpdate update)
+        internal void Update(SensorUpdate update)
         {
             CallJournal(new JournalRecordModel(Id, DateTime.UtcNow, update.Compare(this, update)));
 

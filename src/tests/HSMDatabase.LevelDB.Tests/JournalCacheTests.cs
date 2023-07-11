@@ -64,10 +64,8 @@ public class JournalCacheTests : MonitoringCoreTestsBase<TreeValuesCacheFixture>
         var sensors = new List<BaseSensorModel>();
         for (int i = 0; i < n; i++)
         {
-            var updating = SensorModelFactory.BuildSensorUpdate();
             var sensor = SensorModelFactory.Build(EntitiesFactory.BuildSensorEntity());
-
-            sensor.Update(updating);
+            _journalService.AddJournal(new JournalRecordModel(sensor.Id, DateTime.UtcNow, "Test message"));
             sensors.Add(sensor);
         }
 

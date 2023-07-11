@@ -74,20 +74,15 @@ namespace HSMServer.Core.Cache.UpdateEntities
             var builder = new StringBuilder();
 
             if (entity.Icon != update.Icon)
-            {
                 builder.AppendLine($"Icon: {entity.Icon} -> {update.Icon}");
-            }
             
             if (entity.Template != update.Template)
-            {
                 builder.AppendLine($"Template: {entity.Template} -> {update.Template}");
-            }
+            
             
             if (entity.Status != update.Status)
-            {
                 builder.AppendLine($"Status: {entity.Status} -> {update.Status}");
-            }
-
+            
             if (update.Conditions?.Count > 0)
                 builder.AppendLine("Conditions updated.");
             
