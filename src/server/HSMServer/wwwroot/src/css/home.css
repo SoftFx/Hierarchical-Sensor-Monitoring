@@ -484,6 +484,11 @@ img .tree-png-icon {
 }
 
 
+.target-comment {
+    min-width: 200px;
+}
+
+
 .emojionearea.emojionearea-inline > .emojionearea-editor {
     height: 1.5rem;
     left: 4px;

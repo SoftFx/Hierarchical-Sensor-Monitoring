@@ -17,12 +17,15 @@ namespace HSMServer.Model.DataAlerts
         public string Comment { get; set; }
 
         public string Icon { get; set; }
+
+
+        public string DisplayComment { get; set; }
     }
 
 
     public class ActionViewModel : AlertAction
     {
-        private const string DefaultCommentTemplate = "$sensor $action $target";
+        private const string DefaultCommentTemplate = "$sensor $operation $target";
 
         public const string ShowIconAction = "show icon";
         public const string SetStatusAction = "set sensor status";

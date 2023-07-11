@@ -9,7 +9,59 @@
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
 
 
-<div class="dataAlertRow d-flex flex-row align-items-center">
+<div id="alertLabel_@Model.Id" class="ms-3 @(Model.IsModify ? "d-none" : string.Empty)">
+    <span>If</span>
+    @for (int i = 0; i < Model.Conditions.Count; ++i)
+    {
+        var condition = Model.Conditions[i];
+
+        @if (i > 0)
+        {
+            <span>and</span>
+        }
+
+        <span>
+            @if (condition.Property == ConditionViewModel.TimeToLiveCondition)
+            {
+                <b>Inactivity period is @condition.TimeToLive.DisplayInterval</b>
+            }
+            else if (condition.Property == ConditionViewModel.SensitivityCondition)
+            {
+                <b>Sensitivity is more than @condition.Sensitivity.DisplayInterval</b>
+            }
+            else
+            {
+                <b>@condition.Property @condition.Operation.GetDisplayName() @condition.Target</b>
+            }
+        </span>
+    }
+
+    <span>then</span>
+    @for (int i = 0; i < Model.Actions.Count; ++i)
+    {
+        var action = Model.Actions[i];
+
+        @if (i > 0)
+        {
+            <span>and</span>
+        }
+
+        @if (action.Action == ActionViewModel.SendNotifyAction)
+        {
+            <span>send notification <i>@action.DisplayComment</i></span>
+        }
+        else if (action.Action == ActionViewModel.ShowIconAction)
+        {
+            <span>show icon @action.Icon</span>
+        }
+        else if (action.Action == ActionViewModel.SetStatusAction)
+        {
+            <span>set @AlertPredefined.Statuses[action.Status] sensor status</span>
+        }
+    }
+</div>
+
+<div id="alertConstructor_@Model.Id" class="dataAlertRow d-flex flex-row align-items-center @(!Model.IsModify ? "d-none" : string.Empty)">
     <div class="card mb-2 w-100">
         <div class="card-body py-2">
             <div class="d-flex flex-row align-items-center fullCondition">

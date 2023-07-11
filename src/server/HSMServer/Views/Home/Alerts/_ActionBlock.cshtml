@@ -20,7 +20,7 @@
     <select class="alert-block alert-select property-select" asp-for="Action" asp-items="Model.Actions"></select>
 
     <div name="sendNotificationAction" class="@(isSendAction ? "d-block" : "d-none")">
-        <input type="text" class="alert-block target-input" placeholder="message template" asp-for="Comment" value="@Model.Comment" required>
+        <input type="text" class="alert-block target-input target-comment" placeholder="message template" asp-for="Comment" value="@Model.Comment" required>
     </div>
 
     <div name="showIconAction" class="@(isShowAction ? "d-block" : "d-none") alert-block">

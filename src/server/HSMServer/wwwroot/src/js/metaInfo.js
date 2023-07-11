@@ -18,13 +18,11 @@
 
     $('#partialSavedHistorySelect').removeClass('d-none');
     $('#partialSelfDestroySelect').removeClass('d-none');
-    $('#timeToLive_inputGroup').removeClass('d-none');
-    $('[id^="dataAlertInputGroupd_"]').removeClass('d-none');
+    $('[id^="alertConstructor_"]').removeClass('d-none');
 
     $('#labelSavedHistory').addClass('d-none');
     $('#labelSelfDestroy').addClass('d-none');
-    $('#timeToLive_label').addClass('d-none');
-    $('[id^="dataAlertLabel_"]').addClass('d-none');
+    $('[id^="alertLabel_"]').addClass('d-none');
 }
 
 window.revertInfoButtonClick = function (action) {
