@@ -10,8 +10,6 @@ public interface IJournalService
 {
     void AddJournal(JournalRecordModel record);
 
-    void AddJournals(List<JournalRecordModel> records);
-    
     void RemoveJournal(Guid id);
 
     IAsyncEnumerable<List<JournalRecordModel>> GetJournalValuesPage(JournalHistoryRequestModel request);

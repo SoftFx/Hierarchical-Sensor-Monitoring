@@ -23,13 +23,7 @@ public class JournalService : IJournalService
         if (!string.IsNullOrEmpty(record.Value))
             _database.AddJournalValue(record.Key, record.ToJournalEntity());
     }
-    
-    public void AddJournals(List<JournalRecordModel> records)
-    {
-        foreach (var journal in records)
-            AddJournal(journal);
-    }
-    
+
     public void RemoveJournal(Guid id) => _database.RemoveJournalValue(id);
     
     public async IAsyncEnumerable<List<JournalRecordModel>> GetJournalValuesPage(JournalHistoryRequestModel request)
