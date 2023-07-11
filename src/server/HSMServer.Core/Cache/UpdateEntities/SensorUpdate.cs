@@ -50,6 +50,8 @@ namespace HSMServer.Core.Cache.UpdateEntities
 
         public List<PolicyConditionUpdate> Conditions { get; init; }
 
+        public TimeIntervalModel Sensitivity { get; set; }
+        
         public SensorStatus Status { get; init; }
 
         public string Template { get; init; }
@@ -57,10 +59,11 @@ namespace HSMServer.Core.Cache.UpdateEntities
         public string Icon { get; init; }
 
 
-        public DataPolicyUpdate(Guid id, List<PolicyConditionUpdate> conditions, SensorStatus status, string template, string icon)
+        public DataPolicyUpdate(Guid id, List<PolicyConditionUpdate> conditions, TimeIntervalModel sensitivity, SensorStatus status, string template, string icon)
         {
             Id = id;
             Conditions = conditions;
+            Sensitivity = sensitivity;
             Status = status;
             Template = template;
             Icon = icon;
