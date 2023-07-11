@@ -1,4 +1,4 @@
-﻿using HSMServer.Core.Model.Authentication;
+﻿using HSMServer.Model.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;

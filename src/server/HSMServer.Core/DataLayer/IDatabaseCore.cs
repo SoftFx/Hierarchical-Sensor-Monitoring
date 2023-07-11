@@ -1,6 +1,6 @@
-﻿using HSMDatabase.AccessManager.DatabaseEntities;
-using HSMServer.Core.Model;
-using HSMServer.Core.Model.Authentication;
+﻿using HSMDatabase.AccessManager;
+using HSMDatabase.AccessManager.DatabaseEntities;
+using HSMServer.Core.Registration;
 using System;
 using System.Collections.Generic;
 
@@ -8,11 +8,23 @@ namespace HSMServer.Core.DataLayer
 {
     public interface IDatabaseCore : IDisposable
     {
-        #region Size
+        ISnapshotDatabase Snapshots { get; }
 
-        long GetDatabaseSize();
-        long GetMonitoringDataSize();
-        long GetEnvironmentDatabaseSize();
+
+        long TotalDbSize { get; }
+
+        long SensorHistoryDbSize { get; }
+
+        long EnviromentDbSize { get; }
+
+
+        #region Folders
+
+        public void AddFolder(FolderEntity entity);
+        public void UpdateFolder(FolderEntity entity);
+        public void RemoveFolder(string id);
+        public FolderEntity GetFolder(string id);
+        public List<FolderEntity> GetAllFolders();
 
         #endregion
 
@@ -40,14 +52,17 @@ namespace HSMServer.Core.DataLayer
 
         void AddSensor(SensorEntity entity);
         void UpdateSensor(SensorEntity entity);
-        void RemoveSensorWithMetadata(string sensorId, string productName, string path);
+        void RemoveSensorWithMetadata(string sensorId);
 
         void AddSensorValue(SensorValueEntity valueEntity);
-        void ClearSensorValues(string sensorId, string productName, string path);
+        void ClearSensorValues(string sensorId, DateTime from, DateTime to);
 
-        Dictionary<Guid, byte[]> GetLatestValues(List<BaseSensorModel> sensors);
-        List<byte[]> GetSensorValues(string sensorId, string productName, string path, DateTime to, int count);
-        List<byte[]> GetSensorValues(string sensorId, string productName, string path, DateTime from, DateTime to);
+
+        Dictionary<Guid, byte[]> GetLatestValues(Dictionary<Guid, long> sensors);
+
+        Dictionary<Guid, byte[]> GetLatestValuesFrom(Dictionary<Guid, long> sensors);
+
+        IAsyncEnumerable<List<byte[]>> GetSensorValuesPage(string sensorId, DateTime from, DateTime to, int count);
 
         List<SensorEntity> GetAllSensors();
 
@@ -64,19 +79,11 @@ namespace HSMServer.Core.DataLayer
 
         #region User
 
-        void AddUser(User user);
-        void UpdateUser(User user);
-        void RemoveUser(User user);
-        List<User> GetUsers();
-        List<User> GetUsersPage(int page, int pageSize);
-
-        #endregion
-
-        #region Configuration
-
-        ConfigurationObject GetConfigurationObject(string name);
-        void WriteConfigurationObject(ConfigurationObject obj);
-        void RemoveConfigurationObject(string name);
+        void AddUser(UserEntity user);
+        void UpdateUser(UserEntity user);
+        void RemoveUser(UserEntity user);
+        List<UserEntity> GetUsers();
+        List<UserEntity> GetUsersPage(int page, int pageSize);
 
         #endregion
 

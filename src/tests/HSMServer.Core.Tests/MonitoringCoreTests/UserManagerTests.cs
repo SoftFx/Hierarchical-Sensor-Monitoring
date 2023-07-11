@@ -1,7 +1,7 @@
-﻿using HSMServer.Core.Model.Authentication;
+﻿using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Core.Tests.Infrastructure;
 using HSMServer.Core.Tests.MonitoringCoreTests.Fixture;
-using System;
+using HSMServer.Model.Authentication;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -14,9 +14,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         private readonly User _defaultUser = TestUsersManager.DefaultUser;
         private readonly User _testUser = TestUsersManager.TestUser;
 
-        private delegate User GetUserByUserName(string username);
-        private delegate User GetUser(Guid id);
-        private delegate List<User> GetAllUsersFromDB();
+        private delegate List<UserEntity> GetAllUsersFromDB();
 
 
         public UserManagerTests(UserManagerFixture fixture, DatabaseRegisterFixture registerFixture)
@@ -30,8 +28,8 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
             var usersFromDB = await GetUsersFromDB();
 
             Assert.Single(usersFromDB);
-            TestUser(_defaultUser, usersFromDB[0]);
-            TestUserByName(_defaultUser, _userManager.GetUserByUserName);
+            TestUser(_defaultUser, new(usersFromDB[0]));
+            TestUser(_defaultUser, _userManager[_defaultUser.Name]);
         }
 
         [Theory]
@@ -44,33 +42,29 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         {
             var users = BuildRandomUsers(count);
 
-            users.ForEach(u => _userManager.AddUser(u.UserName, u.CertificateThumbprint, u.CertificateFileName,
-                                                    u.Password, u.IsAdmin, u.ProductsRoles));
+            await Task.WhenAll(users.Select(u => _userManager.AddUser(u.Name, u.Password, u.IsAdmin, u.ProductsRoles)));
 
             await FullTestUserAsync(users,
-                                    _userManager.GetUserByUserName,
                                     _databaseCoreManager.DatabaseCore.GetUsers);
         }
 
         [Fact]
         [Trait("Category", "Add user(s), Negative")]
-        public void AddEmptyUserTest()
+        public async Task AddEmptyUserTest()
         {
-            var emptyUser = new User() { UserName = String.Empty, CertificateThumbprint = String.Empty, CertificateFileName = String.Empty, Password = String.Empty };
-
-            _userManager.AddUser(emptyUser);
+            await _userManager.TryAdd(TestUsersManager.GetEmptyUser());
 
             var actual = _userManager.GetUsers();
-            var expected = new List<User>(2) { TestUsersManager.DefaultUser, emptyUser };
+            var expected = new List<User>(2) { TestUsersManager.DefaultUser, TestUsersManager.GetEmptyUser() };
 
             CompareUserLists(actual, expected);
         }
 
         [Fact]
         [Trait("Category", "Add user(s), Negative")]
-        public void AddSameUserTest()
+        public async Task AddSameUserTest()
         {
-            _userManager.AddUser(TestUsersManager.DefaultUser);
+            await _userManager.TryAdd(TestUsersManager.DefaultUser);
 
             var actual = _userManager.GetUsers();
             var expected = new List<User>(2) { TestUsersManager.DefaultUser, TestUsersManager.DefaultUser };
@@ -83,16 +77,17 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         public async Task UpdateDefaultUserTest()
         {
             var defaultUserFromDB = await GetDefaultUserFromDB();
+            var existingUser = _userManager[defaultUserFromDB.Id];
 
-            var updatedUser = BuildUpdatedUser(defaultUserFromDB);
-            updatedUser.ProductsRoles = new List<KeyValuePair<string, ProductRoleEnum>>(_testUser.ProductsRoles);
+            var updateEntity = BuildUpdatedUser(existingUser);
 
-            _userManager.UpdateUser(updatedUser);
+            existingUser.ProductsRoles.Clear();
+            existingUser.ProductsRoles.AddRange(_testUser.ProductsRoles);
 
-            await FullTestUpdatedUserAsync(new() { updatedUser },
+            await _userManager.TryUpdate(updateEntity);
+
+            await FullTestUpdatedUserAsync(new() { existingUser },
                                            new() { defaultUserFromDB },
-                                           _userManager.GetCopyUser,
-                                           _userManager.GetUserByUserName,
                                            _databaseCoreManager.DatabaseCore.GetUsers);
         }
 
@@ -104,18 +99,20 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         [Trait("Category", "Update user(s)")]
         public async Task UpdateUsersTest(int count)
         {
-            var users = BuildAddAndGetRandomUsers(count - 1); // there is default user in db
+            var users = await BuildAddAndGetRandomUsers(count - 1); // there is default user in db
 
-            var updatedUsers = new List<User>(count);
+            var copiedUsers = new List<User>();
             foreach (var user in users)
-                updatedUsers.Add(BuildUpdatedUser(user));
+                copiedUsers.Add(user.Copy());
 
-            updatedUsers.ForEach(_userManager.UpdateUser);
+            var userUpdates = new List<UserUpdate>(count);
+            foreach (var user in users)
+                userUpdates.Add(BuildUpdatedUser(user));
 
-            await FullTestUpdatedUserAsync(updatedUsers,
-                                           users,
-                                           _userManager.GetCopyUser,
-                                           _userManager.GetUserByUserName,
+            await Task.WhenAll(userUpdates.Select(_userManager.TryUpdate));
+
+            await FullTestUpdatedUserAsync(users,
+                                           copiedUsers,
                                            _databaseCoreManager.DatabaseCore.GetUsers);
         }
 
@@ -127,25 +124,29 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         [Trait("Category", "Update user(s)")]
         public async Task UpdateUserEventTest(int count)
         {
-            List<User> actualUpdatedUsers = new(count);
-            void UpdateUserEvent(User user) => actualUpdatedUsers.Add(user);
+            List<User> updatedUsers = new(count);
+            void UpdateUserEvent(User user) => updatedUsers.Add(user);
 
 
-            var updatedUsers = new List<User>(count);
-            foreach (var user in BuildAddAndGetRandomUsers(count - 1)) // there is default user in db
-                updatedUsers.Add(BuildUpdatedUser(user));
+            var users = await BuildAddAndGetRandomUsers(count - 1); // there is default user in db
 
-            _userManager.UpdateUserEvent += UpdateUserEvent;
+            var copiedUsers = new List<User>();
+            foreach (var user in users)
+                copiedUsers.Add(user.Copy());
 
-            updatedUsers.ForEach(_userManager.UpdateUser);
+            var userUpdates = new List<UserUpdate>(count);
+            foreach (var user in users) // there is default user in db
+                userUpdates.Add(BuildUpdatedUser(user));
 
-            _userManager.UpdateUserEvent -= UpdateUserEvent;
+            _userManager.Updated += UpdateUserEvent;
 
-            Assert.Equal(updatedUsers.Count, actualUpdatedUsers.Count);
+            await Task.WhenAll(userUpdates.Select(_userManager.TryUpdate));
+
+            _userManager.Updated -= UpdateUserEvent;
+
+            Assert.Equal(userUpdates.Count, updatedUsers.Count);
             await FullTestUpdatedUserAsync(updatedUsers,
-                                           actualUpdatedUsers,
-                                           _userManager.GetCopyUser,
-                                           _userManager.GetUserByUserName,
+                                           copiedUsers,
                                            _databaseCoreManager.DatabaseCore.GetUsers);
         }
 
@@ -153,10 +154,9 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         [Trait("Category", "Update user(s)")]
         public async Task UpdateNonExistingUserTest()
         {
-            _userManager.UpdateUser(_testUser);
+            await _userManager.UpdateUser(_testUser);
 
             await FullTestUserAsync(new() { _testUser },
-                                    _userManager.GetUserByUserName,
                                     _databaseCoreManager.DatabaseCore.GetUsers);
         }
 
@@ -166,19 +166,17 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         {
             var defaultUserFromDB = await GetDefaultUserFromDB();
 
-            _userManager.RemoveUser(defaultUserFromDB.UserName);
+            await _userManager.RemoveUser(defaultUserFromDB.Name);
 
             await FullTestRemovedDefaultUserAsync(new() { defaultUserFromDB },
-                                                  _userManager.GetCopyUser,
-                                                  _userManager.GetUserByUserName,
                                                   _databaseCoreManager.DatabaseCore.GetUsers);
         }
 
         [Fact]
         [Trait("Category", "Remove user(s), Negative")]
-        public void RemoveUserByIncorrectNameTest()
+        public async Task RemoveUserByIncorrectNameTest()
         {
-            _userManager.RemoveUser(RandomGenerator.GetRandomString());
+            await _userManager.RemoveUser(RandomGenerator.GetRandomString());
 
             var expected = new List<User>(1) { TestUsersManager.DefaultUser };
             var actual = _userManager.GetUsers();
@@ -188,9 +186,9 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
 
         [Fact]
         [Trait("Category", "Remove user(s), Negative")]
-        public void RemoveUserByEmptyNameTest()
+        public async Task RemoveUserByEmptyNameTest()
         {
-            _userManager.RemoveUser(String.Empty);
+            await _userManager.RemoveUser(string.Empty);
 
             var expected = new List<User>(1) { TestUsersManager.DefaultUser };
             var actual = _userManager.GetUsers();
@@ -206,13 +204,11 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         [Trait("Category", "Remove user(s)")]
         public async Task RemoveUsersByNameTest(int count)
         {
-            var users = BuildAddAndGetRandomUsers(count);
+            var users = await BuildAddAndGetRandomUsers(count);
 
-            users.ForEach(u => _userManager.RemoveUser(u.UserName));
+            await Task.WhenAll(users.Select(u => _userManager.RemoveUser(u.Name)));
 
             await FullTestRemovedDefaultUserAsync(users,
-                                                  _userManager.GetCopyUser,
-                                                  _userManager.GetUserByUserName,
                                                   _databaseCoreManager.DatabaseCore.GetUsers);
         }
 
@@ -222,57 +218,57 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         {
             var defaultUserFromDB = await GetDefaultUserFromDB();
 
-            var actual = _userManager.Authenticate(defaultUserFromDB.UserName, defaultUserFromDB.UserName);
+            var tryAuthenticate = _userManager.TryAuthenticate(defaultUserFromDB.Name, defaultUserFromDB.Name);
 
-            TestAuthenticateUser(defaultUserFromDB, actual);
+            Assert.True(tryAuthenticate);
         }
 
         [Fact]
         [Trait("Category", "Authenticate, Negative")]
         public void AuthenticateUnregisteredUserTest()
         {
-            var UnregisteredUser = new User() { UserName = RandomGenerator.GetRandomString(), Password = RandomGenerator.GetRandomString() };
+            var unregisteredUser = new User() { Name = RandomGenerator.GetRandomString(), Password = RandomGenerator.GetRandomString() };
 
-            var actual = _userManager.Authenticate(UnregisteredUser.UserName, UnregisteredUser.Password);
+            var tryAuthenticate = _userManager.TryAuthenticate(unregisteredUser.Name, unregisteredUser.Password);
 
-            Assert.Null(actual);
+            Assert.False(tryAuthenticate);
         }
 
         [Fact]
         [Trait("Category", "Authenticate, Negative")]
         public void AuthenticateEmptyUserTest()
         {
-            var UnregisteredUser = new User() { UserName = String.Empty, Password = String.Empty };
+            var unregisteredUser = new User() { Name = string.Empty, Password = string.Empty };
 
-            var actual = _userManager.Authenticate(UnregisteredUser.UserName, UnregisteredUser.Password);
+            var tryAuthenticate = _userManager.TryAuthenticate(unregisteredUser.Name, unregisteredUser.Password);
 
-            Assert.Null(actual);
+            Assert.False(tryAuthenticate);
         }
 
         [Fact]
         [Trait("Category", "Remove product from users")]
-        public void RemoveProductFromUsersTest()
+        public async Task RemoveProductFromUsersTest()
         {
-            AddUsers(TestUsersManager.TestUserViewer.Copy(), TestUsersManager.TestUserManager.Copy());
+            await AddUsers(TestUsersManager.TestUserViewer.Copy(), TestUsersManager.TestUserManager.Copy());
 
-            _userManager.RemoveProductFromUsers(TestProductsManager.TestProduct.Id);
+            _valuesCache.RemoveProduct(TestProductsManager.ProductId);
 
             var result = _userManager.GetUsers().ToList();
 
             for (int i = 0; i < result.Count; i++)
             {
-                var actual = result[i].ProductsRoles.FirstOrDefault(p => p.Key == TestProductsManager.TestProduct.Id);
+                var actual = result[i].ProductsRoles.FirstOrDefault(p => p.Item1 == TestProductsManager.ProductId);
                 Assert.Equal(default, actual);
             }
         }
 
         [Fact]
         [Trait("Category", "Get users")]
-        public void GetViewersTest()
+        public async Task GetViewersTest()
         {
-            AddUsers(TestUsersManager.TestUserViewer, TestUsersManager.TestUserManager);
+            await AddUsers(TestUsersManager.TestUserViewer, TestUsersManager.TestUserManager);
 
-            var actual = _userManager.GetViewers(TestProductsManager.TestProduct.Id);
+            var actual = _userManager.GetViewers(TestProductsManager.ProductId);
             var expected = new List<User>(2) { TestUsersManager.TestUserViewer, TestUsersManager.TestUserManager };
 
             CompareUserLists(expected, actual);
@@ -280,13 +276,14 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
 
         [Fact]
         [Trait("Category", "Get users, Negative")]
-        public void GetEmptyViewersTest()
+        public async Task GetEmptyViewersTest()
         {
-            var emptyViewer = new User() { UserName = String.Empty, CertificateThumbprint = String.Empty, CertificateFileName = String.Empty, Password = String.Empty, ProductsRoles = TestUsersManager.TestUserViewer.ProductsRoles };
+            var emptyViewer = TestUsersManager.GetEmptyUser();
+            emptyViewer.ProductsRoles = new(TestUsersManager.TestUserViewer.ProductsRoles);
 
-            _userManager.AddUser(emptyViewer);
+            await _userManager.TryAdd(emptyViewer);
 
-            var actual = _userManager.GetViewers(TestProductsManager.TestProduct.Id);
+            var actual = _userManager.GetViewers(TestProductsManager.ProductId);
             var expected = new List<User>(1) { emptyViewer };
 
             CompareUserLists(expected, actual);
@@ -294,11 +291,11 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
 
         [Fact]
         [Trait("Category", "Get users")]
-        public void GetManagersTest()
+        public async Task GetManagersTest()
         {
-            AddUsers(TestUsersManager.TestUserViewer, TestUsersManager.TestUserManager);
+            await AddUsers(TestUsersManager.TestUserViewer, TestUsersManager.TestUserManager);
 
-            var actual = _userManager.GetManagers(TestProductsManager.TestProduct.Id);
+            var actual = _userManager.GetManagers(TestProductsManager.ProductId);
             var expected = new List<User>(1) { TestUsersManager.TestUserManager };
 
             CompareUserLists(expected, actual);
@@ -306,13 +303,14 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
 
         [Fact]
         [Trait("Category", "Get users, Negative")]
-        public void GetEmptyManagersTest()
+        public async Task GetEmptyManagersTest()
         {
-            var emptyManager = new User() { UserName = String.Empty, CertificateThumbprint = String.Empty, CertificateFileName = String.Empty, Password = String.Empty, ProductsRoles = TestUsersManager.TestUserManager.ProductsRoles };
+            var emptyManager = TestUsersManager.GetEmptyUser();
+            emptyManager.ProductsRoles = new(TestUsersManager.TestUserManager.ProductsRoles);
 
-            _userManager.AddUser(emptyManager);
+            await _userManager.TryAdd(emptyManager);
 
-            var actual = _userManager.GetManagers(TestProductsManager.TestProduct.Id);
+            var actual = _userManager.GetManagers(TestProductsManager.ProductId);
             var expected = new List<User>(1) { emptyManager };
 
             CompareUserLists(expected, actual);
@@ -320,12 +318,12 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
 
         [Fact]
         [Trait("Category", "Get users")]
-        public void GetOnlyAdminUsersTest()
+        public async Task GetOnlyAdminUsersTest()
         {
-            bool IsAdmin(User user) => user.IsAdmin;
+            static bool IsAdmin(User user) => user.IsAdmin;
 
 
-            AddUsers(TestUsersManager.Admin, TestUsersManager.NotAdmin);
+            await AddUsers(TestUsersManager.Admin, TestUsersManager.NotAdmin);
 
             var actual = _userManager.GetUsers(IsAdmin);
             var expected = new List<User>(2) { TestUsersManager.DefaultUser, TestUsersManager.Admin };
@@ -335,12 +333,12 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
 
         [Fact]
         [Trait("Category", "Get users")]
-        public void GetUsersWithProductRoleTest()
+        public async Task GetUsersWithProductRoleTest()
         {
-            bool IsProductRole(User user) => user.ProductsRoles.Count > 0;
+            static bool IsProductRole(User user) => user.ProductsRoles.Count > 0;
 
 
-            AddUsers(TestUsersManager.TestUserViewer, TestUsersManager.TestUserManager);
+            await AddUsers(TestUsersManager.TestUserViewer, TestUsersManager.TestUserManager);
 
             var actual = _userManager.GetUsers(IsProductRole);
             var expected = new List<User>(2) { TestUsersManager.TestUserViewer, TestUsersManager.TestUserManager };
@@ -350,12 +348,12 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
 
         [Fact]
         [Trait("Category", "Get users")]
-        public void GetUsersWithNameTest()
+        public async Task GetUsersWithNameTest()
         {
-            bool IsProductRole(User user) => user.UserName == TestUsersManager.TestUserViewer.UserName;
+            static bool IsProductRole(User user) => user.Name == TestUsersManager.TestUserViewer.Name;
 
 
-            AddUsers(TestUsersManager.TestUserViewer, TestUsersManager.TestUserManager);
+            await AddUsers(TestUsersManager.TestUserViewer, TestUsersManager.TestUserManager);
 
             var actual = _userManager.GetUsers(IsProductRole);
             var expected = new List<User>(1) { TestUsersManager.TestUserViewer };
@@ -365,12 +363,12 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
 
         [Fact]
         [Trait("Category", "Get users")]
-        public void GetUsersOfProductTest()
+        public async Task GetUsersOfProductTest()
         {
-            bool IsProductRole(User user) => user.ProductsRoles.Any(e => e.Key == TestProductsManager.TestProduct.Id);
+            static bool IsProductRole(User user) => user.ProductsRoles.Any(e => e.Item1 == TestProductsManager.ProductId);
 
 
-            AddUsers(TestUsersManager.TestUserViewer, TestUsersManager.TestUserManager, TestUsersManager.Admin, TestUsersManager.NotAdmin);
+            await AddUsers(TestUsersManager.TestUserViewer, TestUsersManager.TestUserManager, TestUsersManager.Admin, TestUsersManager.NotAdmin);
 
             var actual = _userManager.GetUsers(IsProductRole);
             var expected = new List<User>(2) { TestUsersManager.TestUserViewer, TestUsersManager.TestUserManager };
@@ -378,80 +376,79 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
             CompareUserLists(expected, actual);
         }
 
-        private static async Task FullTestUserAsync(List<User> expectedUsers,
-            GetUserByUserName getUserByName, GetAllUsersFromDB getUsersFromDB)
+        private async Task FullTestUserAsync(List<User> expectedUsers, GetAllUsersFromDB getUsersFromDB)
         {
             await Task.Delay(100);
 
             foreach (var expectedUser in expectedUsers)
             {
-                TestUserByName(expectedUser, getUserByName);
+                TestUserByName(expectedUser);
                 TestUserFromDB(expectedUser, getUsersFromDB);
             }
         }
 
-        private static void TestUserByName(User expected, GetUserByUserName getUserByName) =>
-            TestUser(expected, getUserByName(expected.UserName));
+        private void TestUserByName(User expected) =>
+            TestUser(expected, _userManager[expected.Name]);
 
         private static void TestUserFromDB(User expected, GetAllUsersFromDB getUsersFromDB) =>
-            TestUser(expected, getUsersFromDB().FirstOrDefault(u => u.UserName == expected.UserName));
+            TestUser(expected, new(getUsersFromDB().FirstOrDefault(u => u.UserName == expected.Name)));
 
-        private static async Task FullTestUpdatedUserAsync(List<User> expectedUsers, List<User> usersBeforeUpdate,
-            GetUser getUser, GetUserByUserName getUserByName, GetAllUsersFromDB getUsersFromDB)
+        private async Task FullTestUpdatedUserAsync(List<User> expectedUsers, List<User> usersBeforeUpdate,
+            GetAllUsersFromDB getUsersFromDB)
         {
             await Task.Delay(100);
 
             for (int i = 0; i < expectedUsers.Count; ++i)
             {
-                TestUserByGuid(expectedUsers[i], usersBeforeUpdate[i], getUser);
-                TestUserByName(expectedUsers[i], usersBeforeUpdate[i], getUserByName);
+                TestUserByGuid(expectedUsers[i], usersBeforeUpdate[i]);
+                TestUserByName(expectedUsers[i], usersBeforeUpdate[i]);
                 TestUserFromDB(expectedUsers[i], usersBeforeUpdate[i], getUsersFromDB);
             }
         }
 
-        private static void TestUserByName(User expected, User userBeforeUpdate, GetUserByUserName getUserByName)
+        private void TestUserByGuid(User expected, User userBeforeUpdate)
         {
-            var userByName = getUserByName(userBeforeUpdate.UserName);
-
-            TestChangeableUserSettings(expected, userByName);
-            TestNotChangeableUserSettings(userBeforeUpdate, userByName);
-        }
-
-        private static void TestUserByGuid(User expected, User userBeforeUpdate, GetUser getUser)
-        {
-            var userById = getUser(expected.Id);
+            var userById = _userManager[userBeforeUpdate.Id];
 
             TestChangeableUserSettings(expected, userById);
             TestNotChangeableUserSettings(userBeforeUpdate, userById);
         }
 
+        private void TestUserByName(User expected, User userBeforeUpdate)
+        {
+            var userByName = _userManager[userBeforeUpdate.Name];
+
+            TestChangeableUserSettings(expected, userByName);
+            TestNotChangeableUserSettings(userBeforeUpdate, userByName);
+        }
+
         private static void TestUserFromDB(User expected, User userBeforeUpdate, GetAllUsersFromDB getUsersFromDB)
         {
             var userFromDB = getUsersFromDB().FirstOrDefault(u => u.Id == expected.Id);
+            var actualUser = new User(userFromDB);
 
-            TestChangeableUserSettings(expected, userFromDB);
-            TestNotChangeableUserSettings(userBeforeUpdate, userFromDB);
+            TestChangeableUserSettings(expected, actualUser);
+            TestNotChangeableUserSettings(userBeforeUpdate, actualUser);
         }
 
 
-        private static async Task FullTestRemovedDefaultUserAsync(List<User> removed, GetUser getUser,
-            GetUserByUserName getUserByName, GetAllUsersFromDB getUsersFromDB)
+        private async Task FullTestRemovedDefaultUserAsync(List<User> removed, GetAllUsersFromDB getUsersFromDB)
         {
             await Task.Delay(100);
 
             foreach (var user in removed)
             {
-                TestRemovedUser(user, getUserByName);
-                TestRemovedUser(user, getUser);
+                TestRemovedUserById(user);
+                TestRemovedUserByName(user);
                 TestRemovedUser(user, getUsersFromDB);
             }
         }
 
-        private static void TestRemovedUser(User removedUser, GetUserByUserName getUserByName) =>
-            Assert.Null(getUserByName(removedUser.UserName));
+        private void TestRemovedUserById(User removedUser) =>
+            Assert.Null(_userManager[removedUser.Id]);
 
-        private static void TestRemovedUser(User removedUser, GetUser getUser) =>
-            TestUser(new User((User)null), getUser(removedUser.Id));
+        private void TestRemovedUserByName(User removedUser) =>
+            Assert.Null(_userManager[removedUser.Name]);
 
         private static void TestRemovedUser(User removedUser, GetAllUsersFromDB getUsersFromDB) =>
             Assert.Null(getUsersFromDB().FirstOrDefault(u => u.Id == removedUser.Id));
@@ -459,14 +456,6 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         private static void TestUser(User expected, User actual)
         {
             TestChangeableUserSettings(expected, actual);
-            TestNotChangeableUserSettings(expected, actual);
-        }
-
-        private static void TestAuthenticateUser(User expected, User actual)
-        {
-            Assert.Null(actual.Password);
-            Assert.Equal(expected.IsAdmin, actual.IsAdmin);
-            Assert.Equal(expected.ProductsRoles, actual.ProductsRoles);
             TestNotChangeableUserSettings(expected, actual);
         }
 
@@ -479,24 +468,21 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
             if (expected.ProductsRoles != null)
                 foreach (var productRole in expected.ProductsRoles)
                 {
-                    var actualRole = actual.ProductsRoles.FirstOrDefault(r => r.Key == productRole.Key);
+                    var actualRole = actual.ProductsRoles.FirstOrDefault(r => r.Item1 == productRole.Item1);
 
-                    Assert.Equal(productRole.Key, actualRole.Key);
-                    Assert.Equal(productRole.Value, actualRole.Value);
+                    Assert.Equal(productRole, actualRole);
                 }
         }
 
         private static void TestNotChangeableUserSettings(User expected, User actual)
         {
-            Assert.Equal(expected.UserName, actual.UserName);
-            Assert.Equal(expected.CertificateThumbprint, actual.CertificateThumbprint);
-            Assert.Equal(expected.CertificateFileName, actual.CertificateFileName);
+            Assert.Equal(expected.Name, actual.Name);
         }
 
         private static void CompareUserLists(IEnumerable<User> expectedInput, IEnumerable<User> actualInput)
         {
-            var expected = expectedInput.OrderBy(e => e.UserName).ToList();
-            var actual = actualInput.OrderBy(e => e.UserName).ToList();
+            var expected = expectedInput.OrderBy(e => e.Name).ToList();
+            var actual = actualInput.OrderBy(e => e.Name).ToList();
 
             Assert.Equal(expected.Count, actual.Count);
 
@@ -508,27 +494,23 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
         {
             var result = await GetUsersFromDB();
 
-            return result[0];
+            return new(result[0]);
         }
 
-        private async Task<List<User>> GetUsersFromDB()
+        private async Task<List<UserEntity>> GetUsersFromDB()
         {
             await Task.Delay(200);
 
             return _databaseCoreManager.DatabaseCore.GetUsers();
         }
 
-        private void AddUsers(params User[] users)
-        {
-            foreach (var user in users)
-                _userManager.AddUser(user);
-        }
+        private Task AddUsers(params User[] users) => Task.WhenAll(users.Select(_userManager.TryAdd));
 
-        private List<User> BuildAddAndGetRandomUsers(int count)
+        private async Task<List<User>> BuildAddAndGetRandomUsers(int count)
         {
             var users = BuildRandomUsers(count);
 
-            users.ForEach(_userManager.AddUser);
+            await AddUsers(users.ToArray());
 
             return _userManager.GetUsers().ToList();
         }
@@ -543,24 +525,11 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
             return users;
         }
 
-        private static User BuildUpdatedUser(User source)
-        {
-            var productRoles = new List<KeyValuePair<string, ProductRoleEnum>>(source.ProductsRoles.Count);
-            foreach (var role in source.ProductsRoles)
-                productRoles.Add(new KeyValuePair<string, ProductRoleEnum>(GetUpdatedProperty(role.Key), role.Value));
-
-            return new()
+        private static UserUpdate BuildUpdatedUser(User source) =>
+            new()
             {
                 Id = source.Id,
-                UserName = GetUpdatedProperty(source.UserName),
-                CertificateFileName = GetUpdatedProperty(source.CertificateFileName),
-                CertificateThumbprint = GetUpdatedProperty(source.CertificateThumbprint),
                 IsAdmin = !source.IsAdmin,
-                Password = GetUpdatedProperty(source.Password),
-                ProductsRoles = productRoles,
             };
-        }
-
-        private static string GetUpdatedProperty(object property) => $"{property}-updated";
     }
 }

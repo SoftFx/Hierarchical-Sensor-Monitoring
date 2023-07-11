@@ -1,5 +1,5 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities;
-using HSMServer.Core.Cache.Entities;
+using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Model;
 using System;
 
@@ -9,18 +9,17 @@ namespace HSMServer.Core.Tests.Infrastructure
     {
         internal static BaseSensorModel Build(SensorEntity entity)
         {
-            BaseSensorModel BuildSensor<T>() where T : BaseSensorModel, new() =>
-                new T().ApplyEntity(entity);
-
             return (SensorType)entity.Type switch
             {
-                SensorType.Boolean => BuildSensor<BooleanSensorModel>(),
-                SensorType.Integer => BuildSensor<IntegerSensorModel>(),
-                SensorType.Double => BuildSensor<DoubleSensorModel>(),
-                SensorType.String => BuildSensor<StringSensorModel>(),
-                SensorType.IntegerBar => BuildSensor<IntegerBarSensorModel>(),
-                SensorType.DoubleBar => BuildSensor<DoubleBarSensorModel>(),
-                SensorType.File => BuildSensor<FileSensorModel>(),
+                SensorType.Boolean => new BooleanSensorModel(entity),
+                SensorType.Integer => new IntegerSensorModel(entity),
+                SensorType.Double => new DoubleSensorModel(entity),
+                SensorType.String => new StringSensorModel(entity),
+                SensorType.IntegerBar => new IntegerBarSensorModel(entity),
+                SensorType.DoubleBar => new DoubleBarSensorModel(entity),
+                SensorType.File => new FileSensorModel(entity),
+                SensorType.TimeSpan => new TimeSpanSensorModel(entity),
+                SensorType.Version => new VersionSensorModel(entity),
                 _ => throw new ArgumentException($"Unexpected sensor entity type {entity.Type}"),
             };
         }
@@ -30,8 +29,9 @@ namespace HSMServer.Core.Tests.Infrastructure
             {
                 Id = id ?? Guid.NewGuid(),
                 Description = RandomGenerator.GetRandomString(),
-                ExpectedUpdateInterval = TimeSpan.FromMinutes(10),
-                Unit = RandomGenerator.GetRandomString(),
+                ExpectedUpdateInterval = new(TimeSpan.FromMinutes(10).Ticks),
+                State = SensorState.Blocked,
+                Integration = Integration.Grafana,
             };
     }
 }

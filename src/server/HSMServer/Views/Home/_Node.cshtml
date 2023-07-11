@@ -1,0 +1,16 @@
+﻿@using HSMServer.Model.Authentication
+@using HSMServer.Model.ViewModel
+@using HSMServer.Model.TreeViewModel
+
+@model ProductNodeViewModel
+
+@{
+    ViewBag.ParentId = Model.EncodedId;
+}
+
+
+<div>
+    @await Html.PartialAsync("_MetaInfo", new ProductInfoViewModel(Model))
+    
+    @await Html.PartialAsync("_ChildrenPanel", (User as User).SelectedNode)
+</div>

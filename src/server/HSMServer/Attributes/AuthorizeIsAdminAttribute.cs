@@ -1,4 +1,4 @@
-﻿using HSMServer.Core.Model.Authentication;
+﻿using HSMServer.Model.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
@@ -9,28 +9,15 @@ namespace HSMServer.Attributes
 {
     [AttributeUsage(AttributeTargets.Class | AttributeTargets.Method)]
     public class AuthorizeIsAdminAttribute : AuthorizeAttribute, IAuthorizationFilter
-    {
-        private List<bool> _policyRoles;
-
-        public AuthorizeIsAdminAttribute(params bool[] roles)
-        {
-            _policyRoles = new List<bool>();
-            _policyRoles.AddRange(roles);
-        }
+    { 
         public void OnAuthorization(AuthorizationFilterContext context)
         {
-            if (context == null)
-            {
+            if (context is null)
                 throw new ArgumentNullException(nameof(context));
-            }
-
-            var user = context.HttpContext.User;
-
-            if (user is User convertedUser && _policyRoles.Contains(convertedUser.IsAdmin))
-            {
+            
+            if (context.HttpContext.User is User { IsAdmin: true })
                 return;
-            }
-
+            
             context.Result = new UnauthorizedResult();
         }
     }

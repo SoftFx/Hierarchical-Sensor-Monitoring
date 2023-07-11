@@ -1,31 +1,35 @@
-﻿using HSMDataCollector.Core;
-using HSMSensorDataObjects.FullDataObject;
+﻿using System;
+using HSMDataCollector.Core;
+using HSMSensorDataObjects.SensorValueRequests;
 
 namespace HSMDataCollector.Base
 {
+    [Obsolete("Will be replaced by ./SensorBases/SensorBase.cs")]
     public abstract class SensorBase : ISensor
     {
-        protected readonly string ProductKey;
-        protected readonly string Description;
         private readonly IValuesQueue _queue;
+
+        protected string Description { get; }
 
         internal string Path { get; }
 
+        public abstract bool HasLastValue { get; }
 
-        protected SensorBase(string path, string productKey, IValuesQueue queue, string description)
+
+        protected SensorBase(string path, IValuesQueue queue, string description)
         {
             _queue = queue;
             Path = path;
-            ProductKey = productKey;
             Description = description;
         }
-        public abstract bool HasLastValue { get; }
-        public abstract UnitedSensorValue GetLastValue();
+
+
+        public virtual void Start() { }
+
         public abstract void Dispose();
 
-        protected void EnqueueValue(UnitedSensorValue value)
-        {
-            _queue.EnqueueData(value);
-        }
+        public abstract SensorValueBase GetLastValue();
+
+        protected void EnqueueValue(SensorValueBase value) => _queue.Push(value);
     }
 }

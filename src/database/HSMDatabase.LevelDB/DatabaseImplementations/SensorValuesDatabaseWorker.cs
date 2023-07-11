@@ -1,5 +1,5 @@
 ﻿using HSMDatabase.AccessManager;
-using HSMDatabase.AccessManager.DatabaseEntities;
+using HSMDatabase.LevelDB.Extensions;
 using NLog;
 using System;
 using System.Collections.Generic;
@@ -11,6 +11,8 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
 {
     internal sealed class SensorValuesDatabaseWorker : ISensorValuesDatabase
     {
+        private static readonly JsonSerializerOptions _options = new() { IgnoreReadOnlyProperties = true };
+
         private readonly Logger _logger = LogManager.GetCurrentClassLogger();
         private readonly LevelDBDatabaseAdapter _openedDb;
 
@@ -34,11 +36,17 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
 
         public void Dispose() => _openedDb.Dispose();
 
-        public void FillLatestValues(Dictionary<byte[], (Guid sensorId, byte[] latestValue)> keyValuePairs)
+
+        public bool IsInclude(long time) => From <= time && time <= To;
+
+        public bool IsInclude(long from, long to) => From <= to && To >= from;
+
+
+        public void FillLatestValues(Dictionary<byte[], (long, byte[])> keyValuePairs)
         {
             try
             {
-                _openedDb.FillLatestValues(keyValuePairs);
+                _openedDb.FillLatestValues(keyValuePairs, To);
             }
             catch (Exception e)
             {
@@ -46,77 +54,70 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             }
         }
 
-        public void PutSensorValue(SensorValueEntity entity)
+        public void PutSensorValue(byte[] key, object value)
         {
-            var key = Encoding.UTF8.GetBytes(PrefixConstants.GetSensorValueKey(entity.SensorId, entity.ReceivingTime));
-
             try
             {
-                var value = JsonSerializer.SerializeToUtf8Bytes(entity.Value);
-                _openedDb.Put(key, value);
+                var valueBytes = JsonSerializer.SerializeToUtf8Bytes(value, _options);
+                _openedDb.Put(key, valueBytes);
             }
             catch (Exception e)
             {
-                _logger.Error(e, $"Failed to write data for {entity.SensorId}");
+                _logger.Error(e, $"Failed to write data for {key.GetString()}");
             }
         }
 
-        public void PutSensorValue(string sensorId, string time, byte[] value)
+        public void RemoveSensorValues(byte[] from, byte[] to)
         {
-            var key = Encoding.UTF8.GetBytes($"{sensorId}_{time.PadLeft(19, '0')}");
-
             try
             {
-                _openedDb.Put(key, value);
+                _openedDb.DeleteValueFromTo(from, to);
             }
             catch (Exception e)
             {
-                _logger.Error(e, $"Failed to write data for {sensorId}");
+                _logger.Error($"Failed removing values [{from.GetString()}, {to.GetString()}] - {e.Message}");
             }
         }
 
-        public void RemoveSensorValues(string sensorId)
+        public byte[] Get(byte[] key, byte[] sensorId)
         {
-            var key = Encoding.UTF8.GetBytes(sensorId);
-
             try
             {
-                _openedDb.DeleteAllStartingWith(key);
+                return _openedDb.Get(key, sensorId);
             }
             catch (Exception e)
             {
-                _logger.Error(e, $"Failed to remove values for sensor {sensorId}");
+                _logger.Error($"Failed getting value {key.GetString()} - {e.Message}");
+
+                return Array.Empty<byte>();
             }
         }
 
-        public List<byte[]> GetValues(string sensorId, byte[] to, int count)
+        public IEnumerable<byte[]> GetValuesFrom(byte[] from, byte[] to)
         {
             try
             {
-                return _openedDb.GetStartingWithTo(to, Encoding.UTF8.GetBytes(sensorId), count);
+                return _openedDb.GetValueFromTo(from, to);
             }
             catch (Exception e)
             {
-                _logger.Error(e, $"Failed getting values for sensor {sensorId} (to: {to}, count: {count})");
+                _logger.Error($"Failed getting value [{from.GetString()}, {to.GetString()}] - {e.Message}");
 
-                return new();
+                return Enumerable.Empty<byte[]>();
             }
         }
 
-        public List<byte[]> GetValues(string sensorId, byte[] from, byte[] to, int count)
+        public IEnumerable<byte[]> GetValuesTo(byte[] from, byte[] to)
         {
             try
             {
-                var result = _openedDb.GetStartingWithRange(from, to, Encoding.UTF8.GetBytes(sensorId));
-                result.Reverse();
-
-                return result.Take(count).ToList();
+                return _openedDb.GetValueToFrom(from, to);
             }
             catch (Exception e)
             {
-                _logger.Error(e, $"Failed getting values for sensor {sensorId} (from: {from}, to: {to}, count: {count})");
+                _logger.Error($"Failed getting value [{to.GetString()}, {from.GetString()}] - {e.Message}");
 
-                return new();
+                return Enumerable.Empty<byte[]>();
             }
         }
     }

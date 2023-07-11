@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net6.0</TargetFramework>
+    <TargetFramework>net7.0</TargetFramework>
   </PropertyGroup>
 
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|AnyCPU'">
@@ -9,8 +9,8 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="NLog" Version="4.7.10" />
-    <PackageReference Include="SoftFX.LevelDB.Standard" Version="1.0.1" />
+    <PackageReference Include="NLog" Version="5.1.2" />
+    <PackageReference Include="SoftFX.LevelDB.Standard" Version="1.2.0" />
   </ItemGroup>
 
   <ItemGroup>

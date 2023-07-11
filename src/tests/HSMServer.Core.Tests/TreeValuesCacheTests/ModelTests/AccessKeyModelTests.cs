@@ -1,4 +1,4 @@
-﻿using HSMServer.Core.Cache.Entities;
+﻿using HSMServer.Core.Model;
 using HSMServer.Core.Tests.Infrastructure;
 using System;
 using Xunit;
@@ -22,8 +22,8 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests.ModelTests
         [Trait("Category", "AccessKeyModel constructor")]
         public void AccessKeyModelConstructor_AuthorIdProductId_Test()
         {
-            var authorId = Guid.NewGuid().ToString();
-            var productId = Guid.NewGuid().ToString();
+            var authorId = Guid.NewGuid();
+            var productId = Guid.NewGuid();
 
             var key = new AccessKeyModel(authorId, productId);
 

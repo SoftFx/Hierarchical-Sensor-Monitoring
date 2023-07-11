@@ -1,5 +1,4 @@
-﻿using HSMServer.Core.Model;
-using System;
+﻿using System;
 using System.Collections.Generic;
 
 namespace HSMServer.Core.SensorsUpdatesQueue
@@ -8,7 +7,9 @@ namespace HSMServer.Core.SensorsUpdatesQueue
     {
         event Action<List<StoreInfo>> NewItemsEvent;
 
+
         void AddItem(StoreInfo storeInfo);
+
         void AddItems(List<StoreInfo> storeInfos);
     }
 }

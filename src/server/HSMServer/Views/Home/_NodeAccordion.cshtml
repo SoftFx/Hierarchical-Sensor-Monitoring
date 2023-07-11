@@ -1,0 +1,46 @@
+﻿@using HSMServer.Extensions
+@using HSMServer.Model.TreeViewModel
+
+@model NodeViewModel
+
+@{
+    var nodeId = Model.EncodedId;
+}
+
+
+<div class='accordion clickable-node' id='nodeData_@nodeId' onclick="activateNode('@ViewBag.ParentId', '@nodeId')">
+    <div class='accordion-item'>
+        <div class='accordion-collapse' data-bs-parent='#nodeData_@nodeId'>
+            <div class='accordion-body'>
+                <div class="w-100">
+                    <div class='row justify-content-between'>
+                        <div class='row col-md-auto flex-grow-1'>
+                            <div class="row">
+                                <div class='col-md-auto sensor-icon-without-padding'>
+                                    <li id='status_@nodeId' class='@Model.Status.ToIcon() sensor-icon-with-margin' title='Status: @Model.Status'></li>
+                                </div>
+                                @Model.Name
+                            </div>
+                            @if (Model is SensorNodeViewModel sensor)
+                            {
+                                <span id='validation_@nodeId'>
+                                    @if (sensor.IsValidationErrorVisible)
+                                    {
+                                        <li id='errorIcon_@nodeId' class='fas fa-exclamation-triangle' style='margin-right:5px' title='@sensor.ValidationError'></li>
+                                    }
+                                </span>
+                            }
+                        </div>
+                        <div class='col-md-auto time-ago-div me-1' id='update_@nodeId'>updated @Model.UpdateTime.GetTimeAgo()</div>
+                    </div>
+                    <span class="text-break">
+                        @if (Model is SensorNodeViewModel sensorModel)
+                        {
+                            @sensorModel.ShortStringValue
+                        }
+                    </span>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>

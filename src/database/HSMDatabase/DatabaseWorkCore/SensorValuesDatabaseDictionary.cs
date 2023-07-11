@@ -1,6 +1,5 @@
 ﻿using HSMDatabase.AccessManager;
 using HSMDatabase.LevelDB;
-using System;
 using System.Collections;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -12,7 +11,6 @@ namespace HSMDatabase.DatabaseWorkCore
     internal sealed class SensorValuesDatabaseDictionary : IEnumerable<ISensorValuesDatabase>
     {
         private readonly ConcurrentQueue<ISensorValuesDatabase> _sensorDbs = new();
-
         private readonly IDatabaseSettings _dbSettings;
 
         private ISensorValuesDatabase _lastDb;
@@ -22,80 +20,12 @@ namespace HSMDatabase.DatabaseWorkCore
         {
             _dbSettings = dbSettings;
 
-            if (CheckoutAndMigration())
-                return;
-
             var sensorValuesDirectories = GetSensorValuesDirectories();
             foreach (var directory in sensorValuesDirectories)
             {
                 (var from, var to) = GetDatesFromFolderName(directory);
                 AddNewDb(directory, from, to);
             }
-        }
-
-        private bool CheckoutAndMigration()
-        {
-            bool wereMigrated = false;
-
-            var sensorValuesDirectories = GetSensorValuesDirectories();
-            foreach (var directory in sensorValuesDirectories)
-            {
-                var sensorDirectories = Directory.GetDirectories(directory);
-                if (sensorDirectories.Length == 0)
-                    continue;
-
-                wereMigrated = true;
-
-                (var from, var to) = GetDatesFromFolderName(directory);
-
-                from -= 1;
-                to -= 1;
-
-                bool shouldAddDb = true;
-
-                if (_lastDb != null)
-                {
-                    var fromDate = new DateTime(from);
-                    var lastDbFromDate = new DateTime(_lastDb.From);
-
-                    shouldAddDb = fromDate.Year != lastDbFromDate.Year || fromDate.Month != lastDbFromDate.Month || fromDate.Day != lastDbFromDate.Day;
-                }
-
-                if (shouldAddDb)
-                    AddNewDb(_dbSettings.GetPathToSensorValueDatabase(from, to), from, to);
-
-                try
-                {
-                    foreach (var dbPath in sensorDirectories)
-                    {
-                        try
-                        {
-                            var sensorDb = new LevelDBDatabaseAdapter(dbPath);
-                            var sensorId = Path.GetFileName(dbPath);
-
-                            var allValues = sensorDb.GetAllValues();
-                            foreach (var (sensorReceivingTime, value) in allValues)
-                                _lastDb.PutSensorValue(sensorId, sensorReceivingTime, value);
-
-                            sensorDb.Dispose();
-                        }
-                        catch { }
-                    }
-
-                    Directory.Delete(directory, true);
-                }
-                catch { }
-            }
-
-            return wereMigrated;
-        }
-
-        private List<string> GetSensorValuesDirectories()
-        {
-            var sensorValuesDirectories =
-               Directory.GetDirectories(_dbSettings.DatabaseFolder, $"{_dbSettings.SensorValuesDatabaseName}*", SearchOption.TopDirectoryOnly);
-
-            return sensorValuesDirectories.OrderBy(d => d).ToList();
         }
 
 
@@ -121,8 +51,15 @@ namespace HSMDatabase.DatabaseWorkCore
             return _lastDb;
         }
 
+        private List<string> GetSensorValuesDirectories()
+        {
+            var sensorValuesDirectories =
+               Directory.GetDirectories(_dbSettings.DatabaseFolder, $"{_dbSettings.SensorValuesDatabaseName}*", SearchOption.TopDirectoryOnly);
 
-        internal static (long from, long to) GetDatesFromFolderName(string folder)
+            return sensorValuesDirectories.OrderBy(d => d).ToList();
+        }
+
+        private static (long from, long to) GetDatesFromFolderName(string folder)
         {
             var from = 0L;
             var to = 0L;
@@ -138,7 +75,7 @@ namespace HSMDatabase.DatabaseWorkCore
             return (from, to);
         }
 
-        public IEnumerator<ISensorValuesDatabase> GetEnumerator() => _sensorDbs.Reverse().GetEnumerator();
+        public IEnumerator<ISensorValuesDatabase> GetEnumerator() => _sensorDbs.GetEnumerator();
 
         IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
     }

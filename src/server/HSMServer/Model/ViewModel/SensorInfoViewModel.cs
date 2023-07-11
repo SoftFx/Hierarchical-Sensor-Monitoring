@@ -1,41 +1,29 @@
-﻿using HSMServer.Model.TreeViewModels;
-using System;
+﻿using HSMServer.Core;
+using HSMServer.Core.Model;
+using HSMServer.Model.TreeViewModel;
 
 namespace HSMServer.Model.ViewModel
 {
-    public class SensorInfoViewModel
+    public sealed class SensorInfoViewModel : NodeInfoBaseViewModel
     {
-        public Guid Id { get; }
+        public SensorType SensorType { get; }
 
-        public string Path { get; }
+        public string StatusComment { get; }
 
-        public string ProductName { get; }
+        public bool HasGrafana { get; }
 
-        public string SensorType { get; }
-
-        public string Description { get; private set; }
-
-        public string ExpectedUpdateInterval { get; private set; }
-
-        public string Unit { get; private set; }
+        public bool IsMuted { get; }
 
 
-        public SensorInfoViewModel(SensorNodeViewModel sensor)
+        // public constructor without parameters for action Home/UpdateSensorInfo
+        public SensorInfoViewModel() : base() { }
+
+        internal SensorInfoViewModel(SensorNodeViewModel sensor) : base(sensor)
         {
-            Id = sensor.Id;
-            Path = sensor.Path;
-            ProductName = sensor.Product;
-            Description = sensor.Description;
-            ExpectedUpdateInterval = sensor.ExpectedUpdateInterval.ToString();
-            Unit = sensor.Unit;
-            SensorType = sensor.SensorType.ToString();
-        }
-
-        public void Update(UpdateSensorInfoViewModel updateModel)
-        {
-            Description = updateModel.Description;
-            ExpectedUpdateInterval = updateModel.ExpectedUpdateInterval;
-            Unit = updateModel.Unit;
+            SensorType = sensor.Type;
+            StatusComment = sensor.ValidationError;
+            HasGrafana = sensor.Integration.HasGrafana();
+            IsMuted = sensor.State == SensorState.Muted;
         }
     }
 }

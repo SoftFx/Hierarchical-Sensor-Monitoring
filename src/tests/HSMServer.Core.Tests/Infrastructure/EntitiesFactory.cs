@@ -1,18 +1,15 @@
 ﻿using HSMCommon;
 using HSMDatabase.AccessManager.DatabaseEntities;
-using HSMServer.Core.Cache.Entities;
 using HSMServer.Core.Model;
-using HSMServer.Core.Model.Authentication;
+using HSMServer.Core.Registration;
+using HSMServer.Model.Authentication;
 using System;
-using System.Collections.Generic;
+using System.Drawing;
 
 namespace HSMServer.Core.Tests.Infrastructure
 {
     internal static class EntitiesFactory
     {
-        internal static ProductEntity BuildProduct() =>
-            BuildProductEntity().AddSubProduct(Guid.NewGuid().ToString());
-
         internal static ProductEntity BuildProductEntity(string name = null, string parent = "") =>
             new()
             {
@@ -23,27 +20,11 @@ namespace HSMServer.Core.Tests.Infrastructure
                 DisplayName = name ?? RandomGenerator.GetRandomString(),
                 Description = RandomGenerator.GetRandomString(),
                 CreationDate = DateTime.UtcNow.Ticks,
-                SubProductsIds = new List<string>(2),
-                SensorsIds = new List<string>(2),
             };
-
-        internal static ProductEntity AddSubProduct(this ProductEntity product, string subProductId)
-        {
-            product.SubProductsIds.Add(subProductId);
-
-            return product;
-        }
-
-        internal static ProductEntity AddSensor(this ProductEntity product, string sensorId)
-        {
-            product.SensorsIds.Add(sensorId);
-
-            return product;
-        }
 
 
         internal static AccessKeyEntity BuildAccessKeyEntity(string id = null, string name = null, string productId = null,
-            KeyPermissions permissions = KeyPermissions.CanSendSensorData | KeyPermissions.CanAddNodes | KeyPermissions.CanAddSensors) =>
+            KeyPermissions permissions = KeyPermissions.CanSendSensorData | KeyPermissions.CanAddNodes | KeyPermissions.CanAddSensors | KeyPermissions.CanReadSensorData) =>
             new()
             {
                 Id = id ?? Guid.NewGuid().ToString(),
@@ -65,31 +46,39 @@ namespace HSMServer.Core.Tests.Infrastructure
                 DisplayName = name ?? RandomGenerator.GetRandomString(),
                 Description = RandomGenerator.GetRandomString(),
                 Type = type ?? RandomGenerator.GetRandomByte(),
-                Unit = RandomGenerator.GetRandomString(),
+                CreationDate = DateTime.UtcNow.Ticks,
             };
 
 
-        internal static User BuildUser() => new()
-        {
-            UserName = RandomGenerator.GetRandomString(),
-            Password = HashComputer.ComputePasswordHash(RandomGenerator.GetRandomString()),
-            IsAdmin = false
-        };
+        internal static UserEntity BuildUser() =>
+            new()
+            {
+                Id = Guid.NewGuid(),
+                UserName = RandomGenerator.GetRandomString(),
+                Password = HashComputer.ComputePasswordHash(RandomGenerator.GetRandomString()),
+                IsAdmin = false,
+                ProductsRoles = new(),
+            };
 
 
-        internal static RegistrationTicket BuildTicket() => new()
-        {
-            Role = nameof(ProductRoleEnum.ProductManager),
-            ExpirationDate = DateTime.UtcNow.AddMinutes(30),
-            ProductKey = Guid.NewGuid().ToString()
-        };
+        internal static FolderEntity BuildFolderEntity() =>
+            new()
+            {
+                Id = Guid.NewGuid().ToString(),
+                AuthorId = Guid.NewGuid().ToString(),
+                CreationDate = DateTime.UtcNow.Ticks,
+                DisplayName = RandomGenerator.GetRandomString(),
+                Description = RandomGenerator.GetRandomString(),
+                Color = Color.Red.ToArgb(),
+            };
 
 
-        internal static ConfigurationObject BuildConfiguration(string name) => new()
-        {
-            Name = name,
-            Value = RandomGenerator.GetRandomString(),
-            Description = RandomGenerator.GetRandomString()
-        };
+        internal static RegistrationTicket BuildTicket() =>
+            new()
+            {
+                Role = nameof(ProductRoleEnum.ProductManager),
+                ExpirationDate = DateTime.UtcNow.AddMinutes(30),
+                ProductKey = Guid.NewGuid().ToString()
+            };
     }
 }

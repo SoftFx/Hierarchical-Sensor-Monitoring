@@ -1,106 +1,213 @@
-﻿@using HSMServer.Model.AccessKeysViewModels
+﻿@using HSMServer.Authentication
+@using HSMServer.Model.AccessKeysViewModels
 @using HSMServer.Controllers
 @using HSMServer.Constants
+@using HSMServer.Helpers
+@using HSMServer.Core.Model
+@using HSMServer.Model.Authentication
+@using HSMServer.Extensions
+@using Microsoft.AspNetCore.Mvc.TagHelpers
+@addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
 
-@model List<AccessKeyViewModel>
+@inject IUserManager UserManager
 
+@model AccessKeyTableViewModel
 
-@foreach (var key in Model)
-{
-    <tr>
-        @if (key.HasProductColumn)
-        {
-            <td style="word-wrap: break-word">
-                @if (key.IsChangeAvailable && key.ParentProduct.Parent == null)
-                {
-                    @Html.ActionLink($"{key.NodePath}", nameof(ProductController.EditProduct), ViewConstants.ProductController, new { Product = key.ParentProduct.Id }, null)
-                }
-                else
-                {
-                    @key.NodePath
-                }
-            </td>
-        }
-        <td nowrap>@key.DisplayName</td>
-        <td nowrap>
-            <a role="button" tabindex="0" id="copy_@key.Id" data-clipboard-text="@key.Id" title="copy key" class="link-primary">copy</a>
-        </td>
-        <td>@key.Permissions</td>
-        <td>@key.ExpirationDate</td>
-        <td>@key.AuthorName</td>
-        <td>@key.State</td>
-        <td nowrap>
-            @if (key.IsChangeAvailable)
-            {
-                <button id='changeAccessKey_@key.Id' title='edit' class='btn btn-secondary' style='margin-left: 5px'>
-                    <i class='fas fa-edit'></i>
-                </button>
-                <button id='deleteAccessKey_@key.Id' title='remove' class='btn btn-secondary'>
-                    <i class='fas fa-trash-alt'></i>
-                </button>
-            }
-        </td>
-    </tr>
+@{
+    var user = User as User;
+    var hasProductColumn = Model.FullTable;
 }
+<div class="w-100" id="accessKeysTable">
+    <table class="table table-striped">
+        <thead>
+            <tr>
+                @if (hasProductColumn)
+                {
+                    <th id="accessKeys_productColumn">Product</th>
+                }
+                <th>Name</th>
+                <th>Key</th>
+                <th>Permissions</th>
+                @if (hasProductColumn)
+                {
+                    <th>Author</th>
+                }
+                <th class="text-center">State</th>
+                @if (UserRoleHelper.IsManager(user) || UserRoleHelper.IsProductCRUDAllowed(user))
+                {
+                    <th class="text-center">Actions</th>
+                }
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var key in Model.Keys)
+            {
+                var isParentEditAvailable = key.ParentProduct is not null && key.ParentProduct.IsChangingAccessKeysAvailable(user);
 
-@await Html.PartialAsync("~/Views/Shared/_DeletionConfirmationModal.cshtml")
+                <tr id="row_@key.Id">
+                    @if (Model.FullTable)
+                    {
+                        <td class="productName text-break">
+                            @if (isParentEditAvailable)
+                            {
+                                <a asp-controller="@ViewConstants.ProductController" asp-action="@nameof(ProductController.EditProduct)" asp-route-Product="@key.ParentProduct.EncodedId">
+                                    @Html.Raw(key.NodePath)
+                                </a>
+                            }
+                            else if (user.IsAdmin)
+                            {
+                                <span class="fw-bold" style="color: black">Master Key</span>
+                            }
+                            else
+                            {
+                                @Html.Raw(key.NodePath)
+                            }
+                        </td>
+                        <td class="displayName text-break">@Html.Raw(key.DisplayName)</td>
+                        <td nowrap>
+                            <a role="button" tabindex="0" id="copy_@key.Id" onclick="copyToClipboard(`@key.Id`)" title="copy key" class="link-primary fw-normal">copy</a>
+                        </td>
+                        <td>@key.Permissions</td>
+                        <td>
+                            @if (key.AuthorId.HasValue && key.AuthorId.Value != Guid.Empty)
+                            {
+                                @if (UserManager[key.AuthorId] is not null)
+                                {
+                                    @UserManager[key.AuthorId].Name
+                                }
+                                else
+                                {
+                                    <span class="fst-italic">Removed</span>
+                                }
+                            }
+                        </td>
+                        <td class="text-center">
+                            @if (key.State == KeyState.Expired)
+                            {
+                                <span title="@key.StatusTitle">
+                                    <img class="mb-1" src="~/dist/warning.svg" id="svg_exclamation" alt="warning icon"/>
+                                </span>
+                            }
+                            else
+                            {
+                                <i class='@key.State.ToIcon()' title="@key.StatusTitle"></i>
+                            }
+                        </td>
+                    }
+                    else
+                    {
+                        <td class="displayName text-break" id="displayName_@key.DisplayName">@Html.Raw(key.DisplayName)</td>
+                        @if (key.ParentProduct.IsChangingAccessKeysAvailable(user))
+                        {
+                            <td class="text-nowrap" style="width: 1%;white-space: nowrap">
+                                <div class="row text-nowrap flex-nowrap">
+                                    <div class="col-8">
+                                        @key.Id
+                                    </div>
+                                    <a role="button" id="copy_@key.Id" onclick="copyToClipboard(`@key.Id`)" title="copy key" class="col-1 link-primary mx-5 align-items-end">copy</a>
+                                </div>
+                            </td>
+                        }
+                        else
+                        {
+                            <td>
+                                <a role="button" id="copy_@key.Id" onclick="copyToClipboard(`@key.Id`)" title="copy key" class="link-primary">copy</a>
+                            </td>
+                        }
 
+                        <td style="width: 1%;white-space: nowrap">@key.Permissions</td>
+                        <td class="text-center">
+                            @if (key.State == KeyState.Expired)
+                            {
+                                <span title="@key.StatusTitle">
+                                    <img class="mb-1" src="~/dist/warning.svg" id="svg_exclamation" alt="warning icon"/>
+                                </span>
+                            }
+                            else
+                            {
+                                <i class='@key.State.ToIcon()' title="@key.StatusTitle"></i>
+                            }
+                        </td>
+                    }
 
-<script src="~/js/bundles/accessKey.min.js"></script>
+                    @if (UserRoleHelper.IsManager(user) || UserRoleHelper.IsProductCRUDAllowed(user))
+                    {
+                        <td nowrap class="text-center">
+                            <div class='btn-group'>
+                                @if (isParentEditAvailable || user.IsAdmin)
+                                {
+                                    <button id="actionButton" class="btn" data-bs-toggle="dropdown" data-bs-auto-close="true" aria-haspopup="true" aria-expanded="false">
+                                        <i class="fa-solid fa-ellipsis-vertical" style="cursor: pointer"></i>
+                                    </button>
+                                }
+                                else
+                                {
+                                    <i class="fa fa-ellipsis-vertical disabled" style="color: darkgrey"></i>
+                                }
+                                <ul id="dropdown_@key.Id" class='dropdown-menu overflow-auto' aria-labelledby="dropdownMenuButton">
+                                    <li>
+                                        <button id='changeAccessKey_@key.Id' class='dropdown-item'>Edit</button>
+                                    </li>
+                                    @if (key.State != KeyState.Expired)
+                                    {
+                                        <li>
+                                            <button id='blockAccessKey_@key.Id' class='dropdown-item'>
+                                                @if (key.State == KeyState.Blocked)
+                                                {
+                                                    <span id="state_value_@key.Id">Unblock</span>
+                                                }
+                                                else
+                                                {
+                                                    <span id="state_value_@key.Id">Block</span>
+                                                }
+                                            </button>
+                                        </li>
+                                    }
+                                    <li>
+                                        <button id='deleteAccessKey_@key.Id' class='dropdown-item'>Remove</button>
+                                    </li>
+                                </ul>
+                            </div>
+                        </td>
+                    }
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>
+
+@await Html.PartialAsync("~/Views/Shared/_ConfirmationModal.cshtml")
 
 <script>
     var changeAccessKeyAction = "@Html.Raw(Url.Action(nameof(AccessKeysController.ModifyAccessKey), ViewConstants.AccessKeysController))";
     $('[id^="changeAccessKey_"]').off("click").on("click",
         function () {
-            let selectedKeyId = this.id.substring("changeAccessKey_".length, this.id.length);
-
-            $.ajax({
-                type: 'GET',
-                url: `${changeAccessKeyAction}?SelectedKey=${selectedKeyId}`,
-                cache: false,
-                async: true,
-                success: function (viewData) {
-                    setModalBody(viewData);
-                }
-            }).done(function () {
-                showModal();
-                showMiddleModal();
-                setModalTitle(`Edit access key '${selectedKeyId}'`);
-            });
+            const selectedKeyId = this.id.substring("changeAccessKey_".length, this.id.length);
+            const displayName = document.getElementById(`row_${selectedKeyId}`).getElementsByClassName("displayName")[0].textContent;
+            
+            changeAccessKey(changeAccessKeyAction, selectedKeyId, displayName)
         });
-
+   
     $('[id^="deleteAccessKey_"]').off("click").on("click",
         function () {
-            let selectedKeyId = this.id.substring("deleteAccessKey_".length, this.id.length);
-
-            showDeletionConfirmationModal(
-                "Removing access key",
-                `Do you really want to remove selected access key '${selectedKeyId}'?`,
-                function () {
-                    $.ajax({
-                        type: 'POST',
-                        url: getRemoveAccessKeyURL(selectedKeyId),
-                        cache: false,
-                        async: true,
-                        success: function (viewData) {
-                            $('#accessKeysTable').html(viewData);
-                        }
-                    })
-                }
-            );
+            const selectedKeyId = this.id.substring("deleteAccessKey_".length, this.id.length);
+            const displayName = document.getElementById(`row_${selectedKeyId}`).getElementsByClassName("displayName")[0].textContent;
+           
+            let url = `@Html.Raw(Url.Action(nameof(AccessKeysController.RemoveAccessKeyFromAllTable), ViewConstants.AccessKeysController))?selectedKey=${selectedKeyId}&fullTable=@Model.FullTable`;
+ 
+            deleteAccessKey(url, selectedKeyId, displayName)
         });
-
-    function getRemoveAccessKeyURL(selectedKeyId) {
-        let isAllProducts = document.getElementById('allProducts');
-
-        let url;
-        if (isAllProducts != undefined) {
-            url = `@Html.Raw(Url.Action(nameof(AccessKeysController.RemoveAccessKeyFromAllTable), ViewConstants.AccessKeysController))?SelectedKey=${selectedKeyId}&AllProducts=${isAllProducts.checked}`;
-        }
-        else {
-            url = `@Html.Raw(Url.Action(nameof(AccessKeysController.RemoveAccessKeyFromProductTable), ViewConstants.AccessKeysController))?SelectedKey=${selectedKeyId}`;
-        }
-
-        return url;
-    }
+    
+    $('[id^="blockAccessKey_"]').off("click").on("click",
+        function () {
+             const selectedKeyId = this.id.substring("blockAccessKey_".length, this.id.length);
+             const state = document.getElementById(`state_value_${selectedKeyId}`).textContent;
+          
+             let updatedState = "";
+             updatedState=state === "Block" ? '@KeyState.Blocked' : '@KeyState.Active';
+             
+             let url = `@Html.Raw(Url.Action(nameof(AccessKeysController.BlockAccessKeyFromAllTable), ViewConstants.AccessKeysController))?selectedKey=${selectedKeyId}&updatedState=${updatedState}&fullTable=@Model.FullTable`;
+            
+             blockAccessKey(url, selectedKeyId)
+        }); 
 </script>

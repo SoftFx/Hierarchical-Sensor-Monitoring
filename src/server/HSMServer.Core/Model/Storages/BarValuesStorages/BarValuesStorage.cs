@@ -1,49 +1,72 @@
-﻿using System;
+﻿using HSMServer.Core.Extensions;
+using System;
 using System.Collections.Generic;
 
 namespace HSMServer.Core.Model
 {
     public abstract class BarValuesStorage<T> : ValuesStorage<T> where T : BarBaseValue
     {
-        internal override bool HasData => LocalLastValue != default || base.HasData;
-
-        internal override BaseValue LastValue => LocalLastValue ?? base.LastValue;
-
-        internal T LocalLastValue { get; private set; }
+        private T _prevValue;
 
 
-        internal override T AddValue(T value)
+        internal override T LastDbValue => _prevValue;
+
+        internal override T LastValue => PartialLastValue ?? base.LastValue;
+
+        internal override bool HasData => PartialLastValue != default || base.HasData;
+
+
+        internal T PartialLastValue { get; private set; }
+
+
+        internal override void AddValue(T value)
         {
-            var addedValue = LocalLastValue != null && LocalLastValue.OpenTime != value.OpenTime
-                ? base.AddValue(LocalLastValue)
-                : null;
+            var canStore = PartialLastValue != null && PartialLastValue.OpenTime != value.OpenTime;
 
-            LocalLastValue = value;
+            if (canStore)
+            {
+                _prevValue = PartialLastValue;
 
-            return addedValue;
+                base.AddValue(PartialLastValue);
+            }
+
+            PartialLastValue = value;
         }
+
 
         internal override List<BaseValue> GetValues(int count)
         {
-            if (LocalLastValue != null)
-            {
-                var values = base.GetValues(count - 1);
-                values.Add(LocalLastValue);
-
-                return values;
-            }
-
-            return base.GetValues(count);
+            return PartialLastValue != null ? base.GetValues(count - 1).AddFluent(PartialLastValue)
+                                            : base.GetValues(count);
         }
 
         internal override List<BaseValue> GetValues(DateTime from, DateTime to)
         {
             var values = base.GetValues(from, to);
 
-            if (LocalLastValue != null && LocalLastValue.ReceivingTime >= from && LocalLastValue.ReceivingTime <= to)
-                values.Add(LocalLastValue);
+            if (PartialLastValue?.InRange(from, to) ?? false)
+                values.Add(PartialLastValue);
 
             return values;
+        }
+
+        internal override void Clear()
+        {
+            base.Clear();
+
+            _prevValue = null;
+            PartialLastValue = null;
+        }
+
+        internal override void Clear(DateTime to)
+        {
+            base.Clear(to);
+
+            if (_prevValue?.ReceivingTime <= to)
+                _prevValue = null;
+
+            if (PartialLastValue?.ReceivingTime <= to)
+                PartialLastValue = null;
         }
     }
 }

@@ -1,9 +1,18 @@
-﻿@model HSMServer.Model.TreeViewModels.TreeViewModel
+﻿@using HSMServer.Model.UserTreeShallowCopy
+
+@model List<BaseShallowModel>
+
 
 <ul>
-    @foreach (var (_, node) in Model.Nodes)
+    @foreach (var node in Model)
     {
-        @if (node.Parent == null && node.IsAvailableForUser && node.Count != 0)
-            @await Html.PartialAsync("_TreeNode", node)
+        @if (node is NodeShallowModel product)
+        {
+            @await Html.PartialAsync("_TreeNode", product)
+        }
+        else if (node is FolderShallowModel folder)
+        {
+            @await Html.PartialAsync("_TreeFolder", folder)
+        }
     }
 </ul>

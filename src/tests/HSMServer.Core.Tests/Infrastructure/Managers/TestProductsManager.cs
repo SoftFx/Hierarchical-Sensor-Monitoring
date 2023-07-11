@@ -7,12 +7,19 @@ namespace HSMServer.Core.Tests.Infrastructure
     {
         internal const string ProductName = "TestProduct";
 
+        internal static Guid ProductId { get; } = Guid.NewGuid();
+
+
         internal static ProductEntity TestProduct { get; } =
             new()
             {
-                Id = Guid.NewGuid().ToString(),
+                Id = ProductId.ToString(),
                 DisplayName = ProductName,
                 CreationDate = DateTime.UtcNow.Ticks,
+                State = 1 << 30,
             };
+
+        internal static AccessKeyEntity TestProductKey { get; } =
+            EntitiesFactory.BuildAccessKeyEntity(productId: TestProduct.Id);
     }
 }

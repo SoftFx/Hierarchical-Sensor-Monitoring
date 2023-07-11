@@ -1,5 +1,6 @@
 ﻿using HSMServer.Core.Cache;
-using HSMServer.Core.Cache.Entities;
+using HSMServer.Core.Cache.UpdateEntities;
+using HSMServer.Core.Model;
 using HSMServer.Core.Tests.Infrastructure;
 using HSMServer.Core.Tests.MonitoringCoreTests;
 using HSMServer.Core.Tests.MonitoringCoreTests.Fixture;
@@ -16,28 +17,24 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         private const int DefaultKeyCount = 1;
         private const int ProductAddTransactionCount = 1;
 
-        private readonly ITreeValuesCache _valuesCache;
-
         private (int add, int update, int delete) _productTransactionCount;
         private (int add, int update, int delete) _keyTransactionCount;
         private ProductModel _product;
 
-        private delegate ProductModel GetProduct(string id);
+        private delegate ProductModel GetProduct(Guid id);
         private delegate AccessKeyModel GetAccessKey(Guid id);
 
 
         public AccessKeyTests(AccessKeyFixture fixture, DatabaseRegisterFixture dbFixture)
-            : base(fixture, dbFixture, addTestProduct: true)
+            : base(fixture, dbFixture)
         {
-            _valuesCache = new TreeValuesCache(_databaseCoreManager.DatabaseCore, _userManager, _updatesQueue, _notificationCenter);
-
             _productTransactionCount = (0, 0, 0);
             _keyTransactionCount = (0, 0, 0);
 
             _valuesCache.ChangeProductEvent += EventHandler;
             _valuesCache.ChangeAccessKeyEvent += EventHandler;
 
-            _product = _valuesCache.AddProduct(RandomGenerator.GetRandomString());
+            _product = _valuesCache.AddProduct(RandomGenerator.GetRandomString(), Guid.Empty);
         }
 
 
@@ -154,22 +151,22 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             _product = null;
         }
 
-        private void EventHandler<T>(T model, TransactionType type)
+        private void EventHandler<T>(T model, ActionType type)
         {
-            static void CheckTransaction(TransactionType type,
+            static void CheckTransaction(ActionType type,
             ref (int add, int update, int delete) transactionCount)
             {
                 switch (type)
                 {
-                    case TransactionType.Add:
+                    case ActionType.Add:
                         transactionCount.add++;
                         break;
 
-                    case TransactionType.Update:
+                    case ActionType.Update:
                         transactionCount.update++;
                         break;
 
-                    case TransactionType.Delete:
+                    case ActionType.Delete:
                         transactionCount.delete++;
                         break;
                 }
@@ -206,7 +203,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             return keys;
         }
 
-        private AccessKeyModel BuildAccessKeyModel() => new(EntitiesFactory
-            .BuildAccessKeyEntity(productId: _product.Id));
+        private AccessKeyModel BuildAccessKeyModel() =>
+            new(EntitiesFactory.BuildAccessKeyEntity(productId: _product.Id.ToString()));
     }
 }

@@ -1,0 +1,24 @@
+﻿@using HSMServer.Controllers
+@using HSMServer.Model.ViewModel
+
+@model AddProductViewModel
+
+@addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
+
+
+<form id="addProduct_form" asp-action="@nameof(ProductController.CreateProduct)">
+    <div class="row">
+        <label class="col-auto col-form-label" asp-for="Name"></label>
+        <div class="col">
+            <input type='text' class='form-control' asp-for="Name" />
+            <span asp-validation-for="Name"></span>
+        </div>
+    </div>
+
+    <div class="form-group mt-3">
+        <div align="right">
+            <button class="btn btn-secondary col-2" type="submit">Add</button>
+            <button class="btn btn-secondary col-2 px-2" type="button" onclick="hideAddProductModal()">Cancel</button>
+        </div>
+    </div>
+</form>

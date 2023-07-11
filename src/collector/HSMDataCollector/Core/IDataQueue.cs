@@ -1,4 +1,4 @@
-﻿using HSMSensorDataObjects.FullDataObject;
+﻿using HSMSensorDataObjects.SensorValueRequests;
 using System;
 using System.Collections.Generic;
 
@@ -6,13 +6,19 @@ namespace HSMDataCollector.Core
 {
     public interface IDataQueue
     {
-        event EventHandler<List<UnitedSensorValue>> SendValues;
-        event EventHandler<DateTime> QueueOverflow;
-        void ReturnData(List<UnitedSensorValue> values);
-        List<UnitedSensorValue> GetCollectedData();
-        void InitializeTimer();
+        event Action<List<SensorValueBase>> NewValuesEvent;
+        event Action<FileSensorValue> NewValueEvent;
+
+
+        void Init();
+
         void Stop();
-        void Clear();
-        bool Disposed { get; }
+
+        void Flush();
+
+
+        void Push(SensorValueBase value);
+
+        void PushFailValue(SensorValueBase value);
     }
 }

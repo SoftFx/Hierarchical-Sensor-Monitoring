@@ -1,189 +1,275 @@
 ﻿@using HSMServer.Constants
-@using HSMServer.Model.TreeViewModels
+@using HSMServer.Controllers
+@using HSMServer.Model.Authentication
+@using HSMServer.Model
+@using HSMServer.Model.ViewModel
+@using HSMServer.Model.TreeViewModel
+@using HSMServer.UserFilters
 
-@model HSMServer.Model.TreeViewModels.TreeViewModel
+@model TreeViewModel
 
 @{
-    ViewData["Title"] = "Tree";
+    var user = User as User;
+
+    ViewData["Title"] = "Home";
 }
 
 <script>
-    var updateSelectedNode = "@Html.Raw(Url.Action(ViewConstants.UpdateSelectedNodeAction, ViewConstants.HomeController))";
-    var getFileAction = "@Html.Raw(Url.Action(ViewConstants.GetFileAction, ViewConstants.HomeController))";
-    var viewFileAction = "@Html.Raw(Url.Action(ViewConstants.GetFileStreamAction, ViewConstants.HomeController))";
+    var updateSelectedNode = "@Url.Action(nameof(HomeController.UpdateSelectedNode), ViewConstants.HomeController)";
+    var getFileAction = "@Url.Action(nameof(HomeController.GetFile), ViewConstants.HomeController)";
+    var viewFileAction = "@Url.Action(nameof(HomeController.GetFileStream), ViewConstants.HomeController)";
+    var getFileInfo = "@Url.Action(nameof(HomeController.GetFileInfo), ViewConstants.HomeController)";
     var selected = "";
 
-    var selectNode = "@Html.Raw(Url.Action(ViewConstants.SelectNodeAction, ViewConstants.HomeController))";
-    var refreshTree = "@Html.Raw(Url.Action(ViewConstants.RefreshTreeAction, ViewConstants.HomeController))";
+    var selectNode = "@Url.Action(nameof(HomeController.SelectNode), ViewConstants.HomeController)";
+    var refreshTree = "@Url.Action(nameof(HomeController.RefreshTree), ViewConstants.HomeController)";
+    var getNode = "@Url.Action(nameof(HomeController.GetNode), ViewConstants.HomeController)";
+    var closeNode = "@Url.Action(nameof(HomeController.RemoveRenderingNode), ViewConstants.HomeController)";
 
-    var removeNode = "@Html.Raw(Url.Action(ViewConstants.RemoveNodeAction, ViewConstants.HomeController))";
+    var historyLatestAction = "@Url.Action(nameof(SensorHistoryController.TabelHistoryLatest), ViewConstants.HistoryController)";
+    var historyAction = "@Url.Action(nameof(SensorHistoryController.TableHistory), ViewConstants.HistoryController)";
+    var nextPageAction = "@Url.Action(nameof(SensorHistoryController.GetNextTablePage), ViewConstants.HistoryController)";
+    var prevPageAction = "@Url.Action(nameof(SensorHistoryController.GetPreviousTablePage), ViewConstants.HistoryController)";
 
-    var historyAllAction = "@Html.Raw(Url.Action(ViewConstants.HistoryAllAction, ViewConstants.HomeController))";
-    var historyAction = "@Html.Raw(Url.Action(ViewConstants.HistoryAction, ViewConstants.HomeController))";
+    var rawHistoryLatestAction = "@Url.Action(nameof(SensorHistoryController.ChartHistoryLatest), ViewConstants.HistoryController)";
+    var rawHistoryAction = "@Url.Action(nameof(SensorHistoryController.ChartHistory), ViewConstants.HistoryController)";
+    var exportHistoryAction = "@Url.Action(nameof(SensorHistoryController.ExportHistory), ViewConstants.HistoryController)";
+    var reloadRequest = "@Url.Action(nameof(SensorHistoryController.ReloadHistoryRequest), ViewConstants.HistoryController)";
 
-    var rawHistoryAction = "@Html.Raw(Url.Action(ViewConstants.RawHistoryAction, ViewConstants.HomeController))";
-    var rawHistoryAllAction = "@Html.Raw(Url.Action(ViewConstants.RawHistoryAllAction, ViewConstants.HomeController))";
+    var getNodePathAction = "@Url.Action(nameof(HomeController.GetNodePath), ViewConstants.HomeController)";
+    var editProductAction = "@Url.Action(nameof(ProductController.EditProduct), ViewConstants.ProductController)";
+    var removeNodeAction = "@Url.Action(nameof(HomeController.RemoveNode), ViewConstants.HomeController)";
+    var clearHistoryAction = "@Url.Action(nameof(HomeController.ClearHistoryNode), ViewConstants.HomeController)";
 
-    var historyLatestAction = "@Html.Raw(Url.Action(ViewConstants.HistoryLatestAction, ViewConstants.HomeController))";
-    var rawHistoryLatestAction = "@Html.Raw(Url.Action(ViewConstants.RawHistoryLatestAction, ViewConstants.HomeController))";
+    var editFolderAction = "@Url.Action(nameof(FoldersController.EditFolder), ViewConstants.FoldersController)";
 
-    var exportHistoryAction = "@Html.Raw(Url.Action(ViewConstants.ExportHistoryAction, ViewConstants.HomeController))";
-    var exportHistoryAllAction = "@Html.Raw(Url.Action(ViewConstants.ExportHistoryAllAction, ViewConstants.HomeController))";
+    var enableGrafanaAction = "@Url.Action(nameof(HomeController.EnableGrafana), ViewConstants.HomeController)";
+    var disableGrafanaAction = "@Url.Action(nameof(HomeController.DisableGrafana), ViewConstants.HomeController)";
+    var enableNotificationsAction = "@Url.Action(nameof(HomeController.EnableNotifications), ViewConstants.HomeController)";
+    var ignoreNotificationsAction = "@Url.Action(nameof(HomeController.IgnoreNotifications), ViewConstants.HomeController)";
+    var unmuteAction = "@Url.Action(nameof(HomeController.RemoveMutedStateToSensor), ViewConstants.HomeController)";
 
-    var isTimeSorting = false;
-
-    var getSensorInfoAction = "@Html.Raw(Url.Action(ViewConstants.GetSensorInfoAction, ViewConstants.HomeController))";
-    var updateSensorInfoAction = "@Html.Raw(Url.Action(ViewConstants.UpdateSensorInfoAction, ViewConstants.HomeController))";
+    var isDataValidAction = "@Url.Action(nameof(HomeController.IsMetaInfoValid), ViewConstants.HomeController)";
+    
+    var getGrid = `@Url.Action(nameof(HomeController.GetGrid))`;
+    var getList = `@Url.Action(nameof(HomeController.GetList))`;
 </script>
 
-<link rel="stylesheet" href="~/js/jstree/themes/default/style.min.css" />
-<link rel="stylesheet" href="~/css/bundles/homeBundle.min.css" />
-<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/3.5.17/d3.min.js"></script>
-
-<script src="/js/signalr/dist/browser/signalr.min.js"></script>
-<script src="~/js/bundles/homeBundle.min.js"></script>
-<script src="~/js/plotly.js/plotly.min.js"></script>
-<script src="~/js/jstree/jstree.min.js"></script>
-<script src="~/moment.js/moment.min.js"></script>
 
 <div class="modal fade" id="modalDelete" tabindex="-1" aria-labelledby="modalDeleteLabel" aria-hidden="true">
     <div class="modal-dialog modal-dialog-centered">
-        <div class="modal-content">
+        <div class="modal-content" style="display: inline-table">
             <div class="modal-header">
                 <h5 class="modal-title" id="modalDeleteLabel">Remove product</h5>
             </div>
 
-            <div id="modalDeleteBody" class="modal-body">
+            <div id="modalDeleteBody" class="modal-body text-break">
             </div>
 
             <div class="modal-footer">
-                <button id="confirmDeleteButton" type="button" class="btn btn-secondary">Ok</button>
-                <button id="closeDeleteButton" type="button" class="btn btn-secondary" data-bs-dismiss="modalDelete">Cancel</button>
-
+                <button id="confirmDeleteButton" type="button" class="btn btn-secondary col-2">OK</button>
+                <button id="closeDeleteButton" type="button" class="btn btn-secondary col-2" data-bs-dismiss="modalDelete">Cancel</button>
             </div>
         </div>
     </div>
 </div>
 
 @await Html.PartialAsync("~/Views/AccessKeys/_AccessKeysModal.cshtml")
+@await Html.PartialAsync("_AlertsModal", new EditAlertsViewModel())
+@await Html.PartialAsync("~/Views/Shared/_ConfirmationModal.cshtml")
 
+<div id="ignoreNotificatios_partial">@await Html.PartialAsync("_IgnoreNotificationsModal", (IgnoreNotificationsViewModel)null)</div>
 
+<div id="mainSpinner" class="spinner-border big_spinner text-secondary center_spinner" role="status"></div>
 
-<div id="mainContainer">
+<div id="mainContainer" class="container tree-main-container mw-100 d-inline-flex flex-nowrap hidden_element m-0 p-0">
     <div>
-        <div class="d-flex">
-            <div class="me-auto">
-                <div class="col-auto ms-2 mb-1">
-                    <div class='btn-group'>
-                        <button class='btn btn-secondary btn-sm dropdown-toggle' type='button' data-bs-toggle='dropdown'>
-                            Views
-                        </button>
-                        <ul class='dropdown-menu'>
-                            <li>
-                                <a class='dropdown-item' href='#' id="sortByName">Sort By Name <i class="fas fa-sort-alpha-down"></i></a>
-                            </li>
+        <div class="d-flex pt-3 pb-1">
+            <div class="d-flex flex-fill me-auto">
+                <button id="show" type="button" class="btn btn-sm btn-outline-primary ms-3 position-relative" style="height: 2.5rem">
+                    <i class="fa-solid fa-filter"></i>
+                    Filters
+                    @if (user?.TreeFilter.EnabledFiltersCount > 0)
+                    {
+                        <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">
+                            @(user.TreeFilter.EnabledFiltersCount)
+                        </span>
+                    }
 
-                            <li>
-                                <a class='dropdown-item' href='#' id="sortByTime">Sort By Last Update <i class="fas fa-sort-numeric-down-alt"></i></a>
-                            </li>
-                        </ul>
-                    </div>
+                </button>
+                <div class="mx-3 my-2">
+                    <i id="currentSort" class="@(user?.TreeFilter.TreeSortType == TreeSortType.ByTime ? "fas fa-sort-numeric-down-alt" : "fas fa-sort-alpha-down")"></i>
+                </div>
+                @if (user?.TreeFilter.EnabledFiltersCount > 0)
+                {
+                    <span class="enabled-filters-message text-break">@user.TreeFilter.EnabledFiltersMessage</span>
+                }
+                <div class="flex-fill align-self-center text-end">
+                    <i id="collapseIcon" onclick="collapseTree()" class="fa-regular fa-square-minus tree-collapse-button" title="Save and close tree"></i>
                 </div>
             </div>
+        </div>
+        <div class="d-flex justify-content-center tree-wrapper reserved-scroll-y overflow-y-auto">
+            <div class="d-flex me-auto">
+                <div class="ms-2 mb-1"> @await Html.PartialAsync("_TreeFilter.cshtml", new UserFilterViewModel(user.TreeFilter)) </div>
 
-            <div class="col-auto me-1">
-                <div id="state"></div>
-            </div>
-
-            <div class="col-auto me-3">
-                <div id="updateTime"></div>
+                <div class="row justify-content-start mw-100 me-1">
+                    <div class="tree-height-weight-parameters col-auto ms-2 pe-0">
+                        <div class="col-md-auto">
+                            <div id="jstree">@await Html.PartialAsync("_Tree", user.Tree.GetUserTree())</div>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
 
-
-
-    <div>
-        <div id="mainContainer" class="row justify-content-start mw-100">
-            <div class="scrollableBlock col-auto ms-2">
-                <div id="treeContainer">
-                    <div class="col-md-auto">
-                        <div id="jstree">@await Html.PartialAsync("_Tree", Model)</div>
-                    </div>
-                </div>
+    <div class="flex-grow-1 reserved-scroll-y overflow-y-auto">
+        <div class="d-none" id="nodeDataSpinner">
+            <div class="d-flex justify-content-center align-items-center center_relative_spinner">
+                <div class="spinner-border normal_spinner text-secondary" role="status"></div>
             </div>
-
-            <div id="listSensors" class="col-lg-8">@await Html.PartialAsync("_TreeNodeSensors", (NodeViewModel)null)</div>
         </div>
+
+        <div id="nodeDataPanel" class="hidden_element">@await Html.PartialAsync("_NodeDataPanel", (NodeViewModel)null)</div>
     </div>
 </div>
-
 
 
 <script>
     initializeTree();
     initialize();
 
-    $("#state").empty();
-    $("#state").append("<span style='color: green' value='Connection successful'><i class='fas fa-wifi'></i></span>");
+    $(document).ready(() => {
+        $('#updateTime').empty().append('Update Time: ' + new Date().toUTCString());
+    })
 
-    $('#sortByName').off("click").on("click",
-        function() {
-            isTimeSorting = false;
-            initializeTree();
-            $('#jstree').jstree(true).refresh(true);
+    $(window).on('load', function () {
+        $('body').css('overflow', 'hidden');
+    })
+        .on('unload', function () {
+            $('body').css('overflow', 'auto');
         });
 
-    $('#sortByTime').off("click").on("click",
-        function() {
-            isTimeSorting = true;
-            initializeTree();
-            $('#jstree').jstree(true).refresh(true);
-        });
+    var interval = $("#treeInterval").val() * 1000;
 
-    function getSelectedNodeId(selectedNode) {
-        let selectedNodeId = "";
+    setTimeout(updateTreeTimer, interval);
+    setTimeout(updateSelectedNodeData, interval);
 
-        if (selectedNode != undefined) {
-            selectedNodeId = selectedNode.id;
-        }
 
-        return selectedNodeId;
-    }
+    $("#show").click(function () {
+        if (!$("#filter").is(":visible"))
+            $("#filter").css("display", "block");
+        else
+            $("#filter").css("display", "none");
+    });
 
-    function updateSelectedSensor(dataObject) {
+    $("#mainSpinner").css("display", "none");
+    $('#mainContainer').removeClass('hidden_element');
+
+    function updateGridCell(dataObject) {
         var id = dataObject.id;
 
-        $('#value_' + id).empty().append(dataObject.value);
-        $('#update_' + id).empty().append(dataObject.updatedTimeStr);
-
-        $('#status_' + id).removeClass('tree-icon-unknown tree-icon-ok tree-icon-warning tree-icon-error tree-icon-unknown');
-        $('#status_' + id).addClass(dataObject.statusColorClass);
-
-        $('#validation_' + id).empty();
-        if (dataObject.validationError != null && dataObject.validationError != "") {
-            $('#validation_' + id).append(`<li id='errorIcon_${id}' class='fas fa-exclamation-triangle' style='margin-right:5px' title='${dataObject.validationError}'></li>`);
-        }
+        $('#gridCell_' + id).removeClass('grid-cell-offTime grid-cell-ok grid-cell-warning grid-cell-error');
+        $('#gridCell_' + id).addClass(dataObject.gridCellColorClass);
+        $('#gridCell_' + id).prop('title', dataObject.tooltip);
     }
 
-    function updateTreeTimer() {
+    function updateNodeData(dataObject) {
+        var id = dataObject.id;
+
+        if (dataObject.sensorType !== 6)
+            $('#update_' + id).empty().append(dataObject.updatedTimeStr);
+
+        $('#status_' + id).removeClass('tree-icon-offTime tree-icon-ok tree-icon-warning tree-icon-error')
+                          .addClass(dataObject.statusIconColorClass)
+                          .prop('title', `Status: ${dataObject.status}`)
+
+        $('#metainfo_icon_status').removeClass('tree-icon-offTime tree-icon-ok tree-icon-warning tree-icon-error')
+                                  .addClass(dataObject.statusIconColorClass)
+                                  .prop('title', `Status: ${dataObject.status}`);
+        
+        $('#file_status_' + id).removeClass('tree-icon-offTime tree-icon-ok tree-icon-warning tree-icon-error')
+                               .addClass(dataObject.statusIconColorClass)
+                               .prop('title', `Status: ${dataObject.status}`)
+        
+        $('#status_name_' + id).empty().html(dataObject.status);
+
+        $("#newValuesCount").empty().html(dataObject.newValuesCount);
+        if (dataObject.newValuesCount != null && $(`#link_table_${id}`).hasClass("active")) {
+            $("#tableHistoryRefreshButton").removeClass("d-none");
+        }
+    }
+    
+    function updateGeneralInfo(selectedNodeId) {
         $.ajax({
-            type: 'POST',
-            url: refreshTree,
-            dataType: 'html',
-            contentType: 'application/json',
+            type: 'GET',
+            url: `@Url.Action(nameof(HomeController.GetGeneralInfo))?selectedId=${selectedNodeId}`,
             cache: false,
-            async: true
-        }).done(function(treeData) {
-            $('#jstree').jstree(true).settings.core.data = treeData;
-            $('#jstree').jstree(true).refresh(true);
+            async: true,
+            success: function (viewdata) {
+                $('#meta_info_general_info').empty().replaceWith(viewdata);
+            }
         });
     }
 
-    function updateSelectedSensors() {
-        var selectedNode = $('#jstree').jstree().get_selected(true)[0];
-        var selectedNodeId = getSelectedNodeId(selectedNode);
+    function updateSpecificSensorData(dataObject) {
+        var id = dataObject.id;
+        let isFile = dataObject.sensorType === 6;
 
+        $('#value_' + id).empty().append(dataObject.value);
+        $('#validation_' + id).empty();
+        $('#validation_metainfo').empty();
+
+        if (isFile) {
+            $(`#last_file_name_${id}`).empty().append(dataObject.fileNameString);
+
+            if (dataObject.comment !== null)
+                $('#validation_' + id).append(`<span class="d-flex text-break">Comment: ${dataObject.comment}</span>`);
+        }
+
+        if (dataObject.isValidationErrorVisible) {
+            $('#validation_' + id).append(`<li id='errorIcon_${id}' class='fas fa-exclamation-triangle me-1'></li>
+                                               <span>Status comment: ${dataObject.validationError}</span>`);
+            $('#validation_metainfo').append(`<div class="d-flex ms-3 text-nowrap">
+                                                       <span style="min-width: 8rem">Status comment:</span>
+                                                  </div>
+                                                  <div class="d-flex w-100">
+                                                        <span id="markdown_status_comment">${markdownToHTML(dataObject.validationError)}</span>
+                                                  </div>`);
+
+            $('#markdown_status_comment').children().last().css('margin-bottom', 0);
+        }
+
+        let accordionLoaded = $('[id^="sensorData"]');
+
+        if (accordionLoaded.length !== 0) {
+            if (isFile && dataObject.receivingTime !== null) {
+                $('#side_info_' + id).empty().append(`<span>Size: ${dataObject.size}</span>
+                                                           <span>${dataObject.receivingTime}</span>`);
+            }
+
+            if (isFile)
+                setContentPreview(id);
+        }
+    }
+
+    var refreshTreeTimeoutId;
+    var isRefreshing = false;
+    function updateTreeTimer() {
+        clearTimeout(refreshTreeTimeoutId);
+        isRefreshing = true;
+
+        $('#jstree').jstree(true).refresh(true);
+
+        isRefreshing = false;
+    }
+
+    var updateSelectedNodeDataTimeoutId;
+    function updateSelectedNodeData() {
+        clearTimeout(updateSelectedNodeDataTimeoutId);
+
+        var selectedNodeId = currentSelectedNodeId;
         if (selectedNodeId != "")
             $.ajax({
                 type: 'POST',
@@ -192,27 +278,129 @@
                 contentType: 'application/json',
                 cache: false,
                 async: true
-            }).done(function(sensorsData) {
+            }).done(function (sensorsData) {
                 var array = JSON.parse(sensorsData);
-                for (let i = 0; i < array.length; i++) {
-                    updateSelectedSensor(array[i]);
+                let displayChildrenInfo = false;
 
-                    let selectedRadio = $('input[id$=' + array[i].id + ']:checked');
-                    if (selectedRadio !== undefined) {
-                        selectedRadio.click();
+                for (let i = 0; i < array.length; i++) {
+                    let dataObject = array[i];
+
+                    updateNodeData(dataObject);
+
+                    if (dataObject.value !== null && dataObject.value !== undefined)
+                        displayChildrenInfo = true;
+                    
+                    if (dataObject.hasOwnProperty('value')) {
+                        updateSpecificSensorData(dataObject);
                     }
                 }
+                
+                let accordionName = "";
+                let dataPanel = $('#dataPanel li a.active');
+                if (dataPanel.length > 0) {
+                    if (dataPanel[0].innerText === ' Grid') {
+                        accordionName = "grid"
+                        getGridPage(`${accordionName}Sensors`)
+                        getGridPage(`${accordionName}Nodes`)
+                    }
 
-                initialize();
+                    if (dataPanel[0].innerText === ' List') {
+                        accordionName = "list";
+                        getListPage(`${accordionName}Sensors`)
+                        getListPage(`${accordionName}Nodes`)
+                    }
+                }
+                
+
+               updateGeneralInfo(selectedNodeId);
+                
+                if (displayChildrenInfo)
+                    $('#dataPanel').removeClass('d-none');
             });
 
         $('#updateTime').empty();
         $('#updateTime').append('Update Time: ' + new Date().toUTCString());
-
-        $("#state").empty();
-        $("#state").append("<span style='color: green' value='Connection successful'><i class='fas fa-wifi'></i></span>");
     }
 
-    setInterval(updateTreeTimer, 5000);
-    setInterval(updateSelectedSensors, 5000);
+    var isTreeCollapsed = false;
+    var state;
+    function collapseTree() {
+        if (!isTreeCollapsed) {
+            isTreeCollapsed = true;
+            state = $('#jstree').jstree('get_state');
+            $('#jstree').jstree('close_all');
+
+            $('#collapseIcon').removeClass('fa-regular fa-square-minus').addClass('fa-regular fa-square-plus').attr('title', 'Restore tree')
+        }
+        else {
+            isTreeCollapsed = false;
+            $('#jstree').jstree('set_state', state);
+
+            $('#collapseIcon').removeClass('fa-regular fa-square-plus').addClass('fa-regular fa-square-minus').attr('title', 'Save and close tree');
+        }
+    }
+
+    var clipboard = new ClipboardJS('[id^="copy_"]', {
+        container: document.getElementById('accessKeys_modal')
+    });
+    
+    function getGridPage(accordionId, pageNumber = -1, pageSize = -1){
+        let accordion  = $(`#grid-accordion_${accordionId}`);
+        
+        $.ajax({
+            type: 'get',
+            url: `${getGrid}?typeId=${accordionId}&currentPage=${pageNumber}&pageSize=${pageSize}`,
+            datatype: 'html',
+            contenttype: 'application/json',
+            cache: false,
+            success: function (viewData) {
+                if (viewData !== '') {
+                    let currInput = $(`#pageSize_${accordionId}`);
+                    let [wasFocused, lastValue] = getFocusAndVal(currInput);
+                    accordionId = accordion.length !== 0 ? accordionId : 'gridProducts';
+ 
+                    $(`#grid-accordion_${accordionId}`).empty().replaceWith(viewData);
+                    
+                    if (pageNumber === -1 || pageSize === -1)
+                        setPaginationFocus(accordionId, wasFocused, lastValue, $(`#pageSize_${accordionId}`))
+                }
+            }
+        });
+    }
+    
+    function getListPage(accordionId, pageNumber = -1, pageSize = -1){
+        let accordion  = $(`#list-accordion_${accordionId}`);
+        
+        $.ajax({
+            type: 'get',
+            url: `${getList}?typeId=${accordionId}&currentPage=${pageNumber}&pageSize=${pageSize}`,
+            datatype: 'html',
+            contenttype: 'application/json',
+            cache: false,
+            success: function (viewData) {
+                if (viewData !== '') {
+                    let currInput = $(`#pageSize_${accordionId}`);
+                    let [wasFocused, lastValue] = getFocusAndVal(currInput);
+                    accordionId = accordion.length !== 0 ? accordionId : 'listProducts';
+
+                    $(`#list-accordion_${accordionId}`).empty().replaceWith(viewData);
+                    
+                    if (pageNumber === -1 || pageSize === -1)
+                        setPaginationFocus(accordionId, wasFocused, lastValue, $(`#pageSize_${accordionId}`))
+                }
+            }
+        });
+    }
+    
+    function setPaginationFocus(accordionId, wasFocused, lastValue, currInput) {
+        if (wasFocused)
+           currInput.focus();
+        
+        if (lastValue !== undefined)
+           currInput.val(lastValue)
+    }
+    
+    function getFocusAndVal(input) {
+        return [input.is(':focus'), input.val()]
+    }
 </script>

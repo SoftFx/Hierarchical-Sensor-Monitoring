@@ -1,31 +1,78 @@
-﻿@using HSMServer.Constants
-@using HSMServer.HtmlHelpers
+﻿@using HSMServer.Extensions
+@using HSMServer.Model.Authentication
+@using HSMServer.Model.UserTreeShallowCopy
 
-@model HSMServer.Model.TreeViewModels.ProductNodeViewModel
+@model NodeShallowModel
 
-<li id='@Model.EncodedId' title='@Model.Name &#013;@Model.UpdateTime'
-    data-jstree='{"icon" : "fas fa-circle @ViewHelper.GetStatusHeaderColorClass(Model.Status)", "time" : "@Model.UpdateTime.ToString(ViewConstants.NodeUpdateTimeFormat)"}'>
-    @Model.GetShortName(Model.Name) (@Model.Count sensors)
+@{
+    var data = Model.Data;
 
-    @if (Model.Nodes != null)
-        @foreach (var (_, child) in Model.Nodes)
+    var showIcons = (User as User).TreeFilter.ByVisibility.Icons.Value;
+
+    var arrowIcon = Model.VisibleSubtreeSensorsCount > 0 || Model.Data.Nodes.Count > 0 ? "jstree-closed" : string.Empty;
+}
+
+
+<li class="@arrowIcon" id='@data.EncodedId' title='@data.Tooltip' data-jstree='@Model.ToJSTree()'>
+    <span class="@(Model.IsMutedState ? "muted-state-text" : "")"> @Html.Raw(data.Name.GetShortNodeName()) @Model.SensorsCountString </span>
+
+    @if (!data.IsEmpty && !Model.IsMutedState && showIcons)
+    {
+        @if (Model.IsAccountsEnable && !(Model.Parent?.IsAccountsEnable ?? false))
         {
-            @if (child.Count != 0)
-            {
-                <ul>@await Html.PartialAsync("_TreeNode", child)</ul>
-            }
+            <span>
+                <img class="tree-png-icon" src="~/dist/user.png" alt="!"/>
+            </span>
+        }
+        else if (Model.IsAccountsIgnore && !(Model.Parent?.IsAccountsIgnore ?? false))
+        {
+            <span>
+                <img class="tree-png-icon" src="~/dist/user-crossed.png" alt="!"/>
+            </span>
         }
 
-    @if (Model.VisibleSensors != null && Model.VisibleSensors.Count != 0)
+        @if (Model.IsGroupsEnable && !(Model.Parent?.IsGroupsEnable ?? false))
+        {
+            <span>
+                <img class="tree-png-icon" src="~/dist/users.png" alt="!"/>
+            </span>
+        }
+        else if (Model.IsGroupsIgnore && !(Model.Parent?.IsGroupsIgnore ?? false))
+        {
+            <span>
+                <img class="tree-png-icon" src="~/dist/users-crossed.png" alt="!"/>
+            </span>
+        }
+
+        @if (Model.IsGrafanaEnabled && !(Model.Parent?.IsGrafanaEnabled ?? false))
+        {
+            <span>
+                <img class="tree-png-icon" src="~/dist/grafana.svg" alt="!" title="Grafana"/>
+            </span>
+        }
+    }
+
+    @foreach (var child in Model.RenderedNodes)
+    {
+        <ul>@await Html.PartialAsync("_TreeNode", child)</ul>
+    }
+
+    @if (Model.RenderedSensors.Count > 0)
     {
         <ul>
-            @foreach (var sensor in Model.VisibleSensors)
+            @foreach (var sensor in Model.RenderedSensors)
             {
-                <li id='@sensor.EncodedId' title='@sensor.Name &#013;@sensor.UpdateTime'
-                    data-jstree='{"icon" : "fas fa-circle @ViewHelper.GetStatusHeaderColorClass(sensor.Status)", "time" : "@sensor.UpdateTime"}'>
-                    @Model.GetShortName(sensor.Name)
-                </li>
+                @await Html.PartialAsync("_TreeSensor", sensor)
             }
         </ul>
     }
+    @if (Model.RenderWidthDifference > 0)
+    {
+        <ul>
+            <li class="jstree-last jstree-no-icons noHover" id='disabled_@data.EncodedId' data-jstree='@BaseShallowModel.GetDisabledJSTree()'>
+                <span>... and @Model.RenderWidthDifference more</span>
+            </li>
+        </ul>
+    }
+    
 </li>

@@ -1,19 +1,16 @@
-﻿using HSMServer.Core.Model.Authentication;
-using HSMServer.Helpers;
-using HSMServer.Model.AccessKeysViewModels;
+﻿using HSMServer.Model.AccessKeysViewModels;
+using HSMServer.Model.Authentication;
 using Microsoft.AspNetCore.Mvc.Filters;
+using System;
 
 namespace HSMServer.Filters.ProductRoleFilters
 {
     public class ProductRoleFilterByKey : ProductRoleFilterBase
     {
-        protected override string ArgumentName => "key";
+        public ProductRoleFilterByKey(string argumentName, params ProductRoleEnum[] roles) : base(argumentName, roles) { }
 
 
-        public ProductRoleFilterByKey(params ProductRoleEnum[] roles) : base(roles) { }
-
-
-        protected override string GetProductId(object arg, ActionExecutingContext _) =>
-            arg is EditAccessKeyViewModel key ? SensorPathHelper.Decode(key.EncodedProductId) : null;
+        protected override Guid? GetEntityId(object arg, ActionExecutingContext _) =>
+            arg is EditAccessKeyViewModel key ? key.SelectedProductId : null;
     }
 }

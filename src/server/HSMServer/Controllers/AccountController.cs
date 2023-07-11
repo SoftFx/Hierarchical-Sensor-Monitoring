@@ -1,18 +1,14 @@
 ﻿using HSMCommon;
-using HSMCommon.Constants;
 using HSMServer.Attributes;
+using HSMServer.Authentication;
 using HSMServer.Constants;
-using HSMServer.Core.Authentication;
-using HSMServer.Core.Configuration;
-using HSMServer.Core.Encryption;
-using HSMServer.Core.Model.Authentication;
-using HSMServer.Core.Notifications;
-using HSMServer.Core.Registration;
+using HSMServer.Encryption;
 using HSMServer.Filters;
-using HSMServer.Model;
-using HSMServer.Model.TreeViewModels;
+using HSMServer.Model.Authentication;
+using HSMServer.Model.TreeViewModel;
 using HSMServer.Model.Validators;
 using HSMServer.Model.ViewModel;
+using HSMServer.Registration;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authorization;
@@ -22,6 +18,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Security.Claims;
 using System.Threading.Tasks;
+using HSMServer.Extensions;
 
 namespace HSMServer.Controllers
 {
@@ -30,21 +27,15 @@ namespace HSMServer.Controllers
     public class AccountController : Controller
     {
         private readonly IUserManager _userManager;
-        private readonly IConfigurationProvider _configurationProvider;
         private readonly IRegistrationTicketManager _ticketManager;
         private readonly TreeViewModel _treeViewModel;
 
-        private readonly TelegramBot _telegramBot;
 
-        public AccountController(IUserManager userManager, IConfigurationProvider configurationProvider,
-            IRegistrationTicketManager ticketManager, INotificationsCenter notificationsCenter, TreeViewModel treeViewModel)
+        public AccountController(IUserManager userManager, IRegistrationTicketManager ticketManager, TreeViewModel treeViewModel)
         {
             _userManager = userManager;
-            _configurationProvider = configurationProvider;
             _ticketManager = ticketManager;
             _treeViewModel = treeViewModel;
-
-            _telegramBot = notificationsCenter.TelegramBot;
         }
 
         #region Login
@@ -62,7 +53,7 @@ namespace HSMServer.Controllers
         //[ValidateAntiForgeryToken]
         public async Task<IActionResult> Authenticate([FromForm] LoginViewModel model)
         {
-            LoginValidator validator = new LoginValidator(_userManager);
+            LoginValidator validator = new(_userManager);
             var results = validator.Validate(model);
             if (!results.IsValid)
             {
@@ -89,11 +80,12 @@ namespace HSMServer.Controllers
 
             if (!string.IsNullOrEmpty(cipher) && !string.IsNullOrEmpty(tag) && !string.IsNullOrEmpty(nonce))
             {
-                var key = _configurationProvider.ReadConfigurationObject(ConfigurationConstants.AesEncryptionKey);
-                byte[] keyBytes = AESCypher.ToBytes(key.Value);
+                // var key = _configurationProvider.ReadConfigurationObject(ConfigurationConstants.AesEncryptionKey);
+                var key = "sadasda";
+                byte[] keyBytes = AESCypher.ToBytes(key);
 
                 var result = AESCypher.Decrypt(cipher.Replace(' ', '+'), nonce.Replace(' ', '+'), tag.Replace(' ', '+'), keyBytes);
-                var ticketId = Guid.Parse(result);
+                var ticketId = result.ToGuid();
                 var ticket = _ticketManager.GetTicket(ticketId);
                 if (ticket == null)
                 {
@@ -123,7 +115,7 @@ namespace HSMServer.Controllers
         [Consumes("application/x-www-form-urlencoded")]
         public async Task<IActionResult> Registrate([FromForm] RegistrationViewModel model)
         {
-            RegistrationValidator validator = new RegistrationValidator(_userManager);
+            RegistrationValidator validator = new(_userManager);
             var results = validator.Validate(model);
             if (!results.IsValid)
             {
@@ -131,20 +123,20 @@ namespace HSMServer.Controllers
                 return View("Registration", model);
             }
 
-            List<KeyValuePair<string, ProductRoleEnum>> products = null;
+            List<(Guid, ProductRoleEnum)> products = null;
             if (!string.IsNullOrEmpty(model.ProductKey) && !string.IsNullOrEmpty(model.Role))
             {
-                products = new List<KeyValuePair<string, ProductRoleEnum>>()
-                    { new KeyValuePair<string, ProductRoleEnum>(model.ProductKey,
-                    (ProductRoleEnum)int.Parse(model.Role))};
+                products = new List<(Guid, ProductRoleEnum)>()
+                {
+                    (model.ProductKey.ToGuid(), (ProductRoleEnum)int.Parse(model.Role))
+                };
             }
 
-            _userManager.AddUser(model.Username, null, null,
-                HashComputer.ComputePasswordHash(model.Password), false, products);
+            await _userManager.AddUser(model.Username, HashComputer.ComputePasswordHash(model.Password), false, products);
             await Authenticate(model.Username, true);
 
             if (!string.IsNullOrEmpty(model.TicketId))
-                _ticketManager.RemoveTicket(Guid.Parse(model.TicketId));
+                _ticketManager.RemoveTicket(model.TicketId.ToGuid());
 
             return RedirectToAction("Index", "Home");
         }
@@ -153,46 +145,50 @@ namespace HSMServer.Controllers
 
         #region Users
 
-        [AuthorizeIsAdmin(true)]
+        [AuthorizeIsAdmin]
         public IActionResult Users()
         {
             // TODO: use ViewComponent and remove using TempData for passing products
             TempData[TextConstants.TempDataProductsText] =
                 _treeViewModel.Nodes.Values.ToDictionary(product => product.Id, product => product.Name);
 
-            var users = _userManager.GetUsers().OrderBy(x => x.UserName);
+            var users = _userManager.GetUsers().OrderBy(x => x.Name);
             return View(users.Select(x => new UserViewModel(x)).ToList());
         }
 
-        public void RemoveUser([FromQuery(Name = "Username")] string username)
+        [HttpPost]
+        public Task RemoveUser([FromBody] UserViewModel model)
         {
-            _userManager.RemoveUser(username);
+            return _userManager.RemoveUser(model.Username);
         }
 
         [HttpPost]
-        public void CreateUser([FromBody] UserViewModel model)
+        public async Task CreateUser([FromBody] UserViewModel model)
         {
-            UserValidator validator = new UserValidator(_userManager);
+            NewUserValidator validator = new(_userManager);
             var results = validator.Validate(model);
+
             if (!results.IsValid)
                 TempData[TextConstants.TempDataErrorText] = ValidatorHelper.GetErrorString(results.Errors);
-
             else
-                _userManager.AddUser(model.Username, string.Empty, string.Empty,
-                HashComputer.ComputePasswordHash(model.Password), model.IsAdmin);
+                await _userManager.AddUser(model.Username.Trim(), HashComputer.ComputePasswordHash(model.Password), model.IsAdmin);
         }
 
         [HttpPost]
-        public void UpdateUser([FromBody] UserViewModel userViewModel)
+        public Task UpdateUser([FromBody] UserViewModel userViewModel)
         {
-            var currentUser = _userManager.GetUserByUserName(userViewModel.Username);
-            userViewModel.Password = currentUser.Password;
-            userViewModel.UserId = currentUser.Id.ToString();
+            if (_userManager.TryGetIdByName(userViewModel.Username, out var userId))
+            {
+                var updateUser = new UserUpdate
+                {
+                    Id = userId,
+                    IsAdmin = userViewModel.IsAdmin,
+                };
 
-            User user = GetModelFromViewModel(userViewModel);
-            user.ProductsRoles = currentUser.ProductsRoles;
+                return _userManager.TryUpdate(updateUser);
+            }
 
-            _userManager.UpdateUser(user);
+            return Task.CompletedTask;
         }
 
         #endregion
@@ -206,63 +202,14 @@ namespace HSMServer.Controllers
         }
 
 
-        [HttpGet]
-        public IActionResult Settings()
-        {
-            return View(new TelegramSettingsViewModel((HttpContext.User as User).Notifications.Telegram));
-        }
-
-        [HttpPost]
-        public IActionResult UpdateTelegramSettings(TelegramSettingsViewModel telegramSettings)
-        {
-            var user = _userManager.GetCopyUser((HttpContext.User as User).Id);
-            user.Notifications.Telegram.Update(telegramSettings.GetUpdateModel());
-
-            _userManager.UpdateUser(user);
-
-            return RedirectToAction(nameof(Settings));
-        }
-
-        public RedirectResult OpenInvitationLink() =>
-            Redirect(_telegramBot.GetInvitationLink(HttpContext.User as User));
-
-        public IActionResult SendTestTelegramMessage()
-        {
-            _telegramBot.SendTestMessage(HttpContext.User as User);
-
-            return RedirectToAction(nameof(Settings));
-        }
-
-        public IActionResult RemoveTelegramAuthorization()
-        {
-            _telegramBot.RemoveAuthorizedUser(HttpContext.User as User);
-
-            return RedirectToAction(nameof(Settings));
-        }
-
-
-        private async Task Authenticate(string login, bool keepLoggedIn)
+        private Task Authenticate(string login, bool keepLoggedIn)
         {
             var claims = new List<Claim> { new Claim(ClaimsIdentity.DefaultNameClaimType, login) };
-            ClaimsIdentity id = new ClaimsIdentity(claims, "ApplicationCookie",
+            ClaimsIdentity id = new(claims, "ApplicationCookie",
                 ClaimsIdentity.DefaultNameClaimType, ClaimsIdentity.DefaultRoleClaimType);
 
-            AuthenticationProperties properties = new AuthenticationProperties();
-            properties.IsPersistent = keepLoggedIn;
-            await HttpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, new ClaimsPrincipal(id),
-                properties);
-
-        }
-
-        private User GetModelFromViewModel(UserViewModel userViewModel)
-        {
-            User user = new User(userViewModel.Username)
-            {
-                Password = userViewModel.Password,
-                IsAdmin = userViewModel.IsAdmin
-            };
-            user.Id = Guid.Parse(userViewModel.UserId);
-            return user;
+            AuthenticationProperties properties = new() { IsPersistent = keepLoggedIn };
+            return HttpContext.SignInAsync(CookieAuthenticationDefaults.AuthenticationScheme, new ClaimsPrincipal(id), properties);
         }
     }
 }

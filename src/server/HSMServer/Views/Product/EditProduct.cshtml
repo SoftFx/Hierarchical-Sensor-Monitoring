@@ -1,18 +1,27 @@
 ﻿@using HSMServer.Model.ViewModel
 @using HSMServer.Constants
 @using HSMServer.Controllers
-@using HSMServer.HtmlHelpers
+@using HSMServer.Model.Authentication
+@using HSMServer.Model.AccessKeysViewModels
+@using Microsoft.AspNetCore.Mvc.TagHelpers
+@using HSMServer.Notification.Settings;
+
 @model EditProductViewModel
 
-@{ ViewData["Title"] = "Product " + Model.ProductName; }
+@addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
 
-<script src="~/js/clipboard.js/clipboard.min.js"></script>
+@{
+    ViewData["Title"] = $"Product {Model.ProductName}";
+}
 
 <script>
     var addUserRight = "@Html.Raw(Url.Action(ViewConstants.AddUserRightAction, ViewConstants.ProductController))";
     var editUserRole = "@Html.Raw(Url.Action(ViewConstants.EditUserRoleAction, ViewConstants.ProductController))";
     var deleteUserRole = "@Html.Raw(Url.Action(ViewConstants.RemoveUserRoleAction, ViewConstants.ProductController))";
     var invite = "@Html.Raw(Url.Action(ViewConstants.InviteAction, ViewConstants.ProductController))";
+
+    var changeInheritance = "@Url.Action(nameof(NotificationsController.ChangeInheritance), ViewConstants.NotificationsController)"
+    var changeAutoSubscription = "@Url.Action(nameof(NotificationsController.ChangeAutoSubscription), ViewConstants.NotificationsController)"
 </script>
 
 <div class="modal fade" id="modalDelete" tabindex="-1" aria-labelledby="modalDeleteLabel" aria-hidden="true">
@@ -22,7 +31,7 @@
                 <h5 class="modal-title" id="modalDeleteLabel">Remove user right</h5>
             </div>
 
-            <div id="modalDeleteBody" class="modal-body">
+            <div id="modalDeleteBody" class="modal-body text-break">
 
             </div>
 
@@ -34,66 +43,191 @@
     </div>
 </div>
 
-<input id="productKey" value="@Model.ProductId" style="display: none" />
-<input id="encodedProductId" value="@Model.EncodedProductId" style="display: none" />
+<input id="productKey" value="@Model.ProductId" style="display: none"/>
+<input id="encodedProductId" value="@Model.EncodedProductId" style="display: none"/>
 
-<div class="container row justify-content-center">
-    <div style="margin: 10px">
-        <div class="row justify-content-start">
-            <h5 style="margin: 10px 20px 10px">Invite Member</h5><br>
-            <div style="margin-left: 0px">You can invite a new member to manage '@Model.ProductName'. Link is valid for 30 minutes.</div>
-
-
-            <div class="mb-3">
-                <label for="email" class="form-label">Email address</label>
-                <input style="width: 300px" type="email" class="form-control" id="email" placeholder="name@example.com">
+<div class="container">
+    <div class="row justify-content-center">
+        <h4 class="my-3 text-break">Edit product '@Model.ProductName'</h4>
+    
+        @*<div style="margin: 10px">
+                <div class="row justify-content-start">
+                    <h5 style="margin: 10px 20px 10px">Invite Member</h5><br>
+                    <div style="margin-left: 0px">You can invite a new member to manage '@Model.ProductName'. Link is valid for 30 minutes.</div>
+    
+    
+                    <div class="mb-3">
+                        <label for="email" class="form-label">Email address</label>
+                        <input style="width: 300px" type="email" class="form-control" id="email" placeholder="name@example.com">
+                    </div>
+    
+                    <div class="mb-3">
+                        <label for="productRole" class="form-label">Choose a role permission</label>
+                        @ViewHelper.CreateProductRoleSelect()
+                    </div>
+    
+                    <span id="new_invite_span" style="display: none"></span>
+    
+                    <div class="mb-3">
+                        <button style="width: 100px" id="inviteButton" type="submit" class="btn btn-secondary">
+                            <i class="fas fa-envelope"></i> Invite
+                        </button>
+                    </div>
+                </div>
+            </div>*@
+    
+        <div class="my-1">
+            <div>
+                <div class='row justify-content-start'>
+                    <h5 class='mt-1'>Members</h5>
+                </div>
             </div>
-
-            <div class="mb-3">
-                <label for="productRole" class="form-label">Choose a role permission</label>
-                @ViewHelper.CreateProductRoleSelect()
+            <div class='col-xxl'>
+                <table class='table table-striped'>
+                    <thead>
+                    <tr>
+                        <th scope='col'>#</th>
+                        <th scope='col'>Account</th>
+                        <th scope='col'>Role</th>
+                        <th scope='col'>Action</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <tr>
+                        <th>0</th>
+                        <th>
+                            @if (Model.NotAdminUsers.Count != 0)
+                            {
+                                <select class='form-select' id='createUser'>
+                                    @foreach (var user in Model.NotAdminUsers)
+                                    {
+                                        <option value='@user.UserId'>@user.Username</option>
+                                    }
+                                </select>
+                            }
+                            else
+                            {
+                                <select disabled class='form-select' id='createUser'></select>
+                            }
+                            <span class="d-none" id='new_user_span'></span>
+                        </th>
+                        <th>
+                            <select class='form-select' id='createProductRole'>
+                                @foreach (ProductRoleEnum role in Enum.GetValues<ProductRoleEnum>())
+                                {
+                                    <option value='@((int)role)'>@role</option>
+                                }
+                            </select>
+                        </th>
+                        <th>
+                            <button id='createButton' type='button' class='btn btn-secondary ms-1' title='create'>
+                                <i class='fas fa-plus'></i>
+                            </button>
+                        </th>
+                    </tr>
+                    @for(var i = 0; i < Model.UsersRights.Count; i++)
+                        {
+                            var userRight = Model.UsersRights[i];
+                            <tr>
+                                <th scope='row'>@(i + 1)</th>
+                                <td class="text-break">
+                                    @userRight.Item1.Username
+                                    <input id='userId_@userRight.Item1.Username' class="d-none" value='@userRight.Item1.UserId'/>
+                                </td>
+                                <td>
+                                    <select class='form-select' disabled id='role_@userRight.Item1.Username'>
+                                        @foreach (ProductRoleEnum role in Enum.GetValues<ProductRoleEnum>())
+                                        {
+                                            if (role == userRight.Item2)
+                                            {
+                                                <option selected value='@((int)role)'>@role</option>
+                                            }
+                                            else
+                                            {
+                                                <option value='@((int)role)'>@role</option>
+                                            }
+                                        }
+                                    </select>
+                                </td>
+                                <td class="d-inline-flex">
+                                    <button id='change_@userRight.Item1.Username'
+                                            type='button' class='btn btn-secondary ms-1' title='edit'>
+                                        <i class='fas fa-edit'></i>
+                                    </button>
+    
+                                    <button id='delete_@userRight.Item1.Username'
+                                            type='button' class='btn btn-secondary ms-1' title='delete'>
+                                        <i class='fas fa-trash-alt'></i>
+                                    </button>
+    
+                                    <button disabled id='ok_@userRight.Item1.Username'
+                                            type='button' class='btn btn-secondary ms-1' title='ok'>
+                                        <i class='fas fa-check'></i>
+                                    </button>
+    
+                                    <button disabled id='cancel_@userRight.Item1.Username'
+                                            type='button' class='btn btn-secondary ms-1' title='cancel'>
+                                        <i class='fas fa-times'></i>
+                                    </button>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
             </div>
-
-            <span id="new_invite_span" style="display: none"></span>
-
-            <div class="mb-3">
-                <button style="width: 100px" id="inviteButton" type="submit" class="btn btn-secondary">
-                    <i class="fas fa-envelope"></i> Invite
+        </div>
+    
+        <div class="my-1">
+            <div class="d-flex justify-content-between row">
+                <h5 class="col-auto mt-2">Access keys</h5>
+                <button onclick="addAccessKeyButtonClick()" class="btn btn-link col-auto py-0 mt-2">
+                     <i class="fa-solid fa-key"></i>
+                     Add key
                 </button>
             </div>
+                
+            @await Html.PartialAsync("~/Views/AccessKeys/_AllAccessKeys.cshtml",new AccessKeyTableViewModel(){Keys  = Model.AccessKeys})
         </div>
-    </div>
+    
+        <div class="my-1">
+            @{
+                ViewBag.FromParent = Model.IsNotificationsInherited;
+            }
 
-    @ViewHelper.CreateUsersRightsTable(Context.User, Model, TempData[TextConstants.TempDataNotAdminUsersText])
+            <h5 class="col-auto my-1">Telegram <i class="fab fa-telegram"></i></h5>
 
+            <div class="d-flex flex-row mb-3">
+                <h6 class="fw-bold">Messages settings</h6>
 
-    <div class="row justify-content-start">
-        <div class="row" style='margin: 20px 0px 10px;'>
-            <h5 class="col-auto">Product '@Model.ProductName' access keys</h5>
-            <button style='margin-left: 0px 5px' type='button' class='btn btn-secondary col-auto' title='add access key' onclick="addAccessKeyButtonClick()">
-                <i class='fas fa-plus'></i>
-            </button>
+                @if (Model.HasFolder)
+                {
+                    <div class="d-flex flex-row ms-2">
+                        <h6>(From parent</h6>
+                        <div class="form-check form-switch m-0 p-1">
+                            <input id="telegramInheritance" class="form-check-input m-0" type="checkbox" asp-for="IsNotificationsInherited">
+                        </div>
+                        <h6>)</h6>
+                    </div>
+                }
+            </div>
+
+            <div class="mx-4 my-2">
+                @await Html.PartialAsync("~/Views/Notifications/_MessagesSettings.cshtml", Model.Telegram)
+            </div>
+
+            <div class="d-flex flex-row mb-3">
+                <h6 class="fw-bold">Auto subscription for new sensors</h6>
+                <div class="form-check form-switch m-0 p-1">
+                    <input id="notificationsAutoSubscription" class="form-check-input m-0" type="checkbox" asp-for="NotificationsAutoSubscribe">
+                </div>
+            </div>
+
+            @await Html.PartialAsync("~/Views/Notifications/_Chats.cshtml", Model.Telegram)
         </div>
-
-        <table class="table">
-            <tr>
-                <th>Display name</th>
-                <th>Key</th>
-                <th>Permissions</th>
-                <th>Expiration</th>
-                <th>Author</th>
-                <th>State</th>
-                <th></th>
-            </tr>
-            <tbody id="accessKeysTable">
-                @await Html.PartialAsync("~/Views/AccessKeys/_AllAccessKeys.cshtml", Model.AccessKeys)
-            </tbody>
-        </table>
     </div>
 </div>
 
 @await Html.PartialAsync("~/Views/AccessKeys/_AccessKeysModal.cshtml")
-
 
 <script>
     let userErrorText = '@TempData[TextConstants.TempDataUserErrorText]';
@@ -103,18 +237,18 @@
         userErrorSpan.setAttribute("style", "display: block;color: red;font-size: large;font-weight: normal;white-space: pre-line");
     }
 
-    let inviteErrorText = '@TempData[TextConstants.TempDataInviteErrorText]';
-    if (inviteErrorText !== undefined) {
-        let inviteErrorSpan = document.getElementById('new_invite_span');
-        inviteErrorSpan.textContent = inviteErrorText;
-        inviteErrorSpan.setAttribute("style", "display: block;color: red;font-size: large;font-weight: normal;white-space: pre-line");
-    }
+    //let inviteErrorText = '@TempData[TextConstants.TempDataInviteErrorText]';
+    //if (inviteErrorText !== undefined) {
+    //    let inviteErrorSpan = document.getElementById('new_invite_span');
+    //    inviteErrorSpan.textContent = inviteErrorText;
+    //    inviteErrorSpan.setAttribute("style", "display: block;color: red;font-size: large;font-weight: normal;white-space: pre-line");
+    //}
 
     //copy buttons
     var clipboard = new ClipboardJS('[id^="copy_"]');
 </script>
 
-<script>
+@*<script>
     function createInviteData(productKey, email, dateTime, productRole) {
         return {
             "ProductKey": productKey,
@@ -144,11 +278,11 @@
             }
         });
     });
-</script>
+</script>*@
 
 <script>
     function createUserRightData(userId, role, productKey) {
-        return { "ProductKey": productKey, "UserId": userId, "ProductRole": role }
+        return { "EntityId": productKey, "UserId": userId, "ProductRole": role }
     }
 
     //create user
@@ -184,7 +318,6 @@
         $('#modalDeleteLabel').append('Remove user right');
         $('#modalDeleteBody').empty();
         $('#modalDeleteBody').append('Do you really want to remove "' + username + '" user right?');
-
         var modal = new bootstrap.Modal(document.getElementById('modalDelete'));
         modal.show();
 
@@ -248,7 +381,6 @@
             }
         });
     });
-
 </script>
 
 
@@ -257,10 +389,43 @@
         let productId = $('#encodedProductId').val();
         let newAccessKeyURL = "@Html.Raw(Url.Action(nameof(AccessKeysController.NewAccessKey), ViewConstants.AccessKeysController))";
 
-        showNewAccessKeyModal(`${newAccessKeyURL}?Selected=${productId}&CloseModal=true`, true);
+        showNewAccessKeyModal(`${newAccessKeyURL}?selectedId=${productId}&closeModal=true`, true);
     }
 
     $('#accessKeys_modal').on('hidden.bs.modal', function(e) {
         document.location.reload();
+    });
+</script>
+
+
+<script>
+    $("#telegramInheritance").change(function () {
+        let productId = $('#encodedProductId').val();
+
+        $.ajax({
+            type: 'POST',
+            url: `${changeInheritance}?productId=${productId}&fromParent=${this.checked}`,
+            datatype: 'html',
+            contenttype: 'application/json',
+            cache: false,
+            success: function () {
+                document.location.reload();
+            }
+        });
+    });
+
+    $("#notificationsAutoSubscription").change(function () {
+        let productId = $('#encodedProductId').val();
+
+        $.ajax({
+            type: 'POST',
+            url: `${changeAutoSubscription}?productId=${productId}&autoSubscription=${this.checked}`,
+            datatype: 'html',
+            contenttype: 'application/json',
+            cache: false,
+            success: function () {
+                document.location.reload();
+            }
+        });
     });
 </script>

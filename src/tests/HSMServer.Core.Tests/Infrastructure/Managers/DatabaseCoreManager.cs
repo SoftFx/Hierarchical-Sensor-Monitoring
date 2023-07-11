@@ -1,11 +1,13 @@
+using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMDatabase.DatabaseWorkCore;
 using HSMDatabase.Settings;
 using HSMServer.Core.DataLayer;
+using System;
 using System.Threading;
 
 namespace HSMServer.Core.Tests.Infrastructure
 {
-    internal class DatabaseCoreManager
+    internal sealed class DatabaseCoreManager
     {
         private static int _dbNumber;
 
@@ -25,7 +27,6 @@ namespace HSMServer.Core.Tests.Infrastructure
                 {
                     DatabaseFolder = databaseFolder,
                     EnvironmentDatabaseName = $"EnvironmentData{number}_{Thread.CurrentThread.ManagedThreadId}",
-                    MonitoringDatabaseName = $"MonitoringData{number}_{Thread.CurrentThread.ManagedThreadId}",
                     SensorValuesDatabaseName = $"SensorValues{number}_{Thread.CurrentThread.ManagedThreadId}",
                 });
         }
@@ -37,7 +38,12 @@ namespace HSMServer.Core.Tests.Infrastructure
             DatabaseCore = null;
         }
 
-        internal void AddTestProduct() =>
+        internal void AddTestProduct()
+        {
             DatabaseCore.AddProduct(TestProductsManager.TestProduct);
+            DatabaseCore.AddAccessKey(TestProductsManager.TestProductKey);
+        }
+
+        internal ProductEntity GetProduct(Guid id) => DatabaseCore.GetProduct(id.ToString());
     }
 }

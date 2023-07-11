@@ -1,175 +1,135 @@
-﻿using HSMServer.Core.Authentication;
+﻿using HSMServer.Authentication;
 using HSMServer.Core.Cache;
-using HSMServer.Core.Cache.Entities;
-using HSMServer.Core.Helpers;
+using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Model;
-using HSMServer.Core.Model.Authentication;
+using HSMServer.Folders;
 using HSMServer.Model.AccessKeysViewModels;
+using HSMServer.Model.Authentication;
+using HSMServer.Model.Folders;
+using HSMServer.Notification.Settings;
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
+using System.Linq;
 
-namespace HSMServer.Model.TreeViewModels
+namespace HSMServer.Model.TreeViewModel
 {
-    public class TreeViewModel
+    public sealed class TreeViewModel
     {
-        private readonly ITreeValuesCache _treeValuesCache;
+        private readonly IFolderManager _folderManager;
+        private readonly ITreeValuesCache _cache;
         private readonly IUserManager _userManager;
 
 
-        public ConcurrentDictionary<string, ProductNodeViewModel> Nodes { get; } = new();
+        public ConcurrentDictionary<Guid, AccessKeyViewModel> AccessKeys { get; } = new();
 
         public ConcurrentDictionary<Guid, SensorNodeViewModel> Sensors { get; } = new();
 
-        public ConcurrentDictionary<Guid, AccessKeyViewModel> AccessKeys { get; } = new();
+        public ConcurrentDictionary<Guid, ProductNodeViewModel> Nodes { get; } = new();
 
 
-        public TreeViewModel(ITreeValuesCache valuesCache, IUserManager userManager)
+        public TreeViewModel(ITreeValuesCache cache, IFolderManager folderManager, IUserManager userManager)
         {
-            _treeValuesCache = valuesCache;
-            _treeValuesCache.ChangeProductEvent += ChangeProductHandler;
-            _treeValuesCache.ChangeSensorEvent += ChangeSensorHandler;
-            _treeValuesCache.ChangeAccessKeyEvent += ChangeAccessKeyHandler;
+            _folderManager = folderManager;
+            _folderManager.ResetProductTelegramInheritance += ResetProductTelegramInheritanceHandler;
 
             _userManager = userManager;
+            _cache = cache;
 
-            BuildTree();
-        }
+            _cache.ChangeProductEvent += ChangeProductHandler;
+            _cache.ChangeSensorEvent += ChangeSensorHandler;
+            _cache.ChangeAccessKeyEvent += ChangeAccessKeyHandler;
 
+            foreach (var user in _userManager.GetUsers())
+                user.Tree.GetUserProducts += GetUserProducts;
 
-        internal void UpdateNodesCharacteristics(User user)
-        {
-            var userIsAdmin = UserRoleHelper.IsAllProductsTreeAllowed(user);
-            foreach (var (nodeId, node) in Nodes)
-                if (node.Parent == null)
-                    node.IsAvailableForUser = userIsAdmin || ProductRoleHelper.IsAvailable(nodeId, user.ProductsRoles);
+            userManager.Added += AddUserHandler;
+            userManager.Removed += RemoveUserHandler;
 
-            foreach (var (_, node) in Nodes)
-                if (node.Parent == null)
-                    node.Recursion();
-
-            UpdateAccessKeysCharacteristics(user);
-        }
-
-        internal void UpdateAccessKeysCharacteristics(User user)
-        {
-            foreach (var (_, node) in Nodes)
-                if (node.Parent == null)
-                    node.UpdateAccessKeysAvailableOperations(user.IsAdmin);
-
-            foreach (var (productId, role) in user.ProductsRoles)
-                if (role == ProductRoleEnum.ProductManager && Nodes.TryGetValue(productId, out var node))
-                    node.UpdateAccessKeysAvailableOperations(true);
-        }
-
-        private void BuildTree()
-        {
-            var products = _treeValuesCache.GetTree();
-
-            foreach (var product in products)
+            foreach (var product in _cache.GetProducts())
                 AddNewProductViewModel(product);
-
-            foreach (var product in products)
-                foreach (var (_, subProduct) in product.SubProducts)
-                    Nodes[product.Id].AddSubNode(Nodes[subProduct.Id]);
-
-            foreach (var (_, key) in AccessKeys)
-                key.UpdateNodePath();
         }
 
-        private void ChangeProductHandler(ProductModel model, TransactionType transaction)
+
+        public List<ProductNodeViewModel> GetUserProducts(User user)
         {
-            switch (transaction)
-            {
-                case TransactionType.Add:
-                    var newProduct = AddNewProductViewModel(model);
+            var products = GetRootProducts().Select(x => x.RecalculateCharacteristics());
 
-                    if (model.ParentProduct != null && Nodes.TryGetValue(model.ParentProduct.Id, out var parent))
-                        parent.AddSubNode(newProduct);
+            if (user == null || user.IsAdmin)
+                return products.ToList();
 
-                    break;
+            if (user.ProductsRoles == null || user.ProductsRoles.Count == 0)
+                return new List<ProductNodeViewModel>();
 
-                case TransactionType.Update:
-                    if (!Nodes.TryGetValue(model.Id, out var product))
-                        return;
-
-                    product.Update(model);
-                    break;
-
-                case TransactionType.Delete:
-                    Nodes.TryRemove(model.Id, out _);
-
-                    if (model.ParentProduct != null && Nodes.TryGetValue(model.ParentProduct.Id, out var parentProduct))
-                        parentProduct.Nodes.TryRemove(model.Id, out var _);
-
-                    break;
-            }
+            return products.Where(p => user.IsProductAvailable(p.Id)).ToList();
         }
 
-        private void ChangeSensorHandler(BaseSensorModel model, TransactionType transaction)
+
+        internal IEnumerable<ProductNodeViewModel> GetRootProducts() =>
+            Nodes.Where(x => x.Value.Parent is null or FolderModel).Select(x => x.Value);
+
+        internal List<Guid> GetAllNodeSensors(Guid selectedNode)
         {
-            switch (transaction)
+            var sensors = new List<Guid>(1 << 3);
+
+
+            void GetNodeSensors(Guid nodeId)
             {
-                case TransactionType.Add:
-                    if (Nodes.TryGetValue(model.ProductId, out var parent))
-                        AddNewSensorViewModel(model, parent);
+                if (!Nodes.TryGetValue(nodeId, out var node))
+                    return;
 
-                    break;
+                foreach (var (subNodeId, _) in node.Nodes)
+                    GetNodeSensors(subNodeId);
 
-                case TransactionType.Update:
-                    if (!Sensors.TryGetValue(model.Id, out var sensor))
-                        return;
-
-                    sensor.Update(model);
-                    break;
-
-                case TransactionType.Delete:
-                    Sensors.TryRemove(model.Id, out _);
-
-                    if (Nodes.TryGetValue(model.ProductId, out var parentProduct))
-                        parentProduct.Sensors.TryRemove(model.Id, out var _);
-
-                    break;
+                foreach (var (sensorId, _) in node.Sensors)
+                    sensors.Add(sensorId);
             }
+
+
+            if (Sensors.TryGetValue(selectedNode, out var sensor))
+                sensors.Add(sensor.Id);
+            else if (Nodes.TryGetValue(selectedNode, out var node))
+                GetNodeSensors(node.Id);
+            else if (_folderManager.TryGetValue(selectedNode, out var folder))
+            {
+                foreach (var productId in folder.Products.Keys)
+                    GetNodeSensors(productId);
+            }
+
+            return sensors;
         }
 
-        private void ChangeAccessKeyHandler(AccessKeyModel model, TransactionType transaction)
+        internal void UpdateProductNotificationSettings(ProductNodeViewModel product)
         {
-            switch (transaction)
+            var update = new ProductUpdate
             {
-                case TransactionType.Add:
-                    if (Nodes.TryGetValue(model.ProductId, out var parent))
-                        AddNewAccessKeyViewModel(model, parent);
+                Id = product.Id,
+                NotificationSettings = product.Notifications.ToEntity(),
+            };
 
-                    break;
-
-                case TransactionType.Update:
-                    if (!AccessKeys.TryGetValue(model.Id, out var accessKey))
-                        return;
-
-                    accessKey.Update(model);
-                    break;
-
-                case TransactionType.Delete:
-                    AccessKeys.TryRemove(model.Id, out _);
-
-                    if (Nodes.TryGetValue(model.ProductId, out var parentProduct))
-                        parentProduct.AccessKeys.TryRemove(model.Id, out var _);
-
-                    break;
-            }
+            _cache.UpdateProduct(update);
         }
+
 
         private ProductNodeViewModel AddNewProductViewModel(ProductModel product)
         {
-            var node = new ProductNodeViewModel(product);
+            TryGetParentProduct(product, out var parent);
+            TryGetParentFolder(product, out var folder);
+
+            var node = new ProductNodeViewModel(product, parent, folder);
+            if (node.Notifications.Migrated)
+                UpdateProductNotificationSettings(node);
+
+            Nodes.TryAdd(node.Id, node);
+
+            foreach (var (_, child) in product.SubProducts)
+                AddNewProductViewModel(child);
 
             foreach (var (_, sensor) in product.Sensors)
                 AddNewSensorViewModel(sensor, node);
 
             foreach (var (_, key) in product.AccessKeys)
                 AddNewAccessKeyViewModel(key, node);
-
-            Nodes.TryAdd(node.Id, node);
 
             return node;
         }
@@ -184,15 +144,117 @@ namespace HSMServer.Model.TreeViewModels
 
         private void AddNewAccessKeyViewModel(AccessKeyModel key, ProductNodeViewModel parent)
         {
-            var viewModel = new AccessKeyViewModel(key, parent, GetAccessKeyAuthorName(key));
+            var viewModel = new AccessKeyViewModel(key, parent, key.AuthorId);
 
             parent.AddAccessKey(viewModel);
             AccessKeys.TryAdd(key.Id, viewModel);
         }
 
-        private string GetAccessKeyAuthorName(AccessKeyModel key) =>
-            Guid.TryParse(key.AuthorId, out var authorId)
-                ? _userManager.GetUser(authorId)?.UserName
-                : key.AuthorId;
+
+        private void ChangeProductHandler(ProductModel model, ActionType action)
+        {
+            switch (action)
+            {
+                case ActionType.Add:
+                    AddNewProductViewModel(model);
+                    break;
+
+                case ActionType.Update:
+                    if (Nodes.TryGetValue(model.Id, out var product))
+                    {
+                        product.Update(model);
+
+                        if (product.FolderId != model.FolderId)
+                            product.UpdateFolder(_folderManager[model.FolderId]);
+                    }
+
+                    break;
+
+                case ActionType.Delete:
+                    if (Nodes.TryRemove(model.Id, out _) && model.Parent != null && Nodes.TryGetValue(model.Parent.Id, out var parentProduct))
+                        parentProduct.Nodes.TryRemove(model.Id, out var _);
+                    break;
+            }
+        }
+
+        private void ChangeSensorHandler(BaseSensorModel model, ActionType action)
+        {
+            switch (action)
+            {
+                case ActionType.Add:
+                    if (Nodes.TryGetValue(model.Parent.Id, out var parent))
+                    {
+                        AddNewSensorViewModel(model, parent);
+
+                        var root = parent.RootProduct;
+                        if (!root.Notifications.Telegram.Chats.IsEmpty && root.Notifications.AutoSubscription)
+                        {
+                            root.Notifications.Enable(model.Id);
+                            UpdateProductNotificationSettings(root);
+                        }
+                    }
+                    break;
+
+                case ActionType.Update:
+                    if (Sensors.TryGetValue(model.Id, out var sensor))
+                        sensor.Update(model);
+                    break;
+
+                case ActionType.Delete:
+                    if (Sensors.TryRemove(model.Id, out var removedSensor) && Nodes.TryGetValue(model.Parent.Id, out var parentProduct))
+                    {
+                        parentProduct.Sensors.TryRemove(model.Id, out var _);
+
+                        if (removedSensor.RootProduct.Notifications.RemoveSensor(model.Id))
+                            UpdateProductNotificationSettings(removedSensor.RootProduct);
+                    }
+                    break;
+            }
+        }
+
+        private void ChangeAccessKeyHandler(AccessKeyModel model, ActionType action)
+        {
+            switch (action)
+            {
+                case ActionType.Add:
+                    if (Nodes.TryGetValue(model.ProductId, out var parent))
+                        AddNewAccessKeyViewModel(model, parent);
+                    break;
+
+                case ActionType.Update:
+                    if (AccessKeys.TryGetValue(model.Id, out var accessKey))
+                        accessKey.Update(model);
+                    break;
+
+                case ActionType.Delete:
+                    if (AccessKeys.TryRemove(model.Id, out _) && Nodes.TryGetValue(model.ProductId, out var parentProduct))
+                        parentProduct.AccessKeys.TryRemove(model.Id, out var _);
+                    break;
+            }
+        }
+
+        private void AddUserHandler(User user) => user.Tree.GetUserProducts += GetUserProducts;
+
+        private void RemoveUserHandler(User user) => user.Tree.GetUserProducts -= GetUserProducts;
+
+        private void ResetProductTelegramInheritanceHandler(Guid productId)
+        {
+            if (Nodes.TryGetValue(productId, out var product))
+            {
+                product.Notifications.Telegram.Update(new TelegramMessagesSettingsUpdate() { Inheritance = (byte)InheritedSettings.Custom });
+
+                UpdateProductNotificationSettings(product);
+            }
+        }
+
+        private bool TryGetParentProduct(ProductModel product, out ProductNodeViewModel parent)
+        {
+            parent = default;
+
+            return product.Parent != null && Nodes.TryGetValue(product.Parent.Id, out parent);
+        }
+
+        private bool TryGetParentFolder(ProductModel product, out FolderModel parent) =>
+            _folderManager.TryGetValueById(product.FolderId, out parent);
     }
 }

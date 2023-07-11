@@ -4,7 +4,6 @@ using NLog;
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using Exception = System.Exception;
 
 namespace HSMDatabase.LevelDB
@@ -63,7 +62,7 @@ namespace HSMDatabase.LevelDB
             }
         }
 
-        public void DeleteAllStartingWith(byte[] startWithKey)
+        public void DeleteValueFromTo(byte[] from, byte[] to)
         {
             Iterator iterator = null;
 
@@ -71,12 +70,8 @@ namespace HSMDatabase.LevelDB
             {
                 iterator = _database.CreateIterator(_iteratorOptions);
 
-                for (iterator.Seek(startWithKey); iterator.IsValid && iterator.Key().StartsWith(startWithKey); iterator.Next())
+                for (iterator.Seek(from); iterator.IsValid && iterator.Key().IsSmallerOrEquals(to); iterator.Next())
                     _database.Delete(iterator.Key());
-            }
-            catch (Exception e)
-            {
-                throw new ServerDatabaseException(e.Message, e);
             }
             finally
             {
@@ -109,45 +104,17 @@ namespace HSMDatabase.LevelDB
             }
         }
 
-        public long GetSize(byte[] startWithKey)
+        public byte[] Get(byte[] key, byte[] prefix)
         {
             Iterator iterator = null;
-
-            try
-            {
-                long size = 0;
-                iterator = _database.CreateIterator();
-
-                for (iterator.Seek(startWithKey); iterator.IsValid && iterator.Key().StartsWith(startWithKey); iterator.Next())
-                {
-                    size += iterator.Value().LongLength;
-                    //TODO: possibly add startwithKey size
-                }
-
-                return size;
-            }
-            catch (Exception e)
-            {
-                throw new ServerDatabaseException(e.Message, e);
-            }
-            finally
-            {
-                iterator?.Dispose();
-            }
-        }
-
-        public Dictionary<string, byte[]> GetAllValues()
-        {
-            Iterator iterator = null;
-            var values = new Dictionary<string, byte[]>(1 << 5);
 
             try
             {
                 iterator = _database.CreateIterator(_iteratorOptions);
-                for (iterator.SeekToFirst(); iterator.IsValid; iterator.Next())
-                    values.Add(iterator.StringKey(), iterator.Value());
 
-                return values;
+                iterator.Seek(key);
+
+                return iterator.IsValid && iterator.Key().StartsWith(prefix) ? iterator.Value() : null;
             }
             catch (Exception e)
             {
@@ -159,24 +126,16 @@ namespace HSMDatabase.LevelDB
             }
         }
 
-        public List<byte[]> GetStartingWithRange(byte[] from, byte[] to, byte[] startWithKey)
+        public IEnumerable<byte[]> GetValueFromTo(byte[] from, byte[] to)
         {
             Iterator iterator = null;
-            List<byte[]> values = new(1 << 4);
 
             try
             {
                 iterator = _database.CreateIterator(_iteratorOptions);
 
                 for (iterator.Seek(from); iterator.IsValid && iterator.Key().IsSmallerOrEquals(to); iterator.Next())
-                    if (iterator.Key().StartsWith(startWithKey))
-                        values.Add(iterator.Value());
-
-                return values;
-            }
-            catch (Exception e)
-            {
-                throw new ServerDatabaseException(e.Message, e);
+                    yield return iterator.Value();
             }
             finally
             {
@@ -184,28 +143,29 @@ namespace HSMDatabase.LevelDB
             }
         }
 
-        public List<byte[]> GetStartingWithTo(byte[] to, byte[] startWithKey, int count)
+        public IEnumerable<byte[]> GetValueToFrom(byte[] from, byte[] to)
         {
             Iterator iterator = null;
-            var values = new List<byte[]>(count);
 
             try
             {
                 iterator = _database.CreateIterator(_iteratorOptions);
 
-                for (iterator.Seek(startWithKey); iterator.IsValid && iterator.Key().StartsWith(startWithKey); iterator.Next())
+                iterator.Seek(to);
+
+                if (!iterator.IsValid)
+                    iterator.SeekToLast();
+
+                while (iterator.IsValid && iterator.Key().IsGreater(to))
                 {
-                    if (iterator.Key().IsSmallerOrEquals(to))
-                        values.Add(iterator.Value());
+                    iterator.Prev();
+
+                    if (!iterator.IsValid || iterator.Key().IsSmaller(from))
+                        yield break;
                 }
 
-                values.Reverse(); // from newest to oldest
-
-                return values.Take(count).ToList();
-            }
-            catch (Exception e)
-            {
-                throw new ServerDatabaseException(e.Message, e);
+                for (; iterator.IsValid && iterator.Key().IsGreaterOrEquals(from); iterator.Prev())
+                    yield return iterator.Value();
             }
             finally
             {
@@ -237,7 +197,7 @@ namespace HSMDatabase.LevelDB
             }
         }
 
-        public void FillLatestValues(Dictionary<byte[], (Guid sensorId, byte[] latestValue)> keyValuePairs)
+        public void FillLatestValues(Dictionary<byte[], (long from, byte[] latestValue)> keyValuePairs, long endBase)
         {
             Iterator iterator = null;
 
@@ -247,10 +207,10 @@ namespace HSMDatabase.LevelDB
 
                 foreach (var (key, value) in keyValuePairs)
                 {
-                    if (value.latestValue == null)
+                    if (value.latestValue == null && endBase >= value.from)
                     {
                         for (iterator.Seek(key); iterator.IsValid && iterator.Key().StartsWith(key); iterator.Next())
-                            keyValuePairs[key] = (value.sensorId, iterator.Value());
+                            keyValuePairs[key] = (value.from, iterator.Value());
                     }
                 }
             }

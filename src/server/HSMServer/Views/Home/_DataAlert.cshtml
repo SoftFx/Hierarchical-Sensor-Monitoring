@@ -1,0 +1,85 @@
+﻿@using HSMServer.Model.DataAlerts
+@using HSMServer.Extensions
+@using HSMCommon.Extensions
+@using HSMServer.Controllers
+
+@model DataAlertViewModelBase
+
+@addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
+
+
+<div class="dataAlertRow">
+    <input class="d-none" asp-for="Id" value="@Model.Id" />
+    <input class="d-none" asp-for="EntityId" value="@Model.EntityId" />
+
+    <div id="dataAlertLabel_@Model.Id" class="ms-3 @(Model.IsModify ? "d-none" : string.Empty)">
+        If <b>@Model.Property @Model.Operation.GetDisplayName() @Model.Value</b> then send ↕️ with message <i>@Model.DisplayComment</i>
+    </div>
+
+    <div id="dataAlertInputGroupd_@Model.Id" class="input-group mb-1 @(!Model.IsModify ? "d-none" : string.Empty)">
+        <label class="input-group-text">If</label>
+        <select class="form-select" asp-for="Property" asp-items="@Model.PropertiesItems"></select>
+        <select class="form-select" asp-for="Operation" asp-items="@Model.ActionsItems"></select>
+        <input type="text" class="form-control" placeholder="value" asp-for="Value" value="@Model.Value" required>
+
+        <label class="input-group-text">then send</label>
+@*        <select class="form-select" asp-for="Status" asp-items="@Model.StatusesItems"></select>
+
+        <label class="input-group-text">with</label>*@
+        <input type="text" class="form-control w-50" placeholder="custom comment" asp-for="Comment" value="@Model.Comment" required>
+
+        <button id="actionButton" class="btn" data-bs-toggle="dropdown" data-bs-auto-close="true" aria-haspopup="true" aria-expanded="false">
+            <i class="fa-solid fa-ellipsis-vertical button-link"></i>
+        </button>
+        <div class="dropdown-menu dropdown-menu-end" aria-labelledby="actionButton">
+            <a class="dropdown-item text-decoration-none fw-normal button-link sendMessage">Send test message</a>
+            <a class="dropdown-item text-decoration-none fw-normal button-link deleteRow">Remove</a>
+        </div>
+    </div>
+</div>
+
+
+<script>
+    $(document).ready(function () {
+        $("a.deleteRow").off("click").on("click", function () {
+            $(this).parents("div.dataAlertRow:first").remove();
+        });
+    });
+
+    $(document).ready(function () {
+        $("a.sendMessage").off("click").on("click", function () {
+            var element = $(this).parents("div.dataAlertRow:first");
+
+            if (!tryValidate(element, "input", "Value") || !tryValidate(element, "input", "Comment")) {
+                return;
+            }
+
+            var form = new FormData();
+            appendProperty(form, element, "select", "Property");
+            appendProperty(form, element, "select", "Operation");
+            //appendProperty(form, element, "select", "Status");
+            appendProperty(form, element, "input", "Comment");
+            appendProperty(form, element, "input", "Value");
+            appendProperty(form, element, "input", "EntityId");
+
+            $.ajax({
+                url: '@Url.Action(nameof(HomeController.SendTestMessage))',
+                type: 'POST',
+                data: form,
+                processData: false,
+                contentType: false,
+                async: true
+            });
+        });
+    });
+
+    function appendProperty(form, element, propertyElement, propertyName) {
+        form.append(`alert.${propertyName}`, element.find($(`${propertyElement}[name='${propertyName}']`)).val());
+    }
+
+    function tryValidate(element, propertyElement, propertyName) {
+        var input = element.find($(`${propertyElement}[name='${propertyName}']`));
+        
+        return input[0].reportValidity();
+    }
+</script>

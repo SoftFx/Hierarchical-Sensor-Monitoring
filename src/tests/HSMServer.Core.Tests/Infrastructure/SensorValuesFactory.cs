@@ -16,6 +16,8 @@ namespace HSMServer.Core.Tests.Infrastructure
                 SensorType.IntegerBar => BuildIntegerBarValue(),
                 SensorType.DoubleBar => BuildDoubleBarValue(),
                 SensorType.File => BuildFileValue(),
+                SensorType.TimeSpan => BuildTimeSpanValue(),
+                SensorType.Version => BuildVersionValue(),
                 _ => null,
             };
 
@@ -54,6 +56,24 @@ namespace HSMServer.Core.Tests.Infrastructure
                 Status = SensorStatus.Ok,
                 Value = RandomGenerator.GetRandomString(),
             };
+        
+        internal static TimeSpanValue BuildTimeSpanValue() =>
+            new()
+            {
+                Comment = RandomGenerator.GetRandomString(),
+                Time = DateTime.UtcNow,
+                Status = SensorStatus.Ok,
+                Value = RandomGenerator.GetRandomTimeSpan(),
+            };
+
+        internal static VersionValue BuildVersionValue() =>
+            new()
+            {
+                Comment = RandomGenerator.GetRandomString(),
+                Time = DateTime.UtcNow,
+                Status = SensorStatus.Ok,
+                Value = new Version(RandomGenerator.GetRandomInt(positive: true), RandomGenerator.GetRandomInt(positive: true)),
+            };
 
         internal static IntegerBarValue BuildIntegerBarValue() =>
             new()
@@ -84,7 +104,7 @@ namespace HSMServer.Core.Tests.Infrastructure
                 Max = RandomGenerator.GetRandomDouble(),
                 Mean = RandomGenerator.GetRandomDouble(),
                 LastValue = RandomGenerator.GetRandomDouble(),
-                Percentiles = GetPercentileValues(() => RandomGenerator.GetRandomDouble()),
+                Percentiles = GetPercentileValues(RandomGenerator.GetRandomDouble),
             };
 
         internal static FileValue BuildFileValue()

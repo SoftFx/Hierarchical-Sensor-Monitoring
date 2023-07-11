@@ -1,0 +1,12 @@
+﻿@using HSMServer.Model.Folders
+@using HSMServer.Model.Folders.ViewModels
+@using HSMServer.Model.Authentication
+
+@model FolderModel
+
+@addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
+
+
+@await Html.PartialAsync("_MetaInfo", new FolderInfoViewModel(Model))
+
+@await Html.PartialAsync("_ChildrenPanel", (User as User).SelectedNode)

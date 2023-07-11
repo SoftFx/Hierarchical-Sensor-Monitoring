@@ -6,6 +6,17 @@ namespace HSMDatabase.AccessManager
 {
     public interface IEnvironmentDatabase : IDisposable
     {
+        #region Folders
+
+        void PutFolder(FolderEntity entity);
+        void RemoveFolder(string id);
+        void AddFolderToList(string id);
+        void RemoveFolderFromList(string id);
+        FolderEntity GetFolder(string id);
+        List<string> GetFoldersList();
+
+        #endregion
+
         #region Products
 
         void AddProductToList(string productName);
@@ -39,7 +50,7 @@ namespace HSMDatabase.AccessManager
 
         #endregion
 
-        #region
+        #region Policy
 
         void AddPolicyIdToList(string policyId);
         void RemovePolicyFromList(string policyId);
@@ -59,14 +70,6 @@ namespace HSMDatabase.AccessManager
 
         #endregion
 
-        #region Configuration
-
-        ConfigurationEntity ReadConfigurationObject(string name);
-        void WriteConfigurationObject(ConfigurationEntity obj);
-        void RemoveConfigurationObject(string name);
-
-        #endregion
-
         #region Registration Ticket
 
         RegisterTicketEntity ReadRegistrationTicket(Guid id);
@@ -74,8 +77,5 @@ namespace HSMDatabase.AccessManager
         void WriteRegistrationTicket(RegisterTicketEntity ticket);
 
         #endregion
-
-        List<string> GetMonitoringDatabases();
-        void RemoveMonitoringDatabaseFromList(string folderName);
     }
 }

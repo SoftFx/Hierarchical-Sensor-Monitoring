@@ -1,14 +1,15 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Core.DataLayer;
-using HSMServer.Core.Model;
-using HSMServer.Core.Model.Authentication;
+using HSMServer.Core.Registration;
 using HSMServer.Core.Tests.DatabaseTests;
 using HSMServer.Core.Tests.DatabaseTests.Fixture;
 using HSMServer.Core.Tests.Infrastructure;
 using HSMServer.Core.Tests.MonitoringCoreTests.Fixture;
+using HSMServer.Model.Authentication;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using HSMServer.Extensions;
 using Xunit;
 
 namespace HSMServer.Core.Tests
@@ -31,7 +32,7 @@ namespace HSMServer.Core.Tests
         [Trait("Category", "OneProduct")]
         public void AddProductTest()
         {
-            var product = EntitiesFactory.BuildProduct();
+            var product = EntitiesFactory.BuildProductEntity();
             _databaseCore.AddProduct(product);
 
             FullProductTest(product, _databaseCore.GetProduct(product.Id));
@@ -49,7 +50,7 @@ namespace HSMServer.Core.Tests
         {
             for (int i = 0; i < count; i++)
             {
-                var product = EntitiesFactory.BuildProduct();
+                var product = EntitiesFactory.BuildProductEntity();
                 _databaseCore.AddProduct(product);
 
                 FullProductTest(product, _databaseCore.GetProduct(product.Id));
@@ -60,7 +61,7 @@ namespace HSMServer.Core.Tests
         [Trait("Category", "OneProductRemove")]
         public void RemoveProductTest()
         {
-            var product = EntitiesFactory.BuildProduct();
+            var product = EntitiesFactory.BuildProductEntity();
 
             _databaseCore.AddProduct(product);
             Assert.NotNull(_databaseCore.GetProduct(product.Id));
@@ -81,7 +82,7 @@ namespace HSMServer.Core.Tests
         {
             for (int i = 0; i < count; i++)
             {
-                var product = EntitiesFactory.BuildProduct();
+                var product = EntitiesFactory.BuildProductEntity();
 
                 _databaseCore.AddProduct(product);
                 Assert.NotNull(_databaseCore.GetProduct(product.Id));
@@ -110,7 +111,7 @@ namespace HSMServer.Core.Tests
             {
                 var key = AddKey(_databaseCore.AddAccessKey);
 
-                FullKeyTest(key, _databaseCore.GetAccessKey(Guid.Parse(key.Id)));
+                FullKeyTest(key, _databaseCore.GetAccessKey(key.Id.ToGuid()));
             }
         }
 
@@ -128,7 +129,7 @@ namespace HSMServer.Core.Tests
             for (int i = 0; i < count; i++)
             {
                 var key = AddKey(_databaseCore.AddAccessKey);
-                var id = Guid.Parse(key.Id);
+                var id = key.Id.ToGuid();
 
                 Assert.NotNull(_databaseCore.GetAccessKey(id));
 
@@ -155,7 +156,7 @@ namespace HSMServer.Core.Tests
                 var updated = EntitiesFactory.BuildAccessKeyEntity(id: key.Id);
                 _databaseCore.UpdateAccessKey(updated);
 
-                FullKeyTest(updated, _databaseCore.GetAccessKey(Guid.Parse(key.Id)));
+                FullKeyTest(updated, _databaseCore.GetAccessKey(key.Id.ToGuid()));
             }
         }
 
@@ -258,11 +259,10 @@ namespace HSMServer.Core.Tests
         public void AddProductRoleTest()
         {
             var user = EntitiesFactory.BuildUser();
-            var product = EntitiesFactory.BuildProduct();
+            var product = EntitiesFactory.BuildProductEntity();
 
             _databaseCore.AddUser(user);
-            user.ProductsRoles.Add(new KeyValuePair<string, ProductRoleEnum>(product.Id,
-                ProductRoleEnum.ProductManager));
+            user.ProductsRoles.Add(new KeyValuePair<string, byte>(product.Id, (byte)ProductRoleEnum.ProductManager));
             _databaseCore.UpdateUser(user);
 
             FullUserTest(user, GetUser(user.UserName));
@@ -283,10 +283,10 @@ namespace HSMServer.Core.Tests
 
             for (int i = 0; i < count; i++)
             {
-                var product = EntitiesFactory.BuildProduct();
+                var product = EntitiesFactory.BuildProductEntity();
 
                 var role = i % 2 == 0 ? ProductRoleEnum.ProductManager : ProductRoleEnum.ProductViewer;
-                user.ProductsRoles.Add(new KeyValuePair<string, ProductRoleEnum>(product.Id, role));
+                user.ProductsRoles.Add(new KeyValuePair<string, byte>(product.Id, (byte)role));
             }
 
             _databaseCore.UpdateUser(user);
@@ -315,6 +315,54 @@ namespace HSMServer.Core.Tests
 
             Assert.NotNull(actualUsers);
             Assert.Equal(GetCountItemsOnPage(count, page, pageSize), actualUsers.Count);
+        }
+
+        #endregion
+
+        #region [ Folder Tests ]
+
+        [Theory]
+        [InlineData(1)]
+        [InlineData(3)]
+        [InlineData(10)]
+        [InlineData(50)]
+        [InlineData(100)]
+        [InlineData(500)]
+        [InlineData(1000)]
+        [Trait("Category", "AddFolder(s)")]
+        public void AddFoldersTest(int count)
+        {
+            for (int i = 0; i < count; i++)
+            {
+                var folder = EntitiesFactory.BuildFolderEntity();
+                _databaseCore.AddFolder(folder);
+
+                FullFolderTest(folder, _databaseCore.GetFolder(folder.Id));
+            }
+        }
+
+        [Theory]
+        [InlineData(1)]
+        [InlineData(3)]
+        [InlineData(10)]
+        [InlineData(50)]
+        [InlineData(100)]
+        [InlineData(500)]
+        [InlineData(1000)]
+        [Trait("Category", "RemoveFolder(s)")]
+        public void RemoveFoldersTest(int count)
+        {
+            for (int i = 0; i < count; i++)
+            {
+                var folder = EntitiesFactory.BuildFolderEntity();
+
+                _databaseCore.AddFolder(folder);
+                _databaseCore.RemoveFolder(folder.Id);
+
+                Assert.Null(_databaseCore.GetFolder(folder.Id));
+            }
+
+            Assert.Empty(_databaseCore.GetAllFolders());
         }
 
         #endregion
@@ -387,92 +435,6 @@ namespace HSMServer.Core.Tests
 
         #endregion
 
-        #region [ Configuration Object ]
-
-        [Fact]
-        [Trait("Category", "AddConfigurationObject")]
-        public void AddConfigurationObjectTest()
-        {
-            var name = RandomGenerator.GetRandomString();
-            var config = EntitiesFactory.BuildConfiguration(name);
-
-            _databaseCore.WriteConfigurationObject(config);
-
-            FullConfigurationObjectTest(config, _databaseCore.GetConfigurationObject(name));
-        }
-
-        [Theory]
-        [InlineData(3)]
-        [InlineData(10)]
-        [InlineData(50)]
-        [InlineData(100)]
-        [InlineData(500)]
-        [InlineData(1000)]
-        [Trait("Category", "SeveralConfigurationObject")]
-        public void SeveralConfigurationObjectTest(int count)
-        {
-            for (int i = 0; i < count; i++)
-            {
-                var name = RandomGenerator.GetRandomString();
-                var config = EntitiesFactory.BuildConfiguration(name);
-
-                _databaseCore.WriteConfigurationObject(config);
-
-                FullConfigurationObjectTest(config, _databaseCore.GetConfigurationObject(name));
-            }
-        }
-
-        [Fact]
-        [Trait("Category", "UpdateConfigurationObject")]
-        public void UpdateConfigurationObjectTest()
-        {
-            var name = RandomGenerator.GetRandomString();
-            var config = EntitiesFactory.BuildConfiguration(name);
-
-            _databaseCore.WriteConfigurationObject(config);
-            config.Value = RandomGenerator.GetRandomString();
-            _databaseCore.WriteConfigurationObject(config);
-
-            FullConfigurationObjectTest(config, _databaseCore.GetConfigurationObject(name));
-        }
-
-        [Fact]
-        [Trait("Category", "RemoveConfigurationObject")]
-        public void RemoveConfigurationObject()
-        {
-            var name = RandomGenerator.GetRandomString();
-            var config = EntitiesFactory.BuildConfiguration(name);
-
-            _databaseCore.WriteConfigurationObject(config);
-            _databaseCore.RemoveConfigurationObject(name);
-
-            Assert.Null(_databaseCore.GetConfigurationObject(name));
-        }
-
-        [Theory]
-        [InlineData(3)]
-        [InlineData(10)]
-        [InlineData(50)]
-        [InlineData(100)]
-        [InlineData(500)]
-        [InlineData(1000)]
-        [Trait("Category", "SeveralRemoveConfigurationObject")]
-        public void SeveralRemoveConfigurationObject(int count)
-        {
-            for (int i = 0; i < count; i++)
-            {
-                var name = RandomGenerator.GetRandomString();
-                var config = EntitiesFactory.BuildConfiguration(name);
-
-                _databaseCore.WriteConfigurationObject(config);
-                _databaseCore.RemoveConfigurationObject(name);
-
-                Assert.Null(_databaseCore.GetConfigurationObject(name));
-            }
-        }
-
-        #endregion
-
         #region [ Private methods ]
 
         private static void FullProductTest(ProductEntity expectedProduct, ProductEntity actualProduct)
@@ -485,8 +447,6 @@ namespace HSMServer.Core.Tests
             Assert.Equal(expectedProduct.State, actualProduct.State);
             Assert.Equal(expectedProduct.Description, actualProduct.Description);
             Assert.Equal(expectedProduct.CreationDate, actualProduct.CreationDate);
-            Assert.Equal(expectedProduct.SubProductsIds, actualProduct.SubProductsIds);
-            Assert.Equal(expectedProduct.SensorsIds, actualProduct.SensorsIds);
         }
 
         private static void FullKeyTest(AccessKeyEntity expected, AccessKeyEntity actual)
@@ -502,7 +462,7 @@ namespace HSMServer.Core.Tests
             Assert.Equal(expected.ExpirationTime, actual.ExpirationTime);
         }
 
-        private static void FullUserTest(User expectedUser, User actualUser)
+        private static void FullUserTest(UserEntity expectedUser, UserEntity actualUser)
         {
             Assert.NotNull(actualUser);
             Assert.Equal(expectedUser.Id, actualUser.Id);
@@ -527,6 +487,17 @@ namespace HSMServer.Core.Tests
             }
         }
 
+        private static void FullFolderTest(FolderEntity expectedFolder, FolderEntity actualFolder)
+        {
+            Assert.NotNull(actualFolder);
+            Assert.Equal(expectedFolder.Id, actualFolder.Id);
+            Assert.Equal(expectedFolder.AuthorId, actualFolder.AuthorId);
+            Assert.Equal(expectedFolder.DisplayName, actualFolder.DisplayName);
+            Assert.Equal(expectedFolder.Description, actualFolder.Description);
+            Assert.Equal(expectedFolder.CreationDate, actualFolder.CreationDate);
+            Assert.Equal(expectedFolder.Color, actualFolder.Color);
+        }
+
         private static void FullTicketTest(RegistrationTicket expectedTicket, RegistrationTicket actualTicket)
         {
             Assert.NotNull(actualTicket);
@@ -536,16 +507,7 @@ namespace HSMServer.Core.Tests
             Assert.Equal(expectedTicket.ExpirationDate, actualTicket.ExpirationDate);
         }
 
-        private static void FullConfigurationObjectTest(ConfigurationObject expectedConfig, ConfigurationObject actualConfig)
-        {
-            Assert.NotNull(actualConfig);
-            Assert.Equal(expectedConfig.Name, expectedConfig.Name);
-            //Entity doesn't have this field
-            //Assert.Equal(expectedConfig.Description, actualConfig.Description);
-            Assert.Equal(expectedConfig.Value, actualConfig.Value);
-        }
-
-        private User GetUser(string username) =>
+        private UserEntity GetUser(string username) =>
             _databaseCore.GetUsers().FirstOrDefault(u => u.UserName.Equals(username));
 
         private static int GetCountItemsOnPage(int count, int pageNumber, int pageSize)

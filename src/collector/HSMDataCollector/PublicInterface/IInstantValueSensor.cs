@@ -13,12 +13,14 @@ namespace HSMDataCollector.PublicInterface
         /// </summary>
         /// <param name="value">Instant value</param>
         void AddValue(T value);
+
         /// <summary>
         /// Adds instant sensor value and the comment
         /// </summary>
         /// <param name="value">Instant value</param>
         /// <param name="comment">Comment to the value; will be displayed in the values table. Defaults to ""</param>
         void AddValue(T value, string comment = "");
+
         /// <summary>
         /// Adds instant value, comment and status for the sensor
         /// </summary>

@@ -3,12 +3,12 @@
     <PackageId>HSMDataCollector.HSMSensorDataObjects</PackageId>
     <TargetFramework>netstandard2.0</TargetFramework>
     <Platforms>AnyCPU</Platforms>
-    <Version>2.1.34</Version>
+    <Version>3.0.2</Version>
     <Authors>HSM team</Authors>
     <Company>Soft-FX</Company>
     <PackageRequireLicenseAcceptance>false</PackageRequireLicenseAcceptance>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
-    <Copyright>Copyright © 2022</Copyright>
+    <Copyright>Copyright © 2023</Copyright>
     <IsPackable>true</IsPackable>
     <Description>Data objects for HSMDataCollector</Description>
   </PropertyGroup>

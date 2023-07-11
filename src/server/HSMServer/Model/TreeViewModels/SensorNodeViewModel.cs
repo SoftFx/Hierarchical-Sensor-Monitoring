@@ -1,8 +1,11 @@
 ﻿using HSMServer.Core.Model;
-using HSMServer.Helpers;
+using HSMServer.Core.Model.Policies;
+using HSMServer.Extensions;
+using HSMServer.Model.DataAlerts;
 using System;
+using System.Linq;
 
-namespace HSMServer.Model.TreeViewModels
+namespace HSMServer.Model.TreeViewModel
 {
     public class SensorNodeViewModel : NodeViewModel
     {
@@ -10,95 +13,65 @@ namespace HSMServer.Model.TreeViewModels
         private const string FileNamePattern = "File name: ";
 
 
-        public Guid Id { get; }
+        public SensorType Type { get; private set; }
 
-        public string EncodedId { get; }
+        public SensorState State { get; private set; }
 
-        public SensorType SensorType { get; private set; }
-
-        public string Description { get; private set; }
-
-        public bool HasData { get; private set; }
+        public Integration Integration { get; private set; }
 
         public string ShortStringValue { get; private set; }
 
-        public string Path { get; private set; }
-
-        public string Product { get; private set; }
-
         public string FileNameString { get; private set; }
-
-        public bool IsPlottingSupported { get; private set; }
-
-        internal TimeSpan ExpectedUpdateInterval { get; private set; }
-
-        internal string Unit { get; private set; }
 
         internal BaseValue LastValue { get; private set; }
 
         public string ValidationError { get; private set; }
 
-        public override SensorStatus Status { get; protected set; }
+
+        public bool IsValidationErrorVisible => !string.IsNullOrEmpty(ValidationError);
+
+        public bool IsChartSupported => Type is not (SensorType.String or SensorType.Version);
+
+        public bool IsTableFormatSupported => Type is not SensorType.File;
+
+        public bool IsDatapointFormatSupported => Type is SensorType.Integer or SensorType.Double or SensorType.Boolean
+                                                  or SensorType.String or SensorType.TimeSpan;
 
 
-        public SensorNodeViewModel(BaseSensorModel model)
+        public SensorNodeViewModel(BaseSensorModel model) : base(model)
         {
-            Id = model.Id;
-            EncodedId = SensorPathHelper.EncodeGuid(Id);
-
             Update(model);
         }
 
 
-        public string GetTimeAgo(TimeSpan time)
-        {
-            if (time.TotalDays > 30)
-                return "> a month ago";
-
-            if (time.TotalDays >= 1)
-                return $"> {UnitsToString(time.TotalDays, "day")} ago";
-
-            if (time.TotalHours >= 1)
-                return $"> {UnitsToString(time.TotalHours, "hour")} ago";
-
-            if (time.TotalMinutes >= 1)
-                return $"{UnitsToString(time.TotalMinutes, "minute")} ago";
-
-            if (time.TotalSeconds < 60)
-                return "< 1 minute ago";
-
-            return "no info";
-        }
-
         internal void Update(BaseSensorModel model)
         {
-            ExpectedUpdateInterval = new TimeSpan(model.ExpectedUpdateIntervalPolicy?.ExpectedUpdateInterval ?? 0L);
+            base.Update(model);
 
-            Name = model.DisplayName;
-            SensorType = model.Type;
-            Description = model.Description;
-            UpdateTime = model.LastUpdateTime.ToUniversalTime();
-            Status = model.ValidationResult.Result;
-            ValidationError = model.ValidationResult.Message;
-            Product = model.ProductName;
-            Path = model.Path;
-            Unit = model.Unit;
+            Type = model.Type;
+            State = model.State;
+            Integration = model.Integration;
+            UpdateTime = model.LastUpdateTime;
+            Status = model.Status.Status.ToClient().ToEmpty(model.HasData);
+            ValidationError = State == SensorState.Muted ? GetMutedErrorTooltip(model.EndOfMuting) : model.Status.Message;
 
             LastValue = model.LastValue;
             HasData = model.HasData;
             ShortStringValue = model.LastValue?.ShortInfo;
 
-            IsPlottingSupported = IsSensorPlottingAvailable(model.Type);
             FileNameString = GetFileNameString(model.Type, ShortStringValue);
+
+            if (model is DoubleSensorModel or IntegerSensorModel or DoubleBarSensorModel or IntegerBarSensorModel)
+                DataAlerts[Type] = model.DataPolicies.Select(p => BuildAlert(p, model)).ToList();
         }
 
-        private static string UnitsToString(double value, string unit)
+        private static DataAlertViewModel BuildAlert(Policy policy, BaseSensorModel sensor) => policy switch
         {
-            int intValue = Convert.ToInt32(value);
-            return intValue > 1 ? $"{intValue} {unit}s" : $"1 {unit}";
-        }
-
-        private static bool IsSensorPlottingAvailable(SensorType type) => type != SensorType.String;
+            IntegerDataPolicy p => new SingleDataAlertViewModel<IntegerValue, int>(p, sensor),
+            DoubleDataPolicy p => new SingleDataAlertViewModel<DoubleValue, double>(p, sensor),
+            IntegerBarDataPolicy p => new BarDataAlertViewModel<IntegerBarValue, int>(p, sensor),
+            DoubleBarDataPolicy p => new BarDataAlertViewModel<DoubleBarValue, double>(p, sensor),
+        };
 
         private static string GetFileNameString(SensorType sensorType, string value)
         {
@@ -124,5 +97,10 @@ namespace HSMServer.Model.TreeViewModels
 
             return string.Empty;
         }
+
+        private static string GetMutedErrorTooltip(DateTime? endOfMuting) =>
+            endOfMuting is not null && endOfMuting != DateTime.MaxValue
+                ? $"Muted until {endOfMuting.Value.ToDefaultFormat()}"
+                : $"Muted forever";
     }
 }

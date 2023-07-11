@@ -1,13 +1,12 @@
-﻿using HSMServer.Core.Cache.Entities;
+﻿using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Model;
-using HSMServer.Core.Model.Authentication;
-using HSMServer.Core.SensorsUpdatesQueue;
+using HSMServer.Core.Model.Requests;
 using System;
 using System.Collections.Generic;
 
 namespace HSMServer.Core.Cache
 {
-    public enum TransactionType
+    public enum ActionType
     {
         Add,
         Update,
@@ -19,38 +18,47 @@ namespace HSMServer.Core.Cache
     {
         bool IsInitialized { get; }
 
-        event Action<ProductModel, TransactionType> ChangeProductEvent;
-        event Action<BaseSensorModel, TransactionType> ChangeSensorEvent;
-        event Action<AccessKeyModel, TransactionType> ChangeAccessKeyEvent;
+        event Action<ProductModel, ActionType> ChangeProductEvent;
+        event Action<BaseSensorModel, ActionType> ChangeSensorEvent;
+        event Action<AccessKeyModel, ActionType> ChangeAccessKeyEvent;
 
+        event Action<BaseSensorModel, PolicyResult> NotifyAboutChangesEvent;
 
-        List<ProductModel> GetTree();
         List<BaseSensorModel> GetSensors();
         List<AccessKeyModel> GetAccessKeys();
 
-        ProductModel AddProduct(string productName);
-        void RemoveProduct(string id);
-        ProductModel GetProduct(string id);
-        string GetProductNameById(string id);
-        List<ProductModel> GetProducts(User user, bool isAllProducts = false);
-        bool TryGetProductByKey(string key, out ProductModel product, out string message);
-        bool TryCheckKeyPermissions(StoreInfo storeInfo, out string message);
+        ProductModel AddProduct(string productName, Guid authorId);
+        void UpdateProduct(ProductUpdate product);
+        void RemoveProduct(Guid id);
+        ProductModel GetProduct(Guid id);
+        ProductModel GetProductByName(string name);
+        string GetProductNameById(Guid id);
+        List<ProductModel> GetProducts();
+
+        bool TryCheckKeyWritePermissions(BaseRequestModel request, out string message);
+        bool TryCheckKeyReadPermissions(BaseRequestModel request, out string message);
 
         AccessKeyModel AddAccessKey(AccessKeyModel key);
-        void RemoveAccessKey(Guid id);
+        AccessKeyModel RemoveAccessKey(Guid id);
         AccessKeyModel UpdateAccessKey(AccessKeyUpdate key);
+        AccessKeyModel UpdateAccessKeyState(Guid id, KeyState state);
         AccessKeyModel GetAccessKey(Guid id);
+        List<AccessKeyModel> GetMasterKeys();
 
         void UpdateSensor(SensorUpdate updatedSensor);
         void RemoveSensor(Guid sensorId);
-        void RemoveSensorsData(string product);
-        void RemoveSensorData(Guid sensorId);
+        void UpdateMutedSensorState(Guid sensorId, DateTime? endOfMuting = null);
+        void ClearSensorHistory(Guid sensorId, DateTime to);
+        void CheckSensorHistory(Guid sensorId);
+        void ClearNodeHistory(Guid productId);
         BaseSensorModel GetSensor(Guid sensorId);
-        void OnChangeSensorEvent(BaseSensorModel model, TransactionType type);
+        void NotifyAboutChanges(BaseSensorModel model, PolicyResult oldStatus);
 
-        List<BaseValue> GetSensorValues(Guid sensorId, int count);
-        List<BaseValue> GetSensorValues(Guid sensorId, DateTime from, DateTime to);
+        IAsyncEnumerable<List<BaseValue>> GetSensorValues(HistoryRequestModel request);
+        IAsyncEnumerable<List<BaseValue>> GetSensorValuesPage(Guid sensorId, DateTime from, DateTime to, int count);
 
-        void UpdatePolicy(TransactionType type, Policy policy);
+        void UpdateCacheState();
+
+        void SaveLastStateToDb();
     }
 }

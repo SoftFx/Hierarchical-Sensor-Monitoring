@@ -4,7 +4,7 @@ using System.IO.Compression;
 
 namespace HSMServer.Core.Helpers
 {
-    internal static class FileSensorContentCompressionHelper
+    public static class FileSensorContentCompressionHelper
     {
         internal static FileValue CompressContent(this FileValue sensorValue)
         {
@@ -14,13 +14,18 @@ namespace HSMServer.Core.Helpers
                 dstream.Write(sensorValue.Value, 0, sensorValue.Value.Length);
             }
 
+            var compressedValue = output.ToArray();
+            if (compressedValue.Length >= sensorValue.Value.Length)
+                return sensorValue;
+
             return sensorValue with
             {
-                Value = output.ToArray()
+                Value = compressedValue,
             };
         }
 
-        internal static FileValue DecompressContent(this FileValue value)
+
+        public static FileValue DecompressContent(this FileValue value)
         {
             if (value.Value.Length == value.OriginalSize)
                 return value;
@@ -32,7 +37,10 @@ namespace HSMServer.Core.Helpers
                 dstream.CopyTo(output);
             }
 
-            return value with { Value = output.ToArray() };
+            return value with
+            {
+                Value = output.ToArray()
+            };
         }
     }
 }

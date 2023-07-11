@@ -1,11 +1,15 @@
-﻿using HSMSensorDataObjects.FullDataObject;
+﻿using HSMSensorDataObjects.SensorValueRequests;
+using System;
 
 namespace HSMDataCollector.Base
 {
-    internal interface ISensor
+    internal interface ISensor : IDisposable
     {
         bool HasLastValue { get; }
-        UnitedSensorValue GetLastValue();
-        void Dispose();
+
+
+        void Start();
+
+        SensorValueBase GetLastValue();
     }
 }

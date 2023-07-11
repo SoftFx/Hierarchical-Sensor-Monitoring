@@ -1,161 +1,110 @@
-﻿using HSMSensorDataObjects.FullDataObject;
+﻿using HSMDataCollector.Extensions;
+using HSMSensorDataObjects.SensorValueRequests;
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Threading;
 
 namespace HSMDataCollector.Core
 {
-    internal class DataQueue : IDataQueue, IValuesQueue
+    internal sealed class DataQueue : IDataQueue, IValuesQueue
     {
-        private readonly Queue<UnitedSensorValue> _valuesQueue;
-        private readonly List<UnitedSensorValue> _failedList;
-        private const int MAX_VALUES_MESSAGE_CAPACITY = 10000;
-        private const int MAX_QUEUE_CAPACITY = 100000;
-        private int _internalCount = 0;
-        private readonly object _lockObj;
-        private readonly object _listLock;
+        private readonly ConcurrentQueue<SensorValueBase> _valuesQueue = new ConcurrentQueue<SensorValueBase>();
+        private readonly ConcurrentQueue<SensorValueBase> _failedQueue = new ConcurrentQueue<SensorValueBase>();
+
+        private readonly TimeSpan _packageCollectPeriod;
+        private readonly int _maxQueueSize;
+        private readonly int _maxValuesInPackage;
+
         private Timer _sendTimer;
-        private bool _hasFailedData;
-        public bool Disposed { get; private set; }
+        private bool _flushing;
 
-        public DataQueue()
+        public event Action<List<SensorValueBase>> NewValuesEvent;
+        public event Action<FileSensorValue> NewValueEvent;
+
+
+        public DataQueue(CollectorOptions options)
         {
-            _valuesQueue = new Queue<UnitedSensorValue>();
-            _failedList = new List<UnitedSensorValue>();
-            _lockObj = new object();
-            _listLock = new object();
-            Disposed = false;
-        }
-        
-        public event EventHandler<List<UnitedSensorValue>> SendValues;
-        public event EventHandler<DateTime> QueueOverflow;
-
-        public void ReturnData(List<UnitedSensorValue> values)
-        {
-            lock (_listLock)
-            {
-                _failedList.AddRange(values);
-            }
-
-            _hasFailedData = true;
+            _maxQueueSize = options.MaxQueueSize;
+            _maxValuesInPackage = options.MaxValuesInPackage;
+            _packageCollectPeriod = options.PackageCollectPeriod;
         }
 
-        public List<UnitedSensorValue> GetCollectedData()
-        {
-            List<UnitedSensorValue> values = new List<UnitedSensorValue>();
-            if (_hasFailedData)
-            {
-                values.AddRange(DequeueData());
-            }
-            values.AddRange(DequeueData());
-            return values;
-        }
 
-        public void InitializeTimer()
+        public void Init()
         {
-            TimeSpan timerTime = TimeSpan.FromSeconds(15);
-            _sendTimer = new Timer(OnTimerTick, null, timerTime, timerTime);
+            if (_sendTimer == null)
+                _sendTimer = new Timer((_) => Flush(), null, _packageCollectPeriod, _packageCollectPeriod);
         }
 
         public void Stop()
         {
+            Flush();
+
             _sendTimer?.Dispose();
-            Disposed = true;
+            _sendTimer = null;
         }
 
-        public void Clear()
+        public void Flush()
         {
-            ClearData();
-        }
-
-        private void Enqueue(UnitedSensorValue value)
-        {
-            lock (_lockObj)
+            if (!_flushing)
             {
-                _valuesQueue.Enqueue(value);
-            }
+                _flushing = true;
 
-            ++_internalCount;
-            if (_internalCount == MAX_QUEUE_CAPACITY)
-            {
-                OnQueueOverflow();
+                var packagesCount = (_failedQueue.Count + _valuesQueue.Count) / _maxValuesInPackage + 1;
+
+                while (packagesCount-- > 0)
+                {
+                    var dataList = new List<SensorValueBase>(_maxValuesInPackage);
+
+                    Dequeue(_failedQueue, dataList);
+                    Dequeue(_valuesQueue, dataList);
+
+                    if (dataList.Count > 0)
+                        NewValuesEvent?.Invoke(dataList);
+                    else
+                        break;
+                }
+
+                _flushing = false;
             }
         }
-        
-        public void EnqueueData(UnitedSensorValue value)
-        {
-            TrimDataIfNecessary(value);
-            Enqueue(value);
-        }
 
-        private void TrimDataIfNecessary(UnitedSensorValue value)
+
+        public void Push(SensorValueBase value) => Enqueue(_valuesQueue, value.TrimLongComment());
+
+        public void PushFailValue(SensorValueBase value) => Enqueue(_failedQueue, value);
+
+
+        private void Enqueue(ConcurrentQueue<SensorValueBase> queue, SensorValueBase value)
         {
-            if (value?.Data == null || value.Data.Length <= Constants.MaxSensorValueStringLength)
+            if (_sendTimer == null)
                 return;
 
-            value.Data = value.Data.Substring(0, Constants.MaxSensorValueStringLength);
-            if (!string.IsNullOrEmpty(value.Comment))
-            {
-                value.Comment = value.Comment.Substring(0, Constants.MaxSensorValueStringLength);
-            }
-        }
-        private void OnTimerTick(object state)
-        {
-            var data = DequeueData();
-            OnSendValues(data);
+            queue.Enqueue(value);
+
+            while (queue.Count > _maxQueueSize)
+                queue.TryDequeue(out _);
         }
 
-        private void ClearData()
+        private List<SensorValueBase> Dequeue(ConcurrentQueue<SensorValueBase> queue, List<SensorValueBase> dataList)
         {
-            if (_hasFailedData)
-            {
-                lock (_listLock)
+            while (dataList.Count < _maxValuesInPackage && queue.TryDequeue(out var value))
+                switch (value)
                 {
-                    _failedList.Clear();
-                }
-            }
+                    case FileSensorValue fileValue:
+                        NewValueEvent?.Invoke(fileValue);
+                        break;
 
-            lock (_lockObj)
-            {
-                _valuesQueue.Clear();
-            }
-        }
-        private List<UnitedSensorValue> DequeueData()
-        {
-            List<UnitedSensorValue> dataList = new List<UnitedSensorValue>();
-            if (_hasFailedData)
-            {
-                lock (_listLock)
-                {
-                    dataList.AddRange(_failedList);
-                    _failedList.Clear();
-                }
+                    case BarSensorValueBase barSensor when barSensor.Count == 0:
+                        break;
 
-                _hasFailedData = false;
-            }
-
-            int count = 0;
-            lock (_lockObj)
-            {
-                while (count < MAX_VALUES_MESSAGE_CAPACITY && _internalCount > 0)
-                {
-                    dataList.Add(_valuesQueue.Dequeue());
-                    ++count;
-                    --_internalCount;
+                    default:
+                        dataList.Add(value);
+                        break;
                 }
-            }
 
             return dataList;
-        }
-
-        private void OnQueueOverflow()
-        {
-            QueueOverflow?.Invoke(this, DateTime.Now);
-        }
-        
-        private void OnSendValues(List<UnitedSensorValue> values)
-        {
-            SendValues?.Invoke(this, values);
         }
     }
 }

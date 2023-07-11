@@ -1,14 +1,14 @@
 ﻿using HSMCommon;
-using HSMServer.Core.Model.Authentication;
+using HSMServer.Model.Authentication;
+using System;
 using System.Collections.Generic;
+using HSMServer.Extensions;
 
 namespace HSMServer.Core.Tests.Infrastructure
 {
     internal static class TestUsersManager
     {
         private const string DefaultUserName = "default";
-        private const string DefaultUserCertificateFileName = "default.client.crt";
-        private const string DefaultUserCertificateThumbprint = "a563183e1fec784f45bc8f3aa47c40eba1a26df9";
 
         private const string TestUserName = "TestUserName";
         private const string TestUserViewerName = "TestUserViewer";
@@ -19,8 +19,6 @@ namespace HSMServer.Core.Tests.Infrastructure
         internal static User DefaultUser { get; } =
             new(DefaultUserName)
             {
-                CertificateFileName = DefaultUserCertificateFileName,
-                CertificateThumbprint = DefaultUserCertificateThumbprint,
                 IsAdmin = true,
                 Password = HashComputer.ComputePasswordHash(DefaultUserName),
             };
@@ -40,7 +38,14 @@ namespace HSMServer.Core.Tests.Infrastructure
         internal static User NotAdmin { get; } =
             BuildUser(TestUserNotAdminName, false);
 
-
+        internal static User GetEmptyUser()
+        {
+            return new User()
+            {
+                Name = string.Empty,
+                Password = string.Empty
+            };
+        }
         internal static User BuildRandomUser() =>
             BuildUser(GenerateRandomProductRole(), RandomGenerator.GetRandomString());
 
@@ -48,9 +53,9 @@ namespace HSMServer.Core.Tests.Infrastructure
         {
             var user = BuildUser(isAdmin: false);
 
-            user.ProductsRoles = new List<KeyValuePair<string, ProductRoleEnum>>()
+            user.ProductsRoles = new List<(Guid, ProductRoleEnum)>()
             {
-                new KeyValuePair<string, ProductRoleEnum>(productId, productRole),
+                (productId.ToGuid(), productRole),
             };
 
             return user;
@@ -59,8 +64,6 @@ namespace HSMServer.Core.Tests.Infrastructure
         private static User BuildUser(string name = TestUserName, bool? isAdmin = null) =>
              new(name)
              {
-                 CertificateFileName = RandomGenerator.GetRandomString(),
-                 CertificateThumbprint = RandomGenerator.GetRandomString(40),
                  IsAdmin = isAdmin ?? RandomGenerator.GetRandomBool(),
                  Password = HashComputer.ComputePasswordHash(name),
              };
@@ -68,13 +71,11 @@ namespace HSMServer.Core.Tests.Infrastructure
         private static User BuildUser(ProductRoleEnum productRole, string name = TestUserName) =>
             new(name)
             {
-                CertificateFileName = RandomGenerator.GetRandomString(),
-                CertificateThumbprint = RandomGenerator.GetRandomString(40),
                 IsAdmin = RandomGenerator.GetRandomBool(),
                 Password = HashComputer.ComputePasswordHash(name),
-                ProductsRoles = new List<KeyValuePair<string, ProductRoleEnum>>()
+                ProductsRoles = new List<(Guid, ProductRoleEnum)>()
                 {
-                    new KeyValuePair<string, ProductRoleEnum>(TestProductsManager.TestProduct.Id, productRole)
+                    (TestProductsManager.TestProduct.Id.ToGuid(), productRole)
                 },
             };
 

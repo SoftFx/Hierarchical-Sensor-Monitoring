@@ -1,0 +1,56 @@
+﻿@using HSMServer.Constants
+@using HSMServer.Model.ViewModel
+
+@model AddProductViewModel
+
+@addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
+
+
+<div class="modal fade" tabindex="-1" role="dialog" id="addProduct_modal">
+    <div class="modal-dialog modal-dialog-centered" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Add product</h5>
+                <button type="button" class="btn-close" onclick="hideAddProductModal()" aria-label="Close"></button>
+            </div>
+
+            <div id="addProduct_modalBody" class="modal-body">
+                    @await Html.PartialAsync("_AddProduct", Model)
+            </div>
+        </div>
+    </div>
+</div>
+
+
+<script>
+    function showAddProductModal() {
+        $(`#addProduct_modal`).modal({
+            backdrop: 'static'
+        });
+        $(`#addProduct_modal`).modal('show');
+    }
+
+    function hideAddProductModal() {
+        $(`#addProduct_modal`).modal('hide');
+    }
+
+    $(document).on("submit", "#addProduct_form", function (event) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+
+        $.ajax({
+            url: $(`#addProduct_form`).attr("action"),
+            type: 'POST',
+            data: $(`#addProduct_form`).serialize(),
+            datatype: 'json',
+            async: true,
+            success: function (viewData) {
+                $(`#addProduct_modalBody`).html(viewData);
+            }
+        }).done(function () {
+            if (document.getElementsByClassName("field-validation-error").length === 0) {
+                document.location.reload();
+            }
+        });
+    });
+</script>

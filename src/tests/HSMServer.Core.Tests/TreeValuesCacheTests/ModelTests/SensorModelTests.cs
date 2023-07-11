@@ -12,7 +12,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests.ModelTests
         [Trait("Category", "SensorModel creation")]
         public void SensorModelCreationTest()
         {
-            var sensorEntity = EntitiesFactory.BuildSensorEntity();
+            var sensorEntity = EntitiesFactory.BuildSensorEntity(parent: null);
 
             var sensor = SensorModelFactory.Build(sensorEntity);
 
@@ -37,19 +37,11 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests.ModelTests
 
             var sensorValue = SensorValuesFactory.BuildSensorValue(type);
 
-            sensor.TryAddValue(sensorValue, out var cachedValue);
+            sensor.TryAddValue(sensorValue);
 
             Assert.True(sensor.HasData);
             Assert.NotEqual(DateTime.MinValue, sensor.LastUpdateTime);
             ModelsTester.AssertModels(sensorValue, sensor.LastValue);
-
-            if (sensor is IBarSensor barSensor)
-            {
-                Assert.Null(cachedValue);
-                ModelsTester.AssertModels(sensorValue, barSensor.LocalLastValue);
-            }
-            else
-                ModelsTester.AssertModels(sensorValue, cachedValue);
         }
 
         [Fact]
@@ -68,9 +60,12 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests.ModelTests
         [Trait("Category", "SensorModel to entity")]
         public void SensorModelToSensorEntityTest()
         {
-            var entity = EntitiesFactory.BuildSensorEntity();
+            var product = new ProductModel("product");
+            var entity = EntitiesFactory.BuildSensorEntity(parent: product.Id.ToString());
 
             var sensor = SensorModelFactory.Build(entity);
+            product.AddSensor(sensor);
+
             var sensorEntity = sensor.ToEntity();
 
             ModelsTester.TestSensorModel(sensorEntity, sensor);

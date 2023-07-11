@@ -1,4 +1,5 @@
-﻿using System.IO;
+﻿using System;
+using System.IO;
 
 namespace HSMServer.Core.Model
 {
@@ -26,6 +27,20 @@ namespace HSMServer.Core.Model
     }
 
 
+    public record TimeSpanValue : BaseValue<TimeSpan>
+    {
+        public override SensorType Type => SensorType.TimeSpan;
+
+        public override object RawValue => Value.Ticks;
+    }
+
+    public record VersionValue : BaseValue<Version>
+    {
+        public override SensorType Type => SensorType.Version;
+
+        public override string ShortInfo => Value.Revision == 0 ? Value.ToString(3) : Value.ToString();
+    }
+
     public record FileValue : BaseValue<byte[]>
     {
         private const double SizeDenominator = 1024.0;
@@ -36,6 +51,7 @@ namespace HSMServer.Core.Model
         public string Extension { get; init; }
 
         public long OriginalSize { get; init; }
+
 
         public override SensorType Type => SensorType.File;
 
@@ -50,7 +66,7 @@ namespace HSMServer.Core.Model
             return $"File size: {sizeString}. {fileNameString}";
         }
 
-        private string FileSizeToNormalString()
+        public string FileSizeToNormalString()
         {
             const int maxGBCounter = 3;
 

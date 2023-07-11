@@ -1,145 +1,204 @@
 ﻿using HSMServer.Core.Cache;
-using HSMServer.Core.Model.Authentication;
+using HSMServer.Core.Model;
 using HSMServer.Filters.ProductRoleFilters;
-using HSMServer.Helpers;
 using HSMServer.Model.AccessKeysViewModels;
-using HSMServer.Model.TreeViewModels;
+using HSMServer.Model.Authentication;
+using HSMServer.Model.TreeViewModel;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using HSMServer.Attributes;
+using HSMServer.Authentication;
+using HSMServer.Extensions;
 
 namespace HSMServer.Controllers
 {
     [Authorize]
-    public class AccessKeysController : Controller
+    public class AccessKeysController : BaseController
     {
         private readonly TreeViewModel _treeViewModel;
 
         internal ITreeValuesCache TreeValuesCache { get; }
 
 
-        public AccessKeysController(ITreeValuesCache treeValuesCache, TreeViewModel treeViewModel)
+        public AccessKeysController(ITreeValuesCache treeValuesCache, IUserManager userManager, TreeViewModel treeViewModel) : base(userManager)
         {
             TreeValuesCache = treeValuesCache;
             _treeViewModel = treeViewModel;
         }
 
-
-        public IActionResult Index() => View(GetAvailableAccessKeys(isAllProducts: false));
-
-        [HttpGet]
-        public IActionResult AvailableAccessKeys([FromQuery(Name = "AllProducts")] bool isAllProducts) =>
-            GetPartialAllAccessKeys(isAllProducts);
+        public IActionResult Index() => View(GenerateFullViewModel());
 
         [HttpGet]
-        public IActionResult AccessKeysForProduct([FromQuery(Name = "Selected")] string productId) =>
-            GetPartialProductAccessKeys(productId);
-
-        [HttpGet]
-        [ProductRoleFilterByEncodedProductId(ProductRoleEnum.ProductManager)]
-        public IActionResult NewAccessKey([FromQuery(Name = "Selected")] string encodedProductId,
-                                          [FromQuery(Name = "CloseModal")] bool closeModal = false) =>
-            GetPartialNewAccessKey(
-                new EditAccessKeyViewModel()
-                {
-                    EncodedProductId = encodedProductId,
-                    CloseModal = closeModal,
-                });
-
-        [HttpPost]
-        [ProductRoleFilterByKey(ProductRoleEnum.ProductManager)]
-        public IActionResult NewAccessKey(EditAccessKeyViewModel key)
+        public IActionResult SearchKeyResult(string searchKey)
         {
-            if (!ModelState.IsValid)
-                return GetPartialNewAccessKey(key);
-
-            TreeValuesCache.AddAccessKey(key.ToModel((HttpContext.User as User).Id));
-
-            return GetPartialProductAccessKeys(key.EncodedProductId);
+            searchKey ??= string.Empty;
+            return PartialView("_AllAccessKeys", GenerateFullViewModel(searchKey));
         }
 
         [HttpGet]
-        [ProductRoleFilterBySelectedKey(ProductRoleEnum.ProductManager)]
-        public IActionResult ModifyAccessKey([FromQuery(Name = "SelectedKey")] string selectedKey)
-        {
-            var key = TreeValuesCache.GetAccessKey(Guid.Parse(selectedKey));
+        public IActionResult AvailableAccessKeys() => PartialView("_AllAccessKeys", GenerateFullViewModel());
 
-            return GetPartialNewAccessKey(
-                new EditAccessKeyViewModel(key)
-                {
-                    EncodedProductId = SensorPathHelper.Encode(key.ProductId),
-                    CloseModal = true,
-                    IsModify = true,
-                });
+        [HttpGet]
+        public IActionResult AccessKeysForProduct(string productId) => 
+            GetPartialProductAccessKeys(productId.ToGuid());
+        
+        [HttpGet]
+        [AuthorizeIsAdmin]
+        public IActionResult NewServerAccessKey()
+        {
+            return GetPartialNewAccessKey(new EditAccessKeyViewModel()
+            {
+                CloseModal = true,
+                Products = TreeValuesCache.GetProducts().ToList(),
+                ReturnType = AccessKeyReturnType.Table,
+                SelectedProductId = Guid.Empty
+            });
         }
 
-        [HttpPost]
-        [ProductRoleFilterByKey(ProductRoleEnum.ProductManager)]
-        public IActionResult ModifyAccessKey(EditAccessKeyViewModel key)
+        [HttpGet]
+        [ProductRoleFilterByEncodedProductId(nameof(selectedId), ProductRoleEnum.ProductManager)]
+        public IActionResult NewAccessKey(string selectedId, bool closeModal = false, AccessKeyReturnType returnType = AccessKeyReturnType.Modal)
         {
-            if (!ModelState.IsValid)
-                return GetPartialNewAccessKey(key);
-
-            TreeValuesCache.UpdateAccessKey(key.ToAccessKeyUpdate());
+            var key = new EditAccessKeyViewModel()
+            {
+                SelectedProductId = selectedId.ToGuid(),
+                CloseModal = closeModal,
+                ReturnType = returnType,
+                Products = new List<ProductModel>()
+                {
+                    TreeValuesCache.GetProduct(selectedId.ToGuid())
+                }
+            };
 
             return GetPartialNewAccessKey(key);
         }
 
         [HttpPost]
-        [ProductRoleFilterBySelectedKey(ProductRoleEnum.ProductManager)]
-        public IActionResult RemoveAccessKeyFromAllTable([FromQuery(Name = "SelectedKey")] string selectedKey,
-                                                         [FromQuery(Name = "AllProducts")] bool isAllProducts)
+        [ProductRoleFilterByKey(nameof(key), ProductRoleEnum.ProductManager)]
+        public IActionResult NewAccessKey(EditAccessKeyViewModel key)
         {
-            TreeValuesCache.RemoveAccessKey(Guid.Parse(selectedKey));
+            if (!ModelState.IsValid)
+            {
+                if (key.ReturnType is not AccessKeyReturnType.Table)
+                    return GetPartialNewAccessKey(key.ToNotModify(TreeValuesCache.GetProduct(key.SelectedProductId)));
 
-            return GetPartialAllAccessKeys(isAllProducts);
+                return GetPartialNewAccessKey(key.ToNotModify(CurrentUser.IsAdmin ? TreeValuesCache.GetProducts().ToArray() : Array.Empty<ProductModel>()));
+            }
+
+            TreeValuesCache.AddAccessKey(key.ToModel(CurrentUser.Id));
+
+            if (key.CloseModal)
+                return Ok();
+            
+            if (key.ReturnType is AccessKeyReturnType.Modal)
+                return GetPartialProductAccessKeys(key.SelectedProductId);
+
+            return PartialView("_AllAccessKeys", GenerateFullViewModel());
+        }
+
+        [HttpGet]
+        [ProductRoleFilterBySelectedKey(nameof(selectedKey), ProductRoleEnum.ProductManager)]
+        public IActionResult ModifyAccessKey(string selectedKey, bool closeModal = false)
+        {
+            var key = TreeValuesCache.GetAccessKey(selectedKey.ToGuid());
+
+            return GetPartialNewAccessKey(new EditAccessKeyViewModel(key).ToModify(key.IsMaster ? null : TreeValuesCache.GetProduct(key.ProductId), closeModal));
         }
 
         [HttpPost]
-        [ProductRoleFilterBySelectedKey(ProductRoleEnum.ProductManager)]
-        public IActionResult RemoveAccessKeyFromProductTable([FromQuery(Name = "SelectedKey")] string selectedKey)
+        [ProductRoleFilterByKey(nameof(key), ProductRoleEnum.ProductManager)]
+        public IActionResult ModifyAccessKey(EditAccessKeyViewModel key)
         {
-            var accessKeyId = Guid.Parse(selectedKey);
+            if (!ModelState.IsValid)
+                return GetPartialNewAccessKey(key.ToModify(key.IsMaster ? null : TreeValuesCache.GetProduct(key.SelectedProductId), key.CloseModal));
 
-            _treeViewModel.AccessKeys.TryGetValue(accessKeyId, out var key);
-            _treeViewModel.Nodes.TryGetValue(key.ParentProduct.Id, out var productNode);
+            TreeValuesCache.UpdateAccessKey(key.ToAccessKeyUpdate());
 
-            TreeValuesCache.RemoveAccessKey(accessKeyId);
+            if (key.CloseModal)
+                return Ok();
 
-            return PartialView("_AllAccessKeys", productNode.GetAccessKeys());
+            return GetPartialProductAccessKeys(key.SelectedProductId);
         }
 
-
-        private PartialViewResult GetPartialAllAccessKeys(bool isAllProducts) =>
-            PartialView("_AllAccessKeys", GetAvailableAccessKeys(isAllProducts));
-
-        private List<AccessKeyViewModel> GetAvailableAccessKeys(bool isAllProducts)
+        [HttpPost]
+        [ProductRoleFilterBySelectedKey(nameof(selectedKey), ProductRoleEnum.ProductManager)]
+        public IActionResult RemoveAccessKeyFromAllTable(string selectedKey, bool fullTable)
         {
-            var user = HttpContext.User as User;
-            var keys = new List<AccessKeyViewModel>(1 << 5);
+            var key = TreeValuesCache.RemoveAccessKey(selectedKey.ToGuid());
 
-            _treeViewModel.UpdateAccessKeysCharacteristics(user);
+            if (fullTable)
+                return AvailableAccessKeys();
 
-            var availableProducts = TreeValuesCache.GetProducts(user, isAllProducts);
-            foreach (var product in availableProducts)
-            {
-                if (_treeViewModel.Nodes.TryGetValue(product.Id, out var productViewModel))
-                    keys.AddRange(productViewModel.GetAccessKeys());
-            }
-
-            return keys.OrderBy(key => key?.NodePath).ToList();
+            return PartialView("_AllAccessKeys", GenerateShortViewModel(key.ProductId));
         }
 
-        private PartialViewResult GetPartialProductAccessKeys(string productId)
+        [HttpPost]
+        [ProductRoleFilterBySelectedKey(nameof(selectedKey), ProductRoleEnum.ProductManager)]
+        public IActionResult BlockAccessKeyFromAllTable(string selectedKey, KeyState updatedState, bool fullTable)
         {
-            _treeViewModel.Nodes.TryGetValue(SensorPathHelper.Decode(productId), out var node);
+            var key = TreeValuesCache.GetAccessKey(selectedKey.ToGuid());
+            if (updatedState == KeyState.Active && key.IsExpired)
+                updatedState = KeyState.Expired;
+
+            TreeValuesCache.UpdateAccessKeyState(selectedKey.ToGuid(), updatedState);
+
+            if (fullTable)
+                return AvailableAccessKeys();
+
+            return PartialView("_AllAccessKeys", GenerateShortViewModel(key.ProductId));
+        }
+
+        private PartialViewResult GetPartialProductAccessKeys(Guid productId)
+        {
+            _treeViewModel.Nodes.TryGetValue(productId, out var node);
 
             return PartialView("_ProductAccessKeys", node);
         }
 
         private PartialViewResult GetPartialNewAccessKey(EditAccessKeyViewModel key) =>
             PartialView("_NewAccessKey", key);
+
+        private AccessKeyTableViewModel GenerateShortViewModel(Guid productId)
+        {
+            _treeViewModel.Nodes.TryGetValue(productId, out var productNode);
+            return new()
+            {
+                Keys = productNode.GetAccessKeys()
+            };
+        }
+
+        private AccessKeyTableViewModel GenerateFullViewModel(string searchKey = "")
+        {
+            return new()
+            {
+                Keys = GetAvailableAccessKeys().Where(x => x.Id.ToString().Contains(searchKey)).ToList(),
+                FullTable = true
+            };
+        }
+
+        private List<AccessKeyViewModel> GetAvailableAccessKeys()
+        {
+            var keys = new List<AccessKeyViewModel>(1 << 5);
+
+            var availableProducts = _treeViewModel.GetUserProducts(CurrentUser);
+            foreach (var product in availableProducts)
+            {
+                if (_treeViewModel.Nodes.TryGetValue(product.Id, out var productViewModel))
+                    keys.AddRange(productViewModel.GetAccessKeys());
+            }
+
+            keys = keys.OrderBy(key => key?.NodePath).ToList();
+            var serverKeys = new List<AccessKeyViewModel>(1 << 4);
+
+            if (CurrentUser.IsAdmin)
+                serverKeys.AddRange(TreeValuesCache.GetMasterKeys().Select(x => new AccessKeyViewModel(x, null, x.AuthorId)));
+
+            serverKeys.AddRange(keys);
+
+            return serverKeys;
+        }
     }
 }

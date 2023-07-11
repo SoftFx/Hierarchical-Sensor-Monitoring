@@ -1,16 +1,16 @@
 ﻿using HSMCommon.Constants;
 using HSMDatabase.AccessManager;
 using HSMDatabase.AccessManager.DatabaseEntities;
+using HSMDatabase.Extensions;
 using HSMDatabase.LevelDB;
 using HSMDatabase.Settings;
+using HSMDatabase.SnapshotsDb;
 using HSMServer.Core.Converters;
 using HSMServer.Core.DataLayer;
-using HSMServer.Core.Model;
-using HSMServer.Core.Model.Authentication;
+using HSMServer.Core.Registration;
 using NLog;
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using System.Text;
 
@@ -18,163 +18,103 @@ namespace HSMDatabase.DatabaseWorkCore
 {
     public sealed class DatabaseCore : IDatabaseCore
     {
+        private const int SensorValuesPageCount = 100;
+
         private static readonly Logger _logger = LogManager.GetLogger(CommonConstants.InfrastructureLoggerName);
 
-        private readonly IEnvironmentDatabase _environmentDatabase;
-        private readonly ITimeDatabaseDictionary _sensorsDatabases;
         private readonly SensorValuesDatabaseDictionary _sensorValuesDatabases;
-        private readonly IDatabaseSettings _databaseSettings;
+        private readonly IEnvironmentDatabase _environmentDatabase;
+        private readonly IDatabaseSettings _settings;
+
+
+        public ISnapshotDatabase Snapshots { get; }
+
+
+        public long TotalDbSize => _settings.DatabaseFolder.GetSize();
+
+        public long EnviromentDbSize => _settings.PathToEnvironmentDb.GetSize();
+
+        public long SensorHistoryDbSize
+        {
+            get
+            {
+                long size = 0;
+
+                foreach (var db in _sensorValuesDatabases)
+                    size += db.Name.GetSize();
+
+                return size;
+            }
+        }
+
+
+        private delegate IEnumerable<byte[]> GetValuesFunc(ISensorValuesDatabase db);
 
 
         public DatabaseCore(IDatabaseSettings dbSettings = null)
         {
             _logger.Info($"{nameof(DatabaseCore)} is initializing");
 
-            _databaseSettings = dbSettings ?? new DatabaseSettings();
-            _environmentDatabase = LevelDBManager.GetEnvitonmentDatabaseInstance(_databaseSettings.GetPathToEnvironmentDatabase());
-            _sensorsDatabases = new TimeDatabaseDictionary();
-            _sensorValuesDatabases = new SensorValuesDatabaseDictionary(_databaseSettings);
+            _settings = dbSettings ?? new DatabaseSettings();
+            _environmentDatabase = LevelDBManager.GetEnvitonmentDatabaseInstance(_settings.PathToEnvironmentDb);
+            _sensorValuesDatabases = new SensorValuesDatabaseDictionary(_settings);
 
-            OpenAllExistingSensorDatabases();
+            Snapshots = new SnapshotsDatabase(_settings.PathToSnaphotsDb);
 
             _logger.Info($"{nameof(DatabaseCore)} initialized");
         }
 
-        private void OpenAllExistingSensorDatabases()
-        {
-            List<string> databasesList = _environmentDatabase.GetMonitoringDatabases();
-            foreach (var databaseName in databasesList)
-            {
-                GetDatesFromFolderName(databaseName, out DateTime from, out DateTime to);
-                if (from != DateTime.MinValue && to != DateTime.MinValue)
-                {
-                    ISensorsDatabase database = LevelDBManager.GetSensorDatabaseInstance(
-                        _databaseSettings.GetPathToMonitoringDatabase(databaseName), from, to);
-                    _sensorsDatabases.AddDatabase(database);
-                }
-            }
-        }
-
-        #region Database size
-
-        public long GetDatabaseSize()
-        {
-            var databasesDir = new DirectoryInfo(_databaseSettings.DatabaseFolder);
-            return GetDirectorySize(databasesDir);
-        }
-
-        public long GetMonitoringDataSize()
-        {
-            long size = 0;
-            var databasesList = _environmentDatabase.GetMonitoringDatabases();
-            foreach (var monitoringDB in databasesList)
-            {
-                var info = new DirectoryInfo(_databaseSettings.GetPathToMonitoringDatabase(monitoringDB));
-                size += GetDirectorySize(info);
-            }
-
-            foreach (var db in _sensorValuesDatabases)
-                size += GetDirectorySize(new DirectoryInfo(db.Name));
-
-            return size;
-        }
-
-        public long GetEnvironmentDatabaseSize()
-        {
-            DirectoryInfo environmentDatabaseDir = new DirectoryInfo(_databaseSettings.GetPathToEnvironmentDatabase());
-            return GetDirectorySize(environmentDatabaseDir);
-        }
-
-        private static long GetDirectorySize(DirectoryInfo directory)
-        {
-            long size = 0;
-            FileInfo[] files = directory.GetFiles();
-            foreach (var file in files)
-            {
-                try
-                {
-                    size += file.Length;
-                }
-                catch { }
-            }
-
-            DirectoryInfo[] directories = directory.GetDirectories();
-            foreach (var dir in directories)
-            {
-                size += GetDirectorySize(dir);
-            }
-
-            return size;
-        }
-
-        #endregion
 
         #region Fill Sensors (start app)
 
-        public Dictionary<Guid, byte[]> GetLatestValues(List<BaseSensorModel> sensors)
+        public Dictionary<Guid, byte[]> GetLatestValues(Dictionary<Guid, long> sensors)
         {
-            var result = new Dictionary<Guid, byte[]>(sensors.Count);
+            var orderedList = sensors.OrderBy(u => u.Value).ToList();
+            var result = GetResult(sensors.Keys.ToList());
 
-            foreach (var sensor in sensors)
-                result.Add(sensor.Id, null);
+            var curDb = _sensorValuesDatabases.GetEnumerator();
+            var maxBorder = DateTime.MaxValue.Ticks;
 
-            FillLatestValues(sensors, result);
+            curDb.MoveNext(); //go to first db
 
-            return FillRemainingLatestValues(sensors, result);
-        }
+            foreach (var (sensorId, time) in orderedList)
+                if (time < maxBorder) //skip no data sensors
+                {
+                    while (curDb.Current != null && curDb.Current.To < time)
+                        curDb.MoveNext();
 
-        private Dictionary<Guid, byte[]> FillLatestValues(List<BaseSensorModel> sensors, Dictionary<Guid, byte[]> result)
-        {
-            var tempResult = new Dictionary<byte[], (Guid sensorId, byte[] value)>(sensors.Count);
+                    if (curDb.Current != null)
+                    {
+                        var id = sensorId.ToString();
 
-            foreach (var sensor in sensors)
-            {
-                if (result[sensor.Id] != null)
-                    continue;
-
-                byte[] key = Encoding.UTF8.GetBytes(sensor.Id.ToString());
-                (Guid sensorId, byte[] latestValue) value = (sensor.Id, null);
-
-                tempResult.Add(key, value);
-            }
-
-            foreach (var database in _sensorValuesDatabases)
-                database.FillLatestValues(tempResult);
-
-            foreach (var (_, (sensorId, value)) in tempResult)
-                if (value != null)
-                    result[sensorId] = value;
+                        result[sensorId] = curDb.Current.Get(BuildSensorValueKey(id, time), Encoding.UTF8.GetBytes(id));
+                    }
+                    else
+                        break;
+                }
 
             return result;
         }
 
-        private Dictionary<Guid, byte[]> FillRemainingLatestValues(List<BaseSensorModel> sensors, Dictionary<Guid, byte[]> latestValues)
+        public Dictionary<Guid, byte[]> GetLatestValuesFrom(Dictionary<Guid, long> sensors)
         {
-            var remainingResult = new Dictionary<byte[], (Guid sensorId, byte[] value)>(sensors.Count);
+            var result = GetResult(sensors.Keys.ToList());
 
-            foreach (var sensor in sensors)
-            {
-                if (latestValues[sensor.Id] != null)
-                    continue;
+            var tempResult = new Dictionary<byte[], (long from, byte[] value)>(sensors.Count);
 
-                byte[] key = Encoding.UTF8.GetBytes(PrefixConstants.GetSensorReadValueKey(sensor.ProductName, sensor.Path));
-                (Guid sensorId, byte[] latestValue) value = (sensor.Id, null);
+            foreach (var (id, from) in sensors)
+                tempResult.Add(Encoding.UTF8.GetBytes(id.ToString()), (from, null));
 
-                remainingResult.Add(key, value);
-            }
+            foreach (var database in _sensorValuesDatabases.Reverse())
+                database.FillLatestValues(tempResult);
 
-            var databases = _sensorsDatabases.GetAllDatabases();
-            databases.Reverse();
+            foreach (var (key, (_, value)) in tempResult)
+                result[Guid.Parse(Encoding.UTF8.GetString(key))] = value;
 
-            foreach (var database in databases)
-                database.FillLatestValues(remainingResult);
-
-            foreach (var (_, (sensorId, value)) in remainingResult)
-                if (value != null)
-                    latestValues[sensorId] = value;
-
-            return latestValues;
+            return result;
         }
+
+        private static Dictionary<Guid, byte[]> GetResult(List<Guid> ids) => ids.ToDictionary(k => k, v => (byte[])null);
 
         #endregion
 
@@ -189,134 +129,33 @@ namespace HSMDatabase.DatabaseWorkCore
         public void UpdateSensor(SensorEntity entity) =>
             _environmentDatabase.AddSensor(entity);
 
-        public void ClearSensorValues(string sensorId, string productName, string path)
+        public void ClearSensorValues(string sensorId, DateTime from, DateTime to)
         {
-            RemoveSensorData(productName, path);
-            RemoveSensorValues(sensorId);
+            var fromTicks = from.ToUniversalTime().Ticks;
+            var toTicks = to.ToUniversalTime().Ticks;
+
+            var fromBytes = BuildSensorValueKey(sensorId, fromTicks);
+            var toBytes = BuildSensorValueKey(sensorId, toTicks);
+
+            foreach (var db in _sensorValuesDatabases)
+                if (db.IsInclude(fromTicks, toTicks))
+                    db.RemoveSensorValues(fromBytes, toBytes);
         }
 
-        public void RemoveSensorWithMetadata(string sensorId, string productName, string path)
+        public void RemoveSensorWithMetadata(string sensorId)
         {
             _environmentDatabase.RemoveSensor(sensorId);
             _environmentDatabase.RemoveSensorIdFromList(sensorId);
 
-            RemoveSensorData(productName, path);
-            RemoveSensorValues(sensorId);
+            ClearSensorValues(sensorId, DateTime.MinValue, DateTime.MaxValue);
         }
 
         public void AddSensorValue(SensorValueEntity valueEntity)
         {
             var dbs = _sensorValuesDatabases.GetNewestDatabases(valueEntity.ReceivingTime);
+            var key = BuildSensorValueKey(valueEntity.SensorId, valueEntity.ReceivingTime);
 
-            dbs.PutSensorValue(valueEntity);
-        }
-
-        public List<byte[]> GetSensorValues(string sensorId, string productName, string path, DateTime to, int count)
-        {
-            var result = GetSensorValues(sensorId, to, count);
-
-            var remainingCount = count - result.Count;
-            if (remainingCount > 0)
-                result.AddRange(GetSensorValues(productName, path, to, remainingCount));
-
-            return result;
-        }
-
-        public List<byte[]> GetSensorValues(string sensorId, string productName, string path, DateTime from, DateTime to)
-        {
-            const int maxSensorValues = 1000;
-
-            var result = GetSensorValues(sensorId, from, to, maxSensorValues);
-            if (result.Count < maxSensorValues)
-                result.AddRange(GetSensorValues(productName, path, from, to, maxSensorValues - result.Count));
-
-            return result;
-        }
-
-        private void RemoveSensorValues(string sensorId)
-        {
-            foreach (var db in _sensorValuesDatabases)
-                db.RemoveSensorValues(sensorId);
-        }
-
-        private void RemoveSensorData(string productName, string path)
-        {
-            //TAM-90: Do not delete metadata when delete sensors
-            var databases = _sensorsDatabases.GetAllDatabases();
-            foreach (var database in databases)
-                database.DeleteAllSensorValues(productName, path);
-        }
-
-        private List<byte[]> GetSensorValues(string sensorId, DateTime to, int count)
-        {
-            var toBytes = Encoding.UTF8.GetBytes(PrefixConstants.GetSensorValueKey(sensorId, to.Ticks));
-            var result = new List<byte[]>(count);
-
-            foreach (var database in _sensorValuesDatabases)
-            {
-                result.AddRange(database.GetValues(sensorId, toBytes, count - result.Count));
-
-                if (count == result.Count)
-                    break;
-            }
-
-            return result;
-        }
-
-        private List<byte[]> GetSensorValues(string productName, string path, DateTime to, int count)
-        {
-            var result = new List<byte[]>(count);
-
-            var databases = _sensorsDatabases.GetSortedDatabases();
-            foreach (var database in databases)
-            {
-                result.AddRange(database.GetSensorValues(productName, path, to, count - result.Count));
-
-                if (count == result.Count)
-                    break;
-            }
-
-            return result;
-        }
-
-        private List<byte[]> GetSensorValues(string sensorId, DateTime from, DateTime to, int count)
-        {
-            var result = new List<byte[]>(count);
-
-            var fromBytes = Encoding.UTF8.GetBytes(PrefixConstants.GetSensorValueKey(sensorId, from.Ticks));
-            var toBytes = Encoding.UTF8.GetBytes(PrefixConstants.GetSensorValueKey(sensorId, to.Ticks));
-
-            foreach (var database in _sensorValuesDatabases)
-            {
-                if (database.To < from.Ticks || database.From > to.Ticks)
-                    continue;
-
-                result.AddRange(database.GetValues(sensorId, fromBytes, toBytes, count - result.Count));
-
-                if (count == result.Count)
-                    break;
-            }
-
-            return result;
-        }
-
-        private List<byte[]> GetSensorValues(string productName, string path, DateTime from, DateTime to, int count)
-        {
-            var result = new List<byte[]>(count);
-
-            var databases = _sensorsDatabases.GetSortedDatabases();
-            foreach (var database in databases)
-            {
-                if (database.DatabaseMaxTicks < from.Ticks || database.DatabaseMinTicks > to.Ticks)
-                    continue;
-
-                result.AddRange(database.GetSensorValuesBytesBetween(productName, path, from, to, count - result.Count));
-
-                if (count == result.Count)
-                    break;
-            }
-
-            return result;
+            dbs.PutSensorValue(key, valueEntity.Value);
         }
 
         public List<SensorEntity> GetAllSensors()
@@ -333,6 +172,60 @@ namespace HSMDatabase.DatabaseWorkCore
 
             return sensorEntities;
         }
+
+        public IAsyncEnumerable<List<byte[]>> GetSensorValuesPage(string sensorId, DateTime from, DateTime to, int count)
+        {
+            var fromTicks = from.Ticks;
+            var toTicks = to.Ticks;
+
+            var fromBytes = BuildSensorValueKey(sensorId, fromTicks);
+            var toBytes = BuildSensorValueKey(sensorId, toTicks);
+
+            var databases = _sensorValuesDatabases.Where(db => db.IsInclude(fromTicks, toTicks)).ToList();
+            GetValuesFunc getValues = (db) => db.GetValuesFrom(fromBytes, toBytes);
+
+            if (count < 0)
+            {
+                databases.Reverse();
+                getValues = (db) => db.GetValuesTo(fromBytes, toBytes);
+            }
+
+            return GetSensorValuesPage(databases, count, getValues);
+        }
+
+        private async IAsyncEnumerable<List<byte[]>> GetSensorValuesPage(List<ISensorValuesDatabase> databases, int count, GetValuesFunc getValues)
+        {
+            var result = new List<byte[]>(SensorValuesPageCount);
+            var totalCount = 0;
+
+            foreach (var database in databases)
+            {
+                foreach (var value in getValues(database))
+                {
+                    result.Add(value);
+                    totalCount++;
+
+                    if (result.Count == SensorValuesPageCount)
+                    {
+                        yield return result;
+
+                        result.Clear();
+                    }
+
+                    if (Math.Abs(count) == totalCount)
+                    {
+                        yield return result;
+                        yield break;
+                    }
+                }
+            }
+
+            yield return result;
+        }
+
+        // "D19" string format is for inserting leading zeros (long.MaxValue has 19 symbols)
+        private static byte[] BuildSensorValueKey(string sensorId, long time) =>
+            Encoding.UTF8.GetBytes($"{sensorId}_{time:D19}");
 
         #endregion
 
@@ -367,6 +260,43 @@ namespace HSMDatabase.DatabaseWorkCore
             }
 
             return policies;
+        }
+
+        #endregion
+
+        #region Folders
+
+        public void AddFolder(FolderEntity entity)
+        {
+            _environmentDatabase.AddFolderToList(entity.Id);
+            _environmentDatabase.PutFolder(entity);
+        }
+
+        public void UpdateFolder(FolderEntity entity) =>
+            _environmentDatabase.PutFolder(entity);
+
+        public void RemoveFolder(string id)
+        {
+            _environmentDatabase.RemoveFolder(id);
+            _environmentDatabase.RemoveFolderFromList(id);
+        }
+
+        public FolderEntity GetFolder(string id) =>
+            _environmentDatabase.GetFolder(id);
+
+        public List<FolderEntity> GetAllFolders()
+        {
+            var keys = _environmentDatabase.GetFoldersList();
+
+            var foldersEntities = new List<FolderEntity>(keys.Count);
+            foreach (var key in keys)
+            {
+                var folder = _environmentDatabase.GetFolder(key);
+                if (folder != null)
+                    foldersEntities.Add(folder);
+            }
+
+            return foldersEntities;
         }
 
         #endregion
@@ -448,54 +378,18 @@ namespace HSMDatabase.DatabaseWorkCore
 
         #region Environment database : User
 
-        public void AddUser(User user)
-        {
-            UserEntity entity = user.ConvertToEntity();
+        public void AddUser(UserEntity entity) =>
             _environmentDatabase.AddUser(entity);
-        }
 
-        public void RemoveUser(User user)
-        {
-            UserEntity entity = user.ConvertToEntity();
+        public void RemoveUser(UserEntity entity) =>
             _environmentDatabase.RemoveUser(entity);
-        }
 
-        public void UpdateUser(User user) => AddUser(user);
+        public void UpdateUser(UserEntity entity) => AddUser(entity);
 
-        public List<User> GetUsers() => GetUsers(_environmentDatabase.ReadUsers().ToList());
+        public List<UserEntity> GetUsers() => _environmentDatabase.ReadUsers().ToList();
 
-        public List<User> GetUsersPage(int page, int pageSize) =>
-            GetUsers(_environmentDatabase.ReadUsersPage(page, pageSize).ToList());
-
-        private static List<User> GetUsers(List<UserEntity> userEntities)
-        {
-            var userEntitiesCount = userEntities?.Count ?? 0;
-            var users = new List<User>(userEntitiesCount);
-
-            if (userEntitiesCount != 0)
-                users.AddRange(userEntities.Select(e => new User(e)));
-
-            return users;
-        }
-
-        #endregion
-
-        #region Environment database : Configuration
-
-        public ConfigurationObject GetConfigurationObject(string name)
-        {
-            ConfigurationEntity entity = _environmentDatabase.ReadConfigurationObject(name);
-            return entity != null ? new ConfigurationObject(entity) : null;
-        }
-
-        public void WriteConfigurationObject(ConfigurationObject obj)
-        {
-            ConfigurationEntity entity = obj.ConvertToEntity();
-            _environmentDatabase.WriteConfigurationObject(entity);
-        }
-
-        public void RemoveConfigurationObject(string name) =>
-            _environmentDatabase.RemoveConfigurationObject(name);
+        public List<UserEntity> GetUsersPage(int page, int pageSize) =>
+            _environmentDatabase.ReadUsersPage(page, pageSize).ToList();
 
         #endregion
 
@@ -518,25 +412,9 @@ namespace HSMDatabase.DatabaseWorkCore
 
         #endregion
 
-        #region Private methods
-
-        private static void GetDatesFromFolderName(string folder, out DateTime from, out DateTime to)
-        {
-            var splitResults = folder.Split('_');
-
-            bool isFromTicks = long.TryParse(splitResults[1], out long fromTicks);
-            from = isFromTicks ? new DateTime(fromTicks) : DateTime.MinValue;
-
-            bool isToTicks = long.TryParse(splitResults[2], out long toTicks);
-            to = isToTicks ? new DateTime(toTicks) : DateTime.MinValue;
-        }
-
-        #endregion
-
         public void Dispose()
         {
             _environmentDatabase.Dispose();
-            _sensorsDatabases.GetAllDatabases().ForEach(d => d.Dispose());
             _sensorValuesDatabases.ToList().ForEach(d => d.Dispose());
         }
     }

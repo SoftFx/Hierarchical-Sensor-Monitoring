@@ -4,15 +4,43 @@
         <name>HSMServer</name>
     </assembly>
     <members>
-        <member name="T:HSMServer.BackgroundTask.DatabaseMonitoringService">
+        <member name="M:HSMServer.Authentication.IUserManager.AddUser(System.String,System.String,System.Boolean,System.Collections.Generic.List{System.ValueTuple{System.Guid,HSMServer.Model.Authentication.ProductRoleEnum}})">
             <summary>
-            Background service, which reports database size every 5 minutes 
+            Add new user with the specified parameters
+            </summary>
+            <param name="userName">Login of the new user, must be unique and not empty</param>
+            <param name="passwordHash">Password hash computed with HashComputer.ComputePasswordHash().</param>
+        </member>
+        <member name="M:HSMServer.Authentication.IUserManager.UpdateUser(HSMServer.Model.Authentication.User)">
+            <summary>
+            New user object
+            </summary>
+            <param name="user">User object (password field must be password hash).</param>
+        </member>
+        <member name="M:HSMServer.Authentication.IUserManager.RemoveUser(System.String)">
+            <summary>
+            Remove user with the specified userName
+            </summary>
+            <param name="userName">Name of the user to remove.</param>
+        </member>
+        <member name="M:HSMServer.Controllers.GrafanaDatasources.JsonSource.JsonDatasourceController.TestConnection">
+            <summary>
+            with 200 status code response. Used for "Test connection" on the datasource config page.
             </summary>
         </member>
-        <member name="T:HSMServer.BackgroundTask.OutdatedSensorService">
+        <member name="M:HSMServer.Controllers.GrafanaDatasources.JsonSource.JsonDatasourceController.GetMetrics(HSMServer.Controllers.GrafanaDatasources.JsonSource.MetricsRequest)">
             <summary>
-            This class is derived from BackgroundService. Every day, all sensors are checked. Sensors with latest updated older
-            than a specified parameter value are deleted
+            to return available Products
+            </summary>
+        </member>
+        <member name="M:HSMServer.Controllers.GrafanaDatasources.JsonSource.JsonDatasourceController.GetOptions(HSMServer.Controllers.GrafanaDatasources.JsonSource.MetricPayloadOptionsRequest)">
+            <summary>
+            to return a list of metric payload options (Sensors paths and data formats).
+            </summary>
+        </member>
+        <member name="M:HSMServer.Controllers.GrafanaDatasources.JsonSource.JsonDatasourceController.ReadHistory(HSMServer.Controllers.GrafanaDatasources.JsonSource.QueryHistoryRequest)">
+            <summary>
+            to return panel data or annotations
             </summary>
         </member>
         <member name="T:HSMServer.Controllers.SensorsController">
@@ -20,66 +48,137 @@
             Controller for receiving sensors data via https protocol. There is a default product for testing swagger methods.
             </summary>
         </member>
-        <member name="M:HSMServer.Controllers.SensorsController.Post(HSMSensorDataObjects.FullDataObject.IntSensorValue)">
+        <member name="M:HSMServer.Controllers.SensorsController.Post(HSMSensorDataObjects.SensorValueRequests.BoolSensorValue)">
+            <summary>
+            Receives value of bool sensor
+            </summary>
+            <param name="sensorValue"></param>
+            <returns></returns>
+        </member>
+        <member name="M:HSMServer.Controllers.SensorsController.Post(HSMSensorDataObjects.SensorValueRequests.IntSensorValue)">
             <summary>
             Receives value of int sensor
             </summary>
             <param name="sensorValue"></param>
             <returns></returns>
         </member>
-        <member name="M:HSMServer.Controllers.SensorsController.Post(HSMSensorDataObjects.FullDataObject.DoubleSensorValue)">
+        <member name="M:HSMServer.Controllers.SensorsController.Post(HSMSensorDataObjects.SensorValueRequests.DoubleSensorValue)">
             <summary>
             Receives value of double sensor
             </summary>
             <param name="sensorValue"></param>
             <returns></returns>
         </member>
-        <member name="M:HSMServer.Controllers.SensorsController.Post(HSMSensorDataObjects.FullDataObject.StringSensorValue)">
+        <member name="M:HSMServer.Controllers.SensorsController.Post(HSMSensorDataObjects.SensorValueRequests.StringSensorValue)">
             <summary>
             Receives value of string sensor
             </summary>
             <param name="sensorValue"></param>
             <returns></returns>
         </member>
-        <member name="M:HSMServer.Controllers.SensorsController.Post(HSMSensorDataObjects.FullDataObject.DoubleBarSensorValue)">
+        <member name="M:HSMServer.Controllers.SensorsController.Post(HSMSensorDataObjects.SensorValueRequests.TimeSpanSensorValue)">
+            <summary>
+            Receives value of timespan sensor
+            </summary>
+            <param name="sensorValue"></param>
+            <returns></returns>
+        </member>
+        <member name="M:HSMServer.Controllers.SensorsController.Post(HSMSensorDataObjects.SensorValueRequests.VersionSensorValue)">
+            <summary>
+            Receives value of version sensor
+            </summary>
+            <param name="sensorValue"></param>
+            <returns></returns>
+        </member>
+        <member name="M:HSMServer.Controllers.SensorsController.Post(HSMSensorDataObjects.SensorValueRequests.DoubleBarSensorValue)">
             <summary>
             Receives value of double bar sensor
             </summary>
             <param name="sensorValue"></param>
             <returns></returns>
         </member>
-        <member name="M:HSMServer.Controllers.SensorsController.Post(HSMSensorDataObjects.FullDataObject.IntBarSensorValue)">
+        <member name="M:HSMServer.Controllers.SensorsController.Post(HSMSensorDataObjects.SensorValueRequests.IntBarSensorValue)">
             <summary>
             Receives value of integer bar sensor
             </summary>
             <param name="sensorValue"></param>
             <returns></returns>
         </member>
-        <member name="M:HSMServer.Controllers.SensorsController.Post(HSMSensorDataObjects.FullDataObject.FileSensorValue)">
-            <summary>
-            Receives the value of file sensor
-            </summary>
-            <param name="sensorValue"></param>
-            <returns></returns>
-        </member>
-        <member name="M:HSMServer.Controllers.SensorsController.Post(HSMSensorDataObjects.FullDataObject.FileSensorBytesValue)">
+        <member name="M:HSMServer.Controllers.SensorsController.Post(HSMSensorDataObjects.SensorValueRequests.FileSensorValue)">
             <summary>
             Receives the value of file sensor, where the file contents are presented as byte array.
-            Recommended to use for pdf files in order to keep the pdf file encoding.
             </summary>
             <param name="sensorValue"></param>
             <returns></returns>
         </member>
-        <member name="M:HSMServer.Controllers.SensorsController.Post(System.Collections.Generic.IEnumerable{HSMSensorDataObjects.CommonSensorValue})">
+        <member name="M:HSMServer.Controllers.SensorsController.Post(System.Collections.Generic.List{HSMSensorDataObjects.SensorValueRequests.SensorValueBase})">
             <summary>
-            Endpoint used by HSMDataCollector services, which sends data in portions
+            Accepts data in SensorValueBase format. Converts data to a typed format and saves it to the database.
+            The key must be unique and stored in the header.
             </summary>
             <param name="values"></param>
             <returns></returns>
         </member>
-        <member name="T:HSMServer.Filters.ProductRoleFilters.ProductRoleFilterBase">
+        <member name="M:HSMServer.Controllers.SensorsController.Post(System.Collections.Generic.List{HSMServer.ObsoleteUnitedSensorValue.UnitedSensorValue})">
+            <summary>
+            Obsolete method. Will be removed.
+            Accepts data in UnitedSensorValue format. Converts data to a typed format and saves it to the database.
+            </summary>
+            <param name="values"></param>
+            <returns></returns>
+        </member>
+        <member name="M:HSMServer.Controllers.SensorsController.Get(HSMSensorDataObjects.HistoryRequests.HistoryRequest)">
+            <summary>
+            Get history [from, to] or [from - count] for some sensor
+            </summary>
+        </member>
+        <member name="M:HSMServer.Controllers.SensorsController.Get(HSMSensorDataObjects.HistoryRequests.FileHistoryRequest)">
+            <summary>
+            Get file (csv or txt) history [from, to] or [from - count] for some sensor
+            </summary>
+        </member>
+        <member name="T:HSMServer.Filters.DataRequestHeaderSwaggerFilter">
+            <summary>
+            Swagger filter for adding required string 'Key' in API requests header
+            </summary>
+        </member>
+        <member name="T:HSMServer.Filters.UserRoleFilterBase">
             <summary>
             The attribute denies access to some actions for a user who is neither admin or has role from _roles
+            </summary>
+        </member>
+        <member name="M:HSMServer.Model.History.BarHistoryProcessor`1.AddValueFromLists(HSMServer.Model.History.SummaryBarItem{`0})">
+            <summary>
+            Set fields, for which collecting lists of values is required
+            </summary>
+            <param name="summary"></param>
+        </member>
+        <member name="M:HSMServer.Model.History.BarHistoryProcessor`1.ProcessItem(HSMServer.Core.Model.BarBaseValue{`0},HSMServer.Model.History.SummaryBarItem{`0})">
+            <summary>
+            This method applies possible changes to the current data item for fields, for which collecting datas is not required
+            </summary>
+            <param name="value">Currently processed data item</param>
+            <param name="summary">Current summary item</param>
+        </member>
+        <member name="M:HSMServer.Model.History.BarHistoryProcessor`1.CountMean(System.Collections.Generic.List{System.ValueTuple{`0,System.Int32}})">
+            <summary>
+            Count mean from the list of all means
+            </summary>
+            <param name="means"></param>
+            <returns></returns>
+        </member>
+        <member name="M:HSMServer.Model.History.BarHistoryProcessor`1.CountMedian">
+            <returns>median from the percentiles list</returns>
+        </member>
+        <member name="M:HSMServer.Model.History.BarHistoryProcessor`1.CountQ1">
+            <returns>Q1 from the percentiles list</returns>
+        </member>
+        <member name="M:HSMServer.Model.History.BarHistoryProcessor`1.CountQ3">
+            <returns>Q3 from the percentiles list</returns>
+        </member>
+        <member name="M:HSMServer.Registration.RegistrationTicketManager.GetTicket(System.Guid)">
+            <summary>
+            This method MUST be called when update from 2.1.4 or lower to 2.1.5 or higher
             </summary>
         </member>
     </members>

@@ -1,114 +1,113 @@
-﻿using HSMServer.Core.Cache.Entities;
+﻿using HSMCommon.Extensions;
 using HSMServer.Core.Model;
 using HSMServer.Helpers;
 using HSMServer.Model.AccessKeysViewModels;
+using HSMServer.Model.Authentication;
+using HSMServer.Model.Folders;
+using HSMServer.Notification.Settings;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace HSMServer.Model.TreeViewModels
+namespace HSMServer.Model.TreeViewModel
 {
-    public class ProductNodeViewModel : NodeViewModel
+    public class ProductNodeViewModel : NodeViewModel, INotificatable
     {
-        public string Id { get; }
-
-        public string EncodedId { get; }
-
-        public ConcurrentDictionary<string, ProductNodeViewModel> Nodes { get; } = new();
+        public ConcurrentDictionary<Guid, ProductNodeViewModel> Nodes { get; } = new();
 
         public ConcurrentDictionary<Guid, SensorNodeViewModel> Sensors { get; } = new();
 
         public ConcurrentDictionary<Guid, AccessKeyViewModel> AccessKeys { get; } = new();
 
-        public List<SensorNodeViewModel> VisibleSensors => Sensors.Values.Where(s => s.HasData).ToList();
 
-        public bool IsAvailableForUser { get; internal set; }
+        public ClientNotifications Notifications { get; }
 
-        public bool IsAddingAccessKeysAvailable { get; internal set; }
-
-        public int Count { get; private set; }
+        public int AllSensorsCount { get; private set; }
 
 
-        public ProductNodeViewModel(ProductModel model)
+        public override bool HasData => Sensors.Values.Any(s => s.HasData) || Nodes.Values.Any(n => n.HasData);
+
+        public bool IsEmpty => AllSensorsCount == 0;
+
+        public Guid? FolderId => Parent is FolderModel folder ? folder?.Id : null;
+
+
+        public ProductNodeViewModel(ProductModel model, ProductNodeViewModel parent, FolderModel folder) : base(model)
         {
-            Id = model.Id;
-            EncodedId = SensorPathHelper.Encode(Id);
-            Name = model.DisplayName;
+            Notifications = new(model.NotificationsSettings, () => Parent is FolderModel folder ? folder.Notifications : (Parent as ProductNodeViewModel)?.Notifications);
+
+            Update(model);
+
+            parent?.AddSubNode(this);
+
+            if (folder != null)
+                AddFolder(folder);
         }
 
 
-        internal void Update(ProductModel model)
-        {
-            Name = model.DisplayName;
-        }
+        public bool IsChangingAccessKeysAvailable(User user) =>
+            user.IsAdmin || ProductRoleHelper.IsManager(Id, user.ProductsRoles);
 
         internal void AddSubNode(ProductNodeViewModel node)
         {
-            Nodes.TryAdd(node.Id, node);
             node.Parent = this;
+            Nodes.TryAdd(node.Id, node);
         }
 
         internal void AddSensor(SensorNodeViewModel sensor)
         {
-            Sensors.TryAdd(sensor.Id, sensor);
             sensor.Parent = this;
+            Sensors.TryAdd(sensor.Id, sensor);
         }
 
-        internal void AddAccessKey(AccessKeyViewModel key) =>
-            AccessKeys.TryAdd(key.Id, key);
-
-        internal void Recursion()
+        internal void AddFolder(FolderModel folder)
         {
-            int count = 0;
+            folder.Products.Add(Id, this);
+            UpdateFolder(folder);
+        }
+
+        internal void UpdateFolder(FolderModel folder) => Parent = folder;
+
+        internal void AddAccessKey(AccessKeyViewModel key) => AccessKeys.TryAdd(key.Id, key);
+
+        internal List<AccessKeyViewModel> GetAccessKeys() => AccessKeys.Values.ToList();
+
+        internal ProductNodeViewModel RecalculateCharacteristics()
+        {
+            int allSensorsCount = 0;
+
             if (Nodes != null && !Nodes.IsEmpty)
             {
                 foreach (var (_, node) in Nodes)
                 {
-                    node.Recursion();
-                    count += node.Count;
+                    node.RecalculateCharacteristics();
+                    allSensorsCount += node.AllSensorsCount;
                 }
             }
-
-            Count = count + VisibleSensors.Count;
-
+            
+            AllSensorsCount = allSensorsCount + Sensors.Count;
+            
             ModifyUpdateTime();
             ModifyStatus();
+
+            return this;
         }
-
-        internal void UpdateAccessKeysAvailableOperations(bool isAccessKeysOperationsAvailable)
-        {
-            if (Nodes != null && !Nodes.IsEmpty)
-                foreach (var (_, node) in Nodes)
-                    node.UpdateAccessKeysAvailableOperations(isAccessKeysOperationsAvailable);
-
-            IsAddingAccessKeysAvailable = isAccessKeysOperationsAvailable;
-
-            foreach (var (_, accessKey) in AccessKeys)
-                accessKey.IsChangeAvailable = isAccessKeysOperationsAvailable;
-        }
-
-        internal List<AccessKeyViewModel> GetAccessKeys() => AccessKeys.Values.ToList();
 
         private void ModifyUpdateTime()
         {
-            var sensorMaxTime = VisibleSensors.Count == 0 ? null : VisibleSensors?.Max(x => x.UpdateTime);
-            var nodeMaxTime = Nodes.Values.Count == 0 ? null : Nodes?.Values.Max(x => x.UpdateTime);
+            var sensorMaxTime = Sensors.Values.MaxOrDefault(x => x.UpdateTime);
+            var nodeMaxTime = Nodes.Values.MaxOrDefault(x => x.UpdateTime);
 
-            if (sensorMaxTime.HasValue && nodeMaxTime.HasValue)
-                UpdateTime = new List<DateTime> { sensorMaxTime.Value, nodeMaxTime.Value }.Max();
-            else if (sensorMaxTime.HasValue)
-                UpdateTime = sensorMaxTime.Value;
-            else if (nodeMaxTime.HasValue)
-                UpdateTime = nodeMaxTime.Value;
+            UpdateTime = sensorMaxTime > nodeMaxTime ? sensorMaxTime : nodeMaxTime;
         }
 
         private void ModifyStatus()
         {
-            var statusFromSensors = VisibleSensors.Count == 0 ? SensorStatus.Ok : VisibleSensors.Max(s => s.Status);
-            var statusFromNodes = Nodes.Values.Count == 0 ? SensorStatus.Ok : Nodes.Values.Max(n => n.Status);
+            var nodesStatus = Sensors.Values.MaxOrDefault(s => s.Status);
+            var sensorStatus = Nodes.Values.MaxOrDefault(n => n.Status);
 
-            Status = new List<SensorStatus> { statusFromNodes, statusFromSensors }.Max();
+            Status = sensorStatus > nodesStatus ? sensorStatus : nodesStatus;
         }
     }
 }
