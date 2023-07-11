@@ -25,7 +25,7 @@ public class JournalController : BaseController
     }
 
     [HttpPost]
-    public async Task<JsonResult> GetPage([FromQuery] string id, [FromBody] Test parameters)
+    public async Task<JsonResult> GetPage([FromQuery] string id, [FromBody] TableParameters parameters)
     {
         var req = parameters.Parameters;
         var resultSet = new DataTableResultSet
