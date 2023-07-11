@@ -52,17 +52,6 @@ namespace HSMServer.Controllers
             _journalService = journalService;
         }
         
-        //TODO remove after refactoring
-        #region test
-        [AllowAnonymous]
-        public void DeleteJournals(string id)
-        { 
-            _journalService.RemoveJournal(Guid.Parse(id));
-        }
-
-        #endregion
-        
-        
         public IActionResult Index()
         {
             return View(_treeViewModel);
