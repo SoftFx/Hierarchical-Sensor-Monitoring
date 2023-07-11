@@ -53,6 +53,7 @@ public class JournalController : BaseController
                     0 => searched.OrderBy(x => x.Key.Time),
                     1 => searched.OrderBy(x => x.Key.Type),
                     2 => searched.OrderBy(x => x.Value),
+                    3 => searched.OrderBy(x => x.Initiator),
                     _ => searched
                 };
             }
@@ -63,21 +64,21 @@ public class JournalController : BaseController
                     0 => searched.OrderByDescending(x => x.Key.Time),
                     1 => searched.OrderByDescending(x => x.Key.Type),
                     2 => searched.OrderByDescending(x => x.Value),
+                    3 => searched.OrderByDescending(x => x.Initiator),
                     _ => searched
                 };
             }
         }
 
-        var length = 0;
         foreach (var recordFromDb in searched.Skip(req.Start).Take(req.Length).Select(x => new JournalViewModel(x))) {
             var data = new List<string>
             {
                 recordFromDb.TimeAsString,
                 recordFromDb.Type.ToString(),
-                recordFromDb.Value
+                recordFromDb.Value,
+                recordFromDb.Initiator,
             };
             resultSet.Data.Add(data);
-            length++;
         }
 
         resultSet.RecordsTotal = journals.Count;
