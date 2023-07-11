@@ -163,35 +163,41 @@
             $(this).find(`div[name='alertCondition']`).each(function (j) {
                 setFormDataAlertsListProperty(formData, type, i, j, $(this), "Conditions", "select", "Property");
 
-                if ($(this).find('div[name="valueCondition"]').hasClass('d-flex')) {
-                    setFormDataAlertsListProperty(formData, type, i, j, $(this), "Conditions", "select", "Operation");
-                    setFormDataAlertsListProperty(formData, type, i, j, $(this), "Conditions", "input", "Target");
+                let valueBlock = $(this).find('div[name="valueCondition"]');
+                if (valueBlock.hasClass('d-flex')) {
+                    setFormDataAlertsListProperty(formData, type, i, j, valueBlock, "Conditions", "select", "Operation");
+                    setFormDataAlertsListProperty(formData, type, i, j, valueBlock, "Conditions", "input", "Target");
                 }
 
-                if ($(this).find('div[name="sensitivityCondition"]').hasClass('d-flex')) {
-                    setFormDataAlertsConditionIntervals(formData, type, i, j, $(this), "Sensitivity", "select", "Interval");
-                    setFormDataAlertsConditionIntervals(formData, type, i, j, $(this), "Sensitivity", "input", "CustomTimeInterval");
+                let sensitivityBlock = $(this).find('div[name="sensitivityCondition"]');
+                if (sensitivityBlock.hasClass('d-flex')) {
+                    setFormDataAlertsConditionIntervals(formData, type, i, j, sensitivityBlock, "Sensitivity", "select", "Interval");
+                    setFormDataAlertsConditionIntervals(formData, type, i, j, sensitivityBlock, "Sensitivity", "input", "CustomTimeInterval");
                 }
 
-                if ($(this).find('div[name="ttlCondition"]').hasClass('d-flex')) {
-                    setFormDataAlertsConditionIntervals(formData, type, i, j, $(this), "TimeToLive", "select", "Interval");
-                    setFormDataAlertsConditionIntervals(formData, type, i, j, $(this), "TimeToLive", "input", "CustomTimeInterval");
+                let ttlBlock = $(this).find('div[name="ttlCondition"]');
+                if (ttlBlock.hasClass('d-flex')) {
+                    setFormDataAlertsConditionIntervals(formData, type, i, j, ttlBlock, "TimeToLive", "select", "Interval");
+                    setFormDataAlertsConditionIntervals(formData, type, i, j, ttlBlock, "TimeToLive", "input", "CustomTimeInterval");
                 }
             });
 
             $(this).find(`div[name='alertAction']`).each(function (j) {
                 setFormDataAlertsListProperty(formData, type, i, j, $(this), "Actions", "select", "Action");
 
-                if ($(this).find('div[name="sendNotificationAction"]').hasClass('d-block')) {
-                    setFormDataAlertsListProperty(formData, type, i, j, $(this), "Actions", "input", "Comment");
+                let sendBlock = $(this).find('div[name="sendNotificationAction"]');
+                if (sendBlock.hasClass('d-block')) {
+                    setFormDataAlertsListProperty(formData, type, i, j, sendBlock, "Actions", "input", "Comment");
                 }
 
-                if ($(this).find('div[name="showIconAction"]').hasClass('d-block')) {
-                    setFormDataAlertsListProperty(formData, type, i, j, $(this), "Actions", "input", "Icon");
+                let showBlock = $(this).find('div[name="showIconAction"]');
+                if (showBlock.hasClass('d-block')) {
+                    setFormDataAlertsListProperty(formData, type, i, j, showBlock, "Actions", "input", "Icon");
                 }
 
-                if ($(this).find('div[name="setStatusAction"]').hasClass('d-block')) {
-                    setFormDataAlertsListProperty(formData, type, i, j, $(this), "Actions", "select", "Status");
+                let setBlock = $(this).find('div[name="setStatusAction"]');
+                if (setBlock.hasClass('d-block')) {
+                    setFormDataAlertsListProperty(formData, type, i, j, setBlock, "Actions", "select", "Status");
                 }
             });
         });
