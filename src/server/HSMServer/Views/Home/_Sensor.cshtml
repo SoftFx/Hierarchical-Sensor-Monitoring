@@ -266,6 +266,7 @@
          $('[id^="journal_table_"]').dataTable({
                     processing: true,
                     serverSide: true,
+                    order: [[0, 'desc']],
                     ajax: {
                         type: "POST",
                         contentType: "application/json; charset=utf-8",
