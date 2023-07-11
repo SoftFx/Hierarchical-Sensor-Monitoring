@@ -12,6 +12,7 @@ public class JournalService : IJournalService
 {
     private readonly IDatabaseCore _database;
 
+    public event Action<JournalRecordModel> NewJournalEvent;
 
     public JournalService(IDatabaseCore database)
     {
@@ -21,7 +22,10 @@ public class JournalService : IJournalService
     public void AddJournal(JournalRecordModel record)
     {
         if (!string.IsNullOrEmpty(record.Value))
+        {
             _database.AddJournalValue(record.Key, record.ToJournalEntity());
+            NewJournalEvent?.Invoke(record);
+        }
     }
 
     public void RemoveJournal(Guid id) => _database.RemoveJournalValue(id);
