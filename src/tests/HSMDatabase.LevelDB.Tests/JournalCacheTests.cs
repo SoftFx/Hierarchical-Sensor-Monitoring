@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Core.Journal;
 using HSMServer.Core.Model;
@@ -28,7 +29,7 @@ public class JournalCacheTests : MonitoringCoreTestsBase<TreeValuesCacheFixture>
         var sensors = GetUpdatedSensors(n);
         foreach (var sensor in sensors)
         {
-            var journals = await _journalService.GetJournalValuesPage(new(sensor.Id, DateTime.MinValue, DateTime.MaxValue, RecordType.Actions, MaxHistoryCount)).Flatten();
+            var journals = await _journalService.GetJournalValuesPage(new(sensor.Id, DateTime.MinValue, DateTime.MaxValue, RecordType.Changes, MaxHistoryCount)).Flatten();
            
             Assert.NotEmpty(journals);
         }
@@ -43,15 +44,14 @@ public class JournalCacheTests : MonitoringCoreTestsBase<TreeValuesCacheFixture>
         for (int i = 0; i < n; i++)
         {
             string value = RandomGenerator.GetRandomString();
-            var journal = new JournalRecordModel(id, new DateTime(RandomGenerator.GetRandomTimeSpan(3155368608000005611, 3155362560000005611).Ticks), value);
+            var journal = new JournalRecordModel(id, new DateTime(RandomGenerator.GetRandomTimeSpan(DateTime.MaxValue.Ticks, DateTime.MinValue.Ticks).Ticks), value);
             journals.Add(journal);
             _journalService.AddJournal(journal);
         }
 
         await Task.Delay(1000);
-        var expected = journals.OrderByDescending(x => x.Key.Time).ToList();
-        var actual = new List<JournalRecordModel>();
-        actual = await _journalService.GetJournalValuesPage(new(id, DateTime.MinValue, DateTime.MaxValue, RecordType.Actions, 50000)).Flatten();
+        var expected = journals.OrderBy(x => x.Key.Time).ToList();
+        var actual = await _journalService.GetJournalValuesPage(new(id, DateTime.MinValue, DateTime.MaxValue, RecordType.Changes, 50000)).Flatten();
 
         for (int i = 0; i < n; i++)
         {

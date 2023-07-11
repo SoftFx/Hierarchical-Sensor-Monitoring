@@ -35,10 +35,10 @@ public class JournalController : BaseController
         };
 
         var journals = await _journalService
-            .GetJournalValuesPage(new(Guid.Parse(id), DateTime.MinValue, DateTime.MaxValue, RecordType.Actions, TreeValuesCache.MaxHistoryCount)).Flatten();
+            .GetJournalValuesPage(new(Guid.Parse(id), DateTime.MinValue, DateTime.MaxValue, RecordType.Changes, TreeValuesCache.MaxHistoryCount)).Flatten();
         
         var changesJournals = (await _journalService
-            .GetJournalValuesPage(new(Guid.Parse(id), DateTime.MinValue, DateTime.MaxValue, RecordType.Changes, TreeValuesCache.MaxHistoryCount))
+            .GetJournalValuesPage(new(Guid.Parse(id), DateTime.MinValue, DateTime.MaxValue, RecordType.Actions, TreeValuesCache.MaxHistoryCount))
             .Flatten()).ToList();
         
         journals.AddRange(changesJournals);

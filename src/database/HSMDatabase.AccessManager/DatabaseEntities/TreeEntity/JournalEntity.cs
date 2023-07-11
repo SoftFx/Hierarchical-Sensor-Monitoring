@@ -3,12 +3,12 @@ namespace HSMDatabase.AccessManager.DatabaseEntities;
 
 public enum RecordType : byte
 {
-    Changes,
-    Actions
+    Actions,
+    Changes
 }
 
 
-public sealed record JournalEntity(string Value);
+public sealed record JournalEntity(string Value, string Initiator = "System");
 
 
 public readonly struct JournalKey
@@ -25,7 +25,7 @@ public readonly struct JournalKey
     public RecordType Type { get; }
 
 
-    public JournalKey(Guid id, long time, RecordType type = RecordType.Actions)
+    public JournalKey(Guid id, long time, RecordType type = RecordType.Changes)
     {
         Id = id;
         Time = time;

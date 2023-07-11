@@ -13,7 +13,7 @@ public class JournalHistoryRequestModel
 
     public int Count { get; set; } = 100;
 
-    public RecordType Type { get; set; } = RecordType.Actions;
+    public RecordType Type { get; set; } = RecordType.Changes;
     
     public JournalHistoryRequestModel() { }
 

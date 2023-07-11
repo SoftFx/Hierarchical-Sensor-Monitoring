@@ -422,8 +422,8 @@ namespace HSMDatabase.DatabaseWorkCore
             var fromTicks = DateTime.MinValue.Ticks;
             var toTicks = DateTime.MaxValue.Ticks;
 
-            RemoveJournal(id, fromTicks, toTicks, RecordType.Actions);
             RemoveJournal(id, fromTicks, toTicks, RecordType.Changes);
+            RemoveJournal(id, fromTicks, toTicks, RecordType.Actions);
         }
 
         private void RemoveJournal(Guid id, long fromTicks, long toTicks, RecordType type)

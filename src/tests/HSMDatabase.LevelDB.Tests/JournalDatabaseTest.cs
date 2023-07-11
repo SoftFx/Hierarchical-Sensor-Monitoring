@@ -24,7 +24,7 @@ namespace HSMDatabase.LevelDB.Tests
             const int historyValuesCount = 1000;
             var sensorId = Guid.NewGuid();
             var journals = GenerateJournalEntities(sensorId, historyValuesCount);
-            var journalType = RecordType.Actions;
+            var journalType = RecordType.Changes;
 
             foreach (var journal in journals)
             {
@@ -44,17 +44,17 @@ namespace HSMDatabase.LevelDB.Tests
             var firstValue = "Test_Zero";
             var secondValue = "Test_Max";
             
-            await JournalDatabaseTestOrder(Guid.Empty,RecordType.Actions, RecordType.Actions, firstValue, secondValue);
-            await JournalDatabaseTestOrder(Guid.Empty,RecordType.Actions, RecordType.Changes, firstValue, secondValue);
             await JournalDatabaseTestOrder(Guid.Empty,RecordType.Changes, RecordType.Changes, firstValue, secondValue);
             await JournalDatabaseTestOrder(Guid.Empty,RecordType.Changes, RecordType.Actions, firstValue, secondValue);
-            await JournalDatabaseTestOrder(Guid.NewGuid(),RecordType.Actions, RecordType.Actions, firstValue, secondValue);
-            await JournalDatabaseTestOrder(Guid.NewGuid(),RecordType.Actions, RecordType.Changes, firstValue, secondValue);
+            await JournalDatabaseTestOrder(Guid.Empty,RecordType.Actions, RecordType.Actions, firstValue, secondValue);
+            await JournalDatabaseTestOrder(Guid.Empty,RecordType.Actions, RecordType.Changes, firstValue, secondValue);
             await JournalDatabaseTestOrder(Guid.NewGuid(),RecordType.Changes, RecordType.Changes, firstValue, secondValue);
             await JournalDatabaseTestOrder(Guid.NewGuid(),RecordType.Changes, RecordType.Actions, firstValue, secondValue);
+            await JournalDatabaseTestOrder(Guid.NewGuid(),RecordType.Actions, RecordType.Actions, firstValue, secondValue);
+            await JournalDatabaseTestOrder(Guid.NewGuid(),RecordType.Actions, RecordType.Changes, firstValue, secondValue);
         }
         
-        private async Task JournalDatabaseTestOrder(Guid guid, RecordType first = RecordType.Actions, RecordType second = RecordType.Actions, string firstValue = "", string secondValue = "")
+        private async Task JournalDatabaseTestOrder(Guid guid, RecordType first = RecordType.Changes, RecordType second = RecordType.Changes, string firstValue = "", string secondValue = "")
         {
             GenerateBorderValues(guid, first, second, firstValue, secondValue);
             await Task.Delay(100);
@@ -72,8 +72,8 @@ namespace HSMDatabase.LevelDB.Tests
             }
             else
             {
-                var databaseSingleActionsData = await GetJournalValues(guid, DateTime.MinValue, DateTime.MaxValue, RecordType.Actions);
-                var databaseSingleChangesData = await GetJournalValues(guid, DateTime.MinValue, DateTime.MaxValue, RecordType.Changes);
+                var databaseSingleActionsData = await GetJournalValues(guid, DateTime.MinValue, DateTime.MaxValue, RecordType.Changes);
+                var databaseSingleChangesData = await GetJournalValues(guid, DateTime.MinValue, DateTime.MaxValue, RecordType.Actions);
                 Assert.Single(databaseSingleActionsData);
                 Assert.Single(databaseSingleChangesData);
             }
@@ -84,11 +84,11 @@ namespace HSMDatabase.LevelDB.Tests
 
         private RecordType GetAlterType(RecordType currType) => currType switch
         {
-            RecordType.Actions => RecordType.Changes,
-            _ => RecordType.Actions
+            RecordType.Changes => RecordType.Actions,
+            _ => RecordType.Changes
         };
 
-        private void GenerateBorderValues(Guid guid, RecordType first = RecordType.Actions, RecordType second = RecordType.Actions, string firstValue = "", string secondValue = "")
+        private void GenerateBorderValues(Guid guid, RecordType first = RecordType.Changes, RecordType second = RecordType.Changes, string firstValue = "", string secondValue = "")
         {
             var zeroValue = new JournalEntity(firstValue);
             var maxValue = new JournalEntity(secondValue);
@@ -99,7 +99,7 @@ namespace HSMDatabase.LevelDB.Tests
             _databaseCore.AddJournalValue(keyZero, zeroValue);
         }
 
-        private async Task<List<JournalEntity?>> GetJournalValues(Guid guid, DateTime from, DateTime to, RecordType type = RecordType.Actions, int count = 5000) => 
+        private async Task<List<JournalEntity?>> GetJournalValues(Guid guid, DateTime from, DateTime to, RecordType type = RecordType.Changes, int count = 5000) => 
             (await _databaseCore.GetJournalValuesPage(guid, from, to, type, count).Flatten()).Select(x => JsonSerializer.Deserialize<JournalEntity>(x.Entity)).ToList();
 
         private List<(JournalKey, JournalEntity)> GenerateJournalEntities(Guid sensorId, int count)
@@ -108,7 +108,7 @@ namespace HSMDatabase.LevelDB.Tests
 
             for (int i = 0; i < count; i++)
             {
-                var key = new JournalKey(sensorId, DateTime.UtcNow.Ticks, RecordType.Actions);
+                var key = new JournalKey(sensorId, DateTime.UtcNow.Ticks, RecordType.Changes);
                 result.Add((key, new JournalEntity($"TEST_{i}")));
             }
 
