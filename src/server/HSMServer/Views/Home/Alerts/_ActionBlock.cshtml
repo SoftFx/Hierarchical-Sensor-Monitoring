@@ -5,20 +5,29 @@
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
 
 
+@{
+    var action = Model.Action;
+
+    var isSendAction = action == ActionViewModel.SendNotifyAction;
+    var isShowAction = action == ActionViewModel.ShowIconAction;
+    var isSetAction = action == ActionViewModel.SetStatusAction;
+}
+
+
 <div name="alertAction" class="d-flex flex-row align-items-center alert-blocks-group py-1 ms-3">
     <div class="@(Model.IsMain ? "d-none" : "d-flex") alert-text-block alert-add me-3">and</div>
 
     <select class="alert-block alert-select property-select" asp-for="Action" asp-items="Model.Actions"></select>
 
-    <div name="sendNotificationAction" class="d-block">
+    <div name="sendNotificationAction" class="@(isSendAction ? "d-block" : "d-none")">
         <input type="text" class="alert-block target-input" placeholder="message template" asp-for="Comment" value="@Model.Comment" required>
     </div>
 
-    <div name="showIconAction" class="d-none alert-block">
+    <div name="showIconAction" class="@(isShowAction ? "d-block" : "d-none") alert-block">
         <input class="target-input" asp-for="Icon" />
     </div>
 
-    <div name="setStatusAction" class="d-none">
+    <div name="setStatusAction" class="@(isSetAction ? "d-block" : "d-none")">
         <select class="alert-block alert-select target-input" asp-for="Status" asp-items="@Model.StatusesItems"></select>
     </div>
 

@@ -6,7 +6,7 @@
 
 
 @{
-    var condition = Model.PropertiesItems.FirstOrDefault()?.Value;
+    var condition = Model.Property;
 
     var isTtlCondition = condition == ConditionViewModel.TimeToLiveCondition;
     var isSensitivityCondition = condition == ConditionViewModel.SensitivityCondition;
@@ -28,12 +28,12 @@
 
     <div name="sensitivityCondition" class="@(isSensitivityCondition ? "d-flex" : "d-none") flex-row align-items-center">
         <div class="alert-text-block operation-select">more than</div>
-        <partial name="_TimeIntervalSelect" for="Sensitivity" /> @*old name  for="Sensitivity"*@
+        <partial name="_TimeIntervalSelect" for="Sensitivity" />
     </div>
 
     <div name="ttlCondition" class="@(isTtlCondition ? "d-flex" : "d-none") flex-row align-items-center">
         <div class="alert-text-block operation-select">is</div>
-        <partial name="_TimeIntervalSelect" for="TimeToLive" /> @*old name  for="Sensitivity"*@
+        <partial name="_TimeIntervalSelect" for="TimeToLive" />
     </div>
 
     <a class="deleteCondition"><i class="@(isMainCondition ? "d-none" : "d-flex") fa-solid fa-xmark alert-delete-button"></i></a>

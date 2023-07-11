@@ -47,6 +47,7 @@ namespace HSMServer.Model.DataAlerts
             StatusesItems = AlertPredefined.Statuses.Select(s => new SelectListItem(s.Value, $"{s.Key}")).ToList();
 
             Comment = DefaultCommentTemplate;
+            Action = Actions.FirstOrDefault()?.Value;
         }
     }
 }

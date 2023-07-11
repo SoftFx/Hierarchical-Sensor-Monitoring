@@ -41,7 +41,7 @@ namespace HSMServer.Model.DataAlerts
         public List<SelectListItem> OperationsItems { get; }
 
 
-        public ConditionViewModel(bool isFirst)
+        public ConditionViewModel(bool isMain)
         {
             Sensitivity = new TimeIntervalViewModel(PredefinedIntervals.ForRestore) { IsAlertBlock = true };
             TimeToLive = new TimeIntervalViewModel(PredefinedIntervals.ForRestore) { IsAlertBlock = true };
@@ -49,10 +49,12 @@ namespace HSMServer.Model.DataAlerts
             OperationsItems = Actions.Select(a => new SelectListItem(a.GetDisplayName(), $"{a}")).ToList();
             PropertiesItems = Properties.Select(p => new SelectListItem(p, p, false)).ToList();
 
-            if (isFirst)
+            if (isMain)
                 PropertiesItems.Add(new SelectListItem("Inactivity period", TimeToLiveCondition));
             else
                 PropertiesItems.Add(new SelectListItem("Sensitivity", SensitivityCondition));
+
+            Property = PropertiesItems.FirstOrDefault()?.Value;
         }
     }
 
@@ -70,7 +72,7 @@ namespace HSMServer.Model.DataAlerts
         };
 
 
-        public SingleConditionViewModel(bool isFirst) : base(isFirst) { }
+        public SingleConditionViewModel(bool isMain) : base(isMain) { }
     }
 
 
@@ -93,6 +95,6 @@ namespace HSMServer.Model.DataAlerts
         };
 
 
-        public BarConditionViewModel(bool isFirst) : base(isFirst) { }
+        public BarConditionViewModel(bool isMain) : base(isMain) { }
     }
 }

@@ -100,6 +100,6 @@ namespace HSMServer.Model.DataAlerts
         }
 
 
-        protected abstract ConditionViewModel CreateCondition(bool isFirst);
+        protected abstract ConditionViewModel CreateCondition(bool isMain);
     }
 }
