@@ -40,7 +40,7 @@ namespace HSMServer.Core.Model
         public static TimeIntervalModel None { get; } = new(TimeInterval.None);
 
 
-        public TimeInterval Interval { get; } = TimeInterval.FromParent;
+        public TimeInterval Interval { get; }
 
         public long Ticks { get; }
 
@@ -51,6 +51,8 @@ namespace HSMServer.Core.Model
 
         public bool UseTicks => Interval is TimeInterval.Ticks or TimeInterval.FromFolder;
 
+
+        public TimeIntervalModel() : this(TimeInterval.FromParent) { }
 
         public TimeIntervalModel(long ticks) : this(TimeInterval.Ticks, ticks) { }
 

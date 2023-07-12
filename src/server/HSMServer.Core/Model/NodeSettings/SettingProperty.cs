@@ -23,51 +23,39 @@ namespace HSMServer.Core.Model.NodeSettings
     }
 
 
-    public sealed class SettingProperty<T> : SettingProperty where T : TimeIntervalModel
+    public sealed class SettingProperty<T> : SettingProperty where T : TimeIntervalModel, new()
     {
         private readonly T _emptyValue = (T)TimeIntervalModel.None;
-        private T _curValue;
 
 
         public override bool IsEmpty => Value is null;
 
-        public override bool IsSet => _curValue is not null;
+        public override bool IsSet => !CurValue?.IsFromParent ?? false;
 
 
-        public T Value => _curValue ?? ((SettingProperty<T>)ParentProperty)?.Value ?? _emptyValue;
+        public T CurValue { get; private set; } = new T();
+
+        public T Value => IsSet ? CurValue : ((SettingProperty<T>)ParentProperty)?.Value ?? _emptyValue;
 
 
         internal override bool TrySetValue(TimeIntervalModel update)
         {
-            if (update is null)
-                return false;
-
             var action = ActionType.Add;
             var newValue = (T)update;
 
-            if (IsSet)
-            {
-                if (newValue.IsFromParent)
-                {
-                    _curValue = null;
-                    action = ActionType.Delete;
-                }
-                else
-                {
-                    _curValue = newValue;
-                    action = ActionType.Update;
-                }
-            }
-            else if (!newValue.IsFromParent)
-                _curValue = newValue;
-            else
-                return true;
+            if (CurValue is null && newValue is null)
+                return false;
+
+            if (CurValue is not null)
+                action = newValue is null ? ActionType.Delete : ActionType.Update;
+
+            CurValue = newValue;
 
             Uploaded?.Invoke(action, newValue);
 
             return true;
         }
 
-        internal override TimeIntervalEntity ToEntity() => _curValue?.ToEntity();
+        internal override TimeIntervalEntity ToEntity() => CurValue?.ToEntity();
     }
 }

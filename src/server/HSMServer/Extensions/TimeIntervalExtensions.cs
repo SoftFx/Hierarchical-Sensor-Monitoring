@@ -41,33 +41,5 @@ namespace HSMServer.Extensions
 
             _ => throw new NotImplementedException(),
         };
-
-        //public static long ToCustomTicks(this TimeInterval interval, string customInterval)
-        //{
-        //    var time = DateTime.MinValue;
-
-        //    return (interval switch
-        //    {
-        //        TimeInterval.OneMinute => time.AddMinutes(1),
-        //        TimeInterval.FiveMinutes => time.AddMinutes(5),
-        //        TimeInterval.TenMinutes => time.AddMinutes(10),
-        //        TimeInterval.ThirtyMinutes => time.AddMinutes(30),
-        //        TimeInterval.Hour => time.AddHours(1),
-        //        TimeInterval.FourHours => time.AddHours(4),
-        //        TimeInterval.EightHours => time.AddHours(8),
-        //        TimeInterval.SixteenHours => time.AddHours(16),
-        //        TimeInterval.Day => time.AddDays(1),
-        //        TimeInterval.ThirtySixHours => time.AddHours(36),
-        //        TimeInterval.SixtyHours => time.AddHours(60),
-        //        TimeInterval.Week => time.AddDays(7),
-        //        TimeInterval.Month => time.AddMonths(1),
-        //        TimeInterval.ThreeMonths => time.AddMonths(3),
-        //        TimeInterval.SixMonths => time.AddMonths(6),
-        //        TimeInterval.Year => time.AddYears(1),
-        //        TimeInterval.Custom => customInterval.TryParse(out var ticks) ? new DateTime(ticks) : time,
-        //        TimeInterval.Forever => DateTime.MaxValue,
-        //        _ => time,
-        //    }).Ticks;
-        //}
     }
 }

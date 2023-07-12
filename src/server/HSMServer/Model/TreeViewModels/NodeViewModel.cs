@@ -20,11 +20,12 @@ namespace HSMServer.Model.TreeViewModel
         public string EncodedId { get; }
 
 
-        public string Path { get; private set; }
+        public BaseNodeViewModel Parent { get; internal set; }
 
         public virtual bool HasData { get; protected set; }
 
-        public BaseNodeViewModel Parent { get; internal set; }
+        public string Path { get; private set; }
+
 
 
         //TODO: should be changed to NodeViewModel when Sensor will have its own Telegram Settings
@@ -41,9 +42,9 @@ namespace HSMServer.Model.TreeViewModel
 
             bool ParentIsFolder() => Parent is FolderModel;
 
-            TTL = new(model.Settings.TTL.Value, () => (Parent?.TTL, ParentIsFolder()));
-            KeepHistory = new(model.Settings.KeepHistory.Value, () => (Parent?.KeepHistory, ParentIsFolder()));
-            SelfDestroy = new(model.Settings.SelfDestroy.Value, () => (Parent?.SelfDestroy, ParentIsFolder()));
+            TTL = new(() => (Parent?.TTL, ParentIsFolder()));
+            KeepHistory = new(() => (Parent?.KeepHistory, ParentIsFolder()));
+            SelfDestroy = new(() => (Parent?.SelfDestroy, ParentIsFolder()));
         }
 
 
@@ -53,17 +54,9 @@ namespace HSMServer.Model.TreeViewModel
             Name = model.DisplayName;
             Description = model.Description;
 
-            UpdatePolicyView(model.Settings.TTL, TTL);
-            UpdatePolicyView(model.Settings.KeepHistory, KeepHistory);
-            UpdatePolicyView(model.Settings.SelfDestroy, SelfDestroy);
-        }
-
-
-        private static void UpdatePolicyView<T>(SettingProperty<T> property, TimeIntervalViewModel targetView)
-            where T : TimeIntervalModel
-        {
-            if (property.IsSet)
-                targetView.FromModel(property.Value);
+            TTL.FromModel(model.Settings.TTL.CurValue);
+            KeepHistory.FromModel(model.Settings.KeepHistory.CurValue);
+            SelfDestroy.FromModel(model.Settings.SelfDestroy.CurValue);
         }
     }
 }

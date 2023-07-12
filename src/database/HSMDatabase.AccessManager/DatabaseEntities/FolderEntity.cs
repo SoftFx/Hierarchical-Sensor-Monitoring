@@ -6,7 +6,7 @@ namespace HSMDatabase.AccessManager.DatabaseEntities
     public sealed record FolderEntity : BaseNodeEntity
     {
         [Obsolete("Remove after policy migration")]
-        public List<TimeIntervalEntity> ServerPolicies { get; init; } = new();
+        public List<OldTimeIntervalEntity> ServerPolicies { get; init; } = new();
 
         public NotificationSettingsEntity Notifications { get; init; }
 

@@ -41,7 +41,7 @@ namespace HSMServer.Core.Model.NodeSettings
             _properties.Where(p => p.Value.IsSet).ToDictionary(k => k.Key, v => v.Value.ToEntity());
 
 
-        private SettingProperty<T> Register<T>(string name) where T : TimeIntervalModel
+        private SettingProperty<T> Register<T>(string name) where T : TimeIntervalModel, new()
         {
             var property = new SettingProperty<T>();
 
