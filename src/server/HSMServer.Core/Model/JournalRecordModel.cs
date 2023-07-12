@@ -3,7 +3,7 @@ using HSMDatabase.AccessManager.DatabaseEntities;
 
 namespace HSMServer.Core.Model;
 
-public sealed class JournalRecordModel
+public sealed class JournalRecordModel : IComparable
 {
     public JournalKey Key { get; set; }
 
@@ -30,4 +30,6 @@ public sealed class JournalRecordModel
     
     
     public JournalEntity ToJournalEntity() => new(Value, Initiator);
+
+    public int CompareTo(object obj) => 0;
 }

@@ -34,9 +34,9 @@ public class JournalController : BaseController
             var data = new List<string>
             {
                 recordFromDb.TimeAsString,
+                recordFromDb.Initiator,
                 recordFromDb.Type.ToString(),
                 recordFromDb.Value.Replace(Environment.NewLine, "<br>"),
-                recordFromDb.Initiator,
             };
             resultSet.Data.Add(data);
         }

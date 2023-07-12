@@ -42,7 +42,7 @@ public class SelectedJournalViewModel
 
         var searched = Search(parameters.Search.Value);
 
-        return Order(searched, _parameters.Order[0]).Skip(_parameters.Start).Take(_parameters.Length);
+        return Order(searched.OrderBy(x => x, new JournalEmptyComparer()), _parameters.Order).Skip(_parameters.Start).Take(_parameters.Length);
     }
 
     private IEnumerable<JournalRecordModel> Search(string search)
@@ -52,26 +52,22 @@ public class SelectedJournalViewModel
             : _journals;
     }
 
-    private IEnumerable<JournalRecordModel> Order(IEnumerable<JournalRecordModel> items, DataTableOrder order)
+    private static IEnumerable<JournalRecordModel> Order(IOrderedEnumerable<JournalRecordModel> ordered, List<DataTableOrder> orders)
     {
-        if (order.Dir == "asc")
-            return order.Column switch
-            {
-                0 => items.OrderBy(x => x.Key.Time),
-                1 => items.OrderBy(x => x.Key.Type),
-                2 => items.OrderBy(x => x.Value),
-                3 => items.OrderBy(x => x.Initiator),
-                _ => items
-            };
+        foreach (var order in orders)
+        {
+            var descending = order.Dir != "asc";
+            ordered = order.Column switch
+                {
+                    0 => ordered.CreateOrderedEnumerable(x => x.Key.Time, null, descending),
+                    1 => ordered.CreateOrderedEnumerable(x => x.Initiator, null, descending),
+                    2 => ordered.CreateOrderedEnumerable(x => x.Key.Type, null, descending),
+                    3 => ordered.CreateOrderedEnumerable(x => x.Value, null, descending),
+                    _ => ordered
+                };
+        }
 
-        return order.Column switch
-            {
-                0 => items.OrderByDescending(x => x.Key.Time),
-                1 => items.OrderByDescending(x => x.Key.Type),
-                2 => items.OrderByDescending(x => x.Value),
-                3 => items.OrderByDescending(x => x.Initiator),
-                _ => items
-            };
+        return ordered;
     }
 
     private void AddNewJournals(JournalRecordModel record)
