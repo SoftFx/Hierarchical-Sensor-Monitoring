@@ -17,5 +17,12 @@ namespace HSMServer.Core
         };
 
         public static bool HasGrafana(this Integration integration) => integration.HasFlag(Integration.Grafana);
+
+        public static SensorStatus ToStatus(this byte status) => status switch
+        {
+            (byte)SensorStatus.Ok => SensorStatus.Ok,
+            (byte)SensorStatus.OffTime => SensorStatus.OffTime,
+            _ => SensorStatus.Error,
+        };
     }
 }

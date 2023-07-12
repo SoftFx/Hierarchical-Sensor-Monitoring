@@ -1,4 +1,5 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities;
+using HSMServer.Core;
 using HSMServer.Core.Model;
 using HSMServer.Notifications.Telegram;
 using System.Collections.Concurrent;
@@ -35,7 +36,7 @@ namespace HSMServer.Notification.Settings
             if (entity == null)
                 return;
 
-            MessagesMinStatus = (SensorStatus)entity.MessagesMinStatus;
+            MessagesMinStatus = entity.MessagesMinStatus.ToStatus();
             MessagesAreEnabled = entity.MessagesAreEnabled;
             MessagesDelaySec = entity.MessagesDelay;
             Inheritance = (InheritedSettings)entity.Inheritance;
