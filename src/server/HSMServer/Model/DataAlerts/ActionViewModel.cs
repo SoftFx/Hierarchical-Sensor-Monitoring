@@ -10,7 +10,7 @@ namespace HSMServer.Model.DataAlerts
         public string Action { get; set; }
 
 
-        public SensorStatus Status { get; set; } = SensorStatus.Ok;
+        public SensorStatus Status { get; set; }
 
         public string Comment { get; set; }
 
