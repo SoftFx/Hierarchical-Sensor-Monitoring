@@ -446,9 +446,6 @@ namespace HSMServer.Core.Cache
             ChangeProductEvent?.Invoke(product, ActionType.Update);
 
             foreach (var (_, sensor) in product.Sensors)
-                //if (sensorsOldStatuses.TryGetValue(sensor.Id, out var oldStatus))
-                //    NotifyAboutChanges(sensor);
-                //else
                 ChangeSensorEvent?.Invoke(sensor, ActionType.Update);
 
             foreach (var (_, subProduct) in product.SubProducts)
@@ -499,6 +496,7 @@ namespace HSMServer.Core.Cache
             }
 
             var updates = new Dictionary<Guid, SensorUpdate>();
+            var policiesOld = new Dictionary<string, PolicyEntity>();
 
             foreach (var sensor in sensors)
             {
@@ -538,9 +536,55 @@ namespace HSMServer.Core.Cache
                                 updates[sensorId] = update;
                             }
                         }
+
+                        if (policyType >= 2001)
+                        {
+                            var id = raw["Id"].ToString();
+
+                            var policyEntity = new PolicyEntity
+                            {
+                                Conditions = new List<PolicyConditionEntity>()
+                                {
+                                    new PolicyConditionEntity
+                                    {
+                                        Target = new PolicyTargetEntity(byte.Parse(raw["Target"]["Type"].ToString()), raw["Target"]["Value"].ToString()),
+                                        Property = raw["Property"].ToString(),
+                                        Operation = byte.Parse(raw["Operation"].ToString())
+                                    }
+                                },
+                                Id = Guid.Parse(id).ToByteArray(),
+                                SensorStatus = byte.Parse(raw["Status"].ToString()),
+                                Template = raw["Comment"].ToString(),
+                            };
+
+                            policiesOld.Add(id, policyEntity);
+                            _database.AddPolicy(policyEntity);
+                        }
                     }
                 }
             }
+            _logger.Info($"Removing old policies");
+
+            _database.RemoveAllOldPolicies();
+
+            _logger.Info($"Try to update old policies");
+
+            if (policiesOld.Count > 0)
+                foreach (var sensor in sensors)
+                    if (_sensors.TryGetValue(Guid.Parse(sensor.Id), out var model))
+                    {
+                        int oldCnt = model.Policies.Count();
+
+                        model.Policies.ApplyPolicies(sensor.Policies, policiesOld);
+
+                        if (model.Policies.Count() > oldCnt)
+                        {
+                            _database.UpdateSensor(model.ToEntity());
+                            NotifyAboutChanges(model);
+                        }
+                    }
+
+            _logger.Info($"Update finished");
 
             _logger.Info($"Try to update sensors");
 

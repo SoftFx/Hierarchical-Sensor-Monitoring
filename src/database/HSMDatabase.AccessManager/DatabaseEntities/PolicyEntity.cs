@@ -2,14 +2,6 @@
 
 namespace HSMDatabase.AccessManager.DatabaseEntities
 {
-    public sealed record OldPolicyEntity
-    {
-        public string Id { get; init; }
-
-        public byte[] Policy { get; init; }
-    }
-
-
     public sealed record PolicyTargetEntity(byte Type, string Value);
 
 

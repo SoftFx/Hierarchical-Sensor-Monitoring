@@ -19,8 +19,6 @@ namespace HSMServer.Extensions
         public static bool IsDefined(this TimeInterval _, long ticks) => Enum.IsDefined(typeof(TimeInterval), ticks);
 
 
-
-
         public static TimeInterval ToDynamicServer(this CoreTimeInterval core) => core switch
         {
             CoreTimeInterval.Month => TimeInterval.Month,

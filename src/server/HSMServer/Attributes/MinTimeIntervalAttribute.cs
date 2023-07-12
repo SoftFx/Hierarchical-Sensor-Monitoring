@@ -19,10 +19,7 @@ public class MinTimeIntervalAttribute : ValidationAttribute
 
     public override bool IsValid(object value)
     {
-        if (value is TimeIntervalViewModel model && model.TimeInterval.IsCustom())
-            return model.CustomSpan.Ticks >= (long)_interval;
-
-        return true;
+        return value is not TimeIntervalViewModel model || !model.TimeInterval.IsCustom() || model.CustomSpan.Ticks >= (long)_interval;
     }
 
     public override string FormatErrorMessage(string name) => string.Format(CultureInfo.CurrentCulture, ErrorMessageString, name, _interval.GetDisplayName());
