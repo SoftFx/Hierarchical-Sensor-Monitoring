@@ -22,13 +22,16 @@ namespace hsm_wrapper
 	public:
 		DataCollectorImplWrapper(const std::string& product_key, const std::string& address, int port);
 
-		void Initialize(bool use_logging, const std::string& folder_path, const std::string& file_name_format);
+		void Initialize(const std::string& config_path = "", bool write_debug = false);
+		void Start();
 		void Stop();
 		void InitializeSystemMonitoring(bool is_cpu, bool is_free_ram, const std::string& specific_path = "");
 		void InitializeProcessMonitoring(bool is_cpu, bool is_memory, bool is_threads, const std::string& specific_path = "");
-		void InitializeProcessMonitoring(const std::string& process_name, bool is_cpu, bool is_memory, bool is_threads, const std::string& specific_path = "");
-		void InitializeOsMonitoring(bool is_updated, const std::string& specific_path = "");
-		void MonitoringServiceAlive(const std::string& specific_path = "");
+		void InitializeOsMonitoring(bool is_updated, bool last_update, bool last_restart, const std::string& specific_path = "");
+		void InitializeCollectorMonitoring(bool is_alive, bool version, bool status, const std::string& specific_path = "");
+		void InitializeProductVersion(const std::string& version, const std::string& specific_path = "");
+		
+		void SendFileAsync(const std::string& sensor_path, const std::string& file_path, HSMSensorStatus status = HSMSensorStatus::Ok, const std::string& description = {});
 
 		HSMSensor<bool> CreateBoolSensor(const std::string& path, const std::string& description = "");
 		HSMSensor<int> CreateIntSensor(const std::string& path, const std::string& description = "");
@@ -56,13 +59,16 @@ namespace hsm_wrapper
 	public:
 		DataCollectorProxy(const std::string& product_key, const std::string& address, int port);
 
-		void Initialize(bool use_logging = true, const std::string& folder_path = {}, const std::string& file_name_format = {});
+		void Initialize(const std::string& config_path = "", bool write_debug = false);
+		void Start();
 		void Stop();
 		void InitializeSystemMonitoring(bool is_cpu, bool is_free_ram, const std::string& specific_path = "");
 		void InitializeProcessMonitoring(bool is_cpu, bool is_memory, bool is_threads, const std::string& specific_path = "");
-		void InitializeProcessMonitoring(const std::string& process_name, bool is_cpu, bool is_memory, bool is_threads, const std::string& specific_path = "");
-		void InitializeOsMonitoring(bool is_updated, const std::string& specific_path = "");
-		void MonitoringServiceAlive(const std::string& specific_path = "");
+		void InitializeOsMonitoring(bool is_updated, bool last_update, bool last_restart, const std::string& specific_path = "");
+		void InitializeCollectorMonitoring(bool is_alive, bool version, bool status, const std::string& specific_path = "");
+		void InitializeProductVersion(const std::string& version, const std::string& specific_path = ""); // version should be like a.b.c.d
+
+		void SendFileAsync(const std::string& sensor_path, const std::string& file_path, HSMSensorStatus status = HSMSensorStatus::Ok, const std::string& description = {});
 
 		BoolSensor CreateBoolSensor(const std::string& path, const std::string& description = {});
 		IntSensor CreateIntSensor(const std::string& path, const std::string& description = {});
