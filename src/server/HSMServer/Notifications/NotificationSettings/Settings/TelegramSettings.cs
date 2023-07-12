@@ -18,7 +18,7 @@ namespace HSMServer.Notification.Settings
         public ConcurrentDictionary<ChatId, TelegramChat> Chats { get; } = new();
 
 
-        public SensorStatus MessagesMinStatus { get; private set; } = SensorStatus.Warning;
+        public SensorStatus MessagesMinStatus { get; private set; } = SensorStatus.Error;
 
         public bool MessagesAreEnabled { get; private set; } = true;
 

@@ -224,7 +224,6 @@ namespace HSMServer.ApiObjectsConverters
             status switch
             {
                 Model.TreeViewModel.SensorStatus.Ok => ApiSensorStatus.Ok,
-                Model.TreeViewModel.SensorStatus.Warning => ApiSensorStatus.Warning,
                 Model.TreeViewModel.SensorStatus.Error => ApiSensorStatus.Error,
                 Model.TreeViewModel.SensorStatus.OffTime => ApiSensorStatus.OffTime,
                 _ => ApiSensorStatus.Ok,
@@ -237,7 +236,7 @@ namespace HSMServer.ApiObjectsConverters
                 ApiSensorStatus.Ok => SensorStatus.Ok,
                 ApiSensorStatus.OffTime => SensorStatus.OffTime,
                 ApiSensorStatus.Error => SensorStatus.Error,
-                ApiSensorStatus.Warning => SensorStatus.Warning,
+                ApiSensorStatus.Warning => SensorStatus.Error,
                 _ => SensorStatus.Ok
             };
     }

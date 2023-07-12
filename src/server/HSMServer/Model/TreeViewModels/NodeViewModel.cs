@@ -10,7 +10,6 @@ namespace HSMServer.Model.TreeViewModel
         Empty,
         OffTime,
         Ok,
-        Warning,
         Error
     }
 

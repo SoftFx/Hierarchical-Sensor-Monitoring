@@ -7,7 +7,6 @@ namespace HSMServer.Core.Model
     public enum SensorStatus : byte
     {
         Ok,
-        Warning,
         Error,
         OffTime = byte.MaxValue,
     }

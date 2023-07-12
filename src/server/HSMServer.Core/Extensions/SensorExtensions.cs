@@ -11,7 +11,6 @@ namespace HSMServer.Core
         public static string ToIcon(this SensorStatus status) => status switch
         {
             SensorStatus.Ok => "✅",
-            SensorStatus.Warning => "⚠️",
             SensorStatus.Error => "❌",
             SensorStatus.OffTime => "💤",
             _ => "❓"

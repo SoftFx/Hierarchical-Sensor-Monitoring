@@ -10,10 +10,6 @@
     color: green;
 }
 
-.tree-icon-warning {
-    color: #ffc107;
-}
-
 .tree-icon-error {
     color: #dc3545;
 }
@@ -131,11 +127,6 @@
 .grid-cell-ok {
     color: green;
     background-color: #c6efce;
-}
-
-.grid-cell-warning {
-    color: #212529;
-    background-color: #ffc107;
 }
 
 .grid-cell-error {
