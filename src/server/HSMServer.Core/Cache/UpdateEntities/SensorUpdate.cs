@@ -81,9 +81,9 @@ namespace HSMServer.Core.Cache.UpdateEntities
             
             if (entity.Status != update.Status)
                 builder.AppendLine($"Status: {entity.Status} -> {update.Status}");
-            
-            if (update.Conditions?.Count > 0)
-                builder.AppendLine("Conditions updated.");
+
+            // if (update.Conditions?.Count > 0)
+            //     builder.AppendLine("Conditions updated.");
             
             return builder.ToString();
         }
