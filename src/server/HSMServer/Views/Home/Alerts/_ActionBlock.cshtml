@@ -10,7 +10,6 @@
 
     var isSendAction = action == ActionViewModel.SendNotifyAction;
     var isShowAction = action == ActionViewModel.ShowIconAction;
-    var isSetAction = action == ActionViewModel.SetStatusAction;
 }
 
 
@@ -25,10 +24,6 @@
 
     <div name="showIconAction" class="@(isShowAction ? "d-block" : "d-none") alert-block">
         <div name="emoji" class="target-input">@Model.Icon</div>
-    </div>
-
-    <div name="setStatusAction" class="@(isSetAction ? "d-block" : "d-none")">
-        <select class="alert-block alert-select target-input" asp-for="Status" asp-items="@Model.StatusesItems"></select>
     </div>
 
     <a class="deleteAction"><i class="@(Model.IsMain ? "d-none" : "d-flex") fa-solid fa-xmark alert-delete-button"></i></a>
@@ -49,14 +44,12 @@
 
         let send = actionBlock.find($(`div[name='sendNotificationAction']`));
         let show = actionBlock.find($(`div[name='showIconAction']`));
-        let set = actionBlock.find($(`div[name='setStatusAction']`));
 
         let commentInput = send.find($(`input[name='Comment']`));
 
         let action = $(this).val();
         if (action === '@ActionViewModel.SendNotifyAction') {
             show.removeClass("d-block").addClass('d-none');
-            set.removeClass("d-block").addClass('d-none');
 
             commentInput.attr('required', true);
             send.removeClass("d-none").addClass('d-block');
@@ -64,7 +57,6 @@
         else if (action === '@ActionViewModel.ShowIconAction') {
             commentInput.attr('required', false);
             send.removeClass("d-block").addClass('d-none');
-            set.removeClass("d-block").addClass('d-none');
 
             show.removeClass("d-none").addClass('d-block');
         }
@@ -72,8 +64,6 @@
             commentInput.attr('required', false);
             send.removeClass("d-block").addClass('d-none');
             show.removeClass("d-block").addClass('d-none');
-
-            set.removeClass("d-none").addClass('d-block');
         }
     });
 

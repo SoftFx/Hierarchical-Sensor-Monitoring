@@ -196,11 +196,6 @@
                         formData.append(`DataAlerts[${type}][${i}].Actions[${j}].Icon`, $(this)[0].innerText);
                     });
                 }
-
-                let setBlock = $(this).find('div[name="setStatusAction"]');
-                if (setBlock.hasClass('d-block')) {
-                    setFormDataAlertsListProperty(formData, type, i, j, setBlock, "Actions", "select", "Status");
-                }
             });
         });
     }
