@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using HSMServer.Authentication;
@@ -34,7 +35,7 @@ public class JournalController : BaseController
             {
                 recordFromDb.TimeAsString,
                 recordFromDb.Type.ToString(),
-                recordFromDb.Value,
+                recordFromDb.Value.Replace(Environment.NewLine, "<br>"),
                 recordFromDb.Initiator,
             };
             resultSet.Data.Add(data);
