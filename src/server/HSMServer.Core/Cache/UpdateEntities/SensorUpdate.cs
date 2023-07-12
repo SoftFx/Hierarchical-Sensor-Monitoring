@@ -2,6 +2,7 @@
 using HSMServer.Core.Model.Policies;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 
 namespace HSMServer.Core.Cache.UpdateEntities
@@ -37,14 +38,28 @@ namespace HSMServer.Core.Cache.UpdateEntities
     }
 
 
-    public sealed record PolicyConditionUpdate(
-        PolicyOperation Operation,
-        TargetValue Target,
-        string Property,
-        PolicyCombination Combination = PolicyCombination.And);
+    public sealed class PolicyConditionUpdate : IPolicyCondition
+    {
+        public PolicyOperation Operation { get; set; }
+        
+        public TargetValue Target { get; set; }
+        
+        public string Property { get; set; }
+        
+        public PolicyCombination Combination { get; set; }
+        
+
+        public PolicyConditionUpdate(PolicyOperation operation, TargetValue target, string property, PolicyCombination combination = PolicyCombination.And)
+        {
+            Operation = operation;
+            Target = target;
+            Property = property;
+            Combination = combination;
+        }
+    }
 
 
-    public sealed class DataPolicyUpdate : IUpdateComparer<Policy, DataPolicyUpdate>
+    public sealed class DataPolicyUpdate : IUpdateComparer<Policy, DataPolicyUpdate>, IPolicy<PolicyConditionUpdate>
     {
         public Guid Id { get; init; }
 
@@ -52,11 +67,11 @@ namespace HSMServer.Core.Cache.UpdateEntities
 
         public TimeIntervalModel Sensitivity { get; set; }
         
-        public SensorStatus Status { get; init; }
+        public SensorStatus Status { get; set; }
 
-        public string Template { get; init; }
+        public string Template { get; set; }
 
-        public string Icon { get; init; }
+        public string Icon { get; set; }
 
 
         public DataPolicyUpdate(Guid id, List<PolicyConditionUpdate> conditions, TimeIntervalModel sensitivity, SensorStatus status, string template, string icon)
@@ -71,21 +86,15 @@ namespace HSMServer.Core.Cache.UpdateEntities
 
         public string Compare(Policy entity, DataPolicyUpdate update)
         {
-            var builder = new StringBuilder();
+            var oldValue = GetValue(entity);
+            var newValue = GetValue(update);
 
-            if (entity.Icon != update.Icon)
-                builder.AppendLine($"Icon: {entity.Icon} -> {update.Icon}");
-            
-            if (entity.Template != update.Template)
-                builder.AppendLine($"Template: {entity.Template} -> {update.Template}");
-            
-            if (entity.Status != update.Status)
-                builder.AppendLine($"Status: {entity.Status} -> {update.Status}");
+            string GetValue<U>(IPolicy<U> properties) where U : IPolicyCondition
+            {
+                return $"{string.Join(",", properties.Conditions.Select(x => $"{x.Property} {x.Operation} {x.Target.Value}"))} {properties.Icon} {properties.Template} {(properties.Status is SensorStatus.Ok ? string.Empty : properties.Status)}";
+            }
 
-            // if (update.Conditions?.Count > 0)
-            //     builder.AppendLine("Conditions updated.");
-            
-            return builder.ToString();
+            return oldValue != newValue ? $"Old alert: {oldValue}{Environment.NewLine}New alert: {newValue}" : string.Empty;
         }
     }
 }

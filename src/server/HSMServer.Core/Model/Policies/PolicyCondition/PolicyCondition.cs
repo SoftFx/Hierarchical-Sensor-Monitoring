@@ -39,7 +39,7 @@ namespace HSMServer.Core.Model.Policies
     public sealed record TargetValue(TargetType Type, string Value);
 
 
-    public abstract class PolicyCondition
+    public abstract class PolicyCondition : IPolicyCondition
     {
         public abstract PolicyOperation Operation { get; set; }
 
