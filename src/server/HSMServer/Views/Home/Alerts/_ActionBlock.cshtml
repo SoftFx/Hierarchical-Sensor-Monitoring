@@ -24,7 +24,7 @@
     </div>
 
     <div name="showIconAction" class="@(isShowAction ? "d-block" : "d-none") alert-block">
-        <input class="target-input" asp-for="Icon" />
+        <div name="emoji" class="target-input">@Model.Icon</div>
     </div>
 
     <div name="setStatusAction" class="@(isSetAction ? "d-block" : "d-none")">
@@ -37,9 +37,10 @@
 
 <script>
     $(document).ready(function () {
-        $("input[name='Icon']").emojioneArea({
+        let emoji = $("div[name='emoji']").emojioneArea({
             filtersPosition: "bottom",
-            inline: true
+            standalone: true,
+            autocomplete: false
         });
     });
 

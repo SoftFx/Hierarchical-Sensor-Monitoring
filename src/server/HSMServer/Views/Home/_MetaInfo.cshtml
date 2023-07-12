@@ -192,7 +192,9 @@
 
                 let showBlock = $(this).find('div[name="showIconAction"]');
                 if (showBlock.hasClass('d-block')) {
-                    setFormDataAlertsListProperty(formData, type, i, j, showBlock, "Actions", "input", "Icon");
+                    showBlock.find(`div[name='emoji']`).each(function () {
+                        formData.append(`DataAlerts[${type}][${i}].Actions[${j}].Icon`, $(this)[0].innerText);
+                    });
                 }
 
                 let setBlock = $(this).find('div[name="setStatusAction"]');
