@@ -74,7 +74,8 @@ public class SelectedJournalViewModel
     {
         lock (_lock)
         {
-            _journals.Add(record);
+            if (record.Key.Id == _id)
+                _journals.Add(record);
         }
     }
 
