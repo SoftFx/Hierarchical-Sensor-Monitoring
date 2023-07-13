@@ -39,6 +39,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
 
         public bool IsInclude(long from, long to) => From <= to && To >= from;
         
+
         public void Put(byte[] key, JournalEntity value)
         {
             try
@@ -78,12 +79,11 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             }
         }
 
-        public IEnumerable<(byte[], byte[])> GetValuesFrom(byte[] from, byte[] to)
+        public IEnumerable<(byte[] key, byte[] value)> GetValuesFrom(byte[] from, byte[] to)
         {
             try
             {
                 return _openedDb.GetValueKeyPairFromTo(from, to);
-                //return _openedDb.GetValueFromTo(from, to);
             }
             catch (Exception e)
             {
@@ -93,7 +93,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             }
         }
 
-        public IEnumerable<(byte[], byte[])> GetValuesTo(byte[] from, byte[] to)
+        public IEnumerable<(byte[] key, byte[] value)> GetValuesTo(byte[] from, byte[] to)
         {
             try
             {

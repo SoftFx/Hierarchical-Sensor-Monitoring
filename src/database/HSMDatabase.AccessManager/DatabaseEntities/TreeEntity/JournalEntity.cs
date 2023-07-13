@@ -32,17 +32,15 @@ public readonly struct JournalKey
         Type = type;
     }
 
+
     public byte[] GetBytes()
     {
         Span<byte> result = stackalloc byte[StructSize];
         result[GuidSize] = (byte)Type;
-        
-        if (!Id.TryWriteBytes(result))
+
+        if (!Id.TryWriteBytes(result) || !BitConverter.TryWriteBytes(result[(GuidSize + TypeSize)..], Time))
             return Array.Empty<byte>();
 
-        if (!BitConverter.TryWriteBytes(result[(GuidSize + TypeSize)..], Time))
-            return Array.Empty<byte>();
-        
         result[(GuidSize + TypeSize)..].Reverse();
         return result.ToArray();
     }
@@ -54,7 +52,9 @@ public readonly struct JournalKey
 
         var id = new Guid(bytes[..GuidSize]);
         var journalType = bytes[GuidSize];
-        Array.Reverse(bytes, GuidSize + TypeSize, StructSize - (GuidSize + TypeSize));
+
+        Array.Reverse(bytes, GuidSize + TypeSize, sizeof(long));
+
         var time = BitConverter.ToInt64(bytes, GuidSize + TypeSize);
 
         return new JournalKey(id, time, (RecordType)journalType);

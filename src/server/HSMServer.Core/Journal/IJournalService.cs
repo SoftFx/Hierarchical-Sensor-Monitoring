@@ -9,6 +9,7 @@ public interface IJournalService
 {
     event Action<JournalRecordModel> NewJournalEvent;
     
+
     void AddJournal(JournalRecordModel record);
 
     void RemoveJournal(Guid id);

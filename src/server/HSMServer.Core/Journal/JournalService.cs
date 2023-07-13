@@ -14,10 +14,12 @@ public class JournalService : IJournalService
 
     public event Action<JournalRecordModel> NewJournalEvent;
 
+
     public JournalService(IDatabaseCore database)
     {
         _database = database;
     }
+
 
     public void AddJournal(JournalRecordModel record)
     {
@@ -37,9 +39,10 @@ public class JournalService : IJournalService
         await foreach (var page in pages)
         {
             var currPage = new List<JournalRecordModel>(1 << 4);
-            foreach (var item in page)
+
+            foreach (var (key, entity) in page)
             {
-                currPage.Add(new JournalRecordModel(JsonSerializer.Deserialize<JournalEntity>(item.Entity), item.Key));
+                currPage.Add(new JournalRecordModel(JsonSerializer.Deserialize<JournalEntity>(entity), key));
             }
                 
             yield return currPage;
