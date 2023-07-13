@@ -46,15 +46,15 @@
             <span>and</span>
         }
 
-        @if (action.Action == ActionViewModel.SendNotifyAction)
+        @if (action.Action == ActionType.SendNotification)
         {
             <span>send notification <i>@action.DisplayComment</i></span>
         }
-        else if (action.Action == ActionViewModel.ShowIconAction)
+        else if (action.Action == ActionType.ShowIcon)
         {
             <span>show icon @action.Icon</span>
         }
-        else if (action.Action == ActionViewModel.SetStatusAction)
+        else if (action.Action == ActionType.SetStatus)
         {
             <span>@ActionViewModel.SetErrorStatus</span>
         }

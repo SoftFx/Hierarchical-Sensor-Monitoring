@@ -7,9 +7,17 @@ using System.Linq;
 
 namespace HSMServer.Model.DataAlerts
 {
+    public enum ActionType
+    {
+        SendNotification,
+        ShowIcon,
+        SetStatus,
+    }
+
+
     public class AlertActionBase
     {
-        public string Action { get; set; }
+        public ActionType Action { get; set; }
 
 
         public string Comment { get; set; }
@@ -25,19 +33,17 @@ namespace HSMServer.Model.DataAlerts
     {
         private const string DefaultCommentTemplate = "$sensor $operation $target";
 
-        public const string ShowIconAction = "show icon";
-        public const string SetStatusAction = "set error status";
-        public const string SendNotifyAction = "send notification";
-
         public static readonly string SetErrorStatus = $"set {SensorStatus.Error.ToSelectIcon()} {SensorStatus.Error.GetDisplayName()} status";
 
-
-        public List<SelectListItem> Actions { get; } = new()
+        private readonly Dictionary<ActionType, string> _actions = new()
         {
-            new SelectListItem(SendNotifyAction, SendNotifyAction),
-            new SelectListItem(ShowIconAction, ShowIconAction),
-            new SelectListItem(SetErrorStatus, SetStatusAction),
+            { ActionType.SendNotification, "send notification" },
+            { ActionType.ShowIcon, "show icon" },
+            { ActionType.SetStatus, SetErrorStatus },
         };
+
+
+        public List<SelectListItem> Actions { get; }
 
         public bool IsMain { get; }
 
@@ -45,9 +51,10 @@ namespace HSMServer.Model.DataAlerts
         public ActionViewModel(bool isMain)
         {
             IsMain = isMain;
+            Actions = _actions.Select(a => new SelectListItem(a.Value, a.Key.ToString())).ToList();
 
             Comment = DefaultCommentTemplate;
-            Action = Actions.FirstOrDefault()?.Value;
+            Action = ActionType.SendNotification;
         }
     }
 }

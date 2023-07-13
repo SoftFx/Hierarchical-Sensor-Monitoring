@@ -45,11 +45,11 @@ namespace HSMServer.Model.DataAlerts
 
             foreach (var action in Actions)
             {
-                if (action.Action == ActionViewModel.SendNotifyAction)
+                if (action.Action == ActionType.SendNotification)
                     comment = action.Comment;
-                else if (action.Action == ActionViewModel.ShowIconAction)
+                else if (action.Action == ActionType.ShowIcon)
                     icon = action.Icon;
-                else if (action.Action == ActionViewModel.SetStatusAction)
+                else if (action.Action == ActionType.SetStatus)
                     status = SensorStatus.Error;
             }
 
@@ -99,16 +99,16 @@ namespace HSMServer.Model.DataAlerts
 
             Actions.Add(new ActionViewModel(true)
             {
-                Action = ActionViewModel.SendNotifyAction,
+                Action = ActionType.SendNotification,
                 Comment = policy.Template,
                 DisplayComment = policy.BuildStateAndComment(sensor.LastValue as T, sensor, policy.Conditions[0])
             });
 
             if (!string.IsNullOrEmpty(policy.Icon))
-                Actions.Add(new ActionViewModel(false) { Action = ActionViewModel.ShowIconAction, Icon = policy.Icon });
+                Actions.Add(new ActionViewModel(false) { Action = ActionType.ShowIcon, Icon = policy.Icon });
 
             if (policy.Status == Core.Model.SensorStatus.Error)
-                Actions.Add(new ActionViewModel(false) { Action = ActionViewModel.SetStatusAction });
+                Actions.Add(new ActionViewModel(false) { Action = ActionType.SetStatus });
         }
 
 

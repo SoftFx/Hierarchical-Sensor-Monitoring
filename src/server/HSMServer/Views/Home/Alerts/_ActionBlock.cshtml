@@ -9,8 +9,8 @@
 @{
     var action = Model.Action;
 
-    var isSendAction = action == ActionViewModel.SendNotifyAction;
-    var isShowAction = action == ActionViewModel.ShowIconAction;
+    var isSendAction = action == ActionType.SendNotification;
+    var isShowAction = action == ActionType.ShowIcon;
 
     var isSecondaryCondition = !Model.IsMain;
 }
@@ -51,19 +51,19 @@
         let commentInput = send.find($(`input[name='Comment']`));
 
         let action = $(this).val();
-        if (action === '@ActionViewModel.SendNotifyAction') {
+        if (action === '@ActionType.SendNotification') {
             show.removeClass("d-flex").addClass('d-none');
 
             commentInput.attr('required', true);
             send.removeClass("d-none").addClass('d-flex');
         }
-        else if (action === '@ActionViewModel.ShowIconAction') {
+        else if (action === '@ActionType.ShowIcon') {
             commentInput.attr('required', false);
             send.removeClass("d-flex").addClass('d-none');
 
             show.removeClass("d-none").addClass('d-flex');
         }
-        else if (action === '@ActionViewModel.SetStatusAction') {
+        else if (action === '@ActionType.SetStatus') {
             commentInput.attr('required', false);
             send.removeClass("d-flex").addClass('d-none');
             show.removeClass("d-flex").addClass('d-none');
