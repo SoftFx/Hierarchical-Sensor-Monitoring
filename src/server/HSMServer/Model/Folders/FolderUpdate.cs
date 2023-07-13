@@ -10,11 +10,9 @@ namespace HSMServer.Model.Folders
         public required Guid Id { get; init; }
 
 
-        public TimeIntervalViewModel ExpectedUpdateInterval { get; init; }
+        public TimeIntervalViewModel TTL { get; init; }
 
-        public TimeIntervalViewModel SavedHistoryPeriod { get; init; }
-
-        public TimeIntervalViewModel RestoreInterval { get; init; }
+        public TimeIntervalViewModel KeepHistory { get; init; }
 
         public TimeIntervalViewModel SelfDestroy { get; init; }
 

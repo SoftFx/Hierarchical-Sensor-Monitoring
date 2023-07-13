@@ -99,7 +99,7 @@ namespace HSMServer.Controllers
             var update = new FolderUpdate()
             {
                 Id = folderCleanup.Id,
-                SavedHistoryPeriod = folderCleanup.SavedHistoryPeriod,
+                KeepHistory = folderCleanup.SavedHistoryPeriod,
                 SelfDestroy = folderCleanup.SelfDestoryPeriod,
             };
 
@@ -116,7 +116,7 @@ namespace HSMServer.Controllers
             var update = new FolderUpdate()
             {
                 Id = folderAlerts.Id,
-                ExpectedUpdateInterval = folderAlerts.ExpectedUpdateInterval,
+                TTL = folderAlerts.ExpectedUpdateInterval,
                 //RestoreInterval = folderAlerts.SensorRestorePolicy
             };
 

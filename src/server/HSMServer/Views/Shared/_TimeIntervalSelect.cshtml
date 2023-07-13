@@ -6,7 +6,7 @@
 
 <div class="d-grid placeholder-wrapper">
     <select id="timeIntervalSelect_@Model.Id" class="timeIntervalSelect form-select" asp-for="Interval" asp-items="@Model.IntervalItems"></select>
-    <input id="input_timeIntervalSelect_@Model.Id" class="customTimeInterval form-control" placeholder="@TimeIntervalViewModel.CustomTemplate" style="display:none" asp-for="CustomTimeInterval" />
+    <input id="input_timeIntervalSelect_@Model.Id" class="customTimeInterval form-control" placeholder="@TimeIntervalViewModel.CustomTemplate" style="display:none" asp-for="CustomString" />
     <div id="placeholder_timeIntervalSelect_@Model.Id" class="placeholder d-none">@TimeIntervalViewModel.CustomTemplate</div>
 </div>
 
