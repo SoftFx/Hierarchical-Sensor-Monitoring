@@ -7,9 +7,9 @@ using HSMServer.Core.Journal;
 
 namespace HSMServer.Core.Model
 {
-    public abstract class BaseNodeModel : IJournal
+    public abstract class BaseNodeModel : IChangesEntity
     {
-        public event Action<JournalRecordModel> CreateJournal;
+        public event Action<JournalRecordModel> ChangesHandler;
 
 
         public abstract PolicyCollectionBase Policies { get; }
@@ -90,6 +90,6 @@ namespace HSMServer.Core.Model
                 CheckTimeout();
         }
         
-        protected void CallJournal(JournalRecordModel journal) => CreateJournal?.Invoke(journal);
+        protected void CallJournal(JournalRecordModel journal) => ChangesHandler?.Invoke(journal);
     }
 }

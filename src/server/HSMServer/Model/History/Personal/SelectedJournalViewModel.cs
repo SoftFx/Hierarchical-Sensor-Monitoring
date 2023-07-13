@@ -81,6 +81,6 @@ public class SelectedJournalViewModel
 
     private async Task<ICollection<JournalRecordModel>> GetJournals(IJournalService journalService)
     {
-        return await journalService.GetJournalValuesPage(_journalHistoryRequestModel).Flatten();
+        return await journalService.GetPages(_journalHistoryRequestModel).Flatten();
     }
 }

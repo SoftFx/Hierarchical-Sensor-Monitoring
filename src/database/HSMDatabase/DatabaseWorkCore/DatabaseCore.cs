@@ -11,6 +11,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Text.Json;
 
 namespace HSMDatabase.DatabaseWorkCore
 {
@@ -436,7 +437,7 @@ namespace HSMDatabase.DatabaseWorkCore
                     db.Remove(fromBytes, toBytes);
         }
 
-        public IAsyncEnumerable<List<(byte[] Key, byte[] Entity)>> GetJournalValuesPage(Guid sensorId, DateTime from, DateTime to, RecordType fromRecordType, RecordType toRecordType, int count)
+        public IAsyncEnumerable<List<(byte[] Key, JournalEntity Entity)>> GetJournalValuesPage(Guid sensorId, DateTime from, DateTime to, RecordType fromRecordType, RecordType toRecordType, int count)
         {
             var fromTicks = from.Ticks;
             var toTicks = to.Ticks;
@@ -456,16 +457,16 @@ namespace HSMDatabase.DatabaseWorkCore
             return GetJournalValuesPage(databases, count, getValues);
         }
 
-        private async IAsyncEnumerable<List<(byte[], byte[])>> GetJournalValuesPage(List<IJournalValuesDatabase> databases, int count, GetJournalValuesFunc getValues)
+        private async IAsyncEnumerable<List<(byte[], JournalEntity)>> GetJournalValuesPage(List<IJournalValuesDatabase> databases, int count, GetJournalValuesFunc getValues)
         {
-            var result = new List<(byte[], byte[])>(SensorValuesPageCount);
+            var result = new List<(byte[], JournalEntity)>(SensorValuesPageCount);
             var totalCount = 0;
 
             foreach (var database in databases)
             {
                 foreach (var value in getValues(database))
                 {
-                    result.Add(value);
+                    result.Add((value.Item1, JsonSerializer.Deserialize<JournalEntity>(value.Item2)));
                     totalCount++;
 
                     if (result.Count == SensorValuesPageCount)

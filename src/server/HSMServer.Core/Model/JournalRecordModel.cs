@@ -1,9 +1,10 @@
 using System;
 using HSMDatabase.AccessManager.DatabaseEntities;
+using HSMServer.Core.Cache;
 
 namespace HSMServer.Core.Model;
 
-public sealed class JournalRecordModel : IComparable
+public sealed class JournalRecordModel
 {
     public JournalKey Key { get; set; }
 
@@ -25,11 +26,9 @@ public sealed class JournalRecordModel : IComparable
     {
         Value = message;
         Key = new JournalKey(id, date.Ticks, type);
-        Initiator = initiator ?? "System";
+        Initiator = initiator ?? CacheConstants.System;
     }
     
     
     public JournalEntity ToJournalEntity() => new(Value, Initiator);
-
-    public int CompareTo(object obj) => 0;
 }

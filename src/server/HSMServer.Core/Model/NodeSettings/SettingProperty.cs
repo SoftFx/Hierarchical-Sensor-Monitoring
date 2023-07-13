@@ -24,13 +24,13 @@ namespace HSMServer.Core.Model.NodeSettings
     }
 
 
-    public sealed class SettingProperty<T> : SettingProperty, IJournal where T : TimeIntervalModel
+    public sealed class SettingProperty<T> : SettingProperty, IChangesEntity where T : TimeIntervalModel
     {
         private readonly T _emptyValue = (T)TimeIntervalModel.Never;
         private T _curValue;
 
 
-        public event Action<JournalRecordModel> CreateJournal;
+        public event Action<JournalRecordModel> ChangesHandler;
 
 
         public override bool IsEmpty => Value is null;
@@ -76,7 +76,7 @@ namespace HSMServer.Core.Model.NodeSettings
                 var val1 = GetValue(copyValue);
                 var val2 = GetValue(_curValue);
                 if (val1 != val2)
-                    CreateJournal?.Invoke(new JournalRecordModel(id, DateTime.UtcNow, $"{Name}: {val1} -> {val2}"));
+                    ChangesHandler?.Invoke(new JournalRecordModel(id, DateTime.UtcNow, $"{Name}: {val1} -> {val2}"));
             }
             
             Uploaded?.Invoke(action, newValue);

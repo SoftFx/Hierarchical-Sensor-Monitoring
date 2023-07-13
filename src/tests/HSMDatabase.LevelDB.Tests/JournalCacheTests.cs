@@ -29,7 +29,7 @@ public class JournalCacheTests : MonitoringCoreTestsBase<TreeValuesCacheFixture>
         var sensors = GetUpdatedSensors(n);
         foreach (var sensor in sensors)
         {
-            var journals = await _journalService.GetJournalValuesPage(new(sensor.Id, DateTime.MinValue, DateTime.MaxValue, RecordType.Changes, RecordType.Changes, MaxHistoryCount)).Flatten();
+            var journals = await _journalService.GetPages(new(sensor.Id, DateTime.MinValue, DateTime.MaxValue, RecordType.Changes, RecordType.Changes, MaxHistoryCount)).Flatten();
            
             Assert.NotEmpty(journals);
         }
@@ -46,12 +46,12 @@ public class JournalCacheTests : MonitoringCoreTestsBase<TreeValuesCacheFixture>
             string value = RandomGenerator.GetRandomString();
             var journal = new JournalRecordModel(id, new DateTime(RandomGenerator.GetRandomTimeSpan(DateTime.MaxValue.Ticks, DateTime.MinValue.Ticks).Ticks), value);
             journals.Add(journal);
-            _journalService.AddJournal(journal);
+            _journalService.AddRecord(journal);
         }
 
         await Task.Delay(1000);
         var expected = journals.OrderBy(x => x.Key.Time).ToList();
-        var actual = await _journalService.GetJournalValuesPage(new(id, DateTime.MinValue, DateTime.MaxValue, RecordType.Changes, RecordType.Changes, 50000)).Flatten();
+        var actual = await _journalService.GetPages(new(id, DateTime.MinValue, DateTime.MaxValue, RecordType.Changes, RecordType.Changes, 50000)).Flatten();
 
         for (int i = 0; i < n; i++)
         {
@@ -65,7 +65,7 @@ public class JournalCacheTests : MonitoringCoreTestsBase<TreeValuesCacheFixture>
         for (int i = 0; i < n; i++)
         {
             var sensor = SensorModelFactory.Build(EntitiesFactory.BuildSensorEntity());
-            _journalService.AddJournal(new JournalRecordModel(sensor.Id, DateTime.UtcNow, "Test message"));
+            _journalService.AddRecord(new JournalRecordModel(sensor.Id, DateTime.UtcNow, "Test message"));
             sensors.Add(sensor);
         }
 

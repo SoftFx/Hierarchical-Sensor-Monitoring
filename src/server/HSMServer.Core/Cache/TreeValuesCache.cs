@@ -253,7 +253,7 @@ namespace HSMServer.Core.Cache
             RemoveSensorPolicies(sensor);
 
             _database.RemoveSensorWithMetadata(sensorId.ToString());
-            _journalService.RemoveJournal(sensorId);
+            _journalService.RemoveRecord(sensorId);
             _snapshot.Sensors.Remove(sensorId);
 
             ChangeSensorEvent?.Invoke(sensor, ActionType.Delete);
@@ -294,7 +294,7 @@ namespace HSMServer.Core.Cache
             var policy = sensor.Settings.KeepHistory.Value;
 
             if (policy.TimeIsUp(from))
-                ClearSensorHistory(new (sensorId, "System", policy.GetShiftedTime(DateTime.UtcNow, -1)));
+                ClearSensorHistory(new (sensorId, CacheConstants.System, policy.GetShiftedTime(DateTime.UtcNow, -1)));
         }
 
         public void ClearSensorHistory(ClearHistoryRequest request)
@@ -313,7 +313,7 @@ namespace HSMServer.Core.Cache
                 sensor.ResetSensor();
 
             _database.ClearSensorValues(sensor.Id.ToString(), from, request.To);
-            _journalService.AddJournal(new JournalRecordModel(request.Id, DateTime.UtcNow, "History clearing", RecordType.Actions, request.Caller));
+            _journalService.AddRecord(new JournalRecordModel(request.Id, DateTime.UtcNow, "History clearing", RecordType.Actions, request.Caller));
             _snapshot.Sensors[request.Id].History.From = request.To;
 
             ChangeSensorEvent?.Invoke(sensor, ActionType.Update);
@@ -379,22 +379,22 @@ namespace HSMServer.Core.Cache
         {
             sensor.Policies.SensorExpired += SetExpiredSnapshot;
             sensor.Policies.Uploaded += UpdatePolicy;
-            sensor.Policies.CreateJournal += _journalService.AddJournal;
-            sensor.Settings.KeepHistory.CreateJournal += _journalService.AddJournal;
-            sensor.Settings.SelfDestroy.CreateJournal += _journalService.AddJournal;
-            sensor.Settings.TTL.CreateJournal += _journalService.AddJournal;
-            sensor.CreateJournal += _journalService.AddJournal;
+            sensor.Policies.ChangesHandler += _journalService.AddRecord;
+            sensor.Settings.KeepHistory.ChangesHandler += _journalService.AddRecord;
+            sensor.Settings.SelfDestroy.ChangesHandler += _journalService.AddRecord;
+            sensor.Settings.TTL.ChangesHandler += _journalService.AddRecord;
+            sensor.ChangesHandler += _journalService.AddRecord;
         }
 
         private void RemoveSensorPolicies(BaseSensorModel sensor)
         {
             sensor.Policies.SensorExpired -= SetExpiredSnapshot;
             sensor.Policies.Uploaded -= UpdatePolicy;
-            sensor.Policies.CreateJournal -= _journalService.AddJournal;
-            sensor.Settings.KeepHistory.CreateJournal -= _journalService.AddJournal;
-            sensor.Settings.SelfDestroy.CreateJournal -= _journalService.AddJournal;
-            sensor.Settings.TTL.CreateJournal -= _journalService.AddJournal;
-            sensor.CreateJournal -= _journalService.AddJournal;
+            sensor.Policies.ChangesHandler -= _journalService.AddRecord;
+            sensor.Settings.KeepHistory.ChangesHandler -= _journalService.AddRecord;
+            sensor.Settings.SelfDestroy.ChangesHandler -= _journalService.AddRecord;
+            sensor.Settings.TTL.ChangesHandler -= _journalService.AddRecord;
+            sensor.ChangesHandler -= _journalService.AddRecord;
             RemoveEntityPolicies(sensor);
         }
 

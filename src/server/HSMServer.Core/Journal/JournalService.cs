@@ -21,7 +21,7 @@ public class JournalService : IJournalService
     }
 
 
-    public void AddJournal(JournalRecordModel record)
+    public void AddRecord(JournalRecordModel record)
     {
         if (!string.IsNullOrEmpty(record.Value))
         {
@@ -30,9 +30,9 @@ public class JournalService : IJournalService
         }
     }
 
-    public void RemoveJournal(Guid id) => _database.RemoveJournalValue(id);
+    public void RemoveRecord(Guid id) => _database.RemoveJournalValue(id);
     
-    public async IAsyncEnumerable<List<JournalRecordModel>> GetJournalValuesPage(JournalHistoryRequestModel request)
+    public async IAsyncEnumerable<List<JournalRecordModel>> GetPages(JournalHistoryRequestModel request)
     {
         var pages = _database.GetJournalValuesPage(request.Id, request.From, request.To, request.FromType, request.ToType, request.Count);
 
@@ -42,7 +42,7 @@ public class JournalService : IJournalService
 
             foreach (var (key, entity) in page)
             {
-                currPage.Add(new JournalRecordModel(JsonSerializer.Deserialize<JournalEntity>(entity), key));
+                currPage.Add(new JournalRecordModel(entity, key));
             }
                 
             yield return currPage;

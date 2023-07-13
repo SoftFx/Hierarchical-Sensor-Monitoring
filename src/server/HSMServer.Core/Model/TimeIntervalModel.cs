@@ -1,6 +1,5 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities;
 using System;
-using HSMServer.Core.Journal;
 
 namespace HSMServer.Core.Model
 {

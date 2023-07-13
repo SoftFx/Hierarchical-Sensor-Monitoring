@@ -10,9 +10,9 @@ public interface IJournalService
     event Action<JournalRecordModel> NewJournalEvent;
     
 
-    void AddJournal(JournalRecordModel record);
+    void AddRecord(JournalRecordModel record);
 
-    void RemoveJournal(Guid id);
+    void RemoveRecord(Guid id);
 
-    IAsyncEnumerable<List<JournalRecordModel>> GetJournalValuesPage(JournalHistoryRequestModel request);
+    IAsyncEnumerable<List<JournalRecordModel>> GetPages(JournalHistoryRequestModel request);
 }

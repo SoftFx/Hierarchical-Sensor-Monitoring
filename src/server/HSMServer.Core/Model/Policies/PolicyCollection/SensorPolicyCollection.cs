@@ -9,16 +9,16 @@ using HSMServer.Core.Journal;
 
 namespace HSMServer.Core.Model.Policies
 {
-    public abstract class SensorPolicyCollection : PolicyCollectionBase, IJournal
+    public abstract class SensorPolicyCollection : PolicyCollectionBase, IChangesEntity
     {
-        public event Action<JournalRecordModel> CreateJournal;
+        public event Action<JournalRecordModel> ChangesHandler;
         
         internal protected SensorResult SensorResult { get; protected set; } = SensorResult.Ok;
 
         internal protected PolicyResult PolicyResult { get; protected set; } = PolicyResult.Ok;
 
 
-        protected void CallJournal(JournalRecordModel journal) => CreateJournal?.Invoke(journal);
+        protected void CallJournal(JournalRecordModel journal) => ChangesHandler?.Invoke(journal);
 
 
         internal Action<ActionType, Policy> Uploaded;
