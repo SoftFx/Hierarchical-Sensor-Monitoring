@@ -137,7 +137,7 @@ namespace HSMServer.Notifications
         private static string Help() =>
             $"""
             Statuses: 
-                {Core.OffTime.ToIcon()} (OffTime) -> {Core.Ok.ToIcon()} (Ok) -> {Core.Warning.ToIcon()} (Warning) -> {Core.Error.ToIcon()} (Error)
+                {Core.OffTime.ToIcon()} (OffTime) -> {Core.Ok.ToIcon()} (Ok) -> {Core.Error.ToIcon()} (Error)
             Alerts: 
                  - sensor update timeout
                 "↕️" - sensor value alert

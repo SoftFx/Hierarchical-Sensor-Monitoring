@@ -47,7 +47,7 @@ namespace HSMServer.Model.DataAlerts
                 else if (action.Action == ActionViewModel.ShowIconAction)
                     icon = action.Icon;
                 else if (action.Action == ActionViewModel.SetStatusAction)
-                    status = action.Status;
+                    status = SensorStatus.Error;
             }
 
 
@@ -110,8 +110,8 @@ namespace HSMServer.Model.DataAlerts
             if (!string.IsNullOrEmpty(policy.Icon))
                 Actions.Add(new ActionViewModel(false) { Action = ActionViewModel.ShowIconAction, Icon = policy.Icon });
 
-            if (policy.Status != Core.Model.SensorStatus.Ok)
-                Actions.Add(new ActionViewModel(false) { Action = ActionViewModel.SetStatusAction, Status = policy.Status.ToClient() });
+            if (policy.Status == Core.Model.SensorStatus.Error)
+                Actions.Add(new ActionViewModel(false) { Action = ActionViewModel.SetStatusAction });
         }
 
 

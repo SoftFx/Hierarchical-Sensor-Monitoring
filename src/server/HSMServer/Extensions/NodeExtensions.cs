@@ -17,7 +17,6 @@ namespace HSMServer.Extensions
             status switch
             {
                 SensorStatus.Ok => "tree-icon-ok",
-                SensorStatus.Warning => "tree-icon-warning",
                 SensorStatus.Error => "tree-icon-error",
                 SensorStatus.Empty => GetEmptySensorIcon(),
                 _ => "tree-icon-offTime",
@@ -43,7 +42,6 @@ namespace HSMServer.Extensions
             status switch
             {
                 SensorStatus.Ok => "grid-cell-ok",
-                SensorStatus.Warning => "grid-cell-warning",
                 SensorStatus.Error => "grid-cell-error",
                 SensorStatus.OffTime => "grid-cell-offTime",
                 _ => "grid-cell-empty",
