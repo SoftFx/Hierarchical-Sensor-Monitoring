@@ -235,8 +235,7 @@ namespace HSMServer.ApiObjectsConverters
             {
                 ApiSensorStatus.Ok => SensorStatus.Ok,
                 ApiSensorStatus.OffTime => SensorStatus.OffTime,
-                ApiSensorStatus.Error => SensorStatus.Error,
-                ApiSensorStatus.Warning => SensorStatus.Error,
+                ApiSensorStatus.Error or ApiSensorStatus.Warning => SensorStatus.Error,
                 _ => SensorStatus.Ok
             };
     }
