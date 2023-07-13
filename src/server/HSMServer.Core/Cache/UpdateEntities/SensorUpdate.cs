@@ -10,7 +10,7 @@ namespace HSMServer.Core.Cache.UpdateEntities
     /// <summary>
     /// If properties are null - there's no updates for that properties
     /// </summary>
-    public record SensorUpdate : BaseNodeUpdate, IUpdateComparer<BaseSensorModel, SensorUpdate>
+    public record SensorUpdate : BaseNodeUpdate
     {
         public SensorState? State { get; init; }
 
@@ -19,22 +19,6 @@ namespace HSMServer.Core.Cache.UpdateEntities
         public DateTime? EndOfMutingPeriod { get; init; }
 
         public List<DataPolicyUpdate> DataPolicies { get; init; }
-        
-        public string Compare(BaseSensorModel entity, SensorUpdate update)
-        {
-            var builder = new StringBuilder();
-
-            if (entity.State != State && State is not null)
-                builder.AppendLine($"State: {entity.State} -> {State}");
-
-            if (entity.Integration != Integration && Integration is not null)
-                builder.AppendLine($"Integration: {entity.Integration} -> {Integration}");
-
-            if (entity.EndOfMuting != EndOfMutingPeriod && EndOfMutingPeriod is not null)
-                builder.AppendLine($"End of muting: {entity.EndOfMuting} -> {EndOfMutingPeriod}");
-
-            return builder.ToString();
-        }
     }
 
 

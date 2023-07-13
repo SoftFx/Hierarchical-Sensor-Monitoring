@@ -3,6 +3,7 @@ using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Model.NodeSettings;
 using HSMServer.Core.Model.Policies;
 using System;
+using System.Runtime.CompilerServices;
 using HSMServer.Core.Journal;
 
 namespace HSMServer.Core.Model
@@ -79,9 +80,7 @@ namespace HSMServer.Core.Model
 
         protected internal void Update(BaseNodeUpdate update, string initiator = null)
         {
-            CallJournal(new JournalRecordModel(Id, DateTime.UtcNow, update.Compare(this, update), RecordType.Changes, initiator));
-
-            Description = update.Description ?? Description;
+            Description = UpdateProperty(update.Description, Description,initiator);
 
             Settings.KeepHistory.TrySetValue(update.KeepHistory, Id);
             Settings.SelfDestroy.TrySetValue(update.SelfDestroy, Id);
@@ -89,7 +88,13 @@ namespace HSMServer.Core.Model
             if (Settings.TTL.TrySetValue(update.TTL, Id))
                 CheckTimeout();
         }
-        
-        protected void CallJournal(JournalRecordModel journal) => ChangesHandler?.Invoke(journal);
+
+        protected T UpdateProperty<T>(T newValue, T oldValue, string initiator, [CallerArgumentExpression("oldValue")] string propName = "")
+        {
+            if (newValue is not null && !newValue.Equals(oldValue))
+                ChangesHandler?.Invoke(new JournalRecordModel(Id, DateTime.UtcNow, $"{propName} -> {newValue}", RecordType.Changes, initiator));
+            
+            return newValue ?? oldValue;
+        }
     }
 }

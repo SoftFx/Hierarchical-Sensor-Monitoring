@@ -86,13 +86,11 @@ namespace HSMServer.Core.Model
 
         internal void Update(SensorUpdate update, string initiator = null)
         {
-            CallJournal(new JournalRecordModel(Id, DateTime.UtcNow, update.Compare(this, update), RecordType.Changes, initiator));
-
             base.Update(update, initiator);
 
-            State = update?.State ?? State;
-            Integration = update?.Integration ?? Integration;
-            EndOfMuting = update?.EndOfMutingPeriod ?? EndOfMuting;
+            State = UpdateProperty(update.State ?? State, State, initiator);
+            Integration = UpdateProperty(update.Integration ?? Integration, Integration, initiator);
+            EndOfMuting = UpdateProperty(update.EndOfMutingPeriod, EndOfMuting, initiator, "End of muting");
 
             if (State == SensorState.Available)
                 EndOfMuting = null;
