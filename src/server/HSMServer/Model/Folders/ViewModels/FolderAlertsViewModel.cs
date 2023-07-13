@@ -16,7 +16,7 @@ namespace HSMServer.Model.Folders.ViewModels
         internal FolderAlertsViewModel(FolderModel folder)
         {
             Id = folder.Id;
-            ExpectedUpdateInterval = folder.ExpectedUpdateInterval;
+            ExpectedUpdateInterval = folder.TTL;
             //SensorRestorePolicy = folder.SensorRestorePolicy;
         }
     }

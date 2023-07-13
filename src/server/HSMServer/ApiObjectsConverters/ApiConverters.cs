@@ -75,7 +75,7 @@ namespace HSMServer.ApiObjectsConverters
                 Comment = value.Comment,
                 Time = value.Time,
                 Status = value.Status.Convert(),
-                Value = value.Value is null ? Array.Empty<byte>() : value.Value.ToArray(),
+                Value = value.Value?.ToArray() ?? Array.Empty<byte>(),
                 Name = value.Name,
                 Extension = value.Extension,
                 OriginalSize = value.Value?.Count ?? 0L

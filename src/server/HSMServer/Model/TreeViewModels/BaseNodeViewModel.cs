@@ -14,11 +14,11 @@ namespace HSMServer.Model.TreeViewModel
         public ConcurrentDictionary<string, int> AlertIcons { get; } = new();
 
 
-        public TimeIntervalViewModel ExpectedUpdateInterval { get; protected set; }
+        public TimeIntervalViewModel KeepHistory { get; protected set; }
 
-        public TimeIntervalViewModel SavedHistoryPeriod { get; protected set; }
+        public TimeIntervalViewModel SelfDestroy { get; protected set; }
 
-        public TimeIntervalViewModel SelfDestroyPeriod { get; protected set; }
+        public TimeIntervalViewModel TTL { get; protected set; }
 
 
         public Guid Id { get; protected set; }

@@ -23,11 +23,11 @@
         <span>
             @if (condition.Property == ConditionViewModel.TimeToLiveCondition)
             {
-                <b>Inactivity period is @condition.TimeToLive.DisplayInterval</b>
+                <b>Inactivity period is @condition.TimeToLive.DisplayValue</b>
             }
             else if (condition.Property == ConditionViewModel.SensitivityCondition)
             {
-                <b>Sensitivity is more than @condition.Sensitivity.DisplayInterval</b>
+                <b>Sensitivity is more than @condition.Sensitivity.DisplayValue</b>
             }
             else
             {

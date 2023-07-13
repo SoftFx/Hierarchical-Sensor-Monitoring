@@ -61,9 +61,9 @@ namespace HSMServer.Model.ViewModel
             Description = model.Description;
             LastUpdateTime = model.UpdateTime;
 
-            ExpectedUpdateInterval = new(model.ExpectedUpdateInterval, PredefinedIntervals.ForTimeout);
-            SavedHistoryPeriod = new(model.SavedHistoryPeriod, PredefinedIntervals.ForKeepHistory);
-            SelfDestroyPeriod = new(model.SelfDestroyPeriod, PredefinedIntervals.ForSelfDestory);
+            ExpectedUpdateInterval = new(model.TTL, PredefinedIntervals.ForTimeout);
+            SavedHistoryPeriod = new(model.KeepHistory, PredefinedIntervals.ForKeepHistory);
+            SelfDestroyPeriod = new(model.SelfDestroy, PredefinedIntervals.ForSelfDestory);
 
             DataAlerts = model.DataAlerts;
         }

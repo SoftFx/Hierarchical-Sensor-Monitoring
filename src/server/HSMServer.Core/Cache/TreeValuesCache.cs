@@ -12,6 +12,9 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text;
+using System.Text.Json;
+using System.Text.Json.Nodes;
 
 namespace HSMServer.Core.Cache
 {
@@ -443,9 +446,6 @@ namespace HSMServer.Core.Cache
             ChangeProductEvent?.Invoke(product, ActionType.Update);
 
             foreach (var (_, sensor) in product.Sensors)
-                //if (sensorsOldStatuses.TryGetValue(sensor.Id, out var oldStatus))
-                //    NotifyAboutChanges(sensor);
-                //else
                 ChangeSensorEvent?.Invoke(sensor, ActionType.Update);
 
             foreach (var (_, subProduct) in product.SubProducts)
@@ -456,16 +456,16 @@ namespace HSMServer.Core.Cache
         {
             _logger.Info($"{nameof(TreeValuesCache)} is initializing");
 
-            var policyEntities = RequestPolicies();
-
-            _logger.Info($"{nameof(policyEntities)} are deserializing");
-            var policies = GetPolicyModels(policyEntities);
-            _logger.Info($"{nameof(policyEntities)} deserialized");
+            var policies = RequestPolicies();
 
             var productEntities = RequestProducts();
             ApplyProducts(productEntities, policies);
 
-            ApplySensors(productEntities, RequestSensors(), policies);
+            var sensorEntities = RequestSensors();
+
+            ApplySensors(productEntities, sensorEntities, policies);
+
+            LoadOldPolicies(productEntities, sensorEntities); // remove after migration policy to new style
 
             _logger.Info($"{nameof(IDatabaseCore.GetAccessKeys)} is requesting");
             var accessKeysEntities = _database.GetAccessKeys();
@@ -478,6 +478,68 @@ namespace HSMServer.Core.Cache
             _logger.Info($"{nameof(TreeValuesCache)} initialized");
 
             UpdateCacheState();
+        }
+
+        [Obsolete("Should be removed after migration")]
+        private void LoadOldPolicies(List<ProductEntity> products, List<SensorEntity> sensors)
+        {
+            _logger.Info($"{nameof(LoadOldPolicies)} is requesting");
+
+            var rawPolicies = new Dictionary<string, JsonObject>();
+
+            foreach (var oldRaw in _database.GetAllOldPolicies())
+            {
+                var raw = JsonSerializer.Deserialize<JsonObject>(Encoding.UTF8.GetString(oldRaw));
+
+                if (raw["Id"] is not null)
+                    rawPolicies.Add(raw["Id"].ToString(), raw);
+            }
+
+            var resavedPolicies = new Dictionary<string, PolicyEntity>();
+
+            var sensorUpdates = Migrators.GetMigrationUpdates<SensorUpdate, SensorEntity>(sensors, rawPolicies, resavedPolicies);
+            var productUpdates = Migrators.GetMigrationUpdates<ProductUpdate, ProductEntity>(products, rawPolicies, resavedPolicies);
+
+            _logger.Info($"Removing old from db policies");
+
+            _database.RemoveAllOldPolicies();
+
+            _logger.Info($"Resave old policies as new policies");
+
+            foreach (var policy in resavedPolicies)
+                _database.AddPolicy(policy.Value);
+
+            _logger.Info($"Try to update old sensor policies");
+
+            if (resavedPolicies.Count > 0)
+                foreach (var sensor in sensors)
+                    if (_sensors.TryGetValue(Guid.Parse(sensor.Id), out var model))
+                    {
+                        int oldCnt = model.Policies.Count();
+
+                        model.Policies.ApplyPolicies(sensor.Policies, resavedPolicies);
+
+                        if (model.Policies.Count() > oldCnt)
+                            _database.UpdateSensor(model.ToEntity());
+                    }
+
+            _logger.Info($"Sensor update finished");
+
+            _logger.Info($"Try to update prodcuts");
+
+            foreach (var update in productUpdates)
+                UpdateProduct(update.Value);
+
+            _logger.Info($"Prodcuts update is finish");
+
+            _logger.Info($"Try to update sensors");
+
+            foreach (var update in sensorUpdates)
+                UpdateSensor(update.Value);
+
+            _logger.Info($"Sensor update is finish");
+
+            _logger.Info($"{nameof(LoadOldPolicies)} are applying");
         }
 
         private List<ProductEntity> RequestProducts()
@@ -498,18 +560,13 @@ namespace HSMServer.Core.Cache
             return sensorEntities;
         }
 
-        private List<PolicyEntity> RequestPolicies()
+        private Dictionary<string, PolicyEntity> RequestPolicies()
         {
-            //TODO: remove after migration old policies to new style
-            //_logger.Info($"{nameof(IDatabaseCore.GetAllOldPolicies)} is requesting");
-            //var policyEntities = _database.GetAllOldPolicies();
-            //_logger.Info($"{nameof(IDatabaseCore.GetAllOldPolicies)} requested");
-
             _logger.Info($"{nameof(IDatabaseCore.GetAllPolicies)} is requesting");
             var policyEntities = _database.GetAllPolicies();
             _logger.Info($"{nameof(IDatabaseCore.GetAllPolicies)} requested");
 
-            return policyEntities;
+            return policyEntities.ToDictionary(k => new Guid(k.Id).ToString(), v => v);
         }
 
         private void ApplyProducts(List<ProductEntity> productEntities, Dictionary<string, PolicyEntity> policies)
@@ -633,7 +690,7 @@ namespace HSMServer.Core.Cache
                     var update = new ProductUpdate
                     {
                         Id = product.Id,
-                        TTL = new TimeIntervalModel(TimeInterval.Never),
+                        TTL = new TimeIntervalModel(TimeInterval.None),
                         KeepHistory = new TimeIntervalModel(TimeInterval.Month),
                         SelfDestroy = new TimeIntervalModel(TimeInterval.Month),
                     };

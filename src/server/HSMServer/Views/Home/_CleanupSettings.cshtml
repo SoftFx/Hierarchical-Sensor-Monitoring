@@ -14,7 +14,7 @@
 <div class="d-flex flex-row text-nowrap align-items-center ms-3">
     <span class="meta-info-label">Keep @entity history</span>
 
-    <span id="labelSavedHistory" class="meta-info-value">@Model.SavedHistoryPeriod.DisplayInterval</span>
+    <span id="labelSavedHistory" class="meta-info-value">@Model.SavedHistoryPeriod.DisplayValue</span>
     <div id="partialSavedHistorySelect" class="d-none meta-info-interval">
         <partial name="_TimeIntervalSelect" for="SavedHistoryPeriod" />
     </div>
@@ -26,7 +26,7 @@
 <div class="d-flex flex-row text-nowrap align-items-center ms-3 mt-1">
     <span class="meta-info-label">Remove @entity after inactivity</span>
 
-    <span id="labelSelfDestroy" class="meta-info-value">@Model.SelfDestroyPeriod.DisplayInterval</span>
+    <span id="labelSelfDestroy" class="meta-info-value">@Model.SelfDestroyPeriod.DisplayValue</span>
     <div id="partialSelfDestroySelect" class="d-none meta-info-interval">
         <partial name="_TimeIntervalSelect" for="SelfDestroyPeriod" />
     </div>
