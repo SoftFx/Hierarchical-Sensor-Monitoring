@@ -1,4 +1,5 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities;
+using HSMServer.Core;
 using HSMServer.Core.Model;
 using HSMServer.Notifications.Telegram;
 using System.Collections.Concurrent;
@@ -18,7 +19,7 @@ namespace HSMServer.Notification.Settings
         public ConcurrentDictionary<ChatId, TelegramChat> Chats { get; } = new();
 
 
-        public SensorStatus MessagesMinStatus { get; private set; } = SensorStatus.Warning;
+        public SensorStatus MessagesMinStatus { get; private set; } = SensorStatus.Error;
 
         public bool MessagesAreEnabled { get; private set; } = true;
 
@@ -35,7 +36,7 @@ namespace HSMServer.Notification.Settings
             if (entity == null)
                 return;
 
-            MessagesMinStatus = (SensorStatus)entity.MessagesMinStatus;
+            MessagesMinStatus = entity.MessagesMinStatus.ToStatus();
             MessagesAreEnabled = entity.MessagesAreEnabled;
             MessagesDelaySec = entity.MessagesDelay;
             Inheritance = (InheritedSettings)entity.Inheritance;

@@ -23,8 +23,6 @@ namespace HSMServer.Core.Model
 
         public bool HasOffTime => Status >= SensorStatus.OffTime;
 
-        public bool HasWarning => Status >= SensorStatus.Warning;
-
         public bool HasError => Status >= SensorStatus.Error;
 
 

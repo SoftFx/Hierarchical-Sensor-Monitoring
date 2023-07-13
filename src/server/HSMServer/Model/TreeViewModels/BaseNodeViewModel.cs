@@ -9,7 +9,7 @@ namespace HSMServer.Model.TreeViewModel
 {
     public abstract class BaseNodeViewModel
     {
-        public Dictionary<SensorType, List<DataAlertViewModel>> DataAlerts { get; protected set; } = new();
+        public Dictionary<SensorType, List<DataAlertViewModelBase>> DataAlerts { get; protected set; } = new();
 
         public ConcurrentDictionary<string, int> AlertIcons { get; } = new();
 

@@ -24,10 +24,6 @@ namespace HSMServer.Model.ViewModel
         [MinTimeInterval(TimeInterval.OneMinute, ErrorMessage = "{0} minimal value is {1}.")]
         public TimeIntervalViewModel ExpectedUpdateInterval { get; set; }
 
-        //[Display(Name = "Sensitivity interval")]
-        //[MinTimeInterval(TimeInterval.OneMinute, ErrorMessage = "{0} minimal value is {1}.")]
-        //public TimeIntervalViewModel SensorRestorePolicy { get; set; }
-
         [Display(Name = "Keep sensor history")]
         [MinTimeInterval(TimeInterval.Hour, ErrorMessage = "{0} minimal value is {1}.")]
         public TimeIntervalViewModel SavedHistoryPeriod { get; set; }
@@ -36,7 +32,7 @@ namespace HSMServer.Model.ViewModel
         [MinTimeInterval(TimeInterval.Hour, ErrorMessage = "{0} minimal value is {1}.")]
         public TimeIntervalViewModel SelfDestroyPeriod { get; set; }
 
-        public Dictionary<SensorType, List<DataAlertViewModel>> DataAlerts { get; set; }
+        public Dictionary<SensorType, List<DataAlertViewModelBase>> DataAlerts { get; set; }
 
         public string EncodedId { get; set; }
 

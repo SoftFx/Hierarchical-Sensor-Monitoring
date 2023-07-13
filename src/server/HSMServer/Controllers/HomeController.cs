@@ -554,7 +554,7 @@ namespace HSMServer.Controllers
             {
                 Id = sensor.Id,
                 Description = newModel.Description ?? string.Empty,
-                TTL = newModel.ExpectedUpdateInterval.ToModel(),
+                //TTL = newModel.ExpectedUpdateInterval.ToModel(),
                 //RestoreInterval = newModel.SensorRestorePolicy.ToModel(),
                 KeepHistory = newModel.SavedHistoryPeriod.ToModel(),
                 SelfDestroy = newModel.SelfDestroyPeriod.ToModel(),
@@ -578,11 +578,32 @@ namespace HSMServer.Controllers
                 _ => null,
             };
 
-            return PartialView("_DataAlert", viewModel);
+            return PartialView("~/Views/Home/Alerts/_DataAlert.cshtml", viewModel);
         }
 
+        public IActionResult AddAlertCondition(Guid sensorId)
+        {
+            if (!_treeViewModel.Sensors.TryGetValue(sensorId, out var sensor))
+                return _emptyResult;
+
+            ConditionViewModel viewModel = sensor.Type switch
+            {
+                SensorType.Integer => new SingleConditionViewModel<IntegerValue, int>(false),
+                SensorType.Double => new SingleConditionViewModel<DoubleValue, double>(false),
+                SensorType.IntegerBar => new BarConditionViewModel<IntegerBarValue, int>(false),
+                SensorType.DoubleBar => new BarConditionViewModel<DoubleBarValue, double>(false),
+                _ => null,
+            };
+
+            return PartialView("~/Views/Home/Alerts/_ConditionBlock.cshtml", viewModel);
+        }
+
+        public IActionResult AddAlertAction() =>
+            PartialView("~/Views/Home/Alerts/_ActionBlock.cshtml", new ActionViewModel(false));
+
+
         [HttpPost]
-        public void SendTestMessage(DataAlertViewModel alert)
+        public void SendTestMessage(DataAlertViewModelBase alert)
         {
             if (!_treeViewModel.Sensors.TryGetValue(alert.EntityId, out var sensor) ||
                 !_treeViewModel.Nodes.TryGetValue(sensor.RootProduct.Id, out var product))

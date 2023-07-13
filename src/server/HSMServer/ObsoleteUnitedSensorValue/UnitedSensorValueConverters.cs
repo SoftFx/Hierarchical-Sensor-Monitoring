@@ -91,7 +91,7 @@ namespace HSMServer.ObsoleteUnitedSensorValue
                 ApiSensorStatus.Ok => SensorStatus.Ok,
                 ApiSensorStatus.OffTime => SensorStatus.OffTime,
                 ApiSensorStatus.Error => SensorStatus.Error,
-                ApiSensorStatus.Warning => SensorStatus.Warning,
+                ApiSensorStatus.Warning => SensorStatus.Error,
                 _ => SensorStatus.Ok
             };
     }

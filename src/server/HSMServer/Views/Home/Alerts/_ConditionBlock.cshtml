@@ -1,0 +1,85 @@
+﻿@using HSMServer.Extensions
+@using HSMServer.Model.DataAlerts
+
+@model ConditionViewModel
+
+@addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
+
+
+@{
+    var condition = Model.Property;
+
+    var isTtlCondition = condition == ConditionViewModel.TimeToLiveCondition;
+    var isSensitivityCondition = condition == ConditionViewModel.SensitivityCondition;
+    var isValueCondition = !isTtlCondition && !isSensitivityCondition;
+
+    var isSecondaryCondition = !Model.PropertiesItems.Any(i => i.Value == ConditionViewModel.TimeToLiveCondition);
+}
+
+
+<div name="alertCondition" class="d-flex flex-row align-items-center alert-blocks-group ms-3 py-1">
+    <div class="@isSecondaryCondition.ToVisibility() alert-text-block alert-add me-3">and</div>
+
+    <select class="alert-block alert-select property-select" asp-for="Property" asp-items="@Model.PropertiesItems"></select>
+
+    <div name="valueCondition" class="@isValueCondition.ToVisibility() flex-row align-items-center">
+        <select class="alert-block alert-select operation-select" asp-for="Operation" asp-items="@Model.OperationsItems"></select>
+        <input class="alert-block target-input target-value" type="text" placeholder="<enter a value>" asp-for="Target" value="@Model.Target" required="@(isValueCondition ? true : false)"/>
+    </div>
+
+    <div name="sensitivityCondition" class="@isSensitivityCondition.ToVisibility() flex-row align-items-center">
+        <div class="alert-text-block operation-select">is more than</div>
+        <partial name="_TimeIntervalSelect" for="Sensitivity" />
+    </div>
+
+    <div name="ttlCondition" class="@isTtlCondition.ToVisibility() flex-row align-items-center">
+        <div class="alert-text-block operation-select">is</div>
+        <partial name="_TimeIntervalSelect" for="TimeToLive" />
+    </div>
+
+    <a class="deleteCondition"><i class="@isSecondaryCondition.ToVisibility() fa-solid fa-xmark alert-delete-button"></i></a>
+</div>
+
+
+<script>
+    $('select[name="Property"]').off("change").on("change", function () {
+        let conditionBlock = $(this).parents("div[name='alertCondition']:first");
+        
+        let value = conditionBlock.find($(`div[name='valueCondition']`));
+        let timeToLive = conditionBlock.find($(`div[name='ttlCondition']`));
+        let sensitivity = conditionBlock.find($(`div[name='sensitivityCondition']`));
+
+        let targetInput = value.find($(`input[name='Target']`));
+        let addButton = $(this).parents("div.fullCondition:first").find($(`a.addCondition`));
+
+        let condition = $(this).val();
+        if (condition === '@ConditionViewModel.TimeToLiveCondition') {
+            targetInput.attr('required', false);
+            value.removeClass("d-flex").addClass('d-none');
+            sensitivity.removeClass("d-flex").addClass('d-none');
+            addButton.removeClass("d-block").addClass('d-none');
+
+            timeToLive.removeClass("d-none").addClass('d-flex');
+        }
+        else if (condition === '@ConditionViewModel.SensitivityCondition') {
+            targetInput.attr('required', false);
+            value.removeClass("d-flex").addClass('d-none');
+            timeToLive.removeClass("d-flex").addClass('d-none');
+
+            sensitivity.removeClass("d-none").addClass('d-flex');
+            addButton.removeClass("d-none").addClass('d-block');
+        }
+        else {
+            sensitivity.removeClass("d-flex").addClass('d-none');
+            timeToLive.removeClass("d-flex").addClass('d-none');
+
+            targetInput.attr('required', true);
+            value.removeClass("d-none").addClass('d-flex');
+            addButton.removeClass("d-none").addClass('d-block');
+        }
+    });
+
+    $("a.deleteCondition").off("click").on("click", function () {
+        $(this).parents("div[name='alertCondition']:first").remove();
+    });
+</script>

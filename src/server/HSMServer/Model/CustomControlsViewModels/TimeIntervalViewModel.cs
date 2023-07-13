@@ -32,6 +32,8 @@ namespace HSMServer.Model
 
         public bool UseCustomInputTemplate { get; }
 
+        public bool IsAlertBlock { get; init; }
+
 
         public string DisplayValue
         {
