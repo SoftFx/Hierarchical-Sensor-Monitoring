@@ -1,4 +1,5 @@
-﻿@using HSMServer.Model.DataAlerts
+﻿@using HSMServer.Extensions
+@using HSMServer.Model.DataAlerts
 
 @model ActionViewModel
 
@@ -10,23 +11,25 @@
 
     var isSendAction = action == ActionViewModel.SendNotifyAction;
     var isShowAction = action == ActionViewModel.ShowIconAction;
+
+    var isSecondaryCondition = !Model.IsMain;
 }
 
 
 <div name="alertAction" class="d-flex flex-row align-items-center alert-blocks-group py-1 ms-3">
-    <div class="@(Model.IsMain ? "d-none" : "d-flex") alert-text-block alert-add me-3">and</div>
+    <div class="@isSecondaryCondition.ToVisibility() alert-text-block alert-add me-3">and</div>
 
     <select class="alert-block alert-select property-select" asp-for="Action" asp-items="Model.Actions"></select>
 
-    <div name="sendNotificationAction" class="@(isSendAction ? "d-block" : "d-none")">
+    <div name="sendNotificationAction" class="@isSendAction.ToVisibility()">
         <input type="text" class="alert-block target-input target-comment" placeholder="message template" asp-for="Comment" value="@Model.Comment" required="@(isSendAction ? true : false)">
     </div>
 
-    <div name="showIconAction" class="@(isShowAction ? "d-block" : "d-none") alert-block">
+    <div name="showIconAction" class="@isShowAction.ToVisibility() alert-block">
         <div name="emoji" class="target-input">@Model.Icon</div>
     </div>
 
-    <a class="deleteAction"><i class="@(Model.IsMain ? "d-none" : "d-flex") fa-solid fa-xmark alert-delete-button"></i></a>
+    <a class="deleteAction"><i class="@isSecondaryCondition.ToVisibility() fa-solid fa-xmark alert-delete-button"></i></a>
 </div>
 
 
@@ -49,21 +52,21 @@
 
         let action = $(this).val();
         if (action === '@ActionViewModel.SendNotifyAction') {
-            show.removeClass("d-block").addClass('d-none');
+            show.removeClass("d-flex").addClass('d-none');
 
             commentInput.attr('required', true);
-            send.removeClass("d-none").addClass('d-block');
+            send.removeClass("d-none").addClass('d-flex');
         }
         else if (action === '@ActionViewModel.ShowIconAction') {
             commentInput.attr('required', false);
-            send.removeClass("d-block").addClass('d-none');
+            send.removeClass("d-flex").addClass('d-none');
 
-            show.removeClass("d-none").addClass('d-block');
+            show.removeClass("d-none").addClass('d-flex');
         }
         else if (action === '@ActionViewModel.SetStatusAction') {
             commentInput.attr('required', false);
-            send.removeClass("d-block").addClass('d-none');
-            show.removeClass("d-block").addClass('d-none');
+            send.removeClass("d-flex").addClass('d-none');
+            show.removeClass("d-flex").addClass('d-none');
         }
     });
 
