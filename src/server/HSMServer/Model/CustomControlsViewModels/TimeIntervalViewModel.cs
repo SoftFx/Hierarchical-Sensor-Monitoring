@@ -16,6 +16,7 @@ namespace HSMServer.Model
         private static long _id = 0L;
 
         private readonly Func<(TimeIntervalViewModel Value, bool IsFolder)> _getParentValue;
+        private TimeInterval? _interval;
         private TimeSpan _customSpan;
         private string _customString;
 
@@ -69,7 +70,22 @@ namespace HSMServer.Model
             }
         }
 
-        public TimeInterval? Interval { get; set; }
+        public TimeInterval? Interval
+        {
+            get => _interval;
+            set
+            {
+                _interval = value;
+
+                if (_interval.HasValue)
+                {
+                    var val = _interval.Value;
+
+                    if (val.IsUnset() || val.IsStatic() || val.IsDynamic())
+                        CustomSpan = new TimeSpan((long)val);
+                }
+            }
+        }
 
         internal TimeInterval TimeInterval => Interval ?? default;
 
