@@ -509,8 +509,6 @@ namespace HSMServer.Core.Cache
             foreach (var policy in resavedPolicies)
                 _database.AddPolicy(policy.Value);
 
-            _logger.Info($"Try to update product old policies");
-
             _logger.Info($"Try to update old sensor policies");
 
             if (resavedPolicies.Count > 0)
@@ -522,10 +520,7 @@ namespace HSMServer.Core.Cache
                         model.Policies.ApplyPolicies(sensor.Policies, resavedPolicies);
 
                         if (model.Policies.Count() > oldCnt)
-                        {
                             _database.UpdateSensor(model.ToEntity());
-                            NotifyAboutChanges(model);
-                        }
                     }
 
             _logger.Info($"Sensor update finished");

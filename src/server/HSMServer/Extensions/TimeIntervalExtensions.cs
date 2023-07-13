@@ -12,7 +12,7 @@ namespace HSMServer.Extensions
 
         public static bool IsUnset(this TimeInterval interval) => interval is TimeInterval.Forever or TimeInterval.None;
 
-        public static bool IsStatic(this TimeInterval interval) => interval is >= TimeInterval.OneMinute and <= TimeInterval.Month;
+        public static bool IsStatic(this TimeInterval interval) => interval is >= TimeInterval.OneMinute and < TimeInterval.Month;
 
         public static bool IsDynamic(this TimeInterval interval) => interval is >= TimeInterval.Month and <= TimeInterval.Year;
 

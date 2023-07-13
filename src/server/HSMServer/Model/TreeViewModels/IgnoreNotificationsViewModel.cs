@@ -39,7 +39,7 @@ namespace HSMServer.Model
 
         public DateTime DateTimeNow { get; set; }
 
-        public DateTime EndOfIgnorePeriod => IgnorePeriod.TimeInterval == TimeInterval.Forever ?
+        public DateTime EndOfIgnorePeriod => IgnorePeriod.TimeInterval is TimeInterval.Forever ?
                                              DateTime.MaxValue : DateTimeNow.AddDays(Days).AddHours(Hours).AddMinutes(Minutes);
 
         public bool IsOffTimeModal { get; set; }
