@@ -24,10 +24,8 @@ public class JournalController : BaseController
     [HttpPost]
     public JsonResult GetPage([FromBody] TableParameters parameters)
     {
-        var resultSet = new DataTableResultSet
-        {
-            Draw = parameters.Parameters.Draw
-        };
+        var draw = parameters.Parameters.Draw;
+        var rows = new List<List<string>>(1 << 5);
         
         foreach (var recordFromDb in StoredUser.Journal.GetPage(parameters.Parameters).Select(x => new JournalViewModel(x)))
         {
@@ -38,18 +36,10 @@ public class JournalController : BaseController
                 recordFromDb.Type.ToString(),
                 recordFromDb.Value.Replace(Environment.NewLine, "<br>"),
             };
-            resultSet.Data.Add(data);
+
+            rows.Add(data);
         }
 
-        resultSet.RecordsTotal = StoredUser.Journal.Length;
-        resultSet.RecordsFiltered = StoredUser.Journal.Length;
-
-        return Json( new
-        {
-            data = resultSet.Data.ToArray(),
-            resultSet.RecordsFiltered,
-            resultSet.RecordsTotal,
-            resultSet.Draw
-        });
+        return Json(new DataTableResultSet(draw, StoredUser.Journal.Length, StoredUser.Journal.Length, rows));
     }
 }

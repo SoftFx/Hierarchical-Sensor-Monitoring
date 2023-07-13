@@ -14,16 +14,19 @@ public record DataTableOrder(int Column, string Dir);
 
 public class DataTableResultSet
 {
-    public List<List<string>> Data = new();
+    public List<string>[] Data { get; set; }
 
     public int Draw { get; set; }
 
     public int RecordsFiltered { get; set; }
 
     public int RecordsTotal { get; set; }
-}
 
-public class DataTableResultError : DataTableResultSet
-{
-    public string Error { get; set; }
+    public DataTableResultSet(int draw, int recordsFiltered, int recordsTotal, List<List<string>> data)
+    {
+        Draw = draw;
+        RecordsFiltered = recordsFiltered;
+        RecordsTotal = recordsTotal;
+        Data = data.ToArray();
+    }
 }
