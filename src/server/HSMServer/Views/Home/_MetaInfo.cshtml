@@ -186,12 +186,12 @@
                 setFormDataAlertsListProperty(formData, type, i, j, $(this), "Actions", "select", "Action");
 
                 let sendBlock = $(this).find('div[name="sendNotificationAction"]');
-                if (sendBlock.hasClass('d-block')) {
+                if (sendBlock.hasClass('d-flex')) {
                     setFormDataAlertsListProperty(formData, type, i, j, sendBlock, "Actions", "input", "Comment");
                 }
 
                 let showBlock = $(this).find('div[name="showIconAction"]');
-                if (showBlock.hasClass('d-block')) {
+                if (showBlock.hasClass('d-flex')) {
                     showBlock.find(`div[name='emoji']`).each(function () {
                         formData.append(`DataAlerts[${type}][${i}].Actions[${j}].Icon`, $(this)[0].innerText);
                     });
