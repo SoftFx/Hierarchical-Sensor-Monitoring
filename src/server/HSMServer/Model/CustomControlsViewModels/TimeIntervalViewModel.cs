@@ -36,11 +36,11 @@ namespace HSMServer.Model
         {
             get
             {
-                string GetUsedValue(TimeIntervalViewModel model) => model.Interval switch
+                static string GetUsedValue(TimeIntervalViewModel model) => model?.Interval switch
                 {
                     TimeInterval.Custom => model.CustomSpan.ToTableView(),
-                    TimeInterval.FromParent => GetUsedValue(_getParentValue?.Invoke().Value),
-                    _ => model.TimeInterval.GetDisplayName()
+                    TimeInterval.FromParent => GetUsedValue(model._getParentValue?.Invoke().Value),
+                    _ => model?.TimeInterval.GetDisplayName()
                 };
 
                 var used = GetUsedValue(this);
@@ -86,9 +86,6 @@ namespace HSMServer.Model
         {
             IntervalItems = intervals.ToSelectedItems(k => k.GetDisplayName());
             UseCustomInputTemplate = useCustomTemplate;
-
-            if (!HasParentValue)
-                IntervalItems.RemoveAt(0);
         }
 
         internal TimeIntervalViewModel(TimeIntervalViewModel model, List<TimeInterval> intervals) : this(intervals)
@@ -97,6 +94,9 @@ namespace HSMServer.Model
 
             Interval = model.Interval;
             CustomSpan = model.CustomSpan;
+
+            if (!HasParentValue)
+                IntervalItems.RemoveAt(0);
         }
 
         internal TimeIntervalViewModel(TimeIntervalEntity entity, List<TimeInterval> intervals) : this(intervals)

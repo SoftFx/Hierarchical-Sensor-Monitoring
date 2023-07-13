@@ -40,20 +40,16 @@ namespace HSMServer.Core.Model.NodeSettings
 
         internal override bool TrySetValue(TimeIntervalModel update)
         {
-            var action = ActionType.Add;
             var newValue = (T)update;
 
-            if (CurValue is null && newValue is null)
-                return false;
+            if (newValue is not null && CurValue != newValue)
+            {
+                CurValue = newValue;
 
-            if (CurValue is not null)
-                action = newValue is null ? ActionType.Delete : ActionType.Update;
+                Uploaded?.Invoke(ActionType.Update, newValue);
+            }
 
-            CurValue = newValue;
-
-            Uploaded?.Invoke(action, newValue);
-
-            return true;
+            return newValue is null;
         }
 
         internal override TimeIntervalEntity ToEntity() => CurValue?.ToEntity();

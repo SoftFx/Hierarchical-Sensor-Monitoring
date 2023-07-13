@@ -27,11 +27,12 @@ namespace HSMServer.Model.TreeViewModel
         public string Path { get; private set; }
 
 
-
         //TODO: should be changed to NodeViewModel when Sensor will have its own Telegram Settings
         public ProductNodeViewModel RootProduct => Parent is null or FolderModel ? (ProductNodeViewModel)this : ((ProductNodeViewModel)Parent).RootProduct;
 
         public string FullPath => $"{RootProduct?.Name}{Path}";
+
+        private bool ParentIsFolder => Parent is FolderModel;
 
 
         protected NodeViewModel(BaseNodeModel model)
@@ -40,11 +41,9 @@ namespace HSMServer.Model.TreeViewModel
             Path = model.Path;
             EncodedId = SensorPathHelper.EncodeGuid(model.Id);
 
-            bool ParentIsFolder() => Parent is FolderModel;
-
-            TTL = new(() => (Parent?.TTL, ParentIsFolder()));
-            KeepHistory = new(() => (Parent?.KeepHistory, ParentIsFolder()));
-            SelfDestroy = new(() => (Parent?.SelfDestroy, ParentIsFolder()));
+            TTL = new(() => (Parent?.TTL, ParentIsFolder));
+            KeepHistory = new(() => (Parent?.KeepHistory, ParentIsFolder));
+            SelfDestroy = new(() => (Parent?.SelfDestroy, ParentIsFolder));
         }
 
 
