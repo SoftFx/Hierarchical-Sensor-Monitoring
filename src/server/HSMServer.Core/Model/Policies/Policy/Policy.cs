@@ -62,7 +62,7 @@ namespace HSMServer.Core.Model.Policies
             PolicyCondition Update(PolicyCondition condition, PolicyConditionEntity entity) => condition.FromEntity(entity);
 
             Id = new Guid(entity.Id);
-            Status = (SensorStatus)entity.SensorStatus;
+            Status = entity.SensorStatus.ToStatus();
 
             Template = entity.Template;
             Icon = entity.Icon;

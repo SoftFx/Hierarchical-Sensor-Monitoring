@@ -24,10 +24,9 @@ namespace HSMServer.Core.Model.NodeSettings
     }
 
 
-    public sealed class SettingProperty<T> : SettingProperty, IChangesEntity where T : TimeIntervalModel
+    public sealed class SettingProperty<T> : SettingProperty, IChangesEntity where T : TimeIntervalModel, new()
     {
-        private readonly T _emptyValue = (T)TimeIntervalModel.Never;
-        private T _curValue;
+        private readonly T _emptyValue = (T)TimeIntervalModel.None;
 
 
         public event Action<JournalRecordModel> ChangesHandler;
@@ -35,68 +34,30 @@ namespace HSMServer.Core.Model.NodeSettings
 
         public override bool IsEmpty => Value is null;
 
-        public override bool IsSet => _curValue is not null;
+        public override bool IsSet => !CurValue?.IsFromParent ?? false;
 
         
         public required string Name { get; set; }
 
-        public T Value => _curValue ?? ((SettingProperty<T>)ParentProperty)?.Value ?? _emptyValue;
+        public T CurValue { get; private set; } = new T();
+
+        public T Value => IsSet ? CurValue : ((SettingProperty<T>)ParentProperty)?.Value ?? _emptyValue;
 
 
         internal override bool TrySetValue(TimeIntervalModel update, Guid id)
         {
-            if (update is null)
-                return false;
-
-            var action = ActionType.Add;
             var newValue = (T)update;
 
-            var copyValue = _curValue;
-            
-            if (IsSet)
+            if (newValue is not null && CurValue != newValue)
             {
-                if (newValue.IsFromParent)
-                {
-                    _curValue = null;
-                    action = ActionType.Delete;
-                }
-                else
-                {
-                    _curValue = newValue;
-                    action = ActionType.Update;
-                }
-            }
-            else if (!newValue.IsFromParent)
-                _curValue = newValue;
-            else
-                return true;
+                CurValue = newValue;
 
-            if (id != Guid.Empty)
-            {
-                var val1 = GetValue(copyValue);
-                var val2 = GetValue(_curValue);
-                if (val1 != val2)
-                    ChangesHandler?.Invoke(new JournalRecordModel(id, DateTime.UtcNow, $"{Name}: {val1} -> {val2}"));
+                Uploaded?.Invoke(ActionType.Update, newValue);
             }
-            
-            Uploaded?.Invoke(action, newValue);
-            return true;
+
+            return newValue is null;
         }
 
-        private static string GetValue(T value)
-        {
-            if (value is null)
-                return TimeInterval.FromParent.ToString();
-
-            if (value.IsFromParent) 
-                return TimeInterval.FromParent.ToString();
-
-            if (value.UseCustom)
-                return value.Ticks.ToString();
-
-            return value.Interval.ToString();
-        }
-
-        internal override TimeIntervalEntity ToEntity() => _curValue?.ToEntity();
+        internal override TimeIntervalEntity ToEntity() => CurValue?.ToEntity();
     }
 }

@@ -77,7 +77,7 @@ namespace HSMServer.Model.TreeViewModel
             }
         }
 
-        private static DataAlertViewModel BuildAlert(Policy policy, BaseSensorModel sensor) => policy switch
+        private static DataAlertViewModelBase BuildAlert(Policy policy, BaseSensorModel sensor) => policy switch
         {
             IntegerPolicy p => new SingleDataAlertViewModel<IntegerValue, int>(p, sensor),
             DoublePolicy p => new SingleDataAlertViewModel<DoubleValue, double>(p, sensor),

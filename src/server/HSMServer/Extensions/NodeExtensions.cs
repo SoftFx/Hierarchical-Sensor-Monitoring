@@ -17,7 +17,6 @@ namespace HSMServer.Extensions
             status switch
             {
                 SensorStatus.Ok => "tree-icon-ok",
-                SensorStatus.Warning => "tree-icon-warning",
                 SensorStatus.Error => "tree-icon-error",
                 SensorStatus.Empty => GetEmptySensorIcon(),
                 _ => "tree-icon-offTime",
@@ -28,34 +27,6 @@ namespace HSMServer.Extensions
 
         internal static string ToIcon(this SensorStatus status) =>
             $"fas fa-circle {status.ToCssIconClass()}";
-
-        internal static string ToIconClass(this string icon) =>
-            icon switch
-            {
-                "⬆️" => "fa-solid fa-arrow-up",
-                "⏫" => "fa-solid fa-angles-up",
-                "🔼" => "fa-solid fa-angle-up",
-                "↕️" => "fa-solid fa-arrows-up-down",
-                "🔽" => "fa-solid fa-angle-down",
-                "⏬" => "fa-solid fa-angles-down",
-                "⬇️" => "fa-solid fa-arrow-down",
-                "⌛️" => "fa-solid fa-hourglass-end",
-                "❌" => "fa-solid fa-xmark",
-                _ => string.Empty,
-            };
-
-        internal static string ToIconUnicode(this string icon) =>
-            icon switch
-            {
-                "⬆️" => "&#xf062;",
-                "⏫" => "&#xf102;",
-                "🔼" => "&#xf106;",
-                "↕️" => "&#xf338;",
-                "🔽" => "&#xf107;",
-                "⏬" => "&#xf103;",
-                "⬇️" => "&#xf063;",
-                _ => string.Empty,
-            };
 
         internal static HtmlString ToIconStatus(this SensorStatus status) =>
             new($"<span class='{status.ToIcon()}'></span> {status}");
@@ -71,7 +42,6 @@ namespace HSMServer.Extensions
             status switch
             {
                 SensorStatus.Ok => "grid-cell-ok",
-                SensorStatus.Warning => "grid-cell-warning",
                 SensorStatus.Error => "grid-cell-error",
                 SensorStatus.OffTime => "grid-cell-offTime",
                 _ => "grid-cell-empty",

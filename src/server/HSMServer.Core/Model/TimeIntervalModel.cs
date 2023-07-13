@@ -24,33 +24,23 @@ namespace HSMServer.Core.Model
     {
         FromFolder = -100,
         FromParent = -10,
-        Custom = -1,
-
-        OneMinute = 600_000_000,
-        FiveMinutes = 3_000_000_000,
-        TenMinutes = 6_000_000_000,
-
-        Hour = 36_000_000_000,
-        Day = 864_000_000_000,
-        Week = 6_048_000_000_000,
+        Ticks = -1,
+        None = 0L,
 
         Month = 26_784_000_000_000, // 31 days
         ThreeMonths = 80_352_000_000_000, // 31 * 3
         SixMonths = 160_704_000_000_000, // 31 * 6
 
-        Year = 315_360_000_000_000, //365 days
-
-        Never = 0L,
-        Forever = long.MaxValue - 1,
+        Year = 315_360_000_000_000, // 365 days
     }
 
 
     public class TimeIntervalModel
     {
-        public static TimeIntervalModel Never { get; } = new(TimeInterval.Never);
+        public static TimeIntervalModel None { get; } = new(TimeInterval.None);
 
 
-        public TimeInterval Interval { get; } = TimeInterval.FromParent;
+        public TimeInterval Interval { get; }
 
         public long Ticks { get; }
 
@@ -59,10 +49,12 @@ namespace HSMServer.Core.Model
 
         public bool IsFromParent => Interval is TimeInterval.FromParent;
 
-        public bool UseCustom => Interval is TimeInterval.Custom or TimeInterval.FromFolder;
+        public bool UseTicks => Interval is TimeInterval.Ticks or TimeInterval.FromFolder;
 
 
-        public TimeIntervalModel(long ticks) : this(TimeInterval.Custom, ticks) { }
+        public TimeIntervalModel() : this(TimeInterval.FromParent) { }
+
+        public TimeIntervalModel(long ticks) : this(TimeInterval.Ticks, ticks) { }
 
         public TimeIntervalModel(TimeInterval interval) : this(interval, 0L) { }
 
@@ -75,27 +67,23 @@ namespace HSMServer.Core.Model
         }
 
 
-        internal bool TimeIsUp(DateTime time) => UseCustom ? (DateTime.UtcNow - time).Ticks > Ticks
+        internal bool TimeIsUp(DateTime time) => UseTicks ? (DateTime.UtcNow - time).Ticks > Ticks
                                                            : DateTime.UtcNow > GetShiftedTime(time);
 
         public DateTime GetShiftedTime(DateTime time, int coef = 1) => Interval switch
         {
-            TimeInterval.OneMinute or TimeInterval.FiveMinutes or
-            TimeInterval.TenMinutes or TimeInterval.Hour or
-            TimeInterval.Day or TimeInterval.Week => time.AddTicks((long)Interval * coef),
-
             TimeInterval.Month => time.AddMonths(coef),
             TimeInterval.ThreeMonths => time.AddMonths(3 * coef),
             TimeInterval.SixMonths => time.AddMonths(6 * coef),
 
             TimeInterval.Year => time.AddYears(coef),
 
-            TimeInterval.Custom or TimeInterval.FromFolder => time.AddTicks(Ticks * coef),
-            TimeInterval.Never or TimeInterval.Forever => DateTime.MaxValue,
+            TimeInterval.Ticks or TimeInterval.FromFolder => time.AddTicks(Ticks * coef),
+            TimeInterval.None => DateTime.MaxValue,
 
             _ => throw new NotImplementedException(),
         };
 
-        internal TimeIntervalEntity ToEntity() => new((long)Interval, Ticks);
+        public TimeIntervalEntity ToEntity() => new((long)Interval, Ticks);
     }
 }

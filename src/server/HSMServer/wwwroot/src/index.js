@@ -35,6 +35,9 @@ import 'datatables/media/css/jquery.dataTables.min.css';
 import '@fortawesome/fontawesome-free/js/all.min.js';
 import '@fortawesome/fontawesome-free/css/all.min.css';
 
+import 'emojionearea/dist/emojionearea.min.css'
+import 'emojionearea/dist/emojionearea.min.js'
+
 
 import './js/accessKey.js';
 import './js/confirmation.js';

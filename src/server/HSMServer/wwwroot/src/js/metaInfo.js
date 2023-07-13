@@ -16,17 +16,13 @@
     $('#markdown_span_description').addClass('d-none')
     $('#meta_info_collapse').addClass('d-none')
 
-    $('#partialIntervalSelect').removeClass('d-none');
-    $('#partialRestoreSelect').removeClass('d-none');
     $('#partialSavedHistorySelect').removeClass('d-none');
     $('#partialSelfDestroySelect').removeClass('d-none');
-    $('[id^="dataAlertInputGroupd_"]').removeClass('d-none');
+    $('[id^="alertConstructor_"]').removeClass('d-none');
 
-    $('#labelInterval').addClass('d-none');
-    $('#labelRestoreInterval').addClass('d-none');
     $('#labelSavedHistory').addClass('d-none');
     $('#labelSelfDestroy').addClass('d-none');
-    $('[id^="dataAlertLabel_"]').addClass('d-none');
+    $('[id^="alertLabel_"]').addClass('d-none');
 }
 
 window.revertInfoButtonClick = function (action) {

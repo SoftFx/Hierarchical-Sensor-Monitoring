@@ -4,7 +4,7 @@ namespace HSMDatabase.AccessManager.DatabaseEntities
 {
     public abstract record BaseNodeEntity
     {
-        public Dictionary<string, TimeIntervalEntity> Settings { get; init; }
+        public Dictionary<string, TimeIntervalEntity> Settings { get; init; } = new();
 
         public List<string> Policies { get; init; }
 

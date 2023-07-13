@@ -24,14 +24,16 @@ namespace hsm_wrapper
 	public:
 		DataCollectorImpl(const std::string& product_key, const std::string& address, int port);
 
-		void Initialize(bool use_logging, const std::string& folder_path, const std::string& file_name_format);
+		void Initialize(const std::string& config_path = {}, bool write_debug = false);
+		void Start();
 		void Stop();
 		void InitializeSystemMonitoring(bool is_cpu, bool is_free_ram, const std::string& specific_path = "");
 		void InitializeProcessMonitoring(bool is_cpu, bool is_memory, bool is_threads, const std::string& specific_path = "");
-		void InitializeProcessMonitoring(const std::string& process_name, bool is_cpu, bool is_memory, bool is_threads, const std::string& specific_path = "");
-		void InitializeOsMonitoring(bool is_updated, const std::string& specific_path = "");
-		void MonitoringServiceAlive(const std::string& specific_path = "");
+		void InitializeOsMonitoring(bool is_updated, bool last_update, bool last_restart, const std::string& specific_path = "");
+		void InitializeProductVersion(const std::string& version, const std::string& specific_path = "");
+		void InitializeCollectorMonitoring(bool is_alive, bool version, bool status, const std::string& specific_path = "");
 
+		void SendFileAsync(const std::string& sensor_path, const std::string& file_path, HSMSensorStatus status = HSMSensorStatus::Ok, const std::string& description = {});
 
 		HSMSensor<bool> CreateBoolSensor(const std::string& path, const std::string& description = "");
 		HSMSensor<int> CreateIntSensor(const std::string& path, const std::string& description = "");
@@ -75,7 +77,12 @@ namespace hsm_wrapper
 			return std::make_shared<HSMParamsFuncSensorImplWrapper<T, U>>(params_func_sensor_impl);
 		}
 
+
+
+
 	private:
 		msclr::auto_gcroot<IDataCollector^> data_collector;
 	};
+
+
 }

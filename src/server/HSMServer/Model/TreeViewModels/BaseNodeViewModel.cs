@@ -9,16 +9,16 @@ namespace HSMServer.Model.TreeViewModel
 {
     public abstract class BaseNodeViewModel
     {
-        public Dictionary<SensorType, List<DataAlertViewModel>> DataAlerts { get; protected set; } = new();
+        public Dictionary<SensorType, List<DataAlertViewModelBase>> DataAlerts { get; protected set; } = new();
 
         public ConcurrentDictionary<string, int> AlertIcons { get; } = new();
 
 
-        public TimeIntervalViewModel ExpectedUpdateInterval { get; protected set; }
+        public TimeIntervalViewModel KeepHistory { get; protected set; }
 
-        public TimeIntervalViewModel SavedHistoryPeriod { get; protected set; }
+        public TimeIntervalViewModel SelfDestroy { get; protected set; }
 
-        public TimeIntervalViewModel SelfDestroyPeriod { get; protected set; }
+        public TimeIntervalViewModel TTL { get; protected set; }
 
 
         public Guid Id { get; protected set; }

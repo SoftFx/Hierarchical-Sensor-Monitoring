@@ -1,6 +1,5 @@
 ﻿using HSMServer.Core.Model;
 using HSMServer.Core.Model.NodeSettings;
-using HSMServer.Core.Model.Policies;
 using HSMServer.Helpers;
 using HSMServer.Model.Folders;
 
@@ -11,7 +10,6 @@ namespace HSMServer.Model.TreeViewModel
         Empty,
         OffTime,
         Ok,
-        Warning,
         Error
     }
 
@@ -21,17 +19,19 @@ namespace HSMServer.Model.TreeViewModel
         public string EncodedId { get; }
 
 
-        public string Path { get; private set; }
+        public BaseNodeViewModel Parent { get; internal set; }
 
         public virtual bool HasData { get; protected set; }
 
-        public BaseNodeViewModel Parent { get; internal set; }
+        public string Path { get; private set; }
 
 
         //TODO: should be changed to NodeViewModel when Sensor will have its own Telegram Settings
         public ProductNodeViewModel RootProduct => Parent is null or FolderModel ? (ProductNodeViewModel)this : ((ProductNodeViewModel)Parent).RootProduct;
 
         public string FullPath => $"{RootProduct?.Name}{Path}";
+
+        private bool ParentIsFolder => Parent is FolderModel;
 
 
         protected NodeViewModel(BaseNodeModel model)
@@ -40,11 +40,9 @@ namespace HSMServer.Model.TreeViewModel
             Path = model.Path;
             EncodedId = SensorPathHelper.EncodeGuid(model.Id);
 
-            bool NodeHasFolder() => Parent is FolderModel;
-
-            ExpectedUpdateInterval = new(model.Settings.TTL.Value, () => Parent?.ExpectedUpdateInterval, NodeHasFolder);
-            SavedHistoryPeriod = new(model.Settings.KeepHistory.Value, () => Parent?.SavedHistoryPeriod, NodeHasFolder);
-            SelfDestroyPeriod = new(model.Settings.SelfDestroy.Value, () => Parent?.SelfDestroyPeriod, NodeHasFolder);
+            TTL = new(() => (Parent?.TTL, ParentIsFolder));
+            KeepHistory = new(() => (Parent?.KeepHistory, ParentIsFolder));
+            SelfDestroy = new(() => (Parent?.SelfDestroy, ParentIsFolder));
         }
 
 
@@ -54,15 +52,9 @@ namespace HSMServer.Model.TreeViewModel
             Name = model.DisplayName;
             Description = model.Description;
 
-            UpdatePolicyView(model.Settings.TTL, ExpectedUpdateInterval);
-            UpdatePolicyView(model.Settings.KeepHistory, SavedHistoryPeriod);
-            UpdatePolicyView(model.Settings.SelfDestroy, SelfDestroyPeriod);
-        }
-
-
-        private static void UpdatePolicyView<T>(SettingProperty<T> property, TimeIntervalViewModel targetView) where T : TimeIntervalModel
-        {
-            targetView.Update(property.IsSet ? property.Value : null);
+            TTL.FromModel(model.Settings.TTL.CurValue);
+            KeepHistory.FromModel(model.Settings.KeepHistory.CurValue);
+            SelfDestroy.FromModel(model.Settings.SelfDestroy.CurValue);
         }
     }
 }
