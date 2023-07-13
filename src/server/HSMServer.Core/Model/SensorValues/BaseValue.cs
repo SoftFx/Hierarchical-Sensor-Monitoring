@@ -7,7 +7,6 @@ namespace HSMServer.Core.Model
     public enum SensorStatus : byte
     {
         Ok,
-        Warning,
         Error,
         OffTime = byte.MaxValue,
     }
@@ -30,6 +29,7 @@ namespace HSMServer.Core.Model
     {
         public DateTime ReceivingTime { get; init; } = DateTime.UtcNow;
 
+        [JsonConverter(typeof(SensorStatusJsonConverter))]
         public SensorStatus Status { get; init; }
 
         public string Comment { get; init; }

@@ -5,9 +5,7 @@ using HSMDatabase.Extensions;
 using HSMDatabase.LevelDB;
 using HSMDatabase.Settings;
 using HSMDatabase.SnapshotsDb;
-using HSMServer.Core.Converters;
 using HSMServer.Core.DataLayer;
-using HSMServer.Core.Registration;
 using NLog;
 using System;
 using System.Collections.Generic;
@@ -233,29 +231,50 @@ namespace HSMDatabase.DatabaseWorkCore
 
         public void AddPolicy(PolicyEntity entity)
         {
-            _environmentDatabase.AddPolicyIdToList(entity.Id);
+            _environmentDatabase.AddPolicyIdToList(new Guid(entity.Id));
             _environmentDatabase.AddPolicy(entity);
         }
 
         public void UpdatePolicy(PolicyEntity entity) => _environmentDatabase.AddPolicy(entity);
 
-        public void RemovePolicy(Guid id)
-        {
-            var strId = id.ToString();
+        public void RemovePolicy(Guid id) => _environmentDatabase.RemovePolicy(id);
 
-            _environmentDatabase.RemovePolicyFromList(strId);
-            _environmentDatabase.RemovePolicy(strId);
-        }
-
-        public List<byte[]> GetAllPolicies()
+        public List<byte[]> GetAllOldPolicies()
         {
-            var policiesIds = _environmentDatabase.GetAllPoliciesIds();
+            var policiesIds = _environmentDatabase.GetAllOldPoliciesIds();
 
             var policies = new List<byte[]>(policiesIds.Count);
             foreach (var policyId in policiesIds)
             {
-                var policy = _environmentDatabase.GetPolicy(policyId);
+                var policy = _environmentDatabase.GetOldPolicy(policyId);
                 if (policy != null && policy.Length != 0)
+                    policies.Add(policy);
+            }
+
+            return policies;
+        }
+
+        public void RemoveAllOldPolicies()
+        {
+            var policiesIds = _environmentDatabase.GetAllOldPoliciesIds();
+
+            foreach (var id in policiesIds)
+                _environmentDatabase.RemoveOldPolicy(id);
+
+            _environmentDatabase.DropOldPolicyIdsList();
+        }
+
+        public List<PolicyEntity> GetAllPolicies()
+        {
+            var policiesIds = _environmentDatabase.GetAllPoliciesIds();
+
+            var policies = new List<PolicyEntity>(policiesIds.Count);
+
+            foreach (var policyId in policiesIds)
+            {
+                var policy = _environmentDatabase.GetPolicy(policyId);
+
+                if (policy != null)
                     policies.Add(policy);
             }
 
@@ -390,25 +409,6 @@ namespace HSMDatabase.DatabaseWorkCore
 
         public List<UserEntity> GetUsersPage(int page, int pageSize) =>
             _environmentDatabase.ReadUsersPage(page, pageSize).ToList();
-
-        #endregion
-
-        #region Environment database : Ticket
-
-        public RegistrationTicket ReadRegistrationTicket(Guid id)
-        {
-            var entity = _environmentDatabase.ReadRegistrationTicket(id);
-            return entity != null ? new RegistrationTicket(entity) : null;
-        }
-
-        public void RemoveRegistrationTicket(Guid id) =>
-            _environmentDatabase.RemoveRegistrationTicket(id);
-
-        public void WriteRegistrationTicket(RegistrationTicket ticket)
-        {
-            RegisterTicketEntity entity = ticket.ConvertToEntity();
-            _environmentDatabase.WriteRegistrationTicket(entity);
-        }
 
         #endregion
 

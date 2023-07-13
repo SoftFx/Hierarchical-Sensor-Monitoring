@@ -8,7 +8,7 @@ namespace HSMServer.Core.Model
         internal override BooleanValuesStorage Storage { get; } = new BooleanValuesStorage();
 
 
-        public override DataPolicyCollection<BooleanValue, BooleanDataPolicy> DataPolicies { get; } = new();
+        public override SensorPolicyCollection<BooleanValue, BooleanPolicy> Policies { get; } = new();
 
         public override SensorType Type { get; } = SensorType.Boolean;
 

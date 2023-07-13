@@ -1,6 +1,5 @@
 using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Core.Model;
-using HSMServer.Core.Model.Policies;
 using HSMServer.Core.SensorsUpdatesQueue;
 using HSMServer.Core.Tests.Infrastructure;
 using HSMServer.Core.Tests.MonitoringCoreTests;
@@ -90,16 +89,15 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
                     break;
 
                 Assert.False(sensor.TryAddValue(SensorValuesFactory.BuildSensorValue(invalidType)));
-                Assert.True(sensor.Status.HasError);
-                Assert.Equal(SensorStatus.Error, sensor.Status.Status);
-                Assert.Equal(errorMessage, sensor.Status.Message);
+                Assert.True(sensor.Status?.HasError);
+                Assert.Equal(SensorStatus.Error, sensor.Status?.Status);
+                Assert.Equal(errorMessage, sensor.Status?.Message);
             }
         }
 
         [Theory]
         [InlineData(SensorStatus.OffTime)]
         [InlineData(SensorStatus.Error)]
-        [InlineData(SensorStatus.Warning)]
         [Trait("Category", "InvalidStatus")]
         public void SensorValueStatusValidationTest(SensorStatus status)
         {
@@ -112,13 +110,11 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
                     : baseValue.Comment;
 
                 Assert.True(sensor.TryAddValue(baseValue));
-                Assert.Equal(baseValue.Status, sensor.Status.Status);
-                Assert.Equal(expectedMessage, sensor.Status.Message);
+                Assert.Equal(baseValue.Status, sensor.Status?.Status);
+                Assert.Equal(expectedMessage, sensor.Status?.Message);
 
                 if (status == SensorStatus.Error)
-                    Assert.True(sensor.Status.HasError);
-                else if (status == SensorStatus.Warning)
-                    Assert.True(sensor.Status.HasWarning);
+                    Assert.True(sensor.Status?.HasError);
             }
         }
 
@@ -135,28 +131,27 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             foreach (var sensorType in Enum.GetValues<SensorType>())
             {
                 var sensor = BuildSensorModel(sensorType);
-                sensor.AddPolicy(new ExpectedUpdateIntervalPolicy(ticks));
+                //sensor.AddPolicy(new ExpectedUpdateIntervalPolicy(ticks));
 
                 var baseValue = SensorValuesFactory.BuildSensorValue(sensorType) with
                 { ReceivingTime = new DateTime(DateTime.UtcNow.Ticks - ticks) };
 
                 Assert.True(sensor.TryAddValue(baseValue));
-                Assert.True(sensor.HasUpdateTimeout());
-                Assert.True(sensor.Status.HasWarning);
-                Assert.Equal(SensorStatus.Warning, sensor.Status.Status);
-                Assert.Equal(SensorValueOutdated, sensor.Status.Message);
+                Assert.True(sensor.CheckTimeout());
+                Assert.True(sensor.Status?.HasError);
+                Assert.Equal(SensorStatus.Error, sensor.Status?.Status);
+                Assert.Equal(SensorValueOutdated, sensor.Status?.Message);
             }
         }
 
         [Theory]
         [InlineData(SensorStatus.OffTime)]
         [InlineData(SensorStatus.Error)]
-        [InlineData(SensorStatus.Warning)]
         [Trait("Category", "CombinatedStatusWithTooLongLength")]
         public void CombinatedStatusWithTooLongLenghtValidationTest(SensorStatus status)
         {
             var sensor = BuildSensorModel(SensorType.String);
-            sensor.AddPolicy(new StringValueLengthPolicy());
+            //sensor.AddPolicy(new StringValueLengthPolicy());
 
             var stringBase = new StringValue
             {
@@ -165,24 +160,23 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             };
 
             Assert.True(sensor.TryAddValue(stringBase));
-            Assert.True(sensor.Status.HasWarning);
-            Assert.Equal(GetFinalStatus(status, SensorStatus.Warning), sensor.Status.Status);
+            Assert.True(sensor.Status?.HasError);
+            Assert.Equal(GetFinalStatus(status, SensorStatus.Error), sensor.Status?.Status);
 
             if (status == SensorStatus.Error)
-                Assert.True(sensor.Status.HasError);
+                Assert.True(sensor.Status?.HasError);
         }
 
         [Theory]
         //[InlineData(SensorStatus.OffTime)] TTL is not working with OffTime sensor
         [InlineData(SensorStatus.Error)]
-        [InlineData(SensorStatus.Warning)]
         [Trait("Cetagory", "CombinatedStatusWithInterval")]
         public void CombinatedStatusWithIntervalValidationTest(SensorStatus status)
         {
             foreach (var sensorType in Enum.GetValues<SensorType>())
             {
                 var sensor = BuildSensorModel(sensorType);
-                sensor.AddPolicy(new ExpectedUpdateIntervalPolicy(TestTicks));
+                //sensor.AddPolicy(new ExpectedUpdateIntervalPolicy(TestTicks));
 
                 var baseValue = SensorValuesFactory.BuildSensorValue(sensorType) with
                 {
@@ -191,12 +185,12 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
                 };
 
                 Assert.True(sensor.TryAddValue(baseValue));
-                Assert.True(sensor.HasUpdateTimeout());
-                Assert.True(sensor.Status.HasWarning);
-                Assert.Equal(GetFinalStatus(status, SensorStatus.Warning), sensor.Status.Status);
+                Assert.True(sensor.CheckTimeout());
+                Assert.True(sensor.Status?.HasError);
+                Assert.Equal(GetFinalStatus(status, SensorStatus.Error), sensor.Status?.Status);
 
                 if (status == SensorStatus.Error)
-                    Assert.True(sensor.Status.HasError);
+                    Assert.True(sensor.Status?.HasError);
             }
         }
 

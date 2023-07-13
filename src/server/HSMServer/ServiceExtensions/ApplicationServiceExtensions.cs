@@ -10,7 +10,6 @@ using HSMServer.Folders;
 using HSMServer.Middleware;
 using HSMServer.Model.TreeViewModel;
 using HSMServer.Notifications;
-using HSMServer.Registration;
 using HSMServer.ServerConfiguration;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
@@ -38,8 +37,6 @@ public static class ApplicationServiceExtensions
                 .AddSingleton<IUserManager, UserManager>()
                 .AddSingleton<IFolderManager, FolderManager>();
 
-        services.AddSingleton<IRegistrationTicketManager, RegistrationTicketManager>(); // obsolete
-
         services.AddSingleton<NotificationsCenter>()
                 .AddSingleton<DataCollectorWrapper>()
                 .AddSingleton<TreeViewModel>();
@@ -47,7 +44,8 @@ public static class ApplicationServiceExtensions
         services.AddHostedService<TreeSnapshotService>()
                 .AddHostedService<ClearDatabaseService>()
                 .AddHostedService<MonitoringBackgroundService>()
-                .AddHostedService<DatacollectorService>();
+                .AddHostedService<DatacollectorService>()
+                .AddHostedService<NotificationsBackgroundService>();
 
         services.AddSwaggerGen(o =>
         {

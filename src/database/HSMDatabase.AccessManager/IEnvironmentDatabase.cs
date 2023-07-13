@@ -52,13 +52,20 @@ namespace HSMDatabase.AccessManager
 
         #region Policy
 
-        void AddPolicyIdToList(string policyId);
-        void RemovePolicyFromList(string policyId);
-        void AddPolicy(PolicyEntity policy);
-        void RemovePolicy(string policyId);
-        List<string> GetAllPoliciesIds();
-        byte[] GetPolicy(string policyId);
+        [Obsolete("Will be removed after policy migration")]
+        List<string> GetAllOldPoliciesIds();
+        [Obsolete("Will be removed after policy migration")]
+        byte[] GetOldPolicy(string policyId);
+        [Obsolete("Will be removed after policy migration")]
+        void RemoveOldPolicy(string policyId);
+        [Obsolete("Will be removed after policy migration")]
+        void DropOldPolicyIdsList();
 
+        List<byte[]> GetAllPoliciesIds();
+        PolicyEntity GetPolicy(byte[] policyId);
+        void AddPolicyIdToList(Guid policyId);
+        void AddPolicy(PolicyEntity policy);
+        void RemovePolicy(Guid policyId);
         #endregion
 
         #region Users
@@ -67,14 +74,6 @@ namespace HSMDatabase.AccessManager
         List<UserEntity> ReadUsers();
         void RemoveUser(UserEntity user);
         List<UserEntity> ReadUsersPage(int page, int pageSize);
-
-        #endregion
-
-        #region Registration Ticket
-
-        RegisterTicketEntity ReadRegistrationTicket(Guid id);
-        void RemoveRegistrationTicket(Guid id);
-        void WriteRegistrationTicket(RegisterTicketEntity ticket);
 
         #endregion
     }

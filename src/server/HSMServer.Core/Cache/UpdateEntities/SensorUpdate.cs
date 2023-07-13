@@ -20,12 +20,19 @@ namespace HSMServer.Core.Cache.UpdateEntities
     }
 
 
-    public sealed record DataPolicyUpdate(
-        Guid Id,
-        string Property,
+    public sealed record PolicyConditionUpdate(
         PolicyOperation Operation,
         TargetValue Target,
+        string Property,
+        PolicyCombination Combination = PolicyCombination.And);
+
+
+    public sealed record DataPolicyUpdate(
+        Guid Id,
+        List<PolicyConditionUpdate> Conditions,
+        TimeIntervalModel Sensitivity,
         SensorStatus Status,
-        string Comment
+        string Template,
+        string Icon
     );
 }

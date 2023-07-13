@@ -1,0 +1,191 @@
+﻿@using HSMServer.Model.DataAlerts
+@using HSMServer.Extensions
+@using HSMCommon.Extensions
+@using HSMServer.Controllers
+@using HSMServer.Constants
+
+@model DataAlertViewModelBase
+
+@addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
+
+
+<div id="alertLabel_@Model.Id" class="ms-3 @(Model.IsModify ? "d-none" : string.Empty)">
+    <span>If</span>
+    @for (int i = 0; i < Model.Conditions.Count; ++i)
+    {
+        var condition = Model.Conditions[i];
+
+        @if (i > 0)
+        {
+            <span>and</span>
+        }
+
+        <span>
+            @if (condition.Property == ConditionViewModel.TimeToLiveCondition)
+            {
+                <b>Inactivity period is @condition.TimeToLive.DisplayValue</b>
+            }
+            else if (condition.Property == ConditionViewModel.SensitivityCondition)
+            {
+                <b>Sensitivity is more than @condition.Sensitivity.DisplayValue</b>
+            }
+            else
+            {
+                <b>@condition.Property @condition.Operation.GetDisplayName() @condition.Target</b>
+            }
+        </span>
+    }
+
+    <span>then</span>
+    @for (int i = 0; i < Model.Actions.Count; ++i)
+    {
+        var action = Model.Actions[i];
+
+        @if (i > 0)
+        {
+            <span>and</span>
+        }
+
+        @if (action.Action == ActionType.SendNotification)
+        {
+            <span>send notification <i>@action.DisplayComment</i></span>
+        }
+        else if (action.Action == ActionType.ShowIcon)
+        {
+            <span>show icon @action.Icon</span>
+        }
+        else if (action.Action == ActionType.SetStatus)
+        {
+            <span>@ActionViewModel.SetErrorStatus</span>
+        }
+    }
+</div>
+
+<div id="alertConstructor_@Model.Id" class="dataAlertRow d-flex flex-row align-items-center @(!Model.IsModify ? "d-none" : string.Empty)">
+    <div class="card mb-2 w-100">
+        <div class="card-body py-2">
+            <div class="d-flex flex-row align-items-center fullCondition">
+                <div class="alert-text-block alert-add">If</div>
+
+                <div name="conditionsBlock" class="d-flex flex-row flex-wrap align-items-center">
+                    @foreach (var condition in Model.Conditions) 
+                    {
+                        @await Html.PartialAsync("~/Views/Home/Alerts/_ConditionBlock.cshtml", condition)
+                    }
+                </div>
+
+                <a class="addCondition"><i class="fa-solid fa-plus alert-add-button"></i></a>
+            </div>
+
+            <div class="d-flex flex-row align-items-center alert-blocks-group fullAction">
+                <div class="alert-text-block alert-add">then</div>
+
+                <div name="actionsBlock" class="d-flex flex-row flex-wrap align-items-center">
+                    @foreach (var action in Model.Actions)
+                    {
+                        @await Html.PartialAsync("~/Views/Home/Alerts/_ActionBlock.cshtml", action)
+                    }
+                </div>
+
+                <a class="addAction"><i class="fa-solid fa-plus alert-add-button"></i></a>
+            </div>
+        </div>
+    </div>
+
+    <div>
+        <button id="actionButton" class="btn" data-bs-toggle="dropdown" data-bs-auto-close="true" aria-haspopup="true" aria-expanded="false">
+            <i class="fa-solid fa-ellipsis-vertical button-link"></i>
+        </button>
+        <div class="dropdown-menu dropdown-menu-end" aria-labelledby="actionButton">
+            <a class="dropdown-item text-decoration-none fw-normal button-link sendMessage">Send test message</a>
+            <a class="dropdown-item text-decoration-none fw-normal button-link deleteRow">Remove</a>
+        </div>
+    </div>
+
+    <input class="d-none" asp-for="Id" value="@Model.Id" />
+    <input class="d-none" asp-for="EntityId" value="@Model.EntityId" />
+</div>
+
+
+<script>
+    $(document).ready(function () {
+        $("a.addCondition").off("click").on("click", function () {
+            let element = $(this).parents("div.fullCondition:first");
+
+            $.ajax({
+                url: `@Url.Action(nameof(HomeController.AddAlertCondition), ViewConstants.HomeController)?sensorId=@Model.EntityId`,
+                cache: false
+            }).done(function (viewData) {
+                var conditionsBlock = element.find($(`div[name='conditionsBlock']`));
+                conditionsBlock.append(viewData);
+            });
+        });
+
+        $("a.addAction").off("click").on("click", function () {
+            let element = $(this).parents("div.fullAction:first");
+
+            $.ajax({
+                url: `@Url.Action(nameof(HomeController.AddAlertAction), ViewConstants.HomeController)?sensorId=@Model.EntityId`,
+                cache: false
+            }).done(function (viewData) {
+                var actionsBlock = element.find($(`div[name='actionsBlock']`));
+                actionsBlock.append(viewData);
+            });
+        });
+
+        $("a.deleteRow").off("click").on("click", function () {
+            $(this).parents("div.dataAlertRow:first").remove();
+        });
+
+        $("a.advancedMode").off("click").on("click", function () {
+            let element = $(this).parents("div.dataAlertRow:first");
+            let advancedPanel = element.find($(`div[id='alertActions']`));
+
+            let see = $(this).text().includes("See");
+            if (see) {
+                $(this).text("Hide actions panel");
+                advancedPanel.removeClass("d-none");
+            }
+            else {
+                $(this).text("See actions panel");
+                advancedPanel.addClass("d-none");
+            }
+        });
+
+        $("a.sendMessage").off("click").on("click", function () {
+            var element = $(this).parents("div.dataAlertRow:first");
+
+            if (!tryValidate(element, "input", "Value") || !tryValidate(element, "input", "Comment")) {
+                return;
+            }
+
+            var form = new FormData();
+            appendProperty(form, element, "select", "Property");
+            appendProperty(form, element, "select", "Operation");
+            appendProperty(form, element, "select", "Status");
+            appendProperty(form, element, "select", "Icon");
+            appendProperty(form, element, "input", "Comment");
+            appendProperty(form, element, "input", "Value");
+            appendProperty(form, element, "input", "EntityId");
+
+            $.ajax({
+                url: '@Url.Action(nameof(HomeController.SendTestMessage))',
+                type: 'POST',
+                data: form,
+                processData: false,
+                contentType: false,
+                async: true
+            });
+        });
+    });
+
+    function appendProperty(form, element, propertyElement, propertyName) {
+        form.append(`alert.${propertyName}`, element.find($(`${propertyElement}[name='${propertyName}']`)).val());
+    }
+
+    function tryValidate(element, propertyElement, propertyName) {
+        var input = element.find($(`${propertyElement}[name='${propertyName}']`));
+        
+        return input[0].reportValidity();
+    }
+</script>

@@ -6,8 +6,6 @@ namespace HSMServer.Model.ViewModel
     {
         public bool HasOkStatus { get; set; }
 
-        public bool HasWarningStatus { get; set; }
-
         public bool HasErrorStatus { get; set; }
 
         public bool HasOffTimeStatus { get; set; }
@@ -23,7 +21,7 @@ namespace HSMServer.Model.ViewModel
         public bool IsGroupNotificationsIgnored { get; set; }
 
         public bool IsAccountNotificationsIgnored { get; set; }
-        
+
         public bool IsGrafanaEnabled { get; set; }
 
         public bool AreIconsVisible { get; set; }
@@ -42,7 +40,6 @@ namespace HSMServer.Model.ViewModel
         public UserFilterViewModel(TreeUserFilter filter)
         {
             HasOkStatus = filter.ByStatus.Ok.Value;
-            HasWarningStatus = filter.ByStatus.Warning.Value;
             HasErrorStatus = filter.ByStatus.Error.Value;
             HasOffTimeStatus = filter.ByStatus.OffTime.Value;
 
@@ -72,7 +69,6 @@ namespace HSMServer.Model.ViewModel
             };
 
             filter.ByStatus.Ok.Value = HasOkStatus;
-            filter.ByStatus.Warning.Value = HasWarningStatus;
             filter.ByStatus.Error.Value = HasErrorStatus;
             filter.ByStatus.OffTime.Value = HasOffTimeStatus;
 
@@ -85,7 +81,7 @@ namespace HSMServer.Model.ViewModel
             filter.ByNotifications.GroupIgnored.Value = IsGroupNotificationsIgnored;
 
             filter.ByIntegrations.GrafanaEnabled.Value = IsGrafanaEnabled;
-            
+
             filter.ByState.Muted.Value = IsMutedSensorsState;
 
             return filter;

@@ -1,6 +1,5 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Core.Cache.UpdateEntities;
-using HSMServer.Core.Extensions;
 using HSMServer.Core.Model.Policies;
 using System;
 using System.Collections.Generic;
@@ -30,12 +29,12 @@ namespace HSMServer.Core.Model
 
     public abstract class BaseSensorModel : BaseNodeModel
     {
-        private static readonly PolicyResult _muteResult = new(SensorStatus.OffTime, "Muted");
+        private static readonly SensorResult _muteResult = new(SensorStatus.OffTime, "Muted");
+
+        public override SensorPolicyCollection Policies { get; }
 
 
         internal abstract ValuesStorage Storage { get; }
-
-        public abstract DataPolicyCollection DataPolicies { get; }
 
         public abstract SensorType Type { get; }
 
@@ -47,20 +46,20 @@ namespace HSMServer.Core.Model
         public SensorState State { get; private set; }
 
 
-        public PolicyResult Status => State == SensorState.Muted ? _muteResult : ServerPolicy.Result + DataPolicies.Result;
+        public SensorResult? Status => State == SensorState.Muted ? _muteResult : Storage.Result + Policies.SensorResult;
 
-        public bool IsWaitRestore => !ServerPolicy.CheckRestorePolicies(Status.Status, LastUpdateTime).IsOk;
+        public PolicyResult PolicyResult => Policies.PolicyResult;
 
-        public bool ShouldDestroy => !(ServerPolicy.SelfDestroy.Policy?.Validate(LastUpdateTime).IsOk ?? true);
+        public bool ShouldDestroy => Settings.SelfDestroy.Value?.TimeIsUp(LastUpdate) ?? false;
 
 
-        public bool HasData => Storage.HasData;
-
-        public BaseValue LastValue => Storage.LastValue;
+        public DateTime LastUpdate => Storage.LastValue?.ReceivingTime ?? DateTime.MinValue;
 
         public BaseValue LastDbValue => Storage.LastDbValue;
 
-        public DateTime LastUpdateTime => Storage.LastValue?.ReceivingTime ?? DateTime.MinValue;
+        public BaseValue LastValue => Storage.LastValue;
+
+        public bool HasData => Storage.HasData;
 
 
         public Action<BaseValue> ReceivedNewValue;
@@ -72,20 +71,17 @@ namespace HSMServer.Core.Model
             Integration = (Integration)entity.Integration;
             EndOfMuting = entity.EndOfMuting > 0L ? new DateTime(entity.EndOfMuting) : null;
 
-            DataPolicies.Attach(this);
+            Policies.Attach(this);
         }
 
 
         internal abstract bool TryAddValue(BaseValue value);
 
-        internal abstract bool TryAddValue(byte[] bytes);
+        internal abstract void AddDbValue(byte[] bytes);
+
+        internal abstract void RecalculatePolicy();
 
         internal abstract List<BaseValue> ConvertValues(List<byte[]> valuesBytes);
-
-        internal virtual BaseSensorModel InitDataPolicy() => this;
-
-
-        internal override bool HasUpdateTimeout() => !Status.HasOffTime && ServerPolicy.HasUpdateTimeout(LastValue?.ReceivingTime);
 
 
         internal void Update(SensorUpdate update)
@@ -99,18 +95,15 @@ namespace HSMServer.Core.Model
             if (State == SensorState.Available)
                 EndOfMuting = null;
 
-            DataPolicies.Update(update.DataPolicies);
+            if (update.DataPolicies != null)
+                Policies.Update(update.DataPolicies);
         }
 
         internal void ResetSensor()
         {
-            ServerPolicy.Reset();
-            DataPolicies.Reset();
-
+            Policies.Reset();
             Storage.Clear();
         }
-
-        internal override List<Guid> GetPolicyIds() => base.GetPolicyIds().AddRangeFluent(DataPolicies.Ids);
 
         internal SensorEntity ToEntity() => new()
         {
@@ -123,8 +116,9 @@ namespace HSMServer.Core.Model
             Type = (byte)Type,
             State = (byte)State,
             Integration = (int)Integration,
-            Policies = GetPolicyIds().Select(u => u.ToString()).ToList(),
+            Policies = Policies.Ids.Select(u => u.ToString()).ToList(),
             EndOfMuting = EndOfMuting?.Ticks ?? 0L,
+            Settings = Settings.ToEntity(),
         };
     }
 }

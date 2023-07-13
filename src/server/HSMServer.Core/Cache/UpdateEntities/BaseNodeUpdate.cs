@@ -5,12 +5,12 @@ namespace HSMServer.Core.Cache.UpdateEntities
 {
     public abstract record BaseNodeUpdate
     {
-        public required Guid Id { get; init; }
+        public Guid Id { get; init; } //TODO return required after migration policies
 
 
-        public TimeIntervalModel ExpectedUpdateInterval { get; init; }
+        public TimeIntervalModel TTL { get; init; }
 
-        public TimeIntervalModel SavedHistoryPeriod { get; init; }
+        public TimeIntervalModel KeepHistory { get; init; }
 
         public TimeIntervalModel RestoreInterval { get; init; }
 

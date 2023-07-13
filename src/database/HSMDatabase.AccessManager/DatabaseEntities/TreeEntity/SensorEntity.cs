@@ -4,9 +4,11 @@
     {
         public string ProductId { get; init; }
 
+
         public byte Type { get; init; }
 
         public byte State { get; init; }
+
 
         public int Integration { get; init; }
 

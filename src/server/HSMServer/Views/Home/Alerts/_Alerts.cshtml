@@ -1,0 +1,70 @@
+@using HSMServer.Model.DataAlerts
+@using HSMServer.Constants
+@using HSMServer.Controllers
+@using HSMServer.Helpers
+@using HSMServer.Model.ViewModel
+
+@model NodeInfoBaseViewModel
+
+@addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
+
+@{
+    var entity = Model is SensorInfoViewModel ? "sensor" : "sensor(s)";
+}
+
+
+@foreach (var (type, alerts) in Model.DataAlerts)
+{
+    <div id="dataAlertsList_@type" class="@(alerts.Count == 0 ? "d-none" : string.Empty)">
+        <div class="d-flex justify-content-between align-items-center">
+            <div>
+                <label class="col-form-label fw-bold">Alerts:</label>
+                <a id="addDataAlert" href="javascript:addDataAlert('@type', '@Model.EncodedId');" class="d-none mx-2">
+                    <i class="fa-solid fa-plus"></i> Add
+                </a>
+            </div>
+            <a id="commentHelp" data-bs-toggle="popover" title="Custom comment variables" data-bs-html="true" data-bs-content="@DataAlertCommentHelper.CreateCommentHelp()"
+               class="d-none" style="color: #0366d6; cursor: pointer; text-decoration: underline;">
+                Comment help
+            </a>
+        </div>
+
+        @foreach (var alert in alerts)
+        {
+            @await Html.PartialAsync("~/Views/Home/Alerts/_DataAlert.cshtml", alert)
+        }
+    </div>
+}
+
+
+<script>
+    $(document).ready(function() {
+        var popoverTriggerList = [].slice.call(document.querySelectorAll('[data-bs-toggle="popover"]'));
+        var popoverList = popoverTriggerList.map(function(popoverTriggerEl) {
+            return new bootstrap.Popover(popoverTriggerEl);
+        });
+    });
+
+    $('#commentHelp').on('show.bs.popover', () => {
+        $('html').on('click', hideNotFocusedHelp);
+    });
+
+    $('#commentHelp').on('hide.bs.popover', () => {
+        $('html').off('click', hideNotFocusedHelp);
+    });
+
+    function hideNotFocusedHelp(e) {
+        if (!$(e.target).parents().is('.popover')) {
+            $('#commentHelp').popover('hide');
+        }
+    }
+
+    function addDataAlert(type, entityId) {
+        $.ajax({
+            url: `@Url.Action(nameof(HomeController.AddDataPolicy), ViewConstants.HomeController)?type=${type}&sensorId=${entityId}`,
+            cache: false
+        }).done(function (viewData) {
+            $(`#dataAlertsList_${type}`).append(viewData);
+        });
+    }
+</script>

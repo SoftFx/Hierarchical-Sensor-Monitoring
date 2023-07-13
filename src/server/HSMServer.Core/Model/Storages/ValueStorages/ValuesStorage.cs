@@ -11,6 +11,9 @@ namespace HSMServer.Core.Model
         protected virtual int CacheSize => 100;
 
 
+        internal SensorResult? Result => LastValue != null ? new SensorResult(LastValue) : null;
+
+
         internal abstract BaseValue LastDbValue { get; }
 
         internal abstract BaseValue LastValue { get; }

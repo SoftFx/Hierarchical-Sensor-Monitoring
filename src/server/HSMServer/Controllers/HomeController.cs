@@ -1,11 +1,9 @@
-using HSMCommon.Extensions;
 using HSMServer.ApiObjectsConverters;
 using HSMServer.Authentication;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Cache.UpdateEntities;
-using HSMServer.Core.Helpers;
+using HSMServer.Core.Extensions;
 using HSMServer.Core.Model;
-using HSMServer.Core.Model.Policies.Infrastructure;
 using HSMServer.Extensions;
 using HSMServer.Folders;
 using HSMServer.Helpers;
@@ -27,7 +25,6 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
-using SensorStatus = HSMSensorDataObjects.SensorStatus;
 using TimeInterval = HSMServer.Model.TimeInterval;
 
 namespace HSMServer.Controllers
@@ -238,8 +235,7 @@ namespace HSMServer.Controllers
                     var update = new FolderUpdate
                     {
                         Id = id,
-                        RestoreInterval = !isRestoreFromParent ? model.SensorRestorePolicy?.ResaveCustomTicks(model.SensorRestorePolicy) : null,
-                        ExpectedUpdateInterval = !isExpectedFromParent ? model.ExpectedUpdateInterval?.ResaveCustomTicks(model.ExpectedUpdateInterval) : null
+                        TTL = !isExpectedFromParent ? model.ExpectedUpdateInterval : null
                     };
 
                     if (isRestoreFromParent)
@@ -271,8 +267,8 @@ namespace HSMServer.Controllers
                     var update = new ProductUpdate
                     {
                         Id = product.Id,
-                        RestoreInterval = restoreUpdate ? model.SensorRestorePolicy?.ToModel((product.Parent as FolderModel)?.SensorRestorePolicy) : null,
-                        ExpectedUpdateInterval = expectedUpdate ? model.ExpectedUpdateInterval?.ToModel((product.Parent as FolderModel)?.ExpectedUpdateInterval) : null
+                        //RestoreInterval = restoreUpdate ? model.SensorRestorePolicy?.ToModel((product.Parent as FolderModel)?.SensorRestorePolicy) : null,
+                        TTL = expectedUpdate ? model.ExpectedUpdateInterval?.ToModel() : null
                     };
 
                     if (!restoreUpdate)
@@ -298,7 +294,7 @@ namespace HSMServer.Controllers
                     var update = new SensorUpdate
                     {
                         Id = sensor.Id,
-                        ExpectedUpdateInterval = model.ExpectedUpdateInterval?.ToModel(),
+                        TTL = model.ExpectedUpdateInterval?.ToModel(),
                         RestoreInterval = model.SensorRestorePolicy?.ToModel(),
                     };
 
@@ -558,9 +554,9 @@ namespace HSMServer.Controllers
             {
                 Id = sensor.Id,
                 Description = newModel.Description ?? string.Empty,
-                ExpectedUpdateInterval = newModel.ExpectedUpdateInterval.ToModel(),
-                RestoreInterval = newModel.SensorRestorePolicy.ToModel(),
-                SavedHistoryPeriod = newModel.SavedHistoryPeriod.ToModel(),
+                //TTL = newModel.ExpectedUpdateInterval.ToModel(),
+                //RestoreInterval = newModel.SensorRestorePolicy.ToModel(),
+                KeepHistory = newModel.SavedHistoryPeriod.ToModel(),
                 SelfDestroy = newModel.SelfDestroyPeriod.ToModel(),
                 DataPolicies = newModel.DataAlerts?[sensor.Type].Select(a => a.ToUpdate()).ToList() ?? new(),
             };
@@ -582,25 +578,47 @@ namespace HSMServer.Controllers
                 _ => null,
             };
 
-            return PartialView("_DataAlert", viewModel);
+            return PartialView("~/Views/Home/Alerts/_DataAlert.cshtml", viewModel);
         }
 
+        public IActionResult AddAlertCondition(Guid sensorId)
+        {
+            if (!_treeViewModel.Sensors.TryGetValue(sensorId, out var sensor))
+                return _emptyResult;
+
+            ConditionViewModel viewModel = sensor.Type switch
+            {
+                SensorType.Integer => new SingleConditionViewModel<IntegerValue, int>(false),
+                SensorType.Double => new SingleConditionViewModel<DoubleValue, double>(false),
+                SensorType.IntegerBar => new BarConditionViewModel<IntegerBarValue, int>(false),
+                SensorType.DoubleBar => new BarConditionViewModel<DoubleBarValue, double>(false),
+                _ => null,
+            };
+
+            return PartialView("~/Views/Home/Alerts/_ConditionBlock.cshtml", viewModel);
+        }
+
+        public IActionResult AddAlertAction() =>
+            PartialView("~/Views/Home/Alerts/_ActionBlock.cshtml", new ActionViewModel(false));
+
+
         [HttpPost]
-        public void SendTestMessage(DataAlertViewModel alert)
+        public void SendTestMessage(DataAlertViewModelBase alert)
         {
             if (!_treeViewModel.Sensors.TryGetValue(alert.EntityId, out var sensor) ||
                 !_treeViewModel.Nodes.TryGetValue(sensor.RootProduct.Id, out var product))
                 return;
 
-            var template = CommentBuilder.GetTemplateString(alert.Comment);
-            var comment = string.Format(template, product.Name, sensor.Path, sensor.Name,
-                alert.Operation.GetDisplayName(), alert.Value, SensorStatus.Ok, DateTime.UtcNow, "value comment", 0, 0, 0, 0, 0);
-            var testMessage = $"↕️ [{product.Name}]{sensor.Path} = {comment}";
+            //TODO fix after creating alert constructor and merge AlertState
+            //var template = CommentBuilder.GetTemplateString(alert.Comment);
+            //var comment = string.Format(template, product.Name, sensor.Path, sensor.Name,
+            //    alert.Operation.GetDisplayName(), alert.Value, SensorStatus.Ok, DateTime.UtcNow, "value comment", 0, 0, 0, 0, 0);
+            //var testMessage = $"↕️ [{product.Name}]{sensor.Path} = {comment}";
 
-            var notifications = product.Notifications;
-            foreach (var (chat, _) in notifications.Telegram.Chats)
-                if (notifications.IsSensorEnabled(sensor.Id) && !notifications.IsSensorIgnored(sensor.Id, chat))
-                    _telegramBot.SendTestMessage(chat, testMessage);
+            //var notifications = product.Notifications;
+            //foreach (var (chat, _) in notifications.Telegram.Chats)
+            //    if (notifications.IsSensorEnabled(sensor.Id) && !notifications.IsSensorIgnored(sensor.Id, chat))
+            //        _telegramBot.SendTestMessage(chat, testMessage);
         }
 
 
@@ -672,10 +690,10 @@ namespace HSMServer.Controllers
             var update = new ProductUpdate
             {
                 Id = product.Id,
-                ExpectedUpdateInterval = newModel.ExpectedUpdateInterval.ToModel((product.Parent as FolderModel)?.ExpectedUpdateInterval),
-                RestoreInterval = newModel.SensorRestorePolicy.ToModel((product.Parent as FolderModel)?.SensorRestorePolicy),
-                SavedHistoryPeriod = newModel.SavedHistoryPeriod.ToModel((product.Parent as FolderModel)?.SavedHistoryPeriod),
-                SelfDestroy = newModel.SelfDestroyPeriod.ToModel((product.Parent as FolderModel)?.SelfDestroyPeriod),
+                TTL = newModel.ExpectedUpdateInterval.ToModel(),
+                //RestoreInterval = newModel.SensorRestorePolicy.ToModel((product.Parent as FolderModel)?.SensorRestorePolicy),
+                KeepHistory = newModel.SavedHistoryPeriod.ToModel(),
+                SelfDestroy = newModel.SelfDestroyPeriod.ToModel(),
                 Description = newModel.Description ?? string.Empty
             };
 
@@ -702,10 +720,10 @@ namespace HSMServer.Controllers
             {
                 Id = SensorPathHelper.DecodeGuid(newModel.EncodedId),
                 Description = newModel.Description ?? string.Empty,
-                ExpectedUpdateInterval = newModel.ExpectedUpdateInterval.ResaveCustomTicks(newModel.ExpectedUpdateInterval),
-                RestoreInterval = newModel.SensorRestorePolicy.ResaveCustomTicks(newModel.SensorRestorePolicy),
-                SavedHistoryPeriod = newModel.SavedHistoryPeriod.ResaveCustomTicks(newModel.SavedHistoryPeriod),
-                SelfDestroy = newModel.SelfDestroyPeriod.ResaveCustomTicks(newModel.SelfDestroyPeriod),
+                TTL = newModel.ExpectedUpdateInterval,
+                //RestoreInterval = newModel.SensorRestorePolicy.ResaveCustomTicks(newModel.SensorRestorePolicy),
+                KeepHistory = newModel.SavedHistoryPeriod,
+                SelfDestroy = newModel.SelfDestroyPeriod,
             };
 
             return await _folderManager.TryUpdate(update)

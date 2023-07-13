@@ -1,4 +1,4 @@
-﻿using HSMServer.Core.Helpers;
+﻿using HSMServer.Core.Extensions;
 using HSMServer.Core.Model;
 using HSMServer.Core.Tests.Infrastructure;
 using Xunit;
