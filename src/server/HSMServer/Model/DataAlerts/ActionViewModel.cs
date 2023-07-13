@@ -7,7 +7,7 @@ using System.Linq;
 
 namespace HSMServer.Model.DataAlerts
 {
-    public class AlertAction
+    public class AlertActionBase
     {
         public string Action { get; set; }
 
@@ -21,7 +21,7 @@ namespace HSMServer.Model.DataAlerts
     }
 
 
-    public class ActionViewModel : AlertAction
+    public class ActionViewModel : AlertActionBase
     {
         private const string DefaultCommentTemplate = "$sensor $operation $target";
 

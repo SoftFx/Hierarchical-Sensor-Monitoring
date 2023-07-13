@@ -32,7 +32,7 @@ namespace HSMServer.Model.ViewModel
         [MinTimeInterval(TimeInterval.Hour, ErrorMessage = "{0} minimal value is {1}.")]
         public TimeIntervalViewModel SelfDestroyPeriod { get; set; }
 
-        public Dictionary<SensorType, List<DataAlertViewModel>> DataAlerts { get; set; }
+        public Dictionary<SensorType, List<DataAlertViewModelBase>> DataAlerts { get; set; }
 
         public string EncodedId { get; set; }
 

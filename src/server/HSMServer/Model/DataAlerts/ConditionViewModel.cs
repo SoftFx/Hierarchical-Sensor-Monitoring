@@ -7,23 +7,23 @@ using System.Linq;
 
 namespace HSMServer.Model.DataAlerts
 {
-    public class AlertCondition
+    public class AlertConditionBase
     {
         public string Property { get; set; }
-
-
-        public PolicyOperation Operation { get; set; }
-
-        public string Target { get; set; }
 
 
         public TimeIntervalViewModel Sensitivity { get; set; }
 
         public TimeIntervalViewModel TimeToLive { get; set; }
+
+
+        public PolicyOperation Operation { get; set; }
+
+        public string Target { get; set; }
     }
 
 
-    public abstract class ConditionViewModel : AlertCondition
+    public abstract class ConditionViewModel : AlertConditionBase
     {
         public const string TimeToLiveCondition = "TTL";
         public const string SensitivityCondition = "Sensitivity";

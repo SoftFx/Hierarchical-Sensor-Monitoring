@@ -604,7 +604,7 @@ namespace HSMServer.Controllers
 
 
         [HttpPost]
-        public void SendTestMessage(DataAlertViewModel alert)
+        public void SendTestMessage(DataAlertViewModelBase alert)
         {
             if (!_treeViewModel.Sensors.TryGetValue(alert.EntityId, out var sensor) ||
                 !_treeViewModel.Nodes.TryGetValue(sensor.RootProduct.Id, out var product))

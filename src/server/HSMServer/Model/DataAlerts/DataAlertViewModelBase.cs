@@ -7,16 +7,19 @@ using System.Collections.Generic;
 
 namespace HSMServer.Model.DataAlerts
 {
-    public class DataAlertViewModel
+    public class DataAlertViewModelBase
     {
-        public List<AlertCondition> Conditions { get; set; } = new();
+        public List<AlertConditionBase> Conditions { get; } = new();
 
-        public List<AlertAction> Actions { get; set; } = new();
+        public List<AlertActionBase> Actions { get; } = new();
 
 
         public Guid EntityId { get; set; }
 
         public Guid Id { get; set; }
+
+
+        public bool IsModify { get; protected set; }
 
 
         internal DataPolicyUpdate ToUpdate()
@@ -53,12 +56,6 @@ namespace HSMServer.Model.DataAlerts
 
             return new(Id, conditions, sensitivity, status.ToCore(), comment, icon);
         }
-    }
-
-
-    public abstract class DataAlertViewModelBase : DataAlertViewModel
-    {
-        public bool IsModify { get; protected set; }
     }
 
 
