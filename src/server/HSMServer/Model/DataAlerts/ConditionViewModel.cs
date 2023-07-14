@@ -46,7 +46,7 @@ namespace HSMServer.Model.DataAlerts
             TimeToLive = new TimeIntervalViewModel(PredefinedIntervals.ForRestore) { IsAlertBlock = true };
 
             OperationsItems = Actions.ToSelectedItems(k => k.GetDisplayName());
-            PropertiesItems = Properties.ToSelectedItems(k => k);
+            PropertiesItems = Properties.ToSelectedItems();
 
             if (isMain)
                 PropertiesItems.Add(new SelectListItem("Inactivity period", TimeToLiveCondition));
