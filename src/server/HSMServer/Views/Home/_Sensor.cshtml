@@ -297,11 +297,12 @@
         }
         
         $('[id^="journal_table_"]').DataTable({
+            bAutoWidth: false,
             columns: [
-                { "name": DataTableColumnsNames.Date },
-                { "name": DataTableColumnsNames.Initiator },
-                { "name": DataTableColumnsNames.Type },
-                { "name": DataTableColumnsNames.Record }
+                { "name": DataTableColumnsNames.Date , "width": "20%" },
+                { "name": DataTableColumnsNames.Initiator , "width": "20%" },
+                { "name": DataTableColumnsNames.Type , "width": "20%" },
+                { "name": DataTableColumnsNames.Record , "width": "40%" }
             ],
             processing: true,
             serverSide: true,

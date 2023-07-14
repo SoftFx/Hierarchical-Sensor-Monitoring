@@ -37,7 +37,7 @@ else
             <div class="accordion" id="list-accordion_listSensors"></div>
         </div>
         <div class='tab-pane fade' id=@journalDivId role="tabpanel">
-            <table class="display w-100 responsive" id="journal_table_@nodeId">
+            <table class="display w-100" id="journal_table_@nodeId">
                 <thead>
                     <tr>
                         <th>Date</th>
@@ -55,12 +55,13 @@ else
 <script>
     $(document).ready(function () {
         $('[id^="journal_table_"]').DataTable({
+            bAutoWidth: false,
             columns: [
-                { "name": DataTableColumnsNames.Date  },
-                { "name": DataTableColumnsNames.Name },
-                { "name": DataTableColumnsNames.Initiator },
-                { "name": DataTableColumnsNames.Type },
-                { "name": DataTableColumnsNames.Record }
+                { "name": DataTableColumnsNames.Date , "width": "10%" },
+                { "name": DataTableColumnsNames.Name , "width": "30%" },
+                { "name": DataTableColumnsNames.Initiator , "width": "10%" },
+                { "name": DataTableColumnsNames.Type , "width": "10%" },
+                { "name": DataTableColumnsNames.Record , "width": "40%" }
             ],
             processing: true,
             serverSide: true,
