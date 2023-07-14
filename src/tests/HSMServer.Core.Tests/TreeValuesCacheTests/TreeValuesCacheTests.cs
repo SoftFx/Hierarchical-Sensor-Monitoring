@@ -588,6 +588,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             ModelsTester.TestSensorModelWithoutUpdatedMetadata(actualSensorFromCache, sensor);
             ModelsTester.TestSensorModelWithoutUpdatedMetadata(actualSensorFromDb, sensor);
 
+            //TODO: return checking TTL after adding an ability to update it
             //var actualExpectedUpdateIntervalPolicy = GetPolicyByIdFromDb(actualSensorFromCache.Settings.TTL.Value.Id);
 
             //ModelsTester.TestExpectedUpdateIntervalPolicy(sensorUpdate, actualExpectedUpdateIntervalPolicy);
