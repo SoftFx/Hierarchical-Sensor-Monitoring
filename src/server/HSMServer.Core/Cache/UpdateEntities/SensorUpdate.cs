@@ -10,7 +10,7 @@ namespace HSMServer.Core.Cache.UpdateEntities
     /// </summary>
     public record SensorUpdate : BaseNodeUpdate
     {
-        public List<PolicyUpdate> Policies { get; init; } = new();
+        public List<PolicyUpdate> Policies { get; init; }
 
 
         public DateTime? EndOfMutingPeriod { get; init; }

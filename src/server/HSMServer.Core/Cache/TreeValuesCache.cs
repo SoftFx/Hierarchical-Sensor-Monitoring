@@ -511,24 +511,23 @@ namespace HSMServer.Core.Cache
 
             _logger.Info($"Try to update old sensor policies");
 
-            foreach (var sensor in sensors)
-            {
-                if (_sensors.TryGetValue(Guid.Parse(sensor.Id), out var model))
+            if (resavedPolicies.Count > 0)
+                foreach (var sensor in sensors)
                 {
-                    int oldCnt = model.Policies.Count();
+                    if (_sensors.TryGetValue(Guid.Parse(sensor.Id), out var model))
+                    {
+                        int oldCnt = model.Policies.Count();
 
-                    model.Policies.ApplyPolicies(sensor.Policies, resavedPolicies);
+                        model.Policies.ApplyPolicies(sensor.Policies, resavedPolicies);
 
-                    if (model.Policies.Count() > oldCnt)
-                        _database.UpdateSensor(model.ToEntity());
+                        if (sensorUpdates.ContainsKey(model.Id))
+                            model.Policies.AddStatus();
 
-                    if (sensorUpdates.ContainsKey(model.Id))
-                        model.Policies.AddStatus();
+                        if (model.Policies.Count() > oldCnt)
+                            _database.UpdateSensor(model.ToEntity());
+                    }
                 }
 
-                if (sensorUpdates.ContainsKey(sensor.Id))
-            }
-            
             _logger.Info($"Sensor update finished");
 
             _logger.Info($"Try to update prodcuts");

@@ -118,6 +118,7 @@ namespace HSMServer.Core
                                 Id = Guid.Parse(policyIdStr).ToByteArray(),
                                 SensorStatus = byte.Parse(raw["Status"].ToString()),
                                 Template = raw["Comment"].ToString(),
+                                Icon = "↕",
                             };
 
                             resavedPolicies.Add(policyIdStr, policyEntity);

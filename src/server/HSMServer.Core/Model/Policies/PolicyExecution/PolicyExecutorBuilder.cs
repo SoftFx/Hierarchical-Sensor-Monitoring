@@ -17,12 +17,12 @@ namespace HSMServer.Core.Model.Policies
                 _ => throw new NotImplementedException()
             };
 
-        internal static Func<SensorStatus, SensorStatus, bool> GetStatusOperation(PolicyOperation action) =>
+        internal static Func<SensorStatus?, SensorStatus?, bool> GetStatusOperation(PolicyOperation? action) =>
             action switch
             {
-                PolicyOperation.IsChanged => (SensorStatus oldVal, SensorStatus newVal) => oldVal != newVal,
-                PolicyOperation.IsOk => (SensorStatus _, SensorStatus newVal) => newVal == SensorStatus.Error,
-                PolicyOperation.IsError => (SensorStatus _, SensorStatus newVal) => newVal == SensorStatus.Ok,
+                PolicyOperation.IsChanged => (SensorStatus? oldVal, SensorStatus? newVal) => oldVal != newVal,
+                PolicyOperation.IsOk => (SensorStatus? _, SensorStatus? newVal) => newVal == SensorStatus.Error,
+                PolicyOperation.IsError => (SensorStatus? _, SensorStatus? newVal) => newVal == SensorStatus.Ok,
                 _ => throw new NotImplementedException()
             };
 
