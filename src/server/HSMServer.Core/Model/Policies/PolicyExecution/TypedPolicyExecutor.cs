@@ -64,10 +64,10 @@ namespace HSMServer.Core.Model.Policies
     }
 
 
-    internal class PolicyExecutorStatus : PolicyExecutor<SensorStatus>
+    internal class PolicyExecutorStatus : PolicyExecutor<SensorStatus?>
     {
-        protected override Func<SensorStatus, SensorStatus, bool> GetTypedOperation(PolicyOperation operation) => PolicyExecutorBuilder.GetStatusOperation(operation);
+        protected override Func<SensorStatus?, SensorStatus?, bool> GetTypedOperation(PolicyOperation operation) => PolicyExecutorBuilder.GetStatusOperation(operation);
 
-        protected override SensorStatus GetCheckedValue(BaseValue value) => value.Status;
+        protected override SensorStatus? GetCheckedValue(BaseValue value) => value?.Status;
     }
 }

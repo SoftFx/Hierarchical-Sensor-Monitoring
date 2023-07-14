@@ -10,13 +10,14 @@ namespace HSMServer.Core.Cache.UpdateEntities
     /// </summary>
     public record SensorUpdate : BaseNodeUpdate
     {
-        public SensorState? State { get; init; }
+        public List<PolicyUpdate> Policies { get; init; }
 
-        public Integration? Integration { get; init; }
 
         public DateTime? EndOfMutingPeriod { get; init; }
 
-        public List<DataPolicyUpdate> DataPolicies { get; init; }
+        public Integration? Integration { get; init; }
+
+        public SensorState? State { get; init; }
     }
 
 
@@ -27,7 +28,7 @@ namespace HSMServer.Core.Cache.UpdateEntities
         PolicyCombination Combination = PolicyCombination.And);
 
 
-    public sealed record DataPolicyUpdate(
+    public sealed record PolicyUpdate(
         Guid Id,
         List<PolicyConditionUpdate> Conditions,
         TimeIntervalModel Sensitivity,

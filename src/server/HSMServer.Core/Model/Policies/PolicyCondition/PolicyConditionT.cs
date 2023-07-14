@@ -23,7 +23,7 @@ namespace HSMServer.Core.Model.Policies
             set
             {
                 _operationName = value;
-                _executor.SetOperation(value);
+                _executor?.SetOperation(value);
             }
         }
 
@@ -36,7 +36,11 @@ namespace HSMServer.Core.Model.Policies
                     return;
 
                 _propertyName = value;
+
                 _executor = PolicyExecutorBuilder.BuildExecutor<U>(value);
+                _executor.SetOperation(Operation);
+
+                SetTarget(Target);
             }
         }
 
@@ -50,12 +54,7 @@ namespace HSMServer.Core.Model.Policies
 
                 _targetName = value;
 
-                _executor.SetTarget(value.Type switch
-                {
-                    TargetType.Const => BuildConstTargetBuilder(value.Value),
-                    TargetType.LastValue => GetLastTargetValue,
-                    _ => throw new NotImplementedException($"Unsupported target type {value.Type}"),
-                });
+                SetTarget(value);
             }
         }
 
@@ -63,13 +62,25 @@ namespace HSMServer.Core.Model.Policies
         internal bool Check(T value) => _executor.Execute(value);
 
 
-        private Func<U> BuildConstTargetBuilder(string val)
+        private void SetTarget(TargetValue value)
         {
-            U GetConstTarget() => _constTargetValue;
+            Func<U> BuildConstTargetBuilder(string val)
+            {
+                U GetConstTarget() => _constTargetValue;
 
-            _constTargetValue = ConstTargetValueConverter(val);
+                _constTargetValue = ConstTargetValueConverter(val);
 
-            return GetConstTarget;
+                return GetConstTarget;
+            }
+
+            object targetBuilder = value.Type switch
+            {
+                TargetType.Const => BuildConstTargetBuilder(value.Value),
+                TargetType.LastValue => GetLastTargetValue,
+                _ => throw new NotImplementedException($"Unsupported target type {value.Type}"),
+            };
+
+            _executor?.SetTarget(targetBuilder);
         }
     }
 }

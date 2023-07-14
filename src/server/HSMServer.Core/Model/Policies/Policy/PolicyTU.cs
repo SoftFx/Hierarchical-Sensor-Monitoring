@@ -4,7 +4,7 @@ namespace HSMServer.Core.Model.Policies
 {
     public abstract class Policy<T, U> : Policy<T> where T : BaseValue
     {
-        private Func<BaseValue> _getLastSensorValue;
+        private Func<BaseValue> _getLastSensorValue = () => null;
 
 
         protected abstract U GetConstTarget(string strValue);
