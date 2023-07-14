@@ -1,6 +1,7 @@
 ﻿using HSMCommon.Extensions;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Policies;
+using HSMServer.Extensions;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using System.Collections.Generic;
 using System.Linq;
@@ -44,8 +45,8 @@ namespace HSMServer.Model.DataAlerts
             Sensitivity = new TimeIntervalViewModel(PredefinedIntervals.ForRestore) { IsAlertBlock = true };
             TimeToLive = new TimeIntervalViewModel(PredefinedIntervals.ForRestore) { IsAlertBlock = true };
 
-            OperationsItems = Actions.Select(a => new SelectListItem(a.GetDisplayName(), $"{a}")).ToList();
-            PropertiesItems = Properties.Select(p => new SelectListItem(p, p, false)).ToList();
+            OperationsItems = Actions.ToSelectedItems(k => k.GetDisplayName());
+            PropertiesItems = Properties.ToSelectedItems();
 
             if (isMain)
                 PropertiesItems.Add(new SelectListItem("Inactivity period", TimeToLiveCondition));

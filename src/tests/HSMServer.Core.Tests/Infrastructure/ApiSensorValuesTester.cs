@@ -106,8 +106,7 @@ namespace HSMServer.Core.Tests.Infrastructure
           {
               HSMSensorDataObjects.SensorStatus.Ok => SensorStatus.Ok,
               HSMSensorDataObjects.SensorStatus.OffTime => SensorStatus.OffTime,
-              HSMSensorDataObjects.SensorStatus.Error => SensorStatus.Error,
-              HSMSensorDataObjects.SensorStatus.Warning => SensorStatus.Error,
+              HSMSensorDataObjects.SensorStatus.Error or HSMSensorDataObjects.SensorStatus.Warning => SensorStatus.Error,
               _ => SensorStatus.Ok
           };
     }
