@@ -407,7 +407,7 @@ function buildContextMenu(node) {
         let isGrafanaEnabled = node.data.jstree.isGrafanaEnabled === "True";
         if (isGrafanaEnabled) {
             contextMenu["Grafana disable"] = {
-                "label": `Disabe Grafana`,
+                "label": `Disable Grafana`,
                 "icon": "/dist/grafana.svg",
                 "action": _ => grafanaRequest(node, disableGrafanaAction),
             };
