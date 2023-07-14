@@ -677,7 +677,7 @@ namespace HSMServer.Controllers
             var update = new ProductUpdate
             {
                 Id = product.Id,
-                TTL = newModel.ExpectedUpdateInterval.ToModel(),
+                //TTL = newModel.ExpectedUpdateInterval.ToModel(),
                 KeepHistory = newModel.SavedHistoryPeriod.ToModel(),
                 SelfDestroy = newModel.SelfDestroyPeriod.ToModel(),
                 Description = newModel.Description ?? string.Empty
