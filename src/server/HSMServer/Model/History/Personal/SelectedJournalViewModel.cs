@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -7,6 +8,7 @@ using HSMServer.Core.Journal;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Requests;
 using HSMServer.Extensions;
+using HSMServer.Model.TreeViewModel;
 
 namespace HSMServer.Model.History;
 
@@ -14,30 +16,41 @@ public class SelectedJournalViewModel
 {
     private readonly object _lock = new ();
 
-
-    private ICollection<JournalRecordModel> _journals;
+    private ConcurrentDictionary<Guid, int> IdsToSubscribe => new(_baseNode is ProductNodeViewModel node
+        ? node.Sensors.ToDictionary(x => x.Key, x => 1)
+        : Enumerable.Empty<KeyValuePair<Guid, int>>());
     
-    private Guid _id;
+    private List<JournalRecordModel> _journals;
+    
+    private BaseNodeViewModel _baseNode;
+
     private DataTableParameters _parameters;
     private JournalHistoryRequestModel _journalHistoryRequestModel;
 
     public int Length => _journals.Count;
 
-    public async Task ConnectJournal(Guid id, IJournalService journalService)
+    public async Task ConnectJournal(BaseNodeViewModel baseNode, IJournalService journalService)
     {
-        if (_id == id)
+        if (_baseNode?.Id == baseNode.Id)
             return;
         
-        _id = id;
+        _baseNode = baseNode;
+
         journalService.NewJournalEvent -= AddNewJournals;
         journalService.NewJournalEvent += AddNewJournals;
-        _journalHistoryRequestModel = new JournalHistoryRequestModel(_id, To: DateTime.MaxValue);
+        _journalHistoryRequestModel = new JournalHistoryRequestModel(_baseNode.Id, To: DateTime.MaxValue);
 
         _journals = await GetJournals(journalService);
+        if (_baseNode is ProductNodeViewModel node)
+            foreach (var id in node.Sensors.Keys)
+                _journals.AddRange(await journalService.GetPages(_journalHistoryRequestModel with { Id = id }).Flatten());
     }
 
     public IEnumerable<JournalRecordModel> GetPage(DataTableParameters parameters)
     {
+        if (_parameters == parameters)
+            return _journals;
+        
         _parameters = parameters;
 
         var searched = Search(parameters.Search.Value);
@@ -52,19 +65,20 @@ public class SelectedJournalViewModel
             : _journals;
     }
 
-    private static IEnumerable<JournalRecordModel> Order(IOrderedEnumerable<JournalRecordModel> ordered, List<DataTableOrder> orders)
+    private IEnumerable<JournalRecordModel> Order(IOrderedEnumerable<JournalRecordModel> ordered, List<DataTableOrder> orders)
     {
-        foreach (var order in orders)
+        for (int i = 0; i < orders.Count; i++)
         {
-            var descending = order.Dir != "asc";
-            ordered = order.Column switch
-                {
-                    0 => ordered.CreateOrderedEnumerable(x => x.Key.Time, null, descending),
-                    1 => ordered.CreateOrderedEnumerable(x => x.Initiator, null, descending),
-                    2 => ordered.CreateOrderedEnumerable(x => x.Key.Type, null, descending),
-                    3 => ordered.CreateOrderedEnumerable(x => x.Value, null, descending),
-                    _ => ordered
-                };
+            var descending = orders[i].Dir != "asc";
+            ordered = _parameters.Columns[orders[i].Column].GetColumnName() switch
+            {
+                ColumnName.Date => ordered.CreateOrderedEnumerable(x => x.Key.Time, null, descending),
+                ColumnName.Initiator => ordered.CreateOrderedEnumerable(x => x.Initiator, null, descending),
+                ColumnName.Type => ordered.CreateOrderedEnumerable(x => x.Key.Type, null, descending),
+                ColumnName.Record => ordered.CreateOrderedEnumerable(x => x.Value, null, descending),
+                ColumnName.Name => ordered.CreateOrderedEnumerable(x => x.Name, null, descending),
+                _ => ordered
+            };
         }
 
         return ordered;
@@ -74,12 +88,12 @@ public class SelectedJournalViewModel
     {
         lock (_lock)
         {
-            if (record.Key.Id == _id)
+            if (IdsToSubscribe.TryGetValue(record.Key.Id, out _) || _baseNode.Id == record.Key.Id)
                 _journals.Add(record);
         }
     }
 
-    private async Task<ICollection<JournalRecordModel>> GetJournals(IJournalService journalService)
+    private async Task<List<JournalRecordModel>> GetJournals(IJournalService journalService)
     {
         return await journalService.GetPages(_journalHistoryRequestModel).Flatten();
     }

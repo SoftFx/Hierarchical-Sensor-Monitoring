@@ -77,13 +77,14 @@ namespace HSMServer.Controllers
                     viewModel = node;
                     StoredUser.SelectedNode.ConnectNode(node);
                     CurrentUser.Tree.AddOpenedNode(id);
+                    await StoredUser.Journal.ConnectJournal(node, _journalService);
                 }
                 else if (_treeViewModel.Sensors.TryGetValue(id, out var sensor))
                 {
                     viewModel = sensor;
 
                     StoredUser.History.ConnectSensor(_treeValuesCache.GetSensor(id));
-                    await StoredUser.Journal.ConnectJournal(id, _journalService);
+                    await StoredUser.Journal.ConnectJournal(sensor, _journalService);
                 }
             }
 

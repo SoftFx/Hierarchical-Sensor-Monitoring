@@ -297,6 +297,12 @@
         }
         
         $('[id^="journal_table_"]').DataTable({
+            columns: [
+                { "name": DataTableColumnsNames.Date },
+                { "name": DataTableColumnsNames.Initiator },
+                { "name": DataTableColumnsNames.Type },
+                { "name": DataTableColumnsNames.Record }
+            ],
             processing: true,
             serverSide: true,
             order: [[0, 'desc']],
@@ -305,7 +311,7 @@
                 contentType: "application/json; charset=utf-8",
                 url: getJournalPage,
                 data: function (d) {
-                    return JSON.stringify({ parameters: d });
+                    return JSON.stringify(d);
                 }
             }
         });

@@ -1,8 +1,7 @@
+using System;
 using System.Collections.Generic;
 
 namespace HSMServer.Controllers.DataTables;
-
-public record TableParameters(DataTableParameters Parameters);
 
 public record Search(bool Regex, string Value);
 
@@ -11,6 +10,26 @@ public record DataTableParameters(List<DataTableColumn> Columns, int Draw, int L
 public record DataTableColumn(int Data, string Name, bool Orderable, bool Searchable, Search Search);
 
 public record DataTableOrder(int Column, string Dir);
+
+public enum ColumnName
+{
+    Date,
+    Name,
+    Type,
+    Record,
+    Initiator
+}
+public static class DataTableExtension
+{ 
+    public static ColumnName GetColumnName(this DataTableColumn column)
+    {
+        foreach (var columnName in Enum.GetValues<ColumnName>())
+            if (columnName.ToString() == column.Name)
+                return columnName;
+
+        return default;
+    }
+}
 
 public class DataTableResultSet
 {

@@ -22,20 +22,36 @@ public class JournalController : BaseController
     }
 
     [HttpPost]
-    public JsonResult GetPage([FromBody] TableParameters parameters)
+    public JsonResult GetPage([FromBody] DataTableParameters parameters)
     {
-        var draw = parameters.Parameters.Draw;
+        var draw = parameters.Draw;
         var rows = new List<List<string>>(1 << 5);
         
-        foreach (var recordFromDb in StoredUser.Journal.GetPage(parameters.Parameters).Select(x => new JournalViewModel(x)))
+        foreach (var recordFromDb in StoredUser.Journal.GetPage(parameters).Select(x => new JournalViewModel(x)))
         {
-            var data = new List<string>
+            var data = new List<string>(1 << 4);
+
+            foreach (var name in parameters.Columns.Select(x => x.GetColumnName()))
             {
-                recordFromDb.TimeAsString,
-                recordFromDb.Initiator,
-                recordFromDb.Type.ToString(),
-                recordFromDb.Value.Replace(Environment.NewLine, "<br>"),
-            };
+                switch (name)
+                {
+                    case ColumnName.Date:
+                        data.Add(recordFromDb.TimeAsString);
+                        break;
+                    case ColumnName.Name:
+                        data.Add(recordFromDb.Name);
+                        break;
+                    case ColumnName.Type:
+                        data.Add(recordFromDb.Type.ToString());
+                        break;
+                    case ColumnName.Record:
+                        data.Add(recordFromDb.Value.Replace(Environment.NewLine, "<br>"));
+                        break;
+                    case ColumnName.Initiator:
+                        data.Add(recordFromDb.Initiator);
+                        break;
+                }
+            }
 
             rows.Add(data);
         }

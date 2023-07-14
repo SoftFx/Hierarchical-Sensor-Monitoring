@@ -4,6 +4,7 @@
     string nodeId = Model.Id;
     var listDivId = $"list_{nodeId}";
     var gridDivId = $"grid_{nodeId}";
+    var journalDivId = $"journal_{nodeId}";
 }
 
 
@@ -22,6 +23,9 @@ else
         <li class='nav-item'>
             <a id="listLink_@nodeId" class='nav-link' data-bs-toggle='tab' onclick="getListPage(`listSensors`);getListPage(`listNodes`)" href='#@listDivId' role="tab"><i class="fa-solid fa-list"></i> List</a>
         </li>
+        <li class="nav-item">
+            <a id="journalLink_@nodeId" class='nav-link' data-bs-toggle='tab' href='#@journalDivId' role="tab"><i class="fa-solid fa-list"></i> Journal</a>
+        </li>
     </ul>
     <div class='tab-content'>
         <div class='tab-pane fade' id=@gridDivId role="tabpanel">
@@ -32,5 +36,43 @@ else
             <div class="accordion" id="list-accordion_listNodes"></div>
             <div class="accordion" id="list-accordion_listSensors"></div>
         </div>
+        <div class='tab-pane fade' id=@journalDivId role="tabpanel">
+            <table class="display w-100 responsive" id="journal_table_@nodeId">
+                <thead>
+                    <tr>
+                        <th>Date</th>
+                        <th>Name</th> 
+                        <th>Initiator</th>
+                        <th>Type</th>
+                        <th>Record</th>
+                    </tr>
+                </thead>
+            </table>
+        </div>
     </div>
 }
+
+<script>
+    $(document).ready(function () {
+        $('[id^="journal_table_"]').DataTable({
+            columns: [
+                { "name": DataTableColumnsNames.Date  },
+                { "name": DataTableColumnsNames.Name },
+                { "name": DataTableColumnsNames.Initiator },
+                { "name": DataTableColumnsNames.Type },
+                { "name": DataTableColumnsNames.Record }
+            ],
+            processing: true,
+            serverSide: true,
+            order: [[0, 'desc']],
+            ajax: {
+                type: "POST",
+                contentType: "application/json; charset=utf-8",
+                url: getJournalPage,
+                data: function (d) {
+                    return JSON.stringify(d);
+                }
+            }
+        });
+    });
+</script>

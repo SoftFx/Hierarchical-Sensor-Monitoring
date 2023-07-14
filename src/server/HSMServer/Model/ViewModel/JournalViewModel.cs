@@ -15,11 +15,15 @@ public class JournalViewModel
     
     public string Initiator { get; set; }
     
+    public string Name { get; set; }
+
+    
     public JournalViewModel(JournalRecordModel model)
     {
         Type = model.Key.Type;
         TimeAsString = new DateTime(model.Key.Time).ToDefaultFormat();
         Value = model.Value;
         Initiator = model.Initiator;
+        Name = model.Name;
     }
 }

@@ -11,6 +11,8 @@ public sealed class JournalRecordModel
     public string Value { get; set; }
     
     public string Initiator { get; set; }
+    
+    public string Name { get; set; }
 
 
     public JournalRecordModel(){}
@@ -19,16 +21,18 @@ public sealed class JournalRecordModel
     {
         Value = entity.Value;
         Initiator = entity.Initiator;
+        Name = entity.Name;
         Key = JournalKey.FromBytes(key);
     }
 
-    public JournalRecordModel(Guid id, DateTime date, string message, RecordType type = RecordType.Changes, string initiator = "")
+    public JournalRecordModel(Guid id, DateTime date, string message, string name, RecordType type = RecordType.Changes, string initiator = "")
     {
         Value = message;
         Key = new JournalKey(id, date.Ticks, type);
         Initiator = initiator ?? CacheConstants.System;
+        Name = name;
     }
     
     
-    public JournalEntity ToJournalEntity() => new(Value, Initiator);
+    public JournalEntity ToJournalEntity() => new(Value, Name);
 }

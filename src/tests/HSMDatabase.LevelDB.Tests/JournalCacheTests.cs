@@ -44,7 +44,7 @@ public class JournalCacheTests : MonitoringCoreTestsBase<TreeValuesCacheFixture>
         for (int i = 0; i < n; i++)
         {
             string value = RandomGenerator.GetRandomString();
-            var journal = new JournalRecordModel(id, new DateTime(RandomGenerator.GetRandomTimeSpan(DateTime.MaxValue.Ticks, DateTime.MinValue.Ticks).Ticks), value);
+            var journal = new JournalRecordModel(id, new DateTime(RandomGenerator.GetRandomTimeSpan(DateTime.MaxValue.Ticks, DateTime.MinValue.Ticks).Ticks), value, "TestName");
             journals.Add(journal);
             _journalService.AddRecord(journal);
         }
@@ -65,7 +65,7 @@ public class JournalCacheTests : MonitoringCoreTestsBase<TreeValuesCacheFixture>
         for (int i = 0; i < n; i++)
         {
             var sensor = SensorModelFactory.Build(EntitiesFactory.BuildSensorEntity());
-            _journalService.AddRecord(new JournalRecordModel(sensor.Id, DateTime.UtcNow, "Test message"));
+            _journalService.AddRecord(new JournalRecordModel(sensor.Id, DateTime.UtcNow, "Test message", "Test name"));
             sensors.Add(sensor);
         }
 
@@ -80,7 +80,7 @@ public class JournalCacheTests : MonitoringCoreTestsBase<TreeValuesCacheFixture>
         {
             var id = Guid.NewGuid();
             var value = RandomGenerator.GetRandomString();
-            var record = new JournalRecordModel(id, new DateTime(RandomGenerator.GetRandomTimeSpan(DateTime.MaxValue.Ticks, DateTime.MinValue.Ticks).Ticks), value);
+            var record = new JournalRecordModel(id, new DateTime(RandomGenerator.GetRandomTimeSpan(DateTime.MaxValue.Ticks, DateTime.MinValue.Ticks).Ticks), value, "");
 
             var key = record.Key;
 
