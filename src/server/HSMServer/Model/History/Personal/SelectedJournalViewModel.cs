@@ -8,6 +8,7 @@ using HSMServer.Core.Journal;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Requests;
 using HSMServer.Extensions;
+using HSMServer.Model.Folders;
 using HSMServer.Model.TreeViewModel;
 
 namespace HSMServer.Model.History;
@@ -41,9 +42,18 @@ public class SelectedJournalViewModel
         _journalHistoryRequestModel = new JournalHistoryRequestModel(_baseNode.Id, To: DateTime.MaxValue);
 
         _journals = await GetJournals(journalService);
+
         if (_baseNode is ProductNodeViewModel node)
+        {
             foreach (var id in node.Sensors.Keys)
                 _journals.AddRange(await journalService.GetPages(_journalHistoryRequestModel with { Id = id }).Flatten());
+        }
+        else if (_baseNode is FolderModel folder)
+        {
+            foreach (var ids in folder.Products.Select(x => x.Value.Sensors.Keys))
+                foreach (var id in ids)
+                    _journals.AddRange(await journalService.GetPages(_journalHistoryRequestModel with { Id = id }).Flatten());
+        }
     }
 
     public IEnumerable<JournalRecordModel> GetPage(DataTableParameters parameters)
