@@ -13,16 +13,14 @@ using HSMServer.Model.TreeViewModel;
 
 namespace HSMServer.Model.History;
 
-public class SelectedJournalViewModel
+public sealed class SelectedJournalViewModel
 {
     private readonly object _lock = new ();
 
-    private ConcurrentDictionary<Guid, bool> _ids = new ConcurrentDictionary<Guid, bool>();
+    private readonly ConcurrentDictionary<Guid, bool> _ids = new ();
 
     private List<JournalRecordModel> _journals;
-    
     private BaseNodeViewModel _baseNode;
-
     private DataTableParameters _parameters;
     private JournalHistoryRequestModel _journalHistoryRequestModel;
 
@@ -33,21 +31,11 @@ public class SelectedJournalViewModel
         if (_baseNode?.Id == baseNode.Id)
             return;
         
-        _ids.Clear();
-        _baseNode = baseNode;
-
-        journalService.NewJournalEvent -= AddNewJournals;
-        journalService.NewJournalEvent += AddNewJournals;
-        _journalHistoryRequestModel = new JournalHistoryRequestModel(_baseNode.Id, To: DateTime.MaxValue);
-        _journals = await GetJournals(journalService);
+        Reset(journalService);
         
-        if (baseNode is FolderModel folder)
-            CreateIdsToFollow(folder);
-        else if (baseNode is ProductNodeViewModel product)
-            CreateIdsToFollow(product);
-
-        foreach (var (id, _) in _ids)
-            _journals.AddRange(await journalService.GetPages(_journalHistoryRequestModel with { Id = id }).Flatten());
+        _baseNode = baseNode;
+        
+        await SetUpNewJournals(journalService);
     }
 
     public IEnumerable<JournalRecordModel> GetPage(DataTableParameters parameters)
@@ -62,6 +50,27 @@ public class SelectedJournalViewModel
         return Order(searched.OrderBy(x => x, new JournalEmptyComparer()), _parameters.Order).Skip(_parameters.Start).Take(_parameters.Length);
     }
 
+    private async Task SetUpNewJournals(IJournalService journalService)
+    {
+        journalService.NewJournalEvent += AddNewJournals;
+        _journalHistoryRequestModel = new JournalHistoryRequestModel(_baseNode.Id, To: DateTime.MaxValue);
+        _journals = await GetJournals(journalService);
+        
+        if (_baseNode is FolderModel folder)
+            CreateIdsToFollow(folder);
+        else if (_baseNode is ProductNodeViewModel product)
+            CreateIdsToFollow(product);
+
+        foreach (var (id, _) in _ids)
+            _journals.AddRange(await journalService.GetPages(_journalHistoryRequestModel with { Id = id }).Flatten());
+    }
+
+    private void Reset(IJournalService journalService)
+    {
+        _ids.Clear();
+        journalService.NewJournalEvent -= AddNewJournals;
+    }
+    
     private IEnumerable<JournalRecordModel> Search(string search)
     {
         return !string.IsNullOrEmpty(search)
