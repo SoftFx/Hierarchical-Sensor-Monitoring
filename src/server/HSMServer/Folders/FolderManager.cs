@@ -256,8 +256,7 @@ namespace HSMServer.Folders
                     SelfDestroy = IsFromFolder(product.Settings.SelfDestroy, folder.SelfDestroy),
                 };
 
-                if (update.TTL != null || update.RestoreInterval != null ||
-                    update.KeepHistory != null || update.SelfDestroy != null)
+                if (update.TTL != null || update.KeepHistory != null || update.SelfDestroy != null)
                     _cache.UpdateProduct(update);
             }
         }
