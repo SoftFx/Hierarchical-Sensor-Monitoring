@@ -17,10 +17,8 @@ public class SelectedJournalViewModel
 {
     private readonly object _lock = new ();
 
-    private ConcurrentDictionary<Guid, int> IdsToSubscribe => new(_baseNode is ProductNodeViewModel node
-        ? node.Sensors.ToDictionary(x => x.Key, x => 1)
-        : Enumerable.Empty<KeyValuePair<Guid, int>>());
-    
+    private ConcurrentDictionary<Guid, bool> _ids = new ConcurrentDictionary<Guid, bool>();
+
     private List<JournalRecordModel> _journals;
     
     private BaseNodeViewModel _baseNode;
@@ -35,25 +33,21 @@ public class SelectedJournalViewModel
         if (_baseNode?.Id == baseNode.Id)
             return;
         
+        _ids.Clear();
         _baseNode = baseNode;
 
         journalService.NewJournalEvent -= AddNewJournals;
         journalService.NewJournalEvent += AddNewJournals;
         _journalHistoryRequestModel = new JournalHistoryRequestModel(_baseNode.Id, To: DateTime.MaxValue);
-
         _journals = await GetJournals(journalService);
+        
+        if (baseNode is FolderModel folder)
+            CreateIdsToFollow(folder);
+        else if (baseNode is ProductNodeViewModel product)
+            CreateIdsToFollow(product);
 
-        if (_baseNode is ProductNodeViewModel node)
-        {
-            foreach (var id in node.Sensors.Keys)
-                _journals.AddRange(await journalService.GetPages(_journalHistoryRequestModel with { Id = id }).Flatten());
-        }
-        else if (_baseNode is FolderModel folder)
-        {
-            foreach (var ids in folder.Products.Select(x => x.Value.Sensors.Keys))
-                foreach (var id in ids)
-                    _journals.AddRange(await journalService.GetPages(_journalHistoryRequestModel with { Id = id }).Flatten());
-        }
+        foreach (var (id, _) in _ids)
+            _journals.AddRange(await journalService.GetPages(_journalHistoryRequestModel with { Id = id }).Flatten());
     }
 
     public IEnumerable<JournalRecordModel> GetPage(DataTableParameters parameters)
@@ -94,11 +88,35 @@ public class SelectedJournalViewModel
         return ordered;
     }
 
+    private void CreateIdsToFollow(ProductNodeViewModel node)
+    {
+        foreach (var (id, subNode) in node.Nodes)
+        {
+            _ids.TryAdd(id, true);
+            CreateIdsToFollow(subNode);
+        }
+
+        foreach (var id in node.Sensors.Keys)
+        {
+            _ids.TryAdd(id, true);
+        }
+    }
+
+    private void CreateIdsToFollow(FolderModel folder)
+    {
+        foreach (var (id, product) in folder.Products)
+        {
+            _ids.TryAdd(id, true);
+            CreateIdsToFollow(product);
+        }
+    }
+
+
     private void AddNewJournals(JournalRecordModel record)
     {
         lock (_lock)
         {
-            if (IdsToSubscribe.TryGetValue(record.Key.Id, out _) || _baseNode.Id == record.Key.Id)
+            if (_ids.TryGetValue(record.Key.Id, out _) || _baseNode.Id == record.Key.Id)
                 _journals.Add(record);
         }
     }
