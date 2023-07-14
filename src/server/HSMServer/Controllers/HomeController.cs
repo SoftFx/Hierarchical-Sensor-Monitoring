@@ -545,7 +545,7 @@ namespace HSMServer.Controllers
                 //TTL = newModel.ExpectedUpdateInterval.ToModel(),
                 KeepHistory = newModel.SavedHistoryPeriod.ToModel(),
                 SelfDestroy = newModel.SelfDestroyPeriod.ToModel(),
-                DataPolicies = newModel.DataAlerts?[sensor.Type].Select(a => a.ToUpdate()).ToList() ?? new(),
+                Policies = newModel.DataAlerts?[sensor.Type].Select(a => a.ToUpdate()).ToList() ?? new(),
             };
 
             _treeValuesCache.UpdateSensor(update);
