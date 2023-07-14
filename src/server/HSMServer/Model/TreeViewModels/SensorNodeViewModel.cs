@@ -69,6 +69,8 @@ namespace HSMServer.Model.TreeViewModel
             foreach (var alert in model.PolicyResult)
             {
                 var icon = alert.Icon;
+                if (icon is null)
+                    continue;
 
                 if (!AlertIcons.ContainsKey(icon))
                     AlertIcons.TryAdd(icon, 0);
