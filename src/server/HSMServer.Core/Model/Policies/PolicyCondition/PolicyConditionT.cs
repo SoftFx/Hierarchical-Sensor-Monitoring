@@ -4,20 +4,17 @@ namespace HSMServer.Core.Model.Policies
 {
     public class PolicyCondition<T, U> : PolicyCondition where T : BaseValue
     {
-        private Func<U, U, bool> _executeOperation;
-        private Func<T, U> _getProperty;
-        private U _targetValue;
-
         private PolicyOperation _operationName;
         private TargetValue _targetName;
         private string _propertyName;
 
+        private PolicyExecutor _executor;
+        private U _constTargetValue;
 
-        internal Func<PolicyOperation, Func<U, U, bool>> OperationBuilder { get; init; }
 
-        internal Func<string, Func<T, U>> PropertyBuilder { get; init; }
+        internal Func<string, U> ConstTargetValueConverter { get; init; }
 
-        internal Func<string, U> TargetBuilder { get; init; }
+        internal Func<BaseValue> GetLastTargetValue { get; init; }
 
 
         public override PolicyOperation Operation
@@ -26,7 +23,7 @@ namespace HSMServer.Core.Model.Policies
             set
             {
                 _operationName = value;
-                _executeOperation = OperationBuilder(value);
+                _executor.SetOperation(value);
             }
         }
 
@@ -39,7 +36,7 @@ namespace HSMServer.Core.Model.Policies
                     return;
 
                 _propertyName = value;
-                _getProperty = PropertyBuilder(value);
+                _executor = PolicyExecutorBuilder.BuildExecutor<U>(value);
             }
         }
 
@@ -53,15 +50,26 @@ namespace HSMServer.Core.Model.Policies
 
                 _targetName = value;
 
-                _targetValue = Target.Type switch
+                _executor.SetTarget(value.Type switch
                 {
-                    TargetType.Const => TargetBuilder(value.Value),
-                    _ => default,
-                };
+                    TargetType.Const => BuildConstTargetBuilder(value.Value),
+                    TargetType.LastValue => GetLastTargetValue,
+                    _ => throw new NotImplementedException($"Unsupported target type {value.Type}"),
+                });
             }
         }
 
 
-        internal bool Check(T value) => _executeOperation(_getProperty(value), _targetValue);
+        internal bool Check(T value) => _executor.Execute(value);
+
+
+        private Func<U> BuildConstTargetBuilder(string val)
+        {
+            U GetConstTarget() => _constTargetValue;
+
+            _constTargetValue = ConstTargetValueConverter(val);
+
+            return GetConstTarget;
+        }
     }
 }

@@ -6,17 +6,24 @@ namespace HSMServer.Core.Model.Policies
     public enum PolicyOperation : byte
     {
         [Display(Name = "<=")]
-        LessThanOrEqual,
+        LessThanOrEqual = 0,
         [Display(Name = "<")]
-        LessThan,
+        LessThan = 1,
         [Display(Name = ">")]
-        GreaterThan,
+        GreaterThan = 2,
         [Display(Name = ">=")]
-        GreaterThanOrEqual,
+        GreaterThanOrEqual = 3,
         [Display(Name = "==")]
-        Equal,
+        Equal = 4,
         [Display(Name = "!=")]
-        NotEqual,
+        NotEqual = 5,
+
+        [Display(Name = "Change")]
+        Change = 20,
+        [Display(Name = "Is error")]
+        IsError = 21,
+        [Display(Name = "Is ok")]
+        IsOk = 22,
     }
 
 
@@ -32,7 +39,7 @@ namespace HSMServer.Core.Model.Policies
     public enum TargetType : byte
     {
         Const,
-        Sensor,
+        LastValue,
     }
 
 
