@@ -46,8 +46,10 @@ namespace HSMServer.Core.Model
 
         public static bool operator !=(SensorResult first, SensorResult second) => !first.Equals(second);
 
-        public static SensorResult operator +(SensorResult first, SensorResult second) =>
-            new(first._results.UnionFluent(second._results));
+        public static SensorResult operator +(SensorResult? first, SensorResult second)
+        {
+            return first is null ? second : new(first.Value._results.UnionFluent(second._results));
+        }
 
 
         public override bool Equals(object obj) => obj is SensorResult second && ToTuple == second.ToTuple;
