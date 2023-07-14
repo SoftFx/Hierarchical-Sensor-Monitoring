@@ -159,16 +159,19 @@ namespace HSMServer.Core.Tests.Infrastructure
             Assert.Equal(expectedSensorValue.ReceivingTime, actual.LastUpdate);
 
             Assert.Equal(expectedSensorValue.Status, actual.Status?.Status);
-            if (expectedSensorValue.Status != SensorStatus.Ok)
-                Assert.False(string.IsNullOrEmpty(actual.Status?.Message));
-            else
-                Assert.True(string.IsNullOrEmpty(actual.Status?.Message));
+            Assert.Equal(expectedSensorValue.Comment, actual.Status?.Message);
 
             TestSensorValue(expectedSensorValue, actualSensorValue, actual.Type);
         }
 
         internal static void AssertModels<T>(T actual, T expected)
         {
+            if (expected is null)
+            {
+                Assert.Null(actual);
+                return;
+            }
+
             var type = typeof(T);
 
             foreach (var pi in type.GetProperties(BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static))
