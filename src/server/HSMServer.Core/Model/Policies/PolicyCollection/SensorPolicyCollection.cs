@@ -18,9 +18,12 @@ namespace HSMServer.Core.Model.Policies
         internal Action<ActionType, Policy> Uploaded;
 
 
-        internal abstract void Update(List<DataPolicyUpdate> updates);
+        internal abstract void Update(List<PolicyUpdate> updates);
 
         internal abstract void Attach(BaseSensorModel sensor);
+
+        [Obsolete("remove after policy migration")]
+        internal abstract void AddStatus();
 
 
         internal void Reset()
@@ -122,7 +125,7 @@ namespace HSMServer.Core.Model.Policies
                 _storage.TryAdd(policy.Id, typedPolicy);
         }
 
-        internal override void Update(List<DataPolicyUpdate> updatesList)
+        internal override void Update(List<PolicyUpdate> updatesList)
         {
             var updates = updatesList.Where(u => u.Id != Guid.Empty).ToDictionary(u => u.Id);
 
@@ -165,6 +168,31 @@ namespace HSMServer.Core.Model.Policies
 
                     _storage.TryAdd(policy.Id, policy);
                 }
+        }
+
+        internal override void AddStatus()
+        {
+            var policy = new PolicyType();
+
+            var statusUpdate = new PolicyUpdate(
+                           Guid.NewGuid(),
+                           new()
+                           {
+                                new PolicyConditionUpdate(
+                                    PolicyOperation.IsChanged,
+                                    new TargetValue(TargetType.LastValue, _sensor.Id.ToString()),
+                                    "Status"),
+
+                           },
+                           null,
+                           SensorStatus.Ok,
+                           $"$status [$product]$path = $comment",
+                           null);
+
+            policy.Update(statusUpdate);
+
+            AddPolicy(policy);
+            Uploaded?.Invoke(ActionType.Add, policy);
         }
     }
 }

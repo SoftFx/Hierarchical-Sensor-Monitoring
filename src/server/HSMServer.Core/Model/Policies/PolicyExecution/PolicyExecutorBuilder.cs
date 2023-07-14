@@ -20,7 +20,7 @@ namespace HSMServer.Core.Model.Policies
         internal static Func<SensorStatus, SensorStatus, bool> GetStatusOperation(PolicyOperation action) =>
             action switch
             {
-                PolicyOperation.Change => (SensorStatus oldVal, SensorStatus newVal) => oldVal != newVal,
+                PolicyOperation.IsChanged => (SensorStatus oldVal, SensorStatus newVal) => oldVal != newVal,
                 PolicyOperation.IsOk => (SensorStatus _, SensorStatus newVal) => newVal == SensorStatus.Error,
                 PolicyOperation.IsError => (SensorStatus _, SensorStatus newVal) => newVal == SensorStatus.Ok,
                 _ => throw new NotImplementedException()

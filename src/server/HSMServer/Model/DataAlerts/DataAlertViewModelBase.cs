@@ -22,7 +22,7 @@ namespace HSMServer.Model.DataAlerts
         public bool IsModify { get; protected set; }
 
 
-        internal DataPolicyUpdate ToUpdate()
+        internal PolicyUpdate ToUpdate()
         {
             List<PolicyConditionUpdate> conditions = new(Conditions.Count);
             Core.Model.TimeIntervalModel sensitivity = null;

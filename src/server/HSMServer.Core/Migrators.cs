@@ -1,6 +1,7 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Model;
+using HSMServer.Core.Model.Policies;
 using System;
 using System.Collections.Generic;
 using System.Text.Json;
@@ -83,7 +84,7 @@ namespace HSMServer.Core
 
                             if (oldInterval is not null)
                             {
-                                var newInterval = Migrators.ToNewInterval(oldInterval);
+                                var newInterval = ToNewInterval(oldInterval);
 
                                 if (updates.TryGetValue(entityId, out var upd))
                                 {
