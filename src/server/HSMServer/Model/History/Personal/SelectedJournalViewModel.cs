@@ -123,11 +123,11 @@ public sealed class SelectedJournalViewModel
 
     private void AddNewJournals(JournalRecordModel record)
     {
-        lock (_lock)
-        {
-            if (_ids.TryGetValue(record.Key.Id, out _) || _baseNode.Id == record.Key.Id)
+        if (_ids.TryGetValue(record.Key.Id, out _) || _baseNode.Id == record.Key.Id)
+            lock (_lock)
+            { 
                 _journals.Add(record);
-        }
+            }
     }
 
     private async Task<List<JournalRecordModel>> GetJournals(IJournalService journalService)

@@ -23,7 +23,7 @@ public class JournalService : IJournalService
 
     public void AddRecord(JournalRecordModel record)
     {
-        if (!string.IsNullOrEmpty(record.Value))
+        if (!string.IsNullOrEmpty(record.Value) && !string.IsNullOrEmpty(record.Initiator))
         {
             _database.AddJournalValue(record.Key, record.ToJournalEntity());
             NewJournalEvent?.Invoke(record);

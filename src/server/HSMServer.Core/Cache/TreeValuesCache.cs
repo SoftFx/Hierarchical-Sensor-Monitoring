@@ -91,12 +91,12 @@ namespace HSMServer.Core.Cache
             ChangeProductEvent?.Invoke(product, ActionType.Update);
         }
 
-        public void UpdateProduct(ProductUpdate update)
+        public void UpdateProduct(ProductUpdate update, string initiator = null)
         {
             if (!_tree.TryGetValue(update.Id, out var product))
                 return;
 
-            _database.UpdateProduct(product.Update(update).ToEntity());
+            _database.UpdateProduct(product.Update(update, initiator ?? CacheConstants.System).ToEntity());
 
             NotifyAboutProductChange(product);
         }
@@ -593,7 +593,7 @@ namespace HSMServer.Core.Cache
                 var product = new ProductModel(productEntity);
 
                 product.Policies.SensorExpired += SetExpiredSnapshot;
-
+                product.ChangesHandler += _journalService.AddRecord;
                 //product.Policies.ApplyPolicies(productEntity.Policies, policies);
 
                 _tree.TryAdd(product.Id, product);

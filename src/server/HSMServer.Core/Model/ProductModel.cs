@@ -59,9 +59,9 @@ namespace HSMServer.Core.Model
             Sensors.TryAdd(sensor.Id, (BaseSensorModel)sensor.AddParent(this));
         }
 
-        internal ProductModel Update(ProductUpdate update)
+        internal ProductModel Update(ProductUpdate update, string initiator = "")
         {
-            base.Update(update);
+            base.Update(update, initiator);
 
             if (update.FolderId is not null)
                 FolderId = update.FolderId != Guid.Empty ? update.FolderId : null;

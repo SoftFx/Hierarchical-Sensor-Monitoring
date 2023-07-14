@@ -18,7 +18,7 @@ namespace HSMServer.Core.Model.NodeSettings
         public Action<ActionType, TimeIntervalModel> Uploaded;
 
 
-        internal abstract bool TrySetValue(TimeIntervalModel policy, Guid id, string path = "", string initiator = "");
+        internal abstract bool TrySetValue(TimeIntervalModel policy, Guid id = default, string path = "", string initiator = "");
 
         internal abstract TimeIntervalEntity ToEntity();
     }
@@ -44,7 +44,7 @@ namespace HSMServer.Core.Model.NodeSettings
         public T Value => IsSet ? CurValue : ((SettingProperty<T>)ParentProperty)?.Value ?? _emptyValue;
 
 
-        internal override bool TrySetValue(TimeIntervalModel update, Guid id, string path = "", string initiator = "")
+        internal override bool TrySetValue(TimeIntervalModel update, Guid id = default, string path = "", string initiator = "")
         {
             var newValue = (T)update;
 

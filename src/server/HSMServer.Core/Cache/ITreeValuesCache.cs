@@ -27,7 +27,7 @@ namespace HSMServer.Core.Cache
         List<AccessKeyModel> GetAccessKeys();
 
         ProductModel AddProduct(string productName, Guid authorId);
-        void UpdateProduct(ProductUpdate product);
+        void UpdateProduct(ProductUpdate product, string initiator = null);
         void RemoveProduct(Guid id);
         ProductModel GetProduct(Guid id);
         ProductModel GetProductByName(string name);
