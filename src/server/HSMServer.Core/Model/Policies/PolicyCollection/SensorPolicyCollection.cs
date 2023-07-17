@@ -135,7 +135,7 @@ namespace HSMServer.Core.Model.Policies
                 if (updates.TryGetValue(id, out var update))
                 {
                     if (update.Compare(policy, update, out var message))
-                        CallJournal(new JournalRecordModel(_sensor.Id, DateTime.UtcNow, message, _sensor.Path, RecordType.Changes, initiator));
+                        CallJournal(new JournalRecordModel(_sensor.Id, DateTime.UtcNow, message, _sensor.Path, initiator));
 
                     policy.Update(update);
                     Uploaded?.Invoke(ActionType.Update, policy);
@@ -153,7 +153,7 @@ namespace HSMServer.Core.Model.Policies
                     var policy = new PolicyType();
                     
                     if (update.Compare(policy, update, out var message))
-                        CallJournal(new JournalRecordModel(_sensor.Id, DateTime.UtcNow, message, _sensor.Path, RecordType.Changes, initiator));
+                        CallJournal(new JournalRecordModel(_sensor.Id, DateTime.UtcNow, message, _sensor.Path, initiator));
 
                     policy.Update(update);
 

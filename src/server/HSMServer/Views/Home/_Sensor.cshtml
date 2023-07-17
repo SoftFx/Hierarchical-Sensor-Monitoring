@@ -215,8 +215,7 @@
                                             <tr>
                                                 <th>Date</th>
                                                 <th>Initiator</th>
-                                                <th>Type</th>
-                                                <th>Record</th>
+                                                <th>Text</th>
                                             </tr>
                                         </thead>
                                     </table>
@@ -259,8 +258,7 @@
                                             <tr>
                                                 <th>Date</th>
                                                 <th>Initiator</th>
-                                                <th>Type</th>
-                                                <th>Record</th>
+                                                <th>Text</th>
                                             </tr>
                                         </thead>
                                     </table>
@@ -299,10 +297,9 @@
         $('[id^="journal_table_"]').DataTable({
             bAutoWidth: false,
             columns: [
-                { "name": DataTableColumnsNames.Date , "width": "20%" },
-                { "name": DataTableColumnsNames.Initiator , "width": "20%" },
-                { "name": DataTableColumnsNames.Type , "width": "20%" },
-                { "name": DataTableColumnsNames.Record , "width": "40%" }
+                { "name": DataTableColumnsNames.Date , "width": "10%" },
+                { "name": DataTableColumnsNames.Initiator , "width": "10%" },
+                { "name": DataTableColumnsNames.Record , "width": "85%" }
             ],
             processing: true,
             serverSide: true,

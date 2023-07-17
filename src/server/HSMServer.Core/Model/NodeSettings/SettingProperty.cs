@@ -65,7 +65,7 @@ namespace HSMServer.Core.Model.NodeSettings
 
             if (!TrySetValue(update) && oldValue != CurValue.ToString())
             {
-                ChangesHandler?.Invoke(new JournalRecordModel(nodeUpdate.Id, DateTime.UtcNow, $"{Name}: {oldValue} -> {CurValue}", path, RecordType.Changes, nodeUpdate.Initiator));
+                ChangesHandler?.Invoke(new JournalRecordModel(nodeUpdate.Id, DateTime.UtcNow, $"{JournalConstants.CleanUpSettings}{Environment.NewLine}Old {Name}: {oldValue}{Environment.NewLine}New {Name}: {CurValue}", path, nodeUpdate.Initiator));
             }
             
             callbackFunction?.Invoke();

@@ -3,6 +3,7 @@ using HSMServer.Core.Model.Policies;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using HSMServer.Core.Journal;
 
 namespace HSMServer.Core.Cache.UpdateEntities
 {
@@ -77,7 +78,7 @@ namespace HSMServer.Core.Cache.UpdateEntities
                 return $"{string.Join(",", properties.Conditions.Select(x => $"{x.Property} {x.Operation} {x.Target.Value}"))} {properties.Icon} {properties.Template} {(properties.Status is SensorStatus.Ok ? string.Empty : properties.Status)}";
             }
 
-            message = $"Old alert: {oldValue}{Environment.NewLine}New alert: {newValue}";
+            message = $"{JournalConstants.Alerts}{Environment.NewLine}Old: {oldValue}{Environment.NewLine}New: {newValue}";
             
             return oldValue != newValue;
         }

@@ -7,7 +7,6 @@
     var journalDivId = $"journal_{nodeId}";
 }
 
-
 @if (!Model.HasChildren)
 {
     <div class="d-flex justify-content-center align-items-center noData-label">
@@ -37,14 +36,13 @@ else
             <div class="accordion" id="list-accordion_listSensors"></div>
         </div>
         <div class='tab-pane fade' id=@journalDivId role="tabpanel">
-            <table class="display w-100" id="journal_table_@nodeId">
+            <table class="display w-100 test" id="journal_table_@nodeId">
                 <thead>
                     <tr>
                         <th>Date</th>
-                        <th>Name</th> 
+                        <th>Path</th> 
                         <th>Initiator</th>
-                        <th>Type</th>
-                        <th>Record</th>
+                        <th>Text</th>
                     </tr>
                 </thead>
             </table>
@@ -58,10 +56,9 @@ else
             bAutoWidth: false,
             columns: [
                 { "name": DataTableColumnsNames.Date , "width": "10%" },
-                { "name": DataTableColumnsNames.Path , "width": "30%" },
-                { "name": DataTableColumnsNames.Initiator , "width": "10%" },
-                { "name": DataTableColumnsNames.Type , "width": "10%" },
-                { "name": DataTableColumnsNames.Record , "width": "40%" }
+                { "name": DataTableColumnsNames.Path , "width": "20%" },
+                { "name": DataTableColumnsNames.Initiator , "width": "5%" },
+                { "name": DataTableColumnsNames.Record , "width": "55%" }
             ],
             processing: true,
             serverSide: true,
