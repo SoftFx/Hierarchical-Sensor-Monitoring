@@ -55,7 +55,7 @@ namespace HSMServer.Core.Model.NodeSettings
                     var cur = GetValue(CurValue);
                     var updated = GetValue(newValue);
                     if (cur != updated )
-                        ChangesHandler?.Invoke(new JournalRecordModel(id, DateTime.UtcNow, $"{Name} -> {updated}", path, RecordType.Changes, initiator));
+                        ChangesHandler?.Invoke(new JournalRecordModel(id, DateTime.UtcNow, $"{Name}: {cur} -> {updated}", path, RecordType.Changes, initiator));
                 }
                
                 CurValue = newValue;

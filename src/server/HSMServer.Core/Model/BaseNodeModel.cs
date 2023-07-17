@@ -94,7 +94,7 @@ namespace HSMServer.Core.Model
         protected T UpdateProperty<T>(T newValue, T oldValue, string initiator, [CallerArgumentExpression("oldValue")] string propName = "")
         {
             if (newValue is not null && !newValue.Equals(oldValue))
-                ChangesHandler?.Invoke(new JournalRecordModel(Id, DateTime.UtcNow, $"{propName} -> {newValue}", PathOrName, RecordType.Changes, initiator));
+                ChangesHandler?.Invoke(new JournalRecordModel(Id, DateTime.UtcNow, $"{propName}: {oldValue} -> {newValue}", PathOrName, RecordType.Changes, initiator));
             
             return newValue ?? oldValue;
         }
