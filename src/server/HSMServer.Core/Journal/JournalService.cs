@@ -1,14 +1,13 @@
 using System;
 using System.Collections.Generic;
-using System.Text.Json;
-using HSMDatabase.AccessManager.DatabaseEntities;
+using System.Linq;
 using HSMServer.Core.DataLayer;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Requests;
 
 namespace HSMServer.Core.Journal;
 
-public class JournalService : IJournalService
+public sealed class JournalService : IJournalService
 {
     private readonly IDatabaseCore _database;
 
@@ -40,11 +39,8 @@ public class JournalService : IJournalService
         {
             var currPage = new List<JournalRecordModel>(1 << 4);
 
-            foreach (var (key, entity) in page)
-            {
-                currPage.Add(new JournalRecordModel(entity, key));
-            }
-                
+            currPage.AddRange(page.Select(x => new JournalRecordModel(x.Entity, x.Key)));
+
             yield return currPage;
         }
     }
