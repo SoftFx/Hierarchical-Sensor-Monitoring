@@ -429,17 +429,11 @@ namespace HSMDatabase.DatabaseWorkCore
             foreach (var db in _journalValuesDatabases)
                 if (db.IsInclude(fromTicks, toTicks))
                 {
-                    if (parentId != default)
-                        foreach (var (key, value) in db.GetValuesFrom(fromBytes, toBytes))
-                        {
-                            parentId.TryWriteBytes(key);
-                            db.Put(key, value);
-                        }
+                    PutRecordsToParent(fromBytes, toBytes, parentId, db);
 
                     db.Remove(fromBytes, toBytes);
                 }
         }
-
 
         public IAsyncEnumerable<List<(byte[] Key, JournalEntity Entity)>> GetJournalValuesPage(Guid sensorId, DateTime from, DateTime to, RecordType fromRecordType, RecordType toRecordType, int count)
         {
@@ -459,6 +453,17 @@ namespace HSMDatabase.DatabaseWorkCore
             }
 
             return GetJournalValuesPage(databases, count, getValues);
+        }
+
+
+        private void PutRecordsToParent(byte[] from, byte[] to, Guid id, IJournalValuesDatabase db)
+        {
+            if (id != default)
+                foreach (var (key, value) in db.GetValuesFrom(from, to))
+                {
+                    id.TryWriteBytes(key);
+                    db.Put(key, value);
+                }
         }
 
         private async IAsyncEnumerable<List<(byte[], JournalEntity)>> GetJournalValuesPage(List<IJournalValuesDatabase> databases, int count, GetJournalValuesFunc getValues)
