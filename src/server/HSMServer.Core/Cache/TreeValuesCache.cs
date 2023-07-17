@@ -92,12 +92,12 @@ namespace HSMServer.Core.Cache
             ChangeProductEvent?.Invoke(product, ActionType.Update);
         }
 
-        public void UpdateProduct(ProductUpdate update, string initiator = null)
+        public void UpdateProduct(ProductUpdate update)
         {
             if (!_tree.TryGetValue(update.Id, out var product))
                 return;
 
-            _database.UpdateProduct(product.Update(update, initiator ?? System).ToEntity());
+            _database.UpdateProduct(product.Update(update).ToEntity());
 
             NotifyAboutProductChange(product);
         }
@@ -235,12 +235,12 @@ namespace HSMServer.Core.Cache
         public List<AccessKeyModel> GetMasterKeys() => GetAccessKeys().Where(x => x.IsMaster).ToList();
 
 
-        public void UpdateSensor(SensorUpdate update, string initiator = System)
+        public void UpdateSensor(SensorUpdate update)
         {
             if (!_sensors.TryGetValue(update.Id, out var sensor))
                 return;
 
-            sensor.Update(update, initiator);
+            sensor.Update(update);
             _database.UpdateSensor(sensor.ToEntity());
 
             NotifyAboutChanges(sensor);
@@ -274,7 +274,8 @@ namespace HSMServer.Core.Cache
                     Id = sensorId,
                     State = endOfMuting is null ? SensorState.Available : SensorState.Muted,
                     EndOfMutingPeriod = endOfMuting,
-                }, initiator);
+                    Initiator = initiator
+                });
         }
 
         public void ClearNodeHistory(ClearHistoryRequest request)

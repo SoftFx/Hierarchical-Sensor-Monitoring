@@ -38,7 +38,7 @@ public class JournalController : BaseController
                     case ColumnName.Date:
                         data.Add(recordFromDb.TimeAsString);
                         break;
-                    case ColumnName.Name:
+                    case ColumnName.Path:
                         data.Add(recordFromDb.Name);
                         break;
                     case ColumnName.Type:

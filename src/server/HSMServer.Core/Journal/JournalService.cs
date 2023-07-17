@@ -22,11 +22,8 @@ public sealed class JournalService : IJournalService
 
     public void AddRecord(JournalRecordModel record)
     {
-        if (!string.IsNullOrEmpty(record.Value) && !string.IsNullOrEmpty(record.Initiator))
-        {
-            _database.AddJournalValue(record.Key, record.ToJournalEntity());
-            NewJournalEvent?.Invoke(record);
-        }
+        _database.AddJournalValue(record.Key, record.ToJournalEntity());
+        NewJournalEvent?.Invoke(record);
     }
 
     public void RemoveRecord(Guid id) => _database.RemoveJournalValue(id);

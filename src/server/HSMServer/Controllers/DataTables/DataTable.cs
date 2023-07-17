@@ -14,7 +14,7 @@ public record DataTableOrder(int Column, string Dir);
 public enum ColumnName
 {
     Date,
-    Name,
+    Path,
     Type,
     Record,
     Initiator

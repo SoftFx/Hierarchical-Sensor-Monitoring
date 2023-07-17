@@ -1,6 +1,7 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Core.Cache;
 using System;
+using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Journal;
 
 namespace HSMServer.Core.Model.NodeSettings
@@ -18,7 +19,7 @@ namespace HSMServer.Core.Model.NodeSettings
         public Action<ActionType, TimeIntervalModel> Uploaded;
 
 
-        internal abstract bool TrySetValue(TimeIntervalModel policy, Guid id = default, string path = "", string initiator = "");
+        internal abstract bool TrySetValue(TimeIntervalModel policy);
 
         internal abstract TimeIntervalEntity ToEntity();
     }
@@ -44,20 +45,12 @@ namespace HSMServer.Core.Model.NodeSettings
         public T Value => IsSet ? CurValue : ((SettingProperty<T>)ParentProperty)?.Value ?? _emptyValue;
 
 
-        internal override bool TrySetValue(TimeIntervalModel update, Guid id = default, string path = "", string initiator = "")
+        internal override bool TrySetValue(TimeIntervalModel update)
         {
             var newValue = (T)update;
 
             if (newValue is not null && CurValue != newValue)
             {
-                if (id != default)
-                {
-                    var cur = GetValue(CurValue);
-                    var updated = GetValue(newValue);
-                    if (cur != updated )
-                        ChangesHandler?.Invoke(new JournalRecordModel(id, DateTime.UtcNow, $"{Name}: {cur} -> {updated}", path, RecordType.Changes, initiator));
-                }
-               
                 CurValue = newValue;
 
                 Uploaded?.Invoke(ActionType.Update, newValue);
@@ -65,19 +58,17 @@ namespace HSMServer.Core.Model.NodeSettings
 
             return newValue is null;
         }
-        
-        private static string GetValue(T value)
+
+        internal void Update(TimeIntervalModel update, BaseNodeUpdate nodeUpdate, string path, Func<bool> callbackFunction = null)
         {
-            if (value is null)
-                return TimeInterval.FromParent.ToString();
+            var oldValue = CurValue.ToString();
 
-            if (value.IsFromParent) 
-                return TimeInterval.FromParent.ToString();
-
-            if (value.UseTicks)
-                return new TimeSpan(value.Ticks).ToString();
-
-            return value.Interval.ToString();
+            if (!TrySetValue(update) && oldValue != CurValue.ToString())
+            {
+                ChangesHandler?.Invoke(new JournalRecordModel(nodeUpdate.Id, DateTime.UtcNow, $"{Name}: {oldValue} -> {CurValue}", path, RecordType.Changes, nodeUpdate.Initiator));
+            }
+            
+            callbackFunction?.Invoke();
         }
 
         internal override TimeIntervalEntity ToEntity() => CurValue?.ToEntity();

@@ -12,7 +12,7 @@ public sealed class JournalRecordModel
     
     public string Initiator { get; set; }
     
-    public string Name { get; set; }
+    public string Path { get; set; }
 
 
     public JournalRecordModel(){}
@@ -21,18 +21,18 @@ public sealed class JournalRecordModel
     {
         Value = entity.Value;
         Initiator = entity.Initiator;
-        Name = entity.Name;
+        Path = entity.Name;
         Key = JournalKey.FromBytes(key);
     }
 
-    public JournalRecordModel(Guid id, DateTime date, string message, string name, RecordType type = RecordType.Changes, string initiator = "")
+    public JournalRecordModel(Guid id, DateTime date, string message, string path, RecordType type = RecordType.Changes, string initiator = "")
     {
         Value = message;
         Key = new JournalKey(id, date.Ticks, type);
         Initiator = initiator ?? TreeValuesCache.System;
-        Name = name;
+        Path = path;
     }
     
     
-    public JournalEntity ToJournalEntity() => new(Value, Name, Initiator);
+    public JournalEntity ToJournalEntity() => new(Value, Path, Initiator);
 }

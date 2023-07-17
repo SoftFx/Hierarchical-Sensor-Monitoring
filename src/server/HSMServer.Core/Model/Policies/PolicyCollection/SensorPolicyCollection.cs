@@ -134,7 +134,9 @@ namespace HSMServer.Core.Model.Policies
             {
                 if (updates.TryGetValue(id, out var update))
                 {
-                    CallJournal(new JournalRecordModel(_sensor.Id, DateTime.UtcNow, update.Compare(policy, update), _sensor.Path, RecordType.Changes, initiator));
+                    if (update.Compare(policy, update, out var message))
+                        CallJournal(new JournalRecordModel(_sensor.Id, DateTime.UtcNow, message, _sensor.Path, RecordType.Changes, initiator));
+
                     policy.Update(update);
                     Uploaded?.Invoke(ActionType.Update, policy);
                 }
@@ -149,8 +151,10 @@ namespace HSMServer.Core.Model.Policies
                 if (update.Id == Guid.Empty)
                 {
                     var policy = new PolicyType();
+                    
+                    if (update.Compare(policy, update, out var message))
+                        CallJournal(new JournalRecordModel(_sensor.Id, DateTime.UtcNow, message, _sensor.Path, RecordType.Changes, initiator));
 
-                    CallJournal(new JournalRecordModel(_sensor.Id, DateTime.UtcNow, update.Compare(policy, update), _sensor.Path, RecordType.Changes, initiator));
                     policy.Update(update);
 
                     AddPolicy(policy);

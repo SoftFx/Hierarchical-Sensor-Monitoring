@@ -89,7 +89,7 @@ public sealed class SelectedJournalViewModel
                 ColumnName.Initiator => ordered.CreateOrderedEnumerable(x => x.Initiator, null, descending),
                 ColumnName.Type => ordered.CreateOrderedEnumerable(x => x.Key.Type, null, descending),
                 ColumnName.Record => ordered.CreateOrderedEnumerable(x => x.Value, null, descending),
-                ColumnName.Name => ordered.CreateOrderedEnumerable(x => x.Name, null, descending),
+                ColumnName.Path => ordered.CreateOrderedEnumerable(x => x.Path, null, descending),
                 _ => ordered
             };
         }

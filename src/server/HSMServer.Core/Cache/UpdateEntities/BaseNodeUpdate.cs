@@ -1,6 +1,5 @@
 ﻿using HSMServer.Core.Model;
 using System;
-using System.Text;
 
 namespace HSMServer.Core.Cache.UpdateEntities
 {
@@ -18,5 +17,7 @@ namespace HSMServer.Core.Cache.UpdateEntities
         public TimeIntervalModel SelfDestroy { get; init; }
 
         public string Description { get; init; }
+        
+        public string Initiator { get; init; }
     }
 }

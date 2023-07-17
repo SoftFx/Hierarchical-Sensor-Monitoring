@@ -29,7 +29,7 @@ namespace HSMServer.Core.Model.NodeSettings
         {
             foreach (var (name, setting) in entity)
                 if (_properties.TryGetValue(name, out var property))
-                    property.TrySetValue(new TimeIntervalModel(setting), Guid.Empty);
+                    property.TrySetValue(new TimeIntervalModel(setting));
         }
 
         internal void SetParentSettings(SettingsCollection parentCollection)

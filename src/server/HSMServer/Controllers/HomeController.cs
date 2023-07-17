@@ -304,10 +304,11 @@ namespace HSMServer.Controllers
                         Id = sensor.Id,
                         TTL = model.ExpectedUpdateInterval?.ToModel(),
                         RestoreInterval = model.SensorRestorePolicy?.ToModel(),
+                        Initiator = CurrentUser.Name
                     };
 
                     toastViewModel.AddItem(sensor);
-                    _treeValuesCache.UpdateSensor(update, CurrentUser.Name);
+                    _treeValuesCache.UpdateSensor(update);
                 }
             }
 
@@ -379,9 +380,10 @@ namespace HSMServer.Controllers
                 {
                     Id = sensorId,
                     Integration = integration,
+                    Initiator = CurrentUser.Name
                 };
 
-                _treeValuesCache.UpdateSensor(update, CurrentUser.Name);
+                _treeValuesCache.UpdateSensor(update);
             }
         }
 
@@ -567,9 +569,10 @@ namespace HSMServer.Controllers
                 KeepHistory = newModel.SavedHistoryPeriod.ToModel(),
                 SelfDestroy = newModel.SelfDestroyPeriod.ToModel(),
                 DataPolicies = newModel.DataAlerts?[sensor.Type].Select(a => a.ToUpdate()).ToList() ?? new(),
+                Initiator = CurrentUser.Name
             };
 
-            _treeValuesCache.UpdateSensor(update, CurrentUser.Name);
+            _treeValuesCache.UpdateSensor(update);
 
             return PartialView("_MetaInfo", new SensorInfoViewModel(sensor));
         }
@@ -698,11 +701,12 @@ namespace HSMServer.Controllers
             var update = new ProductUpdate
             {
                 Id = product.Id,
-                TTL = newModel.ExpectedUpdateInterval.ToModel(),
+                //TTL = newModel.ExpectedUpdateInterval.ToModel(),
                 //RestoreInterval = newModel.SensorRestorePolicy.ToModel((product.Parent as FolderModel)?.SensorRestorePolicy),
                 KeepHistory = newModel.SavedHistoryPeriod.ToModel(),
                 SelfDestroy = newModel.SelfDestroyPeriod.ToModel(),
-                Description = newModel.Description ?? string.Empty
+                Description = newModel.Description ?? string.Empty,
+                Initiator = CurrentUser.Name
             };
 
             _treeValuesCache.UpdateProduct(update);

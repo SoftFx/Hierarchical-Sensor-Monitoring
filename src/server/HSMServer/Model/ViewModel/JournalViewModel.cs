@@ -24,6 +24,6 @@ public class JournalViewModel
         TimeAsString = new DateTime(model.Key.Time).ToDefaultFormat();
         Value = model.Value;
         Initiator = model.Initiator;
-        Name = model.Name;
+        Name = model.Path;
     }
 }

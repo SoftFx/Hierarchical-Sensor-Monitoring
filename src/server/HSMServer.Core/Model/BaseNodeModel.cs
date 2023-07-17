@@ -39,7 +39,7 @@ namespace HSMServer.Core.Model
 
         public string Path => Parent is null ? string.Empty : $"{Parent.Path}/{DisplayName}";
 
-        public string PathOrName => Parent is null ? $"{DisplayName}" : $"{Parent.Path}/{DisplayName}";
+        public string PathWithName => Parent is null ? $"{DisplayName}" : $"{Parent.Path}/{DisplayName}";
         
 
         protected BaseNodeModel()
@@ -80,21 +80,19 @@ namespace HSMServer.Core.Model
             return this;
         }
 
-        protected internal void Update(BaseNodeUpdate update, string initiator = null)
+        protected internal void Update(BaseNodeUpdate update)
         {
-            Description = UpdateProperty(update.Description, Description, initiator);
+            Description = UpdateProperty(update.Description ?? Description, Description , update.Initiator);
 
-            Settings.KeepHistory.TrySetValue(update.KeepHistory, Id, PathOrName, initiator);
-            Settings.SelfDestroy.TrySetValue(update.SelfDestroy, Id, PathOrName, initiator);
-
-            if (Settings.TTL.TrySetValue(update.TTL, Id, PathOrName, initiator))
-                CheckTimeout();
+            Settings.KeepHistory.Update(update.KeepHistory, update, PathWithName);
+            Settings.SelfDestroy.Update(update.SelfDestroy, update, PathWithName);
+            Settings.TTL.Update(update.TTL, update, PathWithName, CheckTimeout);
         }
 
         protected T UpdateProperty<T>(T newValue, T oldValue, string initiator, [CallerArgumentExpression("oldValue")] string propName = "")
         {
             if (newValue is not null && !newValue.Equals(oldValue))
-                ChangesHandler?.Invoke(new JournalRecordModel(Id, DateTime.UtcNow, $"{propName}: {oldValue} -> {newValue}", PathOrName, RecordType.Changes, initiator));
+                ChangesHandler?.Invoke(new JournalRecordModel(Id, DateTime.UtcNow, $"{propName}: {oldValue} -> {newValue}", PathWithName, RecordType.Changes, initiator));
             
             return newValue ?? oldValue;
         }

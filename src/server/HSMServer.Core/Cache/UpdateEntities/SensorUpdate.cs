@@ -67,7 +67,7 @@ namespace HSMServer.Core.Cache.UpdateEntities
             Icon = icon;
         }
 
-        public string Compare(Policy entity, DataPolicyUpdate update)
+        public bool Compare(Policy entity, DataPolicyUpdate update, out string message)
         {
             var oldValue = GetValue(entity);
             var newValue = GetValue(update);
@@ -77,7 +77,9 @@ namespace HSMServer.Core.Cache.UpdateEntities
                 return $"{string.Join(",", properties.Conditions.Select(x => $"{x.Property} {x.Operation} {x.Target.Value}"))} {properties.Icon} {properties.Template} {(properties.Status is SensorStatus.Ok ? string.Empty : properties.Status)}";
             }
 
-            return oldValue != newValue ? $"Old alert: {oldValue}{Environment.NewLine}New alert: {newValue}" : string.Empty;
+            message = $"Old alert: {oldValue}{Environment.NewLine}New alert: {newValue}";
+            
+            return oldValue != newValue;
         }
     }
 }

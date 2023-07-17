@@ -84,19 +84,19 @@ namespace HSMServer.Core.Model
         internal abstract List<BaseValue> ConvertValues(List<byte[]> valuesBytes);
 
 
-        internal void Update(SensorUpdate update, string initiator = null)
+        internal void Update(SensorUpdate update)
         {
-            base.Update(update, initiator);
+            base.Update(update);
 
-            State = UpdateProperty(update.State ?? State, State, initiator);
-            Integration = UpdateProperty(update.Integration ?? Integration, Integration, initiator);
-            EndOfMuting = UpdateProperty(update.EndOfMutingPeriod, EndOfMuting, initiator, "End of muting");
+            State = UpdateProperty(update.State ?? State, State, update.Initiator);
+            Integration = UpdateProperty(update.Integration ?? Integration, Integration, update.Initiator);
+            EndOfMuting = UpdateProperty(update.EndOfMutingPeriod, EndOfMuting, update.Initiator, "End of muting");
 
             if (State == SensorState.Available)
                 EndOfMuting = null;
 
             if (update.DataPolicies != null)
-                Policies.Update(update.DataPolicies, initiator);
+                Policies.Update(update.DataPolicies, update.Initiator);
         }
 
         internal void ResetSensor()
