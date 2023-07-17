@@ -12,14 +12,14 @@ public sealed record JournalEntity
 {
     public string Value { get; init; }
 
-    public string Name { get; init; }
+    public string Path { get; init; }
 
     public string Initiator { get; init; }
     
-    public JournalEntity(string value, string name, string initiator)
+    public JournalEntity(string value, string path, string initiator)
     {
         Value = value;
-        Name = name;
+        Path = path;
         Initiator = initiator;
     }
 }

@@ -18,7 +18,7 @@ public sealed class JournalRecordModel
     {
         Value = entity.Value;
         Initiator = entity.Initiator;
-        Path = entity.Name;
+        Path = entity.Path;
         Key = JournalKey.FromBytes(key);
     }
 
