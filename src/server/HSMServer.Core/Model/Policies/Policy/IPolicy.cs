@@ -6,11 +6,11 @@ public interface IPolicy<T> where T : IPolicyCondition
 {
     public List<T> Conditions { get; }
     
-    public TimeIntervalModel Sensitivity { get; protected set; }
+    public TimeIntervalModel Sensitivity { get; }
     
-    public SensorStatus Status { get; protected set; }
+    public SensorStatus Status { get; }
 
-    public string Template { get; protected set; }
+    public string Template { get; }
 
-    public string Icon { get; protected set; }
+    public string Icon { get; }
 }

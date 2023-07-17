@@ -20,13 +20,13 @@ namespace HSMServer.Core.Model.Policies
 
         public List<PolicyCondition> Conditions { get; } = new();
 
-        public virtual TimeIntervalModel Sensitivity { get; set; }
+        public virtual TimeIntervalModel Sensitivity { get; protected set; }
 
-        public virtual SensorStatus Status { get; set; }
+        public virtual SensorStatus Status { get; protected set; }
 
-        public virtual string Template { get; set; }
+        public virtual string Template { get; protected set; }
 
-        public virtual string Icon { get; set; }
+        public virtual string Icon { get; protected set; }
 
 
         public Policy()

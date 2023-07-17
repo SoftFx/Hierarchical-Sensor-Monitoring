@@ -10,9 +10,9 @@ namespace HSMServer.Core.Model.Policies
         protected internal override string AlertComment { get; protected set; } = $"Sensor value type is not {typeof(T).Name}";
 
 
-        public override SensorStatus Status { get; set; } = PolicyStatus;
+        public override SensorStatus Status { get; protected set; } = PolicyStatus;
 
-        public override string Icon { get; set; } = PolicyStatus.ToIcon();
+        public override string Icon { get; protected set; } = PolicyStatus.ToIcon();
 
 
         internal CorrectTypePolicy(Guid sensorId) : base(sensorId)
