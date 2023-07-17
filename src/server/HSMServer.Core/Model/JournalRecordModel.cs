@@ -29,7 +29,7 @@ public sealed class JournalRecordModel
     {
         Value = message;
         Key = new JournalKey(id, date.Ticks, type);
-        Initiator = initiator ?? CacheConstants.System;
+        Initiator = initiator ?? TreeValuesCache.System;
         Name = name;
     }
     
