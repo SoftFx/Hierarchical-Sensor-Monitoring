@@ -296,6 +296,8 @@
         
         $('[id^="journal_table_"]').DataTable({
             bAutoWidth: false,
+            pageLength: 50,
+            lengthMenu: [25, 50, 100, 300 ],
             columns: [
                 { "name": DataTableColumnsNames.Date , "width": "10%" },
                 { "name": DataTableColumnsNames.Initiator , "width": "10%" },
