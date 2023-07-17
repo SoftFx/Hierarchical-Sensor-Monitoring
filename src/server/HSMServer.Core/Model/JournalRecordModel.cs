@@ -1,6 +1,5 @@
 using System;
 using HSMDatabase.AccessManager.DatabaseEntities;
-using HSMServer.Core.Cache;
 
 namespace HSMServer.Core.Model;
 
@@ -14,8 +13,6 @@ public sealed class JournalRecordModel
     
     public string Path { get; set; }
 
-
-    public JournalRecordModel(){}
     
     public JournalRecordModel(JournalEntity entity, byte[] key)
     {

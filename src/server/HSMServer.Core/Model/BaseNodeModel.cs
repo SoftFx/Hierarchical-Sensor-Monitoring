@@ -39,7 +39,7 @@ namespace HSMServer.Core.Model
 
         public string Path => Parent is null ? string.Empty : $"{Parent.Path}/{DisplayName}";
 
-        public string PathWithName => Parent is null ? $"{DisplayName}" : $"{Parent.Path}/{DisplayName}";
+        public string PathWithName => Parent is null ? $"{DisplayName}" : $"{Parent.PathWithName}/{DisplayName}";
         
 
         protected BaseNodeModel()
