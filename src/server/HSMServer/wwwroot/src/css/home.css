@@ -329,19 +329,20 @@ img .tree-png-icon {
 
 .tree-alert-icon {
     position: relative;
-    margin: 0px 1px;
+    margin: 0px 1px 0px 0px;
     font-size: smaller;
     top: -1px;
 }
 
 .tree-alert-icon span {
     position: absolute;
-    padding: 0px;
+    padding: 0px 2px;
     font-size: 8px;
-    top: 11px;
-    left: 14px;
-    display: block;
-    color: black;
+    top: 9px;
+    left: 8px;
+    color: white;
+    background-color: grey;
+    border-radius: 4px;
 }
 
 .meta-info-label {

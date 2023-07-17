@@ -25,7 +25,6 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
-using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Core.Journal;
 using TimeInterval = HSMServer.Model.TimeInterval;
 
@@ -221,14 +220,13 @@ namespace HSMServer.Controllers
         [HttpPost]
         public async Task<IActionResult> EditAlerts(EditAlertsViewModel model)
         {
-            if (ModelState[nameof(model.SensorRestorePolicy)]?.Errors.Count > 0 || ModelState[nameof(model.ExpectedUpdateInterval)]?.Errors.Count > 0)
+            if (ModelState[nameof(model.ExpectedUpdateInterval)]?.Errors.Count > 0)
                 return BadRequest(ModelState);
 
             model.Upload();
 
             var toastViewModel = new MultiActionToastViewModel();
             var isExpectedFromParent = model.ExpectedUpdateInterval?.TimeInterval is TimeInterval.FromParent;
-            var isRestoreFromParent = model.SensorRestorePolicy?.TimeInterval is TimeInterval.FromParent;
 
             foreach (var id in model.SelectedNodes)
             {
@@ -246,13 +244,9 @@ namespace HSMServer.Controllers
                         TTL = !isExpectedFromParent ? model.ExpectedUpdateInterval : null
                     };
 
-                    if (isRestoreFromParent)
-                        toastViewModel.AddCantChangeIntervalError(folder.Name, "Folder", "Sensitivity", TimeInterval.FromParent);
-
                     if (isExpectedFromParent)
                         toastViewModel.AddCantChangeIntervalError(folder.Name, "Folder", "Time to live", TimeInterval.FromParent);
-
-                    if (!isExpectedFromParent || !isRestoreFromParent)
+                    else
                     {
                         toastViewModel.AddItem(folder);
                         await _folderManager.TryUpdate(update);
@@ -267,7 +261,6 @@ namespace HSMServer.Controllers
                     }
 
                     var hasParent = product.Parent is not null || product.FolderId is not null;
-                    var restoreUpdate = hasParent || !isRestoreFromParent;
                     var expectedUpdate = hasParent || !isExpectedFromParent;
 
                     var isProduct = product.RootProduct?.Id == product.Id;
@@ -275,17 +268,12 @@ namespace HSMServer.Controllers
                     var update = new ProductUpdate
                     {
                         Id = product.Id,
-                        //RestoreInterval = restoreUpdate ? model.SensorRestorePolicy?.ToModel((product.Parent as FolderModel)?.SensorRestorePolicy) : null,
                         TTL = expectedUpdate ? model.ExpectedUpdateInterval?.ToModel() : null
                     };
 
-                    if (!restoreUpdate)
-                        toastViewModel.AddCantChangeIntervalError(product.Name, !isProduct ? "Node" : "Product", "Sensitivity", TimeInterval.FromParent);
-
                     if (!expectedUpdate)
                         toastViewModel.AddCantChangeIntervalError(product.Name, !isProduct ? "Node" : "Product", "Time to live", TimeInterval.FromParent);
-
-                    if (restoreUpdate || expectedUpdate)
+                    else
                     {
                         toastViewModel.AddItem(product);
                         _treeValuesCache.UpdateProduct(update);
@@ -303,7 +291,6 @@ namespace HSMServer.Controllers
                     {
                         Id = sensor.Id,
                         TTL = model.ExpectedUpdateInterval?.ToModel(),
-                        RestoreInterval = model.SensorRestorePolicy?.ToModel(),
                         Initiator = CurrentUser.Name
                     };
 
@@ -565,10 +552,9 @@ namespace HSMServer.Controllers
                 Id = sensor.Id,
                 Description = newModel.Description ?? string.Empty,
                 //TTL = newModel.ExpectedUpdateInterval.ToModel(),
-                //RestoreInterval = newModel.SensorRestorePolicy.ToModel(),
                 KeepHistory = newModel.SavedHistoryPeriod.ToModel(),
                 SelfDestroy = newModel.SelfDestroyPeriod.ToModel(),
-                DataPolicies = newModel.DataAlerts?[sensor.Type].Select(a => a.ToUpdate()).ToList() ?? new(),
+                Policies = newModel.DataAlerts?[sensor.Type].Select(a => a.ToUpdate()).ToList() ?? new(),
                 Initiator = CurrentUser.Name
             };
 
@@ -702,7 +688,6 @@ namespace HSMServer.Controllers
             {
                 Id = product.Id,
                 //TTL = newModel.ExpectedUpdateInterval.ToModel(),
-                //RestoreInterval = newModel.SensorRestorePolicy.ToModel((product.Parent as FolderModel)?.SensorRestorePolicy),
                 KeepHistory = newModel.SavedHistoryPeriod.ToModel(),
                 SelfDestroy = newModel.SelfDestroyPeriod.ToModel(),
                 Description = newModel.Description ?? string.Empty,
@@ -733,7 +718,6 @@ namespace HSMServer.Controllers
                 Id = SensorPathHelper.DecodeGuid(newModel.EncodedId),
                 Description = newModel.Description ?? string.Empty,
                 TTL = newModel.ExpectedUpdateInterval,
-                //RestoreInterval = newModel.SensorRestorePolicy.ResaveCustomTicks(newModel.SensorRestorePolicy),
                 KeepHistory = newModel.SavedHistoryPeriod,
                 SelfDestroy = newModel.SelfDestroyPeriod,
             };

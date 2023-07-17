@@ -12,13 +12,14 @@ namespace HSMServer.Core.Cache.UpdateEntities
     /// </summary>
     public record SensorUpdate : BaseNodeUpdate
     {
-        public SensorState? State { get; init; }
+        public List<PolicyUpdate> Policies { get; init; }
 
-        public Integration? Integration { get; init; }
 
         public DateTime? EndOfMutingPeriod { get; init; }
 
-        public List<DataPolicyUpdate> DataPolicies { get; init; }
+        public Integration? Integration { get; init; }
+
+        public SensorState? State { get; init; }
     }
 
 
@@ -29,7 +30,7 @@ namespace HSMServer.Core.Cache.UpdateEntities
         public TargetValue Target { get; set; }
         
         public string Property { get; set; }
-        
+
         public PolicyCombination Combination { get; set; }
         
 
@@ -43,7 +44,7 @@ namespace HSMServer.Core.Cache.UpdateEntities
     }
 
 
-    public sealed class DataPolicyUpdate : IUpdateComparer<Policy, DataPolicyUpdate>, IPolicy<PolicyConditionUpdate>
+    public sealed class PolicyUpdate : IUpdateComparer<Policy, PolicyUpdate>, IPolicy<PolicyConditionUpdate>
     {
         public Guid Id { get; init; }
 
@@ -58,7 +59,7 @@ namespace HSMServer.Core.Cache.UpdateEntities
         public string Icon { get; set; }
 
 
-        public DataPolicyUpdate(Guid id, List<PolicyConditionUpdate> conditions, TimeIntervalModel sensitivity, SensorStatus status, string template, string icon)
+        public PolicyUpdate(Guid id, List<PolicyConditionUpdate> conditions, TimeIntervalModel sensitivity, SensorStatus status, string template, string icon)
         {
             Id = id;
             Conditions = conditions;
@@ -68,7 +69,7 @@ namespace HSMServer.Core.Cache.UpdateEntities
             Icon = icon;
         }
 
-        public bool Compare(Policy entity, DataPolicyUpdate update, out string message)
+        public bool Compare(Policy entity, PolicyUpdate update, out string message)
         {
             var oldValue = GetValue(entity);
             var newValue = GetValue(update);

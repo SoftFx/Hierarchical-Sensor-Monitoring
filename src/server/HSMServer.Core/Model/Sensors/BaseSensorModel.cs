@@ -95,8 +95,8 @@ namespace HSMServer.Core.Model
             if (State == SensorState.Available)
                 EndOfMuting = null;
 
-            if (update.DataPolicies != null)
-                Policies.Update(update.DataPolicies, update.Initiator);
+            if (update.Policies != null)
+                Policies.Update(update.Policies, update.Initiator);
         }
 
         internal void ResetSensor()

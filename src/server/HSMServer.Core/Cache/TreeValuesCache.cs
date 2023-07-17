@@ -537,15 +537,20 @@ namespace HSMServer.Core.Cache
 
             if (resavedPolicies.Count > 0)
                 foreach (var sensor in sensors)
+                {
                     if (_sensors.TryGetValue(Guid.Parse(sensor.Id), out var model))
                     {
                         int oldCnt = model.Policies.Count();
 
                         model.Policies.ApplyPolicies(sensor.Policies, resavedPolicies);
 
+                        if (sensorUpdates.ContainsKey(model.Id))
+                            model.Policies.AddStatus();
+
                         if (model.Policies.Count() > oldCnt)
                             _database.UpdateSensor(model.ToEntity());
                     }
+                }
 
             _logger.Info($"Sensor update finished");
 

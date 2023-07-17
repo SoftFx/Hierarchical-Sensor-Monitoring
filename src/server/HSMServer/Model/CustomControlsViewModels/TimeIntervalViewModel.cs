@@ -68,7 +68,7 @@ namespace HSMServer.Model
             set
             {
                 _customString = value;
-                _customSpan = TimeSpan.Parse(value);
+                _customSpan = value is null ? TimeSpan.Zero : TimeSpan.Parse(value);
             }
         }
 

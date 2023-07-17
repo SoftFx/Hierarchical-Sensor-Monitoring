@@ -11,18 +11,21 @@ namespace HSMDatabase.Extensions
         {
             var size = 0L;
 
-            foreach (var file in directory.GetFiles())
+            if (directory.Exists)
             {
-                try
+                foreach (var file in directory.GetFiles())
                 {
-                    size += file.Length;
+                    try
+                    {
+                        size += file.Length;
+                    }
+                    catch { }
                 }
-                catch { }
-            }
 
-            foreach (var dir in directory.GetDirectories())
-            {
-                size += dir.GetSize();
+                foreach (var dir in directory.GetDirectories())
+                {
+                    size += dir.GetSize();
+                }
             }
 
             return size;

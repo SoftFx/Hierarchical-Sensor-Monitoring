@@ -23,9 +23,13 @@ namespace HSMServer.Core.Model.Policies
 
         internal Action<ActionType, Policy> Uploaded;
 
-        internal abstract void Update(List<DataPolicyUpdate> updates, string initiator = null);
+
+        internal abstract void Update(List<PolicyUpdate> updates, string initiator = null);
 
         internal abstract void Attach(BaseSensorModel sensor);
+
+        [Obsolete("remove after policy migration")]
+        internal abstract void AddStatus();
 
 
         internal void Reset()
@@ -33,7 +37,6 @@ namespace HSMServer.Core.Model.Policies
             SensorResult = SensorResult.Ok;
             PolicyResult = PolicyResult.Ok;
         }
-
     }
 
 
@@ -99,9 +102,11 @@ namespace HSMServer.Core.Model.Policies
     {
         private readonly ConcurrentDictionary<Guid, PolicyType> _storage = new();
 
+
         internal override IEnumerable<Guid> Ids => _storage.Keys;
 
         internal IEnumerable<Policy<ValueType>> Policies => _sensor.UseParentPolicies ? _sensor.Parent.GetPolicies<PolicyType>(_sensor.Type) : _storage.Values;
+
 
         protected override bool CalculateStorageResult(ValueType value, bool updateStatus = true)
         {
@@ -126,7 +131,7 @@ namespace HSMServer.Core.Model.Policies
                 _storage.TryAdd(policy.Id, typedPolicy);
         }
 
-        internal override void Update(List<DataPolicyUpdate> updatesList, string initiator = null)
+        internal override void Update(List<PolicyUpdate> updatesList, string initiator = null)
         {
             var updates = updatesList.Where(u => u.Id != Guid.Empty).ToDictionary(u => u.Id);
 
@@ -142,7 +147,9 @@ namespace HSMServer.Core.Model.Policies
                 }
                 else if (_storage.TryRemove(id, out var oldPolicy))
                 {
-                    CalculateStorageResult((ValueType)_sensor.LastValue);
+                    if (_sensor.LastValue is ValueType lastValue && lastValue is not null)
+                        CalculateStorageResult(lastValue);
+
                     Uploaded?.Invoke(ActionType.Delete, oldPolicy);
                 }
             }
@@ -175,6 +182,31 @@ namespace HSMServer.Core.Model.Policies
 
                     _storage.TryAdd(policy.Id, policy);
                 }
+        }
+
+        internal override void AddStatus()
+        {
+            var policy = new PolicyType();
+
+            var statusUpdate = new PolicyUpdate(
+                           Guid.NewGuid(),
+                           new()
+                           {
+                                new PolicyConditionUpdate(
+                                    PolicyOperation.IsChanged,
+                                    new TargetValue(TargetType.LastValue, _sensor.Id.ToString()),
+                                    "Status"),
+
+                           },
+                           null,
+                           SensorStatus.Ok,
+                           $"$status [$product]$path = $comment",
+                           null);
+
+            policy.Update(statusUpdate);
+
+            AddPolicy(policy);
+            Uploaded?.Invoke(ActionType.Add, policy);
         }
     }
 }
