@@ -52,6 +52,18 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
                 _logger.Error(e, $"Failed to write data for {JournalKey.FromBytes(key).Id}");
             }
         }
+        
+        public void Put(byte[] key, byte[] value)
+        {
+            try
+            {
+                _openedDb.Put(key, value);
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, $"Failed to write data for {JournalKey.FromBytes(key).Id}");
+            }
+        }
 
         public void Remove(byte[] from, byte[] to)
         {

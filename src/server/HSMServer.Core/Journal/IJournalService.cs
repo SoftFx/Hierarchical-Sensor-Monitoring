@@ -12,7 +12,7 @@ public interface IJournalService
 
     void AddRecord(JournalRecordModel record);
 
-    void RemoveRecord(Guid id);
+    void RemoveRecords(Guid id, Guid parentId = default);
 
     IAsyncEnumerable<List<JournalRecordModel>> GetPages(JournalHistoryRequestModel request);
 }

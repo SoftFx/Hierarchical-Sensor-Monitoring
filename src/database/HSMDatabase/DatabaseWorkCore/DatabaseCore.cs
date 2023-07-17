@@ -418,24 +418,28 @@ namespace HSMDatabase.DatabaseWorkCore
             dbs.Put(journalKey.GetBytes(), value);
         }
 
-        public void RemoveJournalValue(Guid id)
+        public void RemoveJournalValues(Guid id, Guid parentId)
         {
             var fromTicks = DateTime.MinValue.Ticks;
             var toTicks = DateTime.MaxValue.Ticks;
 
-            RemoveJournal(id, fromTicks, toTicks, RecordType.Changes);
-            RemoveJournal(id, fromTicks, toTicks, RecordType.Actions);
-        }
-
-        private void RemoveJournal(Guid id, long fromTicks, long toTicks, RecordType type)
-        {
-            var fromBytes = new JournalKey(id, fromTicks, type).GetBytes();
-            var toBytes = new JournalKey(id, toTicks, type).GetBytes();
+            var fromBytes = new JournalKey(id, fromTicks, RecordType.Actions).GetBytes();
+            var toBytes = new JournalKey(id, toTicks, RecordType.Changes).GetBytes();
 
             foreach (var db in _journalValuesDatabases)
                 if (db.IsInclude(fromTicks, toTicks))
+                {
+                    if (parentId != default)
+                        foreach (var (key, value) in db.GetValuesFrom(fromBytes, toBytes))
+                        {
+                            parentId.TryWriteBytes(key);
+                            db.Put(key, value);
+                        }
+
                     db.Remove(fromBytes, toBytes);
+                }
         }
+
 
         public IAsyncEnumerable<List<(byte[] Key, JournalEntity Entity)>> GetJournalValuesPage(Guid sensorId, DateTime from, DateTime to, RecordType fromRecordType, RecordType toRecordType, int count)
         {

@@ -207,7 +207,7 @@ namespace HSMServer.Controllers
                         continue;
                     }
 
-                    _treeValuesCache.RemoveSensor(sensor.Id);
+                    _treeValuesCache.RemoveSensor(sensor.Id, CurrentUser.Name);
                     model.AddItem(sensor);
                 }
             }

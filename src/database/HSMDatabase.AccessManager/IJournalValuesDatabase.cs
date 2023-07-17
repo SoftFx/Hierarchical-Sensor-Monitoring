@@ -19,6 +19,8 @@ public interface IJournalValuesDatabase : IDisposable
 
     void Put(byte[] key, JournalEntity value);
 
+    void Put(byte[] key, byte[] value);
+
     void Remove(byte[] from, byte[] to);
 
     byte[] Get(byte[] key, byte[] sensorId);

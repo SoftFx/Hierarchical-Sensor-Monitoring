@@ -26,7 +26,7 @@ public sealed class JournalService : IJournalService
         NewJournalEvent?.Invoke(record);
     }
 
-    public void RemoveRecord(Guid id) => _database.RemoveJournalValue(id);
+    public void RemoveRecords(Guid id, Guid parentId) => _database.RemoveJournalValues(id, parentId);
     
     public async IAsyncEnumerable<List<JournalRecordModel>> GetPages(JournalHistoryRequestModel request)
     {

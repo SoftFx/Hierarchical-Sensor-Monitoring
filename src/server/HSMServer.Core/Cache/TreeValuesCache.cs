@@ -246,18 +246,25 @@ namespace HSMServer.Core.Cache
             NotifyAboutChanges(sensor);
         }
 
-        public void RemoveSensor(Guid sensorId)
+        public void RemoveSensor(Guid sensorId, string initiator = null)
         {
             if (!_sensors.TryRemove(sensorId, out var sensor))
                 return;
 
             if (_tree.TryGetValue(sensor.Parent.Id, out var parent))
+            {
                 parent.Sensors.TryRemove(sensorId, out _);
+                _journalService.RemoveRecords(sensorId, parent.Id);
+                
+                if (initiator is not null)
+                    _journalService.AddRecord(new JournalRecordModel(parent.Id, "Removed", sensor.PathWithName, initiator));
+            }
+            else
+                _journalService.RemoveRecords(sensorId);
 
             RemoveSensorPolicies(sensor);
 
             _database.RemoveSensorWithMetadata(sensorId.ToString());
-            _journalService.RemoveRecord(sensorId);
             _snapshot.Sensors.Remove(sensorId);
 
             ChangeSensorEvent?.Invoke(sensor, ActionType.Delete);
@@ -318,7 +325,7 @@ namespace HSMServer.Core.Cache
                 sensor.ResetSensor();
 
             _database.ClearSensorValues(sensor.Id.ToString(), from, request.To);
-            _journalService.AddRecord(new JournalRecordModel(request.Id, DateTime.UtcNow, "History clearing", sensor.Path, request.Caller));
+            _journalService.AddRecord(new JournalRecordModel(request.Id, "History clearing", sensor.Path, request.Caller));
             _snapshot.Sensors[request.Id].History.From = request.To;
 
             ChangeSensorEvent?.Invoke(sensor, ActionType.Update);

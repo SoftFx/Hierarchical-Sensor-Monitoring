@@ -78,7 +78,7 @@ namespace HSMDatabase.LevelDB.Tests
                 Assert.Single(databaseSingleChangesData);
             }
             
-            _databaseCore.RemoveJournalValue(guid);
+            _databaseCore.RemoveJournalValues(guid, default);
             await Task.Delay(100);
         }
 

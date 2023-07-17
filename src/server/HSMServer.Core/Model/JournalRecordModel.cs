@@ -25,11 +25,11 @@ public sealed class JournalRecordModel
         Key = JournalKey.FromBytes(key);
     }
 
-    public JournalRecordModel(Guid id, DateTime date, string message, string path, string initiator = "")
+    public JournalRecordModel(Guid id, string message, string path, string initiator)
     {
         Value = message;
-        Key = new JournalKey(id, date.Ticks);
-        Initiator = initiator ?? TreeValuesCache.System;
+        Key = new JournalKey(id, DateTime.UtcNow.Ticks);
+        Initiator = initiator;
         Path = path;
     }
     
