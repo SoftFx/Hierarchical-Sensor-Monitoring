@@ -1,5 +1,5 @@
-using System.Text.Json;
 using HSMDatabase.AccessManager.DatabaseEntities;
+using HSMServer.Core.Cache;
 using HSMServer.Core.DataLayer;
 using HSMServer.Core.Tests.DatabaseTests;
 using HSMServer.Core.Tests.Infrastructure;
@@ -90,8 +90,8 @@ namespace HSMDatabase.LevelDB.Tests
 
         private void GenerateBorderValues(Guid guid, RecordType first = RecordType.Changes, RecordType second = RecordType.Changes, string firstValue = "", string secondValue = "")
         {
-            var zeroValue = new JournalEntity(firstValue, "");
-            var maxValue = new JournalEntity(secondValue, "");
+            var zeroValue = new JournalEntity(firstValue, string.Empty, TreeValuesCache.System);
+            var maxValue = new JournalEntity(secondValue, string.Empty, TreeValuesCache.System);
             var keyZero = new JournalKey(guid, DateTime.MinValue.Ticks, first);
             var keyMax = new JournalKey(guid, DateTime.UtcNow.Ticks, second);
             
@@ -109,7 +109,7 @@ namespace HSMDatabase.LevelDB.Tests
             for (int i = 0; i < count; i++)
             {
                 var key = new JournalKey(sensorId, DateTime.UtcNow.Ticks, RecordType.Changes);
-                result.Add((key, new JournalEntity($"TEST_{i}", "")));
+                result.Add((key, new JournalEntity($"TEST_{i}", string.Empty, TreeValuesCache.System)));
             }
 
             return result;

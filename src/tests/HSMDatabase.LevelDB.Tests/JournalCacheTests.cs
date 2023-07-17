@@ -1,4 +1,3 @@
-using System.Diagnostics;
 using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Core.Journal;
 using HSMServer.Core.Model;
@@ -29,7 +28,12 @@ public class JournalCacheTests : MonitoringCoreTestsBase<TreeValuesCacheFixture>
         var sensors = GetUpdatedSensors(n);
         foreach (var sensor in sensors)
         {
-            var journals = await _journalService.GetPages(new(sensor.Id, DateTime.MinValue, DateTime.MaxValue, RecordType.Changes, RecordType.Changes, MaxHistoryCount)).Flatten();
+            var journals = await _journalService.GetPages(new()
+            {
+                Id = sensor.Id,
+                FromType = RecordType.Changes,
+                ToType = RecordType.Changes,
+            }).Flatten();
            
             Assert.NotEmpty(journals);
         }
@@ -51,7 +55,12 @@ public class JournalCacheTests : MonitoringCoreTestsBase<TreeValuesCacheFixture>
 
         await Task.Delay(1000);
         var expected = journals.OrderBy(x => x.Key.Time).ToList();
-        var actual = await _journalService.GetPages(new(id, DateTime.MinValue, DateTime.MaxValue, RecordType.Changes, RecordType.Changes, 50000)).Flatten();
+        var actual = await _journalService.GetPages(new()
+        {
+            Id = id,
+            FromType = RecordType.Changes,
+            ToType = RecordType.Changes,
+        }).Flatten();
 
         for (int i = 0; i < n; i++)
         {

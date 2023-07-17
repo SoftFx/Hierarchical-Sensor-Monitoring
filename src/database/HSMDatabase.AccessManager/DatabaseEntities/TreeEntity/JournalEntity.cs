@@ -8,8 +8,21 @@ public enum RecordType : byte
 }
 
 
-public sealed record JournalEntity(string Value, string Name, string Initiator = "System");
+public sealed record JournalEntity
+{
+    public string Value { get; init; }
 
+    public string Name { get; init; }
+
+    public string Initiator { get; init; }
+    
+    public JournalEntity(string value, string name, string initiator)
+    {
+        Value = value;
+        Name = name;
+        Initiator = initiator;
+    }
+}
 
 public readonly struct JournalKey
 {

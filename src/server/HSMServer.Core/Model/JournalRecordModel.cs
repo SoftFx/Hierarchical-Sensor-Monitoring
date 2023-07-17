@@ -34,5 +34,5 @@ public sealed class JournalRecordModel
     }
     
     
-    public JournalEntity ToJournalEntity() => new(Value, Name);
+    public JournalEntity ToJournalEntity() => new(Value, Name, Initiator);
 }
