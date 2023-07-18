@@ -19,7 +19,7 @@ namespace HSMDatabase.LevelDB.Tests
 
 
         [Fact]
-        public async Task GetValues_Count_Test()
+        public async Task WriteAndReadTest()
         {
             const int historyValuesCount = 1000;
             var sensorId = Guid.NewGuid();
@@ -27,15 +27,92 @@ namespace HSMDatabase.LevelDB.Tests
             var journalType = RecordType.Changes;
 
             foreach (var journal in journals)
-            {
                 _databaseCore.AddJournalValue(journal.Item1, journal.Item2);
-            }
 
-            await Task.Delay(2000);
-            var actualJournals = (await _databaseCore.GetJournalValuesPage(sensorId, DateTime.MinValue, DateTime.MaxValue, journalType, RecordType.Changes, historyValuesCount)
-                .Flatten()).Select(x => x.Entity).ToList();
+            await Task.Delay(1000);
+            var actualJournals = (await _databaseCore.GetJournalValuesPage(sensorId, DateTime.MinValue, DateTime.MaxValue, journalType, journalType, historyValuesCount)
+                .Flatten()).Select(x => (JournalKey.FromBytes(x.Key), x.Entity)).ToList();
 
             Assert.Equal(journals.Count, actualJournals.Count);
+            for (int i = 0; i < journals.Count; i++)
+            {
+                CompareJournalEntity(journals[i].Item2, actualJournals[i].Entity);
+                CompareJournalKey(journals[i].Item1, actualJournals[i].Item1);
+            }
+        }
+
+        private void CompareJournalEntity(JournalEntity actual, JournalEntity expected)
+        {
+            Assert.Equal(actual.Path, expected.Path);
+            Assert.Equal(actual.Value, expected.Value);
+            Assert.Equal(actual.Initiator, expected.Initiator);
+        }
+
+        private void CompareJournalKey(JournalKey actual, JournalKey expected)
+        {
+            Assert.Equal(actual.Id, expected.Id);
+            Assert.Equal(actual.Type, expected.Type);
+            Assert.Equal(actual.Time, expected.Time);
+        }
+
+        [Fact]
+        public async Task BorderTest()
+        {
+           await RandomGuidTest(100);
+        }
+
+        private async Task RandomGuidTest(int count)
+        {
+            var id = Guid.NewGuid();
+            var expectedMinKey = JournalFactory.BuildKey(id, DateTime.MinValue.Ticks);
+            var expectedMaxKey = JournalFactory.BuildKey(id, DateTime.MaxValue.Ticks);
+
+            var expectedKeys = new List<JournalKey>();
+
+            var journals = BuildJournalEntities(count);
+
+            for (int i = 0; i < count; i++)
+            {
+                if (i % 2 is 0)
+                {
+                    _databaseCore.AddJournalValue(expectedMinKey, journals[i]);
+                    expectedKeys.Add(expectedMinKey);
+                    expectedMinKey = JournalFactory.BuildKey(id, expectedMinKey.Time + 1);
+
+                }
+                else
+                {
+                    _databaseCore.AddJournalValue(expectedMaxKey, journals[i]);
+                    expectedKeys.Add(expectedMaxKey);
+                    expectedMaxKey = JournalFactory.BuildKey(id, expectedMaxKey.Time + 1);
+                }
+                
+            }
+
+            var actualMin = await _databaseCore.GetJournalValuesPage(id, DateTime.MinValue, DateTime.MinValue.AddSeconds(1), expectedMinKey.Type, expectedMinKey.Type, TreeValuesCache.MaxHistoryCount).Flatten();
+            var actualMax = await _databaseCore.GetJournalValuesPage(id, DateTime.MaxValue.AddSeconds(-1), DateTime.MaxValue, expectedMaxKey.Type, expectedMaxKey.Type, TreeValuesCache.MaxHistoryCount).Flatten();
+            Assert.Equal(count / 2, actualMin.Count);
+            Assert.Equal(count / 2, actualMax.Count);
+
+            for (int i = 1; i < count; i++)
+            {
+                CompareJournalEntity(actualMin[i - 1].Entity, journals[i - 1]);
+                CompareJournalEntity(actualMax[i].Entity, journals[i]);
+                
+                CompareJournalKey(JournalKey.FromBytes(actualMin[i - 1].Key), expectedKeys[i - 1]);
+                CompareJournalKey(JournalKey.FromBytes(actualMax[i].Key), expectedKeys[i]);
+            }
+            
+        }
+
+        private List<JournalEntity> BuildJournalEntities(int count)
+        {
+            var journals = new List<JournalEntity>(count);
+
+            for (int i = 0; i < count; i++)
+                journals.Add(JournalFactory.BuildJournalEntity());
+
+            return journals;
         }
 
         [Fact]
@@ -109,7 +186,7 @@ namespace HSMDatabase.LevelDB.Tests
             for (int i = 0; i < count; i++)
             {
                 var key = new JournalKey(sensorId, DateTime.UtcNow.Ticks, RecordType.Changes);
-                result.Add((key, new JournalEntity($"TEST_{i}", string.Empty, TreeValuesCache.System)));
+                result.Add((key, new JournalEntity($"TEST_{i}", $"TEST_{i}", $"TEST_{i}")));
             }
 
             return result;
