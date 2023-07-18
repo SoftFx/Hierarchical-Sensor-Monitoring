@@ -2,7 +2,6 @@
 using HSMCommon.Constants;
 using HSMServer.Authentication;
 using HSMServer.Folders;
-using HSMServer.Model;
 using HSMServer.ServerConfiguration;
 using HSMServer.ServiceExtensions;
 using Microsoft.AspNetCore.Authentication.Cookies;
