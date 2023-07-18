@@ -390,11 +390,11 @@ namespace HSMDataCollector.Core
         {
             if (!File.Exists(filePath))
             {
-                _logger.Error(filePath + " not exist");
+                _logger.Error($"{filePath} does not exist");
                 return default;
             }
 
-            _logger.Info("Send " + filePath + " to " + sensorPath);
+            _logger.Info($"Sending {filePath} to {sensorPath}");
 
             var file = new FileInfo(filePath);
 

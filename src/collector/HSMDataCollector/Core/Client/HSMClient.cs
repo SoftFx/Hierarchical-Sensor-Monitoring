@@ -51,7 +51,7 @@ namespace HSMDataCollector.Core
             {
                 try
                 {
-                    using (var stream = new StreamReader((System.IO.Stream)File.Open(fileInfo.FullName, FileMode.Open, FileAccess.Read, FileShare.ReadWrite)))
+                    using (var stream = new StreamReader(File.Open(fileInfo.FullName, FileMode.Open, FileAccess.Read, FileShare.ReadWrite)))
                         return Encoding.UTF8.GetBytes(await stream.ReadToEndAsync()).ToList();
                 }
                 catch (Exception ex)
