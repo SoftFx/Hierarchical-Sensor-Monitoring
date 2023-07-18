@@ -4,9 +4,12 @@ namespace HSMDataCollector.Core
 {
     public sealed class CollectorOptions
     {
-        public string AccessKey { get; set; }
+        public string ServerUrl => ServerAddress.TrimEnd('/');
 
-        public string ServerAddress { get; set; }
+
+        public string ServerAddress { private get; set; }
+
+        public string AccessKey { get; set; }
 
         public int Port { get; set; } = 44330;
         
