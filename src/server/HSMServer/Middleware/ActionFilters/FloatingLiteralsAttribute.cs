@@ -6,7 +6,7 @@ using Microsoft.AspNetCore.Mvc.Formatters;
 
 namespace HSMServer.Middleware.ActionFilters;
 
-public class DoubleJsonAttribute : ActionFilterAttribute
+public class FloatingLiteralsAttribute : ActionFilterAttribute
 {
     public override void OnResultExecuting(ResultExecutingContext context)
     {
