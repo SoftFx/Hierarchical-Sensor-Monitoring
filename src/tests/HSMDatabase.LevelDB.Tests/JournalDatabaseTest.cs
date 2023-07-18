@@ -12,6 +12,10 @@ namespace HSMDatabase.LevelDB.Tests
     {
         private readonly IDatabaseCore _databaseCore;
 
+        private readonly DateTime _minTime = DateTime.MinValue;
+        private readonly DateTime _maxTime = DateTime.MaxValue.AddYears(-1);
+
+
         public JournalDatabaseTest(JournalDatabaseFixture fixture, DatabaseRegisterFixture registerFixture) : base(fixture, registerFixture)
         {
             _databaseCore = _databaseCoreManager.DatabaseCore;
@@ -64,45 +68,41 @@ namespace HSMDatabase.LevelDB.Tests
         private async Task RandomGuidTest(int count)
         {
             var id = Guid.NewGuid();
-            var expectedMinKey = JournalFactory.BuildKey(id, DateTime.MinValue.Ticks);
-            var expectedMaxKey = JournalFactory.BuildKey(id, DateTime.MaxValue.Ticks);
+            var expectedMinKey = JournalFactory.BuildKey(id, _minTime.Ticks);
+            var expectedMaxKey = JournalFactory.BuildKey(id, _maxTime.Ticks);
 
-            var expectedKeys = new List<JournalKey>();
-
+            var expected = new List<(JournalKey, JournalEntity)>();
             var journals = BuildJournalEntities(count);
 
             for (int i = 0; i < count; i++)
             {
-                if (i % 2 is 0)
+                if (i % 2 == 0)
                 {
                     _databaseCore.AddJournalValue(expectedMinKey, journals[i]);
-                    expectedKeys.Add(expectedMinKey);
+                    expected.Add((expectedMinKey, journals[i]));
                     expectedMinKey = JournalFactory.BuildKey(id, expectedMinKey.Time + 1);
-
                 }
                 else
                 {
                     _databaseCore.AddJournalValue(expectedMaxKey, journals[i]);
-                    expectedKeys.Add(expectedMaxKey);
+                    expected.Add((expectedMaxKey, journals[i]));
                     expectedMaxKey = JournalFactory.BuildKey(id, expectedMaxKey.Time + 1);
                 }
                 
             }
 
-            var actualMin = await _databaseCore.GetJournalValuesPage(id, DateTime.MinValue, DateTime.MinValue.AddSeconds(1), expectedMinKey.Type, expectedMinKey.Type, TreeValuesCache.MaxHistoryCount).Flatten();
-            var actualMax = await _databaseCore.GetJournalValuesPage(id, DateTime.MaxValue.AddSeconds(-1), DateTime.MaxValue, expectedMaxKey.Type, expectedMaxKey.Type, TreeValuesCache.MaxHistoryCount).Flatten();
-            Assert.Equal(count / 2, actualMin.Count);
-            Assert.Equal(count / 2, actualMax.Count);
+            expected = expected.OrderBy(x => x.Item1.Time).ToList();
 
-            for (int i = 1; i < count; i++)
-            {
-                CompareJournalEntity(actualMin[i - 1].Entity, journals[i - 1]);
-                CompareJournalEntity(actualMax[i].Entity, journals[i]);
-                
-                CompareJournalKey(JournalKey.FromBytes(actualMin[i - 1].Key), expectedKeys[i - 1]);
-                CompareJournalKey(JournalKey.FromBytes(actualMax[i].Key), expectedKeys[i]);
-            }
+            await Task.Delay(500);
             
+            var actualJournals = await _databaseCore.GetJournalValuesPage(id, _minTime, DateTime.MaxValue, RecordType.Actions, RecordType.Actions, TreeValuesCache.MaxHistoryCount).Flatten();
+            Assert.Equal(count, actualJournals.Count);
+
+            for (int i = 0; i < count; i++)
+            {
+                CompareJournalEntity(actualJournals[i].Entity, expected[i].Item2);
+                CompareJournalKey(JournalKey.FromBytes(actualJournals[i].Key), expected[i].Item1);
+            }
         }
 
         private List<JournalEntity> BuildJournalEntities(int count)
