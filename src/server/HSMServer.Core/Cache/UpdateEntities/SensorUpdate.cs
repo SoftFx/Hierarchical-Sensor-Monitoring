@@ -23,8 +23,8 @@ namespace HSMServer.Core.Cache.UpdateEntities
 
     public sealed record PolicyConditionUpdate(
         PolicyOperation Operation,
+        PolicyProperty Property,
         TargetValue Target,
-        string Property,
         PolicyCombination Combination = PolicyCombination.And);
 
 

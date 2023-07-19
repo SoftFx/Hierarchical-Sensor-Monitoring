@@ -42,7 +42,7 @@ namespace HSMServer.Model.DataAlerts
                     ? new TargetValue(TargetType.LastValue, EntityId.ToString())
                     : new TargetValue(TargetType.Const, condition.Target);
 
-                conditions.Add(new PolicyConditionUpdate(condition.Operation, target, condition.Property));
+                conditions.Add(new PolicyConditionUpdate(condition.Operation, Enum.Parse<PolicyProperty>(condition.Property), target));
             }
 
             SensorStatus status = SensorStatus.Ok;
@@ -85,7 +85,7 @@ namespace HSMServer.Model.DataAlerts
                 var viewModel = CreateCondition(i == 0);
                 var condition = policy.Conditions[i];
 
-                viewModel.Property = condition.Property;
+                viewModel.Property = condition.Property.ToString();
                 viewModel.Operation = condition.Operation;
                 viewModel.Target = condition.Target.Value;
 
