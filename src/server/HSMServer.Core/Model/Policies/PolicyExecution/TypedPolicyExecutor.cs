@@ -9,7 +9,7 @@ namespace HSMServer.Core.Model.Policies
     }
 
 
-    internal class PolicyExecutorNumber<T> : PolicyExecutorSimple<T> where T : INumber<T>
+    internal sealed class PolicyExecutorNumber<T> : PolicyExecutorSimple<T> where T : INumber<T>
     {
         private readonly Func<BaseValue, T> _getCheckedValue;
 
@@ -34,13 +34,13 @@ namespace HSMServer.Core.Model.Policies
     }
 
 
-    internal class PolicyExecutorString : PolicyExecutorSimple<string>
+    internal sealed class PolicyExecutorString : PolicyExecutorSimple<string>
     {
         protected override Func<string, string, bool> GetTypedOperation(PolicyOperation operation) => throw new NotImplementedException();
     }
 
 
-    internal class PolicyExecutorStatus : PolicyExecutor<SensorStatus?>
+    internal sealed class PolicyExecutorStatus : PolicyExecutor<SensorStatus?>
     {
         protected override Func<SensorStatus?, SensorStatus?, bool> GetTypedOperation(PolicyOperation operation) => PolicyExecutorBuilder.GetStatusOperation(operation);
 

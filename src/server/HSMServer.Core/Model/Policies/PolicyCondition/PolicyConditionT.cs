@@ -32,9 +32,6 @@ namespace HSMServer.Core.Model.Policies
             get => _propertyName;
             set
             {
-                if (_propertyName == value)
-                    return;
-
                 _propertyName = value;
 
                 _executor = PolicyExecutorBuilder.BuildExecutor<U>(value);
@@ -49,9 +46,6 @@ namespace HSMServer.Core.Model.Policies
             get => _targetName;
             set
             {
-                if (_targetName == value)
-                    return;
-
                 _targetName = value;
 
                 SetTarget(value);
