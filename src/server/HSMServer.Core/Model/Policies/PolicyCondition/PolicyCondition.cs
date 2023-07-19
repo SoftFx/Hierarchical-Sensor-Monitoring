@@ -6,17 +6,39 @@ namespace HSMServer.Core.Model.Policies
     public enum PolicyOperation : byte
     {
         [Display(Name = "<=")]
-        LessThanOrEqual,
+        LessThanOrEqual = 0,
         [Display(Name = "<")]
-        LessThan,
+        LessThan = 1,
         [Display(Name = ">")]
-        GreaterThan,
+        GreaterThan = 2,
         [Display(Name = ">=")]
-        GreaterThanOrEqual,
+        GreaterThanOrEqual = 3,
         [Display(Name = "==")]
-        Equal,
+        Equal = 4,
         [Display(Name = "!=")]
-        NotEqual,
+        NotEqual = 5,
+
+        [Display(Name = "Change")]
+        IsChanged = 20,
+        [Display(Name = "Is error")]
+        IsError = 21,
+        [Display(Name = "Is ok")]
+        IsOk = 22,
+    }
+
+
+    public enum PolicyProperty : byte
+    {
+        Status = 0,
+        Comment = 1,
+
+        Value = 20,
+
+        Min = 101,
+        Max = 102,
+        Mean = 103,
+        Count = 104,
+        LastValue = 105,
     }
 
 
@@ -32,7 +54,7 @@ namespace HSMServer.Core.Model.Policies
     public enum TargetType : byte
     {
         Const,
-        Sensor,
+        LastValue,
     }
 
 
@@ -43,9 +65,9 @@ namespace HSMServer.Core.Model.Policies
     {
         public abstract PolicyOperation Operation { get; set; }
 
-        public abstract TargetValue Target { get; set; }
+        public abstract PolicyProperty Property { get; set; }
 
-        public abstract string Property { get; set; }
+        public abstract TargetValue Target { get; set; }
 
 
         public PolicyCombination Combination { get; set; }
@@ -57,8 +79,7 @@ namespace HSMServer.Core.Model.Policies
 
             Combination = (PolicyCombination)entity.Combination;
             Operation = (PolicyOperation)entity.Operation;
-
-            Property = entity.Property;
+            Property = (PolicyProperty)entity.Property;
 
             return this;
         }
@@ -69,8 +90,7 @@ namespace HSMServer.Core.Model.Policies
 
             Combination = (byte)Combination,
             Operation = (byte)Operation,
-
-            Property = Property,
+            Property = (byte)Property,
         };
     }
 }

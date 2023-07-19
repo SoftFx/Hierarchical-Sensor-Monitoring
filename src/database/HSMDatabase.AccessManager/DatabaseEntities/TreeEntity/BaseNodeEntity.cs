@@ -6,7 +6,7 @@ namespace HSMDatabase.AccessManager.DatabaseEntities
     {
         public Dictionary<string, TimeIntervalEntity> Settings { get; init; } = new();
 
-        public List<string> Policies { get; init; }
+        public List<string> Policies { get; init; } = new();
 
 
         public required string Id { get; init; }

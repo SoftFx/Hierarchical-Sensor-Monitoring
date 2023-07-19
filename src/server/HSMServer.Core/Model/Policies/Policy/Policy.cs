@@ -37,14 +37,14 @@ namespace HSMServer.Core.Model.Policies
 
         protected abstract PolicyCondition GetCondition();
 
-        internal void Update(DataPolicyUpdate update)
+        internal void Update(PolicyUpdate update)
         {
             PolicyCondition Update(PolicyCondition condition, PolicyConditionUpdate update)
             {
                 condition.Combination = update.Combination;
                 condition.Operation = update.Operation;
-                condition.Target = update.Target;
                 condition.Property = update.Property;
+                condition.Target = update.Target;
 
                 return condition;
             }

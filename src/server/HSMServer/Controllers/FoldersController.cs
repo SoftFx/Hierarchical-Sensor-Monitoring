@@ -117,12 +117,11 @@ namespace HSMServer.Controllers
             {
                 Id = folderAlerts.Id,
                 TTL = folderAlerts.ExpectedUpdateInterval,
-                //RestoreInterval = folderAlerts.SensorRestorePolicy
             };
 
             await _folderManager.TryUpdate(update);
 
-            return PartialView("~/Views/Home/Alerts/_Alerts.cshtml", new FolderAlertsViewModel(_folderManager[update.Id]));
+            return PartialView("_Alerts", new FolderAlertsViewModel(_folderManager[update.Id]));
         }
 
 

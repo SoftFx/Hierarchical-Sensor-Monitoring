@@ -22,7 +22,7 @@ namespace HSMServer.Model.DataAlerts
         public bool IsModify { get; protected set; }
 
 
-        internal DataPolicyUpdate ToUpdate()
+        internal PolicyUpdate ToUpdate()
         {
             List<PolicyConditionUpdate> conditions = new(Conditions.Count);
             Core.Model.TimeIntervalModel sensitivity = null;
@@ -36,7 +36,7 @@ namespace HSMServer.Model.DataAlerts
                 }
 
                 if (condition.Property != ConditionViewModel.TimeToLiveCondition)
-                    conditions.Add(new PolicyConditionUpdate(condition.Operation, new TargetValue(TargetType.Const, condition.Target), condition.Property));
+                    conditions.Add(new PolicyConditionUpdate(condition.Operation, Enum.Parse<PolicyProperty>(condition.Property), new TargetValue(TargetType.Const, condition.Target)));
             }
 
             SensorStatus status = SensorStatus.Ok;
@@ -79,7 +79,7 @@ namespace HSMServer.Model.DataAlerts
                 var viewModel = CreateCondition(i == 0);
                 var condition = policy.Conditions[i];
 
-                viewModel.Property = condition.Property;
+                viewModel.Property = condition.Property.ToString();
                 viewModel.Operation = condition.Operation;
                 viewModel.Target = condition.Target.Value;
 

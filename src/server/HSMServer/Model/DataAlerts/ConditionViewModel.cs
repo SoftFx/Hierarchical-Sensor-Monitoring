@@ -1,15 +1,17 @@
 ﻿using HSMCommon.Extensions;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Policies;
+using HSMServer.Extensions;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using System.Collections.Generic;
 using System.Linq;
+using System.Numerics;
 
 namespace HSMServer.Model.DataAlerts
 {
     public class AlertConditionBase
     {
-        public string Property { get; set; }
+        public string Property { get; set; } //should be changed to enum
 
 
         public TimeIntervalViewModel Sensitivity { get; set; }
@@ -44,8 +46,8 @@ namespace HSMServer.Model.DataAlerts
             Sensitivity = new TimeIntervalViewModel(PredefinedIntervals.ForRestore) { IsAlertBlock = true };
             TimeToLive = new TimeIntervalViewModel(PredefinedIntervals.ForRestore) { IsAlertBlock = true };
 
-            OperationsItems = Actions.Select(a => new SelectListItem(a.GetDisplayName(), $"{a}")).ToList();
-            PropertiesItems = Properties.Select(p => new SelectListItem(p, p, false)).ToList();
+            OperationsItems = Actions.ToSelectedItems(k => k.GetDisplayName());
+            PropertiesItems = Properties.ToSelectedItems();
 
             if (isMain)
                 PropertiesItems.Add(new SelectListItem("Inactivity period", TimeToLiveCondition));
@@ -74,7 +76,7 @@ namespace HSMServer.Model.DataAlerts
     }
 
 
-    public sealed class BarConditionViewModel<T, U> : ConditionViewModel where T : BarBaseValue<U>, new() where U : struct
+    public sealed class BarConditionViewModel<T, U> : ConditionViewModel where T : BarBaseValue<U>, new() where U : INumber<U>
     {
         protected override List<string> Properties { get; } = new()
         {

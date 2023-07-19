@@ -13,6 +13,12 @@
 }
 
 
+@*TODO: remove after adding constructor for Inactivity period*@
+<div class="ms-3">
+    <label>TTL: @Model.ExpectedUpdateInterval.DisplayValue</label>
+</div>
+
+
 @foreach (var (type, alerts) in Model.DataAlerts)
 {
     <div id="dataAlertsList_@type" class="@(alerts.Count == 0 ? "d-none" : string.Empty)">
