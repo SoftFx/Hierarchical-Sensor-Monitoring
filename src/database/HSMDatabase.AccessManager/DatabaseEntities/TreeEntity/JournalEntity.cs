@@ -1,34 +1,40 @@
 using System;
+
 namespace HSMDatabase.AccessManager.DatabaseEntities;
 
+[Flags]
 public enum RecordType : byte
 {
-    Actions,
-    Changes
+    Actions = 0,
+    Changes = 1,
 }
 
 
 public sealed record JournalEntity
 {
-    public string Value { get; init; }
+    public string Initiator { get; init; }
+
+    public string OldValue { get; init; }
+
+    public string NewValue { get; init; }
 
     public string Path { get; init; }
 
-    public string Initiator { get; init; }
-    
+
     public JournalEntity(string value, string path, string initiator)
     {
-        Value = value;
+        OldValue = value;
         Path = path;
         Initiator = initiator;
     }
 }
 
+
 public readonly struct JournalKey
 {
     private const int GuidSize = 16;
-    private const int TypeSize = sizeof(RecordType);
-    private const int StructSize = GuidSize + TypeSize + sizeof(long);
+    private const int GuidAndTypeSize = GuidSize + sizeof(RecordType);
+    private const int StructSize = GuidAndTypeSize + sizeof(long);
 
 
     public Guid Id { get; }
@@ -51,10 +57,10 @@ public readonly struct JournalKey
         Span<byte> result = stackalloc byte[StructSize];
         result[GuidSize] = (byte)Type;
 
-        if (!Id.TryWriteBytes(result) || !BitConverter.TryWriteBytes(result[(GuidSize + TypeSize)..], Time))
+        if (!Id.TryWriteBytes(result) || !BitConverter.TryWriteBytes(result[GuidAndTypeSize..], Time))
             return Array.Empty<byte>();
 
-        result[(GuidSize + TypeSize)..].Reverse();
+        result[GuidAndTypeSize..].Reverse();
         return result.ToArray();
     }
 
@@ -66,11 +72,10 @@ public readonly struct JournalKey
         var id = new Guid(bytes[..GuidSize]);
         var journalType = bytes[GuidSize];
 
-        Array.Reverse(bytes, GuidSize + TypeSize, sizeof(long));
+        Array.Reverse(bytes, GuidAndTypeSize, sizeof(long));
 
-        var time = BitConverter.ToInt64(bytes, GuidSize + TypeSize);
+        var time = BitConverter.ToInt64(bytes, GuidAndTypeSize);
 
         return new JournalKey(id, time, (RecordType)journalType);
     }
 }
-

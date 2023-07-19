@@ -21,6 +21,7 @@ public class JournalController : BaseController
         _journalService = journalService;
     }
 
+
     [HttpPost]
     public JsonResult GetPage([FromBody] DataTableParameters parameters)
     {

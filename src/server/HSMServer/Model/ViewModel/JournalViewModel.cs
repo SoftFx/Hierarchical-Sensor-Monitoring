@@ -22,7 +22,7 @@ public class JournalViewModel
     {
         Type = model.Key.Type;
         TimeAsString = new DateTime(model.Key.Time).ToDefaultFormat();
-        Value = model.Value;
+        Value = model.OldValue;
         Initiator = model.Initiator;
         Name = model.Path;
     }

@@ -64,7 +64,7 @@ public class JournalCacheTests : MonitoringCoreTestsBase<TreeValuesCacheFixture>
 
         for (int i = 0; i < n; i++)
         {
-            Assert.Equal(expected[i].Value, actual[i].Value);
+            Assert.Equal(expected[i].OldValue, actual[i].OldValue);
         }
     }
 

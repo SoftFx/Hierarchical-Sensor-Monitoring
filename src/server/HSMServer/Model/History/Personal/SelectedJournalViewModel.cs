@@ -74,7 +74,7 @@ public sealed class SelectedJournalViewModel
     private IEnumerable<JournalRecordModel> Search(string search)
     {
         return !string.IsNullOrEmpty(search)
-            ? _journals.Where(x => x.Value.Contains(search, StringComparison.OrdinalIgnoreCase))
+            ? _journals.Where(x => x.OldValue.Contains(search, StringComparison.OrdinalIgnoreCase))
             : _journals;
     }
 
@@ -88,7 +88,7 @@ public sealed class SelectedJournalViewModel
                 ColumnName.Date => ordered.CreateOrderedEnumerable(x => x.Key.Time, null, descending),
                 ColumnName.Initiator => ordered.CreateOrderedEnumerable(x => x.Initiator, null, descending),
                 ColumnName.Type => ordered.CreateOrderedEnumerable(x => x.Key.Type, null, descending),
-                ColumnName.Record => ordered.CreateOrderedEnumerable(x => x.Value, null, descending),
+                ColumnName.Record => ordered.CreateOrderedEnumerable(x => x.OldValue, null, descending),
                 ColumnName.Path => ordered.CreateOrderedEnumerable(x => x.Path, null, descending),
                 _ => ordered
             };

@@ -48,7 +48,7 @@ namespace HSMDatabase.LevelDB.Tests
         private void CompareJournalEntity(JournalEntity actual, JournalEntity expected)
         {
             Assert.Equal(actual.Path, expected.Path);
-            Assert.Equal(actual.Value, expected.Value);
+            Assert.Equal(actual.OldValue, expected.OldValue);
             Assert.Equal(actual.Initiator, expected.Initiator);
         }
 
@@ -144,8 +144,8 @@ namespace HSMDatabase.LevelDB.Tests
                 var databaseData = await GetJournalValues(guid, DateTime.MinValue, DateTime.MaxValue, first);
                 Assert.Equal(2, databaseData.Count);
                 
-                Assert.Equal(firstValue, databaseData[0]?.Value);
-                Assert.Equal(secondValue, databaseData[1]?.Value);
+                Assert.Equal(firstValue, databaseData[0]?.OldValue);
+                Assert.Equal(secondValue, databaseData[1]?.OldValue);
             }
             else
             {
