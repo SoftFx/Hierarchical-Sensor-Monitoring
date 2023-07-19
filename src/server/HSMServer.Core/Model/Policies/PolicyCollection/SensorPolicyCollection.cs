@@ -184,7 +184,6 @@ namespace HSMServer.Core.Model.Policies
                                     PolicyOperation.IsChanged,
                                     PolicyProperty.Status,
                                     new TargetValue(TargetType.LastValue, _sensor.Id.ToString())),
-
                            },
                            null,
                            SensorStatus.Ok,
