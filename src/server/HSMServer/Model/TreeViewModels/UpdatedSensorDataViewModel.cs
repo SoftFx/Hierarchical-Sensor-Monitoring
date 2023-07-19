@@ -22,8 +22,8 @@ namespace HSMServer.Model.TreeViewModel
         internal UpdatedNodeDataViewModel(NodeViewModel node)
         {
             Id = node.EncodedId;
-            Status = node.Status.ToEmpty(node.HasData).ToString();
-            StatusIconColorClass = node.Status.ToEmpty(node.HasData).ToCssIconClass();
+            Status = node.Status.ToString();
+            StatusIconColorClass = node.Status.ToCssIconClass();
             GridCellColorClass = node.Status.ToCssGridCellClass();
             UpdatedTimeStr = $"updated {node.UpdateTime.GetTimeAgo()}";
             Tooltip = node.Tooltip;

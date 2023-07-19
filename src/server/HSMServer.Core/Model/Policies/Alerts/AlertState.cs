@@ -185,7 +185,7 @@ namespace HSMServer.Core.Model.Policies
                 Sensor = sensor.DisplayName,
                 Path = sensor.Path,
 
-                Status = value.Status.ToString(),
+                Status = value.Status.ToIcon(),
                 Time = value.Time.ToString(),
                 Comment = value.Comment,
             };
