@@ -18,11 +18,11 @@ namespace HSMServer.Core.Model.Policies
         [Display(Name = "!=")]
         NotEqual = 5,
 
-        [Display(Name = "Change")]
+        [Display(Name = "is changed")]
         IsChanged = 20,
-        [Display(Name = "Is error")]
+        [Display(Name = "is Error")]
         IsError = 21,
-        [Display(Name = "Is ok")]
+        [Display(Name = "is OK")]
         IsOk = 22,
     }
 

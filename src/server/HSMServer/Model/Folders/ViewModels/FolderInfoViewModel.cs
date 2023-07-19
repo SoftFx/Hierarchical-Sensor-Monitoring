@@ -21,7 +21,7 @@ namespace HSMServer.Model.Folders.ViewModels
 
         internal FolderInfoViewModel(FolderModel folder) : base(folder)
         {
-            ProductStatuses = folder.Products.Values.ToGroupedList(x => x.Status.ToEmpty(x.HasData));
+            ProductStatuses = folder.Products.Values.ToGroupedList(x => x.Status);
 
             TotalProducts = folder.Products.Count;
             Id = folder.Id;

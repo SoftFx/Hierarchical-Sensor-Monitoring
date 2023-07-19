@@ -3,15 +3,33 @@ using HSMServer.Core.Model;
 using HSMServer.Core.Model.Policies;
 using HSMServer.Extensions;
 using Microsoft.AspNetCore.Mvc.Rendering;
+using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 using System.Linq;
 using System.Numerics;
 
 namespace HSMServer.Model.DataAlerts
 {
+    public enum AlertProperty
+    {
+        Status,
+        Comment,
+        Value,
+        Min,
+        Max,
+        Mean,
+        Count,
+        LastValue,
+        Sensitivity,
+        [Display(Name = "Inactivity period")]
+        TimeToLive,
+    }
+
+
     public class AlertConditionBase
     {
-        public string Property { get; set; } //should be changed to enum
+        public AlertProperty Property { get; set; }
 
 
         public TimeIntervalViewModel Sensitivity { get; set; }
@@ -27,18 +45,24 @@ namespace HSMServer.Model.DataAlerts
 
     public abstract class ConditionViewModel : AlertConditionBase
     {
-        public const string TimeToLiveCondition = "TTL";
-        public const string SensitivityCondition = "Sensitivity";
+        private readonly List<PolicyOperation> _statusOperations = new()
+        {
+            PolicyOperation.IsChanged,
+            PolicyOperation.IsOk,
+            PolicyOperation.IsError
+        };
 
 
-        protected abstract List<string> Properties { get; }
+        protected abstract List<AlertProperty> Properties { get; }
 
-        protected abstract List<PolicyOperation> Actions { get; }
+        protected abstract List<PolicyOperation> Operations { get; }
 
 
         public List<SelectListItem> PropertiesItems { get; }
 
         public List<SelectListItem> OperationsItems { get; }
+
+        public List<SelectListItem> StatusOperationsItems { get; }
 
 
         public ConditionViewModel(bool isMain)
@@ -46,24 +70,29 @@ namespace HSMServer.Model.DataAlerts
             Sensitivity = new TimeIntervalViewModel(PredefinedIntervals.ForRestore) { IsAlertBlock = true };
             TimeToLive = new TimeIntervalViewModel(PredefinedIntervals.ForRestore) { IsAlertBlock = true };
 
-            OperationsItems = Actions.ToSelectedItems(k => k.GetDisplayName());
-            PropertiesItems = Properties.ToSelectedItems();
+            StatusOperationsItems = _statusOperations.ToSelectedItems(k => k.GetDisplayName());
+            OperationsItems = Operations.ToSelectedItems(k => k.GetDisplayName());
+            PropertiesItems = Properties.ToSelectedItems(k => k.GetDisplayName());
 
             if (isMain)
-                PropertiesItems.Add(new SelectListItem("Inactivity period", TimeToLiveCondition));
+                PropertiesItems.Add(new SelectListItem(AlertProperty.TimeToLive.GetDisplayName(), nameof(AlertProperty.TimeToLive)));
             else
-                PropertiesItems.Add(new SelectListItem("Sensitivity", SensitivityCondition));
+                PropertiesItems.Add(new SelectListItem(AlertProperty.Sensitivity.GetDisplayName(), nameof(AlertProperty.Sensitivity)));
 
-            Property = PropertiesItems.FirstOrDefault()?.Value;
+            Property = Enum.Parse<AlertProperty>(PropertiesItems.FirstOrDefault()?.Value);
         }
     }
 
 
     public sealed class SingleConditionViewModel<T, U> : ConditionViewModel where T : BaseValue<U>, new()
     {
-        protected override List<string> Properties { get; } = new() { nameof(BaseValue<U>.Value) };
+        protected override List<AlertProperty> Properties { get; } = new()
+        {
+            AlertProperty.Value,
+            AlertProperty.Status
+        };
 
-        protected override List<PolicyOperation> Actions { get; } = new()
+        protected override List<PolicyOperation> Operations { get; } = new()
         {
             PolicyOperation.LessThanOrEqual,
             PolicyOperation.LessThan,
@@ -78,15 +107,16 @@ namespace HSMServer.Model.DataAlerts
 
     public sealed class BarConditionViewModel<T, U> : ConditionViewModel where T : BarBaseValue<U>, new() where U : INumber<U>
     {
-        protected override List<string> Properties { get; } = new()
+        protected override List<AlertProperty> Properties { get; } = new()
         {
-            nameof(BarBaseValue<U>.Min),
-            nameof(BarBaseValue<U>.Max),
-            nameof(BarBaseValue<U>.Mean),
-            nameof(BarBaseValue<U>.LastValue),
+            AlertProperty.Min,
+            AlertProperty.Max,
+            AlertProperty.Mean,
+            AlertProperty.LastValue,
+            AlertProperty.Status,
         };
 
-        protected override List<PolicyOperation> Actions { get; } = new()
+        protected override List<PolicyOperation> Operations { get; } = new()
         {
             PolicyOperation.LessThanOrEqual,
             PolicyOperation.LessThan,

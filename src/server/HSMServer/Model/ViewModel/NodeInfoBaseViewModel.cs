@@ -57,7 +57,7 @@ namespace HSMServer.Model.ViewModel
 
         private NodeInfoBaseViewModel(BaseNodeViewModel model)
         {
-            Status = model.Status.ToEmpty(model.UpdateTime != DateTime.MinValue);
+            Status = model.Status;
             Description = model.Description;
             LastUpdateTime = model.UpdateTime;
 
