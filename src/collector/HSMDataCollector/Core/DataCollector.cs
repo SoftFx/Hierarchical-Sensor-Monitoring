@@ -389,7 +389,12 @@ namespace HSMDataCollector.Core
         public Task SendFileAsync(string sensorPath, string filePath, SensorStatus status = SensorStatus.Ok, string comment = "")
         {
             if (!File.Exists(filePath))
+            {
+                _logger.Error($"{filePath} does not exist");
                 return default;
+            }
+
+            _logger.Info($"Sending {filePath} to {sensorPath}");
 
             var file = new FileInfo(filePath);
 
