@@ -26,15 +26,15 @@ namespace HSMServer.Core.Model.Policies
                 _ => throw new NotImplementedException()
             };
 
-        internal static PolicyExecutor BuildExecutor<U>(string property) => property switch
+        internal static PolicyExecutor BuildExecutor<U>(PolicyProperty property) => property switch
         {
-            nameof(BaseValue<U>.Value) or nameof(BarBaseValue<int>.Min) or nameof(BarBaseValue<int>.Max) or
-            nameof(BarBaseValue<int>.Mean) or nameof(BarBaseValue<int>.LastValue) when typeof(U) == typeof(int) => new PolicyExecutorInt(property),
+            PolicyProperty.Value or PolicyProperty.Min or PolicyProperty.Max or PolicyProperty.Mean or
+            PolicyProperty.LastValue when typeof(U) == typeof(int) => new PolicyExecutorInt(property),
 
-            nameof(BaseValue<U>.Value) or nameof(BarBaseValue<int>.Min) or nameof(BarBaseValue<int>.Max) or
-            nameof(BarBaseValue<int>.Mean) or nameof(BarBaseValue<int>.LastValue) when typeof(U) == typeof(double) => new PolicyExecutorDouble(property),
+            PolicyProperty.Value or PolicyProperty.Min or PolicyProperty.Max or
+            PolicyProperty.Mean or PolicyProperty.LastValue when typeof(U) == typeof(double) => new PolicyExecutorDouble(property),
 
-            nameof(BaseValue.Status) => new PolicyExecutorStatus(),
+            PolicyProperty.Status => new PolicyExecutorStatus(),
 
             _ => throw new NotImplementedException($"Unsupported policy property {property} with type {typeof(U).Name}"),
         };

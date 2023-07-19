@@ -27,6 +27,20 @@ namespace HSMServer.Core.Model.Policies
     }
 
 
+    public enum PolicyProperty : byte
+    {
+        Value = 0,
+        Status = 1,
+        Comment = 2,
+
+        Min = 101,
+        Max = 102,
+        Mean = 103,
+        Count = 104,
+        LastValue = 105,
+    }
+
+
     public enum PolicyCombination : byte
     {
         [Display(Name = "and")]
@@ -50,9 +64,9 @@ namespace HSMServer.Core.Model.Policies
     {
         public abstract PolicyOperation Operation { get; set; }
 
-        public abstract TargetValue Target { get; set; }
+        public abstract PolicyProperty Property { get; set; }
 
-        public abstract string Property { get; set; }
+        public abstract TargetValue Target { get; set; }
 
 
         public PolicyCombination Combination { get; set; }
@@ -64,8 +78,7 @@ namespace HSMServer.Core.Model.Policies
 
             Combination = (PolicyCombination)entity.Combination;
             Operation = (PolicyOperation)entity.Operation;
-
-            Property = entity.Property;
+            Property = (PolicyProperty)entity.Property;
 
             return this;
         }
@@ -76,8 +89,7 @@ namespace HSMServer.Core.Model.Policies
 
             Combination = (byte)Combination,
             Operation = (byte)Operation,
-
-            Property = Property,
+            Property = (byte)Property,
         };
     }
 }

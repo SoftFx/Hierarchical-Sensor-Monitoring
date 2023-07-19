@@ -13,15 +13,15 @@ namespace HSMServer.Core.Model.Policies
         private readonly Func<BaseValue, int> _getCheckedValue;
 
 
-        internal PolicyExecutorInt(string property)
+        internal PolicyExecutorInt(PolicyProperty property)
         {
             _getCheckedValue = property switch
             {
-                nameof(BaseValue<int>.Value) => v => ((BaseValue<int>)v).Value,
-                nameof(BarBaseValue<int>.Min) => v => ((BarBaseValue<int>)v).Min,
-                nameof(BarBaseValue<int>.Max) => v => ((BarBaseValue<int>)v).Max,
-                nameof(BarBaseValue<int>.Mean) => v => ((BarBaseValue<int>)v).Mean,
-                nameof(BarBaseValue<int>.LastValue) => v => ((BarBaseValue<int>)v).LastValue,
+                PolicyProperty.Value => v => ((BaseValue<int>)v).Value,
+                PolicyProperty.Min => v => ((BarBaseValue<int>)v).Min,
+                PolicyProperty.Max => v => ((BarBaseValue<int>)v).Max,
+                PolicyProperty.Mean => v => ((BarBaseValue<int>)v).Mean,
+                PolicyProperty.LastValue => v => ((BarBaseValue<int>)v).LastValue,
                 _ => throw new NotImplementedException($"Invalid property {property} fro {nameof(PolicyExecutorInt)}")
             };
         }
@@ -38,15 +38,15 @@ namespace HSMServer.Core.Model.Policies
         private readonly Func<BaseValue, double> _getCheckedValue;
 
 
-        internal PolicyExecutorDouble(string property)
+        internal PolicyExecutorDouble(PolicyProperty property)
         {
             _getCheckedValue = property switch
             {
-                nameof(BaseValue<double>.Value) => v => ((BaseValue<double>)v).Value,
-                nameof(BarBaseValue<double>.Min) => v => ((BarBaseValue<double>)v).Min,
-                nameof(BarBaseValue<double>.Max) => v => ((BarBaseValue<double>)v).Max,
-                nameof(BarBaseValue<double>.Mean) => v => ((BarBaseValue<double>)v).Mean,
-                nameof(BarBaseValue<double>.LastValue) => v => ((BarBaseValue<double>)v).LastValue,
+                PolicyProperty.Value => v => ((BaseValue<double>)v).Value,
+                PolicyProperty.Min => v => ((BarBaseValue<double>)v).Min,
+                PolicyProperty.Max => v => ((BarBaseValue<double>)v).Max,
+                PolicyProperty.Mean => v => ((BarBaseValue<double>)v).Mean,
+                PolicyProperty.LastValue => v => ((BarBaseValue<double>)v).LastValue,
                 _ => throw new NotImplementedException($"Invalid property {property} fro {nameof(PolicyExecutorDouble)}")
             };
         }

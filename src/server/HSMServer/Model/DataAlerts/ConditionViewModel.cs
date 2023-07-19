@@ -10,7 +10,7 @@ namespace HSMServer.Model.DataAlerts
 {
     public class AlertConditionBase
     {
-        public string Property { get; set; }
+        public string Property { get; set; } //should be changed to enum
 
 
         public TimeIntervalViewModel Sensitivity { get; set; }

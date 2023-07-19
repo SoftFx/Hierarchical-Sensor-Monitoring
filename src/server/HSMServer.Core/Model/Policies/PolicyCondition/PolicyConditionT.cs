@@ -1,12 +1,13 @@
-﻿using System;
+﻿using NLog.LayoutRenderers;
+using System;
 
 namespace HSMServer.Core.Model.Policies
 {
     public class PolicyCondition<T, U> : PolicyCondition where T : BaseValue
     {
         private PolicyOperation _operationName;
+        private PolicyProperty _propertyName;
         private TargetValue _targetName;
-        private string _propertyName;
 
         private PolicyExecutor _executor;
         private U _constTargetValue;
@@ -27,7 +28,7 @@ namespace HSMServer.Core.Model.Policies
             }
         }
 
-        public override string Property
+        public override PolicyProperty Property
         {
             get => _propertyName;
             set
@@ -72,6 +73,9 @@ namespace HSMServer.Core.Model.Policies
 
                 return GetConstTarget;
             }
+
+            if (value is null)
+                return;
 
             object targetBuilder = value.Type switch
             {
