@@ -1,6 +1,7 @@
 ﻿using HSMServer.Core.Extensions;
 using HSMServer.Core.Model;
 using HSMServer.Core.Tests.Infrastructure;
+using System.Numerics;
 using Xunit;
 
 namespace HSMServer.Core.Tests.TreeValuesCacheTests.ModelTests
@@ -81,7 +82,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests.ModelTests
             Assert.Equal(baseValueT.Value.ToString(), value.ShortInfo);
         }
 
-        private static void TestBarBaseValue<T>(BaseValue value) where T : struct
+        private static void TestBarBaseValue<T>(BaseValue value) where T : INumber<T>
         {
             var valueT = value as BarBaseValue<T>;
             var expectedShortInfo = $"Min = {valueT.Min}, Mean = {valueT.Mean}, Max = {valueT.Max}, Count = {valueT.Count}, Last = {valueT.LastValue}.";

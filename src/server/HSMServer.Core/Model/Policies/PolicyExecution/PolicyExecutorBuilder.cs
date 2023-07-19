@@ -29,10 +29,10 @@ namespace HSMServer.Core.Model.Policies
         internal static PolicyExecutor BuildExecutor<U>(PolicyProperty property) => property switch
         {
             PolicyProperty.Value or PolicyProperty.Min or PolicyProperty.Max or PolicyProperty.Mean or
-            PolicyProperty.LastValue when typeof(U) == typeof(int) => new PolicyExecutorInt(property),
+            PolicyProperty.LastValue when typeof(U) == typeof(int) => new PolicyExecutorNumber<int>(property),
 
             PolicyProperty.Value or PolicyProperty.Min or PolicyProperty.Max or
-            PolicyProperty.Mean or PolicyProperty.LastValue when typeof(U) == typeof(double) => new PolicyExecutorDouble(property),
+            PolicyProperty.Mean or PolicyProperty.LastValue when typeof(U) == typeof(double) => new PolicyExecutorNumber<double>(property),
 
             PolicyProperty.Status => new PolicyExecutorStatus(),
 
