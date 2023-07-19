@@ -29,14 +29,20 @@ namespace HSMServer.Model.DataAlerts
 
             foreach (var condition in Conditions)
             {
+                if (condition.Property == ConditionViewModel.TimeToLiveCondition)
+                    continue;
+
                 if (condition.Property == ConditionViewModel.SensitivityCondition)
                 {
                     sensitivity = condition.Sensitivity.ToModel();
                     continue;
                 }
 
-                if (condition.Property != ConditionViewModel.TimeToLiveCondition)
-                    conditions.Add(new PolicyConditionUpdate(condition.Operation, new TargetValue(TargetType.Const, condition.Target), condition.Property));
+                var target = condition.Property == ConditionViewModel.StatusCondition
+                    ? new TargetValue(TargetType.LastValue, EntityId.ToString())
+                    : new TargetValue(TargetType.Const, condition.Target);
+
+                conditions.Add(new PolicyConditionUpdate(condition.Operation, target, condition.Property));
             }
 
             SensorStatus status = SensorStatus.Ok;

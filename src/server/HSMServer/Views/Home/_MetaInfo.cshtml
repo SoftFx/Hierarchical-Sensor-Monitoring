@@ -148,6 +148,7 @@
             const type = this.id.substring("dataAlertsList_".length, this.id.length);
 
             setFormDataAlertsProperty(formData, "input", type, "Id");
+            setFormDataAlertsProperty(formData, "input", type, "EntityId");
             setFormDataAlerts(formData, type);
         });
     }
@@ -167,6 +168,11 @@
                 if (valueBlock.hasClass('d-flex')) {
                     setFormDataAlertsListProperty(formData, type, i, j, valueBlock, "Conditions", "select", "Operation");
                     setFormDataAlertsListProperty(formData, type, i, j, valueBlock, "Conditions", "input", "Target");
+                }
+
+                let statusBlock = $(this).find('div[name="statusCondition"]');
+                if (statusBlock.hasClass('d-flex')) {
+                    setFormDataAlertsListProperty(formData, type, i, j, statusBlock, "Conditions", "select", "Operation");
                 }
 
                 let sensitivityBlock = $(this).find('div[name="sensitivityCondition"]');

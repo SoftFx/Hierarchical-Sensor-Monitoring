@@ -9,9 +9,10 @@
 @{
     var condition = Model.Property;
 
+    var isStatusCondition = condition == ConditionViewModel.StatusCondition;
     var isTtlCondition = condition == ConditionViewModel.TimeToLiveCondition;
     var isSensitivityCondition = condition == ConditionViewModel.SensitivityCondition;
-    var isValueCondition = !isTtlCondition && !isSensitivityCondition;
+    var isValueCondition = !isStatusCondition && !isTtlCondition && !isSensitivityCondition;
 
     var isSecondaryCondition = !Model.PropertiesItems.Any(i => i.Value == ConditionViewModel.TimeToLiveCondition);
 }
@@ -25,6 +26,10 @@
     <div name="valueCondition" class="@isValueCondition.ToVisibility() flex-row align-items-center">
         <select class="alert-block alert-select operation-select" asp-for="Operation" asp-items="@Model.OperationsItems"></select>
         <input class="alert-block target-input target-value" type="text" placeholder="<enter a value>" asp-for="Target" value="@Model.Target" required="@(isValueCondition ? true : false)"/>
+    </div>
+
+    <div name="statusCondition" class="@isStatusCondition.ToVisibility() flex-row align-items-center">
+        <select class="alert-block alert-select operation-select" asp-for="Operation" asp-items="@Model.StatusOperationsItems"></select>
     </div>
 
     <div name="sensitivityCondition" class="@isSensitivityCondition.ToVisibility() flex-row align-items-center">
@@ -46,6 +51,7 @@
         let conditionBlock = $(this).parents("div[name='alertCondition']:first");
         
         let value = conditionBlock.find($(`div[name='valueCondition']`));
+        let status = conditionBlock.find($(`div[name='statusCondition']`));
         let timeToLive = conditionBlock.find($(`div[name='ttlCondition']`));
         let sensitivity = conditionBlock.find($(`div[name='sensitivityCondition']`));
 
@@ -53,9 +59,19 @@
         let addButton = $(this).parents("div.fullCondition:first").find($(`a.addCondition`));
 
         let condition = $(this).val();
-        if (condition === '@ConditionViewModel.TimeToLiveCondition') {
+        if (condition === '@ConditionViewModel.StatusCondition') {
             targetInput.attr('required', false);
             value.removeClass("d-flex").addClass('d-none');
+            sensitivity.removeClass("d-flex").addClass('d-none');
+            timeToLive.removeClass("d-none").addClass('d-flex');
+
+            status.removeClass("d-none").addClass('d-flex');
+            addButton.removeClass("d-none").addClass('d-block');
+        }
+        else if (condition === '@ConditionViewModel.TimeToLiveCondition') {
+            targetInput.attr('required', false);
+            value.removeClass("d-flex").addClass('d-none');
+            status.removeClass("d-flex").addClass('d-none');
             sensitivity.removeClass("d-flex").addClass('d-none');
             addButton.removeClass("d-block").addClass('d-none');
 
@@ -64,12 +80,14 @@
         else if (condition === '@ConditionViewModel.SensitivityCondition') {
             targetInput.attr('required', false);
             value.removeClass("d-flex").addClass('d-none');
+            status.removeClass("d-flex").addClass('d-none');
             timeToLive.removeClass("d-flex").addClass('d-none');
 
             sensitivity.removeClass("d-none").addClass('d-flex');
             addButton.removeClass("d-none").addClass('d-block');
         }
         else {
+            status.removeClass("d-flex").addClass('d-none');
             sensitivity.removeClass("d-flex").addClass('d-none');
             timeToLive.removeClass("d-flex").addClass('d-none');
 

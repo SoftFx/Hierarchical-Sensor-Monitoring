@@ -31,7 +31,11 @@
             }
             else
             {
-                <b>@condition.Property @condition.Operation.GetDisplayName() @condition.Target</b>
+                <b>@condition.Property @condition.Operation.GetDisplayName()</b>
+                @if (condition.Property != ConditionViewModel.StatusCondition)
+                {
+                    <b>@condition.Target</b>
+                }
             }
         </span>
     }

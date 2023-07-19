@@ -26,18 +26,29 @@ namespace HSMServer.Model.DataAlerts
 
     public abstract class ConditionViewModel : AlertConditionBase
     {
+        public const string StatusCondition = "Status";
         public const string TimeToLiveCondition = "TTL";
         public const string SensitivityCondition = "Sensitivity";
 
 
+        private readonly List<PolicyOperation> _statusOperations = new()
+        {
+            PolicyOperation.IsChanged,
+            PolicyOperation.IsOk,
+            PolicyOperation.IsError
+        };
+
+
         protected abstract List<string> Properties { get; }
 
-        protected abstract List<PolicyOperation> Actions { get; }
+        protected abstract List<PolicyOperation> Operations { get; }
 
 
         public List<SelectListItem> PropertiesItems { get; }
 
         public List<SelectListItem> OperationsItems { get; }
+
+        public List<SelectListItem> StatusOperationsItems { get; }
 
 
         public ConditionViewModel(bool isMain)
@@ -45,7 +56,8 @@ namespace HSMServer.Model.DataAlerts
             Sensitivity = new TimeIntervalViewModel(PredefinedIntervals.ForRestore) { IsAlertBlock = true };
             TimeToLive = new TimeIntervalViewModel(PredefinedIntervals.ForRestore) { IsAlertBlock = true };
 
-            OperationsItems = Actions.ToSelectedItems(k => k.GetDisplayName());
+            StatusOperationsItems = _statusOperations.ToSelectedItems(k => k.GetDisplayName());
+            OperationsItems = Operations.ToSelectedItems(k => k.GetDisplayName());
             PropertiesItems = Properties.ToSelectedItems();
 
             if (isMain)
@@ -60,9 +72,13 @@ namespace HSMServer.Model.DataAlerts
 
     public sealed class SingleConditionViewModel<T, U> : ConditionViewModel where T : BaseValue<U>, new()
     {
-        protected override List<string> Properties { get; } = new() { nameof(BaseValue<U>.Value) };
+        protected override List<string> Properties { get; } = new()
+        {
+            nameof(BaseValue<U>.Value),
+            nameof(BaseValue<U>.Status)
+        };
 
-        protected override List<PolicyOperation> Actions { get; } = new()
+        protected override List<PolicyOperation> Operations { get; } = new()
         {
             PolicyOperation.LessThanOrEqual,
             PolicyOperation.LessThan,
@@ -83,9 +99,10 @@ namespace HSMServer.Model.DataAlerts
             nameof(BarBaseValue<U>.Max),
             nameof(BarBaseValue<U>.Mean),
             nameof(BarBaseValue<U>.LastValue),
+            nameof(BarBaseValue<U>.Status),
         };
 
-        protected override List<PolicyOperation> Actions { get; } = new()
+        protected override List<PolicyOperation> Operations { get; } = new()
         {
             PolicyOperation.LessThanOrEqual,
             PolicyOperation.LessThan,
