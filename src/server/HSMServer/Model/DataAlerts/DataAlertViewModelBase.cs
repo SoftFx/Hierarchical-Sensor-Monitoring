@@ -36,7 +36,7 @@ namespace HSMServer.Model.DataAlerts
                 }
 
                 if (condition.Property != ConditionViewModel.TimeToLiveCondition)
-                    conditions.Add(new PolicyConditionUpdate(condition.Operation, new TargetValue(TargetType.Const, condition.Target), condition.Property));
+                    conditions.Add(new PolicyConditionUpdate(condition.Operation, Enum.Parse<PolicyProperty>(condition.Property), new TargetValue(TargetType.Const, condition.Target)));
             }
 
             SensorStatus status = SensorStatus.Ok;
@@ -79,7 +79,7 @@ namespace HSMServer.Model.DataAlerts
                 var viewModel = CreateCondition(i == 0);
                 var condition = policy.Conditions[i];
 
-                viewModel.Property = condition.Property;
+                viewModel.Property = condition.Property.ToString();
                 viewModel.Operation = condition.Operation;
                 viewModel.Target = condition.Target.Value;
 

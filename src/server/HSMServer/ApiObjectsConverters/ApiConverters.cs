@@ -7,6 +7,7 @@ using HSMServer.Core.Model.Requests;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Numerics;
 using ApiSensorStatus = HSMSensorDataObjects.SensorStatus;
 
 namespace HSMServer.ApiObjectsConverters
@@ -154,7 +155,7 @@ namespace HSMServer.ApiObjectsConverters
             };
         }
 
-        public static BarSensorHistory Convert<T>(this BarBaseValue<T> value) where T : struct =>
+        public static BarSensorHistory Convert<T>(this BarBaseValue<T> value) where T : INumber<T> =>
             new()
             {
                 Comment = value.Comment,

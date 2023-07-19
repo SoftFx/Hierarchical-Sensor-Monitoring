@@ -111,7 +111,7 @@ namespace HSMServer.Core
                                     new PolicyConditionEntity
                                     {
                                         Target = new PolicyTargetEntity(byte.Parse(raw["Target"]["Type"].ToString()), raw["Target"]["Value"].ToString()),
-                                        Property = raw["Property"].ToString(),
+                                        Property = (byte)Enum.Parse<PolicyProperty>(raw["Property"].ToString()),
                                         Operation = byte.Parse(raw["Operation"].ToString())
                                     }
                                 },
