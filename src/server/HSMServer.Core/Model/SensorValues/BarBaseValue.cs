@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Numerics;
 
 namespace HSMServer.Core.Model
 {
@@ -13,7 +14,7 @@ namespace HSMServer.Core.Model
     }
 
 
-    public abstract record BarBaseValue<T> : BarBaseValue where T : struct
+    public abstract record BarBaseValue<T> : BarBaseValue where T : INumber<T>
     {
         public T Min { get; init; }
 

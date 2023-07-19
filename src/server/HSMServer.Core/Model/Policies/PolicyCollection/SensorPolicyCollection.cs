@@ -194,9 +194,8 @@ namespace HSMServer.Core.Model.Policies
                            {
                                 new PolicyConditionUpdate(
                                     PolicyOperation.IsChanged,
-                                    new TargetValue(TargetType.LastValue, _sensor.Id.ToString()),
-                                    "Status"),
-
+                                    PolicyProperty.Status,
+                                    new TargetValue(TargetType.LastValue, _sensor.Id.ToString())),
                            },
                            null,
                            SensorStatus.Ok,

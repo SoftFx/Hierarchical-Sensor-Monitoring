@@ -49,8 +49,19 @@ namespace HSMDataCollector.Core
         {
             async Task<List<byte>> GetFileBytes()
             {
-                using (var stream = new StreamReader(fileInfo.FullName))
-                    return Encoding.UTF8.GetBytes(await stream.ReadToEndAsync()).ToList();
+                try
+                {
+                    using (var file = File.Open(fileInfo.FullName, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+                    {
+                        using (var stream = new StreamReader(file))
+                            return Encoding.UTF8.GetBytes(await stream.ReadToEndAsync()).ToList();
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.Error(ex.Message);
+                    throw;
+                }
             }
 
             var value = new FileSensorValue()

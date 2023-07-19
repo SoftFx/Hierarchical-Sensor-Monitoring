@@ -23,25 +23,11 @@ namespace HSMServer.Core.Cache.UpdateEntities
     }
 
 
-    public sealed class PolicyConditionUpdate : IPolicyCondition
-    {
-        public PolicyOperation Operation { get; set; }
-        
-        public TargetValue Target { get; set; }
-        
-        public string Property { get; set; }
-
-        public PolicyCombination Combination { get; set; }
-        
-
-        public PolicyConditionUpdate(PolicyOperation operation, TargetValue target, string property, PolicyCombination combination = PolicyCombination.And)
-        {
-            Operation = operation;
-            Target = target;
-            Property = property;
-            Combination = combination;
-        }
-    }
+    public sealed record PolicyConditionUpdate(
+        PolicyOperation Operation,
+        PolicyProperty Property,
+        TargetValue Target,
+        PolicyCombination Combination = PolicyCombination.And);
 
 
     public sealed class PolicyUpdate : IUpdateComparer<Policy, PolicyUpdate>, IPolicy<PolicyConditionUpdate>

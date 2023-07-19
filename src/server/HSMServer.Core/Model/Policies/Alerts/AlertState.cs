@@ -13,7 +13,7 @@ namespace HSMServer.Core.Model.Policies
         private const char Separator = ' ';
 
         private readonly static Dictionary<string, PropertyInfo> _publicProperties = typeof(AlertState).GetProperties()
-            .Where(u => Attribute.IsDefined(u, typeof(CommentVariableAttribute))).ToDictionary(k => k.Name, v => v);
+            .Where(u => Attribute.IsDefined(u, typeof(AlertVariableAttribute))).ToDictionary(k => k.Name, v => v);
 
         private readonly static ConcurrentDictionary<string, (string index, string property)> _variables = new();
 
@@ -30,46 +30,46 @@ namespace HSMServer.Core.Model.Policies
         internal AlertSystemTemplate Template { get; set; }
 
 
-        [CommentVariable("$product", "Parent product name")]
+        [AlertVariable("$product", "Parent product name")]
         public string Product { get; init; }
 
-        [CommentVariable("$path", "Sensor path")]
+        [AlertVariable("$path", "Sensor path")]
         public string Path { get; init; }
 
-        [CommentVariable("$sensor", "Sensor name")]
+        [AlertVariable("$sensor", "Sensor name")]
         public string Sensor { get; init; }
 
-        [CommentVariable("$status", "Sensor status")]
+        [AlertVariable("$status", "Sensor status")]
         public string Status { get; init; }
 
-        [CommentVariable("$time", "Sensor value sending time")]
+        [AlertVariable("$time", "Sensor value sending time")]
         public string Time { get; init; }
 
-        [CommentVariable("$comment", "Sensor value comment")]
+        [AlertVariable("$comment", "Sensor value comment")]
         public string Comment { get; init; }
 
 
-        [CommentVariable("$value", "Sensor value")]
+        [AlertVariable("$value", "Sensor value")]
         public string ValueSingle { get; private set; }
 
 
-        [CommentVariable("$min", "Bar sensor min value")]
+        [AlertVariable("$min", "Bar sensor min value")]
         public string MinValueBar { get; private set; }
 
-        [CommentVariable("$max", "Bar sensor max value")]
+        [AlertVariable("$max", "Bar sensor max value")]
         public string MaxValueBar { get; private set; }
 
-        [CommentVariable("$mean", "Bar sensor mean value")]
+        [AlertVariable("$mean", "Bar sensor mean value")]
         public string MeanValueBar { get; private set; }
 
-        [CommentVariable("$lastValue", "Bar sensor lastValue value")]
+        [AlertVariable("$lastValue", "Bar sensor lastValue value")]
         public string LastValueBar { get; private set; }
 
 
-        [CommentVariable("$operation", "Alert operation")]
+        [AlertVariable("$operation", "Alert operation")]
         public string Operation { get; set; }
 
-        [CommentVariable("$target", "Alert constant to compare")]
+        [AlertVariable("$target", "Alert constant to compare")]
         public string Target { get; set; }
 
 
@@ -79,7 +79,7 @@ namespace HSMServer.Core.Model.Policies
 
             foreach (var prop in _publicProperties.Values)
             {
-                var attr = prop.GetCustomAttribute<CommentVariableAttribute>();
+                var attr = prop.GetCustomAttribute<AlertVariableAttribute>();
 
                 if (attr is not null)
                 {
@@ -185,7 +185,7 @@ namespace HSMServer.Core.Model.Policies
                 Sensor = sensor.DisplayName,
                 Path = sensor.Path,
 
-                Status = value.Status.ToString(),
+                Status = value.Status.ToIcon(),
                 Time = value.Time.ToString(),
                 Comment = value.Comment,
             };

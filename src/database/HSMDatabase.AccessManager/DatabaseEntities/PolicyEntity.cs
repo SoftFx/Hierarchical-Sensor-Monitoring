@@ -11,9 +11,9 @@ namespace HSMDatabase.AccessManager.DatabaseEntities
 
         public byte Combination { get; init; }
 
-        public string Property { get; init; }
-
         public byte Operation { get; init; }
+
+        public byte Property { get; init; }
     }
 
 
