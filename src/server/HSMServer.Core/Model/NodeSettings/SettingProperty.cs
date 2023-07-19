@@ -9,6 +9,8 @@ namespace HSMServer.Core.Model.NodeSettings
         internal SettingProperty ParentProperty { get; set; }
 
 
+        public abstract bool IsEmpty { get; }
+
         public abstract bool IsSet { get; }
 
 
@@ -26,17 +28,17 @@ namespace HSMServer.Core.Model.NodeSettings
         private readonly T _emptyValue = (T)TimeIntervalModel.None;
 
 
+        public override bool IsSet => !CurValue?.IsFromParent ?? false;
+
+        public override bool IsEmpty => Value is null;
+
+
         public required string Name { get; set; }
 
 
         public T CurValue { get; private set; } = new T();
 
         public T Value => IsSet ? CurValue : ((SettingProperty<T>)ParentProperty)?.Value ?? _emptyValue;
-
-
-        public override bool IsSet => !CurValue?.IsFromParent ?? false;
-
-        public bool IsEmpty => Value is null;
 
 
         internal override bool TrySetValue(TimeIntervalModel update)
