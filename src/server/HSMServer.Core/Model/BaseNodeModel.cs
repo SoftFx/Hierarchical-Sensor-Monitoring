@@ -65,6 +65,8 @@ namespace HSMServer.Core.Model
 
             if (entity.Settings != null)
                 Settings.SetSettings(entity.Settings);
+
+            Settings.TTL.Uploaded += (_, _) => CheckTimeout();
         }
 
 
@@ -84,9 +86,7 @@ namespace HSMServer.Core.Model
         {
             Description = UpdateProperty(Description, update.Description ?? Description, update.Initiator);
 
-            Settings.KeepHistory.Update(update.KeepHistory, update, PathWithName);
-            Settings.SelfDestroy.Update(update.SelfDestroy, update, PathWithName);
-            Settings.TTL.Update(update.TTL, update, PathWithName, CheckTimeout);
+            Settings.Update(update, PathWithName);
         }
 
 
