@@ -9,12 +9,12 @@
 @{
     var condition = Model.Property;
 
-    var isStatusCondition = condition == ConditionViewModel.StatusCondition;
-    var isTtlCondition = condition == ConditionViewModel.TimeToLiveCondition;
-    var isSensitivityCondition = condition == ConditionViewModel.SensitivityCondition;
+    var isStatusCondition = condition == AlertProperty.Status;
+    var isTtlCondition = condition == AlertProperty.TimeToLive;
+    var isSensitivityCondition = condition == AlertProperty.Sensitivity;
     var isValueCondition = !isStatusCondition && !isTtlCondition && !isSensitivityCondition;
 
-    var isSecondaryCondition = !Model.PropertiesItems.Any(i => i.Value == ConditionViewModel.TimeToLiveCondition);
+    var isSecondaryCondition = !Model.PropertiesItems.Any(i => i.Value == nameof(AlertProperty.TimeToLive));
 }
 
 
@@ -59,7 +59,7 @@
         let addButton = $(this).parents("div.fullCondition:first").find($(`a.addCondition`));
 
         let condition = $(this).val();
-        if (condition === '@ConditionViewModel.StatusCondition') {
+        if (condition === '@AlertProperty.Status') {
             targetInput.attr('required', false);
             value.removeClass("d-flex").addClass('d-none');
             sensitivity.removeClass("d-flex").addClass('d-none');
@@ -68,7 +68,7 @@
             status.removeClass("d-none").addClass('d-flex');
             addButton.removeClass("d-none").addClass('d-block');
         }
-        else if (condition === '@ConditionViewModel.TimeToLiveCondition') {
+        else if (condition === '@AlertProperty.TimeToLive') {
             targetInput.attr('required', false);
             value.removeClass("d-flex").addClass('d-none');
             status.removeClass("d-flex").addClass('d-none');
@@ -77,7 +77,7 @@
 
             timeToLive.removeClass("d-none").addClass('d-flex');
         }
-        else if (condition === '@ConditionViewModel.SensitivityCondition') {
+        else if (condition === '@AlertProperty.Sensitivity') {
             targetInput.attr('required', false);
             value.removeClass("d-flex").addClass('d-none');
             status.removeClass("d-flex").addClass('d-none');

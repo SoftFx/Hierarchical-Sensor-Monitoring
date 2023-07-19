@@ -29,20 +29,20 @@ namespace HSMServer.Model.DataAlerts
 
             foreach (var condition in Conditions)
             {
-                if (condition.Property == ConditionViewModel.TimeToLiveCondition)
+                if (condition.Property == AlertProperty.TimeToLive)
                     continue;
 
-                if (condition.Property == ConditionViewModel.SensitivityCondition)
+                if (condition.Property == AlertProperty.Sensitivity)
                 {
                     sensitivity = condition.Sensitivity.ToModel();
                     continue;
                 }
 
-                var target = condition.Property == ConditionViewModel.StatusCondition
+                var target = condition.Property == AlertProperty.Status
                     ? new TargetValue(TargetType.LastValue, EntityId.ToString())
                     : new TargetValue(TargetType.Const, condition.Target);
 
-                conditions.Add(new PolicyConditionUpdate(condition.Operation, Enum.Parse<PolicyProperty>(condition.Property), target));
+                conditions.Add(new PolicyConditionUpdate(condition.Operation, condition.Property.ToCore(), target));
             }
 
             SensorStatus status = SensorStatus.Ok;
@@ -85,7 +85,7 @@ namespace HSMServer.Model.DataAlerts
                 var viewModel = CreateCondition(i == 0);
                 var condition = policy.Conditions[i];
 
-                viewModel.Property = condition.Property.ToString();
+                viewModel.Property = condition.Property.ToClient();
                 viewModel.Operation = condition.Operation;
                 viewModel.Target = condition.Target.Value;
 
@@ -97,7 +97,7 @@ namespace HSMServer.Model.DataAlerts
                 var condition = CreateCondition(false);
                 var sensitivityViewModel = new TimeIntervalViewModel(null).FromModel(policy.Sensitivity);
 
-                condition.Property = ConditionViewModel.SensitivityCondition;
+                condition.Property = AlertProperty.Sensitivity;
                 condition.Sensitivity = new TimeIntervalViewModel(sensitivityViewModel, PredefinedIntervals.ForRestore) { IsAlertBlock = true };
 
                 Conditions.Add(condition);

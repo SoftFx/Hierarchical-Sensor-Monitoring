@@ -21,18 +21,18 @@
         }
 
         <span>
-            @if (condition.Property == ConditionViewModel.TimeToLiveCondition)
+            @if (condition.Property == AlertProperty.TimeToLive)
             {
                 <b>Inactivity period is @condition.TimeToLive.DisplayValue</b>
             }
-            else if (condition.Property == ConditionViewModel.SensitivityCondition)
+            else if (condition.Property == AlertProperty.Sensitivity)
             {
                 <b>Sensitivity is more than @condition.Sensitivity.DisplayValue</b>
             }
             else
             {
                 <b>@condition.Property @condition.Operation.GetDisplayName()</b>
-                @if (condition.Property != ConditionViewModel.StatusCondition)
+                @if (condition.Property != AlertProperty.Status)
                 {
                     <b>@condition.Target</b>
                 }
