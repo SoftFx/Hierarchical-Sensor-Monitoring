@@ -29,9 +29,10 @@ namespace HSMServer.Core.Model.Policies
 
     public enum PolicyProperty : byte
     {
-        Value = 0,
-        Status = 1,
-        Comment = 2,
+        Status = 0,
+        Comment = 1,
+
+        Value = 20,
 
         Min = 101,
         Max = 102,

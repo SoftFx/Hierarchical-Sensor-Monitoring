@@ -5,6 +5,7 @@ using HSMServer.Extensions;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using System.Collections.Generic;
 using System.Linq;
+using System.Numerics;
 
 namespace HSMServer.Model.DataAlerts
 {
@@ -75,7 +76,7 @@ namespace HSMServer.Model.DataAlerts
     }
 
 
-    public sealed class BarConditionViewModel<T, U> : ConditionViewModel where T : BarBaseValue<U>, new() where U : struct
+    public sealed class BarConditionViewModel<T, U> : ConditionViewModel where T : BarBaseValue<U>, new() where U : INumber<U>
     {
         protected override List<string> Properties { get; } = new()
         {

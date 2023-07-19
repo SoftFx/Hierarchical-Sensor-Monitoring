@@ -1,5 +1,4 @@
-﻿using NLog.LayoutRenderers;
-using System;
+﻿using System;
 
 namespace HSMServer.Core.Model.Policies
 {
