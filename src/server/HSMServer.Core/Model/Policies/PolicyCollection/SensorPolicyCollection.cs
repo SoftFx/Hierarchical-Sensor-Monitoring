@@ -77,10 +77,7 @@ namespace HSMServer.Core.Model.Policies
 
             var timeout = TimeToLive.HasTimeout(time);
 
-            if (timeout)
-                PolicyResult = TimeToLive.PolicyResult;
-            else
-                PolicyResult = PolicyResult.Ok;
+            PolicyResult = timeout ? TimeToLive.PolicyResult : PolicyResult.Ok;
 
             SensorExpired?.Invoke(_sensor, timeout);
 

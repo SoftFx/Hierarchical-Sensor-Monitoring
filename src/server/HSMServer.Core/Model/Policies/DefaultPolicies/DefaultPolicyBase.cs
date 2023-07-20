@@ -7,9 +7,9 @@ namespace HSMServer.Core.Model.Policies
         internal PolicyResult PolicyResult { get; }
 
 
-        protected DefaultPolicyBase(Guid sensorId) : base()
+        protected DefaultPolicyBase(Guid nodeId) : base()
         {
-            PolicyResult = new PolicyResult(sensorId, this);
+            PolicyResult = new PolicyResult(nodeId, this);
         }
 
 

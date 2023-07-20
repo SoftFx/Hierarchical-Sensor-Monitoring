@@ -82,6 +82,9 @@ namespace HSMServer.Core.Model
 
             if (Settings.TTL.TrySetValue(update.TTL))
                 CheckTimeout();
+
+            if (update.TTLPolicy is not null)
+                Policies.TimeToLive?.Update(update.TTLPolicy);
         }
     }
 }

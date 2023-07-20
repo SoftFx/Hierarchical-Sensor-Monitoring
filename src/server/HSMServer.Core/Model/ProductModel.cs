@@ -46,6 +46,8 @@ namespace HSMServer.Core.Model
             State = (ProductState)entity.State;
             NotificationsSettings = entity.NotificationSettings;
             FolderId = Guid.TryParse(entity.FolderId, out var folderId) ? folderId : null;
+
+            Policies.Attach(this);
         }
 
 

@@ -35,6 +35,11 @@ namespace HSMServer.Core.Model.Policies
         }
 
 
+        internal void Attach(ProductModel product)
+        {
+            TimeToLive = new TTLPolicy(product.Id, product.Settings.TTL);
+        }
+
         internal override void AddPolicy<T>(T policy)
         {
             if (_byPolicyType.TryGetValue(typeof(T), out var collection))
