@@ -6,5 +6,5 @@
 
 @foreach (var (icon, count) in Model)
 {
-    <span class='tree-alert-icon'>@icon<span class='badge badge-dark @(count > 1 ? "d-block" : "d-none")'>@(count > 9 ? "9+" : count)</span></span>
+    <span class='tree-alert-icon'>@icon<span class='badge badge-dark @(count > 1 ? "d-block" : "d-none")'>@(count > 9 ? "∞" : count)</span></span>
 }
