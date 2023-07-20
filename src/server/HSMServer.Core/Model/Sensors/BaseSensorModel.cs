@@ -71,7 +71,7 @@ namespace HSMServer.Core.Model
             Integration = (Integration)entity.Integration;
             EndOfMuting = entity.EndOfMuting > 0L ? new DateTime(entity.EndOfMuting) : null;
 
-            Policies.ApplyTTL(this, entity.TTLPolicy);
+            Policies.Attach(this, entity.TTLPolicy);
         }
 
 
