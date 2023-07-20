@@ -8,25 +8,42 @@ namespace HSMServer.Core.Model.Policies
 {
     public abstract class Policy
     {
+        private AlertSystemTemplate _systemTemplate;
+        private string _userTemplate;
+
+
         public Guid Id { get; private set; }
 
 
         internal protected virtual SensorResult SensorResult { get; protected set; }
-
-        internal protected virtual AlertState State { get; protected set; }
 
         internal protected virtual string AlertComment { get; protected set; }
 
 
         public List<PolicyCondition> Conditions { get; } = new();
 
+        public AlertState State { get; private set; }
+
+
         public virtual TimeIntervalModel Sensitivity { get; protected set; }
 
         public virtual SensorStatus Status { get; protected set; }
 
-        public virtual string Template { get; protected set; }
-
         public virtual string Icon { get; protected set; }
+
+
+        public string Template
+        {
+            get => _userTemplate;
+            protected set
+            {
+                if (_userTemplate == value)
+                    return;
+
+                _userTemplate = value;
+                _systemTemplate = AlertState.BuildSystemTemplate(value);
+            }
+        }
 
 
         public Policy()
@@ -35,7 +52,10 @@ namespace HSMServer.Core.Model.Policies
         }
 
 
+        public abstract string BuildStateAndComment(BaseValue value, BaseSensorModel sensor, PolicyCondition condition);
+
         protected abstract PolicyCondition GetCondition();
+
 
         internal void Update(PolicyUpdate update)
         {
@@ -84,6 +104,18 @@ namespace HSMServer.Core.Model.Policies
             Template = Template,
             Icon = Icon,
         };
+
+
+        protected string SetStateAndGetComment(AlertState state)
+        {
+            State = state;
+            State.Template = _systemTemplate;
+
+            AlertComment = State.BuildComment();
+
+            return AlertComment;
+        }
+
 
         private void UpdateConditions<T>(List<T> updates, Func<PolicyCondition, T, PolicyCondition> updateHandler)
         {

@@ -14,5 +14,8 @@ namespace HSMServer.Core.Model.Policies
 
 
         protected override PolicyCondition GetCondition() => throw new NotImplementedException();
+
+        public override string BuildStateAndComment(BaseValue value, BaseSensorModel sensor, PolicyCondition _) =>
+            SetStateAndGetComment(AlertState.BuildBase(value, sensor));
     }
 }

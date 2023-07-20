@@ -160,7 +160,7 @@ namespace HSMServer.Core.Model.Policies
         {
             var state = BuildBase(value, sensor);
 
-            state.ValueSingle = value.Value.ToString();
+            state.ValueSingle = value?.Value.ToString();
 
             return state;
         }
@@ -170,24 +170,23 @@ namespace HSMServer.Core.Model.Policies
         {
             var state = BuildBase(value, sensor);
 
-            state.MinValueBar = value.Min.ToString();
-            state.MaxValueBar = value.Max.ToString();
-            state.MeanValueBar = value.Mean.ToString();
-            state.LastValueBar = value.LastValue.ToString();
+            state.MinValueBar = value?.Min.ToString();
+            state.MaxValueBar = value?.Max.ToString();
+            state.MeanValueBar = value?.Mean.ToString();
+            state.LastValueBar = value?.LastValue.ToString();
 
             return state;
         }
 
-        private static AlertState BuildBase<T>(T value, BaseSensorModel sensor)
-            where T : BaseValue => new()
-            {
-                Product = sensor.RootProductName,
-                Sensor = sensor.DisplayName,
-                Path = sensor.Path,
+        internal static AlertState BuildBase(BaseValue value, BaseSensorModel sensor) => new()
+        {
+            Product = sensor.RootProductName,
+            Sensor = sensor.DisplayName,
+            Path = sensor.Path,
 
-                Status = value.Status.ToIcon(),
-                Time = value.Time.ToString(),
-                Comment = value.Comment,
-            };
+            Status = value?.Status.ToIcon(),
+            Time = value?.Time.ToString(),
+            Comment = value?.Comment,
+        };
     }
 }
