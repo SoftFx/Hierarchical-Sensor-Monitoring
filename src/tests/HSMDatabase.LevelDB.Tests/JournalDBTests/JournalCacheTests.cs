@@ -1,43 +1,58 @@
 using HSMDatabase.AccessManager.DatabaseEntities;
-using HSMServer.Core.Journal;
 using HSMServer.Core.Model;
+using HSMServer.Core.Model.Requests;
 using HSMServer.Core.Tests.Infrastructure;
 using HSMServer.Core.Tests.MonitoringCoreTests;
 using HSMServer.Core.Tests.MonitoringCoreTests.Fixture;
 using HSMServer.Core.Tests.TreeValuesCacheTests;
 using Xunit;
 
-namespace HSMDatabase.LevelDB.Tests;
+namespace HSMDatabase.LevelDB.Tests.JournalDBTests;
 
 public sealed class JournalCacheTests : MonitoringCoreTestsBase<TreeValuesCacheFixture>, IClassFixture<DatabaseRegisterFixture>
 {
-    private IJournalService _journalService;
-    
-    public JournalCacheTests(TreeValuesCacheFixture fixture, DatabaseRegisterFixture registerFixture)
-        : base(fixture, registerFixture)
+    public JournalCacheTests(TreeValuesCacheFixture fixture, DatabaseRegisterFixture registerFixture) : base(fixture, registerFixture) { }
+
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(10)]
+    [InlineData(100)]
+    [InlineData(1000)]
+    public void CheckKeys(int count)
     {
-        _journalService = new JournalService(_databaseCoreManager.DatabaseCore);
+        for (int i = 0; i < count; i++)
+        {
+            var id = Guid.NewGuid();
+            var record = JournalFactory.GetRecord(id);
+
+            var key = record.Key;
+            var desKey = JournalKey.FromBytes(key.GetBytes());
+
+            Assert.Equal(key.Id, desKey.Id);
+            Assert.Equal(key.Time, desKey.Time);
+            Assert.Equal(key.Type, desKey.Type);
+        }
     }
+
 
     [Theory]
     [InlineData(100)]
     [InlineData(1000)]
     [InlineData(10000)]
-    public async Task SensorUpdateTest(int n)
+    public async Task SensorUpdateTest(int count)
     {
-        var sensors = GetUpdatedSensors(n);
+        var sensors = GetUpdatedSensors(count);
+        var request = new JournalHistoryRequestModel() { Id = sensors[0].Id };
+
         foreach (var sensor in sensors)
         {
-            var journals = await _journalService.GetPages(new()
-            {
-                Id = sensor.Id,
-                FromType = RecordType.Changes,
-                ToType = RecordType.Changes,
-            }).Flatten();
-           
+            var journals = await _journalService.GetPages(request with { Id = sensor.Id}).Flatten();
+
             Assert.NotEmpty(journals);
         }
     }
+
 
     [Theory]
     [InlineData(5)]
@@ -45,6 +60,7 @@ public sealed class JournalCacheTests : MonitoringCoreTestsBase<TreeValuesCacheF
     {
         var id = Guid.NewGuid();
         var journals = new List<JournalRecordModel>();
+
         for (int i = 0; i < n; i++)
         {
             string value = RandomGenerator.GetRandomString();
@@ -54,12 +70,12 @@ public sealed class JournalCacheTests : MonitoringCoreTestsBase<TreeValuesCacheF
         }
 
         await Task.Delay(1000);
+
         var expected = journals.OrderBy(x => x.Key.Time).ToList();
         var actual = await _journalService.GetPages(new()
         {
             Id = id,
-            FromType = RecordType.Changes,
-            ToType = RecordType.Changes,
+            Types = RecordType.Changes,
         }).Flatten();
 
         for (int i = 0; i < n; i++)
@@ -68,10 +84,12 @@ public sealed class JournalCacheTests : MonitoringCoreTestsBase<TreeValuesCacheF
         }
     }
 
-    private List<BaseSensorModel> GetUpdatedSensors(int n)
+
+    private List<BaseSensorModel> GetUpdatedSensors(int count)
     {
         var sensors = new List<BaseSensorModel>();
-        for (int i = 0; i < n; i++)
+
+        for (int i = 0; i < count; i++)
         {
             var sensor = SensorModelFactory.Build(EntitiesFactory.BuildSensorEntity());
             _journalService.AddRecord(new JournalRecordModel(sensor.Id, "Test message", "Test name", "Test initiator"));
@@ -79,25 +97,5 @@ public sealed class JournalCacheTests : MonitoringCoreTestsBase<TreeValuesCacheF
         }
 
         return sensors;
-    }
-
-    [Theory]
-    [InlineData(1000)]
-    public void CHeckKeys(int n)
-    {
-        for (int i = 0; i < n; i++)
-        {
-            var id = Guid.NewGuid();
-            var value = RandomGenerator.GetRandomString();
-            var record = new JournalRecordModel(id, value, "Test", "Test");
-
-            var key = record.Key;
-
-            var desKey = JournalKey.FromBytes(key.GetBytes());
-            
-            Assert.Equal(key.Id, desKey.Id);
-            Assert.Equal(key.Time, desKey.Time);
-            Assert.Equal(key.Type, desKey.Type);
-        }
     }
 }

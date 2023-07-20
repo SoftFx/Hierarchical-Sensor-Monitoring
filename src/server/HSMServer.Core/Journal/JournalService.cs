@@ -31,7 +31,7 @@ public sealed class JournalService : IJournalService
 
     public async IAsyncEnumerable<List<JournalRecordModel>> GetPages(JournalHistoryRequestModel request)
     {
-        var pages = _database.GetJournalValuesPage(request.Id, request.From, request.To, request.FromType, request.ToType, request.Count);
+        var pages = _database.GetJournalValuesPage(request.Id, request.From, request.To, request.Types, request.Count);
 
         await foreach (var page in pages)
         {

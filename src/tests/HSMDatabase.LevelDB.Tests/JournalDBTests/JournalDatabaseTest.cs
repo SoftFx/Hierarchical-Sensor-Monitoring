@@ -6,7 +6,7 @@ using HSMServer.Core.Tests.Infrastructure;
 using HSMServer.Core.Tests.MonitoringCoreTests.Fixture;
 using Xunit;
 
-namespace HSMDatabase.LevelDB.Tests
+namespace HSMDatabase.LevelDB.Tests.JournalDBTests
 {
     public class JournalDatabaseTest : DatabaseCoreTestsBase<JournalDatabaseFixture>, IClassFixture<DatabaseRegisterFixture>
     {
@@ -34,7 +34,7 @@ namespace HSMDatabase.LevelDB.Tests
                 _databaseCore.AddJournalValue(journal.Item1, journal.Item2);
 
             await Task.Delay(1000);
-            var actualJournals = (await _databaseCore.GetJournalValuesPage(sensorId, DateTime.MinValue, DateTime.MaxValue, journalType, journalType, historyValuesCount)
+            var actualJournals = (await _databaseCore.GetJournalValuesPage(sensorId, DateTime.MinValue, DateTime.MaxValue, journalType, historyValuesCount)
                 .Flatten()).Select(x => (JournalKey.FromBytes(x.Key), x.Entity)).ToList();
 
             Assert.Equal(journals.Count, actualJournals.Count);
@@ -68,8 +68,8 @@ namespace HSMDatabase.LevelDB.Tests
         private async Task RandomGuidTest(int count)
         {
             var id = Guid.NewGuid();
-            var expectedMinKey = JournalFactory.BuildKey(id, _minTime.Ticks);
-            var expectedMaxKey = JournalFactory.BuildKey(id, _maxTime.Ticks);
+            var expectedMinKey = JournalFactory.GetKey(id, _minTime.Ticks);
+            var expectedMaxKey = JournalFactory.GetKey(id, _maxTime.Ticks);
 
             var expected = new List<(JournalKey, JournalRecordEntity)>();
             var journals = BuildJournalEntities(count);
@@ -80,13 +80,13 @@ namespace HSMDatabase.LevelDB.Tests
                 {
                     _databaseCore.AddJournalValue(expectedMinKey, journals[i]);
                     expected.Add((expectedMinKey, journals[i]));
-                    expectedMinKey = JournalFactory.BuildKey(id, expectedMinKey.Time + 1);
+                    expectedMinKey = JournalFactory.GetKey(id, expectedMinKey.Time + 1);
                 }
                 else
                 {
                     _databaseCore.AddJournalValue(expectedMaxKey, journals[i]);
                     expected.Add((expectedMaxKey, journals[i]));
-                    expectedMaxKey = JournalFactory.BuildKey(id, expectedMaxKey.Time + 1);
+                    expectedMaxKey = JournalFactory.GetKey(id, expectedMaxKey.Time + 1);
                 }
 
             }
@@ -95,7 +95,7 @@ namespace HSMDatabase.LevelDB.Tests
 
             await Task.Delay(500);
 
-            var actualJournals = await _databaseCore.GetJournalValuesPage(id, _minTime, DateTime.MaxValue, RecordType.Actions, RecordType.Actions, TreeValuesCache.MaxHistoryCount).Flatten();
+            var actualJournals = await _databaseCore.GetJournalValuesPage(id, _minTime, DateTime.MaxValue, RecordType.Actions, TreeValuesCache.MaxHistoryCount).Flatten();
             Assert.Equal(count, actualJournals.Count);
 
             for (int i = 0; i < count; i++)
@@ -110,7 +110,7 @@ namespace HSMDatabase.LevelDB.Tests
             var journals = new List<JournalRecordEntity>(count);
 
             for (int i = 0; i < count; i++)
-                journals.Add(JournalFactory.BuildJournalEntity());
+                journals.Add(JournalFactory.GetEntity());
 
             return journals;
         }
@@ -178,7 +178,7 @@ namespace HSMDatabase.LevelDB.Tests
         }
 
         private async Task<List<JournalRecordEntity>> GetJournalValues(Guid guid, DateTime from, DateTime to, RecordType type = RecordType.Changes, int count = 5000) =>
-            (await _databaseCore.GetJournalValuesPage(guid, from, to, type, RecordType.Changes, count).Flatten()).Select(x => x.Entity).ToList();
+            (await _databaseCore.GetJournalValuesPage(guid, from, to, type, count).Flatten()).Select(x => x.Entity).ToList();
 
         private List<(JournalKey, JournalRecordEntity)> GenerateJournalEntities(Guid sensorId, int count)
         {

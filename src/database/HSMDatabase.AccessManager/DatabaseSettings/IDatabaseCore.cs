@@ -93,8 +93,10 @@ namespace HSMServer.Core.DataLayer
         #region Journal
 
         void AddJournalValue(JournalKey journalKey, JournalRecordEntity value);
+
         void RemoveJournalValues(Guid id, Guid parentId);
-        IAsyncEnumerable<List<(byte[] Key, JournalRecordEntity Entity)>> GetJournalValuesPage(Guid sensorId, DateTime from, DateTime to, RecordType fromRecordType, RecordType toRecordType, int count);
+
+        IAsyncEnumerable<List<(byte[] Key, JournalRecordEntity Entity)>> GetJournalValuesPage(Guid sensorId, DateTime from, DateTime to, RecordType types, int count);
 
         #endregion
     }

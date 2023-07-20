@@ -1,6 +1,6 @@
 using HSMServer.Core.Tests.MonitoringCoreTests.Fixture;
 
-namespace HSMDatabase.LevelDB.Tests;
+namespace HSMDatabase.LevelDB.Tests.JournalDBTests;
 
 public class JournalDatabaseFixture : DatabaseFixture
 {
