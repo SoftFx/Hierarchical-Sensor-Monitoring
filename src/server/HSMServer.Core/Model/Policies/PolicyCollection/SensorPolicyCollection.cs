@@ -20,7 +20,7 @@ namespace HSMServer.Core.Model.Policies
 
         internal abstract void Update(List<PolicyUpdate> updates);
 
-        internal abstract void Attach(BaseSensorModel sensor);
+        internal abstract void Attach(BaseSensorModel sensor, PolicyEntity ttlEntity);
 
         [Obsolete("remove after policy migration")]
         internal abstract void AddStatus();
@@ -61,12 +61,12 @@ namespace HSMServer.Core.Model.Policies
             return CalculateStorageResult(valueT, updateSensor);
         }
 
-        internal override void Attach(BaseSensorModel sensor)
+        internal override void Attach(BaseSensorModel sensor, PolicyEntity ttlEntity)
         {
-            TimeToLive = new TTLPolicy(sensor.Id, sensor.Settings.TTL);
             _typePolicy = new CorrectTypePolicy<T>(sensor.Id);
-
             _sensor = sensor;
+
+            ApplyTTL(sensor, ttlEntity);
         }
 
 
@@ -173,18 +173,18 @@ namespace HSMServer.Core.Model.Policies
             var policy = new PolicyType();
 
             var statusUpdate = new PolicyUpdate(
-                           Guid.NewGuid(),
-                           new()
-                           {
-                                new PolicyConditionUpdate(
-                                    PolicyOperation.IsChanged,
-                                    PolicyProperty.Status,
-                                    new TargetValue(TargetType.LastValue, _sensor.Id.ToString())),
-                           },
-                           null,
-                           SensorStatus.Ok,
-                           $"$status [$product]$path = $comment",
-                           null);
+                Guid.NewGuid(),
+                new()
+                {
+                    new PolicyConditionUpdate(
+                        PolicyOperation.IsChanged,
+                        PolicyProperty.Status,
+                        new TargetValue(TargetType.LastValue, _sensor.Id.ToString())),
+                },
+                null,
+                SensorStatus.Ok,
+                $"$status [$product]$path = $comment",
+                null);
 
             policy.Update(statusUpdate);
 

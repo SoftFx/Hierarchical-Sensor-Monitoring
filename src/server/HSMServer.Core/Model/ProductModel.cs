@@ -47,7 +47,7 @@ namespace HSMServer.Core.Model
             NotificationsSettings = entity.NotificationSettings;
             FolderId = Guid.TryParse(entity.FolderId, out var folderId) ? folderId : null;
 
-            Policies.Attach(this);
+            Policies.ApplyTTL(this, entity.TTLPolicy);
         }
 
 
@@ -105,6 +105,7 @@ namespace HSMServer.Core.Model
             NotificationSettings = NotificationsSettings,
             Policies = Policies.Ids.Select(u => $"{u}").ToList(),
             Settings = Settings.ToEntity(),
+            TTLPolicy = Policies.TimeToLive?.ToEntity(),
         };
     }
 }
