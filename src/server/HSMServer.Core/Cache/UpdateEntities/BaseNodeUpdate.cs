@@ -15,5 +15,8 @@ namespace HSMServer.Core.Cache.UpdateEntities
         public TimeIntervalModel SelfDestroy { get; init; }
 
         public string Description { get; init; }
+
+
+        public PolicyUpdate TTLPolicy { get; init; }
     }
 }

@@ -1,7 +1,9 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities;
+using HSMServer.Core.Cache.UpdateEntities;
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Xml;
 
 namespace HSMServer.Core.Model.Policies
 {
@@ -10,7 +12,7 @@ namespace HSMServer.Core.Model.Policies
         internal abstract IEnumerable<Guid> Ids { get; }
 
 
-        public TTLPolicy TimeToLivePolicy { get; protected set; }
+        public TTLPolicy TimeToLive { get; private set; }
 
 
         internal Action<BaseSensorModel, bool> SensorExpired;
@@ -24,5 +26,14 @@ namespace HSMServer.Core.Model.Policies
         public abstract IEnumerator<Policy> GetEnumerator();
 
         IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
+
+
+        internal void ApplyTTL(BaseNodeModel node, PolicyEntity entity)
+        {
+            TimeToLive = new TTLPolicy(node.Id, node.Settings.TTL);
+
+            if (entity is not null)
+                TimeToLive.Apply(entity);
+        }
     }
 }

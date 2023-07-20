@@ -5,7 +5,7 @@ namespace HSMServer.Core.Model.Policies
 {
     public sealed class TTLPolicy : DefaultPolicyBase
     {
-        private const string DefaultIcon = "⌛️";
+        private const string DefaultIcon = "🕑";
         private const string DefaultTemplate = "[$product]$path";
 
 
@@ -17,7 +17,7 @@ namespace HSMServer.Core.Model.Policies
         public override string Template { get; protected set; } = DefaultTemplate;
 
 
-        internal TTLPolicy(Guid sensorId, SettingProperty<TimeIntervalModel> ttlSetting) : base(sensorId)
+        internal TTLPolicy(Guid nodeId, SettingProperty<TimeIntervalModel> ttlSetting) : base(nodeId)
         {
             _ttl = ttlSetting;
         }
