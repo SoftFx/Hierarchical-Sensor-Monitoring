@@ -10,6 +10,9 @@ namespace HSMServer.Core.Model.Policies
         internal abstract IEnumerable<Guid> Ids { get; }
 
 
+        public TTLPolicy TimeToLivePolicy { get; protected set; }
+
+
         internal Action<BaseSensorModel, bool> SensorExpired;
 
 

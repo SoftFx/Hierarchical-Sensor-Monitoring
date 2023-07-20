@@ -37,7 +37,6 @@ namespace HSMServer.Core.Model.Policies
     public abstract class SensorPolicyCollection<T> : SensorPolicyCollection where T : BaseValue
     {
         private CorrectTypePolicy<T> _typePolicy;
-        private TTLPolicy _ttlPolicy;
 
         private protected BaseSensorModel _sensor;
 
@@ -64,7 +63,7 @@ namespace HSMServer.Core.Model.Policies
 
         internal override void Attach(BaseSensorModel sensor)
         {
-            _ttlPolicy = new TTLPolicy(sensor.Id, sensor.Settings.TTL);
+            TimeToLivePolicy = new TTLPolicy(sensor.Id, sensor.Settings.TTL);
             _typePolicy = new CorrectTypePolicy<T>(sensor.Id);
 
             _sensor = sensor;
@@ -73,13 +72,13 @@ namespace HSMServer.Core.Model.Policies
 
         internal bool SensorTimeout(DateTime? time)
         {
-            if (_ttlPolicy is null)
+            if (TimeToLivePolicy is null)
                 return false;
 
-            var timeout = _ttlPolicy.HasTimeout(time);
+            var timeout = TimeToLivePolicy.HasTimeout(time);
 
             if (timeout)
-                PolicyResult = _ttlPolicy.PolicyResult;
+                PolicyResult = TimeToLivePolicy.PolicyResult;
             else
                 PolicyResult = PolicyResult.Ok;
 

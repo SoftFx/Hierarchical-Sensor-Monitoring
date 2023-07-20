@@ -71,12 +71,10 @@ namespace HSMServer.Model.DataAlerts
             TimeToLive = new TimeIntervalViewModel(PredefinedIntervals.ForRestore) { IsAlertBlock = true };
 
             StatusOperationsItems = _statusOperations.ToSelectedItems(k => k.GetDisplayName());
-            OperationsItems = Operations.ToSelectedItems(k => k.GetDisplayName());
+            OperationsItems = Operations?.ToSelectedItems(k => k.GetDisplayName());
             PropertiesItems = Properties.ToSelectedItems(k => k.GetDisplayName());
 
-            if (isMain)
-                PropertiesItems.Add(new SelectListItem(AlertProperty.TimeToLive.GetDisplayName(), nameof(AlertProperty.TimeToLive)));
-            else
+            if (!isMain)
                 PropertiesItems.Add(new SelectListItem(AlertProperty.Sensitivity.GetDisplayName(), nameof(AlertProperty.Sensitivity)));
 
             Property = Enum.Parse<AlertProperty>(PropertiesItems.FirstOrDefault()?.Value);
@@ -126,5 +124,16 @@ namespace HSMServer.Model.DataAlerts
 
 
         public BarConditionViewModel(bool isMain) : base(isMain) { }
+    }
+
+
+    public sealed class TimeToLiveConditionViewModel : ConditionViewModel
+    {
+        protected override List<AlertProperty> Properties { get; } = new() { AlertProperty.TimeToLive };
+
+        protected override List<PolicyOperation> Operations { get; }
+
+
+        public TimeToLiveConditionViewModel(bool isMain = true) : base(isMain) { }
     }
 }

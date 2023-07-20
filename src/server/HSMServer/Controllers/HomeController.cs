@@ -545,7 +545,7 @@ namespace HSMServer.Controllers
                 //TTL = newModel.ExpectedUpdateInterval.ToModel(),
                 KeepHistory = newModel.SavedHistoryPeriod.ToModel(),
                 SelfDestroy = newModel.SelfDestroyPeriod.ToModel(),
-                Policies = newModel.DataAlerts?[sensor.Type].Select(a => a.ToUpdate()).ToList() ?? new(),
+                Policies = newModel.DataAlerts?[(byte)sensor.Type].Select(a => a.ToUpdate()).ToList() ?? new(),
             };
 
             _treeValuesCache.UpdateSensor(update);
@@ -706,7 +706,7 @@ namespace HSMServer.Controllers
             {
                 Id = SensorPathHelper.DecodeGuid(newModel.EncodedId),
                 Description = newModel.Description ?? string.Empty,
-                TTL = newModel.ExpectedUpdateInterval,
+                //TTL = newModel.ExpectedUpdateInterval,
                 KeepHistory = newModel.SavedHistoryPeriod,
                 SelfDestroy = newModel.SelfDestroyPeriod,
             };

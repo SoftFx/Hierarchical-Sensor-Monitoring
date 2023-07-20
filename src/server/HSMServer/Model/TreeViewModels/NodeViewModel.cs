@@ -1,6 +1,6 @@
 ﻿using HSMServer.Core.Model;
-using HSMServer.Core.Model.NodeSettings;
 using HSMServer.Helpers;
+using HSMServer.Model.DataAlerts;
 using HSMServer.Model.Folders;
 
 namespace HSMServer.Model.TreeViewModel
@@ -16,6 +16,9 @@ namespace HSMServer.Model.TreeViewModel
 
     public abstract class NodeViewModel : BaseNodeViewModel
     {
+        public const byte TimeToLiveAlertKey = byte.MaxValue;
+
+
         public string EncodedId { get; }
 
 
@@ -40,9 +43,11 @@ namespace HSMServer.Model.TreeViewModel
             Path = model.Path;
             EncodedId = SensorPathHelper.EncodeGuid(model.Id);
 
-            TTL = new(() => (Parent?.TTL, ParentIsFolder));
+            TimeToLive = new(() => (Parent?.TimeToLive, ParentIsFolder));
             KeepHistory = new(() => (Parent?.KeepHistory, ParentIsFolder));
             SelfDestroy = new(() => (Parent?.SelfDestroy, ParentIsFolder));
+
+            DataAlerts[TimeToLiveAlertKey] = new();
         }
 
 
@@ -52,9 +57,13 @@ namespace HSMServer.Model.TreeViewModel
             Name = model.DisplayName;
             Description = model.Description;
 
-            TTL.FromModel(model.Settings.TTL.CurValue);
+            TimeToLive.FromModel(model.Settings.TTL.CurValue);
             KeepHistory.FromModel(model.Settings.KeepHistory.CurValue);
             SelfDestroy.FromModel(model.Settings.SelfDestroy.CurValue);
+
+            DataAlerts[TimeToLiveAlertKey].Clear();
+            if (TimeToLive.TimeInterval is not TimeInterval.None && model.Policies.TimeToLivePolicy is not null) // TODO: remove model.Policies.TimeToLivePolicy null checking after add TTLPolicy for products
+                DataAlerts[TimeToLiveAlertKey].Add(new TimeToLiveAlertViewModel(TimeToLive, model.Policies.TimeToLivePolicy, model));
         }
     }
 }

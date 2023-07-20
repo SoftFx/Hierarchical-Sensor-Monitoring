@@ -65,19 +65,48 @@ namespace HSMServer.Model.DataAlerts
     }
 
 
-    public abstract class DataAlertViewModelBase<T> : DataAlertViewModelBase where T : Core.Model.BaseValue
+    public abstract class DataAlertViewModel : DataAlertViewModelBase
     {
-        public DataAlertViewModelBase(Guid entityId)
+        protected DataAlertViewModel(Policy policy, Core.Model.BaseNodeModel node, string displayComment)
+        {
+            EntityId = node.Id;
+
+
+            Actions.Add(new ActionViewModel(true)
+            {
+                Action = ActionType.SendNotification,
+                Comment = policy.Template,
+                DisplayComment = displayComment
+            });
+
+            if (!string.IsNullOrEmpty(policy.Icon))
+                Actions.Add(new ActionViewModel(false) { Action = ActionType.ShowIcon, Icon = policy.Icon });
+
+            if (policy.Status == Core.Model.SensorStatus.Error)
+                Actions.Add(new ActionViewModel(false) { Action = ActionType.SetStatus });
+        }
+
+        public DataAlertViewModel(Guid entityId)
         {
             EntityId = entityId;
             IsModify = true;
 
+            Conditions.Add(CreateCondition(true));
             Actions.Add(new ActionViewModel(true));
         }
 
-        public DataAlertViewModelBase(Policy<T> policy, Core.Model.BaseSensorModel sensor)
+
+        protected abstract ConditionViewModel CreateCondition(bool isMain);
+    }
+
+
+    public abstract class DataAlertViewModel<T> : DataAlertViewModel where T : Core.Model.BaseValue
+    {
+        public DataAlertViewModel(Guid entityId) : base(entityId) { }
+
+        public DataAlertViewModel(Policy<T> policy, Core.Model.BaseSensorModel sensor)
+            : base(policy, sensor, policy.BuildStateAndComment(sensor.LastValue as T, sensor, policy.Conditions[0]))
         {
-            EntityId = sensor.Id;
             Id = policy.Id;
 
             for (int i = 0; i < policy.Conditions.Count; ++i)
@@ -102,22 +131,6 @@ namespace HSMServer.Model.DataAlerts
 
                 Conditions.Add(condition);
             }
-
-            Actions.Add(new ActionViewModel(true)
-            {
-                Action = ActionType.SendNotification,
-                Comment = policy.Template,
-                DisplayComment = policy.BuildStateAndComment(sensor.LastValue as T, sensor, policy.Conditions[0])
-            });
-
-            if (!string.IsNullOrEmpty(policy.Icon))
-                Actions.Add(new ActionViewModel(false) { Action = ActionType.ShowIcon, Icon = policy.Icon });
-
-            if (policy.Status == Core.Model.SensorStatus.Error)
-                Actions.Add(new ActionViewModel(false) { Action = ActionType.SetStatus });
         }
-
-
-        protected abstract ConditionViewModel CreateCondition(bool isMain);
     }
 }

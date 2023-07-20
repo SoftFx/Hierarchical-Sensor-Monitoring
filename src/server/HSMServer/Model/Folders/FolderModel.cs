@@ -47,7 +47,7 @@ namespace HSMServer.Model.Folders
 
                     var name = i switch
                     {
-                        0 => nameof(TTL),
+                        0 => nameof(TimeToLive),
                         2 => nameof(KeepHistory),
                         3 => nameof(SelfDestroy),
                         _ => null,
@@ -60,7 +60,7 @@ namespace HSMServer.Model.Folders
 
             KeepHistory = LoadKeepHistory(entity.Settings.GetValueOrDefault(nameof(KeepHistory)));
             SelfDestroy = LoadSelfDestroy(entity.Settings.GetValueOrDefault(nameof(SelfDestroy)));
-            TTL = LoadTTL(entity.Settings.GetValueOrDefault(nameof(TTL)));
+            TimeToLive = LoadTTL(entity.Settings.GetValueOrDefault(nameof(TimeToLive)));
         }
 
         internal FolderModel(FolderAdd addModel)
@@ -77,7 +77,7 @@ namespace HSMServer.Model.Folders
 
             KeepHistory = LoadKeepHistory();
             SelfDestroy = LoadSelfDestroy();
-            TTL = LoadTTL();
+            TimeToLive = LoadTTL();
         }
 
 
@@ -89,7 +89,7 @@ namespace HSMServer.Model.Folders
             Name = update.Name ?? Name;
 
             if (update.TTL != null)
-                TTL = new TimeIntervalViewModel(update.TTL, PredefinedIntervals.ForTimeout);
+                TimeToLive = new TimeIntervalViewModel(update.TTL, PredefinedIntervals.ForTimeout);
 
             if (update.KeepHistory != null)
                 KeepHistory = new TimeIntervalViewModel(update.KeepHistory, PredefinedIntervals.ForKeepHistory);
@@ -110,7 +110,7 @@ namespace HSMServer.Model.Folders
                 Notifications = Notifications.ToEntity(),
                 Settings = new Dictionary<string, TimeIntervalEntity>
                 {
-                    [nameof(TTL)] = TTL.ToEntity(),
+                    [nameof(TimeToLive)] = TimeToLive.ToEntity(),
                     [nameof(KeepHistory)] = KeepHistory.ToEntity(),
                     [nameof(SelfDestroy)] = SelfDestroy.ToEntity(),
                 }

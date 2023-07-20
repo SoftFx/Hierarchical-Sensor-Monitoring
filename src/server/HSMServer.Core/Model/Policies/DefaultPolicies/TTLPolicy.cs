@@ -5,9 +5,16 @@ namespace HSMServer.Core.Model.Policies
 {
     public sealed class TTLPolicy : DefaultPolicyBase
     {
+        private const string DefaultIcon = "⌛️";
+        private const string DefaultTemplate = "[$product]$path";
+
+
         private readonly SettingProperty<TimeIntervalModel> _ttl;
 
-        public override string Icon { get; protected set; } = "⌛️";
+
+        public override string Icon { get; protected set; } = DefaultIcon;
+
+        public override string Template { get; protected set; } = DefaultTemplate;
 
 
         internal TTLPolicy(Guid sensorId, SettingProperty<TimeIntervalModel> ttlSetting) : base(sensorId)
