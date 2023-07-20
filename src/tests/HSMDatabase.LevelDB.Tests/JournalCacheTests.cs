@@ -9,7 +9,7 @@ using Xunit;
 
 namespace HSMDatabase.LevelDB.Tests;
 
-public class JournalCacheTests : MonitoringCoreTestsBase<TreeValuesCacheFixture>, IClassFixture<DatabaseRegisterFixture>
+public sealed class JournalCacheTests : MonitoringCoreTestsBase<TreeValuesCacheFixture>, IClassFixture<DatabaseRegisterFixture>
 {
     private IJournalService _journalService;
     

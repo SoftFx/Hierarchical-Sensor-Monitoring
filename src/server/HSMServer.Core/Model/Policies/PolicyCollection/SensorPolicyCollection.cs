@@ -1,30 +1,27 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Cache.UpdateEntities;
+using HSMServer.Core.Journal;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
-using HSMServer.Core.Journal;
 
 namespace HSMServer.Core.Model.Policies
 {
     public abstract class SensorPolicyCollection : PolicyCollectionBase, IChangesEntity
     {
-        public event Action<JournalRecordModel> ChangesHandler;
-        
         internal protected SensorResult SensorResult { get; protected set; } = SensorResult.Ok;
 
         internal protected PolicyResult PolicyResult { get; protected set; } = PolicyResult.Ok;
 
 
-        protected void CallJournal(JournalRecordModel journal) => ChangesHandler?.Invoke(journal);
-
-
         internal Action<ActionType, Policy> Uploaded;
 
+        public event Action<JournalRecordModel> ChangesHandler;
 
-        internal abstract void Update(List<PolicyUpdate> updates, string initiator = null);
+
+        internal abstract void Update(List<PolicyUpdate> updates, string initiator);
 
         internal abstract void Attach(BaseSensorModel sensor);
 
@@ -37,6 +34,8 @@ namespace HSMServer.Core.Model.Policies
             SensorResult = SensorResult.Ok;
             PolicyResult = PolicyResult.Ok;
         }
+
+        protected void CallJournal(JournalRecordModel record) => ChangesHandler?.Invoke(record);
     }
 
 
@@ -131,7 +130,7 @@ namespace HSMServer.Core.Model.Policies
                 _storage.TryAdd(policy.Id, typedPolicy);
         }
 
-        internal override void Update(List<PolicyUpdate> updatesList, string initiator = null)
+        internal override void Update(List<PolicyUpdate> updatesList, string initiator)
         {
             var updates = updatesList.Where(u => u.Id != Guid.Empty).ToDictionary(u => u.Id);
 
@@ -139,10 +138,12 @@ namespace HSMServer.Core.Model.Policies
             {
                 if (updates.TryGetValue(id, out var update))
                 {
-                    if (update.Compare(policy, update, out var message))
-                        CallJournal(new JournalRecordModel(_sensor.Id, message, _sensor.PathWithName, initiator));
+                    var oldPolicy = policy.ToString();
 
                     policy.Update(update);
+
+                    CallJournal(oldPolicy, policy.ToString(), initiator);
+
                     Uploaded?.Invoke(ActionType.Update, policy);
                 }
                 else if (_storage.TryRemove(id, out var oldPolicy))
@@ -158,13 +159,12 @@ namespace HSMServer.Core.Model.Policies
                 if (update.Id == Guid.Empty)
                 {
                     var policy = new PolicyType();
-                    
-                    if (update.Compare(policy, update, out var message))
-                        CallJournal(new JournalRecordModel(_sensor.Id, message, _sensor.PathWithName, initiator));
 
                     policy.Update(update);
 
                     AddPolicy(policy);
+                    CallJournal(string.Empty, policy.ToString(), initiator);
+
                     Uploaded?.Invoke(ActionType.Add, policy);
                 }
         }
@@ -207,5 +207,14 @@ namespace HSMServer.Core.Model.Policies
             AddPolicy(policy);
             Uploaded?.Invoke(ActionType.Add, policy);
         }
+
+        private void CallJournal(string oldValue, string newValue, string initiator) => 
+            CallJournal(new JournalRecordModel(_sensor.Id, initiator)
+            {
+                Enviroment = "Alerts update",
+                OldValue = oldValue,
+                NewValue = newValue,
+                Path = _sensor.FullPath,
+            });
     }
 }

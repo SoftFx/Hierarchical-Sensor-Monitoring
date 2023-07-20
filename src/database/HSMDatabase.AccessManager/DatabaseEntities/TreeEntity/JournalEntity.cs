@@ -10,23 +10,20 @@ public enum RecordType : byte
 }
 
 
-public sealed record JournalEntity
+public sealed record JournalRecordEntity
 {
+    public string Enviroment { get; init; }
+
     public string Initiator { get; init; }
+
+
+    public string PropertyName { get; init; }
 
     public string OldValue { get; init; }
 
     public string NewValue { get; init; }
 
     public string Path { get; init; }
-
-
-    public JournalEntity(string value, string path, string initiator)
-    {
-        OldValue = value;
-        Path = path;
-        Initiator = initiator;
-    }
 }
 
 

@@ -27,6 +27,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using HSMServer.Core.Journal;
 using TimeInterval = HSMServer.Model.TimeInterval;
+using HSMServer.Core.Model.Requests;
 
 namespace HSMServer.Controllers
 {
@@ -305,12 +306,14 @@ namespace HSMServer.Controllers
         [HttpPost]
         public void ClearHistoryNode([FromQuery] string selectedId)
         {
+            ClearHistoryRequest GetRequest(Guid id) => new(id, CurrentUser.Name);
+
             var decodedId = SensorPathHelper.DecodeGuid(selectedId);
 
             if (_treeViewModel.Nodes.TryGetValue(decodedId, out var node))
-                _treeValuesCache.ClearNodeHistory(new(node.Id, CurrentUser.Name));
+                _treeValuesCache.ClearNodeHistory(GetRequest(node.Id));
             else if (_treeViewModel.Sensors.TryGetValue(decodedId, out var sensor))
-                _treeValuesCache.ClearSensorHistory(new(sensor.Id, CurrentUser.Name, DateTime.MaxValue));
+                _treeValuesCache.ClearSensorHistory(GetRequest(sensor.Id));
         }
 
         [HttpGet]

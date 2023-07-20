@@ -1,5 +1,4 @@
 using HSMServer.Attributes;
-using HSMServer.Extensions;
 using HSMServer.Model.DataAlerts;
 using HSMServer.Model.Folders;
 using HSMServer.Model.TreeViewModel;

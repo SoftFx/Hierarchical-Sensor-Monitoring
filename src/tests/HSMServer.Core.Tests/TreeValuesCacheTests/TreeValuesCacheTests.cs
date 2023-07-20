@@ -390,7 +390,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         {
             var sensor = GetSensorByNameFromCache("sensor0");
 
-            _valuesCache.ClearSensorHistory(new (sensor.Id, To: DateTime.MaxValue));
+            _valuesCache.ClearSensorHistory(new (sensor.Id));
 
             await TestClearedSensor(sensor.Id);
             ModelsTester.TestSensorDataWithoutClearedData(sensor, GetSensorByIdFromCache(sensor.Id));

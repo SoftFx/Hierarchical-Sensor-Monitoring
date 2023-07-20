@@ -13,7 +13,6 @@ public sealed class JournalRecordModel
     public string Initiator { get; init; }
 
 
-
     public string PropertyName { get; set; }
 
     public string OldValue { get; set; }
@@ -23,11 +22,15 @@ public sealed class JournalRecordModel
     public string Path { get; set; }
 
 
-    public JournalRecordModel(byte[] key, JournalEntity entity)
+    public JournalRecordModel(byte[] key, JournalRecordEntity entity)
     {
         Key = JournalKey.FromBytes(key);
 
         Initiator = entity.Initiator;
+        Enviroment = entity.Enviroment;
+
+        PropertyName = entity.PropertyName;
+        NewValue = entity.NewValue;
         OldValue = entity.OldValue;
         Path = entity.Path;
     }
@@ -45,5 +48,13 @@ public sealed class JournalRecordModel
     }
 
 
-    public JournalEntity ToJournalEntity() => new(OldValue, Path, Initiator);
+    public JournalRecordEntity ToJournalEntity() => new()
+    {
+        Enviroment = Enviroment,
+        Initiator = Initiator,
+        OldValue = OldValue,
+        NewValue = NewValue,
+        PropertyName = PropertyName,
+        Path = Path,
+    };
 }

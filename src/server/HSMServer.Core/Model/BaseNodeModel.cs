@@ -32,11 +32,11 @@ namespace HSMServer.Core.Model
         public bool UseParentPolicies { get; private set; }
 
 
-        public string RootProductName => Parent?.RootProductName ?? DisplayName;
+        public string FullPath => Parent is null ? $"{DisplayName}" : $"{Parent.FullPath}/{DisplayName}";
 
         public string Path => Parent is null ? string.Empty : $"{Parent.Path}/{DisplayName}";
 
-        public string PathWithName => Parent is null ? $"{DisplayName}" : $"{Parent.PathWithName}/{DisplayName}";
+        public string RootProductName => Parent?.RootProductName ?? DisplayName;
 
 
         public event Action<JournalRecordModel> ChangesHandler;
@@ -86,7 +86,7 @@ namespace HSMServer.Core.Model
         {
             Description = UpdateProperty(Description, update.Description ?? Description, update.Initiator);
 
-            Settings.Update(update, PathWithName);
+            Settings.Update(update, FullPath);
         }
 
 
@@ -100,7 +100,7 @@ namespace HSMServer.Core.Model
                     NewValue = $"{newValue}",
 
                     PropertyName = propName,
-                    Path = PathWithName,
+                    Path = FullPath,
                 });
 
             return newValue ?? oldValue;

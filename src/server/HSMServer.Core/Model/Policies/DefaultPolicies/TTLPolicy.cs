@@ -7,6 +7,7 @@ namespace HSMServer.Core.Model.Policies
     {
         private readonly SettingProperty<TimeIntervalModel> _ttl;
 
+
         public override string Icon { get; protected set; } = "⌛️";
 
 

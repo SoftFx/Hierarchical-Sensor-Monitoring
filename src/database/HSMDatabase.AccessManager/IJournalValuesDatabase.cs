@@ -17,7 +17,7 @@ public interface IJournalValuesDatabase : IDisposable
 
     bool IsInclude(long from, long to);
 
-    void Put(byte[] key, JournalEntity value);
+    void Put(byte[] key, JournalRecordEntity value);
 
     void Put(byte[] key, byte[] value);
 

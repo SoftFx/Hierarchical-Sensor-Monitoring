@@ -2,6 +2,7 @@
 using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.DataLayer;
+using HSMServer.Core.Journal;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Policies;
 using HSMServer.Core.Model.Requests;
@@ -15,7 +16,6 @@ using System.Linq;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
-using HSMServer.Core.Journal;
 
 namespace HSMServer.Core.Cache
 {
@@ -255,9 +255,9 @@ namespace HSMServer.Core.Cache
             {
                 parent.Sensors.TryRemove(sensorId, out _);
                 _journalService.RemoveRecords(sensorId, parent.Id);
-                
+
                 if (initiator is not null)
-                    _journalService.AddRecord(new JournalRecordModel(parent.Id, "Removed", sensor.PathWithName, initiator));
+                    _journalService.AddRecord(new JournalRecordModel(parent.Id, "Remove sensor", sensor.FullPath, initiator));
             }
             else
                 _journalService.RemoveRecords(sensorId);
@@ -294,7 +294,7 @@ namespace HSMServer.Core.Cache
                 ClearNodeHistory(request with { Id = subProductId });
 
             foreach (var (sensorId, _) in product.Sensors)
-                ClearSensorHistory(request with { Id = sensorId, To = DateTime.MaxValue});
+                ClearSensorHistory(request with { Id = sensorId });
         }
 
         public void CheckSensorHistory(Guid sensorId)
@@ -306,7 +306,7 @@ namespace HSMServer.Core.Cache
             var policy = sensor.Settings.KeepHistory.Value;
 
             if (policy.TimeIsUp(from))
-                ClearSensorHistory(new (sensorId, System, policy.GetShiftedTime(DateTime.UtcNow, -1)));
+                ClearSensorHistory(new(sensorId, policy.GetShiftedTime(DateTime.UtcNow, -1)));
         }
 
         public void ClearSensorHistory(ClearHistoryRequest request)
@@ -325,7 +325,8 @@ namespace HSMServer.Core.Cache
                 sensor.ResetSensor();
 
             _database.ClearSensorValues(sensor.Id.ToString(), from, request.To);
-            _journalService.AddRecord(new JournalRecordModel(request.Id, "History clearing", sensor.PathWithName, request.Caller));
+            _journalService.AddRecord(request.ToRecord(sensor.FullPath));
+
             _snapshot.Sensors[request.Id].History.From = request.To;
 
             ChangeSensorEvent?.Invoke(sensor, ActionType.Update);
@@ -389,24 +390,21 @@ namespace HSMServer.Core.Cache
 
         private void SubscribeSensorToPolicyUpdate(BaseSensorModel sensor)
         {
+            sensor.Policies.ChangesHandler += _journalService.AddRecord;
             sensor.Policies.SensorExpired += SetExpiredSnapshot;
             sensor.Policies.Uploaded += UpdatePolicy;
-            sensor.Policies.ChangesHandler += _journalService.AddRecord;
-            sensor.Settings.KeepHistory.ChangesHandler += _journalService.AddRecord;
-            sensor.Settings.SelfDestroy.ChangesHandler += _journalService.AddRecord;
-            sensor.Settings.TTL.ChangesHandler += _journalService.AddRecord;
+
             sensor.ChangesHandler += _journalService.AddRecord;
         }
 
         private void RemoveSensorPolicies(BaseSensorModel sensor)
         {
+            sensor.Policies.ChangesHandler -= _journalService.AddRecord;
             sensor.Policies.SensorExpired -= SetExpiredSnapshot;
             sensor.Policies.Uploaded -= UpdatePolicy;
-            sensor.Policies.ChangesHandler -= _journalService.AddRecord;
-            sensor.Settings.KeepHistory.ChangesHandler -= _journalService.AddRecord;
-            sensor.Settings.SelfDestroy.ChangesHandler -= _journalService.AddRecord;
-            sensor.Settings.TTL.ChangesHandler -= _journalService.AddRecord;
+
             sensor.ChangesHandler -= _journalService.AddRecord;
+
             RemoveEntityPolicies(sensor);
         }
 
