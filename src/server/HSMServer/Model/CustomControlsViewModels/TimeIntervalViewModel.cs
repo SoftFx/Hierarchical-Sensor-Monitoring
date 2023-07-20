@@ -101,13 +101,13 @@ namespace HSMServer.Model
             _getParentValue = getParentValue;
         }
 
-        internal TimeIntervalViewModel(List<TimeInterval> intervals, bool useCustomTemplate = true)
+        internal TimeIntervalViewModel(HashSet<TimeInterval> intervals, bool useCustomTemplate = true)
         {
             IntervalItems = intervals.ToSelectedItems(k => k.GetDisplayName());
             UseCustomInputTemplate = useCustomTemplate;
         }
 
-        internal TimeIntervalViewModel(TimeIntervalViewModel model, List<TimeInterval> intervals) : this(intervals)
+        internal TimeIntervalViewModel(TimeIntervalViewModel model, HashSet<TimeInterval> intervals) : this(intervals)
         {
             _getParentValue = model._getParentValue;
 
@@ -118,7 +118,7 @@ namespace HSMServer.Model
                 IntervalItems.RemoveAt(0);
         }
 
-        internal TimeIntervalViewModel(TimeIntervalEntity entity, List<TimeInterval> intervals) : this(intervals)
+        internal TimeIntervalViewModel(TimeIntervalEntity entity, HashSet<TimeInterval> intervals) : this(intervals)
         {
             FromModel(new TimeIntervalModel(entity), intervals);
         }
@@ -138,7 +138,7 @@ namespace HSMServer.Model
             return new TimeIntervalModel(HasFolder ? CoreTimeInterval.FromFolder : CoreTimeInterval.FromParent, ticks);
         }
 
-        internal TimeIntervalViewModel FromModel(TimeIntervalModel model, List<TimeInterval> predefinedIntervals)
+        internal TimeIntervalViewModel FromModel(TimeIntervalModel model, HashSet<TimeInterval> predefinedIntervals)
         {
             if (model.IsFromFolder)
                 Interval = TimeInterval.FromParent;

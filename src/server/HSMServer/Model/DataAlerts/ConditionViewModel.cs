@@ -68,7 +68,7 @@ namespace HSMServer.Model.DataAlerts
         public ConditionViewModel(bool isMain)
         {
             Sensitivity = new TimeIntervalViewModel(PredefinedIntervals.ForRestore) { IsAlertBlock = true };
-            TimeToLive = new TimeIntervalViewModel(PredefinedIntervals.ForRestore) { IsAlertBlock = true };
+            TimeToLive = new TimeIntervalViewModel(PredefinedIntervals.ForTimeout) { IsAlertBlock = true };
 
             StatusOperationsItems = _statusOperations.ToSelectedItems(k => k.GetDisplayName());
             OperationsItems = Operations?.ToSelectedItems(k => k.GetDisplayName());

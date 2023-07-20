@@ -133,7 +133,7 @@ namespace HSMServer.Model.Folders
         private static TimeIntervalViewModel LoadSelfDestroy(TimeIntervalEntity entity = null) => LoadSetting(entity, PredefinedIntervals.ForSelfDestory, Core.Model.TimeInterval.Month);
 
 
-        private static TimeIntervalViewModel LoadSetting(TimeIntervalEntity entity, List<TimeInterval> predefinedIntervals, Core.Model.TimeInterval defaultInterval)
+        private static TimeIntervalViewModel LoadSetting(TimeIntervalEntity entity, HashSet<TimeInterval> predefinedIntervals, Core.Model.TimeInterval defaultInterval)
         {
             entity ??= new TimeIntervalEntity((long)defaultInterval, 0L);
 
