@@ -53,7 +53,7 @@ public sealed class SelectedJournalViewModel
     private async Task SetUpNewJournals(IJournalService journalService)
     {
         journalService.NewJournalEvent += AddNewJournals;
-        _journalHistoryRequestModel = new JournalHistoryRequestModel{ Id = _baseNode.Id };
+        _journalHistoryRequestModel = new JournalHistoryRequestModel(_baseNode.Id, JournalHistoryRequestModel.AllTypes);
         _journals = await GetJournals(journalService);
         
         if (_baseNode is FolderModel folder)

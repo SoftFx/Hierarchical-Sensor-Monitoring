@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics.CodeAnalysis;
 
 namespace HSMDatabase.AccessManager.DatabaseEntities;
 
@@ -41,6 +42,9 @@ public readonly struct JournalKey
     public RecordType Type { get; }
 
 
+    private (Guid, long, RecordType) Key => (Id, Time, Type);
+
+
     public JournalKey(Guid id, long time, RecordType type = RecordType.Changes)
     {
         Id = id;
@@ -75,4 +79,12 @@ public readonly struct JournalKey
 
         return new JournalKey(id, time, (RecordType)journalType);
     }
+
+
+    public override bool Equals([NotNullWhen(true)] object obj)
+    {
+        return obj is JournalKey key && Key == key.Key;
+    }
+
+    public override int GetHashCode() => Key.GetHashCode();
 }

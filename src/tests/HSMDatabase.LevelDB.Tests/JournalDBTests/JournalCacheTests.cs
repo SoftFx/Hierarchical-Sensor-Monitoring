@@ -19,7 +19,7 @@ public sealed class JournalCacheTests : MonitoringCoreTestsBase<TreeValuesCacheF
     [InlineData(10)]
     [InlineData(100)]
     [InlineData(1000)]
-    public void CheckKeys(int count)
+    public void CheckKeysConverting(int count)
     {
         for (int i = 0; i < count; i++)
         {
@@ -37,65 +37,87 @@ public sealed class JournalCacheTests : MonitoringCoreTestsBase<TreeValuesCacheF
 
 
     [Theory]
-    [InlineData(100)]
-    [InlineData(1000)]
-    [InlineData(10000)]
-    public async Task SensorUpdateTest(int count)
+    [InlineData(100, 999)]
+    [InlineData(1000, 41)]
+    [InlineData(10000, 324)]
+    public async Task SensorUpdateTest(int sensorsCount, int valuesCount)
     {
-        var sensors = GetUpdatedSensors(count);
-        var request = new JournalHistoryRequestModel() { Id = sensors[0].Id };
+        var sensors = new List<BaseSensorModel>(sensorsCount);
+
+        for (int i = 0; i < sensorsCount; i++)
+        {
+            var sensor = SensorModelFactory.Build(EntitiesFactory.BuildSensorEntity());
+            var curCnt = 0;
+
+            while (curCnt++ <= valuesCount)
+                _journalService.AddRecord(JournalFactory.GetRecord(sensor.Id));
+
+            sensors.Add(sensor);
+        }
+
+        await Task.Delay(1000);
+
+        var request = new JournalHistoryRequestModel(sensors[0].Id);
 
         foreach (var sensor in sensors)
         {
-            var journals = await _journalService.GetPages(request with { Id = sensor.Id}).Flatten();
+            var journals = await _journalService.GetPages(request with { Id = sensor.Id }).Flatten();
 
             Assert.NotEmpty(journals);
+            Assert.Equal(journals.Count, valuesCount);
         }
     }
 
 
     [Theory]
-    [InlineData(5)]
-    public async Task BorderTest(int n)
+    [InlineData(1, 10)]
+    [InlineData(100, 1000)]
+    [InlineData(1000, 1000)]
+    [InlineData(10000, 100)]
+    public async Task JournalOrderTest(int sensorsCount, int valuesCount)
     {
-        var id = Guid.NewGuid();
-        var journals = new List<JournalRecordModel>();
+        var journals = new Dictionary<Guid, List<JournalRecordModel>>(sensorsCount);
+        var sensors = new List<BaseSensorModel>(sensorsCount);
 
-        for (int i = 0; i < n; i++)
+        for (int i = 0; i < sensorsCount; i++)
         {
-            string value = RandomGenerator.GetRandomString();
-            var journal = new JournalRecordModel(id, value, "TestName", "Test");
-            journals.Add(journal);
-            _journalService.AddRecord(journal);
+            var sensor = SensorModelFactory.Build(EntitiesFactory.BuildSensorEntity());
+            var list = new List<JournalRecordModel>(valuesCount);
+
+            while (list.Count <= valuesCount)
+            {
+                var record = JournalFactory.GetRecord(sensor.Id);
+
+                list.Add(record);
+                _journalService.AddRecord(record);
+            }
+
+            sensors.Add(sensor);
+            journals.Add(sensor.Id, list);
         }
 
         await Task.Delay(1000);
 
-        var expected = journals.OrderBy(x => x.Key.Time).ToList();
-        var actual = await _journalService.GetPages(new()
+        foreach (var (id, records) in journals)
         {
-            Id = id,
-            Types = RecordType.Changes,
-        }).Flatten();
+            var expectedList = records.OrderBy(x => x.Key.Time).ToList();
+            var actualList = await _journalService.GetPages(new(id)).Flatten();
 
-        for (int i = 0; i < n; i++)
-        {
-            Assert.Equal(expected[i].OldValue, actual[i].OldValue);
+            Assert.Equal(expectedList.Count, actualList.Count);
+
+            for (int i = 0; i < expectedList.Count; i++)
+            {
+                var expected = expectedList[i];
+                var actual = actualList[i];
+
+                Assert.Equal(actual.Key, expected.Key);
+                Assert.Equal(actual.PropertyName, expected.PropertyName);
+                Assert.Equal(actual.Enviroment, expected.Enviroment);
+                Assert.Equal(actual.Initiator, expected.Initiator);
+                Assert.Equal(actual.NewValue, expected.NewValue);
+                Assert.Equal(actual.OldValue, expected.OldValue);
+                Assert.Equal(actual.Path, expected.Path);
+            }
         }
-    }
-
-
-    private List<BaseSensorModel> GetUpdatedSensors(int count)
-    {
-        var sensors = new List<BaseSensorModel>();
-
-        for (int i = 0; i < count; i++)
-        {
-            var sensor = SensorModelFactory.Build(EntitiesFactory.BuildSensorEntity());
-            _journalService.AddRecord(new JournalRecordModel(sensor.Id, "Test message", "Test name", "Test initiator"));
-            sensors.Add(sensor);
-        }
-
-        return sensors;
     }
 }

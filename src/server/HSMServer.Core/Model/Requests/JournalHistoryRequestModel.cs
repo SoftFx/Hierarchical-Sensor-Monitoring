@@ -1,6 +1,7 @@
 using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Core.Cache;
 using System;
+using System.Diagnostics.CodeAnalysis;
 
 namespace HSMServer.Core.Model.Requests;
 
@@ -20,4 +21,12 @@ public sealed record JournalHistoryRequestModel
 
 
     public RecordType Types { get; init; } = AllTypes;
+
+
+    [SetsRequiredMembers]
+    public JournalHistoryRequestModel(Guid id, RecordType types = RecordType.Changes)
+    {
+        Id = id;
+        Types = types;
+    }
 }
