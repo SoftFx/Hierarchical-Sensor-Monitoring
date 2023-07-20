@@ -50,11 +50,11 @@ public sealed class JournalRecordModel
 
     public JournalRecordEntity ToJournalEntity() => new()
     {
+        PropertyName = PropertyName,
         Enviroment = Enviroment,
         Initiator = Initiator,
         OldValue = OldValue,
         NewValue = NewValue,
-        PropertyName = PropertyName,
         Path = Path,
     };
 }

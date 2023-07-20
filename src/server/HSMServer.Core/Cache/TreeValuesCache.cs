@@ -272,7 +272,7 @@ namespace HSMServer.Core.Cache
 
         public void UpdateMutedSensorState(Guid sensorId, DateTime? endOfMuting = null, string initiator = null)
         {
-            if (!_sensors.TryGetValue(sensorId, out var sensor) || sensor.State == SensorState.Blocked)
+            if (!_sensors.TryGetValue(sensorId, out var sensor) || sensor.State is SensorState.Blocked)
                 return;
 
             if (sensor.EndOfMuting != endOfMuting)
