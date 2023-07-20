@@ -62,8 +62,8 @@ namespace HSMServer.Model.TreeViewModel
             SelfDestroy.FromModel(model.Settings.SelfDestroy.CurValue);
 
             DataAlerts[TimeToLiveAlertKey].Clear();
-            if (TimeToLive.TimeInterval is not TimeInterval.None && model.Policies.TimeToLivePolicy is not null) // TODO: remove model.Policies.TimeToLivePolicy null checking after add TTLPolicy for products
-                DataAlerts[TimeToLiveAlertKey].Add(new TimeToLiveAlertViewModel(TimeToLive, model.Policies.TimeToLivePolicy, model));
+            if (TimeToLive.TimeInterval is not TimeInterval.None && model.Policies.TimeToLive is not null) // TODO: remove model.Policies.TimeToLivePolicy null checking after add TTLPolicy for products
+                DataAlerts[TimeToLiveAlertKey].Add(new TimeToLiveAlertViewModel(TimeToLive, model.Policies.TimeToLive, model));
         }
     }
 }

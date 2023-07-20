@@ -63,7 +63,7 @@ namespace HSMServer.Core.Model.Policies
 
         internal override void Attach(BaseSensorModel sensor)
         {
-            TimeToLivePolicy = new TTLPolicy(sensor.Id, sensor.Settings.TTL);
+            TimeToLive = new TTLPolicy(sensor.Id, sensor.Settings.TTL);
             _typePolicy = new CorrectTypePolicy<T>(sensor.Id);
 
             _sensor = sensor;
@@ -72,13 +72,13 @@ namespace HSMServer.Core.Model.Policies
 
         internal bool SensorTimeout(DateTime? time)
         {
-            if (TimeToLivePolicy is null)
+            if (TimeToLive is null)
                 return false;
 
-            var timeout = TimeToLivePolicy.HasTimeout(time);
+            var timeout = TimeToLive.HasTimeout(time);
 
             if (timeout)
-                PolicyResult = TimeToLivePolicy.PolicyResult;
+                PolicyResult = TimeToLive.PolicyResult;
             else
                 PolicyResult = PolicyResult.Ok;
 
