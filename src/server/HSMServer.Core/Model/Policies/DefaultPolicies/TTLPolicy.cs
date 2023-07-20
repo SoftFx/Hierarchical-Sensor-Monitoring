@@ -14,12 +14,12 @@ namespace HSMServer.Core.Model.Policies
 
         public override string Icon { get; protected set; } = DefaultIcon;
 
-        public override string Template { get; protected set; } = DefaultTemplate;
-
 
         internal TTLPolicy(Guid nodeId, SettingProperty<TimeIntervalModel> ttlSetting) : base(nodeId)
         {
             _ttl = ttlSetting;
+
+            Template = DefaultTemplate;
         }
 
 

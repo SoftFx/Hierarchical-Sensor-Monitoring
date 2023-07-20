@@ -4,6 +4,7 @@ using HSMServer.Extensions;
 using HSMServer.Model.TreeViewModel;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace HSMServer.Model.DataAlerts
 {
@@ -67,16 +68,16 @@ namespace HSMServer.Model.DataAlerts
 
     public abstract class DataAlertViewModel : DataAlertViewModelBase
     {
-        protected DataAlertViewModel(Policy policy, Core.Model.BaseNodeModel node, string displayComment)
+        protected DataAlertViewModel(Policy policy, Core.Model.BaseNodeModel node)
         {
             EntityId = node.Id;
-
+            Id = policy.Id;
 
             Actions.Add(new ActionViewModel(true)
             {
                 Action = ActionType.SendNotification,
                 Comment = policy.Template,
-                DisplayComment = displayComment
+                DisplayComment = node is Core.Model.BaseSensorModel sensor ? policy.BuildStateAndComment(sensor.LastValue, sensor, policy.Conditions.FirstOrDefault()) : policy.Template
             });
 
             if (!string.IsNullOrEmpty(policy.Icon))
@@ -105,10 +106,8 @@ namespace HSMServer.Model.DataAlerts
         public DataAlertViewModel(Guid entityId) : base(entityId) { }
 
         public DataAlertViewModel(Policy<T> policy, Core.Model.BaseSensorModel sensor)
-            : base(policy, sensor, policy.BuildStateAndComment(sensor.LastValue as T, sensor, policy.Conditions[0]))
+            : base(policy, sensor)
         {
-            Id = policy.Id;
-
             for (int i = 0; i < policy.Conditions.Count; ++i)
             {
                 var viewModel = CreateCondition(i == 0);

@@ -9,7 +9,7 @@ namespace HSMServer.Model.DataAlerts
         public TimeToLiveAlertViewModel(Guid entityId) : base(entityId) { }
 
         public TimeToLiveAlertViewModel(TimeIntervalViewModel interval, TTLPolicy policy, BaseNodeModel node)
-            : base(policy, node, policy.Template)
+            : base(policy, node)
         {
             Conditions.Add(new TimeToLiveConditionViewModel()
             {
