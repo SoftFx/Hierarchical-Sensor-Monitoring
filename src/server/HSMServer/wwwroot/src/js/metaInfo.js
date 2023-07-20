@@ -9,7 +9,9 @@
 
     $('#description').removeClass('d-none')
     $('#metainfo_separator').removeClass('d-none');
+    $('#sensorAlerts').removeClass('d-none');
     $('#addDataAlert').removeClass('d-none');
+    $('#addTtlAlert').removeClass('d-none');
     $('#commentHelp').removeClass('d-none');
     $('[id^="dataAlertsList_"]').removeClass('d-none');
 

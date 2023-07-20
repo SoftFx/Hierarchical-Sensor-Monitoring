@@ -16,6 +16,8 @@ namespace HSMServer.Model
         private static long _id = 0L;
 
         private readonly Func<(TimeIntervalViewModel Value, bool IsFolder)> _getParentValue;
+        private readonly List<TimeInterval> _predefinedIntervals;
+
         private TimeInterval? _interval;
         private TimeSpan _customSpan;
         private string _customString;
@@ -95,13 +97,16 @@ namespace HSMServer.Model
         // public constructor without parameters for post actions
         public TimeIntervalViewModel() { }
 
-        internal TimeIntervalViewModel(Func<(TimeIntervalViewModel, bool)> getParentValue)
+        internal TimeIntervalViewModel(Func<(TimeIntervalViewModel, bool)> getParentValue, List<TimeInterval> intervals)
+            : this(intervals)
         {
             _getParentValue = getParentValue;
         }
 
         internal TimeIntervalViewModel(List<TimeInterval> intervals, bool useCustomTemplate = true)
         {
+            _predefinedIntervals = intervals;
+
             IntervalItems = intervals.ToSelectedItems(k => k.GetDisplayName());
             UseCustomInputTemplate = useCustomTemplate;
         }
@@ -143,7 +148,7 @@ namespace HSMServer.Model
                 Interval = TimeInterval.FromParent;
             else if (!model.UseTicks) //dynamic to dynamic
                 Interval = model.Interval.ToDynamicServer();
-            else if (TimeInterval.IsDefined(model.Ticks)) //const ticks to enum
+            else if (TimeInterval.IsDefined(model.Ticks) && (_predefinedIntervals?.Contains((TimeInterval)model.Ticks) ?? true)) //const ticks to enum
                 Interval = (TimeInterval)model.Ticks;
             else
             {
