@@ -43,9 +43,9 @@ namespace HSMServer.Model.TreeViewModel
             Path = model.Path;
             EncodedId = SensorPathHelper.EncodeGuid(model.Id);
 
-            TimeToLive = new(() => (Parent?.TimeToLive, ParentIsFolder), PredefinedIntervals.ForTimeout);
-            KeepHistory = new(() => (Parent?.KeepHistory, ParentIsFolder), PredefinedIntervals.ForKeepHistory);
-            SelfDestroy = new(() => (Parent?.SelfDestroy, ParentIsFolder), PredefinedIntervals.ForSelfDestory);
+            TimeToLive = new(() => (Parent?.TimeToLive, ParentIsFolder));
+            KeepHistory = new(() => (Parent?.KeepHistory, ParentIsFolder));
+            SelfDestroy = new(() => (Parent?.SelfDestroy, ParentIsFolder));
 
             DataAlerts[TimeToLiveAlertKey] = new();
         }
@@ -57,9 +57,9 @@ namespace HSMServer.Model.TreeViewModel
             Name = model.DisplayName;
             Description = model.Description;
 
-            TimeToLive.FromModel(model.Settings.TTL.CurValue);
-            KeepHistory.FromModel(model.Settings.KeepHistory.CurValue);
-            SelfDestroy.FromModel(model.Settings.SelfDestroy.CurValue);
+            TimeToLive.FromModel(model.Settings.TTL.CurValue, PredefinedIntervals.ForTimeout);
+            KeepHistory.FromModel(model.Settings.KeepHistory.CurValue, PredefinedIntervals.ForKeepHistory);
+            SelfDestroy.FromModel(model.Settings.SelfDestroy.CurValue, PredefinedIntervals.ForSelfDestory);
 
             DataAlerts[TimeToLiveAlertKey].Clear();
             if (TimeToLive.TimeInterval is not TimeInterval.None && model.Policies.TimeToLivePolicy is not null) // TODO: remove model.Policies.TimeToLivePolicy null checking after add TTLPolicy for products

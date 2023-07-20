@@ -16,7 +16,6 @@ namespace HSMServer.Model
         private static long _id = 0L;
 
         private readonly Func<(TimeIntervalViewModel Value, bool IsFolder)> _getParentValue;
-        private readonly List<TimeInterval> _predefinedIntervals;
 
         private TimeInterval? _interval;
         private TimeSpan _customSpan;
@@ -97,16 +96,13 @@ namespace HSMServer.Model
         // public constructor without parameters for post actions
         public TimeIntervalViewModel() { }
 
-        internal TimeIntervalViewModel(Func<(TimeIntervalViewModel, bool)> getParentValue, List<TimeInterval> intervals)
-            : this(intervals)
+        internal TimeIntervalViewModel(Func<(TimeIntervalViewModel, bool)> getParentValue)
         {
             _getParentValue = getParentValue;
         }
 
         internal TimeIntervalViewModel(List<TimeInterval> intervals, bool useCustomTemplate = true)
         {
-            _predefinedIntervals = intervals;
-
             IntervalItems = intervals.ToSelectedItems(k => k.GetDisplayName());
             UseCustomInputTemplate = useCustomTemplate;
         }
@@ -124,7 +120,7 @@ namespace HSMServer.Model
 
         internal TimeIntervalViewModel(TimeIntervalEntity entity, List<TimeInterval> intervals) : this(intervals)
         {
-            FromModel(new TimeIntervalModel(entity));
+            FromModel(new TimeIntervalModel(entity), intervals);
         }
 
 
@@ -142,13 +138,13 @@ namespace HSMServer.Model
             return new TimeIntervalModel(HasFolder ? CoreTimeInterval.FromFolder : CoreTimeInterval.FromParent, ticks);
         }
 
-        internal TimeIntervalViewModel FromModel(TimeIntervalModel model)
+        internal TimeIntervalViewModel FromModel(TimeIntervalModel model, List<TimeInterval> predefinedIntervals)
         {
             if (model.IsFromFolder)
                 Interval = TimeInterval.FromParent;
             else if (!model.UseTicks) //dynamic to dynamic
                 Interval = model.Interval.ToDynamicServer();
-            else if (TimeInterval.IsDefined(model.Ticks) && (_predefinedIntervals?.Contains((TimeInterval)model.Ticks) ?? true)) //const ticks to enum
+            else if (TimeInterval.IsDefined(model.Ticks) && (predefinedIntervals?.Contains((TimeInterval)model.Ticks) ?? true)) //const ticks to enum
                 Interval = (TimeInterval)model.Ticks;
             else
             {
