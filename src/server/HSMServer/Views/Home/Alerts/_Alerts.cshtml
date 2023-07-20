@@ -3,13 +3,17 @@
 @using HSMServer.Controllers
 @using HSMServer.Helpers
 @using HSMServer.Model.ViewModel
+@using HSMServer.Model.TreeViewModel
 
 @model NodeInfoBaseViewModel
 
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
 
 @{
-    var entity = Model is SensorInfoViewModel ? "sensor" : "sensor(s)";
+    var hasAlerts = Model.DataAlerts.Any(a => a.Value.Count > 0);
+
+    var ttlType = NodeViewModel.TimeToLiveAlertKey;
+    var ttlAlert = Model.DataAlerts.TryGetValue(ttlType, out var ttlAlerts) && ttlAlerts.Count > 0 ? ttlAlerts[0] : null;
 }
 
 
@@ -19,14 +23,19 @@
 </div>
 
 
-@foreach (var (type, alerts) in Model.DataAlerts)
+@if (Model is SensorInfoViewModel)
 {
-    <div id="dataAlertsList_@type" class="@(alerts.Count == 0 ? "d-none" : string.Empty)">
+    var sensorType = Model.DataAlerts.FirstOrDefault(a => a.Key != ttlType).Key;
+
+    <div id="sensorAlerts" class="@(hasAlerts ? string.Empty : "d-none")">
         <div class="d-flex justify-content-between align-items-center">
-            <div>
+            <div class="d-flex align-items-center">
                 <label class="col-form-label fw-bold">Alerts:</label>
-                <a id="addDataAlert" href="javascript:addDataAlert('@type', '@Model.EncodedId');" class="d-none mx-2">
+                <a id="addDataAlert" href="javascript:addDataAlert('@sensorType', '@Model.EncodedId');" class="d-none btn btn-link p-0 m-0 ms-2">
                     <i class="fa-solid fa-plus"></i> Add
+                </a>
+                <a id="addTtlAlert" href="javascript:addDataAlert('@ttlType', '@Model.EncodedId');" class="d-none btn btn-link p-0 m-0 ms-2 @(ttlAlert is not null ? "disabled" : string.Empty)">
+                    <i class="fa-solid fa-plus"></i> Add TTL
                 </a>
             </div>
             <a id="commentHelp" data-bs-toggle="popover" title="Custom comment variables" data-bs-html="true" data-bs-content="@DataAlertCommentHelper.CreateCommentHelp()"
@@ -35,11 +44,49 @@
             </a>
         </div>
 
-        @foreach (var alert in alerts)
+        <div id="dataAlertsList_@ttlType" class="@(ttlAlert is null ? "d-none" : string.Empty)">
+            @await Html.PartialAsync("~/Views/Home/Alerts/_DataAlert.cshtml", ttlAlert)
+        </div>
+
+        @foreach (var (type, alerts) in Model.DataAlerts)
         {
-            @await Html.PartialAsync("~/Views/Home/Alerts/_DataAlert.cshtml", alert)
+            @if (type == ttlType)
+            {
+                continue;
+            }
+            <div id="dataAlertsList_@type" class="@(alerts.Count == 0 ? "d-none" : string.Empty)">
+                @foreach (var alert in alerts)
+                {
+                    @await Html.PartialAsync("~/Views/Home/Alerts/_DataAlert.cshtml", alert)
+                }
+            </div>
         }
     </div>
+}
+else
+{
+    @foreach (var (type, alerts) in Model.DataAlerts)
+    {
+        <div id="dataAlertsList_@type" class="@(alerts.Count == 0 ? "d-none" : string.Empty)">
+            <div class="d-flex justify-content-between align-items-center">
+                <div>
+                    <label class="col-form-label fw-bold">Alerts:</label>
+                    <a id="addDataAlert" href="javascript:addDataAlert('@type', '@Model.EncodedId');" class="d-none mx-2">
+                        <i class="fa-solid fa-plus"></i> Add
+                    </a>
+                </div>
+                <a id="commentHelp" data-bs-toggle="popover" title="Custom comment variables" data-bs-html="true" data-bs-content="@DataAlertCommentHelper.CreateCommentHelp()"
+                   class="d-none" style="color: #0366d6; cursor: pointer; text-decoration: underline;">
+                    Comment help
+                </a>
+            </div>
+
+            @foreach (var alert in alerts)
+            {
+                @await Html.PartialAsync("~/Views/Home/Alerts/_DataAlert.cshtml", alert)
+            }
+        </div>
+    }
 }
 
 

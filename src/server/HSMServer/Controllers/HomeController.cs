@@ -554,14 +554,15 @@ namespace HSMServer.Controllers
         }
 
 
-        public IActionResult AddDataPolicy(SensorType type, Guid sensorId)
+        public IActionResult AddDataPolicy(byte type, Guid sensorId)
         {
             DataAlertViewModelBase viewModel = type switch
             {
-                SensorType.Integer => new SingleDataAlertViewModel<IntegerValue, int>(sensorId),
-                SensorType.Double => new SingleDataAlertViewModel<DoubleValue, double>(sensorId),
-                SensorType.IntegerBar => new BarDataAlertViewModel<IntegerBarValue, int>(sensorId),
-                SensorType.DoubleBar => new BarDataAlertViewModel<DoubleBarValue, double>(sensorId),
+                (byte)SensorType.Integer => new SingleDataAlertViewModel<IntegerValue, int>(sensorId),
+                (byte)SensorType.Double => new SingleDataAlertViewModel<DoubleValue, double>(sensorId),
+                (byte)SensorType.IntegerBar => new BarDataAlertViewModel<IntegerBarValue, int>(sensorId),
+                (byte)SensorType.DoubleBar => new BarDataAlertViewModel<DoubleBarValue, double>(sensorId),
+                NodeViewModel.TimeToLiveAlertKey => new TimeToLiveAlertViewModel(sensorId),
                 _ => null,
             };
 

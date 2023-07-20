@@ -43,9 +43,9 @@ namespace HSMServer.Model.TreeViewModel
             Path = model.Path;
             EncodedId = SensorPathHelper.EncodeGuid(model.Id);
 
-            TimeToLive = new(() => (Parent?.TimeToLive, ParentIsFolder));
-            KeepHistory = new(() => (Parent?.KeepHistory, ParentIsFolder));
-            SelfDestroy = new(() => (Parent?.SelfDestroy, ParentIsFolder));
+            TimeToLive = new(() => (Parent?.TimeToLive, ParentIsFolder), PredefinedIntervals.ForTimeout);
+            KeepHistory = new(() => (Parent?.KeepHistory, ParentIsFolder), PredefinedIntervals.ForKeepHistory);
+            SelfDestroy = new(() => (Parent?.SelfDestroy, ParentIsFolder), PredefinedIntervals.ForSelfDestory);
 
             DataAlerts[TimeToLiveAlertKey] = new();
         }

@@ -14,7 +14,7 @@ namespace HSMServer.Model.DataAlerts
             Conditions.Add(new TimeToLiveConditionViewModel()
             {
                 Property = AlertProperty.TimeToLive,
-                TimeToLive = interval,
+                TimeToLive = new TimeIntervalViewModel(interval, PredefinedIntervals.ForTimeout) { IsAlertBlock = true },
             });
         }
 
