@@ -53,6 +53,19 @@ namespace HSMServer.Model
 
     public static class PredefinedIntervals
     {
+        public static HashSet<TimeInterval> ForFolderTimeout { get; } =
+            new()
+            {
+                TimeInterval.FromParent,
+                TimeInterval.None,
+                TimeInterval.TenMinutes,
+                TimeInterval.Hour,
+                TimeInterval.Day,
+                TimeInterval.Week,
+                TimeInterval.Month,
+                TimeInterval.Custom
+            };
+
         public static HashSet<TimeInterval> ForTimeout { get; } =
             new()
             {
