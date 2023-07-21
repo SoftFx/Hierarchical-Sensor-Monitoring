@@ -39,7 +39,7 @@ namespace HSMServer.Core.Model.Policies
         private protected BaseSensorModel _sensor;
         private CorrectTypePolicy<T> _typePolicy;
 
-        
+
         protected abstract bool CalculateStorageResult(T value, bool updateSensor);
 
 
