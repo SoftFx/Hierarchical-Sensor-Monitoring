@@ -12,7 +12,7 @@
 @{
     var hasAlerts = Model.DataAlerts.Any(a => a.Value.Count > 0);
 
-    var ttlType = NodeViewModel.TimeToLiveAlertKey;
+    var ttlType = TimeToLiveAlertViewModel.TimeToLiveAlertKey;
     var ttlAlert = Model.DataAlerts.TryGetValue(ttlType, out var ttlAlerts) && ttlAlerts.Count > 0 ? ttlAlerts[0] : null;
 }
 

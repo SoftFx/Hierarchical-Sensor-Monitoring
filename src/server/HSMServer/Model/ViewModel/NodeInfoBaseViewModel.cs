@@ -65,6 +65,8 @@ namespace HSMServer.Model.ViewModel
             SelfDestroyPeriod = new(model.SelfDestroy, PredefinedIntervals.ForSelfDestory);
 
             DataAlerts = model.DataAlerts;
+            if (model.TimeToLive.TimeInterval is not TimeInterval.None)
+                DataAlerts[TimeToLiveAlertViewModel.TimeToLiveAlertKey] = new List<DataAlertViewModelBase> { model.TimeToLiveAlert.FromInterval(model.TimeToLive) };
         }
     }
 }

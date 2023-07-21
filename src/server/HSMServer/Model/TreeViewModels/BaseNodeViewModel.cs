@@ -19,6 +19,8 @@ namespace HSMServer.Model.TreeViewModel
 
         public TimeIntervalViewModel TimeToLive { get; protected set; }
 
+        public TimeToLiveAlertViewModel TimeToLiveAlert { get; protected set; }
+
 
         public Guid Id { get; protected set; }
 

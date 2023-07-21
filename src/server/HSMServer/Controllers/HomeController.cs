@@ -562,7 +562,7 @@ namespace HSMServer.Controllers
                 (byte)SensorType.Double => new SingleDataAlertViewModel<DoubleValue, double>(sensorId),
                 (byte)SensorType.IntegerBar => new BarDataAlertViewModel<IntegerBarValue, int>(sensorId),
                 (byte)SensorType.DoubleBar => new BarDataAlertViewModel<DoubleBarValue, double>(sensorId),
-                NodeViewModel.TimeToLiveAlertKey => new TimeToLiveAlertViewModel(sensorId),
+                TimeToLiveAlertViewModel.TimeToLiveAlertKey => new TimeToLiveAlertViewModel(sensorId),
                 _ => null,
             };
 
