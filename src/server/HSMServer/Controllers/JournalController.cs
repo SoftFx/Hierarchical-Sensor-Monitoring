@@ -16,7 +16,7 @@ public class JournalController : BaseController
     public JsonResult GetPage([FromBody] DataTableParameters parameters)
     {
         var draw = parameters.Draw;
-        var rows = new List<List<string>>(parameters.PageSize);
+        var rows = new List<List<string>>(parameters.Length);
 
         foreach (var recordFromDb in StoredUser.Journal.GetPage(parameters))
         {
