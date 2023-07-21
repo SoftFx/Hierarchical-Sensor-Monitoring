@@ -538,11 +538,14 @@ namespace HSMServer.Controllers
             if (!ModelState.IsValid)
                 return PartialView("_MetaInfo", new SensorInfoViewModel(sensor));
 
+            var ttl = newModel.DataAlerts.TryGetValue(TimeToLiveAlertViewModel.AlertKey, out var alerts) && alerts.Count > 0 ? alerts[0] : null;
+
             var update = new SensorUpdate
             {
                 Id = sensor.Id,
                 Description = newModel.Description ?? string.Empty,
-                //TTL = newModel.ExpectedUpdateInterval.ToModel(),
+                TTL = ttl?.Conditions[0].TimeToLive.ToModel() ?? new TimeIntervalModel(Core.Model.TimeInterval.None),
+                TTLPolicy = ttl?.ToTimeToLiveUpdate(),
                 KeepHistory = newModel.SavedHistoryPeriod.ToModel(),
                 SelfDestroy = newModel.SelfDestroyPeriod.ToModel(),
                 Policies = newModel.DataAlerts?[(byte)sensor.Type].Select(a => a.ToUpdate()).ToList() ?? new(),
@@ -562,7 +565,7 @@ namespace HSMServer.Controllers
                 (byte)SensorType.Double => new SingleDataAlertViewModel<DoubleValue, double>(sensorId),
                 (byte)SensorType.IntegerBar => new BarDataAlertViewModel<IntegerBarValue, int>(sensorId),
                 (byte)SensorType.DoubleBar => new BarDataAlertViewModel<DoubleBarValue, double>(sensorId),
-                TimeToLiveAlertViewModel.TimeToLiveAlertKey => new TimeToLiveAlertViewModel(sensorId),
+                TimeToLiveAlertViewModel.AlertKey => new TimeToLiveAlertViewModel(sensorId),
                 _ => null,
             };
 

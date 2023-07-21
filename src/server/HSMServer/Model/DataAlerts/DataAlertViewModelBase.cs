@@ -46,6 +46,21 @@ namespace HSMServer.Model.DataAlerts
                 conditions.Add(new PolicyConditionUpdate(condition.Operation, condition.Property.ToCore(), target));
             }
 
+            (var status, var comment, var icon) = GetActions();
+
+            return new(Id, conditions, sensitivity, status.ToCore(), comment, icon);
+        }
+
+        internal PolicyUpdate ToTimeToLiveUpdate()
+        {
+            (var status, var comment, var icon) = GetActions();
+
+            return new(Id, null, null, status.ToCore(), comment, icon);
+        }
+
+
+        private (SensorStatus status, string comment, string icon) GetActions()
+        {
             SensorStatus status = SensorStatus.Ok;
             string comment = null;
             string icon = null;
@@ -60,8 +75,7 @@ namespace HSMServer.Model.DataAlerts
                     status = SensorStatus.Error;
             }
 
-
-            return new(Id, conditions, sensitivity, status.ToCore(), comment, icon);
+            return (status, comment, icon);
         }
     }
 

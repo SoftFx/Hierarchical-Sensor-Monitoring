@@ -6,7 +6,7 @@ namespace HSMServer.Model.DataAlerts
 {
     public sealed class TimeToLiveAlertViewModel : DataAlertViewModel
     {
-        public const byte TimeToLiveAlertKey = byte.MaxValue;
+        public const byte AlertKey = byte.MaxValue;
 
 
         public TimeToLiveAlertViewModel(Guid entityId) : base(entityId) { }

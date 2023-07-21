@@ -69,7 +69,7 @@ namespace HSMServer.Model.ViewModel
             HasTimeToLive = model.TimeToLive.TimeInterval is not TimeInterval.None;
             DataAlerts = new(model.DataAlerts);
             if (model.TimeToLiveAlert is not null)
-                DataAlerts[TimeToLiveAlertViewModel.TimeToLiveAlertKey] = new List<DataAlertViewModelBase> { model.TimeToLiveAlert.FromInterval(model.TimeToLive) };
+                DataAlerts[TimeToLiveAlertViewModel.AlertKey] = new List<DataAlertViewModelBase> { model.TimeToLiveAlert.FromInterval(model.TimeToLive) };
         }
     }
 }

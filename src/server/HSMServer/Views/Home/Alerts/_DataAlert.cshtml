@@ -145,7 +145,7 @@
         });
 
         $("a.deleteRow").off("click").on("click", function () {
-            if ($(this).parents("#dataAlertsList_@TimeToLiveAlertViewModel.TimeToLiveAlertKey").length > 0) {
+            if ($(this).parents("#dataAlertsList_@TimeToLiveAlertViewModel.AlertKey").length > 0) {
                 $('#addTtlAlert').removeClass('disabled');
             }
 

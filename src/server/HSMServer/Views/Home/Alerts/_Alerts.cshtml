@@ -11,7 +11,7 @@
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
 
 @{
-    const byte ttlType = TimeToLiveAlertViewModel.TimeToLiveAlertKey;
+    const byte ttlType = TimeToLiveAlertViewModel.AlertKey;
 
     var hasAlerts = Model.HasTimeToLive || Model.DataAlerts.Any(a => a.Key != ttlType && a.Value.Count > 0);
 }
