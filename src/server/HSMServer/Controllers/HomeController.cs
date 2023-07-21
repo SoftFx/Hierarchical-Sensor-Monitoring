@@ -678,10 +678,13 @@ namespace HSMServer.Controllers
             if (!ModelState.IsValid)
                 return PartialView("_MetaInfo", new ProductInfoViewModel(product));
 
+            var ttl = newModel.DataAlerts.TryGetValue(TimeToLiveAlertViewModel.AlertKey, out var alerts) && alerts.Count > 0 ? alerts[0] : null;
+
             var update = new ProductUpdate
             {
                 Id = product.Id,
-                //TTL = newModel.ExpectedUpdateInterval.ToModel(),
+                TTL = ttl?.Conditions[0].TimeToLive.ToModel() ?? new TimeIntervalModel(Core.Model.TimeInterval.None),
+                TTLPolicy = ttl?.ToTimeToLiveUpdate(),
                 KeepHistory = newModel.SavedHistoryPeriod.ToModel(),
                 SelfDestroy = newModel.SelfDestroyPeriod.ToModel(),
                 Description = newModel.Description ?? string.Empty
