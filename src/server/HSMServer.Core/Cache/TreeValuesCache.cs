@@ -257,7 +257,11 @@ namespace HSMServer.Core.Cache
                 _journalService.RemoveRecords(sensorId, parent.Id);
 
                 if (initiator is not null)
-                    _journalService.AddRecord(new JournalRecordModel(parent.Id, "Remove sensor", sensor.FullPath, initiator));
+                    _journalService.AddRecord(new JournalRecordModel(parent.Id, initiator)
+                    {
+                        Enviroment = "Remove sensor",
+                        Path = sensor.FullPath,
+                    });
             }
             else
                 _journalService.RemoveRecords(sensorId);

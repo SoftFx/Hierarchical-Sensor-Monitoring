@@ -11,7 +11,7 @@ public sealed class JournalService : IJournalService
 {
     private readonly IDatabaseCore _database;
 
-    public event Action<JournalRecordModel> NewJournalEvent;
+    public event Action<JournalRecordModel> NewRecordEvent;
 
 
     public JournalService(IDatabaseCore database)
@@ -23,7 +23,7 @@ public sealed class JournalService : IJournalService
     public void AddRecord(JournalRecordModel record)
     {
         _database.AddJournalValue(record.Key, record.ToJournalEntity());
-        NewJournalEvent?.Invoke(record);
+        NewRecordEvent?.Invoke(record);
     }
 
     public void RemoveRecords(Guid id, Guid parentId) => _database.RemoveJournalValues(id, parentId);

@@ -1,9 +1,11 @@
 ﻿using HSMServer.Authentication;
 using HSMServer.Model.Authentication;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace HSMServer.Controllers
 {
+    [Authorize]
     public abstract class BaseController : Controller
     {
         protected static readonly JsonResult _emptyJsonResult = new(new EmptyResult());

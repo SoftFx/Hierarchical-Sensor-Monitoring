@@ -10,6 +10,7 @@ using System.Security.Claims;
 using System.Text.Json;
 using HSMServer.Extensions;
 using HSMServer.Model.TreeViewModels;
+using HSMServer.Model.History.Personal.Journal;
 
 namespace HSMServer.Model.Authentication
 {

@@ -1,29 +1,30 @@
-using System;
 using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Core.Model;
 using HSMServer.Extensions;
+using System;
 
-namespace HSMServer.Model.ViewModel;
+namespace HSMServer.Model.History.Personal.Journal;
 
-public class JournalViewModel
+public sealed class JournalRecordViewModel
 {
     public RecordType Type { get; set; }
-    
-    public string TimeAsString { get; set; }
-    
-    public string Value { get; set; }
-    
-    public string Initiator { get; set; }
-    
-    public string Name { get; set; }
 
-    
-    public JournalViewModel(JournalRecordModel model)
+
+    public string Initiator { get; set; }
+
+    public string TimeAsString { get; set; }
+
+    public string Value { get; set; }
+
+    public string Path { get; set; }
+
+
+    public JournalRecordViewModel(JournalRecordModel model)
     {
         Type = model.Key.Type;
         TimeAsString = new DateTime(model.Key.Time).ToDefaultFormat();
         Value = $"{model.PropertyName}: {model.OldValue} -> {model.NewValue}";
         Initiator = model.Initiator;
-        Name = model.Path;
+        Path = model.Path;
     }
 }

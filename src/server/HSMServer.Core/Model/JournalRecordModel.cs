@@ -41,12 +41,6 @@ public sealed class JournalRecordModel
         Initiator = initiator;
     }
 
-    public JournalRecordModel(Guid id, string message, string path, string initiator) : this(id, initiator)
-    {
-        OldValue = message;
-        Path = path;
-    }
-
 
     public JournalRecordEntity ToJournalEntity() => new()
     {
