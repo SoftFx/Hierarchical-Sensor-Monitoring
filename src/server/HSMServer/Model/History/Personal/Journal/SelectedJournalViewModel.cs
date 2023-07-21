@@ -14,11 +14,9 @@ using System.Threading.Tasks;
 
 namespace HSMServer.Model.History.Personal.Journal;
 
-public sealed class SelectedJournalViewModel : IDisposable
+public sealed class SelectedJournalViewModel : ConcurrentDictionary<Guid, ConcurrentQueue<JournalRecordViewModel>>, IDisposable
 {
     private const int MaxRecordsOnOneNode = 100;
-
-    private readonly ConcurrentDictionary<Guid, ConcurrentQueue<JournalRecordViewModel>> _subNodeRecords = new();
 
     //private DataTableParameters _tableFilters;
 
@@ -40,10 +38,10 @@ public sealed class SelectedJournalViewModel : IDisposable
             _journal.NewRecordEvent += SaveNewRecords;
         }
 
-        Interlocked.Exchange(ref _totalSize, 0);
-
-        _subNodeRecords.Clear();
         _node = baseNode;
+
+        Interlocked.Exchange(ref _totalSize, 0);
+        Clear();
 
         return Subscribe(_node);
     }
@@ -85,8 +83,7 @@ public sealed class SelectedJournalViewModel : IDisposable
         var records = await _journal.GetPages(request).Flatten();
 
         Interlocked.Add(ref _totalSize, records.Count);
-
-        _subNodeRecords.TryAdd(nodeId, new ConcurrentQueue<JournalRecordViewModel>(records.Select(ToView)));
+        TryAdd(nodeId, new ConcurrentQueue<JournalRecordViewModel>(records.Select(ToView)));
     }
 
 
@@ -118,12 +115,12 @@ public sealed class SelectedJournalViewModel : IDisposable
 
         Func<JournalRecordViewModel, bool> filter = string.IsNullOrEmpty(search) ? EmptyFilter : Filter;
 
-        return _subNodeRecords.Values.SelectMany(x => x.Where(filter)).ToList();
+        return Values.SelectMany(x => x.Where(filter)).ToList();
     }
 
     private void SaveNewRecords(JournalRecordModel record)
     {
-        if (_subNodeRecords.TryGetValue(record.Key.Id, out var queue))
+        if (TryGetValue(record.Key.Id, out var queue))
         {
             Interlocked.Increment(ref _totalSize);
             queue.Enqueue(ToView(record));
