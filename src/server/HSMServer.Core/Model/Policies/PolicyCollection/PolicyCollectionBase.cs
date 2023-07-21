@@ -1,9 +1,7 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities;
-using HSMServer.Core.Cache.UpdateEntities;
 using System;
 using System.Collections;
 using System.Collections.Generic;
-using System.Xml;
 
 namespace HSMServer.Core.Model.Policies
 {
@@ -28,12 +26,6 @@ namespace HSMServer.Core.Model.Policies
         IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
 
 
-        internal void ApplyTTL(BaseNodeModel node, PolicyEntity entity)
-        {
-            TimeToLive = new TTLPolicy(node.Id, node.Settings.TTL);
-
-            if (entity is not null)
-                TimeToLive.Apply(entity);
-        }
+        internal void ApplyTTL(BaseNodeModel node, PolicyEntity entity) => TimeToLive = new TTLPolicy(node, entity);
     }
 }

@@ -91,7 +91,7 @@ namespace HSMServer.Model.DataAlerts
             {
                 Action = ActionType.SendNotification,
                 Comment = policy.Template,
-                DisplayComment = node is Core.Model.BaseSensorModel sensor ? policy.BuildStateAndComment(sensor.LastValue, sensor, policy.Conditions.FirstOrDefault()) : policy.Template
+                DisplayComment = node is Core.Model.BaseSensorModel ? policy.RebuildState() : policy.Template
             });
 
             if (!string.IsNullOrEmpty(policy.Icon))

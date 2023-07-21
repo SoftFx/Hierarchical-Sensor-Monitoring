@@ -1,4 +1,5 @@
-﻿using HSMDatabase.AccessManager.DatabaseEntities;
+﻿using HSMCommon.Extensions;
+using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Core.Cache.UpdateEntities;
 using System;
 using System.Collections.Generic;
@@ -11,31 +12,35 @@ namespace HSMServer.Core.Model.Policies
         private AlertSystemTemplate _systemTemplate;
         private string _userTemplate;
 
-
-        public Guid Id { get; private set; }
-
-
-        internal protected virtual SensorResult SensorResult { get; protected set; }
-
-        internal protected virtual string AlertComment { get; protected set; }
+        protected BaseSensorModel _sensor;
 
 
         public List<PolicyCondition> Conditions { get; } = new();
 
-        public AlertState State { get; private set; }
+
+        public Guid Id { get; private set; }
 
 
-        public virtual TimeIntervalModel Sensitivity { get; protected set; }
+        internal SensorResult SensorResult { get; private set; }
 
-        public virtual SensorStatus Status { get; protected set; }
+        internal PolicyResult PolicyResult { get; private set; }
 
-        public virtual string Icon { get; protected set; }
+        internal AlertState State { get; private set; }
+
+        internal string Comment { get; private set; }
+
+
+        public TimeIntervalModel Sensitivity { get; private set; }
+
+        public SensorStatus Status { get; private set; }
+
+        public string Icon { get; private set; }
 
 
         public string Template
         {
             get => _userTemplate;
-            protected set
+            private set
             {
                 if (_userTemplate == value)
                     return;
@@ -52,10 +57,27 @@ namespace HSMServer.Core.Model.Policies
         }
 
 
-        public abstract string BuildStateAndComment(BaseValue value, BaseSensorModel sensor, PolicyCondition condition);
+        protected abstract AlertState GetState(BaseValue value);
 
         protected abstract PolicyCondition GetCondition();
 
+
+        public string RebuildState(PolicyCondition condition = null, BaseValue value = null)
+        {
+            State = GetState(value ?? _sensor?.LastValue);
+            State.Template = _systemTemplate;
+
+            State.Operation = condition?.Operation.GetDisplayName();
+            State.Target = condition?.Target.Value;
+
+            Comment = State.BuildComment();
+            SensorResult = new SensorResult(Status, Comment);
+
+            if (_sensor is not null)
+                PolicyResult = new PolicyResult(_sensor.Id, this);
+
+            return Comment;
+        }
 
         internal void Update(PolicyUpdate update)
         {
@@ -77,9 +99,11 @@ namespace HSMServer.Core.Model.Policies
             UpdateConditions(update.Conditions, Update);
         }
 
-        internal void Apply(PolicyEntity entity)
+        internal void Apply(PolicyEntity entity, BaseSensorModel sensor)
         {
             PolicyCondition Update(PolicyCondition condition, PolicyConditionEntity entity) => condition.FromEntity(entity);
+
+            _sensor = sensor;
 
             Id = new Guid(entity.Id);
             Status = entity.SensorStatus.ToStatus();
@@ -106,16 +130,12 @@ namespace HSMServer.Core.Model.Policies
         };
 
 
-        protected string SetStateAndGetComment(AlertState state)
+        protected void ResetState()
         {
-            State = state;
-            State.Template = _systemTemplate;
-
-            AlertComment = State.BuildComment();
-
-            return AlertComment;
+            Comment = string.Empty;
+            SensorResult = SensorResult.Ok;
+            PolicyResult = PolicyResult.Ok;
         }
-
 
         private void UpdateConditions<T>(List<T> updates, Func<PolicyCondition, T, PolicyCondition> updateHandler)
         {
@@ -126,6 +146,8 @@ namespace HSMServer.Core.Model.Policies
                 foreach (var update in updates)
                     Conditions.Add(updateHandler(GetCondition(), update));
             }
+
+            RebuildState();
         }
     }
 }

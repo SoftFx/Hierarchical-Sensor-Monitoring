@@ -1,24 +1,19 @@
-﻿using System;
+﻿using HSMDatabase.AccessManager.DatabaseEntities;
 
 namespace HSMServer.Core.Model.Policies
 {
     internal sealed class CorrectTypePolicy<T> : DefaultPolicyBase where T : BaseValue
     {
-        private const SensorStatus PolicyStatus = SensorStatus.Error;
+        private const SensorStatus FatalStatus = SensorStatus.Error;
 
 
-        protected internal override string AlertComment { get; protected set; } = $"Sensor value type is not {typeof(T).Name}";
-
-
-        public override SensorStatus Status { get; protected set; } = PolicyStatus;
-
-        public override string Icon { get; protected set; } = PolicyStatus.ToIcon();
-
-
-        internal CorrectTypePolicy(Guid sensorId) : base(sensorId)
-        {
-            SensorResult = new(Status, AlertComment);
-        }
+        internal CorrectTypePolicy(BaseSensorModel sensor) =>
+            Apply(new PolicyEntity
+            {
+                SensorStatus = (byte)FatalStatus,
+                Icon = FatalStatus.ToIcon(),
+                Template = $"Sensor value type is not {typeof(T).Name}",
+            }, sensor);
 
 
         internal static bool Validate(T value) => value is not null;
