@@ -20,7 +20,7 @@ namespace HSMServer.Model.ViewModel
 
         public SensorStatus Status { get; set; }
 
-        [Obsolete]
+        [Obsolete("Remove after adding TTL constructor for Folder")]
         [Display(Name = "Time to live interval")]
         [MinTimeInterval(TimeInterval.OneMinute, ErrorMessage = "{0} minimal value is {1}.")]
         public TimeIntervalViewModel ExpectedUpdateInterval { get; set; }
@@ -62,7 +62,7 @@ namespace HSMServer.Model.ViewModel
             Description = model.Description;
             LastUpdateTime = model.UpdateTime;
 
-            ExpectedUpdateInterval = new(model.TimeToLive, PredefinedIntervals.ForTimeout);
+            ExpectedUpdateInterval = new(model.TimeToLive, PredefinedIntervals.ForFolderTimeout);
             SavedHistoryPeriod = new(model.KeepHistory, PredefinedIntervals.ForKeepHistory);
             SelfDestroyPeriod = new(model.SelfDestroy, PredefinedIntervals.ForSelfDestory);
 

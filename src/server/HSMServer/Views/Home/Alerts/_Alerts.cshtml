@@ -5,6 +5,7 @@
 @using HSMServer.Model
 @using HSMServer.Model.ViewModel
 @using HSMServer.Model.TreeViewModel
+@using HSMServer.Model.Folders.ViewModels
 
 @model NodeInfoBaseViewModel
 
@@ -17,75 +18,88 @@
 }
 
 
-@*TODO: remove after adding constructor for Inactivity period*@
-<div class="ms-3">
-    <label>TTL: @Model.ExpectedUpdateInterval.DisplayValue</label>
-</div>
+@if (Model is FolderInfoViewModel)
+{
+    <label class="col-form-label fw-bold">Alerts:</label>
 
+    <div class="d-flex flex-row text-nowrap align-items-center ms-3">
+        <span class="meta-info-label">Time to sensor(s) live</span>
 
-<div id="metaInfo_alerts" class="@(hasAlerts ? string.Empty : "d-none")">
-    <div class="d-flex justify-content-between align-items-center">
-        <div class="d-flex align-items-center">
-            <label class="col-form-label fw-bold">Alerts:</label>
+        <span id="folder_ttlLabel" class="meta-info-value">@Model.ExpectedUpdateInterval.DisplayValue</span>
+        <div id="folder_ttl" class="d-none meta-info-interval">
+            <partial name="_TimeIntervalSelect" for="ExpectedUpdateInterval" />
+        </div>
 
-            @if (Model is SensorInfoViewModel)
-            {
-                var sensorType = Model.DataAlerts.FirstOrDefault(a => a.Key != ttlType).Key;
+        <i class='fas fa-question-circle mx-2' title='Time format: dd.hh:mm:ss min value 00:01:00. If the sensor doesn`t receive new data within the specified time interval, a notification sends'></i>
+        <span asp-validation-for="ExpectedUpdateInterval"></span>
+    </div>
+}
+else
+{
+    <div id="metaInfo_alerts" class="@(hasAlerts ? string.Empty : "d-none")">
+        <div class="d-flex justify-content-between align-items-center">
+            <div class="d-flex align-items-center">
+                <label class="col-form-label fw-bold">Alerts:</label>
 
-                <a id="addDataAlert" href="javascript:addDataAlert('@sensorType', '@Model.EncodedId');" class="d-none btn btn-link p-0 m-0 ms-2">
-                    <i class="fa-solid fa-plus"></i> Add
+                @if (Model is SensorInfoViewModel)
+                {
+                    var sensorType = Model.DataAlerts.FirstOrDefault(a => a.Key != ttlType).Key;
+
+                    <a id="addDataAlert" href="javascript:addDataAlert('@sensorType', '@Model.EncodedId');" class="d-none btn btn-link p-0 m-0 ms-2">
+                        <i class="fa-solid fa-plus"></i> Add
+                    </a>
+                }
+
+                <a id="addTtlAlert" href="javascript:addDataAlert('@ttlType', '@Model.EncodedId');" class="d-none btn btn-link p-0 m-0 ms-2 @(Model.HasTimeToLive ? "disabled" : string.Empty)">
+                    <i class="fa-solid fa-plus"></i> Add TTL
                 </a>
-            }
+            </div>
 
-            <a id="addTtlAlert" href="javascript:addDataAlert('@ttlType', '@Model.EncodedId');" class="d-none btn btn-link p-0 m-0 ms-2 @(Model.HasTimeToLive ? "disabled" : string.Empty)">
-                <i class="fa-solid fa-plus"></i> Add TTL
+            <a id="commentHelp" data-bs-toggle="popover" title="Custom comment variables" data-bs-html="true" data-bs-content="@DataAlertCommentHelper.CreateCommentHelp()"
+               class="d-none" style="color: #0366d6; cursor: pointer; text-decoration: underline;">
+                Comment help
             </a>
         </div>
 
-        <a id="commentHelp" data-bs-toggle="popover" title="Custom comment variables" data-bs-html="true" data-bs-content="@DataAlertCommentHelper.CreateCommentHelp()"
-           class="d-none" style="color: #0366d6; cursor: pointer; text-decoration: underline;">
-            Comment help
-        </a>
-    </div>
-
-    <div id="dataAlertsList_@ttlType">
-        @if (Model.HasTimeToLive && Model.DataAlerts.TryGetValue(ttlType, out var ttlAlerts) && ttlAlerts.Count > 0)
-        {
-            @await Html.PartialAsync("~/Views/Home/Alerts/_DataAlert.cshtml", ttlAlerts[0])
-        }
-    </div>
-
-    @foreach (var (type, alerts) in Model.DataAlerts)
-    {
-        @if (type == ttlType)
-        {
-            continue;
-        }
-
-        <div id="dataAlertsList_@type" class="@(alerts.Count == 0 ? "d-none" : string.Empty)">
-            @if (Model is not SensorInfoViewModel)
+        <div id="dataAlertsList_@ttlType">
+            @if (Model.HasTimeToLive && Model.DataAlerts.TryGetValue(ttlType, out var ttlAlerts) && ttlAlerts.Count > 0)
             {
-                <div class="d-flex justify-content-between align-items-center">
-                    <div>
-                        <label class="col-form-label fw-bold">@type alerts:</label>
-                        <a id="addDataAlert" href="javascript:addDataAlert('@type', '@Model.EncodedId');" class="d-none mx-2">
-                            <i class="fa-solid fa-plus"></i> Add
-                        </a>
-                    </div>
-                    <a id="commentHelp" data-bs-toggle="popover" title="Custom comment variables" data-bs-html="true" data-bs-content="@DataAlertCommentHelper.CreateCommentHelp()"
-                        class="d-none" style="color: #0366d6; cursor: pointer; text-decoration: underline;">
-                        Comment help
-                    </a>
-                </div>
-            }
-
-            @foreach (var alert in alerts)
-            {
-                @await Html.PartialAsync("~/Views/Home/Alerts/_DataAlert.cshtml", alert)
+                @await Html.PartialAsync("~/Views/Home/Alerts/_DataAlert.cshtml", ttlAlerts[0])
             }
         </div>
-    }
-</div>
+
+        @foreach (var (type, alerts) in Model.DataAlerts)
+        {
+            @if (type == ttlType)
+            {
+                continue;
+            }
+
+            <div id="dataAlertsList_@type" class="@(alerts.Count == 0 ? "d-none" : string.Empty)">
+                @if (Model is not SensorInfoViewModel)
+                {
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div>
+                            <label class="col-form-label fw-bold">@type alerts:</label>
+                            <a id="addDataAlert" href="javascript:addDataAlert('@type', '@Model.EncodedId');" class="d-none mx-2">
+                                <i class="fa-solid fa-plus"></i> Add
+                            </a>
+                        </div>
+                        <a id="commentHelp" data-bs-toggle="popover" title="Custom comment variables" data-bs-html="true" data-bs-content="@DataAlertCommentHelper.CreateCommentHelp()"
+                            class="d-none" style="color: #0366d6; cursor: pointer; text-decoration: underline;">
+                            Comment help
+                        </a>
+                    </div>
+                }
+
+                @foreach (var alert in alerts)
+                {
+                    @await Html.PartialAsync("~/Views/Home/Alerts/_DataAlert.cshtml", alert)
+                }
+            </div>
+        }
+    </div>
+}
 
 
 <script>

@@ -713,7 +713,7 @@ namespace HSMServer.Controllers
             {
                 Id = SensorPathHelper.DecodeGuid(newModel.EncodedId),
                 Description = newModel.Description ?? string.Empty,
-                //TTL = newModel.ExpectedUpdateInterval,
+                TTL = newModel.ExpectedUpdateInterval,
                 KeepHistory = newModel.SavedHistoryPeriod,
                 SelfDestroy = newModel.SelfDestroyPeriod,
             };
