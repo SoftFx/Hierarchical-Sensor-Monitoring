@@ -14,6 +14,8 @@ namespace HSMServer.Model.ViewModel
 
         public Guid RootProductId { get; }
 
+        public bool HasTimeToLive { get; }
+
         public DateTime LastUpdateTime { get; set; }
 
         public SensorStatus Status { get; set; }
@@ -64,8 +66,9 @@ namespace HSMServer.Model.ViewModel
             SavedHistoryPeriod = new(model.KeepHistory, PredefinedIntervals.ForKeepHistory);
             SelfDestroyPeriod = new(model.SelfDestroy, PredefinedIntervals.ForSelfDestory);
 
-            DataAlerts = model.DataAlerts;
-            if (model.TimeToLive.TimeInterval is not TimeInterval.None)
+            HasTimeToLive = model.TimeToLive.TimeInterval is not TimeInterval.None;
+            DataAlerts = new(model.DataAlerts);
+            if (model.TimeToLiveAlert is not null)
                 DataAlerts[TimeToLiveAlertViewModel.TimeToLiveAlertKey] = new List<DataAlertViewModelBase> { model.TimeToLiveAlert.FromInterval(model.TimeToLive) };
         }
     }
