@@ -19,7 +19,7 @@ public sealed class SelectedJournalViewModel
 
     private readonly ConcurrentDictionary<Guid, bool> _ids = new ();
 
-    private List<JournalRecordModel> _journals;
+    private List<JournalRecordModel> _journals = new();
     private BaseNodeViewModel _baseNode;
     private DataTableParameters _parameters;
     private JournalHistoryRequestModel _journalHistoryRequestModel;

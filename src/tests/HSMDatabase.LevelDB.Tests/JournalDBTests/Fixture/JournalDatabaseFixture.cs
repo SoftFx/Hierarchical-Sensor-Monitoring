@@ -4,5 +4,5 @@ namespace HSMDatabase.LevelDB.Tests.JournalDBTests;
 
 public class JournalDatabaseFixture : DatabaseFixture
 {
-    protected override string DatabaseFolder => nameof(JournalDatabaseFixture);
+    protected override string DatabaseFolder => nameof(JournalCacheTests);
 }

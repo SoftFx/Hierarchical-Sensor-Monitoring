@@ -1,17 +1,24 @@
 using HSMDatabase.AccessManager.DatabaseEntities;
+using HSMServer.Core.Journal;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Requests;
+using HSMServer.Core.Tests.DatabaseTests;
 using HSMServer.Core.Tests.Infrastructure;
-using HSMServer.Core.Tests.MonitoringCoreTests;
 using HSMServer.Core.Tests.MonitoringCoreTests.Fixture;
-using HSMServer.Core.Tests.TreeValuesCacheTests;
 using Xunit;
 
 namespace HSMDatabase.LevelDB.Tests.JournalDBTests;
 
-public sealed class JournalCacheTests : MonitoringCoreTestsBase<TreeValuesCacheFixture>, IClassFixture<DatabaseRegisterFixture>
+[CollectionDefinition("Database collection")]
+public class JournalCacheTests : DatabaseCoreTestsBase<JournalDatabaseFixture>
 {
-    public JournalCacheTests(TreeValuesCacheFixture fixture, DatabaseRegisterFixture registerFixture) : base(fixture, registerFixture) { }
+    private readonly IJournalService _journal;
+
+    public JournalCacheTests(JournalDatabaseFixture fixture, DatabaseRegisterFixture registerFixture)
+        : base(fixture, registerFixture)
+    {
+        _journal = new JournalService(_databaseCoreManager.DatabaseCore);
+    }
 
 
     [Theory]
@@ -50,7 +57,7 @@ public sealed class JournalCacheTests : MonitoringCoreTestsBase<TreeValuesCacheF
             var curCnt = 0;
 
             while (curCnt++ <= valuesCount)
-                _journalService.AddRecord(JournalFactory.GetRecord(sensor.Id));
+                _journal.AddRecord(JournalFactory.GetRecord(sensor.Id));
 
             sensors.Add(sensor);
         }
@@ -61,7 +68,7 @@ public sealed class JournalCacheTests : MonitoringCoreTestsBase<TreeValuesCacheF
 
         foreach (var sensor in sensors)
         {
-            var journals = await _journalService.GetPages(request with { Id = sensor.Id }).Flatten();
+            var journals = await _journal.GetPages(request with { Id = sensor.Id }).Flatten();
 
             Assert.NotEmpty(journals);
             Assert.Equal(journals.Count, valuesCount);
@@ -89,7 +96,7 @@ public sealed class JournalCacheTests : MonitoringCoreTestsBase<TreeValuesCacheF
                 var record = JournalFactory.GetRecord(sensor.Id);
 
                 list.Add(record);
-                _journalService.AddRecord(record);
+                _journal.AddRecord(record);
             }
 
             sensors.Add(sensor);
@@ -101,7 +108,7 @@ public sealed class JournalCacheTests : MonitoringCoreTestsBase<TreeValuesCacheF
         foreach (var (id, records) in journals)
         {
             var expectedList = records.OrderBy(x => x.Key.Time).ToList();
-            var actualList = await _journalService.GetPages(new(id)).Flatten();
+            var actualList = await _journal.GetPages(new(id)).Flatten();
 
             Assert.Equal(expectedList.Count, actualList.Count);
 
