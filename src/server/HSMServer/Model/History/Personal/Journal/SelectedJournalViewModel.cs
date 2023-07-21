@@ -77,6 +77,7 @@ public sealed class SelectedJournalViewModel : IDisposable
     {
         var request = new JournalHistoryRequestModel(nodeId)
         {
+            Types = JournalHistoryRequestModel.AllTypes,
             From = DateTime.UtcNow.AddYears(-1),
             Count = -MaxRecordsOnOneNode,
         };
