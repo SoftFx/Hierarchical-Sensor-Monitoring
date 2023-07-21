@@ -103,17 +103,9 @@ public sealed class SelectedJournalViewModel : IDisposable
             {
                 var ascending = order.Dir == "asc";
 
-                Func<JournalRecordViewModel, string> filterFunc = type switch
-                {
-                    ColumnName.Date => r => r.TimeAsString,
-                    ColumnName.Initiator => x => x.Initiator,
-                    ColumnName.Type => x => x.Type.ToString(),
-                    ColumnName.Record => x => x.Value,
-                    ColumnName.Path => x => x.Path,
-                    _ => throw new NotImplementedException(),
-                };
+                string FilterFunc(JournalRecordViewModel r) => r[type];
 
-                records = (ascending ? records.OrderBy(filterFunc) : records.OrderByDescending(filterFunc)).ToList();
+                records = (ascending ? records.OrderBy(FilterFunc) : records.OrderByDescending(FilterFunc)).ToList();
             }
 
         return records.Skip(filter.Start).Take(filter.Length);

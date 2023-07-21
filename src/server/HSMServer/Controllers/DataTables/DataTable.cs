@@ -1,4 +1,3 @@
-using System;
 using System.Collections.Generic;
 
 namespace HSMServer.Controllers.DataTables;
@@ -21,18 +20,6 @@ public record DataTableColumn(int Data, string Name, bool Orderable, bool Search
 
 public record DataTableOrder(int Column, string Dir);
 
-
-public static class DataTableExtension
-{ 
-    public static ColumnName GetColumnName(this DataTableColumn column)
-    {
-        foreach (var columnName in Enum.GetValues<ColumnName>())
-            if (columnName.ToString() == column.Name)
-                return columnName;
-
-        return default;
-    }
-}
 
 public class DataTableResultSet
 {

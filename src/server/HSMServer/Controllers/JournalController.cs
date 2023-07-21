@@ -3,7 +3,6 @@ using HSMServer.Controllers.DataTables;
 using Microsoft.AspNetCore.Mvc;
 using System;
 using System.Collections.Generic;
-using System.Linq;
 
 namespace HSMServer.Controllers;
 
@@ -17,35 +16,24 @@ public class JournalController : BaseController
     public JsonResult GetPage([FromBody] DataTableParameters parameters)
     {
         var draw = parameters.Draw;
-        var rows = new List<List<string>>(1 << 5);
+        var rows = new List<List<string>>(parameters.PageSize);
 
         foreach (var recordFromDb in StoredUser.Journal.GetPage(parameters))
         {
-            var data = new List<string>(1 << 4);
+            var cells = new List<string>(parameters.Columns.Count);
 
-            foreach (var name in parameters.Columns.Select(x => x.GetColumnName()))
-            {
-                switch (name)
+            foreach (var column in parameters.Columns)
+                if (Enum.TryParse<ColumnName>(column.Name, out var name))
                 {
-                    case ColumnName.Date:
-                        data.Add(recordFromDb.TimeAsString);
-                        break;
-                    case ColumnName.Path:
-                        data.Add(recordFromDb.Path);
-                        break;
-                    case ColumnName.Type:
-                        data.Add(recordFromDb.Type.ToString());
-                        break;
-                    case ColumnName.Record:
-                        data.Add(recordFromDb.Value.Replace(Environment.NewLine, "<br>"));
-                        break;
-                    case ColumnName.Initiator:
-                        data.Add(recordFromDb.Initiator);
-                        break;
-                }
-            }
+                    var value = recordFromDb[name];
 
-            rows.Add(data);
+                    if (name is ColumnName.Record)
+                        value = value.Replace(Environment.NewLine, "<br>");
+
+                    cells.Add(value);
+                }
+
+            rows.Add(cells);
         }
 
         return Json(new DataTableResultSet(draw, StoredUser.Journal.TotalSize, StoredUser.Journal.TotalSize, rows));
