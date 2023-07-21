@@ -115,6 +115,10 @@
             url: `@Url.Action(nameof(HomeController.AddDataPolicy), ViewConstants.HomeController)?type=${type}&sensorId=${entityId}`,
             cache: false
         }).done(function (viewData) {
+            if (type == '@ttlType') {
+                $('#addTtlAlert').addClass('disabled');
+            }
+
             $(`#dataAlertsList_${type}`).append(viewData);
         });
     }
