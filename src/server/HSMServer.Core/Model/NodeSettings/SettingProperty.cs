@@ -1,8 +1,6 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Core.Cache;
 using System;
-using HSMServer.Core.Cache.UpdateEntities;
-using HSMServer.Core.Journal;
 
 namespace HSMServer.Core.Model.NodeSettings
 {
@@ -25,20 +23,18 @@ namespace HSMServer.Core.Model.NodeSettings
     }
 
 
-    public sealed class SettingProperty<T> : SettingProperty, IChangesEntity where T : TimeIntervalModel, new()
+    public sealed class SettingProperty<T> : SettingProperty where T : TimeIntervalModel, new()
     {
         private readonly T _emptyValue = (T)TimeIntervalModel.None;
 
 
-        public event Action<JournalRecordModel> ChangesHandler;
-
+        public override bool IsSet => !CurValue?.IsFromParent ?? false;
 
         public override bool IsEmpty => Value is null;
 
-        public override bool IsSet => !CurValue?.IsFromParent ?? false;
 
-        
         public required string Name { get; set; }
+
 
         public T CurValue { get; private set; } = new T();
 
@@ -59,17 +55,6 @@ namespace HSMServer.Core.Model.NodeSettings
             return newValue is null;
         }
 
-        internal void Update(TimeIntervalModel update, BaseNodeUpdate nodeUpdate, string path, Func<bool> callbackFunction = null)
-        {
-            var oldValue = CurValue.ToString();
-
-            if (!TrySetValue(update) && oldValue != CurValue.ToString())
-            {
-                ChangesHandler?.Invoke(new JournalRecordModel(nodeUpdate.Id, $"{JournalConstants.CleanUpSettings}{Environment.NewLine}Old {Name}: {oldValue}{Environment.NewLine}New {Name}: {CurValue}", path, nodeUpdate.Initiator));
-            }
-            
-            callbackFunction?.Invoke();
-        }
 
         internal override TimeIntervalEntity ToEntity() => CurValue?.ToEntity();
     }

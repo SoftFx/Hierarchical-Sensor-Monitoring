@@ -1,18 +1,15 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Core.Cache.UpdateEntities;
+using HSMServer.Core.Journal;
 using HSMServer.Core.Model.NodeSettings;
 using HSMServer.Core.Model.Policies;
 using System;
 using System.Runtime.CompilerServices;
-using HSMServer.Core.Journal;
 
 namespace HSMServer.Core.Model
 {
     public abstract class BaseNodeModel : IChangesEntity
     {
-        public event Action<JournalRecordModel> ChangesHandler;
-
-
         public abstract PolicyCollectionBase Policies { get; }
 
         public SettingsCollection Settings { get; } = new();
@@ -35,12 +32,15 @@ namespace HSMServer.Core.Model
         public bool UseParentPolicies { get; private set; }
 
 
-        public string RootProductName => Parent?.RootProductName ?? DisplayName;
+        public string FullPath => Parent is null ? $"{DisplayName}" : $"{Parent.FullPath}/{DisplayName}";
 
         public string Path => Parent is null ? string.Empty : $"{Parent.Path}/{DisplayName}";
 
-        public string PathWithName => Parent is null ? $"{DisplayName}" : $"{Parent.PathWithName}/{DisplayName}";
-        
+        public string RootProductName => Parent?.RootProductName ?? DisplayName;
+
+
+        public event Action<JournalRecordModel> ChangesHandler;
+
 
         protected BaseNodeModel()
         {
@@ -65,6 +65,8 @@ namespace HSMServer.Core.Model
 
             if (entity.Settings != null)
                 Settings.SetSettings(entity.Settings);
+
+            Settings.TTL.Uploaded += (_, _) => CheckTimeout();
         }
 
 
@@ -82,18 +84,25 @@ namespace HSMServer.Core.Model
 
         protected internal void Update(BaseNodeUpdate update)
         {
-            Description = UpdateProperty(update.Description ?? Description, Description , update.Initiator);
+            Description = UpdateProperty(Description, update.Description ?? Description, update.Initiator);
 
-            Settings.KeepHistory.Update(update.KeepHistory, update, PathWithName);
-            Settings.SelfDestroy.Update(update.SelfDestroy, update, PathWithName);
-            Settings.TTL.Update(update.TTL, update, PathWithName, CheckTimeout);
+            Settings.Update(update, FullPath);
         }
 
-        protected T UpdateProperty<T>(T newValue, T oldValue, string initiator, [CallerArgumentExpression("oldValue")] string propName = "")
+
+        protected T UpdateProperty<T>(T oldValue, T newValue, string initiator, [CallerArgumentExpression(nameof(oldValue))] string propName = "")
         {
             if (newValue is not null && !newValue.Equals(oldValue))
-                ChangesHandler?.Invoke(new JournalRecordModel(Id, $"{JournalConstants.GeneralInfo}{Environment.NewLine}Old {propName}: {oldValue}{Environment.NewLine}New {propName}: {newValue}", PathWithName, initiator));
-            
+                ChangesHandler?.Invoke(new JournalRecordModel(Id, initiator)
+                {
+                    Enviroment = "General info update",
+                    OldValue = $"{oldValue}",
+                    NewValue = $"{newValue}",
+
+                    PropertyName = propName,
+                    Path = FullPath,
+                });
+
             return newValue ?? oldValue;
         }
     }

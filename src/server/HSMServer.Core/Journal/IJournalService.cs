@@ -7,7 +7,7 @@ namespace HSMServer.Core.Journal;
 
 public interface IJournalService
 {
-    event Action<JournalRecordModel> NewJournalEvent;
+    event Action<JournalRecordModel> NewRecordEvent;
     
 
     void AddRecord(JournalRecordModel record);

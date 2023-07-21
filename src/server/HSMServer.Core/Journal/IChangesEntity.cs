@@ -1,5 +1,5 @@
-using System;
 using HSMServer.Core.Model;
+using System;
 
 namespace HSMServer.Core.Journal;
 

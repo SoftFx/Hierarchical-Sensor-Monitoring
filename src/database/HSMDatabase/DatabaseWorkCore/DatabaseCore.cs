@@ -411,10 +411,10 @@ namespace HSMDatabase.DatabaseWorkCore
 
         #region Journal
 
-        public void AddJournalValue(JournalKey journalKey, JournalEntity value)
+        public void AddJournalValue(JournalKey journalKey, JournalRecordEntity value)
         {
             var dbs = _journalValuesDatabases.GetNewestDatabases(journalKey.Time);
-            
+
             dbs.Put(journalKey.GetBytes(), value);
         }
 
@@ -435,28 +435,38 @@ namespace HSMDatabase.DatabaseWorkCore
                 }
         }
 
-        public IAsyncEnumerable<List<(byte[] Key, JournalEntity Entity)>> GetJournalValuesPage(Guid sensorId, DateTime from, DateTime to, RecordType fromRecordType, RecordType toRecordType, int count)
+        public IAsyncEnumerable<List<(byte[] Key, JournalRecordEntity Entity)>> GetJournalValuesPage(Guid sensorId, DateTime from, DateTime to, RecordType types, int count)
         {
             var fromTicks = from.Ticks;
             var toTicks = to.Ticks;
 
-            var fromBytes = new JournalKey(sensorId, fromTicks, fromRecordType).GetBytes();
-            var toBytes = new JournalKey(sensorId, toTicks, toRecordType).GetBytes();
+            IEnumerable<(byte[], byte[])> GetValuesEnumerator(IJournalValuesDatabase db, Func<byte[], byte[], IEnumerable<(byte[], byte[])>> requestDb)
+            {
+                foreach (var recordType in Enum.GetValues<RecordType>())
+                    if (types.HasFlag(recordType))
+                    {
+                        var fromBytes = new JournalKey(sensorId, fromTicks, recordType).GetBytes();
+                        var toBytes = new JournalKey(sensorId, toTicks, recordType).GetBytes();
+
+                        foreach (var t in requestDb(fromBytes, toBytes))
+                            yield return t;
+                    }
+            }
 
             var databases = _journalValuesDatabases.Where(db => db.IsInclude(fromTicks, toTicks)).ToList();
-            GetJournalValuesFunc getValues = (db) => db.GetValuesFrom(fromBytes, toBytes);
+            GetJournalValuesFunc getValues = (db) => GetValuesEnumerator(db, db.GetValuesFrom);
 
             if (count < 0)
             {
                 databases.Reverse();
-                getValues = (db) => db.GetValuesTo(fromBytes, toBytes);
+                getValues = (db) => GetValuesEnumerator(db, db.GetValuesTo);
             }
 
             return GetJournalValuesPage(databases, count, getValues);
         }
 
 
-        private void PutRecordsToParent(byte[] from, byte[] to, Guid id, IJournalValuesDatabase db)
+        private static void PutRecordsToParent(byte[] from, byte[] to, Guid id, IJournalValuesDatabase db)
         {
             if (id != default)
                 foreach (var (key, value) in db.GetValuesFrom(from, to))
@@ -466,16 +476,16 @@ namespace HSMDatabase.DatabaseWorkCore
                 }
         }
 
-        private async IAsyncEnumerable<List<(byte[], JournalEntity)>> GetJournalValuesPage(List<IJournalValuesDatabase> databases, int count, GetJournalValuesFunc getValues)
+        private async IAsyncEnumerable<List<(byte[], JournalRecordEntity)>> GetJournalValuesPage(List<IJournalValuesDatabase> databases, int count, GetJournalValuesFunc getValues)
         {
-            var result = new List<(byte[], JournalEntity)>(SensorValuesPageCount);
+            var result = new List<(byte[], JournalRecordEntity)>(SensorValuesPageCount);
             var totalCount = 0;
 
             foreach (var database in databases)
             {
                 foreach (var value in getValues(database))
                 {
-                    result.Add((value.Item1, JsonSerializer.Deserialize<JournalEntity>(value.Item2)));
+                    result.Add((value.Item1, JsonSerializer.Deserialize<JournalRecordEntity>(value.Item2)));
                     totalCount++;
 
                     if (result.Count == SensorValuesPageCount)

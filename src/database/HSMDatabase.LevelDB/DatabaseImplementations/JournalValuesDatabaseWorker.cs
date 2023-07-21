@@ -40,7 +40,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
         public bool IsInclude(long from, long to) => From <= to && To >= from;
         
 
-        public void Put(byte[] key, JournalEntity value)
+        public void Put(byte[] key, JournalRecordEntity value)
         {
             try
             {

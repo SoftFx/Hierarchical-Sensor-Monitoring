@@ -1,11 +1,14 @@
-using System;
 using HSMDatabase.AccessManager.DatabaseEntities;
+using HSMServer.Core.Cache.UpdateEntities;
+using HSMServer.Core.Journal;
+using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.CompilerServices;
 
 namespace HSMServer.Core.Model.NodeSettings
 {
-    public sealed class SettingsCollection
+    public sealed class SettingsCollection : IChangesEntity
     {
         private readonly Dictionary<string, SettingProperty> _properties = new();
 
@@ -17,11 +20,38 @@ namespace HSMServer.Core.Model.NodeSettings
         public SettingProperty<TimeIntervalModel> TTL { get; }
 
 
+        public event Action<JournalRecordModel> ChangesHandler;
+
+
         internal SettingsCollection()
         {
             KeepHistory = Register<TimeIntervalModel>(nameof(KeepHistory));
             SelfDestroy = Register<TimeIntervalModel>(nameof(SelfDestroy));
             TTL = Register<TimeIntervalModel>(nameof(TTL));
+        }
+
+
+        internal void Update(BaseNodeUpdate update, string path)
+        {
+            void Update(SettingProperty<TimeIntervalModel> setting, TimeIntervalModel newVal, [CallerArgumentExpression(nameof(setting))] string propName = "")
+            {
+                var oldVal = setting.CurValue;
+
+                if (setting.TrySetValue(newVal))
+                    ChangesHandler?.Invoke(new JournalRecordModel(update.Id, update.Initiator)
+                    {
+                        Enviroment = "Settings update",
+                        OldValue = $"{oldVal}",
+                        NewValue = $"{newVal}",
+
+                        PropertyName = propName,
+                        Path = path,
+                    });
+            }
+
+            Update(TTL, update.TTL);
+            Update(SelfDestroy, update.SelfDestroy, "Remove sensor after inactivity");
+            Update(KeepHistory, update.KeepHistory, "Keep sensor history");
         }
 
 
@@ -44,7 +74,10 @@ namespace HSMServer.Core.Model.NodeSettings
 
         private SettingProperty<T> Register<T>(string name) where T : TimeIntervalModel, new()
         {
-            var property = new SettingProperty<T>(){ Name = name };
+            var property = new SettingProperty<T>()
+            {
+                Name = name
+            };
 
             _properties[name] = property;
 

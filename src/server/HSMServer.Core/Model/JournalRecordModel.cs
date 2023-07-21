@@ -1,35 +1,54 @@
-using System;
 using HSMDatabase.AccessManager.DatabaseEntities;
+using System;
 
 namespace HSMServer.Core.Model;
 
 public sealed class JournalRecordModel
 {
-    public JournalKey Key { get; set; }
+    public JournalKey Key { get; }
 
-    public string Value { get; set; }
-    
-    public string Initiator { get; set; }
-    
+
+    public string Enviroment { get; init; }
+
+    public string Initiator { get; init; }
+
+
+    public string PropertyName { get; set; }
+
+    public string OldValue { get; set; }
+
+    public string NewValue { get; set; }
+
     public string Path { get; set; }
 
-    
-    public JournalRecordModel(JournalEntity entity, byte[] key)
+
+    public JournalRecordModel(byte[] key, JournalRecordEntity entity)
     {
-        Value = entity.Value;
-        Initiator = entity.Initiator;
-        Path = entity.Path;
         Key = JournalKey.FromBytes(key);
+
+        Initiator = entity.Initiator;
+        Enviroment = entity.Enviroment;
+
+        PropertyName = entity.PropertyName;
+        NewValue = entity.NewValue;
+        OldValue = entity.OldValue;
+        Path = entity.Path;
     }
 
-    public JournalRecordModel(Guid id, string message, string path, string initiator)
+    public JournalRecordModel(Guid id, string initiator)
     {
-        Value = message;
         Key = new JournalKey(id, DateTime.UtcNow.Ticks);
         Initiator = initiator;
-        Path = path;
     }
-    
-    
-    public JournalEntity ToJournalEntity() => new(Value, Path, Initiator);
+
+
+    public JournalRecordEntity ToJournalEntity() => new()
+    {
+        PropertyName = PropertyName,
+        Enviroment = Enviroment,
+        Initiator = Initiator,
+        OldValue = OldValue,
+        NewValue = NewValue,
+        Path = Path,
+    };
 }

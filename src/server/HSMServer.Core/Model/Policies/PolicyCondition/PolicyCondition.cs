@@ -61,7 +61,7 @@ namespace HSMServer.Core.Model.Policies
     public sealed record TargetValue(TargetType Type, string Value);
 
 
-    public abstract class PolicyCondition : IPolicyCondition
+    public abstract class PolicyCondition
     {
         public abstract PolicyOperation Operation { get; set; }
 
@@ -92,5 +92,8 @@ namespace HSMServer.Core.Model.Policies
             Operation = (byte)Operation,
             Property = (byte)Property,
         };
+
+
+        public override string ToString() => $"{Property} {Operation} {Target.Value}";
     }
 }

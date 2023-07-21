@@ -1,15 +1,6 @@
-using System;
 using System.Collections.Generic;
 
 namespace HSMServer.Controllers.DataTables;
-
-public record Search(bool Regex, string Value);
-
-public record DataTableParameters(List<DataTableColumn> Columns, int Draw, int Length, List<DataTableOrder> Order, Search Search, int Start);
-
-public record DataTableColumn(int Data, string Name, bool Orderable, bool Searchable, Search Search);
-
-public record DataTableOrder(int Column, string Dir);
 
 public enum ColumnName
 {
@@ -19,17 +10,16 @@ public enum ColumnName
     Record,
     Initiator
 }
-public static class DataTableExtension
-{ 
-    public static ColumnName GetColumnName(this DataTableColumn column)
-    {
-        foreach (var columnName in Enum.GetValues<ColumnName>())
-            if (columnName.ToString() == column.Name)
-                return columnName;
 
-        return default;
-    }
-}
+
+public record Search(bool Regex, string Value);
+
+public record DataTableParameters(List<DataTableColumn> Columns, int Draw, int Length, List<DataTableOrder> Order, Search Search, int Start);
+
+public record DataTableColumn(int Data, string Name, bool Orderable, bool Searchable, Search Search);
+
+public record DataTableOrder(int Column, string Dir);
+
 
 public class DataTableResultSet
 {

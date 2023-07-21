@@ -1,12 +1,14 @@
-﻿using HSMDatabase.AccessManager.DatabaseEntities;
+﻿using HSMCommon.Extensions;
+using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Core.Cache.UpdateEntities;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text;
 
 namespace HSMServer.Core.Model.Policies
 {
-    public abstract class Policy : IPolicy<PolicyCondition>
+    public abstract class Policy
     {
         public Guid Id { get; private set; }
 
@@ -19,6 +21,7 @@ namespace HSMServer.Core.Model.Policies
 
 
         public List<PolicyCondition> Conditions { get; } = new();
+
 
         public virtual TimeIntervalModel Sensitivity { get; protected set; }
 
@@ -94,6 +97,31 @@ namespace HSMServer.Core.Model.Policies
                 foreach (var update in updates)
                     Conditions.Add(updateHandler(GetCondition(), update));
             }
+        }
+
+
+        public override string ToString()
+        {
+            var sb = new StringBuilder(1 << 5);
+
+            sb.Append("If ");
+
+            for (int i = 0; i < Conditions.Count; ++i)
+            {
+                var cond = Conditions[i];
+
+                if (i > 0)
+                    sb.Append($" {cond.Combination.GetDisplayName()}");
+
+                sb.Append(cond.ToString());
+            }
+
+            sb.Append($" then icon={Icon}, template={Template}");
+
+            if (!Status.IsOk())
+                sb.Append($", change status to = {Status}");
+
+            return sb.ToString();
         }
     }
 }

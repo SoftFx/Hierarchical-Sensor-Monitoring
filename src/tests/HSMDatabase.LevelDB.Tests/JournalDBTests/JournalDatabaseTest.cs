@@ -6,7 +6,7 @@ using HSMServer.Core.Tests.Infrastructure;
 using HSMServer.Core.Tests.MonitoringCoreTests.Fixture;
 using Xunit;
 
-namespace HSMDatabase.LevelDB.Tests
+namespace HSMDatabase.LevelDB.Tests.JournalDBTests
 {
     public class JournalDatabaseTest : DatabaseCoreTestsBase<JournalDatabaseFixture>, IClassFixture<DatabaseRegisterFixture>
     {
@@ -34,7 +34,7 @@ namespace HSMDatabase.LevelDB.Tests
                 _databaseCore.AddJournalValue(journal.Item1, journal.Item2);
 
             await Task.Delay(1000);
-            var actualJournals = (await _databaseCore.GetJournalValuesPage(sensorId, DateTime.MinValue, DateTime.MaxValue, journalType, journalType, historyValuesCount)
+            var actualJournals = (await _databaseCore.GetJournalValuesPage(sensorId, DateTime.MinValue, DateTime.MaxValue, journalType, historyValuesCount)
                 .Flatten()).Select(x => (JournalKey.FromBytes(x.Key), x.Entity)).ToList();
 
             Assert.Equal(journals.Count, actualJournals.Count);
@@ -45,10 +45,10 @@ namespace HSMDatabase.LevelDB.Tests
             }
         }
 
-        private void CompareJournalEntity(JournalEntity actual, JournalEntity expected)
+        private void CompareJournalEntity(JournalRecordEntity actual, JournalRecordEntity expected)
         {
             Assert.Equal(actual.Path, expected.Path);
-            Assert.Equal(actual.Value, expected.Value);
+            Assert.Equal(actual.OldValue, expected.OldValue);
             Assert.Equal(actual.Initiator, expected.Initiator);
         }
 
@@ -62,16 +62,16 @@ namespace HSMDatabase.LevelDB.Tests
         [Fact]
         public async Task BorderTest()
         {
-           await RandomGuidTest(100);
+            await RandomGuidTest(100);
         }
 
         private async Task RandomGuidTest(int count)
         {
             var id = Guid.NewGuid();
-            var expectedMinKey = JournalFactory.BuildKey(id, _minTime.Ticks);
-            var expectedMaxKey = JournalFactory.BuildKey(id, _maxTime.Ticks);
+            var expectedMinKey = JournalFactory.GetKey(id, _minTime.Ticks);
+            var expectedMaxKey = JournalFactory.GetKey(id, _maxTime.Ticks);
 
-            var expected = new List<(JournalKey, JournalEntity)>();
+            var expected = new List<(JournalKey, JournalRecordEntity)>();
             var journals = BuildJournalEntities(count);
 
             for (int i = 0; i < count; i++)
@@ -80,22 +80,22 @@ namespace HSMDatabase.LevelDB.Tests
                 {
                     _databaseCore.AddJournalValue(expectedMinKey, journals[i]);
                     expected.Add((expectedMinKey, journals[i]));
-                    expectedMinKey = JournalFactory.BuildKey(id, expectedMinKey.Time + 1);
+                    expectedMinKey = JournalFactory.GetKey(id, expectedMinKey.Time + 1);
                 }
                 else
                 {
                     _databaseCore.AddJournalValue(expectedMaxKey, journals[i]);
                     expected.Add((expectedMaxKey, journals[i]));
-                    expectedMaxKey = JournalFactory.BuildKey(id, expectedMaxKey.Time + 1);
+                    expectedMaxKey = JournalFactory.GetKey(id, expectedMaxKey.Time + 1);
                 }
-                
+
             }
 
             expected = expected.OrderBy(x => x.Item1.Time).ToList();
 
             await Task.Delay(500);
-            
-            var actualJournals = await _databaseCore.GetJournalValuesPage(id, _minTime, DateTime.MaxValue, RecordType.Actions, RecordType.Actions, TreeValuesCache.MaxHistoryCount).Flatten();
+
+            var actualJournals = await _databaseCore.GetJournalValuesPage(id, _minTime, DateTime.MaxValue, RecordType.Actions, TreeValuesCache.MaxHistoryCount).Flatten();
             Assert.Equal(count, actualJournals.Count);
 
             for (int i = 0; i < count; i++)
@@ -105,12 +105,12 @@ namespace HSMDatabase.LevelDB.Tests
             }
         }
 
-        private List<JournalEntity> BuildJournalEntities(int count)
+        private List<JournalRecordEntity> BuildJournalEntities(int count)
         {
-            var journals = new List<JournalEntity>(count);
+            var journals = new List<JournalRecordEntity>(count);
 
             for (int i = 0; i < count; i++)
-                journals.Add(JournalFactory.BuildJournalEntity());
+                journals.Add(JournalFactory.GetEntity());
 
             return journals;
         }
@@ -120,32 +120,32 @@ namespace HSMDatabase.LevelDB.Tests
         {
             var firstValue = "Test_Zero";
             var secondValue = "Test_Max";
-            
-            await JournalDatabaseTestOrder(Guid.Empty,RecordType.Changes, RecordType.Changes, firstValue, secondValue);
-            await JournalDatabaseTestOrder(Guid.Empty,RecordType.Changes, RecordType.Actions, firstValue, secondValue);
-            await JournalDatabaseTestOrder(Guid.Empty,RecordType.Actions, RecordType.Actions, firstValue, secondValue);
-            await JournalDatabaseTestOrder(Guid.Empty,RecordType.Actions, RecordType.Changes, firstValue, secondValue);
-            await JournalDatabaseTestOrder(Guid.NewGuid(),RecordType.Changes, RecordType.Changes, firstValue, secondValue);
-            await JournalDatabaseTestOrder(Guid.NewGuid(),RecordType.Changes, RecordType.Actions, firstValue, secondValue);
-            await JournalDatabaseTestOrder(Guid.NewGuid(),RecordType.Actions, RecordType.Actions, firstValue, secondValue);
-            await JournalDatabaseTestOrder(Guid.NewGuid(),RecordType.Actions, RecordType.Changes, firstValue, secondValue);
+
+            await JournalDatabaseTestOrder(Guid.Empty, RecordType.Changes, RecordType.Changes, firstValue, secondValue);
+            await JournalDatabaseTestOrder(Guid.Empty, RecordType.Changes, RecordType.Actions, firstValue, secondValue);
+            await JournalDatabaseTestOrder(Guid.Empty, RecordType.Actions, RecordType.Actions, firstValue, secondValue);
+            await JournalDatabaseTestOrder(Guid.Empty, RecordType.Actions, RecordType.Changes, firstValue, secondValue);
+            await JournalDatabaseTestOrder(Guid.NewGuid(), RecordType.Changes, RecordType.Changes, firstValue, secondValue);
+            await JournalDatabaseTestOrder(Guid.NewGuid(), RecordType.Changes, RecordType.Actions, firstValue, secondValue);
+            await JournalDatabaseTestOrder(Guid.NewGuid(), RecordType.Actions, RecordType.Actions, firstValue, secondValue);
+            await JournalDatabaseTestOrder(Guid.NewGuid(), RecordType.Actions, RecordType.Changes, firstValue, secondValue);
         }
-        
+
         private async Task JournalDatabaseTestOrder(Guid guid, RecordType first = RecordType.Changes, RecordType second = RecordType.Changes, string firstValue = "", string secondValue = "")
         {
             GenerateBorderValues(guid, first, second, firstValue, secondValue);
             await Task.Delay(100);
-            
+
             if (first == second)
             {
                 var databaseNoData = await GetJournalValues(guid, DateTime.MinValue, DateTime.MaxValue, GetAlterType(first));
                 Assert.Empty(databaseNoData);
-                
+
                 var databaseData = await GetJournalValues(guid, DateTime.MinValue, DateTime.MaxValue, first);
                 Assert.Equal(2, databaseData.Count);
-                
-                Assert.Equal(firstValue, databaseData[0]?.Value);
-                Assert.Equal(secondValue, databaseData[1]?.Value);
+
+                Assert.Equal(firstValue, databaseData[0]?.OldValue);
+                Assert.Equal(secondValue, databaseData[1]?.OldValue);
             }
             else
             {
@@ -154,7 +154,7 @@ namespace HSMDatabase.LevelDB.Tests
                 Assert.Single(databaseSingleActionsData);
                 Assert.Single(databaseSingleChangesData);
             }
-            
+
             _databaseCore.RemoveJournalValues(guid, default);
             await Task.Delay(100);
         }
@@ -167,29 +167,37 @@ namespace HSMDatabase.LevelDB.Tests
 
         private void GenerateBorderValues(Guid guid, RecordType first = RecordType.Changes, RecordType second = RecordType.Changes, string firstValue = "", string secondValue = "")
         {
-            var zeroValue = new JournalEntity(firstValue, string.Empty, TreeValuesCache.System);
-            var maxValue = new JournalEntity(secondValue, string.Empty, TreeValuesCache.System);
+            var zeroValue = GetJournalEntity(firstValue);
+            var maxValue = GetJournalEntity(secondValue);
+
             var keyZero = new JournalKey(guid, DateTime.MinValue.Ticks, first);
             var keyMax = new JournalKey(guid, DateTime.UtcNow.Ticks, second);
-            
+
             _databaseCore.AddJournalValue(keyMax, maxValue);
             _databaseCore.AddJournalValue(keyZero, zeroValue);
         }
 
-        private async Task<List<JournalEntity>> GetJournalValues(Guid guid, DateTime from, DateTime to, RecordType type = RecordType.Changes, int count = 5000) => 
-            (await _databaseCore.GetJournalValuesPage(guid, from, to, type, RecordType.Changes, count).Flatten()).Select(x => x.Entity).ToList();
+        private async Task<List<JournalRecordEntity>> GetJournalValues(Guid guid, DateTime from, DateTime to, RecordType type = RecordType.Changes, int count = 5000) =>
+            (await _databaseCore.GetJournalValuesPage(guid, from, to, type, count).Flatten()).Select(x => x.Entity).ToList();
 
-        private List<(JournalKey, JournalEntity)> GenerateJournalEntities(Guid sensorId, int count)
+        private List<(JournalKey, JournalRecordEntity)> GenerateJournalEntities(Guid sensorId, int count)
         {
-            List<(JournalKey, JournalEntity)> result = new(count);
+            List<(JournalKey, JournalRecordEntity)> result = new(count);
 
             for (int i = 0; i < count; i++)
             {
                 var key = new JournalKey(sensorId, DateTime.UtcNow.Ticks, RecordType.Changes);
-                result.Add((key, new JournalEntity($"TEST_{i}", $"TEST_{i}", $"TEST_{i}")));
+                result.Add((key, GetJournalEntity($"TEST_{i}", $"TEST_{i}", $"TEST_{i}")));
             }
 
             return result;
         }
+
+        private static JournalRecordEntity GetJournalEntity(string text, string path = null, string initiator = "System") => new()
+        {
+            Initiator = initiator,
+            OldValue = text,
+            Path = path,
+        };
     }
 }

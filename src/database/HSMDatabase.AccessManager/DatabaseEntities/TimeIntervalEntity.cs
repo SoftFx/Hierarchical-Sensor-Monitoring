@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Text.Json.Serialization;
 
 namespace HSMDatabase.AccessManager.DatabaseEntities
 {
@@ -27,8 +28,7 @@ namespace HSMDatabase.AccessManager.DatabaseEntities
         public long Ticks { get; init; }
 
 
-        public TimeIntervalEntity() { }
-
+        [JsonConstructor]
         public TimeIntervalEntity(long interval, long ticks)
         {
             Interval = interval;
