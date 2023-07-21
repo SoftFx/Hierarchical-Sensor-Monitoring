@@ -18,6 +18,7 @@ namespace HSMServer.Core.Model.Policies
 
             Apply(entity ?? new PolicyEntity
             {
+                Id = Id.ToByteArray(),
                 Template = DefaultTemplate,
                 Icon = DefaultIcon,
             }, node as BaseSensorModel);

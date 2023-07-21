@@ -12,7 +12,7 @@ namespace HSMServer.Core.Model.Policies
 
     public abstract class BarSensorPolicy<T, U> : Policy<T, U>
         where T : BarBaseValue<U>, new()
-        where U : struct, INumber<U>
+        where U : INumber<U>
     {
         protected override AlertState GetState(BaseValue value) => AlertState.Build((T)value, _sensor);
     }

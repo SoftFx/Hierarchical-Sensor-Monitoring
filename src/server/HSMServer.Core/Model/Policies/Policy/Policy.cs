@@ -64,7 +64,11 @@ namespace HSMServer.Core.Model.Policies
 
         public string RebuildState(PolicyCondition condition = null, BaseValue value = null)
         {
-            State = GetState(value ?? _sensor?.LastValue);
+            if (_sensor is null)
+                return string.Empty;
+
+            PolicyResult = new PolicyResult(_sensor.Id, this);
+            State = GetState(value ?? _sensor.LastValue);
             State.Template = _systemTemplate;
 
             State.Operation = condition?.Operation.GetDisplayName();
@@ -72,9 +76,6 @@ namespace HSMServer.Core.Model.Policies
 
             Comment = State.BuildComment();
             SensorResult = new SensorResult(Status, Comment);
-
-            if (_sensor is not null)
-                PolicyResult = new PolicyResult(_sensor.Id, this);
 
             return Comment;
         }
