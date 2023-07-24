@@ -195,7 +195,7 @@ namespace HSMServer.Folders
                 {
                     Id = productId,
                     FolderId = folder?.Id ?? Guid.Empty,
-                    TTL = GetCorePolicy(ttl, folder?.TimeToLive),
+                    TTL = GetCorePolicy(ttl, folder?.TTL),
                     KeepHistory = GetCorePolicy(savedHistory, folder?.KeepHistory),
                     SelfDestroy = GetCorePolicy(selfDestroy, folder?.SelfDestroy),
                 };
@@ -251,7 +251,7 @@ namespace HSMServer.Folders
                 var update = new ProductUpdate
                 {
                     Id = product.Id,
-                    TTL = IsFromFolder(product.Settings.TTL, folder.TimeToLive),
+                    TTL = IsFromFolder(product.Settings.TTL, folder.TTL),
                     KeepHistory = IsFromFolder(product.Settings.KeepHistory, folder.KeepHistory),
                     SelfDestroy = IsFromFolder(product.Settings.SelfDestroy, folder.SelfDestroy),
                 };

@@ -40,7 +40,7 @@ namespace HSMServer.Model.TreeViewModel
             Path = model.Path;
             EncodedId = SensorPathHelper.EncodeGuid(model.Id);
 
-            TimeToLive = new(() => (Parent?.TimeToLive, ParentIsFolder));
+            TTL = new(() => (Parent?.TTL, ParentIsFolder));
             KeepHistory = new(() => (Parent?.KeepHistory, ParentIsFolder));
             SelfDestroy = new(() => (Parent?.SelfDestroy, ParentIsFolder));
         }
@@ -52,11 +52,11 @@ namespace HSMServer.Model.TreeViewModel
             Name = model.DisplayName;
             Description = model.Description;
 
-            TimeToLive.FromModel(model.Settings.TTL.CurValue, PredefinedIntervals.ForTimeout);
+            TTL.FromModel(model.Settings.TTL.CurValue, PredefinedIntervals.ForTimeout);
             KeepHistory.FromModel(model.Settings.KeepHistory.CurValue, PredefinedIntervals.ForKeepHistory);
             SelfDestroy.FromModel(model.Settings.SelfDestroy.CurValue, PredefinedIntervals.ForSelfDestory);
 
-            TimeToLiveAlert = new TimeToLiveAlertViewModel(model.Policies.TimeToLive, model);
+            TTLAlert = new TimeToLiveAlertViewModel(model.Policies.TimeToLive, model);
         }
     }
 }

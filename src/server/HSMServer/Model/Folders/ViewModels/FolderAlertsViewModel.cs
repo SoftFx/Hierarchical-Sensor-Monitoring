@@ -14,7 +14,7 @@ namespace HSMServer.Model.Folders.ViewModels
         internal FolderAlertsViewModel(FolderModel folder)
         {
             Id = folder.Id;
-            ExpectedUpdateInterval = folder.TimeToLive;
+            ExpectedUpdateInterval = folder.TTL;
         }
     }
 }

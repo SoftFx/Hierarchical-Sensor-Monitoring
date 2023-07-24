@@ -62,14 +62,14 @@ namespace HSMServer.Model.ViewModel
             Description = model.Description;
             LastUpdateTime = model.UpdateTime;
 
-            ExpectedUpdateInterval = new(model.TimeToLive, PredefinedIntervals.ForFolderTimeout);
+            ExpectedUpdateInterval = new(model.TTL, PredefinedIntervals.ForFolderTimeout);
             SavedHistoryPeriod = new(model.KeepHistory, PredefinedIntervals.ForKeepHistory);
             SelfDestroyPeriod = new(model.SelfDestroy, PredefinedIntervals.ForSelfDestory);
 
-            HasTimeToLive = model.TimeToLive.TimeInterval is not TimeInterval.None;
+            HasTimeToLive = model.TTL.TimeInterval is not TimeInterval.None;
             DataAlerts = new(model.DataAlerts);
-            if (model.TimeToLiveAlert is not null)
-                DataAlerts[TimeToLiveAlertViewModel.AlertKey] = new List<DataAlertViewModelBase> { model.TimeToLiveAlert.FromInterval(model.TimeToLive) };
+            if (model.TTLAlert is not null)
+                DataAlerts[TimeToLiveAlertViewModel.AlertKey] = new List<DataAlertViewModelBase> { model.TTLAlert.FromInterval(model.TTL) };
         }
     }
 }
