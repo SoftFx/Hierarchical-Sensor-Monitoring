@@ -106,7 +106,9 @@ namespace HSMServer.Model.DataAlerts
             IsModify = true;
 
             Conditions.Add(CreateCondition(true));
+
             Actions.Add(new ActionViewModel(true));
+            Actions.Add(new ActionViewModel(false) { Action = ActionType.ShowIcon });
         }
 
 
