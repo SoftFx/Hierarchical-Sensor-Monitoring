@@ -103,7 +103,8 @@ namespace HSMServer.Model
                 IntervalItems.RemoveAt(0);
             else
             {
-                var fromParentIndex = IntervalItems.FindIndex(x => x.Text.Equals(TimeInterval.FromParent.GetDisplayName()));
+                var fromParent = TimeInterval.FromParent.GetDisplayName();
+                var fromParentIndex = IntervalItems.FindIndex(x => x.Text.Equals(fromParent));
                 if (fromParentIndex != -1)
                     IntervalItems[fromParentIndex].Text = $"From parent ({GetUsedValue(model._getParentValue?.Invoke().Value)})";
             }
