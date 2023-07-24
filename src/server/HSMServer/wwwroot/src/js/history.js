@@ -142,7 +142,7 @@ function Data(to, from, type, encodedId) {
         }).done(function (data) {
             $("#newValuesCount").empty();
             $("#tableHistoryRefreshButton").addClass("d-none");
-            $('[id^=showAllTableColumns_]').removeClass("d-none");
+            $('#allColumnsButton').removeClass("d-none");
 
             $(`#values_${encodedId}`).html(data);
 
@@ -183,7 +183,7 @@ function Data(to, from, type, encodedId) {
             async: true
         }).done(function (data) {
             $("#tableHistoryRefreshButton").addClass("d-none");
-            $('[id^=showAllTableColumns_]').addClass("d-none");
+            $('#allColumnsButton').addClass("d-none");
 
             let parsedData = JSON.parse(data);
 

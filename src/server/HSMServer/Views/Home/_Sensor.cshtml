@@ -164,7 +164,7 @@
                                 <a class='dropdown-item' href='#' id='button_export_csv_@sensorId'>Export to CSV</a>
                             </li>
                             <li>
-                                <a class='dropdown-item' href='#' id="showAllTableColumns_@sensorId">Show all columns</a>
+                                <a class='dropdown-item' href='#' id="allColumnsButton">Show all columns</a>
                             </li>
                         </ul>
                     </div>
@@ -218,7 +218,7 @@
 <script>
     var previousReceivedTime = undefined;
 
-    $('#showAllTableColumns_@sensorId').off('click').on('click', function (e) {
+    $('#allColumnsButton').off('click').on('click', function (e) {
         if (this.innerText.includes('Show')) {
             $("#receivingTime_header").removeClass('d-none');
             $('[id^="receivingTime_value"]').removeClass('d-none');
