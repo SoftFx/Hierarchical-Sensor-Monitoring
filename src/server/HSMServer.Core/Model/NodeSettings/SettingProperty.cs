@@ -47,9 +47,11 @@ namespace HSMServer.Core.Model.NodeSettings
                 CurValue = newValue;
 
                 Uploaded?.Invoke(ActionType.Update, newValue);
+
+                return true;
             }
 
-            return newValue is null;
+            return false;
         }
 
         internal override TimeIntervalEntity ToEntity() => CurValue?.ToEntity();

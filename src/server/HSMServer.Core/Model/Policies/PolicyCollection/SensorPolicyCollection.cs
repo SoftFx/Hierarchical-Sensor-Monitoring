@@ -20,7 +20,7 @@ namespace HSMServer.Core.Model.Policies
 
         internal abstract void Update(List<PolicyUpdate> updates);
 
-        internal abstract void Attach(BaseSensorModel sensor);
+        internal abstract void Attach(BaseSensorModel sensor, PolicyEntity ttlEntity);
 
         [Obsolete("remove after policy migration")]
         internal abstract void AddStatus();
@@ -36,10 +36,8 @@ namespace HSMServer.Core.Model.Policies
 
     public abstract class SensorPolicyCollection<T> : SensorPolicyCollection where T : BaseValue
     {
-        private CorrectTypePolicy<T> _typePolicy;
-        private TTLPolicy _ttlPolicy;
-
         private protected BaseSensorModel _sensor;
+        private CorrectTypePolicy<T> _typePolicy;
 
 
         protected abstract bool CalculateStorageResult(T value, bool updateSensor);
@@ -62,26 +60,23 @@ namespace HSMServer.Core.Model.Policies
             return CalculateStorageResult(valueT, updateSensor);
         }
 
-        internal override void Attach(BaseSensorModel sensor)
+        internal override void Attach(BaseSensorModel sensor, PolicyEntity ttlEntity)
         {
-            _ttlPolicy = new TTLPolicy(sensor.Id, sensor.Settings.TTL);
-            _typePolicy = new CorrectTypePolicy<T>(sensor.Id);
-
+            _typePolicy = new CorrectTypePolicy<T>(sensor);
             _sensor = sensor;
+
+            ApplyTTL(sensor, ttlEntity);
         }
 
 
         internal bool SensorTimeout(DateTime? time)
         {
-            if (_ttlPolicy is null)
+            if (TimeToLive is null)
                 return false;
 
-            var timeout = _ttlPolicy.HasTimeout(time);
+            var timeout = TimeToLive.HasTimeout(time);
 
-            if (timeout)
-                PolicyResult = _ttlPolicy.PolicyResult;
-            else
-                PolicyResult = PolicyResult.Ok;
+            PolicyResult = timeout ? TimeToLive.PolicyResult : PolicyResult.Ok;
 
             SensorExpired?.Invoke(_sensor, timeout);
 
@@ -166,7 +161,7 @@ namespace HSMServer.Core.Model.Policies
                 {
                     var policy = new PolicyType();
 
-                    policy.Apply(entity);
+                    policy.Apply(entity, _sensor);
 
                     _storage.TryAdd(policy.Id, policy);
                 }
@@ -177,18 +172,18 @@ namespace HSMServer.Core.Model.Policies
             var policy = new PolicyType();
 
             var statusUpdate = new PolicyUpdate(
-                           Guid.NewGuid(),
-                           new()
-                           {
-                                new PolicyConditionUpdate(
-                                    PolicyOperation.IsChanged,
-                                    PolicyProperty.Status,
-                                    new TargetValue(TargetType.LastValue, _sensor.Id.ToString())),
-                           },
-                           null,
-                           SensorStatus.Ok,
-                           $"$status [$product]$path = $comment",
-                           null);
+                Guid.NewGuid(),
+                new()
+                {
+                    new PolicyConditionUpdate(
+                        PolicyOperation.IsChanged,
+                        PolicyProperty.Status,
+                        new TargetValue(TargetType.LastValue, _sensor.Id.ToString())),
+                },
+                null,
+                SensorStatus.Ok,
+                $"$status [$product]$path = $comment",
+                null);
 
             policy.Update(statusUpdate);
 

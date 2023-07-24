@@ -20,9 +20,9 @@ namespace HSMServer.Core.Model.Policies
 
         [Display(Name = "is changed")]
         IsChanged = 20,
-        [Display(Name = "is Error")]
+        [Display(Name = "is 🔴 Error")]
         IsError = 21,
-        [Display(Name = "is OK")]
+        [Display(Name = "is \U0001f7e2 OK")]
         IsOk = 22,
     }
 

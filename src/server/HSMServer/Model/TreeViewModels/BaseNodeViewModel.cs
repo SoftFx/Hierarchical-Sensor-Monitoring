@@ -1,5 +1,4 @@
-﻿using HSMServer.Core.Model;
-using HSMServer.Extensions;
+﻿using HSMServer.Extensions;
 using HSMServer.Model.DataAlerts;
 using System;
 using System.Collections.Concurrent;
@@ -9,7 +8,7 @@ namespace HSMServer.Model.TreeViewModel
 {
     public abstract class BaseNodeViewModel
     {
-        public Dictionary<SensorType, List<DataAlertViewModelBase>> DataAlerts { get; protected set; } = new();
+        public Dictionary<byte, List<DataAlertViewModelBase>> DataAlerts { get; protected set; } = new();
 
         public ConcurrentDictionary<string, int> AlertIcons { get; } = new();
 
@@ -19,6 +18,8 @@ namespace HSMServer.Model.TreeViewModel
         public TimeIntervalViewModel SelfDestroy { get; protected set; }
 
         public TimeIntervalViewModel TTL { get; protected set; }
+
+        public TimeToLiveAlertViewModel TTLAlert { get; protected set; }
 
 
         public Guid Id { get; protected set; }

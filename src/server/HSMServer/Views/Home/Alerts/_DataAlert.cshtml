@@ -69,6 +69,10 @@
     <div class="card mb-2 w-100">
         <div class="card-body py-2">
             <div class="d-flex flex-row align-items-center fullCondition">
+                @{
+                    var isTtlCondition = Model.Conditions[0].Property is AlertProperty.TimeToLive;
+                }
+
                 <div class="alert-text-block alert-add">If</div>
 
                 <div name="conditionsBlock" class="d-flex flex-row flex-wrap align-items-center">
@@ -78,7 +82,10 @@
                     }
                 </div>
 
-                <a class="addCondition"><i class="fa-solid fa-plus alert-add-button"></i></a>
+                @if (!isTtlCondition)
+                {
+                    <a class="addCondition"><i class="fa-solid fa-plus alert-add-button"></i></a>
+                }
             </div>
 
             <div class="d-flex flex-row align-items-center alert-blocks-group fullAction">
@@ -138,6 +145,10 @@
         });
 
         $("a.deleteRow").off("click").on("click", function () {
+            if ($(this).parents("#dataAlertsList_@TimeToLiveAlertViewModel.AlertKey").length > 0) {
+                $('#addTtlAlert').removeClass('disabled');
+            }
+
             $(this).parents("div.dataAlertRow:first").remove();
         });
 
