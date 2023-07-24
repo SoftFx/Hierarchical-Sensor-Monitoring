@@ -561,6 +561,11 @@ namespace HSMServer.Controllers
         {
             DataAlertViewModelBase viewModel = type switch
             {
+                (byte)SensorType.File => new DataAlertViewModel<FileValue>(sensorId),
+                (byte)SensorType.String => new DataAlertViewModel<StringValue>(sensorId),
+                (byte)SensorType.Boolean => new DataAlertViewModel<BooleanValue>(sensorId),
+                (byte)SensorType.Version => new DataAlertViewModel<VersionValue>(sensorId),
+                (byte)SensorType.TimeSpan => new DataAlertViewModel<TimeSpanValue>(sensorId),
                 (byte)SensorType.Integer => new SingleDataAlertViewModel<IntegerValue, int>(sensorId),
                 (byte)SensorType.Double => new SingleDataAlertViewModel<DoubleValue, double>(sensorId),
                 (byte)SensorType.IntegerBar => new BarDataAlertViewModel<IntegerBarValue, int>(sensorId),
@@ -579,6 +584,11 @@ namespace HSMServer.Controllers
 
             ConditionViewModel viewModel = sensor.Type switch
             {
+                SensorType.File => new ConditionViewModel<FileValue>(false),
+                SensorType.String => new ConditionViewModel<StringValue>(false),
+                SensorType.Boolean => new ConditionViewModel<BooleanValue>(false),
+                SensorType.Version => new ConditionViewModel<VersionValue>(false),
+                SensorType.TimeSpan => new ConditionViewModel<TimeSpanValue>(false),
                 SensorType.Integer => new SingleConditionViewModel<IntegerValue, int>(false),
                 SensorType.Double => new SingleConditionViewModel<DoubleValue, double>(false),
                 SensorType.IntegerBar => new BarConditionViewModel<IntegerBarValue, int>(false),

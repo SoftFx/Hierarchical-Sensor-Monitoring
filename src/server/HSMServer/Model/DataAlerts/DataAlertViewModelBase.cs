@@ -4,7 +4,6 @@ using HSMServer.Extensions;
 using HSMServer.Model.TreeViewModel;
 using System;
 using System.Collections.Generic;
-using System.Linq;
 
 namespace HSMServer.Model.DataAlerts
 {
@@ -115,7 +114,7 @@ namespace HSMServer.Model.DataAlerts
     }
 
 
-    public abstract class DataAlertViewModel<T> : DataAlertViewModel where T : Core.Model.BaseValue
+    public class DataAlertViewModel<T> : DataAlertViewModel where T : Core.Model.BaseValue
     {
         public DataAlertViewModel(Guid entityId) : base(entityId) { }
 
@@ -145,5 +144,8 @@ namespace HSMServer.Model.DataAlerts
                 Conditions.Add(condition);
             }
         }
+
+
+        protected override ConditionViewModel CreateCondition(bool isMain) => new ConditionViewModel<T>(isMain);
     }
 }
