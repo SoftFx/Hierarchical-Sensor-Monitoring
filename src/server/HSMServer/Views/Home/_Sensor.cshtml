@@ -163,6 +163,9 @@
                             <li>
                                 <a class='dropdown-item' href='#' id='button_export_csv_@sensorId'>Export to CSV</a>
                             </li>
+                            <li>
+                                <a class='dropdown-item' href='#' id="showAllTableColumns_@sensorId">Show all columns</a>
+                            </li>
                         </ul>
                     </div>
                 </div>
@@ -190,12 +193,6 @@
                                         </div>
                                     </li>
                                 </ul>
-                                <div id="showAllTableColumnsCheckbox" class="form-check d-none">
-                                    <input class="form-check-input" type="checkbox" value="" id="showAllTableColumns_@sensorId">
-                                    <label class="form-check-label" for="showAllTableColumns_@sensorId">
-                                        Show all columns
-                                    </label>
-                                </div>
                             </div>
                             <div class='tab-content'>
                                 <div class='tab-pane fade show active' id=@graphParentDivId>
@@ -208,14 +205,6 @@
                         }
                         else
                         {
-                            <div class="d-flex justify-content-end">
-                                <div class="form-check">
-                                    <input class="form-check-input" type="checkbox" value="" id="showAllTableColumns_@sensorId">
-                                    <label class="form-check-label" for="showAllTableColumns_@sensorId">
-                                        Show all columns
-                                    </label>
-                                </div>
-                            </div>
                             <div id='values_@sensorId'></div>
                         }
                     </div>
@@ -231,14 +220,16 @@
 <script>
     var previousReceivedTime = undefined;
 
-    $('#showAllTableColumns_@sensorId').off('change').on('change', function (e) {
-        if (this.checked) {
+    $('#showAllTableColumns_@sensorId').off('click').on('click', function (e) {
+        if (this.innerText.includes('Show')) {
             $("#receivingTime_header").removeClass('d-none');
             $('[id^="receivingTime_value"]').removeClass('d-none');
+            this.innerText = this.innerText.replace('Show', 'Hide')
         }
         else {
             $("#receivingTime_header").addClass('d-none');
             $('[id^="receivingTime_value"]').addClass('d-none');
+            this.innerText = this.innerText.replace('Hide', 'Show');
         }
     });
 
