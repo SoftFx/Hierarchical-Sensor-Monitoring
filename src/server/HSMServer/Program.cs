@@ -2,7 +2,7 @@
 using HSMCommon.Constants;
 using HSMServer.Authentication;
 using HSMServer.Folders;
-using HSMServer.Model;
+using HSMServer.Middleware;
 using HSMServer.ServerConfiguration;
 using HSMServer.ServiceExtensions;
 using Microsoft.AspNetCore.Authentication.Cookies;
@@ -16,7 +16,6 @@ using NLog.Extensions.Logging;
 using NLog.LayoutRenderers;
 using NLog.Web;
 using System;
-using HSMServer.Middleware;
 
 const string NLogConfigFileName = "nlog.config";
 
@@ -43,12 +42,13 @@ builder.Logging.ClearProviders()
 builder.Host.UseNLog()
             .UseConsoleLifetime();
 
-builder.Services.AddOptions<CookieAuthenticationOptions>(CookieAuthenticationDefaults.AuthenticationScheme).Configure<IUserManager>(
-    async (options, context) =>
-    {
-        options.LoginPath = new PathString("/Account/Index");
-        options.Events = new MyCookieAuthenticationEvents(context);
-    });
+builder.Services.AddOptions<CookieAuthenticationOptions>(CookieAuthenticationDefaults.AuthenticationScheme)
+                .Configure<IUserManager>(
+                (options, context) =>
+                {
+                    options.LoginPath = new PathString("/Account/Index");
+                    options.Events = new MyCookieAuthenticationEvents(context);
+                });
 
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
                 .AddCookie(CookieAuthenticationDefaults.AuthenticationScheme);
