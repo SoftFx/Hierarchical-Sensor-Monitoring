@@ -222,12 +222,12 @@
         if (this.innerText.includes('Show')) {
             $("#receivingTime_header").removeClass('d-none');
             $('[id^="receivingTime_value"]').removeClass('d-none');
-            this.innerText = this.innerText.replace('Show', 'Hide')
+            this.innerText = "Hide extra columns"
         }
         else {
             $("#receivingTime_header").addClass('d-none');
             $('[id^="receivingTime_value"]').addClass('d-none');
-            this.innerText = this.innerText.replace('Hide', 'Show');
+            this.innerText = "Show all columns";
         }
     });
 
