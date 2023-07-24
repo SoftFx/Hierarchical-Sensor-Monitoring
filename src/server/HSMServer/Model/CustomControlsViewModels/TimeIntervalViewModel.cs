@@ -5,6 +5,7 @@ using HSMServer.Extensions;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using CoreTimeInterval = HSMServer.Core.Model.TimeInterval;
 
 namespace HSMServer.Model
@@ -104,9 +105,7 @@ namespace HSMServer.Model
             else
             {
                 var fromParent = TimeInterval.FromParent.GetDisplayName();
-                var fromParentIndex = IntervalItems.FindIndex(x => x.Text.Equals(fromParent));
-                if (fromParentIndex != -1)
-                    IntervalItems[fromParentIndex].Text = $"From parent ({GetUsedValue(model._getParentValue?.Invoke().Value)})";
+                IntervalItems.FirstOrDefault(x => x.Text.Equals(fromParent), new SelectListItem()).Text = $"From parent ({GetUsedValue(model._getParentValue?.Invoke().Value)})";
             }
         }
 
