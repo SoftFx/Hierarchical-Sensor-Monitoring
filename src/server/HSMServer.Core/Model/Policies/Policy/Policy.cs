@@ -71,6 +71,8 @@ namespace HSMServer.Core.Model.Policies
             State = GetState(value ?? _sensor.LastValue);
             State.Template = _systemTemplate;
 
+            condition ??= Conditions?.FirstOrDefault();
+
             State.Operation = condition?.Operation.GetDisplayName();
             State.Target = condition?.Target.Value;
 
