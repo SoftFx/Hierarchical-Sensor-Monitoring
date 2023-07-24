@@ -36,22 +36,7 @@ namespace HSMServer.Model
         public bool IsAlertBlock { get; init; }
 
 
-        public string DisplayValue
-        {
-            get
-            {
-                static string GetUsedValue(TimeIntervalViewModel model) => model?.Interval switch
-                {
-                    TimeInterval.Custom => model.CustomSpan.ToTableView(),
-                    TimeInterval.FromParent => GetUsedValue(model._getParentValue?.Invoke().Value),
-                    _ => model?.TimeInterval.GetDisplayName()
-                };
-
-                var used = GetUsedValue(this);
-
-                return TimeInterval.IsParent() ? $"From parent ({used})" : used;
-            }
-        }
+        public string DisplayValue => GetDisplayValue();
 
         public TimeSpan CustomSpan
         {
@@ -116,6 +101,12 @@ namespace HSMServer.Model
 
             if (!HasParentValue)
                 IntervalItems.RemoveAt(0);
+            else
+            {
+                var fromParentIndex = IntervalItems.FindIndex(x => x.Text.Equals(TimeInterval.FromParent.GetDisplayName()));
+                if (fromParentIndex != -1)
+                    IntervalItems[fromParentIndex].Text += $" ({GetDisplayValue(model._getParentValue?.Invoke().Value)})";
+            }
         }
 
         internal TimeIntervalViewModel(TimeIntervalEntity entity, HashSet<TimeInterval> intervals) : this(intervals)
@@ -156,5 +147,21 @@ namespace HSMServer.Model
         }
 
         internal TimeIntervalEntity ToEntity() => ToModel().ToEntity();
+
+
+        private string GetDisplayValue(TimeIntervalViewModel model = null)
+        {
+            var used = GetUsedValue(model ?? this);
+
+            return TimeInterval.IsParent() ? $"From parent ({used})" : used;
+        }
+
+        private static string GetUsedValue(TimeIntervalViewModel model) =>
+            model?.Interval switch
+            {
+                TimeInterval.Custom => model.CustomSpan.ToTableView(),
+                TimeInterval.FromParent => GetUsedValue(model._getParentValue?.Invoke().Value),
+                _ => model?.TimeInterval.GetDisplayName()
+            };
     }
 }
