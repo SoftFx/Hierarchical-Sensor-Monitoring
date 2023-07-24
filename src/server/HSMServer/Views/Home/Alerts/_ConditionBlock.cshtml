@@ -14,7 +14,7 @@
     var isSensitivityCondition = condition == AlertProperty.Sensitivity;
     var isValueCondition = !isStatusCondition && !isTtlCondition && !isSensitivityCondition;
 
-    var isSecondaryCondition = !Model.PropertiesItems.Any(i => i.Value == nameof(AlertProperty.TimeToLive));
+    var isSecondaryCondition = Model.PropertiesItems.Any(i => i.Value == nameof(AlertProperty.Sensitivity));
 }
 
 
@@ -52,48 +52,31 @@
         
         let value = conditionBlock.find($(`div[name='valueCondition']`));
         let status = conditionBlock.find($(`div[name='statusCondition']`));
-        let timeToLive = conditionBlock.find($(`div[name='ttlCondition']`));
         let sensitivity = conditionBlock.find($(`div[name='sensitivityCondition']`));
 
         let targetInput = value.find($(`input[name='Target']`));
-        let addButton = $(this).parents("div.fullCondition:first").find($(`a.addCondition`));
 
         let condition = $(this).val();
         if (condition === '@AlertProperty.Status') {
             targetInput.attr('required', false);
             value.removeClass("d-flex").addClass('d-none');
             sensitivity.removeClass("d-flex").addClass('d-none');
-            timeToLive.removeClass("d-none").addClass('d-flex');
 
             status.removeClass("d-none").addClass('d-flex');
-            addButton.removeClass("d-none").addClass('d-block');
-        }
-        else if (condition === '@AlertProperty.TimeToLive') {
-            targetInput.attr('required', false);
-            value.removeClass("d-flex").addClass('d-none');
-            status.removeClass("d-flex").addClass('d-none');
-            sensitivity.removeClass("d-flex").addClass('d-none');
-            addButton.removeClass("d-block").addClass('d-none');
-
-            timeToLive.removeClass("d-none").addClass('d-flex');
         }
         else if (condition === '@AlertProperty.Sensitivity') {
             targetInput.attr('required', false);
             value.removeClass("d-flex").addClass('d-none');
             status.removeClass("d-flex").addClass('d-none');
-            timeToLive.removeClass("d-flex").addClass('d-none');
 
             sensitivity.removeClass("d-none").addClass('d-flex');
-            addButton.removeClass("d-none").addClass('d-block');
         }
         else {
             status.removeClass("d-flex").addClass('d-none');
             sensitivity.removeClass("d-flex").addClass('d-none');
-            timeToLive.removeClass("d-flex").addClass('d-none');
 
             targetInput.attr('required', true);
             value.removeClass("d-none").addClass('d-flex');
-            addButton.removeClass("d-none").addClass('d-block');
         }
     });
 

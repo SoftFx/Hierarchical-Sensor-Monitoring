@@ -7,19 +7,23 @@
         $(this).removeClass('d-none');
     });
 
-    $('#description').removeClass('d-none')
+    $('#description').removeClass('d-none');
     $('#metainfo_separator').removeClass('d-none');
+    $('#metaInfo_alerts').removeClass('d-none');
     $('#addDataAlert').removeClass('d-none');
+    $('#addTtlAlert').removeClass('d-none');
     $('#commentHelp').removeClass('d-none');
     $('[id^="dataAlertsList_"]').removeClass('d-none');
 
-    $('#markdown_span_description').addClass('d-none')
-    $('#meta_info_collapse').addClass('d-none')
+    $('#markdown_span_description').addClass('d-none');
+    $('#meta_info_collapse').addClass('d-none');
 
+    $('#folder_ttl').removeClass('d-none');
     $('#partialSavedHistorySelect').removeClass('d-none');
     $('#partialSelfDestroySelect').removeClass('d-none');
     $('[id^="alertConstructor_"]').removeClass('d-none');
 
+    $('#folder_ttlLabel').addClass('d-none');
     $('#labelSavedHistory').addClass('d-none');
     $('#labelSelfDestroy').addClass('d-none');
     $('[id^="alertLabel_"]').addClass('d-none');

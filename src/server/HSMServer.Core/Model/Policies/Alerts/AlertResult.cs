@@ -47,7 +47,7 @@ namespace HSMServer.Core.Model.Policies
         internal void AddPolicyResult(Policy policy)
         {
             Count++;
-            LastComment = policy.AlertComment;
+            LastComment = policy.Comment;
             LastState = policy.State;
         }
 

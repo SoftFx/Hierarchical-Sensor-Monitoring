@@ -71,7 +71,7 @@ namespace HSMServer.Core.Model
             Integration = (Integration)entity.Integration;
             EndOfMuting = entity.EndOfMuting > 0L ? new DateTime(entity.EndOfMuting) : null;
 
-            Policies.Attach(this);
+            Policies.Attach(this, entity.TTLPolicy);
         }
 
 
@@ -119,6 +119,7 @@ namespace HSMServer.Core.Model
             Policies = Policies.Ids.Select(u => u.ToString()).ToList(),
             EndOfMuting = EndOfMuting?.Ticks ?? 0L,
             Settings = Settings.ToEntity(),
+            TTLPolicy = Policies.TimeToLive?.ToEntity(),
         };
     }
 }

@@ -15,11 +15,12 @@
                 <div class="w-100">
                     <div class='row justify-content-between'>
                         <div class='row col-md-auto flex-grow-1'>
-                            <div class="row">
-                                <div class='col-md-auto sensor-icon-without-padding'>
-                                    <li id='status_@nodeId' class='@Model.Status.ToIcon() sensor-icon-with-margin' title='Status: @Model.Status'></li>
-                                </div>
-                                @Model.Name
+                            <div class="d-flex flex-row align-items-center">
+                                <i id='status_@nodeId' class='@Model.Status.ToIcon() sensor-icon-with-margin' title='Status: @Model.Status'></i>
+                                <span>
+                                    @await Html.PartialAsync("~/Views/Home/Alerts/_AlertIconsList.cshtml", Model.AlertIcons)
+                                    @Model.Name
+                                </span>
                             </div>
                             @if (Model is SensorNodeViewModel sensor)
                             {

@@ -66,10 +66,9 @@ namespace HSMServer.Model.TreeViewModel
             FileNameString = GetFileNameString(model.Type, ShortStringValue);
 
             if (model is DoubleSensorModel or IntegerSensorModel or DoubleBarSensorModel or IntegerBarSensorModel)
-                DataAlerts[Type] = model.Policies.Select(p => BuildAlert(p, model)).ToList();
+                DataAlerts[(byte)Type] = model.Policies.Select(p => BuildAlert(p, model)).ToList();
 
             AlertIcons.Clear();
-
             foreach (var alert in model.PolicyResult)
             {
                 var icon = alert.Icon;
