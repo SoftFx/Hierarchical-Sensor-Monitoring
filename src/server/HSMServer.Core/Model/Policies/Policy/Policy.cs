@@ -102,7 +102,7 @@ namespace HSMServer.Core.Model.Policies
             UpdateConditions(update.Conditions, Update);
         }
 
-        internal void Apply(PolicyEntity entity, BaseSensorModel sensor)
+        internal void Apply(PolicyEntity entity, BaseSensorModel sensor = null)
         {
             PolicyCondition Update(PolicyCondition condition, PolicyConditionEntity entity) => condition.FromEntity(entity);
 
