@@ -26,6 +26,6 @@ namespace HSMServer.Core.Model.Policies
         IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
 
 
-        internal void ApplyTTL(BaseNodeModel node, PolicyEntity entity) => TimeToLive = new TTLPolicy(node, entity);
+        internal void BuildTTL(BaseNodeModel node, PolicyEntity entity = null) => TimeToLive = new TTLPolicy(node, entity);
     }
 }

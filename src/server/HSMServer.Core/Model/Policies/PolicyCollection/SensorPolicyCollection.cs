@@ -65,7 +65,7 @@ namespace HSMServer.Core.Model.Policies
             _typePolicy = new CorrectTypePolicy<T>(sensor);
             _sensor = sensor;
 
-            ApplyTTL(sensor, ttlEntity);
+            BuildTTL(sensor, ttlEntity);
         }
 
 
