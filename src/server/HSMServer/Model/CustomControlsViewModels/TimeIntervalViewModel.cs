@@ -105,7 +105,7 @@ namespace HSMServer.Model
             {
                 var fromParentIndex = IntervalItems.FindIndex(x => x.Text.Equals(TimeInterval.FromParent.GetDisplayName()));
                 if (fromParentIndex != -1)
-                    IntervalItems[fromParentIndex].Text += $" ({GetDisplayValue(model._getParentValue?.Invoke().Value)})";
+                    IntervalItems[fromParentIndex].Text = $"From parent ({GetUsedValue(model._getParentValue?.Invoke().Value)})";
             }
         }
 
