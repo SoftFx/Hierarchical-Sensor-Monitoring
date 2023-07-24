@@ -36,9 +36,8 @@ namespace HSMServer.Core.Model.Policies
 
     public abstract class SensorPolicyCollection<T> : SensorPolicyCollection where T : BaseValue
     {
-        private CorrectTypePolicy<T> _typePolicy;
-
         private protected BaseSensorModel _sensor;
+        private CorrectTypePolicy<T> _typePolicy;
 
 
         protected abstract bool CalculateStorageResult(T value, bool updateSensor);
@@ -63,7 +62,7 @@ namespace HSMServer.Core.Model.Policies
 
         internal override void Attach(BaseSensorModel sensor, PolicyEntity ttlEntity)
         {
-            _typePolicy = new CorrectTypePolicy<T>(sensor.Id);
+            _typePolicy = new CorrectTypePolicy<T>(sensor);
             _sensor = sensor;
 
             ApplyTTL(sensor, ttlEntity);
@@ -162,7 +161,7 @@ namespace HSMServer.Core.Model.Policies
                 {
                     var policy = new PolicyType();
 
-                    policy.Apply(entity);
+                    policy.Apply(entity, _sensor);
 
                     _storage.TryAdd(policy.Id, policy);
                 }

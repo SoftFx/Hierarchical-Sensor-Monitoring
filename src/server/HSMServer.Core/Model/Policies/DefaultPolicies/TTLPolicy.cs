@@ -1,4 +1,5 @@
-﻿using HSMServer.Core.Model.NodeSettings;
+﻿using HSMDatabase.AccessManager.DatabaseEntities;
+using HSMServer.Core.Model.NodeSettings;
 using System;
 
 namespace HSMServer.Core.Model.Policies
@@ -8,18 +9,19 @@ namespace HSMServer.Core.Model.Policies
         private const string DefaultIcon = "🕑";
         private const string DefaultTemplate = "[$product]$path";
 
-
         private readonly SettingProperty<TimeIntervalModel> _ttl;
 
 
-        public override string Icon { get; protected set; } = DefaultIcon;
-
-
-        internal TTLPolicy(Guid nodeId, SettingProperty<TimeIntervalModel> ttlSetting) : base(nodeId)
+        internal TTLPolicy(BaseNodeModel node, PolicyEntity entity)
         {
-            _ttl = ttlSetting;
+            _ttl = node.Settings.TTL;
 
-            Template = DefaultTemplate;
+            Apply(entity ?? new PolicyEntity
+            {
+                Id = Id.ToByteArray(),
+                Template = DefaultTemplate,
+                Icon = DefaultIcon,
+            }, node as BaseSensorModel);
         }
 
 
