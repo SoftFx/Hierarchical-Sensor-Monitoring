@@ -68,19 +68,28 @@ namespace HSMServer.Model.DataAlerts
         public ConditionViewModel(bool isMain)
         {
             Sensitivity = new TimeIntervalViewModel(PredefinedIntervals.ForRestore) { IsAlertBlock = true };
-            TimeToLive = new TimeIntervalViewModel(PredefinedIntervals.ForRestore) { IsAlertBlock = true };
+            TimeToLive = new TimeIntervalViewModel(PredefinedIntervals.ForTimeout) { IsAlertBlock = true };
 
             StatusOperationsItems = _statusOperations.ToSelectedItems(k => k.GetDisplayName());
-            OperationsItems = Operations.ToSelectedItems(k => k.GetDisplayName());
+            OperationsItems = Operations?.ToSelectedItems(k => k.GetDisplayName());
             PropertiesItems = Properties.ToSelectedItems(k => k.GetDisplayName());
 
-            if (isMain)
-                PropertiesItems.Add(new SelectListItem(AlertProperty.TimeToLive.GetDisplayName(), nameof(AlertProperty.TimeToLive)));
-            else
+            if (!isMain)
                 PropertiesItems.Add(new SelectListItem(AlertProperty.Sensitivity.GetDisplayName(), nameof(AlertProperty.Sensitivity)));
 
             Property = Enum.Parse<AlertProperty>(PropertiesItems.FirstOrDefault()?.Value);
         }
+    }
+
+
+    public sealed class ConditionViewModel<T> : ConditionViewModel where T : BaseValue
+    {
+        protected override List<AlertProperty> Properties { get; } = new() { AlertProperty.Status };
+
+        protected override List<PolicyOperation> Operations { get; }
+
+
+        public ConditionViewModel(bool isMain) : base(isMain) { }
     }
 
 
@@ -126,5 +135,16 @@ namespace HSMServer.Model.DataAlerts
 
 
         public BarConditionViewModel(bool isMain) : base(isMain) { }
+    }
+
+
+    public sealed class TimeToLiveConditionViewModel : ConditionViewModel
+    {
+        protected override List<AlertProperty> Properties { get; } = new() { AlertProperty.TimeToLive };
+
+        protected override List<PolicyOperation> Operations { get; }
+
+
+        public TimeToLiveConditionViewModel(bool isMain = true) : base(isMain) { }
     }
 }

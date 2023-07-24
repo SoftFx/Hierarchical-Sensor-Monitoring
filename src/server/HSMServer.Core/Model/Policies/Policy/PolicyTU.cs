@@ -2,27 +2,18 @@
 {
     public abstract class Policy<T, U> : Policy<T> where T : BaseValue
     {
-        private BaseSensorModel _sensor;
-
-
         internal override bool Validate(T value, BaseSensorModel sensor)
         {
-            _sensor ??= sensor;
+            var fail = CheckConditions(value, out var failedCondition);
 
-            if (CheckConditions(value, out var failedCondition))
-            {
-                BuildStateAndComment(value, sensor, failedCondition);
+            if (fail)
+                RebuildState(failedCondition, value);
+            else
+                ResetState();
 
-                SensorResult = new SensorResult(Status, AlertComment);
-
-                return false;
-            }
-
-            AlertComment = string.Empty;
-            SensorResult = SensorResult.Ok;
-
-            return true;
+            return fail;
         }
+
 
         protected override PolicyCondition GetCondition() => new PolicyCondition<T, U>()
         {

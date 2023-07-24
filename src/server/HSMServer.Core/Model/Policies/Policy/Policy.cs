@@ -1,4 +1,5 @@
-﻿using HSMDatabase.AccessManager.DatabaseEntities;
+﻿using HSMCommon.Extensions;
+using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Core.Cache.UpdateEntities;
 using System;
 using System.Collections.Generic;
@@ -8,25 +9,46 @@ namespace HSMServer.Core.Model.Policies
 {
     public abstract class Policy
     {
-        public Guid Id { get; private set; }
+        private AlertSystemTemplate _systemTemplate;
+        private string _userTemplate;
 
-
-        internal protected virtual SensorResult SensorResult { get; protected set; }
-
-        internal protected virtual AlertState State { get; protected set; }
-
-        internal protected virtual string AlertComment { get; protected set; }
+        protected BaseSensorModel _sensor;
 
 
         public List<PolicyCondition> Conditions { get; } = new();
 
-        public virtual TimeIntervalModel Sensitivity { get; protected set; }
 
-        public virtual SensorStatus Status { get; protected set; }
+        public Guid Id { get; private set; }
 
-        public virtual string Template { get; protected set; }
 
-        public virtual string Icon { get; protected set; }
+        internal SensorResult SensorResult { get; private set; }
+
+        internal PolicyResult PolicyResult { get; private set; }
+
+        internal AlertState State { get; private set; }
+
+        internal string Comment { get; private set; }
+
+
+        public TimeIntervalModel Sensitivity { get; private set; }
+
+        public SensorStatus Status { get; private set; }
+
+        public string Icon { get; private set; }
+
+
+        public string Template
+        {
+            get => _userTemplate;
+            private set
+            {
+                if (_userTemplate == value)
+                    return;
+
+                _userTemplate = value;
+                _systemTemplate = AlertState.BuildSystemTemplate(value);
+            }
+        }
 
 
         public Policy()
@@ -35,7 +57,30 @@ namespace HSMServer.Core.Model.Policies
         }
 
 
+        protected abstract AlertState GetState(BaseValue value);
+
         protected abstract PolicyCondition GetCondition();
+
+
+        public string RebuildState(PolicyCondition condition = null, BaseValue value = null)
+        {
+            if (_sensor is null)
+                return string.Empty;
+
+            PolicyResult = new PolicyResult(_sensor.Id, this);
+            State = GetState(value ?? _sensor.LastValue);
+            State.Template = _systemTemplate;
+
+            condition ??= Conditions?.FirstOrDefault();
+
+            State.Operation = condition?.Operation.GetDisplayName();
+            State.Target = condition?.Target.Value;
+
+            Comment = State.BuildComment();
+            SensorResult = new SensorResult(Status, Comment);
+
+            return Comment;
+        }
 
         internal void Update(PolicyUpdate update)
         {
@@ -57,9 +102,11 @@ namespace HSMServer.Core.Model.Policies
             UpdateConditions(update.Conditions, Update);
         }
 
-        internal void Apply(PolicyEntity entity)
+        internal void Apply(PolicyEntity entity, BaseSensorModel sensor = null)
         {
             PolicyCondition Update(PolicyCondition condition, PolicyConditionEntity entity) => condition.FromEntity(entity);
+
+            _sensor = sensor;
 
             Id = new Guid(entity.Id);
             Status = entity.SensorStatus.ToStatus();
@@ -85,6 +132,14 @@ namespace HSMServer.Core.Model.Policies
             Icon = Icon,
         };
 
+
+        protected void ResetState()
+        {
+            Comment = string.Empty;
+            SensorResult = SensorResult.Ok;
+            PolicyResult = PolicyResult.Ok;
+        }
+
         private void UpdateConditions<T>(List<T> updates, Func<PolicyCondition, T, PolicyCondition> updateHandler)
         {
             if (updates?.Count > 0)
@@ -94,6 +149,8 @@ namespace HSMServer.Core.Model.Policies
                 foreach (var update in updates)
                     Conditions.Add(updateHandler(GetCondition(), update));
             }
+
+            RebuildState();
         }
     }
 }
