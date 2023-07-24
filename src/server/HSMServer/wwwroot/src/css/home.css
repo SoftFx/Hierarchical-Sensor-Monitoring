@@ -328,21 +328,24 @@ img .tree-png-icon {
 }
 
 .tree-alert-icon {
+    display: inline-block;
     position: relative;
-    margin: 0px 1px 0px 0px;
-    font-size: smaller;
-    top: -1px;
+    font-size: x-small;
+    top: -2px;
+    text-align: center;
+    width: 1rem;
 }
 
 .tree-alert-icon span {
     position: absolute;
     padding: 0px 2px;
     font-size: 8px;
-    top: 9px;
+    top: 8px;
     left: 8px;
     color: white;
     background-color: grey;
     border-radius: 4px;
+    font-weight: 400;
 }
 
 .meta-info-label {
