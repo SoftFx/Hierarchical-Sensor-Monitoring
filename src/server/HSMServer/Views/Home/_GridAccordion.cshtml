@@ -23,7 +23,10 @@
                         {
                             <div id="gridCell_@element.EncodedId" class="@element.Status.ToCssGridCellClass() p-1 grid-cell clickable-node"
                                  title="@element.Tooltip" onclick="activateNode('@ViewBag.ParentId', '@element.EncodedId')">
-                                @element.Name.GetShortCellName()
+                                 <span>
+                                    @await Html.PartialAsync("~/Views/Home/Alerts/_AlertIconsList.cshtml", element.AlertIcons)
+                                    @element.Name.GetShortCellName()
+                                 </span>
                             </div>
                         }
                     </div>
