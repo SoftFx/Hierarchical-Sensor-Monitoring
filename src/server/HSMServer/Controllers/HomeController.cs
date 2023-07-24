@@ -21,6 +21,7 @@ using HSMServer.Notifications;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -440,6 +441,20 @@ namespace HSMServer.Controllers
                 return PartialView("_GeneralInfo", new SensorInfoViewModel(sensor));
 
             return _emptyResult;
+        }
+
+        [HttpGet]
+        public ActionResult GetAlertIcons(string selectedId)
+        {
+            var id = selectedId.ToGuid();
+            ConcurrentDictionary<string, int> icons = null;
+
+            if (_treeViewModel.Nodes.TryGetValue(id, out var node))
+                icons = node.AlertIcons;
+            else if (_treeViewModel.Sensors.TryGetValue(id, out var sensor))
+                icons = sensor.AlertIcons;
+
+            return icons is not null ? PartialView("~/Views/Home/Alerts/_AlertIconsList.cshtml", icons) : _emptyResult;
         }
 
         #endregion

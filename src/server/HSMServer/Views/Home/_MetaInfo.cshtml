@@ -36,17 +36,20 @@
 
 <div id="meta_info_@Model.EncodedId">
     <div class="d-flex justify-content-between flex-grow-1">
-        <div class='d-flex justify-content-start'>
+        <div class='d-flex justify-content-start align-items-center'>
             @if (Model is FolderInfoViewModel)
             {
-                <i class="fa-regular fa-folder my-1 align-self-center sensor-icon-with-margin"></i>
+                <i class="fa-regular fa-folder my-1 sensor-icon-with-margin"></i>
             }
             else
             {
-                <span id='status_@Model.EncodedId' class='@Model.Status.ToIcon() my-1 align-self-center sensor-icon-with-margin' title='Status: @Model.Status'></span>
+                <i id='status_@Model.EncodedId' class='@Model.Status.ToIcon() my-1 sensor-icon-with-margin' title='Status: @Model.Status'></i>
+                <span id="alertIcons_@Model.EncodedId" class="me-1">
+                    @await Html.PartialAsync("~/Views/Home/Alerts/_AlertIconsList.cshtml", Model.AlertIcons)
+                </span>
             }
 
-            <h5 id="nodeHeader" class="d-flex my-1 align-self-top">@Html.Raw(Model.Header)</h5>
+            <h5 id="nodeHeader" class="d-flex my-1">@Html.Raw(Model.Header)</h5>
         </div>
 
         <div id='update_@Model.EncodedId' class='d-flex my-1 time-ago-div'>updated @Model.LastUpdateTime.GetTimeAgo()</div>
