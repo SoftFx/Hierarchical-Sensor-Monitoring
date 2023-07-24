@@ -3,6 +3,7 @@ using HSMServer.Model.DataAlerts;
 using HSMServer.Model.Folders;
 using HSMServer.Model.TreeViewModel;
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 
@@ -10,6 +11,8 @@ namespace HSMServer.Model.ViewModel
 {
     public class NodeInfoBaseViewModel
     {
+        public ConcurrentDictionary<string, int> AlertIcons { get; }
+
         public string Header { get; }
 
         public Guid RootProductId { get; }
@@ -66,6 +69,7 @@ namespace HSMServer.Model.ViewModel
             SavedHistoryPeriod = new(model.KeepHistory, PredefinedIntervals.ForKeepHistory);
             SelfDestroyPeriod = new(model.SelfDestroy, PredefinedIntervals.ForSelfDestory);
 
+            AlertIcons = model.AlertIcons;
             HasTimeToLive = model.TTL.TimeInterval is not TimeInterval.None;
             DataAlerts = new(model.DataAlerts);
             if (model.TTLAlert is not null)

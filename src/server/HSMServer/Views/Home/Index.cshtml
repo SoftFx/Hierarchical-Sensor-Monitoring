@@ -213,6 +213,18 @@
         });
     }
 
+    function updateAlertIcons(selectedNodeId) {
+        $.ajax({
+            type: 'GET',
+            url: `@Url.Action(nameof(HomeController.GetAlertIcons))?selectedId=${selectedNodeId}`,
+            cache: false,
+            async: true,
+            success: function (viewdata) {
+                $(`#alertIcons_${selectedNodeId}`).empty().append(viewdata);
+            }
+        });
+    }
+
     function updateSpecificSensorData(dataObject) {
         var id = dataObject.id;
         let isFile = dataObject.sensorType === 6;
@@ -310,9 +322,9 @@
                         getListPage(`${accordionName}Nodes`)
                     }
                 }
-                
 
-               updateGeneralInfo(selectedNodeId);
+                updateGeneralInfo(selectedNodeId);
+                updateAlertIcons(selectedNodeId);
                 
                 if (displayChildrenInfo)
                     $('#dataPanel').removeClass('d-none');
