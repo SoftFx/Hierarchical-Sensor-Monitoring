@@ -163,6 +163,9 @@
                             <li>
                                 <a class='dropdown-item' href='#' id='button_export_csv_@sensorId'>Export to CSV</a>
                             </li>
+                            <li>
+                                <a class='dropdown-item' href='#' id="allColumnsButton">Show all columns</a>
+                            </li>
                         </ul>
                     </div>
                 </div>
@@ -173,30 +176,22 @@
                     <div id='history_@sensorId'>
                         @if (Model.IsChartSupported)
                         {
-                            <div class="d-flex justify-content-between align-items-center">
-                                <ul class='nav nav-tabs flex-fill'>
-                                    <li class='nav-item'>
-                                        <a id='link_graph_@sensorId' class='nav-link active' data-bs-toggle='tab' href='#@graphParentDivId'>Graph</a>
-                                    </li>
-                                    <li class='nav-item'>
-                                        <div class="d-flex flex-row align-items-center">
-                                            <a id='link_table_@sensorId' class='nav-link' data-bs-toggle='tab' href='#@valuesParentDivId'>
-                                                Table
-                                                <span id="newValuesCount" class="badge rounded-pill badge-light fw-semibold"></span>
-                                            </a>
-                                            <div id="tableHistoryRefreshButton" class="table-history-refresh ms-3 d-none">
-                                                <a class='table-history-refresh-link fw-semibold' href="javascript:refreshTable();">Refresh</a>
-                                            </div>
+                            <ul class='nav nav-tabs flex-fill'>
+                                <li class='nav-item'>
+                                    <a id='link_graph_@sensorId' class='nav-link active' data-bs-toggle='tab' href='#@graphParentDivId'>Graph</a>
+                                </li>
+                                <li class='nav-item'>
+                                    <div class="d-flex flex-row align-items-center">
+                                        <a id='link_table_@sensorId' class='nav-link' data-bs-toggle='tab' href='#@valuesParentDivId'>
+                                            Table
+                                            <span id="newValuesCount" class="badge rounded-pill badge-light fw-semibold"></span>
+                                        </a>
+                                        <div id="tableHistoryRefreshButton" class="table-history-refresh ms-3 d-none">
+                                            <a class='table-history-refresh-link fw-semibold' href="javascript:refreshTable();">Refresh</a>
                                         </div>
-                                    </li>
-                                </ul>
-                                <div id="showAllTableColumnsCheckbox" class="form-check d-none">
-                                    <input class="form-check-input" type="checkbox" value="" id="showAllTableColumns_@sensorId">
-                                    <label class="form-check-label" for="showAllTableColumns_@sensorId">
-                                        Show all columns
-                                    </label>
-                                </div>
-                            </div>
+                                    </div>
+                                </li>
+                            </ul>
                             <div class='tab-content'>
                                 <div class='tab-pane fade show active' id=@graphParentDivId>
                                     <div id='@graphElementId'></div>
@@ -208,14 +203,6 @@
                         }
                         else
                         {
-                            <div class="d-flex justify-content-end">
-                                <div class="form-check">
-                                    <input class="form-check-input" type="checkbox" value="" id="showAllTableColumns_@sensorId">
-                                    <label class="form-check-label" for="showAllTableColumns_@sensorId">
-                                        Show all columns
-                                    </label>
-                                </div>
-                            </div>
                             <div id='values_@sensorId'></div>
                         }
                     </div>
@@ -231,14 +218,16 @@
 <script>
     var previousReceivedTime = undefined;
 
-    $('#showAllTableColumns_@sensorId').off('change').on('change', function (e) {
-        if (this.checked) {
+    $('#allColumnsButton').off('click').on('click', function (e) {
+        if (this.innerText.includes('Show')) {
             $("#receivingTime_header").removeClass('d-none');
             $('[id^="receivingTime_value"]').removeClass('d-none');
+            this.innerText = "Hide extra columns"
         }
         else {
             $("#receivingTime_header").addClass('d-none');
             $('[id^="receivingTime_value"]').addClass('d-none');
+            this.innerText = "Show all columns";
         }
     });
 

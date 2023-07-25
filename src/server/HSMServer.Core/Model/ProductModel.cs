@@ -5,6 +5,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using System.Xml.Linq;
 
 namespace HSMServer.Core.Model
 {
@@ -40,7 +41,7 @@ namespace HSMServer.Core.Model
         {
             State = ProductState.FullAccess;
 
-            Policies.BuildTTL(this);
+            Policies.BuildDefault(this);
         }
 
         public ProductModel(ProductEntity entity) : base(entity)
@@ -49,7 +50,7 @@ namespace HSMServer.Core.Model
             NotificationsSettings = entity.NotificationSettings;
             FolderId = Guid.TryParse(entity.FolderId, out var folderId) ? folderId : null;
 
-            Policies.BuildTTL(this, entity.TTLPolicy);
+            Policies.BuildDefault(this, entity.TTLPolicy);
         }
 
 
@@ -71,6 +72,9 @@ namespace HSMServer.Core.Model
                 FolderId = update.FolderId != Guid.Empty ? update.FolderId : null;
 
             NotificationsSettings = update?.NotificationSettings ?? NotificationsSettings;
+
+            if (update.TTLPolicy is not null)
+                UpdateTTLPolicy(this, update.TTLPolicy);
 
             return this;
         }
@@ -109,5 +113,19 @@ namespace HSMServer.Core.Model
             Settings = Settings.ToEntity(),
             TTLPolicy = Policies.TimeToLive?.ToEntity(),
         };
+
+        private static void UpdateTTLPolicy(ProductModel model, PolicyUpdate update)
+        {
+            model.Policies.TimeToLive.Update(update);
+
+            foreach (var (_, subProduct) in model.SubProducts)
+                UpdateTTLPolicy(subProduct, update);
+
+            foreach (var (_, sensor) in model.Sensors)
+                if (!sensor.Settings.TTL.IsSet)
+                    sensor.Policies.TimeToLive.Update(update);
+
+            model.CheckTimeout();
+        }
     }
 }

@@ -2,7 +2,7 @@
 {
     public abstract class Policy<T, U> : Policy<T> where T : BaseValue
     {
-        internal override bool Validate(T value, BaseSensorModel sensor)
+        internal override bool Validate(T value)
         {
             var fail = CheckConditions(value, out var failedCondition);
 
@@ -11,7 +11,7 @@
             else
                 ResetState();
 
-            return fail;
+            return !fail;
         }
 
 

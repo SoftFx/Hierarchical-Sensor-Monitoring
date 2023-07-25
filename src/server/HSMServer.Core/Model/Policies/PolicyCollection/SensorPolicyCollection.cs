@@ -20,7 +20,7 @@ namespace HSMServer.Core.Model.Policies
 
         internal abstract void Update(List<PolicyUpdate> updates);
 
-        internal abstract void Attach(BaseSensorModel sensor, PolicyEntity ttlEntity);
+        internal abstract void Attach(BaseSensorModel sensor);
 
         [Obsolete("remove after policy migration")]
         internal abstract void AddStatus();
@@ -43,6 +43,15 @@ namespace HSMServer.Core.Model.Policies
         protected abstract bool CalculateStorageResult(T value, bool updateSensor);
 
 
+        internal override void Attach(BaseSensorModel sensor) => _sensor = sensor;
+
+        internal override void BuildDefault(BaseNodeModel node, PolicyEntity entity = null)
+        {
+            _typePolicy = new CorrectTypePolicy<T>(_sensor);
+            base.BuildDefault(node, entity);
+        }
+
+
         internal bool TryValidate(BaseValue value, out T valueT, bool updateSensor = true)
         {
             SensorResult = SensorResult.Ok;
@@ -59,15 +68,6 @@ namespace HSMServer.Core.Model.Policies
 
             return CalculateStorageResult(valueT, updateSensor);
         }
-
-        internal override void Attach(BaseSensorModel sensor, PolicyEntity ttlEntity)
-        {
-            _typePolicy = new CorrectTypePolicy<T>(sensor);
-            _sensor = sensor;
-
-            BuildTTL(sensor, ttlEntity);
-        }
-
 
         internal bool SensorTimeout(DateTime? time)
         {
@@ -102,7 +102,7 @@ namespace HSMServer.Core.Model.Policies
             PolicyResult = new(_sensor.Id);
 
             foreach (var policy in Policies ?? Enumerable.Empty<PolicyType>())
-                if (!policy.Validate(value, _sensor))
+                if (!policy.Validate(value))
                 {
                     PolicyResult.AddAlert(policy);
 
@@ -185,6 +185,7 @@ namespace HSMServer.Core.Model.Policies
                 $"$status [$product]$path = $comment",
                 null);
 
+            policy._sensor = _sensor;
             policy.Update(statusUpdate);
 
             AddPolicy(policy);

@@ -13,7 +13,7 @@ namespace HSMServer.Core.Model.Policies
                 Id = Id.ToByteArray(),
                 SensorStatus = (byte)FatalStatus,
                 Icon = FatalStatus.ToIcon(),
-                Template = $"Sensor value type is not {typeof(T).Name}",
+                Template = $"[$product]$path = received value type is not {typeof(T).Name}",
             }, sensor);
 
 
