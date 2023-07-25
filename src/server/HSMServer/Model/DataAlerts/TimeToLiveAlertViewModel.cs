@@ -1,6 +1,6 @@
 ﻿using HSMServer.Core.Model;
 using HSMServer.Core.Model.Policies;
-using System;
+using HSMServer.Model.TreeViewModel;
 
 namespace HSMServer.Model.DataAlerts
 {
@@ -9,7 +9,15 @@ namespace HSMServer.Model.DataAlerts
         public const byte AlertKey = byte.MaxValue;
 
 
-        public TimeToLiveAlertViewModel(Guid entityId) : base(entityId) { }
+        public TimeToLiveAlertViewModel(NodeViewModel node) : base(node.Id)
+        {
+            Conditions.Clear();
+            Conditions.Add(new TimeToLiveConditionViewModel()
+            {
+                Property = AlertProperty.TimeToLive,
+                TimeToLive = new TimeIntervalViewModel(PredefinedIntervals.ForTimeout, () => (node.Parent?.TTL, node.ParentIsFolder)) { IsAlertBlock = true },
+            });
+        }
 
         public TimeToLiveAlertViewModel(TTLPolicy policy, BaseNodeModel node) : base(policy, node) { }
 

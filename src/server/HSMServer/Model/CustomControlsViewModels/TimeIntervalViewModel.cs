@@ -101,11 +101,7 @@ namespace HSMServer.Model
             if (!HasParentValue)
                 IntervalItems.RemoveAt(0);
             else if (intervals.Contains(TimeInterval.FromParent))
-            {
-                var fromParent = TimeInterval.FromParent.GetDisplayName();
-
                 IntervalItems.First(x => x.Value == nameof(TimeInterval.FromParent)).Text = $"From parent ({GetUsedValue(ParentValue)})";
-            }
         }
 
         internal TimeIntervalViewModel(TimeIntervalViewModel model, HashSet<TimeInterval> intervals) : this(intervals, model._parentRequest)
