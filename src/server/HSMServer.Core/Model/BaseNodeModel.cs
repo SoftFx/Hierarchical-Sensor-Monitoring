@@ -64,7 +64,7 @@ namespace HSMServer.Core.Model
         internal abstract bool CheckTimeout();
 
 
-        protected internal BaseNodeModel AddParent(ProductModel parent)
+        internal virtual BaseNodeModel AddParent(ProductModel parent)
         {
             Parent = parent;
 
