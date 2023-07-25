@@ -124,7 +124,7 @@ namespace HSMServer.Core.Model.Policies
         }
 
 
-        public string BuildComment(string template = null) => string.Format(template ?? Template.Template,
+        public string BuildComment(string template = null) => string.Format(template ?? Template?.Template ?? string.Empty,
             Product, Path, Sensor, Status, Time, Comment, ValueSingle, MinValueBar, MaxValueBar, MeanValueBar,
             LastValueBar, Operation, Target);
 
