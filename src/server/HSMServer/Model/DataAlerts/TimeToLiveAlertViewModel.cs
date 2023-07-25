@@ -11,12 +11,7 @@ namespace HSMServer.Model.DataAlerts
 
         public TimeToLiveAlertViewModel(NodeViewModel node) : base(node.Id)
         {
-            Conditions.Clear();
-            Conditions.Add(new TimeToLiveConditionViewModel()
-            {
-                Property = AlertProperty.TimeToLive,
-                TimeToLive = new TimeIntervalViewModel(PredefinedIntervals.ForTimeout, () => (node.Parent?.TTL, node.ParentIsFolder)) { IsAlertBlock = true },
-            });
+            FillConditions(new TimeIntervalViewModel(PredefinedIntervals.ForTimeout, () => (node.Parent?.TTL, node.ParentIsFolder)) { IsAlertBlock = true });
         }
 
         public TimeToLiveAlertViewModel(TTLPolicy policy, BaseNodeModel node) : base(policy, node) { }
@@ -24,16 +19,21 @@ namespace HSMServer.Model.DataAlerts
 
         internal TimeToLiveAlertViewModel FromInterval(TimeIntervalViewModel interval)
         {
-            Conditions.Clear();
-            Conditions.Add(new TimeToLiveConditionViewModel()
-            {
-                Property = AlertProperty.TimeToLive,
-                TimeToLive = new TimeIntervalViewModel(interval, PredefinedIntervals.ForTimeout) { IsAlertBlock = true },
-            });
+            FillConditions(new TimeIntervalViewModel(interval, PredefinedIntervals.ForTimeout) { IsAlertBlock = true });
 
             return this;
         }
 
         protected override ConditionViewModel CreateCondition(bool isMain) => new TimeToLiveConditionViewModel();
+
+        private void FillConditions(TimeIntervalViewModel intervalBlock)
+        {
+            Conditions.Clear();
+            Conditions.Add(new TimeToLiveConditionViewModel()
+            {
+                Property = AlertProperty.TimeToLive,
+                TimeToLive = intervalBlock,
+            });
+        }
     }
 }
