@@ -82,6 +82,17 @@ namespace HSMServer.Model.DataAlerts
     }
 
 
+    public sealed class ConditionViewModel<T> : ConditionViewModel where T : BaseValue
+    {
+        protected override List<AlertProperty> Properties { get; } = new() { AlertProperty.Status };
+
+        protected override List<PolicyOperation> Operations { get; }
+
+
+        public ConditionViewModel(bool isMain) : base(isMain) { }
+    }
+
+
     public sealed class SingleConditionViewModel<T, U> : ConditionViewModel where T : BaseValue<U>, new()
     {
         protected override List<AlertProperty> Properties { get; } = new()

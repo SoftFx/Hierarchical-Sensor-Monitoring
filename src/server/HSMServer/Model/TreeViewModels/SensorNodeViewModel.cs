@@ -65,8 +65,7 @@ namespace HSMServer.Model.TreeViewModel
 
             FileNameString = GetFileNameString(model.Type, ShortStringValue);
 
-            if (model is DoubleSensorModel or IntegerSensorModel or DoubleBarSensorModel or IntegerBarSensorModel)
-                DataAlerts[(byte)Type] = model.Policies.Select(p => BuildAlert(p, model)).ToList();
+            DataAlerts[(byte)Type] = model.Policies.Select(p => BuildAlert(p, model)).ToList();
 
             AlertIcons.Clear();
             foreach (var alert in model.PolicyResult)
@@ -84,10 +83,16 @@ namespace HSMServer.Model.TreeViewModel
 
         private static DataAlertViewModelBase BuildAlert(Policy policy, BaseSensorModel sensor) => policy switch
         {
+            FilePolicy p => new DataAlertViewModel<FileValue>(p, sensor),
+            StringPolicy p => new DataAlertViewModel<StringValue>(p, sensor),
+            BooleanPolicy p => new DataAlertViewModel<BooleanValue>(p, sensor),
+            VersionPolicy p => new DataAlertViewModel<VersionValue>(p, sensor),
+            TimeSpanPolicy p => new DataAlertViewModel<TimeSpanValue>(p, sensor),
             IntegerPolicy p => new SingleDataAlertViewModel<IntegerValue, int>(p, sensor),
             DoublePolicy p => new SingleDataAlertViewModel<DoubleValue, double>(p, sensor),
             IntegerBarPolicy p => new BarDataAlertViewModel<IntegerBarValue, int>(p, sensor),
             DoubleBarPolicy p => new BarDataAlertViewModel<DoubleBarValue, double>(p, sensor),
+            _ => null,
         };
 
         private static string GetFileNameString(SensorType sensorType, string value)
