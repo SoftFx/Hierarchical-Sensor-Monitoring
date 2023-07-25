@@ -139,7 +139,8 @@ namespace HSMServer.Core.Model.Policies
                 SensorType.Integer => Build((BaseValue<int>)value, sensor),
                 SensorType.Double => Build((BaseValue<double>)value, sensor),
                 SensorType.DoubleBar => Build((BarBaseValue<double>)value, sensor),
-                SensorType.IntegerBar => Build((BarBaseValue<int>)value, sensor)
+                SensorType.IntegerBar => Build((BarBaseValue<int>)value, sensor),
+                _ => BuildBase(value, sensor)
             };
 
             state.Template = BuildSystemTemplate(raw);
