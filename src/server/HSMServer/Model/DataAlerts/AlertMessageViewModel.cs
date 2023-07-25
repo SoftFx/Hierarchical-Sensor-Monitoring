@@ -22,10 +22,26 @@ public class AlertMessageViewModel
 
     public string BuildToastMessage(BaseSensorModel sensor)
     {
-        var test = AlertState.BuildTest(sensor.LastValue, sensor, Comment);
-        test.Operation = Operation.GetDisplayName();
-        test.Target = Target;
+        var alert = BuildTest(sensor.LastValue, sensor, Comment);
+        alert.Operation = Operation.GetDisplayName();
+        alert.Target = Target;
 
-        return $"{Emoji} {test.BuildComment()}";
+        return $"{Emoji} {alert.BuildComment()}";
+    }
+    
+    private static AlertState BuildTest(BaseValue value, BaseSensorModel sensor, string raw)
+    {
+        var state = value.Type switch
+        {
+            SensorType.Integer => AlertState.Build((BaseValue<int>)value, sensor),
+            SensorType.Double => AlertState.Build((BaseValue<double>)value, sensor),
+            SensorType.DoubleBar => AlertState.Build((BarBaseValue<double>)value, sensor),
+            SensorType.IntegerBar => AlertState.Build((BarBaseValue<int>)value, sensor),
+            _ => AlertState.BuildBase(value, sensor)
+        };
+
+        state.Template = AlertState.BuildSystemTemplate(raw);
+            
+        return state;
     }
 }

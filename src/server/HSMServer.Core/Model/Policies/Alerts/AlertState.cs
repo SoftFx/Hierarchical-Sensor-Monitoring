@@ -27,7 +27,7 @@ namespace HSMServer.Core.Model.Policies
         }
 
 
-        internal AlertSystemTemplate Template { get; set; }
+        public AlertSystemTemplate Template { get; set; }
 
 
         [AlertVariable("$product", "Parent product name")]
@@ -128,28 +128,7 @@ namespace HSMServer.Core.Model.Policies
             Product, Path, Sensor, Status, Time, Comment, ValueSingle, MinValueBar, MaxValueBar, MeanValueBar,
             LastValueBar, Operation, Target);
 
-
-        private bool UseProperty(string name) => Template?.UsedVariables.Contains(name) ?? false;
-
-
-        public static AlertState BuildTest(BaseValue value, BaseSensorModel sensor, string raw)
-        {
-            var state = value.Type switch
-            {
-                SensorType.Integer => Build((BaseValue<int>)value, sensor),
-                SensorType.Double => Build((BaseValue<double>)value, sensor),
-                SensorType.DoubleBar => Build((BarBaseValue<double>)value, sensor),
-                SensorType.IntegerBar => Build((BarBaseValue<int>)value, sensor),
-                _ => BuildBase(value, sensor)
-            };
-
-            state.Template = BuildSystemTemplate(raw);
-            
-            return state;
-        }
-
-
-        internal static AlertSystemTemplate BuildSystemTemplate(string raw)
+        public static AlertSystemTemplate BuildSystemTemplate(string raw)
         {
             var words = raw?.Split(Separator, SplitOptions) ?? Array.Empty<string>();
             var hash = new HashSet<string>();
@@ -173,7 +152,7 @@ namespace HSMServer.Core.Model.Policies
             };
         }
 
-        internal static AlertState Build<T>(BaseValue<T> value, BaseSensorModel sensor)
+        public static AlertState Build<T>(BaseValue<T> value, BaseSensorModel sensor)
         {
             var state = BuildBase(value, sensor);
 
@@ -182,7 +161,7 @@ namespace HSMServer.Core.Model.Policies
             return state;
         }
 
-        internal static AlertState Build<T>(BarBaseValue<T> value, BaseSensorModel sensor)
+        public static AlertState Build<T>(BarBaseValue<T> value, BaseSensorModel sensor)
             where T : INumber<T>
         {
             var state = BuildBase(value, sensor);
@@ -195,7 +174,7 @@ namespace HSMServer.Core.Model.Policies
             return state;
         }
 
-        internal static AlertState BuildBase(BaseValue value, BaseSensorModel sensor) => new()
+        public static AlertState BuildBase(BaseValue value, BaseSensorModel sensor) => new()
         {
             Product = sensor.RootProductName,
             Sensor = sensor.DisplayName,
@@ -205,5 +184,8 @@ namespace HSMServer.Core.Model.Policies
             Time = value?.Time.ToString(),
             Comment = value?.Comment,
         };
+
+
+        private bool UseProperty(string name) => Template?.UsedVariables.Contains(name) ?? false;
     }
 }
