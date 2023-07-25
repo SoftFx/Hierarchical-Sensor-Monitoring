@@ -74,6 +74,8 @@ namespace HSMServer.Core.Model
             State = (SensorState)entity.State;
             Integration = (Integration)entity.Integration;
             EndOfMuting = entity.EndOfMuting > 0L ? new DateTime(entity.EndOfMuting) : null;
+
+            Policies.Attach(this);
         }
 
 
@@ -90,7 +92,7 @@ namespace HSMServer.Core.Model
         {
             base.AddParent(parent);
 
-            Policies.Attach(this, _ttlEntity); //need for correct calculating $product and $path properties
+            Policies.BuildDefault(this, _ttlEntity); //need for correct calculating $product and $path properties
 
             return this;
         }

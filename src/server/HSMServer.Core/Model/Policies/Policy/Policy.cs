@@ -12,7 +12,7 @@ namespace HSMServer.Core.Model.Policies
         private AlertSystemTemplate _systemTemplate;
         private string _userTemplate;
 
-        protected BaseSensorModel _sensor;
+        internal BaseSensorModel _sensor; //todo should be protected after migration
 
 
         public List<PolicyCondition> Conditions { get; } = new();
