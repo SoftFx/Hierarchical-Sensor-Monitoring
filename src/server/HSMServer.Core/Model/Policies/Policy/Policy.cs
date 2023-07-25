@@ -12,7 +12,7 @@ namespace HSMServer.Core.Model.Policies
         private AlertSystemTemplate _systemTemplate;
         private string _userTemplate;
 
-        protected BaseSensorModel _sensor;
+        internal BaseSensorModel _sensor; //todo should be protected after migration
 
 
         public List<PolicyCondition> Conditions { get; } = new();
@@ -21,9 +21,10 @@ namespace HSMServer.Core.Model.Policies
         public Guid Id { get; private set; }
 
 
-        internal SensorResult SensorResult { get; private set; }
+        internal SensorResult SensorResult { get; private set; } = SensorResult.Ok;
 
-        internal PolicyResult PolicyResult { get; private set; }
+        internal PolicyResult PolicyResult { get; private set; } = PolicyResult.Ok;
+
 
         internal AlertState State { get; private set; }
 
@@ -67,7 +68,6 @@ namespace HSMServer.Core.Model.Policies
             if (_sensor is null)
                 return string.Empty;
 
-            PolicyResult = new PolicyResult(_sensor.Id, this);
             State = GetState(value ?? _sensor.LastValue);
             State.Template = _systemTemplate;
 
@@ -77,6 +77,8 @@ namespace HSMServer.Core.Model.Policies
             State.Target = condition?.Target.Value;
 
             Comment = State.BuildComment();
+
+            PolicyResult = new PolicyResult(_sensor.Id, this);
             SensorResult = new SensorResult(Status, Comment);
 
             return Comment;

@@ -127,7 +127,6 @@ namespace HSMServer.Notifications
 
                 response.AppendLine($"{entityStr} *{entity.Name.EscapeMarkdownV2()}*");
                 response.AppendLine($"    Messages delay: {telegramSetting.MessagesDelaySec} sec".EscapeMarkdownV2());
-                response.AppendLine($"    Min status level: {telegramSetting.MessagesMinStatus}".EscapeMarkdownV2());
                 response.AppendLine($"    Messages are enabled: {telegramSetting.MessagesAreEnabled}".EscapeMarkdownV2());
             }
 
@@ -138,9 +137,6 @@ namespace HSMServer.Notifications
             $"""
             Statuses: 
                 {Core.OffTime.ToIcon()} (OffTime) -> {Core.Ok.ToIcon()} (Ok) -> {Core.Error.ToIcon()} (Error)
-            Alerts: 
-                 - sensor update timeout
-                "↕️" - sensor value alert
             """.EscapeMarkdownV2();
 
         private static string ServerStatus() => $"HSM server {ServerConfig.Version} is alive.".EscapeMarkdownV2();
