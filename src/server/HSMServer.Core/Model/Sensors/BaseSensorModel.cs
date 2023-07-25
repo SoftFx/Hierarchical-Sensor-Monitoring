@@ -30,6 +30,8 @@ namespace HSMServer.Core.Model
     public abstract class BaseSensorModel : BaseNodeModel
     {
         private static readonly SensorResult _muteResult = new(SensorStatus.OffTime, "Muted");
+        private readonly PolicyEntity _ttlEntity;
+
 
         public override SensorPolicyCollection Policies { get; }
 
@@ -67,6 +69,8 @@ namespace HSMServer.Core.Model
 
         public BaseSensorModel(SensorEntity entity) : base(entity)
         {
+            _ttlEntity = entity.TTLPolicy;
+
             State = (SensorState)entity.State;
             Integration = (Integration)entity.Integration;
             EndOfMuting = entity.EndOfMuting > 0L ? new DateTime(entity.EndOfMuting) : null;
@@ -83,6 +87,15 @@ namespace HSMServer.Core.Model
 
         internal abstract List<BaseValue> ConvertValues(List<byte[]> valuesBytes);
 
+
+        internal override BaseNodeModel AddParent(ProductModel parent)
+        {
+            base.AddParent(parent);
+
+            Policies.BuildDefault(this, _ttlEntity); //need for correct calculating $product and $path properties
+
+            return this;
+        }
 
         internal void Update(SensorUpdate update)
         {
@@ -119,6 +132,7 @@ namespace HSMServer.Core.Model
             Policies = Policies.Ids.Select(u => u.ToString()).ToList(),
             EndOfMuting = EndOfMuting?.Ticks ?? 0L,
             Settings = Settings.ToEntity(),
+            TTLPolicy = Policies.TimeToLive?.ToEntity(),
         };
     }
 }

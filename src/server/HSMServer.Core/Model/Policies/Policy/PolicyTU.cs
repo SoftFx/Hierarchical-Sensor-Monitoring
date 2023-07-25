@@ -1,41 +1,30 @@
-﻿using System;
-
-namespace HSMServer.Core.Model.Policies
+﻿namespace HSMServer.Core.Model.Policies
 {
     public abstract class Policy<T, U> : Policy<T> where T : BaseValue
     {
-        private Func<BaseValue> _getLastSensorValue = () => null;
-
-
-        protected abstract U GetConstTarget(string strValue);
-
-
-        internal override bool Validate(T value, BaseSensorModel sensor)
+        internal override bool Validate(T value)
         {
-            BaseValue GetLastValue() => sensor.LastValue;
+            var fail = CheckConditions(value, out var failedCondition);
 
-            _getLastSensorValue = GetLastValue;
+            if (fail)
+                RebuildState(failedCondition, value);
+            else
+                ResetState();
 
-            if (CheckConditions(value, out var failedCondition))
-            {
-                BuildStateAndComment(value, sensor, failedCondition);
-
-                SensorResult = new SensorResult(Status, AlertComment);
-
-                return false;
-            }
-
-            AlertComment = string.Empty;
-            SensorResult = SensorResult.Ok;
-
-            return true;
+            return !fail;
         }
+
 
         protected override PolicyCondition GetCondition() => new PolicyCondition<T, U>()
         {
             ConstTargetValueConverter = GetConstTarget,
-            GetLastTargetValue = _getLastSensorValue,
+            GetLastTargetValue = GetLastValue,
         };
+
+
+        protected abstract U GetConstTarget(string strValue);
+
+        private BaseValue GetLastValue() => _sensor?.LastValue;
 
 
         private bool CheckConditions(T value, out PolicyCondition failed)

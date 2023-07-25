@@ -25,6 +25,9 @@ namespace HSMServer.Notifications.Telegram.AddressBook.MessageBuilder
 
         internal bool TryApply(AlertState alert)
         {
+            if (_baseState is null)
+                return false;
+
             var apply = _baseState.HasLessThanTwoDiff(alert, out var diffName);
 
             apply &= string.IsNullOrEmpty(_groupDiffPropertyName) || diffName == _groupDiffPropertyName;

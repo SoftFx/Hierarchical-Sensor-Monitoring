@@ -55,7 +55,7 @@ namespace HSMServer.Model
                 _ => null
             };
 
-            IgnorePeriod = new(PredefinedIntervals.ForIgnore, false);
+            IgnorePeriod = new(PredefinedIntervals.ForIgnore, useCustomTemplate: false);
 
             DateTimeNow = DateTime.UtcNow.RoundToMin();
             NotificationsTarget = target;

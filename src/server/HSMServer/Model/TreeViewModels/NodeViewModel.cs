@@ -1,6 +1,6 @@
 ﻿using HSMServer.Core.Model;
-using HSMServer.Core.Model.NodeSettings;
 using HSMServer.Helpers;
+using HSMServer.Model.DataAlerts;
 using HSMServer.Model.Folders;
 
 namespace HSMServer.Model.TreeViewModel
@@ -31,7 +31,7 @@ namespace HSMServer.Model.TreeViewModel
 
         public string FullPath => $"{RootProduct?.Name}{Path}";
 
-        private bool ParentIsFolder => Parent is FolderModel;
+        internal bool ParentIsFolder => Parent is FolderModel;
 
 
         protected NodeViewModel(BaseNodeModel model)
@@ -52,9 +52,11 @@ namespace HSMServer.Model.TreeViewModel
             Name = model.DisplayName;
             Description = model.Description;
 
-            TTL.FromModel(model.Settings.TTL.CurValue);
-            KeepHistory.FromModel(model.Settings.KeepHistory.CurValue);
-            SelfDestroy.FromModel(model.Settings.SelfDestroy.CurValue);
+            TTL.FromModel(model.Settings.TTL.CurValue, PredefinedIntervals.ForTimeout);
+            KeepHistory.FromModel(model.Settings.KeepHistory.CurValue, PredefinedIntervals.ForKeepHistory);
+            SelfDestroy.FromModel(model.Settings.SelfDestroy.CurValue, PredefinedIntervals.ForSelfDestory);
+
+            TTLAlert = new TimeToLiveAlertViewModel(model.Policies.TimeToLive, model);
         }
     }
 }

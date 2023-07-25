@@ -19,5 +19,8 @@ namespace HSMServer.Core.Cache.UpdateEntities
 
 
         public string Description { get; init; }
+
+
+        public PolicyUpdate TTLPolicy { get; init; }
     }
 }

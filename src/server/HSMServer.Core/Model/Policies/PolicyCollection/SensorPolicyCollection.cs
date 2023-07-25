@@ -41,13 +41,20 @@ namespace HSMServer.Core.Model.Policies
 
     public abstract class SensorPolicyCollection<T> : SensorPolicyCollection where T : BaseValue
     {
-        private CorrectTypePolicy<T> _typePolicy;
-        private TTLPolicy _ttlPolicy;
-
         private protected BaseSensorModel _sensor;
+        private CorrectTypePolicy<T> _typePolicy;
 
 
         protected abstract bool CalculateStorageResult(T value, bool updateSensor);
+
+
+        internal override void Attach(BaseSensorModel sensor) => _sensor = sensor;
+
+        internal override void BuildDefault(BaseNodeModel node, PolicyEntity entity = null)
+        {
+            _typePolicy = new CorrectTypePolicy<T>(_sensor);
+            base.BuildDefault(node, entity);
+        }
 
 
         internal bool TryValidate(BaseValue value, out T valueT, bool updateSensor = true)
@@ -67,26 +74,14 @@ namespace HSMServer.Core.Model.Policies
             return CalculateStorageResult(valueT, updateSensor);
         }
 
-        internal override void Attach(BaseSensorModel sensor)
-        {
-            _ttlPolicy = new TTLPolicy(sensor.Id, sensor.Settings.TTL);
-            _typePolicy = new CorrectTypePolicy<T>(sensor.Id);
-
-            _sensor = sensor;
-        }
-
-
         internal bool SensorTimeout(DateTime? time)
         {
-            if (_ttlPolicy is null)
+            if (TimeToLive is null)
                 return false;
 
-            var timeout = _ttlPolicy.HasTimeout(time);
+            var timeout = TimeToLive.HasTimeout(time);
 
-            if (timeout)
-                PolicyResult = _ttlPolicy.PolicyResult;
-            else
-                PolicyResult = PolicyResult.Ok;
+            PolicyResult = timeout ? TimeToLive.PolicyResult : PolicyResult.Ok;
 
             SensorExpired?.Invoke(_sensor, timeout);
 
@@ -112,7 +107,7 @@ namespace HSMServer.Core.Model.Policies
             PolicyResult = new(_sensor.Id);
 
             foreach (var policy in Policies ?? Enumerable.Empty<PolicyType>())
-                if (!policy.Validate(value, _sensor))
+                if (!policy.Validate(value))
                 {
                     PolicyResult.AddAlert(policy);
 
@@ -178,7 +173,7 @@ namespace HSMServer.Core.Model.Policies
                 {
                     var policy = new PolicyType();
 
-                    policy.Apply(entity);
+                    policy.Apply(entity, _sensor);
 
                     _storage.TryAdd(policy.Id, policy);
                 }
@@ -189,19 +184,20 @@ namespace HSMServer.Core.Model.Policies
             var policy = new PolicyType();
 
             var statusUpdate = new PolicyUpdate(
-                           Guid.NewGuid(),
-                           new()
-                           {
-                                new PolicyConditionUpdate(
-                                    PolicyOperation.IsChanged,
-                                    PolicyProperty.Status,
-                                    new TargetValue(TargetType.LastValue, _sensor.Id.ToString())),
-                           },
-                           null,
-                           SensorStatus.Ok,
-                           $"$status [$product]$path = $comment",
-                           null);
+                Guid.NewGuid(),
+                new()
+                {
+                    new PolicyConditionUpdate(
+                        PolicyOperation.IsChanged,
+                        PolicyProperty.Status,
+                        new TargetValue(TargetType.LastValue, _sensor.Id.ToString())),
+                },
+                null,
+                SensorStatus.Ok,
+                $"$status [$product]$path = $comment",
+                null);
 
+            policy._sensor = _sensor;
             policy.Update(statusUpdate);
 
             AddPolicy(policy);

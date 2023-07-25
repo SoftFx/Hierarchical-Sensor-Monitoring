@@ -53,7 +53,20 @@ namespace HSMServer.Model
 
     public static class PredefinedIntervals
     {
-        public static List<TimeInterval> ForTimeout { get; } =
+        public static HashSet<TimeInterval> ForFolderTimeout { get; } =
+            new()
+            {
+                TimeInterval.FromParent,
+                TimeInterval.None,
+                TimeInterval.TenMinutes,
+                TimeInterval.Hour,
+                TimeInterval.Day,
+                TimeInterval.Week,
+                TimeInterval.Month,
+                TimeInterval.Custom
+            };
+
+        public static HashSet<TimeInterval> ForTimeout { get; } =
             new()
             {
                 TimeInterval.FromParent,
@@ -65,7 +78,7 @@ namespace HSMServer.Model
                 TimeInterval.Custom
             };
 
-        public static List<TimeInterval> ForRestore { get; } =
+        public static HashSet<TimeInterval> ForRestore { get; } =
             new()
             {
                 TimeInterval.OneMinute,
@@ -76,7 +89,7 @@ namespace HSMServer.Model
                 TimeInterval.Custom
             };
 
-        public static List<TimeInterval> ForIgnore { get; } =
+        public static HashSet<TimeInterval> ForIgnore { get; } =
             new()
             {
                 TimeInterval.FiveMinutes,
@@ -91,7 +104,7 @@ namespace HSMServer.Model
                 TimeInterval.Custom
             };
 
-        public static List<TimeInterval> ForKeepHistory { get; } =
+        public static HashSet<TimeInterval> ForKeepHistory { get; } =
             new()
             {
                 TimeInterval.FromParent,
@@ -104,7 +117,7 @@ namespace HSMServer.Model
                 TimeInterval.Custom
             };
 
-        public static List<TimeInterval> ForSelfDestory { get; } =
+        public static HashSet<TimeInterval> ForSelfDestory { get; } =
             new()
             {
                 TimeInterval.FromParent,

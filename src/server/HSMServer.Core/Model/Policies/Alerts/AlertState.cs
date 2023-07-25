@@ -109,7 +109,7 @@ namespace HSMServer.Core.Model.Policies
                     var curValue = prop.GetValue(this, null);
                     var otherValue = prop.GetValue(other, null);
 
-                    if (!curValue.Equals(otherValue))
+                    if (curValue == otherValue || (!curValue?.Equals(otherValue) ?? false))
                     {
                         diffProp = prop.Name;
                         hasDiff = !hasDiff; // true -> false mean find 2 diff
@@ -124,7 +124,7 @@ namespace HSMServer.Core.Model.Policies
         }
 
 
-        public string BuildComment(string template = null) => string.Format(template ?? Template.Template,
+        public string BuildComment(string template = null) => string.Format(template ?? Template?.Template ?? string.Empty,
             Product, Path, Sensor, Status, Time, Comment, ValueSingle, MinValueBar, MaxValueBar, MeanValueBar,
             LastValueBar, Operation, Target);
 
@@ -160,34 +160,33 @@ namespace HSMServer.Core.Model.Policies
         {
             var state = BuildBase(value, sensor);
 
-            state.ValueSingle = value.Value.ToString();
+            state.ValueSingle = value?.Value?.ToString();
 
             return state;
         }
 
         internal static AlertState Build<T>(BarBaseValue<T> value, BaseSensorModel sensor)
-            where T : struct, INumber<T>
+            where T : INumber<T>
         {
             var state = BuildBase(value, sensor);
 
-            state.MinValueBar = value.Min.ToString();
-            state.MaxValueBar = value.Max.ToString();
-            state.MeanValueBar = value.Mean.ToString();
-            state.LastValueBar = value.LastValue.ToString();
+            state.MinValueBar = value?.Min.ToString();
+            state.MaxValueBar = value?.Max.ToString();
+            state.MeanValueBar = value?.Mean.ToString();
+            state.LastValueBar = value?.LastValue.ToString();
 
             return state;
         }
 
-        private static AlertState BuildBase<T>(T value, BaseSensorModel sensor)
-            where T : BaseValue => new()
-            {
-                Product = sensor.RootProductName,
-                Sensor = sensor.DisplayName,
-                Path = sensor.Path,
+        internal static AlertState BuildBase(BaseValue value, BaseSensorModel sensor) => new()
+        {
+            Product = sensor.RootProductName,
+            Sensor = sensor.DisplayName,
+            Path = sensor.Path,
 
-                Status = value.Status.ToIcon(),
-                Time = value.Time.ToString(),
-                Comment = value.Comment,
-            };
+            Status = value?.Status.ToIcon(),
+            Time = value?.Time.ToString(),
+            Comment = value?.Comment,
+        };
     }
 }

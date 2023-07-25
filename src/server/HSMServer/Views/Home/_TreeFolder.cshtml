@@ -11,10 +11,7 @@
 
 
 <li id='@data.Id' title='@data.Tooltip' data-jstree='@Model.ToJSTree()'>
-    <span>
-        @await Html.PartialAsync("_TreeAlertIcons", data.AlertIcons)
-        @Html.Raw(data.Name.GetShortNodeName())
-    </span>
+    @Html.Raw(data.Name.GetShortNodeName())
 
     @if (!Model.IsEmpty && showIcons)
     {

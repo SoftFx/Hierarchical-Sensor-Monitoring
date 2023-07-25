@@ -63,7 +63,7 @@ namespace HSMServer.Core.Model
             DisplayName = entity.DisplayName;
             Description = entity.Description;
 
-            if (entity.Settings != null)
+            if (entity.Settings is not null)
                 Settings.SetSettings(entity.Settings);
 
             Settings.TTL.Uploaded += (_, _) => CheckTimeout();
@@ -73,7 +73,7 @@ namespace HSMServer.Core.Model
         internal abstract bool CheckTimeout();
 
 
-        protected internal BaseNodeModel AddParent(ProductModel parent)
+        internal virtual BaseNodeModel AddParent(ProductModel parent)
         {
             Parent = parent;
 
