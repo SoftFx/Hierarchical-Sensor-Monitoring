@@ -560,13 +560,13 @@ namespace HSMServer.Controllers
 
         public IActionResult AddDataPolicy(byte type, Guid sensorId)
         {
-            TimeIntervalViewModel parentTTTL = null;
+            TimeIntervalViewModel parentTTL = null;
 
             if (_treeViewModel.Sensors.TryGetValue(sensorId, out var sensor))
-                parentTTTL = sensor.Parent.TTL;
+                parentTTL = sensor.Parent.TTL;
             
             if (_treeViewModel.Nodes.TryGetValue(sensorId, out var node))
-                parentTTTL = node.Parent.TTL;
+                parentTTL = node.Parent.TTL;
             
             DataAlertViewModelBase viewModel = type switch
             {
@@ -579,7 +579,7 @@ namespace HSMServer.Controllers
                 (byte)SensorType.Double => new SingleDataAlertViewModel<DoubleValue, double>(sensorId),
                 (byte)SensorType.IntegerBar => new BarDataAlertViewModel<IntegerBarValue, int>(sensorId),
                 (byte)SensorType.DoubleBar => new BarDataAlertViewModel<DoubleBarValue, double>(sensorId),
-                TimeToLiveAlertViewModel.AlertKey => new TimeToLiveAlertViewModel(sensorId).FromInterval(parentTTTL),
+                TimeToLiveAlertViewModel.AlertKey => new TimeToLiveAlertViewModel(sensorId).FromInterval(parentTTL),
                 _ => null,
             };
 
