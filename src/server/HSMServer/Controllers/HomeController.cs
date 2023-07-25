@@ -622,7 +622,7 @@ namespace HSMServer.Controllers
 
 
         [HttpPost]
-        public IActionResult SendTestMessage(AlertMessageViewModel alert)
+        public IActionResult GetTestToastMessage(AlertMessageViewModel alert)
         {
             if (!_treeViewModel.Sensors.TryGetValue(alert.EntityId, out _))
                 return _emptyResult;
@@ -632,7 +632,7 @@ namespace HSMServer.Controllers
             test.Operation = alert.Operation.GetDisplayName();
             test.Target = alert.Target;
             
-            return Json(alert.Emoji + test.BuildComment());
+            return Json($"{alert.Emoji} {test.BuildComment()}");
         }
 
 

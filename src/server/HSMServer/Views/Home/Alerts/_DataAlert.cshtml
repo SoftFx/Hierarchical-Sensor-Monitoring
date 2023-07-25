@@ -183,7 +183,7 @@
             appendProperty(form, element, "input", "EntityId");
 
             $.ajax({
-                url: '@Url.Action(nameof(HomeController.SendTestMessage))',
+                url: '@Url.Action(nameof(HomeController.GetTestToastMessage))',
                 type: 'POST',
                 data: form,
                 processData: false,
