@@ -31,7 +31,7 @@ namespace HSMServer.Model.TreeViewModel
 
         public string FullPath => $"{RootProduct?.Name}{Path}";
 
-        private bool ParentIsFolder => Parent is FolderModel;
+        internal bool ParentIsFolder => Parent is FolderModel;
 
 
         protected NodeViewModel(BaseNodeModel model)
