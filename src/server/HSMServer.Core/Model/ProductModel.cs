@@ -41,7 +41,7 @@ namespace HSMServer.Core.Model
         {
             State = ProductState.FullAccess;
 
-            Policies.BuildTTL(this);
+            Policies.BuildDefault(this);
         }
 
         public ProductModel(ProductEntity entity) : base(entity)
@@ -50,7 +50,7 @@ namespace HSMServer.Core.Model
             NotificationsSettings = entity.NotificationSettings;
             FolderId = Guid.TryParse(entity.FolderId, out var folderId) ? folderId : null;
 
-            Policies.BuildTTL(this, entity.TTLPolicy);
+            Policies.BuildDefault(this, entity.TTLPolicy);
         }
 
 
