@@ -132,6 +132,22 @@ namespace HSMServer.Core.Model.Policies
         private bool UseProperty(string name) => Template?.UsedVariables.Contains(name) ?? false;
 
 
+        public static AlertState BuildTest(BaseValue value, BaseSensorModel sensor, string raw)
+        {
+            var state = value.Type switch
+            {
+                SensorType.Integer => Build((BaseValue<int>)value, sensor),
+                SensorType.Double => Build((BaseValue<double>)value, sensor),
+                SensorType.DoubleBar => Build((BarBaseValue<double>)value, sensor),
+                SensorType.IntegerBar => Build((BarBaseValue<int>)value, sensor)
+            };
+
+            state.Template = BuildSystemTemplate(raw);
+            
+            return state;
+        }
+
+
         internal static AlertSystemTemplate BuildSystemTemplate(string raw)
         {
             var words = raw?.Split(Separator, SplitOptions) ?? Array.Empty<string>();

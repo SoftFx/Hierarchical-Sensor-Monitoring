@@ -26,6 +26,8 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
+using HSMCommon.Extensions;
+using HSMServer.Core.Model.Policies;
 using TimeInterval = HSMServer.Model.TimeInterval;
 
 namespace HSMServer.Controllers
@@ -620,22 +622,17 @@ namespace HSMServer.Controllers
 
 
         [HttpPost]
-        public void SendTestMessage(DataAlertViewModelBase alert)
+        public IActionResult SendTestMessage(AlertMessageViewModel alert)
         {
-            if (!_treeViewModel.Sensors.TryGetValue(alert.EntityId, out var sensor) ||
-                !_treeViewModel.Nodes.TryGetValue(sensor.RootProduct.Id, out var product))
-                return;
+            if (!_treeViewModel.Sensors.TryGetValue(alert.EntityId, out _))
+                return _emptyResult;
 
-            //TODO fix after creating alert constructor and merge AlertState
-            //var template = CommentBuilder.GetTemplateString(alert.Comment);
-            //var comment = string.Format(template, product.Name, sensor.Path, sensor.Name,
-            //    alert.Operation.GetDisplayName(), alert.Value, SensorStatus.Ok, DateTime.UtcNow, "value comment", 0, 0, 0, 0, 0);
-            //var testMessage = $"↕️ [{product.Name}]{sensor.Path} = {comment}";
-
-            //var notifications = product.Notifications;
-            //foreach (var (chat, _) in notifications.Telegram.Chats)
-            //    if (notifications.IsSensorEnabled(sensor.Id) && !notifications.IsSensorIgnored(sensor.Id, chat))
-            //        _telegramBot.SendTestMessage(chat, testMessage);
+            var sensorModel = _treeValuesCache.GetSensor(alert.EntityId);
+            var test = AlertState.BuildTest(sensorModel.LastValue, sensorModel, alert.Comment);
+            test.Operation = alert.Operation.GetDisplayName();
+            test.Target = alert.Target;
+            
+            return Json(alert.Emoji + test.BuildComment());
         }
 
 
