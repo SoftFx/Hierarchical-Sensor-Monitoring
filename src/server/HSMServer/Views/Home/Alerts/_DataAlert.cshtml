@@ -190,7 +190,8 @@
                 contentType: false,
                 async: true,
                 success: function (response){
-                    showToast(response, "Test message");
+                    if (response)
+                        showToast(response, "Test message");
                 }
             });
         });
