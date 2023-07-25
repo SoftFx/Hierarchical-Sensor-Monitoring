@@ -160,7 +160,7 @@ namespace HSMServer.Core.Model.Policies
         {
             var state = BuildBase(value, sensor);
 
-            state.ValueSingle = value?.Value.ToString();
+            state.ValueSingle = value?.Value?.ToString();
 
             return state;
         }
