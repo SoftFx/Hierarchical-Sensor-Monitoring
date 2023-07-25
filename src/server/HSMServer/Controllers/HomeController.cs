@@ -26,8 +26,6 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
-using HSMCommon.Extensions;
-using HSMServer.Core.Model.Policies;
 using TimeInterval = HSMServer.Model.TimeInterval;
 
 namespace HSMServer.Controllers
@@ -634,11 +632,8 @@ namespace HSMServer.Controllers
                 return _emptyResult;
 
             var sensorModel = _treeValuesCache.GetSensor(alert.EntityId);
-            var test = AlertState.BuildTest(sensorModel.LastValue, sensorModel, alert.Comment);
-            test.Operation = alert.Operation.GetDisplayName();
-            test.Target = alert.Target;
             
-            return Json($"{alert.Emoji} {test.BuildComment()}");
+            return Json(alert.BuildToastMessage(sensorModel));
         }
 
 
