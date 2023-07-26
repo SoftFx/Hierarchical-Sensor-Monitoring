@@ -395,6 +395,7 @@ namespace HSMServer.Core.Cache
         private void SubscribeSensorToPolicyUpdate(BaseSensorModel sensor)
         {
             sensor.Policies.ChangesHandler += _journalService.AddRecord;
+            sensor.Settings.ChangesHandler += _journalService.AddRecord;
             sensor.Policies.SensorExpired += SetExpiredSnapshot;
             sensor.Policies.Uploaded += UpdatePolicy;
 
@@ -404,6 +405,7 @@ namespace HSMServer.Core.Cache
         private void RemoveSensorPolicies(BaseSensorModel sensor)
         {
             sensor.Policies.ChangesHandler -= _journalService.AddRecord;
+            sensor.Settings.ChangesHandler -= _journalService.AddRecord;
             sensor.Policies.SensorExpired -= SetExpiredSnapshot;
             sensor.Policies.Uploaded -= UpdatePolicy;
 
