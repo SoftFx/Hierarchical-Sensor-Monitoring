@@ -46,7 +46,7 @@ public sealed class SelectedJournalViewModel : ConcurrentDictionary<Guid, Concur
         return Subscribe(_node);
     }
 
-    private async Task Subscribe(BaseNodeViewModel node)
+    private Task Subscribe(BaseNodeViewModel node)
     {
         var requests = new List<Task>()
         {
@@ -56,18 +56,18 @@ public sealed class SelectedJournalViewModel : ConcurrentDictionary<Guid, Concur
         if (node is FolderModel folder)
         {
             foreach (var (_, product) in folder.Products)
-                await Subscribe(product);
+                requests.Add(Subscribe(product));
         }
         else if (node is ProductNodeViewModel product)
         {
             foreach (var (_, subNode) in product.Nodes)
-                await Subscribe(subNode);
+                requests.Add(Subscribe(subNode));
 
             foreach (var (id, _) in product.Sensors)
                 requests.Add(LoadRecords(id));
         }
 
-        await Task.WhenAll(requests);
+        return Task.WhenAll(requests);
     }
 
 
