@@ -65,15 +65,7 @@ namespace HSMServer.ApiObjectsConverters
                 return src[key]?.ToString();
             }
 
-            int GetIntValue(string key, JsonObject src = null, bool isPositive = false)
-            {
-                var val = int.Parse(GetValue(key, src));
-
-                if (isPositive)
-                    return (~val >> 31) & val;
-
-                return val;
-            }
+            int GetIntValue(string key, JsonObject src = null) => Math.Max(int.Parse(GetValue(key, src)), 0);
 
 
             return new VersionSensor()
@@ -84,11 +76,12 @@ namespace HSMServer.ApiObjectsConverters
                 Status = (SensorStatus)GetIntValue(nameof(VersionSensorValue.Status)),
                 Comment = GetValue(nameof(VersionSensorValue.Comment)),
                 Value = obj[nameof(VersionSensorValue.Value)] is JsonObject valueObj
-                    ? new Version(GetIntValue(nameof(Version.Major), valueObj, true), GetIntValue(nameof(Version.Minor), valueObj, true), GetIntValue(nameof(Version.Build), valueObj, true), GetIntValue(nameof(Version.Revision), valueObj, true))
+                    ? new Version(GetIntValue(nameof(Version.Major), valueObj), GetIntValue(nameof(Version.Minor), valueObj), GetIntValue(nameof(Version.Build), valueObj), GetIntValue(nameof(Version.Revision), valueObj))
                     : new Version(GetValue(nameof(VersionSensorValue.Value))),
             };
         }
     }
+
 
     [JsonConverter(typeof(VersionConverter))]
     public sealed class VersionSensor : VersionSensorValue { }
