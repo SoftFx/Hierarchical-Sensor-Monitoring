@@ -6,7 +6,13 @@ namespace HSMServer.Core
     {
         public static bool IsBar(this SensorType type) => type is SensorType.IntegerBar or SensorType.DoubleBar;
 
-        public static bool IsOk(this SensorStatus status) => status == SensorStatus.Ok;
+
+        public static bool IsOk(this SensorStatus status) => status is SensorStatus.Ok;
+
+        public static bool IsOff(this SensorStatus status) => status is SensorStatus.OffTime;
+
+        public static bool IsError(this SensorStatus status) => status is SensorStatus.Error;
+
 
         public static string ToIcon(this SensorStatus status) => status switch
         {
