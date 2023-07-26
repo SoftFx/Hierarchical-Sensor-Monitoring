@@ -7,6 +7,20 @@ using System.Text.Json.Serialization;
 
 namespace HSMServer.ApiObjectsConverters
 {
+    [JsonConverter(typeof(VersionConverter))]
+    public sealed class VersionSensor : VersionSensorValue { }
+
+
+    internal class VersionConverter : JsonConverter<VersionSensor>
+    {
+        public override VersionSensor Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options) => SensorValueBaseDeserializationConverter.DeserializeVersion(ref reader, options);
+
+        public override void Write(Utf8JsonWriter writer, VersionSensor value, JsonSerializerOptions options)
+        {
+            writer.WriteStringValue(JsonSerializer.Serialize<VersionSensorValue>(value, options));
+        }
+    }
+
     internal sealed class SensorValueBaseDeserializationConverter : JsonConverter<SensorValueBase>
     {
         private const string UnexpectedSensorTypeError = "Unexpected sensor type";
@@ -79,19 +93,6 @@ namespace HSMServer.ApiObjectsConverters
                     ? new Version(GetIntValue(nameof(Version.Major), valueObj), GetIntValue(nameof(Version.Minor), valueObj), GetIntValue(nameof(Version.Build), valueObj), GetIntValue(nameof(Version.Revision), valueObj))
                     : new Version(GetValue(nameof(VersionSensorValue.Value))),
             };
-        }
-    }
-
-
-    [JsonConverter(typeof(VersionConverter))]
-    public sealed class VersionSensor : VersionSensorValue { }
-    
-    internal class VersionConverter : JsonConverter<VersionSensor>
-    {
-        public override VersionSensor Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options) => SensorValueBaseDeserializationConverter.DeserializeVersion(ref reader, options);
-        public override void Write(Utf8JsonWriter writer, VersionSensor value, JsonSerializerOptions options)
-        {
-            writer.WriteStringValue(JsonSerializer.Serialize<VersionSensorValue>(value, options));
         }
     }
 }
