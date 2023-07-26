@@ -6,6 +6,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using System.Xml.Linq;
 
 namespace HSMServer.Core.Model.Policies
 {
@@ -48,12 +49,18 @@ namespace HSMServer.Core.Model.Policies
         protected abstract bool CalculateStorageResult(T value, bool updateSensor);
 
 
-        internal override void Attach(BaseSensorModel sensor) => _sensor = sensor;
+        internal override void Attach(BaseSensorModel sensor)
+        {
+            _typePolicy = new CorrectTypePolicy<T>(sensor);
+            _sensor = sensor;
+
+            base.BuildDefault(sensor);
+        }
 
         internal override void BuildDefault(BaseNodeModel node, PolicyEntity entity = null)
         {
-            _typePolicy = new CorrectTypePolicy<T>(_sensor);
             base.BuildDefault(node, entity);
+            _typePolicy.RebuildState();
         }
 
 

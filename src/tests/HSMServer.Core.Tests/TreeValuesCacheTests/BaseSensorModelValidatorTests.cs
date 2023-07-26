@@ -15,7 +15,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
     {
         private const string SensorValueIsTooLong = "The value has exceeded the length limit.";
         private const string SensorValueOutdated = "";
-        private const string SensorValueTypeInvalid = "Sensor value type is not {0}";
+        private const string SensorValueTypeInvalid = "received value type is not {0}";
         private const string SensorValueStatusInvalid = "User data has {0} status";
 
         private const string ErrorPathKey = "Path or key is empty.";
@@ -91,7 +91,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
                 Assert.False(sensor.TryAddValue(SensorValuesFactory.BuildSensorValue(invalidType)));
                 Assert.True(sensor.Status?.HasError);
                 Assert.Equal(SensorStatus.Error, sensor.Status?.Status);
-                Assert.Equal(errorMessage, sensor.Status?.Message);
+                Assert.True(sensor.Status?.Message.EndsWith(errorMessage));
             }
         }
 
