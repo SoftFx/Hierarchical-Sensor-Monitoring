@@ -53,7 +53,7 @@ namespace HSMServer.ApiObjectsConverters
         }
 
 
-        private static VersionSensorValue DeserializeVersion(ref Utf8JsonReader reader, JsonSerializerOptions options)
+        public static VersionSensor DeserializeVersion(ref Utf8JsonReader reader, JsonSerializerOptions options)
         {
             var obj = JsonSerializer.Deserialize<JsonObject>(ref reader, options);
 
@@ -65,10 +65,18 @@ namespace HSMServer.ApiObjectsConverters
                 return src[key]?.ToString();
             }
 
-            int GetIntValue(string key, JsonObject src = null) => int.Parse(GetValue(key, src));
+            int GetIntValue(string key, JsonObject src = null, bool isPositive = false)
+            {
+                var val = int.Parse(GetValue(key, src));
+
+                if (isPositive)
+                    return (~val >> 31) & val;
+
+                return val;
+            }
 
 
-            return new VersionSensorValue()
+            return new VersionSensor()
             {
                 Key = GetValue(nameof(VersionSensorValue.Key)),
                 Path = GetValue(nameof(VersionSensorValue.Path)),
@@ -76,9 +84,21 @@ namespace HSMServer.ApiObjectsConverters
                 Status = (SensorStatus)GetIntValue(nameof(VersionSensorValue.Status)),
                 Comment = GetValue(nameof(VersionSensorValue.Comment)),
                 Value = obj[nameof(VersionSensorValue.Value)] is JsonObject valueObj
-                    ? new Version(GetIntValue(nameof(Version.Major), valueObj), GetIntValue(nameof(Version.Minor), valueObj), GetIntValue(nameof(Version.Build), valueObj), GetIntValue(nameof(Version.Revision), valueObj))
+                    ? new Version(GetIntValue(nameof(Version.Major), valueObj, true), GetIntValue(nameof(Version.Minor), valueObj, true), GetIntValue(nameof(Version.Build), valueObj, true), GetIntValue(nameof(Version.Revision), valueObj, true))
                     : new Version(GetValue(nameof(VersionSensorValue.Value))),
             };
+        }
+    }
+
+    [JsonConverter(typeof(VersionConverter))]
+    public sealed class VersionSensor : VersionSensorValue { }
+    
+    internal class VersionConverter : JsonConverter<VersionSensor>
+    {
+        public override VersionSensor Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options) => SensorValueBaseDeserializationConverter.DeserializeVersion(ref reader, options);
+        public override void Write(Utf8JsonWriter writer, VersionSensor value, JsonSerializerOptions options)
+        {
+            writer.WriteStringValue(JsonSerializer.Serialize<VersionSensorValue>(value, options));
         }
     }
 }
