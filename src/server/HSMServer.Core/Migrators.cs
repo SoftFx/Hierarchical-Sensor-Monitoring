@@ -16,6 +16,9 @@ namespace HSMServer.Core
         {
             var oldEnum = (OldTimeInterval)old.TimeInterval;
 
+            if (old.CustomPeriod == 0 && old.TimeInterval == 0L)
+                oldEnum = OldTimeInterval.Custom;
+
             var newTicks = oldEnum switch
             {
                 OldTimeInterval.OneMinute => 600_000_000L,
