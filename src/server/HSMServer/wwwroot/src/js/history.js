@@ -80,7 +80,6 @@ function Data(to, from, type, encodedId) {
     function initializeTabLinksRequests() {
         $('[id^="link_graph_"]').off("click").on("click", requestGraph);
         $('[id^="link_table_"]').off("click").on("click", requestTable);
-        $('[id^="link_journal_"]').off("click").on("click", () => $('table[id^="journal_table_"]').DataTable().ajax.reload());
     }
 
     function requestGraph() {

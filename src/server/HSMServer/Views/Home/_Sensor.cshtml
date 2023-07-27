@@ -277,13 +277,24 @@
             this.innerText = "Show all columns";
         }
     });
+    
+    $('[id^="link_journal_"]').off('click').on('click', () => initializeJournal())
 
     $(document).ready(function () {
         if ('@(Model.Type is SensorType.File)' === 'True') {
             setContentPreview('@Model.EncodedId');
         }
         
-        $('[id^="journal_table_"]').DataTable({
+        journalTable = undefined;
+    });
+
+    function initializeJournal() {
+        if (journalTable) {
+            journalTable.ajax.reload();
+            return;
+        }
+
+        journalTable = $('[id^="journal_table_"]').DataTable({
             bAutoWidth: false,
             pageLength: 50,
             lengthMenu: [25, 50, 100, 300 ],
@@ -307,7 +318,7 @@
                 }
             }
         });
-    });
+    }
 
     function setContentPreview(encodedId) {
         $.ajax({
