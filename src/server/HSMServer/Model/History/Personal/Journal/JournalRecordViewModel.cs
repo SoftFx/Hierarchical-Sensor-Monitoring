@@ -27,7 +27,7 @@ public sealed class JournalRecordViewModel
     public string TimeAsString { get; set; }
 
     public string Value { get; set; }
-    
+
     public string SearchValue { get; set; }
 
     public string Path { get; set; }
@@ -45,15 +45,13 @@ public sealed class JournalRecordViewModel
 
     private static (string ViewValue, string SearchValue) BuildSearchAndViewValue(JournalRecordModel model)
     {
-        var header = string.IsNullOrEmpty(model.PropertyName) ? model.Enviroment : model.PropertyName;
-
-        if (string.IsNullOrEmpty(model.OldValue) && string.IsNullOrEmpty(model.NewValue))
-            return (header, $"{header}{model.Initiator}");
+        if (string.IsNullOrEmpty(model.PropertyName))
+            return (model.Enviroment, $"{model.Enviroment} {model.Initiator}");
 
         return ($"""
-            {header}
+            {model.PropertyName}
             Old value: {model.OldValue}
             <strong>New value: {model.NewValue}</strong>
-        """, $"{header}{model.OldValue}{model.NewValue}{model.Initiator}");
+        """, $"{model.PropertyName} {model.OldValue} {model.NewValue} {model.Initiator}");
     }
 }

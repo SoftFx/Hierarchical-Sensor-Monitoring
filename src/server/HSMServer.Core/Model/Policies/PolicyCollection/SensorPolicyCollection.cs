@@ -215,6 +215,7 @@ namespace HSMServer.Core.Model.Policies
                 CallJournal(new JournalRecordModel(_sensor.Id, initiator)
                 {
                     Enviroment = "Alerts update",
+                    PropertyName = "Alerts update",
                     OldValue = oldValue,
                     NewValue = newValue,
                     Path = _sensor.FullPath,
