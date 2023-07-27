@@ -204,7 +204,7 @@
                                 <div class='tab-pane fade' id=@valuesParentDivId>
                                     <div id='@valuesElementId'></div>
                                 </div>
-                                <div class='tab-pane fade' id=@journalParentDivId>
+                                <div class='tab-pane fade mt-2' id=@journalParentDivId>
                                     <table class="display w-100" id="journal_table_@sensorId">
                                         <thead>
                                             <tr>
@@ -239,7 +239,7 @@
                                 <div class='tab-pane fade show active' id=@valuesParentDivId>
                                     <div id='@valuesElementId'></div>
                                 </div>
-                                <div class='tab-pane fade' id=@journalParentDivId>
+                                <div class='tab-pane fade mt-2' id=@journalParentDivId>
                                     <table class="display w-100" id="journal_table_@sensorId">
                                         <thead>
                                             <tr>
@@ -301,6 +301,9 @@
                 url: getJournalPage,
                 data: function (d) {
                     return JSON.stringify(d);
+                },
+                complete: function (response){
+                    showNoData(response)
                 }
             }
         });

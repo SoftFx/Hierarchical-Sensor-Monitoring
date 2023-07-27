@@ -332,3 +332,17 @@ function Data(to, from, type, encodedId) {
         });
     }
 }
+
+//Journal
+{
+   window.showNoData = function (data) {
+       if (data.responseJSON.recordsTotal === 0) {
+           $('#noDataPanel').removeClass('d-none');
+           $('#noDataJournalPanel').addClass('d-none');
+       }
+       else {
+           $('#noDataPanel').addClass('d-none');
+           $('#noDataJournalPanel').removeClass('d-none');
+       }
+   }
+}
