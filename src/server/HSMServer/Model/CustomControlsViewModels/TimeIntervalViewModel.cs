@@ -116,7 +116,7 @@ namespace HSMServer.Model
         }
 
 
-        internal TimeIntervalModel ToModel()
+        internal TimeIntervalModel ToModel(TimeIntervalViewModel current = null)
         {
             if (TimeInterval.IsStatic() || TimeInterval.IsCustom())
                 return new TimeIntervalModel(CustomSpan.Ticks);
@@ -125,9 +125,11 @@ namespace HSMServer.Model
             else if (TimeInterval.IsDynamic())
                 return new TimeIntervalModel(TimeInterval.ToDynamicCore());
 
-            var ticks = ParentValue?.CustomSpan.Ticks ?? 0L;
+            // for saving view with TimeInterval = FromFolder
+            var ticks = (current?.ParentValue ?? ParentValue)?.CustomSpan.Ticks ?? 0L;
+            var hasFolder = current?.HasFolder ?? HasFolder;
 
-            return new TimeIntervalModel(HasFolder ? CoreTimeInterval.FromFolder : CoreTimeInterval.FromParent, ticks);
+            return new TimeIntervalModel(hasFolder ? CoreTimeInterval.FromFolder : CoreTimeInterval.FromParent, ticks);
         }
 
         internal TimeIntervalViewModel FromModel(TimeIntervalModel model, HashSet<TimeInterval> predefinedIntervals)
