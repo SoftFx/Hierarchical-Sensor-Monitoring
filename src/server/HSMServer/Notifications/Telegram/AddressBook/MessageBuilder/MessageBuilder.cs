@@ -23,7 +23,7 @@ namespace HSMServer.Notifications
             if (branch.TryGetValue(alert.PolicyId, out var policy))
                 policy.TryAddResult(alert);
             else
-                branch.TryAdd(alert.PolicyId, alert);
+                branch.TryAdd(alert.PolicyId, alert with { });
         }
 
         internal string GetAggregateMessage(int delay)

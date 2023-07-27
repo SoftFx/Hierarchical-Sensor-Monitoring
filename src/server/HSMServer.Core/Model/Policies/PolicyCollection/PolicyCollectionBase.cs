@@ -10,6 +10,9 @@ namespace HSMServer.Core.Model.Policies
         internal abstract IEnumerable<Guid> Ids { get; }
 
 
+        public TTLPolicy TimeToLive { get; private set; }
+
+
         internal Action<BaseSensorModel, bool> SensorExpired;
 
 
@@ -21,5 +24,8 @@ namespace HSMServer.Core.Model.Policies
         public abstract IEnumerator<Policy> GetEnumerator();
 
         IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
+
+
+        internal virtual void BuildDefault(BaseNodeModel node, PolicyEntity entity = null) => TimeToLive = new TTLPolicy(node, entity);
     }
 }

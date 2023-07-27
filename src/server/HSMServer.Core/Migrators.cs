@@ -1,6 +1,7 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Model;
+using HSMServer.Core.Model.Policies;
 using System;
 using System.Collections.Generic;
 using System.Text.Json;
@@ -14,6 +15,9 @@ namespace HSMServer.Core
         public static TimeIntervalModel ToNewInterval(OldTimeIntervalEntity old)
         {
             var oldEnum = (OldTimeInterval)old.TimeInterval;
+
+            if (old.CustomPeriod == 0 && old.TimeInterval == 0L)
+                oldEnum = OldTimeInterval.Custom;
 
             var newTicks = oldEnum switch
             {
@@ -83,7 +87,7 @@ namespace HSMServer.Core
 
                             if (oldInterval is not null)
                             {
-                                var newInterval = Migrators.ToNewInterval(oldInterval);
+                                var newInterval = ToNewInterval(oldInterval);
 
                                 if (updates.TryGetValue(entityId, out var upd))
                                 {
@@ -110,13 +114,14 @@ namespace HSMServer.Core
                                     new PolicyConditionEntity
                                     {
                                         Target = new PolicyTargetEntity(byte.Parse(raw["Target"]["Type"].ToString()), raw["Target"]["Value"].ToString()),
-                                        Property = raw["Property"].ToString(),
+                                        Property = (byte)Enum.Parse<PolicyProperty>(raw["Property"].ToString()),
                                         Operation = byte.Parse(raw["Operation"].ToString())
                                     }
                                 },
                                 Id = Guid.Parse(policyIdStr).ToByteArray(),
                                 SensorStatus = byte.Parse(raw["Status"].ToString()),
                                 Template = raw["Comment"].ToString(),
+                                Icon = "↕",
                             };
 
                             resavedPolicies.Add(policyIdStr, policyEntity);

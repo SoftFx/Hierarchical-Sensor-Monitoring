@@ -19,7 +19,7 @@
 <div name="alertAction" class="d-flex flex-row align-items-center alert-blocks-group py-1 ms-3">
     <div class="@isSecondaryCondition.ToVisibility() alert-text-block alert-add me-3">and</div>
 
-    <select class="alert-block alert-select property-select" asp-for="Action" asp-items="Model.Actions"></select>
+    <select class="alert-block alert-select property-select" asp-for="Action" asp-items="Model.Actions" disabled="@(Model.IsMain ? true : false)"></select>
 
     <div name="sendNotificationAction" class="@isSendAction.ToVisibility()">
         <input type="text" class="alert-block target-input target-comment" placeholder="message template" asp-for="Comment" value="@Model.Comment" required="@(isSendAction ? true : false)">

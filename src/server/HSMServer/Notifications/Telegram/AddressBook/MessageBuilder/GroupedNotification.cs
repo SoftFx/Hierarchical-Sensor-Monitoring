@@ -18,13 +18,16 @@ namespace HSMServer.Notifications.Telegram.AddressBook.MessageBuilder
 
         internal GroupedNotification(AlertResult alert)
         {
-            _baseState = alert.LastState;
+            _baseState = alert.LastState with { };
             _baseAlert = alert;
         }
 
 
         internal bool TryApply(AlertState alert)
         {
+            if (_baseState is null)
+                return false;
+
             var apply = _baseState.HasLessThanTwoDiff(alert, out var diffName);
 
             apply &= string.IsNullOrEmpty(_groupDiffPropertyName) || diffName == _groupDiffPropertyName;

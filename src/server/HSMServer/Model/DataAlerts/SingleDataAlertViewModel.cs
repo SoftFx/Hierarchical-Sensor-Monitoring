@@ -4,12 +4,9 @@ using System;
 
 namespace HSMServer.Model.DataAlerts
 {
-    public sealed class SingleDataAlertViewModel<T, U> : DataAlertViewModelBase<T> where T : BaseValue<U>, new()
+    public sealed class SingleDataAlertViewModel<T, U> : DataAlertViewModel<T> where T : BaseValue<U>, new()
     {
-        public SingleDataAlertViewModel(Guid entityId) : base(entityId)
-        {
-            Conditions.Add(new SingleConditionViewModel<T, U>(true));
-        }
+        public SingleDataAlertViewModel(Guid entityId) : base(entityId) { }
 
         public SingleDataAlertViewModel(Policy<T, U> policy, BaseSensorModel sensor) : base(policy, sensor) { }
 

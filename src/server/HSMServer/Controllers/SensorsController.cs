@@ -211,7 +211,7 @@ namespace HSMServer.Controllers
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status406NotAcceptable)]
-        public ActionResult<VersionSensorValue> Post([FromBody] VersionSensorValue sensorValue)
+        public ActionResult<VersionSensorValue> Post([FromBody] VersionSensor sensorValue)
         {
             try
             {

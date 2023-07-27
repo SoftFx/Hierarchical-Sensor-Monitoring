@@ -103,7 +103,7 @@ void DataCollectorImpl::InitializeCollectorMonitoring(bool is_alive, bool versio
 
 void hsm_wrapper::DataCollectorImpl::SendFileAsync(const std::string& sensor_path, const std::string& file_path, HSMSensorStatus status /*= HSMSensorStatus::Ok*/, const std::string& description /*= {}*/)
 {
-	data_collector->SendFileAsync(gcnew String(sensor_path.c_str()), gcnew String(file_path.c_str()), SensorStatus{ status }, gcnew String(description.c_str()));
+	auto task = data_collector->SendFileAsync(gcnew String(sensor_path.c_str()), gcnew String(file_path.c_str()), SensorStatus{ status }, gcnew String(description.c_str()));
 }
 
 HSMSensor<bool> DataCollectorImpl::CreateBoolSensor(const std::string& path, const std::string& description)

@@ -4,14 +4,10 @@ namespace HSMServer.Core.Model.Policies
 {
     public abstract class DefaultPolicyBase : Policy
     {
-        internal PolicyResult PolicyResult { get; }
+        internal new PolicyResult PolicyResult => new(_sensor.Id, this); //policy always should generate new Result
 
 
-        protected DefaultPolicyBase(Guid sensorId) : base()
-        {
-            PolicyResult = new PolicyResult(sensorId, this);
-        }
-
+        protected override AlertState GetState(BaseValue value) => AlertState.BuildBase(value, _sensor);
 
         protected override PolicyCondition GetCondition() => throw new NotImplementedException();
     }

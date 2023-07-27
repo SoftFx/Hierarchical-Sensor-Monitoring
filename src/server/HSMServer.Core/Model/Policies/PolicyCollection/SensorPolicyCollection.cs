@@ -5,6 +5,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using System.Xml.Linq;
 
 namespace HSMServer.Core.Model.Policies
 {
@@ -18,9 +19,12 @@ namespace HSMServer.Core.Model.Policies
         internal Action<ActionType, Policy> Uploaded;
 
 
-        internal abstract void Update(List<DataPolicyUpdate> updates);
+        internal abstract void Update(List<PolicyUpdate> updates);
 
         internal abstract void Attach(BaseSensorModel sensor);
+
+        [Obsolete("remove after policy migration")]
+        internal abstract void AddStatus();
 
 
         internal void Reset()
@@ -33,13 +37,26 @@ namespace HSMServer.Core.Model.Policies
 
     public abstract class SensorPolicyCollection<T> : SensorPolicyCollection where T : BaseValue
     {
-        private CorrectTypePolicy<T> _typePolicy;
-        private TTLPolicy _ttlPolicy;
-
         private protected BaseSensorModel _sensor;
+        private CorrectTypePolicy<T> _typePolicy;
 
 
         protected abstract bool CalculateStorageResult(T value, bool updateSensor);
+
+
+        internal override void Attach(BaseSensorModel sensor)
+        {
+            _typePolicy = new CorrectTypePolicy<T>(sensor);
+            _sensor = sensor;
+
+            base.BuildDefault(sensor);
+        }
+
+        internal override void BuildDefault(BaseNodeModel node, PolicyEntity entity = null)
+        {
+            base.BuildDefault(node, entity);
+            _typePolicy.RebuildState();
+        }
 
 
         internal bool TryValidate(BaseValue value, out T valueT, bool updateSensor = true)
@@ -59,26 +76,17 @@ namespace HSMServer.Core.Model.Policies
             return CalculateStorageResult(valueT, updateSensor);
         }
 
-        internal override void Attach(BaseSensorModel sensor)
-        {
-            _ttlPolicy = new TTLPolicy(sensor.Id, sensor.Settings.TTL);
-            _typePolicy = new CorrectTypePolicy<T>(sensor.Id);
-
-            _sensor = sensor;
-        }
-
-
         internal bool SensorTimeout(DateTime? time)
         {
-            if (_ttlPolicy is null)
+            if (TimeToLive is null)
                 return false;
 
-            var timeout = _ttlPolicy.HasTimeout(time);
+            var timeout = TimeToLive.HasTimeout(time);
 
             if (timeout)
-                PolicyResult = _ttlPolicy.PolicyResult;
+                PolicyResult.AddSingleAlert(TimeToLive);
             else
-                PolicyResult = PolicyResult.Ok;
+                PolicyResult.RemoveAlert(TimeToLive);
 
             SensorExpired?.Invoke(_sensor, timeout);
 
@@ -104,7 +112,7 @@ namespace HSMServer.Core.Model.Policies
             PolicyResult = new(_sensor.Id);
 
             foreach (var policy in Policies ?? Enumerable.Empty<PolicyType>())
-                if (!policy.Validate(value, _sensor))
+                if (!policy.Validate(value))
                 {
                     PolicyResult.AddAlert(policy);
 
@@ -122,7 +130,7 @@ namespace HSMServer.Core.Model.Policies
                 _storage.TryAdd(policy.Id, typedPolicy);
         }
 
-        internal override void Update(List<DataPolicyUpdate> updatesList)
+        internal override void Update(List<PolicyUpdate> updatesList)
         {
             var updates = updatesList.Where(u => u.Id != Guid.Empty).ToDictionary(u => u.Id);
 
@@ -135,7 +143,9 @@ namespace HSMServer.Core.Model.Policies
                 }
                 else if (_storage.TryRemove(id, out var oldPolicy))
                 {
-                    CalculateStorageResult((ValueType)_sensor.LastValue);
+                    if (_sensor.LastValue is ValueType lastValue && lastValue is not null)
+                        CalculateStorageResult(lastValue);
+
                     Uploaded?.Invoke(ActionType.Delete, oldPolicy);
                 }
             }
@@ -145,7 +155,7 @@ namespace HSMServer.Core.Model.Policies
                 {
                     var policy = new PolicyType();
 
-                    policy.Update(update);
+                    policy.Update(update, _sensor);
 
                     AddPolicy(policy);
                     Uploaded?.Invoke(ActionType.Add, policy);
@@ -161,10 +171,34 @@ namespace HSMServer.Core.Model.Policies
                 {
                     var policy = new PolicyType();
 
-                    policy.Apply(entity);
+                    policy.Apply(entity, _sensor);
 
                     _storage.TryAdd(policy.Id, policy);
                 }
+        }
+
+        internal override void AddStatus()
+        {
+            var policy = new PolicyType();
+
+            var statusUpdate = new PolicyUpdate(
+                Guid.NewGuid(),
+                new()
+                {
+                    new PolicyConditionUpdate(
+                        PolicyOperation.IsChanged,
+                        PolicyProperty.Status,
+                        new TargetValue(TargetType.LastValue, _sensor.Id.ToString())),
+                },
+                null,
+                SensorStatus.Ok,
+                $"$status [$product]$path = $comment",
+                null);
+
+            policy.Update(statusUpdate, _sensor);
+
+            AddPolicy(policy);
+            Uploaded?.Invoke(ActionType.Add, policy);
         }
     }
 }

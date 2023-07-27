@@ -3,7 +3,7 @@ using System.Text;
 
 namespace HSMServer.Core.Model.Policies
 {
-    public sealed class AlertResult
+    public sealed record AlertResult
     {
         public string Icon { get; }
 
@@ -47,7 +47,7 @@ namespace HSMServer.Core.Model.Policies
         internal void AddPolicyResult(Policy policy)
         {
             Count++;
-            LastComment = policy.AlertComment;
+            LastComment = policy.Comment;
             LastState = policy.State;
         }
 

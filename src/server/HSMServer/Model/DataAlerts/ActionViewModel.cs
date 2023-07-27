@@ -51,7 +51,7 @@ namespace HSMServer.Model.DataAlerts
         public ActionViewModel(bool isMain)
         {
             IsMain = isMain;
-            Actions = _actions.Select(a => new SelectListItem(a.Value, a.Key.ToString())).ToList();
+            Actions = _actions.ToSelectedItems(k => k.Value, v => v.Key.ToString());
 
             Comment = DefaultCommentTemplate;
             Action = ActionType.SendNotification;

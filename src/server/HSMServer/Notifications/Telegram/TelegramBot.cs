@@ -195,15 +195,22 @@ namespace HSMServer.Notifications
                 try
                 {
                     foreach (var (entity, chats) in _addressBook.ServerBook)
-                    {
                         foreach (var (_, chat) in chats)
-                            if (chat.MessageBuilder.ExpectedSendingTime <= DateTime.UtcNow)
+                        {
+                            try
                             {
-                                var message = chat.MessageBuilder.GetAggregateMessage(entity.Notifications.UsedTelegram.MessagesDelaySec);
+                                if (chat.MessageBuilder.ExpectedSendingTime <= DateTime.UtcNow)
+                                {
+                                    var message = chat.MessageBuilder.GetAggregateMessage(entity.Notifications.UsedTelegram.MessagesDelaySec);
 
-                                SendMessage(chat.ChatId, message);
+                                    SendMessage(chat.ChatId, message);
+                                }
                             }
-                    }
+                            catch (Exception ex)
+                            {
+                                _logger.Error($"Error getting message: {entity.Name}, {chat.Chat.Name} - {ex}");
+                            }
+                        }
 
                     if (_tokenSource.IsCancellationRequested)
                         break;

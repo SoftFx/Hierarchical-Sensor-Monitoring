@@ -56,7 +56,7 @@ namespace HSMServer.Core.Model
             DisplayName = entity.DisplayName;
             Description = entity.Description;
 
-            if (entity.Settings != null)
+            if (entity.Settings is not null)
                 Settings.SetSettings(entity.Settings);
         }
 
@@ -64,7 +64,7 @@ namespace HSMServer.Core.Model
         internal abstract bool CheckTimeout();
 
 
-        protected internal BaseNodeModel AddParent(ProductModel parent)
+        internal virtual BaseNodeModel AddParent(ProductModel parent)
         {
             Parent = parent;
 
@@ -82,6 +82,12 @@ namespace HSMServer.Core.Model
 
             if (Settings.TTL.TrySetValue(update.TTL))
                 CheckTimeout();
+
+            if (update.TTLPolicy is not null)
+            {
+                Policies.TimeToLive?.Update(update.TTLPolicy);
+                CheckTimeout();
+            }
         }
     }
 }

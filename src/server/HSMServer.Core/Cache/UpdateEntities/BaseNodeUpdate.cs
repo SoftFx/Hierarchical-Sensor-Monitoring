@@ -12,10 +12,11 @@ namespace HSMServer.Core.Cache.UpdateEntities
 
         public TimeIntervalModel KeepHistory { get; init; }
 
-        public TimeIntervalModel RestoreInterval { get; init; }
-
         public TimeIntervalModel SelfDestroy { get; init; }
 
         public string Description { get; init; }
+
+
+        public PolicyUpdate TTLPolicy { get; init; }
     }
 }

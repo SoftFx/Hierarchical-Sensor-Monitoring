@@ -36,17 +36,20 @@
 
 <div id="meta_info_@Model.EncodedId">
     <div class="d-flex justify-content-between flex-grow-1">
-        <div class='d-flex justify-content-start'>
+        <div class='d-flex justify-content-start align-items-center'>
             @if (Model is FolderInfoViewModel)
             {
-                <i class="fa-regular fa-folder my-1 align-self-center sensor-icon-with-margin"></i>
+                <i class="fa-regular fa-folder my-1 sensor-icon-with-margin"></i>
             }
             else
             {
-                <span id='status_@Model.EncodedId' class='@Model.Status.ToIcon() my-1 align-self-center sensor-icon-with-margin' title='Status: @Model.Status'></span>
+                <i id='status_@Model.EncodedId' class='@Model.Status.ToIcon() my-1 sensor-icon-with-margin' title='Status: @Model.Status'></i>
+                <span id="alertIcons_@Model.EncodedId" class="me-1">
+                    @await Html.PartialAsync("~/Views/Home/Alerts/_AlertIconsList.cshtml", Model.AlertIcons)
+                </span>
             }
 
-            <h5 id="nodeHeader" class="d-flex my-1 align-self-top">@Html.Raw(Model.Header)</h5>
+            <h5 id="nodeHeader" class="d-flex my-1">@Html.Raw(Model.Header)</h5>
         </div>
 
         <div id='update_@Model.EncodedId' class='d-flex my-1 time-ago-div'>updated @Model.LastUpdateTime.GetTimeAgo()</div>
@@ -147,19 +150,20 @@
         $("[id^='dataAlertsList_']").each(function () {
             const type = this.id.substring("dataAlertsList_".length, this.id.length);
 
-            setFormDataAlertsProperty(formData, "input", type, "Id");
-            setFormDataAlerts(formData, type);
+            setFormDataAlertsProperty(formData, "input", type, $(this), "Id");
+            setFormDataAlertsProperty(formData, "input", type, $(this), "EntityId");
+            setFormDataAlerts(formData, type, $(this));
         });
     }
 
-    function setFormDataAlertsProperty(formData, element, type, propertyName) {
-        $(`${element}[name='${propertyName}']`).each(function (i) {
+    function setFormDataAlertsProperty(formData, element, type, alertsList, propertyName) {
+        alertsList.find(`${element}[name='${propertyName}']`).each(function (i) {
             formData.append(`DataAlerts[${type}][${i}].${propertyName}`, $(this).val());
         });
     }
 
-    function setFormDataAlerts(formData, type) {
-        $(`div.dataAlertRow`).each(function (i) {
+    function setFormDataAlerts(formData, type, alertsList) {
+        alertsList.find(`div.dataAlertRow`).each(function (i) {
             $(this).find(`div[name='alertCondition']`).each(function (j) {
                 setFormDataAlertsListProperty(formData, type, i, j, $(this), "Conditions", "select", "Property");
 
@@ -169,16 +173,21 @@
                     setFormDataAlertsListProperty(formData, type, i, j, valueBlock, "Conditions", "input", "Target");
                 }
 
+                let statusBlock = $(this).find('div[name="statusCondition"]');
+                if (statusBlock.hasClass('d-flex')) {
+                    setFormDataAlertsListProperty(formData, type, i, j, statusBlock, "Conditions", "select", "Operation");
+                }
+
                 let sensitivityBlock = $(this).find('div[name="sensitivityCondition"]');
                 if (sensitivityBlock.hasClass('d-flex')) {
                     setFormDataAlertsConditionIntervals(formData, type, i, j, sensitivityBlock, "Sensitivity", "select", "Interval");
-                    setFormDataAlertsConditionIntervals(formData, type, i, j, sensitivityBlock, "Sensitivity", "input", "CustomTimeInterval");
+                    setFormDataAlertsConditionIntervals(formData, type, i, j, sensitivityBlock, "Sensitivity", "input", "CustomString");
                 }
 
                 let ttlBlock = $(this).find('div[name="ttlCondition"]');
                 if (ttlBlock.hasClass('d-flex')) {
                     setFormDataAlertsConditionIntervals(formData, type, i, j, ttlBlock, "TimeToLive", "select", "Interval");
-                    setFormDataAlertsConditionIntervals(formData, type, i, j, ttlBlock, "TimeToLive", "input", "CustomTimeInterval");
+                    setFormDataAlertsConditionIntervals(formData, type, i, j, ttlBlock, "TimeToLive", "input", "CustomString");
                 }
             });
 
