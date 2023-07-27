@@ -85,29 +85,12 @@ else
         }
 
         journalTable = $('[id^="journal_table_"]').DataTable({
-            bAutoWidth: false,
-            pageLength: 50,
-            lengthMenu: [25, 50, 100, 300 ],
             columns: [
                 { "name": DataTableColumnsNames.Date , "width": "10%" },
                 { "name": DataTableColumnsNames.Path , "width": "20%" },
                 { "name": DataTableColumnsNames.Initiator , "width": "5%" },
                 { "name": DataTableColumnsNames.Record , "width": "55%" }
-            ],
-            processing: true,
-            serverSide: true,
-            order: [[0, 'desc']],
-            ajax: {
-                type: "POST",
-                contentType: "application/json; charset=utf-8",
-                url: getJournalPage,
-                data: function (d) {
-                     return JSON.stringify(d);
-                },
-                complete: function (response){
-                    showNoData(response)
-                }
-            }
+            ], ...journalTemplate
         });
     }
 </script>
