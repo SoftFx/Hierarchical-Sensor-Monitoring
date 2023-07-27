@@ -18,7 +18,7 @@ namespace HSMServer.Notifications.Telegram.AddressBook.MessageBuilder
 
         internal GroupedNotification(AlertResult alert)
         {
-            _baseState = alert.LastState;
+            _baseState = alert.LastState with { };
             _baseAlert = alert;
         }
 
