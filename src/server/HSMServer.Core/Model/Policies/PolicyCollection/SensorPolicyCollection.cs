@@ -6,7 +6,6 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
-using System.Xml.Linq;
 
 namespace HSMServer.Core.Model.Policies
 {
@@ -143,7 +142,7 @@ namespace HSMServer.Core.Model.Policies
                     var oldPolicy = policy.ToString();
 
                     policy.Update(update);
-
+                    
                     CallJournal(oldPolicy, policy.ToString(), initiator);
 
                     Uploaded?.Invoke(ActionType.Update, policy);
@@ -210,7 +209,11 @@ namespace HSMServer.Core.Model.Policies
             Uploaded?.Invoke(ActionType.Add, policy);
         }
 
-        private void CallJournal(string oldValue, string newValue, string initiator) => 
+        private void CallJournal(string oldValue, string newValue, string initiator)
+        {
+            if (oldValue == newValue)
+                return;
+            
             CallJournal(new JournalRecordModel(_sensor.Id, initiator)
             {
                 Enviroment = "Alerts update",
@@ -218,5 +221,6 @@ namespace HSMServer.Core.Model.Policies
                 NewValue = newValue,
                 Path = _sensor.FullPath,
             });
+        }
     }
 }

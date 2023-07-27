@@ -35,16 +35,21 @@ public sealed class JournalRecordViewModel
     {
         Type = model.Key.Type;
         TimeAsString = new DateTime(model.Key.Time).ToDefaultFormat();
-        Value = BuildValue(model);
+        Value = BuildViewValue(model);
         Initiator = model.Initiator;
         Path = model.Path;
     }
 
 
-    private string BuildValue(JournalRecordModel model)
+    private string BuildViewValue(JournalRecordModel model)
     {
+        var header = (string.IsNullOrEmpty(model.PropertyName) ? model.Enviroment : model.PropertyName);
+
+        if (string.IsNullOrEmpty(model.OldValue) && string.IsNullOrEmpty(model.NewValue))
+            return $"{header}";
+
         return $"""
-            {(string.IsNullOrEmpty(model.PropertyName) ? model.Enviroment : model.PropertyName)}
+            {header}
             Old value: {model.OldValue}
             <strong>New value: {model.NewValue}</strong>
         """;
