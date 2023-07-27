@@ -5,6 +5,7 @@ namespace HSMServer.Notifications.Telegram.AddressBook.MessageBuilder
 {
     internal sealed class GroupedNotification
     {
+        private const string FullCompare = "<Full equals>";
         private const int MaxGroupedItemsCount = 10;
 
         private readonly ConcurrentQueue<string> _groupedItems = new();
@@ -29,19 +30,27 @@ namespace HSMServer.Notifications.Telegram.AddressBook.MessageBuilder
                 return false;
 
             var apply = _baseState.HasLessThanTwoDiff(alert, out var diffName);
+            var isEmptyDiff = string.IsNullOrEmpty(diffName);
 
-            apply &= string.IsNullOrEmpty(_groupDiffPropertyName) || diffName == _groupDiffPropertyName;
+            if (isEmptyDiff && _totalGroupedItems == 1)
+                _groupDiffPropertyName = FullCompare;
+
+            apply &= (isEmptyDiff && _groupDiffPropertyName is FullCompare)
+                     || diffName == _groupDiffPropertyName;
 
             if (apply)
             {
-                if (_groupedItems.IsEmpty)
-                    _groupedItems.Enqueue(_baseState[diffName]);
-
-                if (_groupedItems.Count < MaxGroupedItemsCount)
-                    _groupedItems.Enqueue(alert[diffName]);
-
                 _groupDiffPropertyName = diffName;
                 _totalGroupedItems++;
+
+                if (!isEmptyDiff)
+                {
+                    if (_groupedItems.IsEmpty)
+                        _groupedItems.Enqueue(_baseState[diffName]);
+
+                    if (_groupedItems.Count < MaxGroupedItemsCount)
+                        _groupedItems.Enqueue(alert[diffName]);
+                }
             }
 
             return apply;
@@ -51,7 +60,7 @@ namespace HSMServer.Notifications.Telegram.AddressBook.MessageBuilder
         public override string ToString()
         {
             if (_groupedItems.IsEmpty)
-                return _baseAlert.ToString();
+                return _baseAlert.BuildFullComment(_baseAlert.LastComment, _totalGroupedItems - 1); //remove main as extra
             else
             {
                 var hiddenItemsCnt = _totalGroupedItems - _groupedItems.Count;
