@@ -9,15 +9,15 @@ namespace HSMServer.Core.Extensions
 {
     public static class SensorValueExtensions
     {
-        private static readonly JsonSerializerOptions _options = new () { NumberHandling = JsonNumberHandling.AllowNamedFloatingPointLiterals };
+        private static readonly JsonSerializerOptions _options = new () 
+        { 
+            NumberHandling = JsonNumberHandling.AllowNamedFloatingPointLiterals 
+        };
         
         
         public static BaseValue ToValue<T>(this byte[] bytes) where T : BaseValue
         {
-            if (bytes == null)
-                return null;
-
-            return JsonSerializer.Deserialize<T>(bytes, _options);
+            return bytes == null ? null : (BaseValue)JsonSerializer.Deserialize<T>(bytes, _options);
         }
 
 
