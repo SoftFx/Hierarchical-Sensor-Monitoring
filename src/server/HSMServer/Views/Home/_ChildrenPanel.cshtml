@@ -74,23 +74,23 @@ else
 
 <script>
     $(document).ready(function () {
-        journalTable = undefined;
+        JournalTable = undefined;
     });
 
     function initializeJournal()
     {
-        if (journalTable) {
-            journalTable.ajax.reload();
+        if (JournalTable) {
+            JournalTable.ajax.reload();
             return;
         }
 
-        journalTable = $('[id^="journal_table_"]').DataTable({
+        JournalTable = $('[id^="journal_table_"]').DataTable({
             columns: [
                 { "name": DataTableColumnsNames.Date , "width": "10%" },
                 { "name": DataTableColumnsNames.Path , "width": "20%" },
                 { "name": DataTableColumnsNames.Initiator , "width": "5%" },
                 { "name": DataTableColumnsNames.Record , "width": "55%" }
-            ], ...journalTemplate
+            ], ...JournalTemplate
         });
     }
 </script>

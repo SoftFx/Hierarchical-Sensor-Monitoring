@@ -285,21 +285,21 @@
             setContentPreview('@Model.EncodedId');
         }
         
-        journalTable = undefined;
+        JournalTable = undefined;
     });
 
     function initializeJournal() {
-        if (journalTable) {
-            journalTable.ajax.reload();
+        if (JournalTable) {
+            JournalTable.ajax.reload();
             return;
         }
 
-        journalTable = $('[id^="journal_table_"]').DataTable({
+        JournalTable = $('[id^="journal_table_"]').DataTable({
             columns: [
                 { "name": DataTableColumnsNames.Date , "width": "10%" },
                 { "name": DataTableColumnsNames.Initiator , "width": "10%" },
                 { "name": DataTableColumnsNames.Record , "width": "85%" }
-            ], ...journalTemplate
+            ], ...JournalTemplate
         });
     }
 

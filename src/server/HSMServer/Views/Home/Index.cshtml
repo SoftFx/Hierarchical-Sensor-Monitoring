@@ -56,27 +56,6 @@
     var getGrid = `@Url.Action(nameof(HomeController.GetGrid))`;
     var getList = `@Url.Action(nameof(HomeController.GetList))`;
     
-    var DataTableColumnsNames = { Date: "Date", Path: "Path", Initiator: "Initiator", Type: "Type", Record: "Record"};
-    var journalTable;
-    const journalTemplate = {
-        bAutoWidth: false,
-        pageLength: 50,
-        lengthMenu: [25, 50, 100, 300 ],
-        processing: true,
-        serverSide: true,
-        order: [[0, 'desc']],
-        ajax: {
-            type: "POST",
-            contentType: "application/json; charset=utf-8",
-            url: getJournalPage,
-            data: function (d) {
-                return JSON.stringify(d);
-            },
-            complete: function (response){
-                showNoData(response)
-            }
-        }
-    }
 </script>
 
 

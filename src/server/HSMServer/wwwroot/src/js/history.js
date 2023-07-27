@@ -344,4 +344,34 @@ function Data(to, from, type, encodedId) {
            $('#noDataJournalPanel').removeClass('d-none');
        }
    }
+   
+   window.JournalTable = undefined;
+   
+   window.DataTableColumnsNames = {
+       Date: "Date", 
+       Path: "Path",
+       Initiator: "Initiator",
+       Type: "Type",
+       Record: "Record"
+   };
+   
+   window.JournalTemplate = {
+        bAutoWidth: false,
+        pageLength: 50,
+        lengthMenu: [25, 50, 100, 300 ],
+        processing: true,
+        serverSide: true,
+        order: [[0, 'desc']],
+        ajax: {
+            type: "POST",
+            contentType: "application/json; charset=utf-8",
+            url: 'Journal/GetPage',
+            data: function (d) {
+                return JSON.stringify(d);
+            },
+            complete: function (response){
+                showNoData(response)
+            }
+        }
+    }
 }
