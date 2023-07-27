@@ -33,7 +33,7 @@
 
         internal Endpoints(CollectorOptions options)
         {
-            ConnectionAddress = $"{options.ServerAddress}:{options.Port}/api/sensors";
+            ConnectionAddress = $"{options.ServerUrl}:{options.Port}/api/sensors";
         }
     }
 }
