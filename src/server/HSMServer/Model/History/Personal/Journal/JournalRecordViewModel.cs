@@ -35,8 +35,18 @@ public sealed class JournalRecordViewModel
     {
         Type = model.Key.Type;
         TimeAsString = new DateTime(model.Key.Time).ToDefaultFormat();
-        Value = $"{model.PropertyName}: {model.OldValue} -> {model.NewValue}";
+        Value = BuildValue(model);
         Initiator = model.Initiator;
         Path = model.Path;
+    }
+
+
+    private string BuildValue(JournalRecordModel model)
+    {
+        return $"""
+            {(string.IsNullOrEmpty(model.PropertyName) ? model.Enviroment : model.PropertyName)}
+            Old value: {model.OldValue}
+            <strong>New value: {model.NewValue}</strong>
+        """;
     }
 }
