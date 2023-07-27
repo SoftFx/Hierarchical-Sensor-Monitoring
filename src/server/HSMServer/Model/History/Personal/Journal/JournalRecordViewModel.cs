@@ -49,7 +49,7 @@ public sealed class JournalRecordViewModel
             return (model.Enviroment, $"{model.Enviroment} {model.Initiator}");
 
         return ($"""
-            {model.PropertyName}
+            {model.PropertyName} was modified
             Old value: {model.OldValue}
             <strong>New value: {model.NewValue}</strong>
         """, $"{model.PropertyName} {model.OldValue} {model.NewValue} {model.Initiator}");
