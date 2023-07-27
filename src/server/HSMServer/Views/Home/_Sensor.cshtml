@@ -278,7 +278,7 @@
         }
     });
     
-    $('[id^="link_journal_"]').off('click').on('click', () => initializeJournal())
+    $('[id^="link_journal_"]').off('click').on('click', () => initializeJournal(NodeType.Sensor))
 
     $(document).ready(function () {
         if ('@(Model.Type is SensorType.File)' === 'True') {
@@ -287,21 +287,6 @@
         
         JournalTable = undefined;
     });
-
-    function initializeJournal() {
-        if (JournalTable) {
-            JournalTable.ajax.reload();
-            return;
-        }
-
-        JournalTable = $('[id^="journal_table_"]').DataTable({
-            columns: [
-                { "name": DataTableColumnsNames.Date , "width": "10%" },
-                { "name": DataTableColumnsNames.Initiator , "width": "10%" },
-                { "name": DataTableColumnsNames.Record , "width": "85%" }
-            ], ...JournalTemplate
-        });
-    }
 
     function setContentPreview(encodedId) {
         $.ajax({

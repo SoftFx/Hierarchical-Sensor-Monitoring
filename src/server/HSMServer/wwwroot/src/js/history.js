@@ -334,28 +334,28 @@ function Data(to, from, type, encodedId) {
 
 //Journal
 {
-   window.showNoData = function (data) {
-       if (data.responseJSON.recordsTotal === 0) {
-           $('#noDataPanel').removeClass('d-none');
-           $('#noDataJournalPanel').addClass('d-none');
-       }
-       else {
-           $('#noDataPanel').addClass('d-none');
-           $('#noDataJournalPanel').removeClass('d-none');
-       }
-   }
+    window.showNoData = function (data) {
+        if (data.responseJSON.recordsTotal === 0) {
+            $('#noDataPanel').removeClass('d-none');
+            $('#noDataJournalPanel').addClass('d-none');
+        }
+        else {
+            $('#noDataPanel').addClass('d-none');
+            $('#noDataJournalPanel').removeClass('d-none');
+        }
+    }
    
-   window.JournalTable = undefined;
+    window.JournalTable = undefined;
    
-   window.DataTableColumnsNames = {
-       Date: "Date", 
-       Path: "Path",
-       Initiator: "Initiator",
-       Type: "Type",
-       Record: "Record"
-   };
+    window.DataTableColumnsNames = {
+        Date: "Date", 
+        Path: "Path",
+        Initiator: "Initiator",
+        Type: "Type",
+        Record: "Record"
+    };
    
-   window.JournalTemplate = {
+    window.JournalTemplate = {
         bAutoWidth: false,
         pageLength: 50,
         lengthMenu: [25, 50, 100, 300 ],
@@ -373,5 +373,30 @@ function Data(to, from, type, encodedId) {
                 showNoData(response)
             }
         }
+    }
+    
+    let nodeColumns = [
+        { "name": DataTableColumnsNames.Date , "width": "10%" },
+        { "name": DataTableColumnsNames.Path , "width": "20%" },
+        { "name": DataTableColumnsNames.Initiator , "width": "5%" },
+        { "name": DataTableColumnsNames.Record , "width": "55%" }
+    ]
+    
+    let sensorColumns = [
+        { "name": DataTableColumnsNames.Date , "width": "10%" },
+        { "name": DataTableColumnsNames.Initiator , "width": "10%" },
+        { "name": DataTableColumnsNames.Record , "width": "85%" }
+    ]
+    
+    window.initializeJournal = function(type) {
+        if (JournalTable) {
+             JournalTable.ajax.reload();
+             return;
+        }
+
+        JournalTable = $('[id^="journal_table_"]').DataTable({
+            columns: type === NodeType.Node ? nodeColumns : sensorColumns,
+            ...JournalTemplate
+        });
     }
 }

@@ -44,7 +44,7 @@ else
             <a id="listLink_@nodeId" class='nav-link' data-bs-toggle='tab' onclick="getListPage(`listSensors`);getListPage(`listNodes`)" href='#@listDivId' role="tab"><i class="fa-solid fa-list"></i> List</a>
         </li>
         <li class="nav-item">
-            <a id="journalLink_@nodeId" class='nav-link' data-bs-toggle='tab' onclick="initializeJournal();" href='#@journalDivId' role="tab"><i class="fa-solid fa-list"></i> Journal</a>
+            <a id="journalLink_@nodeId" class='nav-link' data-bs-toggle='tab' onclick="initializeJournal(NodeType.Node);" href='#@journalDivId' role="tab"><i class="fa-solid fa-list"></i> Journal</a>
         </li>
     </ul>
     <div class='tab-content'>
@@ -76,21 +76,4 @@ else
     $(document).ready(function () {
         JournalTable = undefined;
     });
-
-    function initializeJournal()
-    {
-        if (JournalTable) {
-            JournalTable.ajax.reload();
-            return;
-        }
-
-        JournalTable = $('[id^="journal_table_"]').DataTable({
-            columns: [
-                { "name": DataTableColumnsNames.Date , "width": "10%" },
-                { "name": DataTableColumnsNames.Path , "width": "20%" },
-                { "name": DataTableColumnsNames.Initiator , "width": "5%" },
-                { "name": DataTableColumnsNames.Record , "width": "55%" }
-            ], ...JournalTemplate
-        });
-    }
 </script>
