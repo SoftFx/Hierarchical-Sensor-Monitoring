@@ -7,7 +7,7 @@ namespace HSMServer.Core.Model
 {
     public readonly struct PolicyResult : IEnumerable<AlertResult>
     {
-        internal static PolicyResult Ok { get; } = new();
+        internal static PolicyResult Ok => new();
 
 
         public Dictionary<Guid, AlertResult> Alerts { get; }
@@ -34,6 +34,14 @@ namespace HSMServer.Core.Model
         }
 
 
+        internal void AddSingleAlert(Policy policy)
+        {
+            var key = policy.Id;
+
+            if (!Alerts.ContainsKey(key))
+                Alerts.Add(key, new AlertResult(policy));
+        }
+
         internal void AddAlert(Policy policy)
         {
             var key = policy.Id;
@@ -43,6 +51,8 @@ namespace HSMServer.Core.Model
             else
                 Alerts.Add(key, new AlertResult(policy));
         }
+
+        internal void RemoveAlert(Policy policy) => Alerts.Remove(policy.Id, out var _);
 
 
         public IEnumerator<AlertResult> GetEnumerator() => Alerts.Values.GetEnumerator();
