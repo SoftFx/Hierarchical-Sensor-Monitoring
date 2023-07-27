@@ -262,7 +262,7 @@ namespace HSMServer.Controllers
                     var update = new ProductUpdate
                     {
                         Id = product.Id,
-                        TTL = expectedUpdate ? model.ExpectedUpdateInterval?.ToModel() : null
+                        TTL = expectedUpdate ? model.ExpectedUpdateInterval?.ToModel(product.TTL) : null
                     };
 
                     if (!expectedUpdate)
@@ -580,7 +580,7 @@ namespace HSMServer.Controllers
                 entity = sensor;
             if (_treeViewModel.Nodes.TryGetValue(sensorId, out var node))
                 entity = node;
-            
+
             DataAlertViewModelBase viewModel = type switch
             {
                 (byte)SensorType.File => new DataAlertViewModel<FileValue>(sensorId),
@@ -632,7 +632,7 @@ namespace HSMServer.Controllers
                 return _emptyResult;
 
             var sensorModel = _treeValuesCache.GetSensor(alert.EntityId);
-            
+
             return Json(alert.BuildToastMessage(sensorModel));
         }
 
@@ -707,10 +707,10 @@ namespace HSMServer.Controllers
             var update = new ProductUpdate
             {
                 Id = product.Id,
-                TTL = ttl?.Conditions[0].TimeToLive.ToModel() ?? new TimeIntervalModel(Core.Model.TimeInterval.None),
+                TTL = ttl?.Conditions[0].TimeToLive.ToModel(product.TTL) ?? TimeIntervalModel.None,
                 TTLPolicy = ttl?.ToTimeToLiveUpdate(),
-                KeepHistory = newModel.SavedHistoryPeriod.ToModel(),
-                SelfDestroy = newModel.SelfDestroyPeriod.ToModel(),
+                KeepHistory = newModel.SavedHistoryPeriod.ToModel(product.KeepHistory),
+                SelfDestroy = newModel.SelfDestroyPeriod.ToModel(product.SelfDestroy),
                 Description = newModel.Description ?? string.Empty
             };
 
