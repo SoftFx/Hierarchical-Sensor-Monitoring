@@ -16,6 +16,7 @@ using NLog.Extensions.Logging;
 using NLog.LayoutRenderers;
 using NLog.Web;
 using System;
+using System.Text.Json.Serialization;
 
 const string NLogConfigFileName = "nlog.config";
 
@@ -42,9 +43,9 @@ builder.Logging.ClearProviders()
 builder.Host.UseNLog()
             .UseConsoleLifetime();
 
+
 builder.Services.AddOptions<CookieAuthenticationOptions>(CookieAuthenticationDefaults.AuthenticationScheme)
-                .Configure<IUserManager>(
-                (options, context) =>
+                .Configure<IUserManager>((options, context) =>
                 {
                     options.LoginPath = new PathString("/Account/Index");
                     options.Events = new MyCookieAuthenticationEvents(context);
@@ -59,7 +60,11 @@ builder.Services.AddHsts(options =>
     options.IncludeSubDomains = true;
 });
 
-builder.Services.AddMvc();
+builder.Services.AddMvc()
+                .AddJsonOptions(options =>
+                {
+                    options.JsonSerializerOptions.NumberHandling = JsonNumberHandling.AllowReadingFromString | JsonNumberHandling.AllowNamedFloatingPointLiterals;
+                });
 
 builder.Services.AddFluentValidationAutoValidation()
                 .AddFluentValidationClientsideAdapters();
