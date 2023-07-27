@@ -110,7 +110,7 @@ public sealed class SelectedJournalViewModel : ConcurrentDictionary<Guid, Concur
 
     private List<JournalRecordViewModel> GetFilteredList(string search)
     {
-        bool Filter(JournalRecordViewModel record) => record.Value.Contains(search, StringComparison.OrdinalIgnoreCase);
+        bool Filter(JournalRecordViewModel record) => record.SearchValue.Contains(search, StringComparison.OrdinalIgnoreCase);
         bool EmptyFilter(JournalRecordViewModel _) => true;
 
         Func<JournalRecordViewModel, bool> filter = string.IsNullOrEmpty(search) ? EmptyFilter : Filter;

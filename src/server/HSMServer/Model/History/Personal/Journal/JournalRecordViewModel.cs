@@ -27,31 +27,33 @@ public sealed class JournalRecordViewModel
     public string TimeAsString { get; set; }
 
     public string Value { get; set; }
+    
+    public string SearchValue { get; set; }
 
     public string Path { get; set; }
 
 
     public JournalRecordViewModel(JournalRecordModel model)
     {
+        (Value, SearchValue) = BuildSearchAndViewValue(model);
         Type = model.Key.Type;
         TimeAsString = new DateTime(model.Key.Time).ToDefaultFormat();
-        Value = BuildViewValue(model);
         Initiator = model.Initiator;
         Path = model.Path;
     }
 
 
-    private string BuildViewValue(JournalRecordModel model)
+    private static (string ViewValue, string SearchValue) BuildSearchAndViewValue(JournalRecordModel model)
     {
-        var header = (string.IsNullOrEmpty(model.PropertyName) ? model.Enviroment : model.PropertyName);
+        var header = string.IsNullOrEmpty(model.PropertyName) ? model.Enviroment : model.PropertyName;
 
         if (string.IsNullOrEmpty(model.OldValue) && string.IsNullOrEmpty(model.NewValue))
-            return $"{header}";
+            return (header, $"{header}{model.Initiator}");
 
-        return $"""
+        return ($"""
             {header}
             Old value: {model.OldValue}
             <strong>New value: {model.NewValue}</strong>
-        """;
+        """, $"{header}{model.OldValue}{model.NewValue}{model.Initiator}");
     }
 }
