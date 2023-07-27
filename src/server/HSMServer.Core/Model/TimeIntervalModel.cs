@@ -67,8 +67,9 @@ namespace HSMServer.Core.Model
         }
 
 
-        internal bool TimeIsUp(DateTime time) => UseTicks ? (DateTime.UtcNow - time).Ticks > Ticks
-                                                           : DateTime.UtcNow > GetShiftedTime(time);
+        internal bool TimeIsUp(DateTime time) =>
+            UseTicks ? Ticks > 0 && (DateTime.UtcNow - time).Ticks > Ticks
+                     : DateTime.UtcNow > GetShiftedTime(time);
 
         public DateTime GetShiftedTime(DateTime time, int coef = 1) => Interval switch
         {
