@@ -21,7 +21,6 @@ using System.Net.Mime;
 using System.Text;
 using System.Text.Json;
 using System.Threading.Tasks;
-using HSMServer.Middleware.ActionFilters;
 using SensorType = HSMSensorDataObjects.SensorType;
 
 namespace HSMServer.Controllers
@@ -120,7 +119,6 @@ namespace HSMServer.Controllers
         /// <param name="sensorValue"></param>
         /// <returns></returns>
         [HttpPost("double")]
-        //[FloatingLiterals]
         [Consumes(MediaTypeNames.Application.Json)]
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
@@ -236,7 +234,6 @@ namespace HSMServer.Controllers
         /// <param name="sensorValue"></param>
         /// <returns></returns>
         [HttpPost("doubleBar")]
-        //[FloatingLiterals]
         [Consumes(MediaTypeNames.Application.Json)]
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]

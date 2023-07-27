@@ -91,10 +91,10 @@ namespace HSMServer.Controllers
 
             if (localValue is not null && (values.Count == 0 || values[0].Time != localValue.Time))
                 values.Add(localValue);
-            
-            var processorObject = HistoryProcessorFactory.BuildProcessor(model.Type).ProcessingAndCompression(values, model.BarsCount).Select(v => (object)v);
 
-            return new JsonResult(processorObject, _serializerOptions);
+            return new JsonResult(HistoryProcessorFactory.BuildProcessor(model.Type)
+                                                         .ProcessingAndCompression(values, model.BarsCount)
+                                                         .Select(v => (object)v));
         }
 
 
