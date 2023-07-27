@@ -162,7 +162,7 @@ namespace HSMServer.Core.Model.Policies
                 {
                     var policy = new PolicyType();
 
-                    policy.Update(update);
+                    policy.Update(update, _sensor);
 
                     AddPolicy(policy);
                     CallJournal(string.Empty, policy.ToString(), initiator);
@@ -204,8 +204,7 @@ namespace HSMServer.Core.Model.Policies
                 $"$status [$product]$path = $comment",
                 null);
 
-            policy._sensor = _sensor;
-            policy.Update(statusUpdate);
+            policy.Update(statusUpdate, _sensor);
 
             AddPolicy(policy);
             Uploaded?.Invoke(ActionType.Add, policy);

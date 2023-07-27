@@ -3,7 +3,7 @@ using System.Text;
 
 namespace HSMServer.Core.Model.Policies
 {
-    public sealed class AlertResult
+    public sealed record AlertResult
     {
         public string Icon { get; }
 

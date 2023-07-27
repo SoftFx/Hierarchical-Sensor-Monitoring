@@ -58,6 +58,8 @@ namespace HSMServer.Model.DataAlerts
         protected abstract List<PolicyOperation> Operations { get; }
 
 
+        public bool IsMain { get; }
+
         public List<SelectListItem> PropertiesItems { get; }
 
         public List<SelectListItem> OperationsItems { get; }
@@ -67,6 +69,8 @@ namespace HSMServer.Model.DataAlerts
 
         public ConditionViewModel(bool isMain)
         {
+            IsMain = isMain;
+
             Sensitivity = new TimeIntervalViewModel(PredefinedIntervals.ForRestore) { IsAlertBlock = true };
             TimeToLive = new TimeIntervalViewModel(PredefinedIntervals.ForTimeout) { IsAlertBlock = true };
 
@@ -74,8 +78,8 @@ namespace HSMServer.Model.DataAlerts
             OperationsItems = Operations?.ToSelectedItems(k => k.GetDisplayName());
             PropertiesItems = Properties.ToSelectedItems(k => k.GetDisplayName());
 
-            if (!isMain)
-                PropertiesItems.Add(new SelectListItem(AlertProperty.Sensitivity.GetDisplayName(), nameof(AlertProperty.Sensitivity)));
+            //if (!isMain)
+            //    PropertiesItems.Add(new SelectListItem(AlertProperty.Sensitivity.GetDisplayName(), nameof(AlertProperty.Sensitivity)));
 
             Property = Enum.Parse<AlertProperty>(PropertiesItems.FirstOrDefault()?.Value);
         }

@@ -83,7 +83,7 @@
             <param name="sensorValue"></param>
             <returns></returns>
         </member>
-        <member name="M:HSMServer.Controllers.SensorsController.Post(HSMSensorDataObjects.SensorValueRequests.VersionSensorValue)">
+        <member name="M:HSMServer.Controllers.SensorsController.Post(HSMServer.ApiObjectsConverters.VersionSensor)">
             <summary>
             Receives value of version sensor
             </summary>

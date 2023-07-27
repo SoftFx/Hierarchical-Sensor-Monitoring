@@ -58,7 +58,9 @@ namespace HSMServer.Model.TreeViewModel
                 ValidationError = GetMutedErrorTooltip(model.EndOfMuting);
             else if (model.Status?.HasError ?? false)
                 ValidationError = model.Status?.Message;
-
+            else 
+                ValidationError = string.Empty;
+            
             LastValue = model.LastValue;
             HasData = model.HasData;
             ShortStringValue = model.LastValue?.ShortInfo;
