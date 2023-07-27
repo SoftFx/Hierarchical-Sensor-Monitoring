@@ -109,7 +109,7 @@ namespace HSMServer.Core.Model.Policies
                     var curValue = prop.GetValue(this, null);
                     var otherValue = prop.GetValue(other, null);
 
-                    if (curValue == otherValue || (!curValue?.Equals(otherValue) ?? false))
+                    if (curValue != otherValue || (!curValue?.Equals(otherValue) ?? false)) //protection for null & null
                     {
                         diffProp = prop.Name;
                         hasDiff = !hasDiff; // true -> false mean find 2 diff
