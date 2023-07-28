@@ -1,4 +1,6 @@
-﻿using HSMServer.Authentication;
+﻿using System.Text.Json;
+using System.Text.Json.Serialization;
+using HSMServer.Authentication;
 using HSMServer.Model.Authentication;
 using Microsoft.AspNetCore.Mvc;
 
@@ -8,6 +10,11 @@ namespace HSMServer.Controllers
     {
         protected static readonly JsonResult _emptyJsonResult = new(new EmptyResult());
         protected static readonly EmptyResult _emptyResult = new();
+        protected static readonly JsonSerializerOptions _serializerOptions = new ()
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            NumberHandling = JsonNumberHandling.AllowNamedFloatingPointLiterals
+        };
 
         protected readonly IUserManager _userManager;
 
