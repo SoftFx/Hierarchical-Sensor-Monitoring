@@ -453,10 +453,9 @@ namespace HSMDataCollector.Core
         public IBarSensor<int> CreateIntBarSensor(string path, int timeout, int smallPeriod = 15000, string description = "")
         {
             var existingSensor = GetExistingSensor(path);
-            if (existingSensor is IBarSensor<int> intBarSensor)
+            if (existingSensor is IntBarSensorAdapter intBarSensor)
             {
-                //(intBarSensor as IntBarSensorAdapter)
-                return intBarSensor;
+                intBarSensor.Dispose();
             }
 
             IntBarSensorAdapter sensor = new IntBarSensorAdapter(path, _dataQueue as IValuesQueue,
@@ -495,11 +494,9 @@ namespace HSMDataCollector.Core
         public IBarSensor<double> CreateDoubleBarSensor(string path, int timeout, int smallPeriod, int precision, string description = "")
         {
             var existingSensor = GetExistingSensor(path);
-            if (existingSensor is IBarSensor<double> doubleBarSensor)
+            if (existingSensor is DoubleBarSensorAdapter doubleBarSensor)
             {
-                //(doubleBarSensor as BarSensorBase)?.Restart(timeout, smallPeriod);
-
-                return doubleBarSensor;
+                doubleBarSensor.Dispose();
             }
 
             DoubleBarSensorAdapter sensor = new DoubleBarSensorAdapter(path, _dataQueue as IValuesQueue, timeout, smallPeriod, description, precision);
