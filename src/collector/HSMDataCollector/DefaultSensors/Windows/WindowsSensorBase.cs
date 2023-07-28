@@ -4,7 +4,7 @@ using System.Threading.Tasks;
 
 namespace HSMDataCollector.DefaultSensors.Windows
 {
-    public abstract class WindowsSensorBase : BarMonitoringSensorBase<DoubleMonitoringBar, double>
+    public abstract class WindowsSensorBase : BarMonitoringSensorBase<DoubleMonitoringBar, double, double>
     {
         private readonly PerformanceCounter _performanceCounter;
 

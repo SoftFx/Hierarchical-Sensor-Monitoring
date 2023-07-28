@@ -6,9 +6,9 @@ using System.Threading.Tasks;
 
 namespace HSMDataCollector.DefaultSensors
 {
-    public abstract class BarMonitoringSensorBase<BarType, T> : MonitoringSensorBase<BarType>
-        where BarType : MonitoringBarBase<T>, new()
-        where T : struct
+    public abstract class BarMonitoringSensorBase<BarType, ValueType, BarValueType> : MonitoringSensorBase<BarType>
+        where BarType : MonitoringBarBase<ValueType, BarValueType>, new()
+        where BarValueType : struct
     {
         private readonly TimeSpan _barPeriod;
         private readonly TimeSpan _collectBarPeriod;
@@ -16,15 +16,17 @@ namespace HSMDataCollector.DefaultSensors
         private BarType _internalBar;
         private Timer _collectTimer;
 
+        private readonly int _precision;
+
 
         protected sealed override TimeSpan TimerDueTime => _receiveDataPeriod.GetTimerDueTime();
 
 
-        protected BarMonitoringSensorBase(BarSensorOptions options) : base(options)
+        protected BarMonitoringSensorBase(BarSensorOptions options, int precision = 2) : base(options)
         {
             _barPeriod = options.BarPeriod;
             _collectBarPeriod = options.CollectBarPeriod;
-
+            _precision = precision;
             BuildNewBar();
         }
 
@@ -49,7 +51,7 @@ namespace HSMDataCollector.DefaultSensors
         }
 
 
-        protected abstract T GetBarData();
+        protected abstract ValueType GetBarData();
 
         protected sealed override BarType GetValue() => _internalBar.Complete() as BarType;
 
@@ -81,7 +83,7 @@ namespace HSMDataCollector.DefaultSensors
         private void BuildNewBar()
         {
             _internalBar = new BarType();
-            _internalBar.Init(_barPeriod);
+            _internalBar.Init(_barPeriod, _precision);
         }
     }
 }

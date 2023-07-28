@@ -455,15 +455,15 @@ namespace HSMDataCollector.Core
             var existingSensor = GetExistingSensor(path);
             if (existingSensor is IBarSensor<int> intBarSensor)
             {
-                (intBarSensor as BarSensorBase)?.Restart(timeout, smallPeriod);
-
+                //(intBarSensor as IntBarSensorAdapter)
                 return intBarSensor;
             }
 
-            BarSensor<int> sensor = new BarSensor<int>(path, _dataQueue as IValuesQueue, SensorType.IntegerBarSensor,
+            IntBarSensorAdapter sensor = new IntBarSensorAdapter(path, _dataQueue as IValuesQueue,
                 timeout, smallPeriod, description);
             AddNewSensor(sensor, path);
-
+            if (!Status.IsStopped())
+                sensor.Start();
             return sensor;
         }
 
@@ -497,15 +497,15 @@ namespace HSMDataCollector.Core
             var existingSensor = GetExistingSensor(path);
             if (existingSensor is IBarSensor<double> doubleBarSensor)
             {
-                (doubleBarSensor as BarSensorBase)?.Restart(timeout, smallPeriod);
+                //(doubleBarSensor as BarSensorBase)?.Restart(timeout, smallPeriod);
 
                 return doubleBarSensor;
             }
 
-            BarSensor<double> sensor = new BarSensor<double>(path, _dataQueue as IValuesQueue,
-                SensorType.DoubleBarSensor, timeout, smallPeriod, precision, description);
+            DoubleBarSensorAdapter sensor = new DoubleBarSensorAdapter(path, _dataQueue as IValuesQueue, timeout, smallPeriod, description, precision);
             AddNewSensor(sensor, path);
-
+            if (!Status.IsStopped())
+                sensor.Start();
             return sensor;
         }
 
