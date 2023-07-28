@@ -163,6 +163,7 @@ namespace HSMDataCollector.Core
                         _dataQueue.PushFailValue(data);
                 else if (value is SensorValueBase single)
                     _dataQueue.PushFailValue(single);
+
             }
         }
     }
