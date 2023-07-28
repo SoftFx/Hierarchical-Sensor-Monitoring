@@ -1,6 +1,8 @@
-﻿using HSMDataCollector.Extensions;
+﻿using HSMDataCollector.DefaultSensors.MonitoringSensorBase.BarBuilder;
+using HSMDataCollector.Extensions;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.SensorValueRequests;
+using Newtonsoft.Json.Linq;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -8,23 +10,31 @@ using System.Linq;
 namespace HSMDataCollector.DefaultSensors
 {
     public abstract class MonitoringBarBase<T> : BarSensorValueBase<T>
+        where T : IComparable<T>
     {
         private readonly object _lock = new object();
+        private BarBuilder<T> _barBuilder;
 
-        protected readonly List<T> _barValues = new List<T>(1 << 6);
-
-
-        internal void Init(TimeSpan timerPeriod)
+        internal void Init(TimeSpan timerPeriod, int precision)
         {
             OpenTime = timerPeriod.GetOpenTime();
             CloseTime = OpenTime + timerPeriod;
+            _barBuilder = InitBarBuilder(precision);
         }
 
         internal void AddValue(T value)
         {
             lock (_lock)
             {
-                _barValues.Add(value);
+                _barBuilder.AddValue(value);
+            }
+        }
+
+        internal void AddValue(BarValue<T> barValue)
+        {
+            lock (_lock)
+            {
+                _barBuilder.AddValue(barValue);
             }
         }
 
@@ -32,63 +42,25 @@ namespace HSMDataCollector.DefaultSensors
         {
             lock (_lock)
             {
-                Count = _barValues.Count;
-
-                if (Count > 0)
-                {
-                    LastValue = Round(_barValues.LastOrDefault());
-
-                    _barValues.Sort();
-
-                    Min = Round(_barValues.First());
-                    Max = Round(_barValues.Last());
-                    Mean = Round(CountMean());
-
-                    AddPercentile(_barValues, 0.25);
-                    AddPercentile(_barValues, 0.5);
-                    AddPercentile(_barValues, 0.75);
-                }
-
+                _barBuilder.FillBarFields(this);
                 return this;
             }
         }
 
-        protected abstract T CountMean();
-
-        protected abstract T Round(T value);
-
-        private void AddPercentile(List<T> listValues, double percent)
-        {
-            var count = listValues.Count;
-            var index = count > 1 ? (int)Math.Floor(count * percent) : 0;
-            var percentile = count > 0 ? listValues[index] : default;
-
-            Percentiles[percent] = Round(percentile);
-        }
+        protected abstract BarBuilder<T> InitBarBuilder(int precision);
     }
-
 
     public sealed class IntMonitoringBar : MonitoringBarBase<int>
     {
         public override SensorType Type => SensorType.IntegerBarSensor;
 
-
-        protected override int CountMean() => _barValues.Sum() / Count;
-
-        protected override int Round(int value) => value;
+        protected override BarBuilder<int> InitBarBuilder(int precision) => new IntBarBuilder();
     }
-
 
     public sealed class DoubleMonitoringBar : MonitoringBarBase<double>
     {
-        private const int Precision = 2;
-
-
         public override SensorType Type => SensorType.DoubleBarSensor;
 
-
-        protected override double CountMean() => _barValues.Sum() / Count;
-
-        protected override double Round(double value) => Math.Round(value, Precision, MidpointRounding.AwayFromZero);
+        protected override BarBuilder<double> InitBarBuilder(int precision) => new DoubleBarBuider(precision);
     }
 }

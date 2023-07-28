@@ -152,7 +152,7 @@ namespace HSMDataCollector.Core
                 var res = await _client.PostAsync(uri, data, _tokenSource.Token);
 
                 if (!res.IsSuccessStatusCode)
-                    _logger.Error($"Failed to send data. StatusCode={res.StatusCode}");
+                    _logger.Error($"Failed to send data. Data={json}. StatusCode={res.StatusCode}");
             }
             catch (Exception ex)
             {
