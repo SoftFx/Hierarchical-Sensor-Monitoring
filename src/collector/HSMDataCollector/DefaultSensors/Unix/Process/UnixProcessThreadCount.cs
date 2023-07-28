@@ -1,5 +1,4 @@
-﻿using HSMDataCollector.Bar;
-using HSMDataCollector.Options;
+﻿using HSMDataCollector.Options;
 
 namespace HSMDataCollector.DefaultSensors.Unix
 {
