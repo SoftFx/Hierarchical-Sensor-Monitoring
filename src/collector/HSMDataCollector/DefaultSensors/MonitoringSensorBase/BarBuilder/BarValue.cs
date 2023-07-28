@@ -6,7 +6,7 @@ using System.Text;
 
 namespace HSMDataCollector.DefaultSensors.MonitoringSensorBase.BarBuilder
 {
-    internal readonly struct BarValue<T> where T: IComparable<T>
+    public readonly struct BarValue<T> where T: IComparable<T>
     {
         public T MaxValue { get; }
         public T MinValue { get; }

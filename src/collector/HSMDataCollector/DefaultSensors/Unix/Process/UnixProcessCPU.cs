@@ -5,7 +5,7 @@ using System.Diagnostics;
 
 namespace HSMDataCollector.DefaultSensors.Unix
 {
-    internal sealed class UnixProcessCpu : BarMonitoringSensorBase<DoubleMonitoringBar, double, double>
+    internal sealed class UnixProcessCpu : BarMonitoringSensorBase<DoubleMonitoringBar, double>
     {
         private readonly Process _currentProcess = ProcessInfo.CurrentProcess;
 

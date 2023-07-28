@@ -17,7 +17,7 @@ namespace HSMDataCollector.Bar
     internal abstract class BarSensorAdapter<BarSensorType, BarType, BarValueType> : Base.SensorBase, IBarSensor<BarValueType>
         where BarSensorType : PublicBarSensorBase<BarType, BarValueType>
         where BarValueType : struct, IComparable<BarValueType>
-        where BarType : MonitoringBarBase<BarValue<BarValueType>, BarValueType>, new()
+        where BarType : MonitoringBarBase<BarValueType>, new()
     {
         private readonly PublicBarSensorBase<BarType, BarValueType> _sensor;
 
@@ -56,7 +56,7 @@ namespace HSMDataCollector.Bar
         protected abstract PublicBarSensorBase<BarType, BarValueType> InitBarSensor(string name, Options.BarSensorOptions options, int precision);
     }
 
-    internal class DoubleBarSensorAdapter : BarSensorAdapter<PublicDoubleBarSensor, DoubleMonitoringBarSensor, double>
+    internal class DoubleBarSensorAdapter : BarSensorAdapter<PublicDoubleBarSensor, DoubleMonitoringBar, double>
     {
         private readonly PublicDoubleBarSensor _sensor;
 
@@ -64,15 +64,15 @@ namespace HSMDataCollector.Bar
         {
         }
 
-        protected override PublicBarSensorBase<DoubleMonitoringBarSensor, double> InitBarSensor(string name, Options.BarSensorOptions options, int precision) => new PublicDoubleBarSensor(name, precision, options);
+        protected override PublicBarSensorBase<DoubleMonitoringBar, double> InitBarSensor(string name, Options.BarSensorOptions options, int precision) => new PublicDoubleBarSensor(name, precision, options);
     }
 
-    internal class IntBarSensorAdapter : BarSensorAdapter<PublicIntBarSensor, IntMonitoringBarSensor, int>
+    internal class IntBarSensorAdapter : BarSensorAdapter<PublicIntBarSensor, IntMonitoringBar, int>
     {
         public IntBarSensorAdapter(string path, IValuesQueue queue, int barTimerPeriod, int smallTimerPeriod, string description) : base(path, queue, barTimerPeriod, smallTimerPeriod, description, 0)
         {
         }
 
-        protected override PublicBarSensorBase<IntMonitoringBarSensor, int> InitBarSensor(string name, BarSensorOptions options, int precision)  => new PublicIntBarSensor(name, options);
+        protected override PublicBarSensorBase<IntMonitoringBar, int> InitBarSensor(string name, BarSensorOptions options, int precision)  => new PublicIntBarSensor(name, options);
     }
 }

@@ -2,16 +2,18 @@
 using HSMDataCollector.Extensions;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.SensorValueRequests;
+using Newtonsoft.Json.Linq;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 
 namespace HSMDataCollector.DefaultSensors
 {
-    public abstract class MonitoringBarBase<AddValueType, BarValueType> : BarSensorValueBase<BarValueType>
+    public abstract class MonitoringBarBase<T> : BarSensorValueBase<T>
+        where T : IComparable<T>
     {
         private readonly object _lock = new object();
-        private IBarBuilder<AddValueType, BarValueType> _barBuilder;
+        private BarBuilder<T> _barBuilder;
 
         internal void Init(TimeSpan timerPeriod, int precision)
         {
@@ -20,7 +22,7 @@ namespace HSMDataCollector.DefaultSensors
             _barBuilder = InitBarBuilder(precision);
         }
 
-        internal void AddValue(AddValueType value)
+        internal void AddValue(T value)
         {
             lock (_lock)
             {
@@ -28,7 +30,15 @@ namespace HSMDataCollector.DefaultSensors
             }
         }
 
-        internal MonitoringBarBase<AddValueType, BarValueType> Complete()
+        internal void AddValue(BarValue<T> barValue)
+        {
+            lock (_lock)
+            {
+                _barBuilder.AddValue(barValue);
+            }
+        }
+
+        internal MonitoringBarBase<T> Complete()
         {
             lock (_lock)
             {
@@ -37,21 +47,20 @@ namespace HSMDataCollector.DefaultSensors
             }
         }
 
-        protected abstract IBarBuilder<AddValueType, BarValueType> InitBarBuilder(int precision);
+        protected abstract BarBuilder<T> InitBarBuilder(int precision);
     }
 
-    public sealed class IntMonitoringBar : MonitoringBarBase<int, int>
+    public sealed class IntMonitoringBar : MonitoringBarBase<int>
     {
         public override SensorType Type => SensorType.IntegerBarSensor;
 
-        protected override IBarBuilder<int, int> InitBarBuilder(int precision) => new IntListBarBuilder();
+        protected override BarBuilder<int> InitBarBuilder(int precision) => new IntBarBuilder();
     }
 
-
-    public sealed class DoubleMonitoringBar : MonitoringBarBase<double, double>
+    public sealed class DoubleMonitoringBar : MonitoringBarBase<double>
     {
         public override SensorType Type => SensorType.DoubleBarSensor;
 
-        protected override IBarBuilder<double, double> InitBarBuilder(int precision) => new DoubleListBarBuilder(precision);
+        protected override BarBuilder<double> InitBarBuilder(int precision) => new DoubleBarBuider(precision);
     }
 }

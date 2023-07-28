@@ -1,4 +1,5 @@
-﻿using HSMDataCollector.Extensions;
+﻿using HSMDataCollector.DefaultSensors.MonitoringSensorBase.BarBuilder;
+using HSMDataCollector.Extensions;
 using HSMDataCollector.Options;
 using System;
 using System.Threading;
@@ -6,9 +7,37 @@ using System.Threading.Tasks;
 
 namespace HSMDataCollector.DefaultSensors
 {
+    public abstract class BarMonitoringSensorBase<BarType, BarValueType> : BarMonitoringSensorBase<BarType, BarValueType, BarValueType>
+        where BarType : MonitoringBarBase<BarValueType>, new()
+        where BarValueType : struct, IComparable<BarValueType>
+    {
+        protected BarMonitoringSensorBase(BarSensorOptions options, int precision = 2) : base(options, precision)
+        {
+        }
+
+        protected sealed override void AddValueToBar(BarType bar, BarValueType value)
+        {
+            bar.AddValue(value);
+        }
+    }
+
+    public abstract class BarSensorBase<BarType, BarValueType> : BarMonitoringSensorBase<BarType, BarValue<BarValueType>, BarValueType>
+        where BarType : MonitoringBarBase<BarValueType>, new()
+        where BarValueType : struct, IComparable<BarValueType>
+    {
+        protected BarSensorBase(BarSensorOptions options, int precision = 2) : base(options, precision)
+        {
+        }
+
+        protected sealed override void AddValueToBar(BarType bar, BarValue<BarValueType> value)
+        {
+            bar.AddValue(value);
+        }
+    }
+
     public abstract class BarMonitoringSensorBase<BarType, ValueType, BarValueType> : MonitoringSensorBase<BarType>
-        where BarType : MonitoringBarBase<ValueType, BarValueType>, new()
-        where BarValueType : struct
+        where BarType : MonitoringBarBase<BarValueType>, new()
+        where BarValueType : struct, IComparable<BarValueType>
     {
         private readonly TimeSpan _barPeriod;
         private readonly TimeSpan _collectBarPeriod;
@@ -53,6 +82,8 @@ namespace HSMDataCollector.DefaultSensors
 
         protected abstract ValueType GetBarData();
 
+        protected abstract void AddValueToBar(BarType bar, ValueType value);
+
         protected sealed override BarType GetValue() => _internalBar.Complete() as BarType;
 
         protected sealed override BarType GetDefaultValue()
@@ -75,7 +106,7 @@ namespace HSMDataCollector.DefaultSensors
                     BuildNewBar();
                 }
 
-                _internalBar.AddValue(GetBarData());
+                AddValueToBar(_internalBar, GetBarData());
             }
             catch { }
         }

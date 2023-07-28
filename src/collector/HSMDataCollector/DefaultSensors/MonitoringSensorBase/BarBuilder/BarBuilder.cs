@@ -5,7 +5,8 @@ using System.Text;
 
 namespace HSMDataCollector.DefaultSensors.MonitoringSensorBase.BarBuilder
 {
-    internal abstract class BarBuilder<T> : IBarBuilder<BarValue<T>, T> where T : IComparable<T>
+    public abstract class BarBuilder<T>
+        where T : IComparable<T>
     {
         private BarValue<T> _currentValue;
 
@@ -15,6 +16,12 @@ namespace HSMDataCollector.DefaultSensors.MonitoringSensorBase.BarBuilder
                 return;
             var mean = CountMean(_currentValue.Mean, _currentValue.Count, value.Mean, value.Count);
             _currentValue = _currentValue.Merge(value).WithMean(mean);
+        }
+
+        public void AddValue(T value)
+        {
+            var mean = CountMean(_currentValue.Mean, _currentValue.Count, value, 1);
+            _currentValue = _currentValue.AddValue(value).WithMean(mean);
         }
 
         public void FillBarFields(BarSensorValueBase<T> bar)

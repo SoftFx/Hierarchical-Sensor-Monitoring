@@ -11,8 +11,8 @@ using System.Text;
 
 namespace HSMDataCollector.Bar
 {
-    internal abstract class PublicBarSensorBase<BarType, BarValueType> : BarMonitoringSensorBase<BarType, BarValue<BarValueType>, BarValueType>
-        where BarType : MonitoringBarBase<BarValue<BarValueType>, BarValueType>, new()
+    internal abstract class PublicBarSensorBase<BarType, BarValueType> : BarSensorBase<BarType, BarValueType>
+        where BarType : MonitoringBarBase<BarValueType>, new()
         where BarValueType : struct, IComparable<BarValueType>
     {
         private readonly object _lock = new object();
@@ -50,30 +50,16 @@ namespace HSMDataCollector.Bar
         }
     }
 
-    internal class PublicIntBarSensor : PublicBarSensorBase<IntMonitoringBarSensor, int>
+    internal class PublicIntBarSensor : PublicBarSensorBase<IntMonitoringBar, int>
     {
         public PublicIntBarSensor(string name, BarSensorOptions options) : base(name, options, 0) { }
 
         protected override BarBuilder<int> InitBarBuilder(int precision) => new IntBarBuilder(); 
     }
 
-    internal class PublicDoubleBarSensor : PublicBarSensorBase<DoubleMonitoringBarSensor, double>
+    internal class PublicDoubleBarSensor : PublicBarSensorBase<DoubleMonitoringBar, double>
     {
         public PublicDoubleBarSensor(string name, int precision, BarSensorOptions options) : base(name, options, precision) { }
         protected override BarBuilder<double> InitBarBuilder(int precision) => new DoubleBarBuider(precision);       
-    }
-
-    internal sealed class IntMonitoringBarSensor : MonitoringBarBase<BarValue<int>, int>
-    {
-        public override SensorType Type => SensorType.IntegerBarSensor;
-
-        protected override IBarBuilder<BarValue<int>, int> InitBarBuilder(int precision) => new IntBarBuilder();
-    }
-
-    internal sealed class DoubleMonitoringBarSensor : MonitoringBarBase<BarValue<double>, double>
-    {
-        public override SensorType Type => SensorType.DoubleBarSensor;
-
-        protected override IBarBuilder<BarValue<double>, double> InitBarBuilder(int precision) => new DoubleBarBuider(precision);
     }
 }

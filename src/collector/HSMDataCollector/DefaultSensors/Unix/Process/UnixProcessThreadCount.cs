@@ -1,8 +1,9 @@
-﻿using HSMDataCollector.Options;
+﻿using HSMDataCollector.Bar;
+using HSMDataCollector.Options;
 
 namespace HSMDataCollector.DefaultSensors.Unix
 {
-    internal sealed class UnixProcessThreadCount : BarMonitoringSensorBase<DoubleMonitoringBar, double, double>
+    internal sealed class UnixProcessThreadCount : BarMonitoringSensorBase<DoubleMonitoringBar, double>
     {
         protected override string SensorName => "Process thread count";
 
