@@ -6,7 +6,6 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
-using System.Xml.Linq;
 
 namespace HSMServer.Core.Model.Policies
 {
@@ -213,13 +212,17 @@ namespace HSMServer.Core.Model.Policies
             Uploaded?.Invoke(ActionType.Add, policy);
         }
 
-        private void CallJournal(string oldValue, string newValue, string initiator) => 
-            CallJournal(new JournalRecordModel(_sensor.Id, initiator)
-            {
-                Enviroment = "Alerts update",
-                OldValue = oldValue,
-                NewValue = newValue,
-                Path = _sensor.FullPath,
-            });
+        private void CallJournal(string oldValue, string newValue, string initiator)
+        {
+            if (oldValue != newValue)
+                CallJournal(new JournalRecordModel(_sensor.Id, initiator)
+                {
+                    Enviroment = "Alerts update",
+                    PropertyName = "Alerts update",
+                    OldValue = oldValue,
+                    NewValue = newValue,
+                    Path = _sensor.FullPath,
+                });
+        }
     }
 }

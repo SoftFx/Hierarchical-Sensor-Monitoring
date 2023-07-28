@@ -28,7 +28,7 @@ public class JournalController : BaseController
                     var value = recordFromDb[name];
 
                     if (name is ColumnName.Record)
-                        value = value.Replace(Environment.NewLine, "<br>");
+                        value = value?.Replace(Environment.NewLine, "<br>");
 
                     cells.Add(value);
                 }
