@@ -30,7 +30,15 @@ namespace HSMDataCollector.Bar
         {
             lock (_lock)
             {
-                _barBuilder.AddValue(new BarValue<BarValueType>(value));
+                _barBuilder.AddValue(value);
+            }
+        }
+
+        public void AddValues(IEnumerable<BarValueType> values)
+        {
+            lock (_lock)
+            {
+                _barBuilder.AddValues(values);
             }
         }
 

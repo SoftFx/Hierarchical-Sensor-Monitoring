@@ -43,6 +43,11 @@ namespace HSMDataCollector.Bar
             _sensor.AddValue(value);
         }
 
+        public void AddValues(IEnumerable<BarValueType> values)
+        {
+            _sensor.AddValues(values);
+        }
+
         public override void Dispose()
         {
             _sensor.Dispose();

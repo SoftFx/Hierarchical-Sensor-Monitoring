@@ -1,6 +1,7 @@
 ﻿using HSMSensorDataObjects.SensorValueRequests;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 
 namespace HSMDataCollector.DefaultSensors.MonitoringSensorBase.BarBuilder
@@ -24,6 +25,16 @@ namespace HSMDataCollector.DefaultSensors.MonitoringSensorBase.BarBuilder
             _currentValue = _currentValue.AddValue(value).WithMean(mean);
         }
 
+        public void AddValues(IEnumerable<T> values)
+        {
+            var valueToAdd = new BarValue<T>();
+            foreach (var value in values)
+            {
+                valueToAdd = valueToAdd.AddValue(value);
+            }
+            AddValue(valueToAdd.WithMean(CountMean(values)));
+        }
+
         public void FillBarFields(BarSensorValueBase<T> bar)
         {
             bar.Count = _currentValue.Count;
@@ -43,6 +54,7 @@ namespace HSMDataCollector.DefaultSensors.MonitoringSensorBase.BarBuilder
         }
 
         protected abstract T CountMean(T prevMean, int prevCount, T addMean, int addCount);
+        protected abstract T CountMean(IEnumerable<T> values); 
 
         protected abstract T Round(T value);
 
@@ -58,6 +70,18 @@ namespace HSMDataCollector.DefaultSensors.MonitoringSensorBase.BarBuilder
     {
         protected override int CountMean(int prevMean, int prevCount, int addMean, int addCount) => (prevMean * prevCount + addMean * addCount) / (prevCount + addCount);
 
+        protected override int CountMean(IEnumerable<int> values)
+        {
+            int sum = 0;
+            int count = 0;
+            foreach (var value in values)
+            {
+                sum += value;
+                count++;
+            }
+            return sum / count;
+        }
+
         protected override int Round(int value) => value;
     }
 
@@ -71,6 +95,18 @@ namespace HSMDataCollector.DefaultSensors.MonitoringSensorBase.BarBuilder
         }
 
         protected override double CountMean(double prevMean, int prevCount, double addMean, int addCount) => (prevMean * prevCount + addMean * addCount) / (prevCount + addCount);
+
+        protected override double CountMean(IEnumerable<double> values)
+        {
+            double sum = 0;
+            int count = 0;
+            foreach (var value in values)
+            {
+                sum += value;
+                count++;
+            }
+            return sum / count;
+        }
 
         protected override double Round(double value) => Math.Round(value, _precision, MidpointRounding.AwayFromZero);
     }
