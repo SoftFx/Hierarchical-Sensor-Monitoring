@@ -58,6 +58,12 @@ namespace HSMServer.Core.Model.Policies
             _typePolicy.RebuildState();
         }
 
+        internal override void UpdateTTL(PolicyUpdate update)
+        {
+            PolicyResult.RemoveAlert(TimeToLive);
+            base.UpdateTTL(update);
+        }
+
 
         internal bool TryValidate(BaseValue value, out T valueT, bool updateSensor = true)
         {
