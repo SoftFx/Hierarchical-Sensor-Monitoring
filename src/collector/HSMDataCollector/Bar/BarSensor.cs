@@ -236,6 +236,11 @@ namespace HSMDataCollector.Bar
             return result;
         }
 
+        public void AddValues(IEnumerable<T> values)
+        {
+            throw new NotImplementedException();
+        }
+
         #endregion
     }
 }

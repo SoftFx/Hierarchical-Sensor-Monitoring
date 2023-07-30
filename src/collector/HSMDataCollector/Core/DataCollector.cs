@@ -452,19 +452,15 @@ namespace HSMDataCollector.Core
 
         public IBarSensor<int> CreateIntBarSensor(string path, int timeout, int smallPeriod = 15000, string description = "")
         {
-            var existingSensor = GetExistingSensor(path);
-            if (existingSensor is IBarSensor<int> intBarSensor)
-            {
-                (intBarSensor as BarSensorBase)?.Restart(timeout, smallPeriod);
+            if (_sensorsStorage.TryGetValue(path, out var sensor))
+                return (IBarSensor<int>)sensor;
 
-                return intBarSensor;
-            }
+            var options = new BarSensorOptions();
 
-            BarSensor<int> sensor = new BarSensor<int>(path, _dataQueue as IValuesQueue, SensorType.IntegerBarSensor,
-                timeout, smallPeriod, description);
-            AddNewSensor(sensor, path);
+            sensor = new IntBarPublicSensor(options);
 
-            return sensor;
+            return Status.IsRunning() ? (IBarSensor<int>)_sensorsStorage.Run(sensor) :
+                                        (IBarSensor<int>)_sensorsStorage.Register(sensor);
         }
 
         public IBarSensor<int> Create1HrIntBarSensor(string path, string description)

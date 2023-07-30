@@ -14,18 +14,18 @@ namespace HSMDataCollector.DefaultSensors
         protected readonly List<T> _barValues = new List<T>(1 << 6);
 
 
-        internal void Init(TimeSpan timerPeriod)
-        {
-            OpenTime = timerPeriod.GetOpenTime();
-            CloseTime = OpenTime + timerPeriod;
-        }
-
         internal void AddValue(T value)
         {
             lock (_lock)
             {
                 _barValues.Add(value);
             }
+        }
+
+        internal void Init(TimeSpan timerPeriod)
+        {
+            OpenTime = timerPeriod.GetOpenTime();
+            CloseTime = OpenTime + timerPeriod;
         }
 
         internal MonitoringBarBase<T> Complete()
