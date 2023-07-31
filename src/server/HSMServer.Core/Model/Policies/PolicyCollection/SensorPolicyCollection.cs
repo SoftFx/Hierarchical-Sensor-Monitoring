@@ -5,7 +5,6 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
-using System.Xml.Linq;
 
 namespace HSMServer.Core.Model.Policies
 {
@@ -56,6 +55,12 @@ namespace HSMServer.Core.Model.Policies
         {
             base.BuildDefault(node, entity);
             _typePolicy.RebuildState();
+        }
+
+        internal override void UpdateTTL(PolicyUpdate update)
+        {
+            PolicyResult.RemoveAlert(TimeToLive);
+            base.UpdateTTL(update);
         }
 
 

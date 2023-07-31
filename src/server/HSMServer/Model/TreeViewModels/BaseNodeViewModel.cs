@@ -47,10 +47,9 @@ namespace HSMServer.Model.TreeViewModel
                 foreach (var node in collection)
                     foreach (var (icon, count) in node.AlertIcons)
                     {
-                        if (!AlertIcons.ContainsKey(icon))
-                            AlertIcons.TryAdd(icon, 0);
+                        int UpdateCount(string _, int old) => old + count;
 
-                        AlertIcons[icon] += count;
+                        AlertIcons.AddOrUpdate(icon, count, UpdateCount);
                     }
         }
     }

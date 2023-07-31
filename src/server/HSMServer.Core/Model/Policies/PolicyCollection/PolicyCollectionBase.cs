@@ -1,4 +1,5 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities;
+using HSMServer.Core.Cache.UpdateEntities;
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -27,5 +28,7 @@ namespace HSMServer.Core.Model.Policies
 
 
         internal virtual void BuildDefault(BaseNodeModel node, PolicyEntity entity = null) => TimeToLive = new TTLPolicy(node, entity);
+
+        internal virtual void UpdateTTL(PolicyUpdate update) => TimeToLive.Update(update);
     }
 }

@@ -12,11 +12,11 @@ namespace HSMServer.Core
     [Obsolete]
     public static class Migrators
     {
-        public static TimeIntervalModel ToNewInterval(OldTimeIntervalEntity old)
+        public static TimeIntervalModel ToNewInterval(OldTimeIntervalEntity old, bool folderCrunch = false)
         {
             var oldEnum = (OldTimeInterval)old.TimeInterval;
 
-            if (old.CustomPeriod == 0 && old.TimeInterval == 0L)
+            if (folderCrunch && old.CustomPeriod == 0 && old.TimeInterval == 0L)
                 oldEnum = OldTimeInterval.Custom;
 
             var newTicks = oldEnum switch
@@ -49,7 +49,7 @@ namespace HSMServer.Core
                 _ => throw new NotImplementedException(),
             };
 
-            if (newEnum == TimeInterval.Ticks && newTicks == 0L)
+            if (newEnum == TimeInterval.Ticks && (newTicks == 0L || newTicks == DateTime.MaxValue.Ticks))
                 newEnum = TimeInterval.None;
 
             return new TimeIntervalModel(newEnum, newTicks);

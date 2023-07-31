@@ -43,7 +43,7 @@ namespace HSMServer.Model.Folders
                 for (int i = 0; i < entity.ServerPolicies.Count; ++i)
                 {
                     var oldInterval = entity.ServerPolicies[i];
-                    var newEntity = Core.Migrators.ToNewInterval(oldInterval).ToEntity();
+                    var newEntity = Core.Migrators.ToNewInterval(oldInterval, true).ToEntity();
 
                     var name = i switch
                     {

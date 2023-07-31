@@ -3,7 +3,7 @@ using HSMDataCollector.Options;
 
 namespace HSMDataCollector.DefaultSensors.Unix
 {
-    internal sealed class UnixFreeRamMemory : BarMonitoringSensorBase<DoubleMonitoringBar, double>
+    internal sealed class UnixFreeRamMemory : CollectableBarMonitoringSensorBase<DoubleMonitoringBar, double>
     {
         private const string TotalCpuBashCommand = "free -m | awk 'NR==2 { print $7 }'";
 

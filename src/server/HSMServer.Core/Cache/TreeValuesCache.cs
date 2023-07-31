@@ -247,7 +247,7 @@ namespace HSMServer.Core.Cache
             if (!_sensors.TryRemove(sensorId, out var sensor))
                 return;
 
-            if (_tree.TryGetValue(sensor.Parent.Id, out var parent))
+            if (sensor.Parent is not null && _tree.TryGetValue(sensor.Parent.Id, out var parent))
                 parent.Sensors.TryRemove(sensorId, out _);
 
             RemoveSensorPolicies(sensor);
@@ -421,6 +421,8 @@ namespace HSMServer.Core.Cache
                 sensor = SensorModelFactory.Build(entity);
                 parentProduct.AddSensor(sensor);
 
+                sensor.Policies.AddStatus();
+
                 AddSensor(sensor);
                 UpdateProduct(parentProduct);
             }
@@ -516,6 +518,12 @@ namespace HSMServer.Core.Cache
                 {
                     if (_sensors.TryGetValue(Guid.Parse(sensor.Id), out var model))
                     {
+                        if (model.Parent is null)
+                        {
+                            RemoveSensor(Guid.Parse(sensor.Id));
+                            continue;
+                        }
+
                         int oldCnt = model.Policies.Count();
 
                         model.Policies.ApplyPolicies(sensor.Policies, resavedPolicies);
