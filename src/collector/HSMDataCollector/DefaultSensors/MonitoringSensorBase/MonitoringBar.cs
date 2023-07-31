@@ -10,6 +10,8 @@ namespace HSMDataCollector.DefaultSensors
         private readonly object _lock = new object();
         protected double _totalSum = 0.0;
 
+        internal int Precision { get; private set; }
+
 
         internal void AddValue(T value)
         {
@@ -30,10 +32,11 @@ namespace HSMDataCollector.DefaultSensors
             }
         }
 
-        internal void Init(TimeSpan timerPeriod)
+        internal void Init(TimeSpan timerPeriod, int precision)
         {
             OpenTime = timerPeriod.GetOpenTime();
             CloseTime = OpenTime + timerPeriod;
+            Precision = precision;
         }
 
         internal MonitoringBarBase<T> Complete()
@@ -92,8 +95,6 @@ namespace HSMDataCollector.DefaultSensors
 
     public sealed class DoubleMonitoringBar : MonitoringBarBase<double>
     {
-        private const int Precision = 2;
-
         public override SensorType Type => SensorType.DoubleBarSensor;
 
 

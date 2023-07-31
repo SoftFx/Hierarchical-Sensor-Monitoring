@@ -12,6 +12,7 @@ namespace HSMDataCollector.DefaultSensors
     {
         private readonly TimeSpan _collectBarPeriod;
         private readonly TimeSpan _barPeriod;
+        private readonly int _precision;
 
         private Timer _collectTimer;
         protected BarType _internalBar;
@@ -21,8 +22,9 @@ namespace HSMDataCollector.DefaultSensors
 
         protected BarMonitoringSensorBase(BarSensorOptions options) : base(options)
         {
-            _barPeriod = options.BarPeriod;
             _collectBarPeriod = options.CollectBarPeriod;
+            _barPeriod = options.BarPeriod;
+            _precision = options.Precision;
 
             BuildNewBar();
         }
@@ -78,7 +80,7 @@ namespace HSMDataCollector.DefaultSensors
         private void BuildNewBar()
         {
             _internalBar = new BarType();
-            _internalBar.Init(_barPeriod);
+            _internalBar.Init(_barPeriod, _precision);
         }
     }
 }
