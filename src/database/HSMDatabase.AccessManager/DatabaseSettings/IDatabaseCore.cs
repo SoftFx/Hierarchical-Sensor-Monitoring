@@ -73,11 +73,6 @@ namespace HSMServer.Core.DataLayer
         void UpdatePolicy(PolicyEntity policy);
         void RemovePolicy(Guid id);
 
-        [Obsolete("Will be removed after policy migration")]
-        List<byte[]> GetAllOldPolicies();
-        [Obsolete("Will be removed after policy migration")]
-        void RemoveAllOldPolicies();
-
         #endregion
 
         #region User

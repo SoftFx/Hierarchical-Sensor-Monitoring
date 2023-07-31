@@ -80,7 +80,6 @@ function Data(to, from, type, encodedId) {
     function initializeTabLinksRequests() {
         $('[id^="link_graph_"]').off("click").on("click", requestGraph);
         $('[id^="link_table_"]').off("click").on("click", requestTable);
-        $('[id^="link_journal_"]').off("click").on("click", () => $('table[id^="journal_table_"]').DataTable().ajax.reload());
     }
 
     function requestGraph() {
@@ -329,6 +328,75 @@ function Data(to, from, type, encodedId) {
             async: true
         }).done(function (data) {
             $(`#values_${encodedId}`).html(data);
+        });
+    }
+}
+
+//Journal
+{
+    window.showNoData = function (data) {
+        if (data.responseJSON.recordsTotal === 0) {
+            $('#noDataPanel').removeClass('d-none');
+            $('#noDataJournalPanel').addClass('d-none');
+        }
+        else {
+            $('#noDataPanel').addClass('d-none');
+            $('#noDataJournalPanel').removeClass('d-none');
+        }
+    }
+   
+    window.JournalTable = undefined;
+   
+    window.DataTableColumnsNames = {
+        Date: "Date", 
+        Path: "Path",
+        Initiator: "Initiator",
+        Type: "Type",
+        Record: "Record"
+    };
+   
+    window.JournalTemplate = {
+        bAutoWidth: false,
+        pageLength: 50,
+        lengthMenu: [25, 50, 100, 300 ],
+        processing: true,
+        serverSide: true,
+        order: [[0, 'desc']],
+        ajax: {
+            type: "POST",
+            contentType: "application/json; charset=utf-8",
+            url: 'Journal/GetPage',
+            data: function (d) {
+                return JSON.stringify(d);
+            },
+            complete: function (response){
+                showNoData(response)
+            }
+        }
+    }
+    
+    let nodeColumns = [
+        { "name": DataTableColumnsNames.Date , "width": "10%" },
+        { "name": DataTableColumnsNames.Path , "width": "20%" },
+        { "name": DataTableColumnsNames.Initiator , "width": "5%" },
+        { "name": DataTableColumnsNames.Record , "width": "55%" }
+    ]
+    
+    let sensorColumns = [
+        { "name": DataTableColumnsNames.Date , "width": "10%" },
+        { "name": DataTableColumnsNames.Initiator , "width": "10%" },
+        { "name": DataTableColumnsNames.Record , "width": "85%" }
+    ]
+    
+    window.initializeJournal = function(type) {
+        if (JournalTable) {
+             JournalTable.ajax.reload();
+             return;
+        }
+
+        JournalTable = $('[id^="journal_table_"]').DataTable({
+            columns: type === NodeType.Node ? nodeColumns : sensorColumns,
+            ...JournalTemplate
         });
     }
 }

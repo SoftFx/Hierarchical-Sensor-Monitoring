@@ -243,31 +243,6 @@ namespace HSMDatabase.DatabaseWorkCore
 
         public void RemovePolicy(Guid id) => _environmentDatabase.RemovePolicy(id);
 
-        public List<byte[]> GetAllOldPolicies()
-        {
-            var policiesIds = _environmentDatabase.GetAllOldPoliciesIds();
-
-            var policies = new List<byte[]>(policiesIds.Count);
-            foreach (var policyId in policiesIds)
-            {
-                var policy = _environmentDatabase.GetOldPolicy(policyId);
-                if (policy != null && policy.Length != 0)
-                    policies.Add(policy);
-            }
-
-            return policies;
-        }
-
-        public void RemoveAllOldPolicies()
-        {
-            var policiesIds = _environmentDatabase.GetAllOldPoliciesIds();
-
-            foreach (var id in policiesIds)
-                _environmentDatabase.RemoveOldPolicy(id);
-
-            _environmentDatabase.DropOldPolicyIdsList();
-        }
-
         public List<PolicyEntity> GetAllPolicies()
         {
             var policiesIds = _environmentDatabase.GetAllPoliciesIds();

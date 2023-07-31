@@ -204,7 +204,7 @@
                                 <div class='tab-pane fade' id=@valuesParentDivId>
                                     <div id='@valuesElementId'></div>
                                 </div>
-                                <div class='tab-pane fade' id=@journalParentDivId>
+                                <div class='tab-pane fade mt-2' id=@journalParentDivId>
                                     <table class="display w-100" id="journal_table_@sensorId">
                                         <thead>
                                             <tr>
@@ -239,7 +239,7 @@
                                 <div class='tab-pane fade show active' id=@valuesParentDivId>
                                     <div id='@valuesElementId'></div>
                                 </div>
-                                <div class='tab-pane fade' id=@journalParentDivId>
+                                <div class='tab-pane fade mt-2' id=@journalParentDivId>
                                     <table class="display w-100" id="journal_table_@sensorId">
                                         <thead>
                                             <tr>
@@ -277,33 +277,15 @@
             this.innerText = "Show all columns";
         }
     });
+    
+    $('[id^="link_journal_"]').off('click').on('click', () => initializeJournal(NodeType.Sensor))
 
     $(document).ready(function () {
         if ('@(Model.Type is SensorType.File)' === 'True') {
             setContentPreview('@Model.EncodedId');
         }
         
-        $('[id^="journal_table_"]').DataTable({
-            bAutoWidth: false,
-            pageLength: 50,
-            lengthMenu: [25, 50, 100, 300 ],
-            columns: [
-                { "name": DataTableColumnsNames.Date , "width": "10%" },
-                { "name": DataTableColumnsNames.Initiator , "width": "10%" },
-                { "name": DataTableColumnsNames.Record , "width": "85%" }
-            ],
-            processing: true,
-            serverSide: true,
-            order: [[0, 'desc']],
-            ajax: {
-                type: "POST",
-                contentType: "application/json; charset=utf-8",
-                url: getJournalPage,
-                data: function (d) {
-                    return JSON.stringify(d);
-                }
-            }
-        });
+        JournalTable = undefined;
     });
 
     function setContentPreview(encodedId) {

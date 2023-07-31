@@ -9,26 +9,28 @@
 
 @if (!Model.HasChildren)
 {
-    <div class="d-flex justify-content-center align-items-center noData-label">
+    <div id="noDataPanel" class="d-flex justify-content-center align-items-center noData-label">
         <label>No data</label>
     </div>
-    <ul id="dataPanel" class='nav nav-tabs' role="tablist">
-        <li class="nav-item active">
-            <a id="journalLink_@nodeId" class='nav-link active' data-bs-toggle='tab' href='#@journalDivId' role="tab"><i class="fa-solid fa-list"></i> Journal</a>
-        </li>
-    </ul>
-    <div class='tab-content'>
-        <div class='tab-pane fade show active' id=@journalDivId role="tabpanel">
-            <table class="display w-100 test" id="journal_table_@nodeId">
-                <thead>
-                    <tr>
-                        <th>Date</th>
-                        <th>Path</th> 
-                        <th>Initiator</th>
-                        <th>Text</th>
-                    </tr>
-                </thead>
-            </table>
+    <div id="noDataJournalPanel" class="d-none">
+        <ul id="dataPanel" class='nav nav-tabs' role="tablist">
+            <li class="nav-item active">
+                <a id="journalLink_@nodeId" class='nav-link active' data-bs-toggle='tab' href='#@journalDivId' role="tab"><i class="fa-solid fa-list"></i> Journal</a>
+            </li>
+        </ul>
+        <div class='tab-content'>
+            <div class='tab-pane fade show active mt-2' id=@journalDivId role="tabpanel">
+                <table class="display w-100 test" id="journal_table_@nodeId">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Path</th>
+                            <th>Initiator</th>
+                            <th>Text</th>
+                        </tr>
+                    </thead>
+                </table>
+            </div>
         </div>
     </div>
 }
@@ -42,7 +44,7 @@ else
             <a id="listLink_@nodeId" class='nav-link' data-bs-toggle='tab' onclick="getListPage(`listSensors`);getListPage(`listNodes`)" href='#@listDivId' role="tab"><i class="fa-solid fa-list"></i> List</a>
         </li>
         <li class="nav-item">
-            <a id="journalLink_@nodeId" class='nav-link' data-bs-toggle='tab' href='#@journalDivId' role="tab"><i class="fa-solid fa-list"></i> Journal</a>
+            <a id="journalLink_@nodeId" class='nav-link' data-bs-toggle='tab' onclick="initializeJournal(NodeType.Node);" href='#@journalDivId' role="tab"><i class="fa-solid fa-list"></i> Journal</a>
         </li>
     </ul>
     <div class='tab-content'>
@@ -54,7 +56,7 @@ else
             <div class="accordion" id="list-accordion_listNodes"></div>
             <div class="accordion" id="list-accordion_listSensors"></div>
         </div>
-        <div class='tab-pane fade' id=@journalDivId role="tabpanel">
+        <div class='tab-pane fade mt-2' id=@journalDivId role="tabpanel">
             <table class="display w-100 test" id="journal_table_@nodeId">
                 <thead>
                     <tr>
@@ -72,27 +74,6 @@ else
 
 <script>
     $(document).ready(function () {
-        $('[id^="journal_table_"]').DataTable({
-            bAutoWidth: false,
-            pageLength: 50,
-            lengthMenu: [25, 50, 100, 300 ],
-            columns: [
-                { "name": DataTableColumnsNames.Date , "width": "10%" },
-                { "name": DataTableColumnsNames.Path , "width": "20%" },
-                { "name": DataTableColumnsNames.Initiator , "width": "5%" },
-                { "name": DataTableColumnsNames.Record , "width": "55%" }
-            ],
-            processing: true,
-            serverSide: true,
-            order: [[0, 'desc']],
-            ajax: {
-                type: "POST",
-                contentType: "application/json; charset=utf-8",
-                url: getJournalPage,
-                data: function (d) {
-                    return JSON.stringify(d);
-                }
-            }
-        });
+        JournalTable = undefined;
     });
 </script>

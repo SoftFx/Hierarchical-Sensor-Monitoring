@@ -29,6 +29,7 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using TimeInterval = HSMServer.Model.TimeInterval;
+using HSMServer.Core.Model.Requests;
 
 namespace HSMServer.Controllers
 {

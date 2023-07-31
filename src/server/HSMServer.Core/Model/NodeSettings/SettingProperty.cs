@@ -45,7 +45,7 @@ namespace HSMServer.Core.Model.NodeSettings
         {
             var newValue = (T)update;
 
-            if (newValue is not null && CurValue != newValue)
+            if (newValue is not null && CurValue.ToString() != newValue.ToString())
             {
                 CurValue = newValue;
 

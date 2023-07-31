@@ -25,8 +25,7 @@ namespace HSMServer.Core.Model.Policies
 
         internal abstract void Attach(BaseSensorModel sensor);
 
-        [Obsolete("remove after policy migration")]
-        internal abstract void AddStatus();
+        internal abstract void AddDefaultSensors();
 
 
         internal void Reset()
@@ -194,7 +193,7 @@ namespace HSMServer.Core.Model.Policies
                 }
         }
 
-        internal override void AddStatus()
+        internal override void AddDefaultSensors()
         {
             var policy = new PolicyType();
 
@@ -218,13 +217,17 @@ namespace HSMServer.Core.Model.Policies
             Uploaded?.Invoke(ActionType.Add, policy);
         }
 
-        private void CallJournal(string oldValue, string newValue, string initiator) => 
-            CallJournal(new JournalRecordModel(_sensor.Id, initiator)
-            {
-                Enviroment = "Alerts update",
-                OldValue = oldValue,
-                NewValue = newValue,
-                Path = _sensor.FullPath,
-            });
+        private void CallJournal(string oldValue, string newValue, string initiator)
+        {
+            if (oldValue != newValue)
+                CallJournal(new JournalRecordModel(_sensor.Id, initiator)
+                {
+                    Enviroment = "Alerts update",
+                    PropertyName = "Alerts update",
+                    OldValue = oldValue,
+                    NewValue = newValue,
+                    Path = _sensor.FullPath,
+                });
+        }
     }
 }
