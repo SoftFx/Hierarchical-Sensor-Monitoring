@@ -2,23 +2,31 @@
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.SensorValueRequests;
 using System;
-using System.Collections.Generic;
-using System.Linq;
 
 namespace HSMDataCollector.DefaultSensors
 {
     public abstract class MonitoringBarBase<T> : BarSensorValueBase<T>
     {
         private readonly object _lock = new object();
-
-        protected readonly List<T> _barValues = new List<T>(1 << 6);
+        protected double _totalSum = 0.0;
 
 
         internal void AddValue(T value)
         {
             lock (_lock)
             {
-                _barValues.Add(value);
+                if (Count == 0)
+                {
+                    Min = value;
+                    Max = value;
+                    Mean = value;
+                    LastValue = value;
+                }
+                else
+                    ApplyNewValue(value);
+
+                LastValue = value;
+                Count++;
             }
         }
 
@@ -32,39 +40,32 @@ namespace HSMDataCollector.DefaultSensors
         {
             lock (_lock)
             {
-                Count = _barValues.Count;
-
                 if (Count > 0)
                 {
-                    LastValue = Round(_barValues.LastOrDefault());
+                    LastValue = Round(LastValue);
 
-                    _barValues.Sort();
-
-                    Min = Round(_barValues.First());
-                    Max = Round(_barValues.Last());
+                    Min = Round(Min);
+                    Max = Round(Max);
                     Mean = Round(CountMean());
 
-                    AddPercentile(_barValues, 0.25);
-                    AddPercentile(_barValues, 0.5);
-                    AddPercentile(_barValues, 0.75);
+                    Percentiles[0.25] = CountAvr(Mean, Min);
+                    Percentiles[0.5] = Mean;
+                    Percentiles[0.75] = CountAvr(Mean, Max);
                 }
 
                 return this;
             }
         }
 
-        protected abstract T CountMean();
+
+        protected abstract void ApplyNewValue(T value);
+
+
+        protected abstract T CountAvr(T first, T second);
 
         protected abstract T Round(T value);
 
-        private void AddPercentile(List<T> listValues, double percent)
-        {
-            var count = listValues.Count;
-            var index = count > 1 ? (int)Math.Floor(count * percent) : 0;
-            var percentile = count > 0 ? listValues[index] : default;
-
-            Percentiles[percent] = Round(percentile);
-        }
+        protected abstract T CountMean();
     }
 
 
@@ -73,7 +74,17 @@ namespace HSMDataCollector.DefaultSensors
         public override SensorType Type => SensorType.IntegerBarSensor;
 
 
-        protected override int CountMean() => _barValues.Sum() / Count;
+        protected override void ApplyNewValue(int value)
+        {
+            _totalSum += value;
+
+            Min = Math.Min(value, Min);
+            Max = Math.Max(value, Max);
+        }
+
+        protected override int CountAvr(int first, int second) => (first + second) / 2;
+
+        protected override int CountMean() => (int)Math.Round(_totalSum / Count);
 
         protected override int Round(int value) => value;
     }
@@ -83,11 +94,20 @@ namespace HSMDataCollector.DefaultSensors
     {
         private const int Precision = 2;
 
-
         public override SensorType Type => SensorType.DoubleBarSensor;
 
 
-        protected override double CountMean() => _barValues.Sum() / Count;
+        protected override void ApplyNewValue(double value)
+        {
+            _totalSum += value;
+
+            Min = Math.Min(value, Min);
+            Max = Math.Max(value, Max);
+        }
+
+        protected override double CountAvr(double first, double second) => Round((first + second) / 2);
+
+        protected override double CountMean() => _totalSum / Count;
 
         protected override double Round(double value) => Math.Round(value, Precision, MidpointRounding.AwayFromZero);
     }

@@ -9,11 +9,12 @@ namespace HSMDataCollector.DefaultSensors
         where BarType : MonitoringBarBase<T>, new()
         where T : struct
     {
-        protected override string SensorName => throw new NotImplementedException();
+        protected override string SensorName { get; }
 
 
         public PublicBarMonitoringSensor(BarSensorOptions options) : base(options)
         {
+            SensorName = options.SensorName;
         }
 
 
