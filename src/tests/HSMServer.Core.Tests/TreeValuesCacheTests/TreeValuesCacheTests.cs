@@ -595,21 +595,21 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             //ModelsTester.AssertModels(actualSensorFromCache.Settings.TTL.Value, actualExpectedUpdateIntervalPolicy);
         }
 
-        private Policy GetPolicyByIdFromDb(Guid id)
-        {
-            var policyEntities = _databaseCoreManager.DatabaseCore.GetAllOldPolicies();
+        //private Policy GetPolicyByIdFromDb(Guid id)
+        //{
+        //    var policyEntities = _databaseCoreManager.DatabaseCore.GetAllPolicies();
 
-            foreach (var entity in policyEntities)
-            {
-                var str = Encoding.UTF8.GetString(entity);
+        //    foreach (var entity in policyEntities)
+        //    {
+        //        var str = Encoding.UTF8.GetString(entity);
 
-                var policy = JsonSerializer.Deserialize<Policy>(entity);
-                if (policy.Id == id)
-                    return policy;
-            }
+        //        var policy = JsonSerializer.Deserialize<Policy>(entity);
+        //        if (policy.Id == id)
+        //            return policy;
+        //    }
 
-            return null;
-        }
+        //    return null;
+        //}
 
         private BaseSensorModel GetClonedSensorModel(BaseSensorModel sensor)
         {
