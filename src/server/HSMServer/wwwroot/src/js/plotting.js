@@ -116,7 +116,11 @@ function convertToGraphData(graphData, graphType, graphName) {
                 return new TimeSpan.TimeSpan(0, seconds, minutes, hours, days).totalMilliseconds();
             })
             
-            return getTimeSpanGraphData(timeList, data, "lines")
+            return getTimeSpanGraphData(timeList, data, "lines");
+        case "8":
+            data = getNumbersData(escapedData)
+            timeList = getTimeList(escapedData)
+            return getEnumGraphData(timeList, data)
         default:
             return undefined;
     }
@@ -365,4 +369,69 @@ function getPlotType(graphType) {
 
     // no plots for other types yet
     return undefined;
+}
+
+// Enum plot
+{
+    function getEnumGraphData(timeList, dataList){
+        return [
+            {
+                x: timeList,
+                y: dataList,
+                type: 'scatter',
+                customdata: dataList.map(x => ServiceStatus[`${x}`]),
+                hovertemplate: '%{customdata}<extra></extra>'
+            }
+        ];
+    }
+    
+    function getShapes(data){
+        let colors = data.y.map(y => ServiceStatus[`${y}`]);
+        let sh = [];
+
+        for (let i = 0; i < colors.length; i++) {
+            sh.push(getShape(data.x[i], 1, colors[i]))
+        }
+
+        return {
+            shapes: sh,
+        }
+        function getShape(x, y, color) {
+            return {
+                type: 'line',
+                x0: x,
+                y0: 0,
+                x1: x,
+                y1: y,
+                line: {
+                    color: color,
+                    width: 3
+                }
+            }
+        }
+    }
+    
+    function  getEnumLayout(data) {
+        return {
+            ...getShapes(data),
+            yaxis: {
+                tickfont: {
+                    size: 10
+                },
+            },
+            automargin: "width+height",
+            ticktext: ['', '', '', '', '', '', ''],
+            tickvals: [1, 2, 3, 4, 5, 6, 7]
+        }
+    }
+    
+    const ServiceStatus = {
+        1 : '#FF0000', // Stopped
+        2 : '#BFFFBF', // StartPending
+        3 : '#FD6464', // StopPending
+        4 : '#00FF00', // Running
+        5 : '#FFB403', // ContinuePending
+        6 : '#809EFF', // PausePending
+        7 : '#0314FF'  // Paused
+    }
 }
