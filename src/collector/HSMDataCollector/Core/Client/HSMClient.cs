@@ -98,11 +98,11 @@ namespace HSMDataCollector.Core
 
                 return connect.IsSuccessStatusCode
                     ? ConnectionResult.Ok
-                    : new ConnectionResult($"{connect.ReasonPhrase} ({await connect.Content.ReadAsStringAsync()})");
+                    : new ConnectionResult(connect.StatusCode, $"{connect.ReasonPhrase} ({await connect.Content.ReadAsStringAsync()})");
             }
             catch (Exception ex)
             {
-                return new ConnectionResult(ex.Message);
+                return new ConnectionResult(null, ex.Message);
             }
         }
 
