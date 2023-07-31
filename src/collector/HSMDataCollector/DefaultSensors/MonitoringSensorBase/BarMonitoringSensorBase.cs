@@ -66,7 +66,12 @@ namespace HSMDataCollector.DefaultSensors
             }
         }
 
-        protected sealed override BarType GetValue() => _internalBar.Complete() as BarType;
+        protected sealed override BarType GetValue()
+        {
+            _needSendValue = _internalBar.Count > 0;
+
+            return _internalBar.Complete() as BarType;
+        }
 
         protected sealed override BarType GetDefaultValue() =>
             new BarType()

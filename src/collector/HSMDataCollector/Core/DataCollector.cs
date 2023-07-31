@@ -203,7 +203,8 @@ namespace HSMDataCollector.Core
         {
             var lastData = _nameToSensor.Values.Where(v => v.HasLastValue).Select(v => v.GetLastValue()).ToList();
 
-            _hsmClient.SendData(lastData);
+            if (lastData.Count > 0)
+                _hsmClient.SendData(lastData);
 
             foreach (var pair in _nameToSensor.Values)
                 pair.Dispose();
@@ -452,7 +453,9 @@ namespace HSMDataCollector.Core
         {
             var split = path.Split('/');
             var name = split.LastOrDefault();
-            var nodePath = path.Substring(0, path.Length - name.Length - 1);
+
+            var nodePathIndex = path.Length - name.Length - 1;
+            var nodePath = nodePathIndex > -1 ? path.Substring(0, nodePathIndex) : string.Empty;
 
             var options = new BarSensorOptions()
             {
@@ -465,18 +468,18 @@ namespace HSMDataCollector.Core
             return CreateBarSensor(new IntBarPublicSensor(options));
         }
 
-        public IBarSensor<int> Create1HrIntBarSensor(string path, string description) => CreateIntBarSensor(path, 3600000, 15000, description);
+        public IBarSensor<int> Create1HrIntBarSensor(string path, string description = "") => CreateIntBarSensor(path, 3600000, 15000, description);
 
-        public IBarSensor<int> Create30MinIntBarSensor(string path, string description) => CreateIntBarSensor(path, 1800000, 15000, description);
+        public IBarSensor<int> Create30MinIntBarSensor(string path, string description = "") => CreateIntBarSensor(path, 1800000, 15000, description);
 
-        public IBarSensor<int> Create10MinIntBarSensor(string path, string description) => CreateIntBarSensor(path, 600000, 15000, description);
+        public IBarSensor<int> Create10MinIntBarSensor(string path, string description = "") => CreateIntBarSensor(path, 600000, 15000, description);
 
-        public IBarSensor<int> Create5MinIntBarSensor(string path, string description) => CreateIntBarSensor(path, 300000, 15000, description);
+        public IBarSensor<int> Create5MinIntBarSensor(string path, string description = "") => CreateIntBarSensor(path, 300000, 15000, description);
 
-        public IBarSensor<int> Create1MinIntBarSensor(string path, string description) => CreateIntBarSensor(path, 60000, 15000, description);
+        public IBarSensor<int> Create1MinIntBarSensor(string path, string description = "") => CreateIntBarSensor(path, 60000, 15000, description);
 
 
-        public IBarSensor<double> CreateDoubleBarSensor(string path, int barPeriod, int postPeriod, int precision, string description = "")
+        public IBarSensor<double> CreateDoubleBarSensor(string path, int barPeriod, int postPeriod, int precision = 2, string description = "")
         {
             var split = path.Split('/');
             var name = split.LastOrDefault();
@@ -494,15 +497,15 @@ namespace HSMDataCollector.Core
             return CreateBarSensor(new DoubleBarPublicSensor(options));
         }
 
-        public IBarSensor<double> Create1HrDoubleBarSensor(string path, int precision, string description) => CreateDoubleBarSensor(path, 3600000, 15000, precision, description);
+        public IBarSensor<double> Create1HrDoubleBarSensor(string path, int precision = 2, string description = "") => CreateDoubleBarSensor(path, 3600000, 15000, precision, description);
 
-        public IBarSensor<double> Create30MinDoubleBarSensor(string path, int precision, string description) => CreateDoubleBarSensor(path, 1800000, 15000, precision, description);
+        public IBarSensor<double> Create30MinDoubleBarSensor(string path, int precision = 2, string description = "") => CreateDoubleBarSensor(path, 1800000, 15000, precision, description);
 
-        public IBarSensor<double> Create10MinDoubleBarSensor(string path, int precision, string description) => CreateDoubleBarSensor(path, 600000, 15000, precision, description);
+        public IBarSensor<double> Create10MinDoubleBarSensor(string path, int precision = 2, string description = "") => CreateDoubleBarSensor(path, 600000, 15000, precision, description);
 
-        public IBarSensor<double> Create5MinDoubleBarSensor(string path, int precision, string description) => CreateDoubleBarSensor(path, 300000, 15000, precision, description);
+        public IBarSensor<double> Create5MinDoubleBarSensor(string path, int precision = 2, string description = "") => CreateDoubleBarSensor(path, 300000, 15000, precision, description);
 
-        public IBarSensor<double> Create1MinDoubleBarSensor(string path, int precision, string description) => CreateDoubleBarSensor(path, 60000, 15000, precision, description);
+        public IBarSensor<double> Create1MinDoubleBarSensor(string path, int precision = 2, string description = "") => CreateDoubleBarSensor(path, 60000, 15000, precision, description);
 
 
         private IBarSensor<T> CreateBarSensor<BarType, T>(PublicBarMonitoringSensor<BarType, T> newSensor)
@@ -512,8 +515,13 @@ namespace HSMDataCollector.Core
             if (_sensorsStorage.TryGetValue(newSensor.SensorPath, out var sensor))
                 return (IBarSensor<T>)sensor;
 
-            return Status.IsRunning() ? (IBarSensor<T>)_sensorsStorage.Run(sensor) :
-                                        (IBarSensor<T>)_sensorsStorage.Register(sensor);
+            if (Status.IsRunning())
+            {
+                _ = _sensorsStorage.Run(newSensor);
+                return newSensor;
+            }
+
+            return (IBarSensor<T>)_sensorsStorage.Register(newSensor);
         }
 
         #endregion

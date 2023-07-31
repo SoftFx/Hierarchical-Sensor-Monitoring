@@ -106,7 +106,9 @@ namespace HSMDataCollector.Core
             }
         }
 
-        internal Task SendData(List<SensorValueBase> values) => RequestToServer(values.ToList().Cast<object>(), _endpoints.List);
+        internal Task SendData(List<SensorValueBase> values) => values.Count > 0
+            ? RequestToServer(values.ToList().Cast<object>(), _endpoints.List)
+            : Task.CompletedTask;
 
         internal Task SendData(SensorValueBase value)
         {

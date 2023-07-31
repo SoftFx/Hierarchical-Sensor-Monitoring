@@ -17,12 +17,14 @@ namespace HSMDataCollector.DefaultSensors
         {
             lock (_lock)
             {
+                if (DateTime.UtcNow > CloseTime)
+                    return;
+
                 if (Count == 0)
                 {
+                    Mean = value;
                     Min = value;
                     Max = value;
-                    Mean = value;
-                    LastValue = value;
                 }
                 else
                     ApplyNewValue(value);
@@ -51,9 +53,9 @@ namespace HSMDataCollector.DefaultSensors
                     Max = Round(Max);
                     Mean = Round(CountMean());
 
-                    Percentiles[0.25] = CountAvr(Mean, Min);
+                    Percentiles[0.25] = Round(CountAvr(Mean, Min));
                     Percentiles[0.5] = Mean;
-                    Percentiles[0.75] = CountAvr(Mean, Max);
+                    Percentiles[0.75] = Round(CountAvr(Mean, Max));
                 }
 
                 return this;
@@ -106,7 +108,7 @@ namespace HSMDataCollector.DefaultSensors
             Max = Math.Max(value, Max);
         }
 
-        protected override double CountAvr(double first, double second) => Round((first + second) / 2);
+        protected override double CountAvr(double first, double second) => (first + second) / 2;
 
         protected override double CountMean() => _totalSum / Count;
 
