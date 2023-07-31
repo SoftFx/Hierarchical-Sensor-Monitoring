@@ -10,7 +10,6 @@ using HSMServer.Notifications;
 using Microsoft.AspNetCore.Mvc;
 using System;
 using System.Threading.Tasks;
-using SensorStatus = HSMServer.Model.TreeViewModel.SensorStatus;
 
 namespace HSMServer.Controllers
 {
@@ -76,10 +75,6 @@ namespace HSMServer.Controllers
 
             return UpdateTelegramMessageSettings(entityId, update);
         }
-
-        [HttpGet]
-        public string UpdateViewStatusLevelHelper([FromQuery] SensorStatus newSensorStatus) =>
-            TelegramSettingsViewModel.GetStatusPairs(newSensorStatus);
 
         public RedirectResult OpenInvitationLink() =>
             Redirect(_telegramBot.GetInvitationLink(GetCurrentUser()));

@@ -48,12 +48,24 @@ namespace HSMServer.Core.Model.Policies
         protected abstract bool CalculateStorageResult(T value, bool updateSensor);
 
 
-        internal override void Attach(BaseSensorModel sensor) => _sensor = sensor;
+        internal override void Attach(BaseSensorModel sensor)
+        {
+            _typePolicy = new CorrectTypePolicy<T>(sensor);
+            _sensor = sensor;
+
+            base.BuildDefault(sensor);
+        }
 
         internal override void BuildDefault(BaseNodeModel node, PolicyEntity entity = null)
         {
-            _typePolicy = new CorrectTypePolicy<T>(_sensor);
             base.BuildDefault(node, entity);
+            _typePolicy.RebuildState();
+        }
+
+        internal override void UpdateTTL(PolicyUpdate update)
+        {
+            PolicyResult.RemoveAlert(TimeToLive);
+            base.UpdateTTL(update);
         }
 
 
@@ -81,7 +93,10 @@ namespace HSMServer.Core.Model.Policies
 
             var timeout = TimeToLive.HasTimeout(time);
 
-            PolicyResult = timeout ? TimeToLive.PolicyResult : PolicyResult.Ok;
+            if (timeout)
+                PolicyResult.AddSingleAlert(TimeToLive);
+            else
+                PolicyResult.RemoveAlert(TimeToLive);
 
             SensorExpired?.Invoke(_sensor, timeout);
 
@@ -155,7 +170,7 @@ namespace HSMServer.Core.Model.Policies
                 {
                     var policy = new PolicyType();
 
-                    policy.Update(update);
+                    policy.Update(update, _sensor);
 
                     AddPolicy(policy);
                     CallJournal(string.Empty, policy.ToString(), initiator);
@@ -197,8 +212,7 @@ namespace HSMServer.Core.Model.Policies
                 $"$status [$product]$path = $comment",
                 null);
 
-            policy._sensor = _sensor;
-            policy.Update(statusUpdate);
+            policy.Update(statusUpdate, _sensor);
 
             AddPolicy(policy);
             Uploaded?.Invoke(ActionType.Add, policy);

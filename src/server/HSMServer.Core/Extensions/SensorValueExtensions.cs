@@ -3,19 +3,21 @@ using System;
 using System.IO;
 using System.IO.Compression;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace HSMServer.Core.Extensions
 {
     public static class SensorValueExtensions
     {
+        private static readonly JsonSerializerOptions _options = new () 
+        { 
+            NumberHandling = JsonNumberHandling.AllowNamedFloatingPointLiterals 
+        };
+        
+        
         public static BaseValue ToValue<T>(this byte[] bytes) where T : BaseValue
         {
-            if (bytes == null)
-                return null;
-
-            var rootElement = JsonDocument.Parse(bytes).RootElement;
-
-            return rootElement.Deserialize<T>();
+            return bytes == null ? null : (BaseValue)JsonSerializer.Deserialize<T>(bytes, _options);
         }
 
 

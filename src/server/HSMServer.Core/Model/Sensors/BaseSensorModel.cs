@@ -48,7 +48,19 @@ namespace HSMServer.Core.Model
         public SensorState State { get; private set; }
 
 
-        public SensorResult? Status => State == SensorState.Muted ? _muteResult : Storage.Result + Policies.SensorResult;
+        public SensorResult? Status
+        {
+            get
+            {
+                if (State == SensorState.Muted)
+                    return _muteResult;
+
+                if (!Policies.SensorResult.IsOk)
+                    return Policies.SensorResult;
+
+                return Storage.Result;
+            }
+        }
 
         public PolicyResult PolicyResult => Policies.PolicyResult;
 

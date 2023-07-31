@@ -1,4 +1,6 @@
-﻿namespace HSMDataCollector.PublicInterface
+﻿using System.Collections.Generic;
+
+namespace HSMDataCollector.PublicInterface
 {
     /// <summary>
     /// Represents a sensor, which collects the data within the specified period and passes to the server
@@ -12,5 +14,7 @@
         /// </summary>
         /// <param name="value">The value to be added</param>
         void AddValue(T value);
+
+        void AddValues(IEnumerable<T> values);
     }
 }

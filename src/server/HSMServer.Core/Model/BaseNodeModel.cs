@@ -87,6 +87,12 @@ namespace HSMServer.Core.Model
             Description = UpdateProperty(Description, update.Description ?? Description, update.Initiator);
 
             Settings.Update(update, FullPath);
+
+            if (update.TTLPolicy is not null)
+            {
+                Policies.UpdateTTL(update.TTLPolicy);
+                CheckTimeout();
+            }
         }
 
 

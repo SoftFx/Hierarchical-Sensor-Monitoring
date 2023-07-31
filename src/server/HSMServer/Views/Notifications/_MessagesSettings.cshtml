@@ -1,7 +1,6 @@
 ﻿@using HSMServer.Constants
 @using HSMServer.Controllers
 @using HSMServer.Model
-@using HSMServer.Model.TreeViewModel;
 
 @model TelegramSettingsViewModel
 
@@ -56,36 +55,4 @@
             <button type="submit" class="btn btn-secondary my-1">Save</button>
         }
     </form>
-
-
-    <script>
-        $(document).ready(function () {
-            let statusValue = $('#statusLabel').text();
-            if (statusValue == '') {
-                statusValue = $('#statusSelect')[0].value;
-            }
-
-            $.ajax({
-                type: 'GET',
-                url: `@Url.Action(nameof(NotificationsController.UpdateViewStatusLevelHelper), ViewConstants.NotificationsController)?newSensorStatus=${statusValue}`,
-                cache: false,
-                async: true
-            }).done(function (data) {
-                $('#minStatusLevelHelper')[0].innerText = data;
-            });
-        });
-
-        $('#statusSelect').on('change', function() {
-            let currentStatus = this.value;
-
-            $.ajax({
-            type: 'GET',
-            url: `@Url.Action(nameof(NotificationsController.UpdateViewStatusLevelHelper), ViewConstants.NotificationsController)?newSensorStatus=${currentStatus}`,
-            cache: false,
-            async: true
-            }).done(function (data) {
-                $('#minStatusLevelHelper')[0].innerText = data;
-            });
-        });
-    </script>
 }

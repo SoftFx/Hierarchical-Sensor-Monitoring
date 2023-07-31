@@ -14,7 +14,7 @@
     var isSensitivityCondition = condition == AlertProperty.Sensitivity;
     var isValueCondition = !isStatusCondition && !isTtlCondition && !isSensitivityCondition;
 
-    var isSecondaryCondition = Model.PropertiesItems.Any(i => i.Value == nameof(AlertProperty.Sensitivity));
+    var isSecondaryCondition = !Model.IsMain;
 }
 
 

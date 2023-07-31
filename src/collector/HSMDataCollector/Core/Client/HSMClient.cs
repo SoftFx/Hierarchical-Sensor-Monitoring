@@ -98,15 +98,17 @@ namespace HSMDataCollector.Core
 
                 return connect.IsSuccessStatusCode
                     ? ConnectionResult.Ok
-                    : new ConnectionResult($"{connect.ReasonPhrase} ({await connect.Content.ReadAsStringAsync()})");
+                    : new ConnectionResult(connect.StatusCode, $"{connect.ReasonPhrase} ({await connect.Content.ReadAsStringAsync()})");
             }
             catch (Exception ex)
             {
-                return new ConnectionResult(ex.Message);
+                return new ConnectionResult(null, ex.Message);
             }
         }
 
-        internal Task SendData(List<SensorValueBase> values) => RequestToServer(values.Cast<object>().ToList(), _endpoints.List);
+        internal Task SendData(List<SensorValueBase> values) => values.Count > 0
+            ? RequestToServer(values.ToList().Cast<object>(), _endpoints.List)
+            : Task.CompletedTask;
 
         internal Task SendData(SensorValueBase value)
         {
@@ -152,7 +154,7 @@ namespace HSMDataCollector.Core
                 var res = await _client.PostAsync(uri, data, _tokenSource.Token);
 
                 if (!res.IsSuccessStatusCode)
-                    _logger.Error($"Failed to send data. StatusCode={res.StatusCode}");
+                    _logger.Error($"Failed to send data. StatusCode={res.StatusCode}. Data={json}.");
             }
             catch (Exception ex)
             {

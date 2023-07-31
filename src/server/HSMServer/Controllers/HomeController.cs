@@ -3,7 +3,9 @@ using HSMServer.Authentication;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Extensions;
+using HSMServer.Core.Journal;
 using HSMServer.Core.Model;
+using HSMServer.Core.Model.Requests;
 using HSMServer.Extensions;
 using HSMServer.Folders;
 using HSMServer.Helpers;
@@ -26,10 +28,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
-using HSMServer.Core.Journal;
 using TimeInterval = HSMServer.Model.TimeInterval;
-using HSMServer.Core.Model.Requests;
-using System.Xml.Linq;
 
 namespace HSMServer.Controllers
 {
@@ -53,7 +52,7 @@ namespace HSMServer.Controllers
             _folderManager = folderManager;
             _journalService = journalService;
         }
-        
+
         public IActionResult Index()
         {
             return View(_treeViewModel);
@@ -267,7 +266,7 @@ namespace HSMServer.Controllers
                     var update = new ProductUpdate
                     {
                         Id = product.Id,
-                        TTL = expectedUpdate ? model.ExpectedUpdateInterval?.ToModel() : null
+                        TTL = expectedUpdate ? model.ExpectedUpdateInterval?.ToModel(product.TTL) : null
                     };
 
                     if (!expectedUpdate)
@@ -590,7 +589,7 @@ namespace HSMServer.Controllers
                 entity = sensor;
             if (_treeViewModel.Nodes.TryGetValue(sensorId, out var node))
                 entity = node;
-            
+
             DataAlertViewModelBase viewModel = type switch
             {
                 (byte)SensorType.File => new DataAlertViewModel<FileValue>(sensorId),
@@ -636,22 +635,14 @@ namespace HSMServer.Controllers
 
 
         [HttpPost]
-        public void SendTestMessage(DataAlertViewModelBase alert)
+        public IActionResult GetTestToastMessage(AlertMessageViewModel alert)
         {
-            if (!_treeViewModel.Sensors.TryGetValue(alert.EntityId, out var sensor) ||
-                !_treeViewModel.Nodes.TryGetValue(sensor.RootProduct.Id, out var product))
-                return;
+            if (!_treeViewModel.Sensors.TryGetValue(alert.EntityId, out _))
+                return _emptyResult;
 
-            //TODO fix after creating alert constructor and merge AlertState
-            //var template = CommentBuilder.GetTemplateString(alert.Comment);
-            //var comment = string.Format(template, product.Name, sensor.Path, sensor.Name,
-            //    alert.Operation.GetDisplayName(), alert.Value, SensorStatus.Ok, DateTime.UtcNow, "value comment", 0, 0, 0, 0, 0);
-            //var testMessage = $"↕️ [{product.Name}]{sensor.Path} = {comment}";
+            var sensorModel = _treeValuesCache.GetSensor(alert.EntityId);
 
-            //var notifications = product.Notifications;
-            //foreach (var (chat, _) in notifications.Telegram.Chats)
-            //    if (notifications.IsSensorEnabled(sensor.Id) && !notifications.IsSensorIgnored(sensor.Id, chat))
-            //        _telegramBot.SendTestMessage(chat, testMessage);
+            return Json(alert.BuildToastMessage(sensorModel));
         }
 
 
@@ -725,10 +716,11 @@ namespace HSMServer.Controllers
             var update = new ProductUpdate
             {
                 Id = product.Id,
-                TTL = ttl?.Conditions[0].TimeToLive.ToModel() ?? new TimeIntervalModel(Core.Model.TimeInterval.None),
+                TTL = ttl?.Conditions[0].TimeToLive.ToModel(product.TTL) ?? TimeIntervalModel.None,
                 TTLPolicy = ttl?.ToTimeToLiveUpdate(),
-                KeepHistory = newModel.SavedHistoryPeriod.ToModel(),
-                SelfDestroy = newModel.SelfDestroyPeriod.ToModel(),
+
+                KeepHistory = newModel.SavedHistoryPeriod.ToModel(product.KeepHistory),
+                SelfDestroy = newModel.SelfDestroyPeriod.ToModel(product.SelfDestroy),
                 Description = newModel.Description ?? string.Empty,
                 Initiator = CurrentUser.Name
             };
