@@ -29,8 +29,12 @@ namespace HSMDataCollector.DefaultSensors
 
     internal class IntBarPublicSensor : PublicBarMonitoringSensor<IntMonitoringBar, int>
     {
-        public IntBarPublicSensor(BarSensorOptions options) : base(options)
-        {
-        }
+        public IntBarPublicSensor(BarSensorOptions options) : base(options) { }
+    }
+
+
+    internal class DoubleBarPublicSensor : PublicBarMonitoringSensor<DoubleMonitoringBar, double>
+    {
+        public DoubleBarPublicSensor(BarSensorOptions options) : base (options) { }
     }
 }

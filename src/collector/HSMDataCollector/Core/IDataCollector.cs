@@ -209,11 +209,11 @@ namespace HSMDataCollector.Core
         /// Creates new BarSensor for collecting int values via specified parameters
         /// </summary>
         /// <param name="path">Sensor path in the tree</param>
-        /// <param name="timeout">One bar contains the data for the specified period. Defaults to 5 minutes</param>
-        /// <param name="smallPeriod">The frequency of sending bar updates to a server. Defaults to 15 sec</param>
+        /// <param name="barPeriod">One bar contains the data for the specified period. Defaults to 5 minutes</param>
+        /// <param name="postPeriod">The frequency of sending bar updates to a server. Defaults to 15 sec</param>
         /// <param name="description">Possible sensor description, empty by default</param>
         /// <returns>A new instance of <see cref="IBarSensor{T}"/> where T is int, with specified parameters</returns>
-        IBarSensor<int> CreateIntBarSensor(string path, int timeout = 300000, int smallPeriod = 15000, string description = "");
+        IBarSensor<int> CreateIntBarSensor(string path, int barPeriod = 300000, int postPeriod = 15000, string description = "");
 
         /// <summary>
         /// Creates new BarSensor for collecting int values with timeout sent to 1 hour and smallPeriod
@@ -269,12 +269,12 @@ namespace HSMDataCollector.Core
         /// Creates new BarSensor for collecting double values via specified parameters
         /// </summary>
         /// <param name="path">Sensor path in the tree</param>
-        /// <param name="timeout">One bar contains the data for the specified period. Defaults to 5 minutes</param>
-        /// <param name="smallPeriod">The frequency of sending bar updates to a server. Defaults to 15 sec</param>
+        /// <param name="barPeriod">One bar contains the data for the specified period. Defaults to 5 minutes</param>
+        /// <param name="postPeriod">The frequency of sending bar updates to a server. Defaults to 15 sec</param>
         /// <param name="precision">The precision applied to all characteristics calculations, defaults to 2</param>
         /// <param name="description">Possible sensor description, empty by default</param>
         /// <returns>A new instance of <see cref="IBarSensor{T}"/> where T is double, with specified parameters</returns>
-        IBarSensor<double> CreateDoubleBarSensor(string path, int timeout = 300000, int smallPeriod = 15000, int precision = 2, string description = "");
+        IBarSensor<double> CreateDoubleBarSensor(string path, int barPeriod = 300000, int postPeriod = 15000, int precision = 2, string description = "");
 
         /// <summary>
         /// Creates new BarSensor for collecting int values with timeout sent to 1 hour and smallPeriod

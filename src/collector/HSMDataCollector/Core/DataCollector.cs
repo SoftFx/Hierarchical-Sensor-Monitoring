@@ -1,5 +1,4 @@
-﻿using HSMDataCollector.Bar;
-using HSMDataCollector.Base;
+﻿using HSMDataCollector.Base;
 using HSMDataCollector.CustomFuncSensor;
 using HSMDataCollector.DefaultSensors;
 using HSMDataCollector.DefaultValueSensor;
@@ -427,7 +426,7 @@ namespace HSMDataCollector.Core
             if (existingSensor is IInstantValueSensor<T> instantValueSensor)
                 return instantValueSensor;
 
-            InstantValueSensor<T> sensor = new InstantValueSensor<T>(path, _dataQueue as IValuesQueue, description);
+            var sensor = new InstantValueSensor<T>(path, _dataQueue as IValuesQueue, description);
             AddNewSensor(sensor, path);
 
             return sensor;
@@ -439,8 +438,7 @@ namespace HSMDataCollector.Core
             if (existingSensor is ILastValueSensor<T> lastValueSensor)
                 return lastValueSensor;
 
-            DefaultValueSensor<T> sensor =
-                new DefaultValueSensor<T>(path, _dataQueue as IValuesQueue, defaultValue, description);
+            var sensor = new DefaultValueSensor<T>(path, _dataQueue as IValuesQueue, defaultValue, description);
             AddNewSensor(sensor, path);
 
             return sensor;
@@ -450,84 +448,72 @@ namespace HSMDataCollector.Core
 
         #region Generic bar sensors
 
-        public IBarSensor<int> CreateIntBarSensor(string path, int timeout, int smallPeriod = 15000, string description = "")
+        public IBarSensor<int> CreateIntBarSensor(string path, int barPeriod, int postPeriod = 15000, string description = "")
         {
-            if (_sensorsStorage.TryGetValue(path, out var sensor))
-                return (IBarSensor<int>)sensor;
+            var split = path.Split('/');
+            var name = split.LastOrDefault();
+            var nodePath = path.Substring(0, path.Length - name.Length - 1);
 
-            var options = new BarSensorOptions();
-
-            sensor = new IntBarPublicSensor(options);
-
-            return Status.IsRunning() ? (IBarSensor<int>)_sensorsStorage.Run(sensor) :
-                                        (IBarSensor<int>)_sensorsStorage.Register(sensor);
-        }
-
-        public IBarSensor<int> Create1HrIntBarSensor(string path, string description)
-        {
-            return CreateIntBarSensor(path, 3600000, 15000, description);
-        }
-
-        public IBarSensor<int> Create30MinIntBarSensor(string path, string description)
-        {
-            return CreateIntBarSensor(path, 1800000, 15000, description);
-        }
-
-        public IBarSensor<int> Create10MinIntBarSensor(string path, string description)
-        {
-            return CreateIntBarSensor(path, 600000, 15000, description);
-        }
-
-        public IBarSensor<int> Create5MinIntBarSensor(string path, string description)
-        {
-            return CreateIntBarSensor(path, 300000, 15000, description);
-        }
-
-        public IBarSensor<int> Create1MinIntBarSensor(string path, string description)
-        {
-            return CreateIntBarSensor(path, 60000, 15000, description);
-        }
-
-        public IBarSensor<double> CreateDoubleBarSensor(string path, int timeout, int smallPeriod, int precision, string description = "")
-        {
-            var existingSensor = GetExistingSensor(path);
-            if (existingSensor is IBarSensor<double> doubleBarSensor)
+            var options = new BarSensorOptions()
             {
-                (doubleBarSensor as BarSensorBase)?.Restart(timeout, smallPeriod);
+                SensorName = name,
+                NodePath = nodePath,
+                CollectBarPeriod = TimeSpan.FromMilliseconds(barPeriod),
+                PostDataPeriod = TimeSpan.FromMilliseconds(postPeriod),
+            };
 
-                return doubleBarSensor;
-            }
-
-            BarSensor<double> sensor = new BarSensor<double>(path, _dataQueue as IValuesQueue,
-                SensorType.DoubleBarSensor, timeout, smallPeriod, precision, description);
-            AddNewSensor(sensor, path);
-
-            return sensor;
+            return CreateBarSensor(new IntBarPublicSensor(options));
         }
 
-        public IBarSensor<double> Create1HrDoubleBarSensor(string path, int precision, string description)
+        public IBarSensor<int> Create1HrIntBarSensor(string path, string description) => CreateIntBarSensor(path, 3600000, 15000, description);
+
+        public IBarSensor<int> Create30MinIntBarSensor(string path, string description) => CreateIntBarSensor(path, 1800000, 15000, description);
+
+        public IBarSensor<int> Create10MinIntBarSensor(string path, string description) => CreateIntBarSensor(path, 600000, 15000, description);
+
+        public IBarSensor<int> Create5MinIntBarSensor(string path, string description) => CreateIntBarSensor(path, 300000, 15000, description);
+
+        public IBarSensor<int> Create1MinIntBarSensor(string path, string description) => CreateIntBarSensor(path, 60000, 15000, description);
+
+
+        public IBarSensor<double> CreateDoubleBarSensor(string path, int barPeriod, int postPeriod, int precision, string description = "")
         {
-            return CreateDoubleBarSensor(path, 3600000, 15000, precision, description);
+            var split = path.Split('/');
+            var name = split.LastOrDefault();
+            var nodePath = path.Substring(0, path.Length - name.Length - 1);
+
+            var options = new BarSensorOptions()
+            {
+                SensorName = name,
+                NodePath = nodePath,
+                Precision = precision,
+                CollectBarPeriod = TimeSpan.FromMilliseconds(barPeriod),
+                PostDataPeriod = TimeSpan.FromMilliseconds(postPeriod),
+            };
+
+            return CreateBarSensor(new DoubleBarPublicSensor(options));
         }
 
-        public IBarSensor<double> Create30MinDoubleBarSensor(string path, int precision, string description)
-        {
-            return CreateDoubleBarSensor(path, 1800000, 15000, precision, description);
-        }
+        public IBarSensor<double> Create1HrDoubleBarSensor(string path, int precision, string description) => CreateDoubleBarSensor(path, 3600000, 15000, precision, description);
 
-        public IBarSensor<double> Create10MinDoubleBarSensor(string path, int precision, string description)
-        {
-            return CreateDoubleBarSensor(path, 600000, 15000, precision, description);
-        }
+        public IBarSensor<double> Create30MinDoubleBarSensor(string path, int precision, string description) => CreateDoubleBarSensor(path, 1800000, 15000, precision, description);
 
-        public IBarSensor<double> Create5MinDoubleBarSensor(string path, int precision, string description)
-        {
-            return CreateDoubleBarSensor(path, 300000, 15000, precision, description);
-        }
+        public IBarSensor<double> Create10MinDoubleBarSensor(string path, int precision, string description) => CreateDoubleBarSensor(path, 600000, 15000, precision, description);
 
-        public IBarSensor<double> Create1MinDoubleBarSensor(string path, int precision, string description)
+        public IBarSensor<double> Create5MinDoubleBarSensor(string path, int precision, string description) => CreateDoubleBarSensor(path, 300000, 15000, precision, description);
+
+        public IBarSensor<double> Create1MinDoubleBarSensor(string path, int precision, string description) => CreateDoubleBarSensor(path, 60000, 15000, precision, description);
+
+
+        private IBarSensor<T> CreateBarSensor<BarType, T>(PublicBarMonitoringSensor<BarType, T> newSensor)
+            where BarType : MonitoringBarBase<T>, new()
+            where T : struct
         {
-            return CreateDoubleBarSensor(path, 60000, 15000, precision, description);
+            if (_sensorsStorage.TryGetValue(newSensor.SensorPath, out var sensor))
+                return (IBarSensor<T>)sensor;
+
+            return Status.IsRunning() ? (IBarSensor<T>)_sensorsStorage.Run(sensor) :
+                                        (IBarSensor<T>)_sensorsStorage.Register(sensor);
         }
 
         #endregion
