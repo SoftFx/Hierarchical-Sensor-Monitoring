@@ -421,6 +421,8 @@ namespace HSMServer.Core.Cache
                 sensor = SensorModelFactory.Build(entity);
                 parentProduct.AddSensor(sensor);
 
+                sensor.Policies.AddStatus();
+
                 AddSensor(sensor);
                 UpdateProduct(parentProduct);
             }
