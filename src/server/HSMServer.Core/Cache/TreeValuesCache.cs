@@ -13,9 +13,6 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
-using System.Text.Json;
-using System.Text.Json.Nodes;
 
 namespace HSMServer.Core.Cache
 {
@@ -493,8 +490,6 @@ namespace HSMServer.Core.Cache
 
             ApplySensors(productEntities, sensorEntities, policies);
 
-            LoadOldPolicies(productEntities, sensorEntities); // remove after migration policy to new style
-
             _logger.Info($"{nameof(IDatabaseCore.GetAccessKeys)} is requesting");
             var accessKeysEntities = _database.GetAccessKeys();
             _logger.Info($"{nameof(IDatabaseCore.GetAccessKeys)} requested");
@@ -506,73 +501,6 @@ namespace HSMServer.Core.Cache
             _logger.Info($"{nameof(TreeValuesCache)} initialized");
 
             UpdateCacheState();
-        }
-
-        [Obsolete("Should be removed after migration")]
-        private void LoadOldPolicies(List<ProductEntity> products, List<SensorEntity> sensors)
-        {
-            _logger.Info($"{nameof(LoadOldPolicies)} is requesting");
-
-            var rawPolicies = new Dictionary<string, JsonObject>();
-
-            foreach (var oldRaw in _database.GetAllOldPolicies())
-            {
-                var raw = JsonSerializer.Deserialize<JsonObject>(Encoding.UTF8.GetString(oldRaw));
-
-                if (raw["Id"] is not null)
-                    rawPolicies.Add(raw["Id"].ToString(), raw);
-            }
-
-            var resavedPolicies = new Dictionary<string, PolicyEntity>();
-
-            var sensorUpdates = Migrators.GetMigrationUpdates<SensorUpdate, SensorEntity>(sensors, rawPolicies, resavedPolicies);
-            var productUpdates = Migrators.GetMigrationUpdates<ProductUpdate, ProductEntity>(products, rawPolicies, resavedPolicies);
-
-            _logger.Info($"Removing old from db policies");
-
-            _database.RemoveAllOldPolicies();
-
-            _logger.Info($"Resave old policies as new policies");
-
-            foreach (var policy in resavedPolicies)
-                _database.AddPolicy(policy.Value);
-
-            _logger.Info($"Try to update old sensor policies");
-
-            if (resavedPolicies.Count > 0)
-                foreach (var sensor in sensors)
-                {
-                    if (_sensors.TryGetValue(Guid.Parse(sensor.Id), out var model))
-                    {
-                        int oldCnt = model.Policies.Count();
-
-                        model.Policies.ApplyPolicies(sensor.Policies, resavedPolicies);
-
-                        if (sensorUpdates.ContainsKey(model.Id))
-                            model.Policies.AddStatus();
-
-                        if (model.Policies.Count() > oldCnt)
-                            _database.UpdateSensor(model.ToEntity());
-                    }
-                }
-
-            _logger.Info($"Sensor update finished");
-
-            _logger.Info($"Try to update prodcuts");
-
-            foreach (var update in productUpdates)
-                UpdateProduct(update.Value);
-
-            _logger.Info($"Prodcuts update is finish");
-
-            _logger.Info($"Try to update sensors");
-
-            foreach (var update in sensorUpdates)
-                UpdateSensor(update.Value);
-
-            _logger.Info($"Sensor update is finish");
-
-            _logger.Info($"{nameof(LoadOldPolicies)} are applying");
         }
 
         private List<ProductEntity> RequestProducts()

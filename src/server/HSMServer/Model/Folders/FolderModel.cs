@@ -38,26 +38,6 @@ namespace HSMServer.Model.Folders
             CreationDate = new DateTime(entity.CreationDate);
             Notifications = new NotificationSettings(entity.Notifications);
 
-            if (entity.Settings.Count == 0) //TODO: Remove after migrations
-            {
-                for (int i = 0; i < entity.ServerPolicies.Count; ++i)
-                {
-                    var oldInterval = entity.ServerPolicies[i];
-                    var newEntity = Core.Migrators.ToNewInterval(oldInterval).ToEntity();
-
-                    var name = i switch
-                    {
-                        0 => nameof(TTL),
-                        2 => nameof(KeepHistory),
-                        3 => nameof(SelfDestroy),
-                        _ => null,
-                    };
-
-                    if (name != null)
-                        entity.Settings.Add(name, newEntity);
-                }
-            }
-
             KeepHistory = LoadKeepHistory(entity.Settings.GetValueOrDefault(nameof(KeepHistory)));
             SelfDestroy = LoadSelfDestroy(entity.Settings.GetValueOrDefault(nameof(SelfDestroy)));
             TTL = LoadTTL(entity.Settings.GetValueOrDefault(nameof(TTL)));
