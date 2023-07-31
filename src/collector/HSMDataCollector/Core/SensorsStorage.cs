@@ -37,21 +37,35 @@ namespace HSMDataCollector.Core
 
         internal Task Stop() => Task.WhenAll(Values.Select(s => s.Stop()));
 
-        internal void Register(string key, SensorBase value)
+
+        internal async Task<SensorBase> Run(SensorBase sensor)
         {
-            if (TryAdd(key, value))
+            var path = sensor.SensorPath;
+
+            if (!await Register(sensor).Init())
+                _logger.Error($"Failed to init {path}");
+            else if (!await sensor.Start())
+                _logger.Error($"Failed to start {path}");
+
+            return sensor;
+        }
+
+        internal SensorBase Register(SensorBase sensor)
+        {
+            if (TryAdd(sensor.SensorPath, sensor))
             {
-                value.ReceiveSensorValue += _valuesQueue.Push;
-                value.ExceptionThrowing += WriteSensorException;
+                sensor.ReceiveSensorValue += _valuesQueue.Push;
+                sensor.ExceptionThrowing += WriteSensorException;
 
-                _logger.Info($"Added new default sensor {key}");
+                _logger.Info($"New sensor has been added {sensor.SensorPath}");
+
+                return sensor;
             }
+
+            throw new Exception($"Sensor with path {sensor.SensorPath} already exists");
         }
 
 
-        private void WriteSensorException(string sensorPath, Exception ex)
-        {
-            _logger.Error($"Sensor: {sensorPath}, {ex}");
-        }
+        private void WriteSensorException(string sensorPath, Exception ex) => _logger.Error($"Sensor: {sensorPath}, {ex}");
     }
 }
