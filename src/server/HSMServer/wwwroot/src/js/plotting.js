@@ -2,7 +2,28 @@
     let convertedData = convertToGraphData(graphData, graphType, graphName);
     let zoomData = getPreviousZoomData(graphElementId);
     var config = { responsive: true }
-    if (graphType === "7") {
+
+    if (graphType === "1")
+    {
+       
+        let layout = getEnumLayout(convertedData[0], convertedData[1]);
+        layout.autosize = true;
+        let mappedX = convertedData[1].colors.map(x => x === '#00FF00' ? 0.5 : 0)
+        mappedX.pop();
+        let test = {
+            x: convertedData[0].x,
+            y: [0.5, 1.5],
+            z: [mappedX, mappedX],
+            colorscale: [[0, 'red'], [0.5, 'green'], [1, 'blue']],
+            zmin: 0,
+            zmax: 1,
+            showscale: false,
+            type: 'heatmap'
+        }
+
+        Plotly.newPlot(graphElementId, [test, convertedData[0]], layout, config);
+    }
+    else if (graphType === "7") {
         let layout = getTimeSpanLayout(convertedData[0].y)
         layout.autosize = true;
         Plotly.newPlot(graphElementId, convertedData, layout, config);
@@ -71,7 +92,7 @@ function convertToGraphData(graphData, graphType, graphName) {
             data = getBoolData(uniqueData);
             timeList = getTimeList(uniqueData);
             return getBoolGraphData(timeList, data);
-        case "1":
+        case "":
             data = getNumbersData(escapedData);
             timeList = getTimeList(escapedData);
             return getIntGraphData(timeList, data);
@@ -117,7 +138,7 @@ function convertToGraphData(graphData, graphType, graphName) {
             })
             
             return getTimeSpanGraphData(timeList, data, "lines");
-        case "8":
+        case "1":
             data = getNumbersData(escapedData)
             timeList = getTimeList(escapedData)
             return getEnumGraphData(timeList, data)
@@ -374,64 +395,83 @@ function getPlotType(graphType) {
 // Enum plot
 {
     function getEnumGraphData(timeList, dataList){
+        function getMappedData(data) {
+            let y = [];
+            let statuses = [];
+            let colors = [];
+            data.map(function (x) {
+                y.push(1);
+                statuses.push(ServiceStatus[`${x}`][1])
+                colors.push(ServiceStatus[`${x}`][0])
+            })
+            
+            return [y, statuses, colors]
+        }
+        
+        let mappedData = getMappedData(dataList);
         return [
             {
                 x: timeList,
-                y: dataList,
+                y: mappedData[0],
                 type: 'scatter',
-                customdata: dataList.map(x => ServiceStatus[`${x}`]),
-                hovertemplate: '%{customdata}<extra></extra>'
+                mode: 'markers',
+                customdata: mappedData[1],
+                hovertemplate: '%{customdata}<extra></extra>',
+            },
+            {
+                colors: mappedData[2]   
             }
         ];
     }
     
-    function getShapes(data){
-        let colors = data.y.map(y => ServiceStatus[`${y}`]);
+    function getShapes(data, colors){
         let sh = [];
 
         for (let i = 0; i < colors.length; i++) {
-            sh.push(getShape(data.x[i], 1, colors[i]))
+            sh.push(getShape(data.x[i], colors[i]))
         }
 
         return {
             shapes: sh,
         }
-        function getShape(x, y, color) {
+        function getShape(x, color) {
             return {
                 type: 'line',
                 x0: x,
                 y0: 0,
                 x1: x,
-                y1: y,
+                y1: 2,
                 line: {
                     color: color,
                     width: 3
-                }
+                },
             }
         }
     }
     
-    function  getEnumLayout(data) {
+    function  getEnumLayout(data, otherData) {
         return {
-            ...getShapes(data),
+            ...getShapes(data, otherData.colors),
             yaxis: {
                 tickfont: {
                     size: 10
                 },
+                visible: false,
             },
             automargin: "width+height",
             ticktext: ['', '', '', '', '', '', ''],
-            tickvals: [1, 2, 3, 4, 5, 6, 7]
+            tickvals: [1, 1, 1, 1, 1, 1, 1]
         }
     }
     
     const ServiceStatus = {
-        1 : '#FF0000', // Stopped
-        2 : '#BFFFBF', // StartPending
-        3 : '#FD6464', // StopPending
-        4 : '#00FF00', // Running
-        5 : '#FFB403', // ContinuePending
-        6 : '#809EFF', // PausePending
-        7 : '#0314FF'  // Paused
+        1 : ['#FF0000', 'Stopped'],
+        2 : ['#BFFFBF', 'Start Pending'],
+        3 : ['#FD6464','Stop Pending' ],
+        4 : ['#00FF00', 'Running'],
+        5 : ['#FFB403', 'Continue Pending'],
+        6 : ['#809EFF', 'Pause Pending'],
+        7 : ['#0314FF', 'Paused'],
+        0 : ['#000000', 'Unknown']
     }
 }
