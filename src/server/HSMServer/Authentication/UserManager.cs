@@ -126,10 +126,6 @@ namespace HSMServer.Authentication
         {
             await base.Initialize();
 
-            foreach (var (_, user) in this)
-                if (user.Notifications.Migrated)
-                    await UpdateUser(user);
-
             if (Count == 0)
             {
                 await AddDefaultUser();

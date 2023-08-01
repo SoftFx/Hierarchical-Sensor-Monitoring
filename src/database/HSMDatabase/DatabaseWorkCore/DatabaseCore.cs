@@ -11,6 +11,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using System.Text.Json;
 
 namespace HSMDatabase.DatabaseWorkCore
 {
@@ -21,6 +22,7 @@ namespace HSMDatabase.DatabaseWorkCore
         private static readonly Logger _logger = LogManager.GetLogger(CommonConstants.InfrastructureLoggerName);
 
         private readonly SensorValuesDatabaseDictionary _sensorValuesDatabases;
+        private readonly JournalValuesDatabaseDictionary _journalValuesDatabases;
         private readonly IEnvironmentDatabase _environmentDatabase;
         private readonly IDatabaseSettings _settings;
 
@@ -47,6 +49,7 @@ namespace HSMDatabase.DatabaseWorkCore
 
 
         private delegate IEnumerable<byte[]> GetValuesFunc(ISensorValuesDatabase db);
+        private delegate IEnumerable<(byte[], byte[])> GetJournalValuesFunc(IJournalValuesDatabase db);
 
 
         public DatabaseCore(IDatabaseSettings dbSettings = null)
@@ -56,7 +59,7 @@ namespace HSMDatabase.DatabaseWorkCore
             _settings = dbSettings ?? new DatabaseSettings();
             _environmentDatabase = LevelDBManager.GetEnvitonmentDatabaseInstance(_settings.PathToEnvironmentDb);
             _sensorValuesDatabases = new SensorValuesDatabaseDictionary(_settings);
-
+            _journalValuesDatabases = new JournalValuesDatabaseDictionary(_settings);
             Snapshots = new SnapshotsDatabase(_settings.PathToSnaphotsDb);
 
             _logger.Info($"{nameof(DatabaseCore)} initialized");
@@ -156,6 +159,7 @@ namespace HSMDatabase.DatabaseWorkCore
             dbs.PutSensorValue(key, valueEntity.Value);
         }
 
+
         public List<SensorEntity> GetAllSensors()
         {
             var sensorsIds = _environmentDatabase.GetAllSensorsIds();
@@ -239,31 +243,6 @@ namespace HSMDatabase.DatabaseWorkCore
 
         public void RemovePolicy(Guid id) => _environmentDatabase.RemovePolicy(id);
 
-        public List<byte[]> GetAllOldPolicies()
-        {
-            var policiesIds = _environmentDatabase.GetAllOldPoliciesIds();
-
-            var policies = new List<byte[]>(policiesIds.Count);
-            foreach (var policyId in policiesIds)
-            {
-                var policy = _environmentDatabase.GetOldPolicy(policyId);
-                if (policy != null && policy.Length != 0)
-                    policies.Add(policy);
-            }
-
-            return policies;
-        }
-
-        public void RemoveAllOldPolicies()
-        {
-            var policiesIds = _environmentDatabase.GetAllOldPoliciesIds();
-
-            foreach (var id in policiesIds)
-                _environmentDatabase.RemoveOldPolicy(id);
-
-            _environmentDatabase.DropOldPolicyIdsList();
-        }
-
         public List<PolicyEntity> GetAllPolicies()
         {
             var policiesIds = _environmentDatabase.GetAllPoliciesIds();
@@ -291,8 +270,7 @@ namespace HSMDatabase.DatabaseWorkCore
             _environmentDatabase.PutFolder(entity);
         }
 
-        public void UpdateFolder(FolderEntity entity) =>
-            _environmentDatabase.PutFolder(entity);
+        public void UpdateFolder(FolderEntity entity) => _environmentDatabase.PutFolder(entity);
 
         public void RemoveFolder(string id)
         {
@@ -328,8 +306,7 @@ namespace HSMDatabase.DatabaseWorkCore
             _environmentDatabase.PutProduct(entity);
         }
 
-        public void UpdateProduct(ProductEntity entity) =>
-            _environmentDatabase.PutProduct(entity);
+        public void UpdateProduct(ProductEntity entity) => _environmentDatabase.PutProduct(entity);
 
         public void RemoveProduct(string id)
         {
@@ -337,8 +314,7 @@ namespace HSMDatabase.DatabaseWorkCore
             _environmentDatabase.RemoveProductFromList(id);
         }
 
-        public ProductEntity GetProduct(string id) =>
-            _environmentDatabase.GetProduct(id);
+        public ProductEntity GetProduct(string id) => _environmentDatabase.GetProduct(id);
 
         public List<ProductEntity> GetAllProducts()
         {
@@ -375,8 +351,7 @@ namespace HSMDatabase.DatabaseWorkCore
 
         public void UpdateAccessKey(AccessKeyEntity entity) => AddAccessKey(entity);
 
-        public AccessKeyEntity GetAccessKey(Guid id) =>
-            _environmentDatabase.GetAccessKey(id.ToString());
+        public AccessKeyEntity GetAccessKey(Guid id) => _environmentDatabase.GetAccessKey(id.ToString());
 
         public List<AccessKeyEntity> GetAccessKeys()
         {
@@ -397,18 +372,114 @@ namespace HSMDatabase.DatabaseWorkCore
 
         #region Environment database : User
 
-        public void AddUser(UserEntity entity) =>
-            _environmentDatabase.AddUser(entity);
+        public void AddUser(UserEntity entity) => _environmentDatabase.AddUser(entity);
 
-        public void RemoveUser(UserEntity entity) =>
-            _environmentDatabase.RemoveUser(entity);
+        public void RemoveUser(UserEntity entity) => _environmentDatabase.RemoveUser(entity);
 
         public void UpdateUser(UserEntity entity) => AddUser(entity);
 
         public List<UserEntity> GetUsers() => _environmentDatabase.ReadUsers().ToList();
 
-        public List<UserEntity> GetUsersPage(int page, int pageSize) =>
-            _environmentDatabase.ReadUsersPage(page, pageSize).ToList();
+        public List<UserEntity> GetUsersPage(int page, int pageSize) => _environmentDatabase.ReadUsersPage(page, pageSize).ToList();
+
+        #endregion
+
+        #region Journal
+
+        public void AddJournalValue(JournalKey journalKey, JournalRecordEntity value)
+        {
+            var dbs = _journalValuesDatabases.GetNewestDatabases(journalKey.Time);
+
+            dbs.Put(journalKey.GetBytes(), value);
+        }
+
+        public void RemoveJournalValues(Guid id, Guid parentId)
+        {
+            var fromTicks = DateTime.MinValue.Ticks;
+            var toTicks = DateTime.MaxValue.Ticks;
+
+            var fromBytes = new JournalKey(id, fromTicks, RecordType.Actions).GetBytes();
+            var toBytes = new JournalKey(id, toTicks, RecordType.Changes).GetBytes();
+
+            foreach (var db in _journalValuesDatabases)
+                if (db.IsInclude(fromTicks, toTicks))
+                {
+                    PutRecordsToParent(fromBytes, toBytes, parentId, db);
+
+                    db.Remove(fromBytes, toBytes);
+                }
+        }
+
+        public IAsyncEnumerable<List<(byte[] Key, JournalRecordEntity Entity)>> GetJournalValuesPage(Guid sensorId, DateTime from, DateTime to, RecordType types, int count)
+        {
+            var fromTicks = from.Ticks;
+            var toTicks = to.Ticks;
+
+            IEnumerable<(byte[], byte[])> GetValuesEnumerator(IJournalValuesDatabase db, Func<byte[], byte[], IEnumerable<(byte[], byte[])>> requestDb)
+            {
+                foreach (var recordType in Enum.GetValues<RecordType>())
+                    if (types.HasFlag(recordType))
+                    {
+                        var fromBytes = new JournalKey(sensorId, fromTicks, recordType).GetBytes();
+                        var toBytes = new JournalKey(sensorId, toTicks, recordType).GetBytes();
+
+                        foreach (var t in requestDb(fromBytes, toBytes))
+                            yield return t;
+                    }
+            }
+
+            var databases = _journalValuesDatabases.Where(db => db.IsInclude(fromTicks, toTicks)).ToList();
+            GetJournalValuesFunc getValues = (db) => GetValuesEnumerator(db, db.GetValuesFrom);
+
+            if (count < 0)
+            {
+                databases.Reverse();
+                getValues = (db) => GetValuesEnumerator(db, db.GetValuesTo);
+            }
+
+            return GetJournalValuesPage(databases, count, getValues);
+        }
+
+
+        private static void PutRecordsToParent(byte[] from, byte[] to, Guid id, IJournalValuesDatabase db)
+        {
+            if (id != default)
+                foreach (var (key, value) in db.GetValuesFrom(from, to))
+                {
+                    id.TryWriteBytes(key);
+                    db.Put(key, value);
+                }
+        }
+
+        private async IAsyncEnumerable<List<(byte[], JournalRecordEntity)>> GetJournalValuesPage(List<IJournalValuesDatabase> databases, int count, GetJournalValuesFunc getValues)
+        {
+            var result = new List<(byte[], JournalRecordEntity)>(SensorValuesPageCount);
+            var totalCount = 0;
+
+            foreach (var database in databases)
+            {
+                foreach (var value in getValues(database))
+                {
+                    result.Add((value.Item1, JsonSerializer.Deserialize<JournalRecordEntity>(value.Item2)));
+                    totalCount++;
+
+                    if (result.Count == SensorValuesPageCount)
+                    {
+                        yield return result;
+
+                        result.Clear();
+                    }
+
+                    if (Math.Abs(count) == totalCount)
+                    {
+                        yield return result;
+                        yield break;
+                    }
+                }
+            }
+
+            yield return result;
+        }
 
         #endregion
 

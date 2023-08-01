@@ -1,25 +1,7 @@
-﻿using System;
+﻿using System.Text.Json.Serialization;
 
 namespace HSMDatabase.AccessManager.DatabaseEntities
 {
-    [Obsolete("Remove after policy migrations")]
-    public sealed record OldTimeIntervalEntity
-    {
-        public long TimeInterval { get; init; }
-
-        public long CustomPeriod { get; init; }
-
-
-        public OldTimeIntervalEntity() { }
-
-        public OldTimeIntervalEntity(long interval, long ticks)
-        {
-            TimeInterval = interval;
-            CustomPeriod = ticks;
-        }
-    }
-
-
     public sealed record TimeIntervalEntity
     {
         public long Interval { get; init; }
@@ -27,8 +9,7 @@ namespace HSMDatabase.AccessManager.DatabaseEntities
         public long Ticks { get; init; }
 
 
-        public TimeIntervalEntity() { }
-
+        [JsonConstructor]
         public TimeIntervalEntity(long interval, long ticks)
         {
             Interval = interval;

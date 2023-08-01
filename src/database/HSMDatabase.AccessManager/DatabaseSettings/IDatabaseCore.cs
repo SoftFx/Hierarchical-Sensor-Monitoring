@@ -73,11 +73,6 @@ namespace HSMServer.Core.DataLayer
         void UpdatePolicy(PolicyEntity policy);
         void RemovePolicy(Guid id);
 
-        [Obsolete("Will be removed after policy migration")]
-        List<byte[]> GetAllOldPolicies();
-        [Obsolete("Will be removed after policy migration")]
-        void RemoveAllOldPolicies();
-
         #endregion
 
         #region User
@@ -87,6 +82,16 @@ namespace HSMServer.Core.DataLayer
         void RemoveUser(UserEntity user);
         List<UserEntity> GetUsers();
         List<UserEntity> GetUsersPage(int page, int pageSize);
+
+        #endregion
+
+        #region Journal
+
+        void AddJournalValue(JournalKey journalKey, JournalRecordEntity value);
+
+        void RemoveJournalValues(Guid id, Guid parentId);
+
+        IAsyncEnumerable<List<(byte[] Key, JournalRecordEntity Entity)>> GetJournalValuesPage(Guid sensorId, DateTime from, DateTime to, RecordType types, int count);
 
         #endregion
     }
