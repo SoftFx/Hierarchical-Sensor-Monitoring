@@ -5,7 +5,7 @@
 
     if (graphType === "9")
     {
-        let layout = getEnumLayout(convertedData[0], convertedData[1]);
+        let layout = getEnumLayout();
         layout.autosize = true;
         let heat = getHeatMapForEnum(convertedData)
         Plotly.newPlot(graphElementId, [heat], layout, config);
@@ -382,8 +382,8 @@ function getPlotType(graphType) {
 // Enum plot
 {
     function getHeatMapForEnum(data) {
-        let mappedX = data[1].colors.map(x => x === ServiceStatus["4"][0] ? 0.5 : 0)
-        mappedX.pop();
+        let mappedX = data[0].colors.map(x => x === ServiceStatus["4"][0] ? 0.5 : 0);
+
         return {
             x: data[0].x,
             y: [0],
@@ -399,30 +399,25 @@ function getPlotType(graphType) {
     }
 
     function getEnumGraphData(timeList, dataList){
-        function getMappedData(data) {
-            let y = [];
-            let statuses = [];
+        function getMappedData(data, time) {
+            let hoverdata = [];
             let colors = [];
-            data.map(function (x) {
-                y.push(1);
-                statuses.push(ServiceStatus[`${x}`][1])
-                colors.push(ServiceStatus[`${x}`][0])
-            })
             
-            return [y, statuses, colors]
+            for (let i = 0; i < data.length; i++){
+                hoverdata.push(`${ServiceStatus[`${data[i]}`][1]} ${time[i]}`)
+                colors.push(ServiceStatus[`${data[i]}`][0])
+            }
+            
+            return [hoverdata, colors]
         }
         
-        let mappedData = getMappedData(dataList);
+        let mappedData = getMappedData(dataList, timeList);
         return [
             {
                 x: timeList,
-                y: mappedData[0],
-                type: 'scatter',
-                customdata: mappedData[1],
+                customdata: mappedData[0],
                 hovertemplate: '%{customdata}<extra></extra>',
-            },
-            {
-                colors: mappedData[2]   
+                colors: mappedData[1]
             }
         ];
     }
@@ -452,7 +447,7 @@ function getPlotType(graphType) {
         }
     }
     
-    function  getEnumLayout(data, otherData) {
+    function  getEnumLayout() {
         return {
             yaxis: {
                 tickfont: {
