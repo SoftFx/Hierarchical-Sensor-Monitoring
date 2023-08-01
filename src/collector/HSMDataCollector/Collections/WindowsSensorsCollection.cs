@@ -147,6 +147,17 @@ namespace HSMDataCollector.DefaultSensors
         public IWindowsCollection AddProductVersion(VersionSensorOptions options) => (IWindowsCollection)AddProductVersionCommon(options);
 
 
+        public IWindowsCollection SubscribeToWindowsServiceStatus(string serviceName, string module = "")
+        {
+            var options = new ServiceSensorOptions()
+            {
+                NodePath = $"{module}/Product Info",
+                ServiceName = serviceName,
+            };
+
+            return SubscribeToWindowsServiceStatus(options);
+        }
+
         public IWindowsCollection SubscribeToWindowsServiceStatus(ServiceSensorOptions options)
         {
             return options != null ? ToWindows(new WindowsServiceStatusSensor(options))

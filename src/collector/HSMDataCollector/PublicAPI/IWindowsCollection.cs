@@ -52,6 +52,9 @@ namespace HSMDataCollector.PublicInterface
         IWindowsCollection AddProductVersion(VersionSensorOptions options = null);
 
 
+
+        IWindowsCollection SubscribeToWindowsServiceStatus(string serviceName, string module = "");
+
         IWindowsCollection SubscribeToWindowsServiceStatus(ServiceSensorOptions options);
     }
 }
