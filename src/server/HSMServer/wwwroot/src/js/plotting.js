@@ -7,20 +7,8 @@
     {
         let layout = getEnumLayout(convertedData[0], convertedData[1]);
         layout.autosize = true;
-        let mappedX = convertedData[1].colors.map(x => x === '#00FF00' ? 0.5 : 0)
-        mappedX.pop();
-        let test = {
-            x: convertedData[0].x,
-            y: [0.5, 1.5],
-            z: [mappedX, mappedX],
-            colorscale: [[0, 'red'], [0.5, 'green'], [1, 'blue']],
-            zmin: 0,
-            zmax: 1,
-            showscale: false,
-            type: 'heatmap'
-        }
-
-        Plotly.newPlot(graphElementId, [test, convertedData[0]], layout, config);
+        let heat = getHeatMapForEnum(convertedData)
+        Plotly.newPlot(graphElementId, [heat], layout, config);
     }
     else if (graphType === "7") {
         let layout = getTimeSpanLayout(convertedData[0].y)
@@ -393,6 +381,23 @@ function getPlotType(graphType) {
 
 // Enum plot
 {
+    function getHeatMapForEnum(data) {
+        let mappedX = data[1].colors.map(x => x === ServiceStatus["4"][0] ? 0.5 : 0)
+        mappedX.pop();
+        return {
+            x: data[0].x,
+            y: [0],
+            z: [mappedX],
+            colorscale: [[0, '#FF0000'], [0.5, '#00FF00'], [1, 'blue']],
+            zmin: 0,
+            zmax: 1,
+            showscale: false,
+            type: 'heatmap',
+            customdata: [data[0].customdata],
+            hovertemplate: '%{customdata}<extra></extra>',
+        }
+    }
+
     function getEnumGraphData(timeList, dataList){
         function getMappedData(data) {
             let y = [];
@@ -413,7 +418,6 @@ function getPlotType(graphType) {
                 x: timeList,
                 y: mappedData[0],
                 type: 'scatter',
-                mode: 'markers',
                 customdata: mappedData[1],
                 hovertemplate: '%{customdata}<extra></extra>',
             },
@@ -450,7 +454,6 @@ function getPlotType(graphType) {
     
     function  getEnumLayout(data, otherData) {
         return {
-            ...getShapes(data, otherData.colors),
             yaxis: {
                 tickfont: {
                     size: 10
