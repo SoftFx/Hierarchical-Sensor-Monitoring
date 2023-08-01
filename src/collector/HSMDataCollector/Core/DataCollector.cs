@@ -16,7 +16,8 @@ using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Threading.Tasks;
-using SensorBase = HSMDataCollector.Base.SensorBase;
+using OldSensorBase = HSMDataCollector.Base.SensorBase;
+using SensorBase = HSMDataCollector.DefaultSensors.SensorBase;
 
 namespace HSMDataCollector.Core
 {
@@ -444,6 +445,18 @@ namespace HSMDataCollector.Core
             return sensor;
         }
 
+
+
+        public IServiceCommandsSensor CreateServiceCommandsSensor(string module = "")
+        {
+            var options = new SensorOptions()
+            {
+                NodePath = $"{module}/Product Info",
+            };
+
+            return (IServiceCommandsSensor)RegisterCustomSensor(new ServiceCommandsSensor(options));
+        }
+
         #endregion
 
         #region Generic bar sensors
@@ -511,8 +524,13 @@ namespace HSMDataCollector.Core
             where BarType : MonitoringBarBase<T>, new()
             where T : struct
         {
+            return (IBarSensor<T>)RegisterCustomSensor(newSensor);
+        }
+
+        private SensorBase RegisterCustomSensor(SensorBase newSensor)
+        {
             if (_sensorsStorage.TryGetValue(newSensor.SensorPath, out var sensor))
-                return (IBarSensor<T>)sensor;
+                return sensor;
 
             if (Status.IsRunning())
             {
@@ -520,7 +538,7 @@ namespace HSMDataCollector.Core
                 return newSensor;
             }
 
-            return (IBarSensor<T>)_sensorsStorage.Register(newSensor);
+            return _sensorsStorage.Register(newSensor);
         }
 
         #endregion
@@ -595,7 +613,7 @@ namespace HSMDataCollector.Core
 
         #endregion
 
-        private SensorBase GetExistingSensor(string path)
+        private OldSensorBase GetExistingSensor(string path)
         {
             if (_sensorsStorage.ContainsKey(path))
             {
@@ -606,7 +624,7 @@ namespace HSMDataCollector.Core
             }
 
             if (_nameToSensor.TryGetValue(path, out var readValue))
-                return readValue as SensorBase;
+                return readValue as OldSensorBase;
 
             return null;
         }
