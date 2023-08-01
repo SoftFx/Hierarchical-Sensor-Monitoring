@@ -147,7 +147,7 @@ namespace HSMDataCollector.DefaultSensors
         public IWindowsCollection AddProductVersion(VersionSensorOptions options) => (IWindowsCollection)AddProductVersionCommon(options);
 
 
-        public IWindowsCollection SubscribeToServiceStatus(ServiceSensorOptions options)
+        public IWindowsCollection SubscribeToWindowsServiceStatus(ServiceSensorOptions options)
         {
             return options != null ? ToWindows(new WindowsServiceStatusSensor(options))
                                    : throw new ArgumentNullException(nameof(options));

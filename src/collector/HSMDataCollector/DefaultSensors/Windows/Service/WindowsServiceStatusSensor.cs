@@ -44,17 +44,24 @@ namespace HSMDataCollector.DefaultSensors.Windows.Service
 
         private void CheckServiceStatus(object _)
         {
-            _controller.Refresh();
-
-            if (_controller.Status != _lastServiceState)
+            try
             {
-                _lastServiceState = _controller.Status;
-                SendValue((int)_lastServiceState);
+                _controller.Refresh();
+
+                if (_controller.Status != _lastServiceState)
+                {
+                    _lastServiceState = _controller.Status;
+                    SendValue((int)_lastServiceState);
+                }
+            }
+            catch (Exception ex)
+            {
+                ThrowException(ex);
             }
         }
 
         private ServiceController GetService(string serviceName) =>
-            ServiceController.GetServices().First(s => s.ServiceName == serviceName) ?? 
+            ServiceController.GetServices().First(s => s.ServiceName == serviceName) ??
             throw new ArgumentException($"Service {serviceName} not found!");
     }
 }

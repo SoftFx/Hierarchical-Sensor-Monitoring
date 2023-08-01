@@ -52,6 +52,6 @@ namespace HSMDataCollector.PublicInterface
         IWindowsCollection AddProductVersion(VersionSensorOptions options = null);
 
 
-        IWindowsCollection SubscribeToServiceStatus(ServiceSensorOptions options);
+        IWindowsCollection SubscribeToWindowsServiceStatus(ServiceSensorOptions options);
     }
 }
