@@ -3,9 +3,8 @@
     let zoomData = getPreviousZoomData(graphElementId);
     var config = { responsive: true }
 
-    if (graphType === "1")
+    if (graphType === "9")
     {
-       
         let layout = getEnumLayout(convertedData[0], convertedData[1]);
         layout.autosize = true;
         let mappedX = convertedData[1].colors.map(x => x === '#00FF00' ? 0.5 : 0)
@@ -92,7 +91,7 @@ function convertToGraphData(graphData, graphType, graphName) {
             data = getBoolData(uniqueData);
             timeList = getTimeList(uniqueData);
             return getBoolGraphData(timeList, data);
-        case "":
+        case "1":
             data = getNumbersData(escapedData);
             timeList = getTimeList(escapedData);
             return getIntGraphData(timeList, data);
@@ -138,7 +137,7 @@ function convertToGraphData(graphData, graphType, graphName) {
             })
             
             return getTimeSpanGraphData(timeList, data, "lines");
-        case "1":
+        case "9":
             data = getNumbersData(escapedData)
             timeList = getTimeList(escapedData)
             return getEnumGraphData(timeList, data)
