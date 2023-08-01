@@ -108,7 +108,7 @@
             <i class="fa-solid fa-ellipsis-vertical button-link"></i>
         </button>
         <div class="dropdown-menu dropdown-menu-end" aria-labelledby="actionButton">
-            <a class="dropdown-item text-decoration-none fw-normal button-link sendMessage">Send test message</a>
+            <a class="dropdown-item text-decoration-none fw-normal button-link showMessage">Show message</a>
             <a class="dropdown-item text-decoration-none fw-normal button-link deleteRow">Remove</a>
         </div>
     </div>
@@ -167,7 +167,7 @@
             }
         });
 
-        $("a.sendMessage").off("click").on("click", function () {
+        $("a.showMessage").off("click").on("click", function () {
             var element = $(this).parents("div.dataAlertRow:first");
 
             if (!tryValidate(element, "input", "Target") || !tryValidate(element, "input", "Comment")) {
