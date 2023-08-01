@@ -8,6 +8,7 @@ using HSMDataCollector.InstantValue;
 using HSMDataCollector.Logging;
 using HSMDataCollector.Options;
 using HSMDataCollector.PublicInterface;
+using HSMDataCollector.Sensors;
 using HSMSensorDataObjects;
 using System;
 using System.Collections.Concurrent;
@@ -354,25 +355,14 @@ namespace HSMDataCollector.Core
 
         #region Generic sensors functionality
 
-        public IInstantValueSensor<bool> CreateBoolSensor(string path, string description)
-        {
-            return CreateInstantValueSensorInternal<bool>(path, description);
-        }
+        public IInstantValueSensor<double> CreateDoubleSensor(string path, string description = "") => CreateInstantSensor<double>(path, description);
 
-        public IInstantValueSensor<int> CreateIntSensor(string path, string description)
-        {
-            return CreateInstantValueSensorInternal<int>(path, description);
-        }
+        public IInstantValueSensor<string> CreateStringSensor(string path, string description = "") => CreateInstantSensor<string>(path, description);
 
-        public IInstantValueSensor<double> CreateDoubleSensor(string path, string description)
-        {
-            return CreateInstantValueSensorInternal<double>(path, description);
-        }
+        public IInstantValueSensor<bool> CreateBoolSensor(string path, string description = "") => CreateInstantSensor<bool>(path, description);
 
-        public IInstantValueSensor<string> CreateStringSensor(string path, string description)
-        {
-            return CreateInstantValueSensorInternal<string>(path, description);
-        }
+        public IInstantValueSensor<int> CreateIntSensor(string path, string description = "") => CreateInstantSensor<int>(path, description);
+
 
         public IInstantValueSensor<string> CreateFileSensor(string path, string fileName, string extension = "txt", string description = "")
         {
@@ -421,16 +411,17 @@ namespace HSMDataCollector.Core
             return CreateLastValueSensorInternal(path, defaultValue, description);
         }
 
-        private IInstantValueSensor<T> CreateInstantValueSensorInternal<T>(string path, string description)
+        private IInstantValueSensor<T> CreateInstantSensor<T>(string path, string _)
         {
-            var existingSensor = GetExistingSensor(path);
-            if (existingSensor is IInstantValueSensor<T> instantValueSensor)
-                return instantValueSensor;
+            (var nodePath, var name) = GetPathAndName(path);
 
-            var sensor = new InstantValueSensor<T>(path, _dataQueue as IValuesQueue, description);
-            AddNewSensor(sensor, path);
+            var options = new SensorOptions
+            {
+                NodePath = nodePath,
+                SensorName = name,
+            };
 
-            return sensor;
+            return (IInstantValueSensor<T>)RegisterCustomSensor(new SensorInstant<T>(options));
         }
 
         private ILastValueSensor<T> CreateLastValueSensorInternal<T>(string path, T defaultValue, string description = "")
@@ -463,11 +454,7 @@ namespace HSMDataCollector.Core
 
         public IBarSensor<int> CreateIntBarSensor(string path, int barPeriod, int postPeriod = 15000, string description = "")
         {
-            var split = path.Split('/');
-            var name = split.LastOrDefault();
-
-            var nodePathIndex = path.Length - name.Length - 1;
-            var nodePath = nodePathIndex > -1 ? path.Substring(0, nodePathIndex) : string.Empty;
+            (var nodePath, var name) = GetPathAndName(path);
 
             var options = new BarSensorOptions()
             {
@@ -493,9 +480,7 @@ namespace HSMDataCollector.Core
 
         public IBarSensor<double> CreateDoubleBarSensor(string path, int barPeriod, int postPeriod, int precision = 2, string description = "")
         {
-            var split = path.Split('/');
-            var name = split.LastOrDefault();
-            var nodePath = path.Substring(0, path.Length - name.Length - 1);
+            (var nodePath, var name) = GetPathAndName(path);
 
             var options = new BarSensorOptions()
             {
@@ -634,6 +619,17 @@ namespace HSMDataCollector.Core
             _nameToSensor[path] = sensor;
 
             _logger.Info($"Added new sensor {path}");
+        }
+
+        private static (string path, string name) GetPathAndName(string path)
+        {
+            var split = path.Split('/');
+            var name = split.LastOrDefault();
+
+            var nodePathIndex = path.Length - name.Length - 1;
+            var nodePath = nodePathIndex > -1 ? path.Substring(0, nodePathIndex) : string.Empty;
+
+            return (nodePath, name);
         }
     }
 }
