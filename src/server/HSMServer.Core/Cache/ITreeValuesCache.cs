@@ -3,6 +3,7 @@ using HSMServer.Core.Model;
 using HSMServer.Core.Model.Requests;
 using System;
 using System.Collections.Generic;
+using HSMDatabase.AccessManager.DatabaseEntities;
 
 namespace HSMServer.Core.Cache
 {
@@ -44,11 +45,11 @@ namespace HSMServer.Core.Cache
         List<AccessKeyModel> GetMasterKeys();
 
         void UpdateSensor(SensorUpdate updatedSensor);
-        void RemoveSensor(Guid sensorId);
-        void UpdateMutedSensorState(Guid sensorId, DateTime? endOfMuting = null);
-        void ClearSensorHistory(Guid sensorId, DateTime to);
+        void RemoveSensor(Guid sensorId, string initiator = null);
+        void UpdateMutedSensorState(Guid sensorId, DateTime? endOfMuting = null, string initiator = null);
+        void ClearSensorHistory(ClearHistoryRequest request);
         void CheckSensorHistory(Guid sensorId);
-        void ClearNodeHistory(Guid productId);
+        void ClearNodeHistory(ClearHistoryRequest request);
         BaseSensorModel GetSensor(Guid sensorId);
 
         IAsyncEnumerable<List<BaseValue>> GetSensorValues(HistoryRequestModel request);

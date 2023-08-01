@@ -6,8 +6,8 @@ using HSMServer.Core.Tests.Infrastructure;
 using HSMServer.Core.Tests.MonitoringCoreTests.Fixture;
 using HSMServer.Core.TreeStateSnapshot;
 using Moq;
-using System.Collections.Generic;
 using System.Threading.Tasks;
+using HSMServer.Core.Journal;
 using Xunit;
 
 namespace HSMServer.Core.Tests.MonitoringCoreTests
@@ -17,12 +17,13 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
     {
         protected const int MaxHistoryCount = -TreeValuesCache.MaxHistoryCount;
 
-        private protected readonly DatabaseCoreManager _databaseCoreManager;
+        protected readonly DatabaseCoreManager _databaseCoreManager;
 
 
         protected readonly IUpdatesQueue _updatesQueue;
         protected readonly TreeValuesCache _valuesCache;
         protected readonly IUserManager _userManager;
+        protected readonly JournalService _journalService;
 
 
         protected MonitoringCoreTestsBase(DatabaseFixture fixture, DatabaseRegisterFixture dbRegisterFixture, bool addTestProduct = true)
@@ -41,7 +42,8 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
             snaphot.Setup(a => a.Sensors).Returns(new StateCollection<LastSensorState, SensorStateEntity>());
 
             _updatesQueue = new Mock<IUpdatesQueue>().Object;
-            _valuesCache = new TreeValuesCache(_databaseCoreManager.DatabaseCore, snaphot.Object, _updatesQueue);
+            _journalService = new JournalService(_databaseCoreManager.DatabaseCore);
+            _valuesCache = new TreeValuesCache(_databaseCoreManager.DatabaseCore, snaphot.Object, _updatesQueue, _journalService);
 
             var userManagerLogger = CommonMoqs.CreateNullLogger<UserManager>();
             _userManager = new UserManager(_databaseCoreManager.DatabaseCore, _valuesCache, userManagerLogger);

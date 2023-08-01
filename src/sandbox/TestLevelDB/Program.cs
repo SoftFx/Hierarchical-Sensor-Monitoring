@@ -1,6 +1,5 @@
 ﻿using LevelDB;
 using System.Text;
-using TestLevelDB.Server;
 
 namespace TestLevelDB
 {
@@ -8,7 +7,7 @@ namespace TestLevelDB
     {
         public const int SensorsCnt = 10_000;
         public const int SensorsCntData = 2000;
-        
+
         public const int ThreadsCount = 10;
         public const long DbBufferSize = 1024 * 1024 * 1024;
 
@@ -52,26 +51,50 @@ namespace TestLevelDB
 
             var database = new DB(dbPath, options);
 
-            void DbAdd(string key, int val)
+            var vals = new List<(long, string)>();
+
+            void DbAdd(long? key = null)
             {
-                var keyBytes = Encoding.UTF8.GetBytes(key);
+                key ??= Random.Shared.NextInt64();
+                var val = Random.Shared.NextInt64();
+
+                vals.Add((key.Value, val.ToString()));
+
+                var keyBytes = BitConverter.GetBytes(key.Value);
                 var valBytes = Encoding.UTF8.GetBytes(val.ToString());
 
-                database.Put(keyBytes, valBytes);
+                database.Put(keyBytes.Reverse().ToArray(), valBytes);
             }
 
-            DbAdd("1_230", 230);
-            DbAdd("1_240", 240);
-            DbAdd("1_300", 300);
-            DbAdd("2_010", 201);
-            DbAdd("2_100", 210);
+            DbAdd();
+            DbAdd();
+            DbAdd();
+            DbAdd();
+            DbAdd();
+            DbAdd(0L);
+            DbAdd(10L);
+            DbAdd(1L);
+            DbAdd(2L);
+            DbAdd(112312312312L);
 
-            ThreadPool.QueueUserWorkItem(_ => AddValues(database));
+            //ThreadPool.QueueUserWorkItem(_ => AddValues(database));
 
-            await foreach (var value in GetValueFromTo(database, Encoding.UTF8.GetBytes("1_000"), Encoding.UTF8.GetBytes("1_999")))
+            var from = BitConverter.GetBytes(0L);
+            var to = BitConverter.GetBytes(DateTime.MaxValue.Ticks);
+
+
+            Console.WriteLine("DB");
+
+            await foreach (var (key, value) in GetValueFromTo(database, from, to))
             {
-                Console.WriteLine(Encoding.UTF8.GetString(value));
+                Console.WriteLine($"{BitConverter.ToInt64(key.Reverse().ToArray())} - {Encoding.UTF8.GetString(value)}");
             }
+
+            Console.WriteLine();
+            Console.WriteLine("Sorted");
+
+            foreach (var v in vals.OrderBy(k => k.Item1))
+                Console.WriteLine(v);
 
             //var iterator = database.CreateIterator();
 
@@ -102,7 +125,7 @@ namespace TestLevelDB
             }
         }
 
-        public static async IAsyncEnumerable<byte[]> GetValueFromTo(DB _database, byte[] from, byte[] to)
+        public static async IAsyncEnumerable<(byte[], byte[])> GetValueFromTo(DB _database, byte[] from, byte[] to)
         {
             Iterator iterator = null;
 
@@ -111,7 +134,7 @@ namespace TestLevelDB
                 iterator = _database.CreateIterator();
 
                 for (iterator.Seek(from); iterator.IsValid && iterator.Key().IsSmallerOrEquals(to); iterator.Next())
-                    yield return iterator.Value();
+                    yield return (iterator.Key(), iterator.Value());
             }
             finally
             {

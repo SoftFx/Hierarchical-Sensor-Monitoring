@@ -14,10 +14,6 @@ namespace HSMServer.Notification.Settings
         public HashSet<Guid> EnabledSensors { get; } = new();
 
 
-        [Obsolete("Remove after migration IgnoredSensors->PartiallyIgnored")]
-        public bool Migrated { get; }
-
-
         public ClientNotifications() : base() { }
 
         internal ClientNotifications(NotificationSettingsEntity entity, Func<NotificationSettings> getParent = null) : base(entity, getParent)
@@ -44,21 +40,6 @@ namespace HSMServer.Notification.Settings
 
                     PartiallyIgnored.TryAdd(new(chat), ignoredSensors);
                 }
-            }
-            else if (entity?.IgnoredSensors is not null) // TODO: remove migration
-            {
-                if (!Telegram.Chats.IsEmpty)
-                    foreach (var (chat, _) in Telegram.Chats)
-                    {
-                        var ignoredSensors = new ConcurrentDictionary<Guid, DateTime>();
-                        foreach (var (sensorIdStr, endIgnorePeriodTicks) in entity.IgnoredSensors)
-                            if (Guid.TryParse(sensorIdStr, out var sensorId))
-                                ignoredSensors.TryAdd(sensorId, new DateTime(endIgnorePeriodTicks));
-
-                        PartiallyIgnored.TryAdd(chat, ignoredSensors);
-                    }
-
-                Migrated = true;
             }
         }
 

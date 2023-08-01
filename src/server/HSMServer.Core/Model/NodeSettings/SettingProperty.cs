@@ -28,9 +28,12 @@ namespace HSMServer.Core.Model.NodeSettings
         private readonly T _emptyValue = (T)TimeIntervalModel.None;
 
 
+        public override bool IsSet => !CurValue?.IsFromParent ?? false;
+
         public override bool IsEmpty => Value is null;
 
-        public override bool IsSet => !CurValue?.IsFromParent ?? false;
+
+        public required string Name { get; set; }
 
 
         public T CurValue { get; private set; } = new T();
@@ -42,7 +45,7 @@ namespace HSMServer.Core.Model.NodeSettings
         {
             var newValue = (T)update;
 
-            if (newValue is not null && CurValue != newValue)
+            if (newValue is not null && CurValue.ToString() != newValue.ToString())
             {
                 CurValue = newValue;
 
@@ -53,6 +56,7 @@ namespace HSMServer.Core.Model.NodeSettings
 
             return false;
         }
+
 
         internal override TimeIntervalEntity ToEntity() => CurValue?.ToEntity();
     }

@@ -82,7 +82,7 @@ namespace HSMDataCollector.DefaultSensors
             if (!IsCorrectOs)
                 throw _notSupportedException;
 
-            _storage.Register(sensor.SensorPath, sensor);
+            _storage.Register(sensor);
 
             return this;
         }

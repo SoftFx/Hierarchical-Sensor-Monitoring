@@ -4,6 +4,7 @@ using HSMServer.Core.Cache.UpdateEntities;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text;
 
 namespace HSMServer.Core.Model.Policies
 {
@@ -155,6 +156,31 @@ namespace HSMServer.Core.Model.Policies
             }
 
             RebuildState();
+        }
+
+
+        public override string ToString()
+        {
+            var sb = new StringBuilder(1 << 5);
+
+            sb.Append("If ");
+
+            for (int i = 0; i < Conditions.Count; ++i)
+            {
+                var cond = Conditions[i];
+
+                if (i > 0)
+                    sb.Append($" {cond.Combination.GetDisplayName()}");
+
+                sb.Append(cond);
+            }
+
+            sb.Append($" then icon={Icon}, template={Template}");
+
+            if (!Status.IsOk())
+                sb.Append($", change status to = {Status}");
+
+            return sb.ToString();
         }
     }
 }

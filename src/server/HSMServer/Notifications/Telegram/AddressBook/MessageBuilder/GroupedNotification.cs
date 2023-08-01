@@ -36,7 +36,8 @@ namespace HSMServer.Notifications.Telegram.AddressBook.MessageBuilder
                 _groupDiffPropertyName = FullCompare;
 
             apply &= (isEmptyDiff && _groupDiffPropertyName is FullCompare)
-                     || diffName == _groupDiffPropertyName;
+                     || diffName == _groupDiffPropertyName
+                     || string.IsNullOrEmpty(_groupDiffPropertyName);
 
             if (apply)
             {

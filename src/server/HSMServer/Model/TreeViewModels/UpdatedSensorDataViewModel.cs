@@ -58,6 +58,7 @@ namespace HSMServer.Model.TreeViewModel
 
         public string Comment { get; }
 
+
         internal UpdatedSensorDataViewModel(SensorNodeViewModel sensor) : base(sensor)
         {
             SensorType = sensor.Type;

@@ -37,7 +37,11 @@ namespace HSMServer.Core.Model
 
         internal override bool CheckTimeout() => Policies.SensorTimeout(LastValue?.ReceivingTime);
 
-        internal override void RecalculatePolicy() => Policies.TryValidate(LastValue, out _);
+        internal override void RecalculatePolicy()
+        {
+            if (LastValue is not null)
+                Policies.TryValidate(LastValue, out _);
+        }
 
 
         private BaseValue Convert(byte[] bytes) => bytes.ToValue<T>();

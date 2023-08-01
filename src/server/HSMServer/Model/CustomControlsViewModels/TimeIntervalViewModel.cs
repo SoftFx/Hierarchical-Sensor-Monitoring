@@ -43,7 +43,15 @@ namespace HSMServer.Model
         public bool IsAlertBlock { get; init; }
 
 
-        public string DisplayValue => GetDisplayValue();
+        public string DisplayValue
+        {
+            get
+            {
+                var used = GetUsedValue(this);
+
+                return TimeInterval.IsParent() ? $"From parent ({used})" : used;
+            }
+        }
 
         public TimeSpan CustomSpan
         {
@@ -76,7 +84,9 @@ namespace HSMServer.Model
                 {
                     var val = _interval.Value;
 
-                    if (val.IsUnset() || val.IsStatic() || val.IsDynamic())
+                    if (val.IsUnset())
+                        CustomSpan = TimeSpan.Zero;
+                    else if (val.IsStatic() || val.IsDynamic())
                         CustomSpan = new TimeSpan((long)val);
                 }
             }
@@ -95,18 +105,18 @@ namespace HSMServer.Model
 
         internal TimeIntervalViewModel(HashSet<TimeInterval> intervals, ParentRequest request = null, bool useCustomTemplate = true) : this(request)
         {
-            IntervalItems = intervals.ToSelectedItems(k => k.GetDisplayName());
+            string KeyBuilder(TimeInterval interval) => interval.IsParent() ? $"From parent ({GetUsedValue(ParentValue)})" : interval.GetDisplayName();
+
+            IntervalItems = intervals.ToSelectedItems(KeyBuilder);
             UseCustomInputTemplate = useCustomTemplate;
 
             if (!HasParentValue)
                 IntervalItems.RemoveAt(0);
-            else if (intervals.Contains(TimeInterval.FromParent))
-                IntervalItems.First(x => x.Value == nameof(TimeInterval.FromParent)).Text = $"From parent ({GetUsedValue(ParentValue)})";
         }
 
         internal TimeIntervalViewModel(TimeIntervalViewModel model, HashSet<TimeInterval> intervals) : this(intervals, model._parentRequest)
         {
-            Interval = model.Interval;
+            Interval = model.TimeInterval is TimeInterval.None && !intervals.Contains(TimeInterval.None) ? TimeInterval.Forever : model.Interval; //None to Forever (if exists)
             CustomSpan = model.CustomSpan;
         }
 
@@ -151,13 +161,6 @@ namespace HSMServer.Model
 
         internal TimeIntervalEntity ToEntity() => ToModel().ToEntity();
 
-
-        private string GetDisplayValue(TimeIntervalViewModel model = null)
-        {
-            var used = GetUsedValue(model ?? this);
-
-            return TimeInterval.IsParent() ? $"From parent ({used})" : used;
-        }
 
         private static string GetUsedValue(TimeIntervalViewModel model) =>
             model?.Interval switch

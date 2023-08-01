@@ -18,6 +18,8 @@
 
     var graphElementId = $"graph_{sensorId}";
     var graphParentDivId = $"graph_parent_{sensorId}";
+    var journalElementId = $"journal_{sensorId}";
+    var journalParentDivId = $"journal_parent_{sensorId}";
     var valuesElementId = $"values_{sensorId}";
     var valuesParentDivId = $"values_parent_{sensorId}";
 }
@@ -191,6 +193,9 @@
                                         </div>
                                     </div>
                                 </li>
+                                <li class='nav-item'>
+                                    <a id='link_journal_@sensorId' class='nav-link' data-bs-toggle='tab' href='#@journalParentDivId'>Journal</a>
+                                 </li>
                             </ul>
                             <div class='tab-content'>
                                 <div class='tab-pane fade show active' id=@graphParentDivId>
@@ -199,11 +204,53 @@
                                 <div class='tab-pane fade' id=@valuesParentDivId>
                                     <div id='@valuesElementId'></div>
                                 </div>
+                                <div class='tab-pane fade mt-2' id=@journalParentDivId>
+                                    <table class="display w-100" id="journal_table_@sensorId">
+                                        <thead>
+                                            <tr>
+                                                <th>Date</th>
+                                                <th>Initiator</th>
+                                                <th>Text</th>
+                                            </tr>
+                                        </thead>
+                                    </table>
+                                </div>
                             </div>
                         }
                         else
                         {
-                            <div id='values_@sensorId'></div>
+                            <ul class='nav nav-tabs flex-fill'>
+                                <li class='nav-item'>
+                                    <div class="d-flex flex-row align-items-center">
+                                        <a id='link_table_@sensorId' class='nav-link active' data-bs-toggle='tab' href='#@valuesParentDivId'>
+                                            Table
+                                            <span id="newValuesCount" class="badge rounded-pill badge-light fw-semibold"></span>
+                                        </a>
+                                        <div id="tableHistoryRefreshButton" class="table-history-refresh ms-3 d-none">
+                                            <a class='table-history-refresh-link fw-semibold' href="javascript:refreshTable();">Refresh</a>
+                                        </div>
+                                    </div>
+                                </li>
+                                <li class='nav-item'>
+                                    <a id='link_journal_@sensorId' class='nav-link' data-bs-toggle='tab' href='#@journalParentDivId'>Journal</a>
+                                </li>
+                            </ul>
+                            <div class='tab-content'>
+                                <div class='tab-pane fade show active' id=@valuesParentDivId>
+                                    <div id='@valuesElementId'></div>
+                                </div>
+                                <div class='tab-pane fade mt-2' id=@journalParentDivId>
+                                    <table class="display w-100" id="journal_table_@sensorId">
+                                        <thead>
+                                            <tr>
+                                                <th>Date</th>
+                                                <th>Initiator</th>
+                                                <th>Text</th>
+                                            </tr>
+                                        </thead>
+                                    </table>
+                                </div>
+                            </div>
                         }
                     </div>
                 </div>
@@ -230,11 +277,15 @@
             this.innerText = "Show all columns";
         }
     });
+    
+    $('[id^="link_journal_"]').off('click').on('click', () => initializeJournal(NodeType.Sensor))
 
     $(document).ready(function () {
         if ('@(Model.Type is SensorType.File)' === 'True') {
             setContentPreview('@Model.EncodedId');
         }
+        
+        JournalTable = undefined;
     });
 
     function setContentPreview(encodedId) {
