@@ -29,7 +29,7 @@
                             let ranges = $(`#${graphElementId}`)[0]._fullLayout.yaxis.range;
                             let heat = getHeatMapForEnum(graphData[0], ranges[0], ranges[1])
                             Plotly.addTraces(graphElementId, [heat]);
-                            Plotly.update(graphElementId, {}, {hovermode: 'closest'});
+                            Plotly.update(graphElementId, {}, {hovermode: 'x'});
                         }
                     })
                 }},
