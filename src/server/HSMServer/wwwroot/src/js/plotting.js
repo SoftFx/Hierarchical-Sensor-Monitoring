@@ -7,7 +7,7 @@
     {
         let layout = getEnumLayout();
         layout.autosize = true;
-        let heat = getHeatMapForEnum(convertedData)
+        let heat = getHeatMapForEnum(convertedData[0])
         Plotly.newPlot(graphElementId, [heat], layout, config);
     }
     else if (graphType === "7") {
@@ -382,82 +382,55 @@ function getPlotType(graphType) {
 // Enum plot
 {
     function getHeatMapForEnum(data) {
-        let mappedX = data[0].colors.map(x => x === ServiceStatus["4"][0] ? 0.5 : 0);
-
         return {
-            x: data[0].x,
+            x: data.x,
             y: [0],
-            z: [mappedX],
+            z: [data.z],
             colorscale: [[0, '#FF0000'], [0.5, '#00FF00'], [1, 'blue']],
             zmin: 0,
             zmax: 1,
             showscale: false,
             type: 'heatmap',
-            customdata: [data[0].customdata],
+            opacity: 0.5,
+            customdata: [data.customdata],
             hovertemplate: '%{customdata}<extra></extra>',
         }
     }
 
     function getEnumGraphData(timeList, dataList){
         function getMappedData(data, time) {
-            let hoverdata = [];
-            let colors = [];
-            
+            let customdata = [];
+            let z = [];
             for (let i = 0; i < data.length; i++){
-                hoverdata.push(`${ServiceStatus[`${data[i]}`][1]} ${time[i]}`)
-                colors.push(ServiceStatus[`${data[i]}`][0])
+                customdata.push(`${ServiceStatus[`${data[i]}`][1]} <br> ${new Date(time[i]).toUTCString()} - ${i + 1 >= data.length ? 'now' : new Date(time[i + 1]).toUTCString()}`)
+                z.push(ServiceStatus[`${data[i]}`][0] === ServiceStatus["4"][0] ? 0.5 : 0)
             }
             
-            return [hoverdata, colors]
+            return {
+                customdata: customdata,
+                z: z
+            }
         }
         
         let mappedData = getMappedData(dataList, timeList);
+        let currDate = new Date(new Date(Date.now()).toUTCString()).toISOString()
+        timeList.push(currDate);
         return [
             {
                 x: timeList,
-                customdata: mappedData[0],
+                z: mappedData.z,
+                customdata: mappedData.customdata,
                 hovertemplate: '%{customdata}<extra></extra>',
-                colors: mappedData[1]
             }
         ];
-    }
-    
-    function getShapes(data, colors){
-        let sh = [];
-
-        for (let i = 0; i < colors.length; i++) {
-            sh.push(getShape(data.x[i], colors[i]))
-        }
-
-        return {
-            shapes: sh,
-        }
-        function getShape(x, color) {
-            return {
-                type: 'line',
-                x0: x,
-                y0: 0,
-                x1: x,
-                y1: 2,
-                line: {
-                    color: color,
-                    width: 3
-                },
-            }
-        }
     }
     
     function  getEnumLayout() {
         return {
             yaxis: {
-                tickfont: {
-                    size: 10
-                },
                 visible: false,
             },
             automargin: "width+height",
-            ticktext: ['', '', '', '', '', '', ''],
-            tickvals: [1, 1, 1, 1, 1, 1, 1]
         }
     }
     
