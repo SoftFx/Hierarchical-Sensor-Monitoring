@@ -14,8 +14,6 @@
                 icon: icon1,
                 click: function(gd) {
                     const { from, to } = getFromAndTo(graphName);
-                    console.log(from)
-                    console.log(to)
                     let body = Data(to, from, 1, graphName)
                     $.ajax({
                         type: 'POST',
@@ -416,7 +414,7 @@ function getPlotType(graphType) {
 
 // Enum plot
 {
-    function getHeatMapForEnum(data, minValue = 0, maxValue = 0) {
+    function getHeatMapForEnum(data, minValue = 0, maxValue = 1) {
         return {
             x: data.x,
             y: [minValue, maxValue],
