@@ -200,6 +200,9 @@ namespace HSMDataCollector.Core
         /// <returns>A new instance of <see cref="ILastValueSensor{T}"/> where T is string</returns>
         ILastValueSensor<string> CreateLastValueStringSensor(string path, string defaultValue, string description = "");
 
+
+        IServiceCommandsSensor CreateServiceCommandsSensor(string module = "");
+
         #region Bar sensors
 
         /// <summary>
