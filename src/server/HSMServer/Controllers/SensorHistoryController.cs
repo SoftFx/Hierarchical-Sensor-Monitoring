@@ -104,7 +104,17 @@ namespace HSMServer.Controllers
             StoredUser.History.Reload(model);
         }
 
+        [HttpPost]
+        public Task<JsonResult> GetServiceStatusHistory([FromBody] GetSensorHistoryModel model)
+        {
+            var sensor = _tree.Sensors.FirstOrDefault(x => x.Value.Name == "Service status");
+                      
+            if (sensor.Value is null)
+                return Task.FromResult(_emptyJsonResult);
 
+            return ChartHistory(SpecifyLatestHistoryModel(model with { EncodedId = sensor.Key.ToString() }));
+        }
+        
         public async Task<FileResult> ExportHistory([FromQuery(Name = "EncodedId")] string encodedId, [FromQuery(Name = "Type")] int type,
             [FromQuery(Name = "From")] DateTime from, [FromQuery(Name = "To")] DateTime to)
         {
