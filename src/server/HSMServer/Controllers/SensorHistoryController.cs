@@ -120,9 +120,7 @@ namespace HSMServer.Controllers
                 if (_tree.Sensors.TryGetValue(id, out var foundSensor))
                     if (foundSensor.Name == "Service status" && foundSensor.Parent.Name == "Product Info")
                     {
-                        Console.WriteLine(foundSensor.FullPath);
                         var comparedValue = Compare(foundSensor, splittedPath);
-                        Console.WriteLine(comparedValue);
                         if (comparedValue >= pathComparisonValue)
                         {
                             sensorId = foundSensor.Id;
