@@ -137,10 +137,7 @@ namespace HSMServer.Controllers
                 return i;
             }
             
-            if (sensorId == Guid.Empty)
-                return Task.FromResult(_emptyJsonResult);
-
-            return ChartHistory(SpecifyLatestHistoryModel(model with { EncodedId = sensorId.ToString() }));
+            return sensorId == Guid.Empty ? Task.FromResult(_emptyJsonResult) : ChartHistory(SpecifyLatestHistoryModel(model with { EncodedId = sensorId.ToString() }));
         }
         
         public async Task<FileResult> ExportHistory([FromQuery(Name = "EncodedId")] string encodedId, [FromQuery(Name = "Type")] int type,
