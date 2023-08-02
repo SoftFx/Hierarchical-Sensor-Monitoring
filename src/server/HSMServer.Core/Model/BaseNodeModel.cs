@@ -61,7 +61,7 @@ namespace HSMServer.Core.Model
         }
 
 
-        internal abstract bool CheckTimeout();
+        internal abstract bool CheckTimeout(bool toNotify = true);
 
 
         internal virtual BaseNodeModel AddParent(ProductModel parent)
@@ -81,12 +81,12 @@ namespace HSMServer.Core.Model
             Settings.SelfDestroy.TrySetValue(update.SelfDestroy);
 
             if (Settings.TTL.TrySetValue(update.TTL))
-                CheckTimeout();
+                CheckTimeout(toNotify: false);
 
             if (update.TTLPolicy is not null)
             {
                 Policies.UpdateTTL(update.TTLPolicy);
-                CheckTimeout();
+                CheckTimeout(toNotify: false);
             }
         }
     }
