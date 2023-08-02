@@ -29,8 +29,6 @@ namespace HSMServer.Core.Model
 
         public string Description { get; private set; }
 
-        public bool UseParentPolicies { get; private set; }
-
 
         public string FullPath => Parent is null ? $"{DisplayName}" : $"{Parent.FullPath}/{DisplayName}";
 
