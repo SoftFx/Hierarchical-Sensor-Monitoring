@@ -89,7 +89,7 @@ namespace HSMServer.Model.Folders
             Name = update.Name ?? Name;
 
             if (update.TTL != null)
-                TTL = new TimeIntervalViewModel(update.TTL, PredefinedIntervals.ForTimeout);
+                TTL = new TimeIntervalViewModel(update.TTL, PredefinedIntervals.ForFolderTimeout);
 
             if (update.KeepHistory != null)
                 KeepHistory = new TimeIntervalViewModel(update.KeepHistory, PredefinedIntervals.ForKeepHistory);
@@ -126,7 +126,7 @@ namespace HSMServer.Model.Folders
         }
 
 
-        private static TimeIntervalViewModel LoadTTL(TimeIntervalEntity entity = null) => LoadSetting(entity, PredefinedIntervals.ForTimeout, Core.Model.TimeInterval.None);
+        private static TimeIntervalViewModel LoadTTL(TimeIntervalEntity entity = null) => LoadSetting(entity, PredefinedIntervals.ForFolderTimeout, Core.Model.TimeInterval.None);
 
         private static TimeIntervalViewModel LoadKeepHistory(TimeIntervalEntity entity = null) => LoadSetting(entity, PredefinedIntervals.ForKeepHistory, Core.Model.TimeInterval.Month);
 
