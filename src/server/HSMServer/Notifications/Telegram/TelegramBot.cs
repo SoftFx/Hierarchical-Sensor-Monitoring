@@ -203,7 +203,7 @@ namespace HSMServer.Notifications
 
                                 if (messagesDelay > 0 && chat.MessageBuilder.ExpectedSendingTime <= DateTime.UtcNow)
                                 {
-                                    var message = chat.MessageBuilder.GetAggregateMessage(entity.Notifications.UsedTelegram.MessagesDelaySec);
+                                    var message = chat.MessageBuilder.GetAggregateMessage(messagesDelay);
 
                                     SendMessage(chat.ChatId, message);
                                 }
