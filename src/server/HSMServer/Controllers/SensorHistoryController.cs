@@ -107,91 +107,40 @@ namespace HSMServer.Controllers
         [HttpPost]
         public Task<JsonResult> GetServiceStatusHistory([FromBody] GetSensorHistoryModel model)
         {
-            _tree.Sensors.TryGetValue(SensorPathHelper.DecodeGuid(model.EncodedId), out var firstSensor);
-
-            SensorNodeViewModel FindSensor(ProductNodeViewModel node)
-            {
-                if (node.Name == "Product Info")
-                    return node.Sensors.FirstOrDefault(x => x.Value.Name == "Service status").Value;
-
-                return null;
-            }
-
-            var dict = new Dictionary<Guid, byte>();
-           
-            var sensors = TryFindUp(firstSensor.Parent);
-          
-            
-            static Guid CountSameParents(List<SensorNodeViewModel> sensors, SensorNodeViewModel sensor)
-            {
-                var response = Guid.Empty;
-                var max = 0;
-                foreach (var currSensor in sensors)
-                {
-                    var compared = Compare(currSensor, sensor);
-                    if (compared > max)
-                    {
-                        response = currSensor.Id;
-                        max = compared;
-                    }
-                }
-
-                return response;
-
-                int Compare(NodeViewModel currSensor, NodeViewModel sensor)
-                {
-                    var first = currSensor.FullPath.Split('/');
-                    var second = sensor.FullPath.Split('/');
-                    int i = 0;
-
-                    while (i < first.Length && i < second.Length && first[i] == second[i])
-                        i++;
-
-                    return i;
-                }
-            }
-            
-            SensorNodeViewModel TryFindDown(BaseNodeViewModel node)
-            {
-                if (node is ProductNodeViewModel parent && !dict.TryGetValue(parent.Id, out _))
-                {
-                    dict.TryAdd(parent.Id, byte.MinValue);
-                    var sensor = FindSensor(parent);
-                    if (sensor is not null)
-                        return sensor;
-                    
-                    foreach (var (_, subnode) in parent.Nodes)
-                    {
-                        sensor = TryFindDown(subnode);
-                        if (sensor is not null)
-                            return sensor;
-                    }
-                }
-
-                return null;
-            }
-            
-            List<SensorNodeViewModel> TryFindUp(BaseNodeViewModel node)
-            {
-                if (node is ProductNodeViewModel parent)
-                {
-                    var sensors = parent?.Nodes?.Select(x => TryFindDown(x.Value)).Where(x => x is not null).ToList();
-
-                    if (sensors.Count > 0)
-                        return sensors;
-                    
-                    if (parent.Parent is ProductNodeViewModel)
-                        return TryFindUp(parent.Parent);
-                }
-
-                return null;
-            }
-
-            var id = CountSameParents(sensors, firstSensor);
-            if (id == Guid.Empty)
+            if (!_tree.Sensors.TryGetValue(SensorPathHelper.DecodeGuid(model.EncodedId), out var firstSensor))
                 return Task.FromResult(_emptyJsonResult);
 
-            return ChartHistory(SpecifyLatestHistoryModel(model with { EncodedId = id.ToString() }));
+            var nodeIds = _tree.GetAllNodeSensors(firstSensor.RootProduct.Id);
+            var sensorId = Guid.Empty;
+            var pathComparisonValue = 0;
+            foreach (var id in nodeIds)
+                if (_tree.Sensors.TryGetValue(id, out var sensor))
+                    if (sensor.Name == "Service status" && sensor.Parent.Name == "Product Info")
+                    {
+                        var comparedValue = Compare(firstSensor, sensor);
+                        if (comparedValue >= pathComparisonValue)
+                        {
+                            sensorId = sensor.Id;
+                            pathComparisonValue = comparedValue;
+                        }
+                    }
+
+            static int Compare(NodeViewModel firstSensor, NodeViewModel secondSensor)
+            {
+                var first = firstSensor.FullPath.Split('/');
+                var second = secondSensor.FullPath.Split('/');
+                var i = 0;
+
+                while (i < first.Length && i < second.Length && first[i] == second[i]) 
+                    i++;
+
+                return i;
+            }
+            
+            if (sensorId == Guid.Empty)
+                return Task.FromResult(_emptyJsonResult);
+
+            return ChartHistory(SpecifyLatestHistoryModel(model with { EncodedId = sensorId.ToString() }));
         }
         
         public async Task<FileResult> ExportHistory([FromQuery(Name = "EncodedId")] string encodedId, [FromQuery(Name = "Type")] int type,
