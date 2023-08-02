@@ -107,34 +107,47 @@ namespace HSMServer.Controllers
         [HttpPost]
         public Task<JsonResult> GetServiceStatusHistory([FromBody] GetSensorHistoryModel model)
         {
-            if (!_tree.Sensors.TryGetValue(SensorPathHelper.DecodeGuid(model.EncodedId), out var firstSensor))
+            if (!_tree.Sensors.TryGetValue(SensorPathHelper.DecodeGuid(model.EncodedId), out var sensor))
                 return Task.FromResult(_emptyJsonResult);
 
-            var nodeIds = _tree.GetAllNodeSensors(firstSensor.RootProduct.Id);
+            var splittedPath = sensor.FullPath.Split('/');
+            var nodeIds = _tree.GetAllNodeSensors(sensor.RootProduct.Id);
+
             var sensorId = Guid.Empty;
-            var pathComparisonValue = 0;
+            var pathComparisonValue = int.MinValue;
+
             foreach (var id in nodeIds)
-                if (_tree.Sensors.TryGetValue(id, out var sensor))
-                    if (sensor.Name == "Service status" && sensor.Parent.Name == "Product Info")
+                if (_tree.Sensors.TryGetValue(id, out var foundSensor))
+                    if (foundSensor.Name == "Service status" && foundSensor.Parent.Name == "Product Info")
                     {
-                        var comparedValue = Compare(firstSensor, sensor);
+                        Console.WriteLine(foundSensor.FullPath);
+                        var comparedValue = Compare(foundSensor, splittedPath);
+                        Console.WriteLine(comparedValue);
                         if (comparedValue >= pathComparisonValue)
                         {
-                            sensorId = sensor.Id;
+                            sensorId = foundSensor.Id;
                             pathComparisonValue = comparedValue;
                         }
                     }
 
-            static int Compare(NodeViewModel firstSensor, NodeViewModel secondSensor)
+            static int Compare(NodeViewModel sensor, IReadOnlyList<string> splittedPath)
             {
-                var first = firstSensor.FullPath.Split('/');
-                var second = secondSensor.FullPath.Split('/');
+                var comparedPath = sensor.FullPath.Split('/');
                 var i = 0;
+                var compareValue = 0;
+                while (i < comparedPath.Length && i < splittedPath.Count)
+                {
+                    if (comparedPath[i] == splittedPath[i])
+                        compareValue++;
+                    else
+                        compareValue--;
 
-                while (i < first.Length && i < second.Length && first[i] == second[i]) 
                     i++;
+                }
 
-                return i;
+                compareValue -= (comparedPath.Length - splittedPath.Count);
+
+                return compareValue;
             }
             
             return sensorId == Guid.Empty ? Task.FromResult(_emptyJsonResult) : ChartHistory(SpecifyLatestHistoryModel(model with { EncodedId = sensorId.ToString() }));
