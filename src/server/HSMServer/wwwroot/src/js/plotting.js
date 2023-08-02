@@ -6,32 +6,43 @@
         'height': 600,
         'path': 'M224 512c35.32 0 63.97-28.65 63.97-64H160.03c0 35.35 28.65 64 63.97 64zm215.39-149.71c-19.32-20.76-55.47-51.99-55.47-154.29 0-77.7-54.48-139.9-127.94-155.16V32c0-17.67-14.32-32-31.98-32s-31.98 14.33-31.98 32v20.84C118.56 68.1 64.08 130.3 64.08 208c0 102.3-36.15 133.53-55.47 154.29-6 6.45-8.66 14.16-8.61 21.71.11 16.4 12.98 32 32.1 32h383.8c19.12 0 32-15.6 32.1-32 .05-7.55-2.61-15.27-8.61-21.71z'
     }
+    
+    var serviceButtonName = 'Show service status';
     var config = { 
         responsive: true,
         modeBarButtonsToAdd: [
             {
-                name: 'Show service status',
+                name: serviceButtonName, //changing name doesn't work
                 icon: icon1,
                 click: function(gd) {
-                    const { from, to } = getFromAndTo(graphName);
-                    let body = Data(to, from, 1, graphName)
-                    $.ajax({
-                        type: 'POST',
-                        data: JSON.stringify(body),
-                        url: 'SensorHistory/GetServiceStatusHistory',
-                        contentType: 'application/json',
-                        dataType: 'html',
-                        cache: false,
-                        async: true,
-                        success: function (data){
-                            let escapedData = JSON.parse(data);
-                            let graphData = getEnumGraphData(getTimeList(escapedData), getNumbersData(escapedData))
-                            let ranges = $(`#${graphElementId}`)[0]._fullLayout.yaxis.range;
-                            let heat = getHeatMapForEnum(graphData[0], ranges[0], ranges[1])
-                            Plotly.addTraces(graphElementId, [heat]);
-                            Plotly.update(graphElementId, {}, {hovermode: 'x'});
-                        }
-                    })
+                    let graph = $(`#${graphElementId}`)[0];
+                    let graphLength = graph._fullData.length;
+                    if (graphLength > 1) {
+                        Plotly.deleteTraces(graphElementId, graphLength - 1);
+                        serviceButtonName = 'Show service status'
+                    }
+                    else {
+                        const { from, to } = getFromAndTo(graphName);
+                        let body = Data(to, from, 1, graphName)
+                        $.ajax({
+                            type: 'POST',
+                            data: JSON.stringify(body),
+                            url: 'SensorHistory/GetServiceStatusHistory',
+                            contentType: 'application/json',
+                            dataType: 'html',
+                            cache: false,
+                            async: true,
+                            success: function (data){
+                                let escapedData = JSON.parse(data);
+                                let graphData = getEnumGraphData(getTimeList(escapedData), getNumbersData(escapedData))
+                                let ranges = graph._fullLayout.yaxis.range;
+                                let heat = getHeatMapForEnum(graphData[0], ranges[0], ranges[1])
+                                Plotly.addTraces(graphElementId, [heat]);
+                                Plotly.update(graphElementId, {}, {hovermode: 'x'});
+                                serviceButtonName = 'Hide service status'
+                            }
+                        })
+                    }
                 }},
         ],
     }
