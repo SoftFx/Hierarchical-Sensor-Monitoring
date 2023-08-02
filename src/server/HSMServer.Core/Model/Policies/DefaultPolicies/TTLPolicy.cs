@@ -6,8 +6,8 @@ namespace HSMServer.Core.Model.Policies
 {
     public sealed class TTLPolicy : DefaultPolicyBase
     {
-        private const string DefaultIcon = "🕑";
-        private const string DefaultTemplate = "[$product]$path";
+        public const string DefaultIcon = "🕑";
+        public const string DefaultTemplate = "[$product]$path";
 
         private readonly SettingProperty<TimeIntervalModel> _ttl;
 

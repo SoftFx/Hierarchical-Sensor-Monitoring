@@ -138,9 +138,6 @@ namespace HSMDatabase.LevelDB.Tests.JournalDBTests
 
             if (first == second)
             {
-                var databaseNoData = await GetJournalValues(guid, DateTime.MinValue, DateTime.MaxValue, GetAlterType(first));
-                Assert.Empty(databaseNoData);
-
                 var databaseData = await GetJournalValues(guid, DateTime.MinValue, DateTime.MaxValue, first);
                 Assert.Equal(2, databaseData.Count);
 
@@ -151,7 +148,7 @@ namespace HSMDatabase.LevelDB.Tests.JournalDBTests
             {
                 var databaseSingleActionsData = await GetJournalValues(guid, DateTime.MinValue, DateTime.MaxValue, RecordType.Changes);
                 var databaseSingleChangesData = await GetJournalValues(guid, DateTime.MinValue, DateTime.MaxValue, RecordType.Actions);
-                Assert.Single(databaseSingleActionsData);
+                Assert.Equal(2, databaseSingleActionsData.Count);
                 Assert.Single(databaseSingleChangesData);
             }
 

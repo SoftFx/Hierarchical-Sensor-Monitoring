@@ -31,8 +31,6 @@ namespace HSMServer.Model.DataAlerts
 
     public class ActionViewModel : AlertActionBase
     {
-        private const string DefaultCommentTemplate = "$sensor $operation $target";
-
         public static readonly string SetErrorStatus = $"set {SensorStatus.Error.ToSelectIcon()} {SensorStatus.Error.GetDisplayName()} status";
 
         private readonly Dictionary<ActionType, string> _actions = new()
@@ -53,7 +51,6 @@ namespace HSMServer.Model.DataAlerts
             IsMain = isMain;
             Actions = _actions.ToSelectedItems(k => k.Value, v => v.Key.ToString());
 
-            Comment = DefaultCommentTemplate;
             Action = ActionType.SendNotification;
         }
     }

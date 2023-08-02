@@ -81,6 +81,11 @@ namespace HSMServer.Model.DataAlerts
 
     public abstract class DataAlertViewModel : DataAlertViewModelBase
     {
+        protected virtual string DefaultCommentTemplate { get; } = "$sensor $operation $target";
+
+        protected virtual string DefaultIcon { get; }
+
+
         protected DataAlertViewModel(Policy policy, Core.Model.BaseNodeModel node)
         {
             EntityId = node.Id;
@@ -107,8 +112,8 @@ namespace HSMServer.Model.DataAlerts
 
             Conditions.Add(CreateCondition(true));
 
-            Actions.Add(new ActionViewModel(true));
-            Actions.Add(new ActionViewModel(false) { Action = ActionType.ShowIcon });
+            Actions.Add(new ActionViewModel(true) { Comment = DefaultCommentTemplate });
+            Actions.Add(new ActionViewModel(false) { Action = ActionType.ShowIcon, Icon = DefaultIcon });
         }
 
 

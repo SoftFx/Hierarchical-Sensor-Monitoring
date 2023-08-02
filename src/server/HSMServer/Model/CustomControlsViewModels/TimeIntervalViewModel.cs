@@ -116,7 +116,7 @@ namespace HSMServer.Model
 
         internal TimeIntervalViewModel(TimeIntervalViewModel model, HashSet<TimeInterval> intervals) : this(intervals, model._parentRequest)
         {
-            Interval = model.TimeInterval is TimeInterval.None && !intervals.Contains(TimeInterval.None) ? TimeInterval.Forever : model.Interval; //None to Forever (if exists)
+            Interval = model.TimeInterval;
             CustomSpan = model.CustomSpan;
         }
 
@@ -147,7 +147,12 @@ namespace HSMServer.Model
             if (model.IsFromFolder)
                 Interval = TimeInterval.FromParent;
             else if (!model.UseTicks) //dynamic to dynamic
+            {
                 Interval = model.Interval.ToDynamicServer();
+
+                if (Interval is TimeInterval.None && predefinedIntervals.Contains(TimeInterval.Forever))
+                    Interval = TimeInterval.Forever;
+            }
             else if (TimeInterval.IsDefined(model.Ticks) && (predefinedIntervals?.Contains((TimeInterval)model.Ticks) ?? true)) //const ticks to enum
                 Interval = (TimeInterval)model.Ticks;
             else

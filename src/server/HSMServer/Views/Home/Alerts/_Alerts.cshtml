@@ -108,6 +108,12 @@ else
         var popoverList = popoverTriggerList.map(function(popoverTriggerEl) {
             return new bootstrap.Popover(popoverTriggerEl);
         });
+
+        if ('@(Model is SensorInfoViewModel)' !== "True") {
+            $("a.showMessage").each(function () {
+                $(this).addClass("d-none");
+            });
+        }
     });
 
     $('#commentHelp').on('show.bs.popover', () => {
