@@ -10,7 +10,7 @@ using Xunit;
 namespace HSMDatabase.LevelDB.Tests.JournalDBTests;
 
 [CollectionDefinition("Database collection")]
-public class JournalCacheTests : DatabaseCoreTestsBase<JournalDatabaseFixture>
+public class JournalCacheTests : DatabaseCoreTestsBase<JournalDatabaseFixture>, IClassFixture<DatabaseRegisterFixture>
 {
     private readonly IJournalService _journal;
 
@@ -56,7 +56,7 @@ public class JournalCacheTests : DatabaseCoreTestsBase<JournalDatabaseFixture>
             var sensor = SensorModelFactory.Build(EntitiesFactory.BuildSensorEntity());
             var curCnt = 0;
 
-            while (curCnt++ <= valuesCount)
+            while (curCnt++ < valuesCount)
                 _journal.AddRecord(JournalFactory.GetRecord(sensor.Id));
 
             sensors.Add(sensor);
