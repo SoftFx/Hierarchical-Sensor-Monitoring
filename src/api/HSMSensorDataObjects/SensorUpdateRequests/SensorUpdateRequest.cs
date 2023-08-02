@@ -4,9 +4,9 @@ namespace HSMSensorDataObjects.SensorUpdateRequests
 {
     public sealed class SensorUpdateRequest : BaseRequest
     {
-        public List<PolicyUpdateRequest> Policies { get; set; }
+        public List<AlertUpdateRequest> Policies { get; set; }
 
-        public PolicyUpdateRequest TTLPolicy { get; set; }
+        public AlertUpdateRequest TTLPolicy { get; set; }
 
 
         public long KeepHistory { get; set; }

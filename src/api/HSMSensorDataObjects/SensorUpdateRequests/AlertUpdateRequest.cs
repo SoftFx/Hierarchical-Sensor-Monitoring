@@ -2,7 +2,7 @@
 
 namespace HSMSensorDataObjects.SensorUpdateRequests
 {
-    public enum PolicyOperation : byte
+    public enum AlertOperation : byte
     {
         LessThanOrEqual = 0,
         LessThan = 1,
@@ -16,7 +16,7 @@ namespace HSMSensorDataObjects.SensorUpdateRequests
         IsOk = 22,
     }
 
-    public enum PolicyProperty : byte
+    public enum AlertProperty : byte
     {
         Status = 0,
         Comment = 1,
@@ -36,17 +36,16 @@ namespace HSMSensorDataObjects.SensorUpdateRequests
         LastValue,
     }
 
-    public enum PolicyCombination : byte
+    public enum AlertCombination : byte
     {
         And,
         Or,
     }
 
 
-    public sealed class PolicyUpdateRequest
+    public sealed class AlertUpdateRequest
     {
-        //Guid Id,
-        public List<PolicyConditionUpdate> Conditions { get; set; }
+        public List<AlertConditionUpdate> Conditions { get; set; }
 
         public SensorStatus Status { get; set; }
 
@@ -58,15 +57,15 @@ namespace HSMSensorDataObjects.SensorUpdateRequests
     }
 
 
-    public sealed class PolicyConditionUpdate
+    public sealed class AlertConditionUpdate
     {
-        public PolicyOperation Operation { get; set; }
+        public AlertOperation Operation { get; set; }
 
-        public PolicyProperty Property { get; set; }
+        public AlertProperty Property { get; set; }
 
         public TargetValue Target { get; set; }
 
-        public PolicyCombination Combination { get; set; }
+        public AlertCombination Combination { get; set; }
     }
 
 
