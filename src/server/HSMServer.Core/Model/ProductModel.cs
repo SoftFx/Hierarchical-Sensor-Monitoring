@@ -5,7 +5,6 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
-using System.Xml.Linq;
 
 namespace HSMServer.Core.Model
 {
@@ -85,7 +84,7 @@ namespace HSMServer.Core.Model
         }
 
 
-        internal override bool CheckTimeout()
+        internal override bool CheckTimeout(bool _ = true)
         {
             var result = false;
 

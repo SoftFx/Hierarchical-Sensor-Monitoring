@@ -81,7 +81,7 @@ namespace HSMServer.Core.Model.Policies
             return CalculateStorageResult(valueT, updateSensor);
         }
 
-        internal bool SensorTimeout(DateTime? time)
+        internal bool SensorTimeout(DateTime? time, bool toNotify)
         {
             if (TimeToLive is null)
                 return false;
@@ -93,7 +93,8 @@ namespace HSMServer.Core.Model.Policies
             else
                 PolicyResult.RemoveAlert(TimeToLive);
 
-            SensorExpired?.Invoke(_sensor, timeout);
+            if (toNotify)
+                SensorExpired?.Invoke(_sensor, timeout);
 
             return timeout;
         }
