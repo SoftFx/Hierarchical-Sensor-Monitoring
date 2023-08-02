@@ -201,16 +201,23 @@
         let selector = "";
         if (propertyElement !== 'input')
             selector = ':not(:empty)';
-        
-        let foundItem = element.find(`${propertyElement}[name='${propertyName}']${selector}`);
-        let value = '';
-        if (propertyElement === 'div'){
-           value = foundItem.text();
-        }
-        else 
-            value = foundItem.val();
-        
-        form.append(`${propertyName}`, value);
+
+        element.find(`${propertyElement}[name='${propertyName}']${selector}`).each(function () {
+            let value = '';
+
+            if ($(this).parent().hasClass("d-none")) {
+                return;
+            }
+
+            if (propertyElement === 'div') {
+                value = $(this).text();
+            }
+            else {
+                value = $(this).val();
+            }
+
+            form.append(`${propertyName}`, value);
+        });
     }
 
     function tryValidate(element, propertyElement, propertyName) {

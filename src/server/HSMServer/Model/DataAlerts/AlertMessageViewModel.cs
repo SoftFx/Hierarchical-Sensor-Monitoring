@@ -11,7 +11,7 @@ public class AlertMessageViewModel
     
     public AlertProperty Property { get; set; }
 
-    public PolicyOperation Operation { get; set; }
+    public PolicyOperation? Operation { get; set; }
 
     public string Emoji { get; set; }
     

@@ -9,6 +9,11 @@ namespace HSMServer.Model.DataAlerts
         public const byte AlertKey = byte.MaxValue;
 
 
+        protected override string DefaultCommentTemplate { get; } = TTLPolicy.DefaultTemplate;
+
+        protected override string DefaultIcon { get; } = TTLPolicy.DefaultIcon;
+
+
         public TimeToLiveAlertViewModel(NodeViewModel node) : base(node.Id)
         {
             FillConditions(new TimeIntervalViewModel(PredefinedIntervals.ForTimeout, () => (node.Parent?.TTL, node.ParentIsFolder)) { IsAlertBlock = true });
