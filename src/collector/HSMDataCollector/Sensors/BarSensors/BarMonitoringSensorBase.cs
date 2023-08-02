@@ -70,7 +70,7 @@ namespace HSMDataCollector.DefaultSensors
         {
             _needSendValue = _internalBar.Count > 0;
 
-            return _internalBar.Complete() as BarType;
+            return _internalBar.Complete().Copy() as BarType; //need copy for correct partialBar serialization
         }
 
         protected sealed override BarType GetDefaultValue() =>

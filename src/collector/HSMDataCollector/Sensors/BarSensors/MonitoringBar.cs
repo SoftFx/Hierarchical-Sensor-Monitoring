@@ -8,7 +8,8 @@ namespace HSMDataCollector.DefaultSensors
     public abstract class MonitoringBarBase<T> : BarSensorValueBase<T>
     {
         private readonly object _lock = new object();
-        protected double _totalSum = 0.0;
+
+        protected double _totalSum;
 
         internal int Precision { get; private set; }
 
@@ -71,6 +72,9 @@ namespace HSMDataCollector.DefaultSensors
         protected abstract T Round(T value);
 
         protected abstract T CountMean();
+
+
+        internal MonitoringBarBase<T> Copy() => (MonitoringBarBase<T>)MemberwiseClone();
     }
 
 
