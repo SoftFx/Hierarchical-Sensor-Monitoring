@@ -326,8 +326,6 @@ namespace HSMServer.Core.Cache
                 sensor.ResetSensor();
 
             _database.ClearSensorValues(sensor.Id.ToString(), from, request.To);
-            _journalService.AddRecord(request.ToRecord(sensor.FullPath));
-
             _snapshot.Sensors[request.Id].History.From = request.To;
 
             ChangeSensorEvent?.Invoke(sensor, ActionType.Update);
