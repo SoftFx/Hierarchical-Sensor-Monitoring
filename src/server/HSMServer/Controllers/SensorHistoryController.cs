@@ -115,37 +115,27 @@ namespace HSMServer.Controllers
 
             var sensorId = Guid.Empty;
             var pathComparisonValue = int.MinValue;
+            var pathLength = int.MaxValue;
 
             foreach (var id in nodeIds)
                 if (_tree.Sensors.TryGetValue(id, out var foundSensor))
                     if (foundSensor.Name == "Service status" && foundSensor.Parent.Name == "Product Info")
-                    {
-                        var comparedValue = Compare(foundSensor, splittedPath);
-                        if (comparedValue >= pathComparisonValue)
-                        {
-                            sensorId = foundSensor.Id;
-                            pathComparisonValue = comparedValue;
-                        }
-                    }
+                        CheckPath(foundSensor);
 
-            static int Compare(NodeViewModel sensor, IReadOnlyList<string> splittedPath)
+
+            void CheckPath(NodeViewModel sensor)
             {
                 var comparedPath = sensor.FullPath.Split('/');
                 var i = 0;
-                var compareValue = 0;
-                while (i < comparedPath.Length && i < splittedPath.Count)
-                {
-                    if (comparedPath[i] == splittedPath[i])
-                        compareValue++;
-                    else
-                        compareValue--;
-
+                while (i < comparedPath.Length && i < splittedPath.Length && comparedPath[i] == splittedPath[i])
                     i++;
+                
+                if (i > pathComparisonValue || (i == pathComparisonValue && pathLength > comparedPath.Length))
+                {
+                    sensorId = sensor.Id;
+                    pathComparisonValue = i;
+                    pathLength = comparedPath.Length;
                 }
-
-                compareValue -= (comparedPath.Length - splittedPath.Count);
-
-                return compareValue;
             }
             
             return sensorId == Guid.Empty ? Task.FromResult(_emptyJsonResult) : ChartHistory(SpecifyLatestHistoryModel(model with { EncodedId = sensorId.ToString() }));
