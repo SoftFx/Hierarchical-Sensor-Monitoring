@@ -61,7 +61,8 @@ namespace HSMServer.Core.Model.Policies
 
         internal override void UpdateTTL(PolicyUpdate update)
         {
-            PolicyResult.RemoveAlert(TimeToLive);
+            RemoveAlert(TimeToLive);
+
             base.UpdateTTL(update);
         }
 
@@ -91,14 +92,24 @@ namespace HSMServer.Core.Model.Policies
             var timeout = TimeToLive.HasTimeout(time);
 
             if (timeout)
+            {
                 PolicyResult.AddSingleAlert(TimeToLive);
+                SensorResult += TimeToLive.SensorResult;
+            }
             else
-                PolicyResult.RemoveAlert(TimeToLive);
+                RemoveAlert(TimeToLive);
 
             if (toNotify)
                 SensorExpired?.Invoke(_sensor, timeout);
 
             return timeout;
+        }
+
+
+        private void RemoveAlert(Policy policy)
+        {
+            PolicyResult.RemoveAlert(policy);
+            SensorResult -= policy.SensorResult;
         }
     }
 
