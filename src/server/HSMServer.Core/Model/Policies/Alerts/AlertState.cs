@@ -100,9 +100,15 @@ namespace HSMServer.Core.Model.Policies
 
             diffProp = string.Empty;
 
+            if (Template.UsedVariables.Count != other.Template.UsedVariables.Count)
+                return false;
+
             foreach (var prop in _publicProperties.Values)
             {
                 var propName = prop.Name;
+
+                if (UseProperty(propName) ^ other.UseProperty(propName))
+                    return false;
 
                 if (UseProperty(propName) && other.UseProperty(propName))
                 {

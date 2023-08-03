@@ -885,7 +885,7 @@ namespace HSMServer.Core.Cache
                     UpdateMutedSensorState(sensor.Id);
         }
 
-        private void SetExpiredSnapshot(BaseSensorModel sensor, bool timeout)
+        private void SetExpiredSnapshot(BaseSensorModel sensor, bool timeout, bool toNotify)
         {
             var snapshot = _snapshot.Sensors[sensor.Id];
 
@@ -896,7 +896,8 @@ namespace HSMServer.Core.Cache
                 if (!timeout)
                     sensor.RecalculatePolicy();
 
-                NotifyAboutChanges(sensor);
+                if (toNotify)
+                    NotifyAboutChanges(sensor);
             }
         }
     }

@@ -99,8 +99,7 @@ namespace HSMServer.Core.Model.Policies
             else
                 RemoveAlert(TimeToLive);
 
-            if (toNotify)
-                SensorExpired?.Invoke(_sensor, timeout);
+            SensorExpired?.Invoke(_sensor, timeout, toNotify);
 
             return timeout;
         }
