@@ -10,24 +10,27 @@ namespace HSMDataCollector.DefaultSensors
         internal const string DefaultTimeFormat = "dd/MM/yyyy HH:mm:ss";
 
         private readonly string _nodePath;
-        
+
 
         protected abstract string SensorName { get; }
-        
+
         public string SensorPath => $"{_nodePath}/{SensorName}";
-        
-        
+
+
+        internal event Func<string, Task<bool>> SensorMetainfoRequest;
+
         internal event Action<SensorValueBase> ReceiveSensorValue;
+
 
         public event Action<string, Exception> ExceptionThrowing;
 
-        
+
         protected SensorBase(SensorOptions options)
         {
             _nodePath = options.NodePath;
         }
 
-        
+
         public void SendValue(SensorValueBase value)
         {
             value.Path = SensorPath;
@@ -35,8 +38,8 @@ namespace HSMDataCollector.DefaultSensors
         }
 
 
-        internal virtual Task<bool> Init() => Task.FromResult(true);
-        
+        internal virtual Task<bool> Init() => SensorMetainfoRequest?.Invoke("test") ?? Task.FromResult(true);
+
         internal virtual Task<bool> Start() => Task.FromResult(true);
 
         internal virtual Task Stop() => Task.CompletedTask;

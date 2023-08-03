@@ -32,7 +32,6 @@ namespace HSMDataCollector.DefaultSensors
         }
 
 
-
         protected DefaultSensorsCollection AddCollectorAliveCommon(CollectorMonitoringInfoOptions options)
         {
             return Register(new CollectorAlive(_prototype.CollectorAlive.Get(options)));

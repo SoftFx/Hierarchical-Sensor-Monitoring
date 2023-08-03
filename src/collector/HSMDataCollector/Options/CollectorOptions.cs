@@ -11,6 +11,9 @@ namespace HSMDataCollector.Core
         public int Port { get; set; } = 44330;
         
 
+        public string Module { get; set; }
+
+
         public int MaxQueueSize { get; set; } = 20000;
 
         public int MaxValuesInPackage { get; set; } = 1000;

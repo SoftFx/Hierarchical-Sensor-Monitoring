@@ -146,6 +146,7 @@ namespace HSMDataCollector.Core
         {
             try
             {
+
                 string json = JsonConvert.SerializeObject(value);
 
                 _logger.Debug($"{nameof(RequestToServer)}: {json}");
