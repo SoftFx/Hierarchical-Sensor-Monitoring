@@ -20,6 +20,7 @@
                     let graphLength = graph._fullData.length;
                     if (graphLength > 1) {
                         Plotly.deleteTraces(graphElementId, graphLength - 1);
+                        Plotly.update(graphElementId, {}, {hovermode: 'closest'});
                     }
                     else {
                         const { from, to } = getFromAndTo(graphName);
@@ -462,10 +463,11 @@ function getPlotType(graphType) {
                 z: z
             }
         }
-        
-        let mappedData = getMappedData(dataList, timeList);
+
         let currDate = new Date(new Date(Date.now()).toUTCString()).toISOString()
         timeList.push(currDate);
+        let mappedData = getMappedData(dataList, timeList);
+
         return [
             {
                 x: timeList,
