@@ -72,6 +72,7 @@ namespace HSMSensorDataObjects.SensorUpdateRequests
     public sealed class TargetValue
     {
         public TargetType Type { get; set; }
+
         public string Value { get; set; }
     }
 }

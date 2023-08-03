@@ -28,12 +28,12 @@ namespace HSMSensorDataObjects.SensorUpdateRequests
         public long TTL { get; set; }
 
 
-        public string Description { get; set; }
+        public bool SaveOnlyUniqueValues { get; set; }
 
         public bool EnableGrafana { get; set; }
 
-        public bool IsUniq { get; set; }
+        public string Description { get; set; }
 
-        public Unit Unit { get; set; }
+        public Unit SelectedUnit { get; set; }
     }
 }
