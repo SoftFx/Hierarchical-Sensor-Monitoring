@@ -48,6 +48,8 @@ namespace HSMServer.Core.Model.Policies
             _typePolicy = new CorrectTypePolicy<T>(sensor);
             _sensor = sensor;
 
+            PolicyResult = new(sensor.Id);
+
             base.BuildDefault(sensor);
         }
 
