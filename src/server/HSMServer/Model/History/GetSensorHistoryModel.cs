@@ -5,7 +5,7 @@ using System.Text.Json.Serialization;
 
 namespace HSMServer.Model.Model.History
 {
-    public class GetSensorHistoryModel
+    public record GetSensorHistoryModel
     {
         [JsonIgnore]
         internal int Count { get; set; } = SensorHistoryController.MaxHistoryCount;
