@@ -13,7 +13,7 @@ namespace HSMDataCollector.Converters
                 Path = info.Path,
 
                 AvailableUnites = info.Units.AvailableUnits.Select(x => (int)x).ToList(),
-                SelectedUnit = info.Units.SelectedUnit,
+                SelectedUnit = info.Units.Selected,
 
                 KeepHistory = info.Settings.KeepHistory.Ticks,
                 SelfDestroy = info.Settings.SelfDestroy.Ticks,

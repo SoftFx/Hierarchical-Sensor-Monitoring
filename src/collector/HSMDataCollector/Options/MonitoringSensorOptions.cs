@@ -25,7 +25,7 @@ namespace HSMDataCollector.Options
     }
 
 
-    public sealed class BarSensorOptions : MonitoringSensorOptions
+    public class BarSensorOptions : MonitoringSensorOptions
     {
         public TimeSpan CollectBarPeriod { get; set; } = TimeSpan.FromSeconds(5);
 

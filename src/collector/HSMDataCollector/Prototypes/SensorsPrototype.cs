@@ -17,7 +17,6 @@ namespace HSMDataCollector.Options
         internal ProductVersionPrototype ProductVersion { get; } = new ProductVersionPrototype();
 
 
-
         internal CollectorVersionPrototype CollectorVersion { get; } = new CollectorVersionPrototype();
 
         internal CollectorStatusPrototype CollectorStatus { get; } = new CollectorStatusPrototype();

@@ -2,11 +2,11 @@
 {
     internal class SensorMetainfo
     {
-        internal SensorMetainfoSettings Settings { get; } = new SensorMetainfoSettings();
+        internal SensorMetainfoSettings Settings { get; set; } = new SensorMetainfoSettings();
 
-        internal SensorMetainfoEnables Enables { get; } = new SensorMetainfoEnables();
+        internal SensorMetainfoEnables Enables { get; set; } = new SensorMetainfoEnables();
 
-        internal SensorMetainfoUnits Units { get; } = new SensorMetainfoUnits();
+        internal SensorMetainfoUnits Units { get; set; } = new SensorMetainfoUnits();
 
 
         internal string Description { get; set; }
