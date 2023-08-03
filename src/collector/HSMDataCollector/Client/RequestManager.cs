@@ -1,12 +1,10 @@
 ﻿using HSMDataCollector.Logging;
-using HSMDataCollector.SensorsMetadata;
-using System;
+using HSMDataCollector.SensorsMetainfo;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Text;
 using System.Threading.Tasks;
 
-namespace HSMDataCollector.Core.Client
+namespace HSMDataCollector.Client
 {
     internal class RequestManager : ConcurrentDictionary<string, TaskCompletionSource<bool>>
     {

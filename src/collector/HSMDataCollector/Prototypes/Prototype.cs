@@ -1,45 +1,16 @@
-﻿namespace HSMDataCollector.Options
+﻿using HSMDataCollector.SensorsMetainfo;
+
+namespace HSMDataCollector.Options
 {
-    internal abstract class Prototype<T> where T : SensorOptions, new()
+    internal abstract class Prototype<MetainfoType, OptionsType>
+        where MetainfoType : SensorMetainfo, new()
     {
-        protected abstract string NodePath { get; }
+        protected const string ProductInfoPath = "Product Info";
+        protected const string CollectorPath = ProductInfoPath + "/Collector";
 
-        protected T DefaultOptions { get; }
-
-
-        protected Prototype()
-        {
-            DefaultOptions = new T()
-            {
-                NodePath = NodePath,
-            };
-        }
+        protected abstract MetainfoType BaseMetainfo { get; }
 
 
-        internal T Get(T options) => options ?? DefaultOptions;
-
-        internal virtual T GetAndFill(T options)
-        {
-            options = Get(options);
-
-            if (options.NodePath == null)
-                options.NodePath = NodePath;
-
-            return options;
-        }
-    }
-
-
-    internal abstract class MonitoringPrototype<T> : Prototype<T> where T : MonitoringSensorOptions, new()
-    {
-        internal override T GetAndFill(T options)
-        {
-            options = base.GetAndFill(options);
-
-            if (options.PostDataPeriod == default)
-                options.PostDataPeriod = options.DefaultPostDataPeriod;
-
-            return options;
-        }
+        protected abstract MetainfoType Get(OptionsType options);
     }
 }

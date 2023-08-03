@@ -1,4 +1,5 @@
 ﻿using HSMDataCollector.Base;
+using HSMDataCollector.Client;
 using HSMDataCollector.CustomFuncSensor;
 using HSMDataCollector.DefaultSensors;
 using HSMDataCollector.DefaultValueSensor;

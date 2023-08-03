@@ -1,3 +1,5 @@
+using HSMDataCollector.Core;
+using HSMDataCollector.Core;
 using HSMDataCollector.Logging;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.SensorValueRequests;
@@ -12,7 +14,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
-namespace HSMDataCollector.Core
+namespace HSMDataCollector.Client
 {
     internal sealed class HSMClient : IDisposable
     {
@@ -146,7 +148,6 @@ namespace HSMDataCollector.Core
         {
             try
             {
-
                 string json = JsonConvert.SerializeObject(value);
 
                 _logger.Debug($"{nameof(RequestToServer)}: {json}");

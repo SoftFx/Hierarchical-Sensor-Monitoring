@@ -1,4 +1,5 @@
-﻿using HSMDataCollector.Core;
+﻿using HSMDataCollector.Client;
+using HSMDataCollector.Core;
 using HSMDataCollector.Extensions;
 using HSMDataCollector.Options;
 using HSMSensorDataObjects;

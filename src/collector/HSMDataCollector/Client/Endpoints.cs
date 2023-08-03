@@ -1,4 +1,6 @@
-﻿namespace HSMDataCollector.Core
+﻿using HSMDataCollector.Core;
+
+namespace HSMDataCollector.Client
 {
     internal sealed class Endpoints
     {
