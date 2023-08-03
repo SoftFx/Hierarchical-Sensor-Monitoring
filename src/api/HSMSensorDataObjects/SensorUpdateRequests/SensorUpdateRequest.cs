@@ -2,13 +2,15 @@
 
 namespace HSMSensorDataObjects.SensorUpdateRequests
 {
-    public enum Unit : byte
+    public enum Unit
     {
-        Byte = 0,
-        Kilobyte = 1,
-        Megabyte = 2,
-        Gigabyte = 3,
-        Percent = 30,
+        bits = 0,
+        bytes = 1,
+        KB = 2,
+        MB = 3,
+        GB = 4,
+
+        Percents = 100,
     }
 
 
@@ -18,7 +20,13 @@ namespace HSMSensorDataObjects.SensorUpdateRequests
 
         public AlertUpdateRequest TTLPolicy { get; set; }
 
+
         public List<Unit> AvailableUnites { get; set; }
+
+        public Unit SelectedUnit { get; set; }
+
+
+        public string Description { get; set; }
 
 
         public long KeepHistory { get; set; }
@@ -31,9 +39,5 @@ namespace HSMSensorDataObjects.SensorUpdateRequests
         public bool SaveOnlyUniqueValues { get; set; }
 
         public bool EnableGrafana { get; set; }
-
-        public string Description { get; set; }
-
-        public Unit SelectedUnit { get; set; }
     }
 }

@@ -16,6 +16,7 @@ namespace HSMSensorDataObjects.SensorUpdateRequests
         IsOk = 22,
     }
 
+
     public enum AlertProperty : byte
     {
         Status = 0,
@@ -30,11 +31,13 @@ namespace HSMSensorDataObjects.SensorUpdateRequests
         LastValue = 105,
     }
 
+
     public enum TargetType : byte
     {
         Const,
         LastValue,
     }
+
 
     public enum AlertCombination : byte
     {
@@ -49,23 +52,25 @@ namespace HSMSensorDataObjects.SensorUpdateRequests
 
         public SensorStatus Status { get; set; }
 
-        public long Sensitivity { get; set; }
 
         public string Template { get; set; }
 
         public string Icon { get; set; }
+
+
+        public long Sensitivity { get; set; }
     }
 
 
     public sealed class AlertConditionUpdate
     {
+        public AlertCombination Combination { get; set; }
+
         public AlertOperation Operation { get; set; }
 
         public AlertProperty Property { get; set; }
 
         public TargetValue Target { get; set; }
-
-        public AlertCombination Combination { get; set; }
     }
 
 
