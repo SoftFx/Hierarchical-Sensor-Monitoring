@@ -20,9 +20,9 @@ namespace HSMServer.Model.History
 
         protected abstract BarBaseValue<T> GetBarValue(SummaryBarItem<T> summary);
 
-        protected abstract decimal GetComposition(T value1, int value2);
+        protected abstract double GetComposition(T value1, int value2);
 
-        protected abstract T Convert(decimal value);
+        protected abstract T Convert(double value);
 
         protected abstract T Average(T value1, T value2);
 
@@ -157,7 +157,7 @@ namespace HSMServer.Model.History
             if (means.Count < 1)
                 return default;
 
-            decimal sum = 0;
+            double sum = 0;
             int commonCount = 0;
             foreach (var meanPair in means)
             {
