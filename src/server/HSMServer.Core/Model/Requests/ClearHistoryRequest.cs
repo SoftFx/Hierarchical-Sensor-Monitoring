@@ -31,11 +31,4 @@ public sealed record ClearHistoryRequest
     {
         Initiator = initiator;
     }
-
-
-    internal JournalRecordModel ToRecord(string path) => new JournalRecordModel(Id, Initiator)
-    {
-        Enviroment = "Clear sensor history",
-        Path = path,
-    };
 }
