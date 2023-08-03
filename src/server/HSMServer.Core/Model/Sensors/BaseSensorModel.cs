@@ -55,10 +55,7 @@ namespace HSMServer.Core.Model
                 if (State == SensorState.Muted)
                     return _muteResult;
 
-                if (!Policies.SensorResult.IsOk)
-                    return Policies.SensorResult;
-
-                return Storage.Result;
+                return !Policies.SensorResult.IsOk ? Policies.SensorResult : Storage.Result;
             }
         }
 

@@ -77,7 +77,7 @@ namespace HSMServer.Core.Model
             return this;
         }
 
-        internal override bool CheckTimeout()
+        internal override bool CheckTimeout(bool _ = true)
         {
             var result = false;
 

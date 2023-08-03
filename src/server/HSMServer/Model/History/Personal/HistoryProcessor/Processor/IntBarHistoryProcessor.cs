@@ -26,9 +26,9 @@ namespace HSMServer.Model.History
         protected override int Average(int value1, int value2) =>
             (value1 + value2) / 2;
 
-        protected override int Convert(decimal value) => (int)value;
+        protected override int Convert(double value) => (int)value;
 
-        protected override decimal GetComposition(int value1, int value2) =>
+        protected override double GetComposition(int value1, int value2) =>
             value1 * value2;
     }
 }

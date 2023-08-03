@@ -52,6 +52,8 @@ namespace HSMServer.Core.Model.Policies
             _typePolicy = new CorrectTypePolicy<T>(sensor);
             _sensor = sensor;
 
+            PolicyResult = new(sensor.Id);
+
             base.BuildDefault(sensor);
         }
 
@@ -63,7 +65,8 @@ namespace HSMServer.Core.Model.Policies
 
         internal override void UpdateTTL(PolicyUpdate update)
         {
-            PolicyResult.RemoveAlert(TimeToLive);
+            RemoveAlert(TimeToLive);
+
             base.UpdateTTL(update);
         }
 
@@ -85,7 +88,7 @@ namespace HSMServer.Core.Model.Policies
             return CalculateStorageResult(valueT, updateSensor);
         }
 
-        internal bool SensorTimeout(DateTime? time)
+        internal bool SensorTimeout(DateTime? time, bool toNotify)
         {
             if (TimeToLive is null)
                 return false;
@@ -93,13 +96,23 @@ namespace HSMServer.Core.Model.Policies
             var timeout = TimeToLive.HasTimeout(time);
 
             if (timeout)
+            {
                 PolicyResult.AddSingleAlert(TimeToLive);
+                SensorResult += TimeToLive.SensorResult;
+            }
             else
-                PolicyResult.RemoveAlert(TimeToLive);
+                RemoveAlert(TimeToLive);
 
-            SensorExpired?.Invoke(_sensor, timeout);
+            SensorExpired?.Invoke(_sensor, timeout, toNotify);
 
             return timeout;
+        }
+
+
+        private void RemoveAlert(Policy policy)
+        {
+            PolicyResult.RemoveAlert(policy);
+            SensorResult -= policy.SensorResult;
         }
     }
 
