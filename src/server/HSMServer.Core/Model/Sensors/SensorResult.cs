@@ -51,6 +51,11 @@ namespace HSMServer.Core.Model
             return first is null ? second : new(first.Value._results.UnionFluent(second._results));
         }
 
+        public static SensorResult operator -(SensorResult? first, SensorResult second)
+        {
+            return first is null ? second : new(first.Value._results.ExceptFluent(second._results));
+        }
+
 
         public override bool Equals(object obj) => obj is SensorResult second && ToTuple == second.ToTuple;
 

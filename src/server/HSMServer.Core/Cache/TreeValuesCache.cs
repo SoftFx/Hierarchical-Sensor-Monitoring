@@ -326,8 +326,6 @@ namespace HSMServer.Core.Cache
                 sensor.ResetSensor();
 
             _database.ClearSensorValues(sensor.Id.ToString(), from, request.To);
-            _journalService.AddRecord(request.ToRecord(sensor.FullPath));
-
             _snapshot.Sensors[request.Id].History.From = request.To;
 
             ChangeSensorEvent?.Invoke(sensor, ActionType.Update);
@@ -836,7 +834,7 @@ namespace HSMServer.Core.Cache
                     UpdateMutedSensorState(sensor.Id);
         }
 
-        private void SetExpiredSnapshot(BaseSensorModel sensor, bool timeout)
+        private void SetExpiredSnapshot(BaseSensorModel sensor, bool timeout, bool toNotify)
         {
             var snapshot = _snapshot.Sensors[sensor.Id];
 
@@ -847,7 +845,8 @@ namespace HSMServer.Core.Cache
                 if (!timeout)
                     sensor.RecalculatePolicy();
 
-                NotifyAboutChanges(sensor);
+                if (toNotify)
+                    NotifyAboutChanges(sensor);
             }
         }
     }
