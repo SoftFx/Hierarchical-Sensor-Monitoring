@@ -1,5 +1,5 @@
 ﻿using HSMDataCollector.Logging;
-using HSMDataCollector.Options;
+using HSMDataCollector.SensorsMetadata;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
