@@ -1,8 +1,8 @@
 ﻿using System.Collections.Generic;
 
-namespace HSMSensorDataObjects.SensorUpdateRequests
+namespace HSMSensorDataObjects.SensorRequests
 {
-    public enum Unit
+    public enum Unit : int
     {
         bits = 0,
         bytes = 1,
@@ -21,9 +21,9 @@ namespace HSMSensorDataObjects.SensorUpdateRequests
         public AlertUpdateRequest TTLPolicy { get; set; }
 
 
-        public List<Unit> AvailableUnites { get; set; }
+        public List<int> AvailableUnites { get; set; }
 
-        public Unit SelectedUnit { get; set; }
+        public int SelectedUnit { get; set; }
 
 
         public string Description { get; set; }

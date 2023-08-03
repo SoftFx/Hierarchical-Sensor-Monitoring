@@ -1,6 +1,6 @@
 ﻿using System.Collections.Generic;
 
-namespace HSMSensorDataObjects.SensorUpdateRequests
+namespace HSMSensorDataObjects.SensorRequests
 {
     public enum AlertOperation : byte
     {

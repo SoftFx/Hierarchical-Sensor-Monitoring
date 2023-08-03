@@ -4,10 +4,10 @@ namespace HSMDataCollector.SensorsMetainfo
 {
     internal class SensorMetainfoSettings
     {
-        internal TimeSpan TTL { get; set; }
-
-        internal TimeSpan SaveSensorHistory { get; set; }
+        internal TimeSpan KeepHistory { get; set; }
 
         internal TimeSpan SelfDestroy { get; set; }
+
+        internal TimeSpan TTL { get; set; }
     }
 }
