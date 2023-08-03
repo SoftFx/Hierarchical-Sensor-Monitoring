@@ -105,11 +105,13 @@ namespace HSMServer.Controllers
         }
 
         [HttpPost]
-        public Task<JsonResult> GetServiceStatusHistory([FromBody] GetSensorHistoryModel model)
+        public Task<JsonResult> GetServiceStatusHistory([FromBody] GetSensorHistoryModel model, [FromQuery] bool isStatusService = false )
         {
             if (!_tree.Sensors.TryGetValue(SensorPathHelper.DecodeGuid(model.EncodedId), out var sensor))
                 return Task.FromResult(_emptyJsonResult);
 
+            var compareFunc = GetCompareFunc();
+            
             var splittedPath = sensor.FullPath.Split('/');
             var nodeIds = _tree.GetAllNodeSensors(sensor.RootProduct.Id);
 
@@ -119,9 +121,17 @@ namespace HSMServer.Controllers
 
             foreach (var id in nodeIds)
                 if (_tree.Sensors.TryGetValue(id, out var foundSensor))
-                    if (foundSensor.Name == "Service status" && foundSensor.Parent.Name == "Product Info")
+                    if (compareFunc(foundSensor))
                         CheckPath(foundSensor);
 
+
+            Func<SensorNodeViewModel, bool> GetCompareFunc()
+            {
+                if (isStatusService)
+                    return sensor => sensor.Name == "Service status" && sensor.Parent.Name == "Product Info";
+
+                return sensor => sensor.Name == "Service alive";
+            }
 
             void CheckPath(NodeViewModel sensor)
             {
