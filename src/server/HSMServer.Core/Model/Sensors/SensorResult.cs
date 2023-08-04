@@ -26,6 +26,8 @@ namespace HSMServer.Core.Model
         public bool HasError => Status >= SensorStatus.Error;
 
 
+        public bool IsOfftime => Status == SensorStatus.OffTime;
+
         public bool IsOk => Status.IsOk();
 
 
