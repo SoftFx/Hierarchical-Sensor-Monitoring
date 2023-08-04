@@ -90,7 +90,7 @@ namespace HSMServer.Core.Model.Policies
 
         internal bool SensorTimeout(DateTime? time, bool toNotify)
         {
-            if (TimeToLive is null)
+            if (TimeToLive is null || (_sensor?.Status?.IsOfftime ?? true))
                 return false;
 
             var timeout = TimeToLive.HasTimeout(time);
