@@ -4,7 +4,7 @@ using System.Linq;
 
 namespace HSMServer.Core.Model.Requests
 {
-    public abstract class BaseRequestModel
+    public class BaseRequestModel
     {
         private const string ErrorTooLongPath = "Path for the sensor is too long.";
         private const string ErrorInvalidPath = "Path has an invalid format.";

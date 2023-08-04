@@ -1,9 +1,11 @@
 ﻿using HSMSensorDataObjects;
 using HSMSensorDataObjects.HistoryRequests;
+using HSMSensorDataObjects.SensorRequests;
 using HSMSensorDataObjects.SensorValueRequests;
 using HSMServer.ApiObjectsConverters;
 using HSMServer.BackgroundServices;
 using HSMServer.Core.Cache;
+using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Requests;
 using HSMServer.Core.SensorsUpdatesQueue;
@@ -462,6 +464,35 @@ namespace HSMServer.Controllers
         }
 
 
+        /// <summary>
+        /// Update sensor meta info
+        /// </summary>
+        /// <param name="sensorUpdate"></param>
+        /// <returns></returns>
+        [HttpPost("update")]
+        [Consumes(MediaTypeNames.Application.Json)]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status406NotAcceptable)]
+        public ActionResult<SensorUpdateRequest> Post([FromBody] SensorUpdateRequest sensorUpdate)
+        {
+            try
+            {
+                if (TryBuildSensorUpdate(sensorUpdate, out var update, out var message))
+                {
+                    return Ok(sensorUpdate);
+                }
+
+                return StatusCode(406, message);
+            }
+            catch (Exception e)
+            {
+                _logger.LogError(e, "Failed to update sensor!");
+                return BadRequest(sensorUpdate);
+            }
+        }
+
+
         private bool CanAddToQueue(StoreInfo storeInfo, out string message)
         {
             if (storeInfo.TryCheckRequest(out message) &&
@@ -485,14 +516,32 @@ namespace HSMServer.Controllers
                    _cache.TryCheckKeyReadPermissions(requestModel, out message);
         }
 
-        private StoreInfo BuildStoreInfo(SensorValueBase valueBase, BaseValue baseValue)
+        private StoreInfo BuildStoreInfo(SensorValueBase valueBase, BaseValue baseValue) =>
+            new(GetKey(valueBase), valueBase.Path) { BaseValue = baseValue };
+
+        private bool TryBuildSensorUpdate(SensorUpdateRequest request, out SensorUpdate update, out string message)
+        {
+            update = null;
+            var requestModel = new BaseRequestModel(GetKey(request), request.Path);
+
+            if (requestModel.TryCheckRequest(out message) &&
+                _cache.TryCheckKeyWritePermissions(requestModel, out message)) // TODO: check CanAddSensor permission if sensor doesn't exist and return sensor Id (Empty for new sensor)
+            {
+                update = request.Convert(Guid.Empty);
+                return true;
+            }
+
+            return false;
+        }
+
+        private string GetKey(BaseRequest request)
         {
             Request.Headers.TryGetValue(nameof(BaseRequest.Key), out var key);
 
             if (string.IsNullOrEmpty(key))
-                key = valueBase.Key;
+                key = request?.Key;
 
-            return new(key, valueBase.Path) { BaseValue = baseValue };
+            return key;
         }
 
         private bool TryCheckKey(out string message)
