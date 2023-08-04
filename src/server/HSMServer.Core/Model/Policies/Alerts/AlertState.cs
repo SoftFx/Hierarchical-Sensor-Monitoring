@@ -49,6 +49,10 @@ namespace HSMServer.Core.Model.Policies
         public string Comment { get; init; }
 
 
+        [AlertVariable("$prevStatus", "Status of the previous sensor value")]
+        public string PrevStatus { get; init; }
+
+
         [AlertVariable("$value", "Sensor value")]
         public string ValueSingle { get; private set; }
 
@@ -134,7 +138,7 @@ namespace HSMServer.Core.Model.Policies
 
 
         public string BuildComment(string template = null) => string.Format(template ?? Template?.Text ?? string.Empty,
-            Product, Path, Sensor, Status, Time, Comment, ValueSingle, MinValueBar, MaxValueBar, MeanValueBar,
+            Product, Path, Sensor, Status, Time, Comment, PrevStatus, ValueSingle, MinValueBar, MaxValueBar, MeanValueBar,
             LastValueBar, Operation, Target);
 
         public static AlertSystemTemplate BuildSystemTemplate(string raw)
@@ -187,6 +191,8 @@ namespace HSMServer.Core.Model.Policies
             Product = sensor.RootProductName,
             Sensor = sensor.DisplayName,
             Path = sensor.Path,
+
+            PrevStatus = sensor.LastValue?.ToString(),
 
             Status = value?.Status.ToIcon(),
             Time = value?.Time.ToString(),
