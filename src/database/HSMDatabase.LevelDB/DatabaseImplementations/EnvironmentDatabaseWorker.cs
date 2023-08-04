@@ -3,17 +3,26 @@ using HSMDatabase.AccessManager.DatabaseEntities;
 using NLog;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 
 namespace HSMDatabase.LevelDB.DatabaseImplementations
 {
     internal sealed class EnvironmentDatabaseWorker : IEnvironmentDatabase
     {
+        private static readonly JsonSerializerOptions _options = new()
+        {
+            DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingDefault,
+            IgnoreReadOnlyProperties = true,
+        };
+
         private readonly byte[] _productListKey = "ProductsNames"u8.ToArray();
         private readonly byte[] _accessKeyListKey = "AccessKeys"u8.ToArray();
         private readonly byte[] _sensorIdsKey = "SensorIds"u8.ToArray();
-        private readonly byte[] _policyIdsKey = "PolicyIds"u8.ToArray();
+        private readonly byte[] _oldPolicyIdsKey = "PolicyIds"u8.ToArray();
+        private readonly byte[] _policyIdsKey = "NewPolicyIds"u8.ToArray();
         private readonly byte[] _folderIdsKey = "FolderIds"u8.ToArray();
 
         private readonly LevelDBDatabaseAdapter _database;
@@ -407,14 +416,14 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
 
         #region Policies
 
-        public void AddPolicyIdToList(string policyId)
+        public void AddPolicyIdToList(Guid policyId)
         {
             try
             {
                 var policyIds = GetAllPoliciesIds();
 
-                if (!policyIds.Contains(policyId))
-                    policyIds.Add(policyId);
+                if (!policyIds.Select(g => new Guid(g)).Contains(policyId))
+                    policyIds.Add(policyId.ToByteArray());
 
                 _database.Put(_policyIdsKey, JsonSerializer.SerializeToUtf8Bytes(policyIds));
             }
@@ -424,28 +433,25 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             }
         }
 
-        public void RemovePolicyFromList(string id)
+        public void DropOldPolicyIdsList()
         {
             try
             {
-                var policyIds = GetAllPoliciesIds();
-                policyIds.Remove(id);
-
-                _database.Put(_policyIdsKey, JsonSerializer.SerializeToUtf8Bytes(policyIds));
+                _database.Delete(_oldPolicyIdsKey);
             }
             catch (Exception e)
             {
-                _logger.Error(e, $"Failed to remove Policy {id} from list");
+                _logger.Error(e, $"Failed to remove Old Policy Ids list");
             }
         }
 
         public void AddPolicy(PolicyEntity entity)
         {
-            var bytesKey = Encoding.UTF8.GetBytes(entity.Id);
+            var value = JsonSerializer.SerializeToUtf8Bytes(entity, _options);
 
             try
             {
-                _database.Put(bytesKey, entity.Policy);
+                _database.Put(entity.Id, value);
             }
             catch (Exception e)
             {
@@ -453,23 +459,47 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             }
         }
 
-        public void RemovePolicy(string id)
+        public void RemovePolicy(Guid policyId)
+        {
+            try
+            {
+                var policyIds = GetAllPoliciesIds();
+
+                for (int i = 0; i < policyIds.Count; i++)
+                    if (new Guid(policyIds[i]) == policyId)
+                    {
+                        policyIds.RemoveAt(i);
+                        break;
+                    }
+
+                _database.Put(_policyIdsKey, JsonSerializer.SerializeToUtf8Bytes(policyIds));
+                _database.Delete(policyId.ToByteArray());
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, $"Failed to remove Policy by {policyId}");
+            }
+        }
+
+        public void RemoveOldPolicy(string id)
         {
             var bytesKey = Encoding.UTF8.GetBytes(id);
+
             try
             {
                 _database.Delete(bytesKey);
             }
             catch (Exception e)
             {
-                _logger.Error(e, $"Failed to remove Policy by {id}");
+                _logger.Error(e, $"Failed to remove old Policy by {id}");
             }
         }
 
-        public List<string> GetAllPoliciesIds() =>
-            GetListOfKeys(_policyIdsKey, "Failed to get all policy ids");
+        public List<string> GetAllOldPoliciesIds() => GetListOfKeys(_oldPolicyIdsKey, "Failed to get all old policy ids");
 
-        public byte[] GetPolicy(string policyId)
+        public List<byte[]> GetAllPoliciesIds() => GetListOfBytes(_policyIdsKey, "Failed to get all policy ids");
+
+        public byte[] GetOldPolicy(string policyId)
         {
             var bytesKey = Encoding.UTF8.GetBytes(policyId);
 
@@ -479,13 +509,29 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             }
             catch (Exception e)
             {
-                _logger.Error(e, $"Failed to read info for sensor {policyId}");
+                _logger.Error(e, $"Failed to read info for old policy {policyId}");
             }
 
             return null;
         }
 
-        #endregion 
+        public PolicyEntity GetPolicy(byte[] policyId)
+        {
+            try
+            {
+                return _database.TryRead(policyId, out byte[] value)
+                       ? JsonSerializer.Deserialize<PolicyEntity>(value)
+                       : null;
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, $"Failed to read info for policy {policyId}");
+            }
+
+            return null;
+        }
+
+        #endregion
 
         #region User
 
@@ -576,108 +622,6 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
 
         #endregion
 
-        #region Configuration objects
-
-        public ConfigurationEntity ReadConfigurationObject(string name)
-        {
-            var key = PrefixConstants.GetUniqueConfigurationObjectKey(name);
-            byte[] bytesKey = Encoding.UTF8.GetBytes(key);
-            try
-            {
-                return _database.TryRead(bytesKey, out byte[] value)
-                    ? JsonSerializer.Deserialize<ConfigurationEntity>(Encoding.UTF8.GetString(value))
-                    : null;
-            }
-            catch (Exception e)
-            {
-                _logger.Error(e, $"Failed to read configuration object {name}");
-            }
-
-            return null;
-        }
-
-        public void WriteConfigurationObject(ConfigurationEntity obj)
-        {
-            var key = PrefixConstants.GetUniqueConfigurationObjectKey(obj.Name);
-            byte[] bytesKey = Encoding.UTF8.GetBytes(key);
-
-            try
-            {
-                _database.Put(bytesKey, JsonSerializer.SerializeToUtf8Bytes(obj));
-            }
-            catch (Exception e)
-            {
-                _logger.Error(e, $"Failed to write configuration object {obj.Name}");
-            }
-        }
-
-        public void RemoveConfigurationObject(string name)
-        {
-            var key = PrefixConstants.GetUniqueConfigurationObjectKey(name);
-            byte[] bytesKey = Encoding.UTF8.GetBytes(key);
-            try
-            {
-                _database.Delete(bytesKey);
-            }
-            catch (Exception e)
-            {
-                _logger.Error(e, $"Failed to write configuration object {name}");
-            }
-        }
-
-        #endregion
-
-        #region Registration ticket
-
-        public RegisterTicketEntity ReadRegistrationTicket(Guid id)
-        {
-            var key = PrefixConstants.GetRegistrationTicketKey(id);
-            byte[] bytesKey = Encoding.UTF8.GetBytes(key);
-            try
-            {
-                return _database.TryRead(bytesKey, out byte[] value)
-                    ? JsonSerializer.Deserialize<RegisterTicketEntity>(Encoding.UTF8.GetString(value))
-                    : null;
-            }
-            catch (Exception e)
-            {
-                _logger.Error(e, $"Failed to read registration ticket {id}");
-            }
-
-            return null;
-        }
-
-        public void RemoveRegistrationTicket(Guid id)
-        {
-            var key = PrefixConstants.GetRegistrationTicketKey(id);
-            byte[] bytesKey = Encoding.UTF8.GetBytes(key);
-            try
-            {
-                _database.Delete(bytesKey);
-            }
-            catch (Exception e)
-            {
-                _logger.Error(e, $"Failed to write registration ticket {id}");
-            }
-        }
-
-        public void WriteRegistrationTicket(RegisterTicketEntity ticket)
-        {
-            var key = PrefixConstants.GetRegistrationTicketKey(ticket.Id);
-            byte[] bytesKey = Encoding.UTF8.GetBytes(key);
-
-            try
-            {
-                _database.Put(bytesKey, JsonSerializer.SerializeToUtf8Bytes(ticket));
-            }
-            catch (Exception e)
-            {
-                _logger.Error(e, $"Failed to write registration ticket {ticket.Id}");
-            }
-        }
-
-        #endregion
-
         public void Dispose() => _database.Dispose();
 
         private List<string> GetListOfKeys(byte[] key, string error)
@@ -686,7 +630,23 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             {
                 return _database.TryRead(key, out byte[] value) ?
                     JsonSerializer.Deserialize<List<string>>(Encoding.UTF8.GetString(value))
-                    : new List<string>();
+                    : new();
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, error);
+            }
+
+            return new();
+        }
+
+        private List<byte[]> GetListOfBytes(byte[] key, string error)
+        {
+            try
+            {
+                return _database.TryRead(key, out byte[] value) ?
+                    JsonSerializer.Deserialize<List<byte[]>>(Encoding.UTF8.GetString(value))
+                    : new();
             }
             catch (Exception e)
             {

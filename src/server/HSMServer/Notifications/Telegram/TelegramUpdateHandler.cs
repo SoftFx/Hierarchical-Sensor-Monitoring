@@ -1,17 +1,14 @@
-﻿using HSMCommon.Constants;
-using HSMServer.Authentication;
-using HSMServer.Configuration;
+﻿using HSMServer.Authentication;
 using HSMServer.Core;
-using HSMServer.Core.Model.Policies;
-using HSMServer.Model;
+using HSMServer.Extensions;
 using HSMServer.Model.TreeViewModel;
 using HSMServer.Notification.Settings;
+using HSMServer.ServerConfiguration;
 using NLog;
 using System;
 using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using HSMServer.Extensions;
 using Telegram.Bot;
 using Telegram.Bot.Polling;
 using Telegram.Bot.Types;
@@ -28,18 +25,17 @@ namespace HSMServer.Notifications
         private readonly AddressBook _addressBook;
         private readonly IUserManager _userManager;
         private readonly TreeViewModel _tree;
-        private readonly IConfigurationProvider _config;
+        private readonly TelegramConfig _config;
 
-        private string BotName => $"@{_config.ReadOrDefault(ConfigurationConstants.BotName).Value.ToLower()}";
+        private string BotName => $"@{_config.BotName.ToLower()}";
 
 
-        internal TelegramUpdateHandler(AddressBook addressBook, IUserManager userManager,
-            TreeViewModel tree, IConfigurationProvider config)
+        internal TelegramUpdateHandler(AddressBook addressBook, IUserManager userManager, TreeViewModel tree, TelegramConfig config)
         {
             _addressBook = addressBook;
             _userManager = userManager;
-            _tree = tree;
             _config = config;
+            _tree = tree;
         }
 
 
@@ -131,7 +127,6 @@ namespace HSMServer.Notifications
 
                 response.AppendLine($"{entityStr} *{entity.Name.EscapeMarkdownV2()}*");
                 response.AppendLine($"    Messages delay: {telegramSetting.MessagesDelaySec} sec".EscapeMarkdownV2());
-                response.AppendLine($"    Min status level: {telegramSetting.MessagesMinStatus}".EscapeMarkdownV2());
                 response.AppendLine($"    Messages are enabled: {telegramSetting.MessagesAreEnabled}".EscapeMarkdownV2());
             }
 
@@ -141,12 +136,9 @@ namespace HSMServer.Notifications
         private static string Help() =>
             $"""
             Statuses: 
-                {Core.OffTime.ToIcon()} (OffTime) -> {Core.Ok.ToIcon()} (Ok) -> {Core.Warning.ToIcon()} (Warning) -> {Core.Error.ToIcon()} (Error)
-            Alerts: 
-                {ExpectedUpdateIntervalPolicy.PolicyIcon} - sensor update timeout
-                "↕️" - sensor value alert
+                {Core.OffTime.ToIcon()} (OffTime) -> {Core.Ok.ToIcon()} (Ok) -> {Core.Error.ToIcon()} (Error)
             """.EscapeMarkdownV2();
 
-        private static string ServerStatus() => $"HSM server {ServerConfig.Version.RemoveTailZeroes()} is alive.".EscapeMarkdownV2();
+        private static string ServerStatus() => $"HSM server {ServerConfig.Version} is alive.".EscapeMarkdownV2();
     }
 }

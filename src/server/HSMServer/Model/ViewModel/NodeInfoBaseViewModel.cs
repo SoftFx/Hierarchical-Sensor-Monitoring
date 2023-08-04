@@ -1,32 +1,32 @@
 using HSMServer.Attributes;
-using HSMServer.Extensions;
 using HSMServer.Model.DataAlerts;
 using HSMServer.Model.Folders;
 using HSMServer.Model.TreeViewModel;
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
-using SensorType = HSMServer.Core.Model.SensorType;
 
 namespace HSMServer.Model.ViewModel
 {
     public class NodeInfoBaseViewModel
     {
+        public ConcurrentDictionary<string, int> AlertIcons { get; }
+
         public string Header { get; }
 
         public Guid RootProductId { get; }
+
+        public bool HasTimeToLive { get; }
 
         public DateTime LastUpdateTime { get; set; }
 
         public SensorStatus Status { get; set; }
 
+        [Obsolete("Remove after adding TTL constructor for Folder")]
         [Display(Name = "Time to live interval")]
         [MinTimeInterval(TimeInterval.OneMinute, ErrorMessage = "{0} minimal value is {1}.")]
         public TimeIntervalViewModel ExpectedUpdateInterval { get; set; }
-
-        [Display(Name = "Sensitivity interval")]
-        [MinTimeInterval(TimeInterval.OneMinute, ErrorMessage = "{0} minimal value is {1}.")]
-        public TimeIntervalViewModel SensorRestorePolicy { get; set; }
 
         [Display(Name = "Keep sensor history")]
         [MinTimeInterval(TimeInterval.Hour, ErrorMessage = "{0} minimal value is {1}.")]
@@ -36,7 +36,7 @@ namespace HSMServer.Model.ViewModel
         [MinTimeInterval(TimeInterval.Hour, ErrorMessage = "{0} minimal value is {1}.")]
         public TimeIntervalViewModel SelfDestroyPeriod { get; set; }
 
-        public Dictionary<SensorType, List<DataAlertViewModel>> DataAlerts { get; set; }
+        public Dictionary<byte, List<DataAlertViewModelBase>> DataAlerts { get; set; } = new();
 
         public string EncodedId { get; set; }
 
@@ -61,16 +61,19 @@ namespace HSMServer.Model.ViewModel
 
         private NodeInfoBaseViewModel(BaseNodeViewModel model)
         {
-            Status = model.Status.ToEmpty(model.UpdateTime != DateTime.MinValue);
+            Status = model.Status;
             Description = model.Description;
             LastUpdateTime = model.UpdateTime;
 
-            ExpectedUpdateInterval = new(model.ExpectedUpdateInterval, PredefinedIntervals.ForTimeout);
-            SensorRestorePolicy = new(model.SensorRestorePolicy, PredefinedIntervals.ForRestore);
-            SavedHistoryPeriod = new(model.SavedHistoryPeriod, PredefinedIntervals.ForKeepHistory);
-            SelfDestroyPeriod = new(model.SelfDestroyPeriod, PredefinedIntervals.ForSelfDestory);
+            ExpectedUpdateInterval = new(model.TTL, PredefinedIntervals.ForFolderTimeout);
+            SavedHistoryPeriod = new(model.KeepHistory, PredefinedIntervals.ForKeepHistory);
+            SelfDestroyPeriod = new(model.SelfDestroy, PredefinedIntervals.ForSelfDestory);
 
-            DataAlerts = model.DataAlerts;
+            AlertIcons = model.AlertIcons;
+            HasTimeToLive = model.TTL.TimeInterval is not TimeInterval.None;
+            DataAlerts = new(model.DataAlerts);
+            if (model.TTLAlert is not null)
+                DataAlerts[TimeToLiveAlertViewModel.AlertKey] = new List<DataAlertViewModelBase> { model.TTLAlert.FromInterval(model.TTL) };
         }
     }
 }

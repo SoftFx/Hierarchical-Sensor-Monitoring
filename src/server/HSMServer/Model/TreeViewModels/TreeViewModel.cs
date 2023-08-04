@@ -6,6 +6,7 @@ using HSMServer.Folders;
 using HSMServer.Model.AccessKeysViewModels;
 using HSMServer.Model.Authentication;
 using HSMServer.Model.Folders;
+using HSMServer.Notification.Settings;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -30,6 +31,8 @@ namespace HSMServer.Model.TreeViewModel
         public TreeViewModel(ITreeValuesCache cache, IFolderManager folderManager, IUserManager userManager)
         {
             _folderManager = folderManager;
+            _folderManager.ResetProductTelegramInheritance += ResetProductTelegramInheritanceHandler;
+
             _userManager = userManager;
             _cache = cache;
 
@@ -233,6 +236,16 @@ namespace HSMServer.Model.TreeViewModel
         private void AddUserHandler(User user) => user.Tree.GetUserProducts += GetUserProducts;
 
         private void RemoveUserHandler(User user) => user.Tree.GetUserProducts -= GetUserProducts;
+
+        private void ResetProductTelegramInheritanceHandler(Guid productId)
+        {
+            if (Nodes.TryGetValue(productId, out var product))
+            {
+                product.Notifications.Telegram.Update(new TelegramMessagesSettingsUpdate() { Inheritance = (byte)InheritedSettings.Custom });
+
+                UpdateProductNotificationSettings(product);
+            }
+        }
 
         private bool TryGetParentProduct(ProductModel product, out ProductNodeViewModel parent)
         {

@@ -16,13 +16,11 @@ namespace HSMServer.Core.Cache
 
     public interface ITreeValuesCache
     {
-        bool IsInitialized { get; }
-
         event Action<ProductModel, ActionType> ChangeProductEvent;
         event Action<BaseSensorModel, ActionType> ChangeSensorEvent;
         event Action<AccessKeyModel, ActionType> ChangeAccessKeyEvent;
 
-        event Action<BaseSensorModel, PolicyResult> NotifyAboutChangesEvent;
+        event Action<PolicyResult> ChangePolicyResultEvent;
 
         List<BaseSensorModel> GetSensors();
         List<AccessKeyModel> GetAccessKeys();
@@ -52,7 +50,6 @@ namespace HSMServer.Core.Cache
         void CheckSensorHistory(Guid sensorId);
         void ClearNodeHistory(Guid productId);
         BaseSensorModel GetSensor(Guid sensorId);
-        void NotifyAboutChanges(BaseSensorModel model, PolicyResult oldStatus);
 
         IAsyncEnumerable<List<BaseValue>> GetSensorValues(HistoryRequestModel request);
         IAsyncEnumerable<List<BaseValue>> GetSensorValuesPage(Guid sensorId, DateTime from, DateTime to, int count);

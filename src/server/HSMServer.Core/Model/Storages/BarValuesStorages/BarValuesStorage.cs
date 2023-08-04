@@ -9,9 +9,9 @@ namespace HSMServer.Core.Model
         private T _prevValue;
 
 
-        internal override T LastValue => PartialLastValue ?? base.LastValue;
-
         internal override T LastDbValue => _prevValue;
+
+        internal override T LastValue => PartialLastValue ?? base.LastValue;
 
         internal override bool HasData => PartialLastValue != default || base.HasData;
 
@@ -60,7 +60,7 @@ namespace HSMServer.Core.Model
 
         internal override void Clear(DateTime to)
         {
-            base.Clear();
+            base.Clear(to);
 
             if (_prevValue?.ReceivingTime <= to)
                 _prevValue = null;

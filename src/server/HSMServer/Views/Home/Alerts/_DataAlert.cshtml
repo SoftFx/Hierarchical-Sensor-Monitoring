@@ -1,0 +1,228 @@
+﻿@using HSMServer.Model.DataAlerts
+@using HSMServer.Extensions
+@using HSMCommon.Extensions
+@using HSMServer.Controllers
+@using HSMServer.Constants
+
+@model DataAlertViewModelBase
+
+@addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
+
+
+<div id="alertLabel_@Model.Id" class="ms-3 @(Model.IsModify ? "d-none" : string.Empty)">
+    <span>If</span>
+    @for (int i = 0; i < Model.Conditions.Count; ++i)
+    {
+        var condition = Model.Conditions[i];
+
+        @if (i > 0)
+        {
+            <span>and</span>
+        }
+
+        <span>
+            @if (condition.Property == AlertProperty.TimeToLive)
+            {
+                <b>Inactivity period is @condition.TimeToLive.DisplayValue</b>
+            }
+            else if (condition.Property == AlertProperty.Sensitivity)
+            {
+                <b>Sensitivity is more than @condition.Sensitivity.DisplayValue</b>
+            }
+            else
+            {
+                <b>@condition.Property @condition.Operation.GetDisplayName()</b>
+                @if (condition.Property != AlertProperty.Status)
+                {
+                    <b>@condition.Target</b>
+                }
+            }
+        </span>
+    }
+
+    <span>then</span>
+    @for (int i = 0; i < Model.Actions.Count; ++i)
+    {
+        var action = Model.Actions[i];
+
+        @if (i > 0)
+        {
+            <span>and</span>
+        }
+
+        @if (action.Action == ActionType.SendNotification)
+        {
+            <span>send notification <i>@action.DisplayComment</i></span>
+        }
+        else if (action.Action == ActionType.ShowIcon)
+        {
+            <span>show icon @action.Icon</span>
+        }
+        else if (action.Action == ActionType.SetStatus)
+        {
+            <span>@ActionViewModel.SetErrorStatus</span>
+        }
+    }
+</div>
+
+<div id="alertConstructor_@Model.Id" class="dataAlertRow d-flex flex-row align-items-center @(!Model.IsModify ? "d-none" : string.Empty)">
+    <div class="card mb-2 w-100">
+        <div class="card-body py-2">
+            <div class="d-flex flex-row align-items-center fullCondition">
+                @{
+                    var isTtlCondition = Model.Conditions[0].Property is AlertProperty.TimeToLive;
+                }
+
+                <div class="alert-text-block alert-add">If</div>
+
+                <div name="conditionsBlock" class="d-flex flex-row flex-wrap align-items-center">
+                    @foreach (var condition in Model.Conditions) 
+                    {
+                        @await Html.PartialAsync("~/Views/Home/Alerts/_ConditionBlock.cshtml", condition)
+                    }
+                </div>
+
+                @if (!isTtlCondition)
+                {
+                    <a class="addCondition"><i class="fa-solid fa-plus alert-add-button"></i></a>
+                }
+            </div>
+
+            <div class="d-flex flex-row align-items-center alert-blocks-group fullAction">
+                <div class="alert-text-block alert-add">then</div>
+
+                <div name="actionsBlock" class="d-flex flex-row flex-wrap align-items-center">
+                    @foreach (var action in Model.Actions)
+                    {
+                        @await Html.PartialAsync("~/Views/Home/Alerts/_ActionBlock.cshtml", action)
+                    }
+                </div>
+
+                <a class="addAction"><i class="fa-solid fa-plus alert-add-button"></i></a>
+            </div>
+        </div>
+    </div>
+
+    <div>
+        <button id="actionButton" class="btn" data-bs-toggle="dropdown" data-bs-auto-close="true" aria-haspopup="true" aria-expanded="false">
+            <i class="fa-solid fa-ellipsis-vertical button-link"></i>
+        </button>
+        <div class="dropdown-menu dropdown-menu-end" aria-labelledby="actionButton">
+            <a class="dropdown-item text-decoration-none fw-normal button-link showMessage">Show message</a>
+            <a class="dropdown-item text-decoration-none fw-normal button-link deleteRow">Remove</a>
+        </div>
+    </div>
+
+    <input class="d-none" asp-for="Id" value="@Model.Id" />
+    <input class="d-none" asp-for="EntityId" value="@Model.EntityId" />
+</div>
+
+
+<script>
+    $(document).ready(function () {
+        $("a.addCondition").off("click").on("click", function () {
+            let element = $(this).parents("div.fullCondition:first");
+
+            $.ajax({
+                url: `@Url.Action(nameof(HomeController.AddAlertCondition), ViewConstants.HomeController)?sensorId=@Model.EntityId`,
+                cache: false
+            }).done(function (viewData) {
+                var conditionsBlock = element.find($(`div[name='conditionsBlock']`));
+                conditionsBlock.append(viewData);
+            });
+        });
+
+        $("a.addAction").off("click").on("click", function () {
+            let element = $(this).parents("div.fullAction:first");
+
+            $.ajax({
+                url: `@Url.Action(nameof(HomeController.AddAlertAction), ViewConstants.HomeController)?sensorId=@Model.EntityId`,
+                cache: false
+            }).done(function (viewData) {
+                var actionsBlock = element.find($(`div[name='actionsBlock']`));
+                actionsBlock.append(viewData);
+            });
+        });
+
+        $("a.deleteRow").off("click").on("click", function () {
+            if ($(this).parents("#dataAlertsList_@TimeToLiveAlertViewModel.AlertKey").length > 0) {
+                $('#addTtlAlert').removeClass('disabled');
+            }
+
+            $(this).parents("div.dataAlertRow:first").remove();
+        });
+
+        $("a.advancedMode").off("click").on("click", function () {
+            let element = $(this).parents("div.dataAlertRow:first");
+            let advancedPanel = element.find($(`div[id='alertActions']`));
+
+            let see = $(this).text().includes("See");
+            if (see) {
+                $(this).text("Hide actions panel");
+                advancedPanel.removeClass("d-none");
+            }
+            else {
+                $(this).text("See actions panel");
+                advancedPanel.addClass("d-none");
+            }
+        });
+
+        $("a.showMessage").off("click").on("click", function () {
+            var element = $(this).parents("div.dataAlertRow:first");
+
+            if (!tryValidate(element, "input", "Target") || !tryValidate(element, "input", "Comment")) {
+                return;
+            }
+
+            var form = new FormData();
+            appendProperty(form, element, "select", "Property");
+            appendProperty(form, element, "select", "Operation");
+            appendProperty(form, element, "div", "emoji");
+            appendProperty(form, element, "input", "Comment");
+            appendProperty(form, element, "input", "Target");
+            appendProperty(form, element, "input", "EntityId");
+
+            $.ajax({
+                url: '@Url.Action(nameof(HomeController.GetTestToastMessage))',
+                type: 'POST',
+                data: form,
+                processData: false,
+                contentType: false,
+                async: true,
+                success: function (response){
+                    if (response)
+                        showToast(response, "Test message");
+                }
+            });
+        });
+    });
+
+    function appendProperty(form, element, propertyElement, propertyName) {
+        let selector = "";
+        if (propertyElement !== 'input')
+            selector = ':not(:empty)';
+
+        element.find(`${propertyElement}[name='${propertyName}']${selector}`).each(function () {
+            let value = '';
+
+            if ($(this).parent().hasClass("d-none")) {
+                return;
+            }
+
+            if (propertyElement === 'div') {
+                value = $(this).text();
+            }
+            else {
+                value = $(this).val();
+            }
+
+            form.append(`${propertyName}`, value);
+        });
+    }
+
+    function tryValidate(element, propertyElement, propertyName) {
+        var input = element.find($(`${propertyElement}[name='${propertyName}']`));
+        
+        return input[0].reportValidity();
+    }
+</script>

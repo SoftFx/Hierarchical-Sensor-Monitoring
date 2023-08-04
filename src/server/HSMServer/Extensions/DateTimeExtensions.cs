@@ -47,7 +47,7 @@ namespace HSMServer.Extensions
         {
             var roundTicks = span.Ticks;
 
-            return new DateTime(time.Ticks / roundTicks * roundTicks + roundTicks);
+            return roundTicks == 0 ? time : new DateTime(time.Ticks / roundTicks * roundTicks + roundTicks);
         }
 
         internal static DateTime Floor(this DateTime time, TimeSpan span)

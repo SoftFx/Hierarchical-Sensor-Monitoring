@@ -1,7 +1,5 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities;
-using HSMServer.Core.Configuration;
 using HSMServer.Core.DataLayer;
-using HSMServer.Core.Registration;
 using HSMServer.Core.Tests.DatabaseTests;
 using HSMServer.Core.Tests.DatabaseTests.Fixture;
 using HSMServer.Core.Tests.Infrastructure;
@@ -368,160 +366,6 @@ namespace HSMServer.Core.Tests
 
         #endregion
 
-        #region [ Registration Ticket ]
-
-        [Fact]
-        [Trait("Category", "OneRegistrationTicket")]
-        public void AddRegistrationTicketTest()
-        {
-            var ticket = EntitiesFactory.BuildTicket();
-
-            _databaseCore.WriteRegistrationTicket(ticket);
-
-            FullTicketTest(ticket, _databaseCore.ReadRegistrationTicket(ticket.Id));
-        }
-
-        [Theory]
-        [InlineData(3)]
-        [InlineData(10)]
-        [InlineData(50)]
-        [InlineData(100)]
-        [InlineData(500)]
-        [InlineData(1000)]
-        [Trait("Category", "SeveralRegistrationTicket")]
-        public void SeveralRegistartionTicketTest(int count)
-        {
-            for (int i = 0; i < count; i++)
-            {
-                var ticket = EntitiesFactory.BuildTicket();
-
-                _databaseCore.WriteRegistrationTicket(ticket);
-
-                FullTicketTest(ticket, _databaseCore.ReadRegistrationTicket(ticket.Id));
-            }
-        }
-
-        [Fact]
-        [Trait("Category", "OneRemoveRegistrationTicket")]
-        public void RemoveRegistrationTicket()
-        {
-            var ticket = EntitiesFactory.BuildTicket();
-
-            _databaseCore.WriteRegistrationTicket(ticket);
-            _databaseCore.RemoveRegistrationTicket(ticket.Id);
-
-            Assert.Null(_databaseCore.ReadRegistrationTicket(ticket.Id));
-        }
-
-        [Theory]
-        [InlineData(3)]
-        [InlineData(10)]
-        [InlineData(50)]
-        [InlineData(100)]
-        [InlineData(500)]
-        [InlineData(1000)]
-        [Trait("Category", "SeveralRemoveRegistrationTickets")]
-        public void SeveralRemoveRegistrationTickets(int count)
-        {
-            for (int i = 0; i < count; i++)
-            {
-                var ticket = EntitiesFactory.BuildTicket();
-
-                _databaseCore.WriteRegistrationTicket(ticket);
-                _databaseCore.RemoveRegistrationTicket(ticket.Id);
-
-                Assert.Null(_databaseCore.ReadRegistrationTicket(ticket.Id));
-            }
-        }
-
-        #endregion
-
-        #region [ Configuration Object ]
-
-        [Fact]
-        [Trait("Category", "AddConfigurationObject")]
-        public void AddConfigurationObjectTest()
-        {
-            var name = RandomGenerator.GetRandomString();
-            var config = EntitiesFactory.BuildConfiguration(name);
-
-            _databaseCore.WriteConfigurationObject(config);
-
-            FullConfigurationObjectTest(config, _databaseCore.GetConfigurationObject(name));
-        }
-
-        [Theory]
-        [InlineData(3)]
-        [InlineData(10)]
-        [InlineData(50)]
-        [InlineData(100)]
-        [InlineData(500)]
-        [InlineData(1000)]
-        [Trait("Category", "SeveralConfigurationObject")]
-        public void SeveralConfigurationObjectTest(int count)
-        {
-            for (int i = 0; i < count; i++)
-            {
-                var name = RandomGenerator.GetRandomString();
-                var config = EntitiesFactory.BuildConfiguration(name);
-
-                _databaseCore.WriteConfigurationObject(config);
-
-                FullConfigurationObjectTest(config, _databaseCore.GetConfigurationObject(name));
-            }
-        }
-
-        [Fact]
-        [Trait("Category", "UpdateConfigurationObject")]
-        public void UpdateConfigurationObjectTest()
-        {
-            var name = RandomGenerator.GetRandomString();
-            var config = EntitiesFactory.BuildConfiguration(name);
-
-            _databaseCore.WriteConfigurationObject(config);
-            config.Value = RandomGenerator.GetRandomString();
-            _databaseCore.WriteConfigurationObject(config);
-
-            FullConfigurationObjectTest(config, _databaseCore.GetConfigurationObject(name));
-        }
-
-        [Fact]
-        [Trait("Category", "RemoveConfigurationObject")]
-        public void RemoveConfigurationObject()
-        {
-            var name = RandomGenerator.GetRandomString();
-            var config = EntitiesFactory.BuildConfiguration(name);
-
-            _databaseCore.WriteConfigurationObject(config);
-            _databaseCore.RemoveConfigurationObject(name);
-
-            Assert.Null(_databaseCore.GetConfigurationObject(name));
-        }
-
-        [Theory]
-        [InlineData(3)]
-        [InlineData(10)]
-        [InlineData(50)]
-        [InlineData(100)]
-        [InlineData(500)]
-        [InlineData(1000)]
-        [Trait("Category", "SeveralRemoveConfigurationObject")]
-        public void SeveralRemoveConfigurationObject(int count)
-        {
-            for (int i = 0; i < count; i++)
-            {
-                var name = RandomGenerator.GetRandomString();
-                var config = EntitiesFactory.BuildConfiguration(name);
-
-                _databaseCore.WriteConfigurationObject(config);
-                _databaseCore.RemoveConfigurationObject(name);
-
-                Assert.Null(_databaseCore.GetConfigurationObject(name));
-            }
-        }
-
-        #endregion
-
         #region [ Private methods ]
 
         private static void FullProductTest(ProductEntity expectedProduct, ProductEntity actualProduct)
@@ -583,24 +427,6 @@ namespace HSMServer.Core.Tests
             Assert.Equal(expectedFolder.Description, actualFolder.Description);
             Assert.Equal(expectedFolder.CreationDate, actualFolder.CreationDate);
             Assert.Equal(expectedFolder.Color, actualFolder.Color);
-        }
-
-        private static void FullTicketTest(RegistrationTicket expectedTicket, RegistrationTicket actualTicket)
-        {
-            Assert.NotNull(actualTicket);
-            Assert.Equal(expectedTicket.Id, actualTicket.Id);
-            Assert.Equal(expectedTicket.Role, actualTicket.Role);
-            Assert.Equal(expectedTicket.ProductKey, actualTicket.ProductKey);
-            Assert.Equal(expectedTicket.ExpirationDate, actualTicket.ExpirationDate);
-        }
-
-        private static void FullConfigurationObjectTest(ConfigurationObject expectedConfig, ConfigurationObject actualConfig)
-        {
-            Assert.NotNull(actualConfig);
-            Assert.Equal(expectedConfig.Name, expectedConfig.Name);
-            //Entity doesn't have this field
-            //Assert.Equal(expectedConfig.Description, actualConfig.Description);
-            Assert.Equal(expectedConfig.Value, actualConfig.Value);
         }
 
         private UserEntity GetUser(string username) =>

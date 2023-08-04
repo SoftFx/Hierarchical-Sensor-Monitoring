@@ -3,52 +3,57 @@ using System.ComponentModel.DataAnnotations;
 
 namespace HSMServer.Model
 {
-    public enum TimeInterval
+    public enum TimeInterval : long
     {
         [Display(Name = "From parent")]
-        FromParent,
+        FromParent = -10,
+        Forever = -2,
+        Custom = -1,
+
         [Display(Name = "Never")]
-        None,
+        None = 0L,
         [Display(Name = "1 minute")]
-        OneMinute,
+        OneMinute = 600_000_000,
         [Display(Name = "5 minutes")]
-        FiveMinutes,
+        FiveMinutes = 3_000_000_000,
         [Display(Name = "10 minutes")]
-        TenMinutes,
+        TenMinutes = 6_000_000_000,
         [Display(Name = "30 minutes")]
-        ThirtyMinutes,
+        ThirtyMinutes = 18_000_000_000,
+
         [Display(Name = "1 hour")]
-        Hour,
+        Hour = 36_000_000_000,
         [Display(Name = "4 hours")]
-        FourHours,
+        FourHours = 144_000_000_000,
         [Display(Name = "8 hours")]
-        EightHours,
+        EightHours = 288_000_000_000,
         [Display(Name = "16 hours")]
-        SixteenHours,
+        SixteenHours = 576_000_000_000,
+
         [Display(Name = "1 day")]
-        Day,
+        Day = 864_000_000_000,
         [Display(Name = "1 day 12 hours")]
-        ThirtySixHours,
+        ThirtySixHours = 1_296_000_000_000,
         [Display(Name = "2 days 12 hours")]
-        SixtyHours,
+        SixtyHours = 2_160_000_000_000,
         [Display(Name = "1 week")]
-        Week,
+        Week = 6_048_000_000_000,
+
         [Display(Name = "1 month")]
-        Month,
+        Month = 26_784_000_000_000, // 31 days
         [Display(Name = "3 months")]
-        ThreeMonths,
+        ThreeMonths = 80_352_000_000_000, // 31 * 3
         [Display(Name = "6 months")]
-        SixMonths,
+        SixMonths = 160_704_000_000_000, // 31 * 6
+
         [Display(Name = "1 year")]
-        Year,
-        Forever,
-        Custom,
+        Year = 315_360_000_000_000, //365 days
     }
 
 
     public static class PredefinedIntervals
     {
-        public static List<TimeInterval> ForTimeout { get; } =
+        public static HashSet<TimeInterval> ForFolderTimeout { get; } =
             new()
             {
                 TimeInterval.FromParent,
@@ -61,11 +66,21 @@ namespace HSMServer.Model
                 TimeInterval.Custom
             };
 
-        public static List<TimeInterval> ForRestore { get; } =
+        public static HashSet<TimeInterval> ForTimeout { get; } =
             new()
             {
                 TimeInterval.FromParent,
-                TimeInterval.None,
+                TimeInterval.TenMinutes,
+                TimeInterval.Hour,
+                TimeInterval.Day,
+                TimeInterval.Week,
+                TimeInterval.Month,
+                TimeInterval.Custom
+            };
+
+        public static HashSet<TimeInterval> ForRestore { get; } =
+            new()
+            {
                 TimeInterval.OneMinute,
                 TimeInterval.FiveMinutes,
                 TimeInterval.TenMinutes,
@@ -74,7 +89,7 @@ namespace HSMServer.Model
                 TimeInterval.Custom
             };
 
-        public static List<TimeInterval> ForIgnore { get; } =
+        public static HashSet<TimeInterval> ForIgnore { get; } =
             new()
             {
                 TimeInterval.FiveMinutes,
@@ -89,7 +104,7 @@ namespace HSMServer.Model
                 TimeInterval.Custom
             };
 
-        public static List<TimeInterval> ForKeepHistory { get; } =
+        public static HashSet<TimeInterval> ForKeepHistory { get; } =
             new()
             {
                 TimeInterval.FromParent,
@@ -102,7 +117,7 @@ namespace HSMServer.Model
                 TimeInterval.Custom
             };
 
-        public static List<TimeInterval> ForSelfDestory { get; } =
+        public static HashSet<TimeInterval> ForSelfDestory { get; } =
             new()
             {
                 TimeInterval.FromParent,

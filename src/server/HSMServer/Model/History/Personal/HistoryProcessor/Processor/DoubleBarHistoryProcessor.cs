@@ -22,22 +22,22 @@ namespace HSMServer.Model.History
           new()
           {
               Count = summary.Count,
-              OpenTime = summary.OpenTime,
-              CloseTime = summary.CloseTime,
+              OpenTime = summary.OpenTime.ToUniversalTime(),
+              CloseTime = summary.CloseTime.ToUniversalTime(),
               Min = summary.Min,
               Max = summary.Max,
               Mean = summary.Mean,
               Percentiles = summary.Percentiles,
-              Time = summary.CloseTime,
-              ReceivingTime = summary.CloseTime,
+              Time = summary.CloseTime.ToUniversalTime(),
+              ReceivingTime = summary.CloseTime.ToUniversalTime(),
           };
 
         protected override double Average(double value1, double value2) =>
             (value1 + value2) / 2;
 
-        protected override double Convert(decimal value) => (double)value;
+        protected override double Convert(double value) => value;
 
-        protected override decimal GetComposition(double value1, int value2) =>
-            (decimal)value1 * value2;
+        protected override double GetComposition(double value1, int value2) =>
+            value1 * value2;
     }
 }

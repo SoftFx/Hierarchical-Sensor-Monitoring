@@ -11,7 +11,7 @@
 
 
 <li id='@data.Id' title='@data.Tooltip' data-jstree='@Model.ToJSTree()'>
-    <span> @Html.Raw(data.Name.GetShortNodeName())</span>
+    @Html.Raw(data.Name.GetShortNodeName())
 
     @if (!Model.IsEmpty && showIcons)
     {
@@ -49,7 +49,7 @@
         }
     }
 
-    @foreach (var child in Model.Nodes)
+    @foreach (var child in Model.Products)
     {
         <ul>@await Html.PartialAsync("_TreeNode", child)</ul>
     }

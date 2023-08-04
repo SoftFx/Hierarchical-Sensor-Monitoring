@@ -2,7 +2,6 @@
 using HSMServer.Core.Cache;
 using HSMServer.Model.TreeViewModel;
 using HSMServer.Notification.Settings;
-using HSMServer.Notifications;
 using System;
 using System.Threading.Tasks;
 
@@ -10,7 +9,6 @@ namespace HSMServer.BackgroundServices
 {
     public sealed class MonitoringBackgroundService : BaseDelayedBackgroundService
     {
-        private readonly NotificationsCenter _notifications;
         private readonly IUserManager _userManager;
         private readonly ITreeValuesCache _cache;
         private readonly TreeViewModel _tree;
@@ -18,9 +16,8 @@ namespace HSMServer.BackgroundServices
         public override TimeSpan Delay { get; } = new TimeSpan(0, 1, 1); // 1 extra second to apply all updates
 
 
-        public MonitoringBackgroundService(ITreeValuesCache cache, TreeViewModel tree, IUserManager userManager, NotificationsCenter notifications)
+        public MonitoringBackgroundService(ITreeValuesCache cache, TreeViewModel tree, IUserManager userManager)
         {
-            _notifications = notifications;
             _userManager = userManager;
             _cache = cache;
             _tree = tree;
@@ -29,13 +26,9 @@ namespace HSMServer.BackgroundServices
 
         protected override Task ServiceAction()
         {
-            if (_cache.IsInitialized)
-            {
-                _cache.UpdateCacheState();
-                _notifications.CheckNotificationCenterState();
+            _cache.UpdateCacheState();
 
-                RemoveOutdatedIgnoredNotifications();
-            }
+            RemoveOutdatedIgnoredNotifications();
 
             return Task.CompletedTask;
         }

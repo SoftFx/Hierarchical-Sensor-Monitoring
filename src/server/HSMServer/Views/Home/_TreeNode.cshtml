@@ -9,12 +9,15 @@
 
     var showIcons = (User as User).TreeFilter.ByVisibility.Icons.Value;
 
-    var arrowIcon = Model.VisibleSensorsCount > 0 ? "jstree-closed" : string.Empty;
+    var arrowIcon = Model.VisibleSubtreeSensorsCount > 0 || Model.Data.Nodes.Count > 0 ? "jstree-closed" : string.Empty;
 }
 
 
 <li class="@arrowIcon" id='@data.EncodedId' title='@data.Tooltip' data-jstree='@Model.ToJSTree()'>
-    <span class="@(Model.IsMutedState ? "muted-state-text" : "")"> @Html.Raw(data.Name.GetShortNodeName()) @Model.SensorsCountString </span>
+    <span class="@(Model.IsMutedState ? "muted-state-text" : "")">
+        @await Html.PartialAsync("~/Views/Home/Alerts/_AlertIconsList.cshtml", data.AlertIcons)
+        @Html.Raw(data.Name.GetShortNodeName()) @Model.SensorsCountString
+    </span>
 
     @if (!data.IsEmpty && !Model.IsMutedState && showIcons)
     {
@@ -52,25 +55,25 @@
         }
     }
 
-    @foreach (var child in Model.Nodes)
+    @foreach (var child in Model.RenderedNodes)
     {
         <ul>@await Html.PartialAsync("_TreeNode", child)</ul>
     }
 
-    @if (Model.Sensors.Count > 0)
+    @if (Model.RenderedSensors.Count > 0)
     {
         <ul>
-            @foreach (var sensor in Model.Sensors)
+            @foreach (var sensor in Model.RenderedSensors)
             {
                 @await Html.PartialAsync("_TreeSensor", sensor)
             }
         </ul>
     }
-    @if (Model.IsDisabledNodeShown)
+    @if (Model.RenderWidthDifference > 0)
     {
         <ul>
             <li class="jstree-last jstree-no-icons noHover" id='disabled_@data.EncodedId' data-jstree='@BaseShallowModel.GetDisabledJSTree()'>
-                <span>... and @Model.WidthDifference more</span>
+                <span>... and @Model.RenderWidthDifference more</span>
             </li>
         </ul>
     }

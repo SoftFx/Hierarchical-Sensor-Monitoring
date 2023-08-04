@@ -1,9 +1,9 @@
-﻿using System;
-using System.Text.Json.Serialization;
+﻿using HSMDatabase.AccessManager.DatabaseEntities;
+using System;
 
 namespace HSMServer.Core.Model
 {
-    public enum TimeInterval : byte
+    public enum OldTimeInterval : byte
     {
         TenMinutes,
         Hour,
@@ -20,64 +20,71 @@ namespace HSMServer.Core.Model
         Custom = byte.MaxValue,
     }
 
+    public enum TimeInterval : long
+    {
+        FromFolder = -100,
+        FromParent = -10,
+        Ticks = -1,
+        None = 0L,
+
+        Month = 26_784_000_000_000, // 31 days
+        ThreeMonths = 80_352_000_000_000, // 31 * 3
+        SixMonths = 160_704_000_000_000, // 31 * 6
+
+        Year = 315_360_000_000_000, // 365 days
+    }
+
 
     public class TimeIntervalModel
     {
-        public TimeInterval TimeInterval { get; } = TimeInterval.FromParent;
-
-        public long CustomPeriod { get; }
-
-        [JsonIgnore]
-        public bool IsNever => TimeInterval.IsCustom() && CustomPeriod == 0;
-
-        [JsonIgnore]
-        public bool IsFromFolder => TimeInterval == TimeInterval.FromFolder;
+        public static TimeIntervalModel None { get; } = new(TimeInterval.None);
 
 
-        [JsonConstructor]
-        public TimeIntervalModel(TimeInterval timeInterval, long customPeriod)
+        public TimeInterval Interval { get; }
+
+        public long Ticks { get; }
+
+
+        public bool IsFromFolder => Interval is TimeInterval.FromFolder;
+
+        public bool IsFromParent => Interval is TimeInterval.FromParent;
+
+        public bool UseTicks => Interval is TimeInterval.Ticks or TimeInterval.FromFolder;
+
+
+        public TimeIntervalModel() : this(TimeInterval.FromParent) { }
+
+        public TimeIntervalModel(long ticks) : this(TimeInterval.Ticks, ticks) { }
+
+        public TimeIntervalModel(TimeInterval interval) : this(interval, 0L) { }
+
+        public TimeIntervalModel(TimeIntervalEntity entity) : this((TimeInterval)entity.Interval, entity.Ticks) { }
+
+        public TimeIntervalModel(TimeInterval interval, long ticks)
         {
-            TimeInterval = timeInterval;
-            CustomPeriod = customPeriod;
+            Interval = interval;
+            Ticks = ticks;
         }
 
-        public TimeIntervalModel(long period)
+
+        internal bool TimeIsUp(DateTime time) =>
+            UseTicks ? Ticks > 0 && (DateTime.UtcNow - time).Ticks > Ticks
+                     : DateTime.UtcNow > GetShiftedTime(time);
+
+        public DateTime GetShiftedTime(DateTime time, int coef = 1) => Interval switch
         {
-            CustomPeriod = period;
-            TimeInterval = TimeInterval.Custom;
-        }
-
-
-        internal bool TimeIsUp(DateTime time)
-        {
-            if (TimeInterval.UseCustomPeriod() && CustomPeriod > 0L)
-                return (DateTime.UtcNow - time).Ticks > CustomPeriod;
-
-            return DateTime.UtcNow > GetShiftedTime(time);
-        }
-
-        public DateTime GetShiftedTime(DateTime time, int coef = 1) => TimeInterval switch
-        {
-            TimeInterval.OneMinute => time.AddMinutes(1 * coef),
-            TimeInterval.FiveMinutes => time.AddMinutes(5 * coef),
-            TimeInterval.TenMinutes => time.AddMinutes(10 * coef),
-            TimeInterval.Hour => time.AddHours(1 * coef),
-            TimeInterval.Day => time.AddDays(1 * coef),
-            TimeInterval.Week => time.AddDays(7 * coef),
-            TimeInterval.Month => time.AddMonths(1 * coef),
+            TimeInterval.Month => time.AddMonths(coef),
             TimeInterval.ThreeMonths => time.AddMonths(3 * coef),
             TimeInterval.SixMonths => time.AddMonths(6 * coef),
-            TimeInterval.Year => time.AddYears(1 * coef),
-            TimeInterval.Custom or TimeInterval.FromFolder => CustomPeriod == 0L ? DateTime.MaxValue : time.AddTicks(CustomPeriod * coef),
+
+            TimeInterval.Year => time.AddYears(coef),
+
+            TimeInterval.Ticks or TimeInterval.FromFolder => time.AddTicks(Ticks * coef),
+            TimeInterval.None => DateTime.MaxValue,
+
             _ => throw new NotImplementedException(),
         };
 
-
-        public override bool Equals(object obj)
-        {
-            return obj is TimeIntervalModel model && (TimeInterval, CustomPeriod) == (model.TimeInterval, model.CustomPeriod);
-        }
-
-        public override int GetHashCode() => (TimeInterval, CustomPeriod).GetHashCode();
+        public TimeIntervalEntity ToEntity() => new((long)Interval, Ticks);
     }
 }

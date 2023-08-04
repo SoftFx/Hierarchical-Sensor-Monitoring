@@ -1,4 +1,5 @@
-﻿@model HSMServer.Model.ViewModel.LoginViewModel
+﻿@using HSMServer.Controllers
+@model HSMServer.Model.ViewModel.LoginViewModel
 @{
     ViewData["Title"] = "Login";
 }
@@ -6,7 +7,7 @@
 <div class="mx-auto" style="width: 30vh">
     <h4>Login</h4>
     <div>
-        <form method="post" action="Authenticate" enctype="application/x-www-form-urlencoded">
+        <form method="post" action="@nameof(AccountController.Authenticate)" enctype="application/x-www-form-urlencoded">
             <div class="mb-1">
                 <input class="form-control" placeholder="Username" name="username" id="usernameInput"
                        value="@Model.Username" type="text" /><br />

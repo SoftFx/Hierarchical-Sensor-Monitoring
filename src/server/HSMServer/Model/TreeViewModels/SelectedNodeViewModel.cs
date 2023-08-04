@@ -15,7 +15,7 @@ public class SelectedNodeViewModel
 
     public string Id => _selectedNode?.Id.ToString();
 
-    public bool HasChildren => _nodes.VisibleItems?.Count + _sensors.VisibleItems?.Count > 0;
+    public bool HasChildren => _nodes.VisibleItems?.Count > 0 || _sensors.VisibleItems?.Count > 0;
 
 
     public void ConnectNode(ProductNodeViewModel newNode)

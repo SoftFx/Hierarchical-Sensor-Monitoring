@@ -49,8 +49,19 @@ namespace HSMDataCollector.Core
         {
             async Task<List<byte>> GetFileBytes()
             {
-                using (var stream = new StreamReader(fileInfo.FullName))
-                    return Encoding.UTF8.GetBytes(await stream.ReadToEndAsync()).ToList();
+                try
+                {
+                    using (var file = File.Open(fileInfo.FullName, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+                    {
+                        using (var stream = new StreamReader(file))
+                            return Encoding.UTF8.GetBytes(await stream.ReadToEndAsync()).ToList();
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.Error(ex.Message);
+                    throw;
+                }
             }
 
             var value = new FileSensorValue()
@@ -87,15 +98,17 @@ namespace HSMDataCollector.Core
 
                 return connect.IsSuccessStatusCode
                     ? ConnectionResult.Ok
-                    : new ConnectionResult($"{connect.ReasonPhrase} ({await connect.Content.ReadAsStringAsync()})");
+                    : new ConnectionResult(connect.StatusCode, $"{connect.ReasonPhrase} ({await connect.Content.ReadAsStringAsync()})");
             }
             catch (Exception ex)
             {
-                return new ConnectionResult(ex.Message);
+                return new ConnectionResult(null, ex.Message);
             }
         }
 
-        internal Task SendData(List<SensorValueBase> values) => RequestToServer(values.Cast<object>().ToList(), _endpoints.List);
+        internal Task SendData(List<SensorValueBase> values) => values.Count > 0
+            ? RequestToServer(values.ToList().Cast<object>(), _endpoints.List)
+            : Task.CompletedTask;
 
         internal Task SendData(SensorValueBase value)
         {
@@ -141,7 +154,7 @@ namespace HSMDataCollector.Core
                 var res = await _client.PostAsync(uri, data, _tokenSource.Token);
 
                 if (!res.IsSuccessStatusCode)
-                    _logger.Error($"Failed to send data. StatusCode={res.StatusCode}");
+                    _logger.Error($"Failed to send data. StatusCode={res.StatusCode}. Data={json}.");
             }
             catch (Exception ex)
             {

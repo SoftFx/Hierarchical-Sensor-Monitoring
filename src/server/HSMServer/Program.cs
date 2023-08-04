@@ -2,7 +2,8 @@
 using HSMCommon.Constants;
 using HSMServer.Authentication;
 using HSMServer.Folders;
-using HSMServer.Model;
+using HSMServer.Middleware;
+using HSMServer.ServerConfiguration;
 using HSMServer.ServiceExtensions;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Builder;
@@ -15,6 +16,7 @@ using NLog.Extensions.Logging;
 using NLog.LayoutRenderers;
 using NLog.Web;
 using System;
+using System.Text.Json.Serialization;
 
 const string NLogConfigFileName = "nlog.config";
 
@@ -42,8 +44,15 @@ builder.Host.UseNLog()
             .UseConsoleLifetime();
 
 
+builder.Services.AddOptions<CookieAuthenticationOptions>(CookieAuthenticationDefaults.AuthenticationScheme)
+                .Configure<IUserManager>((options, context) =>
+                {
+                    options.LoginPath = new PathString("/Account/Index");
+                    options.Events = new MyCookieAuthenticationEvents(context);
+                });
+
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
-                .AddCookie(options => options.LoginPath = new PathString("/Account/Index"));
+                .AddCookie(CookieAuthenticationDefaults.AuthenticationScheme);
 
 builder.Services.AddHsts(options =>
 {
@@ -51,14 +60,18 @@ builder.Services.AddHsts(options =>
     options.IncludeSubDomains = true;
 });
 
-builder.Services.AddMvc();
+builder.Services.AddMvc()
+                .AddJsonOptions(options =>
+                {
+                    options.JsonSerializerOptions.NumberHandling = JsonNumberHandling.AllowReadingFromString | JsonNumberHandling.AllowNamedFloatingPointLiterals;
+                });
 
 builder.Services.AddFluentValidationAutoValidation()
                 .AddFluentValidationClientsideAdapters();
 
 builder.Services.AddHttpsRedirection(с => с.HttpsPort = serverConfig.Kestrel.SitePort);
 
-builder.Services.AddApplicationServices();
+builder.Services.AddApplicationServices(serverConfig);
 
 builder.Services.Configure<HostOptions>(hostOptions =>
 {

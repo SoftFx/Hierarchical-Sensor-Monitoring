@@ -51,26 +51,50 @@ namespace HSMServer.Model.TreeViewModel
             Type = model.Type;
             State = model.State;
             Integration = model.Integration;
-            UpdateTime = model.LastUpdateTime;
-            Status = model.Status.Status.ToClient().ToEmpty(model.HasData);
-            ValidationError = State == SensorState.Muted ? GetMutedErrorTooltip(model.EndOfMuting) : model.Status.Message;
+            UpdateTime = model.LastUpdate;
+            Status = model.Status.ToClient();
 
+            if (State is SensorState.Muted)
+                ValidationError = GetMutedErrorTooltip(model.EndOfMuting);
+            else if (model.Status?.HasError ?? false)
+                ValidationError = model.Status?.Message;
+            else 
+                ValidationError = string.Empty;
+            
             LastValue = model.LastValue;
             HasData = model.HasData;
             ShortStringValue = model.LastValue?.ShortInfo;
 
             FileNameString = GetFileNameString(model.Type, ShortStringValue);
 
-            if (model is DoubleSensorModel or IntegerSensorModel or DoubleBarSensorModel or IntegerBarSensorModel)
-                DataAlerts[Type] = model.DataPolicies.Select(p => BuildAlert(p, model)).ToList();
+            DataAlerts[(byte)Type] = model.Policies.Select(p => BuildAlert(p, model)).ToList();
+
+            AlertIcons.Clear();
+            foreach (var alert in model.PolicyResult)
+            {
+                var icon = alert.Icon;
+                if (icon is null)
+                    continue;
+
+                if (!AlertIcons.ContainsKey(icon))
+                    AlertIcons.TryAdd(icon, 0);
+
+                AlertIcons[icon] += alert.Count;
+            }
         }
 
-        private DataAlertViewModel BuildAlert(Policy policy, BaseSensorModel sensor) => policy switch
+        private static DataAlertViewModelBase BuildAlert(Policy policy, BaseSensorModel sensor) => policy switch
         {
-            IntegerDataPolicy p => new SingleDataAlertViewModel<IntegerValue, int>(p, sensor),
-            DoubleDataPolicy p => new SingleDataAlertViewModel<DoubleValue, double>(p, sensor),
-            IntegerBarDataPolicy p => new BarDataAlertViewModel<IntegerBarValue, int>(p, sensor),
-            DoubleBarDataPolicy p => new BarDataAlertViewModel<DoubleBarValue, double>(p, sensor),
+            FilePolicy p => new DataAlertViewModel<FileValue>(p, sensor),
+            StringPolicy p => new DataAlertViewModel<StringValue>(p, sensor),
+            BooleanPolicy p => new DataAlertViewModel<BooleanValue>(p, sensor),
+            VersionPolicy p => new DataAlertViewModel<VersionValue>(p, sensor),
+            TimeSpanPolicy p => new DataAlertViewModel<TimeSpanValue>(p, sensor),
+            IntegerPolicy p => new SingleDataAlertViewModel<IntegerValue, int>(p, sensor),
+            DoublePolicy p => new SingleDataAlertViewModel<DoubleValue, double>(p, sensor),
+            IntegerBarPolicy p => new BarDataAlertViewModel<IntegerBarValue, int>(p, sensor),
+            DoubleBarPolicy p => new BarDataAlertViewModel<DoubleBarValue, double>(p, sensor),
+            _ => null,
         };
 
         private static string GetFileNameString(SensorType sensorType, string value)

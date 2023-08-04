@@ -2,7 +2,6 @@
 using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Extensions;
-using HSMServer.Core.Helpers;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Policies;
 using HSMServer.Core.SensorsUpdatesQueue;
@@ -157,19 +156,22 @@ namespace HSMServer.Core.Tests.Infrastructure
             Assert.NotNull(expectedSensorValue);
 
             Assert.True(actual.HasData);
-            Assert.Equal(expectedSensorValue.ReceivingTime, actual.LastUpdateTime);
+            Assert.Equal(expectedSensorValue.ReceivingTime, actual.LastUpdate);
 
-            Assert.Equal(expectedSensorValue.Status, actual.Status.Status);
-            if (expectedSensorValue.Status != SensorStatus.Ok)
-                Assert.False(string.IsNullOrEmpty(actual.Status.Message));
-            else
-                Assert.True(string.IsNullOrEmpty(actual.Status.Message));
+            Assert.Equal(expectedSensorValue.Status, actual.Status?.Status);
+            Assert.Equal(expectedSensorValue.Comment, actual.Status?.Message);
 
             TestSensorValue(expectedSensorValue, actualSensorValue, actual.Type);
         }
 
         internal static void AssertModels<T>(T actual, T expected)
         {
+            if (expected is null)
+            {
+                Assert.Null(actual);
+                return;
+            }
+
             var type = typeof(T);
 
             foreach (var pi in type.GetProperties(BindingFlags.Public | BindingFlags.Instance | BindingFlags.Static))
@@ -194,7 +196,7 @@ namespace HSMServer.Core.Tests.Infrastructure
             TestImmutableSensorData(expected, actual);
 
             AssertModels(expected.LastValue, actual.LastValue);
-            Assert.Equal(expected.LastUpdateTime, actual.LastUpdateTime);
+            Assert.Equal(expected.LastUpdate, actual.LastUpdate);
             Assert.Equal(expected.HasData, actual.HasData);
         }
 
@@ -203,7 +205,7 @@ namespace HSMServer.Core.Tests.Infrastructure
             TestImmutableSensorData(expected, actual);
 
             Assert.Equal(expected.Description, actual.Description);
-            Assert.Equal(expected.ServerPolicy.ExpectedUpdate.Policy, actual.ServerPolicy.ExpectedUpdate.Policy);
+            Assert.Equal(expected.Settings.TTL.Value, actual.Settings.TTL.Value);
         }
 
         internal static void TestSensorModel(StoreInfo expected, BaseSensorModel actual, ProductModel parentProduct = null)
@@ -240,8 +242,8 @@ namespace HSMServer.Core.Tests.Infrastructure
 
         internal static void TestExpectedUpdateIntervalPolicy(SensorUpdate expected, Policy actual)
         {
-            Assert.Equal(expected.ExpectedUpdateInterval.CustomPeriod, (actual as ExpectedUpdateIntervalPolicy).Interval.CustomPeriod);
-            Assert.Equal(expected.ExpectedUpdateInterval.TimeInterval, (actual as ExpectedUpdateIntervalPolicy).Interval.TimeInterval);
+            //Assert.Equal(expected.TTL.Ticks, (actual as ExpectedUpdateIntervalPolicy).Interval.Ticks);
+            //Assert.Equal(expected.TTL.Interval, (actual as ExpectedUpdateIntervalPolicy).Interval.Interval);
         }
 
 

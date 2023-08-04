@@ -9,7 +9,10 @@ namespace HSMServer.Model.History
     {
         public List<BaseValue> ProcessingAndCompression(List<BaseValue> values, int compressedValuesCount)
         {
-            values = values.OrderBy(v => v.Time).ThenBy(v => v.ReceivingTime).ToList();
+            values = values.OrderBy(v => v.Time)
+                           .ThenBy(v => v.ReceivingTime)
+                           .Select(v => v with { Time = v.Time.ToUniversalTime() })
+                           .ToList();
 
             if (values.Count < compressedValuesCount)
                 return values;

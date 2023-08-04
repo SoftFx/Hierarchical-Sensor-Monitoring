@@ -40,7 +40,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests.ModelTests
             sensor.TryAddValue(sensorValue);
 
             Assert.True(sensor.HasData);
-            Assert.NotEqual(DateTime.MinValue, sensor.LastUpdateTime);
+            Assert.NotEqual(DateTime.MinValue, sensor.LastUpdate);
             ModelsTester.AssertModels(sensorValue, sensor.LastValue);
         }
 

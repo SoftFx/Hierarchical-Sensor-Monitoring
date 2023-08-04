@@ -142,6 +142,8 @@ function Data(to, from, type, encodedId) {
         }).done(function (data) {
             $("#newValuesCount").empty();
             $("#tableHistoryRefreshButton").addClass("d-none");
+            $('#allColumnsButton').removeClass('d-none');
+            $('#allColumnsButton')[0].innerText = 'Show all columns';
 
             $(`#values_${encodedId}`).html(data);
 
@@ -165,6 +167,9 @@ function Data(to, from, type, encodedId) {
 
                 reloadHistoryRequest(from, to, body);
             }
+
+            $("#sensorHistorySpinner").addClass("d-none");
+            $('#historyDataPanel').removeClass('hidden_element');
         });
     }
 
@@ -179,6 +184,7 @@ function Data(to, from, type, encodedId) {
             async: true
         }).done(function (data) {
             $("#tableHistoryRefreshButton").addClass("d-none");
+            $('#allColumnsButton').addClass("d-none");
 
             let parsedData = JSON.parse(data);
 
@@ -202,6 +208,9 @@ function Data(to, from, type, encodedId) {
             }
 
             displayGraph(data, type, `graph_${encodedId}`, encodedId);
+
+            $("#sensorHistorySpinner").addClass("d-none");
+            $('#historyDataPanel').removeClass('hidden_element');
         });
     }
 

@@ -1,9 +1,10 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Numerics;
 
 namespace HSMServer.Model.History
 {
-    internal sealed class SummaryBarItem<T> where T : struct
+    internal sealed class SummaryBarItem<T> where T : INumber<T>
     {
         public int Count { get; set; }
 

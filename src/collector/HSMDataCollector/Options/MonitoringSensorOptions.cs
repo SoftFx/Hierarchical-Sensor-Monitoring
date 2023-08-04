@@ -5,6 +5,8 @@ namespace HSMDataCollector.Options
     public class SensorOptions
     {
         public string NodePath { get; set; }
+
+        internal string SensorName { get; set; }
     }
 
 
@@ -25,9 +27,11 @@ namespace HSMDataCollector.Options
 
     public sealed class BarSensorOptions : MonitoringSensorOptions
     {
+        public TimeSpan CollectBarPeriod { get; set; } = TimeSpan.FromSeconds(5);
+
         public TimeSpan BarPeriod { get; set; } = TimeSpan.FromMinutes(5);
 
-        public TimeSpan CollectBarPeriod { get; set; } = TimeSpan.FromSeconds(5);
+        public int Precision { get; set; } = 2;
     }
 
 
@@ -55,7 +59,7 @@ namespace HSMDataCollector.Options
     {
         public Version Version { get; set; }
 
-        public string SensorName { get; set; }
+        public new string SensorName { get; set; }
 
         public DateTime StartTime { get; set; }
     }

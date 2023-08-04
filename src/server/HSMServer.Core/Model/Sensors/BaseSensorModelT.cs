@@ -8,9 +8,9 @@ namespace HSMServer.Core.Model
 {
     public abstract class BaseSensorModel<T> : BaseSensorModel where T : BaseValue
     {
-        internal override ValuesStorage<T> Storage { get; }
+        public override SensorPolicyCollection<T> Policies { get; }
 
-        public override DataPolicyCollection<T> DataPolicies { get; }
+        internal override ValuesStorage<T> Storage { get; }
 
 
         protected BaseSensorModel(SensorEntity entity) : base(entity) { }
@@ -18,12 +18,12 @@ namespace HSMServer.Core.Model
 
         internal override bool TryAddValue(BaseValue value)
         {
-            var canStore = DataPolicies.TryValidate(value, out var valueT);
+            var isLastValue = Storage.LastValue is null || value.Time >= Storage.LastValue.Time;
+            var canStore = Policies.TryValidate(value, out var valueT, isLastValue);
 
             if (canStore)
             {
                 Storage.AddValue(valueT);
-                ServerPolicy.Reset();
 
                 ReceivedNewValue?.Invoke(valueT);
             }
@@ -31,17 +31,19 @@ namespace HSMServer.Core.Model
             return canStore;
         }
 
-        internal override bool TryAddValue(byte[] bytes) => TryAddValue(bytes.ToValue<T>());
+        internal override List<BaseValue> ConvertValues(List<byte[]> pages) => pages.Select(Convert).ToList();
 
-        internal override List<BaseValue> ConvertValues(List<byte[]> bytesPages) =>
-            bytesPages.Select(v => v.ToValue<T>()).ToList();
+        internal override void AddDbValue(byte[] bytes) => Storage.AddValue((T)Convert(bytes));
 
-        internal override void AddPolicy<U>(U policy)
+        internal override bool CheckTimeout(bool toNotify = true) => Policies.SensorTimeout(LastValue?.ReceivingTime, toNotify);
+
+        internal override void RecalculatePolicy()
         {
-            if (policy is DataPolicy<T> dataPolicy)
-                DataPolicies.Add(dataPolicy);
-            else
-                base.AddPolicy(policy);
+            if (LastValue is not null)
+                Policies.TryValidate(LastValue, out _);
         }
+
+
+        private BaseValue Convert(byte[] bytes) => bytes.ToValue<T>();
     }
 }

@@ -213,6 +213,18 @@
         });
     }
 
+    function updateAlertIcons(selectedNodeId) {
+        $.ajax({
+            type: 'GET',
+            url: `@Url.Action(nameof(HomeController.GetAlertIcons))?selectedId=${selectedNodeId}`,
+            cache: false,
+            async: true,
+            success: function (viewdata) {
+                $(`#alertIcons_${selectedNodeId}`).empty().append(viewdata);
+            }
+        });
+    }
+
     function updateSpecificSensorData(dataObject) {
         var id = dataObject.id;
         let isFile = dataObject.sensorType === 6;
@@ -296,18 +308,23 @@
                 }
                 
                 let accordionName = "";
-                if ($('#dataPanel li a.active')[0].innerText === ' Grid') {
-                    accordionName = "grid"
-                    getGridPage(`${accordionName}Sensors`)
-                    getGridPage(`${accordionName}Nodes`)
-                }
-                else {
-                    accordionName = "list";
-                    getListPage(`${accordionName}Sensors`)
-                    getListPage(`${accordionName}Nodes`)
+                let dataPanel = $('#dataPanel li a.active');
+                if (dataPanel.length > 0) {
+                    if (dataPanel[0].innerText === ' Grid') {
+                        accordionName = "grid"
+                        getGridPage(`${accordionName}Sensors`)
+                        getGridPage(`${accordionName}Nodes`)
+                    }
+
+                    if (dataPanel[0].innerText === ' List') {
+                        accordionName = "list";
+                        getListPage(`${accordionName}Sensors`)
+                        getListPage(`${accordionName}Nodes`)
+                    }
                 }
 
-               updateGeneralInfo(selectedNodeId);
+                updateGeneralInfo(selectedNodeId);
+                updateAlertIcons(selectedNodeId);
                 
                 if (displayChildrenInfo)
                     $('#dataPanel').removeClass('d-none');

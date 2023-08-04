@@ -5,11 +5,12 @@ using HSMServer.Core.Cache;
 using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.DataLayer;
 using HSMServer.Core.Model;
-using HSMServer.Core.Model.Policies;
+using HSMServer.Core.Model.NodeSettings;
 using HSMServer.Model;
 using HSMServer.Model.Authentication;
 using HSMServer.Model.Folders;
 using HSMServer.Model.TreeViewModel;
+using HSMServer.Notification.Settings;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -22,6 +23,9 @@ namespace HSMServer.Folders
         private readonly ITreeValuesCache _cache;
         private readonly IUserManager _userManager;
         private readonly IDatabaseCore _databaseCore;
+
+
+        public event Action<Guid> ResetProductTelegramInheritance;
 
 
         protected override Action<FolderEntity> AddToDb => _databaseCore.AddFolder;
@@ -74,8 +78,7 @@ namespace HSMServer.Folders
         {
             var result = TryGetValue(update.Id, out var folder) && await base.TryUpdate(update);
 
-            if (result && (update.ExpectedUpdateInterval != null || update.RestoreInterval != null ||
-                           update.SavedHistoryPeriod != null || update.SelfDestroy != null))
+            if (result && (update.TTL != null || update.KeepHistory != null || update.SelfDestroy != null))
                 foreach (var productId in folder.Products.Keys)
                     TryUpdateProductInFolder(productId, folder);
 
@@ -115,7 +118,7 @@ namespace HSMServer.Folders
             foreach (var user in _userManager.GetUsers())
             {
                 AddUserHandler(user);
-                
+
                 foreach (var (folderId, role) in user.FoldersRoles)
                     if (TryGetValue(folderId, out var folder))
                         folder.UserRoles.Add(user, role);
@@ -169,6 +172,9 @@ namespace HSMServer.Folders
         {
             if (TryGetValue(folderId, out var folder) && TryUpdateProductInFolder(productId, null))
             {
+                if (_cache.GetProduct(productId).NotificationsSettings?.TelegramSettings?.Inheritance == (byte)InheritedSettings.FromParent)
+                    ResetProductTelegramInheritance?.Invoke(productId);
+
                 foreach (var (user, role) in folder.UserRoles)
                     if (user.ProductsRoles.Remove((productId, role)))
                         await _userManager.UpdateUser(user);
@@ -181,19 +187,17 @@ namespace HSMServer.Folders
 
             if (product is not null)
             {
-                var expectedUpdateInterval = product.ServerPolicy.ExpectedUpdate.Policy.Interval;
-                var restoreInterval = product.ServerPolicy.RestoreError.Policy.Interval;
-                var savedHistory = product.ServerPolicy.SavedHistoryPeriod.Policy.Interval;
-                var selfDestroy = product.ServerPolicy.SelfDestroy.Policy.Interval;
+                var ttl = product.Settings.TTL.Value;
+                var savedHistory = product.Settings.KeepHistory.Value;
+                var selfDestroy = product.Settings.SelfDestroy.Value;
 
                 var update = new ProductUpdate()
                 {
                     Id = productId,
                     FolderId = folder?.Id ?? Guid.Empty,
-                    ExpectedUpdateInterval = GetCorePolicy(expectedUpdateInterval, folder?.ExpectedUpdateInterval),
-                    RestoreInterval = GetCorePolicy(restoreInterval, folder?.SensorRestorePolicy),
-                    SavedHistoryPeriod = GetCorePolicy(savedHistory, folder?.SavedHistoryPeriod),
-                    SelfDestroy = GetCorePolicy(selfDestroy, folder?.SelfDestroyPeriod),
+                    TTL = GetCorePolicy(ttl, folder?.TTL),
+                    KeepHistory = GetCorePolicy(savedHistory, folder?.KeepHistory),
+                    SelfDestroy = GetCorePolicy(selfDestroy, folder?.SelfDestroy),
                 };
 
                 _cache.UpdateProduct(update);
@@ -226,21 +230,20 @@ namespace HSMServer.Folders
         }
 
 
-        private static TimeIntervalModel GetCorePolicy(TimeIntervalModel coreInterval, TimeIntervalViewModel folderInterval)
+        private static TimeIntervalModel GetCorePolicy(TimeIntervalModel model, TimeIntervalViewModel folder)
         {
-            return coreInterval.IsFromFolder
-                ? folderInterval?.ToFolderModel() ?? new TimeIntervalModel(coreInterval.CustomPeriod)
-                : null;
+            var childInterval = folder is null ? Core.Model.TimeInterval.Ticks : Core.Model.TimeInterval.FromFolder;
+
+            return model.IsFromFolder ? new TimeIntervalModel(childInterval, model.Ticks) : null;
         }
 
         private void ResetServerPolicyForFolderProducts()
         {
-            static TimeIntervalModel IsFromFolder<T>(CollectionProperty<T> property, TimeIntervalViewModel interval)
-                where T : ServerPolicy, new()
+            static TimeIntervalModel IsFromFolder<T>(SettingProperty<T> property, TimeIntervalViewModel interval)
+                where T : TimeIntervalModel, new()
             {
-                return property.Policy.FromParent ? interval.ToFolderModel() : null;
+                return property.Value.IsFromParent ? interval.ToModel() : null;
             }
-
 
             foreach (var product in _cache.GetProducts())
             {
@@ -250,14 +253,12 @@ namespace HSMServer.Folders
                 var update = new ProductUpdate
                 {
                     Id = product.Id,
-                    ExpectedUpdateInterval = IsFromFolder(product.ServerPolicy.ExpectedUpdate, folder.ExpectedUpdateInterval),
-                    RestoreInterval = IsFromFolder(product.ServerPolicy.RestoreError, folder.SensorRestorePolicy),
-                    SavedHistoryPeriod = IsFromFolder(product.ServerPolicy.SavedHistoryPeriod, folder.SavedHistoryPeriod),
-                    SelfDestroy = IsFromFolder(product.ServerPolicy.SelfDestroy, folder.SelfDestroyPeriod),
+                    TTL = IsFromFolder(product.Settings.TTL, folder.TTL),
+                    KeepHistory = IsFromFolder(product.Settings.KeepHistory, folder.KeepHistory),
+                    SelfDestroy = IsFromFolder(product.Settings.SelfDestroy, folder.SelfDestroy),
                 };
 
-                if (update.ExpectedUpdateInterval != null || update.RestoreInterval != null ||
-                    update.SavedHistoryPeriod != null || update.SelfDestroy != null)
+                if (update.TTL != null || update.KeepHistory != null || update.SelfDestroy != null)
                     _cache.UpdateProduct(update);
             }
         }

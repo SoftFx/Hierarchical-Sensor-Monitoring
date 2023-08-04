@@ -5,10 +5,12 @@ window.currentSelectedNodeId = "";
 
 window.initializeTree = function () {
     var sortingType = $("input[name='TreeSortType']:checked");
-
-    let initOpened = JSON.parse(window.localStorage.jstree).state.core.open.length;
-    if (initOpened > 1)
-        isRefreshing = true;
+    
+    if (window.localStorage.jstree) {
+        let initOpened = JSON.parse(window.localStorage.jstree).state.core.open.length;
+        if (initOpened > 1)
+            isRefreshing = true;
+    }
     
     $('#jstree').jstree({
         "core": {
@@ -90,7 +92,7 @@ function selectNodeAjax(selectedId) {
 function saveMetaData(selectedId) {
     let form = document.getElementById("editMetaInfo_form");
     let formData = new FormData(form);
-    collectDataAlerts(formData);
+    collectAlerts(formData);
 
     $.ajax({
         type: 'POST',
@@ -100,7 +102,18 @@ function saveMetaData(selectedId) {
         contentType: false,
         async: true
     }).done(function (isValid) {
-        if (isValid) {
+        let isAlertsValid = true;
+        $("#editMetaInfo_form").find("div.dataAlertRow").each(function () {
+            $(this).find(`input[name='Comment']`).each(function () {
+                isAlertsValid &= $(this)[0].checkValidity();
+            });
+
+            $(this).find('input[name="Target"]').each(function () {
+                isAlertsValid &= $(this)[0].checkValidity();
+            });
+        });
+
+        if (isValid && isAlertsValid) {
             let path = $("#nodeHeader").text();
 
             showConfirmationModal(
@@ -380,11 +393,21 @@ function buildContextMenu(node) {
                 }
             }
         }
+        
+        if (curType === NodeType.Sensor && !(isMutedState === "True")) {
+            contextMenu["ChangeStatus"] = {
+                "label": `Edit status`,
+                "icon": "/dist/edit.svg",
+                "action": _ => {
+                    loadEditSensorStatusModal();
+                }
+            }
+        }
 
         let isGrafanaEnabled = node.data.jstree.isGrafanaEnabled === "True";
         if (isGrafanaEnabled) {
             contextMenu["Grafana disable"] = {
-                "label": `Disabe Grafana`,
+                "label": `Disable Grafana`,
                 "icon": "/dist/grafana.svg",
                 "action": _ => grafanaRequest(node, disableGrafanaAction),
             };
@@ -486,7 +509,7 @@ function getCurrentElementType(node) {
         (node.parents.length === 2 && isFolder($('#jstree').jstree().get_node(node.parents[0]))))
         return NodeType.Product;
     
-    if (node.children.length === 0)
+    if (typeof node.li_attr.class === 'undefined')
         return NodeType.Sensor;
     
     return NodeType.Node;

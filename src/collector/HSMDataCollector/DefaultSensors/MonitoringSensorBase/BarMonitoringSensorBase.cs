@@ -10,20 +10,21 @@ namespace HSMDataCollector.DefaultSensors
         where BarType : MonitoringBarBase<T>, new()
         where T : struct
     {
-        private readonly TimeSpan _barPeriod;
         private readonly TimeSpan _collectBarPeriod;
+        private readonly TimeSpan _barPeriod;
+        private readonly int _precision;
 
-        private BarType _internalBar;
         private Timer _collectTimer;
-
+        protected BarType _internalBar;
 
         protected sealed override TimeSpan TimerDueTime => _receiveDataPeriod.GetTimerDueTime();
 
 
         protected BarMonitoringSensorBase(BarSensorOptions options) : base(options)
         {
-            _barPeriod = options.BarPeriod;
             _collectBarPeriod = options.CollectBarPeriod;
+            _barPeriod = options.BarPeriod;
+            _precision = options.Precision;
 
             BuildNewBar();
         }
@@ -49,21 +50,7 @@ namespace HSMDataCollector.DefaultSensors
         }
 
 
-        protected abstract T GetBarData();
-
-        protected sealed override BarType GetValue() => _internalBar.Complete() as BarType;
-
-        protected sealed override BarType GetDefaultValue()
-        {
-            return new BarType()
-            {
-                OpenTime = _internalBar?.OpenTime ?? DateTime.UtcNow,
-                CloseTime = _internalBar?.CloseTime ?? DateTime.UtcNow,
-                Count = 1,
-            };
-        }
-
-        private void CollectBar(object _)
+        protected virtual void CollectBar(object _)
         {
             try
             {
@@ -72,16 +59,33 @@ namespace HSMDataCollector.DefaultSensors
                     OnTimerTick();
                     BuildNewBar();
                 }
-
-                _internalBar.AddValue(GetBarData());
             }
-            catch { }
+            catch (Exception ex)
+            {
+                ThrowException(ex);
+            }
         }
+
+        protected sealed override BarType GetValue()
+        {
+            _needSendValue = _internalBar.Count > 0;
+
+            return _internalBar.Complete() as BarType;
+        }
+
+        protected sealed override BarType GetDefaultValue() =>
+            new BarType()
+            {
+                OpenTime = _internalBar?.OpenTime ?? DateTime.UtcNow,
+                CloseTime = _internalBar?.CloseTime ?? DateTime.UtcNow,
+                Count = 1,
+            };
+
 
         private void BuildNewBar()
         {
             _internalBar = new BarType();
-            _internalBar.Init(_barPeriod);
+            _internalBar.Init(_barPeriod, _precision);
         }
     }
 }

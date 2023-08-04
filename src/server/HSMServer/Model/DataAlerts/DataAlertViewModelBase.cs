@@ -1,88 +1,158 @@
-﻿using HSMCommon.Extensions;
-using HSMServer.Core.Cache.UpdateEntities;
+﻿using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Model.Policies;
 using HSMServer.Extensions;
 using HSMServer.Model.TreeViewModel;
-using Microsoft.AspNetCore.Mvc.Rendering;
 using System;
 using System.Collections.Generic;
-using System.ComponentModel.DataAnnotations;
-using System.Linq;
 
 namespace HSMServer.Model.DataAlerts
 {
-    public class DataAlertViewModel
+    public class DataAlertViewModelBase
     {
-        public PolicyOperation Operation { get; set; }
+        public List<AlertConditionBase> Conditions { get; } = new();
 
-        public SensorStatus Status { get; set; }
+        public List<AlertActionBase> Actions { get; } = new();
 
-        public string Property { get; set; }
-
-        [Required]
-        public string Comment { get; set; }
 
         public Guid EntityId { get; set; }
 
-        [Required]
-        public string Value { get; set; }
-
         public Guid Id { get; set; }
-
-
-        internal DataPolicyUpdate ToUpdate() =>
-            new(Id, Property, Operation, new TargetValue(TargetType.Const, Value), Core.Model.SensorStatus.Error, Comment);
-    }
-
-
-    public abstract class DataAlertViewModelBase : DataAlertViewModel
-    {
-        private readonly List<SensorStatus> _statuses = new() { SensorStatus.Error, SensorStatus.Warning };
-
-
-        public abstract string DisplayComment { get; }
-
-        protected abstract List<string> Properties { get; }
-
-        protected abstract List<PolicyOperation> Actions { get; }
 
 
         public bool IsModify { get; protected set; }
 
 
-        public List<SelectListItem> PropertiesItems { get; }
-
-        public List<SelectListItem> ActionsItems { get; }
-
-        public List<SelectListItem> StatusesItems { get; }
-
-
-        public DataAlertViewModelBase()
+        internal PolicyUpdate ToUpdate()
         {
-            PropertiesItems = Properties.Select(p => new SelectListItem(p, p)).ToList();
-            ActionsItems = Actions.Select(a => new SelectListItem(a.GetDisplayName(), $"{a}")).ToList();
-            StatusesItems = _statuses.Select(s => new SelectListItem($"{s.ToSelectIcon()} {s.GetDisplayName()}", $"{s}")).ToList();
+            List<PolicyConditionUpdate> conditions = new(Conditions.Count);
+            Core.Model.TimeIntervalModel sensitivity = null;
+
+            foreach (var condition in Conditions)
+            {
+                if (condition.Property == AlertProperty.TimeToLive)
+                    continue;
+
+                if (condition.Property == AlertProperty.Sensitivity)
+                {
+                    sensitivity = condition.Sensitivity.ToModel();
+                    continue;
+                }
+
+                var target = condition.Property == AlertProperty.Status
+                    ? new TargetValue(TargetType.LastValue, EntityId.ToString())
+                    : new TargetValue(TargetType.Const, condition.Target);
+
+                conditions.Add(new PolicyConditionUpdate(condition.Operation, condition.Property.ToCore(), target));
+            }
+
+            (var status, var comment, var icon) = GetActions();
+
+            return new(Id, conditions, sensitivity, status.ToCore(), comment, icon);
+        }
+
+        internal PolicyUpdate ToTimeToLiveUpdate()
+        {
+            (var status, var comment, var icon) = GetActions();
+
+            return new(Id, null, null, status.ToCore(), comment, icon);
+        }
+
+
+        private (SensorStatus status, string comment, string icon) GetActions()
+        {
+            SensorStatus status = SensorStatus.Ok;
+            string comment = null;
+            string icon = null;
+
+            foreach (var action in Actions)
+            {
+                if (action.Action == ActionType.SendNotification)
+                    comment = action.Comment;
+                else if (action.Action == ActionType.ShowIcon)
+                    icon = action.Icon;
+                else if (action.Action == ActionType.SetStatus)
+                    status = SensorStatus.Error;
+            }
+
+            return (status, comment, icon);
         }
     }
 
 
-    public abstract class DataAlertViewModelBase<T> : DataAlertViewModelBase where T : Core.Model.BaseValue
+    public abstract class DataAlertViewModel : DataAlertViewModelBase
     {
-        public DataAlertViewModelBase(Guid entityId) : base()
+        protected virtual string DefaultCommentTemplate { get; } = "$sensor $operation $target";
+
+        protected virtual string DefaultIcon { get; }
+
+
+        protected DataAlertViewModel(Policy policy, Core.Model.BaseNodeModel node)
+        {
+            EntityId = node.Id;
+            Id = policy.Id;
+
+            Actions.Add(new ActionViewModel(true)
+            {
+                Action = ActionType.SendNotification,
+                Comment = policy.Template,
+                DisplayComment = node is Core.Model.BaseSensorModel ? policy.RebuildState() : policy.Template
+            });
+
+            if (!string.IsNullOrEmpty(policy.Icon))
+                Actions.Add(new ActionViewModel(false) { Action = ActionType.ShowIcon, Icon = policy.Icon });
+
+            if (policy.Status == Core.Model.SensorStatus.Error)
+                Actions.Add(new ActionViewModel(false) { Action = ActionType.SetStatus });
+        }
+
+        public DataAlertViewModel(Guid entityId)
         {
             EntityId = entityId;
             IsModify = true;
+
+            Conditions.Add(CreateCondition(true));
+
+            Actions.Add(new ActionViewModel(true) { Comment = DefaultCommentTemplate });
+            Actions.Add(new ActionViewModel(false) { Action = ActionType.ShowIcon, Icon = DefaultIcon });
         }
 
-        public DataAlertViewModelBase(DataPolicy<T> policy, Core.Model.BaseSensorModel sensor) : base()
+
+        protected abstract ConditionViewModel CreateCondition(bool isMain);
+    }
+
+
+    public class DataAlertViewModel<T> : DataAlertViewModel where T : Core.Model.BaseValue
+    {
+        public DataAlertViewModel(Guid entityId) : base(entityId) { }
+
+        public DataAlertViewModel(Policy<T> policy, Core.Model.BaseSensorModel sensor)
+            : base(policy, sensor)
         {
-            EntityId = sensor.Id;
-            Id = policy.Id;
-            Property = policy.Property;
-            Operation = policy.Operation;
-            Value = policy.Target.Value;
-            Status = policy.Status.ToClient();
-            Comment = policy.Comment;
+            for (int i = 0; i < policy.Conditions.Count; ++i)
+            {
+                var viewModel = CreateCondition(i == 0);
+                var condition = policy.Conditions[i];
+
+                viewModel.Property = condition.Property.ToClient();
+                viewModel.Operation = condition.Operation;
+                viewModel.Target = condition.Target.Value;
+
+                Conditions.Add(viewModel);
+            }
+
+            if (policy.Sensitivity != null)
+            {
+                var condition = CreateCondition(false);
+                var sensitivityViewModel = new TimeIntervalViewModel(null).FromModel(policy.Sensitivity, PredefinedIntervals.ForRestore);
+
+                condition.Property = AlertProperty.Sensitivity;
+                condition.Sensitivity = new TimeIntervalViewModel(sensitivityViewModel, PredefinedIntervals.ForRestore) { IsAlertBlock = true };
+
+                Conditions.Add(condition);
+            }
         }
+
+
+        protected override ConditionViewModel CreateCondition(bool isMain) => new ConditionViewModel<T>(isMain);
     }
 }

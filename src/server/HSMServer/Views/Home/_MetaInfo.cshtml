@@ -36,17 +36,20 @@
 
 <div id="meta_info_@Model.EncodedId">
     <div class="d-flex justify-content-between flex-grow-1">
-        <div class='d-flex justify-content-start'>
+        <div class='d-flex justify-content-start align-items-center'>
             @if (Model is FolderInfoViewModel)
             {
-                <i class="fa-regular fa-folder my-1 align-self-center sensor-icon-with-margin"></i>
+                <i class="fa-regular fa-folder my-1 sensor-icon-with-margin"></i>
             }
             else
             {
-                <span id='status_@Model.EncodedId' class='@Model.Status.ToIcon() my-1 align-self-center sensor-icon-with-margin' title='Status: @Model.Status'></span>
+                <i id='status_@Model.EncodedId' class='@Model.Status.ToIcon() my-1 sensor-icon-with-margin' title='Status: @Model.Status'></i>
+                <span id="alertIcons_@Model.EncodedId" class="me-1">
+                    @await Html.PartialAsync("~/Views/Home/Alerts/_AlertIconsList.cshtml", Model.AlertIcons)
+                </span>
             }
 
-            <h5 id="nodeHeader" class="d-flex my-1 align-self-top">@Html.Raw(Model.Header)</h5>
+            <h5 id="nodeHeader" class="d-flex my-1">@Html.Raw(Model.Header)</h5>
         </div>
 
         <div id='update_@Model.EncodedId' class='d-flex my-1 time-ago-div'>updated @Model.LastUpdateTime.GetTimeAgo()</div>
@@ -77,7 +80,7 @@
         <div class="collapse" id="metaInfoCollapse">
             @await Html.PartialAsync("_GeneralInfo", Model)
             @await Html.PartialAsync("_CleanupSettings", Model)
-            @await Html.PartialAsync("_Alerts", Model)
+            @await Html.PartialAsync("~/Views/Home/Alerts/_Alerts.cshtml", Model)
         </div>
 
         <button class="btn btn-outline-secondary w-100 border-start-0 border-end-0 border-top-0 rounded-0 border-bottom-1"
@@ -99,7 +102,7 @@
     <hr id="metainfo_separator" class="d-none"/>
 </div>
 
-@if (Model is SensorInfoViewModel)
+@if (Model is SensorInfoViewModel sensor)
 {
     @await Html.PartialAsync("_EditSensorStatusModal", new EditSensorStatusViewModal())
 }
@@ -125,7 +128,7 @@
         event.stopImmediatePropagation();
 
         var formData = new FormData(this);
-        collectDataAlerts(formData);
+        collectAlerts(formData);
 
         $.ajax({
             url: $("#editMetaInfo_form").attr("action"),
@@ -143,22 +146,78 @@
         });
     });
 
-    function collectDataAlerts(formData) {
+    function collectAlerts(formData) {
         $("[id^='dataAlertsList_']").each(function () {
             const type = this.id.substring("dataAlertsList_".length, this.id.length);
 
-            setFormDataAlertsProperty(formData, "input", type, "Id");
-            setFormDataAlertsProperty(formData, "select", type, "Property");
-            setFormDataAlertsProperty(formData, "select", type, "Operation");
-            setFormDataAlertsProperty(formData, "input", type, "Value");
-            setFormDataAlertsProperty(formData, "select", type, "Status");
-            setFormDataAlertsProperty(formData, "input", type, "Comment");
+            setFormDataAlertsProperty(formData, "input", type, $(this), "Id");
+            setFormDataAlertsProperty(formData, "input", type, $(this), "EntityId");
+            setFormDataAlerts(formData, type, $(this));
         });
     }
 
-    function setFormDataAlertsProperty(formData, element, type, propertyName) {
-        $(`${element}[name='${propertyName}']`).each(function (i) {
+    function setFormDataAlertsProperty(formData, element, type, alertsList, propertyName) {
+        alertsList.find(`${element}[name='${propertyName}']`).each(function (i) {
             formData.append(`DataAlerts[${type}][${i}].${propertyName}`, $(this).val());
+        });
+    }
+
+    function setFormDataAlerts(formData, type, alertsList) {
+        alertsList.find(`div.dataAlertRow`).each(function (i) {
+            $(this).find(`div[name='alertCondition']`).each(function (j) {
+                setFormDataAlertsListProperty(formData, type, i, j, $(this), "Conditions", "select", "Property");
+
+                let valueBlock = $(this).find('div[name="valueCondition"]');
+                if (valueBlock.hasClass('d-flex')) {
+                    setFormDataAlertsListProperty(formData, type, i, j, valueBlock, "Conditions", "select", "Operation");
+                    setFormDataAlertsListProperty(formData, type, i, j, valueBlock, "Conditions", "input", "Target");
+                }
+
+                let statusBlock = $(this).find('div[name="statusCondition"]');
+                if (statusBlock.hasClass('d-flex')) {
+                    setFormDataAlertsListProperty(formData, type, i, j, statusBlock, "Conditions", "select", "Operation");
+                }
+
+                let sensitivityBlock = $(this).find('div[name="sensitivityCondition"]');
+                if (sensitivityBlock.hasClass('d-flex')) {
+                    setFormDataAlertsConditionIntervals(formData, type, i, j, sensitivityBlock, "Sensitivity", "select", "Interval");
+                    setFormDataAlertsConditionIntervals(formData, type, i, j, sensitivityBlock, "Sensitivity", "input", "CustomString");
+                }
+
+                let ttlBlock = $(this).find('div[name="ttlCondition"]');
+                if (ttlBlock.hasClass('d-flex')) {
+                    setFormDataAlertsConditionIntervals(formData, type, i, j, ttlBlock, "TimeToLive", "select", "Interval");
+                    setFormDataAlertsConditionIntervals(formData, type, i, j, ttlBlock, "TimeToLive", "input", "CustomString");
+                }
+            });
+
+            $(this).find(`div[name='alertAction']`).each(function (j) {
+                setFormDataAlertsListProperty(formData, type, i, j, $(this), "Actions", "select", "Action");
+
+                let sendBlock = $(this).find('div[name="sendNotificationAction"]');
+                if (sendBlock.hasClass('d-flex')) {
+                    setFormDataAlertsListProperty(formData, type, i, j, sendBlock, "Actions", "input", "Comment");
+                }
+
+                let showBlock = $(this).find('div[name="showIconAction"]');
+                if (showBlock.hasClass('d-flex')) {
+                    showBlock.find(`div[name='emoji']`).each(function () {
+                        formData.append(`DataAlerts[${type}][${i}].Actions[${j}].Icon`, $(this)[0].innerText);
+                    });
+                }
+            });
+        });
+    }
+
+    function setFormDataAlertsListProperty(formData, type, i, j, block, list, element, propertyName) {
+        block.find(`${element}[name='${propertyName}']`).each(function () {
+            formData.append(`DataAlerts[${type}][${i}].${list}[${j}].${propertyName}`, $(this).val());
+        });
+    }
+
+    function setFormDataAlertsConditionIntervals(formData, type, i, j, block, intervalName, element, propertyName) {
+        block.find(`${element}[name='${intervalName}.${propertyName}']`).each(function () {
+            formData.append(`DataAlerts[${type}][${i}].Conditions[${j}].${intervalName}.${propertyName}`, $(this).val());
         });
     }
 

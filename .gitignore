@@ -95,7 +95,6 @@ _Pvt_Extensions
 *.mdb
 
 # Installer output files
-HSMlientInstaller/Output/*
 HSMServerInstaller/Output
 
 # Visual studio files
@@ -127,3 +126,6 @@ src/collector/HSMDataCollector/packages.lock.json
 
 # vs code coverage results
 src/server/HSMServer/TestResults/
+
+# Custom configs
+src/server/HSMServer/Config/*

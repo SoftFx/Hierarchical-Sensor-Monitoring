@@ -19,13 +19,12 @@ namespace HSMServer.BackgroundServices
             _cache = cache;
         }
 
-
-        protected override Task ExecuteAsync(CancellationToken token)
-        {
-            ServiceAction();
-
-            return base.ExecuteAsync(token);
-        }
+        // uncomment for immediately running
+        //protected override Task ExecuteAsync(CancellationToken token) 
+        //{
+        //    ServiceAction();
+        //    return base.ExecuteAsync(token);
+        //}
 
         protected override Task ServiceAction()
         {
@@ -44,11 +43,11 @@ namespace HSMServer.BackgroundServices
             {
                 var id = sensor.Id;
 
-                _logger.Info("Start removing: {id} product {product} path {path}", id, sensor.RootProductName, sensor.Path);
+                _logger.Info("Start removing: {id} {product}/{path}", id, sensor.RootProductName, sensor.Path);
 
                 _cache.RemoveSensor(id);
 
-                _logger.Info("Stop removing: {id} product {product} path {path}", id, sensor.RootProductName, sensor.Path);
+                _logger.Info("Stop removing: {id} {product}/{path}", id, sensor.RootProductName, sensor.Path);
             }
         }
 
@@ -58,11 +57,11 @@ namespace HSMServer.BackgroundServices
             {
                 var id = sensor.Id;
 
-                _logger.Info("Start clearing: {id} product {product} path {path}", id, sensor.RootProductName, sensor.Path);
+                _logger.Info("Start clear: {id} {product}/{path}", id, sensor.RootProductName, sensor.Path);
 
                 _cache.CheckSensorHistory(id);
 
-                _logger.Info("Stop clearing: {id} product {product} path {path}", id, sensor.RootProductName, sensor.Path);
+                _logger.Info("Stop clear: {id} {product}/{path}", id, sensor.RootProductName, sensor.Path);
             }
         }
     }

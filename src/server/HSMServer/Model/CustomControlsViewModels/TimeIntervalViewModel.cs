@@ -6,6 +6,7 @@ using Microsoft.AspNetCore.Mvc.Rendering;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Reflection;
 using CoreTimeInterval = HSMServer.Core.Model.TimeInterval;
 
 namespace HSMServer.Model
@@ -14,10 +15,23 @@ namespace HSMServer.Model
     {
         public const string CustomTemplate = "dd.HH:mm:ss";
 
-        private readonly Func<TimeIntervalViewModel> _getParentValue;
-        private readonly Func<bool> _hasFolder;
-
         private static long _id = 0L;
+
+        private readonly ParentRequest _parentRequest;
+
+        private TimeInterval? _interval;
+        private TimeSpan _customSpan;
+        private string _customString;
+
+
+        private TimeIntervalViewModel ParentValue => _parentRequest?.Invoke().Value;
+
+        private bool HasParentValue => ParentValue is not null;
+
+        private bool HasFolder => _parentRequest?.Invoke().IsFolder ?? false;
+
+
+        internal delegate (TimeIntervalViewModel Value, bool IsFolder) ParentRequest();
 
 
         public List<SelectListItem> IntervalItems { get; }
@@ -26,24 +40,57 @@ namespace HSMServer.Model
 
         public bool UseCustomInputTemplate { get; }
 
+        public bool IsAlertBlock { get; init; }
 
-        private bool HasParentValue => _getParentValue?.Invoke() is not null || HasFolder;
 
-        private bool HasFolder => _hasFolder?.Invoke() ?? false;
-
-        private string UsedInterval => TimeInterval switch
+        public string DisplayValue
         {
-            TimeInterval.Custom => CustomTimeInterval.ToTableView(),
-            TimeInterval.FromParent => HasParentValue ? _getParentValue?.Invoke().UsedInterval : TimeInterval.GetDisplayName(),
-            _ => TimeInterval.GetDisplayName()
-        };
+            get
+            {
+                var used = GetUsedValue(this);
 
-        public string DisplayInterval => TimeInterval.IsParent() ? $"From parent ({UsedInterval})" : UsedInterval;
+                return TimeInterval.IsParent() ? $"From parent ({used})" : used;
+            }
+        }
 
+        public TimeSpan CustomSpan
+        {
+            get => _customSpan;
+            set
+            {
+                _customSpan = value;
+                _customString = value.ToString();
+            }
+        }
 
-        public TimeInterval? Interval { get; set; }
+        public string CustomString
+        {
+            get => _customString;
+            set
+            {
+                _customString = value;
+                _customSpan = value is null ? TimeSpan.Zero : TimeSpan.Parse(value);
+            }
+        }
 
-        public string CustomTimeInterval { get; set; }
+        public TimeInterval? Interval
+        {
+            get => _interval;
+            set
+            {
+                _interval = value;
+
+                if (_interval.HasValue)
+                {
+                    var val = _interval.Value;
+
+                    if (val.IsUnset())
+                        CustomSpan = TimeSpan.Zero;
+                    else if (val.IsStatic() || val.IsDynamic())
+                        CustomSpan = new TimeSpan((long)val);
+                }
+            }
+        }
 
         internal TimeInterval TimeInterval => Interval ?? default;
 
@@ -51,83 +98,81 @@ namespace HSMServer.Model
         // public constructor without parameters for post actions
         public TimeIntervalViewModel() { }
 
-        internal TimeIntervalViewModel(TimeIntervalModel model, Func<TimeIntervalViewModel> getParentValue, Func<bool> hasFolder)
+        internal TimeIntervalViewModel(ParentRequest parentRequest)
         {
-            _getParentValue = getParentValue;
-            _hasFolder = hasFolder;
-
-            Update(model);
+            _parentRequest = parentRequest;
         }
 
-        internal TimeIntervalViewModel(List<TimeInterval> intervals, bool useCutomTemplate = true)
+        internal TimeIntervalViewModel(HashSet<TimeInterval> intervals, ParentRequest request = null, bool useCustomTemplate = true) : this(request)
         {
-            IntervalItems = GetIntrevalItems(intervals);
-            UseCustomInputTemplate = useCutomTemplate;
-        }
+            string KeyBuilder(TimeInterval interval) => interval.IsParent() ? $"From parent ({GetUsedValue(ParentValue)})" : interval.GetDisplayName();
 
-        internal TimeIntervalViewModel(TimeIntervalViewModel model, List<TimeInterval> intervals) : this(intervals)
-        {
-            _getParentValue = model._getParentValue;
-            _hasFolder = model._hasFolder;
-
-            Interval = model.Interval;
-            CustomTimeInterval = model.CustomTimeInterval;
+            IntervalItems = intervals.ToSelectedItems(KeyBuilder);
+            UseCustomInputTemplate = useCustomTemplate;
 
             if (!HasParentValue)
                 IntervalItems.RemoveAt(0);
         }
 
-        internal TimeIntervalViewModel(TimeIntervalEntity entity, List<TimeInterval> intervals) : this(intervals)
+        internal TimeIntervalViewModel(TimeIntervalViewModel model, HashSet<TimeInterval> intervals) : this(intervals, model._parentRequest)
         {
-            SetInterval((CoreTimeInterval)entity.Interval, entity.CustomPeriod);
+            Interval = model.TimeInterval;
+            CustomSpan = model.CustomSpan;
+        }
 
-            if (!HasParentValue)
-                IntervalItems.RemoveAt(0);
+        internal TimeIntervalViewModel(TimeIntervalEntity entity, HashSet<TimeInterval> intervals) : this(intervals)
+        {
+            FromModel(new TimeIntervalModel(entity), intervals);
         }
 
 
-        internal void Update(TimeIntervalModel model) =>
-            SetInterval(model?.TimeInterval ?? CoreTimeInterval.FromParent, model?.CustomPeriod ?? 0L);
-
-
-        internal TimeIntervalModel ToModel(TimeIntervalViewModel folderInterval = null) =>
-            new(TimeInterval.ToCore(folderInterval != null), GetCustomTicks(folderInterval));
-
-        internal TimeIntervalModel ToFolderModel() =>
-            new(CoreTimeInterval.FromFolder, TimeInterval.ToCustomTicks(CustomTimeInterval));
-
-        internal TimeIntervalEntity ToEntity() => new((byte)TimeInterval.ToCore(), GetCustomTicks());
-
-        internal TimeIntervalViewModel ResaveCustomTicks(TimeIntervalViewModel interval)
+        internal TimeIntervalModel ToModel(TimeIntervalViewModel current = null)
         {
-            interval.CustomTimeInterval = new TimeSpan(GetCustomTicks(interval)).ToString();
+            if (TimeInterval.IsStatic() || TimeInterval.IsCustom())
+                return new TimeIntervalModel(CustomSpan.Ticks);
+            else if (TimeInterval.IsUnset())
+                return TimeIntervalModel.None;
+            else if (TimeInterval.IsDynamic())
+                return new TimeIntervalModel(TimeInterval.ToDynamicCore());
 
-            return interval;
+            // for saving view with TimeInterval = FromFolder
+            var ticks = (current?.ParentValue ?? ParentValue)?.CustomSpan.Ticks ?? 0L;
+            var hasFolder = current?.HasFolder ?? HasFolder;
+
+            return new TimeIntervalModel(hasFolder ? CoreTimeInterval.FromFolder : CoreTimeInterval.FromParent, ticks);
         }
 
-        private void SetInterval(CoreTimeInterval interval, long customPeriod)
+        internal TimeIntervalViewModel FromModel(TimeIntervalModel model, HashSet<TimeInterval> predefinedIntervals)
         {
-            Interval = interval.ToServer(customPeriod);
-            CustomTimeInterval = customPeriod.TicksToString();
+            if (model.IsFromFolder)
+                Interval = TimeInterval.FromParent;
+            else if (!model.UseTicks) //dynamic to dynamic
+            {
+                Interval = model.Interval.ToDynamicServer();
+
+                if (Interval is TimeInterval.None && predefinedIntervals.Contains(TimeInterval.Forever))
+                    Interval = TimeInterval.Forever;
+            }
+            else if (TimeInterval.IsDefined(model.Ticks) && (predefinedIntervals?.Contains((TimeInterval)model.Ticks) ?? true)) //const ticks to enum
+                Interval = (TimeInterval)model.Ticks;
+            else
+            {
+                Interval = TimeInterval.Custom;
+                CustomSpan = new TimeSpan(model.Ticks);
+            }
+
+            return this;
         }
 
-        private long GetCustomTicks(TimeIntervalViewModel folderInterval = null)
-        {
-            if (TimeInterval.IsCustom() && CustomTimeInterval.TryParse(out var ticks))
-                return ticks;
+        internal TimeIntervalEntity ToEntity() => ToModel().ToEntity();
 
-            if (TimeInterval.IsForever())
-                return TimeInterval.ToCustomTicks(null);
 
-            if (TimeInterval.IsParent() && folderInterval != null)
-                return folderInterval.TimeInterval.ToCustomTicks(folderInterval.CustomTimeInterval);
-
-            return 0L;
-        }
-
-        private static List<SelectListItem> GetIntrevalItems(List<TimeInterval> intervals)
-        {
-            return intervals.Select(u => new SelectListItem(u.GetDisplayName(), $"{u}")).ToList();
-        }
+        private static string GetUsedValue(TimeIntervalViewModel model) =>
+            model?.Interval switch
+            {
+                TimeInterval.Custom => model.CustomSpan.ToTableView(),
+                TimeInterval.FromParent => GetUsedValue(model.ParentValue),
+                _ => model?.TimeInterval.GetDisplayName()
+            };
     }
 }

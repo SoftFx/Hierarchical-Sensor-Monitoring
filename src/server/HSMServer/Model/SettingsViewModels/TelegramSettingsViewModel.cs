@@ -17,7 +17,7 @@ namespace HSMServer.Model
         public bool EnableMessages { get; set; }
 
         [Display(Name = "Min status level")]
-        public SensorStatus MinStatusLevel { get; set; } = SensorStatus.Warning;
+        public SensorStatus MinStatusLevel { get; set; } = SensorStatus.Error;
 
         public string MinStatusLevelHelper { get; set; }
 
@@ -55,21 +55,6 @@ namespace HSMServer.Model
                 Enabled = EnableMessages,
                 Delay = MessagesDelay,
             };
-
-        public static string GetStatusPairs(SensorStatus newStatus)
-        {
-            var length = Enum.GetValues<SensorStatus>().Length;
-
-            var builder = new StringBuilder(1 << 4);
-
-            for (int i = 0; i < length; i++)
-                for (int j = 0; j < length; j++)
-                    if (i != j && (i >= (int)newStatus || j >= (int)newStatus))
-                        builder.Append($"{(SensorStatus)i} -> {(SensorStatus)j}, ");
-
-            var response = builder.ToString();
-            return string.IsNullOrEmpty(response) ? response : response[..^2];
-        }
     }
 
 

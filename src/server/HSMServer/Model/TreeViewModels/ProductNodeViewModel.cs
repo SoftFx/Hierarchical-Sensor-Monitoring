@@ -1,5 +1,5 @@
-﻿using HSMCommon.Extensions;
-using HSMServer.Core.Model;
+﻿using HSMServer.Core.Model;
+using HSMServer.Extensions;
 using HSMServer.Helpers;
 using HSMServer.Model.AccessKeysViewModels;
 using HSMServer.Model.Authentication;
@@ -85,11 +85,12 @@ namespace HSMServer.Model.TreeViewModel
                     allSensorsCount += node.AllSensorsCount;
                 }
             }
-            
+
             AllSensorsCount = allSensorsCount + Sensors.Count;
-            
+
             ModifyUpdateTime();
             ModifyStatus();
+            RecalculateAlerts(Sensors.Values, Nodes.Values);
 
             return this;
         }

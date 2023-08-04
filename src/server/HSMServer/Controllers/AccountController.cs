@@ -1,11 +1,7 @@
 ﻿using HSMCommon;
-using HSMCommon.Constants;
 using HSMServer.Attributes;
 using HSMServer.Authentication;
 using HSMServer.Constants;
-using HSMServer.Configuration;
-using HSMServer.Encryption;
-using HSMServer.Registration;
 using HSMServer.Filters;
 using HSMServer.Model.Authentication;
 using HSMServer.Model.TreeViewModel;
@@ -29,17 +25,12 @@ namespace HSMServer.Controllers
     public class AccountController : Controller
     {
         private readonly IUserManager _userManager;
-        private readonly IConfigurationProvider _configurationProvider;
-        private readonly IRegistrationTicketManager _ticketManager;
         private readonly TreeViewModel _treeViewModel;
 
 
-        public AccountController(IUserManager userManager, IConfigurationProvider configurationProvider,
-            IRegistrationTicketManager ticketManager, TreeViewModel treeViewModel)
+        public AccountController(IUserManager userManager, TreeViewModel treeViewModel)
         {
             _userManager = userManager;
-            _configurationProvider = configurationProvider;
-            _ticketManager = ticketManager;
             _treeViewModel = treeViewModel;
         }
 
@@ -83,34 +74,34 @@ namespace HSMServer.Controllers
         {
             var model = new RegistrationViewModel();
 
-            if (!string.IsNullOrEmpty(cipher) && !string.IsNullOrEmpty(tag) && !string.IsNullOrEmpty(nonce))
-            {
-                var key = _configurationProvider.ReadConfigurationObject(ConfigurationConstants.AesEncryptionKey);
-                byte[] keyBytes = AESCypher.ToBytes(key.Value);
+            //if (!string.IsNullOrEmpty(cipher) && !string.IsNullOrEmpty(tag) && !string.IsNullOrEmpty(nonce))
+            //{
+            //    // var key = _configurationProvider.ReadConfigurationObject(ConfigurationConstants.AesEncryptionKey);
+            //    var key = "sadasda";
+            //    byte[] keyBytes = AESCypher.ToBytes(key);
+            //    var result = AESCypher.Decrypt(cipher.Replace(' ', '+'), nonce.Replace(' ', '+'), tag.Replace(' ', '+'), keyBytes);
+            //    var ticketId = Guid.Parse(result);
+            //    var ticket = _ticketManager.GetTicket(ticketId);
+            //    if (ticket == null)
+            //    {
+            //        return RedirectToAction("Index", "Error", new ErrorViewModel()
+            //        {
+            //            ErrorText = "Link already used.",
+            //            StatusCode = "500"
+            //        });
+            //    }
 
-                var result = AESCypher.Decrypt(cipher.Replace(' ', '+'), nonce.Replace(' ', '+'), tag.Replace(' ', '+'), keyBytes);
-                var ticketId = result.ToGuid();
-                var ticket = _ticketManager.GetTicket(ticketId);
-                if (ticket == null)
-                {
-                    return RedirectToAction("Index", "Error", new ErrorViewModel()
-                    {
-                        ErrorText = "Link already used.",
-                        StatusCode = "500"
-                    });
-                }
+            //    if (ticket.ExpirationDate < DateTime.UtcNow)
+            //        return RedirectToAction("Index", "Error", new ErrorViewModel()
+            //        {
+            //            ErrorText = "Link expired.",
+            //            StatusCode = "500"
+            //        });
 
-                if (ticket.ExpirationDate < DateTime.UtcNow)
-                    return RedirectToAction("Index", "Error", new ErrorViewModel()
-                    {
-                        ErrorText = "Link expired.",
-                        StatusCode = "500"
-                    });
-
-                model.ProductKey = ticket.ProductKey;
-                model.Role = ticket.Role;
-                model.TicketId = ticket.Id.ToString();
-            }
+            //    model.ProductKey = ticket.ProductKey;
+            //    model.Role = ticket.Role;
+            //    model.TicketId = ticket.Id.ToString();
+            //}
 
             return View(model);
         }
@@ -139,8 +130,8 @@ namespace HSMServer.Controllers
             await _userManager.AddUser(model.Username, HashComputer.ComputePasswordHash(model.Password), false, products);
             await Authenticate(model.Username, true);
 
-            if (!string.IsNullOrEmpty(model.TicketId))
-                _ticketManager.RemoveTicket(model.TicketId.ToGuid());
+            //if (!string.IsNullOrEmpty(model.TicketId))
+            //    _ticketManager.RemoveTicket(Guid.Parse(model.TicketId));
 
             return RedirectToAction("Index", "Home");
         }

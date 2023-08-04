@@ -1,6 +1,6 @@
 ﻿using HSMServer.Core.Model;
-using HSMServer.Core.Model.Policies;
 using HSMServer.Helpers;
+using HSMServer.Model.DataAlerts;
 using HSMServer.Model.Folders;
 
 namespace HSMServer.Model.TreeViewModel
@@ -10,7 +10,6 @@ namespace HSMServer.Model.TreeViewModel
         Empty,
         OffTime,
         Ok,
-        Warning,
         Error
     }
 
@@ -20,17 +19,19 @@ namespace HSMServer.Model.TreeViewModel
         public string EncodedId { get; }
 
 
-        public string Path { get; private set; }
+        public BaseNodeViewModel Parent { get; internal set; }
 
         public virtual bool HasData { get; protected set; }
 
-        public BaseNodeViewModel Parent { get; internal set; }
+        public string Path { get; private set; }
 
 
         //TODO: should be changed to NodeViewModel when Sensor will have its own Telegram Settings
         public ProductNodeViewModel RootProduct => Parent is null or FolderModel ? (ProductNodeViewModel)this : ((ProductNodeViewModel)Parent).RootProduct;
 
         public string FullPath => $"{RootProduct?.Name}{Path}";
+
+        internal bool ParentIsFolder => Parent is FolderModel;
 
 
         protected NodeViewModel(BaseNodeModel model)
@@ -39,12 +40,9 @@ namespace HSMServer.Model.TreeViewModel
             Path = model.Path;
             EncodedId = SensorPathHelper.EncodeGuid(model.Id);
 
-            bool NodeHasFolder() => Parent is FolderModel;
-
-            ExpectedUpdateInterval = new(model.ServerPolicy.ExpectedUpdate.Policy.Interval, () => Parent?.ExpectedUpdateInterval, NodeHasFolder);
-            SensorRestorePolicy = new(model.ServerPolicy.RestoreError.Policy.Interval, () => Parent?.SensorRestorePolicy, NodeHasFolder);
-            SavedHistoryPeriod = new(model.ServerPolicy.SavedHistoryPeriod.Policy.Interval, () => Parent?.SavedHistoryPeriod, NodeHasFolder);
-            SelfDestroyPeriod = new(model.ServerPolicy.SelfDestroy.Policy.Interval, () => Parent?.SelfDestroyPeriod, NodeHasFolder);
+            TTL = new(() => (Parent?.TTL, ParentIsFolder));
+            KeepHistory = new(() => (Parent?.KeepHistory, ParentIsFolder));
+            SelfDestroy = new(() => (Parent?.SelfDestroy, ParentIsFolder));
         }
 
 
@@ -54,16 +52,11 @@ namespace HSMServer.Model.TreeViewModel
             Name = model.DisplayName;
             Description = model.Description;
 
-            UpdatePolicyView(model.ServerPolicy.ExpectedUpdate, ExpectedUpdateInterval);
-            UpdatePolicyView(model.ServerPolicy.RestoreError, SensorRestorePolicy);
-            UpdatePolicyView(model.ServerPolicy.SavedHistoryPeriod, SavedHistoryPeriod);
-            UpdatePolicyView(model.ServerPolicy.SelfDestroy, SelfDestroyPeriod);
-        }
+            TTL.FromModel(model.Settings.TTL.CurValue, PredefinedIntervals.ForTimeout);
+            KeepHistory.FromModel(model.Settings.KeepHistory.CurValue, PredefinedIntervals.ForKeepHistory);
+            SelfDestroy.FromModel(model.Settings.SelfDestroy.CurValue, PredefinedIntervals.ForSelfDestory);
 
-
-        private static void UpdatePolicyView<T>(CollectionProperty<T> property, TimeIntervalViewModel targetView) where T : ServerPolicy, new()
-        {
-            targetView.Update(property.IsSet ? property.Policy.Interval : null);
+            TTLAlert = new TimeToLiveAlertViewModel(model.Policies.TimeToLive, model);
         }
     }
 }

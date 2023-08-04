@@ -16,8 +16,8 @@ namespace HSMServer.Model.Folders.ViewModels
         internal FolderCleanupViewModel(FolderModel folder)
         {
             Id = folder.Id;
-            SelfDestoryPeriod = folder.SelfDestroyPeriod;
-            SavedHistoryPeriod = folder.SavedHistoryPeriod;
+            SelfDestoryPeriod = folder.SelfDestroy;
+            SavedHistoryPeriod = folder.KeepHistory;
         }
     }
 }

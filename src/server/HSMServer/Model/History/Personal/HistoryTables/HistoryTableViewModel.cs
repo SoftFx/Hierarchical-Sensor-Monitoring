@@ -6,6 +6,7 @@ using HSMServer.Model.Model.History;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Numerics;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -124,13 +125,13 @@ namespace HSMServer.Model.History
             new()
             {
                 Value = GetTableValue(value),
-                Time = value.Time,
+                Time = value.Time.ToUniversalTime(),
                 Status = value.Status.ToClient(),
                 Comment = value.Comment,
                 ReceivingTime = value.ReceivingTime,
             };
 
-        private static BarSensorValueViewModel Build<T>(BarBaseValue<T> value) where T : struct =>
+        private static BarSensorValueViewModel Build<T>(BarBaseValue<T> value) where T : INumber<T> =>
             new()
             {
                 Count = value.Count,
@@ -138,7 +139,7 @@ namespace HSMServer.Model.History
                 Max = value.Max.ToString(),
                 Mean = value.Mean.ToString(),
                 LastValue = value.LastValue.ToString(),
-                Time = value.Time,
+                Time = value.Time.ToUniversalTime(),
                 Status = value.Status.ToClient(),
                 Comment = value.Comment,
                 ReceivingTime = value.ReceivingTime,
