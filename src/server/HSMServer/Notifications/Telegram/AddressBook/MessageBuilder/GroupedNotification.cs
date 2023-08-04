@@ -20,6 +20,9 @@ namespace HSMServer.Notifications.Telegram.AddressBook.MessageBuilder
         private int _totalItems = 1; //main item
 
 
+        private bool GroupByPath => _mainDiff == PathConst;
+
+
         internal GroupedNotification(AlertResult alert)
         {
             _baseState = alert.LastState with { };
@@ -42,7 +45,7 @@ namespace HSMServer.Notifications.Telegram.AddressBook.MessageBuilder
                 _mainDiff = FullCompare;
 
             if (apply && diffName == PathConst)
-                apply &= _groupedPath.Apply(diffName);
+                apply &= _groupedPath.Apply(alert.Path);
             else
                 apply &= IsEqualsTempaltes(diffName) || diffName == _mainDiff || string.IsNullOrEmpty(_mainDiff);
 
@@ -51,7 +54,7 @@ namespace HSMServer.Notifications.Telegram.AddressBook.MessageBuilder
                 _mainDiff = diffName;
                 _totalItems++;
 
-                if (!isEmptyDiff && _mainDiff != PathConst)
+                if (!isEmptyDiff && !GroupByPath)
                 {
                     if (_groupedItems.IsEmpty)
                         _groupedItems.Enqueue(_baseState[diffName]);
@@ -67,14 +70,14 @@ namespace HSMServer.Notifications.Telegram.AddressBook.MessageBuilder
 
         public override string ToString()
         {
-            if (_groupedItems.IsEmpty)
-                return _baseAlert.BuildFullComment(_baseAlert.LastComment, _totalItems - 1); //remove main as extra
+            if (!_groupedItems.IsEmpty || GroupByPath)
+            {
+                _baseState[_mainDiff] = GroupByPath ? $"{_groupedPath}" : BuildGroupedString(); ;
 
-            var group = _mainDiff == PathConst ? _groupedPath.ToString() : BuildGroupedString();
+                return _baseAlert.BuildFullComment(_baseState.BuildComment());
+            }
 
-            _baseState[_mainDiff] = $"[{group}]";
-
-            return _baseAlert.BuildFullComment(_baseState.BuildComment());
+            return _baseAlert.BuildFullComment(_baseAlert.LastComment, _totalItems - 1); //remove main as extra
         }
 
 
@@ -89,7 +92,7 @@ namespace HSMServer.Notifications.Telegram.AddressBook.MessageBuilder
             if (hiddenItemsCnt > 0)
                 group = $"{group} ... and {hiddenItemsCnt} more";
 
-            return group;
+            return $"[{group}]";
         }
     }
 }
