@@ -18,7 +18,7 @@ namespace HSMServer.Core.Model
 
         internal override bool TryAddValue(BaseValue value)
         {
-            var isLastValue = Storage.LastValue is null || value.Time >= Storage.LastValue.Time;
+            var isLastValue = Storage.LastValue is null || value.Time >= Storage.LastValue.Time.ToUniversalTime();
             var canStore = Policies.TryValidate(value, out var valueT, isLastValue);
 
             if (canStore)
