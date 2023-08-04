@@ -9,8 +9,6 @@ namespace HSMDataCollector.Options
 
         internal ProcessMonitoringPrototype ProcessMonitoring { get; } = new ProcessMonitoringPrototype();
 
-        internal SystemMonitoringPrototype SystemMonitoring { get; } = new SystemMonitoringPrototype();
-
         internal DiskMonitoringPrototype DiskMonitoring { get; } = new DiskMonitoringPrototype();
 
 
