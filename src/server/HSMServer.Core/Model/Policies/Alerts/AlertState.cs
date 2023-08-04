@@ -100,7 +100,7 @@ namespace HSMServer.Core.Model.Policies
 
             diffProp = string.Empty;
 
-            if (Template.UsedVariables.Count != other.Template.UsedVariables.Count)
+            if (Template.Count != other.Template.Count)
                 return false;
 
             foreach (var prop in _publicProperties.Values)
@@ -133,14 +133,14 @@ namespace HSMServer.Core.Model.Policies
         }
 
 
-        public string BuildComment(string template = null) => string.Format(template ?? Template?.Template ?? string.Empty,
+        public string BuildComment(string template = null) => string.Format(template ?? Template?.Text ?? string.Empty,
             Product, Path, Sensor, Status, Time, Comment, ValueSingle, MinValueBar, MaxValueBar, MeanValueBar,
             LastValueBar, Operation, Target);
 
         public static AlertSystemTemplate BuildSystemTemplate(string raw)
         {
             var words = raw?.Split(Separator, SplitOptions) ?? Array.Empty<string>();
-            var hash = new HashSet<string>();
+            var hash = new AlertSystemTemplate();
 
             for (int i = 0; i < words.Length; ++i)
             {
@@ -154,10 +154,9 @@ namespace HSMServer.Core.Model.Policies
                     }
             }
 
-            return new()
+            return new(hash)
             {
-                UsedVariables = hash,
-                Template = string.Join(Separator, words),
+                Text = string.Join(Separator, words),
             };
         }
 
@@ -195,6 +194,6 @@ namespace HSMServer.Core.Model.Policies
         };
 
 
-        private bool UseProperty(string name) => Template?.UsedVariables.Contains(name) ?? false;
+        private bool UseProperty(string name) => Template?.Contains(name) ?? false;
     }
 }
