@@ -86,5 +86,8 @@ namespace HSMServer.Core.Model
         };
 
         public TimeIntervalEntity ToEntity() => new((long)Interval, Ticks);
+
+
+        public override string ToString() => UseTicks ? $"{Interval}({new TimeSpan(Ticks)})" : $"{Interval}";
     }
 }

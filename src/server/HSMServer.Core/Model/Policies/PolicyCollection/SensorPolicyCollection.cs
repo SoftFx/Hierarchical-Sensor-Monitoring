@@ -1,6 +1,7 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Cache.UpdateEntities;
+using HSMServer.Core.Journal;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -8,7 +9,7 @@ using System.Linq;
 
 namespace HSMServer.Core.Model.Policies
 {
-    public abstract class SensorPolicyCollection : PolicyCollectionBase
+    public abstract class SensorPolicyCollection : PolicyCollectionBase, IChangesEntity
     {
         internal protected SensorResult SensorResult { get; protected set; } = SensorResult.Ok;
 
@@ -17,13 +18,14 @@ namespace HSMServer.Core.Model.Policies
 
         internal Action<ActionType, Policy> Uploaded;
 
+        public event Action<JournalRecordModel> ChangesHandler;
 
-        internal abstract void Update(List<PolicyUpdate> updates);
+
+        internal abstract void Update(List<PolicyUpdate> updates, string initiator);
 
         internal abstract void Attach(BaseSensorModel sensor);
 
-        [Obsolete("remove after policy migration")]
-        internal abstract void AddStatus();
+        internal abstract void AddDefaultSensors();
 
 
         internal void Reset()
@@ -31,6 +33,8 @@ namespace HSMServer.Core.Model.Policies
             SensorResult = SensorResult.Ok;
             PolicyResult = PolicyResult.Ok;
         }
+
+        protected void CallJournal(JournalRecordModel record) => ChangesHandler?.Invoke(record);
     }
 
 
@@ -122,14 +126,12 @@ namespace HSMServer.Core.Model.Policies
 
         internal override IEnumerable<Guid> Ids => _storage.Keys;
 
-        internal IEnumerable<Policy<ValueType>> Policies => _sensor.UseParentPolicies ? _sensor.Parent.GetPolicies<PolicyType>(_sensor.Type) : _storage.Values;
-
 
         protected override bool CalculateStorageResult(ValueType value, bool updateStatus = true)
         {
             PolicyResult = new(_sensor.Id);
 
-            foreach (var policy in Policies ?? Enumerable.Empty<PolicyType>())
+            foreach (var policy in _storage.Values)
                 if (!policy.Validate(value))
                 {
                     PolicyResult.AddAlert(policy);
@@ -148,7 +150,7 @@ namespace HSMServer.Core.Model.Policies
                 _storage.TryAdd(policy.Id, typedPolicy);
         }
 
-        internal override void Update(List<PolicyUpdate> updatesList)
+        internal override void Update(List<PolicyUpdate> updatesList, string initiator)
         {
             var updates = updatesList.Where(u => u.Id != Guid.Empty).ToDictionary(u => u.Id);
 
@@ -156,7 +158,12 @@ namespace HSMServer.Core.Model.Policies
             {
                 if (updates.TryGetValue(id, out var update))
                 {
+                    var oldPolicy = policy.ToString();
+
                     policy.Update(update);
+
+                    CallJournal(oldPolicy, policy.ToString(), initiator);
+
                     Uploaded?.Invoke(ActionType.Update, policy);
                 }
                 else if (_storage.TryRemove(id, out var oldPolicy))
@@ -176,6 +183,8 @@ namespace HSMServer.Core.Model.Policies
                     policy.Update(update, _sensor);
 
                     AddPolicy(policy);
+                    CallJournal(string.Empty, policy.ToString(), initiator);
+
                     Uploaded?.Invoke(ActionType.Add, policy);
                 }
         }
@@ -195,7 +204,7 @@ namespace HSMServer.Core.Model.Policies
                 }
         }
 
-        internal override void AddStatus()
+        internal override void AddDefaultSensors()
         {
             var policy = new PolicyType();
 
@@ -217,6 +226,19 @@ namespace HSMServer.Core.Model.Policies
 
             AddPolicy(policy);
             Uploaded?.Invoke(ActionType.Add, policy);
+        }
+
+        private void CallJournal(string oldValue, string newValue, string initiator)
+        {
+            if (oldValue != newValue)
+                CallJournal(new JournalRecordModel(_sensor.Id, initiator)
+                {
+                    Enviroment = "Alerts update",
+                    PropertyName = "Alerts update",
+                    OldValue = oldValue,
+                    NewValue = newValue,
+                    Path = _sensor.FullPath,
+                });
         }
     }
 }

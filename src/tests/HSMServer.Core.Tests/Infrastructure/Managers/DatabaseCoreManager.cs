@@ -7,7 +7,7 @@ using System.Threading;
 
 namespace HSMServer.Core.Tests.Infrastructure
 {
-    internal sealed class DatabaseCoreManager
+    public sealed class DatabaseCoreManager
     {
         private static int _dbNumber;
 
@@ -26,8 +26,9 @@ namespace HSMServer.Core.Tests.Infrastructure
                 new DatabaseSettings()
                 {
                     DatabaseFolder = databaseFolder,
-                    EnvironmentDatabaseName = $"EnvironmentData{number}_{Thread.CurrentThread.ManagedThreadId}",
-                    SensorValuesDatabaseName = $"SensorValues{number}_{Thread.CurrentThread.ManagedThreadId}",
+                    EnvironmentDatabaseName = $"EnvironmentData{number}_{Environment.CurrentManagedThreadId}",
+                    SensorValuesDatabaseName = $"SensorValues{number}_{Environment.CurrentManagedThreadId}",
+                    JournalValuesDatabaseName = $"JournalValues{number}_{Environment.CurrentManagedThreadId}",
                 });
         }
 

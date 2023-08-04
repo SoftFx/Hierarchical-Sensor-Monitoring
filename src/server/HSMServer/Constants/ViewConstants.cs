@@ -13,6 +13,7 @@
         public const string AccessKeysController = "AccessKeys";
         public const string NotificationsController = "Notifications";
         public const string HistoryController = "SensorHistory";
+        public const string JournalController = "Journal";
 
         public const string LogoutAction = "Logout";
         public const string RegistrationAction = "Registration";

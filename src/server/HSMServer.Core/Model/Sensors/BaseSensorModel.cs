@@ -110,15 +110,15 @@ namespace HSMServer.Core.Model
         {
             base.Update(update);
 
-            State = update?.State ?? State;
-            Integration = update?.Integration ?? Integration;
-            EndOfMuting = update?.EndOfMutingPeriod ?? EndOfMuting;
+            State = UpdateProperty(State, update.State ?? State, update.Initiator);
+            Integration = UpdateProperty(Integration, update.Integration ?? Integration, update.Initiator);
+            EndOfMuting = UpdateProperty(EndOfMuting, update.EndOfMutingPeriod, update.Initiator, "End of muting");
 
             if (State == SensorState.Available)
                 EndOfMuting = null;
 
             if (update.Policies != null)
-                Policies.Update(update.Policies);
+                Policies.Update(update.Policies, update.Initiator);
         }
 
         internal void ResetSensor()

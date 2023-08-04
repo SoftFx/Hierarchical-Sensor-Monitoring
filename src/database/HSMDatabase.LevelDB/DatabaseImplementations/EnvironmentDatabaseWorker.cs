@@ -21,7 +21,6 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
         private readonly byte[] _productListKey = "ProductsNames"u8.ToArray();
         private readonly byte[] _accessKeyListKey = "AccessKeys"u8.ToArray();
         private readonly byte[] _sensorIdsKey = "SensorIds"u8.ToArray();
-        private readonly byte[] _oldPolicyIdsKey = "PolicyIds"u8.ToArray();
         private readonly byte[] _policyIdsKey = "NewPolicyIds"u8.ToArray();
         private readonly byte[] _folderIdsKey = "FolderIds"u8.ToArray();
 
@@ -433,18 +432,6 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             }
         }
 
-        public void DropOldPolicyIdsList()
-        {
-            try
-            {
-                _database.Delete(_oldPolicyIdsKey);
-            }
-            catch (Exception e)
-            {
-                _logger.Error(e, $"Failed to remove Old Policy Ids list");
-            }
-        }
-
         public void AddPolicy(PolicyEntity entity)
         {
             var value = JsonSerializer.SerializeToUtf8Bytes(entity, _options);
@@ -481,39 +468,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             }
         }
 
-        public void RemoveOldPolicy(string id)
-        {
-            var bytesKey = Encoding.UTF8.GetBytes(id);
-
-            try
-            {
-                _database.Delete(bytesKey);
-            }
-            catch (Exception e)
-            {
-                _logger.Error(e, $"Failed to remove old Policy by {id}");
-            }
-        }
-
-        public List<string> GetAllOldPoliciesIds() => GetListOfKeys(_oldPolicyIdsKey, "Failed to get all old policy ids");
-
         public List<byte[]> GetAllPoliciesIds() => GetListOfBytes(_policyIdsKey, "Failed to get all policy ids");
-
-        public byte[] GetOldPolicy(string policyId)
-        {
-            var bytesKey = Encoding.UTF8.GetBytes(policyId);
-
-            try
-            {
-                return _database.TryRead(bytesKey, out byte[] value) ? value : null;
-            }
-            catch (Exception e)
-            {
-                _logger.Error(e, $"Failed to read info for old policy {policyId}");
-            }
-
-            return null;
-        }
 
         public PolicyEntity GetPolicy(byte[] policyId)
         {

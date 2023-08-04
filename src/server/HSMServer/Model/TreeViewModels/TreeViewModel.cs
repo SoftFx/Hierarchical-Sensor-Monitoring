@@ -117,8 +117,6 @@ namespace HSMServer.Model.TreeViewModel
             TryGetParentFolder(product, out var folder);
 
             var node = new ProductNodeViewModel(product, parent, folder);
-            if (node.Notifications.Migrated)
-                UpdateProductNotificationSettings(node);
 
             Nodes.TryAdd(node.Id, node);
 

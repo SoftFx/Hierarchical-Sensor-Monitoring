@@ -92,5 +92,8 @@ namespace HSMServer.Core.Model.Policies
             Operation = (byte)Operation,
             Property = (byte)Property,
         };
+
+
+        public override string ToString() => $"{Property} {Operation} {Target.Value}";
     }
 }
