@@ -14,12 +14,16 @@ namespace HSMServer.Model.DataAlerts
         public List<AlertActionBase> Actions { get; } = new();
 
 
+        public bool IsEnabled { get; set; }
+
         public Guid EntityId { get; set; }
 
         public Guid Id { get; set; }
 
 
         public bool IsModify { get; protected set; }
+
+        public bool IsDisabled => !IsEnabled;
 
 
         internal PolicyUpdate ToUpdate()
@@ -47,14 +51,14 @@ namespace HSMServer.Model.DataAlerts
 
             (var status, var comment, var icon) = GetActions();
 
-            return new(Id, conditions, sensitivity, status.ToCore(), comment, icon);
+            return new(Id, conditions, sensitivity, status.ToCore(), comment, icon, IsDisabled);
         }
 
         internal PolicyUpdate ToTimeToLiveUpdate()
         {
             (var status, var comment, var icon) = GetActions();
 
-            return new(Id, null, null, status.ToCore(), comment, icon);
+            return new(Id, null, null, status.ToCore(), comment, icon, IsDisabled);
         }
 
 
@@ -90,6 +94,8 @@ namespace HSMServer.Model.DataAlerts
         {
             EntityId = node.Id;
             Id = policy.Id;
+
+            IsEnabled = !policy.IsDisabled;
 
             Actions.Add(new ActionViewModel(true)
             {

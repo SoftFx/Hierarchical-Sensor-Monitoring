@@ -15,6 +15,7 @@
     const byte ttlType = TimeToLiveAlertViewModel.AlertKey;
 
     var hasAlerts = Model.HasTimeToLive || Model.DataAlerts.Any(a => a.Key != ttlType && a.Value.Count > 0);
+    var isAllAlertsEnabled = Model.DataAlerts.All(u => u.Value.All(a => a.IsEnabled));
 }
 
 
@@ -39,6 +40,8 @@ else
     <div id="metaInfo_alerts" class="@(hasAlerts ? string.Empty : "d-none")">
         <div class="d-flex justify-content-between align-items-center">
             <div class="d-flex align-items-center">
+                <input class="form-check-input my-0 me-2 d-none" type="checkbox" id="enableAllAlertsCheckbox" checked="@isAllAlertsEnabled">
+
                 <label class="col-form-label fw-bold">Alerts:</label>
 
                 @if (Model is SensorInfoViewModel)
@@ -122,6 +125,20 @@ else
 
     $('#commentHelp').on('hide.bs.popover', () => {
         $('html').off('click', hideNotFocusedHelp);
+    });
+
+    $('#enableAllAlertsCheckbox').off('change').on('change', function() {
+        let alertsBlock = $(this).parents("div[id='metaInfo_alerts']");
+        console.log(alertsBlock);
+        alertsBlock.find("input[name='IsEnabled']").each(function () {
+            console.log("1");
+            if (this.checked) {
+                $(this).prop('checked', true);
+            }
+            else {
+                $(this).prop('checked', false);
+            }
+        });
     });
 
     function hideNotFocusedHelp(e) {

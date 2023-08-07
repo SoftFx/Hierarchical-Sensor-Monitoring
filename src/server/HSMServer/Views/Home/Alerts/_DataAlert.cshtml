@@ -66,6 +66,8 @@
 </div>
 
 <div id="alertConstructor_@Model.Id" class="dataAlertRow d-flex flex-row align-items-center @(!Model.IsModify ? "d-none" : string.Empty)">
+    <input class="form-check-input my-0 me-2" type="checkbox" asp-for="IsEnabled" value="@Model.IsEnabled">
+
     <div class="card mb-2 w-100">
         <div class="card-body py-2">
             <div class="d-flex flex-row align-items-center fullCondition">
@@ -194,6 +196,30 @@
                         showToast(response, "Test message");
                 }
             });
+        });
+
+        $("input[name='IsEnabled']").off("change").on("change", function () {
+            if (this.checked) {
+                console.log("checked");
+                $(this).val("True");
+
+                let isAllEnabled = true;
+                let alertsBlock = $(this).parents("div[id='metaInfo_alerts']:first");
+
+                alertsBlock.find("input[name='IsEnabled']").each(function () {
+                    isAllEnabled &= $(this).prop('checked') == true;
+                });
+
+                if (isAllEnabled) {
+                    $('#enableAllAlertsCheckbox').prop('checked', true);
+                }
+            }
+            else {
+                console.log("unchecked");
+                $(this).val("False");
+
+                $('#enableAllAlertsCheckbox').prop('checked', false);
+            }
         });
     });
 
