@@ -409,7 +409,7 @@ namespace HSMServer.Controllers
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status406NotAcceptable)]
-        public async Task<ActionResult<string>> Get([FromBody] HistoryRequest request)
+        public async Task<ActionResult<string>> Get([FromBody] HistoryRequest request, [FromQuery] bool isTTLIncluded = false)
         {
             try
             {

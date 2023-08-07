@@ -127,7 +127,7 @@
             <param name="values"></param>
             <returns></returns>
         </member>
-        <member name="M:HSMServer.Controllers.SensorsController.Get(HSMSensorDataObjects.HistoryRequests.HistoryRequest)">
+        <member name="M:HSMServer.Controllers.SensorsController.Get(HSMSensorDataObjects.HistoryRequests.HistoryRequest,System.Boolean)">
             <summary>
             Get history [from, to] or [from - count] for some sensor
             </summary>
