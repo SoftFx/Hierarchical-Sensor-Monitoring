@@ -823,7 +823,17 @@ namespace HSMServer.Core.Cache
         public void UpdateCacheState()
         {
             foreach (var sensor in GetSensors())
-                sensor.CheckTimeout();
+            {
+                var isTimeout = sensor.CheckTimeout();  
+                
+                if (isTimeout && sensor.LastDbValue.Comment != "#Timeout")
+                {
+                    var value = sensor.LastDbValue.Type.GetTimeoutBaseValue();
+                    if (sensor.TryAddValue(value) && sensor.LastDbValue != null)
+                        SaveSensorValueToDb(sensor.LastDbValue, sensor.Id);
+                }
+            }
+            
 
             foreach (var key in GetAccessKeys())
                 if (key.IsExpired && key.State < KeyState.Expired)

@@ -1,4 +1,5 @@
-﻿using HSMServer.Core.Model;
+﻿using System;
+using HSMServer.Core.Model;
 
 namespace HSMServer.Core
 {
@@ -30,5 +31,83 @@ namespace HSMServer.Core
             (byte)SensorStatus.OffTime => SensorStatus.OffTime,
             _ => SensorStatus.Error,
         };
+
+        public static BaseValue GetTimeoutBaseValue(this SensorType type)
+        {
+            BaseValue value = null;
+
+            switch (type)
+            {
+                case SensorType.Boolean:
+                    value = new BooleanValue()
+                    {
+                        Value = default
+                    };
+                    break;
+                case SensorType.Integer:
+                    value = new IntegerValue()
+                    {
+                        Value = default
+                    };
+                    break;
+                case SensorType.Double:
+                    value = new DoubleValue()
+                    {
+                        Value = default
+                    };
+                    break;
+                case SensorType.String:
+                    value = new StringValue()
+                    {
+                        Value = default
+                    };
+                    break;
+                case SensorType.IntegerBar:
+                    value = new IntegerBarValue()
+                    {
+                        LastValue = default,
+                        Min = default,
+                        Max = default,
+                        Mean = default,
+                        Count = default
+                    };
+                    break;
+                case SensorType.DoubleBar:
+                    value = new DoubleBarValue()
+                    {
+                        LastValue = default,
+                        Min = default,
+                        Max = default,
+                        Mean = default,
+                        Count = default
+                    };;
+                    break;
+                case SensorType.File:
+                    value = new FileValue()
+                    {
+                        Value = default
+                    };
+                    break;
+                case SensorType.TimeSpan:
+                    value = new TimeSpanValue()
+                    {
+                        Value = default
+                    };
+                    break;
+                case SensorType.Version:
+                    value = new VersionValue()
+                    {
+                        Value = default
+                    };
+                    break;
+            }
+            
+            return value is null ? null : value with
+            {
+                Comment = "#Timeout",
+                ReceivingTime = DateTime.UtcNow,
+                Time = DateTime.UtcNow
+            };
+        }
     }
 }
