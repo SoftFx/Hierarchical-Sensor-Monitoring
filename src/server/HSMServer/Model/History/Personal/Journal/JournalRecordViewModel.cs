@@ -48,28 +48,23 @@ public sealed class JournalRecordViewModel
         if (string.IsNullOrEmpty(model.PropertyName))
             return (model.Enviroment, $"{model.Enviroment} {model.Initiator}");
 
-        string header = model.PropertyName == "Alert" ? model.Enviroment : model.PropertyName;
-        
         if (string.IsNullOrEmpty(model.OldValue))
-        {
             return ($"""
-            {header}
-            <strong>Added value: {model.NewValue}</strong>
-            """, $"{header} {model.OldValue} {model.NewValue} {model.Initiator}");
-        }
-
-        if (string.IsNullOrEmpty(model.NewValue))
-        {
-            return ($"""
-            {header}
-            <strong>Removed value: {model.OldValue}</strong>
-            """, $"{header} {model.OldValue} {model.NewValue} {model.Initiator}");
-        }
+            Added new {model.PropertyName}:
+            <strong>{model.NewValue}</strong>
+            """, $"{model.PropertyName} {model.OldValue} {model.NewValue} {model.Initiator}");
         
+        if (string.IsNullOrEmpty(model.NewValue))
+            return ($"""
+            Removed {model.PropertyName}:
+            <strong>{model.OldValue}</strong>
+            """, $"{model.PropertyName} {model.OldValue} {model.NewValue} {model.Initiator}");
+        
+       
         return ($"""
-            {header} was modified
+            {model.PropertyName} was modified
             Old value: {model.OldValue}
             <strong>New value: {model.NewValue}</strong>
-            """, $"{header} {model.OldValue} {model.NewValue} {model.Initiator}");
+            """, $"{model.PropertyName} {model.OldValue} {model.NewValue} {model.Initiator}");
     }
 }

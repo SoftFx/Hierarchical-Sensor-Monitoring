@@ -3,10 +3,11 @@ using HSMServer.Core.Cache.UpdateEntities;
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using HSMServer.Core.Journal;
 
 namespace HSMServer.Core.Model.Policies
 {
-    public abstract class PolicyCollectionBase : IEnumerable<Policy>
+    public abstract class PolicyCollectionBase : IEnumerable<Policy>, IChangesEntity
     {
         internal abstract IEnumerable<Guid> Ids { get; }
 
@@ -16,6 +17,7 @@ namespace HSMServer.Core.Model.Policies
 
         internal Action<BaseSensorModel, bool, bool> SensorExpired;
 
+        public event Action<JournalRecordModel> ChangesHandler;
 
         internal abstract void AddPolicy<T>(T policy) where T : Policy;
 
@@ -30,5 +32,19 @@ namespace HSMServer.Core.Model.Policies
         internal virtual void BuildDefault(BaseNodeModel node, PolicyEntity entity = null) => TimeToLive = new TTLPolicy(node, entity);
 
         internal virtual void UpdateTTL(PolicyUpdate update) => TimeToLive.Update(update);
+        
+        
+        protected void CallJournal(string oldValue, string newValue, string initiator, BaseSensorModel sensor)
+        {
+            if (oldValue != newValue)
+                ChangesHandler?.Invoke(new JournalRecordModel(sensor.Id, initiator)
+                {
+                    Enviroment = "Alert",
+                    PropertyName = "Alert",
+                    OldValue = oldValue,
+                    NewValue = newValue,
+                    Path = sensor.FullPath,
+                });
+        }
     }
 }

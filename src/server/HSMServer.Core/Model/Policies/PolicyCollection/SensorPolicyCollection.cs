@@ -1,7 +1,6 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Cache.UpdateEntities;
-using HSMServer.Core.Journal;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -9,7 +8,7 @@ using System.Linq;
 
 namespace HSMServer.Core.Model.Policies
 {
-    public abstract class SensorPolicyCollection : PolicyCollectionBase, IChangesEntity
+    public abstract class SensorPolicyCollection : PolicyCollectionBase
     {
         internal protected SensorResult SensorResult { get; protected set; } = SensorResult.Ok;
 
@@ -17,8 +16,6 @@ namespace HSMServer.Core.Model.Policies
 
 
         internal Action<ActionType, Policy> Uploaded;
-
-        public event Action<JournalRecordModel> ChangesHandler;
 
 
         internal abstract void Update(List<PolicyUpdate> updates, string initiator);
@@ -33,8 +30,6 @@ namespace HSMServer.Core.Model.Policies
             SensorResult = SensorResult.Ok;
             PolicyResult = PolicyResult.Ok;
         }
-
-        protected void CallJournal(JournalRecordModel record) => ChangesHandler?.Invoke(record);
     }
 
 
@@ -65,9 +60,12 @@ namespace HSMServer.Core.Model.Policies
 
         internal override void UpdateTTL(PolicyUpdate update)
         {
+            var oldValue = TimeToLive.ToString();
             RemoveAlert(TimeToLive);
 
             base.UpdateTTL(update);
+           
+            CallJournal(oldValue, TimeToLive.ToString(), update.Initiator, _sensor);
         }
 
 
@@ -162,7 +160,7 @@ namespace HSMServer.Core.Model.Policies
 
                     policy.Update(update);
 
-                    CallJournal(oldPolicy, policy.ToString(), initiator);
+                    CallJournal(oldPolicy, policy.ToString(), initiator, _sensor);
 
                     Uploaded?.Invoke(ActionType.Update, policy);
                 }
@@ -171,7 +169,7 @@ namespace HSMServer.Core.Model.Policies
                     if (_sensor.LastValue is ValueType lastValue && lastValue is not null)
                         CalculateStorageResult(lastValue);
 
-                    CallJournal(oldPolicy.ToString(), string.Empty, initiator);
+                    CallJournal(oldPolicy.ToString(), string.Empty, initiator, _sensor);
 
                     Uploaded?.Invoke(ActionType.Delete, oldPolicy);
                 }
@@ -185,7 +183,7 @@ namespace HSMServer.Core.Model.Policies
                     policy.Update(update, _sensor);
 
                     AddPolicy(policy);
-                    CallJournal(string.Empty, policy.ToString(), initiator);
+                    CallJournal(string.Empty, policy.ToString(), initiator, _sensor);
 
                     Uploaded?.Invoke(ActionType.Add, policy);
                 }
@@ -228,30 +226,6 @@ namespace HSMServer.Core.Model.Policies
 
             AddPolicy(policy);
             Uploaded?.Invoke(ActionType.Add, policy);
-        }
-
-        private void CallJournal(string oldValue, string newValue, string initiator)
-        {
-            if (oldValue != newValue)
-            {
-                string action = null;
-
-                if (string.IsNullOrEmpty(oldValue))
-                    action = "Added new alert";
-                else if (string.IsNullOrEmpty(newValue))
-                    action = "Removed alert";
-                else 
-                    action = "Alert update";
-
-                CallJournal(new JournalRecordModel(_sensor.Id, initiator)
-                {
-                    Enviroment = action,
-                    PropertyName = "Alert",
-                    OldValue = oldValue,
-                    NewValue = newValue,
-                    Path = _sensor.FullPath,
-                });
-            }
         }
     }
 }
