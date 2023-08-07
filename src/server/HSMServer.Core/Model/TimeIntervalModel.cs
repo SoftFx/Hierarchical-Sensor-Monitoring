@@ -1,5 +1,6 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities;
 using System;
+using HSMServer.Core.Extensions;
 
 namespace HSMServer.Core.Model
 {
@@ -88,6 +89,6 @@ namespace HSMServer.Core.Model
         public TimeIntervalEntity ToEntity() => new((long)Interval, Ticks);
 
 
-        public override string ToString() => UseTicks ? $"{Interval}({new TimeSpan(Ticks)})" : $"{Interval}";
+        public override string ToString() => UseTicks ? $"{Interval}({new TimeSpan(Ticks)})" : $"{Interval.ToDisplay()}";
     }
 }
