@@ -12,9 +12,14 @@ namespace HSMServer.Core.Model.Policies
         private readonly SettingProperty<TimeIntervalModel> _ttl;
 
 
+        internal OkPolicy Ok { get; }
+
+
         internal TTLPolicy(BaseNodeModel node, PolicyEntity entity)
         {
             _ttl = node.Settings.TTL;
+
+            Ok = new OkPolicy(Id, node);
 
             Apply(entity ?? new PolicyEntity
             {

@@ -863,7 +863,10 @@ namespace HSMServer.Core.Cache
                 snapshot.IsExpired = timeout;
 
                 if (!timeout)
+                {
+                    ChangePolicyResultEvent?.Invoke(sensor.Policies.TimeToLive.Ok.PolicyResult);
                     sensor.RecalculatePolicy();
+                }
 
                 if (toNotify)
                     NotifyAboutChanges(sensor);
