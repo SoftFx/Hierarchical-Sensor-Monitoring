@@ -57,13 +57,12 @@ namespace HSMServer.Core.Model.Policies
             var sb = new StringBuilder(1 << 5);
             var totalCnt = Count + extraCnt;
 
-            sb.Append(Icon);
+            sb.Append($"{Icon} {comment}");
 
             if (totalCnt > 1)
-                sb.Append($"({totalCnt} times)");
+                sb.Append($" ({totalCnt} times)");
 
-            return sb.Append($" {comment}")
-                     .ToString();
+            return sb.ToString().Trim();
         }
 
         public override string ToString() => BuildFullComment(LastComment);
