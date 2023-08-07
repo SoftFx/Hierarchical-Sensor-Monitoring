@@ -13,7 +13,6 @@
     $('#addDataAlert').removeClass('d-none');
     $('#addTtlAlert').removeClass('d-none');
     $('#commentHelp').removeClass('d-none');
-    $('#enableAllAlertsCheckbox').removeClass('d-none');
     $('[id^="dataAlertsList_"]').removeClass('d-none');
 
     $('#markdown_span_description').addClass('d-none');
