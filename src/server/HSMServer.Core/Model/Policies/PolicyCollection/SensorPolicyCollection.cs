@@ -90,7 +90,7 @@ namespace HSMServer.Core.Model.Policies
 
         internal bool SensorTimeout(DateTime? time, bool toNotify)
         {
-            if (TimeToLive is null || (_sensor?.Status?.IsOfftime ?? true))
+            if (TimeToLive is null || TimeToLive.IsDisabled || (_sensor?.Status?.IsOfftime ?? true))
                 return false;
 
             var timeout = TimeToLive.HasTimeout(time);
@@ -132,7 +132,7 @@ namespace HSMServer.Core.Model.Policies
             PolicyResult = new(_sensor.Id);
 
             foreach (var policy in _storage.Values)
-                if (!policy.Validate(value))
+                if (!policy.IsDisabled && !policy.Validate(value))
                 {
                     PolicyResult.AddAlert(policy);
 
