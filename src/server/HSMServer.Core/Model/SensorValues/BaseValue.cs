@@ -27,6 +27,9 @@ namespace HSMServer.Core.Model
 
     public abstract record BaseValue
     {
+        private DateTime _time;
+
+
         public DateTime ReceivingTime { get; init; } = DateTime.UtcNow;
 
         [JsonConverter(typeof(SensorStatusJsonConverter))]
@@ -34,7 +37,11 @@ namespace HSMServer.Core.Model
 
         public string Comment { get; init; }
 
-        public DateTime Time { get; init; }
+        public DateTime Time
+        {
+            get => _time.ToUniversalTime();
+            set => _time = value;
+        }
 
 
         [JsonIgnore]
