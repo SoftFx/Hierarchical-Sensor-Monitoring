@@ -179,7 +179,7 @@ namespace HSMServer.Core.Model.Policies
                 sb.Append($"then icon={Icon}");
 
             if (!string.IsNullOrEmpty(Template))
-                sb.Append($"then icon={Template}");
+                sb.Append($"then template={Template}");
 
             if (!Status.IsOk())
                 sb.Append($", change status to = {Status}");
