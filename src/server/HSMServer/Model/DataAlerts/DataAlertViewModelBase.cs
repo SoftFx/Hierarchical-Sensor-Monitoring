@@ -115,6 +115,7 @@ namespace HSMServer.Model.DataAlerts
         {
             EntityId = entityId;
             IsModify = true;
+            IsEnabled = true;
 
             Conditions.Add(CreateCondition(true));
 

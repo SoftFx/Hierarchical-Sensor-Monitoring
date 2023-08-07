@@ -15,7 +15,6 @@
     const byte ttlType = TimeToLiveAlertViewModel.AlertKey;
 
     var hasAlerts = Model.HasTimeToLive || Model.DataAlerts.Any(a => a.Key != ttlType && a.Value.Count > 0);
-    var isAllAlertsEnabled = Model.DataAlerts.All(u => u.Value.All(a => a.IsEnabled));
 }
 
 
