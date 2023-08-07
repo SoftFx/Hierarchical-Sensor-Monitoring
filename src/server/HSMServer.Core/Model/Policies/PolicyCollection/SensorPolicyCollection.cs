@@ -171,6 +171,8 @@ namespace HSMServer.Core.Model.Policies
                     if (_sensor.LastValue is ValueType lastValue && lastValue is not null)
                         CalculateStorageResult(lastValue);
 
+                    CallJournal(oldPolicy.ToString(), string.Empty, initiator);
+
                     Uploaded?.Invoke(ActionType.Delete, oldPolicy);
                 }
             }
@@ -231,14 +233,25 @@ namespace HSMServer.Core.Model.Policies
         private void CallJournal(string oldValue, string newValue, string initiator)
         {
             if (oldValue != newValue)
+            {
+                string action = null;
+
+                if (string.IsNullOrEmpty(oldValue))
+                    action = "Added new alert";
+                else if (string.IsNullOrEmpty(newValue))
+                    action = "Removed alert";
+                else 
+                    action = "Alert update";
+
                 CallJournal(new JournalRecordModel(_sensor.Id, initiator)
                 {
-                    Enviroment = "Alerts update",
-                    PropertyName = "Alerts update",
+                    Enviroment = action,
+                    PropertyName = "Alert",
                     OldValue = oldValue,
                     NewValue = newValue,
                     Path = _sensor.FullPath,
                 });
+            }
         }
     }
 }
