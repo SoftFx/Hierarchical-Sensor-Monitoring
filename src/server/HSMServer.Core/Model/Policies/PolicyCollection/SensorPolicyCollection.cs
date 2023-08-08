@@ -17,6 +17,7 @@ namespace HSMServer.Core.Model.Policies
 
 
         internal Action<ActionType, Policy> Uploaded;
+        internal Action<BaseSensorModel, bool> SensorExpired;
 
         public event Action<JournalRecordModel> ChangesHandler;
 
