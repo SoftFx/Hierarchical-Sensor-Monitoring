@@ -225,7 +225,7 @@ namespace HSMServer.ApiObjectsConverters
             };
 
         public static PolicyUpdate Convert(this AlertUpdateRequest request) =>
-            new(Guid.Empty, request.Conditions.Select(c => c.Convert()).ToList(), new(request.Sensitivity), request.Status.Convert(), request.Template, request.Icon);
+            new(Guid.Empty, request.Conditions.Select(c => c.Convert()).ToList(), new(request.Sensitivity), request.Status.Convert(), request.Template, request.Icon, request.IsDisabled);
 
         public static PolicyConditionUpdate Convert(this AlertConditionUpdate request) =>
             new(request.Operation.Convert(), request.Property.Convert(), new(request.Target.Type.Convert(), request.Target.Value), request.Combination.Convert());

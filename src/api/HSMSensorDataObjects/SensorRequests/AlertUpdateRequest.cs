@@ -59,6 +59,8 @@ namespace HSMSensorDataObjects.SensorRequests
 
 
         public long Sensitivity { get; set; }
+
+        public bool IsDisabled { get; set; }
     }
 
 
