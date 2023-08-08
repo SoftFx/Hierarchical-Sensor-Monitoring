@@ -389,17 +389,17 @@ namespace HSMServer.Core.Cache
         private void AddBaseNodeSubscription(BaseNodeModel model)
         {
             model.Policies.SensorExpired += SetExpiredSnapshot;
-            model.ChangesHandler += AddJournalRecord;
-            model.Policies.ChangesHandler += AddJournalRecord;
-            model.Settings.ChangesHandler += AddJournalRecord;
+            model.ChangesHandler += _journalService.AddRecord;
+            model.Policies.ChangesHandler += _journalService.AddRecord;
+            model.Settings.ChangesHandler += _journalService.AddRecord;
         }
         
         private void RemoveDefaultModelSubscription(BaseNodeModel model)
         {
             model.Policies.SensorExpired -= SetExpiredSnapshot;
-            model.ChangesHandler -= AddJournalRecord;
-            model.Policies.ChangesHandler -= AddJournalRecord;
-            model.Settings.ChangesHandler -= AddJournalRecord;
+            model.ChangesHandler -= _journalService.AddRecord;
+            model.Policies.ChangesHandler -= _journalService.AddRecord;
+            model.Settings.ChangesHandler -= _journalService.AddRecord;
         }
 
         private void SubscribeSensorToPolicyUpdate(BaseSensorModel sensor)
@@ -823,8 +823,6 @@ namespace HSMServer.Core.Cache
             return policies;
         }
 
-        public void AddJournalRecord(JournalRecordModel recordModel) => _journalService.AddRecord(recordModel);
-        
         public void UpdateCacheState()
         {
             foreach (var sensor in GetSensors())

@@ -15,6 +15,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using HSMServer.Core.Journal;
 
 namespace HSMServer.Folders
 {
@@ -22,6 +23,7 @@ namespace HSMServer.Folders
     {
         private readonly ITreeValuesCache _cache;
         private readonly IUserManager _userManager;
+        private readonly IJournalService _journalService;
         private readonly IDatabaseCore _databaseCore;
 
 
@@ -37,7 +39,7 @@ namespace HSMServer.Folders
         protected override Func<List<FolderEntity>> GetFromDb => _databaseCore.GetAllFolders;
 
 
-        public FolderManager(IDatabaseCore databaseCore, ITreeValuesCache cache, IUserManager userManager)
+        public FolderManager(IDatabaseCore databaseCore, ITreeValuesCache cache, IUserManager userManager, IJournalService journalService)
         {
             _databaseCore = databaseCore;
 
@@ -45,6 +47,7 @@ namespace HSMServer.Folders
             _cache.ChangeProductEvent += ChangeProductHandler;
 
             _userManager = userManager;
+            _journalService = journalService;
             _userManager.Removed += RemoveUserHandler;
             _userManager.Added += AddUserHandler;
         }
@@ -72,7 +75,7 @@ namespace HSMServer.Folders
                 foreach (var productId in model.Products.Keys)
                     await AddProductToFolder(productId, model.Id);
 
-                model.ChangesHandler += _cache.AddJournalRecord;
+                model.ChangesHandler += _journalService.AddRecord;
             }
 
             return result;
@@ -117,7 +120,7 @@ namespace HSMServer.Folders
 
             foreach (var (_, folder) in this)
             {
-                folder.ChangesHandler += _cache.AddJournalRecord;
+                folder.ChangesHandler += _journalService.AddRecord;
                 if (_userManager.TryGetValue(folder.AuthorId, out var author))
                     folder.Author = author.Name;
             }
