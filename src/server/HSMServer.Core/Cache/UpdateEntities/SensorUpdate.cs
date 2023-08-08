@@ -35,6 +35,7 @@ namespace HSMServer.Core.Cache.UpdateEntities
         SensorStatus Status,
         string Template,
         string Icon,
-        bool IsDisabled
+        bool IsDisabled,
+        string Initiator = TreeValuesCache.System
     );
 }

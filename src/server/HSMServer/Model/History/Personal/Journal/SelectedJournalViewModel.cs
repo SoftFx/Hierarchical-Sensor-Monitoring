@@ -87,7 +87,7 @@ public sealed class SelectedJournalViewModel : ConcurrentDictionary<Guid, Concur
     }
 
 
-    public IEnumerable<JournalRecordViewModel> GetPage(DataTableParameters filter)
+    public (IEnumerable<JournalRecordViewModel> journals, int filteredSize) GetPage(DataTableParameters filter)
     {
         //if (_tableFilters == filter) //doesn't work because of DataTableParameters has referense on a list
         //    return _journals;
@@ -105,7 +105,7 @@ public sealed class SelectedJournalViewModel : ConcurrentDictionary<Guid, Concur
                 records = (ascending ? records.OrderBy(FilterFunc) : records.OrderByDescending(FilterFunc)).ToList();
             }
 
-        return records.Skip(filter.Start).Take(filter.Length);
+        return (records.Skip(filter.Start).Take(filter.Length), records.Count);
     }
 
     private List<JournalRecordViewModel> GetFilteredList(string search)
