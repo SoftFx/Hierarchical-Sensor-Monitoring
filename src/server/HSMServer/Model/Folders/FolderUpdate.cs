@@ -2,6 +2,7 @@
 using HSMServer.Notification.Settings;
 using System;
 using System.Drawing;
+using HSMServer.Core.Cache;
 
 namespace HSMServer.Model.Folders
 {
@@ -24,5 +25,7 @@ namespace HSMServer.Model.Folders
         public Color? Color { get; init; }
 
         public string Name { get; init; }
+
+        public required string Initiator { get; init; } = TreeValuesCache.System;
     }
 }
