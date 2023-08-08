@@ -19,7 +19,7 @@ namespace HSMDataCollector.DefaultSensors.SystemInfo
         {
             _driveInfo = new DriveInfo(targetPath);
 
-            Name = $" {_driveInfo.Name[0]}";
+            Name = $"{_driveInfo.Name[0]}";
         }
     }
 }
