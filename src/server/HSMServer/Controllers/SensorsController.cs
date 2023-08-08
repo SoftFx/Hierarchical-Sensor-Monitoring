@@ -480,6 +480,7 @@ namespace HSMServer.Controllers
             {
                 if (TryBuildSensorUpdate(sensorUpdate, out var update, out var message))
                 {
+                    _cache.AddOrUpdateSensor(update);
                     return Ok(sensorUpdate);
                 }
 
@@ -489,6 +490,41 @@ namespace HSMServer.Controllers
             {
                 _logger.LogError(e, "Failed to update sensor!");
                 return BadRequest(sensorUpdate);
+            }
+        }
+
+        /// <summary>
+        /// Update sensors meta info
+        /// </summary>
+        /// <param name="sensorUpdates"></param>
+        /// <returns></returns>
+        [HttpPost("updateList")]
+        [Consumes(MediaTypeNames.Application.Json)]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status406NotAcceptable)]
+        public ActionResult<List<SensorUpdateRequest>> Post([FromBody] List<SensorUpdateRequest> sensorUpdates)
+        {
+            try
+            {
+                var result = new Dictionary<string, string>(sensorUpdates.Count);
+                foreach (var sensorUpdate in sensorUpdates)
+                {
+                    if (TryBuildSensorUpdate(sensorUpdate, out var update, out var message))
+                    {
+                        _cache.AddOrUpdateSensor(update);
+                        continue;
+                    }
+
+                    result[sensorUpdate.Path] = message;
+                }
+
+                return result.Count == 0 ? Ok(sensorUpdates) : StatusCode(406, result);
+            }
+            catch (Exception e)
+            {
+                _logger.LogError(e, "Failed to update sensors!");
+                return BadRequest(sensorUpdates);
             }
         }
 
@@ -525,9 +561,9 @@ namespace HSMServer.Controllers
             var requestModel = new BaseRequestModel(GetKey(request), request.Path);
 
             if (requestModel.TryCheckRequest(out message) &&
-                _cache.TryCheckKeyWritePermissions(requestModel, out message)) // TODO: check CanAddSensor permission if sensor doesn't exist and return sensor Id (Empty for new sensor)
+                _cache.TryCheckSensorUpdateKeyPermission(requestModel, out var sensorId, out message))
             {
-                update = request.Convert(Guid.Empty);
+                update = request.Convert(sensorId);
                 return true;
             }
 

@@ -145,17 +145,11 @@ namespace HSMServer.Core.Cache
         /// <returns>list of root products (without parent)</returns>
         public List<ProductModel> GetProducts() => _tree.Values.Where(p => p.Parent == null).ToList();
 
+
         public bool TryCheckKeyWritePermissions(BaseRequestModel request, out string message)
         {
-            if (!TryGetProductByKey(request, out var product, out message))
+            if (!TryCheckProductKey(request, out var product, out message))
                 return false;
-
-            // TODO: remove after refactoring sensors data storing
-            if (product.Parent is not null)
-            {
-                message = "Temporarily unavailable feature. Please select a product without a parent";
-                return false;
-            }
 
             var accessKey = GetAccessKeyModel(request);
             if (!accessKey.IsValid(KeyPermissions.CanSendSensorData, out message))
@@ -176,6 +170,38 @@ namespace HSMServer.Core.Cache
             TryGetProductByKey(request, out var product, out message) &&
             GetAccessKeyModel(request).IsValid(KeyPermissions.CanReadSensorData, out message) &&
             TryGetSensor(request, product, null, out _, out message);
+
+        public bool TryCheckSensorUpdateKeyPermission(BaseRequestModel request, out Guid sensorId, out string message)
+        {
+            sensorId = Guid.Empty;
+
+            if (!TryCheckProductKey(request, out var product, out message))
+                return false;
+
+            var accessKey = GetAccessKeyModel(request);
+            var sensorChecking = TryGetSensor(request, product, accessKey, out var sensor, out message);
+
+            if (sensor is not null)
+                sensorId = sensor.Id;
+
+            return sensorChecking;
+        }
+
+        private bool TryCheckProductKey(BaseRequestModel request, out ProductModel product, out string message)
+        {
+            if (!TryGetProductByKey(request, out product, out message))
+                return false;
+
+            // TODO: remove after refactoring sensors data storing
+            if (product.Parent is not null)
+            {
+                message = "Temporarily unavailable feature. Please select a product without a parent";
+                return false;
+            }
+
+            return true;
+        }
+
 
         public AccessKeyModel AddAccessKey(AccessKeyModel key)
         {
@@ -231,6 +257,11 @@ namespace HSMServer.Core.Cache
 
         public List<AccessKeyModel> GetMasterKeys() => GetAccessKeys().Where(x => x.IsMaster).ToList();
 
+
+        public void AddOrUpdateSensor(SensorUpdate update)
+        {
+
+        }
 
         public void UpdateSensor(SensorUpdate update)
         {
@@ -393,7 +424,7 @@ namespace HSMServer.Core.Cache
             model.Policies.ChangesHandler += _journalService.AddRecord;
             model.Settings.ChangesHandler += _journalService.AddRecord;
         }
-        
+
         private void RemoveBaseNodeSubscription(BaseNodeModel model)
         {
             model.Policies.SensorExpired -= SetExpiredSnapshot;

@@ -3,7 +3,6 @@ using HSMServer.Core.Model;
 using HSMServer.Core.Model.Requests;
 using System;
 using System.Collections.Generic;
-using HSMDatabase.AccessManager.DatabaseEntities;
 
 namespace HSMServer.Core.Cache
 {
@@ -36,6 +35,7 @@ namespace HSMServer.Core.Cache
 
         bool TryCheckKeyWritePermissions(BaseRequestModel request, out string message);
         bool TryCheckKeyReadPermissions(BaseRequestModel request, out string message);
+        bool TryCheckSensorUpdateKeyPermission(BaseRequestModel request, out Guid sensorId, out string message);
 
         AccessKeyModel AddAccessKey(AccessKeyModel key);
         AccessKeyModel RemoveAccessKey(Guid id);
@@ -44,6 +44,7 @@ namespace HSMServer.Core.Cache
         AccessKeyModel GetAccessKey(Guid id);
         List<AccessKeyModel> GetMasterKeys();
 
+        void AddOrUpdateSensor(SensorUpdate update);
         void UpdateSensor(SensorUpdate updatedSensor);
         void RemoveSensor(Guid sensorId, string initiator = null);
         void UpdateMutedSensorState(Guid sensorId, DateTime? endOfMuting = null, string initiator = null);
