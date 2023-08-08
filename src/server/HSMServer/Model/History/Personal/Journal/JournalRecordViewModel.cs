@@ -48,8 +48,8 @@ public sealed class JournalRecordViewModel
         if (string.IsNullOrEmpty(model.PropertyName))
             return (model.Enviroment, $"{model.Enviroment} {model.Initiator}");
 
-        string header = string.Empty;
-        string value = string.Empty;
+        var header = string.Empty;
+        var value = string.Empty;
 
         if (string.IsNullOrEmpty(model.OldValue))
         {
@@ -62,7 +62,7 @@ public sealed class JournalRecordViewModel
             value = model.OldValue;
         }
 
-        if (string.IsNullOrEmpty(model.NewValue))
+        if (header != string.Empty)
             return ($"""
             {header} {model.PropertyName}:
             <strong>{value}</strong>

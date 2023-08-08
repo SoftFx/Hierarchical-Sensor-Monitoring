@@ -39,7 +39,7 @@ namespace HSMServer.Core.Model.Policies
             if (oldValue != newValue)
                 ChangesHandler?.Invoke(new JournalRecordModel(sensor.Id, initiator)
                 {
-                    Enviroment = "Alert",
+                    Enviroment = "Alert collection",
                     PropertyName = "Alert",
                     OldValue = oldValue,
                     NewValue = newValue,

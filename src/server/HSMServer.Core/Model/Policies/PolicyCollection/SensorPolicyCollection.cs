@@ -64,8 +64,10 @@ namespace HSMServer.Core.Model.Policies
             RemoveAlert(TimeToLive);
 
             base.UpdateTTL(update);
-           
-            CallJournal(oldValue, TimeToLive.ToString(), update.Initiator, _sensor);
+            if (update.Id == Guid.Empty)
+                CallJournal(string.Empty, TimeToLive.ToString(), update.Initiator, _sensor);
+            else
+                CallJournal(oldValue, TimeToLive.ToString(), update.Initiator, _sensor);
         }
 
 
