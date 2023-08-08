@@ -152,14 +152,12 @@
 
             setFormDataAlertsProperty(formData, "input", type, $(this), "Id");
             setFormDataAlertsProperty(formData, "input", type, $(this), "EntityId");
-            setFormDataAlertsProperty(formData, "input", type, $(this), "IsDisabled");
-
             setFormDataAlerts(formData, type, $(this));
         });
     }
 
     function setFormDataAlertsProperty(formData, element, type, alertsList, propertyName) {
-        alertsList.find(`${element}[name='${propertyName}']:first`).each(function (i) {
+        alertsList.find(`${element}[name='${propertyName}']`).each(function (i) {
             formData.append(`DataAlerts[${type}][${i}].${propertyName}`, $(this).val());
         });
     }
