@@ -52,11 +52,11 @@ namespace HSMServer.Model.DataAlerts
             return new(Id, conditions, sensitivity, status.ToCore(), comment, icon, IsDisabled);
         }
 
-        internal PolicyUpdate ToTimeToLiveUpdate()
+        internal PolicyUpdate ToTimeToLiveUpdate(string initiator)
         {
             (var status, var comment, var icon) = GetActions();
 
-            return new(Id, null, null, status.ToCore(), comment, icon, IsDisabled);
+            return new(Id, null, null, status.ToCore(), comment, icon, IsDisabled, initiator);
         }
 
 

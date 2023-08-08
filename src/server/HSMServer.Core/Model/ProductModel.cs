@@ -77,7 +77,7 @@ namespace HSMServer.Core.Model
             return this;
         }
 
-        internal override bool CheckTimeout(bool _ = true)
+        internal override bool CheckTimeout()
         {
             var result = false;
 
@@ -116,8 +116,6 @@ namespace HSMServer.Core.Model
             foreach (var (_, sensor) in model.Sensors)
                 if (!sensor.Settings.TTL.IsSet)
                     sensor.Policies.TimeToLive.Update(update);
-
-            model.CheckTimeout();
         }
     }
 }

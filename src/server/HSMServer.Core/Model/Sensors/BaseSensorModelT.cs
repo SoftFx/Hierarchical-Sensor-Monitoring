@@ -33,9 +33,14 @@ namespace HSMServer.Core.Model
 
         internal override List<BaseValue> ConvertValues(List<byte[]> pages) => pages.Select(Convert).ToList();
 
-        internal override void AddDbValue(byte[] bytes) => Storage.AddValue((T)Convert(bytes));
+        internal override bool CheckTimeout() => Policies.SensorTimeout(LastValue);
 
-        internal override bool CheckTimeout(bool toNotify = true) => Policies.SensorTimeout(LastValue?.ReceivingTime, toNotify);
+        internal override void AddDbValue(byte[] bytes)
+        {
+            Storage.AddValue((T)Convert(bytes));
+
+            CheckTimeout();
+        }
 
         internal override void RecalculatePolicy()
         {
