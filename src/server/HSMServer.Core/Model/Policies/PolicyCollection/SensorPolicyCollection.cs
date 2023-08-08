@@ -64,7 +64,7 @@ namespace HSMServer.Core.Model.Policies
             RemoveAlert(TimeToLive);
 
             base.UpdateTTL(update);
-            CallJournal(update.Id == Guid.Empty ? string.Empty : oldValue, TimeToLive.ToString(), update.Initiator, _sensor);
+            CallJournal(update.Id == Guid.Empty ? string.Empty : oldValue, TimeToLive.ToString(), update.Initiator);
         }
 
 
@@ -106,16 +106,16 @@ namespace HSMServer.Core.Model.Policies
         }
 
 
-        protected void CallJournal(string oldValue, string newValue, string initiator, BaseSensorModel sensor)
+        protected void CallJournal(string oldValue, string newValue, string initiator)
         {
             if (oldValue != newValue)
-                CallJournal(new JournalRecordModel(sensor.Id, initiator)
+                CallJournal(new JournalRecordModel(_sensor.Id, initiator)
                 {
                     Enviroment = "Alert collection",
                     PropertyName = "Alert",
                     OldValue = oldValue,
                     NewValue = newValue,
-                    Path = sensor.FullPath,
+                    Path = _sensor.FullPath,
                 });
         }
 
@@ -173,7 +173,7 @@ namespace HSMServer.Core.Model.Policies
 
                     policy.Update(update);
 
-                    CallJournal(oldPolicy, policy.ToString(), initiator, _sensor);
+                    CallJournal(oldPolicy, policy.ToString(), initiator);
 
                     Uploaded?.Invoke(ActionType.Update, policy);
                 }
@@ -182,7 +182,7 @@ namespace HSMServer.Core.Model.Policies
                     if (_sensor.LastValue is ValueType lastValue && lastValue is not null)
                         CalculateStorageResult(lastValue);
 
-                    CallJournal(oldPolicy.ToString(), string.Empty, initiator, _sensor);
+                    CallJournal(oldPolicy.ToString(), string.Empty, initiator);
 
                     Uploaded?.Invoke(ActionType.Delete, oldPolicy);
                 }
@@ -196,7 +196,7 @@ namespace HSMServer.Core.Model.Policies
                     policy.Update(update, _sensor);
 
                     AddPolicy(policy);
-                    CallJournal(string.Empty, policy.ToString(), initiator, _sensor);
+                    CallJournal(string.Empty, policy.ToString(), initiator);
 
                     Uploaded?.Invoke(ActionType.Add, policy);
                 }
