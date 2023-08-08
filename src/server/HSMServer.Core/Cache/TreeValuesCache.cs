@@ -386,25 +386,32 @@ namespace HSMServer.Core.Cache
             }
         }
 
+        private void AddDefaultModelSubscription(BaseNodeModel model)
+        {
+            model.Policies.SensorExpired += SetExpiredSnapshot;
+            model.ChangesHandler += AddJournalRecord;
+            model.Policies.ChangesHandler += AddJournalRecord;
+            model.Settings.ChangesHandler += AddJournalRecord;
+        }
+        
+        private void RemoveDefaultModelSubscription(BaseNodeModel model)
+        {
+            model.Policies.SensorExpired -= SetExpiredSnapshot;
+            model.ChangesHandler -= AddJournalRecord;
+            model.Policies.ChangesHandler -= AddJournalRecord;
+            model.Settings.ChangesHandler -= AddJournalRecord;
+        }
 
         private void SubscribeSensorToPolicyUpdate(BaseSensorModel sensor)
         {
-            sensor.Policies.ChangesHandler += _journalService.AddRecord;
-            sensor.Settings.ChangesHandler += _journalService.AddRecord;
-            sensor.Policies.SensorExpired += SetExpiredSnapshot;
+            AddDefaultModelSubscription(sensor);
             sensor.Policies.Uploaded += UpdatePolicy;
-
-            sensor.ChangesHandler += _journalService.AddRecord;
         }
 
         private void RemoveSensorPolicies(BaseSensorModel sensor)
         {
-            sensor.Policies.ChangesHandler -= _journalService.AddRecord;
-            sensor.Settings.ChangesHandler -= _journalService.AddRecord;
-            sensor.Policies.SensorExpired -= SetExpiredSnapshot;
             sensor.Policies.Uploaded -= UpdatePolicy;
-
-            sensor.ChangesHandler -= _journalService.AddRecord;
+            RemoveDefaultModelSubscription(sensor);
 
             RemoveEntityPolicies(sensor);
         }
@@ -539,11 +546,7 @@ namespace HSMServer.Core.Cache
             {
                 var product = new ProductModel(productEntity);
 
-                product.Policies.SensorExpired += SetExpiredSnapshot;
-                product.ChangesHandler += _journalService.AddRecord;
-                product.Policies.ChangesHandler += _journalService.AddRecord;
-                product.Settings.ChangesHandler += _journalService.AddRecord;
-
+                AddDefaultModelSubscription(product);
                 _tree.TryAdd(product.Id, product);
             }
 
@@ -661,8 +664,7 @@ namespace HSMServer.Core.Cache
                     product.Update(update);
                 }
 
-                product.Policies.SensorExpired += SetExpiredSnapshot;
-
+                AddDefaultModelSubscription(product);
                 _database.AddProduct(product.ToEntity());
 
                 ChangeProductEvent?.Invoke(product, ActionType.Add);
@@ -821,6 +823,8 @@ namespace HSMServer.Core.Cache
             return policies;
         }
 
+        public void AddJournalRecord(JournalRecordModel recordModel) => _journalService.AddRecord(recordModel);
+        
         public void UpdateCacheState()
         {
             foreach (var sensor in GetSensors())

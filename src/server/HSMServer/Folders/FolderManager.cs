@@ -68,8 +68,12 @@ namespace HSMServer.Folders
             var result = await base.TryAdd(model);
 
             if (result)
+            {
                 foreach (var productId in model.Products.Keys)
                     await AddProductToFolder(productId, model.Id);
+
+                model.ChangesHandler += _cache.AddJournalRecord;
+            }
 
             return result;
         }
@@ -112,8 +116,12 @@ namespace HSMServer.Folders
             await base.Initialize();
 
             foreach (var (_, folder) in this)
+            {
+                folder.ChangesHandler += _cache.AddJournalRecord;
                 if (_userManager.TryGetValue(folder.AuthorId, out var author))
                     folder.Author = author.Name;
+            }
+       
 
             foreach (var user in _userManager.GetUsers())
             {

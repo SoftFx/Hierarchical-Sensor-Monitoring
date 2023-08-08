@@ -7,10 +7,12 @@ using HSMServer.Notification.Settings;
 using System;
 using System.Collections.Generic;
 using System.Drawing;
+using HSMServer.Core.Journal;
+using HSMServer.Core.Model;
 
 namespace HSMServer.Model.Folders
 {
-    public class FolderModel : BaseNodeViewModel, IServerModel<FolderEntity, FolderUpdate>
+    public class FolderModel : BaseNodeViewModel, IServerModel<FolderEntity, FolderUpdate>, IChangesEntity
     {
         public Dictionary<Guid, ProductNodeViewModel> Products { get; } = new();
 
@@ -26,6 +28,9 @@ namespace HSMServer.Model.Folders
         public Color Color { get; private set; }
 
         public string Author { get; set; }
+
+
+        public event Action<JournalRecordModel> ChangesHandler;
 
 
         public FolderModel(FolderEntity entity)
