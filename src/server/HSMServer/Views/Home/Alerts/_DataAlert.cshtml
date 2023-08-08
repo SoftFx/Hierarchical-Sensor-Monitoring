@@ -9,7 +9,7 @@
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
 
 
-<div id="alertLabel_@Model.Id" class="ms-3 @(Model.IsModify ? "d-none" : string.Empty)">
+<div id="alertLabel_@Model.Id" class="ms-3 @(Model.IsModify ? "d-none" : string.Empty) @(Model.IsDisabled ? "disabledAlertLabel" : string.Empty)">
     <span>If</span>
     @for (int i = 0; i < Model.Conditions.Count; ++i)
     {
@@ -63,10 +63,15 @@
             <span>@ActionViewModel.SetErrorStatus</span>
         }
     }
+
+    @if (Model.IsDisabled)
+    {
+        <span style="opacity:1; text-decoration:none"><b>(disabled)</b></span>
+    }
 </div>
 
 <div id="alertConstructor_@Model.Id" class="dataAlertRow d-flex flex-row align-items-center @(!Model.IsModify ? "d-none" : string.Empty)">
-    <div class="card mb-2 w-100">
+    <div class="card mb-2 w-100 @(Model.IsDisabled ? "disabledAlert" : string.Empty)">
         <div class="card-body py-2">
             <div class="d-flex flex-row align-items-center fullCondition">
                 @{
@@ -109,10 +114,12 @@
         </button>
         <div class="dropdown-menu dropdown-menu-end" aria-labelledby="actionButton">
             <a class="dropdown-item text-decoration-none fw-normal button-link showMessage">Show message</a>
+            <a class="dropdown-item text-decoration-none fw-normal button-link enable">@(Model.IsDisabled ? "Enable" : "Disable")</a>
             <a class="dropdown-item text-decoration-none fw-normal button-link deleteRow">Remove</a>
         </div>
     </div>
 
+    <input class="d-none" type="checkbox" asp-for="IsDisabled" value="@Model.IsDisabled">
     <input class="d-none" asp-for="Id" value="@Model.Id" />
     <input class="d-none" asp-for="EntityId" value="@Model.EntityId" />
 </div>
@@ -194,6 +201,26 @@
                         showToast(response, "Test message");
                 }
             });
+        });
+
+        $("a.enable").off("click").on("click", function () {
+            let element = $(this).parents("div.dataAlertRow:first");
+
+            let card = element.find($(`div.card`));
+            let isDisabledCheckbox = element.find($(`input[name='IsDisabled']`));
+
+            if (this.text == "Enable") {
+                this.text = "Disable";
+
+                card.removeClass("disabledAlert");
+                isDisabledCheckbox.val("False");
+            }
+            else {
+                this.text = "Enable";
+
+                card.addClass("disabledAlert");
+                isDisabledCheckbox.val("True");
+            }
         });
     });
 
