@@ -36,7 +36,7 @@ namespace HSMServer.ApiObjectsConverters
             new()
             {
                 Comment = value.Comment,
-                Time = value.Time.ToUniversalTime(),
+                Time = value.Time,
                 Status = value.Status.Convert(),
                 Value = value.Value
             };

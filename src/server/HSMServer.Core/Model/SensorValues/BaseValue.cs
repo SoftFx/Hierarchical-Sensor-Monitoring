@@ -40,7 +40,7 @@ namespace HSMServer.Core.Model
         public DateTime Time
         {
             get => _time.ToUniversalTime();
-            set => _time = value;
+            set => _time = value.ToUniversalTime();
         }
 
 
