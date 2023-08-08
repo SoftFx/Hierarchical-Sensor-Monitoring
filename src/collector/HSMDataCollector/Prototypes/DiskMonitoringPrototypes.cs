@@ -1,23 +1,16 @@
 ﻿using HSMDataCollector.Prototypes;
-using System;
+using HSMDataCollector.SensorsMetainfo;
 using System.Collections.Generic;
 using System.IO;
 
 namespace HSMDataCollector.Options
 {
-    internal sealed class DiskMonitoringPrototype : <DiskSensorOptions>
-    {
-        protected override string NodePath { get; } = "Disk monitoring";
-
-
-       
-    }
-
-    internal abstract class DisksMonitoringPrototype : BarBaseMonitoringPrototype<>
+    internal abstract class DisksMonitoringPrototype : BaseMonitoringPrototype<DiskMonitoringSensorMetainfo, DiskSensorOptions>
     {
         protected override string Category => "Disk monitoring";
 
-        internal IEnumerable<DiskSensorOptions> GetAllDisksOptions(DiskSensorOptions userOptions)
+
+        internal IEnumerable<DiskMonitoringSensorMetainfo> GetAllDisksOptions(DiskSensorOptions userOptions)
         {
             var diskOptions = Get(userOptions);
 
@@ -30,6 +23,15 @@ namespace HSMDataCollector.Options
 
                 yield return diskOptions;
             }
+        }
+
+        protected override DiskMonitoringSensorMetainfo Apply(DiskMonitoringSensorMetainfo info, DiskSensorOptions options)
+        {
+            info.CalibrationRequests = options.CalibrationRequests;
+            info.PostDataPeriod = options.PostDataPeriod;
+            info.TargetPath = options.TargetPath;
+
+            return info;
         }
     }
 }
