@@ -2,11 +2,11 @@
 
 ## New tab Journal has been added!
 
-The log records information about who and when changed some properties. Journal saves 4 types of changes:
+The log records information about who changed some properties and when. Journal saves 4 types of changes:
 
-1. Metainfo changes (Description, Enable for grafana, Mute)
+1. Metainfo changes (Description, Enable for Grafana, Muting)
 2. Settings changes (TTL value, Cleanup section)
-3. TTL changes (add/remove/update)
+3. Alert changes (add/remove/update)
 4. Sensor remove (only for nodes/products)
 
 Journal has been added for all entities (Folders, Products, Nodes, Sensors). If entity includes some subnodes or sensors their journals merges on one tab and by default load only 100 last records for each sub entities. Also Journal tab includes paging and searching.
@@ -32,7 +32,7 @@ Old style:
 New style:
 ❌ [Nike store]/goods/[balls, hats, T-shirts] < 10 
 ```
-* If the TTL is turned off, a message will be sent
+* If the TTL is turned off, a message sends
 ```
 Old style:
 🕑 [HSM Server Monitoring]/Database/Environment data size MB
@@ -43,4 +43,4 @@ New style:
 ```
 
 ## Alerts
-* All OnChange Status alerts witch starts with $status variable have been migrated to **$prevStatus->$status** template
+* All OnChange Status alerts that start with $status variable have been migrated to **$prevStatus->$status** template
