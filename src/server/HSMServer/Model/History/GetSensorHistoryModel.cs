@@ -26,5 +26,7 @@ namespace HSMServer.Model.Model.History
         public DateTime To { get; set; } = DateTime.MaxValue;
 
         public DateTime From { get; set; } = DateTime.MinValue;
+
+        public bool IncludeTTl { get; set; } = true;
     }
 }

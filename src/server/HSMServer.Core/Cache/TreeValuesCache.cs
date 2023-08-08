@@ -354,18 +354,18 @@ namespace HSMServer.Core.Cache
             };
 
             return count > 0
-                ? GetSensorValuesPage(sensorId, request.From, request.To ?? DateTime.UtcNow.AddDays(1), count)
-                : GetSensorValuesPage(sensorId, DateTime.MinValue, request.From, count);
+                ? GetSensorValuesPage(sensorId, request.From, request.To ?? DateTime.UtcNow.AddDays(1), count, request.IncludeTTl)
+                : GetSensorValuesPage(sensorId, DateTime.MinValue, request.From, count, request.IncludeTTl);
         }
 
-        public async IAsyncEnumerable<List<BaseValue>> GetSensorValuesPage(Guid sensorId, DateTime from, DateTime to, int count)
+        public async IAsyncEnumerable<List<BaseValue>> GetSensorValuesPage(Guid sensorId, DateTime from, DateTime to, int count, bool includeTTL = true)
         {
             if (_sensors.TryGetValue(sensorId, out var sensor))
             {
                 var pages = _database.GetSensorValuesPage(sensorId.ToString(), from, to, count);
 
                 await foreach (var page in pages)
-                    yield return sensor.ConvertValues(page);
+                    yield return sensor.ConvertValues(page, includeTTL);
             }
         }
 

@@ -94,7 +94,7 @@ namespace HSMServer.Core.Model
 
         internal abstract void RecalculatePolicy();
 
-        internal abstract List<BaseValue> ConvertValues(List<byte[]> valuesBytes);
+        internal abstract List<BaseValue> ConvertValues(List<byte[]> valuesBytes, bool includeTTL = true);
 
 
         internal override BaseNodeModel AddParent(ProductModel parent)
