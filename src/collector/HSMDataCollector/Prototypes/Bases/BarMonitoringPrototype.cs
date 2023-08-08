@@ -3,21 +3,9 @@ using HSMDataCollector.SensorsMetainfo;
 
 namespace HSMDataCollector.Prototypes
 {
-    internal abstract class BarMonitoringPrototype : Prototype<MonitoringSensorMetainfo, BarSensorOptions>
+    internal abstract class BarMonitoringPrototype : BaseMonitoringPrototype<BarMonitoringSensorMetainfo, BarSensorOptions>
     {
-        protected const string SystemPath = ".Default";
-
-
-        protected abstract string SensorName { get; }
-
-
-        protected BarMonitoringPrototype()
-        {
-            Path = BuildPath(SystemPath, SensorName);
-        }
-
-
-        protected override MonitoringSensorMetainfo Apply(MonitoringSensorMetainfo info, BarSensorOptions options)
+        protected override BarMonitoringSensorMetainfo Apply(BarMonitoringSensorMetainfo info, BarSensorOptions options)
         {
             info.CollectBarPeriod = options.CollectBarPeriod;
             info.BarPeriod = options.BarPeriod;

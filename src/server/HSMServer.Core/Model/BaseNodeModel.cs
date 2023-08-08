@@ -88,7 +88,7 @@ namespace HSMServer.Core.Model
 
             if (update.TTLPolicy is not null)
             {
-                Policies.UpdateTTL(update.TTLPolicy);
+                Policies.UpdateTTL(update.TTLPolicy with { Initiator = update.Initiator });
                 CheckTimeout(toNotify: false);
             }
         }
@@ -96,7 +96,7 @@ namespace HSMServer.Core.Model
 
         protected T UpdateProperty<T>(T oldValue, T newValue, string initiator, [CallerArgumentExpression(nameof(oldValue))] string propName = "")
         {
-            if (newValue is not null && !newValue.Equals(oldValue))
+            if (newValue is not null && !newValue.Equals(oldValue ?? newValue))
                 ChangesHandler?.Invoke(new JournalRecordModel(Id, initiator)
                 {
                     Enviroment = "General info update",

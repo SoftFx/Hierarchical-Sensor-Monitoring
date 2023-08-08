@@ -354,22 +354,24 @@ window.Data = function (to, from, type, encodedId) {
         Record: "Record"
     };
    
-    window.JournalTemplate = {
-        bAutoWidth: false,
-        pageLength: 50,
-        lengthMenu: [25, 50, 100, 300 ],
-        processing: true,
-        serverSide: true,
-        order: [[0, 'desc']],
-        ajax: {
-            type: "POST",
-            contentType: "application/json; charset=utf-8",
-            url: 'Journal/GetPage',
-            data: function (d) {
-                return JSON.stringify(d);
-            },
-            complete: function (response){
-                showNoData(response)
+    window.JournalTemplate = (url) => {
+        return {
+            bAutoWidth: false,
+            pageLength: 50,
+            lengthMenu: [25, 50, 100, 300 ],
+            processing: true,
+            serverSide: true,
+            order: [[0, 'desc']],
+            ajax: {
+                type: "POST",
+                contentType: "application/json; charset=utf-8",
+                url: url,
+                data: function (d) {
+                    return JSON.stringify(d);
+                },
+                complete: function (response){
+                    showNoData(response)
+                }
             }
         }
     }
@@ -395,7 +397,7 @@ window.Data = function (to, from, type, encodedId) {
 
         JournalTable = $('[id^="journal_table_"]').DataTable({
             columns: type === NodeType.Node ? nodeColumns : sensorColumns,
-            ...JournalTemplate
+            ...JournalTemplate(getJournalPage)
         });
     }
 }

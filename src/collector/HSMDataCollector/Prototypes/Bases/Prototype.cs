@@ -1,4 +1,5 @@
 ﻿using HSMDataCollector.SensorsMetainfo;
+using System.Linq;
 
 namespace HSMDataCollector.Prototypes
 {
@@ -7,8 +8,8 @@ namespace HSMDataCollector.Prototypes
     {
         private const string PathSeparator = "/";
 
-        protected const string ProductInfoPath = "Product Info";
-        protected const string CollectorPath = ProductInfoPath + "/Collector";
+        //protected const string ProductInfoPath = "Product Info";
+        //protected const string CollectorPath = ProductInfoPath + "/Collector";
 
 
         protected abstract MetainfoType Apply(MetainfoType info, OptionsType options);
@@ -40,6 +41,6 @@ namespace HSMDataCollector.Prototypes
             return Apply(info, options);
         }
 
-        protected string BuildPath(params string[] parts) => string.Join(PathSeparator, parts);
+        protected string BuildPath(params string[] parts) => string.Join(PathSeparator, parts.Select(u => !string.IsNullOrEmpty(u)));
     }
 }

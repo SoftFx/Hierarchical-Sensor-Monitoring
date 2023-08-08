@@ -41,7 +41,7 @@ namespace HSMDataCollector.Prototypes
         protected override string SensorName => "Process CPU";
 
 
-        internal ProcessCpuPrototype()
+        internal ProcessCpuPrototype() : base()
         {
             Description = "CPU usage percentage.";
 
@@ -56,7 +56,7 @@ namespace HSMDataCollector.Prototypes
         protected override string SensorName => "Process memory MB";
 
 
-        internal ProcessMemoryPrototype()
+        internal ProcessMemoryPrototype() : base()
         {
             Description = "Current process working set";
 
@@ -71,7 +71,7 @@ namespace HSMDataCollector.Prototypes
         protected override string SensorName => "Process thread count";
 
 
-        internal ProcessThreadCountPrototype()
+        internal ProcessThreadCountPrototype() : base()
         {
             Description = "The amount of threads, associated with current process";
 

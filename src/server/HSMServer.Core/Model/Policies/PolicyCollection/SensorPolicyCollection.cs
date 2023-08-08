@@ -1,7 +1,6 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Cache.UpdateEntities;
-using HSMServer.Core.Journal;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -9,7 +8,7 @@ using System.Linq;
 
 namespace HSMServer.Core.Model.Policies
 {
-    public abstract class SensorPolicyCollection : PolicyCollectionBase, IChangesEntity
+    public abstract class SensorPolicyCollection : PolicyCollectionBase
     {
         internal protected SensorResult SensorResult { get; protected set; } = SensorResult.Ok;
 
@@ -17,8 +16,6 @@ namespace HSMServer.Core.Model.Policies
 
 
         internal Action<ActionType, Policy> Uploaded;
-
-        public event Action<JournalRecordModel> ChangesHandler;
 
 
         internal abstract void Update(List<PolicyUpdate> updates, string initiator);
@@ -33,8 +30,6 @@ namespace HSMServer.Core.Model.Policies
             SensorResult = SensorResult.Ok;
             PolicyResult = PolicyResult.Ok;
         }
-
-        protected void CallJournal(JournalRecordModel record) => ChangesHandler?.Invoke(record);
     }
 
 
@@ -65,9 +60,11 @@ namespace HSMServer.Core.Model.Policies
 
         internal override void UpdateTTL(PolicyUpdate update)
         {
+            var oldValue = TimeToLive.ToString();
             RemoveAlert(TimeToLive);
 
             base.UpdateTTL(update);
+            CallJournal(update.Id == Guid.Empty ? string.Empty : oldValue, TimeToLive.ToString(), update.Initiator);
         }
 
 
@@ -90,7 +87,7 @@ namespace HSMServer.Core.Model.Policies
 
         internal bool SensorTimeout(DateTime? time, bool toNotify)
         {
-            if (TimeToLive is null || (_sensor?.Status?.IsOfftime ?? true))
+            if (TimeToLive is null || TimeToLive.IsDisabled || (_sensor?.Status?.IsOfftime ?? true))
                 return false;
 
             var timeout = TimeToLive.HasTimeout(time);
@@ -106,6 +103,20 @@ namespace HSMServer.Core.Model.Policies
             SensorExpired?.Invoke(_sensor, timeout, toNotify);
 
             return timeout;
+        }
+
+
+        protected void CallJournal(string oldValue, string newValue, string initiator)
+        {
+            if (oldValue != newValue)
+                CallJournal(new JournalRecordModel(_sensor.Id, initiator)
+                {
+                    Enviroment = "Alert collection",
+                    PropertyName = "Alert",
+                    OldValue = oldValue,
+                    NewValue = newValue,
+                    Path = _sensor.FullPath,
+                });
         }
 
 
@@ -132,7 +143,7 @@ namespace HSMServer.Core.Model.Policies
             PolicyResult = new(_sensor.Id);
 
             foreach (var policy in _storage.Values)
-                if (!policy.Validate(value))
+                if (!policy.IsDisabled && !policy.Validate(value))
                 {
                     PolicyResult.AddAlert(policy);
 
@@ -170,6 +181,8 @@ namespace HSMServer.Core.Model.Policies
                 {
                     if (_sensor.LastValue is ValueType lastValue && lastValue is not null)
                         CalculateStorageResult(lastValue);
+
+                    CallJournal(oldPolicy.ToString(), string.Empty, initiator);
 
                     Uploaded?.Invoke(ActionType.Delete, oldPolicy);
                 }
@@ -220,25 +233,13 @@ namespace HSMServer.Core.Model.Policies
                 null,
                 SensorStatus.Ok,
                 $"$status [$product]$path = $comment",
-                null);
+                null,
+                false);
 
             policy.Update(statusUpdate, _sensor);
 
             AddPolicy(policy);
             Uploaded?.Invoke(ActionType.Add, policy);
-        }
-
-        private void CallJournal(string oldValue, string newValue, string initiator)
-        {
-            if (oldValue != newValue)
-                CallJournal(new JournalRecordModel(_sensor.Id, initiator)
-                {
-                    Enviroment = "Alerts update",
-                    PropertyName = "Alerts update",
-                    OldValue = oldValue,
-                    NewValue = newValue,
-                    Path = _sensor.FullPath,
-                });
         }
     }
 }
