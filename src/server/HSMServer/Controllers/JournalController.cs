@@ -17,8 +17,8 @@ public class JournalController : BaseController
     {
         var draw = parameters.Draw;
         var rows = new List<List<string>>(parameters.Length);
-
-        foreach (var recordFromDb in StoredUser.Journal.GetPage(parameters))
+        var (recordsFromDb, filteredRecords) = StoredUser.Journal.GetPage(parameters); 
+        foreach (var recordFromDb in recordsFromDb)
         {
             var cells = new List<string>(parameters.Columns.Count);
 
@@ -36,6 +36,6 @@ public class JournalController : BaseController
             rows.Add(cells);
         }
 
-        return Json(new DataTableResultSet(draw, StoredUser.Journal.TotalSize, StoredUser.Journal.TotalSize, rows));
+        return Json(new DataTableResultSet(draw, filteredRecords, StoredUser.Journal.TotalSize, rows));
     }
 }

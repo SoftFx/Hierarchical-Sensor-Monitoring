@@ -240,7 +240,8 @@ namespace HSMServer.Controllers
                     var update = new FolderUpdate
                     {
                         Id = id,
-                        TTL = !isExpectedFromParent ? model.ExpectedUpdateInterval : null
+                        TTL = !isExpectedFromParent ? model.ExpectedUpdateInterval : null,
+                        Initiator = CurrentUser.Name
                     };
 
                     if (isExpectedFromParent)
@@ -752,6 +753,7 @@ namespace HSMServer.Controllers
                 TTL = newModel.ExpectedUpdateInterval,
                 KeepHistory = newModel.SavedHistoryPeriod,
                 SelfDestroy = newModel.SelfDestroyPeriod,
+                Initiator = CurrentUser.Name
             };
 
             return await _folderManager.TryUpdate(update)
