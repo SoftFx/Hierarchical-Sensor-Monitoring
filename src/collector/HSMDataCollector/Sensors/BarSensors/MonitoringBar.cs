@@ -14,6 +14,13 @@ namespace HSMDataCollector.DefaultSensors
         internal int Precision { get; private set; }
 
 
+        internal void Init(TimeSpan timerPeriod, int precision)
+        {
+            OpenTime = timerPeriod.GetOpenTime();
+            CloseTime = OpenTime + timerPeriod;
+            Precision = precision;
+        }
+
         internal void AddValue(T value)
         {
             lock (_lock)
@@ -35,11 +42,25 @@ namespace HSMDataCollector.DefaultSensors
             }
         }
 
-        internal void Init(TimeSpan timerPeriod, int precision)
+        internal void AddPartial(T min, T max, T mean, T last, int count)
         {
-            OpenTime = timerPeriod.GetOpenTime();
-            CloseTime = OpenTime + timerPeriod;
-            Precision = precision;
+            lock (_lock)
+            {
+                if (DateTime.UtcNow > CloseTime || count < 1)
+                    return;
+
+                if (Count == 0)
+                {
+                    Mean = mean;
+                    Min = min;
+                    Max = max;
+                }
+                else
+                    ApplyPartial(min, max, mean, count);
+
+                LastValue = last;
+                Count += count;
+            }
         }
 
         internal MonitoringBarBase<T> Complete()
@@ -66,6 +87,8 @@ namespace HSMDataCollector.DefaultSensors
 
         protected abstract void ApplyNewValue(T value);
 
+        protected abstract void ApplyPartial(T min, T max, T mean, int count);
+
 
         protected abstract T CountAvr(T first, T second);
 
@@ -91,6 +114,15 @@ namespace HSMDataCollector.DefaultSensors
             Max = Math.Max(value, Max);
         }
 
+        protected override void ApplyPartial(int min, int max, int mean, int count)
+        {
+            _totalSum += (double)mean * count;
+
+            Min = Math.Min(min, Min);
+            Max = Math.Max(max, Max);
+        }
+
+
         protected override int CountAvr(int first, int second) => (first + second) / 2;
 
         protected override int CountMean() => (int)Math.Round(_totalSum / Count);
@@ -111,6 +143,15 @@ namespace HSMDataCollector.DefaultSensors
             Min = Math.Min(value, Min);
             Max = Math.Max(value, Max);
         }
+
+        protected override void ApplyPartial(double min, double max, double mean, int count)
+        {
+            _totalSum += mean * count;
+
+            Min = Math.Min(min, Min);
+            Max = Math.Max(max, Max);
+        }
+
 
         protected override double CountAvr(double first, double second) => (first + second) / 2;
 

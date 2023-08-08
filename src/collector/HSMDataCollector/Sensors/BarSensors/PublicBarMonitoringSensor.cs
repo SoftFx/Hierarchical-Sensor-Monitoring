@@ -1,6 +1,5 @@
 ﻿using HSMDataCollector.Options;
 using HSMDataCollector.PublicInterface;
-using System;
 using System.Collections.Generic;
 
 namespace HSMDataCollector.DefaultSensors
@@ -20,6 +19,9 @@ namespace HSMDataCollector.DefaultSensors
 
         public void AddValue(T value) => _internalBar.AddValue(value);
 
+        public void AddPartial(T min, T max, T mean, T _, T last, int count) =>
+            _internalBar.AddPartial(min, max, mean, last, count);
+
         public void AddValues(IEnumerable<T> values)
         {
             foreach (var value in values)
@@ -36,6 +38,6 @@ namespace HSMDataCollector.DefaultSensors
 
     internal class DoubleBarPublicSensor : PublicBarMonitoringSensor<DoubleMonitoringBar, double>
     {
-        public DoubleBarPublicSensor(BarSensorOptions options) : base (options) { }
+        public DoubleBarPublicSensor(BarSensorOptions options) : base(options) { }
     }
 }
