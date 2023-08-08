@@ -348,6 +348,15 @@ img .tree-png-icon {
     font-weight: 400;
 }
 
+.disabledAlertLabel span {
+    opacity: 0.5;
+    text-decoration: line-through;
+}
+
+.disabledAlert {
+    opacity: 0.5;
+}
+
 .meta-info-label {
     min-width: 18rem;
 }

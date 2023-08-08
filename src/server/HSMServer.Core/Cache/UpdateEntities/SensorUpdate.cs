@@ -34,6 +34,8 @@ namespace HSMServer.Core.Cache.UpdateEntities
         TimeIntervalModel Sensitivity,
         SensorStatus Status,
         string Template,
-        string Icon
+        string Icon,
+        bool IsDisabled,
+        string Initiator = TreeValuesCache.System
     );
 }

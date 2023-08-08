@@ -386,25 +386,32 @@ namespace HSMServer.Core.Cache
             }
         }
 
+        private void AddBaseNodeSubscription(BaseNodeModel model)
+        {
+            model.Policies.SensorExpired += SetExpiredSnapshot;
+            model.ChangesHandler += _journalService.AddRecord;
+            model.Policies.ChangesHandler += _journalService.AddRecord;
+            model.Settings.ChangesHandler += _journalService.AddRecord;
+        }
+        
+        private void RemoveBaseNodeSubscription(BaseNodeModel model)
+        {
+            model.Policies.SensorExpired -= SetExpiredSnapshot;
+            model.ChangesHandler -= _journalService.AddRecord;
+            model.Policies.ChangesHandler -= _journalService.AddRecord;
+            model.Settings.ChangesHandler -= _journalService.AddRecord;
+        }
 
         private void SubscribeSensorToPolicyUpdate(BaseSensorModel sensor)
         {
-            sensor.Policies.ChangesHandler += _journalService.AddRecord;
-            sensor.Settings.ChangesHandler += _journalService.AddRecord;
-            sensor.Policies.SensorExpired += SetExpiredSnapshot;
+            AddBaseNodeSubscription(sensor);
             sensor.Policies.Uploaded += UpdatePolicy;
-
-            sensor.ChangesHandler += _journalService.AddRecord;
         }
 
         private void RemoveSensorPolicies(BaseSensorModel sensor)
         {
-            sensor.Policies.ChangesHandler -= _journalService.AddRecord;
-            sensor.Settings.ChangesHandler -= _journalService.AddRecord;
-            sensor.Policies.SensorExpired -= SetExpiredSnapshot;
             sensor.Policies.Uploaded -= UpdatePolicy;
-
-            sensor.ChangesHandler -= _journalService.AddRecord;
+            RemoveBaseNodeSubscription(sensor);
 
             RemoveEntityPolicies(sensor);
         }
@@ -528,6 +535,26 @@ namespace HSMServer.Core.Cache
             var policyEntities = _database.GetAllPolicies();
             _logger.Info($"{nameof(IDatabaseCore.GetAllPolicies)} requested");
 
+            //TODO should be removed after migration
+            for (int i = 0; i < policyEntities.Count; ++i)
+                if (policyEntities[i].Conditions.Count == 1)
+                {
+                    var entity = policyEntities[i];
+                    var cond = entity.Conditions[0];
+                    var template = entity.Template;
+
+                    if (cond.Property == (byte)PolicyProperty.Status && cond.Operation == (byte)PolicyOperation.IsChanged && template.StartsWith("$status"))
+                    {
+                        var newEntity = entity with
+                        {
+                            Template = $"$prevStatus->{template}"
+                        };
+
+                        _database.UpdatePolicy(newEntity);
+                        policyEntities[i] = newEntity;
+                    }
+                }
+
             return policyEntities.ToDictionary(k => new Guid(k.Id).ToString(), v => v);
         }
 
@@ -539,10 +566,7 @@ namespace HSMServer.Core.Cache
             {
                 var product = new ProductModel(productEntity);
 
-                product.Policies.SensorExpired += SetExpiredSnapshot;
-                product.ChangesHandler += _journalService.AddRecord;
-                //product.Policies.ApplyPolicies(productEntity.Policies, policies);
-
+                AddBaseNodeSubscription(product);
                 _tree.TryAdd(product.Id, product);
             }
 
@@ -660,8 +684,7 @@ namespace HSMServer.Core.Cache
                     product.Update(update);
                 }
 
-                product.Policies.SensorExpired += SetExpiredSnapshot;
-
+                AddBaseNodeSubscription(product);
                 _database.AddProduct(product.ToEntity());
 
                 ChangeProductEvent?.Invoke(product, ActionType.Add);
@@ -843,7 +866,10 @@ namespace HSMServer.Core.Cache
                 snapshot.IsExpired = timeout;
 
                 if (!timeout)
+                {
+                    ChangePolicyResultEvent?.Invoke(sensor.Policies.TimeToLive.Ok.PolicyResult);
                     sensor.RecalculatePolicy();
+                }
 
                 if (toNotify)
                     NotifyAboutChanges(sensor);

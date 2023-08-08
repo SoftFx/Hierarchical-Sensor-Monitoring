@@ -2,10 +2,13 @@
 
 namespace HSMServer.Core.Model.Policies
 {
-    public record AlertSystemTemplate
+    public class AlertSystemTemplate : HashSet<string>
     {
-        public HashSet<string> UsedVariables { get; init; }
+        public string Text { get; init; }
 
-        public string Template { get; init; }
+
+        public AlertSystemTemplate() : base() { }
+
+        public AlertSystemTemplate(IEnumerable<string> collection) : base(collection) { }
     }
 }
