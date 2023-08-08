@@ -63,6 +63,11 @@
             <span>@ActionViewModel.SetErrorStatus</span>
         }
     }
+
+    @if (Model.IsDisabled)
+    {
+        <span style="opacity:1; text-decoration:none"><b>(disabled)</b></span>
+    }
 </div>
 
 <div id="alertConstructor_@Model.Id" class="dataAlertRow d-flex flex-row align-items-center @(!Model.IsModify ? "d-none" : string.Empty)">
@@ -109,12 +114,12 @@
         </button>
         <div class="dropdown-menu dropdown-menu-end" aria-labelledby="actionButton">
             <a class="dropdown-item text-decoration-none fw-normal button-link showMessage">Show message</a>
-            <a class="dropdown-item text-decoration-none fw-normal button-link enable">@(Model.IsEnabled ? "Disable" : "Enable")</a>
+            <a class="dropdown-item text-decoration-none fw-normal button-link enable">@(Model.IsDisabled ? "Enable" : "Disable")</a>
             <a class="dropdown-item text-decoration-none fw-normal button-link deleteRow">Remove</a>
         </div>
     </div>
 
-    <input class="d-none" type="checkbox" asp-for="IsEnabled" value="@Model.IsEnabled">
+    <input class="d-none" type="checkbox" asp-for="IsDisabled" value="@Model.IsDisabled">
     <input class="d-none" asp-for="Id" value="@Model.Id" />
     <input class="d-none" asp-for="EntityId" value="@Model.EntityId" />
 </div>
@@ -202,19 +207,19 @@
             let element = $(this).parents("div.dataAlertRow:first");
 
             let card = element.find($(`div.card`));
-            let isEnabledCheckbox = element.find($(`input[name='IsEnabled']`));
+            let isDisabledCheckbox = element.find($(`input[name='IsDisabled']`));
 
             if (this.text == "Enable") {
                 this.text = "Disable";
 
                 card.removeClass("disabledAlert");
-                isEnabledCheckbox.val("True");
+                isDisabledCheckbox.val("False");
             }
             else {
                 this.text = "Enable";
 
                 card.addClass("disabledAlert");
-                isEnabledCheckbox.val("False");
+                isDisabledCheckbox.val("True");
             }
         });
     });

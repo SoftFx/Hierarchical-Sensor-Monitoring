@@ -350,6 +350,7 @@ img .tree-png-icon {
 
 .disabledAlertLabel span {
     opacity: 0.5;
+    text-decoration: line-through;
 }
 
 .disabledAlert {

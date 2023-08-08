@@ -14,7 +14,7 @@ namespace HSMServer.Model.DataAlerts
         public List<AlertActionBase> Actions { get; } = new();
 
 
-        public bool IsEnabled { get; set; }
+        public bool IsDisabled { get; set; }
 
         public Guid EntityId { get; set; }
 
@@ -22,8 +22,6 @@ namespace HSMServer.Model.DataAlerts
 
 
         public bool IsModify { get; protected set; }
-
-        public bool IsDisabled => !IsEnabled;
 
 
         internal PolicyUpdate ToUpdate()
@@ -95,7 +93,7 @@ namespace HSMServer.Model.DataAlerts
             EntityId = node.Id;
             Id = policy.Id;
 
-            IsEnabled = !policy.IsDisabled;
+            IsDisabled = policy.IsDisabled;
 
             Actions.Add(new ActionViewModel(true)
             {
@@ -115,7 +113,6 @@ namespace HSMServer.Model.DataAlerts
         {
             EntityId = entityId;
             IsModify = true;
-            IsEnabled = true;
 
             Conditions.Add(CreateCondition(true));
 
