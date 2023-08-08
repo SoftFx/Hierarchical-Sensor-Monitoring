@@ -26,6 +26,6 @@ namespace HSMServer.Model.Folders
 
         public string Name { get; init; }
 
-        public string Initiator { get; init; } = TreeValuesCache.System;
+        public required string Initiator { get; init; } = TreeValuesCache.System;
     }
 }

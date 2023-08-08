@@ -394,7 +394,7 @@ namespace HSMServer.Core.Cache
             model.Settings.ChangesHandler += _journalService.AddRecord;
         }
         
-        private void RemoveDefaultModelSubscription(BaseNodeModel model)
+        private void RemoveBaseNodeSubscription(BaseNodeModel model)
         {
             model.Policies.SensorExpired -= SetExpiredSnapshot;
             model.ChangesHandler -= _journalService.AddRecord;
@@ -411,7 +411,7 @@ namespace HSMServer.Core.Cache
         private void RemoveSensorPolicies(BaseSensorModel sensor)
         {
             sensor.Policies.Uploaded -= UpdatePolicy;
-            RemoveDefaultModelSubscription(sensor);
+            RemoveBaseNodeSubscription(sensor);
 
             RemoveEntityPolicies(sensor);
         }
