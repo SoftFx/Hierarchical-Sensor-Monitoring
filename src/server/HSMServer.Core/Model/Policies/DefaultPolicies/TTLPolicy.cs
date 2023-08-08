@@ -48,6 +48,9 @@ namespace HSMServer.Core.Model.Policies
             if (!Status.IsOk())
                 sb.Append($", change status to = {Status}");
 
+            if (IsDisabled)
+                sb.Append(" (disabled)");
+
             return sb.ToString();
         }
     }
