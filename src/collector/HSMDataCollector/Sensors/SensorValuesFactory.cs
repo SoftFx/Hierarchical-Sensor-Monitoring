@@ -7,6 +7,9 @@ namespace HSMDataCollector.SensorsFactory
     {
         internal static SensorValueBase BuildValue<T>(T val)
         {
+            if (val is SensorValueBase sensorV)
+                return sensorV;
+
             switch (typeof(T))
             {
                 case Type type when type == typeof(bool):
@@ -44,7 +47,6 @@ namespace HSMDataCollector.SensorsFactory
                     {
                         Value = val is Version version ? version : default
                     };
-
                 default:
                     throw new ArgumentException($"Unsupported sensor value {typeof(T).Name}");
             }

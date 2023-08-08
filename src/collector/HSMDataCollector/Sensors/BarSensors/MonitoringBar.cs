@@ -56,8 +56,9 @@ namespace HSMDataCollector.DefaultSensors
                     Max = max;
                 }
                 else
-                    ApplyPartial(min, max, mean, count);
+                    ApplyPartial(min, max);
 
+                CountSum(mean, count);
                 LastValue = last;
                 Count += count;
             }
@@ -87,7 +88,7 @@ namespace HSMDataCollector.DefaultSensors
 
         protected abstract void ApplyNewValue(T value);
 
-        protected abstract void ApplyPartial(T min, T max, T mean, int count);
+        protected abstract void ApplyPartial(T min, T max);
 
 
         protected abstract T CountAvr(T first, T second);
@@ -95,6 +96,8 @@ namespace HSMDataCollector.DefaultSensors
         protected abstract T Round(T value);
 
         protected abstract T CountMean();
+
+        protected abstract void CountSum(T mean, int count);
 
 
         internal MonitoringBarBase<T> Copy() => (MonitoringBarBase<T>)MemberwiseClone();
@@ -114,10 +117,8 @@ namespace HSMDataCollector.DefaultSensors
             Max = Math.Max(value, Max);
         }
 
-        protected override void ApplyPartial(int min, int max, int mean, int count)
+        protected override void ApplyPartial(int min, int max)
         {
-            _totalSum += (double)mean * count;
-
             Min = Math.Min(min, Min);
             Max = Math.Max(max, Max);
         }
@@ -128,6 +129,9 @@ namespace HSMDataCollector.DefaultSensors
         protected override int CountMean() => (int)Math.Round(_totalSum / Count);
 
         protected override int Round(int value) => value;
+
+
+        protected override void CountSum(int mean, int count) => _totalSum += (double)mean * count;
     }
 
 
@@ -144,10 +148,8 @@ namespace HSMDataCollector.DefaultSensors
             Max = Math.Max(value, Max);
         }
 
-        protected override void ApplyPartial(double min, double max, double mean, int count)
+        protected override void ApplyPartial(double min, double max)
         {
-            _totalSum += mean * count;
-
             Min = Math.Min(min, Min);
             Max = Math.Max(max, Max);
         }
@@ -158,5 +160,8 @@ namespace HSMDataCollector.DefaultSensors
         protected override double CountMean() => _totalSum / Count;
 
         protected override double Round(double value) => Math.Round(value, Precision, MidpointRounding.AwayFromZero);
+
+
+        protected override void CountSum(double mean, int count) => _totalSum += mean * count;
     }
 }
