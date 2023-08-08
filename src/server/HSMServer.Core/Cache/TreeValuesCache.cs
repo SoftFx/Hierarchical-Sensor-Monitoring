@@ -386,7 +386,7 @@ namespace HSMServer.Core.Cache
             }
         }
 
-        private void AddDefaultModelSubscription(BaseNodeModel model)
+        private void AddBaseNodeSubscription(BaseNodeModel model)
         {
             model.Policies.SensorExpired += SetExpiredSnapshot;
             model.ChangesHandler += AddJournalRecord;
@@ -404,7 +404,7 @@ namespace HSMServer.Core.Cache
 
         private void SubscribeSensorToPolicyUpdate(BaseSensorModel sensor)
         {
-            AddDefaultModelSubscription(sensor);
+            AddBaseNodeSubscription(sensor);
             sensor.Policies.Uploaded += UpdatePolicy;
         }
 
@@ -546,7 +546,7 @@ namespace HSMServer.Core.Cache
             {
                 var product = new ProductModel(productEntity);
 
-                AddDefaultModelSubscription(product);
+                AddBaseNodeSubscription(product);
                 _tree.TryAdd(product.Id, product);
             }
 
@@ -664,7 +664,7 @@ namespace HSMServer.Core.Cache
                     product.Update(update);
                 }
 
-                AddDefaultModelSubscription(product);
+                AddBaseNodeSubscription(product);
                 _database.AddProduct(product.ToEntity());
 
                 ChangeProductEvent?.Invoke(product, ActionType.Add);

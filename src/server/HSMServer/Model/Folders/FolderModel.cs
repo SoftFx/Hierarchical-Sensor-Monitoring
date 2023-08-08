@@ -93,7 +93,7 @@ namespace HSMServer.Model.Folders
             {
                 ChangesHandler?.Invoke(new JournalRecordModel(Id, initiator)
                 {
-                    Enviroment = "Settings update",
+                    Enviroment = "Folder settings update",
                     OldValue = $"{oldModel}",
                     NewValue = $"{newModel}",
 
@@ -110,7 +110,7 @@ namespace HSMServer.Model.Folders
             if (newValue is not null && !newValue.Equals(oldValue ?? newValue))
                 ChangesHandler?.Invoke(new JournalRecordModel(Id, initiator)
                 {
-                    Enviroment = "General info update",
+                    Enviroment = "Folder general info update",
                     OldValue = $"{oldValue}",
                     NewValue = $"{newValue}",
 

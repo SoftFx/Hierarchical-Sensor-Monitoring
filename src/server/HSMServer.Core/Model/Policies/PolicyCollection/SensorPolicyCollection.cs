@@ -64,10 +64,7 @@ namespace HSMServer.Core.Model.Policies
             RemoveAlert(TimeToLive);
 
             base.UpdateTTL(update);
-            if (update.Id == Guid.Empty)
-                CallJournal(string.Empty, TimeToLive.ToString(), update.Initiator, _sensor);
-            else
-                CallJournal(oldValue, TimeToLive.ToString(), update.Initiator, _sensor);
+            CallJournal(update.Id == Guid.Empty ? string.Empty : oldValue, TimeToLive.ToString(), update.Initiator, _sensor);
         }
 
 
@@ -106,6 +103,20 @@ namespace HSMServer.Core.Model.Policies
             SensorExpired?.Invoke(_sensor, timeout, toNotify);
 
             return timeout;
+        }
+
+
+        protected void CallJournal(string oldValue, string newValue, string initiator, BaseSensorModel sensor)
+        {
+            if (oldValue != newValue)
+                CallJournal(new JournalRecordModel(sensor.Id, initiator)
+                {
+                    Enviroment = "Alert collection",
+                    PropertyName = "Alert",
+                    OldValue = oldValue,
+                    NewValue = newValue,
+                    Path = sensor.FullPath,
+                });
         }
 
 

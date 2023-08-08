@@ -32,19 +32,8 @@ namespace HSMServer.Core.Model.Policies
         internal virtual void BuildDefault(BaseNodeModel node, PolicyEntity entity = null) => TimeToLive = new TTLPolicy(node, entity);
 
         internal virtual void UpdateTTL(PolicyUpdate update) => TimeToLive.Update(update);
-        
-        
-        protected void CallJournal(string oldValue, string newValue, string initiator, BaseSensorModel sensor)
-        {
-            if (oldValue != newValue)
-                ChangesHandler?.Invoke(new JournalRecordModel(sensor.Id, initiator)
-                {
-                    Enviroment = "Alert collection",
-                    PropertyName = "Alert",
-                    OldValue = oldValue,
-                    NewValue = newValue,
-                    Path = sensor.FullPath,
-                });
-        }
+
+
+        protected void CallJournal(JournalRecordModel record) => ChangesHandler?.Invoke(record);
     }
 }
