@@ -36,6 +36,8 @@ namespace HSMServer.Core.Model.Policies
 
         public SensorStatus Status { get; private set; }
 
+        public bool IsDisabled { get; private set; }
+
         public string Icon { get; private set; }
 
 
@@ -100,6 +102,7 @@ namespace HSMServer.Core.Model.Policies
             _sensor ??= sensor;
 
             Sensitivity = update.Sensitivity;
+            IsDisabled = update.IsDisabled;
             Template = update.Template;
             Status = update.Status;
             Icon = update.Icon;
@@ -116,6 +119,7 @@ namespace HSMServer.Core.Model.Policies
             Id = new Guid(entity.Id);
             Status = entity.SensorStatus.ToStatus();
 
+            IsDisabled = entity.IsDisabled;
             Template = entity.Template;
             Icon = entity.Icon;
 
@@ -133,6 +137,7 @@ namespace HSMServer.Core.Model.Policies
 
             Sensitivity = Sensitivity?.ToEntity(),
             SensorStatus = (byte)Status,
+            IsDisabled = IsDisabled,
             Template = Template,
             Icon = Icon,
         };
@@ -183,6 +188,9 @@ namespace HSMServer.Core.Model.Policies
 
             if (!Status.IsOk())
                 sb.Append($", change status to = {Status}");
+
+            if (IsDisabled)
+                sb.Append(" (disabled)");
 
             return sb.ToString();
         }
