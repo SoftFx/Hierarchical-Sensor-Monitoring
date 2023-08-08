@@ -101,6 +101,7 @@ namespace HSMServer.Controllers
                 Id = folderCleanup.Id,
                 KeepHistory = folderCleanup.SavedHistoryPeriod,
                 SelfDestroy = folderCleanup.SelfDestoryPeriod,
+                Initiator = CurrentUser.Name
             };
 
             await _folderManager.TryUpdate(update);
@@ -117,6 +118,7 @@ namespace HSMServer.Controllers
             {
                 Id = folderAlerts.Id,
                 TTL = folderAlerts.ExpectedUpdateInterval,
+                Initiator = CurrentUser.Name
             };
 
             await _folderManager.TryUpdate(update);
