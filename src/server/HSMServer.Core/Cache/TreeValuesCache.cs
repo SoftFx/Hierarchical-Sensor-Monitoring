@@ -541,7 +541,8 @@ namespace HSMServer.Core.Cache
 
                 product.Policies.SensorExpired += SetExpiredSnapshot;
                 product.ChangesHandler += _journalService.AddRecord;
-                //product.Policies.ApplyPolicies(productEntity.Policies, policies);
+                product.Policies.ChangesHandler += _journalService.AddRecord;
+                product.Settings.ChangesHandler += _journalService.AddRecord;
 
                 _tree.TryAdd(product.Id, product);
             }
