@@ -27,8 +27,6 @@ namespace HSMDatabase.AccessManager.DatabaseEntities
 
         public byte SensorStatus { get; init; }
 
-        public bool IsDisabled { get; init; }
-
         public string Template { get; init; }
 
         public string Icon { get; init; }
