@@ -59,7 +59,7 @@ namespace HSMServer.Controllers
             foreach (var product in editFolder.GetFolderProducts(_tree))
                 folder.Products.Add(product.Id, product);
 
-            if (await _folderManager.TryUpdate(editFolder.ToFolderUpdate()))
+            if (await _folderManager.TryUpdate(editFolder.ToFolderUpdate(CurrentUser.Name)))
             {
                 foreach (var (productId, _) in oldProducts.Except(folder.Products))
                     await _folderManager.RemoveProductFromFolder(productId, folder.Id);
