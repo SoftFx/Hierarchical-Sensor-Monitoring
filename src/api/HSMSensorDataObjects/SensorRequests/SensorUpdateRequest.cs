@@ -26,6 +26,8 @@ namespace HSMSensorDataObjects.SensorRequests
         public int SelectedUnit { get; set; }
 
 
+        public SensorType? SensorType { get; set; }
+
         public string Description { get; set; }
 
 

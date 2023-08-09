@@ -4,13 +4,11 @@ namespace HSMServer.Core.Model.Requests
 {
     public sealed class SensorUpdateRequestModel : BaseRequestModel
     {
-        public SensorUpdate Update { get; }
+        public SensorUpdate Update { get; init; }
+
+        public SensorType Type { get; init; }
 
 
-        public SensorUpdateRequestModel(BaseRequestModel request, SensorUpdate update)
-            : base(request.Key, request.Path)
-        {
-            Update = update;
-        }
+        public SensorUpdateRequestModel(BaseRequestModel request) : base(request.Key, request.Path) { }
     }
 }

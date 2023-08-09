@@ -5,7 +5,6 @@ using HSMSensorDataObjects.SensorValueRequests;
 using HSMServer.ApiObjectsConverters;
 using HSMServer.BackgroundServices;
 using HSMServer.Core.Cache;
-using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Requests;
 using HSMServer.Core.SensorsUpdatesQueue;
@@ -563,7 +562,18 @@ namespace HSMServer.Controllers
             if (requestModel.TryCheckRequest(out message) &&
                 _cache.TryCheckSensorUpdateKeyPermission(requestModel, out var sensorId, out message))
             {
-                update = new(requestModel, request.Convert(sensorId));
+                if (sensorId == Guid.Empty && request.SensorType is null)
+                {
+                    message = $"Type property is required, because sensor {request.Path} doesn't exist";
+                    return false;
+                }
+
+                update = new(requestModel)
+                {
+                    Update = request.Convert(sensorId),
+                    Type = request.SensorType.Value.Convert(),
+                };
+
                 return true;
             }
 

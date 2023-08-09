@@ -278,7 +278,7 @@ namespace HSMServer.Core.Cache
             {
                 Id = Guid.NewGuid().ToString(),
                 DisplayName = sensorName,
-                //Type = (byte)value.Type, //TODO: SensorUpdateRequest should contain SensorType
+                Type = (byte)request.Type,
             };
 
             var sensor = SensorModelFactory.Build(entity);
@@ -288,6 +288,8 @@ namespace HSMServer.Core.Cache
 
             AddSensor(sensor);
             UpdateProduct(parentProduct);
+
+            //UpdateSensor(update); //???
         }
 
         public void UpdateSensor(SensorUpdate update)

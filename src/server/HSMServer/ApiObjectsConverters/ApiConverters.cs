@@ -254,6 +254,21 @@ namespace HSMServer.ApiObjectsConverters
                 _ => ApiSensorStatus.Ok,
             };
 
+        public static SensorType Convert(this HSMSensorDataObjects.SensorType type) =>
+            type switch
+            {
+                HSMSensorDataObjects.SensorType.BooleanSensor => SensorType.Boolean,
+                HSMSensorDataObjects.SensorType.IntSensor => SensorType.Integer,
+                HSMSensorDataObjects.SensorType.DoubleSensor => SensorType.Double,
+                HSMSensorDataObjects.SensorType.StringSensor => SensorType.String,
+                HSMSensorDataObjects.SensorType.TimeSpanSensor => SensorType.TimeSpan,
+                HSMSensorDataObjects.SensorType.VersionSensor => SensorType.Version,
+                HSMSensorDataObjects.SensorType.FileSensor => SensorType.File,
+                HSMSensorDataObjects.SensorType.IntegerBarSensor => SensorType.IntegerBar,
+                HSMSensorDataObjects.SensorType.DoubleBarSensor => SensorType.DoubleBar,
+                _ => throw new NotImplementedException(),
+            };
+
 
         private static SensorStatus Convert(this ApiSensorStatus status) =>
             status switch
