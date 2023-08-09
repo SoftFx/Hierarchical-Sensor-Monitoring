@@ -156,6 +156,8 @@ namespace HSMServer.Core.Model.Policies
                         SensorResult += policy.SensorResult;
                 }
 
+            SensorTimeout(value);
+
             return true;
         }
 

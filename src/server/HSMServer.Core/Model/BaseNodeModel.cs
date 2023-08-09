@@ -63,8 +63,6 @@ namespace HSMServer.Core.Model
 
             if (entity.Settings is not null)
                 Settings.SetSettings(entity.Settings);
-
-            Settings.TTL.Uploaded += (_, _) => CheckTimeout();
         }
 
 
@@ -89,10 +87,9 @@ namespace HSMServer.Core.Model
             Settings.Update(update, FullPath);
 
             if (update is not null)
-            {
                 UpdateTTL(update.TTLPolicy);
-                CheckTimeout();
-            }
+
+            CheckTimeout();
         }
 
 
