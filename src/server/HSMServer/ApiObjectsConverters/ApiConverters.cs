@@ -216,19 +216,28 @@ namespace HSMServer.ApiObjectsConverters
             {
                 Id = sensorId,
                 Description = request.Description,
-                Integration = request.EnableGrafana ? Integration.Grafana : null,
-                KeepHistory = new(request.KeepHistory),
-                SelfDestroy = new(request.SelfDestroy),
-                TTL = new(request.TTL),
-                TTLPolicy = request.TTLPolicy.Convert(),
+                Integration = request.EnableGrafana.HasValue && request.EnableGrafana.Value ? Integration.Grafana : null,
+                KeepHistory = request.KeepHistory.HasValue ? new(request.KeepHistory.Value) : null,
+                SelfDestroy = request.SelfDestroy.HasValue ? new(request.SelfDestroy.Value) : null,
+                TTL = request.TTL.HasValue ? new(request.TTL.Value) : null,
+                TTLPolicy = request.TTLPolicy?.Convert(),
                 Policies = request.Policies?.Select(policy => policy.Convert()).ToList(),
             };
 
         public static PolicyUpdate Convert(this AlertUpdateRequest request) =>
-            new(Guid.Empty, request.Conditions.Select(c => c.Convert()).ToList(), new(request.Sensitivity), request.Status.Convert(), request.Template, request.Icon, request.IsDisabled);
+            new(Guid.Empty,
+                request.Conditions?.Select(c => c.Convert()).ToList(),
+                request.Sensitivity.HasValue ? new(request.Sensitivity.Value) : null,
+                request.Status.Convert(),
+                request.Template,
+                request.Icon,
+                request.IsDisabled);
 
         public static PolicyConditionUpdate Convert(this AlertConditionUpdate request) =>
-            new(request.Operation.Convert(), request.Property.Convert(), new(request.Target.Type.Convert(), request.Target.Value), request.Combination.Convert());
+            new(request.Operation.Convert(),
+                request.Property.Convert(),
+                request.Target is not null ? new(request.Target.Type.Convert(), request.Target.Value) : null,
+                request.Combination.Convert());
 
 
         public static SensorValueBase CreateNewSensorValue(SensorType sensorType) => sensorType switch

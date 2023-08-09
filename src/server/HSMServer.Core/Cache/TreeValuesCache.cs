@@ -289,7 +289,7 @@ namespace HSMServer.Core.Cache
             AddSensor(sensor);
             UpdateProduct(parentProduct);
 
-            //UpdateSensor(update); //???
+            UpdateSensor(update);
         }
 
         public void UpdateSensor(SensorUpdate update)
