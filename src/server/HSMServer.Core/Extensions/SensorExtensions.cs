@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Numerics;
 using HSMServer.Core.Model;
 
 namespace HSMServer.Core
@@ -32,82 +33,42 @@ namespace HSMServer.Core
             _ => SensorStatus.Error,
         };
 
-        public static BaseValue GetTimeoutBaseValue(this SensorType type)
+        public static BaseValue GetTimeoutBaseValue(this SensorType type) => type switch
         {
-            BaseValue value = null;
+            SensorType.Boolean => new BooleanValue().SetDefaultValue(),
+            SensorType.Integer => new IntegerValue().SetDefaultValue(),
+            SensorType.Double => new DoubleValue().SetDefaultValue(),
+            SensorType.String => new StringValue().SetDefaultValue(),
+            SensorType.IntegerBar => new IntegerBarValue().SetDefaultValue(),
+            SensorType.DoubleBar => new DoubleBarValue().SetDefaultValue(),
+            SensorType.File => new FileValue().SetDefaultValue(),
+            SensorType.TimeSpan => new TimeSpanValue().SetDefaultValue(),
+            SensorType.Version => new VersionValue().SetDefaultValue(),
+            _ => null
+        };
 
-            switch (type)
+        private static BaseValue<T> SetDefaultValue<T>(this BaseValue<T> value) =>
+            value with
             {
-                case SensorType.Boolean:
-                    value = new BooleanValue()
-                    {
-                        Value = default
-                    };
-                    break;
-                case SensorType.Integer:
-                    value = new IntegerValue()
-                    {
-                        Value = default
-                    };
-                    break;
-                case SensorType.Double:
-                    value = new DoubleValue()
-                    {
-                        Value = default
-                    };
-                    break;
-                case SensorType.String:
-                    value = new StringValue()
-                    {
-                        Value = default
-                    };
-                    break;
-                case SensorType.IntegerBar:
-                    value = new IntegerBarValue()
-                    {
-                        LastValue = default,
-                        Min = default,
-                        Max = default,
-                        Mean = default,
-                        Count = default
-                    };
-                    break;
-                case SensorType.DoubleBar:
-                    value = new DoubleBarValue()
-                    {
-                        LastValue = default,
-                        Min = default,
-                        Max = default,
-                        Mean = default,
-                        Count = default
-                    };;
-                    break;
-                case SensorType.File:
-                    value = new FileValue()
-                    {
-                        Value = default
-                    };
-                    break;
-                case SensorType.TimeSpan:
-                    value = new TimeSpanValue()
-                    {
-                        Value = default
-                    };
-                    break;
-                case SensorType.Version:
-                    value = new VersionValue()
-                    {
-                        Value = default
-                    };
-                    break;
-            }
-            
-            return value is null ? null : value with
-            {
+                Value = default,
                 Comment = "#Timeout",
                 ReceivingTime = DateTime.UtcNow,
                 Time = DateTime.UtcNow
             };
-        }
+
+        private static BarBaseValue<T> SetDefaultValue<T>(this BarBaseValue<T> value) where T : INumber<T> =>
+            value with
+            {
+                LastValue = default,
+                Min = default,
+                Max = default,
+                Mean = default,
+                Count = default,
+                Comment = "#Timeout",
+                ReceivingTime = DateTime.UtcNow,
+                Time = DateTime.UtcNow
+            };
+
+
     }
 }
