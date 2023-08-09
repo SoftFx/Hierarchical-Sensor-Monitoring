@@ -10,13 +10,13 @@ namespace HSMServer.Core.Model.Requests
 
         public int? Count { get; set; }
 
-        public bool IncludeTTl { get; private set; } = true;
+        public bool IncludeTTL { get; private set; } = true;
 
         public HistoryRequestModel(string key, string path) : base(key, path) { }
 
         public HistoryRequestModel AddTTlFlag(bool flag)
         {
-            IncludeTTl = flag;
+            IncludeTTL = flag;
 
             return this;
         }
