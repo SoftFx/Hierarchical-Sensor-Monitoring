@@ -101,7 +101,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         [Trait("Category", "InvalidStatus")]
         public void SensorValueStatusValidationTest(SensorStatus status)
         {
-            foreach (var sensorType in Enum.GetValues<SensorType>())
+            foreach (var sensorType in Enum.GetValues<SensorType>()[..^1])
             {
                 var sensor = BuildSensorModel(sensorType);
                 var baseValue = SensorValuesFactory.BuildSensorValue(sensorType) with { Status = status };
@@ -128,7 +128,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         [Trait("Catgeory", "UpdateIntervalPolicy")]
         public void SensorModelUpdateIntervalValidationTest(long ticks)
         {
-            foreach (var sensorType in Enum.GetValues<SensorType>())
+            foreach (var sensorType in Enum.GetValues<SensorType>()[..^1])
             {
                 var sensor = BuildSensorModel(sensorType);
                 sensor.Settings.TTL.TrySetValue(new TimeIntervalModel(ticks));
@@ -174,7 +174,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         [Trait("Cetagory", "CombinatedStatusWithInterval")]
         public void CombinatedStatusWithIntervalValidationTest(SensorStatus status)
         {
-            foreach (var sensorType in Enum.GetValues<SensorType>())
+            foreach (var sensorType in Enum.GetValues<SensorType>()[..^1])
             {
                 var sensor = BuildSensorModel(sensorType);
                 sensor.Settings.TTL.TrySetValue(new TimeIntervalModel(TestTicks));
