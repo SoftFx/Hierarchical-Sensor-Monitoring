@@ -1,9 +1,10 @@
-﻿using HSMDataCollector.Prototypes;
+﻿using HSMDataCollector.DefaultSensors.SystemInfo;
+using HSMDataCollector.Options;
 using HSMDataCollector.SensorsMetainfo;
 using System.Collections.Generic;
 using System.IO;
 
-namespace HSMDataCollector.Options
+namespace HSMDataCollector.Prototypes
 {
     internal abstract class DisksMonitoringPrototype : BaseMonitoringPrototype<DiskMonitoringSensorMetainfo, DiskSensorOptions>
     {
@@ -30,6 +31,10 @@ namespace HSMDataCollector.Options
             info.CalibrationRequests = options.CalibrationRequests;
             info.PostDataPeriod = options.PostDataPeriod;
             info.TargetPath = options.TargetPath;
+
+            var diskInfo = new WindowsDiskInfo(options.TargetPath);
+
+            info.Path = BuildPath(SystemPath, Category, $"{SensorName} {diskInfo.Name}");
 
             return info;
         }

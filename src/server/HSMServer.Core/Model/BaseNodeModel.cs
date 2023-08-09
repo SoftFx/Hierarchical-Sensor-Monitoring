@@ -63,12 +63,12 @@ namespace HSMServer.Core.Model
 
             if (entity.Settings is not null)
                 Settings.SetSettings(entity.Settings);
-
-            Settings.TTL.Uploaded += (_, _) => CheckTimeout(toNotify: false);
         }
 
 
-        internal abstract bool CheckTimeout(bool toNotify = true);
+        internal abstract bool CheckTimeout();
+
+        protected abstract void UpdateTTL(PolicyUpdate update);
 
 
         internal virtual BaseNodeModel AddParent(ProductModel parent)
@@ -87,10 +87,9 @@ namespace HSMServer.Core.Model
             Settings.Update(update, FullPath);
 
             if (update.TTLPolicy is not null)
-            {
-                Policies.UpdateTTL(update.TTLPolicy with { Initiator = update.Initiator });
-                CheckTimeout(toNotify: false);
-            }
+                UpdateTTL(update.TTLPolicy);
+
+            CheckTimeout();
         }
 
 

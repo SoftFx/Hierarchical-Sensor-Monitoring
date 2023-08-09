@@ -11,16 +11,17 @@ namespace HSMServer.Core.Model.Policies
         public const string DefaultTemplate = "[$product]$path";
 
         private readonly SettingProperty<TimeIntervalModel> _ttl;
+        private readonly OkPolicy _okPolicy;
 
 
-        internal OkPolicy Ok { get; }
+        internal PolicyResult Ok => _okPolicy.PolicyResult;
 
 
         internal TTLPolicy(BaseNodeModel node, PolicyEntity entity)
         {
             _ttl = node.Settings.TTL;
 
-            Ok = new OkPolicy(Id, node);
+            _okPolicy = new OkPolicy(Id, node);
 
             Apply(entity ?? new PolicyEntity
             {
@@ -35,20 +36,9 @@ namespace HSMServer.Core.Model.Policies
 
         public override string ToString()
         {
-            var sb = new StringBuilder(1 << 5);
+            var sb = new StringBuilder($"If Inactivity period = {_ttl.CurValue}");
 
-            sb.Append($"If Inactivity period = {_ttl.CurValue}");
-
-            if (!string.IsNullOrEmpty(Icon))
-                sb.Append($", then icon={Icon}");
-
-            if (!string.IsNullOrEmpty(Template))
-                sb.Append($", then template={Template}");
-
-            if (!Status.IsOk())
-                sb.Append($", change status to = {Status}");
-
-            return sb.ToString();
+            return ActionsToString(sb).ToString();
         }
     }
 }

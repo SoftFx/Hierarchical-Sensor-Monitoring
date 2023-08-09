@@ -180,19 +180,28 @@ namespace HSMServer.Core.Model.Policies
                 sb.Append(cond);
             }
 
-            if (!string.IsNullOrEmpty(Icon))
-                sb.Append($"then icon={Icon}");
+            return ActionsToString(sb).ToString();
+        }
+
+        protected StringBuilder ActionsToString(StringBuilder sb)
+        {
+            var actions = new List<string>();
 
             if (!string.IsNullOrEmpty(Template))
-                sb.Append($"then template={Template}");
+                actions.Add($"template={Template}");
+
+            if (!string.IsNullOrEmpty(Icon))
+                actions.Add($"show icon={Icon}");
 
             if (!Status.IsOk())
-                sb.Append($", change status to = {Status}");
+                actions.Add($"change status to = {Status}");
+
+            sb.Append($" then {string.Join(", ", actions)}");
 
             if (IsDisabled)
                 sb.Append(" (disabled)");
 
-            return sb.ToString();
+            return sb;
         }
     }
 }
