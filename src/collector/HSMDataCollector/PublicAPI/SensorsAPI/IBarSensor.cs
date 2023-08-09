@@ -15,6 +15,8 @@ namespace HSMDataCollector.PublicInterface
         /// <param name="value">The value to be added</param>
         void AddValue(T value);
 
+        void AddPartial(T min, T max, T mean, T first, T last, int count);
+
         void AddValues(IEnumerable<T> values);
     }
 }

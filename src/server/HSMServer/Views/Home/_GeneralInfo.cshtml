@@ -1,4 +1,5 @@
-﻿@using HSMServer.Extensions
+﻿@using HSMServer.Core.Model
+@using HSMServer.Extensions
 @using HSMServer.Model.Folders.ViewModels
 @using HSMServer.Model.TreeViewModel
 @using HSMServer.Model.ViewModel
@@ -27,7 +28,14 @@
             <div class="d-flex w-100">
                 <span>@(sensor.SensorType)</span>
             </div>
-            <input id='sensor_type_@Model.EncodedId' value='@((int)sensor.SensorType)' style='display: none'/>
+            @{
+                SensorType type;
+                if (sensor.Header.Split('/')[^1] == "Service status")
+                    type = SensorType.Enum;
+                else
+                    type = sensor.SensorType;
+            }
+            <input id='sensor_type_@Model.EncodedId' value='@((int)type)' style='display: none'/>
         </div>
 
         <div id="status_metainfo" class="d-flex justify-content-start">

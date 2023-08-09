@@ -7,9 +7,8 @@ namespace HSMDataCollector.DefaultSensors.Windows
 {
     internal sealed class WindowsNeedUpdate : MonitoringSensorBase<bool>
     {
-        private readonly DateTime _windowsLastUpdate;
         private readonly TimeSpan _acceptableUpdateInterval;
-
+        private readonly DateTime _windowsLastUpdate;
 
         protected override string SensorName => "Is need update";
 

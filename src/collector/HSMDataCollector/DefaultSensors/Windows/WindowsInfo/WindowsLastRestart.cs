@@ -7,8 +7,8 @@ namespace HSMDataCollector.DefaultSensors.Windows
 {
     internal sealed class WindowsLastRestart : MonitoringSensorBase<TimeSpan>
     {
-        private const string CategoryName = "System";
         private const string CounterName = "System Up Time";
+        private const string CategoryName = "System";
 
         private readonly PerformanceCounter _performanceCounter;
 

@@ -104,7 +104,43 @@ namespace HSMServer.Controllers
             StoredUser.History.Reload(model);
         }
 
+        [HttpPost]
+        public Task<JsonResult> GetServiceStatusHistory([FromBody] GetSensorHistoryModel model)
+        {
+            if (!_tree.Sensors.TryGetValue(SensorPathHelper.DecodeGuid(model.EncodedId), out var sensor))
+                return Task.FromResult(_emptyJsonResult);
 
+            var splittedPath = sensor.FullPath.Split('/');
+            var nodeIds = _tree.GetAllNodeSensors(sensor.RootProduct.Id);
+
+            var sensorId = Guid.Empty;
+            var pathComparisonValue = int.MinValue;
+            var pathLength = int.MaxValue;
+
+            foreach (var id in nodeIds)
+                if (_tree.Sensors.TryGetValue(id, out var foundSensor))
+                    if (foundSensor.Name == "Service status" && foundSensor.Parent.Name == "Product Info")
+                        CheckPath(foundSensor);
+
+
+            void CheckPath(NodeViewModel sensor)
+            {
+                var comparedPath = sensor.FullPath.Split('/');
+                var i = 0;
+                while (i < comparedPath.Length && i < splittedPath.Length && comparedPath[i] == splittedPath[i])
+                    i++;
+                
+                if (i > pathComparisonValue || (i == pathComparisonValue && pathLength > comparedPath.Length))
+                {
+                    sensorId = sensor.Id;
+                    pathComparisonValue = i;
+                    pathLength = comparedPath.Length;
+                }
+            }
+            
+            return sensorId == Guid.Empty ? Task.FromResult(_emptyJsonResult) : ChartHistory(SpecifyLatestHistoryModel(model with { EncodedId = sensorId.ToString() }));
+        }
+        
         public async Task<FileResult> ExportHistory([FromQuery(Name = "EncodedId")] string encodedId, [FromQuery(Name = "Type")] int type,
             [FromQuery(Name = "From")] DateTime from, [FromQuery(Name = "To")] DateTime to)
         {

@@ -21,7 +21,8 @@ namespace HSMServer.Core.Model
         DoubleBar,
         File,
         TimeSpan,
-        Version
+        Version,
+        Enum
     }
 
 

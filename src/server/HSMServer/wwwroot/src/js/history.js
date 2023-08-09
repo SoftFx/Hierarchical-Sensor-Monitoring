@@ -1,4 +1,21 @@
-﻿var millisecondsInHour = 1000 * 3600;
+﻿window.getFromAndTo = function (encodedId) {
+    let from = $(`#from_${encodedId}`).val();
+    let to = $(`#to_${encodedId}`).val();
+
+    if (to == "") {
+        to = new Date().getTime() + 60000;
+        $(`#to_${encodedId}`).val(datetimeLocal(to));
+    }
+
+    if (from == "") {
+        from = to.AddDays(-1);
+        $(`#from_${encodedId}`).val(datetimeLocal(from));
+    }
+
+    return { from, to };
+}
+
+var millisecondsInHour = 1000 * 3600;
 var millisecondsInDay = millisecondsInHour * 24;
 
 Date.prototype.AddDays = function (days) {
@@ -12,8 +29,7 @@ Date.prototype.AddHours = function(hours) {
     newDate.setHours(newDate.getHours() + hours);
     return newDate;
 }
-
-function Data(to, from, type, encodedId) {
+window.Data = function (to, from, type, encodedId) {
     return { "To": to, "From": from, "Type": type, "EncodedId": encodedId, "BarsCount": getBarsCount(encodedId) };
 }
 
@@ -242,23 +258,6 @@ function Data(to, from, type, encodedId) {
     function isTableHistorySelected(encodedId) {
         let el = $('#values_parent_' + encodedId);
         return el.hasClass("show");
-    }
-
-    function getFromAndTo(encodedId) {
-        let from = $(`#from_${encodedId}`).val();
-        let to = $(`#to_${encodedId}`).val();
-
-        if (to == "") {
-            to = new Date().getTime() + 60000;
-            $(`#to_${encodedId}`).val(datetimeLocal(to));
-        }
-
-        if (from == "") {
-            from = to.AddDays(-1);
-            $(`#from_${encodedId}`).val(datetimeLocal(from));
-        }
-
-        return { from, to };
     }
 
     function getToDate() {
