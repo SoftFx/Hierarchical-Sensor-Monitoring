@@ -555,7 +555,7 @@ namespace HSMServer.Controllers
         private StoreInfo BuildStoreInfo(SensorValueBase valueBase, BaseValue baseValue) =>
             new(GetKey(valueBase), valueBase.Path) { BaseValue = baseValue };
 
-        private bool TryBuildSensorUpdate(SensorUpdateRequest request, out SensorUpdate update, out string message)
+        private bool TryBuildSensorUpdate(SensorUpdateRequest request, out SensorUpdateRequestModel update, out string message)
         {
             update = null;
             var requestModel = new BaseRequestModel(GetKey(request), request.Path);
@@ -563,7 +563,7 @@ namespace HSMServer.Controllers
             if (requestModel.TryCheckRequest(out message) &&
                 _cache.TryCheckSensorUpdateKeyPermission(requestModel, out var sensorId, out message))
             {
-                update = request.Convert(sensorId);
+                update = new(requestModel, request.Convert(sensorId));
                 return true;
             }
 

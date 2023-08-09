@@ -258,9 +258,36 @@ namespace HSMServer.Core.Cache
         public List<AccessKeyModel> GetMasterKeys() => GetAccessKeys().Where(x => x.IsMaster).ToList();
 
 
-        public void AddOrUpdateSensor(SensorUpdate update)
+        public void AddOrUpdateSensor(SensorUpdateRequestModel request)
         {
+            var update = request.Update;
 
+            if (update.Id != Guid.Empty)
+            {
+                UpdateSensor(update);
+                return;
+            }
+
+            if (!TryGetProductByKey(request, out var product, out _))
+                return;
+
+            var parentProduct = AddNonExistingProductsAndGetParentProduct(product, request);
+            var sensorName = request.PathParts[^1];
+
+            SensorEntity entity = new()
+            {
+                Id = Guid.NewGuid().ToString(),
+                DisplayName = sensorName,
+                //Type = (byte)value.Type, //TODO: SensorUpdateRequest should contain SensorType
+            };
+
+            var sensor = SensorModelFactory.Build(entity);
+            parentProduct.AddSensor(sensor);
+
+            //sensor.Policies.AddDefaultSensors();
+
+            AddSensor(sensor);
+            UpdateProduct(parentProduct);
         }
 
         public void UpdateSensor(SensorUpdate update)
