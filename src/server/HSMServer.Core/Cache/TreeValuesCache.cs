@@ -858,7 +858,7 @@ namespace HSMServer.Core.Cache
 
                 snapshot.IsExpired = timeout;
 
-                SendPolicyResult(sensor, timeout ? .PolicyResult : sensor.Policies.TimeToLive.Ok);
+                SendPolicyResult(sensor, timeout ? ttl.PolicyResult : ttl.Ok);
             }
 
             SensorUpdateView(sensor);
