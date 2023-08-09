@@ -497,7 +497,7 @@ namespace HSMServer.Core.Cache
             var policies = RequestPolicies();
 
             var productEntities = RequestProducts();
-            ApplyProducts(productEntities, policies);
+            ApplyProducts(productEntities);
 
             var sensorEntities = RequestSensors();
 
@@ -564,7 +564,7 @@ namespace HSMServer.Core.Cache
             return policyEntities.ToDictionary(k => new Guid(k.Id).ToString(), v => v);
         }
 
-        private void ApplyProducts(List<ProductEntity> productEntities, Dictionary<string, PolicyEntity> policies)
+        private void ApplyProducts(List<ProductEntity> productEntities)
         {
             _logger.Info($"{nameof(productEntities)} are applying");
 
@@ -628,6 +628,7 @@ namespace HSMServer.Core.Cache
 
                     _sensors.TryAdd(sensor.Id, sensor);
                     SubscribeSensorToPolicyUpdate(sensor);
+                    SensorUpdateView(sensor);
                 }
                 catch (Exception ex)
                 {
