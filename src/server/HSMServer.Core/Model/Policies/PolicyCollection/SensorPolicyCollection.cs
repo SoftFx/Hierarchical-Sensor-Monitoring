@@ -77,8 +77,6 @@ namespace HSMServer.Core.Model.Policies
 
         internal bool TryValidate(BaseValue value, out T valueT, bool updateSensor = true)
         {
-            SensorResult = SensorResult.Ok;
-
             valueT = value as T;
 
             if (!CorrectTypePolicy<T>.Validate(valueT))
@@ -106,8 +104,6 @@ namespace HSMServer.Core.Model.Policies
                 PolicyResult.AddSingleAlert(TimeToLive);
                 SensorResult += TimeToLive.SensorResult;
             }
-            else
-                TryValidate(value, out _);
 
             SensorExpired?.Invoke(_sensor, timeout);
 
@@ -148,6 +144,7 @@ namespace HSMServer.Core.Model.Policies
 
         protected override bool CalculateStorageResult(ValueType value, bool updateStatus = true)
         {
+            SensorResult = SensorResult.Ok;
             PolicyResult = new(_sensor.Id);
 
             foreach (var policy in _storage.Values)
