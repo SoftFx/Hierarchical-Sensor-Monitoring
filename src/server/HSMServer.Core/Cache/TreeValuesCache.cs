@@ -337,7 +337,7 @@ namespace HSMServer.Core.Cache
 
         public void SendPolicyResult(BaseSensorModel sensor, PolicyResult? policy = null)
         {
-            if (!sensor.PolicyResult.IsOk && sensor.State != SensorState.Muted)
+            if (sensor.State != SensorState.Muted)
                 ChangePolicyResultEvent?.Invoke(policy ?? sensor.PolicyResult);
         }
 
@@ -467,7 +467,9 @@ namespace HSMServer.Core.Cache
             if (sensor.TryAddValue(value) && sensor.LastDbValue != null)
                 SaveSensorValueToDb(sensor.LastDbValue, sensor.Id);
 
-            SendPolicyResult(sensor);
+            if (!sensor.PolicyResult.IsOk)
+                SendPolicyResult(sensor);
+
             SensorUpdateView(sensor);
         }
 
