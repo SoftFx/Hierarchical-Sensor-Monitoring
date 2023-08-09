@@ -88,11 +88,11 @@ namespace HSMServer.Core.Model
         }
 
 
+        protected override void UpdateTTL(PolicyUpdate update) => Policies.UpdateTTL(update);
+
         internal abstract bool TryAddValue(BaseValue value);
 
         internal abstract void AddDbValue(byte[] bytes);
-
-        internal abstract void RecalculatePolicy();
 
         internal abstract List<BaseValue> ConvertValues(List<byte[]> valuesBytes);
 
