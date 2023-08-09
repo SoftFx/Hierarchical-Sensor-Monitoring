@@ -1,4 +1,45 @@
-﻿window.displayGraph = function(graphData, graphType, graphElementId, graphName) {
+﻿window.barGraphData = {
+    min: undefined,
+    max: undefined,
+    mean: undefined,
+    count: undefined,
+    bar: undefined,
+    x: undefined,
+    
+    graph : {
+        id: undefined,
+        self: undefined
+    }
+};
+
+window.addBarPlot = function (name){
+    if (name === 'bar')
+        Plotly.addTraces(barGraphData.graph.id, barGraphData.bar);
+    else
+        Plotly.addTraces(barGraphData.graph.id, getSimpleGraphData(barGraphData.x, barGraphData[name], 'scatter', name));
+    Plotly.update(barGraphData.graph.id, {}, {hovermode: 'x'});
+};
+
+window.removeBarPlot = function (name){
+    console.log(barGraphData.graph);
+    let indexToDelete = undefined;
+    let plots = barGraphData.graph.self._fullData;
+    for(let i = 0; i < plots.length; i++) {
+        if (plots[i].name === name)
+        {
+            indexToDelete = i;
+            break;
+        }
+    }
+    
+    if (indexToDelete !== undefined){
+        Plotly.deleteTraces(barGraphData.graph.id, indexToDelete);
+    }
+}
+
+window.displayGraph = function(graphData, graphType, graphElementId, graphName) {
+    barGraphData.graph.id = graphElementId
+    barGraphData.graph.self = $(`#${graphElementId}`)[0];
     let convertedData = convertToGraphData(graphData, graphType, graphName);
     let zoomData = getPreviousZoomData(graphElementId);
     var plotIcon = {
@@ -214,13 +255,15 @@ function convertToGraphData(graphData, graphType, graphName) {
         ];
     }
     
-    function getSimpleGraphData(timeList, dataList, chartType) {
+    function getSimpleGraphData(timeList, dataList, chartType, name = 'custom') {
         let data = [
             {
                 x: timeList,
                 y: dataList,
                 type: chartType,
                 //mode: "lines"
+                showlegend: false,
+                name: name
             }
         ];
         return data;
@@ -297,6 +340,12 @@ function getTimeSpanLayout(datalist) {
 
 //Boxplots
 {
+    function getCountFromBars(escapedBarsData) {
+        return escapedBarsData.map(function (d) {
+            return d.count;
+        })
+    }
+    
     function getTimeFromBars(escapedBarsData) {
         return escapedBarsData.map(function (d) {
             if (d.closeTime.toString().startsWith("0001")) {
@@ -314,21 +363,42 @@ function getTimeSpanLayout(datalist) {
         let q3 = getBarsQ3(escapedBarsData);
         let mean = getBarsMean(escapedBarsData);
         let timeList = getTimeFromBars(escapedBarsData);
+        let count = getCountFromBars(escapedBarsData);
 
         let data =
         [
             {
                 "type": "box",
-                "name": graphName,
+                "name": 'bar',
                 "q1": q1,
                 "median": median,
                 "q3": q3,
                 "mean": mean,
                 "lowerfence": min,
                 "upperfence": max,
-                "x": timeList
+                "x": timeList,
+                count: count,
+                showlegend: false
             }
         ];
+        
+        window.barGraphData.count = count;
+        window.barGraphData.min = min;
+        window.barGraphData.max = max;
+        window.barGraphData.mean = mean;
+        window.barGraphData.bar = [{
+            "type": "box",
+            "name": 'bar',
+            "q1": q1,
+            "median": median,
+            "q3": q3,
+            "mean": mean,
+            "lowerfence": min,
+            "upperfence": max,
+            "x": timeList,
+            showlegend: false
+        }];
+        window.barGraphData.x = timeList;
 
         return data;
     }
