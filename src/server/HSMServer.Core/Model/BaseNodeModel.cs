@@ -86,7 +86,7 @@ namespace HSMServer.Core.Model
 
             Settings.Update(update, FullPath);
 
-            if (update is not null)
+            if (update.TTLPolicy is not null)
                 UpdateTTL(update.TTLPolicy);
 
             CheckTimeout();
