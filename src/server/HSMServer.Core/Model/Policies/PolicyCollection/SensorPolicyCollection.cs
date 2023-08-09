@@ -202,6 +202,9 @@ namespace HSMServer.Core.Model.Policies
 
                     Uploaded?.Invoke(ActionType.Add, policy);
                 }
+
+            if (_sensor.LastValue is not null)
+                CalculateStorageResult((ValueType)_sensor?.LastValue);
         }
 
         public override IEnumerator<Policy> GetEnumerator() => _storage.Values.GetEnumerator();
