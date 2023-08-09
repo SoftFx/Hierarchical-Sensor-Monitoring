@@ -150,22 +150,16 @@
         $("[id^='dataAlertsList_']").each(function () {
             const type = this.id.substring("dataAlertsList_".length, this.id.length);
 
-            setFormDataAlertsProperty(formData, "input", type, $(this), "Id");
-            setFormDataAlertsProperty(formData, "input", type, $(this), "EntityId");
-            setFormDataAlertsProperty(formData, "input", type, $(this), "IsDisabled");
-
             setFormDataAlerts(formData, type, $(this));
-        });
-    }
-
-    function setFormDataAlertsProperty(formData, element, type, alertsList, propertyName) {
-        alertsList.find(`${element}[name='${propertyName}']:first`).each(function (i) {
-            formData.append(`DataAlerts[${type}][${i}].${propertyName}`, $(this).val());
         });
     }
 
     function setFormDataAlerts(formData, type, alertsList) {
         alertsList.find(`div.dataAlertRow`).each(function (i) {
+            setFormDataAlertsProperty(formData, "input", type, i, $(this), "Id");
+            setFormDataAlertsProperty(formData, "input", type, i, $(this), "EntityId");
+            setFormDataAlertsProperty(formData, "input", type, i, $(this), "IsDisabled");
+
             $(this).find(`div[name='alertCondition']`).each(function (j) {
                 setFormDataAlertsListProperty(formData, type, i, j, $(this), "Conditions", "select", "Property");
 
@@ -208,6 +202,12 @@
                     });
                 }
             });
+        });
+    }
+
+    function setFormDataAlertsProperty(formData, element, type, i, block, propertyName) {
+        block.find(`${element}[name='${propertyName}']:first`).each(function () {
+            formData.append(`DataAlerts[${type}][${i}].${propertyName}`, $(this).val());
         });
     }
 

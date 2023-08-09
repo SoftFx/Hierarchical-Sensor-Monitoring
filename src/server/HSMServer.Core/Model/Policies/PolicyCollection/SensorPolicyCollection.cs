@@ -1,6 +1,7 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Cache.UpdateEntities;
+using HSMServer.Core.Journal;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -8,7 +9,7 @@ using System.Linq;
 
 namespace HSMServer.Core.Model.Policies
 {
-    public abstract class SensorPolicyCollection : PolicyCollectionBase
+    public abstract class SensorPolicyCollection : PolicyCollectionBase, IChangesEntity
     {
         internal protected SensorResult SensorResult { get; protected set; } = SensorResult.Ok;
 
@@ -16,6 +17,9 @@ namespace HSMServer.Core.Model.Policies
 
 
         internal Action<ActionType, Policy> Uploaded;
+        internal Action<BaseSensorModel, bool> SensorExpired;
+
+        public event Action<JournalRecordModel> ChangesHandler;
 
 
         internal abstract void Update(List<PolicyUpdate> updates, string initiator);
@@ -30,6 +34,8 @@ namespace HSMServer.Core.Model.Policies
             SensorResult = SensorResult.Ok;
             PolicyResult = PolicyResult.Ok;
         }
+
+        protected void CallJournal(JournalRecordModel record) => ChangesHandler?.Invoke(record);
     }
 
 
@@ -55,23 +61,22 @@ namespace HSMServer.Core.Model.Policies
         internal override void BuildDefault(BaseNodeModel node, PolicyEntity entity = null)
         {
             base.BuildDefault(node, entity);
+
             _typePolicy.RebuildState();
         }
 
         internal override void UpdateTTL(PolicyUpdate update)
         {
             var oldValue = TimeToLive.ToString();
-            RemoveAlert(TimeToLive);
 
             base.UpdateTTL(update);
+
             CallJournal(update.Id == Guid.Empty ? string.Empty : oldValue, TimeToLive.ToString(), update.Initiator);
         }
 
 
         internal bool TryValidate(BaseValue value, out T valueT, bool updateSensor = true)
         {
-            SensorResult = SensorResult.Ok;
-
             valueT = value as T;
 
             if (!CorrectTypePolicy<T>.Validate(valueT))
@@ -85,22 +90,22 @@ namespace HSMServer.Core.Model.Policies
             return CalculateStorageResult(valueT, updateSensor);
         }
 
-        internal bool SensorTimeout(DateTime? time, bool toNotify)
+        internal bool SensorTimeout(BaseValue value)
         {
-            if (TimeToLive is null || TimeToLive.IsDisabled || (_sensor?.Status?.IsOfftime ?? true))
+            if (TimeToLive is null || TimeToLive.IsDisabled || value is null || value.Status.IsOfftime())
                 return false;
 
-            var timeout = TimeToLive.HasTimeout(time);
+            RemoveAlert(TimeToLive);
+
+            var timeout = TimeToLive.HasTimeout(value.ReceivingTime);
 
             if (timeout)
             {
                 PolicyResult.AddSingleAlert(TimeToLive);
                 SensorResult += TimeToLive.SensorResult;
             }
-            else
-                RemoveAlert(TimeToLive);
 
-            SensorExpired?.Invoke(_sensor, timeout, toNotify);
+            SensorExpired?.Invoke(_sensor, timeout);
 
             return timeout;
         }
@@ -118,7 +123,6 @@ namespace HSMServer.Core.Model.Policies
                     Path = _sensor.FullPath,
                 });
         }
-
 
         private void RemoveAlert(Policy policy)
         {
@@ -140,6 +144,7 @@ namespace HSMServer.Core.Model.Policies
 
         protected override bool CalculateStorageResult(ValueType value, bool updateStatus = true)
         {
+            SensorResult = SensorResult.Ok;
             PolicyResult = new(_sensor.Id);
 
             foreach (var policy in _storage.Values)
@@ -150,6 +155,8 @@ namespace HSMServer.Core.Model.Policies
                     if (updateStatus)
                         SensorResult += policy.SensorResult;
                 }
+
+            SensorTimeout(value);
 
             return true;
         }
@@ -179,9 +186,6 @@ namespace HSMServer.Core.Model.Policies
                 }
                 else if (_storage.TryRemove(id, out var oldPolicy))
                 {
-                    if (_sensor.LastValue is ValueType lastValue && lastValue is not null)
-                        CalculateStorageResult(lastValue);
-
                     CallJournal(oldPolicy.ToString(), string.Empty, initiator);
 
                     Uploaded?.Invoke(ActionType.Delete, oldPolicy);
@@ -200,6 +204,9 @@ namespace HSMServer.Core.Model.Policies
 
                     Uploaded?.Invoke(ActionType.Add, policy);
                 }
+
+            if (_sensor.LastValue is not null)
+                CalculateStorageResult((ValueType)_sensor?.LastValue);
         }
 
         public override IEnumerator<Policy> GetEnumerator() => _storage.Values.GetEnumerator();
@@ -232,7 +239,7 @@ namespace HSMServer.Core.Model.Policies
                 },
                 null,
                 SensorStatus.Ok,
-                $"$status [$product]$path = $comment",
+                $"$prevStatus->$status [$product]$path = $comment",
                 null,
                 false);
 
