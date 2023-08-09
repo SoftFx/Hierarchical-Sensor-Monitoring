@@ -182,7 +182,7 @@ namespace HSMServer.Controllers.GrafanaDatasources.JsonSource
             var sensorValues = new List<BaseValue>(request.MaxDataPoints);
             var interval = new TimeSpan(0, 0, 0, 0, request.IntervalMs);
 
-            await foreach (var page in _cache.GetSensorValuesPage(sensor.Id, request.Range.FromUtc, request.Range.ToUtc, TreeValuesCache.MaxHistoryCount))
+            await foreach (var page in _cache.GetSensorValuesPage(sensor.Id, request.Range.FromUtc, request.Range.ToUtc, TreeValuesCache.MaxHistoryCount, false))
             {
                 foreach (var value in page)
                 {
