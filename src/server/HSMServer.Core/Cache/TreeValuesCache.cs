@@ -112,7 +112,7 @@ namespace HSMServer.Core.Cache
                 foreach (var (sensorId, _) in product.Sensors)
                     RemoveSensor(sensorId);
 
-                product.Policies.SensorExpired -= SetExpiredSnapshot;
+                RemoveBaseNodeSubscription(product);
 
                 product.Parent?.SubProducts.TryRemove(productId, out _);
                 _database.RemoveProduct(product.Id.ToString());
@@ -240,7 +240,7 @@ namespace HSMServer.Core.Cache
             sensor.Update(update);
             _database.UpdateSensor(sensor.ToEntity());
 
-            NotifyAboutChanges(sensor);
+            SensorUpdateView(sensor);
         }
 
         public void RemoveSensor(Guid sensorId, string initiator = null)
@@ -328,19 +328,20 @@ namespace HSMServer.Core.Cache
             _database.ClearSensorValues(sensor.Id.ToString(), from, request.To);
             _snapshot.Sensors[request.Id].History.From = request.To;
 
-            ChangeSensorEvent?.Invoke(sensor, ActionType.Update);
+            SensorUpdateView(sensor);
         }
 
 
         public BaseSensorModel GetSensor(Guid sensorId) => _sensors.GetValueOrDefault(sensorId);
 
-        public void NotifyAboutChanges(BaseSensorModel sensor)
-        {
-            if (!sensor.PolicyResult.IsOk && sensor.State != SensorState.Muted)
-                ChangePolicyResultEvent?.Invoke(sensor.PolicyResult);
 
-            ChangeSensorEvent?.Invoke(sensor, ActionType.Update);
+        public void SendPolicyResult(BaseSensorModel sensor, PolicyResult? policy = null)
+        {
+            if (sensor.State != SensorState.Muted)
+                ChangePolicyResultEvent?.Invoke(policy ?? sensor.PolicyResult);
         }
+
+        public void SensorUpdateView(BaseSensorModel sensor) => ChangeSensorEvent?.Invoke(sensor, ActionType.Update);
 
 
         public IAsyncEnumerable<List<BaseValue>> GetSensorValues(HistoryRequestModel request)
@@ -388,31 +389,33 @@ namespace HSMServer.Core.Cache
 
         private void AddBaseNodeSubscription(BaseNodeModel model)
         {
-            model.Policies.SensorExpired += SetExpiredSnapshot;
-            model.ChangesHandler += _journalService.AddRecord;
-            model.Policies.ChangesHandler += _journalService.AddRecord;
             model.Settings.ChangesHandler += _journalService.AddRecord;
+            model.ChangesHandler += _journalService.AddRecord;
         }
-        
+
         private void RemoveBaseNodeSubscription(BaseNodeModel model)
         {
-            model.Policies.SensorExpired -= SetExpiredSnapshot;
-            model.ChangesHandler -= _journalService.AddRecord;
-            model.Policies.ChangesHandler -= _journalService.AddRecord;
             model.Settings.ChangesHandler -= _journalService.AddRecord;
+            model.ChangesHandler -= _journalService.AddRecord;
         }
 
         private void SubscribeSensorToPolicyUpdate(BaseSensorModel sensor)
         {
-            AddBaseNodeSubscription(sensor);
+            sensor.Policies.ChangesHandler += _journalService.AddRecord;
+            sensor.Policies.SensorExpired += SetExpiredSnapshot;
             sensor.Policies.Uploaded += UpdatePolicy;
+
+            AddBaseNodeSubscription(sensor);
         }
 
         private void RemoveSensorPolicies(BaseSensorModel sensor)
         {
+            sensor.Policies.ChangesHandler -= _journalService.AddRecord;
+            sensor.Policies.SensorExpired -= SetExpiredSnapshot;
             sensor.Policies.Uploaded -= UpdatePolicy;
-            RemoveBaseNodeSubscription(sensor);
 
+            RemoveBaseNodeSubscription(sensor);
+            RemoveEntityPolicies(sensor);
             RemoveEntityPolicies(sensor);
         }
 
@@ -464,7 +467,10 @@ namespace HSMServer.Core.Cache
             if (sensor.TryAddValue(value) && sensor.LastDbValue != null)
                 SaveSensorValueToDb(sensor.LastDbValue, sensor.Id);
 
-            NotifyAboutChanges(sensor);
+            if (!sensor.PolicyResult.IsOk)
+                SendPolicyResult(sensor);
+
+            SensorUpdateView(sensor);
         }
 
         private void SaveSensorValueToDb(BaseValue value, Guid sensorId)
@@ -478,7 +484,7 @@ namespace HSMServer.Core.Cache
             ChangeProductEvent?.Invoke(product, ActionType.Update);
 
             foreach (var (_, sensor) in product.Sensors)
-                ChangeSensorEvent?.Invoke(sensor, ActionType.Update);
+                SensorUpdateView(sensor);
 
             foreach (var (_, subProduct) in product.SubProducts)
                 NotifyAboutProductChange(subProduct);
@@ -830,19 +836,6 @@ namespace HSMServer.Core.Cache
                 _snapshot.FlushState(true);
         }
 
-        private static Dictionary<string, PolicyEntity> GetPolicyModels(List<PolicyEntity> policyEntities)
-        {
-            Dictionary<string, PolicyEntity> policies = new(policyEntities.Count);
-
-            foreach (var entity in policyEntities)
-            {
-                //var policy = JsonSerializer.Deserialize<Policy>(entity);
-                policies.Add(new Guid(entity.Id).ToString(), entity);
-            }
-
-            return policies;
-        }
-
         public void UpdateCacheState()
         {
             foreach (var sensor in GetSensors())
@@ -857,23 +850,20 @@ namespace HSMServer.Core.Cache
                     UpdateMutedSensorState(sensor.Id);
         }
 
-        private void SetExpiredSnapshot(BaseSensorModel sensor, bool timeout, bool toNotify)
+        private void SetExpiredSnapshot(BaseSensorModel sensor, bool timeout)
         {
             var snapshot = _snapshot.Sensors[sensor.Id];
 
             if (snapshot.IsExpired != timeout)
             {
+                var ttl = sensor.Policies.TimeToLive;
+
                 snapshot.IsExpired = timeout;
 
-                if (!timeout)
-                {
-                    ChangePolicyResultEvent?.Invoke(sensor.Policies.TimeToLive.Ok.PolicyResult);
-                    sensor.RecalculatePolicy();
-                }
-
-                if (toNotify)
-                    NotifyAboutChanges(sensor);
+                SendPolicyResult(sensor, timeout ? ttl.PolicyResult : ttl.Ok);
             }
+
+            SensorUpdateView(sensor);
         }
     }
 }

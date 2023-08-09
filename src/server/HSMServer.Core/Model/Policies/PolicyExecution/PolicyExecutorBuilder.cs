@@ -31,7 +31,7 @@ namespace HSMServer.Core.Model.Policies
         {
             var newValue = newVal.Value;
 
-            return oldVal is not null && oldVal != newVal && !newValue.IsOff() && (!oldVal.Value.IsOff() || newValue.IsError());
+            return oldVal is not null && oldVal != newVal && !newValue.IsOfftime() && (!oldVal.Value.IsOfftime() || newValue.IsError());
         }
 
 

@@ -14,9 +14,6 @@ namespace HSMServer.Core.Model.NodeSettings
         public abstract bool IsSet { get; }
 
 
-        public Action<ActionType, TimeIntervalModel> Uploaded;
-
-
         internal abstract bool TrySetValue(TimeIntervalModel policy);
 
         internal abstract TimeIntervalEntity ToEntity();
@@ -48,8 +45,6 @@ namespace HSMServer.Core.Model.NodeSettings
             if (newValue is not null && CurValue.ToString() != newValue.ToString())
             {
                 CurValue = newValue;
-
-                Uploaded?.Invoke(ActionType.Update, newValue);
 
                 return true;
             }
