@@ -83,7 +83,7 @@ namespace HSMServer.Model.DataAlerts
 
     public abstract class DataAlertViewModel : DataAlertViewModelBase
     {
-        protected virtual string DefaultCommentTemplate { get; } = "$sensor $operation $target";
+        protected virtual string DefaultCommentTemplate { get; } = "[$product]$path $operation $target";
 
         protected virtual string DefaultIcon { get; }
 
