@@ -41,9 +41,6 @@ namespace HSMServer.Core.Model.Policies
         public string Icon { get; private set; }
 
 
-        internal event Action PolicyUpdateEvent;
-
-
         public string Template
         {
             get => _userTemplate;
@@ -111,8 +108,6 @@ namespace HSMServer.Core.Model.Policies
             Icon = update.Icon;
 
             UpdateConditions(update.Conditions, Update);
-
-            PolicyUpdateEvent.Invoke();
         }
 
         internal void Apply(PolicyEntity entity, BaseSensorModel sensor = null)

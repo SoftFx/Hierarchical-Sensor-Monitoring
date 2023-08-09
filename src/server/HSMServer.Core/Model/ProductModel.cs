@@ -71,9 +71,6 @@ namespace HSMServer.Core.Model
 
             NotificationsSettings = update?.NotificationSettings ?? NotificationsSettings;
 
-            if (update.TTLPolicy is not null)
-                UpdateTTLPolicy(this, update.TTLPolicy);
-
             return this;
         }
 
@@ -106,16 +103,22 @@ namespace HSMServer.Core.Model
             TTLPolicy = Policies.TimeToLive?.ToEntity(),
         };
 
-        private static void UpdateTTLPolicy(ProductModel model, PolicyUpdate update)
+
+        protected override void UpdateTTL(PolicyUpdate update)
         {
-            model.Policies.TimeToLive.Update(update);
+            static void UpdateTTLPolicy(ProductModel model, PolicyUpdate update)
+            {
+                model.Policies.TimeToLive.Update(update);
 
-            foreach (var (_, subProduct) in model.SubProducts)
-                UpdateTTLPolicy(subProduct, update);
+                foreach (var (_, subProduct) in model.SubProducts)
+                    UpdateTTLPolicy(subProduct, update);
 
-            foreach (var (_, sensor) in model.Sensors)
-                if (!sensor.Settings.TTL.IsSet)
-                    sensor.Policies.TimeToLive.Update(update);
+                foreach (var (_, sensor) in model.Sensors)
+                    if (!sensor.Settings.TTL.IsSet)
+                        sensor.Policies.TimeToLive.Update(update);
+            }
+
+            UpdateTTLPolicy(this, update);
         }
     }
 }
