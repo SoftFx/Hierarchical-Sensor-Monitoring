@@ -31,7 +31,7 @@ namespace HSMServer.Core.Model
             return canStore;
         }
 
-        internal override List<BaseValue> ConvertValues(List<byte[]> pages, bool includeTTL = true) => includeTTL ? pages.Select(Convert).ToList() : pages.Select(Convert).Where(x => x.Comment != "#Timeout").ToList();
+        internal override List<BaseValue> ConvertValues(List<byte[]> pages, bool includeTTL) => includeTTL ? pages.Select(Convert).ToList() : pages.Select(Convert).Where(x => x.Comment != TimeoutComment).ToList();
 
         internal override void AddDbValue(byte[] bytes) => Storage.AddValue((T)Convert(bytes));
 

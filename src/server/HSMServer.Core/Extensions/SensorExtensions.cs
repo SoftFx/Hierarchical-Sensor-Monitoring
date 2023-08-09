@@ -35,40 +35,26 @@ namespace HSMServer.Core
 
         public static BaseValue GetTimeoutBaseValue(this SensorType type) => type switch
         {
-            SensorType.Boolean => new BooleanValue().SetDefaultValue(),
-            SensorType.Integer => new IntegerValue().SetDefaultValue(),
-            SensorType.Double => new DoubleValue().SetDefaultValue(),
-            SensorType.String => new StringValue().SetDefaultValue(),
-            SensorType.IntegerBar => new IntegerBarValue().SetDefaultValue(),
-            SensorType.DoubleBar => new DoubleBarValue().SetDefaultValue(),
-            SensorType.File => new FileValue().SetDefaultValue(),
-            SensorType.TimeSpan => new TimeSpanValue().SetDefaultValue(),
-            SensorType.Version => new VersionValue().SetDefaultValue(),
+            SensorType.Boolean => BuildDefault<BooleanValue>(),
+            SensorType.Integer => BuildDefault<IntegerValue>(),
+            SensorType.Double => BuildDefault<DoubleValue>(),
+            SensorType.String => BuildDefault<StringValue>(),
+            SensorType.IntegerBar => BuildDefault<IntegerBarValue>(),
+            SensorType.DoubleBar => BuildDefault<DoubleBarValue>(),
+            SensorType.File => BuildDefault<FileValue>(),
+            SensorType.TimeSpan => BuildDefault<TimeSpanValue>(),
+            SensorType.Version => BuildDefault<VersionValue>(),
             _ => null
         };
 
-        private static BaseValue<T> SetDefaultValue<T>(this BaseValue<T> value) =>
-            value with
+
+        private static T BuildDefault<T>() where T : BaseValue, new()
+        {
+            return new T()
             {
-                Value = default,
-                Comment = "#Timeout",
                 ReceivingTime = DateTime.UtcNow,
-                Time = DateTime.UtcNow
+                Time = DateTime.UtcNow,
             };
-
-        private static BarBaseValue<T> SetDefaultValue<T>(this BarBaseValue<T> value) where T : INumber<T> =>
-            value with
-            {
-                LastValue = default,
-                Min = default,
-                Max = default,
-                Mean = default,
-                Count = default,
-                Comment = "#Timeout",
-                ReceivingTime = DateTime.UtcNow,
-                Time = DateTime.UtcNow
-            };
-
-
+        }
     }
 }

@@ -9,5 +9,7 @@ namespace HSMSensorDataObjects.HistoryRequests
         public DateTime? To { get; set; }
 
         public int? Count { get; set; }
+        
+        public bool IncludeTtlHistory { get; set; }
     }
 }

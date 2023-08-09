@@ -409,13 +409,13 @@ namespace HSMServer.Controllers
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status406NotAcceptable)]
-        public async Task<ActionResult<string>> Get([FromBody] HistoryRequest request, [FromQuery] bool isTTLIncluded = true)
+        public async Task<ActionResult<string>> Get([FromBody] HistoryRequest request)
         {
             try
             {
                 if (TryCheckReadHistoryRequest(request, out var requestModel, out var message))
                 {
-                    var historyValues = await _cache.GetSensorValues(requestModel.AddTTlFlag(isTTLIncluded)).Flatten();
+                    var historyValues = await _cache.GetSensorValues(requestModel).Flatten();
                     var response = JsonSerializer.Serialize(historyValues.Convert());
 
                     return Ok(response);

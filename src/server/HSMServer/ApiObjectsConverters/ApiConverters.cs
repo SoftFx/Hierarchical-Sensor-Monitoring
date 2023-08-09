@@ -204,7 +204,8 @@ namespace HSMServer.ApiObjectsConverters
             {
                 From = request.From,
                 To = request.To,
-                Count = request.Count
+                Count = request.Count,
+                IncludeTtlHistory = request.IncludeTtlHistory
             };
 
         public static SensorValueBase CreateNewSensorValue(SensorType sensorType) => sensorType switch

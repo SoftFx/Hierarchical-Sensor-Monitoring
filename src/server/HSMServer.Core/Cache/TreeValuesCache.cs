@@ -354,8 +354,8 @@ namespace HSMServer.Core.Cache
             };
 
             return count > 0
-                ? GetSensorValuesPage(sensorId, request.From, request.To ?? DateTime.UtcNow.AddDays(1), count, request.IncludeTTL)
-                : GetSensorValuesPage(sensorId, DateTime.MinValue, request.From, count, request.IncludeTTL);
+                ? GetSensorValuesPage(sensorId, request.From, request.To ?? DateTime.UtcNow.AddDays(1), count, request.IncludeTtlHistory)
+                : GetSensorValuesPage(sensorId, DateTime.MinValue, request.From, count, request.IncludeTtlHistory);
         }
 
         public async IAsyncEnumerable<List<BaseValue>> GetSensorValuesPage(Guid sensorId, DateTime from, DateTime to, int count, bool includeTTL = true)
@@ -826,7 +826,7 @@ namespace HSMServer.Core.Cache
             {
                 var isTimeout = sensor.CheckTimeout();  
                 
-                if (isTimeout && sensor.LastDbValue != null && sensor.LastDbValue.Comment != "#Timeout")
+                if (isTimeout && sensor.LastDbValue != null && sensor.LastDbValue.Comment != BaseSensorModel.TimeoutComment)
                 {
                     var value = sensor.LastDbValue.Type.GetTimeoutBaseValue();
                     if (value is not null && sensor.TryAddValue(value))

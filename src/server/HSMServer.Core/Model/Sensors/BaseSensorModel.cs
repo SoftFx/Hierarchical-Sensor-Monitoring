@@ -29,6 +29,9 @@ namespace HSMServer.Core.Model
 
     public abstract class BaseSensorModel : BaseNodeModel
     {
+        public const string TimeoutComment = "#Timeout"; 
+
+
         private static readonly SensorResult _muteResult = new(SensorStatus.OffTime, "Muted");
         private readonly PolicyEntity _ttlEntity;
 
@@ -94,7 +97,7 @@ namespace HSMServer.Core.Model
 
         internal abstract void RecalculatePolicy();
 
-        internal abstract List<BaseValue> ConvertValues(List<byte[]> valuesBytes, bool includeTTL = true);
+        internal abstract List<BaseValue> ConvertValues(List<byte[]> valuesBytes, bool includeTTL);
 
 
         internal override BaseNodeModel AddParent(ProductModel parent)
