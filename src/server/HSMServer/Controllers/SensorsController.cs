@@ -561,7 +561,7 @@ namespace HSMServer.Controllers
             {
                 if (sensorId == Guid.Empty && request.SensorType is null)
                 {
-                    message = $"Type property is required, because sensor {request.Path} doesn't exist";
+                    message = $"{nameof(request.SensorType)} property is required, because sensor {request.Path} doesn't exist";
                     return false;
                 }
 
