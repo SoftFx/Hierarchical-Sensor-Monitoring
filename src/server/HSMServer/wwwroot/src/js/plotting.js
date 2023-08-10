@@ -480,10 +480,19 @@ function getPlotType(graphType) {
             icon: icon,
             click: function(gd) {
                 let graph = $(`#${graphElementId}`)[0];
-                let graphLength = graph._fullData.length;
-                if (graphLength > 1) {
-                    Plotly.deleteTraces(graphElementId, graphLength - 1);
-                    Plotly.update(graphElementId, {}, {hovermode: 'closest'});
+                let plots = graph._fullData;
+                if (plots.length > 1) {
+                    let indexToDelete = undefined;
+                    for(let i = 0; i < plots.length; i++) {
+                        if (plots[i].name === name)
+                        {
+                            indexToDelete = i;
+                            break;
+                        }
+                    }
+                    
+                    if (indexToDelete !== undefined)
+                        Plotly.deleteTraces(graphElementId, indexToDelete);
                 }
                 else {
                     const { from, to } = getFromAndTo(graphName);
@@ -500,18 +509,21 @@ function getPlotType(graphType) {
                             let escapedData = JSON.parse(data);
                             let graphData = getEnumGraphData(getTimeList(escapedData), getNumbersData(escapedData), isStatusService)
                             let ranges = graph._fullLayout.yaxis.range;
-                            let heat = getHeatMapForEnum(graphData[0], ranges[0], ranges[1])
+                            let heat = getHeatMapForEnum(graphData[0], name, ranges[0], ranges[1])
             
                             Plotly.addTraces(graphElementId, [heat]);
                             Plotly.update(graphElementId, {}, {hovermode: 'x'});
                         }
                     })
                 }
+
+                if (graph._fullData.length === 1)
+                    Plotly.update(graphElementId, {}, {hovermode: 'closest'});
             }
         }
     }
     
-    function getHeatMapForEnum(data, minValue = 0, maxValue = 1) {
+    function getHeatMapForEnum(data, name = 'custom', minValue = 0, maxValue = 1) {
         return {
             x: data.x,
             y: [minValue, maxValue],
@@ -524,6 +536,7 @@ function getPlotType(graphType) {
             opacity: 0.25,
             customdata: [data.customdata],
             hovertemplate: '%{customdata}<extra></extra>',
+            name: name
         }
     }
 
