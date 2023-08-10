@@ -266,12 +266,8 @@ namespace HSMServer.ApiObjectsConverters
                 _ => ApiSensorStatus.Ok,
             };
 
-        public static SensorType Convert(this HSMSensorDataObjects.SensorType? type)
-        {
-            if (!type.HasValue)
-                return default;
-
-            return type.Value switch
+        public static SensorType Convert(this HSMSensorDataObjects.SensorType type) =>
+            type switch
             {
                 HSMSensorDataObjects.SensorType.BooleanSensor => SensorType.Boolean,
                 HSMSensorDataObjects.SensorType.IntSensor => SensorType.Integer,
@@ -284,7 +280,6 @@ namespace HSMServer.ApiObjectsConverters
                 HSMSensorDataObjects.SensorType.DoubleBarSensor => SensorType.DoubleBar,
                 _ => throw new NotImplementedException(),
             };
-        }
 
 
         private static SensorStatus Convert(this ApiSensorStatus status) =>
