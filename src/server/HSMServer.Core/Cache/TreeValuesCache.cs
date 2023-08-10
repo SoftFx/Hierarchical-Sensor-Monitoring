@@ -13,6 +13,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using HSMSensorDataObjects.HistoryRequests;
 
 namespace HSMServer.Core.Cache
 {
@@ -354,19 +355,27 @@ namespace HSMServer.Core.Cache
             };
 
             return count > 0
-                ? GetSensorValuesPage(sensorId, request.From, request.To ?? DateTime.UtcNow.AddDays(1), count, request.IncludeTtlHistory)
-                : GetSensorValuesPage(sensorId, DateTime.MinValue, request.From, count, request.IncludeTtlHistory);
+                ? GetSensorValuesPage(sensorId, request.From, request.To ?? DateTime.UtcNow.AddDays(1), count, request.Options)
+                : GetSensorValuesPage(sensorId, DateTime.MinValue, request.From, count, request.Options);
         }
 
-        public async IAsyncEnumerable<List<BaseValue>> GetSensorValuesPage(Guid sensorId, DateTime from, DateTime to, int count, bool includeTTL = true)
+        public async IAsyncEnumerable<List<BaseValue>> GetSensorValuesPage(Guid sensorId, DateTime from, DateTime to, int count, RequestOptions options = default)
         {
             if (_sensors.TryGetValue(sensorId, out var sensor))
             {
                 var pages = _database.GetSensorValuesPage(sensorId.ToString(), from, to, count);
 
                 await foreach (var page in pages)
-                    yield return sensor.ConvertValues(page, includeTTL);
+                {
+                    var convertedValues = sensor.ConvertValues(page);
+                    yield return (options.HasFlag(RequestOptions.IncludeTtlHistory) ?
+                                  convertedValues :
+                                  convertedValues.Where(CheckTimout))
+                                  .ToList();
+                }
             }
+
+            static bool CheckTimout(BaseValue value) => value.Comment != BaseSensorModel.TimeoutComment;
         }
 
 

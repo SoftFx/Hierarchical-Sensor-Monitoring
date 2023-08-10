@@ -2,6 +2,7 @@
 using HSMServer.Extensions;
 using System;
 using System.Text.Json.Serialization;
+using HSMSensorDataObjects.HistoryRequests;
 
 namespace HSMServer.Model.Model.History
 {
@@ -27,6 +28,6 @@ namespace HSMServer.Model.Model.History
 
         public DateTime From { get; set; } = DateTime.MinValue;
 
-        public bool IncludeTTl { get; set; } = true;
+        public RequestOptions Options { get; set; }
     }
 }

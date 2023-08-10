@@ -10,6 +10,13 @@ namespace HSMSensorDataObjects.HistoryRequests
 
         public int? Count { get; set; }
         
-        public bool IncludeTtlHistory { get; set; }
+        public RequestOptions Options { get; set; }
+    }
+
+    [Flags]
+    public enum RequestOptions
+    {
+        None = 0,
+        IncludeTtlHistory,
     }
 }

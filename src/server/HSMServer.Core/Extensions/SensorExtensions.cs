@@ -44,7 +44,7 @@ namespace HSMServer.Core
             SensorType.File => BuildDefault<FileValue>(),
             SensorType.TimeSpan => BuildDefault<TimeSpanValue>(),
             SensorType.Version => BuildDefault<VersionValue>(),
-            _ => null
+            _ => throw new ArgumentException($"Sensor type = {type} is not valid")
         };
 
 
@@ -54,6 +54,7 @@ namespace HSMServer.Core
             {
                 ReceivingTime = DateTime.UtcNow,
                 Time = DateTime.UtcNow,
+                Comment = BaseSensorModel.TimeoutComment
             };
         }
     }

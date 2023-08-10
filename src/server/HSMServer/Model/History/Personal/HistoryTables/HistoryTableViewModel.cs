@@ -49,7 +49,7 @@ namespace HSMServer.Model.History
         {
             Reset();
 
-            _pagesEnumerator = cache.GetSensorValuesPage(_model.Id, request.FromUtc, request.ToUtc, request.Count, request.IncludeTTl).GetAsyncEnumerator(_source.Token);
+            _pagesEnumerator = cache.GetSensorValuesPage(_model.Id, request.FromUtc, request.ToUtc, request.Count, request.Options).GetAsyncEnumerator(_source.Token);
 
             await TryReadNextPage();
 
