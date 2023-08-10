@@ -3,7 +3,7 @@ using System.Collections.Generic;
 
 namespace HSMDataCollector.SyncQueue
 {
-    public interface IDataQueue<T>
+    public interface ISyncQueue<T>
     {
         event Action<List<T>> NewValuesEvent;
         event Action<T> NewValueEvent;

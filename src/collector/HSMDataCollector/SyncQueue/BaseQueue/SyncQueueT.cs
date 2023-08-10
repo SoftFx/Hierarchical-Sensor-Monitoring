@@ -5,7 +5,7 @@ using System.Collections.Generic;
 
 namespace HSMDataCollector.SyncQueue
 {
-    internal abstract class SyncQueue<T> : SyncQueue, IDataQueue<T>
+    internal abstract class SyncQueue<T> : SyncQueue, ISyncQueue<T>
     {
         private protected readonly ConcurrentQueue<T> _valuesQueue = new ConcurrentQueue<T>();
         private protected readonly ConcurrentQueue<T> _failedQueue = new ConcurrentQueue<T>();

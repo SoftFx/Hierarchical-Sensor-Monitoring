@@ -6,9 +6,9 @@ namespace HSMDataCollector.SyncQueue
 {
     internal interface IQueueManager : IDisposable
     {
-        IDataQueue<BaseRequest> Commands { get; }
-
-        IDataQueue<SensorValueBase> Data { get; }
+        ISyncQueue<SensorValueBase> Data { get; }
+        
+        ICommandQueue Commands { get; }
 
 
         void Init();

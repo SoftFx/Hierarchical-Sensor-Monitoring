@@ -1,5 +1,4 @@
 ﻿using HSMDataCollector.Core;
-using HSMSensorDataObjects;
 using HSMSensorDataObjects.SensorValueRequests;
 using System.Collections.Generic;
 
@@ -10,15 +9,15 @@ namespace HSMDataCollector.SyncQueue
         private readonly List<SyncQueue> _queueList = new List<SyncQueue>();
 
 
-        public IDataQueue<SensorValueBase> Data { get; }
+        public ISyncQueue<SensorValueBase> Data { get; }
 
-        public IDataQueue<BaseRequest> Commands { get; }
+        public ICommandQueue Commands { get; }
 
 
         internal QueueManager(CollectorOptions options) : base()
         {
-            Data = RegisterQueue(new SensorDataQueue(options));
             Commands = RegisterQueue(new CommandsQueue(options));
+            Data = RegisterQueue(new SensorDataQueue(options));
         }
 
 

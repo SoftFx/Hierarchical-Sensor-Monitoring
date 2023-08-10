@@ -76,7 +76,7 @@ namespace HSMDataCollector.Core
         public DataCollector(CollectorOptions options)
         {
             _queueManager = new QueueManager(options);
-            _sensorsStorage = new SensorsStorage(_queueManager as IValuesQueue, _logger);
+            _sensorsStorage = new SensorsStorage(_queueManager, _logger);
 
             Windows = new WindowsSensorsCollection(_sensorsStorage, _sensorsPrototype);
             Unix = new UnixSensorsCollection(_sensorsStorage, _sensorsPrototype);

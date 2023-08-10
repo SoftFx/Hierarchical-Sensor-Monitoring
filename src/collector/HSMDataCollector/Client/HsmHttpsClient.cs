@@ -25,9 +25,10 @@ namespace HSMDataCollector.Client
         private readonly HttpClient _client;
 
 
-        private IDataQueue<BaseRequest> CommandsQueue => _queueManager.Commands;
+        private ISyncQueue<SensorValueBase> DataQueue => _queueManager.Data;
 
-        private IDataQueue<SensorValueBase> DataQueue => _queueManager.Data;
+        private ICommandQueue CommandsQueue => _queueManager.Commands;
+
 
 
         internal HsmHttpsClient(CollectorOptions options, IQueueManager queueManager, ICollectorLogger logger)
@@ -47,8 +48,8 @@ namespace HSMDataCollector.Client
 
             _client.DefaultRequestHeaders.Add(nameof(BaseRequest.Key), options.AccessKey);
 
-            DataQueue.NewValueEvent += RecieveQueueData;
-            DataQueue.NewValuesEvent += RecieveQueueData;
+            DataQueue.NewValueEvent += RecieveDataQueue;
+            DataQueue.NewValuesEvent += RecieveDataQueue;
         }
 
 
@@ -90,8 +91,8 @@ namespace HSMDataCollector.Client
         {
             _tokenSource.Cancel();
 
-            DataQueue.NewValueEvent -= RecieveQueueData;
-            DataQueue.NewValuesEvent -= RecieveQueueData;
+            DataQueue.NewValueEvent -= RecieveDataQueue;
+            DataQueue.NewValuesEvent -= RecieveDataQueue;
 
             _client.Dispose();
         }
@@ -145,9 +146,9 @@ namespace HSMDataCollector.Client
             }
         }
 
-        private void RecieveQueueData(SensorValueBase value) => SendData(value);
+        private void RecieveDataQueue(SensorValueBase value) => SendData(value);
 
-        private void RecieveQueueData(List<SensorValueBase> value) => SendData(value);
+        private void RecieveDataQueue(List<SensorValueBase> value) => SendData(value);
 
         private async Task RequestToServer<T>(T value, string uri) where T : class
         {

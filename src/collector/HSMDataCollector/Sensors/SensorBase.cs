@@ -1,5 +1,6 @@
 using HSMDataCollector.Converters;
 using HSMDataCollector.Options;
+using HSMDataCollector.Requests;
 using HSMDataCollector.SensorsMetainfo;
 using HSMSensorDataObjects.SensorValueRequests;
 using System;
@@ -20,7 +21,7 @@ namespace HSMDataCollector.DefaultSensors
         public string SensorPath => _metainfo.Path; /*$"{_nodePath}/{SensorName}";*/
 
 
-        internal event Func<SensorMetainfo, Task<bool>> SensorMetainfoRequest;
+        internal event Func<PriorityRequest, Task<bool>> SensorCommandRequest;
 
         internal event Action<SensorValueBase> ReceiveSensorValue;
 
@@ -44,7 +45,7 @@ namespace HSMDataCollector.DefaultSensors
         }
 
 
-        internal virtual Task<bool> Init() => SensorMetainfoRequest?.Invoke(_metainfo) ?? Task.FromResult(true);
+        internal virtual Task<bool> Init() => SendCommand(new PriorityRequest(_metainfo.ToApi()));
 
         internal virtual Task<bool> Start() => Task.FromResult(true);
 
@@ -54,5 +55,8 @@ namespace HSMDataCollector.DefaultSensors
 
 
         public void Dispose() => Stop();
+
+
+        private Task<bool> SendCommand(PriorityRequest request) => SensorCommandRequest?.Invoke(request) ?? Task.FromResult(true);
     }
 }
