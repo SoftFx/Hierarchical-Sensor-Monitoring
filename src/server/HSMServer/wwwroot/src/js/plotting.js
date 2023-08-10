@@ -28,18 +28,20 @@
                         $.ajax({
                             type: 'POST',
                             data: JSON.stringify(body),
-                            url: 'SensorHistory/GetServiceStatusHistory',
+                            url: getSensorStatus,
                             contentType: 'application/json',
                             dataType: 'html',
                             cache: false,
                             async: true,
                             success: function (data){
                                 let escapedData = JSON.parse(data);
-                                let graphData = getEnumGraphData(getTimeList(escapedData), getNumbersData(escapedData))
-                                let ranges = graph._fullLayout.yaxis.range;
-                                let heat = getHeatMapForEnum(graphData[0], ranges[0], ranges[1])
-                                Plotly.addTraces(graphElementId, [heat]);
-                                Plotly.update(graphElementId, {}, {hovermode: 'x'});
+                                if (!jQuery.isEmptyObject(escapedData)) {
+                                    let graphData = getEnumGraphData(getTimeList(escapedData), getNumbersData(escapedData))
+                                    let ranges = graph._fullLayout.yaxis.range;
+                                    let heat = getHeatMapForEnum(graphData[0], ranges[0], ranges[1])
+                                    Plotly.addTraces(graphElementId, [heat]);
+                                    Plotly.update(graphElementId, {}, {hovermode: 'x'});
+                                }
                             }
                         })
                     }
