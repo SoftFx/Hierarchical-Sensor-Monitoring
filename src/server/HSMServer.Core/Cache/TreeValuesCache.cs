@@ -262,32 +262,18 @@ namespace HSMServer.Core.Cache
         {
             var update = request.Update;
 
-            if (update.Id != Guid.Empty)
+            if (update.Id == Guid.Empty)
             {
-                UpdateSensor(update);
-                return;
+                if (!TryGetProductByKey(request, out var product, out _))
+                    return;
+
+                var parentProduct = AddNonExistingProductsAndGetParentProduct(product, request);
+                var sensor = AddSensor(request, request.Type, parentProduct);
+
+                update = update with { Id = sensor.Id };
             }
 
-            if (!TryGetProductByKey(request, out var product, out _))
-                return;
-
-            var parentProduct = AddNonExistingProductsAndGetParentProduct(product, request);
-            var sensorName = request.PathParts[^1];
-
-            SensorEntity entity = new()
-            {
-                Id = Guid.NewGuid().ToString(),
-                DisplayName = sensorName,
-                Type = (byte)request.Type,
-            };
-
-            var sensor = SensorModelFactory.Build(entity);
-            parentProduct.AddSensor(sensor);
-
-            AddSensor(sensor);
-            UpdateProduct(parentProduct);
-
-            UpdateSensor(update with { Id = sensor.Id });
+            UpdateSensor(update);
         }
 
         public void UpdateSensor(SensorUpdate update)
@@ -483,6 +469,7 @@ namespace HSMServer.Core.Cache
                 _database.RemovePolicy(policyId);
         }
 
+
         private void UpdatesQueueNewItemsHandler(IEnumerable<StoreInfo> storeInfos)
         {
             foreach (var store in storeInfos)
@@ -501,22 +488,7 @@ namespace HSMServer.Core.Cache
             var sensor = parentProduct.Sensors.FirstOrDefault(s => s.Value.DisplayName == sensorName).Value;
 
             if (sensor == null)
-            {
-                SensorEntity entity = new()
-                {
-                    Id = Guid.NewGuid().ToString(),
-                    DisplayName = sensorName,
-                    Type = (byte)value.Type,
-                };
-
-                sensor = SensorModelFactory.Build(entity);
-                parentProduct.AddSensor(sensor);
-
-                sensor.Policies.AddDefaultSensors();
-
-                AddSensor(sensor);
-                UpdateProduct(parentProduct);
-            }
+                sensor = AddSensor(storeInfo, value.Type, parentProduct);
             else if (sensor.State == SensorState.Blocked)
                 return;
 
@@ -530,6 +502,7 @@ namespace HSMServer.Core.Cache
 
             SensorUpdateView(sensor);
         }
+
 
         private void SaveSensorValueToDb(BaseValue value, Guid sensorId)
         {
@@ -762,6 +735,27 @@ namespace HSMServer.Core.Cache
             }
 
             return product;
+        }
+
+        private BaseSensorModel AddSensor(BaseRequestModel request, SensorType type, ProductModel parent)
+        {
+            SensorEntity entity = new()
+            {
+                Id = Guid.NewGuid().ToString(),
+                DisplayName = request.PathParts[^1],
+                Type = (byte)type,
+            };
+
+            var sensor = SensorModelFactory.Build(entity);
+            parent.AddSensor(sensor);
+
+            if (request is StoreInfo)
+                sensor.Policies.AddDefault();
+
+            AddSensor(sensor);
+            UpdateProduct(parent);
+
+            return sensor;
         }
 
         private void AddSensor(BaseSensorModel sensor)
