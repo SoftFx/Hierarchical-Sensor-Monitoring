@@ -43,6 +43,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\api\HSMSensorDataObjects\HSMSensorDataObjects.csproj" />
     <ProjectReference Include="..\..\collector\HSMDataCollector\HSMDataCollector.csproj" />
     <ProjectReference Include="..\..\database\HSMDatabase\HSMDatabase.csproj" />
     <ProjectReference Include="..\HSMCommon\HSMCommon.csproj" />

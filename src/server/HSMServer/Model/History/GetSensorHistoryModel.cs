@@ -28,6 +28,7 @@ namespace HSMServer.Model.Model.History
 
         public DateTime From { get; set; } = DateTime.MinValue;
 
+        [JsonConverter(typeof(JsonStringEnumConverter))]
         public RequestOptions Options { get; set; }
     }
 }
