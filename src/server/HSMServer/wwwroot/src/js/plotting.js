@@ -21,7 +21,6 @@ window.addBarPlot = function (name){
 };
 
 window.removeBarPlot = function (name){
-    console.log(barGraphData.graph);
     let indexToDelete = undefined;
     let plots = barGraphData.graph.self._fullData;
     for(let i = 0; i < plots.length; i++) {
