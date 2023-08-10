@@ -833,13 +833,13 @@ namespace HSMServer.Core.Cache
         {
             foreach (var sensor in GetSensors())
             {
-                var isTimeout = sensor.CheckTimeout();  
+                var isTimeout = sensor.CheckTimeout();
                 
                 if (isTimeout && sensor.LastDbValue != null && sensor.LastDbValue.Comment != BaseSensorModel.TimeoutComment)
                 {
                     var value = sensor.LastDbValue.Type.GetTimeoutBaseValue();
                     if (value is not null && sensor.TryAddValue(value))
-                        SaveSensorValueToDb(sensor.LastDbValue, sensor.Id);
+                        SaveSensorValueToDb(value, sensor.Id);
                 }
             }
             
