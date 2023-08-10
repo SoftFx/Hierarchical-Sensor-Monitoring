@@ -92,17 +92,22 @@ namespace HSMServer.Core.Model.Policies
 
         internal bool SensorTimeout(BaseValue value)
         {
-            if (TimeToLive is null || TimeToLive.IsDisabled || value is null || value.Status.IsOfftime())
+            if (value is null || value.Status.IsOfftime())
                 return false;
 
             RemoveAlert(TimeToLive);
 
-            var timeout = TimeToLive.HasTimeout(value.ReceivingTime);
+            var timeout = false;
 
-            if (timeout)
+            if (TimeToLive is not null && !TimeToLive.IsDisabled)
             {
-                PolicyResult.AddSingleAlert(TimeToLive);
-                SensorResult += TimeToLive.SensorResult;
+                timeout = TimeToLive.HasTimeout(value.ReceivingTime);
+
+                if (timeout)
+                {
+                    PolicyResult.AddSingleAlert(TimeToLive);
+                    SensorResult += TimeToLive.SensorResult;
+                }
             }
 
             SensorExpired?.Invoke(_sensor, timeout);
