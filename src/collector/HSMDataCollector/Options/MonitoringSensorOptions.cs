@@ -26,11 +26,18 @@ namespace HSMDataCollector.Options
         public bool OnlyUniqValues { get; set; }
 
 
-        internal SensorType Type { get; set; }
+        internal SensorType Type { get; private set; }
 
         internal bool HasSettings => KeepHistory.HasValue || SelfDestroy.HasValue || TTL.HasValue;
 
         internal string SensorName { get; set; } //???
+
+        internal SensorOptions2 SetType(SensorType type)
+        {
+            Type = type;
+
+            return this;
+        }
     }
 
 

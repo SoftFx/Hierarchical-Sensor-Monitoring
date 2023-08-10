@@ -15,7 +15,7 @@ namespace HSMDataCollector.DefaultSensors.Other
         public CollectorStatusSensor(SensorOptions2 options) : base(options) { }
 
 
-        public void BuildAndSendValue(HSMClient client, CollectorStatus collectorStatus, string error)
+        public void BuildAndSendValue(HsmHpptsClient client, CollectorStatus collectorStatus, string error)
         {
             var dataStatus = string.IsNullOrEmpty(error) ? SensorStatus.Ok : SensorStatus.Error;
 

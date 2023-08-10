@@ -42,7 +42,7 @@ namespace HSMDataCollector.Core
         private readonly SensorsPrototype _sensorsPrototype = new SensorsPrototype();
         private readonly SensorsStorage _sensorsStorage;
         private readonly IDataQueue _dataQueue;
-        private readonly HSMClient _hsmClient;
+        private readonly HsmHpptsClient _hsmClient;
 
 
         internal static bool IsWindowsOS { get; } = RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
@@ -80,7 +80,7 @@ namespace HSMDataCollector.Core
             Windows = new WindowsSensorsCollection(_sensorsStorage, _sensorsPrototype);
             Unix = new UnixSensorsCollection(_sensorsStorage, _sensorsPrototype);
 
-            _hsmClient = new HSMClient(options, _dataQueue, _logger);
+            _hsmClient = new HsmHpptsClient(options, _dataQueue, _logger);
 
             ToRunning += ToStartingCollector;
             ToStopped += ToStoppedCollector;
@@ -432,7 +432,8 @@ namespace HSMDataCollector.Core
             return CreateInstantSensor<T>(options);
         }
 
-        private IInstantValueSensor<T> CreateInstantSensor<T>(SensorOptions2 options) => (IInstantValueSensor<T>)RegisterCustomSensor(new SensorInstant<T>(options));
+        private IInstantValueSensor<T> CreateInstantSensor<T>(SensorOptions2 options) => (IInstantValueSensor<T>)RegisterCustomSensor(new SensorInstant<T>(options.SetInstantType<T>()));
+
 
         private ILastValueSensor<T> CreateLastValueSensorInternal<T>(string path, T defaultValue, string description = "")
         {
@@ -468,10 +469,10 @@ namespace HSMDataCollector.Core
 
             var options = new BarSensorOptions()
             {
-                SensorName = name,
-                Path = nodePath,
                 CollectBarPeriod = TimeSpan.FromMilliseconds(barPeriod),
                 PostDataPeriod = TimeSpan.FromMilliseconds(postPeriod),
+                SensorName = name,
+                Path = nodePath,
             };
 
             return CreateBarSensor(new IntBarPublicSensor(options));

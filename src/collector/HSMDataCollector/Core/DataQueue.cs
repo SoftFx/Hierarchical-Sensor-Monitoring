@@ -13,8 +13,8 @@ namespace HSMDataCollector.Core
         private readonly ConcurrentQueue<SensorValueBase> _failedQueue = new ConcurrentQueue<SensorValueBase>();
 
         private readonly TimeSpan _packageCollectPeriod;
-        private readonly int _maxQueueSize;
         private readonly int _maxValuesInPackage;
+        private readonly int _maxQueueSize;
 
         private Timer _sendTimer;
         private bool _flushing;
