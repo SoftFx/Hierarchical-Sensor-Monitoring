@@ -19,12 +19,16 @@ namespace HSMServer.Core.Model
         internal override bool TryAddValue(BaseValue value)
         {
             var isLastValue = Storage.LastValue is null || value.Time >= Storage.LastValue.Time;
-            var canStore = Policies.TryValidate(value, out var valueT, isLastValue) && value?.Comment != TimeoutComment;
+            var canStore = Policies.TryValidate(value, out var valueT, isLastValue);
 
-            if (canStore)
+            if (value.IsTimeoutValue)
+            {
+                if (!Storage.IsTimeout) 
+                    Storage.AddValue(valueT);
+            }
+            else if (canStore)
             {
                 Storage.AddValue(valueT);
-
                 ReceivedNewValue?.Invoke(valueT);
             }
 

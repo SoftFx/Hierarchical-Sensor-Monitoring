@@ -21,18 +21,25 @@ namespace HSMServer.Core.Model
 
         internal override void AddValue(T value)
         {
-            var isTimeoutValue = value?.Comment == BaseSensorModel.TimeoutComment;
-            var canStore = PartialLastValue != null && PartialLastValue.OpenTime != value.OpenTime && !isTimeoutValue;
+            var canStore = PartialLastValue != null && PartialLastValue.OpenTime != value.OpenTime;
 
-            if (canStore)
+            if (value.IsTimeoutValue)
             {
-                _prevValue = PartialLastValue;
-
-                base.AddValue(PartialLastValue);
+                if (!IsTimeout)
+                    base.AddValue(value);
             }
+            else
+            {
+                if (canStore)
+                {
+                    IsTimeout = false;
+                    _prevValue = PartialLastValue;
 
-            if (!isTimeoutValue)
+                    base.AddValue(PartialLastValue);
+                }
+                
                 PartialLastValue = value;
+            }
         }
 
 

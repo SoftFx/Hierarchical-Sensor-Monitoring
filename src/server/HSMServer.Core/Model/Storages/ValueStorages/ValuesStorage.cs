@@ -50,16 +50,20 @@ namespace HSMServer.Core.Model
 
         internal virtual void AddValueBase(T value)
         {
-            if (value?.Comment == BaseSensorModel.TimeoutComment)
-                IsTimeout = true;
+            if (value.IsTimeoutValue && IsTimeout)
+                return;
 
             _cache.Enqueue(value);
 
             if (_cache.Count > CacheSize)
                 _cache.TryDequeue(out _);
 
-            if (_lastValue is null || value.Time >= _lastValue.Time && !IsTimeout)
-                _lastValue = value;
+            if (!value.IsTimeoutValue)
+                if (_lastValue is null || value.Time >= _lastValue.Time)
+                {
+                    _lastValue = value;
+                    IsTimeout = false;
+                }
         }
 
 
