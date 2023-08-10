@@ -1,5 +1,4 @@
 ﻿using HSMCommon.Constants;
-using HSMCommon.Extensions;
 using HSMDataCollector.Core;
 using HSMDataCollector.Options;
 using HSMDataCollector.PublicInterface;

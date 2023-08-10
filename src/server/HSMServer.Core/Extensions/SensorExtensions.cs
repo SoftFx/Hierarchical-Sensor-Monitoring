@@ -33,29 +33,31 @@ namespace HSMServer.Core
             _ => SensorStatus.Error,
         };
 
-        public static BaseValue GetTimeoutBaseValue(this SensorType type) => type switch
+        public static BaseValue GetTimeoutBaseValue(this SensorType type, DateTime lastUpdateTime, string value)
         {
-            SensorType.Boolean => BuildDefault<BooleanValue>(),
-            SensorType.Integer => BuildDefault<IntegerValue>(),
-            SensorType.Double => BuildDefault<DoubleValue>(),
-            SensorType.String => BuildDefault<StringValue>(),
-            SensorType.IntegerBar => BuildDefault<IntegerBarValue>(),
-            SensorType.DoubleBar => BuildDefault<DoubleBarValue>(),
-            SensorType.File => BuildDefault<FileValue>(),
-            SensorType.TimeSpan => BuildDefault<TimeSpanValue>(),
-            SensorType.Version => BuildDefault<VersionValue>(),
-            _ => throw new ArgumentException($"Sensor type = {type} is not valid")
-        };
-
-
-        private static T BuildDefault<T>() where T : BaseValue, new()
-        {
-            return new T()
+            return type switch
             {
-                ReceivingTime = DateTime.UtcNow,
-                Time = DateTime.UtcNow,
-                Comment = BaseSensorModel.TimeoutComment
+                SensorType.Boolean => BuildDefault<BooleanValue>(),
+                SensorType.Integer => BuildDefault<IntegerValue>(),
+                SensorType.Double => BuildDefault<DoubleValue>(),
+                SensorType.String => BuildDefault<StringValue>(),
+                SensorType.IntegerBar => BuildDefault<IntegerBarValue>(),
+                SensorType.DoubleBar => BuildDefault<DoubleBarValue>(),
+                SensorType.File => BuildDefault<FileValue>(),
+                SensorType.TimeSpan => BuildDefault<TimeSpanValue>(),
+                SensorType.Version => BuildDefault<VersionValue>(),
+                _ => throw new ArgumentException($"Sensor type = {type} is not valid")
             };
+            
+            T BuildDefault<T>() where T : BaseValue, new()
+            {
+                return new T()
+                {
+                    ReceivingTime = DateTime.UtcNow,
+                    Time = DateTime.UtcNow,
+                    Comment = $"{BaseSensorModel.TimeoutComment} - {lastUpdateTime}, {value}"
+                };
+            }
         }
     }
 }
