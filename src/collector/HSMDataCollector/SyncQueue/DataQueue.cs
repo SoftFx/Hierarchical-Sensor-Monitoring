@@ -1,11 +1,12 @@
-﻿using HSMDataCollector.Extensions;
+﻿using HSMDataCollector.Core;
+using HSMDataCollector.Extensions;
 using HSMSensorDataObjects.SensorValueRequests;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Threading;
 
-namespace HSMDataCollector.Core
+namespace HSMDataCollector.SyncQueue
 {
     internal sealed class DataQueue : IDataQueue, IValuesQueue
     {

@@ -9,6 +9,7 @@ using HSMDataCollector.InstantValue;
 using HSMDataCollector.Logging;
 using HSMDataCollector.Options;
 using HSMDataCollector.PublicInterface;
+using HSMDataCollector.SyncQueue;
 using HSMDataCollector.Sensors;
 using HSMSensorDataObjects;
 using System;
@@ -42,7 +43,7 @@ namespace HSMDataCollector.Core
         private readonly SensorsPrototype _sensorsPrototype = new SensorsPrototype();
         private readonly SensorsStorage _sensorsStorage;
         private readonly IDataQueue _dataQueue;
-        private readonly HsmHpptsClient _hsmClient;
+        private readonly HsmHttpsClient _hsmClient;
 
 
         internal static bool IsWindowsOS { get; } = RuntimeInformation.IsOSPlatform(OSPlatform.Windows);
@@ -80,7 +81,7 @@ namespace HSMDataCollector.Core
             Windows = new WindowsSensorsCollection(_sensorsStorage, _sensorsPrototype);
             Unix = new UnixSensorsCollection(_sensorsStorage, _sensorsPrototype);
 
-            _hsmClient = new HsmHpptsClient(options, _dataQueue, _logger);
+            _hsmClient = new HsmHttpsClient(options, _dataQueue, _logger);
 
             ToRunning += ToStartingCollector;
             ToStopped += ToStoppedCollector;

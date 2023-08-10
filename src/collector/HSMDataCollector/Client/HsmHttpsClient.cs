@@ -1,5 +1,6 @@
 using HSMDataCollector.Core;
 using HSMDataCollector.Logging;
+using HSMDataCollector.SyncQueue;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.SensorValueRequests;
 using Newtonsoft.Json;
@@ -15,7 +16,7 @@ using System.Threading.Tasks;
 
 namespace HSMDataCollector.Client
 {
-    internal sealed class HsmHpptsClient : IDisposable
+    internal sealed class HsmHttpsClient : IDisposable
     {
         private readonly CancellationTokenSource _tokenSource = new CancellationTokenSource();
         private readonly ICollectorLogger _logger;
@@ -24,7 +25,7 @@ namespace HSMDataCollector.Client
         private readonly HttpClient _client;
 
 
-        internal HsmHpptsClient(CollectorOptions options, IDataQueue dataQueue, ICollectorLogger logger)
+        internal HsmHttpsClient(CollectorOptions options, IDataQueue dataQueue, ICollectorLogger logger)
         {
             _dataQueue = dataQueue;
             _logger = logger;

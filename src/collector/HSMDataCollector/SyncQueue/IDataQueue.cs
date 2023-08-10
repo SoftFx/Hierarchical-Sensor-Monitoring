@@ -2,7 +2,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace HSMDataCollector.Core
+namespace HSMDataCollector.SyncQueue
 {
     public interface IDataQueue
     {
