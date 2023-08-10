@@ -10,8 +10,12 @@
         public byte State { get; init; }
 
 
-        public int Integration { get; init; }
+        public bool SaveOnlyUniqueValues { get; init; }
+
+        public int? SelectedUnit { get; init; }
 
         public long EndOfMuting { get; init; }
+
+        public int Integration { get; init; }
     }
 }

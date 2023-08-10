@@ -41,11 +41,15 @@ namespace HSMServer.Core.Model
         public abstract SensorType Type { get; }
 
 
+        public bool SaveOnlyUniqueValues { get; private set; }
+
         public Integration Integration { get; private set; }
 
         public DateTime? EndOfMuting { get; private set; }
 
         public SensorState State { get; private set; }
+
+        public int? SelectedUnit { get; private set; }
 
 
         public SensorResult? Status
@@ -81,7 +85,9 @@ namespace HSMServer.Core.Model
             _ttlEntity = entity.TTLPolicy;
 
             State = (SensorState)entity.State;
+            SelectedUnit = entity.SelectedUnit;
             Integration = (Integration)entity.Integration;
+            SaveOnlyUniqueValues = entity.SaveOnlyUniqueValues;
             EndOfMuting = entity.EndOfMuting > 0L ? new DateTime(entity.EndOfMuting) : null;
 
             Policies.Attach(this);
@@ -113,6 +119,8 @@ namespace HSMServer.Core.Model
             State = UpdateProperty(State, update.State ?? State, update.Initiator);
             Integration = UpdateProperty(Integration, update.Integration ?? Integration, update.Initiator);
             EndOfMuting = UpdateProperty(EndOfMuting, update.EndOfMutingPeriod, update.Initiator, "End of muting");
+            SelectedUnit = UpdateProperty(SelectedUnit, update.SelectedUnit ?? SelectedUnit, update.Initiator, "Unit");
+            SaveOnlyUniqueValues = UpdateProperty(SaveOnlyUniqueValues, update.SaveOnlyUniqueValues ?? SaveOnlyUniqueValues, update.Initiator, "Save only unique values");
 
             if (State == SensorState.Available)
                 EndOfMuting = null;
@@ -137,7 +145,9 @@ namespace HSMServer.Core.Model
             CreationDate = CreationDate.Ticks,
             Type = (byte)Type,
             State = (byte)State,
+            SelectedUnit = SelectedUnit,
             Integration = (int)Integration,
+            SaveOnlyUniqueValues = SaveOnlyUniqueValues,
             Policies = Policies.Ids.Select(u => u.ToString()).ToList(),
             EndOfMuting = EndOfMuting?.Ticks ?? 0L,
             Settings = Settings.ToEntity(),
