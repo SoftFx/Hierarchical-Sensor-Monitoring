@@ -1,4 +1,5 @@
 ﻿using HSMDataCollector.Logging;
+using HSMDataCollector.Options;
 using HSMDataCollector.PublicInterface;
 using HSMSensorDataObjects;
 using System;
@@ -143,6 +144,9 @@ namespace HSMDataCollector.Core
         /// <param name="description">Possible sensor description, empty by default</param>
         /// <returns>A new instance of <see cref="IInstantValueSensor{T}"/> where T is double</returns>
         IInstantValueSensor<double> CreateDoubleSensor(string path, string description = "");
+
+        IInstantValueSensor<double> CreateDoubleSensor(SensorOptions2 options);
+
 
         /// <summary>
         /// Creates the instance of <see cref="IInstantValueSensor{T}"/> where T is string

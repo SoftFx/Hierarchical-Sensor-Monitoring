@@ -1,7 +1,37 @@
-﻿using System;
+﻿using HSMSensorDataObjects;
+using HSMSensorDataObjects.SensorRequests;
+using System;
 
 namespace HSMDataCollector.Options
 {
+    public class SensorOptions2
+    {
+        public string Description { get; set; }
+
+        public string Path { get; set; }
+
+        public Unit? SensorUnit { get; set; }
+
+
+        public TimeSpan? KeepHistory { get; set; }
+
+        public TimeSpan? SelfDestroy { get; set; }
+
+        public TimeSpan? TTL { get; set; }
+
+
+        public bool EnableForGrafana { get; set; }
+
+
+        public bool OnlyUniqValues { get; set; }
+
+
+        internal SensorType Type { get; set; }
+
+        internal bool HasSettings => KeepHistory.HasValue || SelfDestroy.HasValue || TTL.HasValue;
+    }
+
+
     public class SensorOptions
     {
         public string NodePath { get; set; }

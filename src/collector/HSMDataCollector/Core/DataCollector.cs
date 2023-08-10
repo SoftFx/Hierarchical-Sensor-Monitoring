@@ -362,6 +362,8 @@ namespace HSMDataCollector.Core
 
         public IInstantValueSensor<double> CreateDoubleSensor(string path, string description = "") => CreateInstantSensor<double>(path, description);
 
+        public IInstantValueSensor<double> CreateDoubleSensor(SensorOptions2 options) => CreateInstantSensor<double>(path, description);
+
         public IInstantValueSensor<string> CreateStringSensor(string path, string description = "") => CreateInstantSensor<string>(path, description);
 
         public IInstantValueSensor<bool> CreateBoolSensor(string path, string description = "") => CreateInstantSensor<bool>(path, description);
