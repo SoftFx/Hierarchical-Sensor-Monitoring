@@ -8,42 +8,13 @@
     }
     
     var serviceButtonName = 'Show/Hide service status plot';
+    var heartBeatButtonName = 'Show/Hide service heart beat plot';
     var config = { 
         responsive: true,
         displaylogo: false,
         modeBarButtonsToAdd: [
-            {
-                name: serviceButtonName, //changing name doesn't work
-                icon: plotIcon,
-                click: function(gd) {
-                    let graph = $(`#${graphElementId}`)[0];
-                    let graphLength = graph._fullData.length;
-                    if (graphLength > 1) {
-                        Plotly.deleteTraces(graphElementId, graphLength - 1);
-                        Plotly.update(graphElementId, {}, {hovermode: 'closest'});
-                    }
-                    else {
-                        const { from, to } = getFromAndTo(graphName);
-                        let body = Data(to, from, 1, graphName)
-                        $.ajax({
-                            type: 'POST',
-                            data: JSON.stringify(body),
-                            url: 'SensorHistory/GetServiceStatusHistory',
-                            contentType: 'application/json',
-                            dataType: 'html',
-                            cache: false,
-                            async: true,
-                            success: function (data){
-                                let escapedData = JSON.parse(data);
-                                let graphData = getEnumGraphData(getTimeList(escapedData), getNumbersData(escapedData))
-                                let ranges = graph._fullLayout.yaxis.range;
-                                let heat = getHeatMapForEnum(graphData[0], ranges[0], ranges[1])
-                                Plotly.addTraces(graphElementId, [heat]);
-                                Plotly.update(graphElementId, {}, {hovermode: 'x'});
-                            }
-                        })
-                    }
-                }},
+            getAddPlotButton(serviceButtonName, true, plotIcon, graphElementId, graphName),
+            getAddPlotButton(heartBeatButtonName, false, plotIcon, graphElementId, graphName),
         ],
         modeBarButtonsToRemove: [
             'pan',
@@ -433,6 +404,43 @@ function getPlotType(graphType) {
 
 // Enum plot
 {
+    function getAddPlotButton(name, isStatusService, icon, graphElementId, graphName){
+        return {
+            name: name, //changing name doesn't work
+            icon: icon,
+            click: function(gd) {
+                let graph = $(`#${graphElementId}`)[0];
+                let graphLength = graph._fullData.length;
+                if (graphLength > 1) {
+                    Plotly.deleteTraces(graphElementId, graphLength - 1);
+                    Plotly.update(graphElementId, {}, {hovermode: 'closest'});
+                }
+                else {
+                    const { from, to } = getFromAndTo(graphName);
+                    let body = Data(to, from, 1, graphName)
+                    $.ajax({
+                        type: 'POST',
+                        data: JSON.stringify(body),
+                        url: `SensorHistory/GetServiceStatusHistory?isStatusService=${isStatusService}`,
+                        contentType: 'application/json',
+                        dataType: 'html',
+                        cache: false,
+                        async: true,
+                        success: function (data){
+                            let escapedData = JSON.parse(data);
+                            let graphData = getEnumGraphData(getTimeList(escapedData), getNumbersData(escapedData), isStatusService)
+                            let ranges = graph._fullLayout.yaxis.range;
+                            let heat = getHeatMapForEnum(graphData[0], ranges[0], ranges[1])
+            
+                            Plotly.addTraces(graphElementId, [heat]);
+                            Plotly.update(graphElementId, {}, {hovermode: 'x'});
+                        }
+                    })
+                }
+            }
+        }
+    }
+    
     function getHeatMapForEnum(data, minValue = 0, maxValue = 1) {
         return {
             x: data.x,
@@ -449,13 +457,20 @@ function getPlotType(graphType) {
         }
     }
 
-    function getEnumGraphData(timeList, dataList){
+    function getEnumGraphData(timeList, dataList, isServiceStatus = true){
         function getMappedData(data, time) {
             let customdata = [];
             let z = [];
             for (let i = 0; i < data.length; i++){
-                customdata.push(`${ServiceStatus[`${data[i]}`][1]} <br> ${new Date(time[i]).toUTCString()} - ${i + 1 >= data.length ? 'now' : new Date(time[i + 1]).toUTCString()}`)
-                z.push(ServiceStatus[`${data[i]}`][0] === ServiceStatus["4"][0] ? 0.5 : 0)
+                if (isServiceStatus){
+                    customdata.push(`${ServiceStatus[`${data[i]}`][1]} <br> ${new Date(time[i]).toUTCString()} - ${i + 1 >= data.length ? 'now' : new Date(time[i + 1]).toUTCString()}`)
+                    z.push(ServiceStatus[`${data[i]}`][0] === ServiceStatus["4"][0] ? 0.5 : 0)
+                }
+                else {
+                    customdata.push(`${data[i] === true ? ServiceStatus["4"][1] : ServiceStatus["1"][1]} <br> ${new Date(time[i]).toUTCString()} - ${i + 1 >= data.length ? 'now' : new Date(time[i + 1]).toUTCString()}`)
+                    z.push(data[i] === true ? 0.5 : 0);
+                }
+
             }
             
             return {

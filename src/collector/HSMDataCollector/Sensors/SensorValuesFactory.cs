@@ -7,24 +7,48 @@ namespace HSMDataCollector.SensorsFactory
     {
         internal static SensorValueBase BuildValue<T>(T val)
         {
-            switch (val)
+            if (val is SensorValueBase sensorV)
+                return sensorV;
+
+            switch (typeof(T))
             {
-                case bool boolV:
-                    return new BoolSensorValue() { Value = boolV };
-                case int intV:
-                    return new IntSensorValue() { Value = intV };
-                case double doubleV:
-                    return new DoubleSensorValue() { Value = doubleV };
-                case string stringV:
-                    return new StringSensorValue() { Value = stringV };
-                case TimeSpan timeSpanV:
-                    return new TimeSpanSensorValue() { Value = timeSpanV };
-                case Version version:
-                    return new VersionSensorValue() { Value = version };
-                case SensorValueBase sensorV:
-                    return sensorV;
+                case Type type when type == typeof(bool):
+                    return new BoolSensorValue()
+                    {
+                        Value = val is bool boolV && boolV
+                    };
+
+                case Type type when type == typeof(int):
+                    return new IntSensorValue()
+                    {
+                        Value = val is int intV ? intV : default
+                    };
+
+                case Type type when type == typeof(double):
+                    return new DoubleSensorValue()
+                    {
+                        Value = val is double doubleV ? doubleV : default
+                    };
+
+                case Type type when type == typeof(string):
+                    return new StringSensorValue()
+                    {
+                        Value = val is string stringV ? stringV : default
+                    };
+
+                case Type type when type == typeof(TimeSpan):
+                    return new TimeSpanSensorValue()
+                    {
+                        Value = val is TimeSpan time ? time : default
+                    };
+
+                case Type type when type == typeof(Version):
+                    return new VersionSensorValue()
+                    {
+                        Value = val is Version version ? version : default
+                    };
                 default:
-                    return null;
+                    throw new ArgumentException($"Unsupported sensor value {typeof(T).Name}");
             }
         }
     }

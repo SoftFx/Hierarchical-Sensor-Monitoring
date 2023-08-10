@@ -14,9 +14,6 @@ namespace HSMServer.Core.Model.Policies
         public TTLPolicy TimeToLive { get; private set; }
 
 
-        internal Action<BaseSensorModel, bool, bool> SensorExpired;
-
-
         internal abstract void AddPolicy<T>(T policy) where T : Policy;
 
         internal abstract void ApplyPolicies(List<string> policyIds, Dictionary<string, PolicyEntity> allPolicies);

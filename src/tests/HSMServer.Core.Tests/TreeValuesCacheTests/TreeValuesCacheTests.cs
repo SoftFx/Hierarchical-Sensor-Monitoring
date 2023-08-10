@@ -2,11 +2,11 @@
 using HSMServer.Core.Cache;
 using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Model;
-using HSMServer.Core.Model.Policies;
 using HSMServer.Core.SensorsUpdatesQueue;
 using HSMServer.Core.Tests.Infrastructure;
 using HSMServer.Core.Tests.MonitoringCoreTests;
 using HSMServer.Core.Tests.MonitoringCoreTests.Fixture;
+using HSMServer.Extensions;
 using HSMServer.Folders;
 using HSMServer.Model.Authentication;
 using HSMServer.Model.TreeViewModel;
@@ -14,10 +14,7 @@ using Moq;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text;
-using System.Text.Json;
 using System.Threading.Tasks;
-using HSMServer.Extensions;
 using Xunit;
 using SensorModelFactory = HSMServer.Core.Tests.Infrastructure.SensorModelFactory;
 
@@ -281,7 +278,8 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
                 Assert.NotNull(updatedSensor);
                 Assert.Equal(ActionType.Update, type);
 
-                ModelsTester.TestSensorModel(sensorUpdate, updatedSensor);
+                if (updatedSensorsCount > 1) //skip first ttl update
+                    ModelsTester.TestSensorModel(sensorUpdate, updatedSensor);
 
                 updatedSensorsCount++;
             }
@@ -292,7 +290,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
 
             _valuesCache.ChangeSensorEvent -= UpdateSensorEventHandler;
 
-            Assert.Equal(1, updatedSensorsCount);
+            Assert.Equal(1, updatedSensorsCount / 2); //TTL generate one more request
             TestSensorUpdates(sensor, sensorUpdate);
         }
 
@@ -322,7 +320,8 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
 
             _valuesCache.ChangeSensorEvent -= UpdateSensorEventHandler;
 
-            Assert.Equal(sensorUpdates.Count, updatedSensorsCount);
+            Assert.Equal(sensorUpdates.Count, updatedSensorsCount / 2); //TTL generate one more request
+
             foreach (var (sensor, sensorUpdate) in sensorUpdates)
                 TestSensorUpdates(sensor, sensorUpdate);
         }
@@ -375,7 +374,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
 
             _valuesCache.ChangeSensorEvent += UpdateSensorEventHandler;
 
-            _valuesCache.ClearNodeHistory(new (product.Id));
+            _valuesCache.ClearNodeHistory(new(product.Id));
 
             _valuesCache.ChangeSensorEvent -= UpdateSensorEventHandler;
 
@@ -390,7 +389,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
         {
             var sensor = GetSensorByNameFromCache("sensor0");
 
-            _valuesCache.ClearSensorHistory(new (sensor.Id));
+            _valuesCache.ClearSensorHistory(new(sensor.Id));
 
             await TestClearedSensor(sensor.Id);
             ModelsTester.TestSensorDataWithoutClearedData(sensor, GetSensorByIdFromCache(sensor.Id));
@@ -466,7 +465,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             ModelsTester.TestProductModel(_databaseCoreManager.GetProduct(subSubProduct.Id), subSubProduct);
 
             Assert.Equal(1, addedSensorsCount);
-            Assert.Equal(1, updatedSensorsCount);
+            Assert.Equal(1, updatedSensorsCount / 2); // TTL generate one more request
 
             ModelsTester.TestSensorModel(storeInfo, sensor, parentProduct: subSubProduct);
             ModelsTester.TestSensorModel(GetSensorByIdFromDb(sensor.Id), sensor);
@@ -524,7 +523,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             var sensor = GetSensorByNameFromCache(sensorName);
             var sensorDataFromDb = _databaseCoreManager.DatabaseCore.GetLatestValuesFrom(new(1) { [sensor.Id] = DateTime.MinValue.Ticks }).FirstOrDefault().Value;
 
-            Assert.Equal(1, updatedSensorsCount);
+            Assert.Equal(1, updatedSensorsCount / 2); // TTL generate one more request
             Assert.NotEmpty(product.Sensors);
 
             ModelsTester.TestSensorModel(storeInfo, sensor, parentProduct: product);

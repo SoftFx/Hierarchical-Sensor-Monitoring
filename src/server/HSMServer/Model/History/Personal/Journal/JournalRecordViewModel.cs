@@ -48,10 +48,30 @@ public sealed class JournalRecordViewModel
         if (string.IsNullOrEmpty(model.PropertyName))
             return (model.Enviroment, $"{model.Enviroment} {model.Initiator}");
 
+        var header = string.Empty;
+        var value = string.Empty;
+
+        if (string.IsNullOrEmpty(model.OldValue))
+        {
+            header = "Added new";
+            value = model.NewValue;
+        }
+        else if (string.IsNullOrEmpty(model.NewValue))
+        {   
+            header = "Removed";
+            value = model.OldValue;
+        }
+
+        if (header != string.Empty)
+            return ($"""
+            {header} {model.PropertyName}:
+            <strong>{value}</strong>
+            """, $"{model.PropertyName} {model.OldValue} {model.NewValue} {model.Initiator}");
+        
         return ($"""
             {model.PropertyName} was modified
             Old value: {model.OldValue}
             <strong>New value: {model.NewValue}</strong>
-        """, $"{model.PropertyName} {model.OldValue} {model.NewValue} {model.Initiator}");
+            """, $"{model.PropertyName} {model.OldValue} {model.NewValue} {model.Initiator}");
     }
 }

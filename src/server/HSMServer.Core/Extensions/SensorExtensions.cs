@@ -11,7 +11,7 @@ namespace HSMServer.Core
 
         public static bool IsOk(this SensorStatus status) => status is SensorStatus.Ok;
 
-        public static bool IsOff(this SensorStatus status) => status is SensorStatus.OffTime;
+        public static bool IsOfftime(this SensorStatus status) => status is SensorStatus.OffTime;
 
         public static bool IsError(this SensorStatus status) => status is SensorStatus.Error;
 
