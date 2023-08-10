@@ -59,7 +59,7 @@ namespace HSMServer.Controllers
             foreach (var product in editFolder.GetFolderProducts(_tree))
                 folder.Products.Add(product.Id, product);
 
-            if (await _folderManager.TryUpdate(editFolder.ToFolderUpdate()))
+            if (await _folderManager.TryUpdate(editFolder.ToFolderUpdate(CurrentUser.Name)))
             {
                 foreach (var (productId, _) in oldProducts.Except(folder.Products))
                     await _folderManager.RemoveProductFromFolder(productId, folder.Id);
@@ -101,6 +101,7 @@ namespace HSMServer.Controllers
                 Id = folderCleanup.Id,
                 KeepHistory = folderCleanup.SavedHistoryPeriod,
                 SelfDestroy = folderCleanup.SelfDestoryPeriod,
+                Initiator = CurrentUser.Name
             };
 
             await _folderManager.TryUpdate(update);
@@ -117,6 +118,7 @@ namespace HSMServer.Controllers
             {
                 Id = folderAlerts.Id,
                 TTL = folderAlerts.ExpectedUpdateInterval,
+                Initiator = CurrentUser.Name
             };
 
             await _folderManager.TryUpdate(update);

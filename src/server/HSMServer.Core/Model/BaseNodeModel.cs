@@ -63,12 +63,12 @@ namespace HSMServer.Core.Model
 
             if (entity.Settings is not null)
                 Settings.SetSettings(entity.Settings);
-
-            Settings.TTL.Uploaded += (_, _) => CheckTimeout();
         }
 
 
         internal abstract bool CheckTimeout();
+
+        protected abstract void UpdateTTL(PolicyUpdate update);
 
 
         internal virtual BaseNodeModel AddParent(ProductModel parent)
@@ -87,16 +87,15 @@ namespace HSMServer.Core.Model
             Settings.Update(update, FullPath);
 
             if (update.TTLPolicy is not null)
-            {
-                Policies.UpdateTTL(update.TTLPolicy);
-                CheckTimeout();
-            }
+                UpdateTTL(update.TTLPolicy);
+
+            CheckTimeout();
         }
 
 
         protected T UpdateProperty<T>(T oldValue, T newValue, string initiator, [CallerArgumentExpression(nameof(oldValue))] string propName = "")
         {
-            if (newValue is not null && !newValue.Equals(oldValue))
+            if (newValue is not null && !newValue.Equals(oldValue ?? newValue))
                 ChangesHandler?.Invoke(new JournalRecordModel(Id, initiator)
                 {
                     Enviroment = "General info update",

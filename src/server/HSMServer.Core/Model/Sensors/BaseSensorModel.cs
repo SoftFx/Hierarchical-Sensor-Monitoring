@@ -55,10 +55,7 @@ namespace HSMServer.Core.Model
                 if (State == SensorState.Muted)
                     return _muteResult;
 
-                if (!Policies.SensorResult.IsOk)
-                    return Policies.SensorResult;
-
-                return Storage.Result;
+                return !Policies.SensorResult.IsOk ? Policies.SensorResult : Storage.Result;
             }
         }
 
@@ -91,11 +88,11 @@ namespace HSMServer.Core.Model
         }
 
 
+        protected override void UpdateTTL(PolicyUpdate update) => Policies.UpdateTTL(update);
+
         internal abstract bool TryAddValue(BaseValue value);
 
         internal abstract void AddDbValue(byte[] bytes);
-
-        internal abstract void RecalculatePolicy();
 
         internal abstract List<BaseValue> ConvertValues(List<byte[]> valuesBytes);
 

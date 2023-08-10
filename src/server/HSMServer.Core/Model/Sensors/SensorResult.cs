@@ -26,6 +26,8 @@ namespace HSMServer.Core.Model
         public bool HasError => Status >= SensorStatus.Error;
 
 
+        public bool IsOfftime => Status == SensorStatus.OffTime;
+
         public bool IsOk => Status.IsOk();
 
 
@@ -49,6 +51,11 @@ namespace HSMServer.Core.Model
         public static SensorResult operator +(SensorResult? first, SensorResult second)
         {
             return first is null ? second : new(first.Value._results.UnionFluent(second._results));
+        }
+
+        public static SensorResult operator -(SensorResult? first, SensorResult second)
+        {
+            return first is null ? second : new(first.Value._results.ExceptFluent(second._results));
         }
 
 

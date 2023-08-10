@@ -14,7 +14,7 @@ public sealed class EditAlertsViewModel
 
     [Display(Name = "Time to live interval")]
     [MinTimeInterval(TimeInterval.OneMinute, ErrorMessage = "{0} minimal value is {1}.")]
-    public TimeIntervalViewModel ExpectedUpdateInterval { get; set; } = new(PredefinedIntervals.ForTimeout);
+    public TimeIntervalViewModel ExpectedUpdateInterval { get; set; } = new(PredefinedIntervals.ForFolderTimeout);
 
     public string NodeIds { get; set; }
 
