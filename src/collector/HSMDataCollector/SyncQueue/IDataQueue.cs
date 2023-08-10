@@ -1,24 +1,15 @@
-﻿using HSMSensorDataObjects.SensorValueRequests;
-using System;
+﻿using System;
 using System.Collections.Generic;
 
 namespace HSMDataCollector.SyncQueue
 {
-    public interface IDataQueue
+    public interface IDataQueue<T>
     {
-        event Action<List<SensorValueBase>> NewValuesEvent;
-        event Action<FileSensorValue> NewValueEvent;
+        event Action<List<T>> NewValuesEvent;
+        event Action<T> NewValueEvent;
 
+        void Push(T value);
 
-        void Init();
-
-        void Stop();
-
-        void Flush();
-
-
-        void Push(SensorValueBase value);
-
-        void PushFailValue(SensorValueBase value);
+        void PushFailValue(T value);
     }
 }

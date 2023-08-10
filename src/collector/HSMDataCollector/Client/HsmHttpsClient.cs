@@ -20,14 +20,19 @@ namespace HSMDataCollector.Client
     {
         private readonly CancellationTokenSource _tokenSource = new CancellationTokenSource();
         private readonly ICollectorLogger _logger;
-        private readonly IDataQueue _dataQueue;
+        private readonly IQueueManager _queueManager;
         private readonly Endpoints _endpoints;
         private readonly HttpClient _client;
 
 
-        internal HsmHttpsClient(CollectorOptions options, IDataQueue dataQueue, ICollectorLogger logger)
+        private IDataQueue<BaseRequest> CommandsQueue => _queueManager.Commands;
+
+        private IDataQueue<SensorValueBase> DataQueue => _queueManager.Data;
+
+
+        internal HsmHttpsClient(CollectorOptions options, IQueueManager queueManager, ICollectorLogger logger)
         {
-            _dataQueue = dataQueue;
+            _queueManager = queueManager;
             _logger = logger;
 
             _endpoints = new Endpoints(options);
@@ -42,8 +47,8 @@ namespace HSMDataCollector.Client
 
             _client.DefaultRequestHeaders.Add(nameof(BaseRequest.Key), options.AccessKey);
 
-            _dataQueue.NewValueEvent += RecieveQueueData;
-            _dataQueue.NewValuesEvent += RecieveQueueData;
+            DataQueue.NewValueEvent += RecieveQueueData;
+            DataQueue.NewValuesEvent += RecieveQueueData;
         }
 
 
@@ -85,8 +90,8 @@ namespace HSMDataCollector.Client
         {
             _tokenSource.Cancel();
 
-            _dataQueue.NewValueEvent -= RecieveQueueData;
-            _dataQueue.NewValuesEvent -= RecieveQueueData;
+            DataQueue.NewValueEvent -= RecieveQueueData;
+            DataQueue.NewValuesEvent -= RecieveQueueData;
 
             _client.Dispose();
         }
@@ -164,9 +169,9 @@ namespace HSMDataCollector.Client
 
                 if (value is IEnumerable<SensorValueBase> list)
                     foreach (var data in list)
-                        _dataQueue.PushFailValue(data);
+                        DataQueue.PushFailValue(data);
                 else if (value is SensorValueBase single)
-                    _dataQueue.PushFailValue(single);
+                    DataQueue.PushFailValue(single);
             }
         }
     }
