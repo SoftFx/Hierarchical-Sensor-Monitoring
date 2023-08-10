@@ -44,3 +44,21 @@ New style:
 
 ## Alerts
 * All OnChange Status alerts that start with $status variable have been migrated to **$prevStatus->$status** template
+* Default template for Value alerts has been changed to __[$product]$path $operation $value__
+
+# HSM Datacollector
+
+## v. 3.1.7
+* [**Status code**](https://learn.microsoft.com/en-us/dotnet/api/system.net.httpstatuscode?view=net-7.0) for **TestConnection()** method has been added
+* Calculation for percentiles has been removed. Percintiles is constant values.
+* **NaN** serialization has been added for Double and BarDouble values
+* Unblocked file stream for **SendFileAsync** method has been added
+
+## v. 3.1.8
+* New default sensor **Service commands** has been added
+* New default sensor **Service status** has been added (Windows only!)
+* Logic of custom functions for creating sensors has been converted into a new format
+
+## v. 3.1.9
+* **AddPartial** method for IBarSensor has been added
+* Null ref for custom sensors if Value is null has been fixed
