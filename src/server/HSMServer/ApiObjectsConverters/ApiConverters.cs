@@ -217,9 +217,9 @@ namespace HSMServer.ApiObjectsConverters
                 Id = sensorId,
                 Description = request.Description,
                 Integration = request.EnableGrafana.HasValue && request.EnableGrafana.Value ? Integration.Grafana : null,
-                KeepHistory = request.KeepHistory.HasValue ? new(request.KeepHistory.Value) : null,
-                SelfDestroy = request.SelfDestroy.HasValue ? new(request.SelfDestroy.Value) : null,
-                TTL = request.TTL.HasValue ? new(request.TTL.Value) : null,
+                KeepHistory = request.KeepHistory.ToTimeInterval(),
+                SelfDestroy = request.SelfDestroy.ToTimeInterval(),
+                TTL = request.TTL.ToTimeInterval(),
                 TTLPolicy = request.TTLPolicy?.Convert(),
                 Policies = request.Policies?.Select(policy => policy.Convert()).ToList(),
             };
@@ -227,7 +227,7 @@ namespace HSMServer.ApiObjectsConverters
         public static PolicyUpdate Convert(this AlertUpdateRequest request) =>
             new(Guid.Empty,
                 request.Conditions?.Select(c => c.Convert()).ToList(),
-                request.Sensitivity.HasValue ? new(request.Sensitivity.Value) : null,
+                request.Sensitivity.ToTimeInterval(),
                 request.Status.Convert(),
                 request.Template,
                 request.Icon,
@@ -238,6 +238,9 @@ namespace HSMServer.ApiObjectsConverters
                 request.Property.Convert(),
                 request.Target is not null ? new(request.Target.Type.Convert(), request.Target.Value) : null,
                 request.Combination.Convert());
+
+        private static TimeIntervalModel ToTimeInterval(this long? ticks) =>
+            ticks.HasValue ? new(ticks.Value) : null;
 
 
         public static SensorValueBase CreateNewSensorValue(SensorType sensorType) => sensorType switch
@@ -263,8 +266,12 @@ namespace HSMServer.ApiObjectsConverters
                 _ => ApiSensorStatus.Ok,
             };
 
-        public static SensorType Convert(this HSMSensorDataObjects.SensorType type) =>
-            type switch
+        public static SensorType Convert(this HSMSensorDataObjects.SensorType? type)
+        {
+            if (!type.HasValue)
+                return default;
+
+            return type.Value switch
             {
                 HSMSensorDataObjects.SensorType.BooleanSensor => SensorType.Boolean,
                 HSMSensorDataObjects.SensorType.IntSensor => SensorType.Integer,
@@ -277,6 +284,7 @@ namespace HSMServer.ApiObjectsConverters
                 HSMSensorDataObjects.SensorType.DoubleBarSensor => SensorType.DoubleBar,
                 _ => throw new NotImplementedException(),
             };
+        }
 
 
         private static SensorStatus Convert(this ApiSensorStatus status) =>

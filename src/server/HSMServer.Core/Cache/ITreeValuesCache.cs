@@ -44,7 +44,7 @@ namespace HSMServer.Core.Cache
         AccessKeyModel GetAccessKey(Guid id);
         List<AccessKeyModel> GetMasterKeys();
 
-        void AddOrUpdateSensor(SensorUpdateRequestModel update);
+        void AddOrUpdateSensor(SensorAddOrUpdateRequestModel update);
         void UpdateSensor(SensorUpdate updatedSensor);
         void RemoveSensor(Guid sensorId, string initiator = null);
         void UpdateMutedSensorState(Guid sensorId, DateTime? endOfMuting = null, string initiator = null);

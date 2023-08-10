@@ -258,7 +258,7 @@ namespace HSMServer.Core.Cache
         public List<AccessKeyModel> GetMasterKeys() => GetAccessKeys().Where(x => x.IsMaster).ToList();
 
 
-        public void AddOrUpdateSensor(SensorUpdateRequestModel request)
+        public void AddOrUpdateSensor(SensorAddOrUpdateRequestModel request)
         {
             var update = request.Update;
 
@@ -283,8 +283,6 @@ namespace HSMServer.Core.Cache
 
             var sensor = SensorModelFactory.Build(entity);
             parentProduct.AddSensor(sensor);
-
-            //sensor.Policies.AddDefaultSensors();
 
             AddSensor(sensor);
             UpdateProduct(parentProduct);

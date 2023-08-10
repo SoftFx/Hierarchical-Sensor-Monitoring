@@ -487,7 +487,7 @@ namespace HSMServer.Controllers
             }
             catch (Exception e)
             {
-                _logger.LogError(e, "Failed to update sensor!");
+                _logger.LogError(e, $"Failed to update sensor! Update request: {JsonSerializer.Serialize(sensorUpdate)}");
                 return BadRequest(sensorUpdate);
             }
         }
@@ -510,12 +510,9 @@ namespace HSMServer.Controllers
                 foreach (var sensorUpdate in sensorUpdates)
                 {
                     if (TryBuildSensorUpdate(sensorUpdate, out var update, out var message))
-                    {
                         _cache.AddOrUpdateSensor(update);
-                        continue;
-                    }
-
-                    result[sensorUpdate.Path] = message;
+                    else
+                        result[sensorUpdate.Path] = message;
                 }
 
                 return result.Count == 0 ? Ok(sensorUpdates) : StatusCode(406, result);
@@ -554,7 +551,7 @@ namespace HSMServer.Controllers
         private StoreInfo BuildStoreInfo(SensorValueBase valueBase, BaseValue baseValue) =>
             new(GetKey(valueBase), valueBase.Path) { BaseValue = baseValue };
 
-        private bool TryBuildSensorUpdate(SensorUpdateRequest request, out SensorUpdateRequestModel update, out string message)
+        private bool TryBuildSensorUpdate(SensorUpdateRequest request, out SensorAddOrUpdateRequestModel update, out string message)
         {
             update = null;
             var requestModel = new BaseRequestModel(GetKey(request), request.Path);
@@ -571,7 +568,7 @@ namespace HSMServer.Controllers
                 update = new(requestModel)
                 {
                     Update = request.Convert(sensorId),
-                    Type = request.SensorType.Value.Convert(),
+                    Type = request.SensorType.Convert(),
                 };
 
                 return true;
