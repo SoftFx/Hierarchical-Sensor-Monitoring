@@ -15,7 +15,7 @@ namespace HSMDataCollector.Options.DefaultOptions
             {
                 SensorName = "Collector version",
                 Version = DataCollectorExtensions.Version,
-                NodePath = options.NodePath,
+                Path = options.Path,
                 StartTime = DateTime.UtcNow,
             };
         }

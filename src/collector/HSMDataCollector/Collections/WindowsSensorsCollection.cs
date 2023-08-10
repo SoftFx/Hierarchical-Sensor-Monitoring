@@ -162,7 +162,7 @@ namespace HSMDataCollector.DefaultSensors
         {
             var options = new ServiceSensorOptions()
             {
-                NodePath = $"{module}/Product Info",
+                Path = $"{module}/Product Info",
                 ServiceName = serviceName,
             };
 

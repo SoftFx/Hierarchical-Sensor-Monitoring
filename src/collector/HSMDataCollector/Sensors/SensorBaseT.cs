@@ -8,7 +8,7 @@ namespace HSMDataCollector.DefaultSensors
 {
     public abstract class SensorBase<T> : SensorBase 
     {
-        protected SensorBase(SensorOptions options) : base(options) { }
+        protected SensorBase(SensorOptions2 options) : base(options) { }
         
 
         public void SendValue(T value, SensorStatus status = SensorStatus.Ok, string comment = "")

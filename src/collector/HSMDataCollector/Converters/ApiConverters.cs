@@ -15,9 +15,9 @@ namespace HSMDataCollector.Converters
                 AvailableUnites = info.Units.AvailableUnits.Select(x => (int)x).ToList(),
                 SelectedUnit = (int)info.Units.Selected,
 
-                KeepHistory = info.Settings.KeepHistory.Ticks,
-                SelfDestroy = info.Settings.SelfDestroy.Ticks,
-                TTL = info.Settings.TTL.Ticks,
+                KeepHistory = info.Settings.KeepHistory?.Ticks,
+                SelfDestroy = info.Settings.SelfDestroy?.Ticks,
+                TTL = info.Settings.TTL?.Ticks,
 
                 SaveOnlyUniqueValues = info.OnlyUniqValues,
 

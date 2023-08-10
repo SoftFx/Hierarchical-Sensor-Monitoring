@@ -63,7 +63,7 @@ namespace HSMDataCollector.DefaultSensors
         {
             //monitoringOptions = _prototype.CollectorAlive.GetAndFill(monitoringOptions);
 
-            var options = new CollectorInfoOptions() { NodePath = monitoringOptions.NodePath };
+            var options = new CollectorInfoOptions() { Path = monitoringOptions.Path };
             //var options = _prototype.CollectorStatus.GetAndFill(new CollectorInfoOptions() { NodePath = monitoringOptions.NodePath });
 
             return AddCollectorAliveCommon(monitoringOptions).AddCollectorVersionCommon(options).AddCollectorStatusCommon(options);

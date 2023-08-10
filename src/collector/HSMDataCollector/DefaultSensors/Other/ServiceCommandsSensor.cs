@@ -9,7 +9,7 @@ namespace HSMDataCollector.DefaultSensors
         protected override string SensorName => "Service commands";
 
 
-        public ServiceCommandsSensor(SensorOptions options) : base(options) { }
+        public ServiceCommandsSensor(SensorOptions2 options) : base(options) { }
 
 
         public void SendCustomCommand(string command, string initiator) =>

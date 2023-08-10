@@ -10,7 +10,7 @@ namespace HSMDataCollector.Sensors
         protected override string SensorName { get; }
 
 
-        public SensorInstant(SensorOptions options) : base(options)
+        public SensorInstant(SensorOptions2 options) : base(options)
         {
             SensorName = options.SensorName;
         }

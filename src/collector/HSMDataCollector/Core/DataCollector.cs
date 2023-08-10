@@ -264,7 +264,7 @@ namespace HSMDataCollector.Core
         {
             if (IsWindowsOS)
             {
-                var options = new BarSensorOptions() { NodePath = specificPath };
+                var options = new BarSensorOptions() { Path = specificPath };
                 //var options = _sensorsPrototype.SystemMonitoring.GetAndFill(new BarSensorOptions() { NodePath = specificPath });
 
                 if (isCPU)
@@ -279,7 +279,7 @@ namespace HSMDataCollector.Core
         [Obsolete("Use method AddProcessSensors(options) in Windows or Unix collections")]
         public void InitializeProcessMonitoring(bool isCPU, bool isMemory, bool isThreads, string specificPath = null)
         {
-            var options = new BarSensorOptions() { NodePath = specificPath };
+            var options = new BarSensorOptions() { Path = specificPath };
             //var options = _sensorsPrototype.ProcessMonitoring.GetAndFill(new BarSensorOptions() { NodePath = specificPath });
 
             if (IsWindowsOS)
@@ -321,7 +321,7 @@ namespace HSMDataCollector.Core
         public void MonitorServiceAlive(string specificPath = null)
         {
             //var options = _sensorsPrototype.CollectorAlive.GetAndFill(new CollectorMonitoringInfoOptions() { NodePath = specificPath });
-            var options = new CollectorMonitoringInfoOptions() { NodePath = specificPath };
+            var options = new CollectorMonitoringInfoOptions() { Path = specificPath };
 
             if (IsWindowsOS)
                 Windows.AddCollectorAlive(options);
@@ -338,7 +338,7 @@ namespace HSMDataCollector.Core
             {
                 var options = new WindowsSensorOptions()
                 {
-                    NodePath = specificPath,
+                    Path = specificPath,
                     PostDataPeriod = sensorInterval,
                     AcceptableUpdateInterval = updateInterval,
                 };
@@ -362,7 +362,7 @@ namespace HSMDataCollector.Core
 
         public IInstantValueSensor<double> CreateDoubleSensor(string path, string description = "") => CreateInstantSensor<double>(path, description);
 
-        public IInstantValueSensor<double> CreateDoubleSensor(SensorOptions2 options) => CreateInstantSensor<double>(path, description);
+        public IInstantValueSensor<double> CreateDoubleSensor(SensorOptions2 options) => CreateInstantSensor<double>(options);
 
         public IInstantValueSensor<string> CreateStringSensor(string path, string description = "") => CreateInstantSensor<string>(path, description);
 
@@ -418,18 +418,21 @@ namespace HSMDataCollector.Core
             return CreateLastValueSensorInternal(path, defaultValue, description);
         }
 
-        private IInstantValueSensor<T> CreateInstantSensor<T>(string path, string _)
+        private IInstantValueSensor<T> CreateInstantSensor<T>(string path, string description)
         {
             (var nodePath, var name) = GetPathAndName(path);
 
-            var options = new SensorOptions
+            var options = new SensorOptions2
             {
-                NodePath = nodePath,
+                Path = nodePath,
                 SensorName = name,
+                Description = description,
             };
 
-            return (IInstantValueSensor<T>)RegisterCustomSensor(new SensorInstant<T>(options));
+            return CreateInstantSensor<T>(options);
         }
+
+        private IInstantValueSensor<T> CreateInstantSensor<T>(SensorOptions2 options) => (IInstantValueSensor<T>)RegisterCustomSensor(new SensorInstant<T>(options));
 
         private ILastValueSensor<T> CreateLastValueSensorInternal<T>(string path, T defaultValue, string description = "")
         {
@@ -447,9 +450,9 @@ namespace HSMDataCollector.Core
 
         public IServiceCommandsSensor CreateServiceCommandsSensor(string module = "")
         {
-            var options = new SensorOptions()
+            var options = new SensorOptions2()
             {
-                NodePath = $"{module}/Product Info",
+                Path = $"{module}/Product Info",
             };
 
             return (IServiceCommandsSensor)RegisterCustomSensor(new ServiceCommandsSensor(options));
@@ -466,7 +469,7 @@ namespace HSMDataCollector.Core
             var options = new BarSensorOptions()
             {
                 SensorName = name,
-                NodePath = nodePath,
+                Path = nodePath,
                 CollectBarPeriod = TimeSpan.FromMilliseconds(barPeriod),
                 PostDataPeriod = TimeSpan.FromMilliseconds(postPeriod),
             };
@@ -492,7 +495,7 @@ namespace HSMDataCollector.Core
             var options = new BarSensorOptions()
             {
                 SensorName = name,
-                NodePath = nodePath,
+                Path = nodePath,
                 Precision = precision,
                 CollectBarPeriod = TimeSpan.FromMilliseconds(barPeriod),
                 PostDataPeriod = TimeSpan.FromMilliseconds(postPeriod),

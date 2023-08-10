@@ -29,6 +29,8 @@ namespace HSMDataCollector.Options
         internal SensorType Type { get; set; }
 
         internal bool HasSettings => KeepHistory.HasValue || SelfDestroy.HasValue || TTL.HasValue;
+
+        internal string SensorName { get; set; } //???
     }
 
 
@@ -40,7 +42,7 @@ namespace HSMDataCollector.Options
     }
 
 
-    public class MonitoringSensorOptions : SensorOptions
+    public class MonitoringSensorOptions : SensorOptions2
     {
         internal virtual TimeSpan DefaultPostDataPeriod { get; } = TimeSpan.FromSeconds(15);
 
@@ -85,7 +87,7 @@ namespace HSMDataCollector.Options
     }
 
 
-    public sealed class VersionSensorOptions : SensorOptions
+    public sealed class VersionSensorOptions : SensorOptions2
     {
         public Version Version { get; set; }
 
@@ -95,13 +97,13 @@ namespace HSMDataCollector.Options
     }
 
 
-    public sealed class ServiceSensorOptions : SensorOptions
+    public sealed class ServiceSensorOptions : SensorOptions2
     {
         public string ServiceName { get; set; }
     }
 
 
-    public sealed class CollectorInfoOptions : SensorOptions
+    public sealed class CollectorInfoOptions : SensorOptions2
     {
         internal const string BaseCollectorPath = "Product Info/Collector";
     }
