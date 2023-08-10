@@ -34,7 +34,8 @@ namespace HSMDataCollector.DefaultSensors
 
         protected DefaultSensorsCollection AddCollectorAliveCommon(CollectorMonitoringInfoOptions options)
         {
-            return Register(new CollectorAlive(_prototype.CollectorAlive.Get(options)));
+            return Register(new CollectorAlive(options));
+            //return Register(new CollectorAlive(_prototype.CollectorAlive.Get(options)));
         }
 
         protected DefaultSensorsCollection AddCollectorVersionCommon(CollectorInfoOptions options)
@@ -52,16 +53,18 @@ namespace HSMDataCollector.DefaultSensors
             if (StatusSensor != null)
                 return this;
 
-            StatusSensor = new CollectorStatusSensor(_prototype.CollectorStatus.GetAndFill(options));
+            StatusSensor = new CollectorStatusSensor(options);
+            //StatusSensor = new CollectorStatusSensor(_prototype.CollectorStatus.GetAndFill(options));
 
             return Register(StatusSensor);
         }
 
         protected DefaultSensorsCollection AddFullCollectorMonitoringCommon(CollectorMonitoringInfoOptions monitoringOptions)
         {
-            monitoringOptions = _prototype.CollectorAlive.GetAndFill(monitoringOptions);
+            //monitoringOptions = _prototype.CollectorAlive.GetAndFill(monitoringOptions);
 
-            var options = _prototype.CollectorStatus.GetAndFill(new CollectorInfoOptions() { NodePath = monitoringOptions.NodePath });
+            var options = new CollectorInfoOptions() { NodePath = monitoringOptions.NodePath };
+            //var options = _prototype.CollectorStatus.GetAndFill(new CollectorInfoOptions() { NodePath = monitoringOptions.NodePath });
 
             return AddCollectorAliveCommon(monitoringOptions).AddCollectorVersionCommon(options).AddCollectorStatusCommon(options);
         }
@@ -71,7 +74,8 @@ namespace HSMDataCollector.DefaultSensors
             if (ProductVersion != null)
                 return this;
 
-            ProductVersion = new ProductVersionSensor(_prototype.ProductVersion.GetAndFill(options));
+            ProductVersion = new ProductVersionSensor(options);
+            //ProductVersion = new ProductVersionSensor(_prototype.ProductVersion.GetAndFill(options));
 
             return Register(ProductVersion);
         }

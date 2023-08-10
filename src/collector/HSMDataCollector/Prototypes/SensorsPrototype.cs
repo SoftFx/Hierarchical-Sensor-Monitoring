@@ -1,15 +1,19 @@
 ﻿using HSMDataCollector.Options.DefaultOptions;
+using HSMDataCollector.Prototypes;
 
 namespace HSMDataCollector.Options
 {
     internal sealed class SensorsPrototype
     {
-        internal WindowsInfoMonitoringPrototype WindowsInfo { get; } = new WindowsInfoMonitoringPrototype();
+        internal WindowsInfoMonitoringPrototype WindowsInfo { get; } /*= new WindowsInfoMonitoringPrototype();*/
 
 
         internal ProcessMonitoringPrototype ProcessMonitoring { get; } = new ProcessMonitoringPrototype();
 
-        internal DiskMonitoringPrototype DiskMonitoring { get; } = new DiskMonitoringPrototype();
+
+        internal FreeSpaceOnDiskPrototype FreeSpaceOnDisk { get; } = new FreeSpaceOnDiskPrototype();
+
+        internal FreeSpaceOnDiskPredictionPrototype FreeSpaceOnDiskPrediction { get; } = new FreeSpaceOnDiskPredictionPrototype();
 
 
         internal ProductVersionPrototype ProductVersion { get; } = new ProductVersionPrototype();

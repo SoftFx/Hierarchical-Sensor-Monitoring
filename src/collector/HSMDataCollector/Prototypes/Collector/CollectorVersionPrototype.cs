@@ -2,14 +2,14 @@
 using System;
 namespace HSMDataCollector.Options.DefaultOptions
 {
-    internal sealed class CollectorVersionPrototype : Prototype<CollectorInfoOptions>
+    internal sealed class CollectorVersionPrototype /*: Prototype<CollectorInfoOptions>*/
     {
-        protected override string NodePath { get; } = CollectorInfoOptions.BaseCollectorPath;
+       // protected override string NodePath { get; } = CollectorInfoOptions.BaseCollectorPath;
 
 
         internal VersionSensorOptions ConvertToVersionOptions(CollectorInfoOptions options)
         {
-            options = GetAndFill(options);
+            //options = GetAndFill(options);
 
             return new VersionSensorOptions
             {

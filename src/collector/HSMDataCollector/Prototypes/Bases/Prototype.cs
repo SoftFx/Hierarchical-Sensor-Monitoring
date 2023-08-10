@@ -14,7 +14,7 @@ namespace HSMDataCollector.Prototypes
 
         protected abstract MetainfoType Apply(MetainfoType info, OptionsType options);
 
-        protected MetainfoType Get(OptionsType options)
+        internal MetainfoType Get(OptionsType options)
         {
             var info = new MetainfoType()
             {

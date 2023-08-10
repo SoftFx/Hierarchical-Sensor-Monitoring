@@ -1,7 +1,7 @@
 ﻿namespace HSMDataCollector.Options.DefaultOptions
 {
-    internal sealed class CollectorStatusPrototype : Prototype<CollectorInfoOptions>
+    internal sealed class CollectorStatusPrototype /* : Prototype<CollectorInfoOptions>*/
     {
-        protected override string NodePath { get; } = CollectorInfoOptions.BaseCollectorPath;
+        //protected override string NodePath { get; } = CollectorInfoOptions.BaseCollectorPath;
     }
 }
