@@ -137,6 +137,20 @@
             Get file (csv or txt) history [from, to] or [from - count] for some sensor
             </summary>
         </member>
+        <member name="M:HSMServer.Controllers.SensorsController.Post(HSMSensorDataObjects.SensorRequests.SensorUpdateRequest)">
+            <summary>
+            Update sensor meta info
+            </summary>
+            <param name="sensorUpdate"></param>
+            <returns></returns>
+        </member>
+        <member name="M:HSMServer.Controllers.SensorsController.Post(System.Collections.Generic.List{HSMSensorDataObjects.SensorRequests.SensorUpdateRequest})">
+            <summary>
+            Update sensors meta info
+            </summary>
+            <param name="sensorUpdates"></param>
+            <returns></returns>
+        </member>
         <member name="T:HSMServer.Filters.DataRequestHeaderSwaggerFilter">
             <summary>
             Swagger filter for adding required string 'Key' in API requests header

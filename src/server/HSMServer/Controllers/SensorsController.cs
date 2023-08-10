@@ -1,5 +1,6 @@
 ﻿using HSMSensorDataObjects;
 using HSMSensorDataObjects.HistoryRequests;
+using HSMSensorDataObjects.SensorRequests;
 using HSMSensorDataObjects.SensorValueRequests;
 using HSMServer.ApiObjectsConverters;
 using HSMServer.BackgroundServices;
@@ -462,6 +463,68 @@ namespace HSMServer.Controllers
         }
 
 
+        /// <summary>
+        /// Update sensor meta info
+        /// </summary>
+        /// <param name="sensorUpdate"></param>
+        /// <returns></returns>
+        [HttpPost("update")]
+        [Consumes(MediaTypeNames.Application.Json)]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status406NotAcceptable)]
+        public ActionResult<SensorUpdateRequest> Post([FromBody] SensorUpdateRequest sensorUpdate)
+        {
+            try
+            {
+                if (TryBuildSensorUpdate(sensorUpdate, out var update, out var message))
+                {
+                    _cache.AddOrUpdateSensor(update);
+                    return Ok(sensorUpdate);
+                }
+
+                return StatusCode(406, message);
+            }
+            catch (Exception e)
+            {
+                _logger.LogError(e, $"Failed to update sensor! Update request: {JsonSerializer.Serialize(sensorUpdate)}");
+                return BadRequest(sensorUpdate);
+            }
+        }
+
+        /// <summary>
+        /// Update sensors meta info
+        /// </summary>
+        /// <param name="sensorUpdates"></param>
+        /// <returns></returns>
+        [HttpPost("updateList")]
+        [Consumes(MediaTypeNames.Application.Json)]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status406NotAcceptable)]
+        public ActionResult<List<SensorUpdateRequest>> Post([FromBody] List<SensorUpdateRequest> sensorUpdates)
+        {
+            try
+            {
+                var result = new Dictionary<string, string>(sensorUpdates.Count);
+                foreach (var sensorUpdate in sensorUpdates)
+                {
+                    if (TryBuildSensorUpdate(sensorUpdate, out var update, out var message))
+                        _cache.AddOrUpdateSensor(update);
+                    else
+                        result[sensorUpdate.Path] = message;
+                }
+
+                return result.Count == 0 ? Ok(sensorUpdates) : StatusCode(406, result);
+            }
+            catch (Exception e)
+            {
+                _logger.LogError(e, "Failed to update sensors!");
+                return BadRequest(sensorUpdates);
+            }
+        }
+
+
         private bool CanAddToQueue(StoreInfo storeInfo, out string message)
         {
             if (storeInfo.TryCheckRequest(out message) &&
@@ -485,14 +548,41 @@ namespace HSMServer.Controllers
                    _cache.TryCheckKeyReadPermissions(requestModel, out message);
         }
 
-        private StoreInfo BuildStoreInfo(SensorValueBase valueBase, BaseValue baseValue)
+        private StoreInfo BuildStoreInfo(SensorValueBase valueBase, BaseValue baseValue) =>
+            new(GetKey(valueBase), valueBase.Path) { BaseValue = baseValue };
+
+        private bool TryBuildSensorUpdate(SensorUpdateRequest request, out SensorAddOrUpdateRequestModel requestModel, out string message)
+        {
+            requestModel = new SensorAddOrUpdateRequestModel(GetKey(request), request.Path);
+
+            if (requestModel.TryCheckRequest(out message) &&
+                _cache.TryCheckSensorUpdateKeyPermission(requestModel, out var sensorId, out message))
+            {
+                if (sensorId == Guid.Empty && request.SensorType is null)
+                {
+                    message = $"{nameof(request.SensorType)} property is required, because sensor {request.Path} doesn't exist";
+                    return false;
+                }
+
+                requestModel.Update = request.Convert(sensorId);
+
+                if (request.SensorType.HasValue)
+                    requestModel.Type = request.SensorType.Value.Convert();
+
+                return true;
+            }
+
+            return false;
+        }
+
+        private string GetKey(BaseRequest request)
         {
             Request.Headers.TryGetValue(nameof(BaseRequest.Key), out var key);
 
             if (string.IsNullOrEmpty(key))
-                key = valueBase.Key;
+                key = request?.Key;
 
-            return new(key, valueBase.Path) { BaseValue = baseValue };
+            return key;
         }
 
         private bool TryCheckKey(out string message)

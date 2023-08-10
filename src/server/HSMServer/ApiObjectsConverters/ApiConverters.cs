@@ -1,8 +1,11 @@
 ﻿using HSMSensorDataObjects.HistoryRequests;
+using HSMSensorDataObjects.SensorRequests;
 using HSMSensorDataObjects.SensorValueRequests;
+using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Extensions;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.HistoryValues;
+using HSMServer.Core.Model.Policies;
 using HSMServer.Core.Model.Requests;
 using System;
 using System.Collections.Generic;
@@ -207,6 +210,39 @@ namespace HSMServer.ApiObjectsConverters
                 Count = request.Count
             };
 
+
+        public static SensorUpdate Convert(this SensorUpdateRequest request, Guid sensorId) =>
+            new()
+            {
+                Id = sensorId,
+                Description = request.Description,
+                Integration = request.EnableGrafana.HasValue && request.EnableGrafana.Value ? Integration.Grafana : null,
+                KeepHistory = request.KeepHistory.ToTimeInterval(),
+                SelfDestroy = request.SelfDestroy.ToTimeInterval(),
+                TTL = request.TTL.ToTimeInterval(),
+                TTLPolicy = request.TTLPolicy?.Convert(),
+                Policies = request.Policies?.Select(policy => policy.Convert()).ToList(),
+            };
+
+        public static PolicyUpdate Convert(this AlertUpdateRequest request) =>
+            new(Guid.Empty,
+                request.Conditions?.Select(c => c.Convert()).ToList(),
+                request.Sensitivity.ToTimeInterval(),
+                request.Status.Convert(),
+                request.Template,
+                request.Icon,
+                request.IsDisabled);
+
+        public static PolicyConditionUpdate Convert(this AlertConditionUpdate request) =>
+            new(request.Operation.Convert(),
+                request.Property.Convert(),
+                request.Target is not null ? new(request.Target.Type.Convert(), request.Target.Value) : null,
+                request.Combination.Convert());
+
+        private static TimeIntervalModel ToTimeInterval(this long? ticks) =>
+            ticks.HasValue ? new(ticks.Value) : null;
+
+
         public static SensorValueBase CreateNewSensorValue(SensorType sensorType) => sensorType switch
         {
             SensorType.Boolean => new BoolSensorValue(),
@@ -230,6 +266,21 @@ namespace HSMServer.ApiObjectsConverters
                 _ => ApiSensorStatus.Ok,
             };
 
+        public static SensorType Convert(this HSMSensorDataObjects.SensorType type) =>
+            type switch
+            {
+                HSMSensorDataObjects.SensorType.BooleanSensor => SensorType.Boolean,
+                HSMSensorDataObjects.SensorType.IntSensor => SensorType.Integer,
+                HSMSensorDataObjects.SensorType.DoubleSensor => SensorType.Double,
+                HSMSensorDataObjects.SensorType.StringSensor => SensorType.String,
+                HSMSensorDataObjects.SensorType.TimeSpanSensor => SensorType.TimeSpan,
+                HSMSensorDataObjects.SensorType.VersionSensor => SensorType.Version,
+                HSMSensorDataObjects.SensorType.FileSensor => SensorType.File,
+                HSMSensorDataObjects.SensorType.IntegerBarSensor => SensorType.IntegerBar,
+                HSMSensorDataObjects.SensorType.DoubleBarSensor => SensorType.DoubleBar,
+                _ => throw new NotImplementedException(),
+            };
+
 
         private static SensorStatus Convert(this ApiSensorStatus status) =>
             status switch
@@ -238,6 +289,51 @@ namespace HSMServer.ApiObjectsConverters
                 ApiSensorStatus.OffTime => SensorStatus.OffTime,
                 ApiSensorStatus.Error or ApiSensorStatus.Warning => SensorStatus.Error,
                 _ => SensorStatus.Ok
+            };
+
+        private static PolicyProperty Convert(this AlertProperty property) =>
+            property switch
+            {
+                AlertProperty.Status => PolicyProperty.Status,
+                AlertProperty.Comment => PolicyProperty.Comment,
+                AlertProperty.Value => PolicyProperty.Value,
+                AlertProperty.Min => PolicyProperty.Min,
+                AlertProperty.Max => PolicyProperty.Max,
+                AlertProperty.Mean => PolicyProperty.Mean,
+                AlertProperty.Count => PolicyProperty.Count,
+                AlertProperty.LastValue => PolicyProperty.LastValue,
+                _ => throw new NotImplementedException(),
+            };
+
+        private static PolicyOperation Convert(this AlertOperation operation) =>
+            operation switch
+            {
+                AlertOperation.LessThanOrEqual => PolicyOperation.LessThanOrEqual,
+                AlertOperation.LessThan => PolicyOperation.LessThan,
+                AlertOperation.GreaterThan => PolicyOperation.GreaterThan,
+                AlertOperation.GreaterThanOrEqual => PolicyOperation.GreaterThanOrEqual,
+                AlertOperation.Equal => PolicyOperation.Equal,
+                AlertOperation.NotEqual => PolicyOperation.NotEqual,
+                AlertOperation.IsChanged => PolicyOperation.IsChanged,
+                AlertOperation.IsError => PolicyOperation.IsError,
+                AlertOperation.IsOk => PolicyOperation.IsOk,
+                _ => throw new NotImplementedException(),
+            };
+
+        private static Core.Model.Policies.TargetType Convert(this HSMSensorDataObjects.SensorRequests.TargetType target) =>
+            target switch
+            {
+                HSMSensorDataObjects.SensorRequests.TargetType.Const => Core.Model.Policies.TargetType.Const,
+                HSMSensorDataObjects.SensorRequests.TargetType.LastValue => Core.Model.Policies.TargetType.LastValue,
+                _ => throw new NotImplementedException(),
+            };
+
+        private static PolicyCombination Convert(this AlertCombination combination) =>
+            combination switch
+            {
+                AlertCombination.And => PolicyCombination.And,
+                AlertCombination.Or => PolicyCombination.Or,
+                _ => throw new NotImplementedException(),
             };
     }
 }

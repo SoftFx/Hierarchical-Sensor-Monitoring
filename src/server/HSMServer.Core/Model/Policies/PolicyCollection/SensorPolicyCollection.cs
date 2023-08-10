@@ -26,7 +26,7 @@ namespace HSMServer.Core.Model.Policies
 
         internal abstract void Attach(BaseSensorModel sensor);
 
-        internal abstract void AddDefaultSensors();
+        internal abstract void AddDefault();
 
 
         internal void Reset()
@@ -224,7 +224,7 @@ namespace HSMServer.Core.Model.Policies
                 }
         }
 
-        internal override void AddDefaultSensors()
+        internal override void AddDefault()
         {
             var policy = new PolicyType();
 
