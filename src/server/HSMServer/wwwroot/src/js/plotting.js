@@ -12,40 +12,40 @@
         responsive: true,
         displaylogo: false,
         modeBarButtonsToAdd: [
-            {
-                name: serviceButtonName, //changing name doesn't work
-                icon: plotIcon,
-                click: function(gd) {
-                    let graph = $(`#${graphElementId}`)[0];
-                    let graphLength = graph._fullData.length;
-                    if (graphLength > 1) {
-                        Plotly.deleteTraces(graphElementId, graphLength - 1);
-                        Plotly.update(graphElementId, {}, {hovermode: 'closest'});
-                    }
-                    else {
-                        const { from, to } = getFromAndTo(graphName);
-                        let body = Data(to, from, 1, graphName)
-                        $.ajax({
-                            type: 'POST',
-                            data: JSON.stringify(body),
-                            url: getSensorStatus,
-                            contentType: 'application/json',
-                            dataType: 'html',
-                            cache: false,
-                            async: true,
-                            success: function (data){
-                                let escapedData = JSON.parse(data);
-                                if (!jQuery.isEmptyObject(escapedData)) {
-                                    let graphData = getEnumGraphData(getTimeList(escapedData), getNumbersData(escapedData))
-                                    let ranges = graph._fullLayout.yaxis.range;
-                                    let heat = getHeatMapForEnum(graphData[0], ranges[0], ranges[1])
-                                    Plotly.addTraces(graphElementId, [heat]);
-                                    Plotly.update(graphElementId, {}, {hovermode: 'x'});
-                                }
-                            }
-                        })
-                    }
-                }},
+            // {
+            //     name: serviceButtonName, //changing name doesn't work
+            //     icon: plotIcon,
+            //     click: function(gd) {
+            //         let graph = $(`#${graphElementId}`)[0];
+            //         let graphLength = graph._fullData.length;
+            //         if (graphLength > 1) {
+            //             Plotly.deleteTraces(graphElementId, graphLength - 1);
+            //             Plotly.update(graphElementId, {}, {hovermode: 'closest'});
+            //         }
+            //         else {
+            //             const { from, to } = getFromAndTo(graphName);
+            //             let body = Data(to, from, 1, graphName)
+            //             $.ajax({
+            //                 type: 'POST',
+            //                 data: JSON.stringify(body),
+            //                 url: getSensorStatus,
+            //                 contentType: 'application/json',
+            //                 dataType: 'html',
+            //                 cache: false,
+            //                 async: true,
+            //                 success: function (data){
+            //                     let escapedData = JSON.parse(data);
+            //                     if (!jQuery.isEmptyObject(escapedData)) {
+            //                         let graphData = getEnumGraphData(getTimeList(escapedData), getNumbersData(escapedData))
+            //                         let ranges = graph._fullLayout.yaxis.range;
+            //                         let heat = getHeatMapForEnum(graphData[0], ranges[0], ranges[1])
+            //                         Plotly.addTraces(graphElementId, [heat]);
+            //                         Plotly.update(graphElementId, {}, {hovermode: 'x'});
+            //                     }
+            //                 }
+            //             })
+            //         }
+            //     }},
         ],
         modeBarButtonsToRemove: [
             'pan',
