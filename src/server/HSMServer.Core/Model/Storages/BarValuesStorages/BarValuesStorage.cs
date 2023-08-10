@@ -21,7 +21,8 @@ namespace HSMServer.Core.Model
 
         internal override void AddValue(T value)
         {
-            var canStore = PartialLastValue != null && PartialLastValue.OpenTime != value.OpenTime;
+            var isTimeoutValue = value?.Comment == BaseSensorModel.TimeoutComment;
+            var canStore = PartialLastValue != null && PartialLastValue.OpenTime != value.OpenTime && !isTimeoutValue;
 
             if (canStore)
             {
@@ -30,7 +31,8 @@ namespace HSMServer.Core.Model
                 base.AddValue(PartialLastValue);
             }
 
-            PartialLastValue = value;
+            if (!isTimeoutValue)
+                PartialLastValue = value;
         }
 
 

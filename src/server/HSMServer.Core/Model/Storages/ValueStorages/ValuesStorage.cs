@@ -20,6 +20,8 @@ namespace HSMServer.Core.Model
 
         internal abstract bool HasData { get; }
 
+        internal bool IsTimeout { get; set; } = false;
+
 
         internal abstract List<BaseValue> GetValues(DateTime from, DateTime to);
 
@@ -44,17 +46,19 @@ namespace HSMServer.Core.Model
 
         internal override bool HasData => !_cache.IsEmpty;
 
-
         internal virtual void AddValue(T value) => AddValueBase(value);
 
         internal virtual void AddValueBase(T value)
         {
+            if (value?.Comment == BaseSensorModel.TimeoutComment)
+                IsTimeout = true;
+
             _cache.Enqueue(value);
 
             if (_cache.Count > CacheSize)
                 _cache.TryDequeue(out _);
 
-            if (_lastValue is null || value.Time >= _lastValue.Time)
+            if (_lastValue is null || value.Time >= _lastValue.Time && !IsTimeout)
                 _lastValue = value;
         }
 

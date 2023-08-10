@@ -835,10 +835,11 @@ namespace HSMServer.Core.Cache
             {
                 var isTimeout = sensor.CheckTimeout();
                 
-                if (isTimeout && sensor.LastDbValue != null && sensor.LastDbValue.Comment != BaseSensorModel.TimeoutComment)
+                if (isTimeout && sensor.LastDbValue != null && !sensor.Storage.IsTimeout)
                 {
+                    sensor.Storage.IsTimeout = true;
                     var value = sensor.LastDbValue.Type.GetTimeoutBaseValue();
-                    if (value is not null && sensor.TryAddValue(value))
+                    if (value is not null)
                         SaveSensorValueToDb(value, sensor.Id);
                 }
             }
