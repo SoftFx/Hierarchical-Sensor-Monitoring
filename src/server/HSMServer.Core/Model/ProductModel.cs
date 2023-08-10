@@ -115,7 +115,10 @@ namespace HSMServer.Core.Model
 
                 foreach (var (_, sensor) in model.Sensors)
                     if (!sensor.Settings.TTL.IsSet)
+                    {
                         sensor.Policies.TimeToLive.Update(update);
+                        sensor.UpdateFromParentSettings?.Invoke(sensor.ToEntity());
+                    }
             }
 
             UpdateTTLPolicy(this, update);
