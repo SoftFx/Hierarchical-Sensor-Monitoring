@@ -44,7 +44,7 @@ namespace HSMServer.Core.Model
         internal override void AddDbValue(byte[] bytes)
         {
             var dbValue = Convert(bytes);
-            
+
             if (Policies.TryValidate(dbValue, out var valueT))
                 Storage.AddValue(valueT);
         }
