@@ -21,15 +21,17 @@ namespace HSMServer.Core.Model
             var isLastValue = Storage.LastValue is null || value.Time >= Storage.LastValue.Time;
             var canStore = Policies.TryValidate(value, out var valueT, isLastValue);
 
-            if (value.IsTimeoutValue)
+            if (!value.IsTimeoutValue)
             {
-                if (!Storage.IsTimeout) 
+                if (canStore)
+                {
                     Storage.AddValue(valueT);
+                    ReceivedNewValue?.Invoke(valueT);
+                }
             }
-            else if (canStore)
+            else
             {
-                Storage.AddValue(valueT);
-                ReceivedNewValue?.Invoke(valueT);
+                Storage.AddValueBase((T)value);
             }
 
             return canStore;
@@ -42,7 +44,7 @@ namespace HSMServer.Core.Model
         internal override void AddDbValue(byte[] bytes)
         {
             var dbValue = Convert(bytes);
-
+            
             if (Policies.TryValidate(dbValue, out var valueT))
                 Storage.AddValue(valueT);
         }

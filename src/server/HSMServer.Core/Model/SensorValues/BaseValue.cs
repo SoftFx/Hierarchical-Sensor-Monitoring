@@ -55,7 +55,7 @@ namespace HSMServer.Core.Model
         public virtual string ShortInfo { get; }
 
         [JsonIgnore] 
-        public bool IsTimeoutValue => Comment == BaseSensorModel.TimeoutComment;
+        public bool IsTimeoutValue => Comment?.StartsWith(BaseSensorModel.TimeoutComment) ?? false;
 
 
         internal SensorValueEntity ToEntity(Guid sensorId) =>

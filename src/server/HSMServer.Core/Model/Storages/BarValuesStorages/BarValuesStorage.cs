@@ -23,23 +23,18 @@ namespace HSMServer.Core.Model
         {
             var canStore = PartialLastValue != null && PartialLastValue.OpenTime != value.OpenTime;
 
-            if (value.IsTimeoutValue)
-            {
-                if (!IsTimeout)
-                    base.AddValue(value);
-            }
-            else
+            if (!value.IsTimeoutValue)
             {
                 if (canStore)
                 {
-                    IsTimeout = false;
                     _prevValue = PartialLastValue;
-
                     base.AddValue(PartialLastValue);
                 }
-                
+            
                 PartialLastValue = value;
             }
+            else
+                base.AddValue(value);
         }
 
 

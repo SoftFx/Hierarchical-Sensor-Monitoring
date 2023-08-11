@@ -182,7 +182,13 @@ namespace HSMServer.Controllers
             _tree.Sensors.TryGetValue(SensorPathHelper.DecodeGuid(model.EncodedId), out var sensor);
 
             model.From = DateTime.MinValue;
-            model.To = sensor?.LastValue?.ReceivingTime ?? DateTime.MinValue;
+
+            if (sensor?.LastActualValue is null)
+                model.To = sensor?.LastValue?.ReceivingTime ?? DateTime.MinValue;
+
+            if (sensor?.LastValue is null)
+                model.To = sensor?.LastActualValue?.ReceivingTime ?? DateTime.MinValue;
+
             model.Count = LatestHistoryCount;
 
             return model;

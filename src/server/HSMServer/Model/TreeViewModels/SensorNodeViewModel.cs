@@ -25,6 +25,8 @@ namespace HSMServer.Model.TreeViewModel
 
         internal BaseValue LastValue { get; private set; }
 
+        internal BaseValue LastActualValue { get; private set; }
+
         public string ValidationError { get; private set; }
 
 
@@ -62,6 +64,8 @@ namespace HSMServer.Model.TreeViewModel
                 ValidationError = string.Empty;
             
             LastValue = model.LastValue;
+            LastActualValue = model.LastActualValue;
+
             HasData = model.HasData;
             ShortStringValue = model.LastValue?.ShortInfo;
 

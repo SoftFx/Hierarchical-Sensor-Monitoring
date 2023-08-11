@@ -72,6 +72,10 @@ namespace HSMServer.Core.Model
         public BaseValue LastDbValue => Storage.LastDbValue;
 
         public BaseValue LastValue => Storage.LastValue;
+        
+        public BaseValue LastDbActualValue => Storage.LastDbActualValue;
+
+        public BaseValue LastActualValue => Storage.LastActualValue;
 
         public bool HasData => Storage.HasData;
 

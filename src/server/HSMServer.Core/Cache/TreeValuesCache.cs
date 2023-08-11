@@ -838,7 +838,7 @@ namespace HSMServer.Core.Cache
                 {
                     sensor.AddDbValue(value);
 
-                    if (!_snapshot.IsFinal)
+                    if (!_snapshot.IsFinal && sensor.LastValue is not null)
                         _snapshot.Sensors[sensorId].SetLastUpdate(sensor.LastValue.ReceivingTime, sensor.CheckTimeout());
                 }
 
@@ -851,13 +851,11 @@ namespace HSMServer.Core.Cache
             foreach (var sensor in GetSensors())
             {
                 var isTimeout = sensor.CheckTimeout();
-                
-                if (isTimeout && sensor.LastDbValue != null && !sensor.Storage.IsTimeout)
+
+                if (isTimeout && sensor.LastDbActualValue is not null && !sensor.LastDbActualValue.IsTimeoutValue)
                 {
-                    sensor.Storage.IsTimeout = true;
-                    var value = sensor.LastDbValue.Type.GetTimeoutBaseValue(sensor.LastValue.Time, sensor.Settings.TTL.CurValue.ToString());
-                    if (value is not null)
-                        SaveSensorValueToDb(value, sensor.Id);
+                    var value = sensor.LastDbActualValue.Type.GetTimeoutBaseValue(sensor.LastActualValue.Time, sensor.Settings.TTL.CurValue.ToString());
+                    SaveSensorValueToDb(value, sensor.Id);
                 }
             }
             
