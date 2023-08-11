@@ -18,6 +18,14 @@ namespace HSMServer.Core.Model.Policies
             };
 
 
+        internal static Func<string, string, bool> GetStringOperation(PolicyOperation? action) =>
+            action switch
+            {
+                PolicyOperation.IsChanged => (string newVal, string oldVal) => oldVal != newVal,
+                _ => throw new NotImplementedException()
+            };
+
+
         internal static Func<SensorStatus?, SensorStatus?, bool> GetStatusOperation(PolicyOperation? action) =>
             action switch
             {
@@ -44,6 +52,8 @@ namespace HSMServer.Core.Model.Policies
             PolicyProperty.Mean or PolicyProperty.LastValue when typeof(U) == typeof(double) => new PolicyExecutorNumber<double>(property),
 
             PolicyProperty.Status => new PolicyExecutorStatus(),
+
+            PolicyProperty.Comment => new PolicyExecutorString(),
 
             _ => throw new NotImplementedException($"Unsupported policy property {property} with type {typeof(U).Name}"),
         };

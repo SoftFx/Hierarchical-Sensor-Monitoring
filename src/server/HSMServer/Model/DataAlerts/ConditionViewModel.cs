@@ -52,6 +52,8 @@ namespace HSMServer.Model.DataAlerts
             PolicyOperation.IsError
         };
 
+        private readonly List<PolicyOperation> _stringOperations = new() { PolicyOperation.IsChanged };
+
 
         protected abstract List<AlertProperty> Properties { get; }
 
@@ -66,6 +68,8 @@ namespace HSMServer.Model.DataAlerts
 
         public List<SelectListItem> StatusOperationsItems { get; }
 
+        public List<SelectListItem> StringOperationsItems { get; }
+
 
         public ConditionViewModel(bool isMain)
         {
@@ -75,6 +79,7 @@ namespace HSMServer.Model.DataAlerts
             TimeToLive = new TimeIntervalViewModel(PredefinedIntervals.ForTimeout) { IsAlertBlock = true };
 
             StatusOperationsItems = _statusOperations.ToSelectedItems(k => k.GetDisplayName());
+            StringOperationsItems = _stringOperations.ToSelectedItems(k => k.GetDisplayName());
             OperationsItems = Operations?.ToSelectedItems(k => k.GetDisplayName());
             PropertiesItems = Properties.ToSelectedItems(k => k.GetDisplayName());
 
@@ -88,7 +93,11 @@ namespace HSMServer.Model.DataAlerts
 
     public sealed class ConditionViewModel<T> : ConditionViewModel where T : BaseValue
     {
-        protected override List<AlertProperty> Properties { get; } = new() { AlertProperty.Status };
+        protected override List<AlertProperty> Properties { get; } = new()
+        {
+            AlertProperty.Status,
+            AlertProperty.Comment
+        };
 
         protected override List<PolicyOperation> Operations { get; }
 
@@ -102,7 +111,8 @@ namespace HSMServer.Model.DataAlerts
         protected override List<AlertProperty> Properties { get; } = new()
         {
             AlertProperty.Value,
-            AlertProperty.Status
+            AlertProperty.Status,
+            AlertProperty.Comment,
         };
 
         protected override List<PolicyOperation> Operations { get; } = new()
@@ -127,6 +137,7 @@ namespace HSMServer.Model.DataAlerts
             AlertProperty.Mean,
             AlertProperty.LastValue,
             AlertProperty.Status,
+            AlertProperty.Comment,
         };
 
         protected override List<PolicyOperation> Operations { get; } = new()
