@@ -19,22 +19,25 @@ namespace HSMServer.Core.Model
         internal override bool TryAddValue(BaseValue value)
         {
             var isLastValue = Storage.LastValue is null || value.Time >= Storage.LastValue.Time;
-            var canStore = Policies.TryValidate(value, out var valueT, isLastValue);
-
+            
             if (!value.IsTimeoutValue)
             {
+                var canStore = Policies.TryValidate(value, out var valueT, isLastValue);
                 if (canStore)
                 {
                     Storage.AddValue(valueT);
                     ReceivedNewValue?.Invoke(valueT);
                 }
+                
+                return canStore;
             }
             else
             {
+                var shouldWrite = !(LastDbActualValue.IsTimeoutValue && value.IsTimeoutValue);
                 Storage.AddValueBase((T)value);
-            }
 
-            return canStore;
+                return shouldWrite;
+            }
         }
 
         internal override IEnumerable<BaseValue> ConvertValues(List<byte[]> pages) => pages.Select(Convert);

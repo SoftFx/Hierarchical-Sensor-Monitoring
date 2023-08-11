@@ -18,8 +18,6 @@ namespace HSMServer.Core.Model
 
         internal abstract BaseValue LastDbValue { get; }
 
-        internal abstract BaseValue LastActualValue { get; }
-
         internal abstract BaseValue LastValue { get; }
 
         internal abstract bool HasData { get; }
@@ -40,7 +38,6 @@ namespace HSMServer.Core.Model
         private readonly ConcurrentQueue<T> _cache = new();
 
         private T _lastValue;
-        private T _lastActualValue;
 
 
         internal override T LastDbActualValue => _cache.LastOrDefault();
@@ -49,21 +46,17 @@ namespace HSMServer.Core.Model
 
         internal override T LastValue => _lastValue;
 
-        internal override T LastActualValue => _lastActualValue;
-
         internal override bool HasData => !_cache.IsEmpty;
 
         internal virtual void AddValue(T value) => AddValueBase(value);
 
         internal virtual void AddValueBase(T value)
         {
-            _cache.Enqueue(value);
+            if (LastDbActualValue is null || !(LastDbActualValue.IsTimeoutValue && value.IsTimeoutValue))
+                _cache.Enqueue(value);
 
             if (_cache.Count > CacheSize)
                 _cache.TryDequeue(out _);
-
-            if (_lastActualValue is null || value.Time >= _lastActualValue.Time)
-                _lastActualValue = value;
 
             if (!value.IsTimeoutValue)
                 if (_lastValue is null || value.Time >= _lastValue.Time)

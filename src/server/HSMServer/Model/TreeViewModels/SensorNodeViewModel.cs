@@ -64,7 +64,7 @@ namespace HSMServer.Model.TreeViewModel
                 ValidationError = string.Empty;
             
             LastValue = model.LastValue;
-            LastActualValue = model.LastActualValue;
+            LastActualValue = model.LastDbActualValue;
 
             HasData = model.HasData;
             ShortStringValue = model.LastValue?.ShortInfo;
