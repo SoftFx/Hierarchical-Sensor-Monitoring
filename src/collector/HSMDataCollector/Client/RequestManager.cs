@@ -1,6 +1,7 @@
 ﻿using HSMDataCollector.Converters;
 using HSMDataCollector.Logging;
 using HSMDataCollector.SensorsMetainfo;
+using HSMSensorDataObjects;
 using HSMSensorDataObjects.SensorRequests;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -22,11 +23,11 @@ namespace HSMDataCollector.Client
         }
 
 
-        internal SensorUpdateRequest RegisterRequest(SensorMetainfo info)
+        internal BaseRequest RegisterRequest(BaseRequest request)
         {
-            AddOrUpdate(info.Path, NewTaskSource, (key, val) => NewTaskSource);
+            AddOrUpdate(request.Path, NewTaskSource, (key, val) => NewTaskSource);
 
-            return info.ToApi();
+            return request;
         }
 
         internal void SetResults(Dictionary<string, string> responses)

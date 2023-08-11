@@ -468,7 +468,7 @@ namespace HSMServer.Controllers
         /// </summary>
         /// <param name="sensorUpdate"></param>
         /// <returns></returns>
-        [HttpPost("update")]
+        [HttpPost("addOrUpdate")]
         [Consumes(MediaTypeNames.Application.Json)]
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
@@ -497,7 +497,7 @@ namespace HSMServer.Controllers
         /// </summary>
         /// <param name="sensorUpdates"></param>
         /// <returns></returns>
-        [HttpPost("updateList")]
+        [HttpPost("addOrUpdateList")]
         [Consumes(MediaTypeNames.Application.Json)]
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]

@@ -1,5 +1,6 @@
 ﻿using HSMDataCollector.DefaultSensors;
 using HSMDataCollector.Logging;
+using HSMDataCollector.SyncQueue;
 using System;
 using System.Collections.Concurrent;
 using System.Linq;
@@ -9,13 +10,13 @@ namespace HSMDataCollector.Core
 {
     internal sealed class SensorsStorage : ConcurrentDictionary<string, SensorBase>, IDisposable
     {
-        private readonly IValuesQueue _valuesQueue;
+        private readonly IQueueManager _queueManager;
         private readonly ICollectorLogger _logger;
 
 
-        internal SensorsStorage(IValuesQueue queue, ICollectorLogger logger)
+        internal SensorsStorage(IQueueManager queue, ICollectorLogger logger)
         {
-            _valuesQueue = queue;
+            _queueManager = queue;
             _logger = logger;
         }
 
@@ -24,7 +25,8 @@ namespace HSMDataCollector.Core
         {
             foreach (var value in Values)
             {
-                value.ReceiveSensorValue -= _valuesQueue.Push;
+                value.SensorCommandRequest -= _queueManager.Commands.CallServer;
+                value.ReceiveSensorValue -= _queueManager.Data.Push;
                 value.ExceptionThrowing -= WriteSensorException;
 
                 value.Dispose();
@@ -54,7 +56,8 @@ namespace HSMDataCollector.Core
         {
             if (TryAdd(sensor.SensorPath, sensor))
             {
-                sensor.ReceiveSensorValue += _valuesQueue.Push;
+                sensor.SensorCommandRequest += _queueManager.Commands.CallServer;
+                sensor.ReceiveSensorValue += _queueManager.Data.Push;
                 sensor.ExceptionThrowing += WriteSensorException;
 
                 _logger.Info($"New sensor has been added {sensor.SensorPath}");
