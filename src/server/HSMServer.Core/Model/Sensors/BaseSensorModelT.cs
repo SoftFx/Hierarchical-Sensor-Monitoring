@@ -33,7 +33,7 @@ namespace HSMServer.Core.Model
             }
             else
             {
-                var shouldWrite = !(LastDbActualValue.IsTimeoutValue && value.IsTimeoutValue);
+                var shouldWrite = LastDbActualValue is null || !(LastDbActualValue.IsTimeoutValue && value.IsTimeoutValue);
                 Storage.AddValueBase((T)value);
 
                 return shouldWrite;
