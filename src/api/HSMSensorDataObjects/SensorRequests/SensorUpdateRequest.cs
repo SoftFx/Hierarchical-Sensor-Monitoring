@@ -21,9 +21,9 @@ namespace HSMSensorDataObjects.SensorRequests
         public AlertUpdateRequest TTLPolicy { get; set; }
 
 
-        public List<int> AvailableUnites { get; set; }
+        public List<Unit> AvailableUnites { get; set; }
 
-        public int? SelectedUnit { get; set; }
+        public Unit? SelectedUnit { get; set; }
 
 
         public SensorType? SensorType { get; set; }

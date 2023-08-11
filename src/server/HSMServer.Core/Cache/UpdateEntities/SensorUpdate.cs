@@ -12,6 +12,8 @@ namespace HSMServer.Core.Cache.UpdateEntities
     {
         public List<PolicyUpdate> Policies { get; init; }
 
+        public List<Unit> AvailableUnits { get; init; }
+
 
         public DateTime? EndOfMutingPeriod { get; init; }
 
@@ -21,7 +23,7 @@ namespace HSMServer.Core.Cache.UpdateEntities
 
         public SensorState? State { get; init; }
 
-        public int? SelectedUnit { get; init; }
+        public Unit? SelectedUnit { get; init; }
     }
 
 

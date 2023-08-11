@@ -20,6 +20,17 @@ namespace HSMServer.Core.Model
         Grafana = 1,
     }
 
+    public enum Unit : int
+    {
+        bits = 0,
+        bytes = 1,
+        KB = 2,
+        MB = 3,
+        GB = 4,
+
+        Percents = 100,
+    }
+
 
     public interface IBarSensor
     {
@@ -41,6 +52,11 @@ namespace HSMServer.Core.Model
         public abstract SensorType Type { get; }
 
 
+        public List<Unit> AvailableUnites { get; } = new();
+
+        public Unit? SelectedUnit { get; private set; }
+
+
         public bool SaveOnlyUniqueValues { get; private set; }
 
         public Integration Integration { get; private set; }
@@ -48,8 +64,6 @@ namespace HSMServer.Core.Model
         public DateTime? EndOfMuting { get; private set; }
 
         public SensorState State { get; private set; }
-
-        public int? SelectedUnit { get; private set; }
 
 
         public SensorResult? Status
@@ -85,7 +99,7 @@ namespace HSMServer.Core.Model
             _ttlEntity = entity.TTLPolicy;
 
             State = (SensorState)entity.State;
-            SelectedUnit = entity.SelectedUnit;
+            SelectedUnit = (Unit?)entity.SelectedUnit;
             Integration = (Integration)entity.Integration;
             SaveOnlyUniqueValues = entity.SaveOnlyUniqueValues;
             EndOfMuting = entity.EndOfMuting > 0L ? new DateTime(entity.EndOfMuting) : null;
@@ -145,8 +159,8 @@ namespace HSMServer.Core.Model
             CreationDate = CreationDate.Ticks,
             Type = (byte)Type,
             State = (byte)State,
-            SelectedUnit = SelectedUnit,
             Integration = (int)Integration,
+            SelectedUnit = (int?)SelectedUnit,
             SaveOnlyUniqueValues = SaveOnlyUniqueValues,
             Policies = Policies.Ids.Select(u => u.ToString()).ToList(),
             EndOfMuting = EndOfMuting?.Ticks ?? 0L,
