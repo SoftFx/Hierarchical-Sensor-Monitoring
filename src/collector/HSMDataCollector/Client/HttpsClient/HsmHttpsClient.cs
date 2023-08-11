@@ -1,12 +1,10 @@
 using HSMDataCollector.Client.HttpsClient;
 using HSMDataCollector.Core;
 using HSMDataCollector.Logging;
-using HSMDataCollector.Requests;
 using HSMDataCollector.SyncQueue;
 using HSMSensorDataObjects;
 using Newtonsoft.Json;
 using System;
-using System.Collections.Generic;
 using System.Net;
 using System.Net.Http;
 using System.Text;
@@ -77,47 +75,6 @@ namespace HSMDataCollector.Client
                 return new ConnectionResult(null, ex.Message);
             }
         }
-
-        //internal Task SendData(List<SensorValueBase> values) => values.Count > 0
-        //    ? RequestToServer(values.ToList().Cast<object>(), _endpoints.List)
-        //    : Task.CompletedTask;
-
-        //internal Task SendSensorData(SensorValueBase value)
-        //{
-        //    switch (value)
-        //    {
-        //        case BoolSensorValue boolV:
-        //            return RequestToServer(boolV, _endpoints.Bool);
-        //        case IntSensorValue intV:
-        //            return RequestToServer(intV, _endpoints.Integer);
-        //        case DoubleSensorValue doubleV:
-        //            return RequestToServer(doubleV, _endpoints.Double);
-        //        case StringSensorValue stringV:
-        //            return RequestToServer(stringV, _endpoints.String);
-        //        case TimeSpanSensorValue timeSpanV:
-        //            return RequestToServer(timeSpanV, _endpoints.Timespan);
-        //        case IntBarSensorValue intBarV:
-        //            return RequestToServer(intBarV, _endpoints.IntBar);
-        //        case DoubleBarSensorValue doubleBarV:
-        //            return RequestToServer(doubleBarV, _endpoints.DoubleBar);
-        //        case FileSensorValue fileV:
-        //            return RequestToServer(fileV, _endpoints.File);
-        //        case VersionSensorValue versionV:
-        //            return RequestToServer(versionV, _endpoints.Version);
-        //        default:
-        //            _logger.Error($"Unsupported sensor type: {value.Path}");
-        //            return Task.CompletedTask;
-        //    }
-        //}
-
-        private Task SendCommand(PriorityRequest request) => RequestToServer(request, _endpoints.AddOrUpdateSensor);
-
-        private Task SendCommands(List<PriorityRequest> request) => RequestToServer(request, _endpoints.AddOrUpdateSensorList);
-
-
-        //private void RecieveDataQueue(SensorValueBase value) => SendSensorData(value);
-
-        //private void RecieveDataQueue(List<SensorValueBase> value) => SendData(value);
 
 
         private async Task<HttpResponseMessage> RequestToServer(object value, string uri)
