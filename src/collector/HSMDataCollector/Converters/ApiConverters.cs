@@ -6,13 +6,14 @@ namespace HSMDataCollector.Converters
 {
     internal static class ApiConverters
     {
-        internal static SensorUpdateRequest ToApi(this SensorMetainfo info) =>
-            new SensorUpdateRequest()
+        internal static AddOrUpdateSensorRequest ToApi(this SensorMetainfo info) =>
+            new AddOrUpdateSensorRequest()
             {
                 Description = info.Description,
+                SensorType = info.SensorType,
                 Path = info.Path,
 
-                AvailableUnites = info.Units.AvailableUnits.Select(x => (int)x).ToList(),
+                AvailableUnites = info.Units.AvailableUnits?.Select(x => (int)x).ToList(),
                 SelectedUnit = (int)info.Units.Selected,
 
                 KeepHistory = info.Settings.KeepHistory?.Ticks,

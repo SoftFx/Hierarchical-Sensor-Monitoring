@@ -24,38 +24,50 @@ namespace HSMDataCollector.Client.HttpsClient
         {
             async Task RegisterRequest<T>(T apiValue, string uri)
             {
-                var response = await base.RequestToServer(apiValue, uri);
-                var json = await response.Content.ReadAsStringAsync();
-                var errors = JsonConvert.DeserializeObject<Dictionary<string, string>>(json);
+                var response = await RequestToServer(apiValue, uri);
+
+                if (response.IsSuccessStatusCode)
+                {
+                    var json = await response.Content.ReadAsStringAsync();
+                    var errors = JsonConvert.DeserializeObject<Dictionary<string, string>>(json);
+
+                    foreach (var val in values)
+                        if (errors.TryGetValue(val.Request.Path, out var error))
+                        {
+                            var result = response.IsSuccessStatusCode && string.IsNullOrEmpty(error);
+
+                            _commandQueue.SetResult(val.Key, result);
+                        }
+
+                    return;
+                }
 
                 foreach (var val in values)
-                    if (errors.TryGetValue(val.Request.Path, out var error))
-                    {
-                        var result = response.IsSuccessStatusCode && string.IsNullOrEmpty(error);
-
-                        _commandQueue.SetResult(val.Key, result);
-                    }
+                    _commandQueue.SetCancel(val.Key);
             }
 
-            return RegisterRequest(values.Select(u => u.Request), _endpoints.AddOrUpdateSensor);
+            return RegisterRequest(values.Select(u => u.Request), _endpoints.CommandsList);
         }
 
         internal override Task SendRequest(PriorityRequest value)
         {
             async Task RegisterRequest<T>(T apiValue, string uri)
             {
-                var response = await base.RequestToServer(apiValue, uri);
-                var json = await response.Content.ReadAsStringAsync();
+                var response = await RequestToServer(apiValue, uri);
 
-                var result = response.IsSuccessStatusCode && string.IsNullOrEmpty(json);
+                if (response.IsSuccessStatusCode)
+                {
+                    var json = await response.Content.ReadAsStringAsync();
 
-                _commandQueue.SetResult(value.Key, result);
+                    _commandQueue.SetResult(value.Key, string.IsNullOrEmpty(json));
+                }
+                else
+                    _commandQueue.SetCancel(value.Key);
             }
-
 
             switch (value.Request)
             {
-                case SensorUpdateRequest sensorUpdate:
+                case AddOrUpdateSensorRequest sensorUpdate:
                     return RegisterRequest(sensorUpdate, _endpoints.AddOrUpdateSensor);
                 default:
                     _commandQueue.SetCancel(value.Key);

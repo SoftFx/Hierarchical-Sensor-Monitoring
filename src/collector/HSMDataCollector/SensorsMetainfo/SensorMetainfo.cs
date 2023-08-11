@@ -1,4 +1,6 @@
-﻿namespace HSMDataCollector.SensorsMetainfo
+﻿using HSMSensorDataObjects;
+
+namespace HSMDataCollector.SensorsMetainfo
 {
     internal class SensorMetainfo
     {
@@ -8,6 +10,8 @@
 
         internal SensorMetainfoUnits Units { get; set; } = new SensorMetainfoUnits();
 
+
+        internal SensorType SensorType { get; set; }
 
         internal string Description { get; set; }
 
