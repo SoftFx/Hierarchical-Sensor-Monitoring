@@ -8,6 +8,8 @@ namespace HSMDataCollector.Requests
     {
         public Guid Id { get; }
 
+        public (Guid, string) Key { get; }
+
         public BaseRequest Request { get; }
 
 
@@ -15,6 +17,8 @@ namespace HSMDataCollector.Requests
         {
             Id = Guid.NewGuid();
             Request = request;
+
+            Key = (Id, request.Path);
         }
     }
 }

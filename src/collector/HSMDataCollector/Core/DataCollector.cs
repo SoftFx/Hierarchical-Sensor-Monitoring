@@ -21,6 +21,9 @@ using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using OldSensorBase = HSMDataCollector.Base.SensorBase;
 using SensorBase = HSMDataCollector.DefaultSensors.SensorBase;
+using HSMSensorDataObjects.SensorValueRequests;
+using System.Reflection;
+using System.Text;
 
 namespace HSMDataCollector.Core
 {
@@ -75,7 +78,7 @@ namespace HSMDataCollector.Core
         /// <param name="options">Common options for datacollector</param>
         public DataCollector(CollectorOptions options)
         {
-            _queueManager = new QueueManager(options);
+            _queueManager = new QueueManager(options, _logger);
             _sensorsStorage = new SensorsStorage(_queueManager, _logger);
 
             Windows = new WindowsSensorsCollection(_sensorsStorage, _sensorsPrototype);
@@ -208,7 +211,7 @@ namespace HSMDataCollector.Core
             var lastData = _nameToSensor.Values.Where(v => v.HasLastValue).Select(v => v.GetLastValue()).ToList();
 
             if (lastData.Count > 0)
-                _hsmClient.SendData(lastData);
+                _hsmClient.Data.SendRequest(lastData);
 
             foreach (var pair in _nameToSensor.Values)
                 pair.Dispose();
@@ -385,19 +388,47 @@ namespace HSMDataCollector.Core
             return sensor;
         }
 
-        public Task SendFileAsync(string sensorPath, string filePath, SensorStatus status = SensorStatus.Ok, string comment = "")
+        public async Task SendFileAsync(string sensorPath, string filePath, SensorStatus status = SensorStatus.Ok, string comment = "")
         {
             if (!File.Exists(filePath))
             {
                 _logger.Error($"{filePath} does not exist");
-                return default;
+                return;
             }
 
             _logger.Info($"Sending {filePath} to {sensorPath}");
 
-            var file = new FileInfo(filePath);
+            var fileInfo = new FileInfo(filePath);
 
-            return _hsmClient.SendFileAsync(file, sensorPath, status, comment);
+            async Task<List<byte>> GetFileBytes()
+            {
+                try
+                {
+                    using (var file = File.Open(fileInfo.FullName, FileMode.Open, FileAccess.Read, FileShare.ReadWrite))
+                    {
+                        using (var stream = new StreamReader(file))
+                            return Encoding.UTF8.GetBytes(await stream.ReadToEndAsync()).ToList();
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.Error(ex.Message);
+                    throw;
+                }
+            }
+
+            var value = new FileSensorValue()
+            {
+                Path = sensorPath,
+                Comment = comment,
+                Status = status,
+                Extension = fileInfo.Extension.TrimStart('.'),
+                Name = Path.GetFileNameWithoutExtension(fileInfo.FullName),
+                Time = DateTime.Now,
+                Value = await GetFileBytes()
+            };
+
+            await _hsmClient.Data.SendRequest(value);
         }
 
         public ILastValueSensor<bool> CreateLastValueBoolSensor(string path, bool defaultValue, string description = "")

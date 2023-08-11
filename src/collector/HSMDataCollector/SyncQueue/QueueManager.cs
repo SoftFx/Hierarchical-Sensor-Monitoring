@@ -1,4 +1,5 @@
 ﻿using HSMDataCollector.Core;
+using HSMDataCollector.Logging;
 using HSMSensorDataObjects.SensorValueRequests;
 using System.Collections.Generic;
 
@@ -14,9 +15,9 @@ namespace HSMDataCollector.SyncQueue
         public ICommandQueue Commands { get; }
 
 
-        internal QueueManager(CollectorOptions options) : base()
+        internal QueueManager(CollectorOptions options, ICollectorLogger logger) : base()
         {
-            Commands = RegisterQueue(new CommandsQueue(options));
+            Commands = RegisterQueue(new CommandsQueue(options, logger));
             Data = RegisterQueue(new SensorDataQueue(options));
         }
 
