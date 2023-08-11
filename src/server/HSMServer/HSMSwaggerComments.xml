@@ -137,18 +137,18 @@
             Get file (csv or txt) history [from, to] or [from - count] for some sensor
             </summary>
         </member>
-        <member name="M:HSMServer.Controllers.SensorsController.Post(HSMSensorDataObjects.SensorRequests.SensorUpdateRequest)">
+        <member name="M:HSMServer.Controllers.SensorsController.Post(HSMSensorDataObjects.SensorRequests.AddOrUpdateSensorRequest)">
             <summary>
-            Update sensor meta info
+            Add new sensor with selected properties or update sensor meta info
             </summary>
             <param name="sensorUpdate"></param>
             <returns></returns>
         </member>
-        <member name="M:HSMServer.Controllers.SensorsController.Post(System.Collections.Generic.List{HSMSensorDataObjects.SensorRequests.SensorUpdateRequest})">
+        <member name="M:HSMServer.Controllers.SensorsController.Post(System.Collections.Generic.List{HSMSensorDataObjects.SensorRequests.CommandRequestBase})">
             <summary>
-            Update sensors meta info
+            List of sensor commands
             </summary>
-            <param name="sensorUpdates"></param>
+            <param name="sensorCommands"></param>
             <returns></returns>
         </member>
         <member name="T:HSMServer.Filters.DataRequestHeaderSwaggerFilter">

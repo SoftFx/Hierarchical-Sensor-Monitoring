@@ -464,7 +464,7 @@ namespace HSMServer.Controllers
 
 
         /// <summary>
-        /// Update sensor meta info
+        /// Add new sensor with selected properties or update sensor meta info
         /// </summary>
         /// <param name="sensorUpdate"></param>
         /// <returns></returns>
@@ -473,7 +473,7 @@ namespace HSMServer.Controllers
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status406NotAcceptable)]
-        public ActionResult<SensorUpdateRequest> Post([FromBody] SensorUpdateRequest sensorUpdate)
+        public ActionResult<AddOrUpdateSensorRequest> Post([FromBody] AddOrUpdateSensorRequest sensorUpdate)
         {
             try
             {
@@ -493,34 +493,40 @@ namespace HSMServer.Controllers
         }
 
         /// <summary>
-        /// Update sensors meta info
+        /// List of sensor commands
         /// </summary>
-        /// <param name="sensorUpdates"></param>
+        /// <param name="sensorCommands"></param>
         /// <returns></returns>
-        [HttpPost("addOrUpdateList")]
+        [HttpPost("commands")]
         [Consumes(MediaTypeNames.Application.Json)]
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status406NotAcceptable)]
-        public ActionResult<List<SensorUpdateRequest>> Post([FromBody] List<SensorUpdateRequest> sensorUpdates)
+        public ActionResult<List<CommandRequestBase>> Post([FromBody, ModelBinder(typeof(SensorCommandModelBinder))] List<CommandRequestBase> sensorCommands)
         {
             try
             {
-                var result = new Dictionary<string, string>(sensorUpdates.Count);
-                foreach (var sensorUpdate in sensorUpdates)
+                var result = new Dictionary<string, string>(sensorCommands.Count);
+
+                foreach (var command in sensorCommands)
                 {
-                    if (TryBuildSensorUpdate(sensorUpdate, out var update, out var message))
-                        _cache.AddOrUpdateSensor(update);
+                    if (command is AddOrUpdateSensorRequest sensorUpdate)
+                    {
+                        if (TryBuildSensorUpdate(sensorUpdate, out var update, out var message))
+                            _cache.AddOrUpdateSensor(update);
+                        else
+                            result[sensorUpdate.Path] = message;
+                    }
                     else
-                        result[sensorUpdate.Path] = message;
+                        result[command.Path] = $"This type of command is not supported now";
                 }
 
-                return result.Count == 0 ? Ok(sensorUpdates) : StatusCode(406, result);
+                return result.Count == 0 ? Ok(sensorCommands) : StatusCode(406, result);
             }
             catch (Exception e)
             {
                 _logger.LogError(e, "Failed to update sensors!");
-                return BadRequest(sensorUpdates);
+                return BadRequest(sensorCommands);
             }
         }
 
@@ -551,7 +557,7 @@ namespace HSMServer.Controllers
         private StoreInfo BuildStoreInfo(SensorValueBase valueBase, BaseValue baseValue) =>
             new(GetKey(valueBase), valueBase.Path) { BaseValue = baseValue };
 
-        private bool TryBuildSensorUpdate(SensorUpdateRequest request, out SensorAddOrUpdateRequestModel requestModel, out string message)
+        private bool TryBuildSensorUpdate(AddOrUpdateSensorRequest request, out SensorAddOrUpdateRequestModel requestModel, out string message)
         {
             requestModel = new SensorAddOrUpdateRequestModel(GetKey(request), request.Path);
 
