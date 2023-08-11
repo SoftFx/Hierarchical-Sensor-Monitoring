@@ -15,6 +15,11 @@ namespace HSMServer.Model.ViewModel
         public bool IsMuted { get; }
 
 
+        public bool SaveOnlyUniqueValues { get; set; }
+
+        public int? SelectedUnit { get; set; }
+
+
         // public constructor without parameters for action Home/UpdateSensorInfo
         public SensorInfoViewModel() : base() { }
 
@@ -24,6 +29,8 @@ namespace HSMServer.Model.ViewModel
             StatusComment = sensor.ValidationError;
             HasGrafana = sensor.Integration.HasGrafana();
             IsMuted = sensor.State == SensorState.Muted;
+            SelectedUnit = sensor.SelectedUnit;
+            SaveOnlyUniqueValues = sensor.SaveOnlyUniqueValues;
         }
     }
 }

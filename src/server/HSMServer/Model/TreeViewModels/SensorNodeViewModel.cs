@@ -27,6 +27,10 @@ namespace HSMServer.Model.TreeViewModel
 
         public string ValidationError { get; private set; }
 
+        public bool SaveOnlyUniqueValues { get; private set; }
+
+        public int? SelectedUnit { get; private set; }
+
 
         public bool IsValidationErrorVisible => !string.IsNullOrEmpty(ValidationError);
 
@@ -53,14 +57,16 @@ namespace HSMServer.Model.TreeViewModel
             Integration = model.Integration;
             UpdateTime = model.LastUpdate;
             Status = model.Status.ToClient();
+            SelectedUnit = model.SelectedUnit;
+            SaveOnlyUniqueValues = model.SaveOnlyUniqueValues;
 
             if (State is SensorState.Muted)
                 ValidationError = GetMutedErrorTooltip(model.EndOfMuting);
             else if (model.Status?.HasError ?? false)
                 ValidationError = model.Status?.Message;
-            else 
+            else
                 ValidationError = string.Empty;
-            
+
             LastValue = model.LastValue;
             HasData = model.HasData;
             ShortStringValue = model.LastValue?.ShortInfo;

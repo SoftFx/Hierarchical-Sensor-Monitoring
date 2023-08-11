@@ -575,6 +575,8 @@ namespace HSMServer.Controllers
                 KeepHistory = newModel.SavedHistoryPeriod.ToModel(),
                 SelfDestroy = newModel.SelfDestroyPeriod.ToModel(),
                 Policies = policyUpdates,
+                SelectedUnit = newModel.SelectedUnit,
+                SaveOnlyUniqueValues = newModel.SaveOnlyUniqueValues,
                 Initiator = CurrentUser.Name
             };
 
