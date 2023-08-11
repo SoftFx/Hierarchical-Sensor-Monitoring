@@ -485,7 +485,8 @@ namespace HSMServer.Core.Cache
         private void SaveSensorValueToDb(BaseValue value, Guid sensorId)
         {
             _database.AddSensorValue(value.ToEntity(sensorId));
-            _snapshot.Sensors[sensorId].SetLastUpdate(value.ReceivingTime);
+            if (!value.IsTimeoutValue)
+                _snapshot.Sensors[sensorId].SetLastUpdate(value.ReceivingTime);
         }
 
         private void NotifyAboutProductChange(ProductModel product)
