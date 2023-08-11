@@ -1,4 +1,5 @@
 ﻿using System.Collections.Generic;
+using System.ComponentModel;
 
 namespace HSMSensorDataObjects.SensorRequests
 {
@@ -14,8 +15,12 @@ namespace HSMSensorDataObjects.SensorRequests
     }
 
 
-    public sealed class SensorUpdateRequest : BaseRequest
+    public sealed class AddOrUpdateSensorRequest : CommandRequestBase
     {
+        [DefaultValue((int)Command.AddOrUpdateSensor)]
+        public override Command Type => Command.AddOrUpdateSensor;
+
+
         public List<AlertUpdateRequest> Policies { get; set; }
 
         public AlertUpdateRequest TTLPolicy { get; set; }
