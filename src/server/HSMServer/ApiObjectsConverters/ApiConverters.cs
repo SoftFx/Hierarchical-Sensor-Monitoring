@@ -211,7 +211,7 @@ namespace HSMServer.ApiObjectsConverters
             };
 
 
-        public static SensorUpdate Convert(this SensorUpdateRequest request, Guid sensorId) =>
+        public static SensorUpdate Convert(this AddOrUpdateSensorRequest request, Guid sensorId) =>
             new()
             {
                 Id = sensorId,

@@ -94,7 +94,12 @@ namespace HSMServer.Core.Model.Policies
                 condition.Combination = update.Combination;
                 condition.Operation = update.Operation;
                 condition.Property = update.Property;
-                condition.Target = update.Target;
+
+                var target = update.Target;
+                if (target is not null && target.Type == TargetType.LastValue && target.Value is null)
+                    target = update.Target with { Value = _sensor?.Id.ToString() };
+
+                condition.Target = target;
 
                 return condition;
             }

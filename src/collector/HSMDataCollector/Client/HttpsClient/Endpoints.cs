@@ -1,10 +1,16 @@
 ﻿using HSMDataCollector.Core;
+using System;
 
 namespace HSMDataCollector.Client
 {
     internal sealed class Endpoints
     {
         internal string ConnectionAddress { get; }
+
+
+        internal string AddOrUpdateSensor => $"{ConnectionAddress}/addOrUpdate";
+
+        internal string AddOrUpdateSensorList => $"{ConnectionAddress}/addOrUpdateList";
 
 
         internal string Bool => $"{ConnectionAddress}/bool";
@@ -35,7 +41,13 @@ namespace HSMDataCollector.Client
 
         internal Endpoints(CollectorOptions options)
         {
-            ConnectionAddress = $"{options.ServerUrl}:{options.Port}/api/sensors";
+            var builder = new UriBuilder(options.ServerUrl)
+            {
+                Port = options.Port,
+                Scheme = "https"
+            };
+
+            ConnectionAddress = $"{builder.Uri}/api/sensors";
         }
     }
 }
