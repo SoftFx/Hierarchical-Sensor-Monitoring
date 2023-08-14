@@ -1,0 +1,89 @@
+﻿@using HSMServer.Model.ViewModel
+@using HSMServer.Extensions
+@using HSMServer.Core.Model
+
+@model SensorInfoViewModel
+
+@addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
+
+
+<div class="d-flex justify-content-start">
+    <div class="d-flex ms-3 text-nowrap">
+        <span style="min-width: 10rem">Sensor type:</span>
+    </div>
+    <div class="d-flex w-100">
+        <span>@(Model.SensorType)</span>
+    </div>
+    @{
+        SensorType type;
+        if (Model.Header.Split('/')[^1] == "Service status")
+            type = SensorType.Enum;
+        else
+            type = Model.SensorType;
+    }
+    <input id='sensor_type_@Model.EncodedId' value='@((int)type)' style='display: none' />
+</div>
+
+<div class="d-flex justify-content-start">
+    <div class="d-flex ms-3 text-nowrap">
+        <span style="min-width: 10rem">Sensor status:</span>
+    </div>
+    <div class="d-flex w-100">
+        <li class='@Model.Status.ToIcon() sensor-icon-with-margin align-self-center' title='Status: @Model.Status'></li>
+        <span>@Model.Status</span>
+        @if (!Model.IsMuted)
+        {
+            <span onclick="loadEditSensorStatusModal()">
+                <i class="fas fa-edit align-self-center ms-2" style="cursor: pointer"></i>
+            </span>
+        }
+    </div>
+</div>
+
+@if (Model.HasGrafana)
+{
+    <div class="d-flex justify-content-start">
+        <div class="d-flex ms-3 text-nowrap">
+            <span style="min-width: 10rem">Enabled for:</span>
+        </div>
+        <div class="d-flex w-100">
+            <div class="sensor-icon-with-margin">
+                <img class="tree-png-icon" src="~/dist/grafana.svg" alt="!" />
+            </div>
+            <span>Grafana</span>
+        </div>
+    </div>
+}
+
+@if (!string.IsNullOrEmpty(Model.StatusComment))
+{
+    <div class="d-flex justify-content-start">
+        <div class="d-flex ms-3 text-nowrap">
+            <span style="min-width: 10rem">Status comment:</span>
+        </div>
+        <div class="d-flex w-100">
+            <span id="markdown_status_comment">@Html.Raw(Model.StatusComment)</span>
+        </div>
+    </div>
+}
+
+@if (Model.SelectedUnit is not null)
+{
+    <div class="d-flex justify-content-start">
+        <div class="d-flex ms-3 text-nowrap">
+            <span style="min-width: 10rem">Unit:</span>
+        </div>
+        <div class="d-flex w-100">
+            <span id="markdown_status_comment">@Model.SelectedUnit</span>
+        </div>
+    </div>
+}
+
+<div class="d-flex justify-content-start">
+    <div class="d-flex ms-3 text-nowrap">
+        <span style="min-width: 10rem">Only unique values:</span>
+    </div>
+    <div class="d-flex w-100 form-check form-switch">
+        <input id="saveOnlyUniqueValuesSwitch" class="form-check-input" type="checkbox" role="switch" asp-for="SaveOnlyUniqueValues" disabled>
+    </div>
+</div>

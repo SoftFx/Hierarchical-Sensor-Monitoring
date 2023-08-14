@@ -29,7 +29,6 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using TimeInterval = HSMServer.Model.TimeInterval;
-using HSMServer.Core.Model.Requests;
 
 namespace HSMServer.Controllers
 {
@@ -575,6 +574,8 @@ namespace HSMServer.Controllers
                 KeepHistory = newModel.SavedHistoryPeriod.ToModel(),
                 SelfDestroy = newModel.SelfDestroyPeriod.ToModel(),
                 Policies = policyUpdates,
+                SelectedUnit = newModel.SelectedUnit,
+                SaveOnlyUniqueValues = newModel.SaveOnlyUniqueValues,
                 Initiator = CurrentUser.Name
             };
 

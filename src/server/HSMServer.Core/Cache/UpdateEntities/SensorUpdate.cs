@@ -12,12 +12,18 @@ namespace HSMServer.Core.Cache.UpdateEntities
     {
         public List<PolicyUpdate> Policies { get; init; }
 
+        public List<Unit> AvailableUnits { get; init; }
+
 
         public DateTime? EndOfMutingPeriod { get; init; }
+
+        public bool? SaveOnlyUniqueValues { get; init; }
 
         public Integration? Integration { get; init; }
 
         public SensorState? State { get; init; }
+
+        public Unit? SelectedUnit { get; init; }
     }
 
 
