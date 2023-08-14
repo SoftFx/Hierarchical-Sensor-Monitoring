@@ -405,6 +405,8 @@ namespace HSMServer.Core.Cache
             sensor.Policies.SensorExpired += SetExpiredSnapshot;
             sensor.Policies.Uploaded += UpdatePolicy;
 
+            sensor.UpdateFromParentSettings += _database.UpdateSensor;
+
             AddBaseNodeSubscription(sensor);
         }
 
@@ -413,6 +415,8 @@ namespace HSMServer.Core.Cache
             sensor.Policies.ChangesHandler -= _journalService.AddRecord;
             sensor.Policies.SensorExpired -= SetExpiredSnapshot;
             sensor.Policies.Uploaded -= UpdatePolicy;
+
+            sensor.UpdateFromParentSettings -= _database.UpdateSensor;
 
             RemoveBaseNodeSubscription(sensor);
             RemoveEntityPolicies(sensor);

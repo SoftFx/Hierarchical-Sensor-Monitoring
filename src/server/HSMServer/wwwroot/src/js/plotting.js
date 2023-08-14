@@ -64,8 +64,8 @@ window.displayGraph = function(graphData, graphType, graphElementId, graphName) 
         responsive: true,
         displaylogo: false,
         modeBarButtonsToAdd: [
-            getAddPlotButton(serviceButtonName, true, plotIcon, graphElementId, graphName),
-            getAddPlotButton(heartBeatButtonName, false, plotIcon, graphElementId, graphName),
+            // getAddPlotButton(serviceButtonName, true, plotIcon, graphElementId, graphName),
+            // getAddPlotButton(heartBeatButtonName, false, plotIcon, graphElementId, graphName),
         ],
         modeBarButtonsToRemove: [
             'pan',
@@ -523,7 +523,7 @@ function getPlotType(graphType) {
                     $.ajax({
                         type: 'POST',
                         data: JSON.stringify(body),
-                        url: `SensorHistory/GetServiceStatusHistory?isStatusService=${isStatusService}`,
+                        url: `${getSensorStatus}?isStatusService=${isStatusService}`,
                         contentType: 'application/json',
                         dataType: 'html',
                         cache: false,

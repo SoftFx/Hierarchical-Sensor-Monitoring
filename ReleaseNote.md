@@ -50,9 +50,9 @@ New style:
 
 ## v. 3.1.7
 * [**Status code**](https://learn.microsoft.com/en-us/dotnet/api/system.net.httpstatuscode?view=net-7.0) for **TestConnection()** method has been added
-* Calculation for percentiles has been removed. Percintiles is constant values.
-* **NaN** serialization has been added for Double and BarDouble values
-* Unblocked file stream for **SendFileAsync** method has been added
+* Calculation for percentiles has been removed. Percentiles are constant values
+* **NaN** serialization has been added for Double and DoubleBar values
+* Non-blocking file stream for **SendFileAsync** method has been added
 
 ## v. 3.1.8
 * New default sensor **Service commands** has been added
