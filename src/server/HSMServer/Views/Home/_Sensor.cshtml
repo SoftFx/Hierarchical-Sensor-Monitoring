@@ -201,41 +201,43 @@
                                 <div class='tab-pane fade show active' id=@graphParentDivId>
                                     @if (Model.Type.IsBar())
                                     {
-                                        <button class="btn btn-secondary dropdown-toggle mt-2" type="button" id="dropdownMenuButton" data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="true">
-                                            Select plot type
-                                        </button>
-                                        <ul class="dropdown-menu" style="max-width: 8rem; min-width: 2rem" aria-labelledby="dropdownMenuButton">
-                                            <li class="dropdown-item text-start px-2 mx-0">
-                                                <input type="checkbox" value="" checked id="plot_bar">
-                                                <label class="noHover" for="plot_bar">
-                                                    Bar
-                                                </label>
-                                            </li>
-                                            <li class="dropdown-item text-start px-2 mx-0">
-                                                <input type="checkbox" value="" id="plot_max">
-                                                <label class="noHover" for="plot_max">
-                                                    Max
-                                                </label>
-                                            </li>
-                                            <li class="dropdown-item text-start px-2  mx-0">
-                                                <input type="checkbox" value="" id="plot_min">
-                                                <label class="noHover" for="plot_min">
-                                                    Min
-                                                </label>
-                                            </li>
-                                            <li class="dropdown-item text-start px-2 mx-0">
-                                                <input type="checkbox" value="" id="plot_mean">
-                                                <label class="noHover" for="plot_mean">
-                                                    Mean
-                                                </label>
-                                            </li>
-                                            <li class="dropdown-item text-start px-2 mx-0">
-                                                <input type="checkbox" value="" id="plot_count">
-                                                <label class="noHover" for="plot_count">
-                                                    Count
-                                                </label>
-                                            </li>
-                                        </ul>
+                                        <div class="d-flex justify-content-end">
+                                            <button class="btn btn-secondary dropdown-toggle mt-2" type="button" id="dropdownMenuButton" data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="true">
+                                                Select plot type
+                                            </button>
+                                            <ul class="dropdown-menu" style="max-width: 8rem; min-width: 2rem" aria-labelledby="dropdownMenuButton">
+                                                <li class="dropdown-item text-start px-2 mx-0">
+                                                    <input type="checkbox" value="" checked id="plot_bar">
+                                                    <label class="noHover" for="plot_bar">
+                                                        Bar
+                                                    </label>
+                                                </li>
+                                                <li class="dropdown-item text-start px-2 mx-0">
+                                                    <input type="checkbox" value="" id="plot_max">
+                                                    <label class="noHover" for="plot_max">
+                                                        Max
+                                                    </label>
+                                                </li>
+                                                <li class="dropdown-item text-start px-2  mx-0">
+                                                    <input type="checkbox" value="" id="plot_min">
+                                                    <label class="noHover" for="plot_min">
+                                                        Min
+                                                    </label>
+                                                </li>
+                                                <li class="dropdown-item text-start px-2 mx-0">
+                                                    <input type="checkbox" value="" id="plot_mean">
+                                                    <label class="noHover" for="plot_mean">
+                                                        Mean
+                                                    </label>
+                                                </li>
+                                                <li class="dropdown-item text-start px-2 mx-0">
+                                                    <input type="checkbox" value="" id="plot_count">
+                                                    <label class="noHover" for="plot_count">
+                                                        Count
+                                                    </label>
+                                                </li>
+                                            </ul>
+                                        </div>
                                     }
                                     <div id='@graphElementId'></div>
                                 </div>
