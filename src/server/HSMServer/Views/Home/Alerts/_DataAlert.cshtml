@@ -32,7 +32,7 @@
             else
             {
                 <b>@condition.Property @condition.Operation.GetDisplayName()</b>
-                @if (condition.Property != AlertProperty.Status)
+                @if (condition.Property is not (AlertProperty.Status or AlertProperty.Comment))
                 {
                     <b>@condition.Target</b>
                 }
