@@ -265,7 +265,7 @@ window.Data = function (to, from, type, encodedId) {
     function getToDate() {
         let now = new Date();
 
-        now.setFullYear(now.getFullYear() + 1);
+        now.setDate(now.getDate() + 1);
 
         return now;
     }
