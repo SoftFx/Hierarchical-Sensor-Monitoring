@@ -61,8 +61,7 @@ namespace HSMServer.Model.TreeViewModel
             Integration = model.Integration;
             UpdateTime = model.LastUpdate;
             Status = model.Status.ToClient();
-            SelectedUnit = model.SelectedUnit;
-            AvailableUnits = model.AvailableUnites;
+            SelectedUnit = model.OriginalUnit;
             SaveOnlyUniqueValues = model.SaveOnlyUniqueValues;
 
             if (State is SensorState.Muted)

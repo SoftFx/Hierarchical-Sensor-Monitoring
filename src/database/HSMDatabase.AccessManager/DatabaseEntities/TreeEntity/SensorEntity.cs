@@ -12,7 +12,7 @@
 
         public bool SaveOnlyUniqueValues { get; init; }
 
-        public int? SelectedUnit { get; init; }
+        public int? OriginalUnit { get; init; }
 
         public long EndOfMuting { get; init; }
 
