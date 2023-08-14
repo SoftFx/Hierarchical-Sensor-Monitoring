@@ -199,47 +199,45 @@
                             </ul>
                             <div class='tab-content'>
                                 <div class='tab-pane fade show active' id=@graphParentDivId>
+                                    <div class="graph-with-plot-button" id='@graphElementId'></div>
                                     @if (Model.Type.IsBar())
                                     {
-                                        <div class="d-flex justify-content-end">
-                                            <button class="btn" id="dropdownMenuButton" data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="true" style="border: 0;">
-                                                <i class="fa-solid fa-ellipsis-vertical button-link"></i>
-                                            </button>
-                                            <ul class="dropdown-menu" style="max-width: 8rem; min-width: 2rem" aria-labelledby="dropdownMenuButton">
-                                                <li class="dropdown-item text-start px-2 mx-0">
-                                                    <input type="checkbox" value="" checked id="plot_bar">
-                                                    <label class="noHover" for="plot_bar">
-                                                        Bar
-                                                    </label>
-                                                </li>
-                                                <li class="dropdown-item text-start px-2 mx-0">
-                                                    <input type="checkbox" value="" id="plot_max">
-                                                    <label class="noHover" for="plot_max">
-                                                        Max
-                                                    </label>
-                                                </li>
-                                                <li class="dropdown-item text-start px-2  mx-0">
-                                                    <input type="checkbox" value="" id="plot_min">
-                                                    <label class="noHover" for="plot_min">
-                                                        Min
-                                                    </label>
-                                                </li>
-                                                <li class="dropdown-item text-start px-2 mx-0">
-                                                    <input type="checkbox" value="" id="plot_mean">
-                                                    <label class="noHover" for="plot_mean">
-                                                        Mean
-                                                    </label>
-                                                </li>
-                                                <li class="dropdown-item text-start px-2 mx-0">
-                                                    <input type="checkbox" value="" id="plot_count">
-                                                    <label class="noHover" for="plot_count">
-                                                        Count
-                                                    </label>
-                                                </li>
-                                            </ul>
-                                        </div>
+                                        <button class="btn button-plot-selection px-0" id="dropdownMenuButton" data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="true">
+                                            <i class="fa-solid fa-ellipsis-vertical button-link"></i>
+                                        </button>
+                                        <ul class="dropdown-menu" style="max-width: 8rem; min-width: 2rem" aria-labelledby="dropdownMenuButton">
+                                            <li class="dropdown-item text-start px-2 mx-0">
+                                                <input type="checkbox" value="" checked id="plot_bar">
+                                                <label class="noHover" for="plot_bar">
+                                                    Bar
+                                                </label>
+                                            </li>
+                                            <li class="dropdown-item text-start px-2 mx-0">
+                                                <input type="checkbox" value="" id="plot_max">
+                                                <label class="noHover" for="plot_max">
+                                                    Max
+                                                </label>
+                                            </li>
+                                            <li class="dropdown-item text-start px-2  mx-0">
+                                                <input type="checkbox" value="" id="plot_min">
+                                                <label class="noHover" for="plot_min">
+                                                    Min
+                                                </label>
+                                            </li>
+                                            <li class="dropdown-item text-start px-2 mx-0">
+                                                <input type="checkbox" value="" id="plot_mean">
+                                                <label class="noHover" for="plot_mean">
+                                                    Mean
+                                                </label>
+                                            </li>
+                                            <li class="dropdown-item text-start px-2 mx-0">
+                                                <input type="checkbox" value="" id="plot_count">
+                                                <label class="noHover" for="plot_count">
+                                                    Count
+                                                </label>
+                                            </li>
+                                        </ul>
                                     }
-                                    <div id='@graphElementId'></div>
                                 </div>
                                 <div class='tab-pane fade' id=@valuesParentDivId>
                                     <div id='@valuesElementId'></div>
