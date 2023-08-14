@@ -26,11 +26,6 @@ namespace HSMSensorDataObjects.SensorRequests
         public AlertUpdateRequest TTLPolicy { get; set; }
 
 
-        public List<Unit> AvailableUnits { get; set; }
-
-        public Unit? SelectedUnit { get; set; }
-
-
         public SensorType? SensorType { get; set; }
 
         public string Description { get; set; }
@@ -46,5 +41,7 @@ namespace HSMSensorDataObjects.SensorRequests
         public bool? SaveOnlyUniqueValues { get; set; }
 
         public bool? EnableGrafana { get; set; }
+
+        public Unit? OriginalUnit { get; set; }
     }
 }

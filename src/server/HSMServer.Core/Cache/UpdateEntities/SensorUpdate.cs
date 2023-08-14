@@ -12,8 +12,6 @@ namespace HSMServer.Core.Cache.UpdateEntities
     {
         public List<PolicyUpdate> Policies { get; init; }
 
-        public List<Unit> AvailableUnits { get; init; }
-
 
         public DateTime? EndOfMutingPeriod { get; init; }
 
