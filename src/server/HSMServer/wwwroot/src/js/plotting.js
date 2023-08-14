@@ -6,21 +6,28 @@
     bar: undefined,
     x: undefined,
     
-    graph : {
+    graph: {
         id: undefined,
-        self: undefined
+        self: undefined,
+        displayedPlots: ['bar']
     }
 };
 
-window.addBarPlot = function (name){
+window.addBarPlot = function (name, isInit = false){
     if (name === 'bar')
         Plotly.addTraces(barGraphData.graph.id, barGraphData.bar);
     else
         Plotly.addTraces(barGraphData.graph.id, getSimpleGraphData(barGraphData.x, barGraphData[name], 'scatter', name));
+    
+    if (!isInit){
+        barGraphData.graph.displayedPlots.push(name);
+        localStorage.setItem(barGraphData.graph.id, barGraphData.graph.displayedPlots)
+    }
+ 
     Plotly.update(barGraphData.graph.id, {}, {hovermode: 'x'});
 };
 
-window.removeBarPlot = function (name){
+window.removeBarPlot = function (name, isInit = false){
     let indexToDelete = undefined;
     let plots = barGraphData.graph.self._fullData;
     for(let i = 0; i < plots.length; i++) {
@@ -33,6 +40,10 @@ window.removeBarPlot = function (name){
     
     if (indexToDelete !== undefined){
         Plotly.deleteTraces(barGraphData.graph.id, indexToDelete);
+        if (!isInit){
+            barGraphData.graph.displayedPlots.splice(barGraphData.graph.displayedPlots.indexOf(name), 1);
+            localStorage.setItem(barGraphData.graph.id, barGraphData.graph.displayedPlots)
+        }
     }
 }
 
@@ -104,6 +115,19 @@ window.displayGraph = function(graphData, graphType, graphElementId, graphName) 
             Plotly.newPlot(graphElementId, convertedData, layout, config);
         }
     }
+    
+    let savedPlots = localStorage.getItem(barGraphData.graph.id);
+    if (savedPlots){
+        removeBarPlot('bar', true)
+        removeBarPlot('min', true)
+        removeBarPlot('max', true)
+        removeBarPlot('mean', true)
+        removeBarPlot('count', true)
+        savedPlots.split(',').forEach((name) => {
+            addBarPlot(name, true)
+        })
+    }
+    
     let graphDiv = document.getElementById(graphElementId);
     graphDiv.on('plotly_relayout',
         function(eventData) {

@@ -332,7 +332,17 @@
         if ('@(Model.Type is SensorType.File)' === 'True') {
             setContentPreview('@Model.EncodedId');
         }
-        
+
+        let savedPlots = localStorage.getItem(`graph_@sensorId`);
+        if (savedPlots) {
+            console.log(savedPlots)
+            let plots = savedPlots.split(',');
+            let jqueryPlots = $('[id^="plot_"]');
+            jqueryPlots.each(x => {
+                jqueryPlots[x].checked = plots.includes(jqueryPlots[x].id.substring("plot_".length));
+            })
+        }
+       
         JournalTable = undefined;
     });
 
