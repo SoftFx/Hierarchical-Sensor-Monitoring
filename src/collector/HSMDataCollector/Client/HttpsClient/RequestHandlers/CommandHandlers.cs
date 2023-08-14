@@ -3,6 +3,7 @@ using HSMDataCollector.Requests;
 using HSMDataCollector.SyncQueue;
 using HSMSensorDataObjects.SensorRequests;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -29,15 +30,15 @@ namespace HSMDataCollector.Client.HttpsClient
                 if (response.IsSuccessStatusCode)
                 {
                     var json = await response.Content.ReadAsStringAsync();
-                    var errors = JsonConvert.DeserializeObject<Dictionary<string, string>>(json);
+                    var errors = JsonConvert.DeserializeObject<JObject>(json);
 
-                    foreach (var val in values)
-                        if (errors.TryGetValue(val.Request.Path, out var error))
-                        {
-                            var result = response.IsSuccessStatusCode && string.IsNullOrEmpty(error);
+                    //foreach (var val in values)
+                    //    if (errors.TryGetValue(val.Request.Path, out var error))
+                    //    {
+                    //        var result = response.IsSuccessStatusCode && string.IsNullOrEmpty(error);
 
-                            _commandQueue.SetResult(val.Key, result);
-                        }
+                    //        _commandQueue.SetResult(val.Key, result);
+                    //    }
 
                     return;
                 }

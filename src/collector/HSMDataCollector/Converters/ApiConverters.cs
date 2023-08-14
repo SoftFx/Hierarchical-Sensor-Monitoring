@@ -13,8 +13,7 @@ namespace HSMDataCollector.Converters
                 SensorType = info.SensorType,
                 Path = info.Path,
 
-                AvailableUnites = info.Units.AvailableUnits?.Select(x => (int)x).ToList(),
-                SelectedUnit = (int)info.Units.Selected,
+                SelectedUnit = info.Units.Selected,
 
                 KeepHistory = info.Settings.KeepHistory?.Ticks,
                 SelfDestroy = info.Settings.SelfDestroy?.Ticks,
