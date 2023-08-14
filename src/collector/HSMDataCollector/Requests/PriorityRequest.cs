@@ -1,4 +1,5 @@
 ﻿using HSMSensorDataObjects;
+using HSMSensorDataObjects.SensorRequests;
 using System;
 
 
@@ -10,10 +11,10 @@ namespace HSMDataCollector.Requests
 
         public (Guid, string) Key { get; }
 
-        public BaseRequest Request { get; }
+        public CommandRequestBase Request { get; }
 
 
-        public PriorityRequest(BaseRequest request)
+        public PriorityRequest(CommandRequestBase request)
         {
             Id = Guid.NewGuid();
             Request = request;

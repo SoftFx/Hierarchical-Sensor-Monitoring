@@ -15,6 +15,7 @@ namespace HSMDataCollector.Converters
                 },
 
                 Description = options.Description,
+                SensorType = options.Type,
                 Path = options.Path,
 
                 OnlyUniqValues = options.OnlyUniqValues,

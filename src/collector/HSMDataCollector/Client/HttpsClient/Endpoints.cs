@@ -10,7 +10,7 @@ namespace HSMDataCollector.Client
 
         internal string AddOrUpdateSensor => $"{ConnectionAddress}/addOrUpdate";
 
-        internal string AddOrUpdateSensorList => $"{ConnectionAddress}/addOrUpdateList";
+        internal string CommandsList => $"{ConnectionAddress}/commands";
 
 
         internal string Bool => $"{ConnectionAddress}/bool";
@@ -44,10 +44,11 @@ namespace HSMDataCollector.Client
             var builder = new UriBuilder(options.ServerUrl)
             {
                 Port = options.Port,
-                Scheme = "https"
+                Scheme = "https",
+                Path = "api/sensors",
             };
 
-            ConnectionAddress = $"{builder.Uri}/api/sensors";
+            ConnectionAddress = $"{builder.Uri}";
         }
     }
 }

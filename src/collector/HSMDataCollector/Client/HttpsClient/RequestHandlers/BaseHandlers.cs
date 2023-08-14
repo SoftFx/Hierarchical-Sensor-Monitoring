@@ -32,7 +32,7 @@ namespace HSMDataCollector.Client.HttpsClient
         internal abstract Task SendRequest(T value);
 
 
-        protected virtual Task<HttpResponseMessage> RequestToServer(object value, string uri)
+        protected Task<HttpResponseMessage> RequestToServer(object value, string uri)
         {
             try
             {

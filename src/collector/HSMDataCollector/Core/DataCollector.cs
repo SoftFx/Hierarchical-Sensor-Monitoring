@@ -143,6 +143,8 @@ namespace HSMDataCollector.Core
                 if (!Status.IsStopped())
                     return;
 
+                _queueManager.Init();
+
                 ChangeStatus(CollectorStatus.Starting);
 
                 foreach (var oldSensor in _nameToSensor.Values)
@@ -169,6 +171,8 @@ namespace HSMDataCollector.Core
             {
                 if (!Status.IsRunning())
                     return;
+
+                _queueManager.Stop();
 
                 ChangeStatus(CollectorStatus.Stopping);
 
