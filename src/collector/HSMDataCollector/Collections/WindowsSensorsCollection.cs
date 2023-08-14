@@ -1,5 +1,6 @@
 ﻿using HSMDataCollector.Core;
 using HSMDataCollector.DefaultSensors.Windows;
+using HSMDataCollector.DefaultSensors.Windows.Service;
 using HSMDataCollector.Options;
 using HSMDataCollector.PublicInterface;
 using System;
@@ -144,6 +145,24 @@ namespace HSMDataCollector.DefaultSensors
 
 
         public IWindowsCollection AddProductVersion(VersionSensorOptions options) => (IWindowsCollection)AddProductVersionCommon(options);
+
+
+        public IWindowsCollection SubscribeToWindowsServiceStatus(string serviceName, string module = "")
+        {
+            var options = new ServiceSensorOptions()
+            {
+                NodePath = $"{module}/Product Info",
+                ServiceName = serviceName,
+            };
+
+            return SubscribeToWindowsServiceStatus(options);
+        }
+
+        public IWindowsCollection SubscribeToWindowsServiceStatus(ServiceSensorOptions options)
+        {
+            return options != null ? ToWindows(new WindowsServiceStatusSensor(options))
+                                   : throw new ArgumentNullException(nameof(options));
+        }
 
 
         private WindowsSensorsCollection ToWindows(SensorBase sensor) => (WindowsSensorsCollection)Register(sensor);

@@ -1,8 +1,70 @@
 ﻿window.displayGraph = function(graphData, graphType, graphElementId, graphName) {
     let convertedData = convertToGraphData(graphData, graphType, graphName);
     let zoomData = getPreviousZoomData(graphElementId);
-    var config = { responsive: true }
-    if (graphType === "7") {
+    var plotIcon = {
+        'width': 500,
+        'height': 600,
+        'path': 'M352 96c0 14.3-3.1 27.9-8.8 40.2L396 227.4c-23.7 25.3-54.2 44.1-88.5 53.6L256 192h0 0l-68 117.5c21.5 6.8 44.3 10.5 68.1 10.5c70.7 0 133.8-32.7 174.9-84c11.1-13.8 31.2-16 45-5s16 31.2 5 45C428.1 341.8 347 384 256 384c-35.4 0-69.4-6.4-100.7-18.1L98.7 463.7C94 471.8 87 478.4 78.6 482.6L23.2 510.3c-5 2.5-10.9 2.2-15.6-.7S0 501.5 0 496V440.6c0-8.4 2.2-16.7 6.5-24.1l60-103.7C53.7 301.6 41.8 289.3 31.2 276c-11.1-13.8-8.8-33.9 5-45s33.9-8.8 45 5c5.7 7.1 11.8 13.8 18.2 20.1l69.4-119.9c-5.6-12.2-8.8-25.8-8.8-40.2c0-53 43-96 96-96s96 43 96 96zm21 297.9c32.6-12.8 62.5-30.8 88.9-52.9l43.7 75.5c4.2 7.3 6.5 15.6 6.5 24.1V496c0 5.5-2.9 10.7-7.6 13.6s-10.6 3.2-15.6 .7l-55.4-27.7c-8.4-4.2-15.4-10.8-20.1-18.9L373 393.9zM256 128a32 32 0 1 0 0-64 32 32 0 1 0 0 64z'
+    }
+    
+    var serviceButtonName = 'Show/Hide service status plot';
+    var config = { 
+        responsive: true,
+        displaylogo: false,
+        modeBarButtonsToAdd: [
+            // {
+            //     name: serviceButtonName, //changing name doesn't work
+            //     icon: plotIcon,
+            //     click: function(gd) {
+            //         let graph = $(`#${graphElementId}`)[0];
+            //         let graphLength = graph._fullData.length;
+            //         if (graphLength > 1) {
+            //             Plotly.deleteTraces(graphElementId, graphLength - 1);
+            //             Plotly.update(graphElementId, {}, {hovermode: 'closest'});
+            //         }
+            //         else {
+            //             const { from, to } = getFromAndTo(graphName);
+            //             let body = Data(to, from, 1, graphName)
+            //             $.ajax({
+            //                 type: 'POST',
+            //                 data: JSON.stringify(body),
+            //                 url: getSensorStatus,
+            //                 contentType: 'application/json',
+            //                 dataType: 'html',
+            //                 cache: false,
+            //                 async: true,
+            //                 success: function (data){
+            //                     let escapedData = JSON.parse(data);
+            //                     if (!jQuery.isEmptyObject(escapedData)) {
+            //                         let graphData = getEnumGraphData(getTimeList(escapedData), getNumbersData(escapedData))
+            //                         let ranges = graph._fullLayout.yaxis.range;
+            //                         let heat = getHeatMapForEnum(graphData[0], ranges[0], ranges[1])
+            //                         Plotly.addTraces(graphElementId, [heat]);
+            //                         Plotly.update(graphElementId, {}, {hovermode: 'x'});
+            //                     }
+            //                 }
+            //             })
+            //         }
+            //     }},
+        ],
+        modeBarButtonsToRemove: [
+            'pan',
+            'lasso2d',
+            'pan2d',
+            'select2d',
+            'autoScale2d',
+            'resetScale2d'
+        ]
+    }
+
+    if (graphType === "9")
+    {
+        let layout = getEnumLayout();
+        layout.autosize = true;
+        let heat = getHeatMapForEnum(convertedData[0])
+        Plotly.newPlot(graphElementId, [heat], layout, config);
+    }
+    else if (graphType === "7") {
         let layout = getTimeSpanLayout(convertedData[0].y)
         layout.autosize = true;
         Plotly.newPlot(graphElementId, convertedData, layout, config);
@@ -116,7 +178,11 @@ function convertToGraphData(graphData, graphType, graphName) {
                 return new TimeSpan.TimeSpan(0, seconds, minutes, hours, days).totalMilliseconds();
             })
             
-            return getTimeSpanGraphData(timeList, data, "lines")
+            return getTimeSpanGraphData(timeList, data, "lines");
+        case "9":
+            data = getNumbersData(escapedData)
+            timeList = getTimeList(escapedData)
+            return getEnumGraphData(timeList, data)
         default:
             return undefined;
     }
@@ -365,4 +431,72 @@ function getPlotType(graphType) {
 
     // no plots for other types yet
     return undefined;
+}
+
+// Enum plot
+{
+    function getHeatMapForEnum(data, minValue = 0, maxValue = 1) {
+        return {
+            x: data.x,
+            y: [minValue, maxValue],
+            z: [data.z],
+            colorscale: [[0, '#FF0000'], [0.5, '#00FF00'], [1, 'blue']],
+            zmin: 0,
+            zmax: 1,
+            showscale: false,
+            type: 'heatmap',
+            opacity: 0.25,
+            customdata: [data.customdata],
+            hovertemplate: '%{customdata}<extra></extra>',
+        }
+    }
+
+    function getEnumGraphData(timeList, dataList){
+        function getMappedData(data, time) {
+            let customdata = [];
+            let z = [];
+            for (let i = 0; i < data.length; i++){
+                customdata.push(`${ServiceStatus[`${data[i]}`][1]} <br> ${new Date(time[i]).toUTCString()} - ${i + 1 >= data.length ? 'now' : new Date(time[i + 1]).toUTCString()}`)
+                z.push(ServiceStatus[`${data[i]}`][0] === ServiceStatus["4"][0] ? 0.5 : 0)
+            }
+            
+            return {
+                customdata: customdata,
+                z: z
+            }
+        }
+
+        let currDate = new Date(new Date(Date.now()).toUTCString()).toISOString()
+        timeList.push(currDate);
+        let mappedData = getMappedData(dataList, timeList);
+
+        return [
+            {
+                x: timeList,
+                z: mappedData.z,
+                customdata: mappedData.customdata,
+                hovertemplate: '%{customdata}<extra></extra>',
+            }
+        ];
+    }
+    
+    function  getEnumLayout() {
+        return {
+            yaxis: {
+                visible: false,
+            },
+            automargin: "width+height",
+        }
+    }
+    
+    const ServiceStatus = {
+        1 : ['#FF0000', 'Stopped'],
+        2 : ['#BFFFBF', 'Start Pending'],
+        3 : ['#FD6464','Stop Pending' ],
+        4 : ['#00FF00', 'Running'],
+        5 : ['#FFB403', 'Continue Pending'],
+        6 : ['#809EFF', 'Pause Pending'],
+        7 : ['#0314FF', 'Paused'],
+        0 : ['#000000', 'Unknown']
+    }
 }

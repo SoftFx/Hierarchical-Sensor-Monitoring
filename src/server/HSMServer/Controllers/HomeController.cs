@@ -3,7 +3,9 @@ using HSMServer.Authentication;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Extensions;
+using HSMServer.Core.Journal;
 using HSMServer.Core.Model;
+using HSMServer.Core.Model.Requests;
 using HSMServer.Extensions;
 using HSMServer.Folders;
 using HSMServer.Helpers;
@@ -27,6 +29,7 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using TimeInterval = HSMServer.Model.TimeInterval;
+using HSMServer.Core.Model.Requests;
 
 namespace HSMServer.Controllers
 {
@@ -38,17 +41,18 @@ namespace HSMServer.Controllers
         private readonly IFolderManager _folderManager;
         private readonly TreeViewModel _treeViewModel;
         private readonly TelegramBot _telegramBot;
+        private readonly IJournalService _journalService;
 
 
         public HomeController(ITreeValuesCache treeValuesCache, IFolderManager folderManager, TreeViewModel treeViewModel,
-                              IUserManager userManager, NotificationsCenter notifications) : base(userManager)
+                              IUserManager userManager, NotificationsCenter notifications, IJournalService journalService) : base(userManager)
         {
             _telegramBot = notifications.TelegramBot;
             _treeValuesCache = treeValuesCache;
             _treeViewModel = treeViewModel;
             _folderManager = folderManager;
+            _journalService = journalService;
         }
-
 
         public IActionResult Index()
         {
@@ -56,7 +60,7 @@ namespace HSMServer.Controllers
         }
 
         [HttpPost]
-        public IActionResult SelectNode(string selectedId)
+        public async Task<PartialViewResult> SelectNode(string selectedId)
         {
             BaseNodeViewModel viewModel = null;
 
@@ -79,10 +83,11 @@ namespace HSMServer.Controllers
                 else if (_treeViewModel.Sensors.TryGetValue(id, out var sensor))
                 {
                     viewModel = sensor;
-
                     StoredUser.History.ConnectSensor(_treeValuesCache.GetSensor(id));
                 }
             }
+
+            await StoredUser.Journal.ConnectJournal(viewModel, _journalService);
 
             return PartialView("_NodeDataPanel", viewModel);
         }
@@ -136,12 +141,12 @@ namespace HSMServer.Controllers
             if (_treeViewModel.Nodes.TryGetValue(decodedId, out _))
             {
                 foreach (var sensorId in GetNodeSensors(decodedId))
-                    _treeValuesCache.UpdateMutedSensorState(sensorId, newMutingPeriod);
+                    _treeValuesCache.UpdateMutedSensorState(sensorId, newMutingPeriod, CurrentUser.Name);
             }
             else
             {
                 if (_treeViewModel.Sensors.TryGetValue(decodedId, out var sensor))
-                    _treeValuesCache.UpdateMutedSensorState(sensor.Id, newMutingPeriod);
+                    _treeValuesCache.UpdateMutedSensorState(sensor.Id, newMutingPeriod, CurrentUser.Name);
             }
 
             UpdateUserNotificationSettings(decodedId, (s, g) => s.Ignore(g, model.EndOfIgnorePeriod));
@@ -156,12 +161,12 @@ namespace HSMServer.Controllers
             if (_treeViewModel.Nodes.TryGetValue(decodedId, out _))
             {
                 foreach (var sensorId in GetNodeSensors(decodedId))
-                    _treeValuesCache.UpdateMutedSensorState(sensorId);
+                    _treeValuesCache.UpdateMutedSensorState(sensorId, initiator: CurrentUser.Name);
             }
             else
             {
                 if (_treeViewModel.Sensors.TryGetValue(decodedId, out var sensor))
-                    _treeValuesCache.UpdateMutedSensorState(sensor.Id);
+                    _treeValuesCache.UpdateMutedSensorState(sensor.Id, initiator: CurrentUser.Name);
             }
 
             UpdateUserNotificationSettings(decodedId, (s, g) => s.RemoveIgnore(g));
@@ -200,7 +205,7 @@ namespace HSMServer.Controllers
                         continue;
                     }
 
-                    _treeValuesCache.RemoveSensor(sensor.Id);
+                    _treeValuesCache.RemoveSensor(sensor.Id, CurrentUser.Name);
                     model.AddItem(sensor);
                 }
             }
@@ -235,7 +240,8 @@ namespace HSMServer.Controllers
                     var update = new FolderUpdate
                     {
                         Id = id,
-                        TTL = !isExpectedFromParent ? model.ExpectedUpdateInterval : null
+                        TTL = !isExpectedFromParent ? model.ExpectedUpdateInterval : null,
+                        Initiator = CurrentUser.Name
                     };
 
                     if (isExpectedFromParent)
@@ -285,6 +291,7 @@ namespace HSMServer.Controllers
                     {
                         Id = sensor.Id,
                         TTL = model.ExpectedUpdateInterval?.ToModel(),
+                        Initiator = CurrentUser.Name
                     };
 
                     toastViewModel.AddItem(sensor);
@@ -298,12 +305,14 @@ namespace HSMServer.Controllers
         [HttpPost]
         public void ClearHistoryNode([FromQuery] string selectedId)
         {
+            ClearHistoryRequest GetRequest(Guid id) => new(id, CurrentUser.Name);
+
             var decodedId = SensorPathHelper.DecodeGuid(selectedId);
 
             if (_treeViewModel.Nodes.TryGetValue(decodedId, out var node))
-                _treeValuesCache.ClearNodeHistory(node.Id);
+                _treeValuesCache.ClearNodeHistory(GetRequest(node.Id));
             else if (_treeViewModel.Sensors.TryGetValue(decodedId, out var sensor))
-                _treeValuesCache.ClearSensorHistory(sensor.Id, DateTime.MaxValue);
+                _treeValuesCache.ClearSensorHistory(GetRequest(sensor.Id));
         }
 
         [HttpGet]
@@ -360,6 +369,7 @@ namespace HSMServer.Controllers
                 {
                     Id = sensorId,
                     Integration = integration,
+                    Initiator = CurrentUser.Name
                 };
 
                 _treeValuesCache.UpdateSensor(update);
@@ -561,10 +571,11 @@ namespace HSMServer.Controllers
                 Id = sensor.Id,
                 Description = newModel.Description ?? string.Empty,
                 TTL = ttl?.Conditions[0].TimeToLive.ToModel() ?? TimeIntervalModel.None,
-                TTLPolicy = ttl?.ToTimeToLiveUpdate(),
+                TTLPolicy = ttl?.ToTimeToLiveUpdate(CurrentUser.Name),
                 KeepHistory = newModel.SavedHistoryPeriod.ToModel(),
                 SelfDestroy = newModel.SelfDestroyPeriod.ToModel(),
                 Policies = policyUpdates,
+                Initiator = CurrentUser.Name
             };
 
             _treeValuesCache.UpdateSensor(update);
@@ -708,10 +719,12 @@ namespace HSMServer.Controllers
             {
                 Id = product.Id,
                 TTL = ttl?.Conditions[0].TimeToLive.ToModel(product.TTL) ?? TimeIntervalModel.None,
-                TTLPolicy = ttl?.ToTimeToLiveUpdate(),
+                TTLPolicy = ttl?.ToTimeToLiveUpdate(CurrentUser.Name),
+
                 KeepHistory = newModel.SavedHistoryPeriod.ToModel(product.KeepHistory),
                 SelfDestroy = newModel.SelfDestroyPeriod.ToModel(product.SelfDestroy),
-                Description = newModel.Description ?? string.Empty
+                Description = newModel.Description ?? string.Empty,
+                Initiator = CurrentUser.Name
             };
 
             _treeValuesCache.UpdateProduct(update);
@@ -740,6 +753,7 @@ namespace HSMServer.Controllers
                 TTL = newModel.ExpectedUpdateInterval,
                 KeepHistory = newModel.SavedHistoryPeriod,
                 SelfDestroy = newModel.SelfDestroyPeriod,
+                Initiator = CurrentUser.Name
             };
 
             return await _folderManager.TryUpdate(update)

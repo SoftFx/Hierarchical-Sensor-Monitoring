@@ -32,10 +32,7 @@ namespace HSMDataCollector.Core
 
         Task Start(Task customStartingTask);
 
-        /// <summary>
-        /// This method must be called before stopping the application. It sends all the data left, stops and disposes the timer.
-        /// The method also disposes the HttpClient.
-        /// </summary>
+
         Task Stop();
 
         Task Stop(Task customStoppingTask);
@@ -202,6 +199,9 @@ namespace HSMDataCollector.Core
         /// <param name="description">Possible sensor description, empty by default</param>
         /// <returns>A new instance of <see cref="ILastValueSensor{T}"/> where T is string</returns>
         ILastValueSensor<string> CreateLastValueStringSensor(string path, string defaultValue, string description = "");
+
+
+        IServiceCommandsSensor CreateServiceCommandsSensor(string module = "");
 
         #region Bar sensors
 

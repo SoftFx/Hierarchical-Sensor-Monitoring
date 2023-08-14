@@ -3,7 +3,7 @@ using System.Threading;
 
 namespace HSMServer.Core.Tests.Infrastructure
 {
-    internal static class RandomGenerator
+    public static class RandomGenerator
     {
         private const string PossibleChars =
             "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
@@ -13,7 +13,7 @@ namespace HSMServer.Core.Tests.Infrastructure
 
         internal static bool GetRandomBool() => _random.Value.Next(0, 2) > 0;
 
-        internal static int GetRandomInt(int min = -100, int max = 100, bool positive = false) =>
+        public static int GetRandomInt(int min = -100, int max = 100, bool positive = false) =>
             _random.Value.Next(positive ? 0 : min, max);
 
         internal static byte GetRandomByte(byte min = 0, byte max = 7) =>
@@ -22,7 +22,7 @@ namespace HSMServer.Core.Tests.Infrastructure
         internal static double GetRandomDouble() =>
             _random.Value.NextDouble() * (GetRandomBool() ? -100 : 100);
 
-        internal static string GetRandomString(int size = 8)
+        public static string GetRandomString(int size = 8)
         {
             var stringChars = new char[size];
 
@@ -32,8 +32,8 @@ namespace HSMServer.Core.Tests.Infrastructure
             return new string(stringChars);
         }
 
-        internal static TimeSpan GetRandomTimeSpan() =>
-            TimeSpan.FromTicks(_random.Value.NextInt64(0L, long.MaxValue));
+        public static TimeSpan GetRandomTimeSpan(long maxValue = long.MaxValue, long minValue = 0L) =>
+            TimeSpan.FromTicks(_random.Value.NextInt64(minValue, maxValue));
 
         internal static byte[] GetRandomBytes(int size = 8)
         {

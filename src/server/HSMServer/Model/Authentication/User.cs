@@ -10,6 +10,7 @@ using System.Security.Claims;
 using System.Text.Json;
 using HSMServer.Extensions;
 using HSMServer.Model.TreeViewModels;
+using HSMServer.Model.History.Personal.Journal;
 
 namespace HSMServer.Model.Authentication
 {
@@ -34,6 +35,8 @@ namespace HSMServer.Model.Authentication
         public VisibleTreeViewModel Tree { get; }
 
         public SelectedSensorHistoryViewModel History { get; } = new();
+
+        public SelectedJournalViewModel Journal { get; } = new();
 
         public SelectedNodeViewModel SelectedNode { get; } = new();
         

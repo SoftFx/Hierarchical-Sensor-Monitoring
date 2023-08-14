@@ -1,5 +1,6 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities;
 using System.ComponentModel.DataAnnotations;
+using HSMCommon.Extensions;
 
 namespace HSMServer.Core.Model.Policies
 {
@@ -92,5 +93,8 @@ namespace HSMServer.Core.Model.Policies
             Operation = (byte)Operation,
             Property = (byte)Property,
         };
+
+
+        public override string ToString() => $"{Property} {Operation.GetDisplayName()} {Target.Value}";
     }
 }

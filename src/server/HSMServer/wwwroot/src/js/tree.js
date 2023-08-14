@@ -193,7 +193,7 @@ function selectNodeInfoTab(tab, selectedId) {
 }
 
 const TelegramTarget = { Groups: 0, Accounts: 1 };
-const NodeType = { Folder: 0, Product: 1, Node: 2, Sensor: 3, Disabled: 4 };
+window.NodeType = { Folder: 0, Product: 1, Node: 2, Sensor: 3, Disabled: 4 };
 
 const AjaxPost = {
     type: 'POST',

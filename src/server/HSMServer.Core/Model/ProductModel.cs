@@ -3,7 +3,6 @@ using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Model.Policies;
 using System;
 using System.Collections.Concurrent;
-using System.Collections.Generic;
 using System.Linq;
 
 namespace HSMServer.Core.Model
@@ -72,19 +71,10 @@ namespace HSMServer.Core.Model
 
             NotificationsSettings = update?.NotificationSettings ?? NotificationsSettings;
 
-            if (update.TTLPolicy is not null)
-                UpdateTTLPolicy(this, update.TTLPolicy);
-
             return this;
         }
 
-        internal List<T> GetPolicies<T>(SensorType type) where T : Policy
-        {
-            return !UseParentPolicies ? Policies[type].Select(u => (T)u).ToList() : Parent?.GetPolicies<T>(type);
-        }
-
-
-        internal override bool CheckTimeout(bool _ = true)
+        internal override bool CheckTimeout()
         {
             var result = false;
 
@@ -113,18 +103,25 @@ namespace HSMServer.Core.Model
             TTLPolicy = Policies.TimeToLive?.ToEntity(),
         };
 
-        private static void UpdateTTLPolicy(ProductModel model, PolicyUpdate update)
+
+        protected override void UpdateTTL(PolicyUpdate update)
         {
-            model.Policies.TimeToLive.Update(update);
+            static void UpdateTTLPolicy(ProductModel model, PolicyUpdate update)
+            {
+                model.Policies.TimeToLive.Update(update);
 
-            foreach (var (_, subProduct) in model.SubProducts)
-                UpdateTTLPolicy(subProduct, update);
+                foreach (var (_, subProduct) in model.SubProducts)
+                    UpdateTTLPolicy(subProduct, update);
 
-            foreach (var (_, sensor) in model.Sensors)
-                if (!sensor.Settings.TTL.IsSet)
-                    sensor.Policies.TimeToLive.Update(update);
+                foreach (var (_, sensor) in model.Sensors)
+                    if (!sensor.Settings.TTL.IsSet)
+                    {
+                        sensor.Policies.TimeToLive.Update(update);
+                        sensor.UpdateFromParentSettings?.Invoke(sensor.ToEntity());
+                    }
+            }
 
-            model.CheckTimeout();
+            UpdateTTLPolicy(this, update);
         }
     }
 }

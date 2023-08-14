@@ -4,6 +4,7 @@ using HSMServer.Core.Cache.UpdateEntities;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text;
 
 namespace HSMServer.Core.Model.Policies
 {
@@ -34,6 +35,8 @@ namespace HSMServer.Core.Model.Policies
         public TimeIntervalModel Sensitivity { get; private set; }
 
         public SensorStatus Status { get; private set; }
+
+        public bool IsDisabled { get; private set; }
 
         public string Icon { get; private set; }
 
@@ -99,6 +102,7 @@ namespace HSMServer.Core.Model.Policies
             _sensor ??= sensor;
 
             Sensitivity = update.Sensitivity;
+            IsDisabled = update.IsDisabled;
             Template = update.Template;
             Status = update.Status;
             Icon = update.Icon;
@@ -115,6 +119,7 @@ namespace HSMServer.Core.Model.Policies
             Id = new Guid(entity.Id);
             Status = entity.SensorStatus.ToStatus();
 
+            IsDisabled = entity.IsDisabled;
             Template = entity.Template;
             Icon = entity.Icon;
 
@@ -132,6 +137,7 @@ namespace HSMServer.Core.Model.Policies
 
             Sensitivity = Sensitivity?.ToEntity(),
             SensorStatus = (byte)Status,
+            IsDisabled = IsDisabled,
             Template = Template,
             Icon = Icon,
         };
@@ -155,6 +161,47 @@ namespace HSMServer.Core.Model.Policies
             }
 
             RebuildState();
+        }
+
+
+        public override string ToString()
+        {
+            var sb = new StringBuilder(1 << 5);
+
+            sb.Append("If ");
+
+            for (int i = 0; i < Conditions.Count; ++i)
+            {
+                var cond = Conditions[i];
+
+                if (i > 0)
+                    sb.Append($" {cond.Combination.GetDisplayName()}");
+
+                sb.Append(cond);
+            }
+
+            return ActionsToString(sb).ToString();
+        }
+
+        protected StringBuilder ActionsToString(StringBuilder sb)
+        {
+            var actions = new List<string>();
+
+            if (!string.IsNullOrEmpty(Template))
+                actions.Add($"template={Template}");
+
+            if (!string.IsNullOrEmpty(Icon))
+                actions.Add($"show icon={Icon}");
+
+            if (!Status.IsOk())
+                actions.Add($"change status to = {Status}");
+
+            sb.Append($" then {string.Join(", ", actions)}");
+
+            if (IsDisabled)
+                sb.Append(" (disabled)");
+
+            return sb;
         }
     }
 }

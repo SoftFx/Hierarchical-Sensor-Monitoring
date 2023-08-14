@@ -65,6 +65,12 @@ namespace HSMDataCollector.Options
     }
 
 
+    public sealed class ServiceSensorOptions : SensorOptions
+    {
+        public string ServiceName { get; set; }
+    }
+
+
     public sealed class CollectorInfoOptions : SensorOptions
     {
         internal const string BaseCollectorPath = "Product Info/Collector";

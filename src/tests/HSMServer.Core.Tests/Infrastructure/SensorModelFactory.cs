@@ -5,9 +5,9 @@ using System;
 
 namespace HSMServer.Core.Tests.Infrastructure
 {
-    internal static class SensorModelFactory
+    public static class SensorModelFactory
     {
-        internal static BaseSensorModel Build(SensorEntity entity)
+        public static BaseSensorModel Build(SensorEntity entity)
         {
             return (SensorType)entity.Type switch
             {
@@ -24,7 +24,7 @@ namespace HSMServer.Core.Tests.Infrastructure
             };
         }
 
-        internal static SensorUpdate BuildSensorUpdate(Guid? id = null) =>
+        public static SensorUpdate BuildSensorUpdate(Guid? id = null) =>
             new()
             {
                 Id = id ?? Guid.NewGuid(),

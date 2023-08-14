@@ -1,12 +1,14 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Core.Cache.UpdateEntities;
+using HSMServer.Core.Journal;
 using HSMServer.Core.Model.NodeSettings;
 using HSMServer.Core.Model.Policies;
 using System;
+using System.Runtime.CompilerServices;
 
 namespace HSMServer.Core.Model
 {
-    public abstract class BaseNodeModel
+    public abstract class BaseNodeModel : IChangesEntity
     {
         public abstract PolicyCollectionBase Policies { get; }
 
@@ -27,12 +29,15 @@ namespace HSMServer.Core.Model
 
         public string Description { get; private set; }
 
-        public bool UseParentPolicies { get; private set; }
 
+        public string FullPath => Parent is null ? $"{DisplayName}" : $"{Parent.FullPath}/{DisplayName}";
+
+        public string Path => Parent is null ? string.Empty : $"{Parent.Path}/{DisplayName}";
 
         public string RootProductName => Parent?.RootProductName ?? DisplayName;
 
-        public string Path => Parent is null ? string.Empty : $"{Parent.Path}/{DisplayName}";
+
+        public event Action<JournalRecordModel> ChangesHandler;
 
 
         protected BaseNodeModel()
@@ -61,7 +66,9 @@ namespace HSMServer.Core.Model
         }
 
 
-        internal abstract bool CheckTimeout(bool toNotify = true);
+        internal abstract bool CheckTimeout();
+
+        protected abstract void UpdateTTL(PolicyUpdate update);
 
 
         internal virtual BaseNodeModel AddParent(ProductModel parent)
@@ -75,19 +82,31 @@ namespace HSMServer.Core.Model
 
         protected internal void Update(BaseNodeUpdate update)
         {
-            Description = update.Description ?? Description;
+            Description = UpdateProperty(Description, update.Description ?? Description, update.Initiator);
 
-            Settings.KeepHistory.TrySetValue(update.KeepHistory);
-            Settings.SelfDestroy.TrySetValue(update.SelfDestroy);
-
-            if (Settings.TTL.TrySetValue(update.TTL))
-                CheckTimeout(toNotify: false);
+            Settings.Update(update, FullPath);
 
             if (update.TTLPolicy is not null)
-            {
-                Policies.UpdateTTL(update.TTLPolicy);
-                CheckTimeout(toNotify: false);
-            }
+                UpdateTTL(update.TTLPolicy);
+
+            CheckTimeout();
+        }
+
+
+        protected T UpdateProperty<T>(T oldValue, T newValue, string initiator, [CallerArgumentExpression(nameof(oldValue))] string propName = "")
+        {
+            if (newValue is not null && !newValue.Equals(oldValue ?? newValue))
+                ChangesHandler?.Invoke(new JournalRecordModel(Id, initiator)
+                {
+                    Enviroment = "General info update",
+                    OldValue = $"{oldValue}",
+                    NewValue = $"{newValue}",
+
+                    PropertyName = propName,
+                    Path = FullPath,
+                });
+
+            return newValue ?? oldValue;
         }
     }
 }

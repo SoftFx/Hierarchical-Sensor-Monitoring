@@ -73,6 +73,7 @@ namespace HSMServer.Core.Model
         public bool HasData => Storage.HasData;
 
 
+        public Action<SensorEntity> UpdateFromParentSettings;
         public Action<BaseValue> ReceivedNewValue;
 
 
@@ -88,11 +89,11 @@ namespace HSMServer.Core.Model
         }
 
 
+        protected override void UpdateTTL(PolicyUpdate update) => Policies.UpdateTTL(update);
+
         internal abstract bool TryAddValue(BaseValue value);
 
         internal abstract void AddDbValue(byte[] bytes);
-
-        internal abstract void RecalculatePolicy();
 
         internal abstract List<BaseValue> ConvertValues(List<byte[]> valuesBytes);
 
@@ -110,15 +111,15 @@ namespace HSMServer.Core.Model
         {
             base.Update(update);
 
-            State = update?.State ?? State;
-            Integration = update?.Integration ?? Integration;
-            EndOfMuting = update?.EndOfMutingPeriod ?? EndOfMuting;
+            State = UpdateProperty(State, update.State ?? State, update.Initiator);
+            Integration = UpdateProperty(Integration, update.Integration ?? Integration, update.Initiator);
+            EndOfMuting = UpdateProperty(EndOfMuting, update.EndOfMutingPeriod, update.Initiator, "End of muting");
 
             if (State == SensorState.Available)
                 EndOfMuting = null;
 
             if (update.Policies != null)
-                Policies.Update(update.Policies);
+                Policies.Update(update.Policies, update.Initiator);
         }
 
         internal void ResetSensor()

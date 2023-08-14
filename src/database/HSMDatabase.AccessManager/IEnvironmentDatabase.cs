@@ -52,15 +52,6 @@ namespace HSMDatabase.AccessManager
 
         #region Policy
 
-        [Obsolete("Will be removed after policy migration")]
-        List<string> GetAllOldPoliciesIds();
-        [Obsolete("Will be removed after policy migration")]
-        byte[] GetOldPolicy(string policyId);
-        [Obsolete("Will be removed after policy migration")]
-        void RemoveOldPolicy(string policyId);
-        [Obsolete("Will be removed after policy migration")]
-        void DropOldPolicyIdsList();
-
         List<byte[]> GetAllPoliciesIds();
         PolicyEntity GetPolicy(byte[] policyId);
         void AddPolicyIdToList(Guid policyId);

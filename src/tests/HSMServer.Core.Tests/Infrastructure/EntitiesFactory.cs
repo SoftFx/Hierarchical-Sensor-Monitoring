@@ -6,9 +6,9 @@ using System.Drawing;
 
 namespace HSMServer.Core.Tests.Infrastructure
 {
-    internal static class EntitiesFactory
+    public static class EntitiesFactory
     {
-        internal static ProductEntity BuildProductEntity(string name = null, string parent = "") =>
+        public static ProductEntity BuildProductEntity(string name = null, string parent = "") =>
             new()
             {
                 Id = Guid.NewGuid().ToString(),
@@ -36,7 +36,7 @@ namespace HSMServer.Core.Tests.Infrastructure
             };
 
 
-        internal static SensorEntity BuildSensorEntity(string name = null, string parent = "", byte? type = null) =>
+        public static SensorEntity BuildSensorEntity(string name = null, string parent = "", byte? type = null) =>
             new()
             {
                 Id = Guid.NewGuid().ToString(),

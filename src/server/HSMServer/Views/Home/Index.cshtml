@@ -15,6 +15,8 @@
 }
 
 <script>
+    var getSensorStatus = "@Url.Action(nameof(SensorHistoryController.GetServiceStatusHistory), ViewConstants.HistoryController)";
+
     var updateSelectedNode = "@Url.Action(nameof(HomeController.UpdateSelectedNode), ViewConstants.HomeController)";
     var getFileAction = "@Url.Action(nameof(HomeController.GetFile), ViewConstants.HomeController)";
     var viewFileAction = "@Url.Action(nameof(HomeController.GetFileStream), ViewConstants.HomeController)";
@@ -26,6 +28,8 @@
     var getNode = "@Url.Action(nameof(HomeController.GetNode), ViewConstants.HomeController)";
     var closeNode = "@Url.Action(nameof(HomeController.RemoveRenderingNode), ViewConstants.HomeController)";
 
+    var getJournalPage = "@Url.Action(nameof(JournalController.GetPage), ViewConstants.JournalController)";
+    
     var historyLatestAction = "@Url.Action(nameof(SensorHistoryController.TabelHistoryLatest), ViewConstants.HistoryController)";
     var historyAction = "@Url.Action(nameof(SensorHistoryController.TableHistory), ViewConstants.HistoryController)";
     var nextPageAction = "@Url.Action(nameof(SensorHistoryController.GetNextTablePage), ViewConstants.HistoryController)";
