@@ -71,7 +71,10 @@ namespace HSMServer.Core.Model
 
         public BaseValue LastDbValue => Storage.LastDbValue;
 
+        public BaseValue LastTimeout => Storage.LastTimeout;
+
         public BaseValue LastValue => Storage.LastValue;
+
 
         public bool HasData => Storage.HasData;
 

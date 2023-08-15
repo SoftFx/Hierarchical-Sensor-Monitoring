@@ -33,6 +33,8 @@ Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "TestLevelDB", "..\..\sandbo
 EndProject
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "HSMDatabase.LevelDB.Tests", "..\..\tests\HSMDatabase.LevelDB.Tests\HSMDatabase.LevelDB.Tests.csproj", "{04411C26-84E6-4178-B8DB-DE86EBCA7062}"
 EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "HSMSensorDataObjects", "..\..\api\HSMSensorDataObjects\HSMSensorDataObjects.csproj", "{0860D59C-086B-4134-8498-4C070BDBA8C4}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -83,6 +85,10 @@ Global
 		{04411C26-84E6-4178-B8DB-DE86EBCA7062}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{04411C26-84E6-4178-B8DB-DE86EBCA7062}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{04411C26-84E6-4178-B8DB-DE86EBCA7062}.Release|Any CPU.Build.0 = Release|Any CPU
+		{0860D59C-086B-4134-8498-4C070BDBA8C4}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{0860D59C-086B-4134-8498-4C070BDBA8C4}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{0860D59C-086B-4134-8498-4C070BDBA8C4}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{0860D59C-086B-4134-8498-4C070BDBA8C4}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
