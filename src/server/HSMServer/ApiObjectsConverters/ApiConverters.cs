@@ -210,8 +210,8 @@ namespace HSMServer.ApiObjectsConverters
         public static SensorValueBase CreateNewSensorValue(SensorType sensorType) => sensorType switch
         {
             SensorType.Boolean => new BoolSensorValue(),
-            SensorType.IntegerBar => new IntBarSensorValue(),
-            SensorType.DoubleBar => new DoubleBarSensorValue(),
+            SensorType.IntegerBar => new IntBarSensorValue().AddOpenAndCloseTime(),
+            SensorType.DoubleBar => new DoubleBarSensorValue().AddOpenAndCloseTime(),
             SensorType.Double => new DoubleSensorValue(),
             SensorType.Integer => new IntSensorValue(),
             SensorType.String => new StringSensorValue(),
@@ -221,6 +221,14 @@ namespace HSMServer.ApiObjectsConverters
             _ => null
         };
 
+        private static SensorValueBase AddOpenAndCloseTime(this BarSensorValueBase value, DateTime? closeTime = null, DateTime? openTime = null)
+        {
+            value.CloseTime = closeTime ?? DateTime.UtcNow;
+            value.OpenTime = openTime ?? DateTime.UtcNow;
+
+            return value;
+        }
+        
         public static ApiSensorStatus ToApi(this Model.TreeViewModel.SensorStatus status) =>
             status switch
             {
