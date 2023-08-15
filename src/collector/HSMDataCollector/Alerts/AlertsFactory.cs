@@ -3,180 +3,58 @@ using System;
 
 namespace HSMDataCollector.Alerts
 {
-    public abstract class AlertBuildRequest
-    {
-        protected internal AlertBuildRequest() { }
-    }
-
-    public sealed class SpecialAlertBuildRequest : AlertBuildRequest
-    {
-    }
-
-    public sealed class InstantAlertBuildRequest : AlertBuildRequest
-    {
-    }
-
-    public sealed class BarAlertBuildRequest : AlertBuildRequest
-    {
-    }
-
-
     public static class Alerts
     {
-        public static SpecialSensorAlert IfInactivityPeriodIs(TimeSpan? time)
+        public static SpecialAlertCondition IfInactivityPeriodIs(TimeSpan? time)
         {
-            return new SpecialSensorAlert();
+            return new SpecialAlertCondition();
         }
 
 
-        public static InstantSensorAlertCondition IfValue<T>(AlertOperation operation, T target)
+        public static InstantAlertCondition IfValue<T>(AlertOperation operation, T target)
         {
-            return new InstantSensorAlertCondition();
+            return new InstantAlertCondition().AndValue(operation, target);
         }
 
-        public static InstantSensorAlertCondition IfComment(AlertOperation operation)
+        public static InstantAlertCondition IfComment(AlertOperation operation)
         {
-            return new InstantSensorAlertCondition();
+            return (InstantAlertCondition)new InstantAlertCondition().AndComment(operation);
         }
 
-        public static InstantSensorAlertCondition IfStatus(AlertOperation operation)
+        public static InstantAlertCondition IfStatus(AlertOperation operation)
         {
-            return new InstantSensorAlertCondition();
+            return (InstantAlertCondition)new InstantAlertCondition().AndStatus(operation);
         }
 
 
-        public static BarSensorAlertCondition IfMax<T>(AlertOperation operation, T value) where T : struct
+        public static BarAlertCondition IfMax<T>(AlertOperation operation, T value) where T : struct
         {
-            return new BarSensorAlertCondition();
+            return new BarAlertCondition().AndMax(operation, value);
         }
 
-        public static BarSensorAlertCondition IfMean<T>(AlertOperation operation, T value) where T : struct
+        public static BarAlertCondition IfMean<T>(AlertOperation operation, T value) where T : struct
         {
-            return new BarSensorAlertCondition();
+            return new BarAlertCondition().AndMean(operation, value);
         }
 
-        public static BarSensorAlertCondition IfMin<T>(AlertOperation operation, T value) where T : struct
+        public static BarAlertCondition IfMin<T>(AlertOperation operation, T value) where T : struct
         {
-            return new BarSensorAlertCondition();
+            return new BarAlertCondition().AndMin(operation, value);
         }
 
-        public static BarSensorAlertCondition IfLastValue<T>(AlertOperation operation, T value) where T : struct
+        public static BarAlertCondition IfLastValue<T>(AlertOperation operation, T value) where T : struct
         {
-            return new BarSensorAlertCondition();
+            return new BarAlertCondition().AndLastValue(operation, value);
         }
 
-        public static BarSensorAlertCondition IfBarComment(AlertOperation operation)
+        public static BarAlertCondition IfBarComment(AlertOperation operation)
         {
-            return new BarSensorAlertCondition();
+            return (BarAlertCondition)new BarAlertCondition().AndComment(operation);
         }
 
-        public static BarSensorAlertCondition IfBarStatus(AlertOperation operation)
+        public static BarAlertCondition IfBarStatus(AlertOperation operation)
         {
-            return new BarSensorAlertCondition();
+            return (BarAlertCondition)new BarAlertCondition().AndComment(operation).AndStatus(operation);
         }
-    }
-
-    public sealed class AlertAction<T> where T : AlertBuildRequest, new()
-    {
-        internal AlertAction() { }
-
-
-        public AlertAction<T> AndNotify(string template)
-        {
-            return this;
-        }
-
-        public AlertAction<T> AndSetSensorError()
-        {
-            return this;
-        }
-
-        public AlertAction<T> AndSetIcon(string icon)
-        {
-            return this;
-        }
-
-        public T Build()
-        {
-            return new T();
-        }
-    }
-
-    public abstract class SensorAlert<T> where T : AlertBuildRequest, new()
-    {
-
-        public AlertAction<T> ThenNotify(string template)
-        {
-            return new AlertAction<T>();
-        }
-
-        public AlertAction<T> ThenSetSensorError()
-        {
-            return new AlertAction<T>();
-        }
-
-        public AlertAction<T> ThenSetIcon(string icon)
-        {
-            return new AlertAction<T>();
-        }
-    }
-
-    public abstract class DataSensorAlertCondition<T> : SensorAlert<T>
-         where T : AlertBuildRequest, new()
-    {
-        protected internal DataSensorAlertCondition() { }
-
-
-        public DataSensorAlertCondition<T> AndComment(AlertOperation operation)
-        {
-            return this;
-        }
-
-        public DataSensorAlertCondition<T> AndStatus(AlertOperation operation)
-        {
-            return this;
-        }
-    }
-
-    public sealed class InstantSensorAlertCondition : DataSensorAlertCondition<InstantAlertBuildRequest>
-    {
-        internal InstantSensorAlertCondition() : base() { }
-
-
-        public InstantSensorAlertCondition AndValue<T>(AlertOperation operation, T value)
-        {
-            return this;
-        }
-    }
-
-    public sealed class BarSensorAlertCondition : DataSensorAlertCondition<BarAlertBuildRequest>
-    {
-        internal BarSensorAlertCondition() : base() { }
-
-
-        public BarSensorAlertCondition AndMax<T>(AlertOperation operation, T target) where T : struct
-        {
-            return this;
-        }
-
-        public BarSensorAlertCondition AndMean<T>(AlertOperation operation, T target) where T : struct
-        {
-            return this;
-        }
-
-        public BarSensorAlertCondition AndMin<T>(AlertOperation operation, T target) where T : struct
-        {
-            return this;
-        }
-
-        public BarSensorAlertCondition AndLastValue<T>(AlertOperation operation, T target) where T : struct
-        {
-            return this;
-        }
-    }
-
-    public sealed class SpecialSensorAlert : SensorAlert<SpecialAlertBuildRequest>
-    {
-        internal SpecialSensorAlert() : base() { }
     }
 }
