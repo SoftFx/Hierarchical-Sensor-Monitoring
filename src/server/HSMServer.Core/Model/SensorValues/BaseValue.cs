@@ -44,6 +44,8 @@ namespace HSMServer.Core.Model
             set => _time = value.ToUniversalTime();
         }
 
+        public bool IsTimeout { get; init; }
+
 
         [JsonIgnore]
         public virtual SensorType Type { get; } //abstract not work with JsonIgnore, so use virtual
@@ -53,9 +55,6 @@ namespace HSMServer.Core.Model
 
         [JsonIgnore]
         public virtual string ShortInfo { get; }
-
-        [JsonIgnore] 
-        public bool IsTimeoutValue => Comment?.StartsWith(BaseSensorModel.TimeoutComment) ?? false;
 
 
         internal SensorValueEntity ToEntity(Guid sensorId) =>

@@ -129,7 +129,7 @@ namespace HSMServer.Model.History
                 Status = value.Status.ToClient(),
                 Comment = value.Comment,
                 ReceivingTime = value.ReceivingTime,
-                IsTimeout = value.IsTimeoutValue
+                IsTimeout = value.IsTimeout
             };
 
         private static BarSensorValueViewModel Build<T>(BarBaseValue<T> value) where T : INumber<T> =>
@@ -144,7 +144,7 @@ namespace HSMServer.Model.History
                 Status = value.Status.ToClient(),
                 Comment = value.Comment,
                 ReceivingTime = value.ReceivingTime,
-                IsTimeout = value.IsTimeoutValue
+                IsTimeout = value.IsTimeout
             };
 
         private static string GetTableValue<T>(BaseValue<T> value) => value switch

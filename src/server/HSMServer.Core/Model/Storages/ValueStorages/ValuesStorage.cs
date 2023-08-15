@@ -53,7 +53,7 @@ namespace HSMServer.Core.Model
 
         internal virtual void AddValueBase(T value)
         {
-            if (value.IsTimeoutValue)
+            if (value.IsTimeout)
             {
                 if (_lastTimeout is null || _lastTimeout.ReceivingTime < value.ReceivingTime)
                     _lastTimeout = value;

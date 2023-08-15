@@ -21,7 +21,7 @@ namespace HSMServer.Core.Model
 
         internal override void AddValue(T value)
         {
-            if (!value.IsTimeoutValue)
+            if (!value.IsTimeout)
             {
                 var canStore = PartialLastValue != null && PartialLastValue.OpenTime != value.OpenTime;
 
