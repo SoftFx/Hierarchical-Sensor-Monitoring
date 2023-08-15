@@ -243,7 +243,7 @@ namespace HSMServer.Core.Cache
             SensorUpdateView(sensor);
         }
 
-        public void UpdateSensorLastValue(SensorUpdate update)
+        public void UpdateSensorLastValue(SensorUpdate update, string initiator)
         {
             var sensor = GetSensor(update.Id);
 
@@ -254,6 +254,15 @@ namespace HSMServer.Core.Cache
                     Status = update.Status.Value, 
                     Comment = update.Comment
                 };
+                
+                _journalService.AddRecord(new JournalRecordModel(update.Id, initiator ?? System)
+                {
+                    PropertyName = "Last value",
+                    Enviroment = "Last value",
+                    Path = sensor.FullPath,
+                    OldValue = $"Status - {sensor.Storage.LastDbValue.Status}; Comment - '{sensor.Storage.LastDbValue.Comment}'",
+                    NewValue = $"Status - {update.Status}; Comment - '{update.Comment}'"
+                });
                 
                 _database.AddSensorValue(value.ToEntity(update.Id));
             }

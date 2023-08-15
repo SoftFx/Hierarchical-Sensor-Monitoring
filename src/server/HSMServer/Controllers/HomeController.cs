@@ -686,7 +686,7 @@ namespace HSMServer.Controllers
                     Status = modal.NewStatus.ToCore()
                 };
 
-                _treeValuesCache.UpdateSensorLastValue(update);
+                _treeValuesCache.UpdateSensorLastValue(update, CurrentUser.Name);
 
                 return Ok();
             }
