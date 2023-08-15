@@ -29,7 +29,7 @@ namespace HSMServer.Core.Model
 
     public abstract class BaseSensorModel : BaseNodeModel
     {
-        public const string TimeoutComment = "#Timeout"; 
+        public const string TimeoutComment = "#Timeout";
 
 
         private static readonly SensorResult _muteResult = new(SensorStatus.OffTime, "Muted");
@@ -72,7 +72,7 @@ namespace HSMServer.Core.Model
         public BaseValue LastDbValue => Storage.LastDbValue;
 
         public BaseValue LastValue => Storage.LastValue;
-        
+
         public bool HasData => Storage.HasData;
 
 

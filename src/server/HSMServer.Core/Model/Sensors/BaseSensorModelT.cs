@@ -26,8 +26,8 @@ namespace HSMServer.Core.Model
             }
 
             var isLastValue = Storage.LastValue is null || value.Time >= Storage.LastValue.Time;
-
             var canStore = Policies.TryValidate(value, out var valueT, isLastValue);
+
             if (canStore)
             {
                 Storage.AddValue(valueT);
