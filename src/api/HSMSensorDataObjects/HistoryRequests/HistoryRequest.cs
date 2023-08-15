@@ -2,6 +2,14 @@
 
 namespace HSMSensorDataObjects.HistoryRequests
 {
+    [Flags]
+    public enum RequestOptions
+    {
+        None = 0,
+        IncludeTtl,
+    }
+
+
     public class HistoryRequest : BaseRequest
     {
         public DateTime From { get; set; }
@@ -9,14 +17,7 @@ namespace HSMSensorDataObjects.HistoryRequests
         public DateTime? To { get; set; }
 
         public int? Count { get; set; }
-        
-        public RequestOptions Options { get; set; }
-    }
 
-    [Flags]
-    public enum RequestOptions
-    {
-        None = 0,
-        IncludeTtlHistory,
+        public RequestOptions Options { get; set; }
     }
 }

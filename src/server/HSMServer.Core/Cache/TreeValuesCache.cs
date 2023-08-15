@@ -369,7 +369,7 @@ namespace HSMServer.Core.Cache
                 await foreach (var page in pages)
                 {
                     var convertedValues = sensor.ConvertValues(page);
-                    yield return (options.HasFlag(RequestOptions.IncludeTtlHistory) ?
+                    yield return (options.HasFlag(RequestOptions.IncludeTtl) ?
                                   convertedValues :
                                   convertedValues.Where(CheckTimout))
                                   .ToList();

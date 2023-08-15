@@ -14,7 +14,7 @@ namespace HSMServer.Core.Model
         internal SensorResult? Result => LastValue != null ? new SensorResult(LastValue) : null;
 
 
-        internal abstract BaseValue LastDbActualValue { get; }
+        internal abstract BaseValue LastTimeout { get; }
 
         internal abstract BaseValue LastDbValue { get; }
 
@@ -37,32 +37,37 @@ namespace HSMServer.Core.Model
     {
         private readonly ConcurrentQueue<T> _cache = new();
 
-        private T _lastValue;
+        private T _lastValue, _lastTimeout;
 
 
-        internal override T LastDbActualValue => _cache.LastOrDefault();
+        internal override T LastDbValue => _cache.LastOrDefault();
 
-        internal override T LastDbValue => _cache.LastOrDefault(x => !x.IsTimeoutValue);
+        internal override T LastTimeout => _lastTimeout;
 
         internal override T LastValue => _lastValue;
 
         internal override bool HasData => !_cache.IsEmpty;
 
+
         internal virtual void AddValue(T value) => AddValueBase(value);
 
         internal virtual void AddValueBase(T value)
         {
-            if (LastDbActualValue is null || !(LastDbActualValue.IsTimeoutValue && value.IsTimeoutValue))
+            if (value.IsTimeoutValue)
+            {
+                if (_lastTimeout is null || _lastTimeout.ReceivingTime < value.ReceivingTime)
+                    _lastTimeout = value;
+            }
+            else
+            {
                 _cache.Enqueue(value);
 
-            if (_cache.Count > CacheSize)
-                _cache.TryDequeue(out _);
+                if (_cache.Count > CacheSize)
+                    _cache.TryDequeue(out _);
 
-            if (!value.IsTimeoutValue)
                 if (_lastValue is null || value.Time >= _lastValue.Time)
-                {
                     _lastValue = value;
-                }
+            }
         }
 
 
