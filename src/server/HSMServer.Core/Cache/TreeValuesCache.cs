@@ -366,7 +366,7 @@ namespace HSMServer.Core.Cache
 
             if (_sensors.TryGetValue(sensorId, out var sensor))
             {
-                var pages = _database.GetSensorValuesPage(sensorId.ToString(), from, to, count);
+                var pages = _database.GetSensorValuesPage(sensorId, from, to, count);
                 var includeTtl = options.HasFlag(RequestOptions.IncludeTtl);
 
                 await foreach (var page in pages)
@@ -822,29 +822,56 @@ namespace HSMServer.Core.Cache
 
         private void FillSensorsData()
         {
-            var requests = GetSensors().ToDictionary(k => k.Id, _ => 0L);
-
-            if (_snapshot.HasData)
+            void ApplyLastValues(Dictionary<Guid, byte[]> lasts)
             {
+                foreach (var (sensorId, value) in lasts)
+                    if (value is not null && _sensors.TryGetValue(sensorId, out var sensor))
+                    {
+                        sensor.AddDbValue(value);
+
+                        if (!_snapshot.IsFinal && sensor.LastValue is not null)
+                            _snapshot.Sensors[sensorId].SetLastUpdate(sensor.LastValue.ReceivingTime, sensor.CheckTimeout());
+                    }
+            }
+
+            if (_snapshot.IsFinal)
+            {
+                var requests = GetSensors().ToDictionary(k => k.Id, _ => 0L);
+
                 foreach (var (key, state) in _snapshot.Sensors)
                     if (requests.ContainsKey(key))
                         requests[key] = state.History.To.Ticks;
+
+                ApplyLastValues(_database.GetLatestValues(requests));
             }
+            else
+            {
+                var maxTo = DateTime.MaxValue.Ticks;
+                var requests = GetSensors().ToDictionary(k => k.Id, _ => (0L, maxTo));
 
-            var values = _snapshot.IsFinal ? _database.GetLatestValues(requests) :
-                                             _database.GetLatestValuesFrom(requests);
-
-            foreach (var (sensorId, value) in values)
-                if (value is not null && _sensors.TryGetValue(sensorId, out var sensor))
+                if (_snapshot.HasData)
                 {
-                    sensor.AddDbValue(value);
-
-                    if (!_snapshot.IsFinal && sensor.LastValue is not null)
-                        _snapshot.Sensors[sensorId].SetLastUpdate(sensor.LastValue.ReceivingTime, sensor.CheckTimeout());
+                    foreach (var (key, state) in _snapshot.Sensors)
+                        if (requests.ContainsKey(key))
+                            requests[key] = (state.History.To.Ticks, maxTo);
                 }
 
-            if (!_snapshot.IsFinal)
+                ApplyLastValues(_database.GetLatestValuesFromTo(requests));
+
+                requests.Clear();
+
+                foreach (var sensor in GetSensors())
+                    if (sensor.LastValue is null)
+                    {
+                        var fromVal = _snapshot.Sensors.TryGetValue(sensor.Id, out var state) ? state.History.To.Ticks : 0L;
+
+                        requests.Add(sensor.Id, (fromVal, sensor.LastTimeout.ReceivingTime.Ticks));
+                    }
+
+                ApplyLastValues(_database.GetLatestValuesFromTo(requests));
+
                 _snapshot.FlushState(true);
+            }  
         }
 
         public void UpdateCacheState()

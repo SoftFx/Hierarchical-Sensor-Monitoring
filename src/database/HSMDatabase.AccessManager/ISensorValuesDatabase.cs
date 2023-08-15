@@ -16,7 +16,7 @@ namespace HSMDatabase.AccessManager
 
         bool IsInclude(long from, long to);
 
-        void FillLatestValues(Dictionary<byte[], (long from, byte[] latestValue)> keyValuePairs);
+        void FillLatestValues(Dictionary<byte[], (long from, byte[] toKey, byte[] latestValue)> keyValuePairs);
 
         void PutSensorValue(byte[] key, object value);
 

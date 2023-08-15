@@ -57,7 +57,7 @@ namespace HSMServer.Core
                 SensorType.File => BuildDefault<FileValue>(),
                 SensorType.TimeSpan => BuildDefault<TimeSpanValue>(),
                 SensorType.Version => BuildDefault<VersionValue>(),
-                _ => throw new ArgumentException($"Sensor type = {type} is not valid")
+                _ => throw new ArgumentException($"Sensor type = {sensor.Type} is not valid")
             };
         }
     }
