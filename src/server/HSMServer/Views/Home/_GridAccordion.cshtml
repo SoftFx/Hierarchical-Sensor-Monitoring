@@ -24,8 +24,8 @@
                             <div id="gridCell_@element.EncodedId" class="@element.Status.ToCssGridCellClass() p-1 grid-cell clickable-node"
                                  title="@element.Tooltip" onclick="activateNode('@ViewBag.ParentId', '@element.EncodedId')">
                                  <span>
-                                    @await Html.PartialAsync("~/Views/Home/Alerts/_AlertIconsList.cshtml", element.AlertIcons)
-                                    @element.Name.GetShortCellName()
+                                    @await Html.PartialAsync("~/Views/Home/Alerts/_AlertIconsList.cshtml", (element.AlertIcons, false))
+                                    @element.Name.GetShortCellName(element.AlertIcons.Count)
                                  </span>
                             </div>
                         }

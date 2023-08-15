@@ -1,17 +1,17 @@
 ﻿@using System.Collections.Concurrent
 
-@model ConcurrentDictionary<string, int>
+@model (ConcurrentDictionary<string, int> Alerts, bool FullIcons)
 
 @{
-    var takeNumber = Model.Count > 3 ? 2 : 3;
+    var takeNumber = Model.Alerts.Count > 3 && !Model.FullIcons ? 2 : Model.Alerts.Count;
 }
 
-@foreach (var (icon, count) in Model.Take(takeNumber))
+@foreach (var (icon, count) in Model.Alerts.Take(takeNumber))
 {
     <span class='tree-alert-icon'>@icon<span class='badge badge-dark @(count > 1 ? "d-block" : "d-none")'>@(count > 9 ? "∞" : count)</span></span>
 }
 
-@if (takeNumber == 2)
+@if (takeNumber == 2 && !Model.FullIcons)
 {
     <span>...</span>
 }

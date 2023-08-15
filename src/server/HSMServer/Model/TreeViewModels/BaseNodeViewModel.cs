@@ -37,9 +37,9 @@ namespace HSMServer.Model.TreeViewModel
 
         public string Title => Name?.Replace('\\', ' ') ?? string.Empty; //TODO remove after rename bad products
 
-        public string Tooltip => $"{Name} {AlertToolTip} {Environment.NewLine}{(UpdateTime != DateTime.MinValue ? UpdateTime.ToDefaultFormat() : "no data")}";
+        public string Tooltip => $"{Name} {AlertTooltip} {Environment.NewLine}{(UpdateTime != DateTime.MinValue ? UpdateTime.ToDefaultFormat() : "no data")}";
 
-        public string AlertToolTip => string.Join(',', AlertIcons.Select(x => x.Value > 1 ? $"{x.Key}x{x.Value}" : $"{x.Key}"));
+        private string AlertTooltip => string.Join(',', AlertIcons.Select(x => x.Value > 1 ? $"{x.Key}x{x.Value}" : $"{x.Key}"));
 
 
         protected void RecalculateAlerts(params IEnumerable<NodeViewModel>[] collections)

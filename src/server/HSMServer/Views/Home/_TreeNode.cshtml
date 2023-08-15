@@ -15,7 +15,7 @@
 
 <li class="@arrowIcon" id='@data.EncodedId' title='@data.Tooltip' data-jstree='@Model.ToJSTree()'>
     <span class="@(Model.IsMutedState ? "muted-state-text" : "")">
-        @await Html.PartialAsync("~/Views/Home/Alerts/_AlertIconsList.cshtml", data.AlertIcons)
+        @await Html.PartialAsync("~/Views/Home/Alerts/_AlertIconsList.cshtml", (data.AlertIcons, false))
         @Html.Raw(data.Name.GetShortNodeName()) @Model.SensorsCountString
     </span>
 

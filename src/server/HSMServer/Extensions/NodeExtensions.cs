@@ -1,3 +1,4 @@
+using System;
 using HSMServer.Model.Authentication;
 using HSMServer.Model.TreeViewModel;
 using HSMServer.UserFilters;
@@ -11,7 +12,7 @@ namespace HSMServer.Extensions
     {
         private const int NodeNameMaxLength = 35;
         private const int CellNameMaxLength = 13;
-
+        private const int IconSize = 3;
 
         internal static string ToCssIconClass(this SensorStatus status) =>
             status switch
@@ -55,9 +56,11 @@ namespace HSMServer.Extensions
 
         internal static string GetShortNodeName(this string name) => name.Cut(NodeNameMaxLength);
 
-        internal static string GetShortCellName(this string name) => name.Cut(CellNameMaxLength);
+        internal static string GetShortCellName(this string name, int iconsLengthDifference = 0) => name.Cut(CellNameMaxLength - iconsLengthDifference.GetIconsLength());
 
         private static string Cut(this string str, int stringLength) =>
             str.Length > stringLength ? $"{str[..stringLength]}..." : str;
+
+        private static int GetIconsLength(this int iconsCount) => Math.Min(iconsCount, 3) * IconSize;
     }
 }

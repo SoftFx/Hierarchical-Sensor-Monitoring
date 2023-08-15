@@ -45,7 +45,7 @@
             {
                 <i id='status_@Model.EncodedId' class='@Model.Status.ToIcon() my-1 sensor-icon-with-margin' title='Status: @Model.Status'></i>
                 <span id="alertIcons_@Model.EncodedId" class="me-1">
-                    @await Html.PartialAsync("~/Views/Home/Alerts/_AlertIconsList.cshtml", Model.AlertIcons)
+                    @await Html.PartialAsync("~/Views/Home/Alerts/_AlertIconsList.cshtml", (Model.AlertIcons, true))
                 </span>
             }
 

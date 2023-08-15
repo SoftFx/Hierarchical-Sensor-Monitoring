@@ -464,7 +464,7 @@ namespace HSMServer.Controllers
             else if (_treeViewModel.Sensors.TryGetValue(id, out var sensor))
                 icons = sensor.AlertIcons;
 
-            return icons is not null ? PartialView("~/Views/Home/Alerts/_AlertIconsList.cshtml", icons) : _emptyResult;
+            return icons is not null ? PartialView("~/Views/Home/Alerts/_AlertIconsList.cshtml", (icons, true)) : _emptyResult;
         }
 
         #endregion
