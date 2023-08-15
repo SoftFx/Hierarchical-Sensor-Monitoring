@@ -36,7 +36,7 @@ window.Data = function (to, from, type, encodedId) {
         "Type": type, 
         "EncodedId": encodedId, 
         "BarsCount": getBarsCount(encodedId),
-        "Options": "IncludeTtlHistory"
+        "Options": "IncludeTtl"
     };
 }
 
