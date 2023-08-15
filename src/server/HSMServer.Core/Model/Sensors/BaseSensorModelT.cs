@@ -24,6 +24,7 @@ namespace HSMServer.Core.Model
             if (canStore)
             {
                 Storage.AddValue(valueT);
+                Policies.SensorTimeout(valueT);
 
                 ReceivedNewValue?.Invoke(valueT);
             }
@@ -40,7 +41,10 @@ namespace HSMServer.Core.Model
             var dbValue = Convert(bytes);
 
             if (Policies.TryValidate(dbValue, out var valueT))
+            {
                 Storage.AddValue(valueT);
+                Policies.SensorTimeout(valueT);
+            }
         }
 
 

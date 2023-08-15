@@ -36,7 +36,9 @@ namespace HSMServer.Core.Model.Policies
 
     internal sealed class PolicyExecutorString : PolicyExecutorSimple<string>
     {
-        protected override Func<string, string, bool> GetTypedOperation(PolicyOperation operation) => throw new NotImplementedException();
+        protected override Func<string, string, bool> GetTypedOperation(PolicyOperation operation) => PolicyExecutorBuilder.GetStringOperation(operation);
+
+        protected override string GetCheckedValue(BaseValue value) => value?.Comment;
     }
 
 

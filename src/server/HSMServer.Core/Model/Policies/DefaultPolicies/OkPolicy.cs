@@ -3,15 +3,14 @@ using System;
 
 namespace HSMServer.Core.Model.Policies
 {
-    internal class OkPolicy : DefaultPolicyBase
+    internal sealed class OkPolicy : DefaultPolicyBase
     {
         internal OkPolicy(Guid id, BaseNodeModel node) 
         {
             Apply(new PolicyEntity
             {
                 Id = id.ToByteArray(),
-                Template = TTLPolicy.DefaultTemplate,
-                Icon = SensorStatus.Ok.ToIcon(),
+                Template = $"$status {TTLPolicy.DefaultTemplate}",
             }, node as BaseSensorModel);
         }
     }

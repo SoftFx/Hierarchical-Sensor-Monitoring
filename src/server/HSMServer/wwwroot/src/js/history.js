@@ -105,6 +105,7 @@ window.Data = function (to, from, type, encodedId) {
         let body = Data(to, from, type, encodedId);
        
         showBarsCount(encodedId);
+        enableFromTo()
         initializeGraph(encodedId, rawHistoryAction, type, body);
     }
 
@@ -115,6 +116,7 @@ window.Data = function (to, from, type, encodedId) {
         let body = Data(to, from, type, encodedId);
 
         hideBarsCount(encodedId);
+        enableFromTo()
         initializeTable(encodedId, historyAction, type, body);
     }
 
@@ -263,7 +265,7 @@ window.Data = function (to, from, type, encodedId) {
     function getToDate() {
         let now = new Date();
 
-        now.setFullYear(now.getFullYear() + 1);
+        now.setDate(now.getDate() + 1);
 
         return now;
     }
@@ -276,13 +278,13 @@ window.Data = function (to, from, type, encodedId) {
 
 
     function hideBarsCount(encodedId) {
-        $(`#labelBarsCount_${encodedId}`).hide();
-        $(`#barsCount_${encodedId}`).hide();
+        $(`[id^="labelBarsCount_"]`).hide();
+        $(`[id^="barsCount_"]`).hide();
     }
 
     function showBarsCount(encodedId) {
-        $(`#labelBarsCount_${encodedId}`).show();
-        $(`#barsCount_${encodedId}`).show();
+        $(`[id^="labelBarsCount_"]`).show();
+        $(`[id^="barsCount_"]`).show();
     }
 
     function getBarsCount(encodedId) {
@@ -390,6 +392,9 @@ window.Data = function (to, from, type, encodedId) {
     ]
     
     window.initializeJournal = function(type) {
+        disableFromTo()
+        hideBarsCount();
+        
         if (JournalTable) {
              JournalTable.ajax.reload();
              return;
@@ -399,5 +404,21 @@ window.Data = function (to, from, type, encodedId) {
             columns: type === NodeType.Node ? nodeColumns : sensorColumns,
             ...JournalTemplate(getJournalPage)
         });
+    }
+
+    window.disableFromTo = function () {
+        changeVisibility('datePickerFromTo', true)
+    }
+
+    window.enableFromTo = function () {
+        changeVisibility('datePickerFromTo');
+    }
+
+    function changeVisibility(containerId ,disable = false) {
+        for (let el of $(`#${containerId} label, #${containerId} input, #${containerId} button`))
+        {
+            el.disabled = disable;
+            el.style.opacity = disable ? "0.5" : "1";
+        }
     }
 }

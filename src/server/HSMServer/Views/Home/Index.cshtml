@@ -15,6 +15,8 @@
 }
 
 <script>
+    var getSensorStatus = "@Url.Action(nameof(SensorHistoryController.GetServiceStatusHistory), ViewConstants.HistoryController)";
+
     var updateSelectedNode = "@Url.Action(nameof(HomeController.UpdateSelectedNode), ViewConstants.HomeController)";
     var getFileAction = "@Url.Action(nameof(HomeController.GetFile), ViewConstants.HomeController)";
     var viewFileAction = "@Url.Action(nameof(HomeController.GetFileStream), ViewConstants.HomeController)";
@@ -55,7 +57,6 @@
     
     var getGrid = `@Url.Action(nameof(HomeController.GetGrid))`;
     var getList = `@Url.Action(nameof(HomeController.GetList))`;
-    
 </script>
 
 
