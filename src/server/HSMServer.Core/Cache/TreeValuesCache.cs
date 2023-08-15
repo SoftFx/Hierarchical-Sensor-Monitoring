@@ -246,25 +246,31 @@ namespace HSMServer.Core.Cache
         public void UpdateSensorLastValue(SensorUpdate update, string initiator)
         {
             var sensor = GetSensor(update.Id);
+            var lastValue = sensor.Storage.LastDbValue ?? sensor.LastValue;
 
-            if (update.Status.HasValue && update.Comment is not null)
+            if (update.Status.HasValue && update.Comment is not null && lastValue is not null)
             {
-                var value = sensor.Storage.LastDbValue with
+                var value = lastValue with
                 {
                     Status = update.Status.Value, 
                     Comment = update.Comment
                 };
-                
-                _journalService.AddRecord(new JournalRecordModel(update.Id, initiator ?? System)
+
+                var (status, comment) = (lastValue.Status, lastValue.Comment);
+
+                if (sensor.Storage.TryChangeLastValue(value))
                 {
-                    PropertyName = "Last value",
-                    Enviroment = "Last value",
-                    Path = sensor.FullPath,
-                    OldValue = $"Status - {sensor.Storage.LastDbValue.Status}; Comment - '{sensor.Storage.LastDbValue.Comment}'",
-                    NewValue = $"Status - {update.Status}; Comment - '{update.Comment}'"
-                });
-                
-                _database.AddSensorValue(value.ToEntity(update.Id));
+                    _journalService.AddRecord(new JournalRecordModel(update.Id, initiator ?? System)
+                    {
+                        PropertyName = "Last value",
+                        Enviroment = "Last value",
+                        Path = sensor.FullPath,
+                        OldValue = $"Status - {status}; Comment - '{comment}'",
+                        NewValue = $"Status - {update.Status}; Comment - '{update.Comment}'"
+                    });
+                    
+                    _database.AddSensorValue(value.ToEntity(update.Id));
+                }
             }
         }
 

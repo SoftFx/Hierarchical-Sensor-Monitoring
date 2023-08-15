@@ -25,6 +25,8 @@ namespace HSMServer.Core.Model
 
         internal abstract List<BaseValue> GetValues(int count);
 
+        internal abstract bool TryChangeLastValue(BaseValue value);
+
         internal abstract void Clear(DateTime to);
 
         internal abstract void Clear();
@@ -56,6 +58,17 @@ namespace HSMServer.Core.Model
 
             if (_lastValue is null || value.Time >= _lastValue.Time)
                 _lastValue = value;
+        }
+
+        internal override bool TryChangeLastValue(BaseValue value)
+        {
+            if (_cache.TryDequeue(out _) || _cache.IsEmpty)
+            {
+                AddValue((T)value);
+                return true;
+            }
+
+            return false;
         }
 
 
