@@ -28,7 +28,7 @@
 <div>
     @await Html.PartialAsync("_MetaInfo", new SensorInfoViewModel(Model))
 
-    @if (Model.UpdateTime == DateTime.MinValue && (Model.LastActualValue?.ReceivingTime ?? DateTime.MinValue) == DateTime.MinValue)
+    @if (Model.UpdateTime == DateTime.MinValue)
     {
         <div class="d-flex justify-content-center align-items-end noData-label">
             <label>No data</label>
