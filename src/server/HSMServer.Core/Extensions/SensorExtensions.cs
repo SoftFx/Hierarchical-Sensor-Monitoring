@@ -1,6 +1,5 @@
-﻿using System;
-using System.Numerics;
-using HSMServer.Core.Model;
+﻿using HSMServer.Core.Model;
+using System;
 
 namespace HSMServer.Core
 {
@@ -33,9 +32,21 @@ namespace HSMServer.Core
             _ => SensorStatus.Error,
         };
 
-        public static BaseValue GetTimeoutBaseValue(this SensorType type, DateTime lastUpdateTime, string value)
+        public static BaseValue GetTimeoutValue(this BaseSensorModel sensor)
         {
-            return type switch
+            T BuildDefault<T>() where T : BaseValue, new()
+            {
+                var ttl = sensor.Settings.TTL.Value.Ticks;
+
+                return new T()
+                {
+                    Time = DateTime.UtcNow,
+                    ReceivingTime = DateTime.UtcNow,
+                    Comment = $"{BaseSensorModel.TimeoutComment} - {sensor.LastUpdate}, TTL = {new TimeSpan(ttl)}"
+                };
+            }
+
+            return sensor.Type switch
             {
                 SensorType.Boolean => BuildDefault<BooleanValue>(),
                 SensorType.Integer => BuildDefault<IntegerValue>(),
@@ -48,16 +59,6 @@ namespace HSMServer.Core
                 SensorType.Version => BuildDefault<VersionValue>(),
                 _ => throw new ArgumentException($"Sensor type = {type} is not valid")
             };
-            
-            T BuildDefault<T>() where T : BaseValue, new()
-            {
-                return new T()
-                {
-                    ReceivingTime = DateTime.UtcNow,
-                    Time = DateTime.UtcNow,
-                    Comment = $"{BaseSensorModel.TimeoutComment} - {lastUpdateTime}, {value}"
-                };
-            }
         }
     }
 }

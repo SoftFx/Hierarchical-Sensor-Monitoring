@@ -1,5 +1,6 @@
 ﻿using HSMCommon.Constants;
 using HSMDatabase.AccessManager.DatabaseEntities;
+using HSMSensorDataObjects.HistoryRequests;
 using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.DataLayer;
 using HSMServer.Core.Journal;
@@ -13,7 +14,6 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
-using HSMSensorDataObjects.HistoryRequests;
 
 namespace HSMServer.Core.Cache
 {
@@ -356,27 +356,26 @@ namespace HSMServer.Core.Cache
             };
 
             return count > 0
-                ? GetSensorValuesPage(sensorId, request.From, request.To ?? DateTime.UtcNow.AddDays(1), count, request.Options)
-                : GetSensorValuesPage(sensorId, DateTime.MinValue, request.From, count, request.Options);
+                   ? GetSensorValuesPage(sensorId, request.From, request.To ?? DateTime.UtcNow.AddDays(1), count, request.Options)
+                   : GetSensorValuesPage(sensorId, DateTime.MinValue, request.From, count, request.Options);
         }
 
         public async IAsyncEnumerable<List<BaseValue>> GetSensorValuesPage(Guid sensorId, DateTime from, DateTime to, int count, RequestOptions options = default)
         {
+            static bool IsTimout(BaseValue value) => value.IsTimeout;
+
             if (_sensors.TryGetValue(sensorId, out var sensor))
             {
                 var pages = _database.GetSensorValuesPage(sensorId.ToString(), from, to, count);
+                var includeTtl = options.HasFlag(RequestOptions.IncludeTtl);
 
                 await foreach (var page in pages)
                 {
                     var convertedValues = sensor.ConvertValues(page);
-                    yield return (options.HasFlag(RequestOptions.IncludeTtl) ?
-                                  convertedValues :
-                                  convertedValues.Where(CheckTimout))
-                                  .ToList();
+
+                    yield return (includeTtl ? convertedValues : convertedValues.Where(IsTimout)).ToList();
                 }
             }
-
-            static bool CheckTimout(BaseValue value) => value.Comment != BaseSensorModel.TimeoutComment;
         }
 
 
@@ -485,6 +484,7 @@ namespace HSMServer.Core.Cache
         private void SaveSensorValueToDb(BaseValue value, Guid sensorId)
         {
             _database.AddSensorValue(value.ToEntity(sensorId));
+
             if (!value.IsTimeout)
                 _snapshot.Sensors[sensorId].SetLastUpdate(value.ReceivingTime);
         }
@@ -850,17 +850,7 @@ namespace HSMServer.Core.Cache
         public void UpdateCacheState()
         {
             foreach (var sensor in GetSensors())
-            {
-                var isTimeout = sensor.CheckTimeout();
-
-                if (isTimeout & (sensor.LastDbActualValue is null || !sensor.LastDbActualValue.IsTimeoutValue))
-                {
-                    var value = sensor.Type.GetTimeoutBaseValue(sensor.LastValue.Time, sensor.Settings.TTL.Value.ToString());
-                    if (sensor.TryAddValue(value))
-                        SaveSensorValueToDb(value, sensor.Id);
-                }
-            }
-            
+                sensor.CheckTimeout();
 
             foreach (var key in GetAccessKeys())
                 if (key.IsExpired && key.State < KeyState.Expired)
@@ -879,7 +869,15 @@ namespace HSMServer.Core.Cache
             {
                 var ttl = sensor.Policies.TimeToLive;
 
-                snapshot.IsExpired = timeout;
+                if (timeout)
+                {
+                    snapshot.IsExpired = timeout;
+
+                    var value = sensor.GetTimeoutValue();
+
+                    if (sensor.TryAddValue(value))
+                        SaveSensorValueToDb(value, sensor.Id);
+                }
 
                 SendPolicyResult(sensor, timeout ? ttl.PolicyResult : ttl.Ok);
             }
