@@ -1,17 +1,13 @@
-﻿@using System.Collections.Concurrent
+﻿@using HSMServer.Model.ViewModel
+@model HSMServer.Model.ViewModel.AlertViewModel
 
-@model (ConcurrentDictionary<string, int> Alerts, bool FullIcons)
 
-@{
-    var takeNumber = Model.Alerts.Count > 3 && !Model.FullIcons ? 2 : Model.Alerts.Count;
-}
-
-@foreach (var (icon, count) in Model.Alerts.Take(takeNumber))
+@foreach (var (icon, count) in Model.Alerts.Take(Model.TakeNumber))
 {
-    <span class='tree-alert-icon'>@icon<span class='badge badge-dark @(count > 1 ? "d-block" : "d-none")'>@(count > 9 ? "∞" : count)</span></span>
+    <span class='tree-alert-icon'>@icon<span class='badge badge-dark @(count > 1 ? "d-block" : "d-none")'>@(count > AlertViewModel.MaxBadgeCounterSize ? AlertViewModel.InfiniteCharacter : count)</span></span>
 }
 
-@if (takeNumber == 2 && !Model.FullIcons)
+@if (Model.IsTooLong)
 {
     <span>...</span>
 }
