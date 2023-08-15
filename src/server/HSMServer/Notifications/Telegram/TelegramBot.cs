@@ -124,6 +124,8 @@ namespace HSMServer.Notifications
 
             await _bot.SetMyCommandsAsync(TelegramBotCommands.Commands, cancellationToken: _tokenSource.Token);
 
+            await ChatNamesSynchronization();
+
             _bot.StartReceiving(_updateHandler, _options, _tokenSource.Token);
             ThreadPool.QueueUserWorkItem(async _ => await MessageReceiver());
 
@@ -244,6 +246,33 @@ namespace HSMServer.Notifications
 
                 if (product != null)
                     _addressBook.RemoveAllChats(product);
+            }
+        }
+
+        private async Task ChatNamesSynchronization()
+        {
+            foreach (var (entity, chats) in _addressBook.ServerBook)
+            {
+                foreach (var (chatId, chatSetting) in chats)
+                {
+                    try
+                    {
+                        var chat = await _bot?.GetChatAsync(chatId, _tokenSource.Token);
+                        var chatName = chatSetting.Chat.IsUserChat ? chat.Username : chat.Title;
+
+                        if (chatSetting.Chat.Name != chatName)
+                        {
+                            chatSetting.Chat.Name = chatName;
+                            entity.Chats[chatId].Name = chatName;
+
+                            entity.UpdateEntity(_userManager, _tree);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.Error($"Telegram chat name updateing is failed - {ex}");
+                    }
+                }
             }
         }
     }
