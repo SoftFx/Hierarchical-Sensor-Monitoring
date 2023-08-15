@@ -12,6 +12,8 @@ namespace HSMServer.Model.History
         public SensorStatus Status { get; init; }
 
         public DateTime ReceivingTime { get; init; }
+        
+        public required bool IsTimeout { get; init; }
     }
 
 
