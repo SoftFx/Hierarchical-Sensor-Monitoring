@@ -149,7 +149,7 @@
             List of sensor commands
             </summary>
             <param name="sensorCommands"></param>
-            <returns></returns>
+            <returns>Dictionary that contains commands error. Key is path to sensor, Value is error</returns>
         </member>
         <member name="T:HSMServer.Filters.DataRequestHeaderSwaggerFilter">
             <summary>

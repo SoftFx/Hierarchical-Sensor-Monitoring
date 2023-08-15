@@ -487,8 +487,10 @@ namespace HSMServer.Controllers
             }
             catch (Exception e)
             {
-                _logger.LogError(e, $"Failed to update sensor! Update request: {JsonSerializer.Serialize(sensorUpdate)}");
-                return BadRequest(sensorUpdate);
+                var message = $"Failed to update sensor! Update request: {JsonSerializer.Serialize(sensorUpdate)}";
+
+                _logger.LogError(e, message);
+                return BadRequest(message);
             }
         }
 
@@ -496,18 +498,18 @@ namespace HSMServer.Controllers
         /// List of sensor commands
         /// </summary>
         /// <param name="sensorCommands"></param>
-        /// <returns></returns>
+        /// <returns>Dictionary that contains commands error. Key is path to sensor, Value is error</returns>
         [HttpPost("commands")]
         [Consumes(MediaTypeNames.Application.Json)]
         [ProducesResponseType(StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status406NotAcceptable)]
-        public ActionResult<List<CommandRequestBase>> Post([FromBody, ModelBinder(typeof(SensorCommandModelBinder))] List<CommandRequestBase> sensorCommands)
+        public ActionResult<Dictionary<string, string>> Post([FromBody, ModelBinder(typeof(SensorCommandModelBinder))] List<CommandRequestBase> sensorCommands)
         {
+            var result = new Dictionary<string, string>(sensorCommands.Count);
+
             try
             {
-                var result = new Dictionary<string, string>(sensorCommands.Count);
-
                 foreach (var command in sensorCommands)
                 {
                     if (command is AddOrUpdateSensorRequest sensorUpdate)
@@ -521,12 +523,12 @@ namespace HSMServer.Controllers
                         result[command.Path] = $"This type of command is not supported now";
                 }
 
-                return result.Count == 0 ? Ok(sensorCommands) : StatusCode(406, result);
+                return result.Count == 0 ? Ok(result) : StatusCode(406, result);
             }
             catch (Exception e)
             {
                 _logger.LogError(e, "Failed to update sensors!");
-                return BadRequest(sensorCommands);
+                return BadRequest(result);
             }
         }
 

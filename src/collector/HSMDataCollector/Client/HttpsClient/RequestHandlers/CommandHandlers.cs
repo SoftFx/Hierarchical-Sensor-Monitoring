@@ -3,14 +3,13 @@ using HSMDataCollector.Requests;
 using HSMDataCollector.SyncQueue;
 using HSMSensorDataObjects.SensorRequests;
 using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 
 namespace HSMDataCollector.Client.HttpsClient
 {
-    internal class CommandHandler : BaseHandlers<PriorityRequest>
+    internal sealed class CommandHandler : BaseHandlers<PriorityRequest>
     {
         private readonly ICommandQueue _commandQueue;
 
@@ -27,24 +26,27 @@ namespace HSMDataCollector.Client.HttpsClient
             {
                 var response = await RequestToServer(apiValue, uri);
 
-                if (response.IsSuccessStatusCode)
+                if (response == null)
                 {
-                    var json = await response.Content.ReadAsStringAsync();
-                    var errors = JsonConvert.DeserializeObject<JObject>(json);
-
-                    //foreach (var val in values)
-                    //    if (errors.TryGetValue(val.Request.Path, out var error))
-                    //    {
-                    //        var result = response.IsSuccessStatusCode && string.IsNullOrEmpty(error);
-
-                    //        _commandQueue.SetResult(val.Key, result);
-                    //    }
+                    foreach (var val in values)
+                        _commandQueue.SetCancel(val.Key);
 
                     return;
                 }
 
+                var json = await response.Content.ReadAsStringAsync();
+                var errors = JsonConvert.DeserializeObject<Dictionary<string, string>>(json);
+
                 foreach (var val in values)
-                    _commandQueue.SetCancel(val.Key);
+                {
+                    var path = val.Request.Path;
+                    var hasError = errors.TryGetValue(path, out var error);
+
+                    if (hasError)
+                        _logger.Error($"Error command for {path} - {error}");
+
+                    _commandQueue.SetResult(val.Key, !hasError);
+                }
             }
 
             return RegisterRequest(values.Select(u => u.Request), _endpoints.CommandsList);
@@ -56,14 +58,22 @@ namespace HSMDataCollector.Client.HttpsClient
             {
                 var response = await RequestToServer(apiValue, uri);
 
-                if (response.IsSuccessStatusCode)
-                {
-                    var json = await response.Content.ReadAsStringAsync();
-
-                    _commandQueue.SetResult(value.Key, string.IsNullOrEmpty(json));
-                }
-                else
+                if (response == null)
                     _commandQueue.SetCancel(value.Key);
+                else
+                {
+                    var isSuccess = response.IsSuccessStatusCode;
+
+                    if (!isSuccess)
+                    {
+                        var json = await response.Content.ReadAsStringAsync();
+                        var error = JsonConvert.DeserializeObject<string>(json);
+
+                        _logger.Error($"Error command for {value.Request.Path} - {error}");
+                    }
+
+                    _commandQueue.SetResult(value.Key, isSuccess);
+                }
             }
 
             switch (value.Request)
