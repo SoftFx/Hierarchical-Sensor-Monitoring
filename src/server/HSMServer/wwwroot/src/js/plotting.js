@@ -1,4 +1,55 @@
-﻿window.displayGraph = function(graphData, graphType, graphElementId, graphName) {
+﻿window.barGraphData = {
+    min: undefined,
+    max: undefined,
+    mean: undefined,
+    count: undefined,
+    bar: undefined,
+    x: undefined,
+    
+    graph: {
+        id: undefined,
+        self: undefined,
+        displayedPlots: ['bar']
+    }
+};
+
+window.addBarPlot = function (name, isInit = false){
+    if (name === 'bar')
+        Plotly.addTraces(barGraphData.graph.id, barGraphData.bar);
+    else
+        Plotly.addTraces(barGraphData.graph.id, getSimpleGraphData(barGraphData.x, barGraphData[name], 'scatter', name));
+    
+    if (!isInit){
+        barGraphData.graph.displayedPlots.push(name);
+        localStorage.setItem(barGraphData.graph.id, barGraphData.graph.displayedPlots)
+    }
+ 
+    Plotly.update(barGraphData.graph.id, {}, {hovermode: 'x'});
+};
+
+window.removeBarPlot = function (name, isInit = false){
+    let indexToDelete = undefined;
+    let plots = barGraphData.graph.self._fullData;
+    for(let i = 0; i < plots.length; i++) {
+        if (plots[i].name === name)
+        {
+            indexToDelete = i;
+            break;
+        }
+    }
+    
+    if (indexToDelete !== undefined){
+        Plotly.deleteTraces(barGraphData.graph.id, indexToDelete);
+        if (!isInit){
+            barGraphData.graph.displayedPlots.splice(barGraphData.graph.displayedPlots.indexOf(name), 1);
+            localStorage.setItem(barGraphData.graph.id, barGraphData.graph.displayedPlots)
+        }
+    }
+}
+
+window.displayGraph = function(graphData, graphType, graphElementId, graphName) {
+    barGraphData.graph.id = graphElementId
+    barGraphData.graph.self = $(`#${graphElementId}`)[0];
     let convertedData = convertToGraphData(graphData, graphType, graphName);
     let zoomData = getPreviousZoomData(graphElementId);
     var plotIcon = {
@@ -64,6 +115,19 @@
             Plotly.newPlot(graphElementId, convertedData, layout, config);
         }
     }
+    
+    let savedPlots = localStorage.getItem(barGraphData.graph.id);
+    if (savedPlots){
+        removeBarPlot('bar', true)
+        removeBarPlot('min', true)
+        removeBarPlot('max', true)
+        removeBarPlot('mean', true)
+        removeBarPlot('count', true)
+        savedPlots.split(',').forEach((name) => {
+            addBarPlot(name, true)
+        })
+    }
+    
     let graphDiv = document.getElementById(graphElementId);
     graphDiv.on('plotly_relayout',
         function(eventData) {
@@ -214,13 +278,15 @@ function convertToGraphData(graphData, graphType, graphName) {
         ];
     }
     
-    function getSimpleGraphData(timeList, dataList, chartType) {
+    function getSimpleGraphData(timeList, dataList, chartType, name = 'custom') {
         let data = [
             {
                 x: timeList,
                 y: dataList,
                 type: chartType,
                 //mode: "lines"
+                showlegend: false,
+                name: name
             }
         ];
         return data;
@@ -297,6 +363,12 @@ function getTimeSpanLayout(datalist) {
 
 //Boxplots
 {
+    function getCountFromBars(escapedBarsData) {
+        return escapedBarsData.map(function (d) {
+            return d.count;
+        })
+    }
+    
     function getTimeFromBars(escapedBarsData) {
         return escapedBarsData.map(function (d) {
             if (d.closeTime.toString().startsWith("0001")) {
@@ -314,21 +386,42 @@ function getTimeSpanLayout(datalist) {
         let q3 = getBarsQ3(escapedBarsData);
         let mean = getBarsMean(escapedBarsData);
         let timeList = getTimeFromBars(escapedBarsData);
+        let count = getCountFromBars(escapedBarsData);
 
         let data =
         [
             {
                 "type": "box",
-                "name": graphName,
+                "name": 'bar',
                 "q1": q1,
                 "median": median,
                 "q3": q3,
                 "mean": mean,
                 "lowerfence": min,
                 "upperfence": max,
-                "x": timeList
+                "x": timeList,
+                count: count,
+                showlegend: false
             }
         ];
+        
+        window.barGraphData.count = count;
+        window.barGraphData.min = min;
+        window.barGraphData.max = max;
+        window.barGraphData.mean = mean;
+        window.barGraphData.bar = [{
+            "type": "box",
+            "name": 'bar',
+            "q1": q1,
+            "median": median,
+            "q3": q3,
+            "mean": mean,
+            "lowerfence": min,
+            "upperfence": max,
+            "x": timeList,
+            showlegend: false
+        }];
+        window.barGraphData.x = timeList;
 
         return data;
     }
@@ -410,10 +503,19 @@ function getPlotType(graphType) {
             icon: icon,
             click: function(gd) {
                 let graph = $(`#${graphElementId}`)[0];
-                let graphLength = graph._fullData.length;
-                if (graphLength > 1) {
-                    Plotly.deleteTraces(graphElementId, graphLength - 1);
-                    Plotly.update(graphElementId, {}, {hovermode: 'closest'});
+                let plots = graph._fullData;
+                if (plots.length > 1) {
+                    let indexToDelete = undefined;
+                    for(let i = 0; i < plots.length; i++) {
+                        if (plots[i].name === name)
+                        {
+                            indexToDelete = i;
+                            break;
+                        }
+                    }
+                    
+                    if (indexToDelete !== undefined)
+                        Plotly.deleteTraces(graphElementId, indexToDelete);
                 }
                 else {
                     const { from, to } = getFromAndTo(graphName);
@@ -421,7 +523,7 @@ function getPlotType(graphType) {
                     $.ajax({
                         type: 'POST',
                         data: JSON.stringify(body),
-                        url: `SensorHistory/GetServiceStatusHistory?isStatusService=${isStatusService}`,
+                        url: `${getSensorStatus}?isStatusService=${isStatusService}`,
                         contentType: 'application/json',
                         dataType: 'html',
                         cache: false,
@@ -430,18 +532,21 @@ function getPlotType(graphType) {
                             let escapedData = JSON.parse(data);
                             let graphData = getEnumGraphData(getTimeList(escapedData), getNumbersData(escapedData), isStatusService)
                             let ranges = graph._fullLayout.yaxis.range;
-                            let heat = getHeatMapForEnum(graphData[0], ranges[0], ranges[1])
+                            let heat = getHeatMapForEnum(graphData[0], name, ranges[0], ranges[1])
             
                             Plotly.addTraces(graphElementId, [heat]);
                             Plotly.update(graphElementId, {}, {hovermode: 'x'});
                         }
                     })
                 }
+
+                if (graph._fullData.length === 1)
+                    Plotly.update(graphElementId, {}, {hovermode: 'closest'});
             }
         }
     }
     
-    function getHeatMapForEnum(data, minValue = 0, maxValue = 1) {
+    function getHeatMapForEnum(data, name = 'custom', minValue = 0, maxValue = 1) {
         return {
             x: data.x,
             y: [minValue, maxValue],
@@ -454,6 +559,7 @@ function getPlotType(graphType) {
             opacity: 0.25,
             customdata: [data.customdata],
             hovertemplate: '%{customdata}<extra></extra>',
+            name: name
         }
     }
 

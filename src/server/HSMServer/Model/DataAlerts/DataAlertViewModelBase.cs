@@ -40,7 +40,7 @@ namespace HSMServer.Model.DataAlerts
                     continue;
                 }
 
-                var target = condition.Property == AlertProperty.Status
+                var target = condition.Property is AlertProperty.Status or AlertProperty.Comment
                     ? new TargetValue(TargetType.LastValue, EntityId.ToString())
                     : new TargetValue(TargetType.Const, condition.Target);
 

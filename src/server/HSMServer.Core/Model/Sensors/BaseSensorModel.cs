@@ -79,6 +79,7 @@ namespace HSMServer.Core.Model
         public bool HasData => Storage.HasData;
 
 
+        public Action<SensorEntity> UpdateFromParentSettings;
         public Action<BaseValue> ReceivedNewValue;
 
 
