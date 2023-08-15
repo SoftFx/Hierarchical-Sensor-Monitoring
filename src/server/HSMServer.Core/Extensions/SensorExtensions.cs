@@ -40,6 +40,7 @@ namespace HSMServer.Core
 
                 return new T()
                 {
+                    IsTimeout = true,
                     Time = DateTime.UtcNow,
                     ReceivingTime = DateTime.UtcNow,
                     Comment = $"{BaseSensorModel.TimeoutComment} - {sensor.LastUpdate}, TTL = {new TimeSpan(ttl)}"
