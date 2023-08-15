@@ -861,7 +861,7 @@ namespace HSMServer.Core.Cache
                 requests.Clear();
 
                 foreach (var sensor in GetSensors())
-                    if (sensor.LastValue is null)
+                    if (sensor.LastTimeout is not null)
                     {
                         var fromVal = _snapshot.Sensors.TryGetValue(sensor.Id, out var state) ? state.History.To.Ticks : 0L;
 
