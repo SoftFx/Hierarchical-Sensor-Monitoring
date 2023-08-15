@@ -3,6 +3,7 @@ using HSMServer.Model.DataAlerts;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace HSMServer.Model.TreeViewModel
 {
@@ -36,7 +37,9 @@ namespace HSMServer.Model.TreeViewModel
 
         public string Title => Name?.Replace('\\', ' ') ?? string.Empty; //TODO remove after rename bad products
 
-        public string Tooltip => $"{Name}{Environment.NewLine}{(UpdateTime != DateTime.MinValue ? UpdateTime.ToDefaultFormat() : "no data")}";
+        public string Tooltip => $"{Name} {AlertToolTip} {Environment.NewLine}{(UpdateTime != DateTime.MinValue ? UpdateTime.ToDefaultFormat() : "no data")}";
+
+        public string AlertToolTip => string.Join(',', AlertIcons.Select(x => x.Value > 1 ? $"{x.Key}x{x.Value}" : $"{x.Key}"));
 
 
         protected void RecalculateAlerts(params IEnumerable<NodeViewModel>[] collections)

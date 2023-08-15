@@ -1,10 +1,17 @@
 ﻿@using System.Collections.Concurrent
-@using HSMServer.Extensions
 
 @model ConcurrentDictionary<string, int>
 
+@{
+    var takeNumber = Model.Count > 3 ? 2 : 3;
+}
 
-@foreach (var (icon, count) in Model)
+@foreach (var (icon, count) in Model.Take(takeNumber))
 {
     <span class='tree-alert-icon'>@icon<span class='badge badge-dark @(count > 1 ? "d-block" : "d-none")'>@(count > 9 ? "∞" : count)</span></span>
+}
+
+@if (takeNumber == 2)
+{
+    <span>...</span>
 }
