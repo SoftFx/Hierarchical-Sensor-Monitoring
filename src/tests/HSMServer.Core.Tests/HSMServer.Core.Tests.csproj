@@ -24,11 +24,4 @@
     <ProjectReference Include="..\..\server\HSMServer.Core\HSMServer.Core.csproj" />
     <ProjectReference Include="..\..\server\HSMServer\HSMServer.csproj" />
   </ItemGroup>
-
-  <ItemGroup>
-    <Reference Include="HSMSensorDataObjects">
-      <HintPath>..\..\api\HSMSensorDataObjects\bin\Debug\netstandard2.0\HSMSensorDataObjects.dll</HintPath>
-    </Reference>
-  </ItemGroup>
-
 </Project>
