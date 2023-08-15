@@ -161,8 +161,6 @@ namespace HSMServer.Core.Model.Policies
                         SensorResult += policy.SensorResult;
                 }
 
-            SensorTimeout(value);
-
             return true;
         }
 
@@ -210,8 +208,11 @@ namespace HSMServer.Core.Model.Policies
                     Uploaded?.Invoke(ActionType.Add, policy);
                 }
 
-            if (_sensor.LastValue is not null)
-                CalculateStorageResult((ValueType)_sensor?.LastValue);
+            if (_sensor?.LastValue is ValueType valueT)
+            {
+                CalculateStorageResult(valueT);
+                SensorTimeout(valueT);
+            }
         }
 
         public override IEnumerator<Policy> GetEnumerator() => _storage.Values.GetEnumerator();

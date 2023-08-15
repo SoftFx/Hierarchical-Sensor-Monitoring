@@ -14,7 +14,15 @@ namespace HSMServer.Core.Model.Policies
         private readonly OkPolicy _okPolicy;
 
 
-        internal PolicyResult Ok => _okPolicy.PolicyResult;
+        internal PolicyResult Ok
+        {
+            get
+            {
+                _okPolicy.RebuildState();
+
+                return _okPolicy.PolicyResult;
+            }
+        }
 
 
         internal TTLPolicy(BaseNodeModel node, PolicyEntity entity)
