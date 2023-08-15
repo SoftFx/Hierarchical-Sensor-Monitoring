@@ -18,7 +18,7 @@ namespace HSMServer.Core.Model
 
         internal override bool TryAddValue(BaseValue value)
         {
-            if (value.IsTimeout)
+            if (value?.IsTimeout ?? false)
             {
                 Storage.AddValueBase((T)value);
 

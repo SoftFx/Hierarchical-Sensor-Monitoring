@@ -373,7 +373,7 @@ namespace HSMServer.Core.Cache
                 {
                     var convertedValues = sensor.ConvertValues(page);
 
-                    yield return (includeTtl ? convertedValues : convertedValues.Where(IsTimout)).ToList();
+                    yield return (includeTtl ? convertedValues.Where(IsTimout) : convertedValues).ToList();
                 }
             }
         }
