@@ -32,11 +32,13 @@ namespace HSMDataCollector.Client.HttpsClient
         internal abstract Task SendRequest(T value);
 
 
-        protected Task<HttpResponseMessage> RequestToServer(object value, string uri)
+        protected async Task<HttpResponseMessage> RequestToServer(object value, string uri)
         {
             try
             {
-                return InvokeRequest(value, uri);
+                var responce = await InvokeRequest(value, uri);
+
+                return responce;
             }
             catch (Exception ex)
             {
@@ -48,7 +50,7 @@ namespace HSMDataCollector.Client.HttpsClient
                 else if (value is T single)
                     _queue.PushFailValue(single);
 
-                return Task.FromResult<HttpResponseMessage>(null);
+                return null;
             }
         }
 
