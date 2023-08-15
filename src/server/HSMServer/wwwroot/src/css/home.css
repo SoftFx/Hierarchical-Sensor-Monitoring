@@ -535,3 +535,17 @@ img .tree-png-icon {
 .emojionearea:focus {
     outline: none;
 }
+
+.button-plot-selection{
+    display: inline-block;
+    min-width: 1%; 
+    max-width: 1%; 
+    vertical-align: top;
+    border: 0
+}
+
+.graph-with-plot-button{
+    display: inline-block; 
+    min-width: 98%; 
+    max-width: 98%
+}
