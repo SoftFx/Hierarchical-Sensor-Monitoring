@@ -362,7 +362,7 @@ namespace HSMServer.Core.Cache
 
         public async IAsyncEnumerable<List<BaseValue>> GetSensorValuesPage(Guid sensorId, DateTime from, DateTime to, int count, RequestOptions options = default)
         {
-            static bool IsTimout(BaseValue value) => value.IsTimeout;
+            static bool IsNotTimout(BaseValue value) => !value.IsTimeout;
 
             if (_sensors.TryGetValue(sensorId, out var sensor))
             {
@@ -373,7 +373,7 @@ namespace HSMServer.Core.Cache
                 {
                     var convertedValues = sensor.ConvertValues(page);
 
-                    yield return (includeTtl ? convertedValues.Where(IsTimout) : convertedValues).ToList();
+                    yield return (includeTtl ? convertedValues : convertedValues.Where(IsNotTimout)).ToList();
                 }
             }
         }
