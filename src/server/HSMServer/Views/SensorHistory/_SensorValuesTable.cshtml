@@ -23,21 +23,21 @@ else
         <table class='table table-striped'>
             <thead>
                 <tr class="text-nowrap">
-                    <th class="w-10">Date</th>
+                    <th>Date</th>
                     <th id="receivingTime_header" class="d-none">Receiving time</th>
                     @if (Model.IsBarSensor)
                     {
-                        <th id="min_header" class="d-none">Min</th>
-                        <th id="mean_header" class="d-none">Mean</th>
-                        <th id="max_header" class="d-none">Max</th>
-                        <th id="count_header" class="d-none">Count</th>
-                        <th id="last_header" class="d-none">Last value</th>
+                        <th>Min</th>
+                        <th>Mean</th>
+                        <th>Max</th>
+                        <th>Count</th>
+                        <th>Last value</th>
                     }
                     else
                     {
-                        <th id="last_header" class="d-none">Value</th>
+                        <th>Value</th>
                     }
-                    <th id="status_header" class="d-none">Status</th>
+                    <th>Status</th>
                     <th>Comment</th>
                 </tr>
             </thead>
@@ -53,19 +53,19 @@ else
                         {
                             var barValue = value as BarSensorValueViewModel;
 
-                            <td id="min_value@(i)" class="d-none">@barValue.Min</td>
-                            <td id="mean_value@(i)" class="d-none">@barValue.Mean</td>
-                            <td id="max_value@(i)" class="d-none">@barValue.Max</td>
-                            <td id="count_value@(i)" class="d-none">@barValue.Count</td>
-                            <td id="last_value@(i)" class="d-none">@barValue.LastValue</td>
+                            <td>@barValue.Min</td>
+                            <td>@barValue.Mean</td>
+                            <td>@barValue.Max</td>
+                            <td>@barValue.Count</td>
+                            <td>@barValue.LastValue</td>
                         }
                         else
                         {
                             var simpleValue = value as SimpleSensorValueViewModel;
 
-                            <td id="last_value@(i)" class="d-none">@simpleValue.Value</td>
+                            <td>@simpleValue.Value</td>
                         }
-                        <td id="status_value@(i)" class="d-none">@value.Status.ToIconStatus()</td>
+                        <td>@value.Status.ToIconStatus()</td>
                         <td>@value.Comment</td>
                     </tr>
                 }

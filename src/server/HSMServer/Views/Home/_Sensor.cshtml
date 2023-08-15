@@ -269,49 +269,11 @@
         if (this.innerText.includes('Show')) {
             $("#receivingTime_header").removeClass('d-none');
             $('[id^="receivingTime_value"]').removeClass('d-none');
-            
-            $("#min_header").removeClass('d-none');
-            $('[id^="min_value"]').removeClass('d-none');
-            
-            $("#max_header").removeClass('d-none');
-            $('[id^="max_value"]').removeClass('d-none');
-            
-            $("#mean_header").removeClass('d-none');
-            $('[id^="mean_value"]').removeClass('d-none');
-            
-            $("#count_header").removeClass('d-none');
-            $('[id^="count_value"]').removeClass('d-none');
-            
-            $("#last_header").removeClass('d-none');
-            $('[id^="last_value"]').removeClass('d-none');
-            
-            $("#status_header").removeClass('d-none');
-            $('[id^="status_value"]').removeClass('d-none');
-            
             this.innerText = "Hide extra columns"
         }
         else {
             $("#receivingTime_header").addClass('d-none');
             $('[id^="receivingTime_value"]').addClass('d-none');
-            
-            $("#min_header").addClass('d-none');
-            $('[id^="min_value"]').addClass('d-none');
-            
-            $("#max_header").addClass('d-none');
-            $('[id^="max_value"]').addClass('d-none');
-            
-            $("#mean_header").addClass('d-none');
-            $('[id^="mean_value"]').addClass('d-none');
-            
-            $("#count_header").addClass('d-none');
-            $('[id^="count_value"]').addClass('d-none');
-            
-            $("#last_header").addClass('d-none');
-            $('[id^="last_value"]').addClass('d-none');
-            
-            $("#status_header").addClass('d-none');
-            $('[id^="status_value"]').addClass('d-none');
-            
             this.innerText = "Show all columns";
         }
     });
