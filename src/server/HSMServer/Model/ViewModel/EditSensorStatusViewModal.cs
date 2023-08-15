@@ -27,6 +27,9 @@ public class EditSensorStatusViewModal
     [Required(ErrorMessage = "Reason required")]
     public string Reason { get; set; }
     
+    [Display(Name = "Rewrite Last")]
+    public bool RewriteLast { get; set; }
+    
     public bool IsAccessKeyExist { get; internal set; }
     
     

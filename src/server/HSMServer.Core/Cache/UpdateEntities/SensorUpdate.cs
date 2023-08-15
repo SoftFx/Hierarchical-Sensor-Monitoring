@@ -18,6 +18,10 @@ namespace HSMServer.Core.Cache.UpdateEntities
         public Integration? Integration { get; init; }
 
         public SensorState? State { get; init; }
+        
+        public SensorStatus? Status { get; init; }
+        
+        public string Comment { get; init; }
     }
 
 

@@ -243,6 +243,22 @@ namespace HSMServer.Core.Cache
             SensorUpdateView(sensor);
         }
 
+        public void UpdateSensorLastValue(SensorUpdate update)
+        {
+            var sensor = GetSensor(update.Id);
+
+            if (update.Status.HasValue && update.Comment is not null)
+            {
+                var value = sensor.Storage.LastDbValue with
+                {
+                    Status = update.Status.Value, 
+                    Comment = update.Comment
+                };
+                
+                _database.AddSensorValue(value.ToEntity(update.Id));
+            }
+        }
+
         public void RemoveSensor(Guid sensorId, string initiator = null)
         {
             if (!_sensors.TryRemove(sensorId, out var sensor))

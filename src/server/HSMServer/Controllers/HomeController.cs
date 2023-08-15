@@ -677,6 +677,20 @@ namespace HSMServer.Controllers
             var sensor = _treeValuesCache.GetSensor(modal.SensorId);
             var comment = $"User: {CurrentUser.Name}. Reason: {modal.Reason}";
 
+            if (modal.RewriteLast)
+            {
+                var update = new SensorUpdate
+                {
+                    Id = sensor.Id,
+                    Comment = comment,
+                    Status = modal.NewStatus.ToCore()
+                };
+
+                _treeValuesCache.UpdateSensorLastValue(update);
+
+                return Ok();
+            }
+            
             var sensorValue = ApiConverters.CreateNewSensorValue(sensor.Type);
 
             if (sensorValue is null)
