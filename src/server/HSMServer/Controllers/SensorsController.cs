@@ -487,8 +487,10 @@ namespace HSMServer.Controllers
             }
             catch (Exception e)
             {
-                _logger.LogError(e, $"Failed to update sensor! Update request: {JsonSerializer.Serialize(sensorUpdate)}");
-                return BadRequest(sensorUpdate);
+                var message = $"Failed to update sensor! Update request: {JsonSerializer.Serialize(sensorUpdate)}";
+
+                _logger.LogError(e, message);
+                return BadRequest(message);
             }
         }
 

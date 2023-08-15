@@ -36,9 +36,9 @@ namespace HSMDataCollector.Client.HttpsClient
         {
             try
             {
-                var responce = await InvokeRequest(value, uri);
+                var response = await InvokeRequest(value, uri);
 
-                return responce;
+                return response;
             }
             catch (Exception ex)
             {

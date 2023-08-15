@@ -61,7 +61,19 @@ namespace HSMDataCollector.Client.HttpsClient
                 if (response == null)
                     _commandQueue.SetCancel(value.Key);
                 else
-                    _commandQueue.SetResult(value.Key, response.IsSuccessStatusCode);
+                {
+                    var isSuccess = response.IsSuccessStatusCode;
+
+                    if (!isSuccess)
+                    {
+                        var json = await response.Content.ReadAsStringAsync();
+                        var error = JsonConvert.DeserializeObject<string>(json);
+
+                        _logger.Error($"Error command for {value.Request.Path} - {error}");
+                    }
+
+                    _commandQueue.SetResult(value.Key, isSuccess);
+                }
             }
 
             switch (value.Request)
