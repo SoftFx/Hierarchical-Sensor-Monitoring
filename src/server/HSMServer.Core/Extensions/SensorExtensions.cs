@@ -1,5 +1,6 @@
 ﻿using HSMServer.Core.Model;
 using System;
+using HSMServer.Core.Extensions;
 
 namespace HSMServer.Core
 {
@@ -43,7 +44,7 @@ namespace HSMServer.Core
                     IsTimeout = true,
                     Time = DateTime.UtcNow,
                     ReceivingTime = DateTime.UtcNow,
-                    Comment = $"{BaseSensorModel.TimeoutComment} - {sensor.LastUpdate}, TTL = {new TimeSpan(ttl)}"
+                    Comment = $"{BaseSensorModel.TimeoutComment} - {sensor.LastUpdate.ToDefaultFormat()}, TTL = {new TimeSpan(ttl)}"
                 };
             }
 
@@ -53,13 +54,20 @@ namespace HSMServer.Core
                 SensorType.Integer => BuildDefault<IntegerValue>(),
                 SensorType.Double => BuildDefault<DoubleValue>(),
                 SensorType.String => BuildDefault<StringValue>(),
-                SensorType.IntegerBar => BuildDefault<IntegerBarValue>(),
-                SensorType.DoubleBar => BuildDefault<DoubleBarValue>(),
+                SensorType.IntegerBar => BuildDefault<IntegerBarValue>().AddCurrentTime(),
+                SensorType.DoubleBar => BuildDefault<DoubleBarValue>().AddCurrentTime(),
                 SensorType.File => BuildDefault<FileValue>(),
                 SensorType.TimeSpan => BuildDefault<TimeSpanValue>(),
                 SensorType.Version => BuildDefault<VersionValue>(),
                 _ => throw new ArgumentException($"Sensor type = {sensor.Type} is not valid")
             };
         }
+
+        private static BaseValue AddCurrentTime(this BarBaseValue barBaseValue) =>
+            barBaseValue with
+            {
+                OpenTime = barBaseValue.ReceivingTime,
+                CloseTime = barBaseValue.ReceivingTime
+            };
     }
 }

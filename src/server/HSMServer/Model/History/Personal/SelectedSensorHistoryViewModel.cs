@@ -75,19 +75,11 @@ namespace HSMServer.Model.History
 
         private void NewSensorValueHandler(BaseValue value)
         {
-            if (value.IsTimeout)
-            {
-                NewValuesCnt++;
-                return;
-            }
-            
             if (_request == null || _request.FromUtc > value.ReceivingTime || _request.ToUtc < value.ReceivingTime)
                 return;
 
-            if (_sensor.Type.IsBar())
+            if (_sensor.Type.IsBar() && value is BarBaseValue barValue)
             {
-                var barValue = value as BarBaseValue;
-
                 if (_lastBar != null && _lastBar.OpenTime == barValue.OpenTime)
                     return;
 
