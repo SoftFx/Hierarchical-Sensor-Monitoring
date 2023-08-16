@@ -270,7 +270,7 @@ namespace HSMServer.Notifications
                     }
                     catch (Exception ex)
                     {
-                        _logger.Error($"Telegram chat name updateing is failed - {ex}");
+                        _logger.Error($"Telegram chat name '{chatSetting.Chat.Name}' updating is failed - {ex}");
                     }
                 }
             }
