@@ -901,11 +901,10 @@ namespace HSMServer.Core.Cache
             if (snapshot.IsExpired != timeout)
             {
                 var ttl = sensor.Policies.TimeToLive;
+                snapshot.IsExpired = timeout;
 
                 if (timeout)
                 {
-                    snapshot.IsExpired = timeout;
-
                     var value = sensor.GetTimeoutValue();
 
                     if (sensor.TryAddValue(value))
