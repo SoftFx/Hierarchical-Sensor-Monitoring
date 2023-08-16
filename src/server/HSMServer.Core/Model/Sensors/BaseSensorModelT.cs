@@ -21,6 +21,7 @@ namespace HSMServer.Core.Model
             if (value?.IsTimeout ?? false)
             {
                 Storage.AddValueBase((T)value);
+                ReceivedNewValue?.Invoke(value);
 
                 return true;
             }

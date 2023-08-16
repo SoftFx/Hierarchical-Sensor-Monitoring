@@ -75,6 +75,12 @@ namespace HSMServer.Model.History
 
         private void NewSensorValueHandler(BaseValue value)
         {
+            if (value.IsTimeout)
+            {
+                NewValuesCnt++;
+                return;
+            }
+            
             if (_request == null || _request.FromUtc > value.ReceivingTime || _request.ToUtc < value.ReceivingTime)
                 return;
 
