@@ -40,6 +40,9 @@ namespace HSMServer.Core.Model
 
     public abstract class BaseSensorModel : BaseNodeModel
     {
+        public const string TimeoutComment = "#Timeout";
+
+
         private static readonly SensorResult _muteResult = new(SensorStatus.OffTime, "Muted");
         private readonly PolicyEntity _ttlEntity;
 
@@ -83,7 +86,10 @@ namespace HSMServer.Core.Model
 
         public BaseValue LastDbValue => Storage.LastDbValue;
 
+        public BaseValue LastTimeout => Storage.LastTimeout;
+
         public BaseValue LastValue => Storage.LastValue;
+
 
         public bool HasData => Storage.HasData;
 
@@ -112,7 +118,7 @@ namespace HSMServer.Core.Model
 
         internal abstract void AddDbValue(byte[] bytes);
 
-        internal abstract List<BaseValue> ConvertValues(List<byte[]> valuesBytes);
+        internal abstract IEnumerable<BaseValue> ConvertValues(List<byte[]> valuesBytes);
 
 
         internal override BaseNodeModel AddParent(ProductModel parent)

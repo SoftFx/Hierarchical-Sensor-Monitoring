@@ -3,6 +3,8 @@ using HSMServer.Core.Model;
 using HSMServer.Core.Model.Requests;
 using System;
 using System.Collections.Generic;
+using HSMSensorDataObjects.HistoryRequests;
+
 
 namespace HSMServer.Core.Cache
 {
@@ -54,7 +56,7 @@ namespace HSMServer.Core.Cache
         BaseSensorModel GetSensor(Guid sensorId);
 
         IAsyncEnumerable<List<BaseValue>> GetSensorValues(HistoryRequestModel request);
-        IAsyncEnumerable<List<BaseValue>> GetSensorValuesPage(Guid sensorId, DateTime from, DateTime to, int count);
+        IAsyncEnumerable<List<BaseValue>> GetSensorValuesPage(Guid sensorId, DateTime from, DateTime to, int count, RequestOptions requestOptions = default);
 
         void UpdateCacheState();
 

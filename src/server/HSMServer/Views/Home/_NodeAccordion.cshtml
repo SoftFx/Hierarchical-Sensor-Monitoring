@@ -1,5 +1,6 @@
 ﻿@using HSMServer.Extensions
 @using HSMServer.Model.TreeViewModel
+@using HSMServer.Model.ViewModel
 
 @model NodeViewModel
 
@@ -18,7 +19,7 @@
                             <div class="d-flex flex-row align-items-center">
                                 <i id='status_@nodeId' class='@Model.Status.ToIcon() sensor-icon-with-margin' title='Status: @Model.Status'></i>
                                 <span>
-                                    @await Html.PartialAsync("~/Views/Home/Alerts/_AlertIconsList.cshtml", Model.AlertIcons)
+                                    @await Html.PartialAsync("~/Views/Home/Alerts/_AlertIconsList.cshtml", new AlertIconsViewModel(Model.AlertIcons, true) )
                                     @Model.Name
                                 </span>
                             </div>

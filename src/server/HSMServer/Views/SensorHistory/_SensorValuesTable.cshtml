@@ -53,19 +53,40 @@ else
                         {
                             var barValue = value as BarSensorValueViewModel;
 
-                            <td>@barValue.Min</td>
-                            <td>@barValue.Mean</td>
-                            <td>@barValue.Max</td>
-                            <td>@barValue.Count</td>
-                            <td>@barValue.LastValue</td>
+                            @if (value.IsTimeout)
+                            {
+                                <td></td>
+                                <td></td>
+                                <td></td>
+                                <td></td>
+                                <td></td>
+                                <td></td>
+                            }
+                            else
+                            {
+                                <td>@barValue.Min</td>
+                                <td>@barValue.Mean</td>
+                                <td>@barValue.Max</td>
+                                <td>@barValue.Count</td>
+                                <td>@barValue.LastValue</td>
+                                <td>@value.Status.ToIconStatus()</td>
+                            }
                         }
                         else
                         {
                             var simpleValue = value as SimpleSensorValueViewModel;
 
-                            <td>@simpleValue.Value</td>
+                            if (value.IsTimeout)
+                            {
+                                <td></td>
+                                <td></td>
+                            }
+                            else
+                            {
+                                <td>@simpleValue.Value</td>
+                                <td>@value.Status.ToIconStatus()</td>
+                            }
                         }
-                        <td>@value.Status.ToIconStatus()</td>
                         <td>@value.Comment</td>
                     </tr>
                 }

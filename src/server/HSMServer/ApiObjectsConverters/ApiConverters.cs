@@ -207,7 +207,8 @@ namespace HSMServer.ApiObjectsConverters
             {
                 From = request.From,
                 To = request.To,
-                Count = request.Count
+                Count = request.Count,
+                Options = request.Options
             };
 
 

@@ -59,9 +59,9 @@ namespace HSMServer.Core.DataLayer
 
         Dictionary<Guid, byte[]> GetLatestValues(Dictionary<Guid, long> sensors);
 
-        Dictionary<Guid, byte[]> GetLatestValuesFrom(Dictionary<Guid, long> sensors);
+        Dictionary<Guid, byte[]> GetLatestValuesFromTo(Dictionary<Guid, (long, long)> sensors);
 
-        IAsyncEnumerable<List<byte[]>> GetSensorValuesPage(string sensorId, DateTime from, DateTime to, int count);
+        IAsyncEnumerable<List<byte[]>> GetSensorValuesPage(Guid sensorId, DateTime from, DateTime to, int count);
 
         List<SensorEntity> GetAllSensors();
 

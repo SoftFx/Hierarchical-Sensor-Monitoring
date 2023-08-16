@@ -1,6 +1,7 @@
 ﻿@using HSMServer.Extensions
 @using HSMServer.Model.Authentication
 @using HSMServer.Model.UserTreeShallowCopy
+@using HSMServer.Model.ViewModel
 
 @model SensorShallowModel
 
@@ -12,7 +13,7 @@
 
 <li id='@data.EncodedId' title='@data.Tooltip' data-jstree='@Model.ToJSTree()'>
     <span class="@data.State.ToCssClass()">
-        @await Html.PartialAsync("~/Views/Home/Alerts/_AlertIconsList.cshtml", data.AlertIcons)
+        @await Html.PartialAsync("~/Views/Home/Alerts/_AlertIconsList.cshtml", new AlertIconsViewModel(data.AlertIcons))
         @Html.Raw(data.Name.GetShortNodeName())
     </span>
 

@@ -452,7 +452,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             var subProduct = GetProductByName(subProductName);
             var subSubProduct = GetProductByName(subSubProductName);
             var sensor = GetSensorByNameFromCache(sensorName);
-            var sensorDataFromDb = _databaseCoreManager.DatabaseCore.GetLatestValuesFrom(new(1) { [sensor.Id] = DateTime.MinValue.Ticks }).FirstOrDefault().Value;
+            var sensorDataFromDb = _databaseCoreManager.DatabaseCore.GetLatestValuesFromTo(new(1) { [sensor.Id] = (DateTime.MinValue.Ticks, DateTime.MaxValue.Ticks) }).FirstOrDefault().Value;
 
             Assert.Equal(2, addedProductsCount);
             Assert.Equal(5, updatedProductsCount);
@@ -521,7 +521,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
 
             var product = _valuesCache.GetProduct(productId);
             var sensor = GetSensorByNameFromCache(sensorName);
-            var sensorDataFromDb = _databaseCoreManager.DatabaseCore.GetLatestValuesFrom(new(1) { [sensor.Id] = DateTime.MinValue.Ticks }).FirstOrDefault().Value;
+            var sensorDataFromDb = _databaseCoreManager.DatabaseCore.GetLatestValuesFromTo(new(1) { [sensor.Id] = (DateTime.MinValue.Ticks, DateTime.MaxValue.Ticks) }).FirstOrDefault().Value;
 
             Assert.Equal(1, updatedSensorsCount / 2); // TTL generate one more request
             Assert.NotEmpty(product.Sensors);
@@ -557,14 +557,14 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             _databaseCoreManager.DatabaseCore.GetAllSensors().FirstOrDefault(s => s.Id == id.ToString());
 
         private ValueTask<List<byte[]>> GetAllSensorValues(BaseSensorModel sensor) =>
-            _databaseCoreManager.DatabaseCore.GetSensorValuesPage(sensor.Id.ToString(), DateTime.MinValue, DateTime.MaxValue, MaxHistoryCount).Flatten();
+            _databaseCoreManager.DatabaseCore.GetSensorValuesPage(sensor.Id, DateTime.MinValue, DateTime.MaxValue, MaxHistoryCount).Flatten();
 
 
         private void TestSensors(List<SensorEntity> expected, List<BaseSensorModel> actual)
         {
             Assert.Equal(expected.Count, actual.Count);
 
-            var expectedSensorValues = _databaseCoreManager.DatabaseCore.GetLatestValuesFrom(actual.ToDictionary(s => s.Id, _ => DateTime.MinValue.Ticks));
+            var expectedSensorValues = _databaseCoreManager.DatabaseCore.GetLatestValuesFromTo(actual.ToDictionary(s => s.Id, _ => (DateTime.MinValue.Ticks, DateTime.MaxValue.Ticks)));
             var actualDict = actual.ToDictionary(s => s.Id);
 
             foreach (var expectedSensor in expected)
