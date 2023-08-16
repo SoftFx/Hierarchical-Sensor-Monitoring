@@ -244,7 +244,7 @@ namespace HSMDatabase.LevelDB
             }
         }
 
-        public void FillLatestValues(Dictionary<byte[], (long from, byte[] latestValue)> keyValuePairs, long endBase)
+        public void FillLatestValues(Dictionary<byte[], (long from, byte[] toKey, byte[] latestValue)> keyValuePairs, long endBase)
         {
             Iterator iterator = null;
 
@@ -256,8 +256,8 @@ namespace HSMDatabase.LevelDB
                 {
                     if (value.latestValue == null && endBase >= value.from)
                     {
-                        for (iterator.Seek(key); iterator.IsValid && iterator.Key().StartsWith(key); iterator.Next())
-                            keyValuePairs[key] = (value.from, iterator.Value());
+                        for (iterator.Seek(key); iterator.IsValid && iterator.Key().StartsWith(key) && iterator.Key().IsSmaller(value.toKey); iterator.Next())
+                            keyValuePairs[key] = (value.from, value.toKey, iterator.Value());
                     }
                 }
             }

@@ -105,13 +105,13 @@ namespace HSMServer.Controllers
         }
 
         [HttpPost]
-        public Task<JsonResult> GetServiceStatusHistory([FromBody] GetSensorHistoryModel model, [FromQuery] bool isStatusService = false )
+        public Task<JsonResult> GetServiceStatusHistory([FromBody] GetSensorHistoryModel model, [FromQuery] bool isStatusService = false)
         {
             if (!_tree.Sensors.TryGetValue(SensorPathHelper.DecodeGuid(model.EncodedId), out var sensor))
                 return Task.FromResult(_emptyJsonResult);
 
             var compareFunc = GetCompareFunc();
-            
+
             var splittedPath = sensor.FullPath.Split('/');
             var nodeIds = _tree.GetAllNodeSensors(sensor.RootProduct.Id);
 
@@ -139,7 +139,7 @@ namespace HSMServer.Controllers
                 var i = 0;
                 while (i < comparedPath.Length && i < splittedPath.Length && comparedPath[i] == splittedPath[i])
                     i++;
-                
+
                 if (i > pathComparisonValue || (i == pathComparisonValue && pathLength > comparedPath.Length))
                 {
                     sensorId = sensor.Id;
@@ -150,7 +150,7 @@ namespace HSMServer.Controllers
             
             return sensorId == Guid.Empty ? Task.FromResult(_emptyJsonResult) : ChartHistory(model with { EncodedId = sensorId.ToString() });
         }
-        
+
         public async Task<FileResult> ExportHistory([FromQuery(Name = "EncodedId")] string encodedId, [FromQuery(Name = "Type")] int type,
             [FromQuery(Name = "From")] DateTime from, [FromQuery(Name = "To")] DateTime to)
         {
@@ -181,8 +181,11 @@ namespace HSMServer.Controllers
         {
             _tree.Sensors.TryGetValue(SensorPathHelper.DecodeGuid(model.EncodedId), out var sensor);
 
+            var lastUpdate = sensor?.LastValue?.ReceivingTime ?? DateTime.MinValue;
+            var lastTimeout = sensor?.LastTimeout?.ReceivingTime ?? DateTime.MinValue;
+
             model.From = DateTime.MinValue;
-            model.To = sensor?.LastValue?.ReceivingTime ?? DateTime.MinValue;
+            model.To = lastTimeout > lastUpdate ? lastTimeout : lastUpdate;
             model.Count = LatestHistoryCount;
 
             return model;

@@ -1,5 +1,6 @@
 ﻿using HSMCommon.Constants;
 using HSMDatabase.AccessManager.DatabaseEntities;
+using HSMSensorDataObjects.HistoryRequests;
 using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.DataLayer;
 using HSMServer.Core.Journal;
@@ -355,18 +356,25 @@ namespace HSMServer.Core.Cache
             };
 
             return count > 0
-                ? GetSensorValuesPage(sensorId, request.From, request.To ?? DateTime.UtcNow.AddDays(1), count)
-                : GetSensorValuesPage(sensorId, DateTime.MinValue, request.From, count);
+                   ? GetSensorValuesPage(sensorId, request.From, request.To ?? DateTime.UtcNow.AddDays(1), count, request.Options)
+                   : GetSensorValuesPage(sensorId, DateTime.MinValue, request.From, count, request.Options);
         }
 
-        public async IAsyncEnumerable<List<BaseValue>> GetSensorValuesPage(Guid sensorId, DateTime from, DateTime to, int count)
+        public async IAsyncEnumerable<List<BaseValue>> GetSensorValuesPage(Guid sensorId, DateTime from, DateTime to, int count, RequestOptions options = default)
         {
+            static bool IsNotTimout(BaseValue value) => !value.IsTimeout;
+
             if (_sensors.TryGetValue(sensorId, out var sensor))
             {
-                var pages = _database.GetSensorValuesPage(sensorId.ToString(), from, to, count);
+                var pages = _database.GetSensorValuesPage(sensorId, from, to, count);
+                var includeTtl = options.HasFlag(RequestOptions.IncludeTtl);
 
                 await foreach (var page in pages)
-                    yield return sensor.ConvertValues(page);
+                {
+                    var convertedValues = sensor.ConvertValues(page);
+
+                    yield return (includeTtl ? convertedValues : convertedValues.Where(IsNotTimout)).ToList();
+                }
             }
         }
 
@@ -480,7 +488,9 @@ namespace HSMServer.Core.Cache
         private void SaveSensorValueToDb(BaseValue value, Guid sensorId)
         {
             _database.AddSensorValue(value.ToEntity(sensorId));
-            _snapshot.Sensors[sensorId].SetLastUpdate(value.ReceivingTime);
+
+            if (!value.IsTimeout)
+                _snapshot.Sensors[sensorId].SetLastUpdate(value.ReceivingTime);
         }
 
         private void NotifyAboutProductChange(ProductModel product)
@@ -816,29 +826,58 @@ namespace HSMServer.Core.Cache
 
         private void FillSensorsData()
         {
-            var requests = GetSensors().ToDictionary(k => k.Id, _ => 0L);
-
-            if (_snapshot.HasData)
+            void ApplyLastValues(Dictionary<Guid, byte[]> lasts)
             {
+                foreach (var (sensorId, value) in lasts)
+                    if (value is not null && _sensors.TryGetValue(sensorId, out var sensor))
+                    {
+                        sensor.AddDbValue(value);
+
+                        if (!_snapshot.IsFinal && sensor.LastValue is not null)
+                            _snapshot.Sensors[sensorId].SetLastUpdate(sensor.LastValue.ReceivingTime, sensor.CheckTimeout());
+                    }
+            }
+
+            if (_snapshot.IsFinal)
+            {
+                var requests = GetSensors().ToDictionary(k => k.Id, _ => 0L);
+
                 foreach (var (key, state) in _snapshot.Sensors)
                     if (requests.ContainsKey(key))
                         requests[key] = state.History.To.Ticks;
+
+                ApplyLastValues(_database.GetLatestValues(requests));
             }
+            else
+            {
+                var maxTo = DateTime.MaxValue.Ticks;
+                var requests = GetSensors().ToDictionary(k => k.Id, _ => (0L, maxTo));
 
-            var values = _snapshot.IsFinal ? _database.GetLatestValues(requests) :
-                                             _database.GetLatestValuesFrom(requests);
-
-            foreach (var (sensorId, value) in values)
-                if (value is not null && _sensors.TryGetValue(sensorId, out var sensor))
+                if (_snapshot.HasData)
                 {
-                    sensor.AddDbValue(value);
-
-                    if (!_snapshot.IsFinal)
-                        _snapshot.Sensors[sensorId].SetLastUpdate(sensor.LastValue.ReceivingTime, sensor.CheckTimeout());
+                    foreach (var (key, state) in _snapshot.Sensors)
+                        if (requests.ContainsKey(key))
+                            requests[key] = (state.History.To.Ticks, maxTo);
                 }
 
-            if (!_snapshot.IsFinal)
+                ApplyLastValues(_database.GetLatestValuesFromTo(requests));
+
+                requests.Clear();
+
+                foreach (var sensor in GetSensors())
+                    if (sensor.LastTimeout is not null)
+                    {
+                        _snapshot.Sensors[sensor.Id].IsExpired = true;
+
+                        var fromVal = _snapshot.Sensors.TryGetValue(sensor.Id, out var state) ? state.History.To.Ticks : 0L;
+
+                        requests.Add(sensor.Id, (fromVal, sensor.LastTimeout.ReceivingTime.Ticks));
+                    }
+
+                ApplyLastValues(_database.GetLatestValuesFromTo(requests));
+
                 _snapshot.FlushState(true);
+            }
         }
 
         public void UpdateCacheState()
@@ -862,8 +901,15 @@ namespace HSMServer.Core.Cache
             if (snapshot.IsExpired != timeout)
             {
                 var ttl = sensor.Policies.TimeToLive;
-
                 snapshot.IsExpired = timeout;
+
+                if (timeout)
+                {
+                    var value = sensor.GetTimeoutValue();
+
+                    if (sensor.TryAddValue(value))
+                        SaveSensorValueToDb(value, sensor.Id);
+                }
 
                 SendPolicyResult(sensor, timeout ? ttl.PolicyResult : ttl.Ok);
             }

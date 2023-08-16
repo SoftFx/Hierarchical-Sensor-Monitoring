@@ -30,7 +30,14 @@ Date.prototype.AddHours = function(hours) {
     return newDate;
 }
 window.Data = function (to, from, type, encodedId) {
-    return { "To": to, "From": from, "Type": type, "EncodedId": encodedId, "BarsCount": getBarsCount(encodedId) };
+    return { 
+        "To": to, 
+        "From": from, 
+        "Type": type, 
+        "EncodedId": encodedId, 
+        "BarsCount": getBarsCount(encodedId),
+        "Options": "IncludeTtl"
+    };
 }
 
 //Initialization

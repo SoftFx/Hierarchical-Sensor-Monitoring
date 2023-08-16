@@ -97,19 +97,19 @@ namespace HSMDatabase.DatabaseWorkCore
             return result;
         }
 
-        public Dictionary<Guid, byte[]> GetLatestValuesFrom(Dictionary<Guid, long> sensors)
+        public Dictionary<Guid, byte[]> GetLatestValuesFromTo(Dictionary<Guid, (long, long)> sensors)
         {
             var result = GetResult(sensors.Keys.ToList());
 
-            var tempResult = new Dictionary<byte[], (long from, byte[] value)>(sensors.Count);
+            var tempResult = new Dictionary<byte[], (long from, byte[] to, byte[] value)>(sensors.Count);
 
-            foreach (var (id, from) in sensors)
-                tempResult.Add(Encoding.UTF8.GetBytes(id.ToString()), (from, null));
+            foreach (var (id, (from, to)) in sensors)
+                tempResult.Add(Encoding.UTF8.GetBytes(id.ToString()), (from, BuildSensorValueKey(id.ToString(), to), null));
 
             foreach (var database in _sensorValuesDatabases.Reverse())
                 database.FillLatestValues(tempResult);
 
-            foreach (var (key, (_, value)) in tempResult)
+            foreach (var (key, (_, _, value)) in tempResult)
                 result[Guid.Parse(Encoding.UTF8.GetString(key))] = value;
 
             return result;
@@ -175,13 +175,13 @@ namespace HSMDatabase.DatabaseWorkCore
             return sensorEntities;
         }
 
-        public IAsyncEnumerable<List<byte[]>> GetSensorValuesPage(string sensorId, DateTime from, DateTime to, int count)
+        public IAsyncEnumerable<List<byte[]>> GetSensorValuesPage(Guid sensorId, DateTime from, DateTime to, int count)
         {
             var fromTicks = from.Ticks;
             var toTicks = to.Ticks;
 
-            var fromBytes = BuildSensorValueKey(sensorId, fromTicks);
-            var toBytes = BuildSensorValueKey(sensorId, toTicks);
+            var fromBytes = BuildSensorValueKey(sensorId.ToString(), fromTicks);
+            var toBytes = BuildSensorValueKey(sensorId.ToString(), toTicks);
 
             var databases = _sensorValuesDatabases.Where(db => db.IsInclude(fromTicks, toTicks)).ToList();
             GetValuesFunc getValues = (db) => db.GetValuesFrom(fromBytes, toBytes);
