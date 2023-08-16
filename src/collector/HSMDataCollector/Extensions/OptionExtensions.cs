@@ -11,24 +11,24 @@ namespace HSMDataCollector.Extensions
             switch (typeof(T))
             {
                 case Type type when type == typeof(bool):
-                    return (InstantSensorOptions)options.SetType(SensorType.BooleanSensor);
+                    return options.SetType(SensorType.BooleanSensor);
                 case Type type when type == typeof(int):
-                    return (InstantSensorOptions)options.SetType(SensorType.IntSensor);
+                    return options.SetType(SensorType.IntSensor);
                 case Type type when type == typeof(double):
-                    return (InstantSensorOptions)options.SetType(SensorType.DoubleSensor);
+                    return options.SetType(SensorType.DoubleSensor);
                 case Type type when type == typeof(string):
-                    return (InstantSensorOptions)options.SetType(SensorType.StringSensor);
+                    return options.SetType(SensorType.StringSensor);
                 case Type type when type == typeof(TimeSpan):
-                    return (InstantSensorOptions)options.SetType(SensorType.TimeSpanSensor);
+                    return options.SetType(SensorType.TimeSpanSensor);
                 case Type type when type == typeof(Version):
-                    return (InstantSensorOptions)options.SetType(SensorType.VersionSensor);
+                    return options.SetType(SensorType.VersionSensor);
                 default:
                     throw new ArgumentException($"Unsupported sensor value {typeof(T).Name}");
             }
         }
 
 
-        internal static SensorOptions2 SetBarType<T>(this SensorOptions2 options)
+        internal static BarSensorOptions2 SetBarType<T>(this BarSensorOptions2 options)
         {
             switch (typeof(T))
             {

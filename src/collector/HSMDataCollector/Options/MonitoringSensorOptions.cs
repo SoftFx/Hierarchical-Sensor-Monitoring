@@ -6,16 +6,33 @@ using System.Collections.Generic;
 
 namespace HSMDataCollector.Options
 {
-    public class InstantSensorOptions : SensorOptions2<InstantAlertBuildRequest> { }
-
-    public class BarSensorOptions2 : SensorOptions2<BarAlertBuildRequest> { }
-
-
-    public abstract class SensorOptions2<T> where T : AlertBuildRequest
+    public class InstantSensorOptions : SensorOptions2
     {
-        public List<T> Alerts { get; set; } = new List<T>();
+        public List<InstantAlertBuildRequest> Alerts { get; set; } = new List<InstantAlertBuildRequest>();
+
+        internal InstantSensorOptions SetType(SensorType type)
+        {
+            Type = type;
+
+            return this;
+        }
+    }
+
+    public class BarSensorOptions2 : SensorOptions2 
+    {
+        public List<BarAlertBuildRequest> Alerts { get; set; } = new List<BarAlertBuildRequest>();
+
+        internal BarSensorOptions2 SetType(SensorType type)
+        {
+            Type = type;
+
+            return this;
+        }
+    }
 
 
+    public abstract class SensorOptions2
+    {
         public SpecialAlertBuildRequest TtlAlert { get; set; }
 
         public Unit? SensorUnit { get; set; }
@@ -39,18 +56,11 @@ namespace HSMDataCollector.Options
         public bool OnlyUniqValues { get; set; }
 
 
-        internal SensorType Type { get; private set; }
+        internal SensorType Type { get; private protected set; }
 
         internal bool HasSettings => KeepHistory.HasValue || SelfDestroy.HasValue || TTL.HasValue;
 
         internal string SensorName { get; set; } //???
-
-        internal SensorOptions2<T> SetType(SensorType type)
-        {
-            Type = type;
-
-            return this;
-        }
     }
 
 

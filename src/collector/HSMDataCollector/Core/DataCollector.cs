@@ -371,7 +371,7 @@ namespace HSMDataCollector.Core
 
         public IInstantValueSensor<double> CreateDoubleSensor(string path, string description = "") => CreateInstantSensor<double>(path, description);
 
-        public IInstantValueSensor<double> CreateDoubleSensor(SensorOptions2 options) => CreateInstantSensor<double>(options);
+        public IInstantValueSensor<double> CreateDoubleSensor(InstantSensorOptions options) => CreateInstantSensor<double>(options);
 
         public IInstantValueSensor<string> CreateStringSensor(string path, string description = "") => CreateInstantSensor<string>(path, description);
 
@@ -459,7 +459,7 @@ namespace HSMDataCollector.Core
         {
             (var nodePath, var name) = GetPathAndName(path);
 
-            var options = new SensorOptions2
+            var options = new InstantSensorOptions
             {
                 Path = nodePath,
                 SensorName = name,
@@ -469,7 +469,7 @@ namespace HSMDataCollector.Core
             return CreateInstantSensor<T>(options);
         }
 
-        private IInstantValueSensor<T> CreateInstantSensor<T>(SensorOptions2 options) => (IInstantValueSensor<T>)RegisterCustomSensor(new SensorInstant<T>(options.SetInstantType<T>()));
+        private IInstantValueSensor<T> CreateInstantSensor<T>(InstantSensorOptions options) => (IInstantValueSensor<T>)RegisterCustomSensor(new SensorInstant<T>(options.SetInstantType<T>()));
 
 
         private ILastValueSensor<T> CreateLastValueSensorInternal<T>(string path, T defaultValue, string description = "")
@@ -488,7 +488,7 @@ namespace HSMDataCollector.Core
 
         public IServiceCommandsSensor CreateServiceCommandsSensor(string module = "")
         {
-            var options = new SensorOptions2()
+            var options = new InstantSensorOptions()
             {
                 Path = $"{module}/Product Info",
             };

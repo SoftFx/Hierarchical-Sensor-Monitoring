@@ -145,7 +145,7 @@ namespace HSMDataCollector.Core
         /// <returns>A new instance of <see cref="IInstantValueSensor{T}"/> where T is double</returns>
         IInstantValueSensor<double> CreateDoubleSensor(string path, string description = "");
 
-        IInstantValueSensor<double> CreateDoubleSensor(SensorOptions2 options);
+        IInstantValueSensor<double> CreateDoubleSensor(InstantSensorOptions options);
 
 
         /// <summary>
