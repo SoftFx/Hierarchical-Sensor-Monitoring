@@ -44,6 +44,8 @@ namespace HSMServer.Core.Model
             set => _time = value.ToUniversalTime();
         }
 
+        public bool IsTimeout { get; init; }
+
 
         [JsonIgnore]
         public virtual SensorType Type { get; } //abstract not work with JsonIgnore, so use virtual

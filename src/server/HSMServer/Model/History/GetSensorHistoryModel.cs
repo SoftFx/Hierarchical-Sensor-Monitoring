@@ -2,6 +2,7 @@
 using HSMServer.Extensions;
 using System;
 using System.Text.Json.Serialization;
+using HSMSensorDataObjects.HistoryRequests;
 
 namespace HSMServer.Model.Model.History
 {
@@ -26,5 +27,8 @@ namespace HSMServer.Model.Model.History
         public DateTime To { get; set; } = DateTime.MaxValue;
 
         public DateTime From { get; set; } = DateTime.MinValue;
+
+        [JsonConverter(typeof(JsonStringEnumConverter))]
+        public RequestOptions Options { get; set; }
     }
 }

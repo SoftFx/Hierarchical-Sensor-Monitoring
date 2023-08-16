@@ -1,10 +1,12 @@
-﻿@using System.Collections.Concurrent
-@using HSMServer.Extensions
-
-@model ConcurrentDictionary<string, int>
+﻿@model HSMServer.Model.ViewModel.AlertIconsViewModel
 
 
-@foreach (var (icon, count) in Model)
+@foreach (var (icon, count) in Model.VisibleIcons)
 {
-    <span class='tree-alert-icon'>@icon<span class='badge badge-dark @(count > 1 ? "d-block" : "d-none")'>@(count > 9 ? "∞" : count)</span></span>
+    <span class='tree-alert-icon'>@icon<span class='badge badge-dark @(count > 1 ? "d-block" : "d-none")'>@Model.GetLabelCount(count)</span></span>
+}
+
+@if (Model.IsTooLong)
+{
+    <span>...</span>
 }

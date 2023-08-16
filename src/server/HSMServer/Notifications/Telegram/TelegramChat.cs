@@ -8,7 +8,7 @@ namespace HSMServer.Notifications.Telegram
     {
         public ChatId Id { get; init; }
 
-        public string Name { get; init; }
+        public string Name { get; set; }
 
         public bool IsUserChat { get; init; }
 

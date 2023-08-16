@@ -64,8 +64,8 @@ window.displayGraph = function(graphData, graphType, graphElementId, graphName) 
         responsive: true,
         displaylogo: false,
         modeBarButtonsToAdd: [
-            // getAddPlotButton(serviceButtonName, true, plotIcon, graphElementId, graphName),
-            // getAddPlotButton(heartBeatButtonName, false, plotIcon, graphElementId, graphName),
+            getAddPlotButton(serviceButtonName, true, plotIcon, graphElementId, graphName),
+            getAddPlotButton(heartBeatButtonName, false, plotIcon, graphElementId, graphName),
         ],
         modeBarButtonsToRemove: [
             'pan',
@@ -518,7 +518,7 @@ function getPlotType(graphType) {
                         Plotly.deleteTraces(graphElementId, indexToDelete);
                 }
                 else {
-                    const { from, to } = getFromAndTo(graphName);
+                    let { from, to } = getFromAndTo(graphName);
                     let body = Data(to, from, 1, graphName)
                     $.ajax({
                         type: 'POST',
