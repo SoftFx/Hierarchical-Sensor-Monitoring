@@ -1,16 +1,29 @@
-﻿using HSMSensorDataObjects;
+﻿using HSMDataCollector.Alerts;
+using HSMSensorDataObjects;
 using HSMSensorDataObjects.SensorRequests;
 using System;
+using System.Collections.Generic;
 
 namespace HSMDataCollector.Options
 {
-    public class SensorOptions2
+    public class InstantSensorOptions : SensorOptions2<InstantAlertBuildRequest> { }
+
+    public class BarSensorOptions2 : SensorOptions2<BarAlertBuildRequest> { }
+
+
+    public abstract class SensorOptions2<T> where T : AlertBuildRequest
     {
+        public List<T> Alerts { get; set; } = new List<T>();
+
+
+        public SpecialAlertBuildRequest TtlAlert { get; set; }
+
+        public Unit? SensorUnit { get; set; }
+
+
         public string Description { get; set; }
 
         public string Path { get; set; }
-
-        public Unit? SensorUnit { get; set; }
 
 
         public TimeSpan? KeepHistory { get; set; }
@@ -32,7 +45,7 @@ namespace HSMDataCollector.Options
 
         internal string SensorName { get; set; } //???
 
-        internal SensorOptions2 SetType(SensorType type)
+        internal SensorOptions2<T> SetType(SensorType type)
         {
             Type = type;
 
@@ -49,7 +62,7 @@ namespace HSMDataCollector.Options
     }
 
 
-    public class MonitoringSensorOptions : SensorOptions2
+    public class MonitoringSensorOptions : BarSensorOptions2
     {
         internal virtual TimeSpan DefaultPostDataPeriod { get; } = TimeSpan.FromSeconds(15);
 
@@ -94,7 +107,7 @@ namespace HSMDataCollector.Options
     }
 
 
-    public sealed class VersionSensorOptions : SensorOptions2
+    public sealed class VersionSensorOptions : InstantSensorOptions
     {
         public Version Version { get; set; }
 
@@ -104,13 +117,13 @@ namespace HSMDataCollector.Options
     }
 
 
-    public sealed class ServiceSensorOptions : SensorOptions2
+    public sealed class ServiceSensorOptions : InstantSensorOptions
     {
         public string ServiceName { get; set; }
     }
 
 
-    public sealed class CollectorInfoOptions : SensorOptions2
+    public sealed class CollectorInfoOptions : InstantSensorOptions
     {
         internal const string BaseCollectorPath = "Product Info/Collector";
     }
