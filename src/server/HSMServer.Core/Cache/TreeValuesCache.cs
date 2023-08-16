@@ -867,6 +867,8 @@ namespace HSMServer.Core.Cache
                 foreach (var sensor in GetSensors())
                     if (sensor.LastTimeout is not null)
                     {
+                        _snapshot.Sensors[sensor.Id].IsExpired = true;
+
                         var fromVal = _snapshot.Sensors.TryGetValue(sensor.Id, out var state) ? state.History.To.Ticks : 0L;
 
                         requests.Add(sensor.Id, (fromVal, sensor.LastTimeout.ReceivingTime.Ticks));
@@ -875,7 +877,7 @@ namespace HSMServer.Core.Cache
                 ApplyLastValues(_database.GetLatestValuesFromTo(requests));
 
                 _snapshot.FlushState(true);
-            }  
+            }
         }
 
         public void UpdateCacheState()
