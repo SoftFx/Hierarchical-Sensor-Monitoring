@@ -518,7 +518,7 @@ function getPlotType(graphType) {
                         Plotly.deleteTraces(graphElementId, indexToDelete);
                 }
                 else {
-                    const { from, to } = getFromAndTo(graphName);
+                    let { from, to } = getFromAndTo(graphName);
                     let body = Data(to, from, 1, graphName)
                     $.ajax({
                         type: 'POST',
