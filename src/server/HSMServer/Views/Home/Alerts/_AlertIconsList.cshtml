@@ -1,10 +1,9 @@
-﻿@using HSMServer.Model.ViewModel
-@model HSMServer.Model.ViewModel.AlertViewModel
+﻿@model HSMServer.Model.ViewModel.AlertIconsViewModel
 
 
-@foreach (var (icon, count) in Model.Alerts.Take(Model.TakeNumber))
+@foreach (var (icon, count) in Model.VisibleIcons)
 {
-    <span class='tree-alert-icon'>@icon<span class='badge badge-dark @(count > 1 ? "d-block" : "d-none")'>@(count > AlertViewModel.MaxBadgeCounterSize ? AlertViewModel.InfiniteCharacter : count)</span></span>
+    <span class='tree-alert-icon'>@icon<span class='badge badge-dark @(count > 1 ? "d-block" : "d-none")'>@Model.GetLabelCount(count)</span></span>
 }
 
 @if (Model.IsTooLong)

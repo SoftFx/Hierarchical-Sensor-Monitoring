@@ -5,6 +5,7 @@ using HSMServer.UserFilters;
 using Microsoft.AspNetCore.Html;
 using System.Collections.Generic;
 using System.Linq;
+using HSMServer.Model.ViewModel;
 
 namespace HSMServer.Extensions
 {
@@ -61,6 +62,6 @@ namespace HSMServer.Extensions
         private static string Cut(this string str, int stringLength) =>
             str.Length > stringLength ? $"{str[..stringLength]}..." : str;
 
-        private static int GetIconsLength(this int iconsCount) => Math.Min(iconsCount, 3) * IconSize;
+        private static int GetIconsLength(this int iconsCount) => Math.Min(iconsCount, AlertIconsViewModel.VisibleMaxSize) * IconSize;
     }
 }
