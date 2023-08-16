@@ -14,21 +14,20 @@ public sealed class AlertIconsViewModel
 
 
     private readonly ConcurrentDictionary<string, int> _alerts;
+    private readonly bool _showFullList;
+    private readonly int _visibleCount;
 
 
-    public readonly bool ShowFullList;
-    public readonly int VisibleCount;
+    public IEnumerable<KeyValuePair<string, int>> VisibleIcons => _alerts.Take(_visibleCount);
 
-    public IEnumerable<KeyValuePair<string, int>> VisibleIcons => _alerts.Take(VisibleCount);
-
-    public bool IsTooLong => _alerts.Count > VisibleMaxSize && !ShowFullList;
+    public bool IsTooLong => _alerts.Count > VisibleMaxSize && !_showFullList;
 
 
     public AlertIconsViewModel(ConcurrentDictionary<string, int> alerts, bool showFullList = false)
     {
         _alerts = alerts;
-        ShowFullList = showFullList;
-        VisibleCount = IsTooLong ? MaxDisplayedSize : _alerts.Count;
+        _showFullList = showFullList;
+        _visibleCount = IsTooLong ? MaxDisplayedSize : _alerts.Count;
     }
 
     public string GetLabelCount(int count) => count > MaxBadgeCounterSize ? InfiniteCharacter : $"{count}";
