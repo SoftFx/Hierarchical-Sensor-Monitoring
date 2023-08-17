@@ -29,7 +29,7 @@ namespace HSMDataCollector.Converters
             };
 
 
-        internal static AlertUpdateRequest ToApi(this AlertBuildRequest alert) =>
+        internal static AlertUpdateRequest ToApi(this AlertBaseTemplate alert) =>
             new AlertUpdateRequest()
             {
                 Conditions = alert.Conditions?.Select(u => u.ToApi()).ToList(),
@@ -42,7 +42,7 @@ namespace HSMDataCollector.Converters
             };
 
 
-        internal static AlertConditionUpdate ToApi(this AlertConditionBuildRequest condition) =>
+        internal static AlertConditionUpdate ToApi(this AlertConditionTemplate condition) =>
             new AlertConditionUpdate()
             {
                 Combination = condition.Combination,
@@ -53,7 +53,7 @@ namespace HSMDataCollector.Converters
             };
 
 
-        internal static TargetValue ToApi(this AlertTargetBuildRequest target) =>
+        internal static TargetValue ToApi(this AlertTargetTemplate target) =>
             new TargetValue()
             {
                 Value = target.Value,

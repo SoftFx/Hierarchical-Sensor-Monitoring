@@ -3,9 +3,9 @@ using System.Collections.Generic;
 
 namespace HSMDataCollector.Alerts
 {
-    public class AlertAction<T> where T : AlertBuildRequest, new()
+    public class AlertAction<T> where T : AlertBaseTemplate, new()
     {
-        private readonly List<AlertConditionBuildRequest> _conditions;
+        private readonly List<AlertConditionTemplate> _conditions;
 
 
         public SensorStatus Status { get; private set; } = SensorStatus.Ok;
@@ -18,7 +18,7 @@ namespace HSMDataCollector.Alerts
         public bool IsDisabled { get; private set; }
 
 
-        internal AlertAction(List<AlertConditionBuildRequest> conditions)
+        internal AlertAction(List<AlertConditionTemplate> conditions)
         {
             _conditions = conditions;
         }

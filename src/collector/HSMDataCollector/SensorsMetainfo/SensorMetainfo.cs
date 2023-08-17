@@ -7,9 +7,9 @@ namespace HSMDataCollector.SensorsMetainfo
 {
     internal class SensorMetainfo
     {
-        internal List<AlertBuildRequest> Alerts { get; set; }
+        internal List<AlertBaseTemplate> Alerts { get; set; }
 
-        internal SpecialAlertBuildRequest TtlAlert { get; set; }
+        internal SpecialAlertTemplate TtlAlert { get; set; }
 
 
         internal SensorMetainfoSettings Settings { get; set; } = new SensorMetainfoSettings();

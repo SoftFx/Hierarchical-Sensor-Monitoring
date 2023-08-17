@@ -2,7 +2,7 @@
 
 namespace HSMDataCollector.Alerts
 {
-    public sealed class InstantAlertCondition : DataAlertCondition<InstantAlertBuildRequest>
+    public sealed class InstantAlertCondition : DataAlertCondition<InstantAlertTemplate>
     {
         internal InstantAlertCondition() : base() { }
 

@@ -3,9 +3,9 @@ using System.Collections.Generic;
 
 namespace HSMDataCollector.Alerts
 {
-    public abstract class AlertConditionBase<T> where T : AlertBuildRequest, new()
+    public abstract class AlertConditionBase<T> where T : AlertBaseTemplate, new()
     {
-        private readonly List<AlertConditionBuildRequest> _conditions = new List<AlertConditionBuildRequest>();
+        private readonly List<AlertConditionTemplate> _conditions = new List<AlertConditionTemplate>();
 
 
         public AlertAction<T> ThenNotify(string template) => BuildAlertAction().AndNotify(template);
@@ -19,9 +19,9 @@ namespace HSMDataCollector.Alerts
 
         protected void BuildCondition(AlertProperty property, AlertOperation operation, string value = null)
         {
-            _conditions.Add(new AlertConditionBuildRequest()
+            _conditions.Add(new AlertConditionTemplate()
             {
-                Target = new AlertTargetBuildRequest()
+                Target = new AlertTargetTemplate()
                 {
                     Type = string.IsNullOrEmpty(value) ? TargetType.LastValue : TargetType.Const,
                     Value = value,
@@ -37,7 +37,7 @@ namespace HSMDataCollector.Alerts
 
 
     public abstract class DataAlertCondition<T> : AlertConditionBase<T>
-         where T : AlertBuildRequest, new()
+         where T : AlertBaseTemplate, new()
     {
         protected internal DataAlertCondition() { }
 

@@ -10,7 +10,7 @@ namespace HSMDataCollector.Options
 {
     public class InstantSensorOptions : SensorOptions2
     {
-        public List<InstantAlertBuildRequest> Alerts { get; set; } = new List<InstantAlertBuildRequest>();
+        public List<InstantAlertTemplate> Alerts { get; set; } = new List<InstantAlertTemplate>();
 
 
         internal override SensorMetainfo Metainfo => this.ToInfo();
@@ -35,7 +35,7 @@ namespace HSMDataCollector.Options
 
     public class BarSensorOptions2 : MonitoringSensorOptions2
     {
-        public List<BarAlertBuildRequest> Alerts { get; set; } = new List<BarAlertBuildRequest>();
+        public List<BarAlertTemplate> Alerts { get; set; } = new List<BarAlertTemplate>();
 
 
         public TimeSpan CollectBarPeriod { get; set; } = TimeSpan.FromSeconds(5);
@@ -60,7 +60,7 @@ namespace HSMDataCollector.Options
 
     public abstract class SensorOptions2
     {
-        public SpecialAlertBuildRequest TtlAlert { get; set; }
+        public SpecialAlertTemplate TtlAlert { get; set; }
 
         public Unit? SensorUnit { get; set; }
 

@@ -2,7 +2,7 @@
 
 namespace HSMDataCollector.Alerts
 {
-    public sealed class SpecialAlertAction : AlertAction<SpecialAlertBuildRequest>
+    public sealed class SpecialAlertAction : AlertAction<SpecialAlertTemplate>
     {
         public TimeSpan? TtlValue { get; internal set; }
 
@@ -10,7 +10,7 @@ namespace HSMDataCollector.Alerts
         internal SpecialAlertAction() : base(null) { }
 
 
-        public override SpecialAlertBuildRequest Build()
+        public override SpecialAlertTemplate Build()
         {
             var request =  base.Build();
 

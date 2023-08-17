@@ -2,9 +2,9 @@
 
 namespace HSMDataCollector.Alerts
 {
-    public sealed class AlertConditionBuildRequest
+    public sealed class AlertConditionTemplate
     {
-        public AlertTargetBuildRequest Target { get; internal set; }
+        public AlertTargetTemplate Target { get; internal set; }
 
         public AlertCombination Combination { get; internal set; }
 
@@ -14,7 +14,7 @@ namespace HSMDataCollector.Alerts
     }
 
 
-    public sealed class AlertTargetBuildRequest
+    public sealed class AlertTargetTemplate
     {
         public TargetType Type { get; internal set; }
 

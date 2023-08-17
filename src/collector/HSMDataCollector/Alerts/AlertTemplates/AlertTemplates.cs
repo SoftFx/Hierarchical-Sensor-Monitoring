@@ -4,21 +4,21 @@ using System.Collections.Generic;
 
 namespace HSMDataCollector.Alerts
 {
-    public sealed class InstantAlertBuildRequest : AlertBuildRequest { }
+    public sealed class InstantAlertTemplate : AlertBaseTemplate { }
 
 
-    public sealed class BarAlertBuildRequest : AlertBuildRequest { }
+    public sealed class BarAlertTemplate : AlertBaseTemplate { }
 
 
-    public sealed class SpecialAlertBuildRequest : AlertBuildRequest
+    public sealed class SpecialAlertTemplate : AlertBaseTemplate
     {
         public TimeSpan? TtlValue { get; internal set; }
     }
 
 
-    public abstract class AlertBuildRequest
+    public abstract class AlertBaseTemplate
     {
-        public List<AlertConditionBuildRequest> Conditions { get; set; }
+        public List<AlertConditionTemplate> Conditions { get; set; }
 
         public SensorStatus Status { get; set; }
 
@@ -31,6 +31,6 @@ namespace HSMDataCollector.Alerts
         public bool IsDisabled { get; set; }
 
 
-        protected internal AlertBuildRequest() { }
+        protected internal AlertBaseTemplate() { }
     }
 }

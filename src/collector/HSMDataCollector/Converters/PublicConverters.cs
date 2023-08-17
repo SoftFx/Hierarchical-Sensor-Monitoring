@@ -11,7 +11,7 @@ namespace HSMDataCollector.Converters
         {
             var info = options.ToBaseInfo();
 
-            info.Alerts = options.Alerts?.Select(u => (AlertBuildRequest)u).ToList();
+            info.Alerts = options.Alerts?.Select(u => (AlertBaseTemplate)u).ToList();
 
             return info;
         }
@@ -21,7 +21,7 @@ namespace HSMDataCollector.Converters
         {
             var info = options.ToBaseInfo();
 
-            info.Alerts = options.Alerts?.Select(u => (AlertBuildRequest)u).ToList();
+            info.Alerts = options.Alerts?.Select(u => (AlertBaseTemplate)u).ToList();
 
             return info;
         }

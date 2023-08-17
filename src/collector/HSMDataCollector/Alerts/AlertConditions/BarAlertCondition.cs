@@ -2,7 +2,7 @@
 
 namespace HSMDataCollector.Alerts
 {
-    public sealed class BarAlertCondition : DataAlertCondition<BarAlertBuildRequest>
+    public sealed class BarAlertCondition : DataAlertCondition<BarAlertTemplate>
     {
         internal BarAlertCondition() : base() { }
 
