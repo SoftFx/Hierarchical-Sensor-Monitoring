@@ -71,6 +71,13 @@ namespace HSMServer.Core.Model
         }
 
 
+        internal virtual void AddOrUpdateValue(T value)
+        {
+            if (LastValue is null || !LastValue.TryUpdate(value))
+                AddValue(value);
+        }
+
+
         internal override List<BaseValue> GetValues(int count) =>
             _cache.Take(count).Select(v => (BaseValue)v).ToList();
 

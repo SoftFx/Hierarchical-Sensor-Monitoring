@@ -33,6 +33,12 @@ namespace HSMServer.Core.Model
 
         public DateTime ReceivingTime { get; init; } = DateTime.UtcNow;
 
+        public DateTime? LastReceivingTime { get; private set; }
+
+        [JsonIgnore]
+        public DateTime LastUpdateTime => LastReceivingTime ?? ReceivingTime;
+
+
         [JsonConverter(typeof(SensorStatusJsonConverter))]
         public SensorStatus Status { get; init; }
 
@@ -57,6 +63,17 @@ namespace HSMServer.Core.Model
         public virtual string ShortInfo { get; }
 
 
+        internal bool TryUpdate(BaseValue value)
+        {
+            if (IsEqual(value))
+            {
+                LastReceivingTime = value.ReceivingTime;
+                return true;
+            }
+
+            return false;
+        }
+
         internal SensorValueEntity ToEntity(Guid sensorId) =>
             new()
             {
@@ -64,6 +81,8 @@ namespace HSMServer.Core.Model
                 ReceivingTime = ReceivingTime.Ticks,
                 Value = this,
             };
+
+        protected virtual bool IsEqual(BaseValue value) => (Status, Comment) == (value.Status, value.Comment);
     }
 
 
@@ -72,8 +91,17 @@ namespace HSMServer.Core.Model
         public T Value { get; init; }
 
 
+        [JsonIgnore]
         public override string ShortInfo => Value?.ToString();
 
+        [JsonIgnore]
         public override object RawValue => Value;
+
+
+        protected override bool IsEqual(BaseValue value)
+        {
+            return base.IsEqual(value) && value is BaseValue<T> valueT &&
+                   ((Value is null && valueT.Value is null) || (Value?.Equals(valueT.Value) ?? false));
+        }
     }
 }

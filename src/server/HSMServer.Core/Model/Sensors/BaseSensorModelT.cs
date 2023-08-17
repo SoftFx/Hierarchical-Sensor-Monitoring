@@ -31,7 +31,11 @@ namespace HSMServer.Core.Model
 
             if (canStore)
             {
-                Storage.AddValue(valueT);
+                if (SaveOnlyUniqueValues)
+                    Storage.AddOrUpdateValue(valueT);
+                else
+                    Storage.AddValue(valueT);
+
                 Policies.SensorTimeout(valueT);
 
                 ReceivedNewValue?.Invoke(valueT);
