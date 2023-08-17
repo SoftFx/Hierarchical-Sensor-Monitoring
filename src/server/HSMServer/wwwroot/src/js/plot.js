@@ -110,6 +110,13 @@ export class DoublePlot extends Plot {
             this.y.push(i.value)
         }
     }
+    
+    customSetUp(timelist, datalist) {
+        this.x = timelist;
+        this.y = datalist;
+        
+        return this;
+    }
 }
 
 export class BarPLot extends Plot {
