@@ -679,14 +679,9 @@ namespace HSMServer.Controllers
 
             if (modal.RewriteLast)
             {
-                var update = new SensorUpdate
-                {
-                    Id = sensor.Id,
-                    Comment = comment,
-                    Status = modal.NewStatus.ToCore()
-                };
+                var updateRequest = new UpdateLastValueRequestModel(sensor.Id, modal.NewStatus.ToCore(), comment, CurrentUser.Name);
 
-                _treeValuesCache.UpdateSensorLastValue(update, CurrentUser.Name);
+                _treeValuesCache.UpdateSensorLastValue(updateRequest);
 
                 return Ok();
             }

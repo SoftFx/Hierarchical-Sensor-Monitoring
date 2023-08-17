@@ -244,33 +244,31 @@ namespace HSMServer.Core.Cache
             SensorUpdateView(sensor);
         }
 
-        public void UpdateSensorLastValue(SensorUpdate update, string initiator)
+        public void UpdateSensorLastValue(UpdateLastValueRequestModel request)
         {
-            var sensor = GetSensor(update.Id);
-            var lastValue = sensor.Storage.LastDbValue ?? sensor.LastValue;
+            var sensor = GetSensor(request.Id);
+            var lastValue = sensor.LastValue;
 
-            if (update.Status.HasValue && update.Comment is not null && lastValue is not null)
+            if (request.Comment is not null && lastValue is not null)
             {
                 var value = lastValue with
                 {
-                    Status = update.Status.Value, 
-                    Comment = update.Comment
+                    Status = request.Status, 
+                    Comment = request.Comment
                 };
-
-                var (status, comment) = (lastValue.Status, lastValue.Comment);
 
                 if (sensor.Storage.TryChangeLastValue(value))
                 {
-                    _journalService.AddRecord(new JournalRecordModel(update.Id, initiator ?? System)
+                    _journalService.AddRecord(new JournalRecordModel(request.Id, request.Initiator ?? System)
                     {
                         PropertyName = "Last value",
-                        Enviroment = "Last value",
+                        Enviroment = "Rewrite last value",
                         Path = sensor.FullPath,
-                        OldValue = $"Status - {status}; Comment - '{comment}'",
-                        NewValue = $"Status - {update.Status}; Comment - '{update.Comment}'"
+                        OldValue = request.BuildComment(lastValue.Status, lastValue.Comment),
+                        NewValue = request.BuildComment()
                     });
                     
-                    _database.AddSensorValue(value.ToEntity(update.Id));
+                    _database.AddSensorValue(value.ToEntity(request.Id));
                 }
             }
         }

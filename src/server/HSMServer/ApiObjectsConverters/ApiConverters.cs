@@ -224,8 +224,8 @@ namespace HSMServer.ApiObjectsConverters
 
         private static SensorValueBase AddOpenAndCloseTime(this BarSensorValueBase value, DateTime? closeTime = null, DateTime? openTime = null)
         {
-            value.CloseTime = closeTime ?? DateTime.UtcNow;
-            value.OpenTime = openTime ?? DateTime.UtcNow;
+            value.CloseTime = closeTime ?? value.Time;
+            value.OpenTime = openTime ?? value.Time;
 
             return value;
         }
