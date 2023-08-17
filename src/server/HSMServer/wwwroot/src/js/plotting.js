@@ -1,4 +1,4 @@
-﻿import {BoolPlot, Plot} from "./plot";
+﻿import {BoolPlot, IntegerPlot, Plot} from "./plot";
 
 window.barGraphData = {
     min: undefined,
@@ -166,9 +166,10 @@ function convertToGraphData(graphData, graphType, graphName) {
         case "0":
             return new BoolPlot(escapedData).getPlotData();
         case "1":
-            data = getNumbersData(escapedData);
-            timeList = getTimeList(escapedData);
-            return getIntGraphData(timeList, data);
+            // data = getNumbersData(escapedData);
+            // timeList = getTimeList(escapedData);
+            // return getIntGraphData(timeList, data);
+            return new IntegerPlot(escapedData).getPlotData();
         case "2":
             data = getNumbersData(escapedData);
             timeList = getTimeList(escapedData);
