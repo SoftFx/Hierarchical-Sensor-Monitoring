@@ -4,7 +4,8 @@ export class Plot {
     constructor(data) {
         this.basicInit();
     }
-    basicInit (){
+
+    basicInit() {
         this.x = [];
         this.y = [];
         this.customdata = [];
@@ -14,12 +15,18 @@ export class Plot {
         this.hovertemplate = '';
         this.showlegend = false;
     }
-    
-    setUpData(data) {}
-    
-    getPlotData (){
-        console.log([this])
+
+    setUpData(data) {
+    }
+
+    getPlotData() {
         return [this];
+    }
+
+    getLayout() {
+        return {
+            autosize: true
+        }
     }
 }
 
@@ -37,39 +44,50 @@ export class BoolPlot extends Plot {
     }
 
     setUpData(data) {
-        for(let i of data){
+        for (let i of data) {
             this.x.push(i.time)
-            
-            if (i.isTimeout === true){
+
+            if (i.isTimeout === true) {
                 this.y.push(-1)
-            }
-            else {
+            } else {
                 this.y.push(i.value === true ? 1 : 0)
                 this.customdata.push(i.value === true);
                 this.marker.color.push(i.value === true ? 'rgb(0,0,255)' : 'rgb(255,0,0)');
             }
         }
-        
+
         this.hovertemplate = "%{x}, %{customdata}" +
-                             "<extra></extra>";
+            "<extra></extra>";
+    }
+    
+    getLayout() {
+        return {
+            autosize: true,
+            yaxis: {
+                tickmode: 'auto',
+                tick0: 0,
+                dtick: 1,
+                nticks: 2
+            }
+        }
     }
 }
 
 export class IntegerPlot extends Plot {
     constructor(data) {
         super();
-        
+
         this.type = 'scatter';
         this.mode = 'lines+markers';
         this.line = {
             shape: 'hv'
         }
-        
+
         this.setUpData(data);
     }
 
     setUpData(data) {
-        for(let i of data){
+        for (let i of data) {
             this.x.push(i.time)
             this.y.push(i.value)
         }
@@ -87,7 +105,7 @@ export class DoublePlot extends Plot {
     }
 
     setUpData(data) {
-        for(let i of data){
+        for (let i of data) {
             this.x.push(i.time)
             this.y.push(i.value)
         }
@@ -100,7 +118,7 @@ export class BarPLot extends Plot {
 
         this.type = 'box';
         this.name = 'bar';
-        
+
         this.upperfence = [];
         this.lowerfence = [];
         this.median = [];
@@ -113,12 +131,12 @@ export class BarPLot extends Plot {
     }
 
     setUpData(data) {
-        for(let i of data){
+        for (let i of data) {
             if (i.closeTime.toString().startsWith("0001"))
                 this.x.push(i.openTime);
             else
                 this.x.push(i.closeTime);
-            
+
             this.upperfence.push(i.max);
             this.lowerfence.push(i.min);
             this.median.push(i.percentiles[0.5]);
@@ -150,10 +168,10 @@ export class BarPLot extends Plot {
 export class TimeSpanPlot extends Plot {
     constructor(data) {
         super();
-        
+
         this.type = 'lines';
         this.customdata = [];
-        
+
         this.setUpData(data)
     }
 
@@ -170,27 +188,26 @@ export class TimeSpanPlot extends Plot {
                 }
             })
         });
-        
-        for(let i of uniqueData){
+
+        for (let i of uniqueData) {
             this.x.push(i.time);
-            
+
             let timespan = this.getTimeSpanValue(i);
             this.y.push(timespan.totalMilliseconds());
             this.customdata.push(this.getTimeSpanCustomData(timespan))
         }
-        
-        this.hovertemplate=  '%{customdata}<extra></extra>'
+
+        this.hovertemplate = '%{customdata}<extra></extra>'
     }
-    
+
     getTimeSpanValue(value) {
         let time = value.value.split(':');
         let temp = time[0].split('.')
-        let days, hours, minutes,seconds;
+        let days, hours, minutes, seconds;
         if (temp.length > 1) {
             days = Number(temp[0]);
             hours = Number(temp[1]);
-        }
-        else {
+        } else {
             hours = Number(time[0]);
             days = 0;
         }
@@ -199,7 +216,7 @@ export class TimeSpanPlot extends Plot {
 
         return new TimeSpan.TimeSpan(0, seconds, minutes, hours, days);
     }
-    
+
     getTimeSpanCustomData(timespan) {
         if (timespan === undefined)
             return '0h 0m 0s';
@@ -238,7 +255,7 @@ export class TimeSpanPlot extends Plot {
 export class EnumPlot extends Plot {
     constructor(data, isServiceStatus) {
         super();
-        
+
         this.z = [];
         this.customdata = [];
         this.isServiceStatus = isServiceStatus;
@@ -251,7 +268,7 @@ export class EnumPlot extends Plot {
         this.opacity = 0.25;
         this.setUpData(data)
     }
-    
+
     setUpData(data) {
         let currDate = new Date(new Date(Date.now()).toUTCString()).toISOString();
         data.push({
@@ -259,18 +276,17 @@ export class EnumPlot extends Plot {
         })
         for (let i = 0; i < data.length - 1; i++) {
             this.x.push(data[i].time);
-            if (this.isServiceStatus){
+            if (this.isServiceStatus) {
                 this.customdata.push(`${ServiceStatus[`${data[i].value}`][1]} <br> ${new Date(data[i].time).toUTCString()} - ${i + 1 >= data.length ? 'now' : new Date(data[i + 1].time).toUTCString()}`)
                 this.z.push(ServiceStatus[`${data[i].value}`][0] === ServiceStatus["4"][0] ? 0.5 : 0)
-            }
-            else {
+            } else {
                 this.customdata.push(`${data[i].value === true ? ServiceStatus["4"][1] : ServiceStatus["1"][1]} <br> ${new Date(data[i].time).toUTCString()} - ${i + 1 >= data.length ? 'now' : new Date(data[i + 1].time).toUTCString()}`)
                 this.z.push(data[i].value === true ? 0.5 : 0);
             }
         }
         this.x.push(currDate);
     }
-    
+
     getPlotData(name = 'custom', minValue = 0, maxValue = 1) {
         this.y = [minValue, maxValue];
         this.z = [this.z];
@@ -279,7 +295,7 @@ export class EnumPlot extends Plot {
 
         return super.getPlotData();
     }
-    
+
     getLayout() {
         return {
             yaxis: {

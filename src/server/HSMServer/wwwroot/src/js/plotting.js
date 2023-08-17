@@ -82,26 +82,10 @@ window.displayGraph = function(graphData, graphType, graphElementId, graphName) 
     if (graphType === "9" || graphType === "7")
         layout = plot.getLayout();
     else {
-        if (zoomData === undefined || zoomData === null) {
-            layout = { autosize: true};
-            if (graphType === "0")
-                layout.yaxis = { 
-                    tickmode: 'auto',
-                    tick0: 0,
-                    dtick: 1, 
-                    nticks: 2
-                };
-        }
-        else {
-            layout = createLayoutFromZoomData(zoomData);
-            if (graphType === "0")
-                layout.yaxis = {
-                    tickmode: 'auto',
-                    tick0: 0,
-                    dtick: 1,
-                    nticks: 2
-                };
-        }
+        if (zoomData === undefined || zoomData === null)
+            layout = plot.getLayout()
+        else 
+            layout = createLayoutFromZoomData(zoomData, plot.getLayout());
     }
     
     Plotly.newPlot(graphElementId, plot.getPlotData(), layout, config);
@@ -125,18 +109,19 @@ window.displayGraph = function(graphData, graphType, graphElementId, graphName) 
         });
 }
 
-function createLayoutFromZoomData(zoomData) {
+function createLayoutFromZoomData(zoomData, layout) {
     let processedData = Object.values(JSON.parse(zoomData));
 
-    var layout = {
-        xaxis : {
-            range: [processedData[0], processedData[1]]
-        },
-        yaxis : {
-            range: [processedData[2], processedData[3]]
-        },
-        autosize: true
+    layout.xaxis = {
+        range: [processedData[0], processedData[1]]
     };
+    
+    layout.yaxis = {
+        range: [processedData[2], processedData[3]]
+    };
+    
+    layout.autosize = true;
+    
     return layout;
 }
 
@@ -484,11 +469,9 @@ function getPlotType(graphType) {
                         async: true,
                         success: function (data){
                             let escapedData = JSON.parse(data);
-                            let graphData = getEnumGraphData(getTimeList(escapedData), getNumbersData(escapedData), isStatusService)
                             let ranges = graph._fullLayout.yaxis.range;
-                            let heat = getHeatMapForEnum(graphData[0], name, ranges[0], ranges[1])
-            
-                            Plotly.addTraces(graphElementId, [heat]);
+                            let heatPlot = new EnumPlot(escapedData, isStatusService)
+                            Plotly.addTraces(graphElementId, heatPlot.getPlotData(name, ranges[0], ranges[1]));
                             Plotly.update(graphElementId, {}, {hovermode: 'x'});
                         }
                     })
