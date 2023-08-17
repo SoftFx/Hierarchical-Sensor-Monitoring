@@ -101,7 +101,7 @@ namespace HSMServer.Core.Model.Policies
 
             if (TimeToLive is not null && !TimeToLive.IsDisabled)
             {
-                timeout = TimeToLive.HasTimeout(value.ReceivingTime);
+                timeout = TimeToLive.HasTimeout(value.LastUpdateTime);
 
                 if (timeout)
                 {

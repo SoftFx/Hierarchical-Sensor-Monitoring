@@ -129,6 +129,7 @@ namespace HSMServer.Model.History
                 Status = value.Status.ToClient(),
                 Comment = value.Comment,
                 ReceivingTime = value.ReceivingTime,
+                LastUpdateTime = value.LastUpdateTime,
                 IsTimeout = value.IsTimeout
             };
 

@@ -12,13 +12,15 @@ namespace HSMServer.Model.History
         public SensorStatus Status { get; init; }
 
         public DateTime ReceivingTime { get; init; }
-        
+
         public required bool IsTimeout { get; init; }
     }
 
 
     public class SimpleSensorValueViewModel : TableValueViewModel
     {
+        public DateTime LastUpdateTime { get; init; }
+
         public string Value { get; init; }
     }
 

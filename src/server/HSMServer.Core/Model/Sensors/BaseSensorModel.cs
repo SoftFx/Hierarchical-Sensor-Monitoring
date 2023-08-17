@@ -82,7 +82,7 @@ namespace HSMServer.Core.Model
         public bool ShouldDestroy => Settings.SelfDestroy.Value?.TimeIsUp(LastUpdate) ?? false;
 
 
-        public DateTime LastUpdate => Storage.LastValue?.ReceivingTime ?? DateTime.MinValue;
+        public DateTime LastUpdate => Storage.LastValue?.LastUpdateTime ?? DateTime.MinValue;
 
         public BaseValue LastDbValue => Storage.LastDbValue;
 

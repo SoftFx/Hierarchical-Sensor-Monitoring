@@ -35,6 +35,7 @@ else
                     }
                     else
                     {
+                        <th id="lastUpdateTime_header" class="d-none">Last update time</th>
                         <th>Value</th>
                     }
                     <th>Status</th>
@@ -83,6 +84,7 @@ else
                             }
                             else
                             {
+                                <td id="lastUpdateTime_value@(i)" class="d-none">@simpleValue.LastUpdateTime.ToDefaultFormat()</td>
                                 <td>@simpleValue.Value</td>
                                 <td>@value.Status.ToIconStatus()</td>
                             }

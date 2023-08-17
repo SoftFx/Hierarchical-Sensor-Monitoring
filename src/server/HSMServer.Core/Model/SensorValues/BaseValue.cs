@@ -33,7 +33,7 @@ namespace HSMServer.Core.Model
 
         public DateTime ReceivingTime { get; init; } = DateTime.UtcNow;
 
-        public DateTime? LastReceivingTime { get; private set; }
+        public DateTime? LastReceivingTime { get; set; }
 
         [JsonIgnore]
         public DateTime LastUpdateTime => LastReceivingTime ?? ReceivingTime;

@@ -86,7 +86,7 @@ namespace HSMServer.Core.Model
 
         internal override void Clear(DateTime to)
         {
-            while (_cache.FirstOrDefault()?.ReceivingTime <= to)
+            while (_cache.FirstOrDefault()?.LastUpdateTime <= to)
                 _cache.TryDequeue(out _);
 
             if (_cache.IsEmpty)
