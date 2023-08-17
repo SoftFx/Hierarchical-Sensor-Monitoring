@@ -1,4 +1,4 @@
-﻿import {BoolPlot, IntegerPlot, Plot} from "./plot";
+﻿import {BarPLot, BoolPlot, DoublePlot, EnumPlot, IntegerPlot, Plot, TimeSpanPlot} from "./plot";
 
 window.barGraphData = {
     min: undefined,
@@ -52,7 +52,7 @@ window.removeBarPlot = function (name, isInit = false){
 window.displayGraph = function(graphData, graphType, graphElementId, graphName) {
     barGraphData.graph.id = graphElementId
     barGraphData.graph.self = $(`#${graphElementId}`)[0];
-    let convertedData = convertToGraphData(graphData, graphType, graphName);
+    let plot = convertToGraphData(graphData, graphType, graphName);
     let zoomData = getPreviousZoomData(graphElementId);
     var plotIcon = {
         'width': 500,
@@ -78,22 +78,12 @@ window.displayGraph = function(graphData, graphType, graphElementId, graphName) 
             'resetScale2d'
         ]
     }
-
-    if (graphType === "9")
-    {
-        let layout = getEnumLayout();
-        layout.autosize = true;
-        let heat = getHeatMapForEnum(convertedData[0])
-        Plotly.newPlot(graphElementId, [heat], layout, config);
-    }
-    else if (graphType === "7") {
-        let layout = getTimeSpanLayout(convertedData[0].y)
-        layout.autosize = true;
-        Plotly.newPlot(graphElementId, convertedData, layout, config);
-    }
+    let layout;
+    if (graphType === "9" || graphType === "7")
+        layout = plot.getLayout();
     else {
         if (zoomData === undefined || zoomData === null) {
-            let layout = { autosize: true};
+            layout = { autosize: true};
             if (graphType === "0")
                 layout.yaxis = { 
                     tickmode: 'auto',
@@ -101,11 +91,9 @@ window.displayGraph = function(graphData, graphType, graphElementId, graphName) 
                     dtick: 1, 
                     nticks: 2
                 };
-            
-            Plotly.newPlot(graphElementId, convertedData, layout, config);
         }
         else {
-            let layout = createLayoutFromZoomData(zoomData);
+            layout = createLayoutFromZoomData(zoomData);
             if (graphType === "0")
                 layout.yaxis = {
                     tickmode: 'auto',
@@ -113,10 +101,10 @@ window.displayGraph = function(graphData, graphType, graphElementId, graphName) 
                     dtick: 1,
                     nticks: 2
                 };
-            
-            Plotly.newPlot(graphElementId, convertedData, layout, config);
         }
     }
+    
+    Plotly.newPlot(graphElementId, plot.getPlotData(), layout, config);
     
     let savedPlots = localStorage.getItem(barGraphData.graph.id);
     if (savedPlots){
@@ -164,58 +152,19 @@ function convertToGraphData(graphData, graphType, graphName) {
     let uniqueData;
     switch (graphType) {
         case "0":
-            return new BoolPlot(escapedData).getPlotData();
+            return new BoolPlot(escapedData);
         case "1":
-            // data = getNumbersData(escapedData);
-            // timeList = getTimeList(escapedData);
-            // return getIntGraphData(timeList, data);
-            return new IntegerPlot(escapedData).getPlotData();
+            return new IntegerPlot(escapedData);
         case "2":
-            data = getNumbersData(escapedData);
-            timeList = getTimeList(escapedData);
-            return getSimpleGraphData(timeList, data, "scatter");
+            return new DoublePlot(escapedData);
         case "4":
-            return createBarGraphData(escapedData, graphName);
+            return new BarPLot(escapedData, graphName);
         case "5":
-            return createBarGraphData(escapedData, graphName);
+            return new BarPLot(escapedData, graphName);
         case "7":
-            uniqueData = getUniqueData(escapedData)
-            escapedData.forEach(x => {
-                uniqueData.forEach(y => {
-                    if (x.time === y.time && ((new Date(x.receivingTime)) > (new Date(y.receivingTime)))) {
-                        y.comment = x.comment;
-                        y.receivingTime = x.receivingTime;
-                        y.status = x.status;
-                        y.time = x.time;
-                        y.value = x.value;
-                    }
-                })
-            });
-            
-            timeList = getTimeList(uniqueData);
-            data = uniqueData.map(function (i) {
-                let time = i.value.split(':');
-                let temp = time[0].split('.')
-                let days, hours, minutes,seconds;
-                if (temp.length > 1) {
-                    days = Number(temp[0]);
-                    hours = Number(temp[1]);
-                }
-                else {
-                    hours = Number(time[0]);
-                    days = 0;
-                }
-                minutes = Number(time[1]);
-                seconds = Number(time[2]);
-               
-                return new TimeSpan.TimeSpan(0, seconds, minutes, hours, days).totalMilliseconds();
-            })
-            
-            return getTimeSpanGraphData(timeList, data, "lines");
+            return new TimeSpanPlot(escapedData);
         case "9":
-            data = getNumbersData(escapedData)
-            timeList = getTimeList(escapedData)
-            return getEnumGraphData(timeList, data)
+            return new EnumPlot(escapedData, true);
         default:
             return undefined;
     }
@@ -432,7 +381,7 @@ function getTimeSpanLayout(datalist) {
     }
 
     // Get numeric characteristics
-    {
+    
         function getBarsMin(escapedBarsData) {
             return escapedBarsData.map(function (d) {
                 return d.min;
@@ -480,7 +429,7 @@ function getTimeSpanLayout(datalist) {
                 return d.mean;
             });
         }
-    }
+    
 
 
 
@@ -613,7 +562,7 @@ function getPlotType(graphType) {
         }
     }
     
-    const ServiceStatus = {
+    export const ServiceStatus = {
         1 : ['#FF0000', 'Stopped'],
         2 : ['#BFFFBF', 'Start Pending'],
         3 : ['#FD6464','Stop Pending' ],
