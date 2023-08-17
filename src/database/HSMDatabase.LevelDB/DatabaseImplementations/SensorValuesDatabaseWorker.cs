@@ -13,6 +13,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
     {
         private static readonly JsonSerializerOptions _options = new()
         {
+            IgnoreReadOnlyProperties = true,
             NumberHandling = JsonNumberHandling.AllowNamedFloatingPointLiterals
         };
 

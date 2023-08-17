@@ -1,53 +1,44 @@
 ﻿using System;
 using System.IO;
-using System.Text.Json.Serialization;
 
 namespace HSMServer.Core.Model
 {
     public record BooleanValue : BaseValue<bool>
     {
-        [JsonIgnore]
         public override SensorType Type => SensorType.Boolean;
     }
 
 
     public record IntegerValue : BaseValue<int>
     {
-        [JsonIgnore]
         public override SensorType Type => SensorType.Integer;
     }
 
 
     public record DoubleValue : BaseValue<double>
     {
-        [JsonIgnore]
         public override SensorType Type => SensorType.Double;
     }
 
 
     public record StringValue : BaseValue<string>
     {
-        [JsonIgnore]
         public override SensorType Type => SensorType.String;
     }
 
 
     public record TimeSpanValue : BaseValue<TimeSpan>
     {
-        [JsonIgnore]
         public override SensorType Type => SensorType.TimeSpan;
 
-        [JsonIgnore]
         public override object RawValue => Value.Ticks;
     }
 
 
     public record VersionValue : BaseValue<Version>
     {
-        [JsonIgnore]
         public override SensorType Type => SensorType.Version;
 
-        [JsonIgnore]
         public override string ShortInfo => Value.Revision == 0 ? Value.ToString(3) : Value.ToString();
     }
 
@@ -64,10 +55,8 @@ namespace HSMServer.Core.Model
         public long OriginalSize { get; init; }
 
 
-        [JsonIgnore]
         public override SensorType Type => SensorType.File;
 
-        [JsonIgnore]
         public override string ShortInfo => GetShortDescription();
 
 
@@ -118,14 +107,12 @@ namespace HSMServer.Core.Model
 
     public record IntegerBarValue : BarBaseValue<int>
     {
-        [JsonIgnore]
         public override SensorType Type => SensorType.IntegerBar;
     }
 
 
     public record DoubleBarValue : BarBaseValue<double>
     {
-        [JsonIgnore]
         public override SensorType Type => SensorType.DoubleBar;
     }
 }

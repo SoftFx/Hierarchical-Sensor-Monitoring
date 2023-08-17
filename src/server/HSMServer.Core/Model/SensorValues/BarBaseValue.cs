@@ -1,7 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Numerics;
-using System.Text.Json.Serialization;
 
 namespace HSMServer.Core.Model
 {
@@ -27,7 +26,6 @@ namespace HSMServer.Core.Model
 
         public Dictionary<double, T> Percentiles { get; init; } = new();
 
-        [JsonIgnore]
         public override string ShortInfo =>
             $"Min = {Min}, Mean = {Mean}, Max = {Max}, Count = {Count}, Last = {LastValue}.";
 

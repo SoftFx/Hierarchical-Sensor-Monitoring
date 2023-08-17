@@ -91,10 +91,8 @@ namespace HSMServer.Core.Model
         public T Value { get; init; }
 
 
-        [JsonIgnore]
         public override string ShortInfo => Value?.ToString();
 
-        [JsonIgnore]
         public override object RawValue => Value;
 
 
