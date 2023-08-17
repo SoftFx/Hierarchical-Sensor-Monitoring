@@ -29,12 +29,14 @@ namespace HSMDataCollector.Converters
 
         private static SensorMetainfo ToBaseInfo(this SensorOptions2 options)
         {
-            var info = new SensorMetainfo()
+            var info = new SensorMetainfo
             {
                 Enables = new SensorMetainfoEnables()
                 {
                     ForGrafana = options.EnableForGrafana
                 },
+
+                TtlAlert = options.TtlAlert,
 
                 Description = options.Description,
                 SensorType = options.Type,
@@ -42,6 +44,8 @@ namespace HSMDataCollector.Converters
 
                 OnlyUniqValues = options.OnlyUniqValues,
             };
+
+            options.TTL = info.TtlAlert.TtlValue ?? options.TTL;
 
             if (options.HasSettings)
                 info.Settings = new SensorMetainfoSettings()

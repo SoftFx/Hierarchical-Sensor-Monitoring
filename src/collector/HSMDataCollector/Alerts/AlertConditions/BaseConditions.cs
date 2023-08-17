@@ -8,12 +8,14 @@ namespace HSMDataCollector.Alerts
         private readonly List<AlertConditionBuildRequest> _conditions = new List<AlertConditionBuildRequest>();
 
 
-        public AlertAction<T> ThenNotify(string template) => new AlertAction<T>(_conditions).AndNotify(template);
+        public AlertAction<T> ThenNotify(string template) => BuildAlertAction().AndNotify(template);
 
-        public AlertAction<T> ThenSetIcon(string icon) => new AlertAction<T>(_conditions).AndSetIcon(icon);
+        public AlertAction<T> ThenSetIcon(string icon) => BuildAlertAction().AndSetIcon(icon);
 
-        public AlertAction<T> ThenSetSensorError() => new AlertAction<T>(_conditions).AndSetSensorError();
+        public AlertAction<T> ThenSetSensorError() => BuildAlertAction().AndSetSensorError();
 
+
+        protected virtual AlertAction<T> BuildAlertAction() => new AlertAction<T>(_conditions);
 
         protected void BuildCondition(AlertProperty property, AlertOperation operation, string value = null)
         {

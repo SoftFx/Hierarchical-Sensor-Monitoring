@@ -1,15 +1,19 @@
 ﻿using HSMSensorDataObjects;
+using System;
 using System.Collections.Generic;
 
 namespace HSMDataCollector.Alerts
 {
-    public sealed class SpecialAlertBuildRequest : AlertBuildRequest { }
-
-
     public sealed class InstantAlertBuildRequest : AlertBuildRequest { }
 
 
     public sealed class BarAlertBuildRequest : AlertBuildRequest { }
+
+
+    public sealed class SpecialAlertBuildRequest : AlertBuildRequest
+    {
+        public TimeSpan? TtlValue { get; internal set; }
+    }
 
 
     public abstract class AlertBuildRequest

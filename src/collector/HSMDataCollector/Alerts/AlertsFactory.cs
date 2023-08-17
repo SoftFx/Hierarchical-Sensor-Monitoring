@@ -5,9 +5,9 @@ namespace HSMDataCollector.Alerts
 {
     public static class Alert
     {
-        public static SpecialAlertCondition IfInactivityPeriodIs(TimeSpan? time)
+        public static SpecialAlertCondition IfInactivityPeriodIs(TimeSpan? time = null)
         {
-            return new SpecialAlertCondition();
+            return new SpecialAlertCondition().AddTtlValue(time);
         }
 
 

@@ -3,7 +3,7 @@ using System.Collections.Generic;
 
 namespace HSMDataCollector.Alerts
 {
-    public sealed class AlertAction<T> where T : AlertBuildRequest, new()
+    public class AlertAction<T> where T : AlertBuildRequest, new()
     {
         private readonly List<AlertConditionBuildRequest> _conditions;
 
@@ -52,7 +52,7 @@ namespace HSMDataCollector.Alerts
             return Build();
         }
 
-        public T Build() => new T()
+        public virtual T Build() => new T()
         {
             Conditions = _conditions,
 
