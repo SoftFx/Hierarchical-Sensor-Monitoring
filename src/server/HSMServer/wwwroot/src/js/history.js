@@ -18,13 +18,13 @@
 var millisecondsInHour = 1000 * 3600;
 var millisecondsInDay = millisecondsInHour * 24;
 
-Date.prototype.AddDays = function (days) {
+window.Date.prototype.AddDays = function (days) {
     let date = new Date(this.valueOf());
     date.setDate(date.getDate() + days);
     return date;
 }
 
-Date.prototype.AddHours = function(hours) {
+window.Date.prototype.AddHours = function(hours) {
     let newDate = new Date(this.valueOf());
     newDate.setHours(newDate.getHours() + hours);
     return newDate;
@@ -41,7 +41,7 @@ window.Data = function (to, from, type, encodedId) {
 }
 
 //Initialization
-{
+
     window.initialize = function() {
         initializeSensorAccordion();
         initializeFileSensorEvents();
@@ -130,10 +130,10 @@ window.Data = function (to, from, type, encodedId) {
     function InitializePeriodRequests() {
         $('[id^="button_export_csv_"]').off("click").on("click", exportCsv);
     }
-}
+
 
 //Request methods
-{
+
     function requestHistory(encodedId, action, rawAction, type, reqData) {
         if (!isGraphAvailable(type)) {
             initializeTable(encodedId, action, type, reqData);
@@ -251,11 +251,11 @@ window.Data = function (to, from, type, encodedId) {
             async: true
         });
     }
-}
+
 
 
 // Sub-methods
-{
+
     function isFileSensor(type) {
         return type === "6";
     }
@@ -319,10 +319,10 @@ window.Data = function (to, from, type, encodedId) {
     function getTypeForSensor(encodedId) {
         return $('#sensor_type_' + encodedId).first().val();
     }    
-}
+
 
 //Pagination
-{
+
     window.showPage = function(getPageAction, encodedId) {
         $('#nextPageButton').addClass('disabled');
         $('#prevPageButton').addClass('disabled');
@@ -338,10 +338,10 @@ window.Data = function (to, from, type, encodedId) {
             $(`#values_${encodedId}`).html(data);
         });
     }
-}
+
 
 //Journal
-{
+
     window.showNoData = function (data) {
         if (data.responseJSON.recordsTotal === 0) {
             $('#noDataPanel').removeClass('d-none');
@@ -428,4 +428,3 @@ window.Data = function (to, from, type, encodedId) {
             el.style.opacity = disable ? "0.5" : "1";
         }
     }
-}

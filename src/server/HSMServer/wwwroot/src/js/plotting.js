@@ -1,4 +1,6 @@
-﻿window.barGraphData = {
+﻿import {BoolPlot, Plot} from "./plot";
+
+window.barGraphData = {
     min: undefined,
     max: undefined,
     mean: undefined,
@@ -162,10 +164,7 @@ function convertToGraphData(graphData, graphType, graphName) {
     let uniqueData;
     switch (graphType) {
         case "0":
-            uniqueData = getUniqueData(escapedData)
-            data = getBoolData(uniqueData);
-            timeList = getTimeList(uniqueData);
-            return getBoolGraphData(timeList, data);
+            return new BoolPlot(escapedData).getPlotData();
         case "1":
             data = getNumbersData(escapedData);
             timeList = getTimeList(escapedData);
@@ -222,10 +221,12 @@ function convertToGraphData(graphData, graphType, graphName) {
 }
 
 //Boolean 
-{
+
     function getBoolData(escapedItems) {
         let bools = escapedItems.map(function (i) {
             let currentBoolean = i.value === true;
+            if (i.isTimeout === true)
+                return -1;
             return currentBoolean ? 1 : 0;
         });
 
@@ -235,10 +236,10 @@ function convertToGraphData(graphData, graphType, graphName) {
     function getUniqueData(data){
         return [...new Map(data.map(item => [item['time'], item])).values()]
     }
-}
+
 
 //Simple plots: integer, double and bool
-{
+
     function getIntGraphData(timeList, dataList) {
         let data = [
             {
@@ -259,12 +260,15 @@ function convertToGraphData(graphData, graphType, graphName) {
             {
                 x: timeList,
                 y: dataList.map((i) => {
+                    if (i === -1) return 0;
                     return i === 1 ? 1 : 0;
                 }),
                 type: 'scatter',
                 mode: 'markers',
                 marker: {
                     color: dataList.map((i) => {
+                        if (i === -1) 
+                            return 'rgb(0,255,0)';
                         return i === 1 ? 'rgb(0,0,255)' : 'rgb(255,0,0)';
                     }),
                     size: 10
@@ -305,7 +309,7 @@ function convertToGraphData(graphData, graphType, graphName) {
             return i.time;
         });
     }
-}
+
 
 function getTimeSpanGraphData(timeList, dataList, chartType){
     return [
@@ -362,7 +366,7 @@ function getTimeSpanLayout(datalist) {
 }
 
 //Boxplots
-{
+
     function getCountFromBars(escapedBarsData) {
         return escapedBarsData.map(function (d) {
             return d.count;
@@ -476,7 +480,7 @@ function getTimeSpanLayout(datalist) {
             });
         }
     }
-}
+
 
 
 // plot type
@@ -496,7 +500,7 @@ function getPlotType(graphType) {
 }
 
 // Enum plot
-{
+
     function getAddPlotButton(name, isStatusService, icon, graphElementId, graphName){
         return {
             name: name, //changing name doesn't work
@@ -618,4 +622,3 @@ function getPlotType(graphType) {
         7 : ['#0314FF', 'Paused'],
         0 : ['#000000', 'Unknown']
     }
-}
