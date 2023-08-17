@@ -73,7 +73,7 @@ namespace HSMServer.Core.Model
 
         internal virtual void AddOrUpdateValue(T value)
         {
-            if (LastValue is null || !LastValue.TryUpdate(value))
+            if (LastValue is null || (LastTimeout is not null && LastTimeout?.ReceivingTime > LastValue.ReceivingTime) || !LastValue.TryUpdate(value))
                 AddValue(value);
         }
 
