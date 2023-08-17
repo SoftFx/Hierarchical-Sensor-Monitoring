@@ -17,7 +17,7 @@ namespace HSMDataCollector.Converters
                 SensorType = info.SensorType,
                 Path = info.Path,
 
-                OriginalUnit = info.Units.Selected,
+                OriginalUnit = info.OriginalUnit,
 
                 KeepHistory = info.Settings.KeepHistory?.Ticks,
                 SelfDestroy = info.Settings.SelfDestroy?.Ticks,

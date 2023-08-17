@@ -1,4 +1,5 @@
 ﻿using HSMDataCollector.SensorsMetainfo;
+using HSMSensorDataObjects.SensorRequests;
 
 namespace HSMDataCollector.Prototypes
 {
@@ -12,7 +13,7 @@ namespace HSMDataCollector.Prototypes
             Description = "Current available free space of some disk";
 
             Enables = SetEnables.ForGrafana;
-            Units = SetUnits.SetMB;
+            OriginalUnit = Unit.MB;
         }
     }
 

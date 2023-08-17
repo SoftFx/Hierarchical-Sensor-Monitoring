@@ -25,9 +25,25 @@ namespace HSMDataCollector.Options
     }
 
 
-    public class BarSensorOptions2 : SensorOptions2 
+    public class MonitoringSensorOptions2 : SensorOptions2
+    {
+        public TimeSpan PostDataPeriod { get; set; } = TimeSpan.FromSeconds(15);
+
+        internal override SensorMetainfo Metainfo => null;
+    }
+
+
+    public class BarSensorOptions2 : MonitoringSensorOptions2
     {
         public List<BarAlertBuildRequest> Alerts { get; set; } = new List<BarAlertBuildRequest>();
+
+
+        public TimeSpan CollectBarPeriod { get; set; } = TimeSpan.FromSeconds(5);
+
+        public TimeSpan BarPeriod { get; set; } = TimeSpan.FromMinutes(5);
+
+
+        public int Precision { get; set; } = 2;
 
 
         internal override SensorMetainfo Metainfo => this.ToInfo();

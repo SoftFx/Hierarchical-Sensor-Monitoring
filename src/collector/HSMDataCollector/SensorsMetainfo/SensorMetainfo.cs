@@ -1,5 +1,6 @@
 ﻿using HSMDataCollector.Alerts;
 using HSMSensorDataObjects;
+using HSMSensorDataObjects.SensorRequests;
 using System.Collections.Generic;
 
 namespace HSMDataCollector.SensorsMetainfo
@@ -15,10 +16,11 @@ namespace HSMDataCollector.SensorsMetainfo
 
         internal SensorMetainfoEnables Enables { get; set; } = new SensorMetainfoEnables();
 
-        internal SensorMetainfoUnits Units { get; set; } = new SensorMetainfoUnits();
-
 
         internal SensorType SensorType { get; set; }
+
+        internal Unit? OriginalUnit { get; set; }
+
 
         internal string Description { get; set; }
 

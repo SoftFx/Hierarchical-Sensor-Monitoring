@@ -21,7 +21,7 @@ namespace HSMDataCollector.DefaultSensors
         protected bool IsInitialized => _sendTimer != null;
 
 
-        protected MonitoringSensorBase(MonitoringSensorOptions options) : base(options)
+        protected MonitoringSensorBase(MonitoringSensorOptions2 options) : base(options)
         {
             _receiveDataPeriod = options.PostDataPeriod;
         }

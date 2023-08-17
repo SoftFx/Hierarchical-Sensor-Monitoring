@@ -9,21 +9,20 @@ using HSMDataCollector.InstantValue;
 using HSMDataCollector.Logging;
 using HSMDataCollector.Options;
 using HSMDataCollector.PublicInterface;
-using HSMDataCollector.SyncQueue;
 using HSMDataCollector.Sensors;
+using HSMDataCollector.SyncQueue;
 using HSMSensorDataObjects;
+using HSMSensorDataObjects.SensorValueRequests;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
+using System.Text;
 using System.Threading.Tasks;
 using OldSensorBase = HSMDataCollector.Base.SensorBase;
 using SensorBase = HSMDataCollector.DefaultSensors.SensorBase;
-using HSMSensorDataObjects.SensorValueRequests;
-using System.Reflection;
-using System.Text;
 
 namespace HSMDataCollector.Core
 {
@@ -371,8 +370,6 @@ namespace HSMDataCollector.Core
 
         public IInstantValueSensor<double> CreateDoubleSensor(string path, string description = "") => CreateInstantSensor<double>(path, description);
 
-        public IInstantValueSensor<double> CreateDoubleSensor(InstantSensorOptions options) => CreateInstantSensor<double>(options);
-
         public IInstantValueSensor<string> CreateStringSensor(string path, string description = "") => CreateInstantSensor<string>(path, description);
 
         public IInstantValueSensor<bool> CreateBoolSensor(string path, string description = "") => CreateInstantSensor<bool>(path, description);
@@ -380,6 +377,15 @@ namespace HSMDataCollector.Core
         public IInstantValueSensor<int> CreateIntSensor(string path, string description = "") => CreateInstantSensor<int>(path, description);
 
 
+        public IInstantValueSensor<double> CreateDoubleSensor(InstantSensorOptions options) => CreateInstantSensor<double>(options);
+
+        public IInstantValueSensor<string> CreateStringSensor(InstantSensorOptions options) => CreateInstantSensor<string>(options);
+
+        public IInstantValueSensor<bool> CreateBoolSensor(InstantSensorOptions options) => CreateInstantSensor<bool>(options);
+
+        public IInstantValueSensor<int> CreateIntSensor(InstantSensorOptions options) => CreateInstantSensor<int>(options);
+
+        [Obsolete]
         public IInstantValueSensor<string> CreateFileSensor(string path, string fileName, string extension = "txt", string description = "")
         {
             var existingSensor = GetExistingSensor(path);
@@ -435,21 +441,25 @@ namespace HSMDataCollector.Core
             await _hsmClient.Data.SendRequest(value);
         }
 
+        [Obsolete]
         public ILastValueSensor<bool> CreateLastValueBoolSensor(string path, bool defaultValue, string description = "")
         {
             return CreateLastValueSensorInternal(path, defaultValue, description);
         }
 
+        [Obsolete]
         public ILastValueSensor<int> CreateLastValueIntSensor(string path, int defaultValue, string description = "")
         {
             return CreateLastValueSensorInternal(path, defaultValue, description);
         }
 
+        [Obsolete]
         public ILastValueSensor<double> CreateLastValueDoubleSensor(string path, double defaultValue, string description = "")
         {
             return CreateLastValueSensorInternal(path, defaultValue, description);
         }
 
+        [Obsolete]
         public ILastValueSensor<string> CreateLastValueStringSensor(string path, string defaultValue, string description = "")
         {
             return CreateLastValueSensorInternal(path, defaultValue, description);
@@ -457,11 +467,11 @@ namespace HSMDataCollector.Core
 
         private IInstantValueSensor<T> CreateInstantSensor<T>(string path, string description)
         {
-            (var nodePath, var name) = GetPathAndName(path);
+            (var _, var name) = GetPathAndName(path);
 
             var options = new InstantSensorOptions
             {
-                Path = nodePath,
+                Path = path,
                 SensorName = name,
                 Description = description,
             };
@@ -471,7 +481,7 @@ namespace HSMDataCollector.Core
 
         private IInstantValueSensor<T> CreateInstantSensor<T>(InstantSensorOptions options) => (IInstantValueSensor<T>)RegisterCustomSensor(new SensorInstant<T>(options.SetInstantType<T>()));
 
-
+        [Obsolete]
         private ILastValueSensor<T> CreateLastValueSensorInternal<T>(string path, T defaultValue, string description = "")
         {
             var existingSensor = GetExistingSensor(path);
@@ -515,6 +525,21 @@ namespace HSMDataCollector.Core
             return CreateBarSensor(new IntBarPublicSensor(options));
         }
 
+        public IBarSensor<int> CreateIntBarSensor(BarSensorOptions2 options)
+        {
+            //(var nodePath, var name) = GetPathAndName(options.Path);
+
+            //var options = new BarSensorOptions2()
+            //{
+            //    CollectBarPeriod = TimeSpan.FromMilliseconds(barPeriod),
+            //    PostDataPeriod = TimeSpan.FromMilliseconds(postPeriod),
+            //    SensorName = name,
+            //    Path = nodePath,
+            //};
+
+            return CreateBarSensor(new IntBarPublicSensor(options));
+        }
+
         public IBarSensor<int> Create1HrIntBarSensor(string path, string description = "") => CreateIntBarSensor(path, 3600000, 15000, description);
 
         public IBarSensor<int> Create30MinIntBarSensor(string path, string description = "") => CreateIntBarSensor(path, 1800000, 15000, description);
@@ -541,6 +566,13 @@ namespace HSMDataCollector.Core
 
             return CreateBarSensor(new DoubleBarPublicSensor(options));
         }
+
+
+        public IBarSensor<double> CreateDoubleBarSensor(BarSensorOptions2 options)
+        {
+            throw new NotImplementedException();
+        }
+
 
         public IBarSensor<double> Create1HrDoubleBarSensor(string path, int precision = 2, string description = "") => CreateDoubleBarSensor(path, 3600000, 15000, precision, description);
 

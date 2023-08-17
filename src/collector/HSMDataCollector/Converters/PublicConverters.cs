@@ -38,6 +38,7 @@ namespace HSMDataCollector.Converters
 
                 TtlAlert = options.TtlAlert,
 
+                OriginalUnit = options.SensorUnit,
                 Description = options.Description,
                 SensorType = options.Type,
                 Path = options.Path,
@@ -45,7 +46,7 @@ namespace HSMDataCollector.Converters
                 OnlyUniqValues = options.OnlyUniqValues,
             };
 
-            options.TTL = info.TtlAlert.TtlValue ?? options.TTL;
+            options.TTL = info.TtlAlert?.TtlValue ?? options.TTL;
 
             if (options.HasSettings)
                 info.Settings = new SensorMetainfoSettings()
@@ -54,9 +55,6 @@ namespace HSMDataCollector.Converters
                     SelfDestroy = options.SelfDestroy,
                     TTL = options.TTL,
                 };
-
-            if (options.SensorUnit != null)
-                info.Units = new SensorMetainfoUnits(options.SensorUnit.Value);
 
             return info;
         }

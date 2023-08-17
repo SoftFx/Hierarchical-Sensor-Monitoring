@@ -1,4 +1,5 @@
 ﻿using HSMDataCollector.SensorsMetainfo;
+using HSMSensorDataObjects.SensorRequests;
 
 namespace HSMDataCollector.Prototypes
 {
@@ -14,7 +15,7 @@ namespace HSMDataCollector.Prototypes
             "currently in use by the operating system.";
 
             Enables = SetEnables.ForGrafana;
-            Units = SetUnits.SetMB;
+            OriginalUnit = Unit.MB;
         }
     }
 
@@ -31,7 +32,7 @@ namespace HSMDataCollector.Prototypes
             "server, or computer at any given point.";
 
             Enables = SetEnables.ForGrafana;
-            Units = SetUnits.SetPercents;
+            OriginalUnit = Unit.Percents;
         }
     }
 
@@ -46,7 +47,7 @@ namespace HSMDataCollector.Prototypes
             Description = "CPU usage percentage.";
 
             Enables = SetEnables.ForGrafana;
-            Units = SetUnits.SetPercents;
+            OriginalUnit = Unit.Percents;
         }
     }
 
@@ -61,7 +62,7 @@ namespace HSMDataCollector.Prototypes
             Description = "Current process working set";
 
             Enables = SetEnables.ForGrafana;
-            Units = SetUnits.SetMB;
+            OriginalUnit = Unit.MB;
         }
     }
 

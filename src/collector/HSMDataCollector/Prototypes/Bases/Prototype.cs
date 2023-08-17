@@ -18,10 +18,9 @@ namespace HSMDataCollector.Prototypes
         {
             var info = new MetainfoType()
             {
+                OriginalUnit = OriginalUnit,
                 Description = Description,
                 Path = Path,
-
-                Units = new SensorMetainfoUnits(Units.Selected),
 
                 Settings = new SensorMetainfoSettings()
                 {
