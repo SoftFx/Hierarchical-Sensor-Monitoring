@@ -9,7 +9,7 @@
 
 <div class="d-flex justify-content-start">
     <div class="d-flex ms-3 text-nowrap">
-        <span style="min-width: 10rem">Sensor type:</span>
+        <span style="min-width: 8rem">Sensor type:</span>
     </div>
     <div class="d-flex w-100">
         <span>@(Model.SensorType)</span>
@@ -26,7 +26,7 @@
 
 <div class="d-flex justify-content-start">
     <div class="d-flex ms-3 text-nowrap">
-        <span style="min-width: 10rem">Sensor status:</span>
+        <span style="min-width: 8rem">Sensor status:</span>
     </div>
     <div class="d-flex w-100">
         <li class='@Model.Status.ToIcon() sensor-icon-with-margin align-self-center' title='Status: @Model.Status'></li>
@@ -44,7 +44,7 @@
 {
     <div class="d-flex justify-content-start">
         <div class="d-flex ms-3 text-nowrap">
-            <span style="min-width: 10rem">Enabled for:</span>
+            <span style="min-width: 8rem">Enabled for:</span>
         </div>
         <div class="d-flex w-100">
             <div class="sensor-icon-with-margin">
@@ -59,7 +59,7 @@
 {
     <div class="d-flex justify-content-start">
         <div class="d-flex ms-3 text-nowrap">
-            <span style="min-width: 10rem">Status comment:</span>
+            <span style="min-width: 8rem">Status comment:</span>
         </div>
         <div class="d-flex w-100">
             <span id="markdown_status_comment">@Html.Raw(Model.StatusComment)</span>
@@ -71,7 +71,7 @@
 {
     <div class="d-flex justify-content-start">
         <div class="d-flex ms-3 text-nowrap">
-            <span style="min-width: 10rem">Unit:</span>
+            <span style="min-width: 8rem">Unit:</span>
         </div>
         <div class="d-flex w-100">
             <span id="markdown_status_comment">@Model.SelectedUnit</span>
@@ -79,11 +79,14 @@
     </div>
 }
 
-<div class="d-flex justify-content-start">
-    <div class="d-flex ms-3 text-nowrap">
-        <span style="min-width: 10rem">Only unique values:</span>
+@if (Model.SensorType is not (SensorType.IntegerBar or SensorType.DoubleBar or SensorType.File))
+{
+    <div class="d-flex justify-content-start">
+        <div class="d-flex ms-3 text-nowrap">
+            <span style="min-width: 8rem">Aggregate data:</span>
+        </div>
+        <div class="d-flex w-100 form-check form-switch">
+            <input id="saveOnlyUniqueValuesSwitch" class="form-check-input" type="checkbox" role="switch" asp-for="SaveOnlyUniqueValues" disabled>
+        </div>
     </div>
-    <div class="d-flex w-100 form-check form-switch">
-        <input id="saveOnlyUniqueValuesSwitch" class="form-check-input" type="checkbox" role="switch" asp-for="SaveOnlyUniqueValues" disabled>
-    </div>
-</div>
+}
