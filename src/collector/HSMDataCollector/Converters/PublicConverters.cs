@@ -1,11 +1,33 @@
-﻿using HSMDataCollector.Options;
+﻿using HSMDataCollector.Alerts;
+using HSMDataCollector.Options;
 using HSMDataCollector.SensorsMetainfo;
+using System.Linq;
 
 namespace HSMDataCollector.Converters
 {
     internal static class PublicConverters
     {
-        internal static SensorMetainfo ToInfo(this SensorOptions2 options)
+        internal static SensorMetainfo ToInfo(this InstantSensorOptions options)
+        {
+            var info = options.ToBaseInfo();
+
+            info.Alerts = options.Alerts?.Select(u => (AlertBuildRequest)u).ToList();
+
+            return info;
+        }
+
+
+        internal static SensorMetainfo ToInfo(this BarSensorOptions2 options)
+        {
+            var info = options.ToBaseInfo();
+
+            info.Alerts = options.Alerts?.Select(u => (AlertBuildRequest)u).ToList();
+
+            return info;
+        }
+
+
+        private static SensorMetainfo ToBaseInfo(this SensorOptions2 options)
         {
             var info = new SensorMetainfo()
             {

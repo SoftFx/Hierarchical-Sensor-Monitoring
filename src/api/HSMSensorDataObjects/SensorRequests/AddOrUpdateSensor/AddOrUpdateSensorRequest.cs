@@ -21,9 +21,9 @@ namespace HSMSensorDataObjects.SensorRequests
         public override Command Type => Command.AddOrUpdateSensor;
 
 
-        public List<AlertUpdateRequest> Policies { get; set; }
+        public List<AlertUpdateRequest> Alerts { get; set; }
 
-        public AlertUpdateRequest TTLPolicy { get; set; }
+        public AlertUpdateRequest TtlAlert { get; set; }
 
 
         public SensorType? SensorType { get; set; }

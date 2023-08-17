@@ -1,4 +1,6 @@
 ﻿using HSMDataCollector.Alerts;
+using HSMDataCollector.Converters;
+using HSMDataCollector.SensorsMetainfo;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.SensorRequests;
 using System;
@@ -10,6 +12,10 @@ namespace HSMDataCollector.Options
     {
         public List<InstantAlertBuildRequest> Alerts { get; set; } = new List<InstantAlertBuildRequest>();
 
+
+        internal override SensorMetainfo Metainfo => this.ToInfo();
+
+
         internal InstantSensorOptions SetType(SensorType type)
         {
             Type = type;
@@ -18,9 +24,14 @@ namespace HSMDataCollector.Options
         }
     }
 
+
     public class BarSensorOptions2 : SensorOptions2 
     {
         public List<BarAlertBuildRequest> Alerts { get; set; } = new List<BarAlertBuildRequest>();
+
+
+        internal override SensorMetainfo Metainfo => this.ToInfo();
+
 
         internal BarSensorOptions2 SetType(SensorType type)
         {
@@ -55,6 +66,9 @@ namespace HSMDataCollector.Options
 
         public bool OnlyUniqValues { get; set; }
 
+
+
+        internal abstract SensorMetainfo Metainfo { get; }
 
         internal SensorType Type { get; private protected set; }
 

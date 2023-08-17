@@ -1,4 +1,5 @@
-﻿using HSMDataCollector.SensorsMetainfo;
+﻿using HSMDataCollector.Alerts;
+using HSMDataCollector.SensorsMetainfo;
 using HSMSensorDataObjects.SensorRequests;
 using System.Linq;
 
@@ -9,6 +10,9 @@ namespace HSMDataCollector.Converters
         internal static AddOrUpdateSensorRequest ToApi(this SensorMetainfo info) =>
             new AddOrUpdateSensorRequest()
             {
+                Alerts = info.Alerts?.Select(u => u.ToApi()).ToList(),
+                TtlAlert = info.TtlAlert?.ToApi(),
+
                 Description = info.Description,
                 SensorType = info.SensorType,
                 Path = info.Path,
@@ -22,6 +26,38 @@ namespace HSMDataCollector.Converters
                 SaveOnlyUniqueValues = info.OnlyUniqValues,
 
                 EnableGrafana = info.Enables.ForGrafana,
+            };
+
+
+        internal static AlertUpdateRequest ToApi(this AlertBuildRequest alert) =>
+            new AlertUpdateRequest()
+            {
+                Conditions = alert.Conditions?.Select(u => u.ToApi()).ToList(),
+
+                Template = alert.Template,
+                Status = alert.Status,
+                Icon = alert.Icon,
+
+                IsDisabled = alert.IsDisabled,
+            };
+
+
+        internal static AlertConditionUpdate ToApi(this AlertConditionBuildRequest condition) =>
+            new AlertConditionUpdate()
+            {
+                Combination = condition.Combination,
+                Operation = condition.Operation,
+                Property = condition.Property,
+
+                Target = condition.Target.ToApi(),
+            };
+
+
+        internal static TargetValue ToApi(this AlertTargetBuildRequest target) =>
+            new TargetValue()
+            {
+                Value = target.Value,
+                Type = target.Type,
             };
     }
 }

@@ -1,4 +1,4 @@
-﻿namespace HSMSensorDataObjects.SensorRequests
+﻿namespace HSMSensorDataObjects
 {
     public enum Command
     {

@@ -223,8 +223,8 @@ namespace HSMServer.ApiObjectsConverters
                 KeepHistory = request.KeepHistory.ToTimeInterval(),
                 SelfDestroy = request.SelfDestroy.ToTimeInterval(),
                 TTL = request.TTL.ToTimeInterval(),
-                TTLPolicy = request.TTLPolicy?.Convert(),
-                Policies = request.Policies?.Select(policy => policy.Convert()).ToList(),
+                TTLPolicy = request.TtlAlert?.Convert(),
+                Policies = request.Alerts?.Select(policy => policy.Convert()).ToList(),
             };
 
         public static PolicyUpdate Convert(this AlertUpdateRequest request) =>

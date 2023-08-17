@@ -29,7 +29,7 @@ namespace HSMDataCollector.DefaultSensors
         public event Action<string, Exception> ExceptionThrowing;
 
 
-        protected SensorBase(SensorOptions2 options) : this(options.ToInfo()) { }
+        protected SensorBase(SensorOptions2 options) : this(options.Metainfo) { }
 
         private protected SensorBase(SensorMetainfo info)
         {

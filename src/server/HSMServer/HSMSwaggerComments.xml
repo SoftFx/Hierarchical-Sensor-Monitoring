@@ -144,7 +144,7 @@
             <param name="sensorUpdate"></param>
             <returns></returns>
         </member>
-        <member name="M:HSMServer.Controllers.SensorsController.Post(System.Collections.Generic.List{HSMSensorDataObjects.SensorRequests.CommandRequestBase})">
+        <member name="M:HSMServer.Controllers.SensorsController.Post(System.Collections.Generic.List{HSMSensorDataObjects.CommandRequestBase})">
             <summary>
             List of sensor commands
             </summary>
