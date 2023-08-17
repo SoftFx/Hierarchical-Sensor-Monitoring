@@ -43,7 +43,7 @@ namespace HSMDataCollector.Converters
                 SensorType = options.Type,
                 Path = options.Path,
 
-                OnlyUniqValues = options.OnlyUniqValues,
+                AggregateData = options.AggregateData,
             };
 
             options.TTL = info.TtlAlert?.TtlValue ?? options.TTL;

@@ -400,15 +400,13 @@ namespace HSMDataCollector.Core
 
         public async Task SendFileAsync(string sensorPath, string filePath, SensorStatus status = SensorStatus.Ok, string comment = "")
         {
-            if (!File.Exists(filePath))
+            var fileInfo = new FileInfo(filePath);
+
+            if (!fileInfo.Exists)
             {
                 _logger.Error($"{filePath} does not exist");
                 return;
             }
-
-            _logger.Info($"Sending {filePath} to {sensorPath}");
-
-            var fileInfo = new FileInfo(filePath);
 
             async Task<List<byte>> GetFileBytes()
             {
@@ -434,9 +432,11 @@ namespace HSMDataCollector.Core
                 Status = status,
                 Extension = fileInfo.Extension.TrimStart('.'),
                 Name = Path.GetFileNameWithoutExtension(fileInfo.FullName),
-                Time = DateTime.Now,
+                Time = DateTime.UtcNow,
                 Value = await GetFileBytes()
             };
+
+            _logger.Info($"Sending {filePath} to {sensorPath}");
 
             await _hsmClient.Data.SendRequest(value);
         }

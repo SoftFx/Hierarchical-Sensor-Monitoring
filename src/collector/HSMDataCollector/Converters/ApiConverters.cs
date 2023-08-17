@@ -23,7 +23,7 @@ namespace HSMDataCollector.Converters
                 SelfDestroy = info.Settings.SelfDestroy?.Ticks,
                 TTL = info.Settings.TTL?.Ticks,
 
-                SaveOnlyUniqueValues = info.OnlyUniqValues,
+                AggregateData = info.AggregateData,
 
                 EnableGrafana = info.Enables.ForGrafana,
             };

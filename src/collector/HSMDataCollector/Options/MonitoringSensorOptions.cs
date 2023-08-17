@@ -80,7 +80,7 @@ namespace HSMDataCollector.Options
         public bool EnableForGrafana { get; set; }
 
 
-        public bool OnlyUniqValues { get; set; }
+        public bool AggregateData { get; set; }
 
 
 

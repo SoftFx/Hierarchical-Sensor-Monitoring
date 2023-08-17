@@ -34,7 +34,7 @@ namespace HSMDataCollector.Prototypes
                     ForGrafana = Enables.ForGrafana,
                 },
 
-                OnlyUniqValues = OnlyUniqValues,
+                AggregateData = AggregateData,
             };
 
             return Apply(info, options);

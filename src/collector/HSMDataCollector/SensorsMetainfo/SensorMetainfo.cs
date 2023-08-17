@@ -27,6 +27,6 @@ namespace HSMDataCollector.SensorsMetainfo
         internal string Path { get; set; }
 
 
-        internal bool OnlyUniqValues { get; set; }
+        internal bool AggregateData { get; set; }
     }
 }
