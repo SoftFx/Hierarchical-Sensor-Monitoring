@@ -37,12 +37,15 @@ export class Plot {
     
     addCustomData(value, compareFunc = null) {
         if (this.checkTtl(value))
-            this.customdata.push('#Timeout');
+            this.customdata.push(value.comment);
         else  
             this.customdata.push(compareFunc === null ? value.value : compareFunc(value));
     }
 
     markerColorCompareFunc(value) {
+        if (this.checkTtl(value))
+            return 'rgba(255,102,25, 1)'
+
         return 'rgba(31, 119, 180, 1)';
     }
     
@@ -62,7 +65,11 @@ export class BoolPlot extends Plot {
         this.marker = {
             color: [],
             size: [],
-            opacity: 1
+            opacity: 1,
+            line: {
+                color: 'rgb(231, 99, 250)',
+                width: 0
+            }
         };
         this.setUpData([...new Map(data.map(item => [item['time'], item])).values()]);
     }
@@ -117,7 +124,11 @@ export class IntegerPlot extends Plot {
         this.marker = {
             color: [],
             size: [],
-            opacity: 1
+            opacity: 1,
+            line: {
+                color: 'rgb(231, 99, 250)',
+                width: 0
+            }
         };
         this.setUpData(data);
     }
@@ -131,13 +142,6 @@ export class IntegerPlot extends Plot {
             this.marker.color.push(this.markerColorCompareFunc(i));
         }
     }
-    
-    markerColorCompareFunc(value) {
-        if (this.checkTtl(value))
-            return 'rgba(255,255,51,1)'
-        
-        return super.markerColorCompareFunc(value);
-    }
 }
 
 export class DoublePlot extends Plot {
@@ -149,7 +153,11 @@ export class DoublePlot extends Plot {
         this.marker = {
             color: [],
             size: [],
-            opacity: 1
+            opacity: 1,
+            line: {
+                color: 'rgb(231, 99, 250)',
+                width: 0
+            }
         };
         this.setUpData(data);
     }
@@ -163,13 +171,6 @@ export class DoublePlot extends Plot {
             this.marker.size.push(this.getMarkerSize(i));
             this.marker.color.push(this.markerColorCompareFunc(i));
         }
-    }
-    
-    markerColorCompareFunc(value) {
-        if (this.checkTtl(value))
-            return 'rgba(255,255,51,1)'
-
-        return super.markerColorCompareFunc(value);
     }
     
     customSetUp(timelist, datalist) {
@@ -231,13 +232,6 @@ export class BarPLot extends Plot {
         }];
         window.barGraphData.x = this.x;
     }
-
-    markerColorCompareFunc(value) {
-        if (this.checkTtl(value))
-            return 'rgba(255,255,51,1)'
-
-        return super.markerColorCompareFunc(value);
-    }
 }
 
 export class TimeSpanPlot extends Plot {
@@ -286,13 +280,6 @@ export class TimeSpanPlot extends Plot {
         this.hovertemplate = '%{customdata}<extra></extra>'
     }
     
-    markerColorCompareFunc(value) {
-        if (this.checkTtl(value))
-            return 'rgba(255,255,51,1)'
-
-        return super.markerColorCompareFunc(value);
-    }
-
     getTimeSpanValue(value) {
         let time = value.value.split(':');
         let temp = time[0].split('.')
@@ -312,7 +299,7 @@ export class TimeSpanPlot extends Plot {
 
     getTimeSpanCustomData(timespan, value) {
         if (this.checkTtl(value))
-            return "#Timeout";
+            return value.comment;
         
         if (timespan === undefined)
             return '0h 0m 0s';
