@@ -79,9 +79,12 @@ namespace HSMDataCollector.Options
 
     public sealed class DiskSensorOptions : MonitoringInstantSensorOptions
     {
-        public string TargetPath { get; set; } = @"C:\";
+        internal const int DefaultCalibrationRequests = 6;
+        internal const string DefaultTargetPath = @"C:\";
 
-        public int CalibrationRequests { get; set; } = 6;
+        public int CalibrationRequests { get; set; } = DefaultCalibrationRequests;
+
+        public string TargetPath { get; set; } = DefaultTargetPath;
     }
 
 

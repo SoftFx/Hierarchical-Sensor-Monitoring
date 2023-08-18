@@ -9,10 +9,6 @@ namespace HSMDataCollector.Prototypes
 {
     internal abstract class DisksMonitoringPrototype : MonitoringInstantSensorOptionsPrototype<DiskSensorOptions>
     {
-        private const int DefaultCalibrationRequests = 6;
-        private const string DefaultTargetPath = @"C:\";
-
-
         protected override TimeSpan DefaultPostDataPeriod => TimeSpan.FromMinutes(5);
 
         protected override string Category => "Disks monitoring";
@@ -37,8 +33,8 @@ namespace HSMDataCollector.Prototypes
         {
             var options = base.Get(customOptions);
 
-            options.CalibrationRequests = customOptions?.CalibrationRequests ?? DefaultCalibrationRequests;
-            options.TargetPath = customOptions?.TargetPath ?? DefaultTargetPath;
+            options.CalibrationRequests = customOptions?.CalibrationRequests ?? DiskSensorOptions.DefaultCalibrationRequests;
+            options.TargetPath = customOptions?.TargetPath ?? DiskSensorOptions.DefaultTargetPath;
 
             var diskInfo = new WindowsDiskInfo(options.TargetPath);
 
