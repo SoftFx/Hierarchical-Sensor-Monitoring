@@ -11,7 +11,7 @@ namespace HSMDataCollector.Prototypes
 
     internal sealed class FreeRamMemoryPrototype : SystemMonitoringPrototype
     {
-        protected override string SensorName => "Free RAM memory MB";
+        protected override string SensorName => "Free RAM memory";
 
 
         internal FreeRamMemoryPrototype() : base()
@@ -57,7 +57,7 @@ namespace HSMDataCollector.Prototypes
 
     internal sealed class ProcessMemoryPrototype : SystemMonitoringPrototype
     {
-        protected override string SensorName => "Process memory MB";
+        protected override string SensorName => "Process memory";
 
 
         internal ProcessMemoryPrototype() : base()

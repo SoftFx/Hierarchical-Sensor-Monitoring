@@ -9,10 +9,7 @@ namespace HSMDataCollector.DefaultSensors.Other
 {
     internal sealed class CollectorStatusSensor : SensorBase<string>
     {
-        protected override string SensorName => "Collector status";
-
-
-        public CollectorStatusSensor(SensorOptions options) : base(options) { }
+        public CollectorStatusSensor(InstantSensorOptions options) : base(options) { }
 
 
         public void BuildAndSendValue(HsmHttpsClient client, CollectorStatus collectorStatus, string error)

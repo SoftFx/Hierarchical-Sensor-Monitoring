@@ -17,7 +17,7 @@ namespace HSMDataCollector.DefaultSensors
 
         private bool IsCalibration => _requestsCount <= _calibrationRequests;
 
-        protected override string SensorName => $"Free space on disk{_diskInfo.Name} prediction";
+        //protected override string SensorName => $"Free space on disk{_diskInfo.Name} prediction";
 
 
         public FreeDiskSpacePredictionBase(DiskSensorOptions options, IDiskInfo diskInfo) : base(options)

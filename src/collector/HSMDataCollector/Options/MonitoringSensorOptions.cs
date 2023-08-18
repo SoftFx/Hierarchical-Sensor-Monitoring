@@ -77,31 +77,6 @@ namespace HSMDataCollector.Options
     }
 
 
-    //public class MonitoringSensorOptions : BarSensorOptions2
-    //{
-    //    internal virtual TimeSpan DefaultPostDataPeriod { get; } = TimeSpan.FromSeconds(15);
-
-
-    //    public TimeSpan PostDataPeriod { get; set; }
-
-
-    //    public MonitoringSensorOptions()
-    //    {
-    //        PostDataPeriod = DefaultPostDataPeriod;
-    //    }
-    //}
-
-
-    //public class BarSensorOptions : MonitoringSensorOptions
-    //{
-    //    public TimeSpan CollectBarPeriod { get; set; } = TimeSpan.FromSeconds(5);
-
-    //    public TimeSpan BarPeriod { get; set; } = TimeSpan.FromMinutes(5);
-
-    //    public int Precision { get; set; } = 2;
-    //}
-
-
     public sealed class DiskSensorOptions : MonitoringInstantSensorOptions
     {
         public string TargetPath { get; set; } = @"C:\";
@@ -110,7 +85,6 @@ namespace HSMDataCollector.Options
     }
 
 
-    
     public sealed class VersionSensorOptions : InstantSensorOptions
     {
         public Version Version { get; set; }
@@ -127,11 +101,7 @@ namespace HSMDataCollector.Options
     }
 
 
-    public sealed class CollectorInfoOptions : InstantSensorOptions
-    {
-        internal const string BaseCollectorPath = "Product Info/Collector";
-    }
-
+    public sealed class CollectorInfoOptions : InstantSensorOptions { }
 
     public sealed class WindowsInfoSensorOptions : MonitoringInstantSensorOptions { }
 

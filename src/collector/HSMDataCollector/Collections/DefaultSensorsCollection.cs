@@ -38,12 +38,12 @@ namespace HSMDataCollector.DefaultSensors
             //return Register(new CollectorAlive(_prototype.CollectorAlive.Get(options)));
         }
 
-        protected DefaultSensorsCollection AddCollectorVersionCommon(CollectorInfoOptions options)
+        protected DefaultSensorsCollection AddCollectorVersionCommon(CollectorInfoOptions options = null)
         {
             if (CollectorVersion != null)
                 return this;
 
-            CollectorVersion = new ProductVersionSensor(_prototype.CollectorVersion.ConvertToVersionOptions(options));
+            CollectorVersion = new ProductVersionSensor(_prototype.CollectorVersion.Get(null));
 
             return Register(CollectorVersion);
         }

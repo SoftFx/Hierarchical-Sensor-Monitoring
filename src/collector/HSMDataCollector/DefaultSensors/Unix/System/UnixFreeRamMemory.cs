@@ -8,9 +8,6 @@ namespace HSMDataCollector.DefaultSensors.Unix
         private const string TotalCpuBashCommand = "free -m | awk 'NR==2 { print $7 }'";
 
 
-        protected override string SensorName => "Free RAM memory MB";
-
-
         internal UnixFreeRamMemory(BarSensorOptions options) : base(options) { }
 
 
