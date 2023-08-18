@@ -30,6 +30,14 @@ namespace HSMDataCollector.Prototypes
             };
 
 
-        internal static string BuildPath(params string[] parts) => string.Join(PathSeparator, SystemPath, parts.Select(u => !string.IsNullOrEmpty(u)));
+        internal static string BuildDefaultPath(string category, string path) =>
+            BuildPath(new string[]
+            {
+                SystemPath,
+                category,
+                path,
+            });
+
+        internal static string BuildPath(params string[] parts) => string.Join(PathSeparator, parts.Where(u => !string.IsNullOrEmpty(u)));
     }
 }

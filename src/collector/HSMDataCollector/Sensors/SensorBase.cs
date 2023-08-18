@@ -15,22 +15,20 @@ namespace HSMDataCollector.DefaultSensors
         private readonly SensorOptions _metainfo;
 
 
-        public string SensorPath { get; }
+        public string SensorPath => _metainfo.Path;
 
 
         internal event Func<PriorityRequest, Task<bool>> SensorCommandRequest;
-
         internal event Action<SensorValueBase> ReceiveSensorValue;
-
 
         public event Action<string, Exception> ExceptionThrowing;
 
 
         protected SensorBase(SensorOptions options)
         {
-            _metainfo = options;
+            options.Path = DefaultPrototype.BuildPath(options.Module, options.Path);
 
-            SensorPath = DefaultPrototype.BuildPath(options.Module, options.Path);
+            _metainfo = options;
         }
 
 

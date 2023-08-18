@@ -12,7 +12,7 @@ namespace HSMDataCollector.Prototypes
 
         protected BarSensorOptionsPrototype()
         {
-            Path = DefaultPrototype.BuildPath(Category, Path);
+            Path = DefaultPrototype.BuildDefaultPath(Category, Path);
             EnableForGrafana = true;
         }
 
