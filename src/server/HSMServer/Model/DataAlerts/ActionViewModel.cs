@@ -1,6 +1,7 @@
 ﻿using HSMCommon.Extensions;
 using HSMServer.Extensions;
 using HSMServer.Model.TreeViewModel;
+using HSMServer.Notifications.Telegram;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using System.Collections.Generic;
 
@@ -42,18 +43,18 @@ namespace HSMServer.Model.DataAlerts
         };
 
 
-        public List<SelectListItem> AvailableChats { get; } = new List<SelectListItem> { new SelectListItem("HSM_Group", "1"), new SelectListItem("HSM_Dev", "2"), new SelectListItem("acc1", "3"), new SelectListItem("acc2", "4") };
+        public List<TelegramChat> AvailableChats { get; }
 
         public List<SelectListItem> Actions { get; }
 
         public bool IsMain { get; }
 
 
-        public ActionViewModel(bool isMain/*, List<SelectListItem> availableChats*/)
+        public ActionViewModel(bool isMain, List<TelegramChat> availableChats)
         {
             IsMain = isMain;
             Actions = _actions.ToSelectedItems(k => k.Value, v => v.Key.ToString());
-            //AvailableChats = availableChats;
+            AvailableChats = availableChats;
 
             Action = ActionType.SendNotification;
         }

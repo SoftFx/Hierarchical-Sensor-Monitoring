@@ -143,7 +143,7 @@
             let element = $(this).parents("div.fullAction:first");
 
             $.ajax({
-                url: `@Url.Action(nameof(HomeController.AddAlertAction), ViewConstants.HomeController)?sensorId=@Model.EntityId`,
+                url: `@Url.Action(nameof(HomeController.AddAlertAction), ViewConstants.HomeController)?entityId=@Model.EntityId`,
                 cache: false
             }).done(function (viewData) {
                 var actionsBlock = element.find($(`div[name='actionsBlock']`));

@@ -56,7 +56,7 @@ namespace HSMServer.Model.TreeViewModel
             KeepHistory.FromModel(model.Settings.KeepHistory.CurValue, PredefinedIntervals.ForKeepHistory);
             SelfDestroy.FromModel(model.Settings.SelfDestroy.CurValue, PredefinedIntervals.ForSelfDestory);
 
-            TTLAlert = new TimeToLiveAlertViewModel(model.Policies.TimeToLive, model);
+            TTLAlert = new TimeToLiveAlertViewModel(model.Policies.TimeToLive, this);
         }
     }
 }

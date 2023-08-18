@@ -5,6 +5,7 @@ using HSMServer.Model.AccessKeysViewModels;
 using HSMServer.Model.Authentication;
 using HSMServer.Model.Folders;
 using HSMServer.Notification.Settings;
+using HSMServer.Notifications.Telegram;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -33,11 +34,12 @@ namespace HSMServer.Model.TreeViewModel
         public Guid? FolderId => Parent is FolderModel folder ? folder?.Id : null;
 
 
+        internal Func<Dictionary<Telegram.Bot.Types.ChatId, TelegramChat>> GetAllUserChats;
+
+
         public ProductNodeViewModel(ProductModel model, ProductNodeViewModel parent, FolderModel folder) : base(model)
         {
             Notifications = new(model.NotificationsSettings, () => Parent is FolderModel folder ? folder.Notifications : (Parent as ProductNodeViewModel)?.Notifications);
-
-            Update(model);
 
             parent?.AddSubNode(this);
 

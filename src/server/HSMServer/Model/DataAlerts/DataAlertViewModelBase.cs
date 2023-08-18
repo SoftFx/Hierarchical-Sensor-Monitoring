@@ -88,36 +88,40 @@ namespace HSMServer.Model.DataAlerts
         protected virtual string DefaultIcon { get; }
 
 
-        protected DataAlertViewModel(Policy policy, Core.Model.BaseNodeModel node)
+        protected DataAlertViewModel(Policy policy, NodeViewModel node)
         {
             EntityId = node.Id;
             Id = policy.Id;
 
             IsDisabled = policy.IsDisabled;
 
-            Actions.Add(new ActionViewModel(true)
+            var availableChats = node.GetAllChats();
+
+            Actions.Add(new ActionViewModel(true, availableChats)
             {
                 Action = ActionType.SendNotification,
                 Comment = policy.Template,
-                DisplayComment = node is Core.Model.BaseSensorModel ? policy.RebuildState() : policy.Template
+                DisplayComment = node is SensorNodeViewModel ? policy.RebuildState() : policy.Template
             });
 
             if (!string.IsNullOrEmpty(policy.Icon))
-                Actions.Add(new ActionViewModel(false) { Action = ActionType.ShowIcon, Icon = policy.Icon });
+                Actions.Add(new ActionViewModel(false, availableChats) { Action = ActionType.ShowIcon, Icon = policy.Icon });
 
             if (policy.Status == Core.Model.SensorStatus.Error)
-                Actions.Add(new ActionViewModel(false) { Action = ActionType.SetStatus });
+                Actions.Add(new ActionViewModel(false, availableChats) { Action = ActionType.SetStatus });
         }
 
-        public DataAlertViewModel(Guid entityId)
+        public DataAlertViewModel(NodeViewModel node)
         {
-            EntityId = entityId;
+            EntityId = node.Id;
             IsModify = true;
 
             Conditions.Add(CreateCondition(true));
 
-            Actions.Add(new ActionViewModel(true) { Comment = DefaultCommentTemplate });
-            Actions.Add(new ActionViewModel(false) { Action = ActionType.ShowIcon, Icon = DefaultIcon });
+            var availableChats = node.GetAllChats();
+
+            Actions.Add(new ActionViewModel(true, availableChats) { Comment = DefaultCommentTemplate });
+            Actions.Add(new ActionViewModel(false, availableChats) { Action = ActionType.ShowIcon, Icon = DefaultIcon });
         }
 
 
@@ -127,9 +131,9 @@ namespace HSMServer.Model.DataAlerts
 
     public class DataAlertViewModel<T> : DataAlertViewModel where T : Core.Model.BaseValue
     {
-        public DataAlertViewModel(Guid entityId) : base(entityId) { }
+        public DataAlertViewModel(NodeViewModel node) : base(node) { }
 
-        public DataAlertViewModel(Policy<T> policy, Core.Model.BaseSensorModel sensor)
+        public DataAlertViewModel(Policy<T> policy, SensorNodeViewModel sensor)
             : base(policy, sensor)
         {
             for (int i = 0; i < policy.Conditions.Count; ++i)
