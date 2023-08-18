@@ -218,7 +218,7 @@ namespace HSMServer.ApiObjectsConverters
                 Id = sensorId,
                 Description = request.Description,
                 SelectedUnit = request.OriginalUnit?.Convert(),
-                SaveOnlyUniqueValues = request.SaveOnlyUniqueValues,
+                SaveOnlyUniqueValues = request.AggregateData,
                 Integration = request.EnableGrafana.HasValue && request.EnableGrafana.Value ? Integration.Grafana : null,
                 KeepHistory = request.KeepHistory.ToTimeInterval(),
                 SelfDestroy = request.SelfDestroy.ToTimeInterval(),

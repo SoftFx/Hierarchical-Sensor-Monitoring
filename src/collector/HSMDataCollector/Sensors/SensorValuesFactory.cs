@@ -1,10 +1,47 @@
-﻿using HSMSensorDataObjects.SensorValueRequests;
+﻿using HSMSensorDataObjects;
+using HSMSensorDataObjects.SensorValueRequests;
 using System;
 
 namespace HSMDataCollector.SensorsFactory
 {
     internal static class SensorValuesFactory
     {
+        internal static SensorType GetInstantType<T>()
+        {
+            switch (typeof(T))
+            {
+                case Type type when type == typeof(bool):
+                    return SensorType.BooleanSensor;
+                case Type type when type == typeof(int):
+                    return SensorType.IntSensor;
+                case Type type when type == typeof(double):
+                    return SensorType.DoubleSensor;
+                case Type type when type == typeof(string):
+                    return SensorType.StringSensor;
+                case Type type when type == typeof(TimeSpan):
+                    return SensorType.TimeSpanSensor;
+                case Type type when type == typeof(Version):
+                    return SensorType.VersionSensor;
+                default:
+                    throw new ArgumentException($"Unsupported sensor value {typeof(T).Name}");
+            }
+        }
+
+
+        internal static SensorType GetBarType<T>()
+        {
+            switch (typeof(T))
+            {
+                case Type type when type == typeof(int):
+                    return SensorType.IntegerBarSensor;
+                case Type type when type == typeof(double):
+                    return SensorType.DoubleBarSensor;
+                default:
+                    throw new ArgumentException($"Unsupported sensor value {typeof(T).Name}");
+            }
+        }
+
+
         internal static SensorValueBase BuildValue<T>(T val)
         {
             if (val is SensorValueBase sensorV)

@@ -10,6 +10,7 @@ using HSMDataCollector.Logging;
 using HSMDataCollector.Options;
 using HSMDataCollector.PublicInterface;
 using HSMDataCollector.Sensors;
+using HSMDataCollector.SensorsFactory;
 using HSMDataCollector.SyncQueue;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.SensorValueRequests;
@@ -369,7 +370,7 @@ namespace HSMDataCollector.Core
 
         #endregion
 
-        #region Generic sensors functionality
+        #region Custom instant sensors
 
         public IInstantValueSensor<double> CreateDoubleSensor(string path, string description = "") => CreateInstantSensor<double>(path, description);
 
@@ -387,6 +388,40 @@ namespace HSMDataCollector.Core
         public IInstantValueSensor<bool> CreateBoolSensor(string path, InstantSensorOptions options) => CreateInstantSensor<bool>(path, options);
 
         public IInstantValueSensor<int> CreateIntSensor(string path, InstantSensorOptions options) => CreateInstantSensor<int>(path, options);
+
+
+        private IInstantValueSensor<T> CreateInstantSensor<T>(string path, string description) =>
+            CreateInstantSensor<T>(path, new InstantSensorOptions()
+            {
+                Description = description,
+            });
+
+        private IInstantValueSensor<T> CreateInstantSensor<T>(string path, InstantSensorOptions options)
+        {
+            options = FillOptions(path, SensorValuesFactory.GetInstantType<T>(), options);
+
+            return (IInstantValueSensor<T>)RegisterCustomSensor(new SensorInstant<T>(options));
+        }
+
+        private T FillOptions<T>(string path, SensorType type, T options) where T : SensorOptions2
+        {
+            options.Path = path;
+            options.Type = type;
+            options.Module = _options.Module;
+
+            return options;
+        }
+
+        public IServiceCommandsSensor CreateServiceCommandsSensor(string module = "")
+        {
+            var options = FillOptions($"Product Info/Service commands", SensorValuesFactory.GetInstantType<string>(), new InstantSensorOptions());
+
+            return (IServiceCommandsSensor)RegisterCustomSensor(new ServiceCommandsSensor(options));
+        }
+
+        #endregion
+
+        #region Obsolete functions
 
         [Obsolete]
         public IInstantValueSensor<string> CreateFileSensor(string path, string fileName, string extension = "txt", string description = "")
@@ -444,14 +479,6 @@ namespace HSMDataCollector.Core
             await _hsmClient.Data.SendRequest(value);
         }
 
-        private IInstantValueSensor<T> CreateInstantSensor<T>(string path, string description) =>
-            CreateInstantSensor<T>(path, new InstantSensorOptions()
-            {
-                Description = description,
-            });
-
-        private IInstantValueSensor<T> CreateInstantSensor<T>(string path, InstantSensorOptions options) => (IInstantValueSensor<T>)RegisterCustomSensor(new SensorInstant<T>(options.SetInstantType<T>()));
-
 
         [Obsolete]
         public ILastValueSensor<bool> CreateLastValueBoolSensor(string path, bool defaultValue, string description = "")
@@ -490,19 +517,8 @@ namespace HSMDataCollector.Core
             return sensor;
         }
 
-
-
-        public IServiceCommandsSensor CreateServiceCommandsSensor(string module = "")
-        {
-            var options = new InstantSensorOptions()
-            {
-                Path = $"{module}/Product Info",
-            };
-
-            return (IServiceCommandsSensor)RegisterCustomSensor(new ServiceCommandsSensor(options));
-        }
-
         #endregion
+
 
         #region Generic bar sensors
 
@@ -517,9 +533,14 @@ namespace HSMDataCollector.Core
         public IBarSensor<int> Create1MinIntBarSensor(string path, string description = "") => CreateIntBarSensor(path, 60000, 15000, description);
 
         public IBarSensor<int> CreateIntBarSensor(string path, int barPeriod, int postPeriod = 15000, string description = "") =>
-            CreateIntBarSensor(BuildBarOptions(path, barPeriod, postPeriod, description));
+            CreateIntBarSensor(path, BuildBarOptions<int>(barPeriod, postPeriod, description));
 
-        public IBarSensor<int> CreateIntBarSensor(BarSensorOptions2 options) => (IBarSensor<int>)RegisterCustomSensor(new IntBarPublicSensor(options));
+        public IBarSensor<int> CreateIntBarSensor(string path, BarSensorOptions2 options)
+        {
+            options = FillOptions(path, SensorValuesFactory.GetBarType<int>(), options);
+
+            return (IBarSensor<int>)RegisterCustomSensor(new IntBarPublicSensor(options));
+        }
 
 
         public IBarSensor<double> Create1HrDoubleBarSensor(string path, int precision = 2, string description = "") => CreateDoubleBarSensor(path, 3600000, 15000, precision, description);
@@ -533,12 +554,17 @@ namespace HSMDataCollector.Core
         public IBarSensor<double> Create1MinDoubleBarSensor(string path, int precision = 2, string description = "") => CreateDoubleBarSensor(path, 60000, 15000, precision, description);
 
         public IBarSensor<double> CreateDoubleBarSensor(string path, int barPeriod, int postPeriod, int precision = 2, string description = "") =>
-            CreateDoubleBarSensor(BuildBarOptions(path, barPeriod, postPeriod, description, precision));
+            CreateDoubleBarSensor(path, BuildBarOptions<double>(barPeriod, postPeriod, description, precision));
 
-        public IBarSensor<double> CreateDoubleBarSensor(BarSensorOptions2 options) => (IBarSensor<double>)RegisterCustomSensor(new DoubleBarPublicSensor(options));
+        public IBarSensor<double> CreateDoubleBarSensor(string path, BarSensorOptions2 options)
+        {
+            options = FillOptions(path, SensorValuesFactory.GetBarType<double>(), options);
+
+            return (IBarSensor<double>)RegisterCustomSensor(new DoubleBarPublicSensor(options));
+        }
 
 
-        private BarSensorOptions2 BuildBarOptions(string path, int barPeriod, int postPeriod, string description, int precision = 2) =>
+        private BarSensorOptions2 BuildBarOptions<T>(int barPeriod, int postPeriod, string description, int precision = 2) =>
             new BarSensorOptions2()
             {
                 PostDataPeriod = TimeSpan.FromMilliseconds(postPeriod),
@@ -546,7 +572,6 @@ namespace HSMDataCollector.Core
 
                 Description = description,
                 Precision = precision,
-                Path = path,
             };
 
         private SensorBase RegisterCustomSensor(SensorBase newSensor)

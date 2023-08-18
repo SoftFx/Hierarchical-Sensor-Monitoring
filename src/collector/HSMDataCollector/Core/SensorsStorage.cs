@@ -68,7 +68,6 @@ namespace HSMDataCollector.Core
             throw new Exception($"Sensor with path {sensor.SensorPath} already exists");
         }
 
-
         private void WriteSensorException(string sensorPath, Exception ex) => _logger.Error($"Sensor: {sensorPath}, {ex}");
     }
 }

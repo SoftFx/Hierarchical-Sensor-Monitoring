@@ -64,7 +64,10 @@ namespace HSMDataCollector.Options
 
         internal SensorType Type { get; set; }
 
+        internal string Module { get; set; }
+
         internal string Path { get; set; }
+
 
 
         internal bool HasSettings => KeepHistory.HasValue || SelfDestroy.HasValue || TTL.HasValue;

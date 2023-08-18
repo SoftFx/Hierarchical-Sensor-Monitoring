@@ -129,7 +129,7 @@ namespace HSMDataCollector.Core
         /// <returns>A new instance of <see cref="IInstantValueSensor{T}"/> where T is bool</returns>
         IInstantValueSensor<bool> CreateBoolSensor(string path, string description = "");
 
-        IInstantValueSensor<bool> CreateBoolSensor(InstantSensorOptions options);
+        IInstantValueSensor<bool> CreateBoolSensor(string path, InstantSensorOptions options);
 
         /// <summary>
         /// Creates the instance of <see cref="IInstantValueSensor{T}"/> where T is int
@@ -139,7 +139,7 @@ namespace HSMDataCollector.Core
         /// <returns>A new instance of <see cref="IInstantValueSensor{T}"/> where T is int</returns>
         IInstantValueSensor<int> CreateIntSensor(string path, string description = "");
 
-        IInstantValueSensor<int> CreateIntSensor(InstantSensorOptions options);
+        IInstantValueSensor<int> CreateIntSensor(string path, InstantSensorOptions options);
 
         /// <summary>
         /// Creates the instance of <see cref="IInstantValueSensor{T}"/> where T is double
@@ -149,7 +149,7 @@ namespace HSMDataCollector.Core
         /// <returns>A new instance of <see cref="IInstantValueSensor{T}"/> where T is double</returns>
         IInstantValueSensor<double> CreateDoubleSensor(string path, string description = "");
 
-        IInstantValueSensor<double> CreateDoubleSensor(InstantSensorOptions options);
+        IInstantValueSensor<double> CreateDoubleSensor(string path, InstantSensorOptions options);
 
 
         /// <summary>
@@ -160,7 +160,7 @@ namespace HSMDataCollector.Core
         /// <returns>A new instance of <see cref="IInstantValueSensor{T}"/> where T is string</returns>
         IInstantValueSensor<string> CreateStringSensor(string path, string description = "");
 
-        IInstantValueSensor<string> CreateStringSensor(InstantSensorOptions options);
+        IInstantValueSensor<string> CreateStringSensor(string path, InstantSensorOptions options);
 
         /// <summary>
         /// Creates the instance of <see cref="IInstantValueSensor{T}"/> where T is string
@@ -229,7 +229,7 @@ namespace HSMDataCollector.Core
         /// <returns>A new instance of <see cref="IBarSensor{T}"/> where T is int, with specified parameters</returns>
         IBarSensor<int> CreateIntBarSensor(string path, int barPeriod = 300000, int postPeriod = 15000, string description = "");
 
-        IBarSensor<int> CreateIntBarSensor(BarSensorOptions2 options);
+        IBarSensor<int> CreateIntBarSensor(string path, BarSensorOptions2 options);
 
         /// <summary>
         /// Creates new BarSensor for collecting int values with timeout sent to 1 hour and smallPeriod
@@ -292,7 +292,7 @@ namespace HSMDataCollector.Core
         /// <returns>A new instance of <see cref="IBarSensor{T}"/> where T is double, with specified parameters</returns>
         IBarSensor<double> CreateDoubleBarSensor(string path, int barPeriod = 300000, int postPeriod = 15000, int precision = 2, string description = "");
 
-        IBarSensor<double> CreateDoubleBarSensor(BarSensorOptions2 options);
+        IBarSensor<double> CreateDoubleBarSensor(string path, BarSensorOptions2 options);
 
         /// <summary>
         /// Creates new BarSensor for collecting int values with timeout sent to 1 hour and smallPeriod
