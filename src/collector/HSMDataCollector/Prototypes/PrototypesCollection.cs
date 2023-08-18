@@ -2,7 +2,7 @@
 
 namespace HSMDataCollector.Options
 {
-    internal sealed class SensorsPrototype
+    internal sealed class PrototypesCollection
     {
         internal WindowsInfoMonitoringPrototype WindowsInfo { get; } /*= new WindowsInfoMonitoringPrototype();*/
 

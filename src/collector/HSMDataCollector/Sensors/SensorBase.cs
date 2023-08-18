@@ -30,7 +30,7 @@ namespace HSMDataCollector.DefaultSensors
         {
             _metainfo = options;
 
-            SensorPath = DefaultSensorPrototype.BuildPath(options.Module, options.Path);
+            SensorPath = DefaultPrototype.BuildPath(options.Module, options.Path);
         }
 
 

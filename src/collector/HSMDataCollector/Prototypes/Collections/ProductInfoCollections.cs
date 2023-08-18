@@ -8,7 +8,6 @@ namespace HSMDataCollector.Prototypes
     {
         internal const string ProductInfoCategory = "ProductInfo";
 
-
         protected override string Category => ProductInfoCategory;
     }
 

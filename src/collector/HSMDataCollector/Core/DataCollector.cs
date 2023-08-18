@@ -43,7 +43,7 @@ namespace HSMDataCollector.Core
         private readonly LoggerManager _logger = new LoggerManager();
 
         private readonly ConcurrentDictionary<string, ISensor> _nameToSensor = new ConcurrentDictionary<string, ISensor>();
-        private readonly SensorsPrototype _sensorsPrototype = new SensorsPrototype();
+        private readonly PrototypesCollection _sensorsPrototype = new PrototypesCollection();
         private readonly SensorsStorage _sensorsStorage;
         private readonly IQueueManager _queueManager;
         private readonly CollectorOptions _options;

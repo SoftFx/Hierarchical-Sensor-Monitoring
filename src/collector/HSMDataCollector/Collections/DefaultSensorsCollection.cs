@@ -12,7 +12,7 @@ namespace HSMDataCollector.DefaultSensors
         private static readonly NotSupportedException _notSupportedException = new NotSupportedException(NotSupportedSensor);
 
         private readonly SensorsStorage _storage;
-        protected readonly SensorsPrototype _prototype;
+        protected readonly PrototypesCollection _prototype;
 
 
         internal CollectorStatusSensor StatusSensor { get; private set; }
@@ -25,7 +25,7 @@ namespace HSMDataCollector.DefaultSensors
         protected abstract bool IsCorrectOs { get; }
 
 
-        protected DefaultSensorsCollection(SensorsStorage storage, SensorsPrototype prototype)
+        protected DefaultSensorsCollection(SensorsStorage storage, PrototypesCollection prototype)
         {
             _storage = storage;
             _prototype = prototype;

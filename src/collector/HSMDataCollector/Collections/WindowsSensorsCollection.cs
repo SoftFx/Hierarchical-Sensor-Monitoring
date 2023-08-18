@@ -12,7 +12,7 @@ namespace HSMDataCollector.DefaultSensors
         protected override bool IsCorrectOs => DataCollector.IsWindowsOS;
 
 
-        public WindowsSensorsCollection(SensorsStorage storage, SensorsPrototype prototype) : base(storage, prototype) { }
+        public WindowsSensorsCollection(SensorsStorage storage, PrototypesCollection prototype) : base(storage, prototype) { }
 
 
         #region Process
