@@ -4,7 +4,7 @@ using System;
 
 namespace HSMDataCollector.Prototypes
 {
-    internal abstract class ProductInfoPrototype : InstantSensorOptionsPrototype<InstantSensorOptions>
+    internal abstract class ProductInfoPrototype : InstantSensorOptionsPrototype<ServiceSensorOptions>
     {
         internal const string ProductInfoCategory = "ProductInfo";
 

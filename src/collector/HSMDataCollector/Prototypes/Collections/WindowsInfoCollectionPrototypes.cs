@@ -35,12 +35,12 @@ namespace HSMDataCollector.Prototypes
     }
 
 
-    internal sealed class WindowsUpdatePrototype : WindowsInfoMonitoringPrototype
+    internal sealed class WindowsLastUpdatePrototype : WindowsInfoMonitoringPrototype
     {
         protected override string SensorName => "Last update";
 
 
-        internal WindowsUpdatePrototype() : base()
+        internal WindowsLastUpdatePrototype() : base()
         {
             Description = "Time since last system update";
         }

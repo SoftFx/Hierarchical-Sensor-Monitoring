@@ -29,15 +29,31 @@ namespace HSMDataCollector.Options
         #endregion
 
 
+        #region Windows Os Info
 
-        internal WindowsInfoMonitoringPrototype WindowsInfo { get; } /*= new WindowsInfoMonitoringPrototype();*/
+        internal WindowsIsNeedUpdatePrototype WindowsIsNeedUpdate { get; } = new WindowsIsNeedUpdatePrototype();
+
+        internal WindowsLastRestartPrototype WindowsLastRestart { get; } = new WindowsLastRestartPrototype();
+
+        internal WindowsLastUpdatePrototype WindowsLastUpdate { get; } = new WindowsLastUpdatePrototype();
+
+        #endregion
+
+
+        #region Product Info
+
+        internal CollectorVersionPrototype CollectorVersion { get; } = new CollectorVersionPrototype();
+
+        internal ServiceAlivePrototype CollectorAlive { get; } = new ServiceAlivePrototype();
 
 
         internal ProductVersionPrototype ProductVersion { get; } = new ProductVersionPrototype();
 
 
-        internal CollectorVersionPrototype CollectorVersion { get; } = new CollectorVersionPrototype();
+        internal ServiceCommandsPrototype ServiceCommands { get; } = new ServiceCommandsPrototype();
 
-        internal ServiceAlivePrototype CollectorAlive { get; } = new ServiceAlivePrototype();
+        internal ServiceStatusPrototype ServiceStatus { get; } = new ServiceStatusPrototype();
+
+        #endregion
     }
 }

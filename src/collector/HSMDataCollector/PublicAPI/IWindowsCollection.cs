@@ -44,15 +44,13 @@ namespace HSMDataCollector.PublicInterface
 
         IWindowsCollection AddCollectorVersion(CollectorInfoOptions options = null);
 
-        IWindowsCollection AddCollectorStatus(CollectorInfoOptions options = null);
-
         IWindowsCollection AddCollectorMonitoringSensors(CollectorMonitoringInfoOptions options = null);
 
 
         IWindowsCollection AddProductVersion(VersionSensorOptions options = null);
 
 
-        IWindowsCollection SubscribeToWindowsServiceStatus(string serviceName, string module = "");
+        IWindowsCollection SubscribeToWindowsServiceStatus(string serviceName);
 
         IWindowsCollection SubscribeToWindowsServiceStatus(ServiceSensorOptions options);
     }
