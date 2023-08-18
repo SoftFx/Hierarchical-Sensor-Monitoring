@@ -23,6 +23,9 @@
 
     <div name="sendNotificationAction" class="@isSendAction.ToVisibility()">
         <input type="text" class="alert-block target-input target-comment" placeholder="message template" asp-for="Comment" value="@Model.Comment" required="@(isSendAction ? true : false)">
+        <div class="alert-text-block operation-select">at</div>
+        <select class="selectpicker" asp-for="Chats" asp-items="@Model.AvailableChats" multiple
+                data-width="100%" data-live-search="true" data-style="alert-block target-input target-multiselect" data-placeholder="Choose telegram chats" data-actions-box="true"></select>
     </div>
 
     <div name="showIconAction" class="@isShowAction.ToVisibility() alert-block">
@@ -35,7 +38,22 @@
 
 <script>
     $(document).ready(function () {
-        let emoji = $("div[name='emoji']").emojioneArea({
+        $("select[name='Chats']").selectpicker();
+
+        $("select[name='Chats']").off('changed.bs.select').on('changed.bs.select', function (e, clickedIndex, isSelected, previousValue) {
+            let allSelected = true;
+
+            $(this).children().each(function() {
+                allSelected &= $(this).is(':selected');
+            });
+            
+            if (allSelected) {
+                let $title = $(this).parent().find('.filter-option-inner-inner');
+                $title.text("All chats");
+            }
+        });
+
+        $("div[name='emoji']").emojioneArea({
             filtersPosition: "bottom",
             standalone: true,
             autocomplete: false
