@@ -76,7 +76,7 @@ namespace HSMDataCollector.DefaultSensors
 
         public IUnixCollection AddCollectorAlive(CollectorMonitoringInfoOptions options) => (IUnixCollection)AddCollectorAliveCommon(options);
 
-        public IUnixCollection AddCollectorVersion(CollectorInfoOptions options) => (IUnixCollection)AddCollectorVersionCommon(options);
+        public IUnixCollection AddCollectorVersion() => (IUnixCollection)AddCollectorVersionCommon();
 
         public IUnixCollection AddCollectorMonitoringSensors(CollectorMonitoringInfoOptions options) => (IUnixCollection)AddFullCollectorMonitoringCommon(options);
 

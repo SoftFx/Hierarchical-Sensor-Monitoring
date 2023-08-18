@@ -34,11 +34,10 @@ namespace HSMDataCollector.DefaultSensors
 
         protected DefaultSensorsCollection AddCollectorAliveCommon(CollectorMonitoringInfoOptions options)
         {
-            return Register(new CollectorAlive(options));
-            //return Register(new CollectorAlive(_prototype.CollectorAlive.Get(options)));
+            return Register(new CollectorAlive(_prototype.CollectorAlive.Get(options)));
         }
 
-        protected DefaultSensorsCollection AddCollectorVersionCommon(CollectorInfoOptions options = null)
+        protected DefaultSensorsCollection AddCollectorVersionCommon()
         {
             if (CollectorVersion != null)
                 return this;
@@ -48,34 +47,16 @@ namespace HSMDataCollector.DefaultSensors
             return Register(CollectorVersion);
         }
 
-        protected DefaultSensorsCollection AddCollectorStatusCommon(CollectorInfoOptions options)
-        {
-            if (StatusSensor != null)
-                return this;
-
-            StatusSensor = new CollectorStatusSensor(options);
-            //StatusSensor = new CollectorStatusSensor(_prototype.CollectorStatus.GetAndFill(options));
-
-            return Register(StatusSensor);
-        }
-
-        protected DefaultSensorsCollection AddFullCollectorMonitoringCommon(CollectorMonitoringInfoOptions monitoringOptions)
-        {
-            //monitoringOptions = _prototype.CollectorAlive.GetAndFill(monitoringOptions);
-
-            var options = new CollectorInfoOptions() { Path = monitoringOptions.Path };
-            //var options = _prototype.CollectorStatus.GetAndFill(new CollectorInfoOptions() { NodePath = monitoringOptions.NodePath });
-
-            return AddCollectorAliveCommon(monitoringOptions).AddCollectorVersionCommon(options).AddCollectorStatusCommon(options);
-        }
+       
+        protected DefaultSensorsCollection AddFullCollectorMonitoringCommon(CollectorMonitoringInfoOptions monitoringOptions) =>
+            AddCollectorAliveCommon(monitoringOptions).AddCollectorVersionCommon();
 
         protected DefaultSensorsCollection AddProductVersionCommon(VersionSensorOptions options)
         {
             if (ProductVersion != null)
                 return this;
 
-            ProductVersion = new ProductVersionSensor(options);
-            //ProductVersion = new ProductVersionSensor(_prototype.ProductVersion.GetAndFill(options));
+            ProductVersion = new ProductVersionSensor(_prototype.ProductVersion.Get(options));
 
             return Register(ProductVersion);
         }

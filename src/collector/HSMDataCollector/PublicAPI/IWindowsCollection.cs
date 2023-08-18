@@ -42,7 +42,7 @@ namespace HSMDataCollector.PublicInterface
 
         IWindowsCollection AddCollectorAlive(CollectorMonitoringInfoOptions options = null);
 
-        IWindowsCollection AddCollectorVersion(CollectorInfoOptions options = null);
+        IWindowsCollection AddCollectorVersion();
 
         IWindowsCollection AddCollectorMonitoringSensors(CollectorMonitoringInfoOptions options = null);
 

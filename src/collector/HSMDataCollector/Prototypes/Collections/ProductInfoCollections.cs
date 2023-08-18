@@ -12,10 +12,25 @@ namespace HSMDataCollector.Prototypes
     }
 
 
-    internal sealed class CollectorVersionPrototype : InstantSensorOptionsPrototype<VersionSensorOptions>
+    internal abstract class ProductVersionInfoPrototype : InstantSensorOptionsPrototype<VersionSensorOptions>
     {
         protected override string Category => ProductInfoPrototype.ProductInfoCategory;
 
+
+        public override VersionSensorOptions Get(VersionSensorOptions customOptions)
+        {
+            var options = base.Get(customOptions);
+
+            options.StartTime = DateTime.UtcNow;
+            options.SensorName = SensorName;
+
+            return options;
+        }
+    }
+
+
+    internal sealed class CollectorVersionPrototype : ProductVersionInfoPrototype
+    {
         protected override string SensorName => "Collector version";
 
 
@@ -30,8 +45,6 @@ namespace HSMDataCollector.Prototypes
             var options = base.Get(customOptions);
 
             options.Version = DataCollectorExtensions.Version;
-            options.StartTime = DateTime.UtcNow;
-            options.SensorName = SensorName;
 
             return options;
         }
@@ -62,7 +75,7 @@ namespace HSMDataCollector.Prototypes
     }
 
 
-    internal sealed class ProductVersionPrototype : ProductInfoPrototype
+    internal sealed class ProductVersionPrototype : ProductVersionInfoPrototype
     {
         protected override string SensorName => "Version";
 
