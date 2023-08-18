@@ -1,9 +1,12 @@
-﻿using HSMDataCollector.SensorsMetainfo;
+﻿using HSMDataCollector.Options;
+using System;
 
 namespace HSMDataCollector.Prototypes
 {
-    internal abstract class WindowsInfoMonitoringPrototype : BarMonitoringPrototype
+    internal abstract class WindowsInfoMonitoringPrototype : MonitoringInstantSensorOptionsPrototype<WindowsInfoSensorOptions>
     {
+        protected override TimeSpan DefaultPostDataPeriod => TimeSpan.FromHours(12);
+
         protected override string Category => "Windows OS info";
     }
 
@@ -16,8 +19,6 @@ namespace HSMDataCollector.Prototypes
         internal WindowsIsNeedUpdatePrototype() : base()
         {
             Description = "Gets true if the system has not been updated for a half a year";
-
-            Enables = SetEnables.ForGrafana;
         }
     }
 
@@ -30,8 +31,6 @@ namespace HSMDataCollector.Prototypes
         internal WindowsLastRestartPrototype() : base()
         {
             Description = "Time since last system restart";
-
-            Enables = SetEnables.ForGrafana;
         }
     }
 
@@ -44,8 +43,6 @@ namespace HSMDataCollector.Prototypes
         internal WindowsUpdatePrototype() : base()
         {
             Description = "Time since last system update";
-
-            Enables = SetEnables.ForGrafana;
         }
     }
 }

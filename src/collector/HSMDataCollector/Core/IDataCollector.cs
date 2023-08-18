@@ -229,7 +229,7 @@ namespace HSMDataCollector.Core
         /// <returns>A new instance of <see cref="IBarSensor{T}"/> where T is int, with specified parameters</returns>
         IBarSensor<int> CreateIntBarSensor(string path, int barPeriod = 300000, int postPeriod = 15000, string description = "");
 
-        IBarSensor<int> CreateIntBarSensor(string path, BarSensorOptions2 options);
+        IBarSensor<int> CreateIntBarSensor(string path, BarSensorOptions options);
 
         /// <summary>
         /// Creates new BarSensor for collecting int values with timeout sent to 1 hour and smallPeriod
@@ -292,7 +292,7 @@ namespace HSMDataCollector.Core
         /// <returns>A new instance of <see cref="IBarSensor{T}"/> where T is double, with specified parameters</returns>
         IBarSensor<double> CreateDoubleBarSensor(string path, int barPeriod = 300000, int postPeriod = 15000, int precision = 2, string description = "");
 
-        IBarSensor<double> CreateDoubleBarSensor(string path, BarSensorOptions2 options);
+        IBarSensor<double> CreateDoubleBarSensor(string path, BarSensorOptions options);
 
         /// <summary>
         /// Creates new BarSensor for collecting int values with timeout sent to 1 hour and smallPeriod

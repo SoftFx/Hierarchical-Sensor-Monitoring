@@ -7,13 +7,7 @@ namespace HSMDataCollector.Sensors
 {
     internal class SensorInstant<T> : SensorBase<T>, IInstantValueSensor<T>
     {
-        protected override string SensorName { get; }
-
-
-        public SensorInstant(SensorOptions2 options) : base(options)
-        {
-            SensorName = options.SensorName;
-        }
+        public SensorInstant(SensorOptions options) : base(options) { }
 
 
         public void AddValue(T value) => SendValue(value);

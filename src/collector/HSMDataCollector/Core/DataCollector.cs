@@ -348,11 +348,10 @@ namespace HSMDataCollector.Core
         {
             try
             {
-                var options = new WindowsSensorOptions()
+                var options = new WindowsInfoSensorOptions()
                 {
                     Path = specificPath,
                     PostDataPeriod = sensorInterval,
-                    AcceptableUpdateInterval = updateInterval,
                 };
 
                 //Windows.AddWindowsNeedUpdate(_sensorsPrototype.WindowsInfo.GetAndFill(options));
@@ -403,7 +402,7 @@ namespace HSMDataCollector.Core
             return (IInstantValueSensor<T>)RegisterCustomSensor(new SensorInstant<T>(options));
         }
 
-        private T FillOptions<T>(string path, SensorType type, T options) where T : SensorOptions2
+        private T FillOptions<T>(string path, SensorType type, T options) where T : SensorOptions
         {
             options.Path = path;
             options.Type = type;
@@ -535,7 +534,7 @@ namespace HSMDataCollector.Core
         public IBarSensor<int> CreateIntBarSensor(string path, int barPeriod, int postPeriod = 15000, string description = "") =>
             CreateIntBarSensor(path, BuildBarOptions<int>(barPeriod, postPeriod, description));
 
-        public IBarSensor<int> CreateIntBarSensor(string path, BarSensorOptions2 options)
+        public IBarSensor<int> CreateIntBarSensor(string path, BarSensorOptions options)
         {
             options = FillOptions(path, SensorValuesFactory.GetBarType<int>(), options);
 
@@ -556,7 +555,7 @@ namespace HSMDataCollector.Core
         public IBarSensor<double> CreateDoubleBarSensor(string path, int barPeriod, int postPeriod, int precision = 2, string description = "") =>
             CreateDoubleBarSensor(path, BuildBarOptions<double>(barPeriod, postPeriod, description, precision));
 
-        public IBarSensor<double> CreateDoubleBarSensor(string path, BarSensorOptions2 options)
+        public IBarSensor<double> CreateDoubleBarSensor(string path, BarSensorOptions options)
         {
             options = FillOptions(path, SensorValuesFactory.GetBarType<double>(), options);
 
@@ -564,8 +563,8 @@ namespace HSMDataCollector.Core
         }
 
 
-        private BarSensorOptions2 BuildBarOptions<T>(int barPeriod, int postPeriod, string description, int precision = 2) =>
-            new BarSensorOptions2()
+        private BarSensorOptions BuildBarOptions<T>(int barPeriod, int postPeriod, string description, int precision = 2) =>
+            new BarSensorOptions()
             {
                 PostDataPeriod = TimeSpan.FromMilliseconds(postPeriod),
                 BarPeriod = TimeSpan.FromMilliseconds(barPeriod),

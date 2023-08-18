@@ -1,5 +1,4 @@
-﻿using HSMDataCollector.SensorsMetainfo;
-using HSMSensorDataObjects.SensorRequests;
+﻿using HSMSensorDataObjects.SensorRequests;
 
 namespace HSMDataCollector.Prototypes
 {
@@ -12,8 +11,7 @@ namespace HSMDataCollector.Prototypes
         {
             Description = "Current available free space of some disk";
 
-            Enables = SetEnables.ForGrafana;
-            OriginalUnit = Unit.MB;
+            SensorUnit = Unit.MB;
         }
     }
 
@@ -26,8 +24,6 @@ namespace HSMDataCollector.Prototypes
         internal FreeSpaceOnDiskPredictionPrototype() : base()
         {
             Description = "Estimated time until disk space runs out";
-
-            Enables = SetEnables.ForGrafana;
         }
     }
 }

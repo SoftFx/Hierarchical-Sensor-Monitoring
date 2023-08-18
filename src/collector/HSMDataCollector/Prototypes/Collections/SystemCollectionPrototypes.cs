@@ -1,9 +1,15 @@
-﻿using HSMDataCollector.SensorsMetainfo;
+﻿using HSMDataCollector.Options;
 using HSMSensorDataObjects.SensorRequests;
 
 namespace HSMDataCollector.Prototypes
 {
-    internal sealed class FreeRamMemoryPrototype : BarMonitoringPrototype
+    internal abstract class SystemMonitoringPrototype : BarSensorOptionsPrototype<BarSensorOptions>
+    {
+        protected override string Category => string.Empty;
+    }
+
+
+    internal sealed class FreeRamMemoryPrototype : SystemMonitoringPrototype
     {
         protected override string SensorName => "Free RAM memory MB";
 
@@ -14,13 +20,12 @@ namespace HSMDataCollector.Prototypes
             " is defined as free and cache pages. The remainder is active memory, which is memory " +
             "currently in use by the operating system.";
 
-            Enables = SetEnables.ForGrafana;
-            OriginalUnit = Unit.MB;
+            SensorUnit = Unit.MB;
         }
     }
 
 
-    internal sealed class TotalCPUPrototype : BarMonitoringPrototype
+    internal sealed class TotalCPUPrototype : SystemMonitoringPrototype
     {
         protected override string SensorName => "Total CPU";
 
@@ -31,13 +36,12 @@ namespace HSMDataCollector.Prototypes
             " exhausted to process data and run various programs on a network device, " +
             "server, or computer at any given point.";
 
-            Enables = SetEnables.ForGrafana;
-            OriginalUnit = Unit.Percents;
+            SensorUnit = Unit.Percents;
         }
     }
 
 
-    internal sealed class ProcessCpuPrototype : BarMonitoringPrototype
+    internal sealed class ProcessCpuPrototype : SystemMonitoringPrototype
     {
         protected override string SensorName => "Process CPU";
 
@@ -46,13 +50,12 @@ namespace HSMDataCollector.Prototypes
         {
             Description = "CPU usage percentage.";
 
-            Enables = SetEnables.ForGrafana;
-            OriginalUnit = Unit.Percents;
+            SensorUnit = Unit.Percents;
         }
     }
 
 
-    internal sealed class ProcessMemoryPrototype : BarMonitoringPrototype
+    internal sealed class ProcessMemoryPrototype : SystemMonitoringPrototype
     {
         protected override string SensorName => "Process memory MB";
 
@@ -61,13 +64,12 @@ namespace HSMDataCollector.Prototypes
         {
             Description = "Current process working set";
 
-            Enables = SetEnables.ForGrafana;
-            OriginalUnit = Unit.MB;
+            SensorUnit = Unit.MB;
         }
     }
 
 
-    internal sealed class ProcessThreadCountPrototype : BarMonitoringPrototype
+    internal sealed class ProcessThreadCountPrototype : SystemMonitoringPrototype
     {
         protected override string SensorName => "Process thread count";
 
@@ -75,8 +77,6 @@ namespace HSMDataCollector.Prototypes
         internal ProcessThreadCountPrototype() : base()
         {
             Description = "The amount of threads, associated with current process";
-
-            Enables = SetEnables.ForGrafana;
         }
     }
 }

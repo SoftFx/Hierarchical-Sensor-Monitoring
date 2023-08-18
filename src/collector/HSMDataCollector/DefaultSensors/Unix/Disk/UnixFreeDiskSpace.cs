@@ -5,7 +5,7 @@ namespace HSMDataCollector.DefaultSensors.Unix
 {
     internal sealed class UnixFreeDiskSpace : FreeDiskSpaceBase
     {
-        public UnixFreeDiskSpace(MonitoringSensorOptions options)
+        public UnixFreeDiskSpace(DiskSensorOptions options)
             : base(options, new UnixDiskInfo()) { }
     }
 }

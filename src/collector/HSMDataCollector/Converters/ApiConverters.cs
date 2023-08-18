@@ -1,5 +1,5 @@
 ﻿using HSMDataCollector.Alerts;
-using HSMDataCollector.SensorsMetainfo;
+using HSMDataCollector.Options;
 using HSMSensorDataObjects.SensorRequests;
 using System.Linq;
 
@@ -7,25 +7,44 @@ namespace HSMDataCollector.Converters
 {
     internal static class ApiConverters
     {
-        internal static AddOrUpdateSensorRequest ToApi(this SensorMetainfo info) =>
-            new AddOrUpdateSensorRequest()
+        internal static AddOrUpdateSensorRequest ToApi(this InstantSensorOptions options)
+        {
+            var info = options.ToBaseInfo();
+
+            info.Alerts = options.Alerts?.Select(u => u.ToApi()).ToList();
+
+            return info;
+        }
+
+
+        internal static AddOrUpdateSensorRequest ToApi(this BarSensorOptions options)
+        {
+            var info = options.ToBaseInfo();
+
+            info.Alerts = options.Alerts?.Select(u => u.ToApi()).ToList();
+
+            return info;
+        }
+
+
+        private static AddOrUpdateSensorRequest ToBaseInfo(this SensorOptions options) =>
+            new AddOrUpdateSensorRequest
             {
-                Alerts = info.Alerts?.Select(u => u.ToApi()).ToList(),
-                TtlAlert = info.TtlAlert?.ToApi(),
+                TtlAlert = options.TtlAlert?.ToApi(),
 
-                Description = info.Description,
-                SensorType = info.SensorType,
-                Path = info.Path,
+                SensorType = options.Type,
+                Path = options.Path,
 
-                OriginalUnit = info.OriginalUnit,
+                OriginalUnit = options.SensorUnit,
+                Description = options.Description,
 
-                KeepHistory = info.Settings.KeepHistory?.Ticks,
-                SelfDestroy = info.Settings.SelfDestroy?.Ticks,
-                TTL = info.Settings.TTL?.Ticks,
+                TTL = options.TtlAlert?.TtlValue?.Ticks ?? options.TTL?.Ticks,
+                KeepHistory = options.KeepHistory?.Ticks,
+                SelfDestroy = options.SelfDestroy?.Ticks,
 
-                AggregateData = info.AggregateData,
+                EnableGrafana = options.EnableForGrafana,
 
-                EnableGrafana = info.Enables.ForGrafana,
+                AggregateData = options.AggregateData,
             };
 
 

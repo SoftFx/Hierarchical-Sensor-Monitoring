@@ -11,7 +11,7 @@ namespace HSMDataCollector.DefaultSensors
         protected override string SensorName { get; }
 
 
-        public PublicBarMonitoringSensor(BarSensorOptions2 options) : base(options)
+        public PublicBarMonitoringSensor(BarSensorOptions options) : base(options)
         {
             SensorName = options.SensorName;
         }
@@ -32,12 +32,12 @@ namespace HSMDataCollector.DefaultSensors
 
     internal class IntBarPublicSensor : PublicBarMonitoringSensor<IntMonitoringBar, int>
     {
-        public IntBarPublicSensor(BarSensorOptions2 options) : base(options) { }
+        public IntBarPublicSensor(BarSensorOptions options) : base(options) { }
     }
 
 
     internal class DoubleBarPublicSensor : PublicBarMonitoringSensor<DoubleMonitoringBar, double>
     {
-        public DoubleBarPublicSensor(BarSensorOptions2 options) : base(options) { }
+        public DoubleBarPublicSensor(BarSensorOptions options) : base(options) { }
     }
 }

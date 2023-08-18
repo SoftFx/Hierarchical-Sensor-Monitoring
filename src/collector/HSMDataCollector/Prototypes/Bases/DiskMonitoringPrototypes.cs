@@ -1,17 +1,23 @@
 ﻿using HSMDataCollector.DefaultSensors.SystemInfo;
 using HSMDataCollector.Options;
-using HSMDataCollector.SensorsMetainfo;
+using System;
 using System.Collections.Generic;
 using System.IO;
 
 namespace HSMDataCollector.Prototypes
 {
-    internal abstract class DisksMonitoringPrototype : BaseMonitoringPrototype<DiskMonitoringSensorMetainfo, DiskSensorOptions>
+    internal abstract class DisksMonitoringPrototype : MonitoringInstantSensorOptionsPrototype<DiskSensorOptions>
     {
-        protected override string Category => "Disk monitoring";
+        private const int DefaultCalibrationRequests = 6;
+        private const string DefaultTargetPath = @"C:\";
 
 
-        internal IEnumerable<DiskMonitoringSensorMetainfo> GetAllDisksOptions(DiskSensorOptions userOptions)
+        protected override TimeSpan DefaultPostDataPeriod => TimeSpan.FromMinutes(5);
+
+        protected override string Category => "Disks monitoring";
+
+
+        internal IEnumerable<DiskSensorOptions> GetAllDisksOptions(DiskSensorOptions userOptions)
         {
             var diskOptions = Get(userOptions);
 
@@ -20,23 +26,24 @@ namespace HSMDataCollector.Prototypes
                 if (drive.DriveType != DriveType.Fixed)
                     continue;
 
-                diskOptions.TargetPath = drive.Name;
+                diskOptions.TargetPath = drive.Name; // TODO: bug with sensor names should be checked
 
                 yield return diskOptions;
             }
         }
 
-        protected override DiskMonitoringSensorMetainfo Apply(DiskMonitoringSensorMetainfo info, DiskSensorOptions options)
+        public override DiskSensorOptions Get(DiskSensorOptions customOptions)
         {
-            info.CalibrationRequests = options.CalibrationRequests;
-            info.PostDataPeriod = options.PostDataPeriod;
-            info.TargetPath = options.TargetPath;
+            var options = base.Get(customOptions);
+
+            options.CalibrationRequests = customOptions?.CalibrationRequests ?? DefaultCalibrationRequests;
+            options.TargetPath = customOptions?.TargetPath ?? DefaultTargetPath;
 
             var diskInfo = new WindowsDiskInfo(options.TargetPath);
 
-            info.Path = BuildPath(SystemPath, Category, $"{SensorName} {diskInfo.Name}");
+            options.Path = $"{options.Path} {diskInfo.Name}";
 
-            return info;
+            return options;
         }
     }
 }

@@ -13,7 +13,7 @@ namespace HSMDataCollector.DefaultSensors.Windows
         protected override string SensorName => "Is need update";
 
 
-        public WindowsNeedUpdate(WindowsSensorOptions options) : base(options)
+        public WindowsNeedUpdate(WindowsInfoSensorOptions options) : base(options)
         {
             _acceptableUpdateInterval = options.AcceptableUpdateInterval;
 
