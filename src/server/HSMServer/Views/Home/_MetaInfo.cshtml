@@ -198,6 +198,7 @@
                 let sendBlock = $(this).find('div[name="sendNotificationAction"]');
                 if (sendBlock.hasClass('d-flex')) {
                     setFormDataAlertsListProperty(formData, type, i, j, sendBlock, "Actions", "input", "Comment");
+                    setFormDataAlertsSendNotificationChats(formData, type, i, j, sendBlock);
                 }
 
                 let showBlock = $(this).find('div[name="showIconAction"]');
@@ -226,6 +227,16 @@
         block.find(`${element}[name='${intervalName}.${propertyName}']`).each(function () {
             formData.append(`DataAlerts[${type}][${i}].Conditions[${j}].${intervalName}.${propertyName}`, $(this).val());
         });
+    }
+
+    function setFormDataAlertsSendNotificationChats(formData, type, i, j, block) {
+        let k = 0;
+        block.find("select[name='Chats']:first option").each(function () {
+            if ($(this).is(':selected')) {
+                formData.append(`DataAlerts[${type}][${i}].Actions[${j}].Chats[${k}]`, $(this).val());
+                ++k;
+            }
+        })
     }
 
     function collapseChangeTextContent() {
