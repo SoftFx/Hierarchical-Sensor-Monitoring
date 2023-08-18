@@ -17,28 +17,21 @@ namespace HSMDataCollector.DefaultSensors
 
         public IUnixCollection AddProcessCpu(BarSensorOptions options)
         {
-            return ToUnix(new UnixProcessCpu(options));
-            //return ToUnix(new UnixProcessCpu(_prototype.ProcessMonitoring.Get(options)));
+            return ToUnix(new UnixProcessCpu(_prototype.ProcessCpu.Get(options)));
         }
 
         public IUnixCollection AddProcessMemory(BarSensorOptions options)
         {
-            return ToUnix(new UnixProcessMemory(options));
-            //return ToUnix(new UnixProcessMemory(_prototype.ProcessMonitoring.Get(options)));
+            return ToUnix(new UnixProcessMemory(_prototype.ProcessMemory.Get(options)));
         }
 
         public IUnixCollection AddProcessThreadCount(BarSensorOptions options)
         {
-            return ToUnix(new UnixProcessThreadCount(options));
-            //return ToUnix(new UnixProcessThreadCount(_prototype.ProcessMonitoring.Get(options)));
+            return ToUnix(new UnixProcessThreadCount(_prototype.ProcessThreadCount.Get(options)));
         }
 
-        public IUnixCollection AddProcessMonitoringSensors(BarSensorOptions options)
-        {
-            //options = _prototype.ProcessMonitoring.GetAndFill(options);
-
-            return AddProcessCpu(options).AddProcessMemory(options).AddProcessThreadCount(options);
-        }
+        public IUnixCollection AddProcessMonitoringSensors(BarSensorOptions options) =>
+            AddProcessCpu(options).AddProcessMemory(options).AddProcessThreadCount(options);
 
         #endregion
 
@@ -47,22 +40,16 @@ namespace HSMDataCollector.DefaultSensors
 
         public IUnixCollection AddTotalCpu(BarSensorOptions options)
         {
-            return ToUnix(new UnixTotalCpu(options));
-            //return ToUnix(new UnixTotalCpu(_prototype.SystemMonitoring.Get(options)));
+            return ToUnix(new UnixTotalCpu(_prototype.TotalCPU.Get(options)));
         }
 
         public IUnixCollection AddFreeRamMemory(BarSensorOptions options)
         {
-            return ToUnix(new UnixFreeRamMemory(options));
-            //return ToUnix(new UnixFreeRamMemory(_prototype.SystemMonitoring.Get(options)));
+            return ToUnix(new UnixFreeRamMemory(_prototype.FreeRam.Get(options)));
         }
 
-        public IUnixCollection AddSystemMonitoringSensors(BarSensorOptions options)
-        {
-            //options = _prototype.SystemMonitoring.GetAndFill(options);
-
-            return AddFreeRamMemory(options).AddTotalCpu(options);
-        }
+        public IUnixCollection AddSystemMonitoringSensors(BarSensorOptions options) =>
+            AddFreeRamMemory(options).AddTotalCpu(options);
 
         #endregion
 
@@ -71,22 +58,16 @@ namespace HSMDataCollector.DefaultSensors
 
         public IUnixCollection AddFreeDiskSpace(DiskSensorOptions options)
         {
-            return ToUnix(new UnixFreeDiskSpace(options));
-            //return ToUnix(new UnixFreeDiskSpace(_prototype.FreeSpaceOnDisk.Get(options)));
+            return ToUnix(new UnixFreeDiskSpace(_prototype.FreeSpaceOnDisk.Get(options)));
         }
 
         public IUnixCollection AddFreeDiskSpacePrediction(DiskSensorOptions options)
         {
-            return ToUnix(new UnixFreeDiskSpacePrediction(options));
-            //return ToUnix(new UnixFreeDiskSpacePrediction(_prototype.FreeSpaceOnDisk.Get(options)));
+            return ToUnix(new UnixFreeDiskSpacePrediction(_prototype.FreeSpaceOnDisk.Get(options)));
         }
 
-        public IUnixCollection AddDiskMonitoringSensors(DiskSensorOptions options)
-        {
-            //options = _prototype.FreeSpaceOnDisk.Get(options);
-
-            return AddFreeDiskSpace(options).AddFreeDiskSpacePrediction(options);
-        }
+        public IUnixCollection AddDiskMonitoringSensors(DiskSensorOptions options) =>
+            AddFreeDiskSpace(options).AddFreeDiskSpacePrediction(options);
 
         #endregion
 
@@ -96,8 +77,6 @@ namespace HSMDataCollector.DefaultSensors
         public IUnixCollection AddCollectorAlive(CollectorMonitoringInfoOptions options) => (IUnixCollection)AddCollectorAliveCommon(options);
 
         public IUnixCollection AddCollectorVersion(CollectorInfoOptions options) => (IUnixCollection)AddCollectorVersionCommon(options);
-
-        public IUnixCollection AddCollectorStatus(CollectorInfoOptions options) => (IUnixCollection)AddCollectorStatusCommon(options);
 
         public IUnixCollection AddCollectorMonitoringSensors(CollectorMonitoringInfoOptions options) => (IUnixCollection)AddFullCollectorMonitoringCommon(options);
 

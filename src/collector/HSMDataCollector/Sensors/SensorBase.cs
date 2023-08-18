@@ -1,4 +1,3 @@
-using HSMDataCollector.Converters;
 using HSMDataCollector.Options;
 using HSMDataCollector.Prototypes;
 using HSMDataCollector.Requests;

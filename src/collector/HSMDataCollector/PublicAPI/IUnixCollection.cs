@@ -31,8 +31,6 @@ namespace HSMDataCollector.PublicInterface
 
         IUnixCollection AddCollectorVersion(CollectorInfoOptions options = null);
 
-        IUnixCollection AddCollectorStatus(CollectorInfoOptions options = null);
-
         IUnixCollection AddCollectorMonitoringSensors(CollectorMonitoringInfoOptions options = null);
 
 

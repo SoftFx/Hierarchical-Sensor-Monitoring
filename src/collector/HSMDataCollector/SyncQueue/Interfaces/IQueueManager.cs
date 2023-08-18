@@ -1,5 +1,4 @@
-﻿using HSMSensorDataObjects;
-using HSMSensorDataObjects.SensorValueRequests;
+﻿using HSMSensorDataObjects.SensorValueRequests;
 using System;
 
 namespace HSMDataCollector.SyncQueue
@@ -7,7 +6,7 @@ namespace HSMDataCollector.SyncQueue
     internal interface IQueueManager : IDisposable
     {
         ISyncQueue<SensorValueBase> Data { get; }
-        
+
         ICommandQueue Commands { get; }
 
 
