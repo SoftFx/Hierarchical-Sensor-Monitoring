@@ -1,6 +1,6 @@
 ﻿import {ServiceStatus} from "./plotting";
 
-export class Plot {
+export class Plots {
     constructor(data) {
         this.basicInit();
     }
@@ -30,7 +30,7 @@ export class Plot {
     }
 }
 
-export class BoolPlot extends Plot {
+export class BoolPlot extends Plots {
     constructor(data) {
         super();
         this.type = 'scatter';
@@ -73,7 +73,7 @@ export class BoolPlot extends Plot {
     }
 }
 
-export class IntegerPlot extends Plot {
+export class IntegerPlot extends Plots {
     constructor(data) {
         super();
 
@@ -94,7 +94,7 @@ export class IntegerPlot extends Plot {
     }
 }
 
-export class DoublePlot extends Plot {
+export class DoublePlot extends Plots {
     constructor(data, name) {
         super();
 
@@ -119,7 +119,7 @@ export class DoublePlot extends Plot {
     }
 }
 
-export class BarPLot extends Plot {
+export class BarPLot extends Plots {
     constructor(data, name) {
         super();
 
@@ -172,7 +172,7 @@ export class BarPLot extends Plot {
     }
 }
 
-export class TimeSpanPlot extends Plot {
+export class TimeSpanPlot extends Plots {
     constructor(data) {
         super();
 
@@ -259,7 +259,7 @@ export class TimeSpanPlot extends Plot {
     }
 }
 
-export class EnumPlot extends Plot {
+export class EnumPlot extends Plots {
     constructor(data, isServiceStatus) {
         super();
 
