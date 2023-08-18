@@ -1,4 +1,4 @@
-﻿import {BarPLot, BoolPlot, DoublePlot, EnumPlot, IntegerPlot, Plots, TimeSpanPlot} from "./plots";
+﻿import {BarPLot, BoolPlot, DoublePlot, EnumPlot, IntegerPlot, Plot, TimeSpanPlot} from "./plots";
 
 window.barGraphData = {
     min: undefined,
