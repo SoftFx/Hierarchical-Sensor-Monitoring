@@ -8,6 +8,8 @@ namespace HSMDataCollector.Extensions
     {
         internal static InstantSensorOptions SetInstantType<T>(this InstantSensorOptions options)
         {
+            options.Path = path;
+
             switch (typeof(T))
             {
                 case Type type when type == typeof(bool):

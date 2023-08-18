@@ -60,14 +60,24 @@ namespace HSMDataCollector.Options
 
     public abstract class SensorOptions2
     {
+        internal abstract SensorMetainfo Metainfo { get; }
+
+        internal SensorType Type { get; set; }
+
+        internal string Path { get; set; }
+
+
+        internal bool HasSettings => KeepHistory.HasValue || SelfDestroy.HasValue || TTL.HasValue;
+
+        internal string SensorName { get; set; } //???
+
+
         public SpecialAlertTemplate TtlAlert { get; set; }
 
         public Unit? SensorUnit { get; set; }
 
 
         public string Description { get; set; }
-
-        public string Path { get; set; }
 
 
         public TimeSpan? KeepHistory { get; set; }
@@ -79,18 +89,7 @@ namespace HSMDataCollector.Options
 
         public bool EnableForGrafana { get; set; }
 
-
         public bool AggregateData { get; set; }
-
-
-
-        internal abstract SensorMetainfo Metainfo { get; }
-
-        internal SensorType Type { get; private protected set; }
-
-        internal bool HasSettings => KeepHistory.HasValue || SelfDestroy.HasValue || TTL.HasValue;
-
-        internal string SensorName { get; set; } //???
     }
 
 

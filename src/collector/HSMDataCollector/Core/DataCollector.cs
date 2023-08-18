@@ -45,6 +45,7 @@ namespace HSMDataCollector.Core
         private readonly SensorsPrototype _sensorsPrototype = new SensorsPrototype();
         private readonly SensorsStorage _sensorsStorage;
         private readonly IQueueManager _queueManager;
+        private readonly CollectorOptions _options;
         private readonly HsmHttpsClient _hsmClient;
 
 
@@ -77,6 +78,8 @@ namespace HSMDataCollector.Core
         /// <param name="options">Common options for datacollector</param>
         public DataCollector(CollectorOptions options)
         {
+            _options = options;
+
             _queueManager = new QueueManager(options, _logger);
             _sensorsStorage = new SensorsStorage(_queueManager, _logger);
 
@@ -377,13 +380,13 @@ namespace HSMDataCollector.Core
         public IInstantValueSensor<int> CreateIntSensor(string path, string description = "") => CreateInstantSensor<int>(path, description);
 
 
-        public IInstantValueSensor<double> CreateDoubleSensor(InstantSensorOptions options) => CreateInstantSensor<double>(options);
+        public IInstantValueSensor<double> CreateDoubleSensor(string path, InstantSensorOptions options) => CreateInstantSensor<double>(path, options);
 
-        public IInstantValueSensor<string> CreateStringSensor(InstantSensorOptions options) => CreateInstantSensor<string>(options);
+        public IInstantValueSensor<string> CreateStringSensor(string path, InstantSensorOptions options) => CreateInstantSensor<string>(path, options);
 
-        public IInstantValueSensor<bool> CreateBoolSensor(InstantSensorOptions options) => CreateInstantSensor<bool>(options);
+        public IInstantValueSensor<bool> CreateBoolSensor(string path, InstantSensorOptions options) => CreateInstantSensor<bool>(path, options);
 
-        public IInstantValueSensor<int> CreateIntSensor(InstantSensorOptions options) => CreateInstantSensor<int>(options);
+        public IInstantValueSensor<int> CreateIntSensor(string path, InstantSensorOptions options) => CreateInstantSensor<int>(path, options);
 
         [Obsolete]
         public IInstantValueSensor<string> CreateFileSensor(string path, string fileName, string extension = "txt", string description = "")
@@ -442,13 +445,12 @@ namespace HSMDataCollector.Core
         }
 
         private IInstantValueSensor<T> CreateInstantSensor<T>(string path, string description) =>
-            CreateInstantSensor<T>(new InstantSensorOptions
+            CreateInstantSensor<T>(path, new InstantSensorOptions()
             {
-                Path = path,
                 Description = description,
             });
 
-        private IInstantValueSensor<T> CreateInstantSensor<T>(InstantSensorOptions options) => (IInstantValueSensor<T>)RegisterCustomSensor(new SensorInstant<T>(options.SetInstantType<T>()));
+        private IInstantValueSensor<T> CreateInstantSensor<T>(string path, InstantSensorOptions options) => (IInstantValueSensor<T>)RegisterCustomSensor(new SensorInstant<T>(options.SetInstantType<T>()));
 
 
         [Obsolete]
