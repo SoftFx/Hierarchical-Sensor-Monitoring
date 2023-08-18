@@ -19,6 +19,8 @@ namespace HSMServer.Model.History
 
     public class SimpleSensorValueViewModel : TableValueViewModel
     {
+        public long AggregatedValuesCount { get; init; }
+
         public DateTime LastUpdateTime { get; init; }
 
         public string Value { get; init; }

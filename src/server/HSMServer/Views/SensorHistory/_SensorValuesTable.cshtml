@@ -36,6 +36,7 @@ else
                     else
                     {
                         <th id="lastUpdateTime_header" class="d-none">Last update time</th>
+                        <th id="aggregatedValuesCount_header" class="d-none">Aggregated values count</th>
                         <th>Value</th>
                     }
                     <th>Status</th>
@@ -80,12 +81,14 @@ else
                             if (value.IsTimeout)
                             {
                                 <td id="lastUpdateTime_value@(i)" class="d-none"></td>
+                                <td id="aggregatedValuesCount_value@(i)" class="d-none"></td>
                                 <td></td>
                                 <td></td>
                             }
                             else
                             {
                                 <td id="lastUpdateTime_value@(i)" class="d-none">@simpleValue.LastUpdateTime.ToDefaultFormat()</td>
+                                <td id="aggregatedValuesCount_value@(i)" class="d-none">@simpleValue.AggregatedValuesCount</td>
                                 <td>@simpleValue.Value</td>
                                 <td>@value.Status.ToIconStatus()</td>
                             }

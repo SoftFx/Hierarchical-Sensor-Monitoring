@@ -320,7 +320,9 @@
 
             if ('@Model.SaveOnlyUniqueValues' === 'True') {
                 $("#lastUpdateTime_header").removeClass('d-none');
+                $("#aggregatedValuesCount_header").removeClass('d-none');
                 $('[id^="lastUpdateTime_value"]').removeClass('d-none');
+                $('[id^="aggregatedValuesCount_value"]').removeClass('d-none');
             }
 
             this.innerText = "Hide extra columns"
@@ -331,7 +333,9 @@
 
             if ('@Model.SaveOnlyUniqueValues' === 'True') {
                 $("#lastUpdateTime_header").addClass('d-none');
+                $("#aggregatedValuesCount_header").addClass('d-none');
                 $('[id^="lastUpdateTime_value"]').addClass('d-none');
+                $('[id^="aggregatedValuesCount_value"]').addClass('d-none');
             }
 
             this.innerText = "Show all columns";

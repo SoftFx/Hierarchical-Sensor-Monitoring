@@ -33,12 +33,6 @@ namespace HSMServer.Core.Model
 
         public DateTime ReceivingTime { get; init; } = DateTime.UtcNow;
 
-        public DateTime? LastReceivingTime { get; set; }
-
-        [JsonIgnore]
-        public DateTime LastUpdateTime => LastReceivingTime ?? ReceivingTime;
-
-
         [JsonConverter(typeof(SensorStatusJsonConverter))]
         public SensorStatus Status { get; init; }
 
@@ -51,6 +45,15 @@ namespace HSMServer.Core.Model
         }
 
         public bool IsTimeout { get; init; }
+
+
+        public DateTime? LastReceivingTime { get; set; }
+
+        public long AggregatedValuesCount { get; set; } = 1;
+
+
+        [JsonIgnore]
+        public DateTime LastUpdateTime => LastReceivingTime ?? ReceivingTime;
 
 
         [JsonIgnore]
@@ -68,6 +71,8 @@ namespace HSMServer.Core.Model
             if (IsEqual(value))
             {
                 LastReceivingTime = value.ReceivingTime;
+                AggregatedValuesCount++;
+
                 return true;
             }
 
