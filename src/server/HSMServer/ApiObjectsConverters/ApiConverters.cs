@@ -208,27 +208,6 @@ namespace HSMServer.ApiObjectsConverters
                 Options = request.Options
             };
 
-        public static SensorValueBase CreateNewSensorValue(SensorType sensorType) => sensorType switch
-        {
-            SensorType.Boolean => new BoolSensorValue(),
-            SensorType.IntegerBar => new IntBarSensorValue().AddOpenAndCloseTime(),
-            SensorType.DoubleBar => new DoubleBarSensorValue().AddOpenAndCloseTime(),
-            SensorType.Double => new DoubleSensorValue(),
-            SensorType.Integer => new IntSensorValue(),
-            SensorType.String => new StringSensorValue(),
-            SensorType.File => new FileSensorValue(),
-            SensorType.TimeSpan => new TimeSpanSensorValue(),
-            SensorType.Version => new VersionSensorValue(),
-            _ => null
-        };
-
-        private static SensorValueBase AddOpenAndCloseTime(this BarSensorValueBase value, DateTime? closeTime = null, DateTime? openTime = null)
-        {
-            value.CloseTime = closeTime ?? value.Time;
-            value.OpenTime = openTime ?? value.Time;
-
-            return value;
-        }
         
         public static ApiSensorStatus ToApi(this Model.TreeViewModel.SensorStatus status) =>
             status switch

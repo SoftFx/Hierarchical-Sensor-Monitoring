@@ -30,7 +30,7 @@ namespace HSMServer.Core.Model
 
         internal abstract List<BaseValue> GetValues(int count);
 
-        internal abstract bool TryChangeLastValue(BaseValue value);
+        internal abstract bool TryChangeLastValue(BaseValue value, bool isRewrite = false);
 
         internal abstract BaseValue GetNewValue(BaseValue value, string newValue);
 
@@ -77,8 +77,14 @@ namespace HSMServer.Core.Model
             }
         }
 
-        internal override bool TryChangeLastValue(BaseValue value)
+        internal override bool TryChangeLastValue(BaseValue value, bool isRewrite = false)
         {
+            if (!isRewrite)
+            {
+                AddValue((T)value);
+                return true;
+            }
+            
             if (_cache.TryDequeue(out _) || _cache.IsEmpty)
             {
                 AddValue((T)value);

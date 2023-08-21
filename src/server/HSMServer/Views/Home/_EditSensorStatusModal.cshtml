@@ -120,24 +120,7 @@
             success: function (response) {
                 if (response === '') {
                     hideEditSensorModal();
-                    return;
                 }
-                
-                if (response.sensor.type === 8)
-                    response.sensor.value = "0.0.0.0";
-
-                 $.ajax({
-                     url: '/api/Sensors/list',
-                     headers: { 'key': response.key },
-                     type: 'POST',
-                     contentType: 'application/json',
-                     dataType: 'JSON',
-                     data: JSON.stringify([response.sensor]),
-                     async: true,
-                     success: function () {
-                        hideEditSensorModal();
-                     }
-                 })
             },
             error: function (jqXHR) {
                 $('span.field-validation-valid').each(function () {
