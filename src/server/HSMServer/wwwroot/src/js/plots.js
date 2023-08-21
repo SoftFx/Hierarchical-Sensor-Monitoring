@@ -1,5 +1,13 @@
 ﻿import {ServiceStatus} from "./plotting";
 
+const Colors = {
+    default: 'rgba(31, 119, 180, 1)',
+    red: 'rgba(255,0,0,1)',
+    TtlGrey: 'rgba(192,192,192,1)',
+    blue: 'rgba(0,0,255,1)',
+    line: 'rgb(231, 99, 250)'
+}
+
 export class Plot {
     constructor(data) {
         this.basicInit();
@@ -44,9 +52,9 @@ export class Plot {
 
     markerColorCompareFunc(value) {
         if (this.checkTtl(value))
-            return 'rgba(255,102,25, 1)'
+            return Colors.TtlGrey
 
-        return 'rgba(31, 119, 180, 1)';
+        return Colors.default;
     }
     
     getMarkerSize (value) {
@@ -67,7 +75,7 @@ export class BoolPlot extends Plot {
             size: [],
             opacity: 1,
             line: {
-                color: 'rgb(231, 99, 250)',
+                color: Colors.line,
                 width: 0
             }
         };
@@ -94,9 +102,9 @@ export class BoolPlot extends Plot {
     
     markerColorCompareFunc(value) {
         if (this.checkTtl(value))
-            return 'rgb(255,255,5,1)';
+            return Colors.TtlGrey;
         
-        return this.customDataCompareFunc(value) ? 'rgba(0,0,255, 1)' : 'rgba(255,0,0,1)';
+        return this.customDataCompareFunc(value) ? Colors.blue : Colors.red;
     }
     
     getLayout() {
@@ -126,7 +134,7 @@ export class IntegerPlot extends Plot {
             size: [],
             opacity: 1,
             line: {
-                color: 'rgb(231, 99, 250)',
+                color: Colors.line,
                 width: 0
             }
         };
@@ -155,7 +163,7 @@ export class DoublePlot extends Plot {
             size: [],
             opacity: 1,
             line: {
-                color: 'rgb(231, 99, 250)',
+                color: Colors.line,
                 width: 0
             }
         };
@@ -246,7 +254,7 @@ export class TimeSpanPlot extends Plot {
             size: [],
             opacity: 1,
             line: {
-                color: 'rgb(231, 99, 250)',
+                color: Colors.line,
                 width: 0
             }
         };
