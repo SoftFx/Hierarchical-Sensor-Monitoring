@@ -6,7 +6,7 @@ namespace HSMServer.Core.Model.Policies
 {
     public sealed record AlertResult
     {
-        public HashSet<Guid> Chats { get; }
+        public AlertDestination Destination { get; }
 
         public string Icon { get; }
 
@@ -30,7 +30,7 @@ namespace HSMServer.Core.Model.Policies
             Icon = policy.Icon;
             PolicyId = policy.Id;
             Template = policy.Template;
-            Chats = new HashSet<Guid>(policy.Chats.Keys);
+            Destination = new(policy.Destination.AllChats, new HashSet<Guid>(policy.Destination.Chats.Keys));
 
             AddPolicyResult(policy);
         }
@@ -71,4 +71,7 @@ namespace HSMServer.Core.Model.Policies
 
         public override string ToString() => BuildFullComment(LastComment);
     }
+
+
+    public sealed record AlertDestination(bool AllChats, HashSet<Guid> Chats);
 }

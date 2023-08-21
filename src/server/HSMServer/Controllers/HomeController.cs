@@ -628,13 +628,10 @@ namespace HSMServer.Controllers
             return PartialView("~/Views/Home/Alerts/_ConditionBlock.cshtml", viewModel);
         }
 
-        public IActionResult AddAlertAction(Guid entityId)
-        {
-            if (!TryGetSelectedNode(entityId, out var entity))
-                return _emptyResult;
-
-            return PartialView("~/Views/Home/Alerts/_ActionBlock.cshtml", new ActionViewModel(false, entity.GetAllChats()));
-        }
+        public IActionResult AddAlertAction(Guid entityId) =>
+            TryGetSelectedNode(entityId, out var entity)
+                ? PartialView("~/Views/Home/Alerts/_ActionBlock.cshtml", new ActionViewModel(false, entity.GetAllChats()))
+                : _emptyResult;
 
         private bool TryGetSelectedNode(Guid entityId, out NodeViewModel entity)
         {

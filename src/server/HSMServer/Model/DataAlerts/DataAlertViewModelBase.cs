@@ -47,23 +47,23 @@ namespace HSMServer.Model.DataAlerts
                 conditions.Add(new PolicyConditionUpdate(condition.Operation, condition.Property.ToCore(), target));
             }
 
-            (var status, var chats, var comment, var icon) = GetActions();
+            (var status, var destination, var comment, var icon) = GetActions();
 
-            return new(Id, conditions, sensitivity, status.ToCore(), comment, icon, IsDisabled, chats);
+            return new(Id, conditions, sensitivity, status.ToCore(), comment, icon, IsDisabled, destination);
         }
 
         internal PolicyUpdate ToTimeToLiveUpdate(string initiator)
         {
-            (var status, var chats, var comment, var icon) = GetActions();
+            (var status, var destination, var comment, var icon) = GetActions();
 
-            return new(Id, null, null, status.ToCore(), comment, icon, IsDisabled, chats, initiator);
+            return new(Id, null, null, status.ToCore(), comment, icon, IsDisabled, destination, initiator);
         }
 
 
-        private (SensorStatus status, Dictionary<Guid, string> chats, string comment, string icon) GetActions()
+        private (SensorStatus status, PolicyDestinationUpdate destination, string comment, string icon) GetActions()
         {
+            PolicyDestinationUpdate destination = null;
             SensorStatus status = SensorStatus.Ok;
-            Dictionary<Guid, string> chats = null;
             string comment = null;
             string icon = null;
 
@@ -71,8 +71,11 @@ namespace HSMServer.Model.DataAlerts
             {
                 if (action.Action == ActionType.SendNotification)
                 {
+                    bool allChats = action.Chats.ContainsKey(Guid.Empty);
+                    Dictionary<Guid, string> chats = allChats ? new() : action.Chats ?? new();
+
+                    destination = new PolicyDestinationUpdate(allChats, chats);
                     comment = action.Comment;
-                    chats = action.Chats ?? new();
                 }
                 else if (action.Action == ActionType.ShowIcon)
                     icon = action.Icon;
@@ -80,7 +83,7 @@ namespace HSMServer.Model.DataAlerts
                     status = SensorStatus.Error;
             }
 
-            return (status, chats, comment, icon);
+            return (status, destination, comment, icon);
         }
     }
 
@@ -105,7 +108,7 @@ namespace HSMServer.Model.DataAlerts
             {
                 Action = ActionType.SendNotification,
                 Comment = policy.Template,
-                Chats = policy.Chats,
+                Chats = policy.Destination.AllChats ? new Dictionary<Guid, string>(1) { { Guid.Empty, null } } : policy.Destination.Chats,
                 DisplayComment = node is SensorNodeViewModel ? policy.RebuildState() : policy.Template
             });
 

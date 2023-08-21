@@ -28,6 +28,9 @@ namespace HSMServer.Core.Cache.UpdateEntities
         PolicyCombination Combination = PolicyCombination.And);
 
 
+    public sealed record PolicyDestinationUpdate(bool AllChats, Dictionary<Guid, string> Chats);
+
+
     public sealed record PolicyUpdate(
         Guid Id,
         List<PolicyConditionUpdate> Conditions,
@@ -36,7 +39,7 @@ namespace HSMServer.Core.Cache.UpdateEntities
         string Template,
         string Icon,
         bool IsDisabled,
-        Dictionary<Guid, string> Chats,
+        PolicyDestinationUpdate Destination,
         string Initiator = TreeValuesCache.System
     );
 }
