@@ -92,8 +92,6 @@ namespace HSMDataCollector.Options
     {
         public Version Version { get; set; }
 
-        public string SensorName { get; set; }
-
         public DateTime StartTime { get; set; }
     }
 

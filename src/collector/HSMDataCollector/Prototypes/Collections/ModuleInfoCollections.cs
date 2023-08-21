@@ -1,12 +1,13 @@
 ﻿using HSMDataCollector.Extensions;
 using HSMDataCollector.Options;
+using HSMSensorDataObjects;
 using System;
 
 namespace HSMDataCollector.Prototypes
 {
     internal abstract class ProductInfoPrototype : InstantSensorOptionsPrototype<ServiceSensorOptions>
     {
-        internal const string ProductInfoCategory = "ProductInfo";
+        internal const string ProductInfoCategory = "Module Info";
 
         protected override string Category => ProductInfoCategory;
     }
@@ -21,8 +22,10 @@ namespace HSMDataCollector.Prototypes
         {
             var options = base.Get(customOptions);
 
+            options.Type = SensorType.VersionSensor;
             options.StartTime = DateTime.UtcNow;
-            options.SensorName = SensorName;
+
+            options.Version = customOptions?.Version;
 
             return options;
         }
@@ -34,7 +37,7 @@ namespace HSMDataCollector.Prototypes
         protected override string SensorName => "Collector version";
 
 
-        internal CollectorVersionPrototype() : base()
+        public CollectorVersionPrototype() : base()
         {
             Description = "Current DataCollector version after calling Start method";
         }
@@ -56,7 +59,7 @@ namespace HSMDataCollector.Prototypes
         protected override string SensorName => "Service commands";
 
 
-        internal ServiceCommandsPrototype() : base()
+        public ServiceCommandsPrototype() : base()
         {
             Description = "Service Commands";
         }
@@ -68,7 +71,7 @@ namespace HSMDataCollector.Prototypes
         protected override string SensorName => "Service status";
 
 
-        internal ServiceStatusPrototype() : base()
+        public ServiceStatusPrototype() : base()
         {
             Description = "Current status of the connected product";
         }
@@ -80,7 +83,7 @@ namespace HSMDataCollector.Prototypes
         protected override string SensorName => "Version";
 
 
-        internal ProductVersionPrototype() : base()
+        public ProductVersionPrototype() : base()
         {
             Description = "Current connected product version after calling Start method";
         }
@@ -96,8 +99,7 @@ namespace HSMDataCollector.Prototypes
         protected override string SensorName => "Service alive";
 
 
-
-        internal ServiceAlivePrototype() : base()
+        public ServiceAlivePrototype() : base()
         {
             Description = "Indicator that the monitored service is alive";
         }

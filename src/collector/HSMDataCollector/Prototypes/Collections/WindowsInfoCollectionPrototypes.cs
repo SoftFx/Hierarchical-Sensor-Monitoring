@@ -16,7 +16,7 @@ namespace HSMDataCollector.Prototypes
         protected override string SensorName => "Is need update";
 
 
-        internal WindowsIsNeedUpdatePrototype() : base()
+        public WindowsIsNeedUpdatePrototype() : base()
         {
             Description = "Gets true if the system has not been updated for a half a year";
         }
@@ -28,7 +28,7 @@ namespace HSMDataCollector.Prototypes
         protected override string SensorName => "Last restart";
 
 
-        internal WindowsLastRestartPrototype() : base()
+        public WindowsLastRestartPrototype() : base()
         {
             Description = "Time since last system restart";
         }
@@ -40,7 +40,7 @@ namespace HSMDataCollector.Prototypes
         protected override string SensorName => "Last update";
 
 
-        internal WindowsLastUpdatePrototype() : base()
+        public WindowsLastUpdatePrototype() : base()
         {
             Description = "Time since last system update";
         }

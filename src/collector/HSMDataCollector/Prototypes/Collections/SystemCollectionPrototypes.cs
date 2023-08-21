@@ -14,7 +14,7 @@ namespace HSMDataCollector.Prototypes
         protected override string SensorName => "Free RAM memory";
 
 
-        internal FreeRamMemoryPrototype() : base()
+        public FreeRamMemoryPrototype() : base()
         {
             Description = "Free memory, which is memory available to the operating system," +
             " is defined as free and cache pages. The remainder is active memory, which is memory " +
@@ -30,7 +30,7 @@ namespace HSMDataCollector.Prototypes
         protected override string SensorName => "Total CPU";
 
 
-        internal TotalCPUPrototype() : base()
+        public TotalCPUPrototype() : base()
         {
             Description = "CPU usage indicates the total percentage of processing power" +
             " exhausted to process data and run various programs on a network device, " +
@@ -46,7 +46,7 @@ namespace HSMDataCollector.Prototypes
         protected override string SensorName => "Process CPU";
 
 
-        internal ProcessCpuPrototype() : base()
+        public ProcessCpuPrototype() : base()
         {
             Description = "CPU usage percentage.";
 
@@ -60,7 +60,7 @@ namespace HSMDataCollector.Prototypes
         protected override string SensorName => "Process memory";
 
 
-        internal ProcessMemoryPrototype() : base()
+        public ProcessMemoryPrototype() : base()
         {
             Description = "Current process working set";
 
@@ -74,7 +74,7 @@ namespace HSMDataCollector.Prototypes
         protected override string SensorName => "Process thread count";
 
 
-        internal ProcessThreadCountPrototype() : base()
+        public ProcessThreadCountPrototype() : base()
         {
             Description = "The amount of threads, associated with current process";
         }

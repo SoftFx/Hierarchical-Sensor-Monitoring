@@ -50,7 +50,7 @@ namespace HSMDataCollector.Prototypes
         protected override string SensorName => "Free space on disk";
 
 
-        internal FreeSpaceOnDiskPrototype() : base()
+        public FreeSpaceOnDiskPrototype() : base()
         {
             Description = "Current available free space of some disk";
 
@@ -64,7 +64,7 @@ namespace HSMDataCollector.Prototypes
         protected override string SensorName => "Free space on disk prediction";
 
 
-        internal FreeSpaceOnDiskPredictionPrototype() : base()
+        public FreeSpaceOnDiskPredictionPrototype() : base()
         {
             Description = "Estimated time until disk space runs out";
         }
