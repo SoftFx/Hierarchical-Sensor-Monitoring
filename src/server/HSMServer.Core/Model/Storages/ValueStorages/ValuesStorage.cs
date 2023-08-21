@@ -96,12 +96,9 @@ namespace HSMServer.Core.Model
                 SensorType.Integer => GetParsedBaseValue<IntegerValue, int>(newValue, value),
                 SensorType.Double => GetParsedBaseValue<DoubleValue, double>(newValue, value),
                 SensorType.String => GetParsedBaseValue<StringValue, string>(newValue, value),
-                SensorType.IntegerBar => (IntegerBarValue)value with { Max = 1, Min = 1, },
-                SensorType.DoubleBar => (DoubleBarValue)value with { Max = 1, Min = 1, },
-                SensorType.File => GetParsedBaseValue<FileValue, byte[]>(newValue, value),
                 SensorType.TimeSpan => GetParsedBaseValue<TimeSpanValue, TimeSpan>(newValue, value),
                 SensorType.Version => GetParsedBaseValue<VersionValue, Version>(newValue, value),
-                _ => throw new ArgumentOutOfRangeException(nameof(value.Type))
+                _ => value
             };
 
 
