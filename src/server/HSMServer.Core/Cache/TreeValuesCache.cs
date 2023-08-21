@@ -506,7 +506,7 @@ namespace HSMServer.Core.Cache
 
             var oldStatus = sensor.Status;
 
-            if (sensor.TryAddValue(value) && sensor.LastDbValue != null)
+           if (sensor.TryAddValue(value) && sensor.LastDbValue != null)
                 SaveSensorValueToDb(sensor.LastDbValue, sensor.Id);
 
             if (!sensor.PolicyResult.IsOk)
@@ -959,7 +959,7 @@ namespace HSMServer.Core.Cache
                 {
                     var value = sensor.GetTimeoutValue();
 
-                    if (sensor.TryAddValue(value))
+                    if ((sensor.LastTimeout is null || sensor.LastTimeout.ReceivingTime < sensor.LastUpdate) && sensor.TryAddValue(value))
                         SaveSensorValueToDb(value, sensor.Id);
                 }
 
