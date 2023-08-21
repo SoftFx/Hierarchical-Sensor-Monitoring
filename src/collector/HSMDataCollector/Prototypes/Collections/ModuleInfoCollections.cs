@@ -5,7 +5,7 @@ using System;
 
 namespace HSMDataCollector.Prototypes
 {
-    internal abstract class ProductInfoPrototype : InstantSensorOptionsPrototype<ServiceSensorOptions>
+    internal abstract class ModuleInfoPrototype : InstantSensorOptionsPrototype<ServiceSensorOptions>
     {
         internal const string ProductInfoCategory = "Module Info";
 
@@ -15,7 +15,7 @@ namespace HSMDataCollector.Prototypes
 
     internal abstract class ProductVersionInfoPrototype : InstantSensorOptionsPrototype<VersionSensorOptions>
     {
-        protected override string Category => ProductInfoPrototype.ProductInfoCategory;
+        protected override string Category => ModuleInfoPrototype.ProductInfoCategory;
 
 
         public override VersionSensorOptions Get(VersionSensorOptions customOptions)
@@ -54,7 +54,7 @@ namespace HSMDataCollector.Prototypes
     }
 
 
-    internal sealed class ServiceCommandsPrototype : ProductInfoPrototype
+    internal sealed class ServiceCommandsPrototype : ModuleInfoPrototype
     {
         protected override string SensorName => "Service commands";
 
@@ -62,11 +62,12 @@ namespace HSMDataCollector.Prototypes
         public ServiceCommandsPrototype() : base()
         {
             Description = "Service Commands";
+            Type = SensorType.StringSensor;
         }
     }
 
 
-    internal sealed class ServiceStatusPrototype : ProductInfoPrototype
+    internal sealed class ServiceStatusPrototype : ModuleInfoPrototype
     {
         protected override string SensorName => "Service status";
 
@@ -74,6 +75,7 @@ namespace HSMDataCollector.Prototypes
         public ServiceStatusPrototype() : base()
         {
             Description = "Current status of the connected product";
+            Type = SensorType.IntSensor;
         }
     }
 
@@ -92,7 +94,7 @@ namespace HSMDataCollector.Prototypes
 
     internal sealed class ServiceAlivePrototype : MonitoringInstantSensorOptionsPrototype<MonitoringInstantSensorOptions>
     {
-        protected override string Category => ProductInfoPrototype.ProductInfoCategory;
+        protected override string Category => ModuleInfoPrototype.ProductInfoCategory;
 
         protected override TimeSpan DefaultPostDataPeriod => TimeSpan.FromSeconds(15);
 
@@ -102,6 +104,7 @@ namespace HSMDataCollector.Prototypes
         public ServiceAlivePrototype() : base()
         {
             Description = "Indicator that the monitored service is alive";
+            Type = SensorType.BooleanSensor;
         }
     }
 }

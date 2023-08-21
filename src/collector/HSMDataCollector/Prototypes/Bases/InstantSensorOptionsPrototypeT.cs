@@ -1,7 +1,9 @@
-﻿namespace HSMDataCollector.Prototypes
+﻿using HSMDataCollector.Options;
+
+namespace HSMDataCollector.Prototypes
 {
     internal abstract class InstantSensorOptionsPrototype<T> : Options.InstantSensorOptions
-        where T : Options.InstantSensorOptions, new()
+        where T : InstantSensorOptions, new()
     {
         protected abstract string SensorName { get; }
 
@@ -21,7 +23,7 @@
 
             options.Alerts = customOptions?.Alerts ?? Alerts;
 
-            return (T)options;
+            return options;
         }
     }
 }

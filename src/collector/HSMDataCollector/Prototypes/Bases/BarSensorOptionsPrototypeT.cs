@@ -3,7 +3,7 @@
 namespace HSMDataCollector.Prototypes
 {
     internal abstract class BarSensorOptionsPrototype<T> : BarSensorOptions
-            where T : BarSensorOptions, new()
+        where T : BarSensorOptions, new()
     {
         protected abstract string SensorName { get; }
 
@@ -29,7 +29,7 @@ namespace HSMDataCollector.Prototypes
 
             options.Precision = customOptions?.Precision ?? Precision;
 
-            return (T)options;
+            return options;
         }
     }
 }

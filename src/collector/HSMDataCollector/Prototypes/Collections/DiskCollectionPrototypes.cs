@@ -1,5 +1,6 @@
 ﻿using HSMDataCollector.DefaultSensors.SystemInfo;
 using HSMDataCollector.Options;
+using HSMSensorDataObjects;
 using HSMSensorDataObjects.SensorRequests;
 using System;
 using System.Collections.Generic;
@@ -54,6 +55,7 @@ namespace HSMDataCollector.Prototypes
         {
             Description = "Current available free space of some disk";
 
+            Type = SensorType.DoubleSensor;
             SensorUnit = Unit.MB;
         }
     }
@@ -67,6 +69,8 @@ namespace HSMDataCollector.Prototypes
         public FreeSpaceOnDiskPredictionPrototype() : base()
         {
             Description = "Estimated time until disk space runs out";
+
+            Type = SensorType.TimeSpanSensor;
         }
     }
 }

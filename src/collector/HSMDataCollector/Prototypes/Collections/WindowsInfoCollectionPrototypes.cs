@@ -1,4 +1,5 @@
 ﻿using HSMDataCollector.Options;
+using HSMSensorDataObjects;
 using System;
 
 namespace HSMDataCollector.Prototypes
@@ -19,6 +20,8 @@ namespace HSMDataCollector.Prototypes
         public WindowsIsNeedUpdatePrototype() : base()
         {
             Description = "Gets true if the system has not been updated for a half a year";
+
+            Type = SensorType.BooleanSensor;
         }
     }
 
@@ -31,6 +34,8 @@ namespace HSMDataCollector.Prototypes
         public WindowsLastRestartPrototype() : base()
         {
             Description = "Time since last system restart";
+
+            Type = SensorType.TimeSpanSensor;
         }
     }
 
@@ -43,6 +48,8 @@ namespace HSMDataCollector.Prototypes
         public WindowsLastUpdatePrototype() : base()
         {
             Description = "Time since last system update";
+
+            Type = SensorType.TimeSpanSensor;
         }
     }
 }

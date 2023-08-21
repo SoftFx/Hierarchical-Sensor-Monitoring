@@ -1,4 +1,5 @@
 ﻿using HSMDataCollector.Options;
+using HSMSensorDataObjects;
 using HSMSensorDataObjects.SensorRequests;
 
 namespace HSMDataCollector.Prototypes
@@ -21,6 +22,7 @@ namespace HSMDataCollector.Prototypes
             "currently in use by the operating system.";
 
             SensorUnit = Unit.MB;
+            Type = SensorType.DoubleBarSensor;
         }
     }
 
@@ -37,6 +39,7 @@ namespace HSMDataCollector.Prototypes
             "server, or computer at any given point.";
 
             SensorUnit = Unit.Percents;
+            Type = SensorType.DoubleBarSensor;
         }
     }
 
@@ -51,6 +54,7 @@ namespace HSMDataCollector.Prototypes
             Description = "CPU usage percentage.";
 
             SensorUnit = Unit.Percents;
+            Type = SensorType.DoubleBarSensor;
         }
     }
 
@@ -65,6 +69,7 @@ namespace HSMDataCollector.Prototypes
             Description = "Current process working set";
 
             SensorUnit = Unit.MB;
+            Type = SensorType.DoubleBarSensor;
         }
     }
 
@@ -77,6 +82,8 @@ namespace HSMDataCollector.Prototypes
         public ProcessThreadCountPrototype() : base()
         {
             Description = "The amount of threads, associated with current process";
+
+            Type = SensorType.DoubleBarSensor;
         }
     }
 }
