@@ -259,7 +259,6 @@ namespace HSMServer.Core.Cache
 
                 var newValue = request.IsReWrite? value : SetUtcNowTime();
 
-
                 if (sensor.Storage.TryChangeLastValue(newValue, request.IsReWrite))
                 {
                     _journalService.AddRecord(new JournalRecordModel(request.Id, request.Initiator ?? System)
@@ -267,8 +266,8 @@ namespace HSMServer.Core.Cache
                         PropertyName = request.PropertyName,
                         Enviroment = request.Environment,
                         Path = sensor.FullPath,
-                        OldValue = request.BuildComment(lastValue.Status, lastValue.Comment),
-                        NewValue = request.BuildComment()
+                        OldValue = request.BuildComment(lastValue.Status, lastValue.Comment, lastValue.RawValue.ToString()),
+                        NewValue = request.BuildComment(value: newValue.RawValue.ToString())
                     });
                     
                     _database.AddSensorValue(newValue.ToEntity(request.Id));
