@@ -13,13 +13,13 @@ namespace HSMDataCollector.Options
     }
 
 
-    public class MonitoringInstantSensorOptions : InstantSensorOption, IMonitoringOptions
+    public class MonitoringInstantSensorOptions : InstantSensorOptions, IMonitoringOptions
     {
         public TimeSpan PostDataPeriod { get; set; } = TimeSpan.FromSeconds(15);
     }
 
 
-    public class InstantSensorOption : SensorOptions
+    public class InstantSensorOptions : SensorOptions
     {
         public List<InstantAlertTemplate> Alerts { get; set; } = new List<InstantAlertTemplate>();
 
@@ -88,7 +88,7 @@ namespace HSMDataCollector.Options
     }
 
 
-    public sealed class VersionSensorOptions : InstantSensorOption
+    public sealed class VersionSensorOptions : InstantSensorOptions
     {
         public Version Version { get; set; }
 
@@ -96,13 +96,13 @@ namespace HSMDataCollector.Options
     }
 
 
-    public sealed class ServiceSensorOptions : InstantSensorOption
+    public sealed class ServiceSensorOptions : InstantSensorOptions
     {
         public string ServiceName { get; set; }
     }
 
 
-    public sealed class CollectorInfoOptions : InstantSensorOption { }
+    public sealed class CollectorInfoOptions : InstantSensorOptions { }
 
     public sealed class WindowsInfoSensorOptions : MonitoringInstantSensorOptions { }
 

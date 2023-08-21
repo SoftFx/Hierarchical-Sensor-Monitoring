@@ -381,22 +381,22 @@ namespace HSMDataCollector.Core
         public IInstantValueSensor<int> CreateIntSensor(string path, string description = "") => CreateInstantSensor<int>(path, description);
 
 
-        public IInstantValueSensor<double> CreateDoubleSensor(string path, InstantSensorOption options) => CreateInstantSensor<double>(path, options);
+        public IInstantValueSensor<double> CreateDoubleSensor(string path, InstantSensorOptions options) => CreateInstantSensor<double>(path, options);
 
-        public IInstantValueSensor<string> CreateStringSensor(string path, InstantSensorOption options) => CreateInstantSensor<string>(path, options);
+        public IInstantValueSensor<string> CreateStringSensor(string path, InstantSensorOptions options) => CreateInstantSensor<string>(path, options);
 
-        public IInstantValueSensor<bool> CreateBoolSensor(string path, InstantSensorOption options) => CreateInstantSensor<bool>(path, options);
+        public IInstantValueSensor<bool> CreateBoolSensor(string path, InstantSensorOptions options) => CreateInstantSensor<bool>(path, options);
 
-        public IInstantValueSensor<int> CreateIntSensor(string path, InstantSensorOption options) => CreateInstantSensor<int>(path, options);
+        public IInstantValueSensor<int> CreateIntSensor(string path, InstantSensorOptions options) => CreateInstantSensor<int>(path, options);
 
 
         private IInstantValueSensor<T> CreateInstantSensor<T>(string path, string description) =>
-            CreateInstantSensor<T>(path, new Options.InstantSensorOption()
+            CreateInstantSensor<T>(path, new Options.InstantSensorOptions()
             {
                 Description = description,
             });
 
-        private IInstantValueSensor<T> CreateInstantSensor<T>(string path, Options.InstantSensorOption options)
+        private IInstantValueSensor<T> CreateInstantSensor<T>(string path, Options.InstantSensorOptions options)
         {
             options = FillOptions(path, SensorValuesFactory.GetInstantType<T>(), options);
 
@@ -414,7 +414,7 @@ namespace HSMDataCollector.Core
 
         public IServiceCommandsSensor CreateServiceCommandsSensor()
         {
-            var options = FillOptions($"Product Info/Service commands", SensorValuesFactory.GetInstantType<string>(), new InstantSensorOption());
+            var options = FillOptions($"Product Info/Service commands", SensorValuesFactory.GetInstantType<string>(), new InstantSensorOptions());
 
             return (IServiceCommandsSensor)RegisterCustomSensor(new ServiceCommandsSensor(options));
         }

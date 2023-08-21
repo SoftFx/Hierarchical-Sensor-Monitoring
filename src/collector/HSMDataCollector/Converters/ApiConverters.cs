@@ -7,7 +7,7 @@ namespace HSMDataCollector.Converters
 {
     internal static class ApiConverters
     {
-        internal static AddOrUpdateSensorRequest ToApi(this InstantSensorOption options)
+        internal static AddOrUpdateSensorRequest ToApi(this InstantSensorOptions options)
         {
             var info = options.ToBaseInfo();
 

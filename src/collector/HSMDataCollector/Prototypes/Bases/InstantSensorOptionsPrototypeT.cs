@@ -1,7 +1,7 @@
 ﻿namespace HSMDataCollector.Prototypes
 {
-    internal abstract class InstantSensorOptionsPrototype<T> : Options.InstantSensorOption
-        where T : Options.InstantSensorOption, new()
+    internal abstract class InstantSensorOptionsPrototype<T> : Options.InstantSensorOptions
+        where T : Options.InstantSensorOptions, new()
     {
         protected abstract string SensorName { get; }
 

@@ -129,7 +129,7 @@ namespace HSMDataCollector.Core
         /// <returns>A new instance of <see cref="IInstantValueSensor{T}"/> where T is bool</returns>
         IInstantValueSensor<bool> CreateBoolSensor(string path, string description = "");
 
-        IInstantValueSensor<bool> CreateBoolSensor(string path, InstantSensorOption options);
+        IInstantValueSensor<bool> CreateBoolSensor(string path, InstantSensorOptions options);
 
         /// <summary>
         /// Creates the instance of <see cref="IInstantValueSensor{T}"/> where T is int
@@ -139,7 +139,7 @@ namespace HSMDataCollector.Core
         /// <returns>A new instance of <see cref="IInstantValueSensor{T}"/> where T is int</returns>
         IInstantValueSensor<int> CreateIntSensor(string path, string description = "");
 
-        IInstantValueSensor<int> CreateIntSensor(string path, InstantSensorOption options);
+        IInstantValueSensor<int> CreateIntSensor(string path, InstantSensorOptions options);
 
         /// <summary>
         /// Creates the instance of <see cref="IInstantValueSensor{T}"/> where T is double
@@ -149,7 +149,7 @@ namespace HSMDataCollector.Core
         /// <returns>A new instance of <see cref="IInstantValueSensor{T}"/> where T is double</returns>
         IInstantValueSensor<double> CreateDoubleSensor(string path, string description = "");
 
-        IInstantValueSensor<double> CreateDoubleSensor(string path, InstantSensorOption options);
+        IInstantValueSensor<double> CreateDoubleSensor(string path, InstantSensorOptions options);
 
 
         /// <summary>
@@ -160,7 +160,7 @@ namespace HSMDataCollector.Core
         /// <returns>A new instance of <see cref="IInstantValueSensor{T}"/> where T is string</returns>
         IInstantValueSensor<string> CreateStringSensor(string path, string description = "");
 
-        IInstantValueSensor<string> CreateStringSensor(string path, InstantSensorOption options);
+        IInstantValueSensor<string> CreateStringSensor(string path, InstantSensorOptions options);
 
         /// <summary>
         /// Creates the instance of <see cref="IInstantValueSensor{T}"/> where T is string
