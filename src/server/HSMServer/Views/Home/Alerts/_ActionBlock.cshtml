@@ -28,7 +28,7 @@
                 data-width="100%" data-live-search="true" data-style="alert-block target-input target-multiselect" data-placeholder="telegram chats" data-actions-box="true">
             @foreach (var chat in Model.AvailableChats)
             {
-                <option value="@chat.Id" data-subtext="@(chat.IsUserChat ? "private" : "group")">@chat.Name</option>
+                <option value="@chat.SystemId" data-subtext="@(chat.IsUserChat ? "private" : "group")">@chat.Name</option>
             }
         </select>
     </div>

@@ -3,6 +3,7 @@ using HSMServer.Extensions;
 using HSMServer.Model.TreeViewModel;
 using HSMServer.Notifications.Telegram;
 using Microsoft.AspNetCore.Mvc.Rendering;
+using System;
 using System.Collections.Generic;
 
 namespace HSMServer.Model.DataAlerts
@@ -20,7 +21,7 @@ namespace HSMServer.Model.DataAlerts
         public ActionType Action { get; set; }
 
 
-        public List<long> Chats { get; set; }
+        public List<Guid> Chats { get; set; }
 
         public string Comment { get; set; }
 
