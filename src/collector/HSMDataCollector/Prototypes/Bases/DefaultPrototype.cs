@@ -9,7 +9,7 @@ namespace HSMDataCollector.Prototypes
         private const string SystemPath = ".Default";
 
 
-        internal static T Merge<T>(T defaultOptions, T customOptions) where T : SensorOptions, new() =>
+        internal static T Merge<T>(SensorOptions defaultOptions, T customOptions) where T : SensorOptions, new() =>
             new T()
             {
                 Module = defaultOptions.Module,

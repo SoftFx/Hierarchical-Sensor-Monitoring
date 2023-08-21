@@ -12,16 +12,16 @@ namespace HSMDataCollector.Prototypes
 
         protected BarSensorOptionsPrototype()
         {
-            Path = DefaultPrototype.BuildDefaultPath(Category, Path);
+            Path = DefaultPrototype.BuildDefaultPath(Category, SensorName);
             EnableForGrafana = true;
         }
 
 
         public virtual T Get(T customOptions)
         {
-            var options = DefaultPrototype.Merge<BarSensorOptions>(this, customOptions);
+            var options = DefaultPrototype.Merge(this, customOptions);
 
-            options.Alerts = customOptions.Alerts ?? Alerts;
+            options.Alerts = customOptions?.Alerts ?? Alerts;
 
             options.PostDataPeriod = customOptions?.PostDataPeriod ?? PostDataPeriod;
             options.BarTickPeriod = customOptions?.BarTickPeriod ?? BarTickPeriod;

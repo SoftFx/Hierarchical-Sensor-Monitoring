@@ -6,7 +6,7 @@ namespace HSMDataCollector.DefaultSensors
 {
     internal class ServiceCommandsSensor : SensorBase<string>, IServiceCommandsSensor
     {
-        public ServiceCommandsSensor(InstantSensorOptions options) : base(options) { }
+        public ServiceCommandsSensor(InstantSensorOption options) : base(options) { }
 
 
         public void SendCustomCommand(string command, string initiator) =>

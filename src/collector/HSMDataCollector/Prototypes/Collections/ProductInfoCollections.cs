@@ -93,7 +93,7 @@ namespace HSMDataCollector.Prototypes
 
         protected override TimeSpan DefaultPostDataPeriod => TimeSpan.FromSeconds(15);
 
-        protected override string SensorName => "Version";
+        protected override string SensorName => "Service alive";
 
 
 

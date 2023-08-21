@@ -38,7 +38,7 @@ namespace HSMDataCollector.Prototypes
 
             var diskInfo = new WindowsDiskInfo(options.TargetPath);
 
-            options.Path = $"{options.Path} {diskInfo.Name}";
+            //options.Path = $"{options.Path} {diskInfo.Name}";
 
             return options;
         }

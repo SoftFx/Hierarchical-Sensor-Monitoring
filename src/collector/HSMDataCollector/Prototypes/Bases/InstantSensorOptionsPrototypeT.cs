@@ -1,9 +1,7 @@
-﻿using HSMDataCollector.Options;
-
-namespace HSMDataCollector.Prototypes
+﻿namespace HSMDataCollector.Prototypes
 {
-    internal abstract class InstantSensorOptionsPrototype<T> : InstantSensorOptions
-        where T : InstantSensorOptions, new()
+    internal abstract class InstantSensorOptionsPrototype<T> : Options.InstantSensorOption
+        where T : Options.InstantSensorOption, new()
     {
         protected abstract string SensorName { get; }
 
@@ -12,16 +10,16 @@ namespace HSMDataCollector.Prototypes
 
         protected InstantSensorOptionsPrototype()
         {
-            Path = DefaultPrototype.BuildDefaultPath(Category, Path);
+            Path = DefaultPrototype.BuildDefaultPath(Category, SensorName);
             EnableForGrafana = true;
         }
 
 
         public virtual T Get(T customOptions)
         {
-            var options = DefaultPrototype.Merge<InstantSensorOptions>(this, customOptions);
+            var options = DefaultPrototype.Merge(this, customOptions);
 
-            options.Alerts = customOptions.Alerts ?? Alerts;
+            options.Alerts = customOptions?.Alerts ?? Alerts;
 
             return (T)options;
         }
