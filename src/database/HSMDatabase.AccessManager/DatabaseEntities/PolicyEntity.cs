@@ -21,6 +21,8 @@ namespace HSMDatabase.AccessManager.DatabaseEntities
     {
         public List<PolicyConditionEntity> Conditions { get; init; }
 
+        public Dictionary<byte[], string> Chats { get; init; }
+
         public TimeIntervalEntity Sensitivity { get; init; }
 
         public byte[] Id { get; init; }

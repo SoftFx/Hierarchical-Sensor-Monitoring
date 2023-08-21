@@ -36,6 +36,7 @@ namespace HSMServer.Core.Cache.UpdateEntities
         string Template,
         string Icon,
         bool IsDisabled,
+        Dictionary<Guid, string> Chats,
         string Initiator = TreeValuesCache.System
     );
 }

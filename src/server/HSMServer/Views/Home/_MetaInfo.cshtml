@@ -230,11 +230,10 @@
     }
 
     function setFormDataAlertsSendNotificationChats(formData, type, i, j, block) {
-        let k = 0;
         block.find("select[name='Chats']:first option").each(function () {
             if ($(this).is(':selected')) {
-                formData.append(`DataAlerts[${type}][${i}].Actions[${j}].Chats[${k}]`, $(this).val());
-                ++k;
+                let chatId = $(this).val();
+                formData.append(`DataAlerts[${type}][${i}].Actions[${j}].Chats[${chatId}]`, $(this).text());
             }
         })
     }

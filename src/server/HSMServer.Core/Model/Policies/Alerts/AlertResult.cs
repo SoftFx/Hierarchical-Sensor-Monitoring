@@ -1,10 +1,13 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Text;
 
 namespace HSMServer.Core.Model.Policies
 {
     public sealed record AlertResult
     {
+        public HashSet<Guid> Chats { get; }
+
         public string Icon { get; }
 
         public string Template { get; }
@@ -27,6 +30,7 @@ namespace HSMServer.Core.Model.Policies
             Icon = policy.Icon;
             PolicyId = policy.Id;
             Template = policy.Template;
+            Chats = new HashSet<Guid>(policy.Chats.Keys);
 
             AddPolicyResult(policy);
         }

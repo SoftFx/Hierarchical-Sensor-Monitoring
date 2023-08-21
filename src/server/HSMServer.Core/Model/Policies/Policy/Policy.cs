@@ -18,6 +18,8 @@ namespace HSMServer.Core.Model.Policies
 
         public List<PolicyCondition> Conditions { get; } = new();
 
+        public Dictionary<Guid, string> Chats { get; } = new();
+
 
         public Guid Id { get; private set; }
 
@@ -108,6 +110,11 @@ namespace HSMServer.Core.Model.Policies
             Icon = update.Icon;
 
             UpdateConditions(update.Conditions, Update);
+
+            Chats.Clear();
+            if (update.Chats is not null)
+                foreach (var (chatId, name) in update.Chats)
+                    Chats.Add(chatId, name);
         }
 
         internal void Apply(PolicyEntity entity, BaseSensorModel sensor = null)
@@ -127,6 +134,11 @@ namespace HSMServer.Core.Model.Policies
                 Sensitivity = new TimeIntervalModel(entity.Sensitivity);
 
             UpdateConditions(entity.Conditions, Update);
+
+            Chats.Clear();
+            if (entity.Chats is not null)
+                foreach (var (chatId, name) in entity.Chats)
+                    Chats.Add(new Guid(chatId), name);
         }
 
         internal PolicyEntity ToEntity() => new()
@@ -134,6 +146,7 @@ namespace HSMServer.Core.Model.Policies
             Id = Id.ToByteArray(),
 
             Conditions = Conditions?.Select(u => u.ToEntity()).ToList(),
+            Chats = Chats?.ToDictionary(k => k.Key.ToByteArray(), v => v.Value),
 
             Sensitivity = Sensitivity?.ToEntity(),
             SensorStatus = (byte)Status,
@@ -189,6 +202,9 @@ namespace HSMServer.Core.Model.Policies
 
             if (!string.IsNullOrEmpty(Template))
                 actions.Add($"template={Template}");
+
+            if (Chats.Count > 0)
+                actions.Add($"chats='{string.Join(", ", Chats.Values)}");
 
             if (!string.IsNullOrEmpty(Icon))
                 actions.Add($"show icon={Icon}");

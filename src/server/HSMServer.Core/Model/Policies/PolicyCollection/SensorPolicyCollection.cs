@@ -247,7 +247,8 @@ namespace HSMServer.Core.Model.Policies
                 SensorStatus.Ok,
                 $"$prevStatus->$status [$product]$path = $comment",
                 null,
-                false);
+                false,
+                null);
 
             policy.Update(statusUpdate, _sensor);
 

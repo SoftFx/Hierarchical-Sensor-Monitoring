@@ -47,36 +47,40 @@ namespace HSMServer.Model.DataAlerts
                 conditions.Add(new PolicyConditionUpdate(condition.Operation, condition.Property.ToCore(), target));
             }
 
-            (var status, var comment, var icon) = GetActions();
+            (var status, var chats, var comment, var icon) = GetActions();
 
-            return new(Id, conditions, sensitivity, status.ToCore(), comment, icon, IsDisabled);
+            return new(Id, conditions, sensitivity, status.ToCore(), comment, icon, IsDisabled, chats);
         }
 
         internal PolicyUpdate ToTimeToLiveUpdate(string initiator)
         {
-            (var status, var comment, var icon) = GetActions();
+            (var status, var chats, var comment, var icon) = GetActions();
 
-            return new(Id, null, null, status.ToCore(), comment, icon, IsDisabled, initiator);
+            return new(Id, null, null, status.ToCore(), comment, icon, IsDisabled, chats, initiator);
         }
 
 
-        private (SensorStatus status, string comment, string icon) GetActions()
+        private (SensorStatus status, Dictionary<Guid, string> chats, string comment, string icon) GetActions()
         {
             SensorStatus status = SensorStatus.Ok;
+            Dictionary<Guid, string> chats = null;
             string comment = null;
             string icon = null;
 
             foreach (var action in Actions)
             {
                 if (action.Action == ActionType.SendNotification)
+                {
                     comment = action.Comment;
+                    chats = action.Chats ?? new();
+                }
                 else if (action.Action == ActionType.ShowIcon)
                     icon = action.Icon;
                 else if (action.Action == ActionType.SetStatus)
                     status = SensorStatus.Error;
             }
 
-            return (status, comment, icon);
+            return (status, chats, comment, icon);
         }
     }
 
@@ -101,6 +105,7 @@ namespace HSMServer.Model.DataAlerts
             {
                 Action = ActionType.SendNotification,
                 Comment = policy.Template,
+                Chats = policy.Chats,
                 DisplayComment = node is SensorNodeViewModel ? policy.RebuildState() : policy.Template
             });
 
