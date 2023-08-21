@@ -412,7 +412,7 @@ namespace HSMDataCollector.Core
             return options;
         }
 
-        public IServiceCommandsSensor CreateServiceCommandsSensor(string module = "")
+        public IServiceCommandsSensor CreateServiceCommandsSensor()
         {
             var options = FillOptions($"Product Info/Service commands", SensorValuesFactory.GetInstantType<string>(), new InstantSensorOption());
 
@@ -693,17 +693,6 @@ namespace HSMDataCollector.Core
             _nameToSensor[path] = sensor;
 
             _logger.Info($"Added new sensor {path}");
-        }
-
-        private static (string path, string name) GetPathAndName(string path)
-        {
-            var split = path.Split('/');
-            var name = split.LastOrDefault();
-
-            var nodePathIndex = path.Length - name.Length - 1;
-            var nodePath = nodePathIndex > -1 ? path.Substring(0, nodePathIndex) : string.Empty;
-
-            return (nodePath, name);
         }
     }
 }

@@ -215,7 +215,7 @@ namespace HSMDataCollector.Core
         ILastValueSensor<string> CreateLastValueStringSensor(string path, string defaultValue, string description = "");
 
 
-        IServiceCommandsSensor CreateServiceCommandsSensor(string module = "");
+        IServiceCommandsSensor CreateServiceCommandsSensor();
 
         #region Bar sensors
 
