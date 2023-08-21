@@ -675,7 +675,7 @@ namespace HSMServer.Controllers
             }
 
             var sensor = _treeValuesCache.GetSensor(modal.SensorId);
-            var comment = $"User: {CurrentUser.Name}. Reason: {modal.Reason}";
+            var comment = $"User: {CurrentUser.Name}. Reason: {modal.Comment}";
 
             if (modal.RewriteLast)
             {

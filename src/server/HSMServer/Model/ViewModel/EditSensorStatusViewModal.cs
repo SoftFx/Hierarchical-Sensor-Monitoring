@@ -24,9 +24,9 @@ public class EditSensorStatusViewModal
     [Display(Name = "New status")]
     public SensorStatus NewStatus { get; set; }
     
-    [Display(Name = "Reason")]
-    [Required(ErrorMessage = "Reason required")]
-    public string Reason { get; set; }
+    [Display(Name = "Comment")]
+    [Required(ErrorMessage = "Comment required")]
+    public string Comment { get; set; }
     
     [Display(Name = "Rewrite Last")]
     public bool RewriteLast { get; set; }
