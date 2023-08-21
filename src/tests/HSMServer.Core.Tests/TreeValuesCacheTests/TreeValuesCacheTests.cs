@@ -33,8 +33,9 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             : base(fixture, registerFixture)
         {
             var folderManager = new Mock<IFolderManager>().Object;
+            var treeViewModelLogger = CommonMoqs.CreateNullLogger<TreeViewModel>();
 
-            _treeViewModel = new(_valuesCache, folderManager, _userManager);
+            _treeViewModel = new(_valuesCache, folderManager, _userManager, treeViewModelLogger);
         }
 
 

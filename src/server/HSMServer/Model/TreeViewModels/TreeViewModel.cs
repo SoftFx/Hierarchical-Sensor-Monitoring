@@ -8,6 +8,7 @@ using HSMServer.Model.Authentication;
 using HSMServer.Model.Folders;
 using HSMServer.Notification.Settings;
 using HSMServer.Notifications.Telegram;
+using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -20,6 +21,7 @@ namespace HSMServer.Model.TreeViewModel
         private readonly IFolderManager _folderManager;
         private readonly ITreeValuesCache _cache;
         private readonly IUserManager _userManager;
+        private readonly ILogger<TreeViewModel> _logger;
 
 
         public ConcurrentDictionary<Guid, AccessKeyViewModel> AccessKeys { get; } = new();
@@ -29,8 +31,10 @@ namespace HSMServer.Model.TreeViewModel
         public ConcurrentDictionary<Guid, ProductNodeViewModel> Nodes { get; } = new();
 
 
-        public TreeViewModel(ITreeValuesCache cache, IFolderManager folderManager, IUserManager userManager)
+        public TreeViewModel(ITreeValuesCache cache, IFolderManager folderManager, IUserManager userManager, ILogger<TreeViewModel> logger)
         {
+            _logger = logger;
+
             _folderManager = folderManager;
             _folderManager.ResetProductTelegramInheritance += ResetProductTelegramInheritanceHandler;
 
@@ -49,6 +53,8 @@ namespace HSMServer.Model.TreeViewModel
 
             foreach (var product in _cache.GetProducts())
                 AddNewProductViewModel(product);
+
+            TelegramChatsMigration();
         }
 
 
@@ -277,6 +283,36 @@ namespace HSMServer.Model.TreeViewModel
                         chats.TryAdd(chatId, chat);
 
             return chats;
+        }
+
+        [Obsolete("Should be removed after telegram chat IDs migration")]
+        private void TelegramChatsMigration()
+        {
+            _logger.LogInformation($"Starting products telegram chats migration...");
+
+            var productsToResave = new HashSet<Guid>();
+            var chatIds = new Dictionary<Telegram.Bot.Types.ChatId, Guid>(1 << 4);
+
+            foreach (var (_, node) in Nodes)
+                foreach (var (chatId, chat) in node.Notifications.Telegram.Chats)
+                    if (chat.SystemId == Guid.Empty)
+                    {
+                        if (chatIds.TryGetValue(chatId, out var systemChatId))
+                            chat.SystemId = systemChatId;
+                        else
+                        {
+                            chat.SystemId = Guid.NewGuid();
+                            chatIds.Add(chatId, chat.SystemId);
+                        }
+
+                        productsToResave.Add(node.Id);
+                    }
+
+            foreach (var productId in productsToResave)
+                if (Nodes.TryGetValue(productId, out var product))
+                    UpdateProductNotificationSettings(product);
+
+            _logger.LogInformation($"{productsToResave.Count} products telegram chats migration is finished");
         }
     }
 }

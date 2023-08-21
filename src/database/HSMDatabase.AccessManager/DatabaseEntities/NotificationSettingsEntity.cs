@@ -30,7 +30,10 @@ namespace HSMDatabase.AccessManager.DatabaseEntities
 
     public sealed class TelegramChatEntity
     {
+        public byte[] SystemId { get; init; }
+
         public long Id { get; init; }
+
 
         public string Name { get; init; }
 

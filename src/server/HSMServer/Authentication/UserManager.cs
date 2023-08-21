@@ -132,6 +132,8 @@ namespace HSMServer.Authentication
                 _logger.LogInformation("Default user has been added.");
             }
 
+            TelegramChatsMigration();
+
             _logger.LogInformation($"Read users from database, users count = {Count}.");
         }
 
@@ -174,6 +176,36 @@ namespace HSMServer.Authentication
                     TryUpdate(user);
                 }
             }
+        }
+
+        [Obsolete("Should be removed after telegram chat IDs migration")]
+        private void TelegramChatsMigration()
+        {
+            _logger.LogInformation($"Starting users telegram chats migration...");
+
+            var usersToResave = new HashSet<Guid>();
+            var chatIds = new Dictionary<Telegram.Bot.Types.ChatId, Guid>(1 << 4);
+
+            foreach (var (_, user) in this)
+                foreach (var (chatId, chat) in user.Notifications.Telegram.Chats)
+                    if (chat.SystemId == Guid.Empty)
+                    {
+                        if (chatIds.TryGetValue(chatId, out var systemChatId))
+                            chat.SystemId = systemChatId;
+                        else
+                        {
+                            chat.SystemId = Guid.NewGuid();
+                            chatIds.Add(chatId, chat.SystemId);
+                        }
+
+                        usersToResave.Add(user.Id);
+                    }
+
+            foreach (var userId in usersToResave)
+                if (TryGetValue(userId, out var user))
+                    _databaseCore.UpdateUser(user.ToEntity());
+
+            _logger.LogInformation($"{usersToResave.Count} users telegram chats migration is finished");
         }
     }
 }
