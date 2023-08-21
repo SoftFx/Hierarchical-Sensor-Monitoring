@@ -60,12 +60,12 @@ namespace HSMDataCollector.DefaultSensors
 
         public IWindowsCollection AddFreeDiskSpace(DiskSensorOptions options)
         {
-            return ToWindows(new WindowsFreeDiskSpace(_prototype.FreeSpaceOnDisk.Get(options)));
+            return ToWindows(new WindowsFreeDiskSpace(_prototype.FreeSpaceOnDisk.GetWindowsOptions(options)));
         }
 
         public IWindowsCollection AddFreeDiskSpacePrediction(DiskSensorOptions options)
         {
-            return ToWindows(new WindowsFreeDiskSpacePrediction(_prototype.FreeSpaceOnDiskPrediction.Get(options)));
+            return ToWindows(new WindowsFreeDiskSpacePrediction(_prototype.FreeSpaceOnDiskPrediction.GetWindowsOptions(options)));
         }
 
         public IWindowsCollection AddFreeDisksSpace(DiskSensorOptions options) =>

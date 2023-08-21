@@ -1,5 +1,6 @@
 ﻿using HSMDataCollector.Alerts;
 using HSMDataCollector.Converters;
+using HSMDataCollector.DefaultSensors.SystemInfo;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.SensorRequests;
 using System;
@@ -81,6 +82,10 @@ namespace HSMDataCollector.Options
     {
         internal const int DefaultCalibrationRequests = 6;
         internal const string DefaultTargetPath = @"C:\";
+
+
+        internal IDiskInfo DiskInfo { get; set; }
+
 
         public int CalibrationRequests { get; set; } = DefaultCalibrationRequests;
 

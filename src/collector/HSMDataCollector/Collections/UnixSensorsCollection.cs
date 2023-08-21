@@ -58,12 +58,12 @@ namespace HSMDataCollector.DefaultSensors
 
         public IUnixCollection AddFreeDiskSpace(DiskSensorOptions options)
         {
-            return ToUnix(new UnixFreeDiskSpace(_prototype.FreeSpaceOnDisk.Get(options)));
+            return ToUnix(new UnixFreeDiskSpace(_prototype.FreeSpaceOnDisk.GetUnixOptions(options)));
         }
 
         public IUnixCollection AddFreeDiskSpacePrediction(DiskSensorOptions options)
         {
-            return ToUnix(new UnixFreeDiskSpacePrediction(_prototype.FreeSpaceOnDiskPrediction.Get(options)));
+            return ToUnix(new UnixFreeDiskSpacePrediction(_prototype.FreeSpaceOnDiskPrediction.GetUnixOptions(options)));
         }
 
         public IUnixCollection AddDiskMonitoringSensors(DiskSensorOptions options) =>
