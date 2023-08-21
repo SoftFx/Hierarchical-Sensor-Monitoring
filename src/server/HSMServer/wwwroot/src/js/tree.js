@@ -374,7 +374,7 @@ function buildContextMenu(node) {
                         modal.hide();
 
                         $.ajax({
-                                url:`${removeNodeAction}`,
+                                url:`${emoveNodeAction}`,
                                 type: 'POST',
                                 cache: false,
                                 async: true,

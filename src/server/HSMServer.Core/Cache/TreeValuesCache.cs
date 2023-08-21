@@ -251,12 +251,12 @@ namespace HSMServer.Core.Cache
 
             if (request.Comment is not null && lastValue is not null)
             {
-                var value = lastValue with
+                var value = sensor.Storage.GetNewValue(lastValue, request.Value) with
                 {
                     Status = request.Status, 
                     Comment = request.Comment
                 };
-
+                
                 if (sensor.Storage.TryChangeLastValue(value))
                 {
                     _journalService.AddRecord(new JournalRecordModel(request.Id, request.Initiator ?? System)

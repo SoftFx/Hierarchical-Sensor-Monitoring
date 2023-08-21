@@ -68,6 +68,14 @@
                             <textarea class="form-control" asp-for="@Model.Reason"></textarea>
                             <span asp-validation-for="Reason"></span>
                         </div>
+                        @if (Model.IsValueChangeBlockDisplayed)
+                        {
+                            <div class="d-flex flex-column mt-2">
+                                <label class="form-label" asp-for="@Model.NewValue"></label>
+                                <textarea class="form-control" asp-for="@Model.NewValue"></textarea>
+                                <span asp-validation-for="@Model.NewValue"></span>
+                            </div>
+                        }
                     </div>
                     <div class="form-group mt-2">
                         <div class="d-flex flex-column">
