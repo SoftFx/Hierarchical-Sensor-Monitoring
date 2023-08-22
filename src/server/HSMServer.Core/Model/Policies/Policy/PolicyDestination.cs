@@ -13,7 +13,9 @@ namespace HSMServer.Core.Model.Policies
         public bool AllChats { get; set; } // TODO: should be private set after policies destination migration
 
 
-        public PolicyDestination(PolicyDestinationEntity entity) // TODO: should be internal after policies destination migration
+        public PolicyDestination() { } // TODO: should be internal after policies destination migration
+
+        internal PolicyDestination(PolicyDestinationEntity entity)
         {
             if (entity is null)
                 return;

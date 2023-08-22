@@ -219,7 +219,10 @@ namespace HSMServer.Authentication
             var policiesToResave = new Dictionary<Guid, Policy>(1 << 8);
             var sensorsToResave = new HashSet<Guid>();
 
-            var products = _treeValuesCache.GetProducts().ToDictionary(k => k.DisplayName, v => v.NotificationsSettings);
+            var products = new Dictionary<string, NotificationSettingsEntity>(1 << 5);
+            foreach (var product in _treeValuesCache.GetProducts())
+                if (!products.ContainsKey(product.DisplayName))
+                    products.Add(product.DisplayName, product.NotificationsSettings);
 
             foreach (var sensor in _treeValuesCache.GetSensors())
             {
@@ -289,7 +292,7 @@ namespace HSMServer.Authentication
         [Obsolete("Should be removed after policies chats migration")]
         private static bool TryUpdatePolicyDestination(Policy policy, TelegramChat chat)
         {
-            policy.Destination ??= new(new PolicyDestinationEntity() { Chats = new() });
+            policy.Destination ??= new();
 
             if (!policy.Destination.Chats.ContainsKey(chat.SystemId))
             {
@@ -308,9 +311,9 @@ namespace HSMServer.Authentication
             var oldAllChats = policy.Destination?.AllChats;
 
 
-            policy.Destination ??= new(new PolicyDestinationEntity() { Chats = new() });
-
+            policy.Destination ??= new();
             policy.Destination.AllChats = allChats;
+
             if (allChats)
                 policy.Destination.Chats.Clear();
 

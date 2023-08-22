@@ -476,7 +476,7 @@ namespace HSMServer.Core.Cache
 
             var oldStatus = sensor.Status;
 
-           if (sensor.TryAddValue(value) && sensor.LastDbValue != null)
+            if (sensor.TryAddValue(value) && sensor.LastDbValue != null)
                 SaveSensorValueToDb(sensor.LastDbValue, sensor.Id);
 
             if (!sensor.PolicyResult.IsOk)
@@ -546,7 +546,7 @@ namespace HSMServer.Core.Cache
                 var oldChats = policy.Destination?.Chats.Count ?? -1;
                 var oldAllChats = policy.Destination?.AllChats;
 
-                policy.Destination ??= new(new PolicyDestinationEntity() { Chats = new() });
+                policy.Destination ??= new();
                 policy.Destination.AllChats = true;
 
                 if (policy.Destination.Chats.Count != oldChats || policy.Destination.AllChats != oldAllChats)
