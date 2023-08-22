@@ -8,10 +8,9 @@ builder.Configuration.SetBasePath(PingConfig.ConfigPath)
                      .AddJsonFile(PingConfig.ConfigName, true);
 
 var config = new PingConfig(builder.Configuration);
+DataCollectorWrapper.SetConfig(config);
 
-builder.Services.Configure<DataCollectorWrapper>(x => x.SetConfig(config))
-                .AddSingleton<DataCollectorWrapper>();
-
+builder.Services.AddSingleton<DataCollectorWrapper>();;
 builder.Services.AddHostedService<DatacollectorService>();
                 
 

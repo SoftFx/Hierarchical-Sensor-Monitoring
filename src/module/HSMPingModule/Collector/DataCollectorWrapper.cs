@@ -8,20 +8,21 @@ namespace HSMPingModule.Collector;
 
 internal sealed class DataCollectorWrapper
 {
+    private static PingConfig _config;
     private readonly IDataCollector _collector;
-    private PingConfig _config;
+
 
     public DataCollectorWrapper()
     {
-        var collectorOptions = new CollectorOptions()
-        {
-            AccessKey = _config?.CollectorSettings.Key,
-            ServerAddress = _config?.CollectorSettings.ServerAddress,
-        };
-
         var productInfoOptions = new VersionSensorOptions()
         {
-            Version = Assembly.GetEntryAssembly()?.GetName().GetVersion()
+            Version = Assembly.GetEntryAssembly()?.GetName().GetVersion(),
+        };
+
+        var collectorOptions = new CollectorOptions()
+        {
+            AccessKey = _config.CollectorSettings.Key,
+            ServerAddress = _config.CollectorSettings.ServerAddress
         };
 
         var collectorInfoOptions = new CollectorMonitoringInfoOptions();
@@ -42,18 +43,12 @@ internal sealed class DataCollectorWrapper
                            .AddProductVersion(productInfoOptions);
         }
     }
-
-    internal void SendDbInfo()
-    {
-        
-    }
     
-    public void SetConfig(PingConfig config) => _config = config;
+    public static void SetConfig(PingConfig config) => _config = config;
     
     public void Dispose() => _collector?.Dispose();
 
     internal Task Start() => _collector.Start();
 
     internal Task Stop() => _collector.Stop();
-
 }

@@ -8,7 +8,7 @@ namespace HSMPingModule.Collector
         private readonly DataCollectorWrapper _collector;
 
 
-        public override TimeSpan Delay { get; } = TimeSpan.FromMinutes(5);
+        public override TimeSpan Delay { get; } = TimeSpan.FromSeconds(5);
 
 
         public DatacollectorService(DataCollectorWrapper collector)
@@ -22,17 +22,11 @@ namespace HSMPingModule.Collector
 
         protected override async Task ExecuteAsync(CancellationToken token)
         {
-            await Task.Delay(_initDelay, token); //small delay wait server initializing
+            await Task.Delay(_initDelay, token);
+
             await _collector.Start();
-
-            await base.ExecuteAsync(token);
         }
 
-        protected override Task ServiceAction()
-        {
-            _collector.SendDbInfo();
-
-            return Task.CompletedTask;
-        }
+        protected override Task ServiceAction() => Task.CompletedTask;
     }
 }
