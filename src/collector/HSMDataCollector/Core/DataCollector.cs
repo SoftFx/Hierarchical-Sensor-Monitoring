@@ -42,7 +42,7 @@ namespace HSMDataCollector.Core
         private readonly LoggerManager _logger = new LoggerManager();
 
         private readonly ConcurrentDictionary<string, ISensor> _nameToSensor = new ConcurrentDictionary<string, ISensor>();
-        private readonly PrototypesCollection _sensorsPrototype;
+        private readonly PrototypesCollection _prototypes;
         private readonly SensorsStorage _sensorsStorage;
         private readonly IQueueManager _queueManager;
         private readonly CollectorOptions _options;
@@ -82,10 +82,10 @@ namespace HSMDataCollector.Core
 
             _queueManager = new QueueManager(options, _logger);
             _sensorsStorage = new SensorsStorage(this, _queueManager, _logger);
-            _sensorsPrototype = new PrototypesCollection(options.Module);
+            _prototypes = new PrototypesCollection(options.Module);
 
-            Windows = new WindowsSensorsCollection(_sensorsStorage, _sensorsPrototype);
-            Unix = new UnixSensorsCollection(_sensorsStorage, _sensorsPrototype);
+            Windows = new WindowsSensorsCollection(_sensorsStorage, _prototypes);
+            Unix = new UnixSensorsCollection(_sensorsStorage, _prototypes);
 
             _hsmClient = new HsmHttpsClient(options, _queueManager, _logger);
 
@@ -413,7 +413,7 @@ namespace HSMDataCollector.Core
 
         public IServiceCommandsSensor CreateServiceCommandsSensor()
         {
-            var options = FillOptions($"Product Info/Service commands", SensorValuesFactory.GetInstantType<string>(), new InstantSensorOptions());
+            var options = _prototypes.ServiceCommands.Get(null);
 
             return (IServiceCommandsSensor)_sensorsStorage.Register(new ServiceCommandsSensor(options));
         }
