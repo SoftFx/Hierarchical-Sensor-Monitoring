@@ -14,6 +14,9 @@ namespace HSMServer.Model.TreeViewModel
         public ConcurrentDictionary<string, int> AlertIcons { get; } = new();
 
 
+        public Func<bool> IsJournalEmpty { get; set; }
+
+
         public TimeIntervalViewModel KeepHistory { get; protected set; }
 
         public TimeIntervalViewModel SelfDestroy { get; protected set; }

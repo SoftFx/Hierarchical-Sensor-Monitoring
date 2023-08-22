@@ -39,6 +39,7 @@ public sealed class SelectedJournalViewModel : ConcurrentDictionary<Guid, Concur
         }
 
         _node = baseNode;
+        _node.IsJournalEmpty = IsJournalEmpty;
 
         Interlocked.Exchange(ref _totalSize, 0);
         Clear();
@@ -135,7 +136,8 @@ public sealed class SelectedJournalViewModel : ConcurrentDictionary<Guid, Concur
 
     private JournalRecordViewModel ToView(JournalRecordModel record) => new(record);
 
-
+    private bool IsJournalEmpty() => TotalSize == 0;
+    
     public void Dispose()
     {
         if (_journal is not null)

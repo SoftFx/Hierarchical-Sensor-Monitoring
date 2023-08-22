@@ -194,7 +194,7 @@
                                     </div>
                                 </li>
                                 <li class='nav-item'>
-                                    <a id='link_journal_@sensorId' class='nav-link' data-bs-toggle='tab' href='#@journalParentDivId'>Journal</a>
+                                    <a id='link_journal_@sensorId' class='nav-link @(Model.IsJournalEmpty?.Invoke() ?? false ? "hidden_element": "")' data-bs-toggle='tab' href='#@journalParentDivId'>Journal</a>
                                  </li>
                             </ul>
                             <div class='tab-content'>
@@ -270,7 +270,7 @@
                                     </div>
                                 </li>
                                 <li class='nav-item'>
-                                    <a id='link_journal_@sensorId' class='nav-link' data-bs-toggle='tab' href='#@journalParentDivId'>Journal</a>
+                                    <a id='link_journal_@sensorId' class='nav-link @(Model.IsJournalEmpty?.Invoke() ?? false ? "hidden_element": "")' data-bs-toggle='tab' href='#@journalParentDivId'>Journal</a>
                                 </li>
                             </ul>
                             <div class='tab-content'>
