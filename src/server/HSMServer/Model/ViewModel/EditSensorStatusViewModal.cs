@@ -28,8 +28,8 @@ public class EditSensorStatusViewModal
     [Required(ErrorMessage = "Comment required")]
     public string Comment { get; set; }
     
-    [Display(Name = "Rewrite Last")]
-    public bool RewriteLast { get; set; }
+    [Display(Name = "Change last")]
+    public bool ChangeLast { get; set; }
     
     [Display(Name = "New Value")]
     public string NewValue { get; set; }
