@@ -212,7 +212,7 @@ namespace HSMServer.ApiObjectsConverters
             };
 
 
-        public static SensorUpdate Convert(this AddOrUpdateSensorRequest request, Guid sensorId) =>
+        public static SensorUpdate Convert(this AddOrUpdateSensorRequest request, Guid sensorId, string keyName) =>
             new()
             {
                 Id = sensorId,
@@ -225,6 +225,7 @@ namespace HSMServer.ApiObjectsConverters
                 TTL = request.TTL.ToTimeInterval(),
                 TTLPolicy = request.TtlAlert?.Convert(),
                 Policies = request.Alerts?.Select(policy => policy.Convert()).ToList(),
+                Initiator = $"Datacollector ({keyName})",
             };
 
 

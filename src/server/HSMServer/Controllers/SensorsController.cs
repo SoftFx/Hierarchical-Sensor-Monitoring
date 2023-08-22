@@ -477,7 +477,9 @@ namespace HSMServer.Controllers
         {
             try
             {
-                if (TryBuildSensorUpdate(sensorUpdate, out var update, out var message))
+                var keyName = GetCollectorKeyName();
+
+                if (TryBuildSensorUpdate(sensorUpdate, keyName, out var update, out var message))
                 {
                     _cache.AddOrUpdateSensor(update);
                     return Ok(sensorUpdate);
@@ -510,11 +512,13 @@ namespace HSMServer.Controllers
 
             try
             {
+                var keyName = GetCollectorKeyName();
+
                 foreach (var command in sensorCommands)
                 {
                     if (command is AddOrUpdateSensorRequest sensorUpdate)
                     {
-                        if (TryBuildSensorUpdate(sensorUpdate, out var update, out var message))
+                        if (TryBuildSensorUpdate(sensorUpdate, keyName, out var update, out var message))
                             _cache.AddOrUpdateSensor(update);
                         else
                             result[sensorUpdate.Path] = message;
@@ -532,6 +536,14 @@ namespace HSMServer.Controllers
             }
         }
 
+
+        private string GetCollectorKeyName()
+        {
+            if (HttpContext.Request.Headers.TryGetValue(nameof(BaseRequest.Key), out var keyVal))
+                return _cache.GetAccessKey(Guid.Parse(keyVal)).DisplayName;
+            else
+                throw new Exception("Key is required");
+        }
 
         private bool CanAddToQueue(StoreInfo storeInfo, out string message)
         {
@@ -559,7 +571,7 @@ namespace HSMServer.Controllers
         private StoreInfo BuildStoreInfo(SensorValueBase valueBase, BaseValue baseValue) =>
             new(GetKey(valueBase), valueBase.Path) { BaseValue = baseValue };
 
-        private bool TryBuildSensorUpdate(AddOrUpdateSensorRequest request, out SensorAddOrUpdateRequestModel requestModel, out string message)
+        private bool TryBuildSensorUpdate(AddOrUpdateSensorRequest request, string keyName, out SensorAddOrUpdateRequestModel requestModel, out string message)
         {
             requestModel = new SensorAddOrUpdateRequestModel(GetKey(request), request.Path);
 
@@ -572,7 +584,7 @@ namespace HSMServer.Controllers
                     return false;
                 }
 
-                requestModel.Update = request.Convert(sensorId);
+                requestModel.Update = request.Convert(sensorId, keyName);
 
                 if (request.SensorType.HasValue)
                     requestModel.Type = request.SensorType.Value.Convert();
