@@ -8,26 +8,23 @@ const Colors = {
     line: 'rgb(231, 99, 250)'
 }
 
+const MarkerSize = {
+    default: 10,
+    Ttl: 15
+}
+
 export class Plot {
-    constructor(data) {
-        this.basicInit();
-    }
+    x = [];
+    y = [];
+    customdata = [];
+    type = '';
+    mode = '';
+    showlegend = false;
+    hovertemplate = "%{x}, %{customdata}<extra></extra>";
+    
+    constructor(data) { }
 
-    basicInit() {
-        this.x = [];
-        this.y = [];
-        this.customdata = [];
-        this.type = '';
-        this.mode = '';
-        this.customdata = [];
-        this.hovertemplate = '';
-        this.showlegend = false;
-
-        this.hovertemplate = "%{x}, %{customdata}" + "<extra></extra>";
-    }
-
-    setUpData(data) {
-    }
+    setUpData(data) {}
 
     getPlotData() {
         return [this];
@@ -43,11 +40,11 @@ export class Plot {
         return !!value.isTimeout;
     }
     
-    addCustomData(value, compareFunc = null) {
+    addCustomData(value, compareFunc = null, customField = 'value') {
         if (this.checkTtl(value))
             this.customdata.push(value.comment);
         else  
-            this.customdata.push(compareFunc === null ? value.value : compareFunc(value));
+            this.customdata.push(compareFunc === null ? value[customField] : compareFunc(value));
     }
 
     markerColorCompareFunc(value) {
@@ -59,9 +56,9 @@ export class Plot {
     
     getMarkerSize (value) {
         if (this.checkTtl(value))
-            return 15;
+            return MarkerSize.Ttl;
         
-        return 10;
+        return MarkerSize.default;
     }
 }
 
@@ -92,8 +89,7 @@ export class BoolPlot extends Plot {
             this.marker.size.push(this.getMarkerSize(i))
         }
 
-        this.hovertemplate = "%{x}, %{customdata}" +
-            "<extra></extra>";
+        this.hovertemplate = "%{x}, %{customdata}<extra></extra>";
     }
     
     customDataCompareFunc(value) {
@@ -153,7 +149,7 @@ export class IntegerPlot extends Plot {
 }
 
 export class DoublePlot extends Plot {
-    constructor(data, name) {
+    constructor(data, name, field = 'value') {
         super();
 
         this.type = 'scatter';
@@ -167,25 +163,22 @@ export class DoublePlot extends Plot {
                 width: 0
             }
         };
-        this.setUpData(data);
+        this.setUpData(data, field);
     }
 
-    setUpData(data) {
+    setUpData(data, customField = 'value') {
         for (let i of data) {
             this.x.push(i.time)
-            this.y.push(i.value)
+            this.y.push(i[customField])
             
-            this.addCustomData(i);
+            this.addCustomData(i, null, customField);
             this.marker.size.push(this.getMarkerSize(i));
             this.marker.color.push(this.markerColorCompareFunc(i));
         }
-    }
-    
-    customSetUp(timelist, datalist) {
-        this.x = timelist;
-        this.y = datalist;
-        
-        return this;
+
+        if (customField !== 'value') {
+            this.hovertemplate = `%{customdata} <extra>${this.name}</extra>`
+        }
     }
 }
 
@@ -222,23 +215,9 @@ export class BarPLot extends Plot {
             this.mean.push(i.mean);
             this.count.push(i.count);
         }
-        window.barGraphData.count = this.count;
-        window.barGraphData.min = this.lowerfence;
-        window.barGraphData.max = this.upperfence;
-        window.barGraphData.mean = this.mean;
-        window.barGraphData.bar = [{
-            "type": "box",
-            "name": 'bar',
-            "q1": this.q1,
-            "median": this.median,
-            "q3": this.q3,
-            "mean": this.mean,
-            "lowerfence": this.lowerfence,
-            "upperfence": this.upperfence,
-            "x": this.x,
-            showlegend: false
-        }];
-        window.barGraphData.x = this.x;
+        
+        window.barGraphData.plot = this;
+        window.barGraphData.plotData = data;
     }
 }
 

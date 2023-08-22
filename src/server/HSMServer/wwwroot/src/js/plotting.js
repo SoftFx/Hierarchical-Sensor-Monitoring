@@ -1,12 +1,8 @@
 ﻿import {BarPLot, BoolPlot, DoublePlot, EnumPlot, IntegerPlot, Plot, TimeSpanPlot} from "./plots";
 
 window.barGraphData = {
-    min: undefined,
-    max: undefined,
-    mean: undefined,
-    count: undefined,
-    bar: undefined,
-    x: undefined,
+    plot: undefined,
+    plotData: [],
 
     graph: {
         id: undefined,
@@ -17,9 +13,9 @@ window.barGraphData = {
 
 window.addBarPlot = function (name, isInit = false) {
     if (name === 'bar')
-        Plotly.addTraces(barGraphData.graph.id, barGraphData.bar);
+        Plotly.addTraces(barGraphData.graph.id, barGraphData.plot.getPlotData());
     else {
-        let currPlot = new DoublePlot([], name).customSetUp(barGraphData.x, barGraphData[name]);
+        let currPlot = new DoublePlot(barGraphData.plotData, name, name);
         Plotly.addTraces(barGraphData.graph.id, currPlot.getPlotData());
     }
 
