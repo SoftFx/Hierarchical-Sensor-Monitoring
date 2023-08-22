@@ -3,9 +3,6 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
-using System.Net;
-using System.Security.Cryptography.X509Certificates;
-using System.Text.Json;
 
 namespace HSMServer.Core.Model
 {
@@ -30,7 +27,7 @@ namespace HSMServer.Core.Model
 
         internal abstract List<BaseValue> GetValues(int count);
 
-        internal abstract bool TryChangeLastValue(BaseValue value, bool isRewrite = false);
+        internal abstract bool TryChangeLastValue(BaseValue value, bool changeLast = false);
 
         internal abstract BaseValue GetNewValue(BaseValue value, string newValue);
 
@@ -77,9 +74,9 @@ namespace HSMServer.Core.Model
             }
         }
 
-        internal override bool TryChangeLastValue(BaseValue value, bool isRewrite = false)
+        internal override bool TryChangeLastValue(BaseValue value, bool changeLast = false)
         {
-            if (!isRewrite)
+            if (!changeLast)
             {
                 AddValue((T)value);
                 return true;

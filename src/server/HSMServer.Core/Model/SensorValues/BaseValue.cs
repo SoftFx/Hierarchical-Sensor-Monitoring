@@ -78,7 +78,7 @@ namespace HSMServer.Core.Model
 
         public virtual bool TryParseValue(string value, out T parsedValue)
         {
-            if (string.IsNullOrEmpty(value) || string.IsNullOrWhiteSpace(value))
+            if (string.IsNullOrEmpty(value))
             {
                 parsedValue = Value;
                 return true;

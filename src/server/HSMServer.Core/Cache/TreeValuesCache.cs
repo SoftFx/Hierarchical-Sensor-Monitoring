@@ -257,9 +257,9 @@ namespace HSMServer.Core.Cache
                     Comment = request.Comment,
                 };
 
-                var newValue = request.IsReWrite? value : SetUtcNowTime();
+                var newValue = request.ChangeLast? value : SetUtcNowTime();
 
-                if (sensor.Storage.TryChangeLastValue(newValue, request.IsReWrite))
+                if (sensor.Storage.TryChangeLastValue(newValue, request.ChangeLast))
                 {
                     _journalService.AddRecord(new JournalRecordModel(request.Id, request.Initiator ?? System)
                     {
