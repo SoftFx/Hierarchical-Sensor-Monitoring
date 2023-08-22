@@ -50,21 +50,21 @@ public sealed class SelectedJournalViewModel : ConcurrentDictionary<Guid, Concur
     {
         var requests = new List<Task>()
         {
-            LoadRecords(node.Id),
+            Task.Run(() => LoadRecords(node.Id)),
         };
 
         if (node is FolderModel folder)
         {
             foreach (var (_, product) in folder.Products)
-                requests.Add(Subscribe(product));
+                requests.Add(Task.Run(() => Subscribe(product)));
         }
         else if (node is ProductNodeViewModel product)
         {
             foreach (var (_, subNode) in product.Nodes)
-                requests.Add(Subscribe(subNode));
+                requests.Add(Task.Run(() => Subscribe(subNode)));
 
             foreach (var (id, _) in product.Sensors)
-                requests.Add(LoadRecords(id));
+                requests.Add(Task.Run(() => LoadRecords(id))); 
         }
 
         return Task.WhenAll(requests);
