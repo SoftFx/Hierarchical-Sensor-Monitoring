@@ -9,8 +9,6 @@ using HSMDataCollector.InstantValue;
 using HSMDataCollector.Logging;
 using HSMDataCollector.Options;
 using HSMDataCollector.PublicInterface;
-using HSMDataCollector.Sensors;
-using HSMDataCollector.SensorsFactory;
 using HSMDataCollector.SyncQueue;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.SensorValueRequests;
@@ -34,9 +32,7 @@ namespace HSMDataCollector.Core
         Stopped,
     }
 
-    /// <summary>
-    /// Main monitoring class which is used to create and control sensors' instances
-    /// </summary>
+
     public sealed class DataCollector : IDataCollector
     {
         private readonly LoggerManager _logger = new LoggerManager();
@@ -102,8 +98,7 @@ namespace HSMDataCollector.Core
         /// <param name="address">HSM server address to send data to (Do not forget https:// if needed)</param>
         /// <param name="port">HSM sensors API port, which defaults to 44330. Specify if your HSM server Docker container configured differently.</param>
         public DataCollector(string productKey, string address = CollectorOptions.LocalhostAddress, int port = CollectorOptions.DefaultPort)
-            : this(new CollectorOptions() { AccessKey = productKey, ServerAddress = address, Port = port })
-        { }
+            : this(new CollectorOptions() { AccessKey = productKey, ServerAddress = address, Port = port }) { }
 
 
         public Task<ConnectionResult> TestConnection() => _hsmClient.TestConnection();
