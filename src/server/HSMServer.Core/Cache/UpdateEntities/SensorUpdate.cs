@@ -21,6 +21,30 @@ namespace HSMServer.Core.Cache.UpdateEntities
     }
 
 
+    public sealed record PolicyUpdate
+    {
+        public List<PolicyConditionUpdate> Conditions { get; init; }
+
+        public PolicyDestinationUpdate Destination { get; init; }
+
+        public TimeIntervalModel Sensitivity { get; init; }
+
+
+        public Guid Id { get; init; }
+
+        public SensorStatus Status { get; init; }
+
+        public string Template { get; init; }
+
+        public bool IsDisabled { get; init; }
+
+        public string Icon { get; init; }
+
+
+        public string Initiator { get; init; } = TreeValuesCache.System;
+    }
+
+
     public sealed record PolicyConditionUpdate(
         PolicyOperation Operation,
         PolicyProperty Property,
@@ -29,17 +53,4 @@ namespace HSMServer.Core.Cache.UpdateEntities
 
 
     public sealed record PolicyDestinationUpdate(bool AllChats, Dictionary<Guid, string> Chats);
-
-
-    public sealed record PolicyUpdate(
-        Guid Id,
-        List<PolicyConditionUpdate> Conditions,
-        TimeIntervalModel Sensitivity,
-        SensorStatus Status,
-        string Template,
-        string Icon,
-        bool IsDisabled,
-        PolicyDestinationUpdate Destination,
-        string Initiator = TreeValuesCache.System
-    );
 }

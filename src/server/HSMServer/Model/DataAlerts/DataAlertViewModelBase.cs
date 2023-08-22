@@ -49,14 +49,33 @@ namespace HSMServer.Model.DataAlerts
 
             (var status, var destination, var comment, var icon) = GetActions();
 
-            return new(Id, conditions, sensitivity, status.ToCore(), comment, icon, IsDisabled, destination);
+            return new()
+            {
+                Id = Id,
+                Conditions = conditions,
+                Sensitivity = sensitivity,
+                Status = status.ToCore(),
+                Template = comment,
+                Icon = icon,
+                IsDisabled = IsDisabled,
+                Destination = destination,
+            };
         }
 
         internal PolicyUpdate ToTimeToLiveUpdate(string initiator)
         {
             (var status, var destination, var comment, var icon) = GetActions();
 
-            return new(Id, null, null, status.ToCore(), comment, icon, IsDisabled, destination, initiator);
+            return new()
+            {
+                Id = Id,
+                Status = status.ToCore(),
+                Template = comment,
+                Icon = icon,
+                IsDisabled = IsDisabled,
+                Destination = destination,
+                Initiator = initiator,
+            };
         }
 
 

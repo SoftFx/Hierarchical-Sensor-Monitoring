@@ -233,22 +233,19 @@ namespace HSMServer.Core.Model.Policies
         internal override void AddDefaultSensors()
         {
             var policy = new PolicyType();
-
-            var statusUpdate = new PolicyUpdate(
-                Guid.NewGuid(),
-                new()
+            var statusUpdate = new PolicyUpdate
+            {
+                Id = Guid.NewGuid(),
+                Status = SensorStatus.Ok,
+                Template = $"$prevStatus->$status [$product]$path = $comment",
+                Conditions = new(1)
                 {
                     new PolicyConditionUpdate(
                         PolicyOperation.IsChanged,
                         PolicyProperty.Status,
                         new TargetValue(TargetType.LastValue, _sensor.Id.ToString())),
                 },
-                null,
-                SensorStatus.Ok,
-                $"$prevStatus->$status [$product]$path = $comment",
-                null,
-                false,
-                null);
+            };
 
             policy.Update(statusUpdate, _sensor);
 
