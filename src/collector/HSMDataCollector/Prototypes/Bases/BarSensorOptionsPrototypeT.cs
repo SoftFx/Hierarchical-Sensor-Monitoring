@@ -1,4 +1,5 @@
 ﻿using HSMDataCollector.Options;
+using System;
 
 namespace HSMDataCollector.Prototypes
 {
@@ -14,6 +15,8 @@ namespace HSMDataCollector.Prototypes
         {
             Path = DefaultPrototype.BuildDefaultPath(Category, SensorName);
             EnableForGrafana = true;
+
+            TTL = TimeSpan.MaxValue; //Never
         }
 
 

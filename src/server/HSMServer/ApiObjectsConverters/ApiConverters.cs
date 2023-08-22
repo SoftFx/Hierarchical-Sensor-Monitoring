@@ -227,6 +227,7 @@ namespace HSMServer.ApiObjectsConverters
                 Policies = request.Alerts?.Select(policy => policy.Convert()).ToList(),
             };
 
+
         public static PolicyUpdate Convert(this AlertUpdateRequest request) =>
             new(Guid.Empty,
                 request.Conditions?.Select(c => c.Convert()).ToList(),
@@ -236,14 +237,18 @@ namespace HSMServer.ApiObjectsConverters
                 request.Icon,
                 request.IsDisabled);
 
+
         public static PolicyConditionUpdate Convert(this AlertConditionUpdate request) =>
             new(request.Operation.Convert(),
                 request.Property.Convert(),
                 request.Target is not null ? new(request.Target.Type.Convert(), request.Target.Value) : null,
                 request.Combination.Convert());
 
-        private static TimeIntervalModel ToTimeInterval(this long? ticks) =>
-            ticks.HasValue ? new(ticks.Value) : null;
+
+        private static TimeIntervalModel ToTimeInterval(this long? ticks)
+        {
+            return !ticks.HasValue ? null : ticks.Value == TimeSpan.MaxValue.Ticks ? new TimeIntervalModel(TimeInterval.None) : new(ticks.Value);
+        }
 
 
         public static SensorValueBase CreateNewSensorValue(SensorType sensorType) => sensorType switch
