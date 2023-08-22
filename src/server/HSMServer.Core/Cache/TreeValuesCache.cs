@@ -578,6 +578,37 @@ namespace HSMServer.Core.Cache
             return policyEntities.ToDictionary(k => new Guid(k.Id).ToString(), v => v);
         }
 
+        [Obsolete("Should be removed after telegram chat IDs migration")]
+        private void TelegramChatsMigration()
+        {
+            _logger.Info($"Starting products telegram chats migration...");
+
+            var productsToResave = new HashSet<Guid>();
+            var chatIds = new Dictionary<long, byte[]>(1 << 4);
+
+            foreach (var (_, node) in _tree)
+                if (node.NotificationsSettings?.TelegramSettings?.Chats is not null)
+                    foreach (var chat in node.NotificationsSettings.TelegramSettings.Chats)
+                        if (chat.SystemId is null)
+                        {
+                            if (chatIds.TryGetValue(chat.Id, out var systemChatId))
+                                chat.SystemId = systemChatId;
+                            else
+                            {
+                                chat.SystemId = Guid.NewGuid().ToByteArray();
+                                chatIds.Add(chat.Id, chat.SystemId);
+                            }
+
+                            productsToResave.Add(node.Id);
+                        }
+
+            foreach (var productId in productsToResave)
+                if (_tree.TryGetValue(productId, out var product))
+                    _database.UpdateProduct(product.ToEntity());
+
+            _logger.Info($"{productsToResave.Count} products telegram chats migration is finished");
+        }
+
         private void ApplyProducts(List<ProductEntity> productEntities)
         {
             _logger.Info($"{nameof(productEntities)} are applying");
@@ -591,6 +622,8 @@ namespace HSMServer.Core.Cache
             }
 
             _logger.Info($"{nameof(productEntities)} applied");
+
+            TelegramChatsMigration();
 
             _logger.Info("Links between products are building");
 
