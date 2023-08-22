@@ -4,6 +4,7 @@ using HSMServer.Core.Model.Requests;
 using System;
 using System.Collections.Generic;
 using HSMSensorDataObjects.HistoryRequests;
+using HSMServer.Core.Model.Policies;
 
 namespace HSMServer.Core.Cache
 {
@@ -58,5 +59,8 @@ namespace HSMServer.Core.Cache
         void UpdateCacheState();
 
         void SaveLastStateToDb();
+
+        [Obsolete("Should be removed after policies chats migration")]
+        void UpdatePolicy(Policy policy);
     }
 }

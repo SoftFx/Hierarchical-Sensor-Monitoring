@@ -4,8 +4,10 @@ using HSMServer.ConcurrentStorage;
 using HSMServer.Core.Cache;
 using HSMServer.Core.DataLayer;
 using HSMServer.Core.Model;
+using HSMServer.Core.Model.Policies;
 using HSMServer.Helpers;
 using HSMServer.Model.Authentication;
+using HSMServer.Notifications.Telegram;
 using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
@@ -133,6 +135,7 @@ namespace HSMServer.Authentication
             }
 
             TelegramChatsMigration();
+            PoliciesDestinationMigration();
 
             _logger.LogInformation($"Read users from database, users count = {Count}.");
         }
@@ -201,11 +204,74 @@ namespace HSMServer.Authentication
                         usersToResave.Add(user.Id);
                     }
 
-            foreach (var userId in usersToResave)
-                if (TryGetValue(userId, out var user))
-                    _databaseCore.UpdateUser(user.ToEntity());
+            //foreach (var userId in usersToResave)
+            //    if (TryGetValue(userId, out var user))
+            //        _databaseCore.UpdateUser(user.ToEntity());
 
             _logger.LogInformation($"{usersToResave.Count} users telegram chats migration is finished");
+        }
+
+        [Obsolete("Should be removed after policies chats migration")]
+        private void PoliciesDestinationMigration()
+        {
+            _logger.LogInformation($"Starting policies destination (Users) migration...");
+
+            var policiesToResave = new Dictionary<Guid, Policy>(1 << 10);
+
+            foreach (var sensor in _treeValuesCache.GetSensors())
+            {
+                bool allChats = true;
+
+                foreach (var (_, user) in this)
+                {
+                    if (user.Notifications?.EnabledSensors is not null && user.Notifications.EnabledSensors.Contains(sensor.Id))
+                    {
+                        foreach (var (_, chat) in user.Notifications.Telegram.Chats)
+                        {
+                            foreach (var policy in sensor.Policies)
+                                UpdatePolicyDestination(policy, chat, policiesToResave);
+
+                            UpdatePolicyDestination(sensor.Policies.TimeToLive, chat, policiesToResave);
+                        }
+                    }
+                    else
+                        allChats = false;
+                }
+
+                foreach (var policy in sensor.Policies)
+                    UpdatePolicyAllChats(policy, allChats, policiesToResave);
+
+                UpdatePolicyAllChats(sensor.Policies.TimeToLive, allChats, policiesToResave);
+            }
+
+            //foreach (var (_, policy) in policiesToResave)
+            //    _treeValuesCache.UpdatePolicy(policy);
+
+            _logger.LogInformation($"{policiesToResave.Count} polices destination (Users) migration is finished");
+        }
+
+        [Obsolete("Should be removed after policies chats migration")]
+        private static void UpdatePolicyDestination(Policy policy, TelegramChat chat, Dictionary<Guid, Policy> policiesToResave)
+        {
+            policy.Destination ??= new(new PolicyDestinationEntity() { Chats = new() });
+
+            if (!policy.Destination.Chats.ContainsKey(chat.SystemId))
+                policy.Destination.Chats.Add(chat.SystemId, chat.Name);
+
+            policiesToResave[policy.Id] = policy;
+        }
+
+        [Obsolete("Should be removed after policies chats migration")]
+        private static void UpdatePolicyAllChats(Policy policy, bool allChats, Dictionary<Guid, Policy> policiesToResave)
+        {
+            policy.Destination ??= new(new PolicyDestinationEntity() { Chats = new() });
+
+            if (policy.Destination.AllChats && allChats)
+                policy.Destination.Chats.Clear();
+            else
+                policy.Destination.AllChats = false;
+
+            policiesToResave[policy.Id] = policy;
         }
     }
 }

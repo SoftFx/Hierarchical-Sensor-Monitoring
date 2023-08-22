@@ -36,7 +36,7 @@ namespace HSMServer.Core.Model.Policies
 
         public SensorStatus Status { get; private set; }
 
-        public PolicyDestination Destination { get; private set; }
+        public PolicyDestination Destination { get; set; } // TODO: should be private set after policies destination migration
 
         public bool IsDisabled { get; private set; }
 

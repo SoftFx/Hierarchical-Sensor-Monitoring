@@ -10,10 +10,10 @@ namespace HSMServer.Core.Model.Policies
     {
         public Dictionary<Guid, string> Chats { get; } = new();
 
-        public bool AllChats { get; private set; }
+        public bool AllChats { get; set; } // TODO: should be private set after policies destination migration
 
 
-        internal PolicyDestination(PolicyDestinationEntity entity)
+        public PolicyDestination(PolicyDestinationEntity entity) // TODO: should be internal after policies destination migration
         {
             if (entity is null)
                 return;

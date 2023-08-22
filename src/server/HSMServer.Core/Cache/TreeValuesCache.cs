@@ -527,7 +527,82 @@ namespace HSMServer.Core.Cache
 
             _logger.Info($"{nameof(TreeValuesCache)} initialized");
 
+            PoliciesDestinationMigration();
+
             UpdateCacheState();
+        }
+
+        [Obsolete("Should be removed after policies chats migration")]
+        private void PoliciesDestinationMigration()
+        {
+            _logger.Info($"Starting policies destination (Groups) migration...");
+
+            var products = GetProducts().ToDictionary(k => k.DisplayName, v => v.NotificationsSettings);
+            var policiesToResave = new Dictionary<Guid, Policy>(_sensors.Count);
+
+            foreach (var (_, sensor) in _sensors)
+            {
+                if (products.TryGetValue(sensor.RootProductName, out var notifications) &&
+                    notifications is not null && notifications.EnabledSensors.Contains(sensor.Id.ToString()))
+                {
+                    bool allChats = true;
+
+                    foreach (var chat in notifications.TelegramSettings.Chats)
+                    {
+                        if (notifications.PartiallyIgnored.TryGetValue(chat.Id, out var ignoredSensors) && ignoredSensors.ContainsKey(sensor.Id.ToString()))
+                        {
+                            allChats = false;
+                            continue;
+                        }
+                        else
+                        {
+                            foreach (var policy in sensor.Policies)
+                                UpdatePolicyDestination(policy, chat, policiesToResave);
+
+                            UpdatePolicyDestination(sensor.Policies.TimeToLive, chat, policiesToResave);
+                        }
+                    }
+
+                    foreach (var policy in sensor.Policies)
+                        UpdatePolicyAllChats(policy, allChats, policiesToResave);
+
+                    UpdatePolicyAllChats(sensor.Policies.TimeToLive, allChats, policiesToResave);
+                }
+            }
+
+            foreach (var (_, product) in _tree)
+                UpdatePolicyAllChats(product.Policies.TimeToLive, true, policiesToResave);
+
+            // for each product.Policies.TTL выставить Destination.AllChats = true
+
+            //foreach (var (_, policy) in policiesToResave)
+            //    _database.UpdatePolicy(policy.ToEntity());
+
+            _logger.Info($"{policiesToResave.Count} polices destination (Groups) migration is finished");
+        }
+
+        [Obsolete("Should be removed after policies chats migration")]
+        private static void UpdatePolicyDestination(Policy policy, TelegramChatEntity chat, Dictionary<Guid, Policy> policiesToResave)
+        {
+            policy.Destination ??= new(new PolicyDestinationEntity() { Chats = new() });
+            policy.Destination.Chats.Add(new Guid(chat.SystemId), chat.Name);
+
+            policiesToResave[policy.Id] = policy;
+        }
+
+        [Obsolete("Should be removed after policies chats migration")]
+        private static void UpdatePolicyAllChats(Policy policy, bool allChats, Dictionary<Guid, Policy> policiesToResave)
+        {
+            policy.Destination ??= new(new PolicyDestinationEntity() { Chats = new() });
+            policy.Destination.AllChats = allChats;
+
+            policiesToResave[policy.Id] = policy;
+        }
+
+        [Obsolete("Should be removed after policies chats migration")]
+        public void UpdatePolicy(Policy policy)
+        {
+            _database.UpdatePolicy(policy.ToEntity());
         }
 
 
@@ -602,9 +677,9 @@ namespace HSMServer.Core.Cache
                             productsToResave.Add(node.Id);
                         }
 
-            foreach (var productId in productsToResave)
-                if (_tree.TryGetValue(productId, out var product))
-                    _database.UpdateProduct(product.ToEntity());
+            //foreach (var productId in productsToResave)
+            //    if (_tree.TryGetValue(productId, out var product))
+            //        _database.UpdateProduct(product.ToEntity());
 
             _logger.Info($"{productsToResave.Count} products telegram chats migration is finished");
         }
