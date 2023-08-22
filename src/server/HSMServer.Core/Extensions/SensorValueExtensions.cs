@@ -26,38 +26,41 @@ namespace HSMServer.Core.Extensions
             return value.ReceivingTime >= from && value.ReceivingTime <= to;
         }
 
-        public static FileValue CompressContent(this FileValue sensorValue)
+        public static FileValue CompressContent(this FileValue file)
         {
+            if (file.Value == null) 
+                return file;
+
             using var output = new MemoryStream();
             using (var dstream = new DeflateStream(output, CompressionLevel.Optimal))
             {
-                dstream.Write(sensorValue.Value, 0, sensorValue.Value.Length);
+                dstream.Write(file.Value, 0, file.Value.Length);
             }
 
             var compressedValue = output.ToArray();
-            if (compressedValue.Length >= sensorValue.Value.Length)
-                return sensorValue;
+            if (compressedValue.Length >= file.Value.Length)
+                return file;
 
-            return sensorValue with
+            return file with
             {
                 Value = compressedValue,
             };
         }
 
 
-        public static FileValue DecompressContent(this FileValue value)
+        public static FileValue DecompressContent(this FileValue file)
         {
-            if (value.Value.Length == value.OriginalSize)
-                return value;
+            if (file.Value == null || file.Value.Length == file.OriginalSize)
+                return file;
 
-            using var input = new MemoryStream(value.Value);
+            using var input = new MemoryStream(file.Value);
             using var output = new MemoryStream();
             using (var dstream = new DeflateStream(input, CompressionMode.Decompress))
             {
                 dstream.CopyTo(output);
             }
 
-            return value with
+            return file with
             {
                 Value = output.ToArray()
             };
