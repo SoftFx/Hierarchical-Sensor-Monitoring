@@ -204,9 +204,9 @@ namespace HSMServer.Authentication
                         usersToResave.Add(user.Id);
                     }
 
-            //foreach (var userId in usersToResave)
-            //    if (TryGetValue(userId, out var user))
-            //        _databaseCore.UpdateUser(user.ToEntity());
+            foreach (var userId in usersToResave)
+                if (TryGetValue(userId, out var user))
+                    _databaseCore.UpdateUser(user.ToEntity());
 
             _logger.LogInformation($"{usersToResave.Count} users telegram chats migration is finished");
         }
@@ -214,13 +214,42 @@ namespace HSMServer.Authentication
         [Obsolete("Should be removed after policies chats migration")]
         private void PoliciesDestinationMigration()
         {
-            _logger.LogInformation($"Starting policies destination (Users) migration...");
+            _logger.LogInformation($"Starting policies destination migration for sensors...");
 
-            var policiesToResave = new Dictionary<Guid, Policy>(1 << 10);
+            var policiesToResave = new Dictionary<Guid, Policy>(1 << 8);
+            var sensorsToResave = new HashSet<Guid>();
+
+            var products = _treeValuesCache.GetProducts().ToDictionary(k => k.DisplayName, v => v.NotificationsSettings);
 
             foreach (var sensor in _treeValuesCache.GetSensors())
             {
                 bool allChats = true;
+
+                if (products.TryGetValue(sensor.RootProductName, out var notifications) && notifications is not null)
+                {
+                    if (notifications.EnabledSensors.Contains(sensor.Id.ToString()))
+                    {
+                        foreach (var chat in notifications.TelegramSettings.Chats)
+                        {
+                            if (notifications.PartiallyIgnored.TryGetValue(chat.Id, out var ignoredSensors) && ignoredSensors.ContainsKey(sensor.Id.ToString()))
+                            {
+                                allChats = false;
+                                continue;
+                            }
+                            else
+                            {
+                                foreach (var policy in sensor.Policies)
+                                    if (TryUpdatePolicyDestination(policy, new TelegramChat(chat)))
+                                        policiesToResave[policy.Id] = policy;
+
+                                if (TryUpdatePolicyDestination(sensor.Policies.TimeToLive, new TelegramChat(chat)))
+                                    sensorsToResave.Add(sensor.Id);
+                            }
+                        }
+                    }
+                    else if (notifications.TelegramSettings.Chats.Count > 0)
+                        allChats = false;
+                }
 
                 foreach (var (_, user) in this)
                 {
@@ -229,9 +258,11 @@ namespace HSMServer.Authentication
                         foreach (var (_, chat) in user.Notifications.Telegram.Chats)
                         {
                             foreach (var policy in sensor.Policies)
-                                UpdatePolicyDestination(policy, chat, policiesToResave);
+                                if (TryUpdatePolicyDestination(policy, chat))
+                                    policiesToResave[policy.Id] = policy;
 
-                            UpdatePolicyDestination(sensor.Policies.TimeToLive, chat, policiesToResave);
+                            if (TryUpdatePolicyDestination(sensor.Policies.TimeToLive, chat))
+                                sensorsToResave.Add(sensor.Id);
                         }
                     }
                     else
@@ -239,39 +270,52 @@ namespace HSMServer.Authentication
                 }
 
                 foreach (var policy in sensor.Policies)
-                    UpdatePolicyAllChats(policy, allChats, policiesToResave);
+                    if (TryUpdatePolicyAllChats(policy, allChats))
+                        policiesToResave[policy.Id] = policy;
 
-                UpdatePolicyAllChats(sensor.Policies.TimeToLive, allChats, policiesToResave);
+                if (TryUpdatePolicyAllChats(sensor.Policies.TimeToLive, allChats))
+                    sensorsToResave.Add(sensor.Id);
             }
 
-            //foreach (var (_, policy) in policiesToResave)
-            //    _treeValuesCache.UpdatePolicy(policy);
+            foreach (var sensorId in sensorsToResave)
+                _treeValuesCache.UpdateSensor(sensorId);
 
-            _logger.LogInformation($"{policiesToResave.Count} polices destination (Users) migration is finished");
+            foreach (var (_, policy) in policiesToResave)
+                _treeValuesCache.UpdatePolicy(policy);
+
+            _logger.LogInformation($"{policiesToResave.Count} polices destination migration is finished for {sensorsToResave.Count} sensors");
         }
 
         [Obsolete("Should be removed after policies chats migration")]
-        private static void UpdatePolicyDestination(Policy policy, TelegramChat chat, Dictionary<Guid, Policy> policiesToResave)
+        private static bool TryUpdatePolicyDestination(Policy policy, TelegramChat chat)
         {
             policy.Destination ??= new(new PolicyDestinationEntity() { Chats = new() });
 
             if (!policy.Destination.Chats.ContainsKey(chat.SystemId))
+            {
                 policy.Destination.Chats.Add(chat.SystemId, chat.Name);
 
-            policiesToResave[policy.Id] = policy;
+                return true;
+            }
+
+            return false;
         }
 
         [Obsolete("Should be removed after policies chats migration")]
-        private static void UpdatePolicyAllChats(Policy policy, bool allChats, Dictionary<Guid, Policy> policiesToResave)
+        private static bool TryUpdatePolicyAllChats(Policy policy, bool allChats)
         {
+            var oldChats = policy.Destination?.Chats.Count ?? -1;
+            var oldAllChats = policy.Destination?.AllChats;
+
+
             policy.Destination ??= new(new PolicyDestinationEntity() { Chats = new() });
 
-            if (policy.Destination.AllChats && allChats)
+            policy.Destination.AllChats = allChats;
+            if (allChats)
                 policy.Destination.Chats.Clear();
-            else
-                policy.Destination.AllChats = false;
 
-            policiesToResave[policy.Id] = policy;
+
+            return policy.Destination.Chats.Count != oldChats || policy.Destination.AllChats != oldAllChats;
         }
     }
 }

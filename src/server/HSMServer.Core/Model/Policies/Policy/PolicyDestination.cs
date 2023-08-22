@@ -45,7 +45,7 @@ namespace HSMServer.Core.Model.Policies
 
         internal PolicyDestinationEntity ToEntity() => new()
         {
-            Chats = Chats?.ToDictionary(k => k.Key.ToByteArray(), v => v.Value),
+            Chats = Chats?.ToDictionary(k => k.Key.ToString(), v => v.Value),
             AllChats = AllChats,
         };
     }
