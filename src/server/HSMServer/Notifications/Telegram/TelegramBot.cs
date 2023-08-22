@@ -178,10 +178,13 @@ namespace HSMServer.Notifications
                                 var isInstant = entity.Notifications.UsedTelegram.MessagesDelaySec == 0;
 
                                 foreach (var alert in result)
-                                    if (isInstant)
-                                        SendMessage(chat.ChatId, alert.ToString());
-                                    else
-                                        chat.MessageBuilder.AddMessage(alert);
+                                    if (alert.Destination.AllChats || alert.Destination.Chats.Contains(chat.SystemId))
+                                    {
+                                        if (isInstant)
+                                            SendMessage(chat.ChatId, alert.ToString());
+                                        else
+                                            chat.MessageBuilder.AddMessage(alert);
+                                    }
                             }
             }
             catch (Exception ex)

@@ -493,6 +493,21 @@ img .tree-png-icon {
 }
 
 
+.target-multiselect {
+    margin: -5px 0px 0px 0px;
+}
+
+.target-multiselect.active, .target-multiselect.show, .target-multiselect:first-child:active {
+    background-color: rgba(221,221,221,.5) !important;
+    border: 0 !important;
+}
+
+.target-multiselect:hover {
+    background-color: rgba(221,221,221,.5) !important;
+    border: 0 !important;
+}
+
+
 .emojionearea.emojionearea-standalone {
     height: 1.5rem;
 }

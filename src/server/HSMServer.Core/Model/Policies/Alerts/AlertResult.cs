@@ -1,10 +1,13 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Text;
 
 namespace HSMServer.Core.Model.Policies
 {
     public sealed record AlertResult
     {
+        public AlertDestination Destination { get; }
+
         public string Icon { get; }
 
         public string Template { get; }
@@ -27,6 +30,7 @@ namespace HSMServer.Core.Model.Policies
             Icon = policy.Icon;
             PolicyId = policy.Id;
             Template = policy.Template;
+            Destination = new(policy.Destination.AllChats, new HashSet<Guid>(policy.Destination.Chats.Keys));
 
             AddPolicyResult(policy);
         }
@@ -67,4 +71,7 @@ namespace HSMServer.Core.Model.Policies
 
         public override string ToString() => BuildFullComment(LastComment);
     }
+
+
+    public sealed record AlertDestination(bool AllChats, HashSet<Guid> Chats);
 }

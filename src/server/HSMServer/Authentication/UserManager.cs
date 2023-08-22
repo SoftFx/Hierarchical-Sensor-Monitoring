@@ -4,8 +4,10 @@ using HSMServer.ConcurrentStorage;
 using HSMServer.Core.Cache;
 using HSMServer.Core.DataLayer;
 using HSMServer.Core.Model;
+using HSMServer.Core.Model.Policies;
 using HSMServer.Helpers;
 using HSMServer.Model.Authentication;
+using HSMServer.Notifications.Telegram;
 using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
@@ -132,6 +134,9 @@ namespace HSMServer.Authentication
                 _logger.LogInformation("Default user has been added.");
             }
 
+            TelegramChatsMigration();
+            PoliciesDestinationMigration();
+
             _logger.LogInformation($"Read users from database, users count = {Count}.");
         }
 
@@ -174,6 +179,146 @@ namespace HSMServer.Authentication
                     TryUpdate(user);
                 }
             }
+        }
+
+        [Obsolete("Should be removed after telegram chat IDs migration")]
+        private void TelegramChatsMigration()
+        {
+            _logger.LogInformation($"Starting users telegram chats migration...");
+
+            var usersToResave = new HashSet<Guid>();
+            var chatIds = new Dictionary<Telegram.Bot.Types.ChatId, Guid>(1 << 4);
+
+            foreach (var (_, user) in this)
+                foreach (var (chatId, chat) in user.Notifications.Telegram.Chats)
+                    if (chat.SystemId == Guid.Empty)
+                    {
+                        if (chatIds.TryGetValue(chatId, out var systemChatId))
+                            chat.SystemId = systemChatId;
+                        else
+                        {
+                            chat.SystemId = Guid.NewGuid();
+                            chatIds.Add(chatId, chat.SystemId);
+                        }
+
+                        usersToResave.Add(user.Id);
+                    }
+
+            foreach (var userId in usersToResave)
+                if (TryGetValue(userId, out var user))
+                    _databaseCore.UpdateUser(user.ToEntity());
+
+            _logger.LogInformation($"{usersToResave.Count} users telegram chats migration is finished");
+        }
+
+        [Obsolete("Should be removed after policies chats migration")]
+        private void PoliciesDestinationMigration()
+        {
+            _logger.LogInformation($"Starting policies destination migration for sensors...");
+
+            var policiesToResave = new Dictionary<Guid, Policy>(1 << 8);
+            var sensorsToResave = new HashSet<Guid>();
+
+            var products = new Dictionary<string, NotificationSettingsEntity>(1 << 5);
+            foreach (var product in _treeValuesCache.GetProducts())
+                if (!products.ContainsKey(product.DisplayName))
+                    products.Add(product.DisplayName, product.NotificationsSettings);
+
+            foreach (var sensor in _treeValuesCache.GetSensors())
+            {
+                bool allChats = true;
+
+                if (products.TryGetValue(sensor.RootProductName, out var notifications) && notifications is not null)
+                {
+                    if (notifications.EnabledSensors.Contains(sensor.Id.ToString()))
+                    {
+                        foreach (var chat in notifications.TelegramSettings.Chats)
+                        {
+                            if (notifications.PartiallyIgnored.TryGetValue(chat.Id, out var ignoredSensors) && ignoredSensors.ContainsKey(sensor.Id.ToString()))
+                            {
+                                allChats = false;
+                                continue;
+                            }
+                            else
+                            {
+                                foreach (var policy in sensor.Policies)
+                                    if (TryUpdatePolicyDestination(policy, new TelegramChat(chat)))
+                                        policiesToResave[policy.Id] = policy;
+
+                                if (TryUpdatePolicyDestination(sensor.Policies.TimeToLive, new TelegramChat(chat)))
+                                    sensorsToResave.Add(sensor.Id);
+                            }
+                        }
+                    }
+                    else if (notifications.TelegramSettings.Chats.Count > 0)
+                        allChats = false;
+                }
+
+                foreach (var (_, user) in this)
+                {
+                    if (user.Notifications?.EnabledSensors is not null && user.Notifications.EnabledSensors.Contains(sensor.Id))
+                    {
+                        foreach (var (_, chat) in user.Notifications.Telegram.Chats)
+                        {
+                            foreach (var policy in sensor.Policies)
+                                if (TryUpdatePolicyDestination(policy, chat))
+                                    policiesToResave[policy.Id] = policy;
+
+                            if (TryUpdatePolicyDestination(sensor.Policies.TimeToLive, chat))
+                                sensorsToResave.Add(sensor.Id);
+                        }
+                    }
+                    else
+                        allChats = false;
+                }
+
+                foreach (var policy in sensor.Policies)
+                    if (TryUpdatePolicyAllChats(policy, allChats))
+                        policiesToResave[policy.Id] = policy;
+
+                if (TryUpdatePolicyAllChats(sensor.Policies.TimeToLive, allChats))
+                    sensorsToResave.Add(sensor.Id);
+            }
+
+            foreach (var sensorId in sensorsToResave)
+                _treeValuesCache.UpdateSensor(sensorId);
+
+            foreach (var (_, policy) in policiesToResave)
+                _treeValuesCache.UpdatePolicy(policy);
+
+            _logger.LogInformation($"{policiesToResave.Count} polices destination migration is finished for {sensorsToResave.Count} sensors");
+        }
+
+        [Obsolete("Should be removed after policies chats migration")]
+        private static bool TryUpdatePolicyDestination(Policy policy, TelegramChat chat)
+        {
+            policy.Destination ??= new();
+
+            if (!policy.Destination.Chats.ContainsKey(chat.SystemId))
+            {
+                policy.Destination.Chats.Add(chat.SystemId, chat.Name);
+
+                return true;
+            }
+
+            return false;
+        }
+
+        [Obsolete("Should be removed after policies chats migration")]
+        private static bool TryUpdatePolicyAllChats(Policy policy, bool allChats)
+        {
+            var oldChats = policy.Destination?.Chats.Count ?? -1;
+            var oldAllChats = policy.Destination?.AllChats;
+
+
+            policy.Destination ??= new();
+            policy.Destination.AllChats = allChats;
+
+            if (allChats)
+                policy.Destination.Chats.Clear();
+
+
+            return policy.Destination.Chats.Count != oldChats || policy.Destination.AllChats != oldAllChats;
         }
     }
 }
