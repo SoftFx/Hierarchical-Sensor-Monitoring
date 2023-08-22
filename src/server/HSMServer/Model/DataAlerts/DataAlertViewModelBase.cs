@@ -90,8 +90,8 @@ namespace HSMServer.Model.DataAlerts
             {
                 if (action.Action == ActionType.SendNotification)
                 {
-                    bool allChats = action.Chats.ContainsKey(Guid.Empty);
-                    Dictionary<Guid, string> chats = allChats ? new() : action.Chats ?? new();
+                    bool allChats = action.Chats?.ContainsKey(ActionViewModel.AllChatsId) ?? false;
+                    Dictionary<Guid, string> chats = allChats ? new(0) : action.Chats ?? new(0);
 
                     destination = new PolicyDestinationUpdate(allChats, chats);
                     comment = action.Comment;
@@ -127,7 +127,7 @@ namespace HSMServer.Model.DataAlerts
             {
                 Action = ActionType.SendNotification,
                 Comment = policy.Template,
-                Chats = policy.Destination.AllChats ? new Dictionary<Guid, string>(1) { { Guid.Empty, null } } : policy.Destination.Chats,
+                Chats = policy.Destination.AllChats ? new Dictionary<Guid, string>(1) { { ActionViewModel.AllChatsId, null } } : policy.Destination.Chats,
                 DisplayComment = node is SensorNodeViewModel ? policy.RebuildState() : policy.Template
             });
 

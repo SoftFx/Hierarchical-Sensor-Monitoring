@@ -5,6 +5,7 @@ using HSMServer.Notifications.Telegram;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace HSMServer.Model.DataAlerts
 {
@@ -34,6 +35,7 @@ namespace HSMServer.Model.DataAlerts
 
     public class ActionViewModel : AlertActionBase
     {
+        public static readonly Guid AllChatsId = Guid.Empty;
         public static readonly string SetErrorStatus = $"set {SensorStatus.Error.ToSelectIcon()} {SensorStatus.Error.GetDisplayName()} status";
 
         private readonly Dictionary<ActionType, string> _actions = new()
@@ -59,5 +61,10 @@ namespace HSMServer.Model.DataAlerts
 
             Action = ActionType.SendNotification;
         }
+
+
+        public List<TelegramChat> GetChats(bool isUser) => AvailableChats.Where(ch => ch.IsUserChat == isUser).ToList();
+
+        public bool ChatIsSelected(TelegramChat chat) => Chats?.ContainsKey(chat.SystemId) ?? false;
     }
 }
