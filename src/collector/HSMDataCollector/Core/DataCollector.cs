@@ -23,7 +23,6 @@ using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading.Tasks;
 using OldSensorBase = HSMDataCollector.Base.SensorBase;
-using SensorBase = HSMDataCollector.DefaultSensors.SensorBase;
 
 namespace HSMDataCollector.Core
 {
@@ -82,7 +81,7 @@ namespace HSMDataCollector.Core
             _options = options;
 
             _queueManager = new QueueManager(options, _logger);
-            _sensorsStorage = new SensorsStorage(_queueManager, _logger);
+            _sensorsStorage = new SensorsStorage(this, _queueManager, _logger);
             _sensorsPrototype = new PrototypesCollection(options.Module);
 
             Windows = new WindowsSensorsCollection(_sensorsStorage, _sensorsPrototype);
@@ -400,7 +399,7 @@ namespace HSMDataCollector.Core
         {
             options = FillOptions(path, SensorValuesFactory.GetInstantType<T>(), options);
 
-            return (IInstantValueSensor<T>)RegisterCustomSensor(new SensorInstant<T>(options));
+            return (IInstantValueSensor<T>)_sensorsStorage.Register(new SensorInstant<T>(options));
         }
 
         private T FillOptions<T>(string path, SensorType type, T options) where T : SensorOptions
@@ -416,7 +415,7 @@ namespace HSMDataCollector.Core
         {
             var options = FillOptions($"Product Info/Service commands", SensorValuesFactory.GetInstantType<string>(), new InstantSensorOptions());
 
-            return (IServiceCommandsSensor)RegisterCustomSensor(new ServiceCommandsSensor(options));
+            return (IServiceCommandsSensor)_sensorsStorage.Register(new ServiceCommandsSensor(options));
         }
 
         #endregion
@@ -539,7 +538,7 @@ namespace HSMDataCollector.Core
         {
             options = FillOptions(path, SensorValuesFactory.GetBarType<int>(), options);
 
-            return (IBarSensor<int>)RegisterCustomSensor(new IntBarPublicSensor(options));
+            return (IBarSensor<int>)_sensorsStorage.Register(new IntBarPublicSensor(options));
         }
 
 
@@ -560,7 +559,7 @@ namespace HSMDataCollector.Core
         {
             options = FillOptions(path, SensorValuesFactory.GetBarType<double>(), options);
 
-            return (IBarSensor<double>)RegisterCustomSensor(new DoubleBarPublicSensor(options));
+            return (IBarSensor<double>)_sensorsStorage.Register(new DoubleBarPublicSensor(options));
         }
 
 
@@ -573,20 +572,6 @@ namespace HSMDataCollector.Core
                 Description = description,
                 Precision = precision,
             };
-
-        private SensorBase RegisterCustomSensor(SensorBase newSensor)
-        {
-            if (_sensorsStorage.TryGetValue(newSensor.SensorPath, out var sensor))
-                return sensor;
-
-            if (Status.IsRunning())
-            {
-                _ = _sensorsStorage.Run(newSensor);
-                return newSensor;
-            }
-
-            return _sensorsStorage.Register(newSensor);
-        }
 
         #endregion
 
