@@ -22,7 +22,7 @@ namespace HSMServer.Extensions
             var availableGroups = node.RootProduct.Notifications.Telegram.Chats.Values;
             var availableUsers = node.RootProduct.GetAllUserChats().Values;
 
-            return availableGroups.Union(availableUsers).OrderBy(chat => chat.Name).ToList();
+            return availableGroups.Union(availableUsers).OrderBy(chat => chat.IsUserChat).ThenBy(chat => chat.Name).ToList();
         }
 
 

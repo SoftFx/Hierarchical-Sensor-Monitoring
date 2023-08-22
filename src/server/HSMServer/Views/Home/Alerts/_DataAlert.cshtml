@@ -50,9 +50,17 @@
             <span>and</span>
         }
 
-        @if (action.Action == ActionType.SendNotification)
+        @if (action.Action == ActionType.SendNotification && action.Chats.Count > 0)
         {
-            <span>send notification <i>@action.DisplayComment</i></span>
+            <span>send notification <i>@action.DisplayComment</i> at</span>
+            @if (action.Chats.ContainsKey(Guid.Empty))
+            {
+                <span>all chats</span>
+            }
+            else
+            {
+                <span>@string.Join(", ", action.Chats.Values)</span>
+            }
         }
         else if (action.Action == ActionType.ShowIcon)
         {
