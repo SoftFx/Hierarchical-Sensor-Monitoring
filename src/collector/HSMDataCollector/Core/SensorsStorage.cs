@@ -1,7 +1,11 @@
 ﻿using HSMDataCollector.DefaultSensors;
 using HSMDataCollector.Extensions;
 using HSMDataCollector.Logging;
+using HSMDataCollector.Options;
+using HSMDataCollector.Sensors;
+using HSMDataCollector.SensorsFactory;
 using HSMDataCollector.SyncQueue;
+using HSMSensorDataObjects;
 using System;
 using System.Collections.Concurrent;
 using System.Linq;
@@ -43,6 +47,27 @@ namespace HSMDataCollector.Core
         internal Task Stop() => Task.WhenAll(Values.Select(s => s.Stop()));
 
 
+        internal SensorInstant<T> CreateInstantSensor<T>(string path, InstantSensorOptions options)
+        {
+            options = FillOptions(path, SensorValuesFactory.GetInstantType<T>(), options);
+
+            return (SensorInstant<T>)Register(new SensorInstant<T>(options));
+        }
+
+        internal IntBarPublicSensor CreateIntBarSensor(string path, BarSensorOptions options)
+        {
+            options = FillOptions(path, SensorValuesFactory.GetBarType<int>(), options);
+
+            return (IntBarPublicSensor)Register(new IntBarPublicSensor(options));
+        }
+
+        internal DoubleBarPublicSensor CreateDoubleBarSensor(string path, BarSensorOptions options)
+        {
+            options = FillOptions(path, SensorValuesFactory.GetBarType<double>(), options);
+
+            return (DoubleBarPublicSensor)Register(new DoubleBarPublicSensor(options));
+        }
+
         internal SensorBase Register(SensorBase sensor)
         {
             var path = sensor.SensorPath;
@@ -58,6 +83,7 @@ namespace HSMDataCollector.Core
 
             return AddSensor(sensor);
         }
+
 
         private async Task<SensorBase> AddAndStart(SensorBase sensor)
         {
@@ -87,6 +113,15 @@ namespace HSMDataCollector.Core
             }
 
             throw new Exception($"Sensor with path {path} already exists");
+        }
+
+        private T FillOptions<T>(string path, SensorType type, T options) where T : SensorOptions
+        {
+            options.Module = _collector.Module;
+            options.Path = path;
+            options.Type = type;
+
+            return options;
         }
 
         private void WriteSensorException(string sensorPath, Exception ex) => _logger.Error($"Sensor: {sensorPath}, {ex}");
