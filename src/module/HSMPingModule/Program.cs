@@ -1,4 +1,5 @@
 using HSMPingModule.Config;
+using HSMPingModule.Services;
 using DatacollectorService = HSMPingModule.Collector.DatacollectorService;
 using DataCollectorWrapper = HSMPingModule.Collector.DataCollectorWrapper;
 
@@ -10,6 +11,7 @@ builder.Configuration.SetBasePath(PingConfig.ConfigPath)
 builder.Services.Configure<PingConfig>(config => config.SetUpConfig(builder.Configuration));
 builder.Services.AddSingleton<DataCollectorWrapper>();;
 builder.Services.AddHostedService<DatacollectorService>();
+builder.Services.AddHostedService<PingService>();
 
 var app = builder.Build();
 

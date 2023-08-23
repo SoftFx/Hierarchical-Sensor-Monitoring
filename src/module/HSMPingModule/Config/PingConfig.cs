@@ -39,9 +39,9 @@ internal sealed class PingConfig
     internal static string Name { get; }
 
 
-    internal CollectorSettings CollectorSettings { get; private set; }
+    public CollectorSettings CollectorSettings { get; private set; }
 
-    internal VpnSettings VpnSettings { get; private set; }
+    public VpnSettings VpnSettings { get; private set; }
 
 
     static PingConfig()
