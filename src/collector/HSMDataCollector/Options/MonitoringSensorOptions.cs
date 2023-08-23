@@ -115,8 +115,6 @@ namespace HSMDataCollector.Options
     }
 
 
-    public sealed class CollectorInfoOptions : InstantSensorOptions { }
-
     public sealed class WindowsInfoSensorOptions : MonitoringInstantSensorOptions { }
 
     public sealed class CollectorMonitoringInfoOptions : MonitoringInstantSensorOptions { }

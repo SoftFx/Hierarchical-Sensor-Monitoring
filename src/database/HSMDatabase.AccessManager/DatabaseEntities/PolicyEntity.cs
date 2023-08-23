@@ -17,9 +17,19 @@ namespace HSMDatabase.AccessManager.DatabaseEntities
     }
 
 
+    public sealed record PolicyDestinationEntity
+    {
+        public Dictionary<string, string> Chats { get; init; }
+
+        public bool AllChats { get; init; }
+    }
+
+
     public sealed record PolicyEntity
     {
         public List<PolicyConditionEntity> Conditions { get; init; }
+
+        public PolicyDestinationEntity Destination { get; init; }
 
         public TimeIntervalEntity Sensitivity { get; init; }
 

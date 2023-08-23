@@ -26,6 +26,6 @@ namespace HSMServer.Core.Model.Policies
 
         internal virtual void BuildDefault(BaseNodeModel node, PolicyEntity entity = null) => TimeToLive = new TTLPolicy(node, entity);
 
-        internal virtual void UpdateTTL(PolicyUpdate update) => TimeToLive.Update(update);
+        public virtual void UpdateTTL(PolicyUpdate update) => TimeToLive.FullUpdate(update); // TODO: should be internal after policies migration
     }
 }

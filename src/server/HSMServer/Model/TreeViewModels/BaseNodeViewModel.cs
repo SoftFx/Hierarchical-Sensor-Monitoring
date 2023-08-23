@@ -9,6 +9,9 @@ namespace HSMServer.Model.TreeViewModel
 {
     public abstract class BaseNodeViewModel
     {
+        internal event Func<bool> CheckJournalCount;
+
+
         public Dictionary<byte, List<DataAlertViewModelBase>> DataAlerts { get; protected set; } = new();
 
         public ConcurrentDictionary<string, int> AlertIcons { get; } = new();
@@ -34,6 +37,8 @@ namespace HSMServer.Model.TreeViewModel
 
         public DateTime UpdateTime { get; protected set; }
 
+
+        public bool IsJournalEmpty => CheckJournalCount?.Invoke() ?? false;
 
         public string Title => Name?.Replace('\\', ' ') ?? string.Empty; //TODO remove after rename bad products
 

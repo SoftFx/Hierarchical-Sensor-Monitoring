@@ -13,7 +13,7 @@ namespace HSMDataCollector.DefaultSensors.Windows
         
         public WindowsNeedUpdate(WindowsInfoSensorOptions options) : base(options)
         {
-            _windowsLastUpdate = RegistryInfo.GetInstallationDate();
+            _windowsLastUpdate = RegistryInfo.GetInstallationDate().ToUniversalTime();
         }
 
 

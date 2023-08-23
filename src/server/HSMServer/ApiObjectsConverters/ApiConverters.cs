@@ -223,20 +223,25 @@ namespace HSMServer.ApiObjectsConverters
                 KeepHistory = request.KeepHistory.ToTimeInterval(),
                 SelfDestroy = request.SelfDestroy.ToTimeInterval(),
                 TTL = request.TTL.ToTimeInterval(),
-                TTLPolicy = request.TtlAlert?.Convert(),
-                Policies = request.Alerts?.Select(policy => policy.Convert()).ToList(),
+                TTLPolicy = request.TtlAlert?.Convert(keyName),
+                Policies = request.Alerts?.Select(policy => policy.Convert(keyName)).ToList(),
                 Initiator = $"Datacollector ({keyName})",
             };
 
 
-        public static PolicyUpdate Convert(this AlertUpdateRequest request) =>
-            new(Guid.Empty,
-                request.Conditions?.Select(c => c.Convert()).ToList(),
-                request.Sensitivity.ToTimeInterval(),
-                request.Status.Convert(),
-                request.Template,
-                request.Icon,
-                request.IsDisabled);
+        public static PolicyUpdate Convert(this AlertUpdateRequest request, string keyName) => new()
+        {
+            Conditions = request.Conditions?.Select(c => c.Convert()).ToList(),
+            Destination = new PolicyDestinationUpdate(),
+            Sensitivity = request.Sensitivity.ToTimeInterval(),
+
+            Id = Guid.Empty,
+            Status = request.Status.Convert(),
+            Template = request.Template,
+            Icon = request.Icon,
+            IsDisabled = request.IsDisabled,
+            Initiator = $"Datacollector ({keyName})",
+        };
 
 
         public static PolicyConditionUpdate Convert(this AlertConditionUpdate request) =>

@@ -33,7 +33,8 @@ namespace HSMDataCollector.Prototypes
 
         public WindowsLastRestartPrototype() : base()
         {
-            Description = "Time since last system restart";
+            Description = "This sensor sends information about the time of the last OS restart. " +
+                "Information is read from [**Windows Registry**](https://en.wikipedia.org/wiki/Windows_Registry).";
 
             Type = SensorType.TimeSpanSensor;
         }
@@ -47,7 +48,8 @@ namespace HSMDataCollector.Prototypes
 
         public WindowsLastUpdatePrototype() : base()
         {
-            Description = "Time since last system update";
+            Description = "This sensor sends information about the time of the last OS update. " +
+                "Information is read from [**Windows Registry**](https://en.wikipedia.org/wiki/Windows_Registry).";
 
             Type = SensorType.TimeSpanSensor;
         }
