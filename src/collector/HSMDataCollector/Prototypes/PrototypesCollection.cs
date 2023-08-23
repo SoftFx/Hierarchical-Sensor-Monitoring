@@ -22,9 +22,14 @@ namespace HSMDataCollector.Options
 
         #region Disks
 
-        internal FreeSpaceOnDiskPredictionPrototype FreeSpaceOnDiskPrediction { get; }
+        internal WindowsFreeSpaceOnDiskPredictionPrototype WindowsFreeSpaceOnDiskPrediction { get; }
 
-        internal FreeSpaceOnDiskPrototype FreeSpaceOnDisk { get; }
+        internal WindowsFreeSpaceOnDiskPrototype WindowsFreeSpaceOnDisk { get; }
+
+
+        internal UnixFreeSpaceOnDiskPredictionPrototype UnixFreeSpaceOnDiskPrediction { get; }
+
+        internal UnixFreeSpaceOnDiskPrototype UnixFreeSpaceOnDisk { get; }
 
         #endregion
 
@@ -71,8 +76,11 @@ namespace HSMDataCollector.Options
             FreeRam = Register<FreeRamMemoryPrototype>();
             TotalCPU = Register<TotalCPUPrototype>();
 
-            FreeSpaceOnDiskPrediction = Register<FreeSpaceOnDiskPredictionPrototype>();
-            FreeSpaceOnDisk = Register<FreeSpaceOnDiskPrototype>();
+            WindowsFreeSpaceOnDiskPrediction = Register<WindowsFreeSpaceOnDiskPredictionPrototype>();
+            WindowsFreeSpaceOnDisk = Register<WindowsFreeSpaceOnDiskPrototype>();
+
+            UnixFreeSpaceOnDiskPrediction = Register<UnixFreeSpaceOnDiskPredictionPrototype>();
+            UnixFreeSpaceOnDisk = Register<UnixFreeSpaceOnDiskPrototype>();
 
             WindowsIsNeedUpdate = Register<WindowsIsNeedUpdatePrototype>();
             WindowsLastRestart = Register<WindowsLastRestartPrototype>();

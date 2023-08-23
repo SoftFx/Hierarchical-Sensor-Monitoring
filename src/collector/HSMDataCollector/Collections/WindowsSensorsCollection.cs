@@ -60,30 +60,32 @@ namespace HSMDataCollector.DefaultSensors
 
         public IWindowsCollection AddFreeDiskSpace(DiskSensorOptions options)
         {
-            return ToWindows(new WindowsFreeDiskSpace(_prototype.FreeSpaceOnDisk.GetWindowsOptions(options)));
+            return ToWindows(new WindowsFreeDiskSpace(_prototype.WindowsFreeSpaceOnDisk.Get(options)));
         }
 
         public IWindowsCollection AddFreeDiskSpacePrediction(DiskSensorOptions options)
         {
-            return ToWindows(new WindowsFreeDiskSpacePrediction(_prototype.FreeSpaceOnDiskPrediction.GetWindowsOptions(options)));
+            return ToWindows(new WindowsFreeDiskSpacePrediction(_prototype.WindowsFreeSpaceOnDiskPrediction.Get(options)));
         }
 
-        public IWindowsCollection AddFreeDisksSpace(DiskSensorOptions options) =>
-            AddDisksMonitoring(options, o => new WindowsFreeDiskSpace(o));
-
-        public IWindowsCollection AddFreeDisksSpacePrediction(DiskSensorOptions options) =>
-            AddDisksMonitoring(options, o => new WindowsFreeDiskSpacePrediction(o));
-
-        public IWindowsCollection AddDiskMonitoringSensors(DiskSensorOptions options) =>
-            AddFreeDiskSpace(options).AddFreeDiskSpacePrediction(options);
-
-        private IWindowsCollection AddDisksMonitoring(DiskSensorOptions options, Func<DiskSensorOptions, SensorBase> newSensorFunc)
+        public IWindowsCollection AddFreeDisksSpace(DiskSensorOptions options)
         {
-            foreach (var diskOptions in _prototype.FreeSpaceOnDisk.GetAllDisksOptions(options))
-                ToWindows(newSensorFunc(diskOptions));
+            foreach (var diskOptions in _prototype.WindowsFreeSpaceOnDisk.GetAllDisksOptions(options))
+                ToWindows(new WindowsFreeDiskSpace(diskOptions));
 
             return this;
         }
+
+        public IWindowsCollection AddFreeDisksSpacePrediction(DiskSensorOptions options)
+        {
+            foreach (var diskOptions in _prototype.WindowsFreeSpaceOnDiskPrediction.GetAllDisksOptions(options))
+                ToWindows(new WindowsFreeDiskSpacePrediction(diskOptions));
+
+            return this;
+        }
+
+        public IWindowsCollection AddDiskMonitoringSensors(DiskSensorOptions options) =>
+            AddFreeDiskSpace(options).AddFreeDiskSpacePrediction(options);
 
         #endregion
 
