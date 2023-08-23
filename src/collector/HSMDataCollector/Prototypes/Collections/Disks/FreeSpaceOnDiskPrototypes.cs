@@ -21,7 +21,7 @@ namespace HSMDataCollector.Prototypes
 
             options.Alerts.Add(AlertsFactory.IfValue(AlertOperation.LessThanOrEqual, 5.GigobytesToMegabytes())
                                             .ThenNotify($"[$product] {SensorName} is running out. Current free space is $value {options.SensorUnit}")
-                                            .AndSetSensorError().Build());
+                                            .AndSetIcon(AlertIcon.ArrowDown).AndSetSensorError().Build());
 
             return options;
         }

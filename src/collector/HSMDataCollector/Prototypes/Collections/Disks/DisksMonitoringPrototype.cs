@@ -9,7 +9,7 @@ namespace HSMDataCollector.Prototypes
 {
     internal abstract class DisksMonitoringPrototype : MonitoringInstantSensorOptionsPrototype<DiskSensorOptions>
     {
-        private const string BaseDescription = "The sensor sends information about {0} with a period of {1}. Information about free disk space is read using {2}.";
+        private const string BaseDescription = "The sensor sends information about {0} with a period of {1}. The information is read using {2}.";
 
         protected const string WindowsDescription = "[**Disk info**](https://learn.microsoft.com/en-us/dotnet/api/system.io.driveinfo?view=netframework-4.7.2) class";
         protected const string UnixDescription = "[**df**](https://www.ibm.com/docs/en/aix/7.2?topic=d-df-command) command";

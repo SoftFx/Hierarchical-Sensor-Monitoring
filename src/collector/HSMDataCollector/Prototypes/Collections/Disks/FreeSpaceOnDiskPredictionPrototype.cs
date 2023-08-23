@@ -5,7 +5,7 @@ namespace HSMDataCollector.Prototypes
 {
     internal abstract class FreeSpaceOnDiskPredictionPrototype : DisksMonitoringPrototype
     {
-        private const string CalibrationInfo = "After the start of the sensor, it's calibrated during {0} requests that post with OffTime status";
+        private const string CalibrationInfo = "After the start of the sensor, it's calibrated during {0} requests that post with OffTime status.";
 
 
         public FreeSpaceOnDiskPredictionPrototype() : base()

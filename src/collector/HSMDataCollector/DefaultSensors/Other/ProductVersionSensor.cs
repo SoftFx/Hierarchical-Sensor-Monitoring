@@ -12,7 +12,7 @@ namespace HSMDataCollector.DefaultSensors.Other
         public ProductVersionSensor(VersionSensorOptions options) : base(options)
         {
             _version = options.Version;
-            _startTime = options.StartTime;
+            _startTime = options.StartTime.ToUniversalTime();
         }
 
 

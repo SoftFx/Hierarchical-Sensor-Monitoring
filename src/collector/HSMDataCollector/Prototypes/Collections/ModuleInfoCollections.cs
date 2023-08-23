@@ -39,7 +39,8 @@ namespace HSMDataCollector.Prototypes
 
         public CollectorVersionPrototype() : base()
         {
-            Description = "Current DataCollector version after calling Start method";
+            Description = "This sensor sends the current [**Version**](https://learn.microsoft.com/en-us/dotnet/api/system.version?view=netframework-4.7.2) of DataCollector " +
+            "and its start time in UTC format. All available versions of DataCollector can be found [**here**](https://www.nuget.org/packages/HSMDataCollector.HSMDataCollector).";
         }
 
 
@@ -61,7 +62,7 @@ namespace HSMDataCollector.Prototypes
 
         public ServiceCommandsPrototype() : base()
         {
-            Description = "Service Commands";
+            Description = "This is a special sensor that sends information about various critical commands (Start, Stop, Update, Restart, etc.) and information about the initiator";
             Type = SensorType.StringSensor;
         }
     }
