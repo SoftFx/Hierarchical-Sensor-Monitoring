@@ -462,12 +462,12 @@ function buildContextMenu(node) {
         }
     }
 
-    if ((curType === NodeType.Folder && node.children.length != 0) || (isMutedState !== '' && isMutedState !== undefined))
-        contextMenu["Notifications"] = {
-            "label": "Notifications",
-            "separator_before": true,
-            "submenu": notificationSubmenu,
-        };
+    //if ((curType === NodeType.Folder && node.children.length != 0) || (isMutedState !== '' && isMutedState !== undefined))
+    //    contextMenu["Notifications"] = {
+    //        "label": "Notifications",
+    //        "separator_before": true,
+    //        "submenu": notificationSubmenu,
+    //    };
     
     return contextMenu;
 }

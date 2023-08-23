@@ -17,9 +17,6 @@ namespace HSMServer.Core.Model.Policies
 
         internal PolicyDestination(PolicyDestinationEntity entity)
         {
-            if (entity is null)
-                return;
-
             AllChats = entity.AllChats;
             Chats.Clear();
 
@@ -29,20 +26,13 @@ namespace HSMServer.Core.Model.Policies
         }
 
 
-        public override string ToString() => $"chats={(AllChats ? "all chats" : string.Join(", ", Chats.Values))}";
-
-
         internal void Update(PolicyDestinationUpdate update)
         {
-            if (update is null)
-                return;
-
             AllChats = update.AllChats;
             Chats.Clear();
 
-            if (update.Chats is not null)
-                foreach (var (chatId, name) in update.Chats)
-                    Chats.Add(chatId, name);
+            foreach (var (chatId, name) in update.Chats)
+                Chats.Add(chatId, name);
         }
 
         internal PolicyDestinationEntity ToEntity() => new()
@@ -50,5 +40,7 @@ namespace HSMServer.Core.Model.Policies
             Chats = Chats?.ToDictionary(k => k.Key.ToString(), v => v.Value),
             AllChats = AllChats,
         };
+
+        public override string ToString() => $"chats={(AllChats ? "all chats" : string.Join(", ", Chats.Values))}";
     }
 }
