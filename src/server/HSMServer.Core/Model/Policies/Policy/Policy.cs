@@ -79,6 +79,7 @@ namespace HSMServer.Core.Model.Policies
             condition ??= Conditions?.FirstOrDefault();
 
             State.Operation = condition?.Operation.GetDisplayName();
+            State.Property = condition?.Property.ToString();
             State.Target = condition?.Target.Value;
 
             Comment = State.BuildComment();
