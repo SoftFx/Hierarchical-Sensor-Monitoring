@@ -1,6 +1,8 @@
-﻿using HSMDataCollector.Extensions;
+﻿using HSMDataCollector.Alerts;
+using HSMDataCollector.Extensions;
 using HSMDataCollector.Options;
 using HSMSensorDataObjects;
+using HSMSensorDataObjects.SensorRequests;
 using System;
 
 namespace HSMDataCollector.Prototypes
@@ -65,6 +67,16 @@ namespace HSMDataCollector.Prototypes
             Description = "This is a special sensor that sends information about various critical commands (Start, Stop, Update, Restart, etc.) and information about the initiator";
             Type = SensorType.StringSensor;
         }
+
+
+        public override ServiceSensorOptions Get(ServiceSensorOptions customOptions)
+        {
+            var options = base.Get(customOptions);
+
+            options.Alerts.Add(AlertsFactory.IfStatus(AlertOperation.IsOk).ThenSendNotification($"[$product] $value - $comment").Build());
+
+            return options;
+        }
     }
 
 
@@ -75,8 +87,28 @@ namespace HSMDataCollector.Prototypes
 
         public ServiceStatusPrototype() : base()
         {
-            Description = "Current status of the connected product";
+            Description = "This sensor subscribes to the specified [**Windows service**](https://en.wikipedia.org/wiki/Windows_service) and sends status changes. " +
+                "Windows service has the following statuses: \n\n" +
+                "* ContinuePending - The service continue is pending.  \n" +
+                "* Paused - The service is paused. \n" +
+                "* PausePending - The service pause is pending. \n" +
+                "* Running - The service is running.\n" +
+                "* StartPending - The service is starting.\n" +
+                "* Stopped - The service is not running.\n" +
+                "* StopPending - The service is stopping. \n\n" +
+                "More information you can find [**here**](https://learn.microsoft.com/en-us/dotnet/api/system.serviceprocess.servicecontrollerstatus?view=dotnet-plat-ext-7.0)";
+
             Type = SensorType.IntSensor;
+        }
+
+
+        public override ServiceSensorOptions Get(ServiceSensorOptions customOptions)
+        {
+            var options = base.Get(customOptions);
+
+            options.ServiceName = customOptions.ServiceName;
+
+            return options;
         }
     }
 
@@ -88,13 +120,18 @@ namespace HSMDataCollector.Prototypes
 
         public ProductVersionPrototype() : base()
         {
-            Description = "Current connected product version after calling Start method";
+            Description = "This sensor sends the current [**Version**](https://learn.microsoft.com/en-us/dotnet/api/system.version?view=netframework-4.7.2) " +
+                "of connected application and its start time in UTC format.";
         }
     }
 
 
     internal sealed class ServiceAlivePrototype : MonitoringInstantSensorOptionsPrototype<MonitoringInstantSensorOptions>
     {
+        private const string DescriptionTemplate = "This sensor sends DataCollector heartbits with a period of {0}. " +
+            "If TTL triggered and HSM server stopped receiving data, you need to check the status of the connected application";
+
+
         protected override string Category => ModuleInfoPrototype.ProductInfoCategory;
 
         protected override TimeSpan DefaultPostDataPeriod => TimeSpan.FromSeconds(15);
@@ -106,6 +143,22 @@ namespace HSMDataCollector.Prototypes
         {
             Description = "Indicator that the monitored service is alive";
             Type = SensorType.BooleanSensor;
+            AggregateData = true;
+
+            TTL = TimeSpan.FromMinutes(1);
+            KeepHistory = TimeSpan.FromDays(180);
+
+            TtlAlert = AlertsFactory.IfInactivityPeriodIs().ThenSendNotification($"[$product]$path").AndSetIcon(AlertIcon.Clock).AndSetSensorError().Build();
+        }
+
+
+        public override MonitoringInstantSensorOptions Get(MonitoringInstantSensorOptions customOptions)
+        {
+            var options = base.Get(customOptions);
+
+            options.Description = string.Format(DescriptionTemplate, options.PostDataPeriod.ToReadableView());
+
+            return options;
         }
     }
 }

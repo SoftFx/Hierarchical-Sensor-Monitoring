@@ -40,7 +40,7 @@ namespace HSMDataCollector.Alerts
         }
 
 
-        public AlertAction<T> AndNotify(string template)
+        public AlertAction<T> AndSendNotification(string template)
         {
             Template = template;
 

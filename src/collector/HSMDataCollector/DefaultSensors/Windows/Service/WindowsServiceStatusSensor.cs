@@ -59,7 +59,7 @@ namespace HSMDataCollector.DefaultSensors.Windows.Service
         }
 
         private ServiceController GetService(string serviceName) =>
-            ServiceController.GetServices().First(s => s.ServiceName == serviceName) ??
+            ServiceController.GetServices().FirstOrDefault(s => s.ServiceName == serviceName) ??
             throw new ArgumentException($"Service {serviceName} not found!");
     }
 }
