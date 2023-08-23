@@ -35,11 +35,11 @@ namespace HSMServer.Core
 
         public static BaseValue GetTimeoutValue(this BaseSensorModel sensor)
         {
-            T BuildDefault<T>() where T : BaseValue, new()
+            BaseValue BuildDefault<T>() where T : BaseValue, new()
             {
                 var ttl = sensor.Settings.TTL.Value.Ticks;
 
-                return new T()
+                return sensor.LastValue with
                 {
                     IsTimeout = true,
                     Time = DateTime.UtcNow,
@@ -63,11 +63,16 @@ namespace HSMServer.Core
             };
         }
 
-        private static BaseValue AddCurrentTime(this BarBaseValue barBaseValue) =>
-            barBaseValue with
-            {
-                OpenTime = barBaseValue.ReceivingTime,
-                CloseTime = barBaseValue.ReceivingTime
-            };
+        private static BaseValue AddCurrentTime(this BaseValue value)
+        {
+            if (value.Type.IsBar() && value is BarBaseValue barBaseValue)
+                return barBaseValue with
+                {
+                    OpenTime = barBaseValue.ReceivingTime,
+                    CloseTime = barBaseValue.ReceivingTime
+                };
+
+            return value;
+        }
     }
 }
