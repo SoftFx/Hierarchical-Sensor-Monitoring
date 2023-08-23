@@ -9,7 +9,7 @@ using Microsoft.Extensions.Options;
 
 namespace HSMPingModule.Collector;
 
-internal sealed class DataCollectorWrapper
+internal sealed class DataCollectorWrapper : IDisposable
 {
     private readonly PingConfig _config;
 
@@ -72,7 +72,7 @@ internal sealed class DataCollectorWrapper
         return Task.CompletedTask;
     }
 
-    internal void Dispose() => _collector?.Dispose();
+    public void Dispose() => _collector?.Dispose();
 
     internal Task Start() => _collector.Start();
 
