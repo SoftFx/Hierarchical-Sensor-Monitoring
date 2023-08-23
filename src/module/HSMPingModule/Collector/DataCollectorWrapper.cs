@@ -3,17 +3,21 @@ using HSMDataCollector.Core;
 using HSMDataCollector.Options;
 using HSMPingModule.Config;
 using HSMServer.Extensions;
+using Microsoft.Extensions.Options;
 
 namespace HSMPingModule.Collector;
 
 internal sealed class DataCollectorWrapper
 {
-    private static PingConfig _config;
+    private readonly PingConfig _config;
+    
     private readonly IDataCollector _collector;
 
 
-    public DataCollectorWrapper()
+    internal DataCollectorWrapper(IOptions<PingConfig> config)
     {
+        _config = config.Value;
+        
         var productInfoOptions = new VersionSensorOptions()
         {
             Version = Assembly.GetEntryAssembly()?.GetName().GetVersion(),
@@ -43,10 +47,8 @@ internal sealed class DataCollectorWrapper
                            .AddProductVersion(productInfoOptions);
         }
     }
-    
-    public static void SetConfig(PingConfig config) => _config = config;
-    
-    public void Dispose() => _collector?.Dispose();
+
+    internal void Dispose() => _collector?.Dispose();
 
     internal Task Start() => _collector.Start();
 

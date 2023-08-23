@@ -11,7 +11,7 @@ namespace HSMPingModule.Collector
         public override TimeSpan Delay { get; } = TimeSpan.FromSeconds(5);
 
 
-        public DatacollectorService(DataCollectorWrapper collector)
+        internal DatacollectorService(DataCollectorWrapper collector)
         {
             _collector = collector;
         }

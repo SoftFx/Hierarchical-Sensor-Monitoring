@@ -16,7 +16,7 @@ internal sealed class PingConfig
 
     private readonly string _settingsPath = Path.Combine(ConfigPath, ConfigName);
 
-    private readonly IConfigurationRoot _configuration;
+    private IConfigurationRoot _configuration;
 
 
 #if RELEASE
@@ -26,23 +26,22 @@ internal sealed class PingConfig
 #endif
 
     [JsonIgnore] 
-    public static string ConfigPath { get; } = Path.Combine(Environment.CurrentDirectory, "Config");
+    internal static string ConfigPath { get; } = Path.Combine(Environment.CurrentDirectory, "Config");
 
     [JsonIgnore] 
-    public static string ExecutableDirectory { get; }
+    internal static string ExecutableDirectory { get; }
 
 
     [JsonIgnore] 
-    public static string Version { get; }
+    internal static string Version { get; }
 
     [JsonIgnore] 
-    public static string Name { get; }
+    internal static string Name { get; }
 
 
-    public CollectorSettings CollectorSettings { get; }
+    internal CollectorSettings CollectorSettings { get; private set; }
 
-    public VpnSettings VpnSettings { get; }
-
+    internal VpnSettings VpnSettings { get; private set; }
 
 
     static PingConfig()
@@ -58,7 +57,11 @@ internal sealed class PingConfig
             FileManager.SafeCreateDirectory(ConfigPath);
     }
 
-    public PingConfig(IConfigurationRoot configuration)
+
+    public PingConfig(){}
+
+    
+    public void SetUpConfig(IConfigurationRoot configuration)
     {
         _configuration = configuration;
 
@@ -68,7 +71,8 @@ internal sealed class PingConfig
         ResaveSettings();
     }
 
-    public void ResaveSettings() => File.WriteAllText(_settingsPath, JsonSerializer.Serialize(this, _options));
+
+    internal void ResaveSettings() => File.WriteAllText(_settingsPath, JsonSerializer.Serialize(this, _options));
 
 
     private T Register<T>(string sectionName) where T : class, new()
