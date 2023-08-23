@@ -132,7 +132,7 @@ else
 
     function addDataAlert(type, entityId) {
         $.ajax({
-            url: `@Url.Action(nameof(HomeController.AddDataPolicy), ViewConstants.HomeController)?type=${type}&sensorId=${entityId}`,
+            url: `@Url.Action(nameof(HomeController.AddDataPolicy), ViewConstants.HomeController)?type=${type}&entityId=${entityId}`,
             cache: false
         }).done(function (viewData) {
             if (type == '@ttlType') {

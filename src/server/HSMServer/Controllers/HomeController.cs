@@ -585,25 +585,22 @@ namespace HSMServer.Controllers
         }
 
 
-        public IActionResult AddDataPolicy(byte type, Guid sensorId)
+        public IActionResult AddDataPolicy(byte type, Guid entityId)
         {
-            NodeViewModel entity = null;
-            if (_treeViewModel.Sensors.TryGetValue(sensorId, out var sensor))
-                entity = sensor;
-            if (_treeViewModel.Nodes.TryGetValue(sensorId, out var node))
-                entity = node;
+            if (!TryGetSelectedNode(entityId, out var entity))
+                return _emptyResult;
 
             DataAlertViewModelBase viewModel = type switch
             {
-                (byte)SensorType.File => new DataAlertViewModel<FileValue>(sensorId),
-                (byte)SensorType.String => new DataAlertViewModel<StringValue>(sensorId),
-                (byte)SensorType.Boolean => new DataAlertViewModel<BooleanValue>(sensorId),
-                (byte)SensorType.Version => new DataAlertViewModel<VersionValue>(sensorId),
-                (byte)SensorType.TimeSpan => new DataAlertViewModel<TimeSpanValue>(sensorId),
-                (byte)SensorType.Integer => new SingleDataAlertViewModel<IntegerValue, int>(sensorId),
-                (byte)SensorType.Double => new SingleDataAlertViewModel<DoubleValue, double>(sensorId),
-                (byte)SensorType.IntegerBar => new BarDataAlertViewModel<IntegerBarValue, int>(sensorId),
-                (byte)SensorType.DoubleBar => new BarDataAlertViewModel<DoubleBarValue, double>(sensorId),
+                (byte)SensorType.File => new DataAlertViewModel<FileValue>(entity),
+                (byte)SensorType.String => new DataAlertViewModel<StringValue>(entity),
+                (byte)SensorType.Boolean => new DataAlertViewModel<BooleanValue>(entity),
+                (byte)SensorType.Version => new DataAlertViewModel<VersionValue>(entity),
+                (byte)SensorType.TimeSpan => new DataAlertViewModel<TimeSpanValue>(entity),
+                (byte)SensorType.Integer => new SingleDataAlertViewModel<IntegerValue, int>(entity),
+                (byte)SensorType.Double => new SingleDataAlertViewModel<DoubleValue, double>(entity),
+                (byte)SensorType.IntegerBar => new BarDataAlertViewModel<IntegerBarValue, int>(entity),
+                (byte)SensorType.DoubleBar => new BarDataAlertViewModel<DoubleBarValue, double>(entity),
                 TimeToLiveAlertViewModel.AlertKey => new TimeToLiveAlertViewModel(entity),
                 _ => null,
             };
@@ -633,8 +630,22 @@ namespace HSMServer.Controllers
             return PartialView("~/Views/Home/Alerts/_ConditionBlock.cshtml", viewModel);
         }
 
-        public IActionResult AddAlertAction() =>
-            PartialView("~/Views/Home/Alerts/_ActionBlock.cshtml", new ActionViewModel(false));
+        public IActionResult AddAlertAction(Guid entityId) =>
+            TryGetSelectedNode(entityId, out var entity)
+                ? PartialView("~/Views/Home/Alerts/_ActionBlock.cshtml", new ActionViewModel(false, entity.GetAllChats()))
+                : _emptyResult;
+
+        private bool TryGetSelectedNode(Guid entityId, out NodeViewModel entity)
+        {
+            entity = null;
+
+            if (_treeViewModel.Sensors.TryGetValue(entityId, out var sensor))
+                entity = sensor;
+            if (_treeViewModel.Nodes.TryGetValue(entityId, out var node))
+                entity = node;
+
+            return entity is not null;
+        }
 
 
         [HttpPost]

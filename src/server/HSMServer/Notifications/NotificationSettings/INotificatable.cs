@@ -20,9 +20,7 @@ namespace HSMServer.Notification.Settings
 
 
         public bool CanSendData(Guid sensorId, ChatId chatId) =>
-            Notifications.UsedTelegram.MessagesAreEnabled &&
-            Notifications.IsSensorEnabled(sensorId) &&
-            !Notifications.IsSensorIgnored(sensorId, chatId);
+            Notifications.UsedTelegram.MessagesAreEnabled;
     }
 
 

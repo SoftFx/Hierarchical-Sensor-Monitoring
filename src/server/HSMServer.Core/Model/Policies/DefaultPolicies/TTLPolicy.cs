@@ -1,4 +1,5 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities;
+using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Model.NodeSettings;
 using System;
 using System.Text;
@@ -29,16 +30,24 @@ namespace HSMServer.Core.Model.Policies
         {
             _ttl = node.Settings.TTL;
 
-            _okPolicy = new OkPolicy(Id, node);
-
             Apply(entity ?? new PolicyEntity
             {
                 Id = Id.ToByteArray(),
                 Template = DefaultTemplate,
                 Icon = DefaultIcon,
+                Destination = new PolicyDestinationEntity() { AllChats = true },
             }, node as BaseSensorModel);
+
+            _okPolicy = new OkPolicy(this, node);
         }
 
+
+        internal void FullUpdate(PolicyUpdate update, BaseSensorModel sensor = null)
+        {
+            Update(update, sensor);
+
+            _okPolicy.Update(update with { Template = _okPolicy.OkTemplate }, sensor);
+        }
 
         internal bool HasTimeout(DateTime? time) => !_ttl.IsEmpty && time.HasValue && _ttl.Value.TimeIsUp(time.Value);
 
