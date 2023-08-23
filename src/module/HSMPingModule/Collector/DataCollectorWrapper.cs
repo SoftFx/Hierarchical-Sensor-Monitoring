@@ -14,7 +14,7 @@ internal sealed class DataCollectorWrapper
     private readonly IDataCollector _collector;
 
 
-    internal DataCollectorWrapper(IOptions<PingConfig> config)
+    public DataCollectorWrapper(IOptions<PingConfig> config)
     {
         _config = config.Value;
         
