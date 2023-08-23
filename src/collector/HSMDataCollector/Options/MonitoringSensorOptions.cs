@@ -84,12 +84,20 @@ namespace HSMDataCollector.Options
         internal const string DefaultTargetPath = @"C:\";
 
 
-        internal IDiskInfo DiskInfo { get; set; }
+        internal IDiskInfo DiskInfo { get; private set; }
 
 
         public int CalibrationRequests { get; set; } = DefaultCalibrationRequests;
 
         public string TargetPath { get; set; } = DefaultTargetPath;
+
+
+        internal DiskSensorOptions SetInfo(IDiskInfo info)
+        {
+            DiskInfo = info;
+
+            return this;
+        }
     }
 
 

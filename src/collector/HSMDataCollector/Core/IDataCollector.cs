@@ -17,6 +17,8 @@ namespace HSMDataCollector.Core
 
         CollectorStatus Status { get; }
 
+        string Module { get; }
+
 
         event Action ToStarting;
         event Action ToRunning;

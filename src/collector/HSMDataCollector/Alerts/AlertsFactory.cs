@@ -3,7 +3,7 @@ using System;
 
 namespace HSMDataCollector.Alerts
 {
-    public static class AlertFactory
+    public static class AlertsFactory
     {
         public static SpecialAlertCondition IfInactivityPeriodIs(TimeSpan? time = null)
         {

@@ -8,7 +8,7 @@ namespace HSMDataCollector.Alerts
         private readonly List<AlertConditionTemplate> _conditions = new List<AlertConditionTemplate>();
 
 
-        public AlertAction<T> ThenNotify(string template) => BuildAlertAction().AndNotify(template);
+        public AlertAction<T> ThenSendNotification(string template) => BuildAlertAction().AndSendNotification(template);
 
         public AlertAction<T> ThenSetIcon(string icon) => BuildAlertAction().AndSetIcon(icon);
 

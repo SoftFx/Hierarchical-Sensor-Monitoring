@@ -1,8 +1,24 @@
-﻿using HSMSensorDataObjects;
+﻿using HSMDataCollector.Extensions;
+using HSMSensorDataObjects;
 using System.Collections.Generic;
 
 namespace HSMDataCollector.Alerts
 {
+    public enum AlertIcon
+    {
+        Ok = 0,
+        Warning = 1,
+        Error = 2,
+        Pause = 3,
+
+        ArrowUp = 10,
+        ArrowDown = 11,
+
+        Clock = 100,
+        Hourglass = 101,
+    }
+
+
     public class AlertAction<T> where T : AlertBaseTemplate, new()
     {
         private readonly List<AlertConditionTemplate> _conditions;
@@ -24,7 +40,7 @@ namespace HSMDataCollector.Alerts
         }
 
 
-        public AlertAction<T> AndNotify(string template)
+        public AlertAction<T> AndSendNotification(string template)
         {
             Template = template;
 
@@ -34,6 +50,13 @@ namespace HSMDataCollector.Alerts
         public AlertAction<T> AndSetIcon(string icon)
         {
             Icon = icon;
+
+            return this;
+        }
+
+        public AlertAction<T> AndSetIcon(AlertIcon icon)
+        {
+            Icon = icon.ToUtf8();
 
             return this;
         }

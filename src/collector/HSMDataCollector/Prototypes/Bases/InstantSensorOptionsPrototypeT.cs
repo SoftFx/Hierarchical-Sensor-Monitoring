@@ -1,8 +1,9 @@
 ﻿using HSMDataCollector.Options;
+using System;
 
 namespace HSMDataCollector.Prototypes
 {
-    internal abstract class InstantSensorOptionsPrototype<T> : Options.InstantSensorOptions
+    internal abstract class InstantSensorOptionsPrototype<T> : InstantSensorOptions
         where T : InstantSensorOptions, new()
     {
         protected abstract string SensorName { get; }
@@ -14,6 +15,8 @@ namespace HSMDataCollector.Prototypes
         {
             Path = DefaultPrototype.BuildDefaultPath(Category, SensorName);
             EnableForGrafana = true;
+
+            TTL = TimeSpan.MaxValue; //Never
         }
 
 
