@@ -1,6 +1,8 @@
+using System.Collections.Concurrent;
 using System.Reflection;
 using HSMDataCollector.Core;
 using HSMDataCollector.Options;
+using HSMDataCollector.PublicInterface;
 using HSMPingModule.Config;
 using HSMServer.Extensions;
 using Microsoft.Extensions.Options;
@@ -10,8 +12,10 @@ namespace HSMPingModule.Collector;
 internal sealed class DataCollectorWrapper
 {
     private readonly PingConfig _config;
-    
+
     private readonly IDataCollector _collector;
+
+    private readonly ConcurrentDictionary<string, IInstantValueSensor<bool>> _sensors = new ();
 
 
     public DataCollectorWrapper(IOptions<PingConfig> config)
@@ -46,6 +50,26 @@ internal sealed class DataCollectorWrapper
                            .AddCollectorVersion()
                            .AddProductVersion(productInfoOptions);
         }
+    }
+
+
+    internal Task PingResultSend(string hostname, string country, PingResponse reply)
+    {
+        IInstantValueSensor<bool> sensor;
+        var path = $"{country}/{hostname}";
+
+        if (_sensors.TryGetValue(path, out sensor))
+        {
+            sensor.AddValue(reply.Value, reply.Status, reply.Comment);
+        }
+        else
+        {
+            sensor = _collector.CreateBoolSensor(path);
+            sensor.AddValue(reply.Value, reply.Status, reply.Comment);
+            _sensors.TryAdd(path, sensor);
+        }
+
+        return Task.CompletedTask;
     }
 
     internal void Dispose() => _collector?.Dispose();
