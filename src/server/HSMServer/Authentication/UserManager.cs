@@ -2,6 +2,7 @@
 using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.ConcurrentStorage;
 using HSMServer.Core.Cache;
+using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.DataLayer;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Policies;
@@ -221,63 +222,98 @@ namespace HSMServer.Authentication
 
             var products = new Dictionary<string, NotificationSettingsEntity>(1 << 5);
             foreach (var product in _treeValuesCache.GetProducts())
-                if (!products.ContainsKey(product.DisplayName))
+                if (!products.ContainsKey(product.DisplayName) && product.NotificationsSettings is not null)
                     products.Add(product.DisplayName, product.NotificationsSettings);
+
+            var usersChatsCount = 0;
+            foreach (var (_, user) in this)
+                usersChatsCount += user.Notifications?.Telegram?.Chats?.Count ?? 0;
 
             foreach (var sensor in _treeValuesCache.GetSensors())
             {
-                bool allChats = true;
+                var sensorPolicies = sensor.Policies.ToList();
+                sensorPolicies.Add(sensor.Policies.TimeToLive);
 
-                if (products.TryGetValue(sensor.RootProductName, out var notifications) && notifications is not null)
+                if (products.TryGetValue(sensor.RootProductName, out var notifications))
                 {
-                    if (notifications.EnabledSensors.Contains(sensor.Id.ToString()))
-                    {
-                        foreach (var chat in notifications.TelegramSettings.Chats)
+                    var chatsCount = (notifications.TelegramSettings?.Chats?.Count ?? 0) + usersChatsCount;
+
+                    foreach (var policy in sensorPolicies)
+                        if (policy.Destination is null)
                         {
-                            if (notifications.PartiallyIgnored.TryGetValue(chat.Id, out var ignoredSensors) && ignoredSensors.ContainsKey(sensor.Id.ToString()))
+                            policy.Destination = new();
+
+                            if (notifications.EnabledSensors.Contains(sensor.Id.ToString()))
                             {
-                                allChats = false;
-                                continue;
+                                foreach (var chat in notifications.TelegramSettings.Chats)
+                                    if (!notifications.PartiallyIgnored.TryGetValue(chat.Id, out var ignoredSensors) || !ignoredSensors.ContainsKey(sensor.Id.ToString()))
+                                        AddChatToDestination(policy, new TelegramChat(chat));
+                            }
+
+                            foreach (var (_, user) in this)
+                            {
+                                if (user.Notifications?.EnabledSensors?.Contains(sensor.Id) ?? false)
+                                    foreach (var (_, chat) in user.Notifications.Telegram.Chats)
+                                        AddChatToDestination(policy, chat);
+                            }
+
+                            if (policy.Destination.Chats.Count == chatsCount)
+                            {
+                                policy.Destination.AllChats = true;
+                                policy.Destination.Chats.Clear();
+                            }
+
+                            if (policy is TTLPolicy ttl)
+                            {
+                                var ttlUpdate = new PolicyUpdate
+                                {
+                                    Id = ttl.Id,
+                                    Conditions = ttl.Conditions.Select(u => new PolicyConditionUpdate(u.Operation, u.Property, u.Target, u.Combination)).ToList(),
+                                    Destination = new(ttl.Destination.AllChats, ttl.Destination.Chats.ToDictionary(k => k.Key, v => v.Value)),
+                                    Sensitivity = ttl.Sensitivity,
+                                    Status = ttl.Status,
+                                    Template = ttl.Template,
+                                    IsDisabled = ttl.IsDisabled,
+                                    Icon = ttl.Icon,
+                                };
+
+                                sensor.Policies.UpdateTTL(ttlUpdate);
+                                sensorsToResave.Add(sensor.Id);
                             }
                             else
-                            {
-                                foreach (var policy in sensor.Policies)
-                                    if (TryUpdatePolicyDestination(policy, new TelegramChat(chat)))
-                                        policiesToResave[policy.Id] = policy;
-
-                                if (TryUpdatePolicyDestination(sensor.Policies.TimeToLive, new TelegramChat(chat)))
-                                    sensorsToResave.Add(sensor.Id);
-                            }
+                                policiesToResave[policy.Id] = policy;
                         }
-                    }
-                    else if (notifications.TelegramSettings.Chats.Count > 0)
-                        allChats = false;
                 }
-
-                foreach (var (_, user) in this)
+                else
                 {
-                    if (user.Notifications?.EnabledSensors is not null && user.Notifications.EnabledSensors.Contains(sensor.Id))
+                    foreach (var policy in sensorPolicies)
                     {
-                        foreach (var (_, chat) in user.Notifications.Telegram.Chats)
+                        if (policy.Destination is null)
                         {
-                            foreach (var policy in sensor.Policies)
-                                if (TryUpdatePolicyDestination(policy, chat))
-                                    policiesToResave[policy.Id] = policy;
+                            policy.Destination = new();
 
-                            if (TryUpdatePolicyDestination(sensor.Policies.TimeToLive, chat))
+                            if (policy is TTLPolicy ttl)
+                            {
+                                var ttlUpdate = new PolicyUpdate
+                                {
+                                    Id = ttl.Id,
+                                    Conditions = ttl.Conditions.Select(u => new PolicyConditionUpdate(u.Operation, u.Property, u.Target, u.Combination)).ToList(),
+                                    Destination = new(ttl.Destination.AllChats, ttl.Destination.Chats.ToDictionary(k => k.Key, v => v.Value)),
+                                    Sensitivity = ttl.Sensitivity,
+                                    Status = ttl.Status,
+                                    Template = ttl.Template,
+                                    IsDisabled = ttl.IsDisabled,
+                                    Icon = ttl.Icon,
+                                };
+
+                                sensor.Policies.UpdateTTL(ttlUpdate);
                                 sensorsToResave.Add(sensor.Id);
+                            }
+                            else
+                                policiesToResave[policy.Id] = policy;
                         }
                     }
-                    else
-                        allChats = false;
                 }
-
-                foreach (var policy in sensor.Policies)
-                    if (TryUpdatePolicyAllChats(policy, allChats))
-                        policiesToResave[policy.Id] = policy;
-
-                if (TryUpdatePolicyAllChats(sensor.Policies.TimeToLive, allChats))
-                    sensorsToResave.Add(sensor.Id);
             }
 
             foreach (var sensorId in sensorsToResave)
@@ -290,35 +326,10 @@ namespace HSMServer.Authentication
         }
 
         [Obsolete("Should be removed after policies chats migration")]
-        private static bool TryUpdatePolicyDestination(Policy policy, TelegramChat chat)
+        private static void AddChatToDestination(Policy policy, TelegramChat chat)
         {
-            policy.Destination ??= new();
-
             if (!policy.Destination.Chats.ContainsKey(chat.SystemId))
-            {
                 policy.Destination.Chats.Add(chat.SystemId, chat.Name);
-
-                return true;
-            }
-
-            return false;
-        }
-
-        [Obsolete("Should be removed after policies chats migration")]
-        private static bool TryUpdatePolicyAllChats(Policy policy, bool allChats)
-        {
-            var oldChats = policy.Destination?.Chats.Count ?? -1;
-            var oldAllChats = policy.Destination?.AllChats;
-
-
-            policy.Destination ??= new();
-            policy.Destination.AllChats = allChats;
-
-            if (allChats)
-                policy.Destination.Chats.Clear();
-
-
-            return policy.Destination.Chats.Count != oldChats || policy.Destination.AllChats != oldAllChats;
         }
     }
 }

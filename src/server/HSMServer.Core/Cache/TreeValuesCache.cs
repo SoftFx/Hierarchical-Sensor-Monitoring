@@ -542,15 +542,23 @@ namespace HSMServer.Core.Cache
             foreach (var (productId, product) in _tree)
             {
                 var policy = product.Policies.TimeToLive;
+                if (policy.Destination is not null)
+                    continue;
 
-                var oldChats = policy.Destination?.Chats.Count ?? -1;
-                var oldAllChats = policy.Destination?.AllChats;
+                var ttlUpdate = new PolicyUpdate
+                {
+                    Id = policy.Id,
+                    Conditions = policy.Conditions.Select(u => new PolicyConditionUpdate(u.Operation, u.Property, u.Target, u.Combination)).ToList(),
+                    Destination = new PolicyDestinationUpdate(true, new()),
+                    Sensitivity = policy.Sensitivity,
+                    Status = policy.Status,
+                    Template = policy.Template,
+                    IsDisabled = policy.IsDisabled,
+                    Icon = policy.Icon,
+                };
 
-                policy.Destination ??= new();
-                policy.Destination.AllChats = true;
-
-                if (policy.Destination.Chats.Count != oldChats || policy.Destination.AllChats != oldAllChats)
-                    productsToResave.Add(productId);
+                product.Policies.UpdateTTL(ttlUpdate);
+                productsToResave.Add(productId);
             }
 
             foreach (var productId in productsToResave)
@@ -563,6 +571,7 @@ namespace HSMServer.Core.Cache
         [Obsolete("Should be removed after policies chats migration")]
         public void UpdatePolicy(Policy policy)
         {
+            policy.RebuildState();
             _database.UpdatePolicy(policy.ToEntity());
         }
 

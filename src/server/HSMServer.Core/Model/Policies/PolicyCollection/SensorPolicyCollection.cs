@@ -65,7 +65,7 @@ namespace HSMServer.Core.Model.Policies
             _typePolicy.RebuildState();
         }
 
-        internal override void UpdateTTL(PolicyUpdate update)
+        public override void UpdateTTL(PolicyUpdate update)
         {
             var oldValue = TimeToLive.ToString();
 
@@ -238,7 +238,7 @@ namespace HSMServer.Core.Model.Policies
                 Id = Guid.NewGuid(),
                 Status = SensorStatus.Ok,
                 Template = $"$prevStatus->$status [$product]$path = $comment",
-                Destination = new PolicyDestinationUpdate(true, new(0)),
+                Destination = new(true, new(0)),
                 Conditions = new(1)
                 {
                     new PolicyConditionUpdate(

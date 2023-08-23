@@ -30,7 +30,9 @@ namespace HSMServer.Core.Model.Policies
             Icon = policy.Icon;
             PolicyId = policy.Id;
             Template = policy.Template;
-            Destination = new(policy.Destination.AllChats, new HashSet<Guid>(policy.Destination.Chats.Keys));
+
+            if (policy.Destination is not null) // TODO: remove this check after policies migration
+                Destination = new(policy.Destination.AllChats, new HashSet<Guid>(policy.Destination.Chats.Keys));
 
             AddPolicyResult(policy);
         }
