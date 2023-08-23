@@ -18,10 +18,10 @@ internal sealed class DataCollectorWrapper : IDisposable
     private readonly ConcurrentDictionary<string, IInstantValueSensor<bool>> _sensors = new ();
 
 
-    public DataCollectorWrapper(IOptions<PingConfig> config)
+    public DataCollectorWrapper(IOptionsMonitor<PingConfig> config)
     {
-        _config = config.Value;
-        
+        _config = config.CurrentValue;
+
         var productInfoOptions = new VersionSensorOptions()
         {
             Version = Assembly.GetEntryAssembly()?.GetName().GetVersion(),
@@ -34,7 +34,6 @@ internal sealed class DataCollectorWrapper : IDisposable
         };
 
         var collectorInfoOptions = new CollectorMonitoringInfoOptions();
-
 
         _collector = new DataCollector(collectorOptions).AddNLog();
 

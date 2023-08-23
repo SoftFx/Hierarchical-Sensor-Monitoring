@@ -14,17 +14,13 @@ internal class PingService : BackgroundService
 
     private readonly DataCollectorWrapper _collectorWrapper;
     private readonly PingConfig _config;
-    private readonly List<string> _webSites;
-    private readonly List<string> _contries;
     private readonly int _delay = 15;
 
 
-    public PingService(IOptions<PingConfig> config, DataCollectorWrapper collectorWrapper)
+    public PingService(IOptionsMonitor<PingConfig> config, DataCollectorWrapper collectorWrapper)
     {
         _collectorWrapper = collectorWrapper;
-        _config = config.Value;
-        _contries = _config.VpnSettings.Countries;
-        _webSites = _config.VpnSettings.WebSites;
+        _config = config.CurrentValue;
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -32,8 +28,8 @@ internal class PingService : BackgroundService
         var timer = new PeriodicTimer(TimeSpan.FromSeconds(_delay));
         while (await timer.WaitForNextTickAsync(stoppingToken))
         {
-            foreach (var country in _contries.Distinct())
-                foreach (var host in _webSites)
+            foreach (var country in _config.VpnSettings.Countries.ToList().Distinct())
+                foreach (var host in _config.VpnSettings.WebSites.ToList())
                     Ping(host).ContinueWith((reply) => _collectorWrapper.PingResultSend(host, country, reply.Result));
         }
     }

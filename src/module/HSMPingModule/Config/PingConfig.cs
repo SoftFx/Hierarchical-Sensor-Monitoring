@@ -67,8 +67,6 @@ internal sealed class PingConfig
 
         CollectorSettings = Register<CollectorSettings>(nameof(CollectorSettings));
         VpnSettings = Register<VpnSettings>(nameof(VpnSettings));
-
-        ResaveSettings();
     }
 
 
@@ -78,5 +76,12 @@ internal sealed class PingConfig
     private T Register<T>(string sectionName) where T : class, new()
     {
         return _configuration.GetSection(sectionName).Get<T>() ?? new T();
+    }
+
+    public void Reload()
+    {
+        _configuration.Reload();
+        CollectorSettings = Register<CollectorSettings>(nameof(CollectorSettings));
+        VpnSettings = Register<VpnSettings>(nameof(VpnSettings));
     }
 }

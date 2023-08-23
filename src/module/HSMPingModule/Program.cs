@@ -9,6 +9,7 @@ builder.Configuration.SetBasePath(PingConfig.ConfigPath)
                      .AddJsonFile(PingConfig.ConfigName, true);
 
 builder.Services.Configure<PingConfig>(config => config.SetUpConfig(builder.Configuration));
+builder.Services.AddHostedService<SettingsWatcherService>();;
 builder.Services.AddSingleton<DataCollectorWrapper>();;
 builder.Services.AddHostedService<DatacollectorService>();
 builder.Services.AddHostedService<PingService>();
