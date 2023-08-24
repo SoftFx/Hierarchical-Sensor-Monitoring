@@ -14,6 +14,8 @@ namespace HSMServer.Core.Model
         internal SensorResult? Result => LastValue != null ? new SensorResult(LastValue) : null;
 
 
+        internal abstract BaseValue OldestValue { get; }
+
         internal abstract BaseValue LastTimeout { get; }
 
         internal abstract BaseValue LastDbValue { get; }
@@ -27,7 +29,7 @@ namespace HSMServer.Core.Model
 
         internal abstract List<BaseValue> GetValues(int count);
 
-        internal abstract void Clear(DateTime to);
+        internal abstract BaseValue Clear(DateTime to);
 
         internal abstract void Clear();
     }
@@ -39,6 +41,8 @@ namespace HSMServer.Core.Model
 
         private T _lastValue, _lastTimeout;
 
+
+        internal override T OldestValue => _cache.FirstOrDefault();
 
         internal override T LastDbValue => _cache.LastOrDefault();
 
@@ -84,13 +88,17 @@ namespace HSMServer.Core.Model
         internal override List<BaseValue> GetValues(DateTime from, DateTime to) =>
             _cache.Where(v => v.InRange(from, to)).Select(u => (BaseValue)u).ToList();
 
-        internal override void Clear(DateTime to)
+        internal override BaseValue Clear(DateTime to)
         {
+            var lastPop = _cache.LastOrDefault();
+
             while (_cache.FirstOrDefault()?.LastUpdateTime <= to)
-                _cache.TryDequeue(out _);
+                _cache.TryDequeue(out lastPop);
 
             if (_cache.IsEmpty)
                 _lastValue = null;
+
+            return lastPop;
         }
 
         internal override void Clear()

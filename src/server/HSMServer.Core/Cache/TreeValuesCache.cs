@@ -361,17 +361,26 @@ namespace HSMServer.Core.Cache
                 return;
 
             var from = _snapshot.Sensors[request.Id].History.From;
+            var to = request.To;
 
-            if (from > request.To)
+            if (from > to)
                 return;
 
-            sensor.Storage.Clear(request.To);
+            var lastPop = sensor.Storage.Clear(to);
 
             if (!sensor.HasData)
                 sensor.ResetSensor();
 
-            _database.ClearSensorValues(sensor.Id.ToString(), from, request.To);
-            _snapshot.Sensors[request.Id].History.From = request.To;
+            if (sensor.SaveOnlyUniqueValues)
+            {
+                var oldest = sensor.Storage.OldestValue;
+
+                from = from > lastPop.ReceivingTime ? lastPop.ReceivingTime : from;
+                to = oldest.ReceivingTime < to ? oldest.ReceivingTime.AddTicks(-1) : to;
+            }
+
+            _database.ClearSensorValues(sensor.Id.ToString(), from, to);
+            _snapshot.Sensors[request.Id].History.From = to;
 
             SensorUpdateView(sensor);
         }
