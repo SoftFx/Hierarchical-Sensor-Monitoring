@@ -9,7 +9,7 @@ namespace HSMPingModule.Collector;
 
 internal sealed class DataCollectorWrapper : IDisposable
 {
-    private readonly ConcurrentDictionary<string, IInstantValueSensor<bool>> _sensors = new ();
+    private readonly ConcurrentDictionary<string, IInstantValueSensor<int>> _sensors = new ();
     private readonly IDataCollector _collector;
     private readonly ServiceConfig _config;
 
@@ -45,17 +45,17 @@ internal sealed class DataCollectorWrapper : IDisposable
     }
 
 
-    internal Task PingResultSend(string hostname, string country, PingResponse reply)
+    internal async Task PingResultSend(string hostname, string country, Task<PingResponse> taskReply)
     {
+        var reply = await taskReply;
+
         var path = $"{country}/{hostname}";
-        
-        var sensor = _collector.CreateBoolSensor(path);
+
+        var sensor = _collector.CreateIntSensor(path, options:new InstantSensorOptions(){});
         sensor.AddValue(reply.Value, reply.Status, reply.Comment);
 
         if (!_sensors.TryGetValue(path, out _))
             _sensors.TryAdd(path, sensor);
-
-        return Task.CompletedTask;
     }
 
     public void Dispose() => _collector?.Dispose();

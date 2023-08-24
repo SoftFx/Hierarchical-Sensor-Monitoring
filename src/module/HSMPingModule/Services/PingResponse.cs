@@ -5,7 +5,7 @@ namespace HSMPingModule;
 
 internal record PingResponse
 {
-    public bool Value { get; init; }
+    public int Value { get; init; }
 
     public SensorStatus Status { get; init; }
 
@@ -18,13 +18,13 @@ internal record PingResponse
         {
             Status = SensorStatus.Ok;
             Comment = string.Empty;
-            Value = true;
+            Value = (int)reply.RoundtripTime;
         }
         else
         {
             Status = SensorStatus.Error;
             Comment = reply.Status.ToString();
-            Value = false;
+            Value = (int)reply.RoundtripTime;
         }
     }
 
@@ -32,6 +32,6 @@ internal record PingResponse
     {
         Status = SensorStatus.Error;
         Comment = exception.Message;
-        Value = false;
+        Value = 0;
     }
 }
