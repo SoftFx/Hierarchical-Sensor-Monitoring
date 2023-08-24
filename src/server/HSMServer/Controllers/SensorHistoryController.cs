@@ -128,10 +128,9 @@ namespace HSMServer.Controllers
 
             Func<SensorNodeViewModel, bool> GetCompareFunc()
             {
-                if (isStatusService)
-                    return sensor => sensor.Name == "Service status" && sensor.Parent.Name == "Product Info";
+                var name = isStatusService ? "Service status" : "Service alive";
 
-                return sensor => sensor.Name == "Service alive";
+                return sensor => sensor.Path.EndsWith($".default/Module Info/{name}");
             }
 
             void CheckPath(NodeViewModel sensor)
