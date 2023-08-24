@@ -56,6 +56,7 @@ namespace HSMServer.Core.DataLayer
         void AddSensorValue(SensorValueEntity valueEntity);
         void ClearSensorValues(string sensorId, DateTime from, DateTime to);
 
+        byte[] GetLatestValue(Guid sensorId, long to);
 
         Dictionary<Guid, byte[]> GetLatestValues(Dictionary<Guid, long> sensors);
 

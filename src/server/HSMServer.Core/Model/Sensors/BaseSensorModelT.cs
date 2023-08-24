@@ -44,7 +44,6 @@ namespace HSMServer.Core.Model
             return canStore;
         }
 
-        internal override IEnumerable<BaseValue> ConvertValues(List<byte[]> pages) => pages.Select(Convert);
 
         internal override bool CheckTimeout() => Policies.SensorTimeout(LastValue);
 
@@ -62,6 +61,8 @@ namespace HSMServer.Core.Model
         }
 
 
-        private BaseValue Convert(byte[] bytes) => bytes.ToValue<T>();
+        internal override IEnumerable<BaseValue> Convert(List<byte[]> pages) => pages.Select(Convert);
+
+        internal override BaseValue Convert(byte[] bytes) => bytes.ToValue<T>();
     }
 }

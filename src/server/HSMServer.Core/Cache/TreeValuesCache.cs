@@ -422,9 +422,22 @@ namespace HSMServer.Core.Cache
                 var pages = _database.GetSensorValuesPage(sensorId, from, to, count);
                 var includeTtl = options.HasFlag(RequestOptions.IncludeTtl);
 
+                if (sensor.SaveOnlyUniqueValues)
+                {
+                    var latest = _database.GetLatestValue(sensorId, from.Ticks - 1); // get prev from value
+
+                    if (latest is not null)
+                    {
+                        var last = sensor.Convert(latest);
+
+                        if (last.ReceivingTime < from && from <= last.LastUpdateTime && (includeTtl || IsNotTimout(last)))
+                            yield return new List<BaseValue>() { last };
+                    }
+                }
+
                 await foreach (var page in pages)
                 {
-                    var convertedValues = sensor.ConvertValues(page);
+                    var convertedValues = sensor.Convert(page);
 
                     yield return (includeTtl ? convertedValues : convertedValues.Where(IsNotTimout)).ToList();
                 }

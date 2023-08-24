@@ -97,6 +97,20 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             }
         }
 
+        public byte[] GetLatest(byte[] key, byte[] sensorId)
+        {
+            try
+            {
+                return _openedDb.GetLatest(key, sensorId);
+            }
+            catch (Exception e)
+            {
+                _logger.Error($"Failed getting latest value {key.GetString()} - {e.Message}");
+
+                return Array.Empty<byte>();
+            }
+        }
+
         public IEnumerable<byte[]> GetValuesFrom(byte[] from, byte[] to)
         {
             try

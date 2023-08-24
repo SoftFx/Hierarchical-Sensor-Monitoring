@@ -118,7 +118,10 @@ namespace HSMServer.Core.Model
 
         internal abstract void AddDbValue(byte[] bytes);
 
-        internal abstract IEnumerable<BaseValue> ConvertValues(List<byte[]> valuesBytes);
+
+        internal abstract IEnumerable<BaseValue> Convert(List<byte[]> valuesBytes);
+
+        internal abstract BaseValue Convert(byte[] bytes);
 
 
         internal override BaseNodeModel AddParent(ProductModel parent)
