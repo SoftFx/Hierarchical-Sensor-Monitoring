@@ -36,8 +36,6 @@ namespace HSMDataCollector.Options
 
         #region Windows Os Info
 
-        internal WindowsIsNeedUpdatePrototype WindowsIsNeedUpdate { get; }
-
         internal WindowsLastRestartPrototype WindowsLastRestart { get; }
 
         internal WindowsLastUpdatePrototype WindowsLastUpdate { get; }
@@ -82,7 +80,6 @@ namespace HSMDataCollector.Options
             UnixFreeSpaceOnDiskPrediction = Register<UnixFreeSpaceOnDiskPredictionPrototype>();
             UnixFreeSpaceOnDisk = Register<UnixFreeSpaceOnDiskPrototype>();
 
-            WindowsIsNeedUpdate = Register<WindowsIsNeedUpdatePrototype>();
             WindowsLastRestart = Register<WindowsLastRestartPrototype>();
             WindowsLastUpdate = Register<WindowsLastUpdatePrototype>();
 

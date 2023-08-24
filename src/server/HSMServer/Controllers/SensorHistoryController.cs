@@ -130,7 +130,7 @@ namespace HSMServer.Controllers
             {
                 var name = isStatusService ? "Service status" : "Service alive";
 
-                return sensor => sensor.Path.EndsWith($".default/Module Info/{name}");
+                return sensor => sensor.Path.EndsWith($".module/Module Info/{name}");
             }
 
             void CheckPath(NodeViewModel sensor)

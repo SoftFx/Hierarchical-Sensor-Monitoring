@@ -18,24 +18,10 @@ namespace HSMDataCollector.Prototypes
         {
             var options = base.Get(customOptions);
 
-            options.Description = $"{options.Description}. Information is read from [**Windows Registry**](https://en.wikipedia.org/wiki/Windows_Registry)." +
+            options.Description = $"{options.Description} Information is read from [**Windows Registry**](https://en.wikipedia.org/wiki/Windows_Registry)." +
             $" The system check is carried out every {options.PostDataPeriod.ToReadableView()}";
 
             return options;
-        }
-    }
-
-
-    internal sealed class WindowsIsNeedUpdatePrototype : WindowsInfoMonitoringPrototype
-    {
-        protected override string SensorName => "Is need update";
-
-
-        public WindowsIsNeedUpdatePrototype() : base()
-        {
-            Description = "Gets true if the system has not been updated for a half a year";
-
-            Type = SensorType.BooleanSensor;
         }
     }
 

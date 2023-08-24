@@ -31,8 +31,6 @@ namespace HSMDataCollector.PublicInterface
         IWindowsCollection AddDiskMonitoringSensors(DiskSensorOptions options = null);
 
 
-        IWindowsCollection AddWindowsNeedUpdate(WindowsInfoSensorOptions options = null);
-
         IWindowsCollection AddWindowsLastUpdate(WindowsInfoSensorOptions options = null);
 
         IWindowsCollection AddWindowsLastRestart(WindowsInfoSensorOptions options = null);

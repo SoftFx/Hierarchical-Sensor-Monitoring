@@ -6,7 +6,7 @@ namespace HSMDataCollector.Prototypes
     internal static class DefaultPrototype
     {
         private const string PathSeparator = "/";
-        private const string SystemPath = ".default";
+        private const string SystemPath = ".module";
 
 
         internal static T Merge<T>(SensorOptions defaultOptions, T customOptions) where T : SensorOptions, new() =>
