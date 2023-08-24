@@ -29,7 +29,7 @@ internal class PingService : BackgroundService
         {
             foreach (var country in _config.ResourceSettings.Countries.ToList().Distinct())
                 foreach (var host in _config.ResourceSettings.WebSites.ToList())
-                    Ping(host).ContinueWith((reply) => _collectorWrapper.PingResultSend(host, country, reply.Result), stoppingToken);
+                    _ = Ping(host).ContinueWith((reply) => _collectorWrapper.PingResultSend(host, country, reply.Result), stoppingToken);
         }
     }
 

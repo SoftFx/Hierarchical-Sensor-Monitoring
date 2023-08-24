@@ -48,9 +48,6 @@ internal sealed class ServiceConfig
     }
 
 
-    public ServiceConfig(){}
-
-    
     public void SetUpConfig(IConfigurationRoot configuration)
     {
         _configuration = configuration;
