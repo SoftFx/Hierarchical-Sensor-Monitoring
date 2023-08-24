@@ -5,10 +5,12 @@ namespace HSMPingModule.Services;
 
 internal class SettingsWatcherService : BackgroundService
 {
-    private static bool _isFired = false; 
-    
+    private static bool _isFired = false;
+
+
     private readonly IOptionsMonitor<PingConfig> _config;
     private readonly FileSystemWatcher _watcher;
+
 
     public SettingsWatcherService(IOptionsMonitor<PingConfig> config)
     {
