@@ -22,7 +22,7 @@ namespace HSMServer.Model.DataAlerts
         public ActionType Action { get; set; }
 
 
-        public Dictionary<Guid, string> Chats { get; set; }
+        public Dictionary<Guid, string> Chats { get; set; } = new();
 
         public string Comment { get; set; }
 
