@@ -343,24 +343,6 @@ namespace HSMDataCollector.Core
         [Obsolete("Use method AddWindowsSensors(options) in Windows collection")]
         public bool InitializeWindowsUpdateMonitoring(TimeSpan sensorInterval, TimeSpan updateInterval, string specificPath = null)
         {
-            try
-            {
-                var options = new WindowsInfoSensorOptions()
-                {
-                    Path = specificPath,
-                    PostDataPeriod = sensorInterval,
-                };
-
-                //Windows.AddWindowsNeedUpdate(_sensorsPrototype.WindowsInfo.GetAndFill(options));
-                Windows.AddWindowsNeedUpdate(options);
-            }
-            catch
-            {
-                return false;
-            }
-
-            _ = Start();
-
             return true;
         }
 
