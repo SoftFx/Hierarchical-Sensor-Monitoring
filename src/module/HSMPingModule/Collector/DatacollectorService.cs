@@ -2,7 +2,6 @@
 
 internal sealed class DatacollectorService : BackgroundService
 {
-    private readonly TimeSpan _initDelay = TimeSpan.FromSeconds(10);
     private readonly DataCollectorWrapper _collector;
 
 

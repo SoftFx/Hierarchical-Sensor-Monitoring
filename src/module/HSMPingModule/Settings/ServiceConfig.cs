@@ -57,10 +57,7 @@ internal sealed class ServiceConfig
     }
 
 
-    private T Register<T>(string sectionName) where T : class, new()
-    {
-        return _configuration.GetSection(sectionName).Get<T>() ?? new T();
-    }
+    private T Register<T>(string sectionName) where T : class, new() => _configuration.GetSection(sectionName).Get<T>() ?? new T();
 
     public void Reload()
     {

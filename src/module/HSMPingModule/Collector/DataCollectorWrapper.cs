@@ -3,6 +3,7 @@ using HSMDataCollector.Core;
 using HSMDataCollector.Options;
 using HSMDataCollector.PublicInterface;
 using HSMPingModule.Config;
+using HSMPingModule.Resourses;
 using Microsoft.Extensions.Options;
 
 namespace HSMPingModule.Collector;
@@ -45,13 +46,14 @@ internal sealed class DataCollectorWrapper : IDisposable
     }
 
 
-    internal async Task PingResultSend(string hostname, string country, Task<PingResponse> taskReply)
+    internal async Task PingResultSend(WebSite webSite, string country, Task<PingResponse> taskReply)
     {
         var reply = await taskReply;
 
-        var path = $"{country}/{hostname}";
+        var path = $"{webSite.HostName}/{country}";
 
-        var sensor = _collector.CreateIntSensor(path, options:new InstantSensorOptions(){});
+        var sensor = _collector.CreateIntSensor(path, webSite.GetOptions);
+
         sensor.AddValue(reply.Value, reply.Status, reply.Comment);
 
         if (!_sensors.TryGetValue(path, out _))

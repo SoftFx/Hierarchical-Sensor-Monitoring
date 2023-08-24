@@ -8,6 +8,7 @@ namespace HSMPingModule.Services;
 internal class PingService : BackgroundService
 {
     public const int PingTimout = int.MaxValue;
+    public const int SensorPingTimout = 30_000; // 30sec
     private const int Delay = 15;
 
     private readonly ConcurrentDictionary<string, PingAdapter> _pings = new ();
@@ -27,19 +28,18 @@ internal class PingService : BackgroundService
         var timer = new PeriodicTimer(TimeSpan.FromSeconds(Delay));
         while (await timer.WaitForNextTickAsync(stoppingToken))
         {
-            foreach (var country in _config.ResourceSettings.Countries.ToList().Distinct())
-                foreach (var host in _config.ResourceSettings.WebSites.ToList())
+            foreach (var website in _config.ResourceSettings.WebSites.ToList().Distinct())
+                foreach (var country in website.Countries)
                 {
                     PingAdapter ping;
-                    
-                    if (!_pings.TryGetValue($"{country}/{host}", out ping))
+                    var path = $"{website.HostName}/{country}";
+                    if (!_pings.TryGetValue(path, out ping))
                     {
-                        var path = $"{country}/{host}";
-                        ping = new PingAdapter(host);
+                        ping = new PingAdapter(website.HostName);
                         _pings.TryAdd(path, ping);
                     }
                     
-                    _ = ping.SendRequest().ContinueWith((reply) => _collectorWrapper.PingResultSend(host, country, reply), stoppingToken);
+                    _ = ping.SendRequest().ContinueWith((reply) => _collectorWrapper.PingResultSend(website, country, reply), stoppingToken);
                 }
         }
     }
