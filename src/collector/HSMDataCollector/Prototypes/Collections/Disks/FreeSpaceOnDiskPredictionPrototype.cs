@@ -1,5 +1,8 @@
-﻿using HSMDataCollector.Options;
+﻿using HSMDataCollector.Alerts;
+using HSMDataCollector.Options;
 using HSMSensorDataObjects;
+using HSMSensorDataObjects.SensorRequests;
+using System;
 
 namespace HSMDataCollector.Prototypes
 {
@@ -20,9 +23,9 @@ namespace HSMDataCollector.Prototypes
 
             options.Description = $"{options.Description} {string.Format(CalibrationInfo, options.CalibrationRequests)}";
 
-            //options.Alerts.Add(AlertsFactory.IfValue(AlertOperation.LessOrEqualThan, 5.GigobytesToMegabytes())
-            //                                .ThenNotify($"[$product] {SensorName} is running out. Current free space is $value {options.SensorUnit}")
-            //                                .AndSetSensorError().Build());
+            options.Alerts.Add(AlertsFactory.IfValue(AlertOperation.LessThanOrEqual, TimeSpan.FromDays(2))
+                                            .ThenSendNotification($"[$product] $sensor. Free disk space will run out in about $value")
+                                            .AndSetSensorError().Build());
 
             return options;
         }
