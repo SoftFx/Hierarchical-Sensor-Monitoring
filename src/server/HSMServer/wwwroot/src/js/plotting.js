@@ -63,8 +63,8 @@ window.displayGraph = function (graphData, graphType, graphElementId, graphName)
         responsive: true,
         displaylogo: false,
         modeBarButtonsToAdd: [
-            // getAddPlotButton(serviceButtonName, true, plotIcon, graphElementId, graphName),
-            // getAddPlotButton(heartBeatButtonName, false, plotIcon, graphElementId, graphName),
+            getAddPlotButton(serviceButtonName, true, plotIcon, graphElementId, graphName),
+            getAddPlotButton(heartBeatButtonName, false, plotIcon, graphElementId, graphName),
         ],
         modeBarButtonsToRemove: [
             'pan',
