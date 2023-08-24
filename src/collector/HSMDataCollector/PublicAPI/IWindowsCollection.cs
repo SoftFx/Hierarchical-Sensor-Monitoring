@@ -31,28 +31,26 @@ namespace HSMDataCollector.PublicInterface
         IWindowsCollection AddDiskMonitoringSensors(DiskSensorOptions options = null);
 
 
-        IWindowsCollection AddWindowsNeedUpdate(WindowsSensorOptions options = null);
+        IWindowsCollection AddWindowsNeedUpdate(WindowsInfoSensorOptions options = null);
 
-        IWindowsCollection AddWindowsLastUpdate(WindowsSensorOptions options = null);
+        IWindowsCollection AddWindowsLastUpdate(WindowsInfoSensorOptions options = null);
 
-        IWindowsCollection AddWindowsLastRestart(WindowsSensorOptions options = null);
+        IWindowsCollection AddWindowsLastRestart(WindowsInfoSensorOptions options = null);
 
-        IWindowsCollection AddWindowsInfoMonitoringSensors(WindowsSensorOptions options = null);
+        IWindowsCollection AddWindowsInfoMonitoringSensors(WindowsInfoSensorOptions options = null);
 
 
         IWindowsCollection AddCollectorAlive(CollectorMonitoringInfoOptions options = null);
 
-        IWindowsCollection AddCollectorVersion(CollectorInfoOptions options = null);
-
-        IWindowsCollection AddCollectorStatus(CollectorInfoOptions options = null);
+        IWindowsCollection AddCollectorVersion();
 
         IWindowsCollection AddCollectorMonitoringSensors(CollectorMonitoringInfoOptions options = null);
 
 
-        IWindowsCollection AddProductVersion(VersionSensorOptions options = null);
+        IWindowsCollection AddProductVersion(VersionSensorOptions options);
 
 
-        IWindowsCollection SubscribeToWindowsServiceStatus(string serviceName, string module = "");
+        IWindowsCollection SubscribeToWindowsServiceStatus(string serviceName);
 
         IWindowsCollection SubscribeToWindowsServiceStatus(ServiceSensorOptions options);
     }

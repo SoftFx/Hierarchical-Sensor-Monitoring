@@ -1,4 +1,6 @@
 ﻿using HSMDataCollector.Alerts;
+using HSMDataCollector.Converters;
+using HSMDataCollector.DefaultSensors.SystemInfo;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.SensorRequests;
 using System;
@@ -6,41 +8,61 @@ using System.Collections.Generic;
 
 namespace HSMDataCollector.Options
 {
-    public class InstantSensorOptions : SensorOptions2
+    public interface IMonitoringOptions
     {
-        public List<InstantAlertBuildRequest> Alerts { get; set; } = new List<InstantAlertBuildRequest>();
-
-        internal InstantSensorOptions SetType(SensorType type)
-        {
-            Type = type;
-
-            return this;
-        }
-    }
-
-    public class BarSensorOptions2 : SensorOptions2 
-    {
-        public List<BarAlertBuildRequest> Alerts { get; set; } = new List<BarAlertBuildRequest>();
-
-        internal BarSensorOptions2 SetType(SensorType type)
-        {
-            Type = type;
-
-            return this;
-        }
+        TimeSpan PostDataPeriod { get; set; }
     }
 
 
-    public abstract class SensorOptions2
+    public class MonitoringInstantSensorOptions : InstantSensorOptions, IMonitoringOptions
     {
-        public SpecialAlertBuildRequest TtlAlert { get; set; }
+        public TimeSpan PostDataPeriod { get; set; } = TimeSpan.FromSeconds(15);
+    }
 
-        public Unit? SensorUnit { get; set; }
+
+    public class InstantSensorOptions : SensorOptions
+    {
+        public List<InstantAlertTemplate> Alerts { get; set; } = new List<InstantAlertTemplate>();
+
+        internal override AddOrUpdateSensorRequest ApiRequest => this.ToApi();
+    }
+
+
+    public class BarSensorOptions : SensorOptions, IMonitoringOptions
+    {
+        public List<BarAlertTemplate> Alerts { get; set; } = new List<BarAlertTemplate>();
+
+
+        public TimeSpan PostDataPeriod { get; set; } = TimeSpan.FromSeconds(15);
+
+        public TimeSpan BarTickPeriod { get; set; } = TimeSpan.FromSeconds(5);
+
+        public TimeSpan BarPeriod { get; set; } = TimeSpan.FromMinutes(5);
+
+        public int Precision { get; set; } = 2;
+
+
+        internal override AddOrUpdateSensorRequest ApiRequest => this.ToApi();
+    }
+
+
+    public abstract class SensorOptions
+    {
+        internal abstract AddOrUpdateSensorRequest ApiRequest { get; }
+
+        internal SensorType Type { get; set; }
+
+        internal string Module { get; set; }
+
+        internal string Path { get; set; }
+
+
+        public SpecialAlertTemplate TtlAlert { get; set; }
 
 
         public string Description { get; set; }
 
-        public string Path { get; set; }
+        public Unit? SensorUnit { get; set; }
 
 
         public TimeSpan? KeepHistory { get; set; }
@@ -50,78 +72,38 @@ namespace HSMDataCollector.Options
         public TimeSpan? TTL { get; set; }
 
 
-        public bool EnableForGrafana { get; set; }
+        public bool? EnableForGrafana { get; set; }
 
-
-        public bool OnlyUniqValues { get; set; }
-
-
-        internal SensorType Type { get; private protected set; }
-
-        internal bool HasSettings => KeepHistory.HasValue || SelfDestroy.HasValue || TTL.HasValue;
-
-        internal string SensorName { get; set; } //???
+        public bool? AggregateData { get; set; }
     }
 
 
-    public class SensorOptions
+    public sealed class DiskSensorOptions : MonitoringInstantSensorOptions
     {
-        public string NodePath { get; set; }
-
-        internal string SensorName { get; set; }
-    }
+        internal const int DefaultCalibrationRequests = 6;
+        internal const string DefaultTargetPath = @"C:\";
 
 
-    public class MonitoringSensorOptions : BarSensorOptions2
-    {
-        internal virtual TimeSpan DefaultPostDataPeriod { get; } = TimeSpan.FromSeconds(15);
+        internal IDiskInfo DiskInfo { get; private set; }
 
 
-        public TimeSpan PostDataPeriod { get; set; }
+        public int CalibrationRequests { get; set; } = DefaultCalibrationRequests;
+
+        public string TargetPath { get; set; } = DefaultTargetPath;
 
 
-        public MonitoringSensorOptions()
+        internal DiskSensorOptions SetInfo(IDiskInfo info)
         {
-            PostDataPeriod = DefaultPostDataPeriod;
+            DiskInfo = info;
+
+            return this;
         }
-    }
-
-
-    public class BarSensorOptions : MonitoringSensorOptions
-    {
-        public TimeSpan CollectBarPeriod { get; set; } = TimeSpan.FromSeconds(5);
-
-        public TimeSpan BarPeriod { get; set; } = TimeSpan.FromMinutes(5);
-
-        public int Precision { get; set; } = 2;
-    }
-
-
-    public sealed class DiskSensorOptions : MonitoringSensorOptions
-    {
-        internal override TimeSpan DefaultPostDataPeriod { get; } = TimeSpan.FromMinutes(5);
-
-
-        public string TargetPath { get; set; } = @"C:\";
-
-        public int CalibrationRequests { get; set; } = 6;
-    }
-
-
-    public sealed class WindowsSensorOptions : MonitoringSensorOptions
-    {
-        internal override TimeSpan DefaultPostDataPeriod { get; } = TimeSpan.FromHours(12);
-
-
-        public TimeSpan AcceptableUpdateInterval { get; set; } = TimeSpan.FromDays(30);
     }
 
 
     public sealed class VersionSensorOptions : InstantSensorOptions
     {
         public Version Version { get; set; }
-
-        public new string SensorName { get; set; }
 
         public DateTime StartTime { get; set; }
     }
@@ -133,11 +115,7 @@ namespace HSMDataCollector.Options
     }
 
 
-    public sealed class CollectorInfoOptions : InstantSensorOptions
-    {
-        internal const string BaseCollectorPath = "Product Info/Collector";
-    }
+    public sealed class WindowsInfoSensorOptions : MonitoringInstantSensorOptions { }
 
-
-    public sealed class CollectorMonitoringInfoOptions : MonitoringSensorOptions { }
+    public sealed class CollectorMonitoringInfoOptions : MonitoringInstantSensorOptions { }
 }

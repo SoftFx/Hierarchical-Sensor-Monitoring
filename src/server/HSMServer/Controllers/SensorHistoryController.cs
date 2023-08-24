@@ -14,6 +14,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using HSMSensorDataObjects.HistoryRequests;
 
 namespace HSMServer.Controllers
 {
@@ -85,7 +86,7 @@ namespace HSMServer.Controllers
             if (model == null)
                 return _emptyJsonResult;
 
-            var values = await GetSensorValues(model.EncodedId, model.FromUtc, model.ToUtc, model.Count);
+            var values = await GetSensorValues(model.EncodedId, model.FromUtc, model.ToUtc, model.Count, model.Options);
 
             var localValue = GetLocalLastValue(model.EncodedId, model.FromUtc, model.ToUtc);
 
@@ -169,12 +170,12 @@ namespace HSMServer.Controllers
         private PartialViewResult GetHistoryTable(HistoryTableViewModel viewModel) => PartialView("_SensorValuesTable", viewModel);
 
 
-        private ValueTask<List<BaseValue>> GetSensorValues(string encodedId, DateTime from, DateTime to, int count)
+        private ValueTask<List<BaseValue>> GetSensorValues(string encodedId, DateTime from, DateTime to, int count, RequestOptions options = default)
         {
             if (string.IsNullOrEmpty(encodedId))
                 return new(new List<BaseValue>());
 
-            return _cache.GetSensorValuesPage(SensorPathHelper.DecodeGuid(encodedId), from, to, count).Flatten();
+            return _cache.GetSensorValuesPage(SensorPathHelper.DecodeGuid(encodedId), from, to, count, options).Flatten();
         }
 
         private GetSensorHistoryModel SpecifyLatestHistoryModel(GetSensorHistoryModel model)

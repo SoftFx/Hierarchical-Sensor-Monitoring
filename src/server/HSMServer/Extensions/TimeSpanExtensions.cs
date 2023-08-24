@@ -6,14 +6,32 @@ public static class TimeSpanExtensions
 {
     public static string ToTableView(this TimeSpan time)
     {
+        bool hasPrevious = false;
+
+        string BuildUnit(string unit, int val)
+        {
+            if (val == 0)
+                return string.Empty;
+
+            var str = $"{val} {unit}";
+
+            if (hasPrevious)
+                str = $" {str}";
+
+            if (val > 1)
+                str = $"{str}s";
+
+            hasPrevious = true;
+
+            return str;
+        }
+
         var tooltip = new StringBuilder(1 << 4);
 
-        if (time.Days != 0)
-            tooltip.Append($"{time.Days}d ");
-
-        return tooltip.Append($"{time.Hours}h ")
-                      .Append($"{time.Minutes}m ")
-                      .Append($"{time.Seconds}s")
+        return tooltip.Append(BuildUnit("day", time.Days))
+                      .Append(BuildUnit("hour", time.Hours))
+                      .Append(BuildUnit("minute", time.Minutes))
+                      .Append(BuildUnit("second", time.Seconds))
                       .ToString();
     }
 

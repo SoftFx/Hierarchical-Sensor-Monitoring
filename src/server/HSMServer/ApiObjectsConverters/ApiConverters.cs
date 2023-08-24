@@ -212,29 +212,37 @@ namespace HSMServer.ApiObjectsConverters
             };
 
 
-        public static SensorUpdate Convert(this AddOrUpdateSensorRequest request, Guid sensorId) =>
+        public static SensorUpdate Convert(this AddOrUpdateSensorRequest request, Guid sensorId, string keyName) =>
             new()
             {
                 Id = sensorId,
                 Description = request.Description,
                 SelectedUnit = request.OriginalUnit?.Convert(),
-                SaveOnlyUniqueValues = request.SaveOnlyUniqueValues,
+                SaveOnlyUniqueValues = request.AggregateData,
                 Integration = request.EnableGrafana.HasValue && request.EnableGrafana.Value ? Integration.Grafana : null,
                 KeepHistory = request.KeepHistory.ToTimeInterval(),
                 SelfDestroy = request.SelfDestroy.ToTimeInterval(),
                 TTL = request.TTL.ToTimeInterval(),
-                TTLPolicy = request.TTLPolicy?.Convert(),
-                Policies = request.Policies?.Select(policy => policy.Convert()).ToList(),
+                TTLPolicy = request.TtlAlert?.Convert(keyName),
+                Policies = request.Alerts?.Select(policy => policy.Convert(keyName)).ToList(),
+                Initiator = $"Datacollector ({keyName})",
             };
 
-        public static PolicyUpdate Convert(this AlertUpdateRequest request) =>
-            new(Guid.Empty,
-                request.Conditions?.Select(c => c.Convert()).ToList(),
-                request.Sensitivity.ToTimeInterval(),
-                request.Status.Convert(),
-                request.Template,
-                request.Icon,
-                request.IsDisabled);
+
+        public static PolicyUpdate Convert(this AlertUpdateRequest request, string keyName) => new()
+        {
+            Conditions = request.Conditions?.Select(c => c.Convert()).ToList(),
+            Destination = new PolicyDestinationUpdate(),
+            Sensitivity = request.Sensitivity.ToTimeInterval(),
+
+            Id = Guid.Empty,
+            Status = request.Status.Convert(),
+            Template = request.Template,
+            Icon = request.Icon,
+            IsDisabled = request.IsDisabled,
+            Initiator = $"Datacollector ({keyName})",
+        };
+
 
         public static PolicyConditionUpdate Convert(this AlertConditionUpdate request) =>
             new(request.Operation.Convert(),
@@ -242,8 +250,11 @@ namespace HSMServer.ApiObjectsConverters
                 request.Target is not null ? new(request.Target.Type.Convert(), request.Target.Value) : null,
                 request.Combination.Convert());
 
-        private static TimeIntervalModel ToTimeInterval(this long? ticks) =>
-            ticks.HasValue ? new(ticks.Value) : null;
+
+        private static TimeIntervalModel ToTimeInterval(this long? ticks)
+        {
+            return !ticks.HasValue ? null : ticks.Value == TimeSpan.MaxValue.Ticks ? new TimeIntervalModel(TimeInterval.None) : new(ticks.Value);
+        }
 
 
         public static SensorValueBase CreateNewSensorValue(SensorType sensorType) => sensorType switch

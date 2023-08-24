@@ -50,9 +50,17 @@
             <span>and</span>
         }
 
-        @if (action.Action == ActionType.SendNotification)
+        @if (action.Action == ActionType.SendNotification && action.Chats.Count > 0)
         {
-            <span>send notification <i>@action.DisplayComment</i></span>
+            <span>send notification <i>@action.DisplayComment</i> at</span>
+            @if (action.Chats.ContainsKey(ActionViewModel.AllChatsId))
+            {
+                <span>all chats</span>
+            }
+            else
+            {
+                <span>@string.Join(", ", action.Chats.Values)</span>
+            }
         }
         else if (action.Action == ActionType.ShowIcon)
         {
@@ -143,7 +151,7 @@
             let element = $(this).parents("div.fullAction:first");
 
             $.ajax({
-                url: `@Url.Action(nameof(HomeController.AddAlertAction), ViewConstants.HomeController)?sensorId=@Model.EntityId`,
+                url: `@Url.Action(nameof(HomeController.AddAlertAction), ViewConstants.HomeController)?entityId=@Model.EntityId`,
                 cache: false
             }).done(function (viewData) {
                 var actionsBlock = element.find($(`div[name='actionsBlock']`));

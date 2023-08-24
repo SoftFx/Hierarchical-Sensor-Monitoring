@@ -3,11 +3,11 @@ using System;
 
 namespace HSMDataCollector.Alerts
 {
-    public static class Alerts
+    public static class AlertsFactory
     {
-        public static SpecialAlertCondition IfInactivityPeriodIs(TimeSpan? time)
+        public static SpecialAlertCondition IfInactivityPeriodIs(TimeSpan? time = null)
         {
-            return new SpecialAlertCondition();
+            return new SpecialAlertCondition().AddTtlValue(time);
         }
 
 

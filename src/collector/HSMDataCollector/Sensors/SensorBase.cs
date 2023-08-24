@@ -1,7 +1,6 @@
-using HSMDataCollector.Converters;
 using HSMDataCollector.Options;
+using HSMDataCollector.Prototypes;
 using HSMDataCollector.Requests;
-using HSMDataCollector.SensorsMetainfo;
 using HSMSensorDataObjects.SensorValueRequests;
 using System;
 using System.Threading.Tasks;
@@ -12,29 +11,23 @@ namespace HSMDataCollector.DefaultSensors
     {
         internal const string DefaultTimeFormat = "dd/MM/yyyy HH:mm:ss";
 
-        private readonly SensorMetainfo _metainfo;
-        //private readonly string _nodePath;
+        private readonly SensorOptions _metainfo;
 
 
-        protected abstract string SensorName { get; }
-
-        public string SensorPath => _metainfo.Path; /*$"{_nodePath}/{SensorName}";*/
+        public string SensorPath => _metainfo.Path;
 
 
         internal event Func<PriorityRequest, Task<bool>> SensorCommandRequest;
-
         internal event Action<SensorValueBase> ReceiveSensorValue;
-
 
         public event Action<string, Exception> ExceptionThrowing;
 
 
-        protected SensorBase(SensorOptions2 options) : this(options.ToInfo()) { }
-
-        private protected SensorBase(SensorMetainfo info)
+        protected SensorBase(SensorOptions options)
         {
-            //_nodePath = info.Path;
-            _metainfo = info;
+            options.Path = DefaultPrototype.BuildPath(options.Module, options.Path);
+
+            _metainfo = options;
         }
 
 
@@ -45,7 +38,7 @@ namespace HSMDataCollector.DefaultSensors
         }
 
 
-        internal virtual Task<bool> Init() => SendCommand(new PriorityRequest(_metainfo.ToApi()));
+        internal virtual Task<bool> Init() => SendCommand(new PriorityRequest(_metainfo.ApiRequest));
 
         internal virtual Task<bool> Start() => Task.FromResult(true);
 

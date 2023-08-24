@@ -1,5 +1,4 @@
-﻿using HSMServer.Core.Model;
-using HSMServer.Core.Model.Policies;
+﻿using HSMServer.Core.Model.Policies;
 using HSMServer.Model.TreeViewModel;
 
 namespace HSMServer.Model.DataAlerts
@@ -14,12 +13,12 @@ namespace HSMServer.Model.DataAlerts
         protected override string DefaultIcon { get; } = TTLPolicy.DefaultIcon;
 
 
-        public TimeToLiveAlertViewModel(NodeViewModel node) : base(node.Id)
+        public TimeToLiveAlertViewModel(NodeViewModel node) : base(node)
         {
             FillConditions(new TimeIntervalViewModel(PredefinedIntervals.ForTimeout, () => (node.Parent?.TTL, node.ParentIsFolder)) { IsAlertBlock = true });
         }
 
-        public TimeToLiveAlertViewModel(TTLPolicy policy, BaseNodeModel node) : base(policy, node) { }
+        public TimeToLiveAlertViewModel(TTLPolicy policy, NodeViewModel node) : base(policy, node) { }
 
 
         internal TimeToLiveAlertViewModel FromInterval(TimeIntervalViewModel interval)

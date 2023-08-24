@@ -1,5 +1,4 @@
 ﻿using HSMSensorDataObjects;
-using HSMSensorDataObjects.SensorRequests;
 using System;
 
 

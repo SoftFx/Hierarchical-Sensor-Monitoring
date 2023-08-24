@@ -4,11 +4,15 @@ namespace HSMDataCollector.Core
 {
     public sealed class CollectorOptions
     {
-        public string ServerAddress { get; set; }
+        internal const string LocalhostAddress = "localhost";
+        internal const int DefaultPort = 44330;
+
+
+        public string ServerAddress { get; set; } = LocalhostAddress;
 
         public string AccessKey { get; set; }
 
-        public int Port { get; set; } = 44330;
+        public int Port { get; set; } = DefaultPort;
         
 
         public string Module { get; set; }

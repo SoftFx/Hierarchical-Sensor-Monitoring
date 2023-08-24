@@ -7,17 +7,13 @@ namespace HSMDataCollector.DefaultSensors.Windows
 {
     internal sealed class WindowsNeedUpdate : MonitoringSensorBase<bool>
     {
-        private readonly TimeSpan _acceptableUpdateInterval;
+        private readonly TimeSpan _acceptableUpdateInterval = TimeSpan.FromDays(31);
         private readonly DateTime _windowsLastUpdate;
 
-        protected override string SensorName => "Is need update";
-
-
-        public WindowsNeedUpdate(WindowsSensorOptions options) : base(options)
+        
+        public WindowsNeedUpdate(WindowsInfoSensorOptions options) : base(options)
         {
-            _acceptableUpdateInterval = options.AcceptableUpdateInterval;
-
-            _windowsLastUpdate = RegistryInfo.GetInstallationDate();
+            _windowsLastUpdate = RegistryInfo.GetInstallationDate().ToUniversalTime();
         }
 
 
