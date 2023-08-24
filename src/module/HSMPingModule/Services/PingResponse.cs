@@ -6,19 +6,12 @@ namespace HSMPingModule;
 internal record PingResponse
 {
     public bool Value { get; init; }
-    
+
     public SensorStatus Status { get; init; }
-    
+
     public string Comment { get; init; }
-    
-    
-    public PingResponse(bool value, SensorStatus status, string comment)
-    {
-        Value = value;
-        Status = status;
-        Comment = comment;
-    }
-    
+
+
     public PingResponse(PingReply reply)
     {
         if (reply.Status is IPStatus.Success)
@@ -33,5 +26,12 @@ internal record PingResponse
             Comment = reply.Status.ToString();
             Value = false;
         }
+    }
+
+    public PingResponse(Exception exception)
+    {
+        Status = SensorStatus.Error;
+        Comment = exception.Message;
+        Value = false;
     }
 }

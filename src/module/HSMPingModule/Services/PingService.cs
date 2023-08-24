@@ -1,17 +1,16 @@
-using System.Net;
-using System.Net.NetworkInformation;
+using System.Collections.Concurrent;
 using HSMPingModule.Collector;
 using HSMPingModule.Config;
-using HSMSensorDataObjects;
 using Microsoft.Extensions.Options;
 
 namespace HSMPingModule.Services;
 
 internal class PingService : BackgroundService
 {
-    private const int PingTimout = 1000;
+    public const int PingTimout = 1000;
     private const int Delay = 15;
 
+    private readonly ConcurrentDictionary<string, PingAdapter> _pings = new ();
     private readonly DataCollectorWrapper _collectorWrapper;
     private readonly ServiceConfig _config;
 
@@ -22,6 +21,7 @@ internal class PingService : BackgroundService
         _config = config.CurrentValue;
     }
 
+
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         var timer = new PeriodicTimer(TimeSpan.FromSeconds(Delay));
@@ -29,26 +29,18 @@ internal class PingService : BackgroundService
         {
             foreach (var country in _config.ResourceSettings.Countries.ToList().Distinct())
                 foreach (var host in _config.ResourceSettings.WebSites.ToList())
-                    _ = Ping(host).ContinueWith((reply) => _collectorWrapper.PingResultSend(host, country, reply.Result), stoppingToken);
-        }
-    }
-
-
-    private async Task<PingResponse> Ping(string host)
-    {
-        var myPing = new Ping();
-        var buffer = new byte[32];
-        var pingOptions = new PingOptions();
-
-        try
-        {
-            var ips = await Dns.GetHostAddressesAsync(host);
-            
-            return new PingResponse(await myPing.SendPingAsync(ips[0], PingTimout, buffer, pingOptions));
-        }
-        catch (Exception ex)
-        {
-            return new PingResponse(false, SensorStatus.Error, ex.Message);
+                {
+                    PingAdapter ping;
+                    
+                    if (!_pings.TryGetValue($"{country}/{host}", out ping))
+                    {
+                        var path = $"{country}/{host}";
+                        ping = new PingAdapter(host);
+                        _pings.TryAdd(path, ping);
+                    }
+                    
+                    _ = ping.SendRequest().ContinueWith((reply) => _collectorWrapper.PingResultSend(host, country, reply.Result), stoppingToken);
+                }
         }
     }
 }
