@@ -2,12 +2,11 @@ using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using HSMCommon;
-using HSMPingModule.Extensions;
 using HSMPingModule.Settings;
 
 namespace HSMPingModule.Config;
 
-internal sealed class PingConfig
+internal sealed class ServiceConfig
 {
     private static readonly JsonSerializerOptions _options = new()
     {
@@ -28,37 +27,28 @@ internal sealed class PingConfig
     [JsonIgnore] 
     internal static string ConfigPath { get; } = Path.Combine(Environment.CurrentDirectory, "Config");
 
-    [JsonIgnore] 
-    internal static string ExecutableDirectory { get; }
-
 
     [JsonIgnore] 
-    internal static string Version { get; }
-
-    [JsonIgnore] 
-    internal static string Name { get; }
+    internal static Version Version { get; }
 
 
     public CollectorSettings CollectorSettings { get; private set; }
 
-    public VpnSettings VpnSettings { get; private set; }
+    public ResourceSettings ResourceSettings { get; private set; }
 
 
-    static PingConfig()
+    static ServiceConfig()
     {
         var assembly = Assembly.GetExecutingAssembly().GetName();
 
-        Name = assembly.Name;
-        ExecutableDirectory = Path.GetDirectoryName(Assembly.GetEntryAssembly().Location);
-
-        Version = assembly.GetVersion().RemoveTailZeroes();
+        Version = assembly.Version;
 
         if (!Directory.Exists(ConfigPath))
             FileManager.SafeCreateDirectory(ConfigPath);
     }
 
 
-    public PingConfig(){}
+    public ServiceConfig(){}
 
     
     public void SetUpConfig(IConfigurationRoot configuration)
@@ -66,11 +56,8 @@ internal sealed class PingConfig
         _configuration = configuration;
 
         CollectorSettings = Register<CollectorSettings>(nameof(CollectorSettings));
-        VpnSettings = Register<VpnSettings>(nameof(VpnSettings));
+        ResourceSettings = Register<ResourceSettings>(nameof(ResourceSettings));
     }
-
-
-    internal void ResaveSettings() => File.WriteAllText(_settingsPath, JsonSerializer.Serialize(this, _options));
 
 
     private T Register<T>(string sectionName) where T : class, new()
@@ -82,6 +69,6 @@ internal sealed class PingConfig
     {
         _configuration.Reload();
         CollectorSettings = Register<CollectorSettings>(nameof(CollectorSettings));
-        VpnSettings = Register<VpnSettings>(nameof(VpnSettings));
+        ResourceSettings = Register<ResourceSettings>(nameof(ResourceSettings));
     }
 }

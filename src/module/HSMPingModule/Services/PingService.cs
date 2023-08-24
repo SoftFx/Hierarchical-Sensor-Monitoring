@@ -10,14 +10,13 @@ namespace HSMPingModule.Services;
 internal class PingService : BackgroundService
 {
     private const int PingTimout = 1000;
-
+    private const int Delay = 15;
 
     private readonly DataCollectorWrapper _collectorWrapper;
-    private readonly PingConfig _config;
-    private readonly int _delay = 15;
+    private readonly ServiceConfig _config;
 
 
-    public PingService(IOptionsMonitor<PingConfig> config, DataCollectorWrapper collectorWrapper)
+    public PingService(IOptionsMonitor<ServiceConfig> config, DataCollectorWrapper collectorWrapper)
     {
         _collectorWrapper = collectorWrapper;
         _config = config.CurrentValue;
@@ -25,12 +24,12 @@ internal class PingService : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        var timer = new PeriodicTimer(TimeSpan.FromSeconds(_delay));
+        var timer = new PeriodicTimer(TimeSpan.FromSeconds(Delay));
         while (await timer.WaitForNextTickAsync(stoppingToken))
         {
-            foreach (var country in _config.VpnSettings.Countries.ToList().Distinct())
-                foreach (var host in _config.VpnSettings.WebSites.ToList())
-                    Ping(host).ContinueWith((reply) => _collectorWrapper.PingResultSend(host, country, reply.Result));
+            foreach (var country in _config.ResourceSettings.Countries.ToList().Distinct())
+                foreach (var host in _config.ResourceSettings.WebSites.ToList())
+                    Ping(host).ContinueWith((reply) => _collectorWrapper.PingResultSend(host, country, reply.Result), stoppingToken);
         }
     }
 

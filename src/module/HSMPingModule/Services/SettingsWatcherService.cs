@@ -7,16 +7,15 @@ internal class SettingsWatcherService : BackgroundService
 {
     private static bool _isFired = false;
 
-
-    private readonly IOptionsMonitor<PingConfig> _config;
+    private readonly IOptionsMonitor<ServiceConfig> _config;
     private readonly FileSystemWatcher _watcher;
 
 
-    public SettingsWatcherService(IOptionsMonitor<PingConfig> config)
+    public SettingsWatcherService(IOptionsMonitor<ServiceConfig> config)
     {
         _config = config;
 
-        _watcher = new FileSystemWatcher(PingConfig.ConfigPath, PingConfig.ConfigName)
+        _watcher = new FileSystemWatcher(ServiceConfig.ConfigPath, ServiceConfig.ConfigName)
         {
             NotifyFilter = NotifyFilters.LastWrite
         };

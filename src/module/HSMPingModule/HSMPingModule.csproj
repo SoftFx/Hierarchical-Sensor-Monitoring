@@ -2,7 +2,7 @@
 
     <PropertyGroup>
         <TargetFramework>net7.0</TargetFramework>
-        <Nullable>enable</Nullable>
+        <Nullable>disable</Nullable>
         <ImplicitUsings>enable</ImplicitUsings>
         <UserSecretsId>dotnet-HSMPingModule-71CF568D-B617-46BA-A8F9-6AFE241BF8AE</UserSecretsId>
         <DockerDefaultTargetOS>Linux</DockerDefaultTargetOS>
