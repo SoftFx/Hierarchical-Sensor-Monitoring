@@ -4,7 +4,7 @@ using HSMDataCollector.Core;
 using HSMDataCollector.Options;
 using HSMDataCollector.PublicInterface;
 using HSMPingModule.Config;
-using HSMServer.Extensions;
+using HSMPingModule.Extensions;
 using Microsoft.Extensions.Options;
 
 namespace HSMPingModule.Collector;

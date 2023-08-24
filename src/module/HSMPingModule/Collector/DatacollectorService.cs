@@ -1,14 +1,9 @@
-﻿using HSMServer.BackgroundServices;
-
-namespace HSMPingModule.Collector
+﻿namespace HSMPingModule.Collector
 {
-    internal sealed class DatacollectorService : BaseDelayedBackgroundService
+    internal sealed class DatacollectorService : BackgroundService
     {
         private readonly TimeSpan _initDelay = TimeSpan.FromSeconds(10);
         private readonly DataCollectorWrapper _collector;
-
-
-        public override TimeSpan Delay { get; } = TimeSpan.FromSeconds(5);
 
 
         public DatacollectorService(DataCollectorWrapper collector)
@@ -26,7 +21,5 @@ namespace HSMPingModule.Collector
 
             await _collector.Start();
         }
-
-        protected override Task ServiceAction() => Task.CompletedTask;
     }
 }

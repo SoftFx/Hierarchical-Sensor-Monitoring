@@ -2,8 +2,8 @@ using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using HSMCommon;
+using HSMPingModule.Extensions;
 using HSMPingModule.Settings;
-using HSMServer.Extensions;
 
 namespace HSMPingModule.Config;
 
