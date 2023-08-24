@@ -62,15 +62,17 @@ namespace HSMServer.Core.Model
             PartialLastValue = null;
         }
 
-        internal override void Clear(DateTime to)
+        internal override BaseValue Clear(DateTime to)
         {
-            base.Clear(to);
+            var value = base.Clear(to);
 
             if (_prevValue?.ReceivingTime <= to)
                 _prevValue = null;
 
             if (PartialLastValue?.ReceivingTime <= to)
                 PartialLastValue = null;
+
+            return value;
         }
     }
 }
