@@ -98,7 +98,10 @@ namespace HSMDataCollector.DefaultSensors
         }
 
         public IWindowsCollection AddDiskMonitoringSensors(DiskSensorOptions options = null, DiskBarSensorOptions activeTimeOptions = null) =>
-            AddFreeDiskSpace(options).AddFreeDiskSpacePrediction(options).AddActiveDiskTimeForAllDisksSensors(activeTimeOptions);
+            AddFreeDiskSpace(options).AddFreeDiskSpacePrediction(options).AddActiveDiskTimeSensor(activeTimeOptions);
+
+        public IWindowsCollection AddAllDisksMonitoringSensors(DiskSensorOptions options = null, DiskBarSensorOptions activeTimeOptions = null) =>
+            AddFreeDisksSpace(options).AddFreeDisksSpacePrediction(options).AddActiveDiskTimeForAllDisksSensors(activeTimeOptions);
 
         #endregion
 
