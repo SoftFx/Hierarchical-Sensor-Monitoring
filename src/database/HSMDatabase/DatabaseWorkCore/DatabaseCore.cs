@@ -75,7 +75,7 @@ namespace HSMDatabase.DatabaseWorkCore
             var idBytes = Encoding.UTF8.GetBytes(sensorId.ToString());
 
             foreach (var database in _sensorValuesDatabases.Reverse())
-                if (database.To >= to)
+                if (database.From <= to)
                 {
                     var value = database.GetLatest(maxKey, idBytes);
 

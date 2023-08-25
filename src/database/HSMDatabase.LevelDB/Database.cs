@@ -130,7 +130,7 @@ namespace HSMDatabase.LevelDB
         {
             Iterator iterator = null;
 
-            bool CheckValue() => iterator.IsValid && iterator.Key().StartsWith(prefix);
+            bool CheckValue() => iterator.IsValid && iterator.Key().StartsWith(prefix) && iterator.Key().IsSmallerOrEquals(key);
 
             try
             {
