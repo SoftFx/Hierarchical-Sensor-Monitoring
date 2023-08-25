@@ -1,6 +1,6 @@
 using HSMDataCollector.Alerts;
 using HSMDataCollector.Options;
-using HSMPingModule.Services;
+using HSMPingModule.Settings;
 using HSMSensorDataObjects.SensorRequests;
 
 namespace HSMPingModule.Resourses;
@@ -10,19 +10,23 @@ internal sealed class WebSite
     private readonly InstantSensorOptions _options;
 
 
-    public string HostName { get; set; }
-
     public List<string> Countries { get; set; }
 
-    public TimeSpan TTL { get; set; } = TimeSpan.FromMinutes(1);
+    public TimeSpan? TTL { get; set; }
 
-    public int PingTimeoutValue { get; set; } = PingService.SensorPingTimout;
+    public int? PingTimeoutValue { get; set; }
 
     public InstantSensorOptions GetOptions => _options;
-    
 
-    public WebSite()
+
+    public WebSite(){}
+
+    public WebSite(WebSite webSite)
     {
+        Countries = webSite.Countries ?? ResourceSettings.DefaultSiteNodeSettings.Countries;
+        TTL = webSite.TTL ?? ResourceSettings.DefaultSiteNodeSettings.TTL;
+        PingTimeoutValue = webSite.PingTimeoutValue ?? ResourceSettings.DefaultSiteNodeSettings.PingTimeoutValue;
+
         _options = new()
         {
             TTL = TTL,

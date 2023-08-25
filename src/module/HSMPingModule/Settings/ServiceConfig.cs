@@ -51,18 +51,21 @@ internal sealed class ServiceConfig
     public void SetUpConfig(IConfigurationRoot configuration)
     {
         _configuration = configuration;
-
-        CollectorSettings = Register<CollectorSettings>(nameof(CollectorSettings));
-        ResourceSettings = Register<ResourceSettings>(nameof(ResourceSettings));
+        Read();
     }
-
-
-    private T Register<T>(string sectionName) where T : class, new() => _configuration.GetSection(sectionName).Get<T>() ?? new T();
 
     public void Reload()
     {
         _configuration.Reload();
-        CollectorSettings = Register<CollectorSettings>(nameof(CollectorSettings));
-        ResourceSettings = Register<ResourceSettings>(nameof(ResourceSettings));
+        Read();
+    }
+
+
+    private T Read<T>(string sectionName) where T : class, new() => _configuration.GetSection(sectionName).Get<T>() ?? new T();
+
+    private void Read()
+    {
+        CollectorSettings = Read<CollectorSettings>(nameof(CollectorSettings));
+        ResourceSettings = new (Read<ResourceSettings>(nameof(ResourceSettings)));
     }
 }

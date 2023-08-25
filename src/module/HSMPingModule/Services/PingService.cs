@@ -28,18 +28,18 @@ internal class PingService : BackgroundService
         var timer = new PeriodicTimer(TimeSpan.FromSeconds(Delay));
         while (await timer.WaitForNextTickAsync(stoppingToken))
         {
-            foreach (var website in _config.ResourceSettings.WebSites.ToList().Distinct())
+            foreach (var (hostname, website) in _config.ResourceSettings.WebSites.ToList())
                 foreach (var country in website.Countries)
                 {
                     PingAdapter ping;
-                    var path = $"{website.HostName}/{country}";
+                    var path = $"{hostname}/{country}";
                     if (!_pings.TryGetValue(path, out ping))
                     {
-                        ping = new PingAdapter(website.HostName);
+                        ping = new PingAdapter(hostname);
                         _pings.TryAdd(path, ping);
                     }
                     
-                    _ = ping.SendRequest().ContinueWith((reply) => _collectorWrapper.PingResultSend(website, country, reply), stoppingToken);
+                    _ = ping.SendRequest().ContinueWith((reply) => _collectorWrapper.PingResultSend(website, hostname, country, reply), stoppingToken);
                 }
         }
     }
