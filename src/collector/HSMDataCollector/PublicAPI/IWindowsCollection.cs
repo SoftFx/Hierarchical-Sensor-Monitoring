@@ -28,7 +28,11 @@ namespace HSMDataCollector.PublicInterface
 
         IWindowsCollection AddFreeDisksSpacePrediction(DiskSensorOptions options = null);
 
-        IWindowsCollection AddDiskMonitoringSensors(DiskSensorOptions options = null);
+        IWindowsCollection AddActiveDiskTimeSensor(DiskBarSensorOptions options = null);
+
+        IWindowsCollection AddActiveDiskTimeForAllDisksSensors(DiskBarSensorOptions options = null);
+
+        IWindowsCollection AddDiskMonitoringSensors(DiskSensorOptions options = null, DiskBarSensorOptions activeTimeOptions = null);
 
 
         IWindowsCollection AddWindowsLastUpdate(WindowsInfoSensorOptions options = null);

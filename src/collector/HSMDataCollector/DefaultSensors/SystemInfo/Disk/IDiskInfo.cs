@@ -2,10 +2,10 @@
 {
     internal interface IDiskInfo
     {
-        string Name { get; }
+        long FreeSpaceMb { get; }
 
         long FreeSpace { get; }
 
-        long FreeSpaceMb { get; }
+        string DiskLetter { get; }
     }
 }

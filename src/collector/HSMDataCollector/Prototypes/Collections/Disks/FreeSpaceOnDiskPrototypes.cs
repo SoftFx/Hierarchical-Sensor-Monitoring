@@ -42,7 +42,7 @@ namespace HSMDataCollector.Prototypes
         {
             options = SetWindowsOptions(options);
 
-            _sensorName = string.Format(SensorName, options.DiskInfo.Name);
+            _sensorName = string.Format(SensorName, options.DiskInfo.DiskLetter);
 
             return options;
         }
