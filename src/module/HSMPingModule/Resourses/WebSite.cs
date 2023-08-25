@@ -15,6 +15,8 @@ internal sealed class WebSite
     public TimeSpan? TTL { get; set; }
 
     public int? PingTimeoutValue { get; set; }
+    
+    public int? PingDelay { get; set; }
 
     public InstantSensorOptions GetOptions => _options;
 
@@ -26,7 +28,7 @@ internal sealed class WebSite
         Countries = webSite.Countries ?? ResourceSettings.DefaultSiteNodeSettings.Countries;
         TTL = webSite.TTL ?? ResourceSettings.DefaultSiteNodeSettings.TTL;
         PingTimeoutValue = webSite.PingTimeoutValue ?? ResourceSettings.DefaultSiteNodeSettings.PingTimeoutValue;
-
+        PingDelay = webSite.PingDelay ?? ResourceSettings.DefaultSiteNodeSettings.PingDelay;
         _options = new()
         {
             TTL = TTL,

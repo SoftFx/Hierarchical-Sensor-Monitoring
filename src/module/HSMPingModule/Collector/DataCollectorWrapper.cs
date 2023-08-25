@@ -46,11 +46,9 @@ internal sealed class DataCollectorWrapper : IDisposable
     }
 
 
-    internal async Task PingResultSend(WebSite webSite, string hostname, string country, Task<PingResponse> taskReply)
+    internal async Task PingResultSend(WebSite webSite, string path, Task<PingResponse> taskReply)
     {
         var reply = await taskReply;
-
-        var path = $"{hostname}/{country}";
 
         var sensor = _collector.CreateIntSensor(path, webSite.GetOptions);
 

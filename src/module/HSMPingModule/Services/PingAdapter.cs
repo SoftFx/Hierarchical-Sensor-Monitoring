@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.NetworkInformation;
+using HSMPingModule.Resourses;
 
 namespace HSMPingModule.Services;
 
@@ -9,13 +10,19 @@ internal class PingAdapter : Ping
     private readonly IPAddress[] _ips;
     private readonly PingResponse _dnsException;
     private readonly PingOptions _options = new ();
+    
+    
+    public WebSite WebSite { get; }
+    public string HostName { get; }
 
 
-    public PingAdapter(string host) : base()
+    public PingAdapter(WebSite webSite, string host) : base()
     {
         try
         {
-            _ips = Dns.GetHostAddressesAsync(host).Result;
+            WebSite = webSite;
+            HostName = host;
+            _ips = Dns.GetHostAddressesAsync(HostName).Result;
         }
         catch (Exception ex)
         {
@@ -24,19 +31,19 @@ internal class PingAdapter : Ping
     }
 
 
-    public async Task<PingResponse> SendRequest(int timeout)
+    public async Task<PingResponse> SendRequest()
     {
         if (_dnsException is not null)
             return _dnsException;
 
-        return await Ping(timeout);
+        return await Ping();
     }
 
-    private async Task<PingResponse> Ping(int timeout)
+    private async Task<PingResponse> Ping()
     {
         try
         {
-            return new PingResponse(await SendPingAsync(_ips[0], timeout, _buffer, _options));
+            return new PingResponse(await SendPingAsync(_ips[0], WebSite.PingTimeoutValue.Value, _buffer, _options));
         }
         catch (Exception ex)
         {

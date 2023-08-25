@@ -18,27 +18,26 @@ internal class PingService : BackgroundService
     {
         _collectorWrapper = collectorWrapper;
         _config = config.CurrentValue;
+        
+        foreach (var (hostname, website) in _config.ResourceSettings.WebSites.ToList())
+            foreach (var path in website.Countries.Select(country => $"{hostname}/{country}"))
+                if (!_pings.TryGetValue(path, out _))
+                    _pings.TryAdd(path, new PingAdapter(website, hostname));
     }
 
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        var timer = new PeriodicTimer(TimeSpan.FromSeconds(Delay));
-        while (await timer.WaitForNextTickAsync(stoppingToken))
+        foreach (var (path, ping) in _pings)
         {
-            foreach (var (hostname, website) in _config.ResourceSettings.WebSites.ToList())
-                foreach (var country in website.Countries)
+            _ = Task.Run(async () =>
+            {
+                var timer = new PeriodicTimer(TimeSpan.FromSeconds(ping.WebSite.PingDelay.Value));
+                while (await timer.WaitForNextTickAsync(stoppingToken))
                 {
-                    PingAdapter ping;
-                    var path = $"{hostname}/{country}";
-                    if (!_pings.TryGetValue(path, out ping))
-                    {
-                        ping = new PingAdapter(hostname);
-                        _pings.TryAdd(path, ping);
-                    }
-                    
-                    _ = ping.SendRequest(website.PingTimeoutValue.Value).ContinueWith((reply) => _collectorWrapper.PingResultSend(website, hostname, country, reply), stoppingToken);
+                    _ = ping.SendRequest().ContinueWith((reply) => _collectorWrapper.PingResultSend(ping.WebSite, path, reply), stoppingToken);
                 }
+            }, stoppingToken);
         }
     }
 }
