@@ -13,12 +13,6 @@
     <div class="row">
         <h4>Telegram <i class="fab fa-telegram"></i></h4>
 
-        <h5>Messages settings</h5>
-
-        <form class="mx-4 my-2" method="post" asp-action="@nameof(NotificationsController.UpdateTelegramSettings)">
-            @await Html.PartialAsync("_MessagesSettings")
-        </form>
-
         <div class="my-2">
             <div class="row">
                 <h5 class="col-auto m-0">Accounts</h5>
