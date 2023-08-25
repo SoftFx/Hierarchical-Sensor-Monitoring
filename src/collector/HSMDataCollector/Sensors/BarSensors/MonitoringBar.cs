@@ -33,6 +33,8 @@ namespace HSMDataCollector.DefaultSensors
                     Mean = value;
                     Min = value;
                     Max = value;
+
+                    CountSum(value, 1);
                 }
                 else
                     ApplyNewValue(value);
