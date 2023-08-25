@@ -16,6 +16,8 @@
 
 ## Notifications
 * If the TTL is turned off telegram notification includes $status of received value (Error or Ok) and template of TTL alert
+* Aggregation with equals variables but different constant messages have been fixed
+* **Enable messages** and **Messages delay** for Products and Users temporary disabled. By default **Enable messages** is true and **Messages delay** is 60 sec.
 
 ## Rest API
 * New option **includeTTL** has been added for history requests
