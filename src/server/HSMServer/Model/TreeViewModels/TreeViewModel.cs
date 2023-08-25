@@ -196,12 +196,12 @@ namespace HSMServer.Model.TreeViewModel
                     {
                         AddNewSensorViewModel(model, parent);
 
-                        var root = parent.RootProduct;
-                        if (!root.Notifications.Telegram.Chats.IsEmpty && root.Notifications.AutoSubscription)
-                        {
-                            root.Notifications.Enable(model.Id);
-                            UpdateProductNotificationSettings(root);
-                        }
+                        //var root = parent.RootProduct;
+                        //if (!root.Notifications.Telegram.Chats.IsEmpty && root.Notifications.AutoSubscription)
+                        //{
+                        //    root.Notifications.Enable(model.Id);
+                        //    UpdateProductNotificationSettings(root);
+                        //}
                     }
                     break;
 
