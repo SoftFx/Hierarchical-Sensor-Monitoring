@@ -11,6 +11,8 @@ internal record PingResponse
 
     public string Comment { get; init; }
 
+    public bool IsException { get; set; } = false;
+
 
     public PingResponse(PingReply reply)
     {
@@ -33,5 +35,6 @@ internal record PingResponse
         Status = SensorStatus.Error;
         Comment = exception.Message;
         Value = 0;
+        IsException = true;
     }
 }

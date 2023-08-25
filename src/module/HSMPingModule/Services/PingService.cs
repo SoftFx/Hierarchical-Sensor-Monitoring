@@ -7,8 +7,6 @@ namespace HSMPingModule.Services;
 
 internal class PingService : BackgroundService
 {
-    private const int Delay = 15;
-
     private readonly ConcurrentDictionary<string, PingAdapter> _pings = new ();
     private readonly DataCollectorWrapper _collectorWrapper;
     private readonly ServiceConfig _config;
