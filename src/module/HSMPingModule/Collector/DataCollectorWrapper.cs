@@ -10,7 +10,7 @@ namespace HSMPingModule.Collector;
 
 internal sealed class DataCollectorWrapper : IDisposable
 {
-    private readonly ConcurrentDictionary<string, IInstantValueSensor<int>> _sensors = new ();
+    private readonly ConcurrentDictionary<string, IInstantValueSensor<int>> _sensors = new (){};
     private readonly IInstantValueSensor<string> _exceptionSensor;
     private readonly IDataCollector _collector;
     private readonly ServiceConfig _config;
@@ -55,7 +55,7 @@ internal sealed class DataCollectorWrapper : IDisposable
 
         if (reply.IsException)
         {
-            _exceptionSensor.AddValue(reply.Comment, reply.Status, $"sensor path: {path}");
+            _exceptionSensor.AddValue(reply.Comment, reply.Status, $"Path: {path}");
             return;
         }
         

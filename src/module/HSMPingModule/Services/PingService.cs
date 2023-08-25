@@ -11,12 +11,12 @@ internal class PingService : BackgroundService
     private readonly DataCollectorWrapper _collectorWrapper;
     private readonly ServiceConfig _config;
 
-
     public PingService(IOptionsMonitor<ServiceConfig> config, DataCollectorWrapper collectorWrapper)
     {
         _collectorWrapper = collectorWrapper;
         _config = config.CurrentValue;
-        
+        _config.OnChange += OnChange;
+
         foreach (var (hostname, website) in _config.ResourceSettings.WebSites.ToList())
             foreach (var path in website.Countries.Select(country => $"{hostname}/{country}"))
                 if (!_pings.TryGetValue(path, out _))
@@ -27,15 +27,32 @@ internal class PingService : BackgroundService
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         foreach (var (path, ping) in _pings)
-        {
-            _ = Task.Run(async () =>
-            {
-                var timer = new PeriodicTimer(TimeSpan.FromSeconds(ping.WebSite.PingDelay.Value));
-                while (await timer.WaitForNextTickAsync(stoppingToken))
+            _ = ping.StartPinging(path, _collectorWrapper.PingResultSend);
+        
+    }
+
+
+    private void OnChange()
+    {
+        foreach (var (hostname, website) in _config.ResourceSettings.WebSites.ToList())
+            foreach (var path in website.Countries.Select(country => $"{hostname}/{country}"))
+                if (_pings.TryGetValue(path, out var currentPing) )
                 {
-                    _ = ping.SendRequest().ContinueWith((reply) => _collectorWrapper.PingResultSend(ping.WebSite, path, reply), stoppingToken);
+                    if (!currentPing.WebSite.Equals(website))
+                        if (_pings.TryRemove(path, out currentPing))
+                        {
+                            currentPing.CancellationTokenSource.Cancel();
+                            var newPing = new PingAdapter(website, hostname);
+
+                            if (_pings.TryAdd(path, newPing))
+                                newPing.StartPinging(path, _collectorWrapper.PingResultSend);
+                        }
                 }
-            }, stoppingToken);
-        }
+                else
+                {
+                    var newPing = new PingAdapter(website, hostname);
+                    if (_pings.TryAdd(path, newPing))
+                        newPing.StartPinging(path, _collectorWrapper.PingResultSend);
+                }
     }
 }

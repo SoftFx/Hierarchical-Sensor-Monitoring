@@ -40,4 +40,9 @@ internal sealed class WebSite
             }
         };
     }
+    
+    public bool Equals(WebSite other)
+    {
+        return TTL.Value == other.TTL.Value && PingTimeoutValue.Value == other.PingTimeoutValue.Value && PingDelay.Value == other.PingDelay.Value;
+    }
 }

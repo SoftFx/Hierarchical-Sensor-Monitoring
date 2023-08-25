@@ -32,6 +32,8 @@ internal sealed class ServiceConfig
     internal static Version Version { get; }
 
 
+    internal event Action OnChange;
+    
     public CollectorSettings CollectorSettings { get; private set; }
 
     public ResourceSettings ResourceSettings { get; private set; }
@@ -66,6 +68,8 @@ internal sealed class ServiceConfig
     private void Read()
     {
         CollectorSettings = Read<CollectorSettings>(nameof(CollectorSettings));
+        ResourceSettings.DefaultSiteNodeSettings = null;
         ResourceSettings = new (Read<ResourceSettings>(nameof(ResourceSettings)));
+        OnChange?.Invoke();
     }
 }
