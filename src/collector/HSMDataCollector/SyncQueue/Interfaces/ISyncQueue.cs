@@ -1,4 +1,5 @@
-﻿using System;
+﻿using HSMDataCollector.Core;
+using System;
 using System.Collections.Generic;
 
 namespace HSMDataCollector.SyncQueue
