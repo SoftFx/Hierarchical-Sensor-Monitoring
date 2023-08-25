@@ -7,8 +7,6 @@ namespace HSMPingModule.Services;
 
 internal class PingService : BackgroundService
 {
-    public const int PingTimout = int.MaxValue;
-    public const int SensorPingTimout = 30_000; // 30sec
     private const int Delay = 15;
 
     private readonly ConcurrentDictionary<string, PingAdapter> _pings = new ();
@@ -39,7 +37,7 @@ internal class PingService : BackgroundService
                         _pings.TryAdd(path, ping);
                     }
                     
-                    _ = ping.SendRequest().ContinueWith((reply) => _collectorWrapper.PingResultSend(website, hostname, country, reply), stoppingToken);
+                    _ = ping.SendRequest(website.PingTimeoutValue.Value).ContinueWith((reply) => _collectorWrapper.PingResultSend(website, hostname, country, reply), stoppingToken);
                 }
         }
     }

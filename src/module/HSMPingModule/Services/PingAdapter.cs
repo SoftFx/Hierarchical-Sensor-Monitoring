@@ -24,19 +24,19 @@ internal class PingAdapter : Ping
     }
 
 
-    public async Task<PingResponse> SendRequest()
+    public async Task<PingResponse> SendRequest(int timeout)
     {
         if (_dnsException is not null)
             return _dnsException;
 
-        return await Ping();
+        return await Ping(timeout);
     }
 
-    private async Task<PingResponse> Ping()
+    private async Task<PingResponse> Ping(int timeout)
     {
         try
         {
-            return new PingResponse(await SendPingAsync(_ips[0], PingService.PingTimout, _buffer, _options));
+            return new PingResponse(await SendPingAsync(_ips[0], timeout, _buffer, _options));
         }
         catch (Exception ex)
         {
