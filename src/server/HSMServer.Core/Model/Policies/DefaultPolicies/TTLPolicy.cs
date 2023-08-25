@@ -46,7 +46,7 @@ namespace HSMServer.Core.Model.Policies
         {
             Update(update, sensor);
 
-            _okPolicy.Update(update with { Template = _okPolicy.OkTemplate }, sensor);
+            _okPolicy.Update(update with { Template = _okPolicy.OkTemplate, Icon = null }, sensor);
         }
 
         internal bool HasTimeout(DateTime? time) => !_ttl.IsEmpty && time.HasValue && _ttl.Value.TimeIsUp(time.Value);

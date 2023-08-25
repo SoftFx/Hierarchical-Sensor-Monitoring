@@ -393,7 +393,7 @@ namespace HSMDataCollector.Core
             if (existingSensor is IInstantValueSensor<string> instantValueSensor)
                 return instantValueSensor;
 
-            var sensor = new InstantFileSensor(path, fileName, extension, _queueManager as IValuesQueue, description);
+            var sensor = new InstantFileSensor(path, fileName, extension, _queueManager.Data as IValuesQueue, description);
             AddNewSensor(sensor, path);
 
             return sensor;
@@ -474,7 +474,7 @@ namespace HSMDataCollector.Core
             if (existingSensor is ILastValueSensor<T> lastValueSensor)
                 return lastValueSensor;
 
-            var sensor = new DefaultValueSensor<T>(path, _queueManager as IValuesQueue, defaultValue, description);
+            var sensor = new DefaultValueSensor<T>(path, _queueManager.Data as IValuesQueue, defaultValue, description);
             AddNewSensor(sensor, path);
 
             return sensor;
@@ -587,7 +587,7 @@ namespace HSMDataCollector.Core
             if (existingSensor is IParamsFuncSensor<T, U> typedSensor)
                 return typedSensor;
 
-            OneParamFuncSensor<T, U> sensor = new OneParamFuncSensor<T, U>(path, _queueManager as IValuesQueue, description, interval, function, _logger);
+            OneParamFuncSensor<T, U> sensor = new OneParamFuncSensor<T, U>(path, _queueManager.Data as IValuesQueue, description, interval, function, _logger);
             AddNewSensor(sensor, path);
 
             return sensor;
@@ -601,7 +601,7 @@ namespace HSMDataCollector.Core
             if (existingSensor is INoParamsFuncSensor<T> typedSensor)
                 return typedSensor;
 
-            NoParamsFuncSensor<T> sensor = new NoParamsFuncSensor<T>(path, _queueManager as IValuesQueue, description, interval, function, _logger);
+            NoParamsFuncSensor<T> sensor = new NoParamsFuncSensor<T>(path, _queueManager.Data as IValuesQueue, description, interval, function, _logger);
             AddNewSensor(sensor, path);
 
             return sensor;
