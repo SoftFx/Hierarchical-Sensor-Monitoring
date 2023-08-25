@@ -92,11 +92,6 @@ namespace HSMDataCollector.DefaultSensors
 
         #region Windows
 
-        public IWindowsCollection AddWindowsNeedUpdate(WindowsInfoSensorOptions options)
-        {
-            return ToWindows(new WindowsNeedUpdate(_prototype.WindowsIsNeedUpdate.Get(options)));
-        }
-
         public IWindowsCollection AddWindowsLastUpdate(WindowsInfoSensorOptions options)
         {
             return ToWindows(new WindowsLastUpdate(_prototype.WindowsLastRestart.Get(options)));
@@ -108,7 +103,7 @@ namespace HSMDataCollector.DefaultSensors
         }
 
         public IWindowsCollection AddWindowsInfoMonitoringSensors(WindowsInfoSensorOptions options) =>
-            AddWindowsNeedUpdate(options).AddWindowsLastUpdate(options).AddWindowsLastRestart(options);
+            AddWindowsLastUpdate(options).AddWindowsLastRestart(options);
 
         #endregion
 

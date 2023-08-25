@@ -47,21 +47,41 @@ namespace HSMServer.Model.DataAlerts
                 conditions.Add(new PolicyConditionUpdate(condition.Operation, condition.Property.ToCore(), target));
             }
 
-            (var status, var comment, var icon) = GetActions();
+            (var status, var destination, var comment, var icon) = GetActions();
 
-            return new(Id, conditions, sensitivity, status.ToCore(), comment, icon, IsDisabled);
+            return new()
+            {
+                Id = Id,
+                Conditions = conditions,
+                Sensitivity = sensitivity,
+                Status = status.ToCore(),
+                Template = comment,
+                Icon = icon,
+                IsDisabled = IsDisabled,
+                Destination = destination,
+            };
         }
 
         internal PolicyUpdate ToTimeToLiveUpdate(string initiator)
         {
-            (var status, var comment, var icon) = GetActions();
+            (var status, var destination, var comment, var icon) = GetActions();
 
-            return new(Id, null, null, status.ToCore(), comment, icon, IsDisabled, initiator);
+            return new()
+            {
+                Id = Id,
+                Status = status.ToCore(),
+                Template = comment,
+                Icon = icon,
+                IsDisabled = IsDisabled,
+                Destination = destination,
+                Initiator = initiator,
+            };
         }
 
 
-        private (SensorStatus status, string comment, string icon) GetActions()
+        private (SensorStatus status, PolicyDestinationUpdate destination, string comment, string icon) GetActions()
         {
+            PolicyDestinationUpdate destination = null;
             SensorStatus status = SensorStatus.Ok;
             string comment = null;
             string icon = null;
@@ -69,14 +89,20 @@ namespace HSMServer.Model.DataAlerts
             foreach (var action in Actions)
             {
                 if (action.Action == ActionType.SendNotification)
+                {
+                    bool allChats = action.Chats?.ContainsKey(ActionViewModel.AllChatsId) ?? false;
+                    Dictionary<Guid, string> chats = allChats ? new(0) : action.Chats ?? new(0);
+
+                    destination = new PolicyDestinationUpdate(allChats, chats);
                     comment = action.Comment;
+                }
                 else if (action.Action == ActionType.ShowIcon)
                     icon = action.Icon;
                 else if (action.Action == ActionType.SetStatus)
                     status = SensorStatus.Error;
             }
 
-            return (status, comment, icon);
+            return (status, destination, comment, icon);
         }
     }
 
@@ -88,36 +114,41 @@ namespace HSMServer.Model.DataAlerts
         protected virtual string DefaultIcon { get; }
 
 
-        protected DataAlertViewModel(Policy policy, Core.Model.BaseNodeModel node)
+        protected DataAlertViewModel(Policy policy, NodeViewModel node)
         {
             EntityId = node.Id;
             Id = policy.Id;
 
             IsDisabled = policy.IsDisabled;
 
-            Actions.Add(new ActionViewModel(true)
+            var availableChats = node.GetAllChats();
+
+            Actions.Add(new ActionViewModel(true, availableChats)
             {
                 Action = ActionType.SendNotification,
                 Comment = policy.Template,
-                DisplayComment = node is Core.Model.BaseSensorModel ? policy.RebuildState() : policy.Template
+                Chats = policy.Destination.AllChats ? new Dictionary<Guid, string>(1) { { ActionViewModel.AllChatsId, null } } : policy.Destination.Chats,
+                DisplayComment = node is SensorNodeViewModel ? policy.RebuildState() : policy.Template
             });
 
             if (!string.IsNullOrEmpty(policy.Icon))
-                Actions.Add(new ActionViewModel(false) { Action = ActionType.ShowIcon, Icon = policy.Icon });
+                Actions.Add(new ActionViewModel(false, availableChats) { Action = ActionType.ShowIcon, Icon = policy.Icon });
 
             if (policy.Status == Core.Model.SensorStatus.Error)
-                Actions.Add(new ActionViewModel(false) { Action = ActionType.SetStatus });
+                Actions.Add(new ActionViewModel(false, availableChats) { Action = ActionType.SetStatus });
         }
 
-        public DataAlertViewModel(Guid entityId)
+        public DataAlertViewModel(NodeViewModel node)
         {
-            EntityId = entityId;
+            EntityId = node.Id;
             IsModify = true;
 
             Conditions.Add(CreateCondition(true));
 
-            Actions.Add(new ActionViewModel(true) { Comment = DefaultCommentTemplate });
-            Actions.Add(new ActionViewModel(false) { Action = ActionType.ShowIcon, Icon = DefaultIcon });
+            var availableChats = node.GetAllChats();
+
+            Actions.Add(new ActionViewModel(true, availableChats) { Comment = DefaultCommentTemplate });
+            Actions.Add(new ActionViewModel(false, availableChats) { Action = ActionType.ShowIcon, Icon = DefaultIcon });
         }
 
 
@@ -127,9 +158,9 @@ namespace HSMServer.Model.DataAlerts
 
     public class DataAlertViewModel<T> : DataAlertViewModel where T : Core.Model.BaseValue
     {
-        public DataAlertViewModel(Guid entityId) : base(entityId) { }
+        public DataAlertViewModel(NodeViewModel node) : base(node) { }
 
-        public DataAlertViewModel(Policy<T> policy, Core.Model.BaseSensorModel sensor)
+        public DataAlertViewModel(Policy<T> policy, SensorNodeViewModel sensor)
             : base(policy, sensor)
         {
             for (int i = 0; i < policy.Conditions.Count; ++i)

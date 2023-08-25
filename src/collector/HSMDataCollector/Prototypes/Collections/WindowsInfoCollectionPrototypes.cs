@@ -1,5 +1,8 @@
-﻿using HSMDataCollector.Options;
+﻿using HSMDataCollector.Alerts;
+using HSMDataCollector.Extensions;
+using HSMDataCollector.Options;
 using HSMSensorDataObjects;
+using HSMSensorDataObjects.SensorRequests;
 using System;
 
 namespace HSMDataCollector.Prototypes
@@ -9,19 +12,16 @@ namespace HSMDataCollector.Prototypes
         protected override TimeSpan DefaultPostDataPeriod => TimeSpan.FromHours(12);
 
         protected override string Category => "Windows OS info";
-    }
 
 
-    internal sealed class WindowsIsNeedUpdatePrototype : WindowsInfoMonitoringPrototype
-    {
-        protected override string SensorName => "Is need update";
-
-
-        public WindowsIsNeedUpdatePrototype() : base()
+        public override WindowsInfoSensorOptions Get(WindowsInfoSensorOptions customOptions)
         {
-            Description = "Gets true if the system has not been updated for a half a year";
+            var options = base.Get(customOptions);
 
-            Type = SensorType.BooleanSensor;
+            options.Description = $"{options.Description} Information is read from [**Windows Registry**](https://en.wikipedia.org/wiki/Windows_Registry)." +
+            $" The system check is carried out every {options.PostDataPeriod.ToReadableView()}";
+
+            return options;
         }
     }
 
@@ -33,7 +33,7 @@ namespace HSMDataCollector.Prototypes
 
         public WindowsLastRestartPrototype() : base()
         {
-            Description = "Time since last system restart";
+            Description = "This sensor sends information about the time of the last OS restart.";
 
             Type = SensorType.TimeSpanSensor;
         }
@@ -47,9 +47,13 @@ namespace HSMDataCollector.Prototypes
 
         public WindowsLastUpdatePrototype() : base()
         {
-            Description = "Time since last system update";
+            Description = "This sensor sends information about the time of the last OS update.";
 
             Type = SensorType.TimeSpanSensor;
+
+            Alerts.Add(AlertsFactory.IfValue(AlertOperation.GreaterThan, TimeSpan.FromDays(90))
+                                    .ThenSendNotification($"[$product] $sensor. Windows hasn't been updated for $value")
+                                    .AndSetSensorError().Build());
         }
     }
 }

@@ -64,7 +64,7 @@ namespace HSMDataCollector.Prototypes
 
         public ServiceCommandsPrototype() : base()
         {
-            Description = "This is a special sensor that sends information about various critical commands (Start, Stop, Update, Restart, etc.) and information about the initiator";
+            Description = "This is a special sensor that sends information about various critical commands (Start, Stop, Update, Restart, etc.) and information about the initiator.";
             Type = SensorType.StringSensor;
         }
 
@@ -129,7 +129,7 @@ namespace HSMDataCollector.Prototypes
     internal sealed class ServiceAlivePrototype : MonitoringInstantSensorOptionsPrototype<MonitoringInstantSensorOptions>
     {
         private const string DescriptionTemplate = "This sensor sends DataCollector heartbits with a period of {0}. " +
-            "If TTL triggered and HSM server stopped receiving data, you need to check the status of the connected application";
+            "If TTL triggered and HSM server stopped receiving data, you need to check the status of the connected application.";
 
 
         protected override string Category => ModuleInfoPrototype.ProductInfoCategory;
