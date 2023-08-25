@@ -68,7 +68,7 @@ namespace HSMDataCollector.DefaultSensors
             return ToWindows(new WindowsFreeDiskSpacePrediction(_prototype.WindowsFreeSpaceOnDiskPrediction.Get(options)));
         }
 
-        public IWindowsCollection AddActiveDiskTimeSensor(DiskBarSensorOptions options)
+        public IWindowsCollection AddActiveDiskTime(DiskBarSensorOptions options)
         {
             return ToWindows(new WindowsActiveTimeDisk(_prototype.WindowsActiveTimeDisk.Get(options)));
         }
@@ -89,7 +89,7 @@ namespace HSMDataCollector.DefaultSensors
             return this;
         }
 
-        public IWindowsCollection AddActiveDiskTimeForAllDisksSensors(DiskBarSensorOptions options = null)
+        public IWindowsCollection AddActiveDisksTime(DiskBarSensorOptions options = null)
         {
             foreach (var diskOptions in _prototype.WindowsActiveTimeDisk.GetAllDisksOptions(options))
                 ToWindows(new WindowsActiveTimeDisk(diskOptions));
@@ -98,10 +98,10 @@ namespace HSMDataCollector.DefaultSensors
         }
 
         public IWindowsCollection AddDiskMonitoringSensors(DiskSensorOptions options = null, DiskBarSensorOptions activeTimeOptions = null) =>
-            AddFreeDiskSpace(options).AddFreeDiskSpacePrediction(options).AddActiveDiskTimeSensor(activeTimeOptions);
+            AddFreeDiskSpace(options).AddFreeDiskSpacePrediction(options).AddActiveDiskTime(activeTimeOptions);
 
         public IWindowsCollection AddAllDisksMonitoringSensors(DiskSensorOptions options = null, DiskBarSensorOptions activeTimeOptions = null) =>
-            AddFreeDisksSpace(options).AddFreeDisksSpacePrediction(options).AddActiveDiskTimeForAllDisksSensors(activeTimeOptions);
+            AddFreeDisksSpace(options).AddFreeDisksSpacePrediction(options).AddActiveDisksTime(activeTimeOptions);
 
         #endregion
 

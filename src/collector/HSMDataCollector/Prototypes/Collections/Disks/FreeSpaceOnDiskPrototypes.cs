@@ -30,7 +30,9 @@ namespace HSMDataCollector.Prototypes
 
     internal sealed class WindowsFreeSpaceOnDiskPrototype : FreeSpaceOnDiskPrototype
     {
-        private string _sensorName = "Free space on {0} disk";
+        private const string SensorNameTemplate = "Free space on {0} disk";
+
+        private string _sensorName;
 
 
         protected override string SensorName => _sensorName;
@@ -42,7 +44,7 @@ namespace HSMDataCollector.Prototypes
         {
             options = SetWindowsOptions(options);
 
-            _sensorName = string.Format(SensorName, options.DiskInfo.DiskLetter);
+            _sensorName = string.Format(SensorNameTemplate, options.DiskInfo.DiskLetter);
 
             return options;
         }

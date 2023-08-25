@@ -8,7 +8,10 @@ namespace HSMDataCollector.Prototypes.Collections.Disks
 {
     internal sealed class WindowsActiveTimeDiskPrototype : BarDisksMonitoringPrototype
     {
-        private string _sensorName = "Active time on {0} disk";
+        private const string SensorNameTemplate = "Active time on {0} disk";
+
+        private string _sensorName;
+
 
         protected override string SensorName => _sensorName;
 
@@ -28,7 +31,7 @@ namespace HSMDataCollector.Prototypes.Collections.Disks
         {
             options.SetInfo(new WindowsDiskInfo(options.TargetPath));
 
-            _sensorName = string.Format(SensorName, options.DiskInfo.DiskLetter);
+            _sensorName = string.Format(SensorNameTemplate, options.DiskInfo.DiskLetter);
 
             return options;
         }
