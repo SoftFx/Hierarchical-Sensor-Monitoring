@@ -251,15 +251,9 @@ namespace HSMServer.Core.Cache
 
             if (request.Comment is not null && lastValue is not null)
             {
-                var value = sensor.Storage.GetNewValue(lastValue, request.Value) with
-                {
-                    Status = request.Status, 
-                    Comment = request.Comment,
-                };
+                var value = request.BuildNewValue(sensor.Storage.GetNewValue(lastValue, request.Value));
 
-                var newValue = request.ChangeLast ? value : SetUtcNowTime();
-
-                if (sensor.Storage.TryChangeLastValue(newValue, request.ChangeLast))
+                if (sensor.Storage.TryChangeLastValue(value, request.ChangeLast))
                 {
                     _journalService.AddRecord(new JournalRecordModel(request.Id, request.Initiator ?? System)
                     {
@@ -267,28 +261,10 @@ namespace HSMServer.Core.Cache
                         Enviroment = request.Environment,
                         Path = sensor.FullPath,
                         OldValue = request.BuildComment(lastValue.Status, lastValue.Comment, lastValue.RawValue.ToString()),
-                        NewValue = request.BuildComment(value: newValue.RawValue.ToString())
+                        NewValue = request.BuildComment(value: value.RawValue.ToString())
                     });
-                    
-                    _database.AddSensorValue(newValue.ToEntity(request.Id));
-                }
-                
-                BaseValue SetUtcNowTime()
-                {
-                    var time = DateTime.UtcNow;
 
-                    if (value.Type.IsBar() && value is BarBaseValue barValue)
-                        value = barValue with
-                        {
-                            CloseTime = time,
-                            OpenTime = time,
-                        };
-                
-                    return value with
-                    {
-                        Time = time,
-                        ReceivingTime = time
-                    };
+                    _database.AddSensorValue(value.ToEntity(request.Id));
                 }
             }
         }

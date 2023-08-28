@@ -9,4 +9,35 @@ public sealed record UpdateSensorValueRequestModel(Guid Id, SensorStatus Status,
     public string Environment => ChangeLast ? "Change last value" : "Added new value";
     
     public string BuildComment(SensorStatus? status = null, string comment = null, string value = null) => $"Status - {status ?? Status}; Comment - '{comment ?? Comment}; Value - '{value ?? Value}''";
-};
+
+
+    public BaseValue BuildNewValue(BaseValue value)
+    {
+        value = value with
+        {
+            Status = Status, 
+            Comment = Comment,
+        };
+
+        return ChangeLast ? value : SetUtcNowTime(value);
+    }
+
+
+    private static BaseValue SetUtcNowTime(BaseValue value)
+    {
+        var time = DateTime.UtcNow;
+
+        if (value.Type.IsBar() && value is BarBaseValue barValue)
+            value = barValue with
+            {
+                CloseTime = time,
+                OpenTime = time,
+            };
+                
+        return value with
+        {
+            Time = time,
+            ReceivingTime = time
+        };
+    }
+}
