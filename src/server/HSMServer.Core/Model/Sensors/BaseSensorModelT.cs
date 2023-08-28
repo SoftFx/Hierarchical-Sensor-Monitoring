@@ -31,7 +31,7 @@ namespace HSMServer.Core.Model
 
             if (canStore)
             {
-                if (SaveOnlyUniqueValues)
+                if (AggregateValues)
                     Storage.AggregateValue(valueT);
                 else
                     Storage.AddValue(valueT);

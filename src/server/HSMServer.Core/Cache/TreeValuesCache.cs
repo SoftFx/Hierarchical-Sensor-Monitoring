@@ -371,7 +371,7 @@ namespace HSMServer.Core.Cache
             if (!sensor.HasData)
                 sensor.ResetSensor();
 
-            if (sensor.SaveOnlyUniqueValues)
+            if (sensor.AggregateValues)
             {
                 if (IsBorderedValue(sensor, from.Ticks - 1, out var latestFrom) && from <= latestFrom.LastUpdateTime && latestFrom.LastUpdateTime <= to)
                     from = latestFrom.ReceivingTime;
@@ -441,7 +441,7 @@ namespace HSMServer.Core.Cache
             {
                 var includeTtl = options.HasFlag(RequestOptions.IncludeTtl);
 
-                if (sensor.SaveOnlyUniqueValues && IsBorderedValue(sensor, from.Ticks - 1, out var latest) && (includeTtl || IsNotTimout(latest)))
+                if (sensor.AggregateValues && IsBorderedValue(sensor, from.Ticks - 1, out var latest) && (includeTtl || IsNotTimout(latest)))
                     from = latest.ReceivingTime;
 
                 await foreach (var page in _database.GetSensorValuesPage(sensorId, from, to, count))
