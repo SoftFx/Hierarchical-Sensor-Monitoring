@@ -29,7 +29,7 @@ namespace HSMServer.Core.Model
 
         internal abstract bool TryChangeLastValue(BaseValue value, bool changeLast = false);
 
-        internal abstract BaseValue GetNewValue(BaseValue value, string newValue);
+        internal abstract BaseValue GetEmptyValue();
 
         internal abstract void Clear(DateTime to);
 
@@ -37,7 +37,7 @@ namespace HSMServer.Core.Model
     }
 
 
-    public abstract class ValuesStorage<T> : ValuesStorage where T : BaseValue
+    public abstract class ValuesStorage<T> : ValuesStorage where T : BaseValue, new()
     {
         private readonly ConcurrentQueue<T> _cache = new();
 
@@ -91,34 +91,7 @@ namespace HSMServer.Core.Model
             return false;
         }
 
-        internal override BaseValue GetNewValue(BaseValue value, string newValue)
-        {
-            return value.Type switch
-            {
-                SensorType.Boolean => GetParsedBaseValue<BooleanValue, bool>(newValue, value),
-                SensorType.Integer => GetParsedBaseValue<IntegerValue, int>(newValue, value),
-                SensorType.Double => GetParsedBaseValue<DoubleValue, double>(newValue, value),
-                SensorType.String => GetParsedBaseValue<StringValue, string>(newValue, value),
-                SensorType.TimeSpan => GetParsedBaseValue<TimeSpanValue, TimeSpan>(newValue, value),
-                SensorType.Version => GetParsedBaseValue<VersionValue, Version>(newValue, value),
-                _ => value
-            };
-
-
-            BaseValue GetParsedBaseValue<TU, TK>(string value, BaseValue oldVal) where TU : BaseValue<TK>
-            {
-                var currentValue = (TU)oldVal;
-                
-                if (currentValue.TryParseValue(value, out var parsedValue))
-                    currentValue = currentValue with
-                    {
-                        Value = parsedValue
-                    };
-
-                return currentValue;
-            }
-        }
-
+        internal override BaseValue GetEmptyValue() => new T();
 
         internal override List<BaseValue> GetValues(int count) =>
             _cache.Take(count).Select(v => (BaseValue)v).ToList();

@@ -55,6 +55,8 @@ namespace HSMServer.Core.Model
 
         [JsonIgnore]
         public virtual string ShortInfo { get; }
+        
+        public abstract BaseValue TrySetValue(string str);
 
 
         internal SensorValueEntity ToEntity(Guid sensorId) =>
@@ -77,5 +79,16 @@ namespace HSMServer.Core.Model
         public override object RawValue => Value;
 
         public abstract bool TryParseValue(string value, out T parsedValue);
+
+        public override BaseValue TrySetValue(string newValue)
+        {
+            if (TryParseValue(newValue, out var parsedValue))
+                return this with
+                {
+                    Value = parsedValue
+                };
+
+            return this;
+        }
     }
 }

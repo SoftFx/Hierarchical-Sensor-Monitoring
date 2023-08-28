@@ -251,7 +251,7 @@ namespace HSMServer.Core.Cache
 
             if (request.Comment is not null && lastValue is not null)
             {
-                var value = request.BuildNewValue(sensor.Storage.GetNewValue(lastValue, request.Value));
+                var value = request.BuildNewValue(sensor.Storage.GetEmptyValue(), lastValue);
 
                 if (sensor.Storage.TryChangeLastValue(value, request.ChangeLast))
                 {
