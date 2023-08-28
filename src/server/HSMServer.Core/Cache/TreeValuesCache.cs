@@ -257,7 +257,7 @@ namespace HSMServer.Core.Cache
                     Comment = request.Comment,
                 };
 
-                var newValue = request.ChangeLast? value : SetUtcNowTime();
+                var newValue = request.ChangeLast ? value : SetUtcNowTime();
 
                 if (sensor.Storage.TryChangeLastValue(newValue, request.ChangeLast))
                 {

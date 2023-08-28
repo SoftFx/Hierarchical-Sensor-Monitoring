@@ -76,16 +76,6 @@ namespace HSMServer.Core.Model
 
         public override object RawValue => Value;
 
-        public virtual bool TryParseValue(string value, out T parsedValue)
-        {
-            if (string.IsNullOrEmpty(value))
-            {
-                parsedValue = Value;
-                return true;
-            }
-            
-            parsedValue = default;
-            return false;
-        }
+        public abstract bool TryParseValue(string value, out T parsedValue);
     }
 }

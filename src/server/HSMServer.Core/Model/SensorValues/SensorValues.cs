@@ -1,5 +1,7 @@
 ﻿using System;
 using System.IO;
+using System.Runtime.InteropServices.JavaScript;
+using NLog.Time;
 
 namespace HSMServer.Core.Model
 {
@@ -7,7 +9,7 @@ namespace HSMServer.Core.Model
     {
         public override SensorType Type => SensorType.Boolean;
 
-        public override bool TryParseValue(string value, out bool parsedValue) => bool.TryParse(value, out parsedValue) || base.TryParseValue(value, out parsedValue);
+        public override bool TryParseValue(string value, out bool parsedValue) => bool.TryParse(value, out parsedValue);
     }
 
 
@@ -15,7 +17,7 @@ namespace HSMServer.Core.Model
     {
         public override SensorType Type => SensorType.Integer;
 
-        public override bool TryParseValue(string value, out int parsedValue) => int.TryParse(value, out parsedValue) || base.TryParseValue(value, out parsedValue);
+        public override bool TryParseValue(string value, out int parsedValue) => int.TryParse(value, out parsedValue);
     }
 
 
@@ -23,7 +25,7 @@ namespace HSMServer.Core.Model
     {
         public override SensorType Type => SensorType.Double;
 
-        public override bool TryParseValue(string value, out double parsedValue) => double.TryParse(value, out parsedValue) || base.TryParseValue(value, out parsedValue);
+        public override bool TryParseValue(string value, out double parsedValue) => double.TryParse(value, out parsedValue);
     }
 
 
@@ -33,13 +35,9 @@ namespace HSMServer.Core.Model
 
         public override bool TryParseValue(string value, out string parsedValue)
         {
-            if (!(string.IsNullOrEmpty(value) || string.IsNullOrWhiteSpace(value)))
-            {
-                parsedValue = value;
-                return true;
-            }
+            parsedValue = value;
 
-            return base.TryParseValue(value, out parsedValue);
+            return !string.IsNullOrWhiteSpace(value);
         }
     }
 
@@ -50,7 +48,7 @@ namespace HSMServer.Core.Model
 
         public override object RawValue => Value.Ticks;
 
-        public override bool TryParseValue(string value, out TimeSpan parsedValue) => TimeSpan.TryParse(value, out parsedValue) || base.TryParseValue(value, out parsedValue);
+        public override bool TryParseValue(string value, out TimeSpan parsedValue) => TimeSpan.TryParse(value, out parsedValue);
     }
 
 
@@ -60,7 +58,7 @@ namespace HSMServer.Core.Model
 
         public override string ShortInfo => Value.Revision == 0 ? Value.ToString(3) : Value.ToString();
         
-        public override bool TryParseValue(string value, out Version parsedValue) => Version.TryParse(value, out parsedValue) || base.TryParseValue(value, out parsedValue);
+        public override bool TryParseValue(string value, out Version parsedValue) => Version.TryParse(value, out parsedValue);
     }
 
 
@@ -79,6 +77,12 @@ namespace HSMServer.Core.Model
         public override SensorType Type => SensorType.File;
 
         public override string ShortInfo => GetShortDescription();
+
+        public override bool TryParseValue(string value, out byte[] parsedValue)
+        {
+            parsedValue = Array.Empty<byte>();
+            return false;
+        }
 
 
         private string GetShortDescription()
