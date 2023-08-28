@@ -10,7 +10,7 @@
         public byte State { get; init; }
 
 
-        public bool SaveOnlyUniqueValues { get; init; }
+        public bool AggregateValues { get; init; }
 
         public int? OriginalUnit { get; init; }
 

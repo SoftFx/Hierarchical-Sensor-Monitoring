@@ -68,6 +68,25 @@ namespace HSMDatabase.DatabaseWorkCore
 
         #region Fill Sensors (start app)
 
+
+        public byte[] GetLatestValue(Guid sensorId, long to)
+        {
+            var maxKey = BuildSensorValueKey(sensorId.ToString(), to);
+            var idBytes = Encoding.UTF8.GetBytes(sensorId.ToString());
+
+            foreach (var database in _sensorValuesDatabases.Reverse())
+                if (database.From <= to)
+                {
+                    var value = database.GetLatest(maxKey, idBytes);
+
+                    if (value is not null)
+                        return value;
+                }
+
+            return null;
+        }
+
+
         public Dictionary<Guid, byte[]> GetLatestValues(Dictionary<Guid, long> sensors)
         {
             var orderedList = sensors.OrderBy(u => u.Value).ToList();

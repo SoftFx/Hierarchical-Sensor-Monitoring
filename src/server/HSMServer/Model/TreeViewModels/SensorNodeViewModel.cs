@@ -61,7 +61,7 @@ namespace HSMServer.Model.TreeViewModel
             UpdateTime = model.LastUpdate;
             Status = model.Status.ToClient();
             SelectedUnit = model.OriginalUnit;
-            SaveOnlyUniqueValues = model.SaveOnlyUniqueValues;
+            SaveOnlyUniqueValues = model.AggregateValues;
 
             if (State is SensorState.Muted)
                 ValidationError = GetMutedErrorTooltip(model.EndOfMuting);

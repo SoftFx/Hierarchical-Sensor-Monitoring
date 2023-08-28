@@ -361,19 +361,48 @@ namespace HSMServer.Core.Cache
                 return;
 
             var from = _snapshot.Sensors[request.Id].History.From;
+            var to = request.To;
 
-            if (from > request.To)
+            if (from > to)
                 return;
 
-            sensor.Storage.Clear(request.To);
+            sensor.Storage.Clear(to);
 
             if (!sensor.HasData)
                 sensor.ResetSensor();
 
-            _database.ClearSensorValues(sensor.Id.ToString(), from, request.To);
-            _snapshot.Sensors[request.Id].History.From = request.To;
+            if (sensor.AggregateValues)
+            {
+                if (IsBorderedValue(sensor, from.Ticks - 1, out var latestFrom) && from <= latestFrom.LastUpdateTime && latestFrom.LastUpdateTime <= to)
+                    from = latestFrom.ReceivingTime;
+
+                if (IsBorderedValue(sensor, to.Ticks, out var latestTo))
+                    to = latestTo.ReceivingTime.AddTicks(-1);
+
+                if (from > to)
+                    return;
+            }
+
+            _database.ClearSensorValues(sensor.Id.ToString(), from, to);
+            _snapshot.Sensors[request.Id].History.From = to;
 
             SensorUpdateView(sensor);
+        }
+
+        private bool IsBorderedValue(BaseSensorModel sensor, long pointTicks, out BaseValue latest)
+        {
+            var bytes = _database.GetLatestValue(sensor.Id, pointTicks); // get prev pointTicks value
+
+            latest = null;
+
+            if (bytes is not null)
+            {
+                latest = sensor.Convert(bytes);
+
+                return latest.ReceivingTime.Ticks <= pointTicks && pointTicks <= latest.LastUpdateTime.Ticks;
+            }
+
+            return false;
         }
 
 
@@ -406,16 +435,18 @@ namespace HSMServer.Core.Cache
 
         public async IAsyncEnumerable<List<BaseValue>> GetSensorValuesPage(Guid sensorId, DateTime from, DateTime to, int count, RequestOptions options = default)
         {
-            static bool IsNotTimout(BaseValue value) => !value.IsTimeout;
+            bool IsNotTimout(BaseValue value) => !value.IsTimeout;
 
             if (_sensors.TryGetValue(sensorId, out var sensor))
             {
-                var pages = _database.GetSensorValuesPage(sensorId, from, to, count);
                 var includeTtl = options.HasFlag(RequestOptions.IncludeTtl);
 
-                await foreach (var page in pages)
+                if (sensor.AggregateValues && IsBorderedValue(sensor, from.Ticks - 1, out var latest) && (includeTtl || IsNotTimout(latest)))
+                    from = latest.ReceivingTime;
+
+                await foreach (var page in _database.GetSensorValuesPage(sensorId, from, to, count))
                 {
-                    var convertedValues = sensor.ConvertValues(page);
+                    var convertedValues = sensor.Convert(page);
 
                     yield return (includeTtl ? convertedValues : convertedValues.Where(IsNotTimout)).ToList();
                 }

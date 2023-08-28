@@ -44,6 +44,7 @@ namespace HSMServer.Core
                     IsTimeout = true,
                     Time = DateTime.UtcNow,
                     ReceivingTime = DateTime.UtcNow,
+                    AggregatedValuesCount = 1,
                     Comment = $"{BaseSensorModel.TimeoutComment} - {sensor.LastUpdate.ToDefaultFormat()}, TTL = {new TimeSpan(ttl)}"
                 };
             }

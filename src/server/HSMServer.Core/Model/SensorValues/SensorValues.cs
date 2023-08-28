@@ -60,14 +60,6 @@ namespace HSMServer.Core.Model
         public override string ShortInfo => GetShortDescription();
 
 
-        private string GetShortDescription()
-        {
-            string sizeString = FileSizeToNormalString();
-            string fileNameString = GetFileNameString();
-
-            return $"File size: {sizeString}. {fileNameString}";
-        }
-
         public string FileSizeToNormalString()
         {
             const int maxGBCounter = 3;
@@ -87,6 +79,16 @@ namespace HSMServer.Core.Model
             };
 
             return $"{size:F2} {units}";
+        }
+
+        protected override bool IsEqual(BaseValue value) => false;
+
+        private string GetShortDescription()
+        {
+            string sizeString = FileSizeToNormalString();
+            string fileNameString = GetFileNameString();
+
+            return $"File size: {sizeString}. {fileNameString}";
         }
 
         private string GetFileNameString()

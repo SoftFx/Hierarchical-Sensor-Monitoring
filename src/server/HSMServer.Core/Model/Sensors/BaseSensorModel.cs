@@ -55,7 +55,7 @@ namespace HSMServer.Core.Model
         public abstract SensorType Type { get; }
 
 
-        public bool SaveOnlyUniqueValues { get; private set; }
+        public bool AggregateValues { get; private set; }
 
         public Integration Integration { get; private set; }
 
@@ -82,7 +82,7 @@ namespace HSMServer.Core.Model
         public bool ShouldDestroy => Settings.SelfDestroy.Value?.TimeIsUp(LastUpdate) ?? false;
 
 
-        public DateTime LastUpdate => Storage.LastValue?.ReceivingTime ?? DateTime.MinValue;
+        public DateTime LastUpdate => Storage.LastValue?.LastUpdateTime ?? DateTime.MinValue;
 
         public BaseValue LastDbValue => Storage.LastDbValue;
 
@@ -105,7 +105,7 @@ namespace HSMServer.Core.Model
             State = (SensorState)entity.State;
             OriginalUnit = (Unit?)entity.OriginalUnit;
             Integration = (Integration)entity.Integration;
-            SaveOnlyUniqueValues = entity.SaveOnlyUniqueValues;
+            AggregateValues = entity.AggregateValues;
             EndOfMuting = entity.EndOfMuting > 0L ? new DateTime(entity.EndOfMuting) : null;
 
             Policies.Attach(this);
@@ -118,7 +118,10 @@ namespace HSMServer.Core.Model
 
         internal abstract void AddDbValue(byte[] bytes);
 
-        internal abstract IEnumerable<BaseValue> ConvertValues(List<byte[]> valuesBytes);
+
+        internal abstract IEnumerable<BaseValue> Convert(List<byte[]> valuesBytes);
+
+        internal abstract BaseValue Convert(byte[] bytes);
 
 
         internal override BaseNodeModel AddParent(ProductModel parent)
@@ -138,7 +141,7 @@ namespace HSMServer.Core.Model
             Integration = UpdateProperty(Integration, update.Integration ?? Integration, update.Initiator);
             EndOfMuting = UpdateProperty(EndOfMuting, update.EndOfMutingPeriod, update.Initiator, "End of muting");
             OriginalUnit = UpdateProperty(OriginalUnit, update.SelectedUnit ?? OriginalUnit, update.Initiator, "Unit");
-            SaveOnlyUniqueValues = UpdateProperty(SaveOnlyUniqueValues, update.SaveOnlyUniqueValues ?? SaveOnlyUniqueValues, update.Initiator, "Save only unique values");
+            AggregateValues = UpdateProperty(AggregateValues, update.SaveOnlyUniqueValues ?? AggregateValues, update.Initiator, "Save only unique values");
 
             if (State == SensorState.Available)
                 EndOfMuting = null;
@@ -165,7 +168,7 @@ namespace HSMServer.Core.Model
             State = (byte)State,
             Integration = (int)Integration,
             OriginalUnit = (int?)OriginalUnit,
-            SaveOnlyUniqueValues = SaveOnlyUniqueValues,
+            AggregateValues = AggregateValues,
             Policies = Policies.Ids.Select(u => u.ToString()).ToList(),
             EndOfMuting = EndOfMuting?.Ticks ?? 0L,
             Settings = Settings.ToEntity(),

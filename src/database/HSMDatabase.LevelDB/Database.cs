@@ -126,6 +126,36 @@ namespace HSMDatabase.LevelDB
             }
         }
 
+        public byte[] GetLatest(byte[] key, byte[] prefix)
+        {
+            Iterator iterator = null;
+
+            bool CheckValue() => iterator.IsValid && iterator.Key().StartsWith(prefix) && iterator.Key().IsSmallerOrEquals(key);
+
+            try
+            {
+                iterator = _database.CreateIterator(_iteratorOptions);
+
+                iterator.Seek(key);
+
+                if (CheckValue())
+                    return iterator.Value();
+
+                iterator.Prev();
+
+                return CheckValue() ? iterator.Value() : null;
+            }
+            catch (Exception e)
+            {
+                throw new ServerDatabaseException(e.Message, e);
+            }
+            finally
+            {
+                iterator?.Dispose();
+            }
+        }
+
+
         public IEnumerable<byte[]> GetValueFromTo(byte[] from, byte[] to)
         {
             Iterator iterator = null;
