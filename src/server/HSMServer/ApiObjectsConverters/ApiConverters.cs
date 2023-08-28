@@ -359,6 +359,7 @@ namespace HSMServer.ApiObjectsConverters
                 HSMSensorDataObjects.SensorRequests.Unit.MB => Core.Model.Unit.MB,
                 HSMSensorDataObjects.SensorRequests.Unit.GB => Core.Model.Unit.GB,
                 HSMSensorDataObjects.SensorRequests.Unit.Percents => Core.Model.Unit.Percents,
+                HSMSensorDataObjects.SensorRequests.Unit.Seconds => Core.Model.Unit.Seconds,
                 _ => throw new NotImplementedException(),
             };
     }
