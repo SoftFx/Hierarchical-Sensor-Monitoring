@@ -11,7 +11,7 @@ namespace HSMPingModule.Collector;
 
 internal sealed class DataCollectorService : BackgroundService, IDataCollectorService, IDisposable
 {
-    private readonly ConcurrentDictionary<string, IInstantValueSensor<int>> _sensors = new ();
+    private readonly ConcurrentDictionary<string, IInstantValueSensor<double>> _sensors = new ();
     private readonly IInstantValueSensor<string> _exceptionSensor;
     private readonly IDataCollector _collector;
     private readonly ServiceConfig _config;
@@ -79,7 +79,7 @@ internal sealed class DataCollectorService : BackgroundService, IDataCollectorSe
             return;
         }
 
-        var sensor = _collector.CreateIntSensor(path, webSite.GetOptions);
+        var sensor = _collector.CreateDoubleSensor(path, webSite.GetOptions);
 
         sensor.AddValue(reply.Value, reply.Status, reply.Comment);
 

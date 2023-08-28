@@ -14,7 +14,7 @@ internal sealed class WebSite
 
     public TimeSpan? TTL { get; set; }
 
-    public int? PingTimeoutValue { get; set; }
+    public double? PingTimeoutValue { get; set; }
     
     public int? PingDelay { get; set; }
 
@@ -37,7 +37,8 @@ internal sealed class WebSite
             {
                 AlertsFactory.IfValue(AlertOperation.GreaterThan, PingTimeoutValue).ThenSetIcon("🤣").AndSendNotification("$product $path ping timeout").Build(),
                 AlertsFactory.IfStatus(AlertOperation.IsError).ThenSetIcon("❌").Build()
-            }
+            },
+            SensorUnit = Unit.Seconds
         };
     }
     
