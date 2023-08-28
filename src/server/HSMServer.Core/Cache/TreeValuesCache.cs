@@ -391,7 +391,7 @@ namespace HSMServer.Core.Cache
 
         private bool IsBorderedValue(BaseSensorModel sensor, long pointTicks, out BaseValue latest)
         {
-            var bytes = _database.GetLatestValue(sensor.Id, pointTicks); // get prev from value
+            var bytes = _database.GetLatestValue(sensor.Id, pointTicks); // get prev pointTicks value
 
             latest = null;
 
