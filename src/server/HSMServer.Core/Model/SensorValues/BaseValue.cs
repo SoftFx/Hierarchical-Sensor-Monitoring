@@ -66,7 +66,7 @@ namespace HSMServer.Core.Model
         public virtual string ShortInfo { get; }
 
 
-        internal bool TryUpdate(BaseValue value)
+        internal bool TryAggregateValue(BaseValue value)
         {
             if (IsEqual(value))
             {

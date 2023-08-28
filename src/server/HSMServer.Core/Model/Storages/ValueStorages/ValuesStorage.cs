@@ -71,9 +71,9 @@ namespace HSMServer.Core.Model
         }
 
 
-        internal virtual void AddOrUpdateValue(T value)
+        internal virtual void AggregateValue(T value)
         {
-            if (LastValue is null || LastTimeout?.ReceivingTime > LastValue.ReceivingTime || !LastValue.TryUpdate(value))
+            if (LastValue is null || LastTimeout?.ReceivingTime > LastValue.ReceivingTime || !LastValue.TryAggregateValue(value))
                 AddValue(value);
         }
 
