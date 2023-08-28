@@ -22,6 +22,9 @@ namespace HSMDatabase.AccessManager.DatabaseEntities
         public string Description { get; init; }
 
 
+
+        public ChangeInfoNodeEntity ChangeInfo { get; init; }
+
         public PolicyEntity TTLPolicy { get; init; }
     }
 }
