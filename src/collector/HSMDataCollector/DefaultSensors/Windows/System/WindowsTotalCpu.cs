@@ -8,7 +8,7 @@ namespace HSMDataCollector.DefaultSensors.Windows
 
         protected override string CounterName => "% Processor Time";
 
-        protected override string InstanceName => "_Total";
+        protected override string InstanceName => TotalInstance;
 
 
 

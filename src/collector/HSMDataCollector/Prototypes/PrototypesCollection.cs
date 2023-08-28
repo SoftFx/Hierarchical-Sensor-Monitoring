@@ -1,4 +1,5 @@
 ﻿using HSMDataCollector.Prototypes;
+using HSMDataCollector.Prototypes.Collections.Disks;
 
 namespace HSMDataCollector.Options
 {
@@ -25,6 +26,8 @@ namespace HSMDataCollector.Options
         internal WindowsFreeSpaceOnDiskPredictionPrototype WindowsFreeSpaceOnDiskPrediction { get; }
 
         internal WindowsFreeSpaceOnDiskPrototype WindowsFreeSpaceOnDisk { get; }
+
+        internal WindowsActiveTimeDiskPrototype WindowsActiveTimeDisk { get; }
 
 
         internal UnixFreeSpaceOnDiskPredictionPrototype UnixFreeSpaceOnDiskPrediction { get; }
@@ -76,6 +79,7 @@ namespace HSMDataCollector.Options
 
             WindowsFreeSpaceOnDiskPrediction = Register<WindowsFreeSpaceOnDiskPredictionPrototype>();
             WindowsFreeSpaceOnDisk = Register<WindowsFreeSpaceOnDiskPrototype>();
+            WindowsActiveTimeDisk = Register<WindowsActiveTimeDiskPrototype>();
 
             UnixFreeSpaceOnDiskPrediction = Register<UnixFreeSpaceOnDiskPredictionPrototype>();
             UnixFreeSpaceOnDisk = Register<UnixFreeSpaceOnDiskPrototype>();

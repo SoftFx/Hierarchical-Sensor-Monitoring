@@ -7,10 +7,11 @@ namespace HSMDataCollector.DefaultSensors.SystemInfo
         private const string AvailableSpaceCommand = @"df --output=avail / | sed 1d"; // get available space without header in /
 
 
-        public string Name { get; }
-
         public long FreeSpace => long.TryParse(AvailableSpaceCommand.BashExecute(), out var availableSpace) ? availableSpace : 0L;
 
         public long FreeSpaceMb => FreeSpace.KilobytesToMegabytes();
+
+
+        public string DiskLetter { get; }
     }
 }

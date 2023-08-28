@@ -7,9 +7,53 @@ using System.IO;
 
 namespace HSMDataCollector.Prototypes
 {
+    internal abstract class BarDisksMonitoringPrototype : BarSensorOptionsPrototype<DiskBarSensorOptions>
+    {
+        internal const string BaseDescription = "The sensor sends information about {0} with a period of {1}. The information is read using " +
+            "[**Performance counter**](https://learn.microsoft.com/en-us/dotnet/api/system.diagnostics.performancecounter?view=netframework-4.7.2) by path *PhysicalDisk/% Disk Time*";
+
+
+        protected override string Category => DisksMonitoringPrototype.DiskCategory;
+
+
+        protected abstract DiskBarSensorOptions SetDiskInfo(DiskBarSensorOptions options);
+
+        public override DiskBarSensorOptions Get(DiskBarSensorOptions customOptions)
+        {
+            var options = base.Get(customOptions);
+
+            options.TargetPath = customOptions?.TargetPath ?? DiskSensorOptions.DefaultTargetPath;
+
+            options = SetDiskInfo(options);
+
+            options.Path = DefaultPrototype.BuildDefaultPath(Category, SensorName);
+            options.Description = string.Format(BaseDescription, SensorName, options.PostDataPeriod.ToReadableView());
+
+            return options;
+        }
+
+
+        internal IEnumerable<DiskBarSensorOptions> GetAllDisksOptions(DiskBarSensorOptions userOptions)
+        {
+            var prototype = Get(userOptions);
+
+            foreach (var drive in DriveInfo.GetDrives())
+            {
+                if (drive.DriveType == DriveType.Fixed)
+                {
+                    prototype.TargetPath = drive.Name;
+
+                    yield return Get(prototype);
+                }
+            }
+        }
+    }
+
+
     internal abstract class DisksMonitoringPrototype : MonitoringInstantSensorOptionsPrototype<DiskSensorOptions>
     {
-        private const string BaseDescription = "The sensor sends information about {0} with a period of {1}. The information is read using {2}.";
+        internal const string BaseDescription = "The sensor sends information about {0} with a period of {1}. The information is read using {2}.";
+        internal const string DiskCategory = "Disks monitoring";
 
         protected const string WindowsDescription = "[**Disk info**](https://learn.microsoft.com/en-us/dotnet/api/system.io.driveinfo?view=netframework-4.7.2) class";
         protected const string UnixDescription = "[**df**](https://www.ibm.com/docs/en/aix/7.2?topic=d-df-command) command";
@@ -17,7 +61,7 @@ namespace HSMDataCollector.Prototypes
 
         protected override TimeSpan DefaultPostDataPeriod => TimeSpan.FromMinutes(5);
 
-        protected override string Category => "Disks monitoring";
+        protected override string Category => DiskCategory;
 
 
         protected abstract string OsDiskInfo { get; }
