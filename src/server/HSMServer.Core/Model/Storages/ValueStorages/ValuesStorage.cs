@@ -90,7 +90,7 @@ namespace HSMServer.Core.Model
 
         internal override BaseValue Clear(DateTime to)
         {
-            var lastPop = _cache.LastOrDefault();
+            T lastPop = null;
 
             while (_cache.FirstOrDefault()?.LastUpdateTime <= to)
                 _cache.TryDequeue(out lastPop);

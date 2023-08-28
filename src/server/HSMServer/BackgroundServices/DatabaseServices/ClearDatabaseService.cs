@@ -1,7 +1,6 @@
 ﻿using HSMServer.Core.Cache;
 using System;
 using System.Linq;
-using System.Threading;
 using System.Threading.Tasks;
 
 namespace HSMServer.BackgroundServices

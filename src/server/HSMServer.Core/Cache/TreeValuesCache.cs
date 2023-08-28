@@ -371,12 +371,12 @@ namespace HSMServer.Core.Cache
             if (!sensor.HasData)
                 sensor.ResetSensor();
 
-            if (sensor.SaveOnlyUniqueValues)
+            if (sensor.SaveOnlyUniqueValues && lastPop is not null)
             {
                 var oldest = sensor.Storage.OldestValue;
 
-                from = from > lastPop.ReceivingTime ? lastPop.ReceivingTime : from;
-                to = oldest.ReceivingTime < to ? oldest.ReceivingTime.AddTicks(-1) : to;
+                from = from > lastPop?.ReceivingTime ? lastPop.ReceivingTime : from;
+                to = oldest?.ReceivingTime < to ? oldest.ReceivingTime.AddTicks(-1) : to;
             }
 
             _database.ClearSensorValues(sensor.Id.ToString(), from, to);
