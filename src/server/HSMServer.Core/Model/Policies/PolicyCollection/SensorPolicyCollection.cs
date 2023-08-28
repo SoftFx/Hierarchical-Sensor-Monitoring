@@ -239,7 +239,7 @@ namespace HSMServer.Core.Model.Policies
                 Id = Guid.NewGuid(),
                 Status = SensorStatus.Ok,
                 Template = $"$prevStatus->$status [$product]$path = $comment",
-                Destination = new(false, connectedChats),
+                Destination = new(true, connectedChats),
                 Conditions = new(1)
                 {
                     new PolicyConditionUpdate(
