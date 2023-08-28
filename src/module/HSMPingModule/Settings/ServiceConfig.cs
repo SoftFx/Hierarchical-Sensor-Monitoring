@@ -8,13 +8,6 @@ namespace HSMPingModule.Config;
 
 internal sealed class ServiceConfig
 {
-    private static readonly JsonSerializerOptions _options = new()
-    {
-        WriteIndented = true,
-    };
-
-    private readonly string _settingsPath = Path.Combine(ConfigPath, ConfigName);
-
     private IConfigurationRoot _configuration;
 
 
