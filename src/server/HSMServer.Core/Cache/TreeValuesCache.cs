@@ -466,7 +466,8 @@ namespace HSMServer.Core.Cache
                 sensor = SensorModelFactory.Build(entity);
                 parentProduct.AddSensor(sensor);
 
-                sensor.Policies.AddDefaultSensors();
+                var root = GetProductByName(sensor.RootProductName);
+                sensor.Policies.AddDefaultSensors(root?.NotificationsSettings?.TelegramSettings?.Chats?.ToDictionary(u => new Guid(u.SystemId), v => v.Name));
 
                 AddSensor(sensor);
                 UpdateProduct(parentProduct);

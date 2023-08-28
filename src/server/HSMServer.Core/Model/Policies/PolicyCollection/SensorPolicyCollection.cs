@@ -26,7 +26,7 @@ namespace HSMServer.Core.Model.Policies
 
         internal abstract void Attach(BaseSensorModel sensor);
 
-        internal abstract void AddDefaultSensors();
+        internal abstract void AddDefaultSensors(Dictionary<Guid, string> connectedChats);
 
 
         internal void Reset()
@@ -230,15 +230,16 @@ namespace HSMServer.Core.Model.Policies
                 }
         }
 
-        internal override void AddDefaultSensors()
+        internal override void AddDefaultSensors(Dictionary<Guid, string> connectedChats)
         {
             var policy = new PolicyType();
+
             var statusUpdate = new PolicyUpdate
             {
                 Id = Guid.NewGuid(),
                 Status = SensorStatus.Ok,
                 Template = $"$prevStatus->$status [$product]$path = $comment",
-                Destination = new(true, new(0)),
+                Destination = new(false, connectedChats),
                 Conditions = new(1)
                 {
                     new PolicyConditionUpdate(
