@@ -539,6 +539,17 @@ namespace HSMServer.Core.Cache
 
             var productsToResave = new HashSet<Guid>(_tree.Count);
 
+            var productsChats = new Dictionary<string, Dictionary<Guid, string>>();
+            foreach (var product in GetProducts())
+            {
+                var chats = new Dictionary<Guid, string>();
+                if (product?.NotificationsSettings?.TelegramSettings?.Chats?.Count > 0)
+                    foreach (var chat in product.NotificationsSettings.TelegramSettings.Chats)
+                        chats.Add(new Guid(chat.SystemId), chat.Name);
+
+                productsChats.Add(product.DisplayName, chats);
+            }
+
             foreach (var (productId, product) in _tree)
             {
                 var policy = product.Policies.TimeToLive;
@@ -549,7 +560,7 @@ namespace HSMServer.Core.Cache
                 {
                     Id = policy.Id,
                     Conditions = policy.Conditions.Select(u => new PolicyConditionUpdate(u.Operation, u.Property, u.Target, u.Combination)).ToList(),
-                    Destination = new PolicyDestinationUpdate(true, new()),
+                    Destination = new PolicyDestinationUpdate(true, productsChats.TryGetValue(product.RootProductName, out var chats) ? chats : new()),
                     Sensitivity = policy.Sensitivity,
                     Status = policy.Status,
                     Template = policy.Template,
