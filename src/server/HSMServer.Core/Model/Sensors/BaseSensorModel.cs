@@ -82,7 +82,7 @@ namespace HSMServer.Core.Model
         public bool ShouldDestroy => Settings.SelfDestroy.Value?.TimeIsUp(LastUpdate) ?? false;
 
 
-        public DateTime LastUpdate => Storage.LastValue?.ReceivingTime ?? DateTime.MinValue;
+        public DateTime LastUpdate => Storage.LastValue?.LastUpdateTime ?? DateTime.MinValue;
 
         public BaseValue LastDbValue => Storage.LastDbValue;
 
@@ -118,7 +118,10 @@ namespace HSMServer.Core.Model
 
         internal abstract void AddDbValue(byte[] bytes);
 
-        internal abstract IEnumerable<BaseValue> ConvertValues(List<byte[]> valuesBytes);
+
+        internal abstract IEnumerable<BaseValue> Convert(List<byte[]> valuesBytes);
+
+        internal abstract BaseValue Convert(byte[] bytes);
 
 
         internal override BaseNodeModel AddParent(ProductModel parent)

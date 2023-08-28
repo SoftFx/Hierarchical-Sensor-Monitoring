@@ -23,7 +23,7 @@ namespace HSMServer.Core.Extensions
 
         public static bool InRange<T>(this T value, DateTime from, DateTime to) where T : BaseValue
         {
-            return value.ReceivingTime >= from && value.ReceivingTime <= to;
+            return value.LastUpdateTime >= from && value.ReceivingTime <= to;
         }
 
         public static FileValue CompressContent(this FileValue file)

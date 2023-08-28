@@ -24,6 +24,8 @@ namespace HSMDatabase.AccessManager
 
         byte[] Get(byte[] key, byte[] sensorId);
 
+        byte[] GetLatest(byte[] to, byte[] sensorId);
+
         IEnumerable<byte[]> GetValuesFrom(byte[] from, byte[] to);
 
         IEnumerable<byte[]> GetValuesTo(byte[] from, byte[] to);

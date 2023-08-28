@@ -71,6 +71,13 @@ namespace HSMServer.Core.Model
         }
 
 
+        internal virtual void AddOrUpdateValue(T value)
+        {
+            if (LastValue is null || LastTimeout?.ReceivingTime > LastValue.ReceivingTime || !LastValue.TryUpdate(value))
+                AddValue(value);
+        }
+
+
         internal override List<BaseValue> GetValues(int count) =>
             _cache.Take(count).Select(v => (BaseValue)v).ToList();
 
@@ -79,7 +86,7 @@ namespace HSMServer.Core.Model
 
         internal override void Clear(DateTime to)
         {
-            while (_cache.FirstOrDefault()?.ReceivingTime <= to)
+            while (_cache.FirstOrDefault()?.LastUpdateTime <= to)
                 _cache.TryDequeue(out _);
 
             if (_cache.IsEmpty)

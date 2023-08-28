@@ -31,7 +31,11 @@ namespace HSMServer.Core.Model
 
             if (canStore)
             {
-                Storage.AddValue(valueT);
+                if (SaveOnlyUniqueValues)
+                    Storage.AddOrUpdateValue(valueT);
+                else
+                    Storage.AddValue(valueT);
+
                 Policies.SensorTimeout(valueT);
 
                 ReceivedNewValue?.Invoke(valueT);
@@ -40,7 +44,6 @@ namespace HSMServer.Core.Model
             return canStore;
         }
 
-        internal override IEnumerable<BaseValue> ConvertValues(List<byte[]> pages) => pages.Select(Convert);
 
         internal override bool CheckTimeout() => Policies.SensorTimeout(LastValue);
 
@@ -58,6 +61,8 @@ namespace HSMServer.Core.Model
         }
 
 
-        private BaseValue Convert(byte[] bytes) => bytes.ToValue<T>();
+        internal override IEnumerable<BaseValue> Convert(List<byte[]> pages) => pages.Select(Convert);
+
+        internal override BaseValue Convert(byte[] bytes) => bytes.ToValue<T>();
     }
 }
