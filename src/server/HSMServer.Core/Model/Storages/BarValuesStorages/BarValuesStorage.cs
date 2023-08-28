@@ -30,7 +30,7 @@ namespace HSMServer.Core.Model
                     _prevValue = PartialLastValue;
                     base.AddValue(PartialLastValue);
                 }
-            
+
                 PartialLastValue = value;
             }
             else
@@ -62,17 +62,15 @@ namespace HSMServer.Core.Model
             PartialLastValue = null;
         }
 
-        internal override BaseValue Clear(DateTime to)
+        internal override void Clear(DateTime to)
         {
-            var value = base.Clear(to);
+            base.Clear(to);
 
             if (_prevValue?.ReceivingTime <= to)
                 _prevValue = null;
 
             if (PartialLastValue?.ReceivingTime <= to)
                 PartialLastValue = null;
-
-            return value;
         }
     }
 }
