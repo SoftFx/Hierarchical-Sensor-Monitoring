@@ -9,7 +9,7 @@ using Microsoft.Extensions.Options;
 
 namespace HSMPingModule.Collector;
 
-internal sealed class DataCollectorService : BackgroundService, IDisposable, IDataCollectorService
+internal sealed class DataCollectorService : BackgroundService, IDataCollectorService, IDisposable
 {
     private readonly ConcurrentDictionary<string, IInstantValueSensor<int>> _sensors = new ();
     private readonly IInstantValueSensor<string> _exceptionSensor;
@@ -38,28 +38,35 @@ internal sealed class DataCollectorService : BackgroundService, IDisposable, IDa
         if (OperatingSystem.IsWindows())
         {
             _collector.Windows.AddProductVersion(productInfoOptions)
-                .AddCollectorMonitoringSensors();
+                              .AddCollectorMonitoringSensors();
         }
         else
         {
             _collector.Unix.AddProductVersion(productInfoOptions)
-                .AddCollectorMonitoringSensors();
+                           .AddCollectorMonitoringSensors();
         }
 
         _exceptionSensor = _collector.CreateStringSensor("Exception");
     }
 
 
-    public override Task StopAsync(CancellationToken _) => _collector.Stop();
-    
-    public override Task StartAsync(CancellationToken cancellationToken)
+    public override async Task StopAsync(CancellationToken cancellationToken)
     {
-        _collector.Start();
-        return base.StartAsync(cancellationToken);
+        await _collector.Stop();
+        await base.StopAsync(cancellationToken);
+    }
+    
+
+    protected override Task ExecuteAsync(CancellationToken stoppingToken)
+    {
+        return Task.CompletedTask;
     }
 
-
-    protected override Task ExecuteAsync(CancellationToken token) => Task.CompletedTask;
+    public override Task StartAsync(CancellationToken token)
+    {
+        _collector.Start();
+        return base.StartAsync(token);
+    }
 
 
     public async Task PingResultSend(WebSite webSite, string path, Task<PingResponse> taskReply)

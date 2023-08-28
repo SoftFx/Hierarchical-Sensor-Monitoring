@@ -12,8 +12,8 @@ builder.Services.Configure<ServiceConfig>(config => config.SetUpConfig(builder.C
 
 builder.Services.AddSingleton<IDataCollectorService, DataCollectorService>();
 
+builder.Services.AddHostedService(provider => provider.GetService(typeof(IDataCollectorService)) as BackgroundService);
 builder.Services.AddHostedService<SettingsWatcherService>();
-builder.Services.AddHostedService<DataCollectorService>();
 builder.Services.AddHostedService<PingService>();
 
 var app = builder.Build();

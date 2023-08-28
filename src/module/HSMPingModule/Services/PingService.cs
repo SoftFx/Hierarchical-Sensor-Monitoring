@@ -1,5 +1,4 @@
 using System.Collections.Concurrent;
-using HSMPingModule.Collector;
 using HSMPingModule.Config;
 using HSMPingModule.Services.Interfaces;
 using Microsoft.Extensions.Options;
@@ -25,11 +24,12 @@ internal class PingService : BackgroundService
     }
 
 
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    protected override Task ExecuteAsync(CancellationToken stoppingToken)
     {
         foreach (var (path, ping) in _pings)
             _ = ping.StartPinging(path, _collectorService.PingResultSend);
-        
+
+        return Task.CompletedTask;
     }
 
 
