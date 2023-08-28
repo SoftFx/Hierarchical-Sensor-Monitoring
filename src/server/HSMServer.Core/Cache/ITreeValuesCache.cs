@@ -1,7 +1,6 @@
 ﻿using HSMSensorDataObjects.HistoryRequests;
 using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Model;
-using HSMServer.Core.Model.Policies;
 using HSMServer.Core.Model.Requests;
 using System;
 using System.Collections.Generic;
@@ -62,11 +61,5 @@ namespace HSMServer.Core.Cache
         void UpdateCacheState();
 
         void SaveLastStateToDb();
-
-        [Obsolete("Should be removed after policies chats migration")]
-        void UpdatePolicy(Policy policy);
-
-        [Obsolete("Should be removed after policies chats migration")]
-        void UpdateSensor(Guid sensorId);
     }
 }
