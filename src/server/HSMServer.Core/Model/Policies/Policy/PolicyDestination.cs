@@ -31,8 +31,9 @@ namespace HSMServer.Core.Model.Policies
             AllChats = update.AllChats;
             Chats.Clear();
 
-            foreach (var (chatId, name) in update.Chats)
-                Chats.Add(chatId, name);
+            if (update.Chats is not null)
+                foreach (var (chatId, name) in update.Chats)
+                    Chats.Add(chatId, name);
         }
 
         internal PolicyDestinationEntity ToEntity() => new()
