@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using HSMPingModule.Collector;
 using HSMPingModule.Config;
+using HSMPingModule.Services.Interfaces;
 using Microsoft.Extensions.Options;
 
 namespace HSMPingModule.Services;
@@ -8,12 +9,12 @@ namespace HSMPingModule.Services;
 internal class PingService : BackgroundService
 {
     private readonly ConcurrentDictionary<string, PingAdapter> _pings = new ();
-    private readonly DataCollectorWrapper _collectorWrapper;
+    private readonly IDataCollectorService _collectorService;
     private readonly ServiceConfig _config;
 
-    public PingService(IOptionsMonitor<ServiceConfig> config, DataCollectorWrapper collectorWrapper)
+    public PingService(IOptionsMonitor<ServiceConfig> config, IDataCollectorService collectorService)
     {
-        _collectorWrapper = collectorWrapper;
+        _collectorService = collectorService;
         _config = config.CurrentValue;
         _config.OnChange += OnChange;
 
@@ -27,7 +28,7 @@ internal class PingService : BackgroundService
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
         foreach (var (path, ping) in _pings)
-            _ = ping.StartPinging(path, _collectorWrapper.PingResultSend);
+            _ = ping.StartPinging(path, _collectorService.PingResultSend);
         
     }
 
@@ -41,18 +42,18 @@ internal class PingService : BackgroundService
                     if (!currentPing.WebSite.Equals(website))
                         if (_pings.TryRemove(path, out currentPing))
                         {
-                            currentPing.CancellationTokenSource.Cancel();
+                            currentPing.CancelToken();
                             var newPing = new PingAdapter(website, hostname);
 
                             if (_pings.TryAdd(path, newPing))
-                                newPing.StartPinging(path, _collectorWrapper.PingResultSend);
+                                newPing.StartPinging(path, _collectorService.PingResultSend);
                         }
                 }
                 else
                 {
                     var newPing = new PingAdapter(website, hostname);
                     if (_pings.TryAdd(path, newPing))
-                        newPing.StartPinging(path, _collectorWrapper.PingResultSend);
+                        newPing.StartPinging(path, _collectorService.PingResultSend);
                 }
     }
 }

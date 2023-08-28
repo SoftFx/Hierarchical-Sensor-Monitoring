@@ -14,14 +14,14 @@ internal class PingAdapter : Ping
 
     public string HostName { get; }
 
-    public CancellationTokenSource CancellationTokenSource { get; set; }
+    public CancellationTokenSource Token { get; set; }
 
 
     public PingAdapter(WebSite webSite, string host) : base()
     {
         WebSite = webSite;
         HostName = host;
-        CancellationTokenSource = new CancellationTokenSource();
+        Token = new CancellationTokenSource();
     }
 
 
@@ -45,12 +45,12 @@ internal class PingAdapter : Ping
     public Task StartPinging(string path, Func<WebSite, string, Task<PingResponse>, Task> callBackFunc) => Task.Run(async () =>
     {
         var timer = new PeriodicTimer(TimeSpan.FromSeconds(WebSite.PingDelay.Value));
-        while (await timer.WaitForNextTickAsync(CancellationTokenSource.Token))
+        while (await timer.WaitForNextTickAsync(Token.Token))
         {
-            _ = SendPingRequest().ContinueWith((reply) => callBackFunc(WebSite, path, reply), CancellationTokenSource.Token);
+            _ = SendPingRequest().ContinueWith((reply) => callBackFunc(WebSite, path, reply), Token.Token);
         }
-    }, CancellationTokenSource.Token);
+    }, Token.Token);
 
 
-    public void CancelToken() => CancellationTokenSource.Cancel();
+    public void CancelToken() => Token.Cancel();
 }
