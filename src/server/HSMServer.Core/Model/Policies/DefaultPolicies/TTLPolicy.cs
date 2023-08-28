@@ -42,6 +42,19 @@ namespace HSMServer.Core.Model.Policies
         }
 
 
+        internal void ApplyParent(TTLPolicy parent)
+        {
+            Update(new PolicyUpdate()
+            {
+                Destination = new PolicyDestinationUpdate(parent.Destination.AllChats, parent.Destination.Chats),
+
+                Id = Id,
+                Template = parent.Template,
+                Icon = parent.Icon,
+            }, _sensor);
+        }
+
+
         internal void FullUpdate(PolicyUpdate update, BaseSensorModel sensor = null)
         {
             Update(update, sensor);

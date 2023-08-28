@@ -10,6 +10,9 @@ namespace HSMServer.Core.Model
 {
     public abstract class BaseNodeModel : IChangesEntity
     {
+        private readonly PolicyEntity _ttlEntity;
+
+
         public abstract PolicyCollectionBase Policies { get; }
 
         public SettingsCollection Settings { get; } = new();
@@ -54,6 +57,8 @@ namespace HSMServer.Core.Model
 
         protected BaseNodeModel(BaseNodeEntity entity) : this()
         {
+            _ttlEntity = entity.TTLPolicy;
+
             Id = Guid.Parse(entity.Id);
             AuthorId = Guid.TryParse(entity.AuthorId, out var authorId) ? authorId : Guid.Empty;
             CreationDate = new DateTime(entity.CreationDate);
@@ -71,11 +76,15 @@ namespace HSMServer.Core.Model
         protected abstract void UpdateTTL(PolicyUpdate update);
 
 
-        internal virtual BaseNodeModel AddParent(ProductModel parent)
+        internal BaseNodeModel AddParent(ProductModel parent)
         {
             Parent = parent;
 
             Settings.SetParentSettings(parent.Settings);
+            Policies.BuildDefault(this, _ttlEntity); //need for correct calculating $product and $path properties
+
+            if (!Settings.TTL.IsSet)
+                Policies.TimeToLive.ApplyParent(parent.Policies.TimeToLive);
 
             return this;
         }
