@@ -32,7 +32,7 @@ internal sealed class WebSite
         _options = new()
         {
             TTL = TTL,
-            TtlAlert = AlertsFactory.IfInactivityPeriodIs(TTL).ThenSetIcon("🎃").AndSendNotification("$product $path test").Build(),
+            TtlAlert = AlertsFactory.IfInactivityPeriodIs().ThenSetIcon("🎃").AndSendNotification("$product $path test").Build(),
             Alerts = new List<InstantAlertTemplate>()
             {
                 AlertsFactory.IfValue(AlertOperation.GreaterThan, PingTimeoutValue).ThenSetIcon("🤣").AndSendNotification("$product $path ping timeout").Build(),
