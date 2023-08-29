@@ -13,7 +13,7 @@ internal record PingResponse
 
     public string Comment { get; init; }
 
-    public bool IsException { get; set; } = false;
+    public bool IsException { get; } = false;
 
 
     public PingResponse(PingReply reply)
