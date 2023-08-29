@@ -11,9 +11,10 @@ namespace HSMServer.Core.Model
 {
     public abstract class BaseNodeModel : IChangesEntity
     {
-        private readonly protected ChangeInfoTable _changeTable;
         private readonly PolicyEntity _ttlEntity;
 
+
+        internal ChangeInfoTable ChangeTable { get; }
 
         public abstract PolicyCollectionBase Policies { get; }
 
@@ -47,7 +48,7 @@ namespace HSMServer.Core.Model
 
         protected BaseNodeModel()
         {
-            _changeTable = new ChangeInfoTable(() => FullPath);
+            ChangeTable = new ChangeInfoTable(() => FullPath);
 
             Id = Guid.NewGuid();
             CreationDate = DateTime.UtcNow;
@@ -61,7 +62,6 @@ namespace HSMServer.Core.Model
 
         protected BaseNodeModel(BaseNodeEntity entity) : this()
         {
-            _changeTable.FromEntity(entity.ChangeInfo);
             _ttlEntity = entity.TTLPolicy;
 
             Id = Guid.Parse(entity.Id);
@@ -70,6 +70,8 @@ namespace HSMServer.Core.Model
 
             DisplayName = entity.DisplayName;
             Description = entity.Description;
+
+            ChangeTable.FromEntity(entity.ChangeTable);
 
             if (entity.Settings is not null)
                 Settings.SetSettings(entity.Settings);
@@ -98,10 +100,13 @@ namespace HSMServer.Core.Model
         {
             Description = UpdateProperty(Description, update.Description ?? Description, update.Initiator);
 
-            Settings.Update(update, _changeTable);
+            Settings.Update(update, ChangeTable);
 
-            if (update.TTLPolicy is not null && _changeTable.TtlPolicy.CanChange(update.Initiator))
+            if (update.TTLPolicy is not null && ChangeTable.TtlPolicy.CanChange(update.Initiator))
+            {
                 UpdateTTL(update.TTLPolicy);
+                ChangeTable.TtlPolicy.SetUpdate(update.Initiator);
+            }
 
             CheckTimeout();
         }
@@ -109,9 +114,13 @@ namespace HSMServer.Core.Model
 
         protected T UpdateProperty<T>(T oldValue, T newValue, InitiatorInfo initiator, [CallerArgumentExpression(nameof(oldValue))] string propName = "")
         {
-            var canChange = _changeTable.Properties[propName].CanChange(initiator);
+            var infoNode = ChangeTable.Properties[propName];
 
-            if (canChange && newValue is not null && !newValue.Equals(oldValue ?? newValue))
+            if (!infoNode.CanChange(initiator))
+                return oldValue;
+
+            if (newValue is not null && !newValue.Equals(oldValue ?? newValue))
+            {
                 ChangesHandler?.Invoke(new JournalRecordModel(Id, initiator)
                 {
                     Enviroment = "General info update",
@@ -121,6 +130,9 @@ namespace HSMServer.Core.Model
                     PropertyName = propName,
                     Path = FullPath,
                 });
+
+                infoNode.SetUpdate(initiator);
+            }
 
             return newValue ?? oldValue;
         }

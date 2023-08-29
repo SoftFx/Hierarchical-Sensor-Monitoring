@@ -8,7 +8,7 @@ namespace HSMDatabase.AccessManager.DatabaseEntities
 
         public Dictionary<string, ChangeInfoEntity> Settings { get; init; } = new();
 
-        public Dictionary<byte[], ChangeInfoEntity> Policies { get; init; } = new();
+        public Dictionary<string, ChangeInfoEntity> Policies { get; init; } = new();
 
 
         public ChangeInfoEntity TTLPolicy { get; init; } = new();

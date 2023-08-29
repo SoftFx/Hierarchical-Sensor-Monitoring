@@ -134,7 +134,7 @@ namespace HSMServer.Core.Model
                 EndOfMuting = null;
 
             if (update.Policies != null)
-                Policies.Update(update.Policies, _changeTable, update.Initiator);
+                Policies.Update(update.Policies, update.Initiator);
         }
 
         internal void ResetSensor()
@@ -160,7 +160,7 @@ namespace HSMServer.Core.Model
             EndOfMuting = EndOfMuting?.Ticks ?? 0L,
             Settings = Settings.ToEntity(),
             TTLPolicy = Policies.TimeToLive?.ToEntity(),
-            ChangeInfo = _changeTable.ToEntity(),
+            ChangeTable = ChangeTable.ToEntity(),
         };
     }
 }

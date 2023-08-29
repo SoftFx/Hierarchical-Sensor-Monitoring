@@ -23,7 +23,7 @@ namespace HSMDatabase.AccessManager.DatabaseEntities
 
 
 
-        public ChangeInfoTableEntity ChangeInfo { get; init; }
+        public ChangeInfoTableEntity ChangeTable { get; init; }
 
         public PolicyEntity TTLPolicy { get; init; }
     }

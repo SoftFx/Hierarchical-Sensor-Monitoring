@@ -10,11 +10,11 @@ namespace HSMServer.Core.TableOfChanges
         private readonly Func<string> _getFullPath;
 
 
-        public GuidChangeCollection Policies { get; private set; } = new();
-
         public ChangeCollection Properties { get; private set; } = new();
 
         public ChangeCollection Settings { get; private set; } = new();
+
+        public ChangeCollection Policies { get; private set; } = new();
 
 
         public ChangeInfo TtlPolicy { get; private set; }
@@ -36,8 +36,8 @@ namespace HSMServer.Core.TableOfChanges
 
             entity ??= new ChangeInfoTableEntity();
 
-            Policies = new(entity.Policies.ToDictionary(k => new Guid(k.Key), v => new ChangeInfo(v.Value)));
             Properties = BuildCollection(entity.Properties);
+            Policies = BuildCollection(entity.Policies);
             Settings = BuildCollection(entity.Settings);
 
             TtlPolicy = new ChangeInfo(entity.TTLPolicy);

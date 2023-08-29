@@ -101,7 +101,7 @@ namespace HSMServer.Core.Model
             Policies = Policies.Ids.Select(u => $"{u}").ToList(),
             Settings = Settings.ToEntity(),
             TTLPolicy = Policies.TimeToLive?.ToEntity(),
-            ChangeInfo = _changeTable.ToEntity(),
+            ChangeTable = ChangeTable.ToEntity(),
         };
 
 

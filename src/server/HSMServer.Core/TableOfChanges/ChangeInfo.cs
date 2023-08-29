@@ -5,12 +5,12 @@ namespace HSMServer.Core.TableOfChanges
 {
     internal class ChangeInfo
     {
-        public InitiatorInfo Initiator { get; } = InitiatorInfo.System;
+        public InitiatorInfo Initiator { get; private set; } = InitiatorInfo.System;
 
-        public DateTime LastUpdate { get; } = DateTime.UtcNow;
+        public DateTime LastUpdate { get; private set; } = DateTime.UtcNow;
 
 
-        public ChangeInfo() { }
+        public ChangeInfo() { } // for CDict collection
 
         public ChangeInfo(ChangeInfoEntity entity)
         {
@@ -20,6 +20,12 @@ namespace HSMServer.Core.TableOfChanges
             LastUpdate = new DateTime(entity.Time);
         }
 
+
+        internal void SetUpdate(InitiatorInfo initiator)
+        {
+            Initiator = initiator;
+            LastUpdate = DateTime.UtcNow;
+        }
 
         public bool CanChange(InitiatorInfo newInfo) => Initiator.Type <= newInfo.Type;
 

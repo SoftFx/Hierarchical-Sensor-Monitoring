@@ -28,6 +28,8 @@ namespace HSMServer.Core.TableOfChanges
 
         public InitiatorInfo(InitiatorInfoEntity entity)
         {
+            entity ??= new InitiatorInfoEntity();
+
             Type = (InitiatorType)entity.Type;
             Info = entity.Info;
         }

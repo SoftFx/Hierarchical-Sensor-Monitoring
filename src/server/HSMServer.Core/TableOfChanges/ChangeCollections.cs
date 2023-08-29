@@ -16,16 +16,4 @@ namespace HSMServer.Core.TableOfChanges
         public Dictionary<string, ChangeInfoEntity> ToEntity() =>
             this.ToDictionary(k => k.Key, v => v.Value.ToEntity());
     }
-
-
-    internal class GuidChangeCollection : CDictBase<Guid, ChangeInfo>
-    {
-        public GuidChangeCollection() { }
-
-        public GuidChangeCollection(Dictionary<Guid, ChangeInfo> dict) : base(dict) { }
-
-
-        public Dictionary<byte[], ChangeInfoEntity> ToEntity() =>
-            this.ToDictionary(k => k.Key.ToByteArray(), v => v.Value.ToEntity());
-    }
 }
