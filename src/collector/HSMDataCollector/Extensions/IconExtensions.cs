@@ -2,7 +2,7 @@
 
 namespace HSMDataCollector.Extensions
 {
-    internal static class IconExtensions
+    public static class IconExtensions
     {
         public static string ToUtf8(this AlertIcon icon)
         {
