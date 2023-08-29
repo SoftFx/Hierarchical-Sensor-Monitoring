@@ -103,8 +103,11 @@ namespace HSMServer.Core.Model.Policies
 
             _sensor ??= sensor;
 
-            Destination ??= new(); // TODO remove after policies migration
-            Destination.Update(update.Destination);
+            if (update.Destination is not null) // TODO remove after policies migration
+            {
+                Destination ??= new(); // TODO remove after policies migration
+                Destination.Update(update.Destination);
+            }
             Sensitivity = update.Sensitivity;
             IsDisabled = update.IsDisabled;
             Template = update.Template;
