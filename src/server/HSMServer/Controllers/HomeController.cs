@@ -685,22 +685,13 @@ namespace HSMServer.Controllers
             }
 
             var sensor = _treeValuesCache.GetSensor(modal.SensorId);
-            var comment = $"User: {CurrentUser.Name}. Reason: {modal.Reason}";
+            var comment = modal.Comment;
+            var updateRequest = new UpdateSensorValueRequestModel(sensor.Id, modal.NewStatus.ToCore(), comment, CurrentUser.Name, modal.NewValue, modal.ChangeLast);
 
-            var sensorValue = ApiConverters.CreateNewSensorValue(sensor.Type);
 
-            if (sensorValue is null)
-                return BadRequest();
+            _treeValuesCache.UpdateSensorValue(updateRequest);
 
-            sensorValue.Comment = comment;
-            sensorValue.Path = sensor.Path;
-            sensorValue.Status = modal.NewStatus.ToApi();
-
-            return Ok(new
-            {
-                Sensor = sensorValue,
-                Key = key
-            });
+            return Ok();
         }
 
         #endregion

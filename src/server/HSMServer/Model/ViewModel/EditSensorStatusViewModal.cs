@@ -1,5 +1,6 @@
 using System;
 using System.ComponentModel.DataAnnotations;
+using HSMServer.Core.Model;
 using HSMServer.Extensions;
 using HSMServer.Model.TreeViewModel;
 using SensorStatus = HSMServer.Model.TreeViewModel.SensorStatus;
@@ -23,12 +24,20 @@ public class EditSensorStatusViewModal
     [Display(Name = "New status")]
     public SensorStatus NewStatus { get; set; }
     
-    [Display(Name = "Reason")]
-    [Required(ErrorMessage = "Reason required")]
-    public string Reason { get; set; }
+    [Display(Name = "Comment")]
+    [Required(ErrorMessage = "Comment required")]
+    public string Comment { get; set; }
+    
+    [Display(Name = "Change last")]
+    public bool ChangeLast { get; set; }
+    
+    [Display(Name = "New Value")]
+    public string NewValue { get; set; }
     
     public bool IsAccessKeyExist { get; internal set; }
-    
+
+
+    public bool IsValueChangeBlockDisplayed { get; private set; } = true;
     
     public EditSensorStatusViewModal() { }
 
@@ -40,5 +49,7 @@ public class EditSensorStatusViewModal
         IsAccessKeyExist = isAccessKeyExist;
 
         Status = model.Status;
+
+        IsValueChangeBlockDisplayed = model.Type is not (SensorType.File or SensorType.DoubleBar or SensorType.IntegerBar);
     }
 }
