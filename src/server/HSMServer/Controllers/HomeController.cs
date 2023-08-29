@@ -692,6 +692,8 @@ namespace HSMServer.Controllers
             var updateRequest = new UpdateSensorValueRequestModel(sensor.Id, modal.NewStatus.ToCore(), comment, CurrentUser.Name, modal.NewValue, modal.ChangeLast);
 
             _treeValuesCache.UpdateSensorValue(updateRequest);
+            _treeViewModel.Sensors.TryGetValue(updateRequest.Id, out var sensorNodeViewModel);
+            sensorNodeViewModel?.Update(sensor);
 
             return Ok();
         }
