@@ -84,12 +84,14 @@ namespace HSMServer.Notifications
             _telegramBook[chat.Id].Add(entity);
         }
 
-        internal void RemoveChat(INotificatable entity, ChatId chatId)
+        internal TelegramChat RemoveChat(INotificatable entity, ChatId chatId)
         {
+            TelegramChat removedChat = null;
+
             if (ServerBook.TryGetValue(entity, out var chats))
                 if (chats.TryRemove(chatId, out _))
                 {
-                    entity.Chats.TryRemove(chatId, out _);
+                    entity.Chats.TryRemove(chatId, out removedChat);
                     entity.Notifications.PartiallyIgnored.TryRemove(chatId, out _);
 
                     if (entity.Chats.IsEmpty)
@@ -97,6 +99,8 @@ namespace HSMServer.Notifications
                 }
 
             RemoveEntity(entity, chatId);
+
+            return removedChat;
         }
 
         internal void RemoveAllChats(INotificatable entity)
