@@ -52,7 +52,7 @@ namespace HSMServer.Core.Cache
         void UpdateSensor(SensorUpdate updatedSensor);
         void UpdateSensorValue(UpdateSensorValueRequestModel request);
         void RemoveSensor(Guid sensorId, InitiatorInfo initiator = null);
-        void UpdateMutedSensorState(Guid sensorId, DateTime? endOfMuting = null, InitiatorInfo initiator = null);
+        void UpdateMutedSensorState(Guid sensorId, InitiatorInfo initiator, DateTime? endOfMuting = null);
         void ClearSensorHistory(ClearHistoryRequest request);
         void CheckSensorHistory(Guid sensorId);
         void ClearNodeHistory(ClearHistoryRequest request);

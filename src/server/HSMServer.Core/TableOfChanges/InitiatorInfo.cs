@@ -15,6 +15,7 @@ namespace HSMServer.Core.TableOfChanges
     {
         public static InitiatorInfo System { get; } = new InitiatorInfo(InitiatorType.System);
 
+
         public InitiatorType Type { get; }
 
         public string Info { get; }
