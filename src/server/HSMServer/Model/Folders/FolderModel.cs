@@ -98,8 +98,8 @@ namespace HSMServer.Model.Folders
                 ChangesHandler?.Invoke(new JournalRecordModel(Id, initiator)
                 {
                     Enviroment = "Folder settings update",
-                    OldValue = $"{oldValueString}",
-                    NewValue = $"{newValueString}",
+                    OldValue = oldValueString,
+                    NewValue = newValueString,
 
                     PropertyName = propName,
                     Path = Name,

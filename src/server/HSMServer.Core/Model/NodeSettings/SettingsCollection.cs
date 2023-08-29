@@ -46,8 +46,8 @@ namespace HSMServer.Core.Model.NodeSettings
                     ChangesHandler?.Invoke(new JournalRecordModel(update.Id, update.Initiator)
                     {
                         Enviroment = "Settings update",
-                        OldValue = $"{oldValueString}",
-                        NewValue = $"{newValueString}",
+                        OldValue = oldValueString,
+                        NewValue = newValueString,
 
                         PropertyName = propName,
                         Path = path,
