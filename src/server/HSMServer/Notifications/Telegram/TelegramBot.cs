@@ -56,7 +56,7 @@ namespace HSMServer.Notifications
             cache.ChangeProductEvent += RemoveProductEventHandler;
             cache.ChangePolicyResultEvent += SendMessage;
 
-            _updateHandler = new(_addressBook, _userManager, _tree, config);
+            _updateHandler = new(_addressBook, _userManager, _tree, cache, config);
 
             FillAddressBook();
         }
@@ -187,7 +187,7 @@ namespace HSMServer.Notifications
                         var isInstant = false; //entity.Notifications.UsedTelegram.MessagesDelaySec == 0;
 
                         foreach (var alert in result)
-                            if (alert.Destination.AllChats || alert.Destination.Chats.Contains(chat.SystemId))
+                            if (alert.Destination.Chats.Contains(chat.SystemId))
                             {
                                 if (isInstant)
                                     SendMessage(chat.ChatId, alert.ToString());

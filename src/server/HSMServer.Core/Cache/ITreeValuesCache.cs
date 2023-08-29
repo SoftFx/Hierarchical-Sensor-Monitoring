@@ -60,6 +60,8 @@ namespace HSMServer.Core.Cache
 
         void SaveLastStateToDb();
 
+        void AddNewChat(Guid chatId, string name, string productName);
+
         [Obsolete("Should be removed after policies chats migration")]
         void UpdatePolicy(Policy policy);
 

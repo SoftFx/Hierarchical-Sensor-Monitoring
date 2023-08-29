@@ -43,14 +43,16 @@ namespace HSMServer.Notifications
 
         internal void RemoveToken(Guid token) => _tokens.TryRemove(token, out _);
 
-        internal void RegisterChat(Message message, InvitationToken token, bool isUserChat)
+        internal TelegramChat RegisterChat(Message message, InvitationToken token, bool isUserChat)
         {
             var entity = token.Entity;
             var chats = entity.Chats;
 
+            TelegramChat chatModel = null;
+
             if (!chats.ContainsKey(message.Chat))
             {
-                var chatModel = new TelegramChat()
+                chatModel = new TelegramChat()
                 {
                     Id = message.Chat,
                     Name = isUserChat ? message.From.Username : message.Chat.Title,
@@ -66,6 +68,8 @@ namespace HSMServer.Notifications
             }
 
             RemoveToken(token.Token);
+
+            return chatModel;
         }
 
         internal void RegisterChat(INotificatable entity, TelegramChat chat)
