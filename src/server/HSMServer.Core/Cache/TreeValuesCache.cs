@@ -496,6 +496,11 @@ namespace HSMServer.Core.Cache
                     if (sensor.Policies.TimeToLive.AddChat(chatId, name))
                         UpdatePolicy(ActionType.Update, sensor.Policies.TimeToLive);
                 }
+
+            foreach (var (_, product) in _tree)
+                if (productName is null || product.RootProductName == productName)
+                    if (product.Policies.TimeToLive.AddChat(chatId, name))
+                        UpdatePolicy(ActionType.Update, product.Policies.TimeToLive);
         }
 
         public void RemoveChat(Guid chatId, string productName)
@@ -514,6 +519,11 @@ namespace HSMServer.Core.Cache
                     if (sensor.Policies.TimeToLive.RemoveChat(chatId))
                         UpdatePolicy(ActionType.Update, sensor.Policies.TimeToLive);
                 }
+
+            foreach (var (_, product) in _tree)
+                if (productName is null || product.RootProductName == productName)
+                    if (product.Policies.TimeToLive.RemoveChat(chatId))
+                        UpdatePolicy(ActionType.Update, product.Policies.TimeToLive);
         }
 
         private void UpdatePolicy(ActionType type, Policy policy)

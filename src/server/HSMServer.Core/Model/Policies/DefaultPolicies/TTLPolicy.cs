@@ -46,7 +46,7 @@ namespace HSMServer.Core.Model.Policies
         {
             Update(new PolicyUpdate()
             {
-                Destination = new PolicyDestinationUpdate(parent.Destination.AllChats, parent.Destination.Chats),
+                Destination = parent.Destination is null ? null : new PolicyDestinationUpdate(parent.Destination.AllChats, parent.Destination.Chats), // TODO: null checking should be removed after policies migration
 
                 Id = Id,
                 Template = parent.Template,

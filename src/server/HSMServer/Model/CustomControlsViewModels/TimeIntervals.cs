@@ -58,8 +58,6 @@ namespace HSMServer.Model
             {
                 TimeInterval.FromParent,
                 TimeInterval.None,
-                TimeInterval.OneMinute,
-                TimeInterval.FiveMinutes,
                 TimeInterval.TenMinutes,
                 TimeInterval.Hour,
                 TimeInterval.Day,
@@ -72,8 +70,6 @@ namespace HSMServer.Model
             new()
             {
                 TimeInterval.FromParent,
-                TimeInterval.OneMinute,
-                TimeInterval.FiveMinutes,
                 TimeInterval.TenMinutes,
                 TimeInterval.Hour,
                 TimeInterval.Day,
