@@ -4,7 +4,7 @@ using System.Collections.Generic;
 
 namespace HSMServer.Core.Model
 {
-    public abstract class BarValuesStorage<T> : ValuesStorage<T> where T : BarBaseValue
+    public abstract class BarValuesStorage<T> : ValuesStorage<T> where T : BarBaseValue, new()
     {
         private T _prevValue;
 

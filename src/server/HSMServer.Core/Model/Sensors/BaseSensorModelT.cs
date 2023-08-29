@@ -6,7 +6,7 @@ using System.Linq;
 
 namespace HSMServer.Core.Model
 {
-    public abstract class BaseSensorModel<T> : BaseSensorModel where T : BaseValue
+    public abstract class BaseSensorModel<T> : BaseSensorModel where T : BaseValue, new()
     {
         public override SensorPolicyCollection<T> Policies { get; }
 
