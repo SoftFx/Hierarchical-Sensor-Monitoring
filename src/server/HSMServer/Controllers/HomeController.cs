@@ -1,4 +1,3 @@
-using HSMServer.ApiObjectsConverters;
 using HSMServer.Authentication;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Cache.UpdateEntities;
@@ -562,15 +561,17 @@ namespace HSMServer.Controllers
             if (!ModelState.IsValid)
                 return PartialView("_MetaInfo", new SensorInfoViewModel(sensor));
 
+            var availableChats = sensor.RootProduct.GetAvailableChats();
+
             var ttl = newModel.DataAlerts.TryGetValue(TimeToLiveAlertViewModel.AlertKey, out var alerts) && alerts.Count > 0 ? alerts[0] : null;
-            var policyUpdates = newModel.DataAlerts.TryGetValue((byte)sensor.Type, out var list) ? list.Select(a => a.ToUpdate()).ToList() : new();
+            var policyUpdates = newModel.DataAlerts.TryGetValue((byte)sensor.Type, out var list) ? list.Select(a => a.ToUpdate(availableChats)).ToList() : new();
 
             var update = new SensorUpdate
             {
                 Id = sensor.Id,
                 Description = newModel.Description ?? string.Empty,
                 TTL = ttl?.Conditions[0].TimeToLive.ToModel() ?? TimeIntervalModel.None,
-                TTLPolicy = ttl?.ToTimeToLiveUpdate(CurrentUser.Name),
+                TTLPolicy = ttl?.ToTimeToLiveUpdate(CurrentUser.Name, availableChats),
                 KeepHistory = newModel.SavedHistoryPeriod.ToModel(),
                 SelfDestroy = newModel.SelfDestroyPeriod.ToModel(),
                 Policies = policyUpdates,
@@ -690,7 +691,6 @@ namespace HSMServer.Controllers
             var comment = modal.Comment;
             var updateRequest = new UpdateSensorValueRequestModel(sensor.Id, modal.NewStatus.ToCore(), comment, CurrentUser.Name, modal.NewValue, modal.ChangeLast);
 
-
             _treeValuesCache.UpdateSensorValue(updateRequest);
 
             return Ok();
@@ -716,13 +716,14 @@ namespace HSMServer.Controllers
             if (!ModelState.IsValid)
                 return PartialView("_MetaInfo", new ProductInfoViewModel(product));
 
+            var availableChats = product.RootProduct.GetAvailableChats();
             var ttl = newModel.DataAlerts.TryGetValue(TimeToLiveAlertViewModel.AlertKey, out var alerts) && alerts.Count > 0 ? alerts[0] : null;
 
             var update = new ProductUpdate
             {
                 Id = product.Id,
                 TTL = ttl?.Conditions[0].TimeToLive.ToModel(product.TTL) ?? TimeIntervalModel.None,
-                TTLPolicy = ttl?.ToTimeToLiveUpdate(CurrentUser.Name),
+                TTLPolicy = ttl?.ToTimeToLiveUpdate(CurrentUser.Name, availableChats),
 
                 KeepHistory = newModel.SavedHistoryPeriod.ToModel(product.KeepHistory),
                 SelfDestroy = newModel.SelfDestroyPeriod.ToModel(product.SelfDestroy),

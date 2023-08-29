@@ -25,6 +25,9 @@ namespace HSMServer.Extensions
             return availableGroups.Union(availableUsers).OrderBy(chat => chat.IsUserChat).ThenBy(chat => chat.Name).ToList();
         }
 
+        internal static Dictionary<Guid, string> GetAvailableChats(this NodeViewModel node) =>
+            node.GetAllChats().ToDictionary(k => k.SystemId, v => v.Name);
+
 
         internal static string ToCssIconClass(this SensorStatus status) =>
             status switch
