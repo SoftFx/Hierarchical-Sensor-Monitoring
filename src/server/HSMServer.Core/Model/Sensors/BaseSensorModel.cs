@@ -160,6 +160,7 @@ namespace HSMServer.Core.Model
             EndOfMuting = EndOfMuting?.Ticks ?? 0L,
             Settings = Settings.ToEntity(),
             TTLPolicy = Policies.TimeToLive?.ToEntity(),
+            ChangeInfo = _changeTable.ToEntity(),
         };
     }
 }

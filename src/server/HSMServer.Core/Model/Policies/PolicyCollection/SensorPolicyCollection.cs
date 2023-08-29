@@ -2,6 +2,7 @@
 using HSMServer.Core.Cache;
 using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Journal;
+using HSMServer.Core.TableOfChanges;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -22,7 +23,7 @@ namespace HSMServer.Core.Model.Policies
         public event Action<JournalRecordModel> ChangesHandler;
 
 
-        internal abstract void Update(List<PolicyUpdate> updates, string initiator);
+        internal abstract void Update(List<PolicyUpdate> updates, InitiatorInfo initiator);
 
         internal abstract void Attach(BaseSensorModel sensor);
 
@@ -117,7 +118,7 @@ namespace HSMServer.Core.Model.Policies
         }
 
 
-        protected void CallJournal(string oldValue, string newValue, string initiator)
+        protected void CallJournal(string oldValue, string newValue, InitiatorInfo initiator)
         {
             if (oldValue != newValue)
                 CallJournal(new JournalRecordModel(_sensor.Id, initiator)
@@ -172,7 +173,7 @@ namespace HSMServer.Core.Model.Policies
                 _storage.TryAdd(policy.Id, typedPolicy);
         }
 
-        internal override void Update(List<PolicyUpdate> updatesList, string initiator)
+        internal override void Update(List<PolicyUpdate> updatesList, InitiatorInfo initiator)
         {
             var updates = updatesList.Where(u => u.Id != Guid.Empty).ToDictionary(u => u.Id);
 

@@ -3,6 +3,7 @@ using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Journal;
 using HSMServer.Core.Model.NodeSettings;
 using HSMServer.Core.Model.Policies;
+using HSMServer.Core.TableOfChanges;
 using System;
 using System.Runtime.CompilerServices;
 
@@ -11,6 +12,7 @@ namespace HSMServer.Core.Model
     public abstract class BaseNodeModel : IChangesEntity
     {
         private readonly PolicyEntity _ttlEntity;
+        private protected ChangeInfoTable _changeTable;
 
 
         public abstract PolicyCollectionBase Policies { get; }
@@ -45,6 +47,8 @@ namespace HSMServer.Core.Model
 
         protected BaseNodeModel()
         {
+            _changeTable = new ChangeInfoTable();
+
             Id = Guid.NewGuid();
             CreationDate = DateTime.UtcNow;
         }
@@ -57,6 +61,7 @@ namespace HSMServer.Core.Model
 
         protected BaseNodeModel(BaseNodeEntity entity) : this()
         {
+            _changeTable = new ChangeInfoTable(entity.ChangeInfo);
             _ttlEntity = entity.TTLPolicy;
 
             Id = Guid.Parse(entity.Id);
@@ -102,9 +107,11 @@ namespace HSMServer.Core.Model
         }
 
 
-        protected T UpdateProperty<T>(T oldValue, T newValue, string initiator, [CallerArgumentExpression(nameof(oldValue))] string propName = "")
+        protected T UpdateProperty<T>(T oldValue, T newValue, InitiatorInfo initiator, [CallerArgumentExpression(nameof(oldValue))] string propName = "")
         {
-            if (newValue is not null && !newValue.Equals(oldValue ?? newValue))
+            var canChange = _changeTable.Properties[propName].Initiator.Type <= initiator.Type;
+
+            if (canChange && newValue is not null && !newValue.Equals(oldValue ?? newValue))
                 ChangesHandler?.Invoke(new JournalRecordModel(Id, initiator)
                 {
                     Enviroment = "General info update",

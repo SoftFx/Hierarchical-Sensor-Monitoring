@@ -8,6 +8,7 @@ using System.ComponentModel.DataAnnotations;
 using System.Drawing;
 using System.Linq;
 using HSMServer.Core.Cache;
+using HSMServer.Core.TableOfChanges;
 
 namespace HSMServer.Model.Folders.ViewModels
 {
@@ -87,14 +88,14 @@ namespace HSMServer.Model.Folders.ViewModels
                 Products = GetFolderProducts(treeViewModel).ToDictionary(f => f.Id),
             };
 
-        internal FolderUpdate ToFolderUpdate(string initiator = null) =>
+        internal FolderUpdate ToFolderUpdate(InitiatorInfo initiator = null) =>
             new()
             {
                 Id = Id,
                 Color = Color,
                 Name = IsNameChanged ? Name : null,
                 Description = Description is null ? string.Empty : Description,
-                Initiator = initiator ?? TreeValuesCache.System
+                Initiator = initiator,
             };
     }
 }

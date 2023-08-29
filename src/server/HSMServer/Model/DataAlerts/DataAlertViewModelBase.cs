@@ -1,5 +1,6 @@
 ﻿using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Model.Policies;
+using HSMServer.Core.TableOfChanges;
 using HSMServer.Extensions;
 using HSMServer.Model.TreeViewModel;
 using System;
@@ -62,7 +63,7 @@ namespace HSMServer.Model.DataAlerts
             };
         }
 
-        internal PolicyUpdate ToTimeToLiveUpdate(string initiator, Dictionary<Guid, string> availavleChats)
+        internal PolicyUpdate ToTimeToLiveUpdate(InitiatorInfo initiator, Dictionary<Guid, string> availavleChats)
         {
             (var status, var destination, var comment, var icon) = GetActions(availavleChats);
 

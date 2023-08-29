@@ -3,6 +3,7 @@ using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Policies;
 using HSMServer.Core.Model.Requests;
+using HSMServer.Core.TableOfChanges;
 using System;
 using System.Collections.Generic;
 
@@ -50,8 +51,8 @@ namespace HSMServer.Core.Cache
         void AddOrUpdateSensor(SensorAddOrUpdateRequestModel update);
         void UpdateSensor(SensorUpdate updatedSensor);
         void UpdateSensorValue(UpdateSensorValueRequestModel request);
-        void RemoveSensor(Guid sensorId, string initiator = null);
-        void UpdateMutedSensorState(Guid sensorId, DateTime? endOfMuting = null, string initiator = null);
+        void RemoveSensor(Guid sensorId, InitiatorInfo initiator = null);
+        void UpdateMutedSensorState(Guid sensorId, DateTime? endOfMuting = null, InitiatorInfo initiator = null);
         void ClearSensorHistory(ClearHistoryRequest request);
         void CheckSensorHistory(Guid sensorId);
         void ClearNodeHistory(ClearHistoryRequest request);

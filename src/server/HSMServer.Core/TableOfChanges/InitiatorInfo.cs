@@ -11,7 +11,7 @@ namespace HSMServer.Core.TableOfChanges
     }
 
 
-    internal readonly struct InitiatorInfo
+    public record InitiatorInfo
     {
         public static InitiatorInfo System { get; } = new InitiatorInfo(InitiatorType.System);
 

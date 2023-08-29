@@ -1,4 +1,5 @@
 ﻿using System.Collections.Concurrent;
+using System.Collections.Generic;
 
 namespace HSMCommon.Collections
 {
@@ -8,6 +9,11 @@ namespace HSMCommon.Collections
     public abstract class CDictBase<T, U> : ConcurrentDictionary<T, U> where U : new()
     {
         public new U this[T key] => GetOrAdd(key);
+
+
+        protected CDictBase() : base() { }
+
+        protected CDictBase(Dictionary<T, U> dict) : base(dict) { }
 
 
         public U GetOrAdd(T key)

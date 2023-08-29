@@ -2,7 +2,7 @@
 
 namespace HSMDatabase.AccessManager.DatabaseEntities
 {
-    public record ChangeInfoNodeEntity
+    public record ChangeInfoTableEntity
     {
         public Dictionary<string, ChangeInfoEntity> Properties { get; init; } = new();
 

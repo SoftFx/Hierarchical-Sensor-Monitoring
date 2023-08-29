@@ -10,6 +10,12 @@ namespace HSMServer.Core.TableOfChanges
         public DateTime LastUpdate { get; }
 
 
+        public ChangeInfo()
+        {
+            Initiator = InitiatorInfo.System;
+            LastUpdate = DateTime.UtcNow;
+        }
+
         public ChangeInfo(ChangeInfoEntity entity)
         {
             Initiator = new InitiatorInfo(entity.Initiator);
