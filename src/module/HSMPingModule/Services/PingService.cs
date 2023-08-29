@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using HSMPingModule.Config;
+using HSMPingModule.Resourses;
 using HSMPingModule.Services.Interfaces;
 using Microsoft.Extensions.Options;
 
@@ -39,21 +40,23 @@ internal class PingService : BackgroundService
             foreach (var path in website.Countries.Select(country => $"{hostname}/{country}"))
                 if (_pings.TryGetValue(path, out var currentPing) )
                 {
-                    if (!currentPing.WebSite.Equals(website))
-                        if (_pings.TryRemove(path, out currentPing))
-                        {
-                            currentPing.CancelToken();
-                            var newPing = new PingAdapter(website, hostname);
-
-                            if (_pings.TryAdd(path, newPing))
-                                newPing.StartPinging(path, _collectorService.PingResultSend);
-                        }
+                    if (!currentPing.WebSite.Equals(website) && _pings.TryRemove(path, out currentPing))
+                    {
+                        currentPing.CancelToken();
+                        RegisterNewAdapter(website, hostname, path);
+                    }
                 }
                 else
                 {
-                    var newPing = new PingAdapter(website, hostname);
-                    if (_pings.TryAdd(path, newPing))
-                        newPing.StartPinging(path, _collectorService.PingResultSend);
+                    RegisterNewAdapter(website, hostname, path);
                 }
+    }
+
+    private void RegisterNewAdapter(WebSite website, string hostname, string path)
+    {
+        var newPing = new PingAdapter(website, hostname);
+
+        if (_pings.TryAdd(path, newPing))
+            newPing.StartPinging(path, _collectorService.PingResultSend);
     }
 }
