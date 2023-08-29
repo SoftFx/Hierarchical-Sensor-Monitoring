@@ -62,6 +62,7 @@ namespace HSMServer.Core.Model.Policies
         {
             base.BuildDefault(node, entity);
 
+            _typePolicy.Destination = node.Policies.TimeToLive.Destination;
             _typePolicy.RebuildState();
         }
 
