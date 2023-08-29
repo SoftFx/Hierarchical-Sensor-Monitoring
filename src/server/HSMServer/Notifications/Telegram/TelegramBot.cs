@@ -56,7 +56,7 @@ namespace HSMServer.Notifications
             cache.ChangeProductEvent += RemoveProductEventHandler;
             cache.ChangePolicyResultEvent += SendMessage;
 
-            _updateHandler = new(_addressBook, _userManager, _tree, config);
+            _updateHandler = new(_addressBook, _userManager, _tree, cache, config);
 
             FillAddressBook();
         }

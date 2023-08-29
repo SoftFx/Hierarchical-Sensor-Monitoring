@@ -379,6 +379,20 @@ namespace HSMServer.Core.Cache
         }
 
 
+        public void AddNewChat(Guid chatId, string name, string productName)
+        {
+            foreach (var (_, sensor) in _sensors)
+                if (productName is null || sensor.RootProductName == productName)
+                    foreach (var policy in sensor.Policies)
+                        if (policy.Destination.AllChats && !policy.Destination.Chats.ContainsKey(chatId))
+                        {
+                            policy.Destination.Chats.Add(chatId, name);
+                            policy.RebuildState();
+
+                            UpdatePolicy(ActionType.Update, policy);
+                        }
+        }
+
         private void UpdatePolicy(ActionType type, Policy policy)
         {
             switch (type)
