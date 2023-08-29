@@ -512,6 +512,8 @@ namespace HSMServer.Core.Cache
 
                 sensor = SensorModelFactory.Build(entity);
                 parentProduct.AddSensor(sensor);
+                if (!sensor.Settings.TTL.IsSet)
+                    sensor.Policies.TimeToLive.ApplyParent(parentProduct.Policies.TimeToLive);
 
                 SubscribeSensorToPolicyUpdate(sensor);
 
@@ -823,6 +825,8 @@ namespace HSMServer.Core.Cache
                     subProduct = new ProductModel(subProductName, authorId);
 
                     parentProduct.AddSubProduct(subProduct);
+                    if (!subProduct.Settings.TTL.IsSet)
+                        subProduct.Policies.TimeToLive.ApplyParent(parentProduct.Policies.TimeToLive);
 
                     AddProduct(subProduct);
                     UpdateProduct(parentProduct);

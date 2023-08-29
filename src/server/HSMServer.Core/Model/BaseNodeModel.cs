@@ -83,8 +83,8 @@ namespace HSMServer.Core.Model
             Settings.SetParentSettings(parent.Settings);
             Policies.BuildDefault(this, _ttlEntity); //need for correct calculating $product and $path properties
 
-            if (!Settings.TTL.IsSet)
-                Policies.TimeToLive.ApplyParent(parent.Policies.TimeToLive);
+            //if (!Settings.TTL.IsSet)
+            //    Policies.TimeToLive.ApplyParent(parent.Policies.TimeToLive);
 
             return this;
         }
