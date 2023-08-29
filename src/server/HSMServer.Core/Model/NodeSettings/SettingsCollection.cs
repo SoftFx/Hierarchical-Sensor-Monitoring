@@ -36,10 +36,11 @@ namespace HSMServer.Core.Model.NodeSettings
         {
             void Update(SettingProperty<TimeIntervalModel> setting, TimeIntervalModel newVal, [CallerArgumentExpression(nameof(setting))] string propName = "")
             {
-                var canChange = table.Settings[propName].CanChange(update.Initiator);
+                var nodeInfo = table.Settings[propName];
                 var oldVal = setting.CurValue;
 
-                if (canChange && setting.TrySetValue(newVal))
+                if (nodeInfo.CanChange(update.Initiator) && setting.TrySetValue(newVal))
+                {
                     ChangesHandler?.Invoke(new JournalRecordModel(update.Id, update.Initiator)
                     {
                         Enviroment = "Settings update",
@@ -49,6 +50,9 @@ namespace HSMServer.Core.Model.NodeSettings
                         PropertyName = propName,
                         Path = table.Path,
                     });
+
+                    nodeInfo.SetUpdate(update.Initiator);
+                }
             }
 
             Update(TTL, update.TTL);
