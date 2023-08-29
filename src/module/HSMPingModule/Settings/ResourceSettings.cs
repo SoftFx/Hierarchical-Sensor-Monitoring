@@ -9,9 +9,6 @@ internal sealed class ResourceSettings
     public WebSite DefaultSiteNodeSettings { get; set; }
 
 
-    public ResourceSettings(){}
-
-
     public ResourceSettings ApplyDefaultSettings()
     {
         foreach (var (_, value) in WebSites)

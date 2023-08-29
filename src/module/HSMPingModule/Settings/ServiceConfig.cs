@@ -50,8 +50,15 @@ internal sealed class ServiceConfig
 
     public void Reload()
     {
-        _configuration.Reload();
-        Read();
+        try
+        {
+            _configuration.Reload();
+            Read();
+        }
+        catch(Exception exception)
+        {
+            //log exception
+        }
     }
 
 

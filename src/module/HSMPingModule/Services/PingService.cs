@@ -1,6 +1,5 @@
 using System.Collections.Concurrent;
 using HSMPingModule.Config;
-using HSMPingModule.Resourses;
 using HSMPingModule.Services.Interfaces;
 using Microsoft.Extensions.Options;
 
@@ -8,7 +7,7 @@ namespace HSMPingModule.Services;
 
 internal class PingService : BackgroundService
 {
-    private readonly ConcurrentDictionary<string, PingAdapter> _pings = new ();
+    private readonly ConcurrentDictionary<string, ConcurrentDictionary<string, PingAdapter>> _newPings = new();
     private readonly IDataCollectorService _collectorService;
     private readonly ServiceConfig _config;
 
@@ -16,45 +15,51 @@ internal class PingService : BackgroundService
     {
         _collectorService = collectorService;
         _config = config.CurrentValue;
-        _config.OnChange += OnChange;
+        _config.OnChange += RebuildPings;
 
-        foreach (var (hostname, website) in _config.ResourceSettings.WebSites.ToList())
-            foreach (var path in website.Countries.Select(country => $"{hostname}/{country}"))
-                if (!_pings.TryGetValue(path, out _))
-                    _pings.TryAdd(path, new PingAdapter(website, hostname));
+        foreach (var (hostname, website) in _config.ResourceSettings.WebSites)
+            foreach (var country in website.Countries)
+                if (_newPings.TryGetValue(country, out var dict))
+                    dict.TryAdd(hostname, new(website, hostname));
+                else
+                    _newPings.TryAdd(country, new ConcurrentDictionary<string, PingAdapter>()
+                    {
+                        [hostname] = new (website, hostname)
+                    });
     }
 
 
     protected override Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        foreach (var (path, ping) in _pings)
-            _ = ping.StartPinging(path, _collectorService.PingResultSend);
+        foreach (var (country, pings) in _newPings)
+            foreach (var (hostname, ping) in pings)
+                _ = ping.StartPinging($"{hostname}/{country}", _collectorService.PingResultSend);
 
         return Task.CompletedTask;
     }
 
 
-    private void OnChange()
-    {
-        foreach (var (hostname, website) in _config.ResourceSettings.WebSites.ToList())
-            foreach (var path in website.Countries.Select(country => $"{hostname}/{country}"))
-                if (_pings.TryGetValue(path, out var currentPing) )
-                {
-                    if (!currentPing.WebSite.Equals(website) && _pings.TryRemove(path, out currentPing))
-                    {
-                        currentPing.CancelToken();
-                        RegisterNewAdapter(website, hostname, path);
-                    }
-                }
+    private void RebuildPings()
+    { 
+        foreach (var (_, pingAdapter) in _newPings.SelectMany(x => x.Value))
+            pingAdapter.CancelToken();
+
+        _newPings.Clear();
+
+        foreach (var (hostname, website) in _config.ResourceSettings.WebSites)
+            foreach (var country in website.Countries)
+            {
+                var ping = new PingAdapter(website, hostname);
+
+                if (_newPings.TryGetValue(country, out var dict))
+                    dict.TryAdd(hostname, ping);
                 else
-                    RegisterNewAdapter(website, hostname, path);
-    }
+                    _newPings.TryAdd(country, new ConcurrentDictionary<string, PingAdapter>
+                    {
+                        [hostname] = ping
+                    });
 
-    private void RegisterNewAdapter(WebSite website, string hostname, string path)
-    {
-        var newPing = new PingAdapter(website, hostname);
-
-        if (_pings.TryAdd(path, newPing))
-            newPing.StartPinging(path, _collectorService.PingResultSend);
+                ping.StartPinging($"{hostname}/{country}", _collectorService.PingResultSend);
+            }
     }
 }

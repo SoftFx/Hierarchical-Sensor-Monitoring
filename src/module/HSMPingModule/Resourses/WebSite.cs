@@ -26,13 +26,4 @@ internal sealed class WebSite
         },
         SensorUnit = Unit.Seconds
     };
-
-
-    public WebSite(){}
-
-    
-    public bool Equals(WebSite other)
-    {
-        return TTL.Value == other.TTL.Value && PingTimeoutValue.Value == other.PingTimeoutValue.Value && PingDelay.Value == other.PingDelay.Value;
-    }
 }
