@@ -2,20 +2,40 @@ using HSMPingModule.Collector;
 using HSMPingModule.Config;
 using HSMPingModule.Services;
 using HSMPingModule.Services.Interfaces;
+using NLog;
+using NLog.Extensions.Logging;
+using NLog.Web;
 
-var builder = Host.CreateApplicationBuilder(args);
+var logger = LogManager.Setup().LoadConfigurationFromAppSettings().GetCurrentClassLogger();
 
-builder.Configuration.SetBasePath(ServiceConfig.ConfigPath)
-                     .AddJsonFile(ServiceConfig.ConfigName, true);
+try
+{
+    var builder = Host.CreateApplicationBuilder(args);
 
-builder.Services.Configure<ServiceConfig>(config => config.SetUpConfig(builder.Configuration));
+    builder.Logging.ClearProviders();
+    builder.Logging.AddNLog();
 
-builder.Services.AddSingleton<IDataCollectorService, DataCollectorService>();
+    builder.Configuration.SetBasePath(ServiceConfig.ConfigPath)
+        .AddJsonFile(ServiceConfig.ConfigName, true);
 
-builder.Services.AddHostedService(provider => provider.GetService(typeof(IDataCollectorService)) as BackgroundService);
-builder.Services.AddHostedService<SettingsWatcherService>();
-builder.Services.AddHostedService<PingService>();
+    builder.Services.Configure<ServiceConfig>(config => config.SetUpConfig(builder.Configuration));
 
-var app = builder.Build();
+    builder.Services.AddSingleton<IDataCollectorService, DataCollectorService>();
 
-app.Run();
+    builder.Services.AddHostedService(provider => provider.GetService(typeof(IDataCollectorService)) as BackgroundService);
+    builder.Services.AddHostedService<SettingsWatcherService>();
+    builder.Services.AddHostedService<PingService>();
+
+    var app = builder.Build();
+
+    app.Run();
+}
+catch (Exception exception)
+{
+    logger.Fatal(exception, "Stopped program because of exception");
+    throw;
+}
+finally
+{
+    LogManager.Shutdown();
+}
