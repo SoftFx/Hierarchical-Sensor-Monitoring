@@ -26,7 +26,7 @@ namespace HSMServer.Core.Model.Policies
 
         internal abstract void Attach(BaseSensorModel sensor);
 
-        internal abstract void AddDefaultSensors();
+        internal abstract void AddDefault();
 
 
         internal void Reset()
@@ -65,7 +65,7 @@ namespace HSMServer.Core.Model.Policies
             _typePolicy.RebuildState();
         }
 
-        internal override void UpdateTTL(PolicyUpdate update)
+        public override void UpdateTTL(PolicyUpdate update)
         {
             var oldValue = TimeToLive.ToString();
 
@@ -101,7 +101,7 @@ namespace HSMServer.Core.Model.Policies
 
             if (TimeToLive is not null && !TimeToLive.IsDisabled)
             {
-                timeout = TimeToLive.HasTimeout(value.ReceivingTime);
+                timeout = TimeToLive.HasTimeout(value.LastUpdateTime);
 
                 if (timeout)
                 {
@@ -230,24 +230,23 @@ namespace HSMServer.Core.Model.Policies
                 }
         }
 
-        internal override void AddDefaultSensors()
+        internal override void AddDefault()
         {
             var policy = new PolicyType();
-
-            var statusUpdate = new PolicyUpdate(
-                Guid.NewGuid(),
-                new()
+            var statusUpdate = new PolicyUpdate
+            {
+                Id = Guid.NewGuid(),
+                Status = SensorStatus.Ok,
+                Template = $"$prevStatus->$status [$product]$path = $comment",
+                Destination = new(),
+                Conditions = new(1)
                 {
                     new PolicyConditionUpdate(
                         PolicyOperation.IsChanged,
                         PolicyProperty.Status,
                         new TargetValue(TargetType.LastValue, _sensor.Id.ToString())),
                 },
-                null,
-                SensorStatus.Ok,
-                $"$prevStatus->$status [$product]$path = $comment",
-                null,
-                false);
+            };
 
             policy.Update(statusUpdate, _sensor);
 

@@ -1,7 +1,9 @@
 ﻿using HSMCommon.Extensions;
 using HSMServer.Extensions;
 using HSMServer.Model.TreeViewModel;
+using HSMServer.Notifications.Telegram;
 using Microsoft.AspNetCore.Mvc.Rendering;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -20,6 +22,8 @@ namespace HSMServer.Model.DataAlerts
         public ActionType Action { get; set; }
 
 
+        public Dictionary<Guid, string> Chats { get; set; } = new();
+
         public string Comment { get; set; }
 
         public string Icon { get; set; }
@@ -31,6 +35,7 @@ namespace HSMServer.Model.DataAlerts
 
     public class ActionViewModel : AlertActionBase
     {
+        public static readonly Guid AllChatsId = Guid.Empty;
         public static readonly string SetErrorStatus = $"set {SensorStatus.Error.ToSelectIcon()} {SensorStatus.Error.GetDisplayName()} status";
 
         private readonly Dictionary<ActionType, string> _actions = new()
@@ -41,17 +46,25 @@ namespace HSMServer.Model.DataAlerts
         };
 
 
+        public List<TelegramChat> AvailableChats { get; }
+
         public List<SelectListItem> Actions { get; }
 
         public bool IsMain { get; }
 
 
-        public ActionViewModel(bool isMain)
+        public ActionViewModel(bool isMain, List<TelegramChat> availableChats)
         {
             IsMain = isMain;
             Actions = _actions.ToSelectedItems(k => k.Value, v => v.Key.ToString());
+            AvailableChats = availableChats;
 
             Action = ActionType.SendNotification;
         }
+
+
+        public List<TelegramChat> GetChats(bool isUser) => AvailableChats.Where(ch => ch.IsUserChat == isUser).ToList();
+
+        public bool ChatIsSelected(TelegramChat chat) => Chats?.ContainsKey(chat.SystemId) ?? false;
     }
 }

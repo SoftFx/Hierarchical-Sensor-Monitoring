@@ -4,8 +4,6 @@ namespace HSMDataCollector.DefaultSensors.Windows
 {
     internal sealed class WindowsProcessCpu : WindowsSensorBase
     {
-        protected override string SensorName => "Process CPU";
-
         protected override string CategoryName => "Process";
 
         protected override string CounterName => "% Processor Time";

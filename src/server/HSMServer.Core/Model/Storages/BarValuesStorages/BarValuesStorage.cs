@@ -30,7 +30,7 @@ namespace HSMServer.Core.Model
                     _prevValue = PartialLastValue;
                     base.AddValue(PartialLastValue);
                 }
-            
+
                 PartialLastValue = value;
             }
             else

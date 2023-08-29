@@ -36,6 +36,8 @@ namespace HSMServer.Core.Model.Policies
 
         public SensorStatus Status { get; private set; }
 
+        public PolicyDestination Destination { get; set; } // TODO: should be private set and new() by default after policies destination migration
+
         public bool IsDisabled { get; private set; }
 
         public string Icon { get; private set; }
@@ -77,6 +79,7 @@ namespace HSMServer.Core.Model.Policies
             condition ??= Conditions?.FirstOrDefault();
 
             State.Operation = condition?.Operation.GetDisplayName();
+            State.Property = condition?.Property.ToString();
             State.Target = condition?.Target.Value;
 
             Comment = State.BuildComment();
@@ -94,13 +97,20 @@ namespace HSMServer.Core.Model.Policies
                 condition.Combination = update.Combination;
                 condition.Operation = update.Operation;
                 condition.Property = update.Property;
-                condition.Target = update.Target;
+
+                var target = update.Target;
+                if (target is not null && target.Type == TargetType.LastValue && target.Value is null)
+                    target = update.Target with { Value = _sensor?.Id.ToString() };
+
+                condition.Target = target;
 
                 return condition;
             }
 
             _sensor ??= sensor;
 
+            Destination ??= new(); // TODO remove after policies migration
+            Destination.Update(update.Destination);
             Sensitivity = update.Sensitivity;
             IsDisabled = update.IsDisabled;
             Template = update.Template;
@@ -126,6 +136,9 @@ namespace HSMServer.Core.Model.Policies
             if (entity.Sensitivity is not null)
                 Sensitivity = new TimeIntervalModel(entity.Sensitivity);
 
+            if (entity.Destination is not null)
+                Destination = new PolicyDestination(entity.Destination);
+
             UpdateConditions(entity.Conditions, Update);
         }
 
@@ -136,6 +149,7 @@ namespace HSMServer.Core.Model.Policies
             Conditions = Conditions?.Select(u => u.ToEntity()).ToList(),
 
             Sensitivity = Sensitivity?.ToEntity(),
+            Destination = Destination?.ToEntity(),
             SensorStatus = (byte)Status,
             IsDisabled = IsDisabled,
             Template = Template,
@@ -189,6 +203,9 @@ namespace HSMServer.Core.Model.Policies
 
             if (!string.IsNullOrEmpty(Template))
                 actions.Add($"template={Template}");
+
+            if (Destination is not null)
+                actions.Add(Destination.ToString());
 
             if (!string.IsNullOrEmpty(Icon))
                 actions.Add($"show icon={Icon}");

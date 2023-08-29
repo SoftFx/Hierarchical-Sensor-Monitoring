@@ -93,6 +93,13 @@ namespace HSMServer.Core.Model
 
         internal override BaseValue GetEmptyValue() => new T();
 
+        internal virtual void AggregateValue(T value)
+        {
+            if (LastValue is null || LastTimeout?.ReceivingTime > LastValue.ReceivingTime || !LastValue.TryAggregateValue(value))
+                AddValue(value);
+        }
+
+
         internal override List<BaseValue> GetValues(int count) =>
             _cache.Take(count).Select(v => (BaseValue)v).ToList();
 
@@ -101,7 +108,7 @@ namespace HSMServer.Core.Model
 
         internal override void Clear(DateTime to)
         {
-            while (_cache.FirstOrDefault()?.ReceivingTime <= to)
+            while (_cache.FirstOrDefault()?.LastUpdateTime <= to)
                 _cache.TryDequeue(out _);
 
             if (_cache.IsEmpty)

@@ -1,11 +1,12 @@
-using System;
 using HSMServer.Model.Authentication;
 using HSMServer.Model.TreeViewModel;
+using HSMServer.Model.ViewModel;
+using HSMServer.Notifications.Telegram;
 using HSMServer.UserFilters;
 using Microsoft.AspNetCore.Html;
+using System;
 using System.Collections.Generic;
 using System.Linq;
-using HSMServer.Model.ViewModel;
 
 namespace HSMServer.Extensions
 {
@@ -14,6 +15,16 @@ namespace HSMServer.Extensions
         private const int NodeNameMaxLength = 35;
         private const int CellNameMaxLength = 13;
         private const int IconSize = 3;
+
+
+        internal static List<TelegramChat> GetAllChats(this NodeViewModel node)
+        {
+            var availableGroups = node.RootProduct.Notifications.Telegram.Chats.Values;
+            var availableUsers = node.RootProduct.GetAllUserChats().Values;
+
+            return availableGroups.Union(availableUsers).OrderBy(chat => chat.IsUserChat).ThenBy(chat => chat.Name).ToList();
+        }
+
 
         internal static string ToCssIconClass(this SensorStatus status) =>
             status switch

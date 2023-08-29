@@ -32,5 +32,8 @@ namespace HSMServer.Core.Model
 
         public override string ShortInfo =>
             $"Min = {Min}, Mean = {Mean}, Max = {Max}, Count = {Count}, Last = {LastValue}.";
+
+
+        protected override bool IsEqual(BaseValue value) => false;
     }
 }

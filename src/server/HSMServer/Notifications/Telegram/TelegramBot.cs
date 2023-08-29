@@ -5,6 +5,7 @@ using HSMServer.Model.TreeViewModel;
 using HSMServer.Notification.Settings;
 using HSMServer.ServerConfiguration;
 using System;
+using System.Collections.Concurrent;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -171,18 +172,30 @@ namespace HSMServer.Notifications
             try
             {
                 if (IsBotRunning && _config.IsRunning)
-                    foreach (var (entity, chats) in _addressBook.ServerBook)
-                        foreach (var (_, chat) in chats)
-                            if (entity.CanSendData(result.SensorId, chat.ChatId))
-                            {
-                                var isInstant = entity.Notifications.UsedTelegram.MessagesDelaySec == 0;
+                {
+                    var uniqueChats = new ConcurrentDictionary<Guid, ChatSettings>();
 
-                                foreach (var alert in result)
-                                    if (isInstant)
-                                        SendMessage(chat.ChatId, alert.ToString());
-                                    else
-                                        chat.MessageBuilder.AddMessage(alert);
+                    foreach (var (entity, chats) in _addressBook.ServerBook)
+                    {
+                        foreach (var (_, chat) in chats)
+                            uniqueChats.TryAdd(chat.SystemId, chat);
+                    }
+
+                    foreach (var (_, chat) in uniqueChats)
+                    //if (entity.CanSendData(result.SensorId, chat.ChatId))
+                    {
+                        var isInstant = false; //entity.Notifications.UsedTelegram.MessagesDelaySec == 0;
+
+                        foreach (var alert in result)
+                            if (alert.Destination.AllChats || alert.Destination.Chats.Contains(chat.SystemId))
+                            {
+                                if (isInstant)
+                                    SendMessage(chat.ChatId, alert.ToString());
+                                else
+                                    chat.MessageBuilder.AddMessage(alert);
                             }
+                    }
+                }
             }
             catch (Exception ex)
             {
@@ -196,25 +209,32 @@ namespace HSMServer.Notifications
             {
                 try
                 {
+                    var uniqueChats = new ConcurrentDictionary<Guid, ChatSettings>();
+
                     foreach (var (entity, chats) in _addressBook.ServerBook)
+                    {
                         foreach (var (_, chat) in chats)
+                            uniqueChats.TryAdd(chat.SystemId, chat);
+                    }
+
+                    foreach (var (_, chat) in uniqueChats)
+                    {
+                        try
                         {
-                            try
-                            {
-                                var messagesDelay = entity.Notifications.UsedTelegram.MessagesDelaySec;
+                            var messagesDelay = 60; //entity.Notifications.UsedTelegram.MessagesDelaySec;
 
-                                if (messagesDelay > 0 && chat.MessageBuilder.ExpectedSendingTime <= DateTime.UtcNow)
-                                {
-                                    var message = chat.MessageBuilder.GetAggregateMessage(messagesDelay);
-
-                                    SendMessage(chat.ChatId, message);
-                                }
-                            }
-                            catch (Exception ex)
+                            if (messagesDelay > 0 && chat.MessageBuilder.ExpectedSendingTime <= DateTime.UtcNow)
                             {
-                                _logger.Error($"Error getting message: {entity.Name}, {chat.Chat.Name} - {ex}");
+                                var message = chat.MessageBuilder.GetAggregateMessage(messagesDelay);
+
+                                SendMessage(chat.ChatId, message);
                             }
                         }
+                        catch (Exception ex)
+                        {
+                            _logger.Error($"Error getting message: {chat.Chat.Name} - {ex}");
+                        }
+                    }
 
                     if (_tokenSource.IsCancellationRequested)
                         break;
