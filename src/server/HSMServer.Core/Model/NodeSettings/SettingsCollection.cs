@@ -34,7 +34,7 @@ namespace HSMServer.Core.Model.NodeSettings
 
         internal void Update(BaseNodeUpdate update, ChangeInfoTable table)
         {
-            void Update(SettingProperty<TimeIntervalModel> setting, TimeIntervalModel newVal, [CallerArgumentExpression(nameof(setting))] string propName = "")
+            void Update(SettingProperty<TimeIntervalModel> setting, TimeIntervalModel newVal, [CallerArgumentExpression(nameof(setting))] string propName = "", NoneValues none = NoneValues.Never)
             {
                 var nodeInfo = table.Settings[propName];
                 var oldVal = setting.CurValue;
@@ -44,8 +44,8 @@ namespace HSMServer.Core.Model.NodeSettings
                     ChangesHandler?.Invoke(new JournalRecordModel(update.Id, update.Initiator)
                     {
                         Enviroment = "Settings update",
-                        OldValue = $"{oldVal}",
-                        NewValue = $"{newVal}",
+                        OldValue = oldVal.IsNone ? $"{none}" : $"{oldVal}",
+                        NewValue = newVal.IsNone ? $"{none}" : $"{newVal}",
 
                         PropertyName = propName,
                         Path = table.Path,
@@ -57,7 +57,7 @@ namespace HSMServer.Core.Model.NodeSettings
 
             Update(TTL, update.TTL);
             Update(SelfDestroy, update.SelfDestroy, "Remove sensor after inactivity");
-            Update(KeepHistory, update.KeepHistory, "Keep sensor history");
+            Update(KeepHistory, update.KeepHistory, "Keep sensor history", NoneValues.Forever);
         }
 
 

@@ -21,6 +21,7 @@ namespace HSMServer.Core.Model
         Custom = byte.MaxValue,
     }
 
+
     public enum TimeInterval : long
     {
         FromFolder = -100,
@@ -36,6 +37,13 @@ namespace HSMServer.Core.Model
     }
 
 
+    public enum NoneValues
+    {
+        Never,
+        Forever,
+    }
+
+
     public class TimeIntervalModel
     {
         public static TimeIntervalModel None { get; } = new(TimeInterval.None);
@@ -45,6 +53,8 @@ namespace HSMServer.Core.Model
 
         public long Ticks { get; }
 
+
+        public bool IsNone => Interval is TimeInterval.None;
 
         public bool IsFromFolder => Interval is TimeInterval.FromFolder;
 
