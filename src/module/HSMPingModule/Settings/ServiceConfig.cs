@@ -60,8 +60,7 @@ internal sealed class ServiceConfig
     private void Read()
     {
         CollectorSettings = Read<CollectorSettings>(nameof(CollectorSettings));
-        ResourceSettings.DefaultSiteNodeSettings = null;
-        ResourceSettings = new (Read<ResourceSettings>(nameof(ResourceSettings)));
+        ResourceSettings = Read<ResourceSettings>(nameof(ResourceSettings)).ApplyDefaultSettings();
         OnChange?.Invoke();
     }
 }

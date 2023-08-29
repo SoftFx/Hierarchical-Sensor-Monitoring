@@ -6,13 +6,25 @@ internal sealed class ResourceSettings
 {
     public Dictionary<string, WebSite> WebSites { get; set; }
 
-    public static WebSite DefaultSiteNodeSettings { get; set; }
+    public WebSite DefaultSiteNodeSettings { get; set; }
 
 
     public ResourceSettings(){}
-    
-    public ResourceSettings(ResourceSettings settings)
+
+
+    public ResourceSettings ApplyDefaultSettings()
     {
-        WebSites = new Dictionary<string, WebSite>(settings.WebSites.ToDictionary(x => x.Key, y => new WebSite(y.Value)));
+        foreach (var (_, value) in WebSites)
+            ApplyDefaultSettings(value);
+
+        return this;
+
+        void ApplyDefaultSettings(WebSite currentWebSite)
+        {
+            currentWebSite.PingDelay ??= DefaultSiteNodeSettings.PingDelay;
+            currentWebSite.PingTimeoutValue ??= DefaultSiteNodeSettings.PingTimeoutValue;
+            currentWebSite.Countries ??= DefaultSiteNodeSettings.Countries;
+            currentWebSite.TTL ??= DefaultSiteNodeSettings.TTL;
+        }
     }
 }
