@@ -81,7 +81,7 @@ namespace HSMServer.Core.Model
                 AddValue((T)value);
                 return true;
             }
-            
+
             if (_cache.TryDequeue(out _) || _cache.IsEmpty)
             {
                 AddValue((T)value);

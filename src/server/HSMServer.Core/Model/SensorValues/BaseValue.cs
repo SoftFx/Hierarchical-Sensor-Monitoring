@@ -65,6 +65,7 @@ namespace HSMServer.Core.Model
         [JsonIgnore]
         public virtual string ShortInfo { get; }
 
+
         public abstract BaseValue TrySetValue(string str);
 
 

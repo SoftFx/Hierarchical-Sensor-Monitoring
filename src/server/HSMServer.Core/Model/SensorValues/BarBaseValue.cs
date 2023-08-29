@@ -27,12 +27,11 @@ namespace HSMServer.Core.Model
 
         public T LastValue { get; init; }
 
-
-        public override BaseValue TrySetValue(string str) => this;
-
         public override string ShortInfo =>
             $"Min = {Min}, Mean = {Mean}, Max = {Max}, Count = {Count}, Last = {LastValue}.";
 
+
+        public override BaseValue TrySetValue(string str) => this;
 
         protected override bool IsEqual(BaseValue value) => false;
     }

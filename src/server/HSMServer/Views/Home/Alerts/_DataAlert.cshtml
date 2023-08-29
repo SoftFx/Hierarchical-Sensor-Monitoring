@@ -49,7 +49,7 @@
     {
         @if (action.Action == ActionType.SendNotification && action.Chats.Count > 0)
         {
-            actions.Add(new HtmlString($"<span>send notification <i>{action.DisplayComment}</i> at </span><span style='color: #0366d6;'>{(action.Chats.ContainsKey(ActionViewModel.AllChatsId) ? "all chats" : string.Join(", ", action.Chats.Values))}</span>"));
+            actions.Add(new HtmlString($"<span>send notification <i>{action.DisplayComment}</i> to </span><span style='color: #0366d6;'>{(action.Chats.ContainsKey(ActionViewModel.AllChatsId) ? "all chats" : string.Join(", ", action.Chats.Values))}</span>"));
         }
         else if (action.Action == ActionType.ShowIcon)
         {

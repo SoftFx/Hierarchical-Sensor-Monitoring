@@ -24,7 +24,7 @@ namespace HSMServer.Model.DataAlerts
         public bool IsModify { get; protected set; }
 
 
-        internal PolicyUpdate ToUpdate()
+        internal PolicyUpdate ToUpdate(Dictionary<Guid, string> availavleChats)
         {
             List<PolicyConditionUpdate> conditions = new(Conditions.Count);
             Core.Model.TimeIntervalModel sensitivity = null;
@@ -47,7 +47,7 @@ namespace HSMServer.Model.DataAlerts
                 conditions.Add(new PolicyConditionUpdate(condition.Operation, condition.Property.ToCore(), target));
             }
 
-            (var status, var destination, var comment, var icon) = GetActions();
+            (var status, var destination, var comment, var icon) = GetActions(availavleChats);
 
             return new()
             {
@@ -62,9 +62,9 @@ namespace HSMServer.Model.DataAlerts
             };
         }
 
-        internal PolicyUpdate ToTimeToLiveUpdate(string initiator)
+        internal PolicyUpdate ToTimeToLiveUpdate(string initiator, Dictionary<Guid, string> availavleChats)
         {
-            (var status, var destination, var comment, var icon) = GetActions();
+            (var status, var destination, var comment, var icon) = GetActions(availavleChats);
 
             return new()
             {
@@ -79,7 +79,7 @@ namespace HSMServer.Model.DataAlerts
         }
 
 
-        private (SensorStatus status, PolicyDestinationUpdate destination, string comment, string icon) GetActions()
+        private (SensorStatus status, PolicyDestinationUpdate destination, string comment, string icon) GetActions(Dictionary<Guid, string> availavleChats)
         {
             PolicyDestinationUpdate destination = null;
             SensorStatus status = SensorStatus.Ok;
@@ -91,7 +91,7 @@ namespace HSMServer.Model.DataAlerts
                 if (action.Action == ActionType.SendNotification)
                 {
                     bool allChats = action.Chats?.ContainsKey(ActionViewModel.AllChatsId) ?? false;
-                    Dictionary<Guid, string> chats = allChats ? new(0) : action.Chats ?? new(0);
+                    Dictionary<Guid, string> chats = allChats ? availavleChats : action.Chats ?? new(0);
 
                     destination = new PolicyDestinationUpdate(allChats, chats);
                     comment = action.Comment;
