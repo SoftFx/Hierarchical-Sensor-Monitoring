@@ -208,7 +208,20 @@ namespace HSMServer.ApiObjectsConverters
                 Options = request.Options
             };
 
-        
+        public static SensorValueBase CreateNewSensorValue(SensorType sensorType) => sensorType switch
+        {
+            SensorType.Boolean => new BoolSensorValue(),
+            SensorType.IntegerBar => new IntBarSensorValue(),
+            SensorType.DoubleBar => new DoubleBarSensorValue(),
+            SensorType.Double => new DoubleSensorValue(),
+            SensorType.Integer => new IntSensorValue(),
+            SensorType.String => new StringSensorValue(),
+            SensorType.File => new FileSensorValue(),
+            SensorType.TimeSpan => new TimeSpanSensorValue(),
+            SensorType.Version => new VersionSensorValue(),
+            _ => null
+        };
+
         public static ApiSensorStatus ToApi(this Model.TreeViewModel.SensorStatus status) =>
             status switch
             {

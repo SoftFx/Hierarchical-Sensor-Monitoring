@@ -63,26 +63,10 @@
                                 </button>
                             </div>
                         </div>
-                        @if (Model.IsValueChangeBlockDisplayed)
-                        {
-                            <div class="d-flex flex-column mt-2">
-                                <label class="form-label" asp-for="@Model.NewValue"></label>
-                                <textarea class="form-control" asp-for="@Model.NewValue"></textarea>
-                                <span asp-validation-for="@Model.NewValue"></span>
-                            </div>
-                        }
                         <div class="d-flex flex-column mt-2">
-                            <label class="form-label" asp-for="@Model.Comment"></label>
-                            <textarea class="form-control" asp-for="@Model.Comment"></textarea>
-                            <span asp-validation-for="Comment"></span>
-                        </div>
-                    </div>
-                    <div class="form-group mt-2">
-                        <div class="d-flex flex-column">
-                            <div class="d-flex flex-row align-items-center">
-                                <label class="form-label" asp-for="ChangeLast"></label>
-                                <input class="ms-2" asp-for="ChangeLast" type="checkbox" checked/>
-                            </div>
+                            <label class="form-label" asp-for="@Model.Reason"></label>
+                            <textarea class="form-control" asp-for="@Model.Reason"></textarea>
+                            <span asp-validation-for="Reason"></span>
                         </div>
                     </div>
 
@@ -108,19 +92,30 @@
         if (!allowSubmitEditStatus) return;
         
         allowSubmitEditStatus = false;
-        let data = new FormData(this);
         $.ajax({
             url: $("#editSensorStatus_form").attr("action"),
             type: 'POST',
-            data: data,
+            data: new FormData(this),
             datatype: 'html',
             processData: false,
             contentType: false,
             async: true,
             success: function (response) {
-                if (response === '') {
-                    hideEditSensorModal();
-                }
+                if (response.sensor.type === 8)
+                    response.sensor.value = "0.0.0.0";
+                    
+                 $.ajax({
+                     url: '/api/Sensors/list',
+                     headers: { 'key': response.key },
+                     type: 'POST',
+                     contentType: 'application/json',
+                     dataType: 'JSON',
+                     data: JSON.stringify([response.sensor]),
+                     async: true,
+                     success: function () {
+                        hideEditSensorModal();
+                     }
+                 })
             },
             error: function (jqXHR) {
                 $('span.field-validation-valid').each(function () {

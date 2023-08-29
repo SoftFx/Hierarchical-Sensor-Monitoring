@@ -27,17 +27,13 @@ namespace HSMServer.Core.Model
 
         internal abstract List<BaseValue> GetValues(int count);
 
-        internal abstract bool TryChangeLastValue(BaseValue value, bool changeLast = false);
-
-        internal abstract BaseValue GetEmptyValue();
-
         internal abstract void Clear(DateTime to);
 
         internal abstract void Clear();
     }
 
 
-    public abstract class ValuesStorage<T> : ValuesStorage where T : BaseValue, new()
+    public abstract class ValuesStorage<T> : ValuesStorage where T : BaseValue
     {
         private readonly ConcurrentQueue<T> _cache = new();
 
@@ -74,24 +70,6 @@ namespace HSMServer.Core.Model
             }
         }
 
-        internal override bool TryChangeLastValue(BaseValue value, bool changeLast = false)
-        {
-            if (!changeLast)
-            {
-                AddValue((T)value);
-                return true;
-            }
-            
-            if (_cache.TryDequeue(out _) || _cache.IsEmpty)
-            {
-                AddValue((T)value);
-                return true;
-            }
-
-            return false;
-        }
-
-        internal override BaseValue GetEmptyValue() => new T();
 
         internal override List<BaseValue> GetValues(int count) =>
             _cache.Take(count).Select(v => (BaseValue)v).ToList();
