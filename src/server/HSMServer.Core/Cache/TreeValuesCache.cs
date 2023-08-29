@@ -483,6 +483,7 @@ namespace HSMServer.Core.Cache
         {
             foreach (var (_, sensor) in _sensors)
                 if (productName is null || sensor.RootProductName == productName)
+                {
                     foreach (var policy in sensor.Policies)
                         if (policy.Destination.AllChats && !policy.Destination.Chats.ContainsKey(chatId))
                         {
@@ -491,12 +492,16 @@ namespace HSMServer.Core.Cache
 
                             UpdatePolicy(ActionType.Update, policy);
                         }
+
+                    sensor.Policies.TimeToLive.AddDestination(chatId, name);
+                }
         }
 
         public void RemoveChat(Guid chatId, string productName)
         {
             foreach (var (_, sensor) in _sensors)
                 if (productName is null || sensor.RootProductName == productName)
+                {
                     foreach (var policy in sensor.Policies)
                         if (policy.Destination.Chats.Remove(chatId))
                         {
@@ -504,6 +509,9 @@ namespace HSMServer.Core.Cache
 
                             UpdatePolicy(ActionType.Update, policy);
                         }
+
+                    sensor.Policies.TimeToLive.RemoveDestination(chatId);
+                }
         }
 
         private void UpdatePolicy(ActionType type, Policy policy)

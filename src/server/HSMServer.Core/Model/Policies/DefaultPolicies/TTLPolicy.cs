@@ -62,6 +62,24 @@ namespace HSMServer.Core.Model.Policies
             _okPolicy.Update(update with { Template = _okPolicy.OkTemplate, Icon = null }, sensor);
         }
 
+        internal void AddDestination(Guid id, string name)
+        {
+            Destination.Chats.Add(id, name);
+            _okPolicy.Destination.Chats.Add(id, name);
+
+            RebuildState();
+            _okPolicy.RebuildState();
+        }
+
+        internal void RemoveDestination(Guid id)
+        {
+            Destination.Chats.Remove(id);
+            _okPolicy.Destination.Chats.Remove(id);
+
+            RebuildState();
+            _okPolicy.RebuildState();
+        }
+
         internal bool HasTimeout(DateTime? time) => !_ttl.IsEmpty && time.HasValue && _ttl.Value.TimeIsUp(time.Value);
 
         public override string ToString()
