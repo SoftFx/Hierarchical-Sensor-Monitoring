@@ -44,10 +44,9 @@ internal sealed class PingAdapter : Ping
     public Task StartPinging(string path, Func<WebSite, string, Task<PingResponse>, Task> callBackFunc) => Task.Run(async () =>
     {
         var timer = new PeriodicTimer(TimeSpan.FromSeconds(WebSite.PingDelay.Value));
+
         while (await timer.WaitForNextTickAsync(_token.Token))
-        {
-            _ = SendPingRequest().ContinueWith((reply) => callBackFunc(WebSite, path, reply), _token.Token);
-        }
+            _ = SendPingRequest().ContinueWith((reply) => callBackFunc(WebSite, path, reply), _token.Token).Unwrap();
     }, _token.Token);
 
 
