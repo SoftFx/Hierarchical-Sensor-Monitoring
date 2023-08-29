@@ -47,9 +47,7 @@ internal class PingService : BackgroundService
                     }
                 }
                 else
-                {
                     RegisterNewAdapter(website, hostname, path);
-                }
     }
 
     private void RegisterNewAdapter(WebSite website, string hostname, string path)

@@ -14,7 +14,7 @@ internal sealed class WebSite
 
     public TimeSpan? TTL { get; set; }
 
-    public double? PingTimeoutValue { get; set; }
+    public int? PingTimeoutValue { get; set; }
     
     public int? PingDelay { get; set; }
 

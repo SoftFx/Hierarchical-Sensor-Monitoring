@@ -17,10 +17,9 @@ internal class SettingsWatcherService : BackgroundService
 
         _watcher = new FileSystemWatcher(ServiceConfig.ConfigPath, ServiceConfig.ConfigName)
         {
-            NotifyFilter = NotifyFilters.LastWrite
+            NotifyFilter = NotifyFilters.LastWrite,
+            EnableRaisingEvents = true
         };
-        
-        _watcher.EnableRaisingEvents = true;
 
         _watcher.Changed += OnAppSettingsChanged;
     }
