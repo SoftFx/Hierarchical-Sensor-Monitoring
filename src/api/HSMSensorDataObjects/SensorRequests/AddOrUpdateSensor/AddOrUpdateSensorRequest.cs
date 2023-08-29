@@ -10,9 +10,13 @@ namespace HSMSensorDataObjects.SensorRequests
         KB = 2,
         MB = 3,
         GB = 4,
-        Seconds = 5,
 
         Percents = 100,
+
+        Ticks = 1000,
+        Milliseconds = 1010,
+        Seconds = 1011,
+        Minutes = 1012
     }
 
 
