@@ -44,14 +44,15 @@ namespace HSMServer.Core.Model.Policies
 
         internal void ApplyParent(TTLPolicy parent)
         {
-            Update(new PolicyUpdate()
+            var update = new PolicyUpdate()
             {
-                Destination = parent.Destination is null ? null : new PolicyDestinationUpdate(parent.Destination.AllChats, parent.Destination.Chats), // TODO: null checking should be removed after policies migration
-
+                Destination = parent.Destination is null ? null : new PolicyDestinationUpdate(parent.Destination.AllChats, parent.Destination.Chats), // TODO: null checking should be removed after policies migration,
                 Id = Id,
                 Template = parent.Template,
                 Icon = parent.Icon,
-            }, _sensor);
+            };
+
+            FullUpdate(update, _sensor);
         }
 
 
