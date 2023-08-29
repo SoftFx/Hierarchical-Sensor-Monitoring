@@ -11,8 +11,8 @@ namespace HSMServer.Core.Model
 {
     public abstract class BaseNodeModel : IChangesEntity
     {
+        private readonly protected ChangeInfoTable _changeTable;
         private readonly PolicyEntity _ttlEntity;
-        private protected ChangeInfoTable _changeTable;
 
 
         public abstract PolicyCollectionBase Policies { get; }
@@ -47,7 +47,7 @@ namespace HSMServer.Core.Model
 
         protected BaseNodeModel()
         {
-            _changeTable = new ChangeInfoTable();
+            _changeTable = new ChangeInfoTable(() => FullPath);
 
             Id = Guid.NewGuid();
             CreationDate = DateTime.UtcNow;
@@ -61,7 +61,7 @@ namespace HSMServer.Core.Model
 
         protected BaseNodeModel(BaseNodeEntity entity) : this()
         {
-            _changeTable = new ChangeInfoTable(entity.ChangeInfo);
+            _changeTable.FromEntity(entity.ChangeInfo);
             _ttlEntity = entity.TTLPolicy;
 
             Id = Guid.Parse(entity.Id);
@@ -98,9 +98,9 @@ namespace HSMServer.Core.Model
         {
             Description = UpdateProperty(Description, update.Description ?? Description, update.Initiator);
 
-            Settings.Update(update, FullPath);
+            Settings.Update(update, _changeTable);
 
-            if (update.TTLPolicy is not null)
+            if (update.TTLPolicy is not null && _changeTable.TtlPolicy.CanChange(update.Initiator))
                 UpdateTTL(update.TTLPolicy);
 
             CheckTimeout();
@@ -109,7 +109,7 @@ namespace HSMServer.Core.Model
 
         protected T UpdateProperty<T>(T oldValue, T newValue, InitiatorInfo initiator, [CallerArgumentExpression(nameof(oldValue))] string propName = "")
         {
-            var canChange = _changeTable.Properties[propName].Initiator.Type <= initiator.Type;
+            var canChange = _changeTable.Properties[propName].CanChange(initiator);
 
             if (canChange && newValue is not null && !newValue.Equals(oldValue ?? newValue))
                 ChangesHandler?.Invoke(new JournalRecordModel(Id, initiator)

@@ -23,7 +23,7 @@ namespace HSMServer.Core.Model.Policies
         public event Action<JournalRecordModel> ChangesHandler;
 
 
-        internal abstract void Update(List<PolicyUpdate> updates, InitiatorInfo initiator);
+        internal abstract void Update(List<PolicyUpdate> updates, ChangeInfoTable table, InitiatorInfo initiator);
 
         internal abstract void Attach(BaseSensorModel sensor);
 
@@ -173,29 +173,30 @@ namespace HSMServer.Core.Model.Policies
                 _storage.TryAdd(policy.Id, typedPolicy);
         }
 
-        internal override void Update(List<PolicyUpdate> updatesList, InitiatorInfo initiator)
+        internal override void Update(List<PolicyUpdate> updatesList, ChangeInfoTable table, InitiatorInfo initiator)
         {
             var updates = updatesList.Where(u => u.Id != Guid.Empty).ToDictionary(u => u.Id);
 
             foreach (var (id, policy) in _storage)
-            {
-                if (updates.TryGetValue(id, out var update))
+                if (table.Policies[id].CanChange(initiator))
                 {
-                    var oldPolicy = policy.ToString();
+                    if (updates.TryGetValue(id, out var update))
+                    {
+                        var oldPolicy = policy.ToString();
 
-                    policy.Update(update);
+                        policy.Update(update);
 
-                    CallJournal(oldPolicy, policy.ToString(), initiator);
+                        CallJournal(oldPolicy, policy.ToString(), initiator);
 
-                    Uploaded?.Invoke(ActionType.Update, policy);
+                        Uploaded?.Invoke(ActionType.Update, policy);
+                    }
+                    else if (_storage.TryRemove(id, out var oldPolicy))
+                    {
+                        CallJournal(oldPolicy.ToString(), string.Empty, initiator);
+
+                        Uploaded?.Invoke(ActionType.Delete, oldPolicy);
+                    }
                 }
-                else if (_storage.TryRemove(id, out var oldPolicy))
-                {
-                    CallJournal(oldPolicy.ToString(), string.Empty, initiator);
-
-                    Uploaded?.Invoke(ActionType.Delete, oldPolicy);
-                }
-            }
 
             foreach (var update in updatesList)
                 if (update.Id == Guid.Empty)

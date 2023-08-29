@@ -1,46 +1,54 @@
-﻿using HSMCommon.Collections;
-using HSMDatabase.AccessManager.DatabaseEntities;
+﻿using HSMDatabase.AccessManager.DatabaseEntities;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 
 namespace HSMServer.Core.TableOfChanges
 {
-    internal class ChangeCollection : CDictBase<string, ChangeInfo>
-    {
-        public ChangeCollection() { }
-
-        public ChangeCollection(Dictionary<string, ChangeInfo> dict) : base(dict) { }
-    }
-
-
     internal sealed class ChangeInfoTable
     {
-        public ChangeCollection Properties { get; } = new();
-
-        public ChangeCollection Settings { get; } = new();
-
-        public ChangeCollection Policies { get; } = new();
+        private readonly Func<string> _getFullPath;
 
 
-        public string Path { get; }
+        public GuidChangeCollection Policies { get; private set; } = new();
+
+        public ChangeCollection Properties { get; private set; } = new();
+
+        public ChangeCollection Settings { get; private set; } = new();
 
 
-        public ChangeInfoTable() { }
+        public ChangeInfo TtlPolicy { get; private set; }
 
-        public ChangeInfoTable(ChangeInfoTableEntity entity)
+
+        public string Path => _getFullPath?.Invoke();
+
+
+        public ChangeInfoTable(Func<string> getPath)
+        {
+            _getFullPath = getPath;
+        }
+
+
+        public void FromEntity(ChangeInfoTableEntity entity)
         {
             static ChangeCollection BuildCollection(Dictionary<string, ChangeInfoEntity> collection) =>
                 new(collection.ToDictionary(k => k.Key, v => new ChangeInfo(v.Value)));
 
+            entity ??= new ChangeInfoTableEntity();
+
+            Policies = new(entity.Policies.ToDictionary(k => new Guid(k.Key), v => new ChangeInfo(v.Value)));
             Properties = BuildCollection(entity.Properties);
             Settings = BuildCollection(entity.Settings);
-            Policies = BuildCollection(entity.Policies);
+
+            TtlPolicy = new ChangeInfo(entity.TTLPolicy);
         }
 
-
-        public ChangeInfoTableEntity ToEntity()
-        {
-            return new();
-        }
+        public ChangeInfoTableEntity ToEntity() =>
+            new()
+            {
+                Policies = Policies.ToEntity(),
+                Settings = Settings.ToEntity(),
+                Properties = Properties.ToEntity(),
+            };
     }
 }

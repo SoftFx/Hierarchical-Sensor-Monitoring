@@ -38,6 +38,12 @@ namespace HSMServer.Core.TableOfChanges
         public static InitiatorInfo AsCollector(string key) => new(InitiatorType.DataCollector, key);
 
 
+        public InitiatorInfoEntity ToEntity() => new()
+        {
+            Type = (byte)Type,
+            Info = Info,
+        };
+
         public override string ToString()
         {
             var sb = new StringBuilder(1 << 5);

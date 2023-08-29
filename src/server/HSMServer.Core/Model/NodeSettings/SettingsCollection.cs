@@ -1,6 +1,7 @@
 using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Journal;
+using HSMServer.Core.TableOfChanges;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -31,13 +32,14 @@ namespace HSMServer.Core.Model.NodeSettings
         }
 
 
-        internal void Update(BaseNodeUpdate update, string path)
+        internal void Update(BaseNodeUpdate update, ChangeInfoTable table)
         {
             void Update(SettingProperty<TimeIntervalModel> setting, TimeIntervalModel newVal, [CallerArgumentExpression(nameof(setting))] string propName = "")
             {
+                var canChange = table.Settings[propName].CanChange(update.Initiator);
                 var oldVal = setting.CurValue;
 
-                if (setting.TrySetValue(newVal))
+                if (canChange && setting.TrySetValue(newVal))
                     ChangesHandler?.Invoke(new JournalRecordModel(update.Id, update.Initiator)
                     {
                         Enviroment = "Settings update",
@@ -45,7 +47,7 @@ namespace HSMServer.Core.Model.NodeSettings
                         NewValue = $"{newVal}",
 
                         PropertyName = propName,
-                        Path = path,
+                        Path = table.Path,
                     });
             }
 

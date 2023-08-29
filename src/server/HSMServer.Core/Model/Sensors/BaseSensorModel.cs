@@ -134,7 +134,7 @@ namespace HSMServer.Core.Model
                 EndOfMuting = null;
 
             if (update.Policies != null)
-                Policies.Update(update.Policies, update.Initiator);
+                Policies.Update(update.Policies, _changeTable, update.Initiator);
         }
 
         internal void ResetSensor()
