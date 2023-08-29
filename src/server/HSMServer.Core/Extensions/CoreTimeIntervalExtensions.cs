@@ -1,8 +1,9 @@
 using HSMServer.Core.Model;
+using HSMServer.Core.Model.NodeSettings;
 
 namespace HSMServer.Core.Extensions;
 
-internal static class CoreTimeIntervalExtensions
+public static class CoreTimeIntervalExtensions
 {
    internal static string ToDisplay(this TimeInterval interval) => interval switch
    {
@@ -12,4 +13,21 @@ internal static class CoreTimeIntervalExtensions
       TimeInterval.SixMonths => "Six Months",
       _ => interval.ToString()
    };
+   
+   public static string GetStringValue(string name, TimeInterval interval)
+   {
+      if (interval == TimeInterval.None)
+      {
+         return name switch
+         {
+            nameof(SettingsCollection.KeepHistory) => TimeInterval.Forever.ToString(),
+            nameof(SettingsCollection.SelfDestroy) => TimeInterval.Never.ToString(),
+            "Keep sensor history" => TimeInterval.Forever.ToString(),
+            "Remove sensor after inactivity" => TimeInterval.Never.ToString(),
+            _ => null
+         };
+      }
+
+      return null;
+   }
 }

@@ -8,6 +8,7 @@ using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Runtime.CompilerServices;
+using HSMServer.Core.Extensions;
 using HSMServer.Core.Journal;
 using HSMServer.Core.Model;
 
@@ -91,11 +92,14 @@ namespace HSMServer.Model.Folders
 
             if (newModel is not null && oldModel.ToString() != newModel.ToString())
             {
+                var oldValueString = CoreTimeIntervalExtensions.GetStringValue(propName, oldModel.Interval) ?? oldModel.ToString();
+                var newValueString = CoreTimeIntervalExtensions.GetStringValue(propName, newModel.Interval) ?? newModel.ToString();
+
                 ChangesHandler?.Invoke(new JournalRecordModel(Id, initiator)
                 {
                     Enviroment = "Folder settings update",
-                    OldValue = $"{oldModel}",
-                    NewValue = $"{newModel}",
+                    OldValue = $"{oldValueString}",
+                    NewValue = $"{newValueString}",
 
                     PropertyName = propName,
                     Path = Name,

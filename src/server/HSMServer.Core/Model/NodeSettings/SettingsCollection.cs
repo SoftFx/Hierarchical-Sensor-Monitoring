@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.CompilerServices;
+using HSMServer.Core.Extensions;
 
 namespace HSMServer.Core.Model.NodeSettings
 {
@@ -38,15 +39,20 @@ namespace HSMServer.Core.Model.NodeSettings
                 var oldVal = setting.CurValue;
 
                 if (setting.TrySetValue(newVal))
+                {
+                    var oldValueString = CoreTimeIntervalExtensions.GetStringValue(setting.Name, oldVal.Interval) ?? oldVal.ToString();
+                    var newValueString = CoreTimeIntervalExtensions.GetStringValue(setting.Name, newVal.Interval) ?? newVal.ToString();
+
                     ChangesHandler?.Invoke(new JournalRecordModel(update.Id, update.Initiator)
                     {
                         Enviroment = "Settings update",
-                        OldValue = $"{oldVal}",
-                        NewValue = $"{newVal}",
+                        OldValue = $"{oldValueString}",
+                        NewValue = $"{newValueString}",
 
                         PropertyName = propName,
                         Path = path,
                     });
+                }
             }
 
             Update(TTL, update.TTL);

@@ -23,6 +23,8 @@ namespace HSMServer.Core.Model
 
     public enum TimeInterval : long
     {
+        Forever = -300,
+        Never = -200,
         FromFolder = -100,
         FromParent = -10,
         Ticks = -1,
