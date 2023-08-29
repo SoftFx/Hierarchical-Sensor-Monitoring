@@ -78,6 +78,7 @@ namespace HSMServer.Core.Model
 
         public override object RawValue => Value;
 
+
         public abstract bool TryParseValue(string value, out T parsedValue);
 
         public override BaseValue TrySetValue(string newValue)

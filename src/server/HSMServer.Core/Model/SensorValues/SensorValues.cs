@@ -133,15 +133,11 @@ namespace HSMServer.Core.Model
     public record IntegerBarValue : BarBaseValue<int>
     {
         public override SensorType Type => SensorType.IntegerBar;
-
-        public override BaseValue TrySetValue(string str) => this;
     }
 
 
     public record DoubleBarValue : BarBaseValue<double>
     {
         public override SensorType Type => SensorType.DoubleBar;
-
-        public override BaseValue TrySetValue(string str) => this;
     }
 }
