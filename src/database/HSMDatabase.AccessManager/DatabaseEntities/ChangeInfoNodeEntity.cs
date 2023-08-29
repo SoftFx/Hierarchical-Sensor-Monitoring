@@ -4,26 +4,26 @@ namespace HSMDatabase.AccessManager.DatabaseEntities
 {
     public record ChangeInfoNodeEntity
     {
-        public Dictionary<string, ChangeInfo> Properties { get; init; } = new();
+        public Dictionary<string, ChangeInfoEntity> Properties { get; init; } = new();
 
-        public Dictionary<string, ChangeInfo> Settings { get; init; } = new();
+        public Dictionary<string, ChangeInfoEntity> Settings { get; init; } = new();
 
-        public Dictionary<string, ChangeInfo> Policies { get; init; } = new();
+        public Dictionary<string, ChangeInfoEntity> Policies { get; init; } = new();
 
 
-        public ChangeInfo TTLPolicy { get; init; }
+        public ChangeInfoEntity TTLPolicy { get; init; }
     }
 
 
-    public sealed record ChangeInfo
+    public sealed record ChangeInfoEntity
     {
-        public InitiatorInfo Initiator { get; init; }
+        public InitiatorInfoEntity Initiator { get; init; }
 
         public long Time { get; init; }
     }
 
 
-    public sealed record InitiatorInfo
+    public sealed record InitiatorInfoEntity
     {
         public byte Type { get; init; }
 
