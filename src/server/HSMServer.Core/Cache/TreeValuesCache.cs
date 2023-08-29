@@ -288,6 +288,31 @@ namespace HSMServer.Core.Cache
             SensorUpdateView(sensor);
         }
 
+        public void UpdateSensorValue(UpdateSensorValueRequestModel request)
+        {
+            var sensor = GetSensor(request.Id);
+            var lastValue = sensor.LastValue;
+
+            if (request.Comment is not null && lastValue is not null)
+            {
+                var value = request.BuildNewValue(sensor.Storage.GetEmptyValue(), lastValue);
+
+                if (sensor.Storage.TryChangeLastValue(value, request.ChangeLast))
+                {
+                    _journalService.AddRecord(new JournalRecordModel(request.Id, request.Initiator ?? System)
+                    {
+                        PropertyName = request.PropertyName,
+                        Enviroment = request.Environment,
+                        Path = sensor.FullPath,
+                        OldValue = request.BuildComment(lastValue.Status, lastValue.Comment, lastValue.RawValue.ToString()),
+                        NewValue = request.BuildComment(value: value.RawValue.ToString())
+                    });
+
+                    _database.AddSensorValue(value.ToEntity(request.Id));
+                }
+            }
+        }
+
         public void RemoveSensor(Guid sensorId, string initiator = null)
         {
             if (!_sensors.TryRemove(sensorId, out var sensor))
