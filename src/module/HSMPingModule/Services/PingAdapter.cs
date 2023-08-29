@@ -11,10 +11,12 @@ internal sealed class PingAdapter : Ping
     private readonly CancellationTokenSource _token = new ();
 
 
+    public static event Func<WebSite, string, Task<PingResponse>, Task> SendResult;
+
+
     public WebSite WebSite { get; }
 
     public string HostName { get; }
-
 
 
     public PingAdapter(WebSite webSite, string host) : base()
@@ -41,12 +43,12 @@ internal sealed class PingAdapter : Ping
     }
 
 
-    public Task StartPinging(string path, Func<WebSite, string, Task<PingResponse>, Task> callBackFunc) => Task.Run(async () =>
+    public Task StartPinging(string path) => Task.Run(async () =>
     {
         var timer = new PeriodicTimer(TimeSpan.FromSeconds(WebSite.PingDelay.Value));
 
         while (await timer.WaitForNextTickAsync(_token.Token))
-            _ = SendPingRequest().ContinueWith((reply) => callBackFunc(WebSite, path, reply), _token.Token).Unwrap();
+            _ = SendPingRequest().ContinueWith(reply => SendResult?.Invoke(WebSite, path, reply), _token.Token).Unwrap();
     }, _token.Token);
 
 

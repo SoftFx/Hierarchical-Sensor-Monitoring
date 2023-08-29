@@ -20,6 +20,8 @@ internal class PingService : BackgroundService
         _config = config.CurrentValue;
         _config.OnChange += RebuildPings;
 
+        PingAdapter.SendResult += _collectorService.PingResultSend;
+
         foreach (var (hostname, website) in _config.ResourceSettings.WebSites)
             foreach (var country in website.Countries)
                 if (_newPings.TryGetValue(country, out var dict))
@@ -36,7 +38,7 @@ internal class PingService : BackgroundService
     {
         foreach (var (country, pings) in _newPings)
             foreach (var (hostname, ping) in pings)
-                _ = ping.StartPinging($"{hostname}/{country}", _collectorService.PingResultSend);
+                _ = ping.StartPinging($"{hostname}/{country}");
 
         return Task.CompletedTask;
     }
@@ -64,7 +66,7 @@ internal class PingService : BackgroundService
                         [hostname] = ping
                     });
 
-                ping.StartPinging($"{hostname}/{country}", _collectorService.PingResultSend);
+                ping.StartPinging($"{hostname}/{country}");
             }
     }
 }
