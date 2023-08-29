@@ -31,6 +31,7 @@ namespace HSMServer.Notifications
 
         private readonly TelegramUpdateHandler _updateHandler;
         private readonly IUserManager _userManager;
+        private readonly ITreeValuesCache _cache;
         private readonly TelegramConfig _config;
         private readonly TreeViewModel _tree;
 
@@ -51,12 +52,13 @@ namespace HSMServer.Notifications
             _userManager.Removed += _addressBook.RemoveAllChats;
 
             _config = config;
+            _cache = cache;
             _tree = tree;
 
-            cache.ChangeProductEvent += RemoveProductEventHandler;
-            cache.ChangePolicyResultEvent += SendMessage;
+            _cache.ChangeProductEvent += RemoveProductEventHandler;
+            _cache.ChangePolicyResultEvent += SendMessage;
 
-            _updateHandler = new(_addressBook, _userManager, _tree, cache, config);
+            _updateHandler = new(_addressBook, _userManager, _tree, _cache, config);
 
             FillAddressBook();
         }
@@ -85,8 +87,11 @@ namespace HSMServer.Notifications
 
         internal void RemoveChat(INotificatable entity, long chatId)
         {
-            _addressBook.RemoveChat(entity, new ChatId(chatId));
+            var removedChat = _addressBook.RemoveChat(entity, new ChatId(chatId));
             entity.UpdateEntity(_userManager, _tree);
+
+            if (removedChat is not null)
+                _cache.RemoveChat(removedChat.SystemId, removedChat.IsUserChat ? null : entity.Name);
         }
 
         internal void SendTestMessage(ChatId chatId, string message)

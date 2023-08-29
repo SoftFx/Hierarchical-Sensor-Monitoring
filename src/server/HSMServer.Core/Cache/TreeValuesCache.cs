@@ -393,6 +393,19 @@ namespace HSMServer.Core.Cache
                         }
         }
 
+        public void RemoveChat(Guid chatId, string productName)
+        {
+            foreach (var (_, sensor) in _sensors)
+                if (productName is null || sensor.RootProductName == productName)
+                    foreach (var policy in sensor.Policies)
+                        if (policy.Destination.Chats.Remove(chatId))
+                        {
+                            policy.RebuildState();
+
+                            UpdatePolicy(ActionType.Update, policy);
+                        }
+        }
+
         private void UpdatePolicy(ActionType type, Policy policy)
         {
             switch (type)
