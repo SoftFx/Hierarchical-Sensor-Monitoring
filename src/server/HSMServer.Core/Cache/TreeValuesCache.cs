@@ -393,7 +393,8 @@ namespace HSMServer.Core.Cache
                             UpdatePolicy(ActionType.Update, policy);
                         }
 
-                    sensor.Policies.TimeToLive.AddDestination(chatId, name);
+                    if (sensor.Policies.TimeToLive.AddChat(chatId, name))
+                        UpdatePolicy(ActionType.Update, sensor.Policies.TimeToLive);
                 }
         }
 
@@ -410,7 +411,8 @@ namespace HSMServer.Core.Cache
                             UpdatePolicy(ActionType.Update, policy);
                         }
 
-                    sensor.Policies.TimeToLive.RemoveDestination(chatId);
+                    if (sensor.Policies.TimeToLive.RemoveChat(chatId))
+                        UpdatePolicy(ActionType.Update, sensor.Policies.TimeToLive);
                 }
         }
 
