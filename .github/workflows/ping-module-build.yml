@@ -178,6 +178,9 @@ jobs:
 
       - name: Build Linux image for Docker
         run: dotnet publish ${{ env.SERVER_PATH }} -c Release --os linux --arch x64 -p:PublishProfile=DefaultContainer -p:ContainerBaseImage=${{ env.DockerDepsUrl }} -p:ContainerImageName=${{ env.DockerMainName }}
-
+      
+      - name: check
+        run: docker images
+        
       - name: Push image to remote Docker
         run: docker push "${{ env.DockerMainName }}:${{ needs.build.outputs.VERSION }}"
