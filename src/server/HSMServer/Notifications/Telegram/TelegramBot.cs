@@ -192,7 +192,7 @@ namespace HSMServer.Notifications
                         var isInstant = false; //entity.Notifications.UsedTelegram.MessagesDelaySec == 0;
 
                         foreach (var alert in result)
-                            if (alert.Destination.Chats.Contains(chat.SystemId))
+                            if (chat is not null && (alert.Destination?.Chats?.Contains(chat.SystemId) ?? false))
                             {
                                 if (isInstant)
                                     SendMessage(chat.ChatId, alert.ToString());
