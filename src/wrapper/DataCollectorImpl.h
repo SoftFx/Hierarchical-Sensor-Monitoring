@@ -32,6 +32,7 @@ namespace hsm_wrapper
 		void InitializeOsMonitoring(bool is_updated, bool last_update, bool last_restart, const std::string& specific_path = "");
 		void InitializeProductVersion(const std::string& version, const std::string& specific_path = "");
 		void InitializeCollectorMonitoring(bool is_alive, bool version, bool status, const std::string& specific_path = "");
+		void AddServiceStateMonitoring(const std::string& service_name, const std::string& specific_path = "");
 
 		void SendFileAsync(const std::string& sensor_path, const std::string& file_path, HSMSensorStatus status = HSMSensorStatus::Ok, const std::string& description = {});
 
@@ -83,6 +84,7 @@ namespace hsm_wrapper
 	private:
 		msclr::auto_gcroot<IDataCollector^> data_collector;
 	};
+
 
 
 }
