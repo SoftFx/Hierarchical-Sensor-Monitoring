@@ -1,4 +1,4 @@
-name: HSMPingModule build
+name: HSMServer build
 on:
   push:
     branches: [master, develop]
@@ -14,12 +14,12 @@ env:
   OUTPUT_FOLDER: ${{ github.workspace }}/BuildOutput
 
   SOLUTION_PATH: src/server/HSMServer/HSMServer.sln
-  SERVER_PATH: src/server/HSMServer/HSMServer.csproj
+  SERVER_PATH: src/module/HSMPingModule/HSMPingModule.csproj
 
-  DOCKER_DOCKERHUB_ORG: hsmonitoring
+  DOCKER_DOCKERHUB_ORG: pawgyrocopter
   DOCKER_DEPS_REPOS: hierarchical_sensor_monitoring_deps
   DOCKER_DEPS_TAG: latest
-  DOCKER_MAIN_REPOS: hierarchical_sensor_monitoring
+  DOCKER_MAIN_REPOS: hierarchical_sensor_monitoring_ping
 
 jobs:
   build:
