@@ -24,5 +24,4 @@
     <ProjectReference Include="..\..\server\HSMServer.Core\HSMServer.Core.csproj" />
     <ProjectReference Include="..\..\server\HSMServer\HSMServer.csproj" />
   </ItemGroup>
-
 </Project>

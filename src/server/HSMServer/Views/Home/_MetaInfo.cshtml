@@ -45,7 +45,7 @@
             {
                 <i id='status_@Model.EncodedId' class='@Model.Status.ToIcon() my-1 sensor-icon-with-margin' title='Status: @Model.Status'></i>
                 <span id="alertIcons_@Model.EncodedId" class="me-1">
-                    @await Html.PartialAsync("~/Views/Home/Alerts/_AlertIconsList.cshtml", Model.AlertIcons)
+                    @await Html.PartialAsync("~/Views/Home/Alerts/_AlertIconsList.cshtml", new AlertIconsViewModel(Model.AlertIcons, true))
                 </span>
             }
 
@@ -174,6 +174,11 @@
                     setFormDataAlertsListProperty(formData, type, i, j, statusBlock, "Conditions", "select", "Operation");
                 }
 
+                let stringBlock = $(this).find('div[name="stringCondition"]');
+                if (stringBlock.hasClass('d-flex')) {
+                    setFormDataAlertsListProperty(formData, type, i, j, stringBlock, "Conditions", "select", "Operation");
+                }
+
                 let sensitivityBlock = $(this).find('div[name="sensitivityCondition"]');
                 if (sensitivityBlock.hasClass('d-flex')) {
                     setFormDataAlertsConditionIntervals(formData, type, i, j, sensitivityBlock, "Sensitivity", "select", "Interval");
@@ -193,6 +198,7 @@
                 let sendBlock = $(this).find('div[name="sendNotificationAction"]');
                 if (sendBlock.hasClass('d-flex')) {
                     setFormDataAlertsListProperty(formData, type, i, j, sendBlock, "Actions", "input", "Comment");
+                    setFormDataAlertsSendNotificationChats(formData, type, i, j, sendBlock);
                 }
 
                 let showBlock = $(this).find('div[name="showIconAction"]');
@@ -221,6 +227,15 @@
         block.find(`${element}[name='${intervalName}.${propertyName}']`).each(function () {
             formData.append(`DataAlerts[${type}][${i}].Conditions[${j}].${intervalName}.${propertyName}`, $(this).val());
         });
+    }
+
+    function setFormDataAlertsSendNotificationChats(formData, type, i, j, block) {
+        block.find("select[name='Chats']:first option").each(function () {
+            if ($(this).is(':selected')) {
+                let chatId = $(this).val();
+                formData.append(`DataAlerts[${type}][${i}].Actions[${j}].Chats[${chatId}]`, $(this).text());
+            }
+        })
     }
 
     function collapseChangeTextContent() {

@@ -21,16 +21,20 @@ namespace HSMServer.Core.Model
 
         internal override void AddValue(T value)
         {
-            var canStore = PartialLastValue != null && PartialLastValue.OpenTime != value.OpenTime;
-
-            if (canStore)
+            if (!value.IsTimeout)
             {
-                _prevValue = PartialLastValue;
+                var canStore = PartialLastValue != null && PartialLastValue.OpenTime != value.OpenTime;
 
-                base.AddValue(PartialLastValue);
+                if (canStore)
+                {
+                    _prevValue = PartialLastValue;
+                    base.AddValue(PartialLastValue);
+                }
+            
+                PartialLastValue = value;
             }
-
-            PartialLastValue = value;
+            else
+                base.AddValue(value);
         }
 
 

@@ -1,5 +1,6 @@
 ﻿using HSMCommon.Constants;
 using HSMDatabase.AccessManager.DatabaseEntities;
+using HSMSensorDataObjects.HistoryRequests;
 using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.DataLayer;
 using HSMServer.Core.Journal;
@@ -355,21 +356,75 @@ namespace HSMServer.Core.Cache
             };
 
             return count > 0
-                ? GetSensorValuesPage(sensorId, request.From, request.To ?? DateTime.UtcNow.AddDays(1), count)
-                : GetSensorValuesPage(sensorId, DateTime.MinValue, request.From, count);
+                   ? GetSensorValuesPage(sensorId, request.From, request.To ?? DateTime.UtcNow.AddDays(1), count, request.Options)
+                   : GetSensorValuesPage(sensorId, DateTime.MinValue, request.From, count, request.Options);
         }
 
-        public async IAsyncEnumerable<List<BaseValue>> GetSensorValuesPage(Guid sensorId, DateTime from, DateTime to, int count)
+        public async IAsyncEnumerable<List<BaseValue>> GetSensorValuesPage(Guid sensorId, DateTime from, DateTime to, int count, RequestOptions options = default)
         {
+            static bool IsNotTimout(BaseValue value) => !value.IsTimeout;
+
             if (_sensors.TryGetValue(sensorId, out var sensor))
             {
-                var pages = _database.GetSensorValuesPage(sensorId.ToString(), from, to, count);
+                var pages = _database.GetSensorValuesPage(sensorId, from, to, count);
+                var includeTtl = options.HasFlag(RequestOptions.IncludeTtl);
 
                 await foreach (var page in pages)
-                    yield return sensor.ConvertValues(page);
+                {
+                    var convertedValues = sensor.ConvertValues(page);
+
+                    yield return (includeTtl ? convertedValues : convertedValues.Where(IsNotTimout)).ToList();
+                }
             }
         }
 
+
+        public void AddNewChat(Guid chatId, string name, string productName)
+        {
+            foreach (var (_, sensor) in _sensors)
+                if (productName is null || sensor.RootProductName == productName)
+                {
+                    foreach (var policy in sensor.Policies)
+                        if (policy.Destination.AllChats && !policy.Destination.Chats.ContainsKey(chatId))
+                        {
+                            policy.Destination.Chats.Add(chatId, name);
+                            policy.RebuildState();
+
+                            UpdatePolicy(ActionType.Update, policy);
+                        }
+
+                    if (sensor.Policies.TimeToLive.AddChat(chatId, name))
+                        UpdatePolicy(ActionType.Update, sensor.Policies.TimeToLive);
+                }
+
+            foreach (var (_, product) in _tree)
+                if (productName is null || product.RootProductName == productName)
+                    if (product.Policies.TimeToLive.AddChat(chatId, name))
+                        UpdatePolicy(ActionType.Update, product.Policies.TimeToLive);
+        }
+
+        public void RemoveChat(Guid chatId, string productName)
+        {
+            foreach (var (_, sensor) in _sensors)
+                if (productName is null || sensor.RootProductName == productName)
+                {
+                    foreach (var policy in sensor.Policies)
+                        if (policy.Destination.Chats.Remove(chatId))
+                        {
+                            policy.RebuildState();
+
+                            UpdatePolicy(ActionType.Update, policy);
+                        }
+
+                    if (sensor.Policies.TimeToLive.RemoveChat(chatId))
+                        UpdatePolicy(ActionType.Update, sensor.Policies.TimeToLive);
+                }
+
+            foreach (var (_, product) in _tree)
+                if (productName is null || product.RootProductName == productName)
+                    if (product.Policies.TimeToLive.RemoveChat(chatId))
+                        UpdatePolicy(ActionType.Update, product.Policies.TimeToLive);
+        }
 
         private void UpdatePolicy(ActionType type, Policy policy)
         {
@@ -457,8 +512,13 @@ namespace HSMServer.Core.Cache
 
                 sensor = SensorModelFactory.Build(entity);
                 parentProduct.AddSensor(sensor);
+                if (!sensor.Settings.TTL.IsSet)
+                    sensor.Policies.TimeToLive.ApplyParent(parentProduct.Policies.TimeToLive);
 
-                sensor.Policies.AddDefaultSensors();
+                SubscribeSensorToPolicyUpdate(sensor);
+
+                var root = GetProductByName(sensor.RootProductName); //should be after AddSensor because of subscription
+                sensor.Policies.AddDefaultSensors(root?.NotificationsSettings?.TelegramSettings?.Chats?.ToDictionary(u => new Guid(u.SystemId), v => v.Name));
 
                 AddSensor(sensor);
                 UpdateProduct(parentProduct);
@@ -480,7 +540,9 @@ namespace HSMServer.Core.Cache
         private void SaveSensorValueToDb(BaseValue value, Guid sensorId)
         {
             _database.AddSensorValue(value.ToEntity(sensorId));
-            _snapshot.Sensors[sensorId].SetLastUpdate(value.ReceivingTime);
+
+            if (!value.IsTimeout)
+                _snapshot.Sensors[sensorId].SetLastUpdate(value.ReceivingTime);
         }
 
         private void NotifyAboutProductChange(ProductModel product)
@@ -517,7 +579,70 @@ namespace HSMServer.Core.Cache
 
             _logger.Info($"{nameof(TreeValuesCache)} initialized");
 
+            PoliciesDestinationMigration();
+
             UpdateCacheState();
+        }
+
+        [Obsolete("Should be removed after policies chats migration")]
+        private void PoliciesDestinationMigration()
+        {
+            _logger.Info($"Starting policies destination migration for products...");
+
+            var productsToResave = new HashSet<Guid>(_tree.Count);
+
+            var productsChats = new Dictionary<string, Dictionary<Guid, string>>();
+            foreach (var product in GetProducts())
+            {
+                var chats = new Dictionary<Guid, string>();
+                if (product?.NotificationsSettings?.TelegramSettings?.Chats?.Count > 0)
+                    foreach (var chat in product.NotificationsSettings.TelegramSettings.Chats)
+                        chats.Add(new Guid(chat.SystemId), chat.Name);
+
+                productsChats.Add(product.DisplayName, chats);
+            }
+
+            foreach (var (productId, product) in _tree)
+            {
+                var policy = product.Policies.TimeToLive;
+                if (policy.Destination is not null)
+                    continue;
+
+                var ttlUpdate = new PolicyUpdate
+                {
+                    Id = policy.Id,
+                    Conditions = policy.Conditions.Select(u => new PolicyConditionUpdate(u.Operation, u.Property, u.Target, u.Combination)).ToList(),
+                    Destination = new PolicyDestinationUpdate(true, productsChats.TryGetValue(product.RootProductName, out var chats) ? chats : new()),
+                    Sensitivity = policy.Sensitivity,
+                    Status = policy.Status,
+                    Template = policy.Template,
+                    IsDisabled = policy.IsDisabled,
+                    Icon = policy.Icon,
+                };
+
+                product.Policies.UpdateTTL(ttlUpdate);
+                productsToResave.Add(productId);
+            }
+
+            foreach (var productId in productsToResave)
+                if (_tree.TryGetValue(productId, out var product))
+                    _database.UpdateProduct(product.ToEntity());
+
+            _logger.Info($"{productsToResave.Count} polices destination migration is finished for products");
+        }
+
+        [Obsolete("Should be removed after policies chats migration")]
+        public void UpdatePolicy(Policy policy)
+        {
+            policy.RebuildState();
+            _database.UpdatePolicy(policy.ToEntity());
+        }
+
+        [Obsolete("Should be removed after policies chats migration")]
+        public void UpdateSensor(Guid sensorId)
+        {
+            if (_sensors.TryGetValue(sensorId, out var sensor))
+                _database.UpdateSensor(sensor.ToEntity());
         }
 
 
@@ -568,6 +693,37 @@ namespace HSMServer.Core.Cache
             return policyEntities.ToDictionary(k => new Guid(k.Id).ToString(), v => v);
         }
 
+        [Obsolete("Should be removed after telegram chat IDs migration")]
+        private void TelegramChatsMigration()
+        {
+            _logger.Info($"Starting products telegram chats migration...");
+
+            var productsToResave = new HashSet<Guid>();
+            var chatIds = new Dictionary<long, byte[]>(1 << 4);
+
+            foreach (var (_, node) in _tree)
+                if (node.NotificationsSettings?.TelegramSettings?.Chats is not null)
+                    foreach (var chat in node.NotificationsSettings.TelegramSettings.Chats)
+                        if (chat.SystemId is null)
+                        {
+                            if (chatIds.TryGetValue(chat.Id, out var systemChatId))
+                                chat.SystemId = systemChatId;
+                            else
+                            {
+                                chat.SystemId = Guid.NewGuid().ToByteArray();
+                                chatIds.Add(chat.Id, chat.SystemId);
+                            }
+
+                            productsToResave.Add(node.Id);
+                        }
+
+            foreach (var productId in productsToResave)
+                if (_tree.TryGetValue(productId, out var product))
+                    _database.UpdateProduct(product.ToEntity());
+
+            _logger.Info($"{productsToResave.Count} products telegram chats migration is finished");
+        }
+
         private void ApplyProducts(List<ProductEntity> productEntities)
         {
             _logger.Info($"{nameof(productEntities)} are applying");
@@ -581,6 +737,8 @@ namespace HSMServer.Core.Cache
             }
 
             _logger.Info($"{nameof(productEntities)} applied");
+
+            TelegramChatsMigration();
 
             _logger.Info("Links between products are building");
 
@@ -667,6 +825,8 @@ namespace HSMServer.Core.Cache
                     subProduct = new ProductModel(subProductName, authorId);
 
                     parentProduct.AddSubProduct(subProduct);
+                    if (!subProduct.Settings.TTL.IsSet)
+                        subProduct.Policies.TimeToLive.ApplyParent(parentProduct.Policies.TimeToLive);
 
                     AddProduct(subProduct);
                     UpdateProduct(parentProduct);
@@ -714,8 +874,6 @@ namespace HSMServer.Core.Cache
         {
             _sensors.TryAdd(sensor.Id, sensor);
             _database.AddSensor(sensor.ToEntity());
-
-            SubscribeSensorToPolicyUpdate(sensor);
 
             ChangeSensorEvent?.Invoke(sensor, ActionType.Add);
         }
@@ -816,29 +974,58 @@ namespace HSMServer.Core.Cache
 
         private void FillSensorsData()
         {
-            var requests = GetSensors().ToDictionary(k => k.Id, _ => 0L);
-
-            if (_snapshot.HasData)
+            void ApplyLastValues(Dictionary<Guid, byte[]> lasts)
             {
+                foreach (var (sensorId, value) in lasts)
+                    if (value is not null && _sensors.TryGetValue(sensorId, out var sensor))
+                    {
+                        sensor.AddDbValue(value);
+
+                        if (!_snapshot.IsFinal && sensor.LastValue is not null)
+                            _snapshot.Sensors[sensorId].SetLastUpdate(sensor.LastValue.ReceivingTime, sensor.CheckTimeout());
+                    }
+            }
+
+            if (_snapshot.IsFinal)
+            {
+                var requests = GetSensors().ToDictionary(k => k.Id, _ => 0L);
+
                 foreach (var (key, state) in _snapshot.Sensors)
                     if (requests.ContainsKey(key))
                         requests[key] = state.History.To.Ticks;
+
+                ApplyLastValues(_database.GetLatestValues(requests));
             }
+            else
+            {
+                var maxTo = DateTime.MaxValue.Ticks;
+                var requests = GetSensors().ToDictionary(k => k.Id, _ => (0L, maxTo));
 
-            var values = _snapshot.IsFinal ? _database.GetLatestValues(requests) :
-                                             _database.GetLatestValuesFrom(requests);
-
-            foreach (var (sensorId, value) in values)
-                if (value is not null && _sensors.TryGetValue(sensorId, out var sensor))
+                if (_snapshot.HasData)
                 {
-                    sensor.AddDbValue(value);
-
-                    if (!_snapshot.IsFinal)
-                        _snapshot.Sensors[sensorId].SetLastUpdate(sensor.LastValue.ReceivingTime, sensor.CheckTimeout());
+                    foreach (var (key, state) in _snapshot.Sensors)
+                        if (requests.ContainsKey(key))
+                            requests[key] = (state.History.To.Ticks, maxTo);
                 }
 
-            if (!_snapshot.IsFinal)
+                ApplyLastValues(_database.GetLatestValuesFromTo(requests));
+
+                requests.Clear();
+
+                foreach (var sensor in GetSensors())
+                    if (sensor.LastTimeout is not null)
+                    {
+                        _snapshot.Sensors[sensor.Id].IsExpired = true;
+
+                        var fromVal = _snapshot.Sensors.TryGetValue(sensor.Id, out var state) ? state.History.To.Ticks : 0L;
+
+                        requests.Add(sensor.Id, (fromVal, sensor.LastTimeout.ReceivingTime.Ticks));
+                    }
+
+                ApplyLastValues(_database.GetLatestValuesFromTo(requests));
+
                 _snapshot.FlushState(true);
+            }
         }
 
         public void UpdateCacheState()
@@ -862,8 +1049,15 @@ namespace HSMServer.Core.Cache
             if (snapshot.IsExpired != timeout)
             {
                 var ttl = sensor.Policies.TimeToLive;
-
                 snapshot.IsExpired = timeout;
+
+                if (timeout)
+                {
+                    var value = sensor.GetTimeoutValue();
+
+                    if ((sensor.LastTimeout is null || sensor.LastTimeout.ReceivingTime < sensor.LastUpdate) && sensor.TryAddValue(value))
+                        SaveSensorValueToDb(value, sensor.Id);
+                }
 
                 SendPolicyResult(sensor, timeout ? ttl.PolicyResult : ttl.Ok);
             }

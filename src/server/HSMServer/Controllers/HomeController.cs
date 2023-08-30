@@ -29,7 +29,6 @@ using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using TimeInterval = HSMServer.Model.TimeInterval;
-using HSMServer.Core.Model.Requests;
 
 namespace HSMServer.Controllers
 {
@@ -464,7 +463,7 @@ namespace HSMServer.Controllers
             else if (_treeViewModel.Sensors.TryGetValue(id, out var sensor))
                 icons = sensor.AlertIcons;
 
-            return icons is not null ? PartialView("~/Views/Home/Alerts/_AlertIconsList.cshtml", icons) : _emptyResult;
+            return icons is not null ? PartialView("~/Views/Home/Alerts/_AlertIconsList.cshtml", new AlertIconsViewModel(icons, true)) : _emptyResult;
         }
 
         #endregion
@@ -563,15 +562,17 @@ namespace HSMServer.Controllers
             if (!ModelState.IsValid)
                 return PartialView("_MetaInfo", new SensorInfoViewModel(sensor));
 
+            var availableChats = sensor.RootProduct.GetAvailableChats();
+
             var ttl = newModel.DataAlerts.TryGetValue(TimeToLiveAlertViewModel.AlertKey, out var alerts) && alerts.Count > 0 ? alerts[0] : null;
-            var policyUpdates = newModel.DataAlerts.TryGetValue((byte)sensor.Type, out var list) ? list.Select(a => a.ToUpdate()).ToList() : new();
+            var policyUpdates = newModel.DataAlerts.TryGetValue((byte)sensor.Type, out var list) ? list.Select(a => a.ToUpdate(availableChats)).ToList() : new();
 
             var update = new SensorUpdate
             {
                 Id = sensor.Id,
                 Description = newModel.Description ?? string.Empty,
                 TTL = ttl?.Conditions[0].TimeToLive.ToModel() ?? TimeIntervalModel.None,
-                TTLPolicy = ttl?.ToTimeToLiveUpdate(CurrentUser.Name),
+                TTLPolicy = ttl?.ToTimeToLiveUpdate(CurrentUser.Name, availableChats),
                 KeepHistory = newModel.SavedHistoryPeriod.ToModel(),
                 SelfDestroy = newModel.SelfDestroyPeriod.ToModel(),
                 Policies = policyUpdates,
@@ -584,25 +585,22 @@ namespace HSMServer.Controllers
         }
 
 
-        public IActionResult AddDataPolicy(byte type, Guid sensorId)
+        public IActionResult AddDataPolicy(byte type, Guid entityId)
         {
-            NodeViewModel entity = null;
-            if (_treeViewModel.Sensors.TryGetValue(sensorId, out var sensor))
-                entity = sensor;
-            if (_treeViewModel.Nodes.TryGetValue(sensorId, out var node))
-                entity = node;
+            if (!TryGetSelectedNode(entityId, out var entity))
+                return _emptyResult;
 
             DataAlertViewModelBase viewModel = type switch
             {
-                (byte)SensorType.File => new DataAlertViewModel<FileValue>(sensorId),
-                (byte)SensorType.String => new DataAlertViewModel<StringValue>(sensorId),
-                (byte)SensorType.Boolean => new DataAlertViewModel<BooleanValue>(sensorId),
-                (byte)SensorType.Version => new DataAlertViewModel<VersionValue>(sensorId),
-                (byte)SensorType.TimeSpan => new DataAlertViewModel<TimeSpanValue>(sensorId),
-                (byte)SensorType.Integer => new SingleDataAlertViewModel<IntegerValue, int>(sensorId),
-                (byte)SensorType.Double => new SingleDataAlertViewModel<DoubleValue, double>(sensorId),
-                (byte)SensorType.IntegerBar => new BarDataAlertViewModel<IntegerBarValue, int>(sensorId),
-                (byte)SensorType.DoubleBar => new BarDataAlertViewModel<DoubleBarValue, double>(sensorId),
+                (byte)SensorType.File => new DataAlertViewModel<FileValue>(entity),
+                (byte)SensorType.String => new DataAlertViewModel<StringValue>(entity),
+                (byte)SensorType.Boolean => new DataAlertViewModel<BooleanValue>(entity),
+                (byte)SensorType.Version => new DataAlertViewModel<VersionValue>(entity),
+                (byte)SensorType.TimeSpan => new DataAlertViewModel<TimeSpanValue>(entity),
+                (byte)SensorType.Integer => new SingleDataAlertViewModel<IntegerValue, int>(entity),
+                (byte)SensorType.Double => new SingleDataAlertViewModel<DoubleValue, double>(entity),
+                (byte)SensorType.IntegerBar => new BarDataAlertViewModel<IntegerBarValue, int>(entity),
+                (byte)SensorType.DoubleBar => new BarDataAlertViewModel<DoubleBarValue, double>(entity),
                 TimeToLiveAlertViewModel.AlertKey => new TimeToLiveAlertViewModel(entity),
                 _ => null,
             };
@@ -632,8 +630,22 @@ namespace HSMServer.Controllers
             return PartialView("~/Views/Home/Alerts/_ConditionBlock.cshtml", viewModel);
         }
 
-        public IActionResult AddAlertAction() =>
-            PartialView("~/Views/Home/Alerts/_ActionBlock.cshtml", new ActionViewModel(false));
+        public IActionResult AddAlertAction(Guid entityId) =>
+            TryGetSelectedNode(entityId, out var entity)
+                ? PartialView("~/Views/Home/Alerts/_ActionBlock.cshtml", new ActionViewModel(false, entity.GetAllChats()))
+                : _emptyResult;
+
+        private bool TryGetSelectedNode(Guid entityId, out NodeViewModel entity)
+        {
+            entity = null;
+
+            if (_treeViewModel.Sensors.TryGetValue(entityId, out var sensor))
+                entity = sensor;
+            if (_treeViewModel.Nodes.TryGetValue(entityId, out var node))
+                entity = node;
+
+            return entity is not null;
+        }
 
 
         [HttpPost]
@@ -713,13 +725,14 @@ namespace HSMServer.Controllers
             if (!ModelState.IsValid)
                 return PartialView("_MetaInfo", new ProductInfoViewModel(product));
 
+            var availableChats = product.RootProduct.GetAvailableChats();
             var ttl = newModel.DataAlerts.TryGetValue(TimeToLiveAlertViewModel.AlertKey, out var alerts) && alerts.Count > 0 ? alerts[0] : null;
 
             var update = new ProductUpdate
             {
                 Id = product.Id,
                 TTL = ttl?.Conditions[0].TimeToLive.ToModel(product.TTL) ?? TimeIntervalModel.None,
-                TTLPolicy = ttl?.ToTimeToLiveUpdate(CurrentUser.Name),
+                TTLPolicy = ttl?.ToTimeToLiveUpdate(CurrentUser.Name, availableChats),
 
                 KeepHistory = newModel.SavedHistoryPeriod.ToModel(product.KeepHistory),
                 SelfDestroy = newModel.SelfDestroyPeriod.ToModel(product.SelfDestroy),

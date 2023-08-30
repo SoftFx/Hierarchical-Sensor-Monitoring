@@ -1,17 +1,23 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities;
-using System;
 
 namespace HSMServer.Core.Model.Policies
 {
-    internal class OkPolicy : DefaultPolicyBase
+    internal sealed class OkPolicy : DefaultPolicyBase
     {
-        internal OkPolicy(Guid id, BaseNodeModel node) 
+        private readonly TTLPolicy _ttl;
+
+        internal string OkTemplate => $"$status {_ttl.Template}";
+
+
+        internal OkPolicy(TTLPolicy policy, BaseNodeModel node)
         {
+            _ttl = policy;
+
             Apply(new PolicyEntity
             {
-                Id = id.ToByteArray(),
-                Template = TTLPolicy.DefaultTemplate,
-                Icon = SensorStatus.Ok.ToIcon(),
+                Id = policy.Id.ToByteArray(),
+                Destination = policy.Destination?.ToEntity(),
+                Template = OkTemplate,
             }, node as BaseSensorModel);
         }
     }

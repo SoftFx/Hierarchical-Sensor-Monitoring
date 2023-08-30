@@ -3,6 +3,7 @@
 @using HSMCommon.Extensions
 @using HSMServer.Controllers
 @using HSMServer.Constants
+@using Microsoft.AspNetCore.Html
 
 @model DataAlertViewModelBase
 
@@ -32,7 +33,7 @@
             else
             {
                 <b>@condition.Property @condition.Operation.GetDisplayName()</b>
-                @if (condition.Property != AlertProperty.Status)
+                @if (condition.Property is not (AlertProperty.Status or AlertProperty.Comment))
                 {
                     <b>@condition.Target</b>
                 }
@@ -40,28 +41,42 @@
         </span>
     }
 
-    <span>then</span>
-    @for (int i = 0; i < Model.Actions.Count; ++i)
+    @{
+        var actions = new List<HtmlString>();
+    }
+
+    @foreach (var action in Model.Actions)
     {
-        var action = Model.Actions[i];
-
-        @if (i > 0)
+        @if (action.Action == ActionType.SendNotification && action.Chats.Count > 0)
         {
-            <span>and</span>
-        }
-
-        @if (action.Action == ActionType.SendNotification)
-        {
-            <span>send notification <i>@action.DisplayComment</i></span>
+            actions.Add(new HtmlString($"<span>send notification <i>{action.DisplayComment}</i> to </span><span style='color: #0366d6;'>{(action.Chats.ContainsKey(ActionViewModel.AllChatsId) ? "all chats" : string.Join(", ", action.Chats.Values))}</span>"));
         }
         else if (action.Action == ActionType.ShowIcon)
         {
-            <span>show icon @action.Icon</span>
+            actions.Add(new HtmlString($"<span>show icon {action.Icon}</span>"));
         }
         else if (action.Action == ActionType.SetStatus)
         {
-            <span>@ActionViewModel.SetErrorStatus</span>
+            actions.Add(new HtmlString($"<span>{ActionViewModel.SetErrorStatus}</span>"));
         }
+    }
+
+    <span>then</span>
+    @if (actions.Count > 0)
+    {
+        @for (int i = 0; i < actions.Count; ++i)
+        {
+            @if (i > 0)
+            {
+                <span>and</span>
+            }
+
+            @Html.Raw(actions[i]);
+        }
+    }
+    else
+    {
+        <span>... (<i>add any action</i>)</span>
     }
 
     @if (Model.IsDisabled)
@@ -143,7 +158,7 @@
             let element = $(this).parents("div.fullAction:first");
 
             $.ajax({
-                url: `@Url.Action(nameof(HomeController.AddAlertAction), ViewConstants.HomeController)?sensorId=@Model.EntityId`,
+                url: `@Url.Action(nameof(HomeController.AddAlertAction), ViewConstants.HomeController)?entityId=@Model.EntityId`,
                 cache: false
             }).done(function (viewData) {
                 var actionsBlock = element.find($(`div[name='actionsBlock']`));

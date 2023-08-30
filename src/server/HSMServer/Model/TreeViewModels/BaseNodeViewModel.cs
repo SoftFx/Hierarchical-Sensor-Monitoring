@@ -3,11 +3,15 @@ using HSMServer.Model.DataAlerts;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace HSMServer.Model.TreeViewModel
 {
     public abstract class BaseNodeViewModel
     {
+        internal event Func<bool> CheckJournalCount;
+
+
         public Dictionary<byte, List<DataAlertViewModelBase>> DataAlerts { get; protected set; } = new();
 
         public ConcurrentDictionary<string, int> AlertIcons { get; } = new();
@@ -34,9 +38,13 @@ namespace HSMServer.Model.TreeViewModel
         public DateTime UpdateTime { get; protected set; }
 
 
+        public bool IsJournalEmpty => CheckJournalCount?.Invoke() ?? false;
+
         public string Title => Name?.Replace('\\', ' ') ?? string.Empty; //TODO remove after rename bad products
 
-        public string Tooltip => $"{Name}{Environment.NewLine}{(UpdateTime != DateTime.MinValue ? UpdateTime.ToDefaultFormat() : "no data")}";
+        public string Tooltip => $"{Name} {AlertTooltip} {Environment.NewLine}{(UpdateTime != DateTime.MinValue ? UpdateTime.ToDefaultFormat() : "no data")}";
+
+        private string AlertTooltip => string.Join(',', AlertIcons.Select(x => x.Value > 1 ? $"{x.Key}x{x.Value}" : $"{x.Key}"));
 
 
         protected void RecalculateAlerts(params IEnumerable<NodeViewModel>[] collections)

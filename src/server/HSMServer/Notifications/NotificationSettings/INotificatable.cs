@@ -1,5 +1,4 @@
-﻿using HSMServer.Core.Model;
-using HSMServer.Notifications.Telegram;
+﻿using HSMServer.Notifications.Telegram;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -16,14 +15,12 @@ namespace HSMServer.Notification.Settings
 
         public ClientNotifications Notifications { get; }
 
-        public ConcurrentDictionary<Telegram.Bot.Types.ChatId, TelegramChat> Chats =>
+        public ConcurrentDictionary<ChatId, TelegramChat> Chats =>
             Notifications?.Telegram.Chats ?? new();
 
 
         public bool CanSendData(Guid sensorId, ChatId chatId) =>
-            Notifications.UsedTelegram.MessagesAreEnabled &&
-            Notifications.IsSensorEnabled(sensorId) &&
-            !Notifications.IsSensorIgnored(sensorId, chatId);
+            Notifications.UsedTelegram.MessagesAreEnabled;
     }
 
 

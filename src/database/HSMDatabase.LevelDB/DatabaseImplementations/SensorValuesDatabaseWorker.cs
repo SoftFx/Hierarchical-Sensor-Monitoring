@@ -46,7 +46,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
         public bool IsInclude(long from, long to) => From <= to && To >= from;
 
 
-        public void FillLatestValues(Dictionary<byte[], (long, byte[])> keyValuePairs)
+        public void FillLatestValues(Dictionary<byte[], (long, byte[], byte[])> keyValuePairs)
         {
             try
             {

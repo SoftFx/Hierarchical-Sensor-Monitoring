@@ -1,4 +1,5 @@
 ﻿using System;
+using HSMSensorDataObjects.HistoryRequests;
 
 namespace HSMServer.Core.Model.Requests
 {
@@ -10,6 +11,7 @@ namespace HSMServer.Core.Model.Requests
 
         public int? Count { get; set; }
 
+        public RequestOptions Options { get; set; }
 
         public HistoryRequestModel(string key, string path) : base(key, path) { }
     }

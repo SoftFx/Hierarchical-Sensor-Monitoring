@@ -141,7 +141,7 @@
 
             <div id='historyDataPanel' class='pt-3 text-break hidden_element'>
                 <div class="d-flex justify-content-between">
-                    <div>
+                    <div id="datePickerFromTo">
                         <label class="me-1" for="from_@sensorId">From:</label>
                         <input class="me-2" type="datetime-local" id="from_@sensorId" name="from">
 
@@ -194,12 +194,50 @@
                                     </div>
                                 </li>
                                 <li class='nav-item'>
-                                    <a id='link_journal_@sensorId' class='nav-link' data-bs-toggle='tab' href='#@journalParentDivId'>Journal</a>
+                                    <a id='link_journal_@sensorId' class='nav-link @(Model.IsJournalEmpty ? "hidden_element": "")' data-bs-toggle='tab' href='#@journalParentDivId'>Journal</a>
                                  </li>
                             </ul>
                             <div class='tab-content'>
                                 <div class='tab-pane fade show active' id=@graphParentDivId>
-                                    <div id='@graphElementId'></div>
+                                    <div class="graph-with-plot-button" id='@graphElementId'></div>
+                                    @if (Model.Type.IsBar())
+                                    {
+                                        <button class="btn button-plot-selection px-0" id="dropdownMenuButton" data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="true">
+                                            <i class="fa-solid fa-ellipsis-vertical button-link"></i>
+                                        </button>
+                                        <ul class="dropdown-menu" style="max-width: 8rem; min-width: 2rem" aria-labelledby="dropdownMenuButton">
+                                            <li class="dropdown-item text-start px-2 mx-0">
+                                                <input type="checkbox" value="" checked id="plot_bar">
+                                                <label class="noHover" for="plot_bar">
+                                                    Bar
+                                                </label>
+                                            </li>
+                                            <li class="dropdown-item text-start px-2 mx-0">
+                                                <input type="checkbox" value="" id="plot_max">
+                                                <label class="noHover" for="plot_max">
+                                                    Max
+                                                </label>
+                                            </li>
+                                            <li class="dropdown-item text-start px-2  mx-0">
+                                                <input type="checkbox" value="" id="plot_min">
+                                                <label class="noHover" for="plot_min">
+                                                    Min
+                                                </label>
+                                            </li>
+                                            <li class="dropdown-item text-start px-2 mx-0">
+                                                <input type="checkbox" value="" id="plot_mean">
+                                                <label class="noHover" for="plot_mean">
+                                                    Mean
+                                                </label>
+                                            </li>
+                                            <li class="dropdown-item text-start px-2 mx-0">
+                                                <input type="checkbox" value="" id="plot_count">
+                                                <label class="noHover" for="plot_count">
+                                                    Count
+                                                </label>
+                                            </li>
+                                        </ul>
+                                    }
                                 </div>
                                 <div class='tab-pane fade' id=@valuesParentDivId>
                                     <div id='@valuesElementId'></div>
@@ -232,7 +270,7 @@
                                     </div>
                                 </li>
                                 <li class='nav-item'>
-                                    <a id='link_journal_@sensorId' class='nav-link' data-bs-toggle='tab' href='#@journalParentDivId'>Journal</a>
+                                    <a id='link_journal_@sensorId' class='nav-link @(Model.IsJournalEmpty ? "hidden_element": "")' data-bs-toggle='tab' href='#@journalParentDivId'>Journal</a>
                                 </li>
                             </ul>
                             <div class='tab-content'>
@@ -265,6 +303,16 @@
 <script>
     var previousReceivedTime = undefined;
 
+    $('[id^="plot_"]').change(function () {
+        const name = this.id.substring("plot_".length, this.id.length);
+        if ($(this).is(':checked')){
+            addBarPlot(name);   
+        }
+        else {
+            removeBarPlot(name);  
+        }
+    })
+    
     $('#allColumnsButton').off('click').on('click', function (e) {
         if (this.innerText.includes('Show')) {
             $("#receivingTime_header").removeClass('d-none');
@@ -284,7 +332,17 @@
         if ('@(Model.Type is SensorType.File)' === 'True') {
             setContentPreview('@Model.EncodedId');
         }
-        
+
+        let savedPlots = localStorage.getItem(`graph_@sensorId`);
+        if (savedPlots) {
+            console.log(savedPlots)
+            let plots = savedPlots.split(',');
+            let jqueryPlots = $('[id^="plot_"]');
+            jqueryPlots.each(x => {
+                jqueryPlots[x].checked = plots.includes(jqueryPlots[x].id.substring("plot_".length));
+            })
+        }
+       
         JournalTable = undefined;
     });
 

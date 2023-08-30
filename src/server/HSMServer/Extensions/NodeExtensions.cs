@@ -1,7 +1,10 @@
 using HSMServer.Model.Authentication;
 using HSMServer.Model.TreeViewModel;
+using HSMServer.Model.ViewModel;
+using HSMServer.Notifications.Telegram;
 using HSMServer.UserFilters;
 using Microsoft.AspNetCore.Html;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -11,6 +14,19 @@ namespace HSMServer.Extensions
     {
         private const int NodeNameMaxLength = 35;
         private const int CellNameMaxLength = 13;
+        private const int IconSize = 3;
+
+
+        internal static List<TelegramChat> GetAllChats(this NodeViewModel node)
+        {
+            var availableGroups = node.RootProduct.Notifications.Telegram.Chats.Values;
+            var availableUsers = node.RootProduct.GetAllUserChats().Values;
+
+            return availableGroups.Union(availableUsers).OrderBy(chat => chat.IsUserChat).ThenBy(chat => chat.Name).ToList();
+        }
+
+        internal static Dictionary<Guid, string> GetAvailableChats(this NodeViewModel node) =>
+            node.GetAllChats().ToDictionary(k => k.SystemId, v => v.Name);
 
 
         internal static string ToCssIconClass(this SensorStatus status) =>
@@ -55,9 +71,11 @@ namespace HSMServer.Extensions
 
         internal static string GetShortNodeName(this string name) => name.Cut(NodeNameMaxLength);
 
-        internal static string GetShortCellName(this string name) => name.Cut(CellNameMaxLength);
+        internal static string GetShortCellName(this string name, int iconsLengthDifference = 0) => name.Cut(CellNameMaxLength - iconsLengthDifference.GetIconsLength());
 
         private static string Cut(this string str, int stringLength) =>
             str.Length > stringLength ? $"{str[..stringLength]}..." : str;
+
+        private static int GetIconsLength(this int iconsCount) => Math.Min(iconsCount, AlertIconsViewModel.VisibleMaxSize) * IconSize;
     }
 }

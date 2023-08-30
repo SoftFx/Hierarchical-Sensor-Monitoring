@@ -49,7 +49,7 @@ namespace HSMServer.Model.History
         {
             Reset();
 
-            _pagesEnumerator = cache.GetSensorValuesPage(_model.Id, request.FromUtc, request.ToUtc, request.Count).GetAsyncEnumerator(_source.Token);
+            _pagesEnumerator = cache.GetSensorValuesPage(_model.Id, request.FromUtc, request.ToUtc, request.Count, request.Options).GetAsyncEnumerator(_source.Token);
 
             await TryReadNextPage();
 
@@ -129,6 +129,7 @@ namespace HSMServer.Model.History
                 Status = value.Status.ToClient(),
                 Comment = value.Comment,
                 ReceivingTime = value.ReceivingTime,
+                IsTimeout = value.IsTimeout
             };
 
         private static BarSensorValueViewModel Build<T>(BarBaseValue<T> value) where T : INumber<T> =>
@@ -143,11 +144,12 @@ namespace HSMServer.Model.History
                 Status = value.Status.ToClient(),
                 Comment = value.Comment,
                 ReceivingTime = value.ReceivingTime,
+                IsTimeout = value.IsTimeout
             };
 
         private static string GetTableValue<T>(BaseValue<T> value) => value switch
         {
-            VersionValue version => version.Value.RemoveTailZeroes(),
+            VersionValue version => version.Value?.RemoveTailZeroes() ?? string.Empty,
             TimeSpanValue timespan => timespan.Value.ToTableView(),
             _ => value.Value?.ToString(),
         };

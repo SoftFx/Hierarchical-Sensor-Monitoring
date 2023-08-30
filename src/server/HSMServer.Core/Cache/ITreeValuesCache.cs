@@ -1,9 +1,10 @@
-﻿using HSMServer.Core.Cache.UpdateEntities;
+﻿using HSMSensorDataObjects.HistoryRequests;
+using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Model;
+using HSMServer.Core.Model.Policies;
 using HSMServer.Core.Model.Requests;
 using System;
 using System.Collections.Generic;
-using HSMDatabase.AccessManager.DatabaseEntities;
 
 namespace HSMServer.Core.Cache
 {
@@ -53,10 +54,20 @@ namespace HSMServer.Core.Cache
         BaseSensorModel GetSensor(Guid sensorId);
 
         IAsyncEnumerable<List<BaseValue>> GetSensorValues(HistoryRequestModel request);
-        IAsyncEnumerable<List<BaseValue>> GetSensorValuesPage(Guid sensorId, DateTime from, DateTime to, int count);
+        IAsyncEnumerable<List<BaseValue>> GetSensorValuesPage(Guid sensorId, DateTime from, DateTime to, int count, RequestOptions requestOptions = default);
 
         void UpdateCacheState();
 
         void SaveLastStateToDb();
+
+        void AddNewChat(Guid chatId, string name, string productName);
+
+        void RemoveChat(Guid chatId, string productName);
+
+        [Obsolete("Should be removed after policies chats migration")]
+        void UpdatePolicy(Policy policy);
+
+        [Obsolete("Should be removed after policies chats migration")]
+        void UpdateSensor(Guid sensorId);
     }
 }

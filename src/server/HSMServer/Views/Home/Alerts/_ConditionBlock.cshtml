@@ -10,9 +10,10 @@
     var condition = Model.Property;
 
     var isStatusCondition = condition == AlertProperty.Status;
+    var isStringCondition = condition == AlertProperty.Comment;
     var isTtlCondition = condition == AlertProperty.TimeToLive;
     var isSensitivityCondition = condition == AlertProperty.Sensitivity;
-    var isValueCondition = !isStatusCondition && !isTtlCondition && !isSensitivityCondition;
+    var isValueCondition = !isStatusCondition && !isTtlCondition && !isSensitivityCondition && !isStringCondition;
 
     var isSecondaryCondition = !Model.IsMain;
 }
@@ -30,6 +31,10 @@
 
     <div name="statusCondition" class="@isStatusCondition.ToVisibility() flex-row align-items-center">
         <select class="alert-block alert-select operation-select" asp-for="Operation" asp-items="@Model.StatusOperationsItems"></select>
+    </div>
+
+    <div name="stringCondition" class="@isStringCondition.ToVisibility() flex-row align-items-center">
+        <select class="alert-block alert-select operation-select" asp-for="Operation" asp-items="@Model.StringOperationsItems"></select>
     </div>
 
     <div name="sensitivityCondition" class="@isSensitivityCondition.ToVisibility() flex-row align-items-center">
@@ -52,6 +57,7 @@
         
         let value = conditionBlock.find($(`div[name='valueCondition']`));
         let status = conditionBlock.find($(`div[name='statusCondition']`));
+        let string = conditionBlock.find($(`div[name='stringCondition']`));
         let sensitivity = conditionBlock.find($(`div[name='sensitivityCondition']`));
 
         let targetInput = value.find($(`input[name='Target']`));
@@ -60,19 +66,30 @@
         if (condition === '@AlertProperty.Status') {
             targetInput.attr('required', false);
             value.removeClass("d-flex").addClass('d-none');
+            string.removeClass("d-flex").addClass('d-none');
             sensitivity.removeClass("d-flex").addClass('d-none');
 
             status.removeClass("d-none").addClass('d-flex');
+        }
+        else if (condition == '@AlertProperty.Comment') {
+            targetInput.attr('required', false);
+            value.removeClass("d-flex").addClass('d-none');
+            status.removeClass("d-flex").addClass('d-none');
+            sensitivity.removeClass("d-flex").addClass('d-none');
+
+            string.removeClass("d-none").addClass('d-flex');
         }
         else if (condition === '@AlertProperty.Sensitivity') {
             targetInput.attr('required', false);
             value.removeClass("d-flex").addClass('d-none');
             status.removeClass("d-flex").addClass('d-none');
+            string.removeClass("d-flex").addClass('d-none');
 
             sensitivity.removeClass("d-none").addClass('d-flex');
         }
         else {
             status.removeClass("d-flex").addClass('d-none');
+            string.removeClass("d-flex").addClass('d-none');
             sensitivity.removeClass("d-flex").addClass('d-none');
 
             targetInput.attr('required', true);

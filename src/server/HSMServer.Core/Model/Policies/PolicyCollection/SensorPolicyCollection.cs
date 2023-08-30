@@ -26,7 +26,7 @@ namespace HSMServer.Core.Model.Policies
 
         internal abstract void Attach(BaseSensorModel sensor);
 
-        internal abstract void AddDefaultSensors();
+        internal abstract void AddDefaultSensors(Dictionary<Guid, string> connectedChats);
 
 
         internal void Reset()
@@ -62,10 +62,11 @@ namespace HSMServer.Core.Model.Policies
         {
             base.BuildDefault(node, entity);
 
+            _typePolicy.Destination = node.Policies.TimeToLive.Destination;
             _typePolicy.RebuildState();
         }
 
-        internal override void UpdateTTL(PolicyUpdate update)
+        public override void UpdateTTL(PolicyUpdate update)
         {
             var oldValue = TimeToLive.ToString();
 
@@ -161,8 +162,6 @@ namespace HSMServer.Core.Model.Policies
                         SensorResult += policy.SensorResult;
                 }
 
-            SensorTimeout(value);
-
             return true;
         }
 
@@ -210,8 +209,11 @@ namespace HSMServer.Core.Model.Policies
                     Uploaded?.Invoke(ActionType.Add, policy);
                 }
 
-            if (_sensor.LastValue is not null)
-                CalculateStorageResult((ValueType)_sensor?.LastValue);
+            if (_sensor?.LastValue is ValueType valueT)
+            {
+                CalculateStorageResult(valueT);
+                SensorTimeout(valueT);
+            }
         }
 
         public override IEnumerator<Policy> GetEnumerator() => _storage.Values.GetEnumerator();
@@ -229,24 +231,24 @@ namespace HSMServer.Core.Model.Policies
                 }
         }
 
-        internal override void AddDefaultSensors()
+        internal override void AddDefaultSensors(Dictionary<Guid, string> connectedChats)
         {
             var policy = new PolicyType();
 
-            var statusUpdate = new PolicyUpdate(
-                Guid.NewGuid(),
-                new()
+            var statusUpdate = new PolicyUpdate
+            {
+                Id = Guid.NewGuid(),
+                Status = SensorStatus.Ok,
+                Template = $"$prevStatus->$status [$product]$path = $comment",
+                Destination = new(true, connectedChats),
+                Conditions = new(1)
                 {
                     new PolicyConditionUpdate(
                         PolicyOperation.IsChanged,
                         PolicyProperty.Status,
                         new TargetValue(TargetType.LastValue, _sensor.Id.ToString())),
                 },
-                null,
-                SensorStatus.Ok,
-                $"$prevStatus->$status [$product]$path = $comment",
-                null,
-                false);
+            };
 
             policy.Update(statusUpdate, _sensor);
 
