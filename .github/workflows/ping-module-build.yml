@@ -177,7 +177,7 @@ jobs:
         run: echo "DockerMainName=${{ env.DOCKER_DOCKERHUB_ORG }}/${{ env.DOCKER_MAIN_REPOS }}" >> $GITHUB_ENV
 
       - name: Build Linux image for Docker
-        run: dotnet publish ${{ env.SERVER_PATH }} -c Release --os linux --arch x64 -p:PublishProfile=DefaultContainer -p:ContainerBaseImage=${{ env.DockerDepsUrl }} -p:ContainerImageName=${{ env.DockerMainName }}
+        run: dotnet publish ${{ env.SERVER_PATH }} -c Release --os linux --arch x64 /t:PublishContainer -p:ContainerBaseImage=${{ env.DockerDepsUrl }} -p:ContainerImageName=${{ env.DockerMainName }}
       
       - name: check
         run: docker images
