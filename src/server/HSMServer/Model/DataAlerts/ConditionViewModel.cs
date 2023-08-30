@@ -136,6 +136,7 @@ namespace HSMServer.Model.DataAlerts
             AlertProperty.Max,
             AlertProperty.Mean,
             AlertProperty.LastValue,
+            AlertProperty.Count,
             AlertProperty.Status,
             AlertProperty.Comment,
         };
