@@ -304,7 +304,7 @@ namespace HSMServer.Controllers
         [HttpPost]
         public void ClearHistoryNode([FromQuery] string selectedId)
         {
-            ClearHistoryRequest GetRequest(Guid id) => new(id, CurrentUser.Name);
+            ClearHistoryRequest GetRequest(Guid id) => new(id, CurrentInitiator);
 
             var decodedId = SensorPathHelper.DecodeGuid(selectedId);
 

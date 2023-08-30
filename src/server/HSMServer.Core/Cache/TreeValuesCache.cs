@@ -26,7 +26,6 @@ namespace HSMServer.Core.Cache
         private const string ErrorMasterKey = "Master key is invalid for this request because product is not specified.";
 
         public const int MaxHistoryCount = 50000;
-        public const string System = "System";
 
         private readonly ConcurrentDictionary<Guid, BaseSensorModel> _sensors = new();
         private readonly ConcurrentDictionary<Guid, AccessKeyModel> _keys = new();
