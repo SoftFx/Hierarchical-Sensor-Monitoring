@@ -126,11 +126,12 @@ namespace HSMServer.Core.Model
         {
             base.Update(update);
 
-            State = UpdateProperty(State, update.State ?? State, update.Initiator);
             Integration = UpdateProperty(Integration, update.Integration ?? Integration, update.Initiator);
-            EndOfMuting = UpdateProperty(EndOfMuting, update.EndOfMutingPeriod, update.Initiator, "End of muting");
             OriginalUnit = UpdateProperty(OriginalUnit, update.SelectedUnit ?? OriginalUnit, update.Initiator, "Unit");
             AggregateValues = UpdateProperty(AggregateValues, update.SaveOnlyUniqueValues ?? AggregateValues, update.Initiator, "Save only unique values");
+
+            State = UpdateProperty(State, update.State ?? State, update.Initiator, forced: true);
+            EndOfMuting = UpdateProperty(EndOfMuting, update.EndOfMutingPeriod, update.Initiator, "End of muting", true);
 
             if (State == SensorState.Available)
                 EndOfMuting = null;
@@ -162,6 +163,7 @@ namespace HSMServer.Core.Model
             EndOfMuting = EndOfMuting?.Ticks ?? 0L,
             Settings = Settings.ToEntity(),
             TTLPolicy = Policies.TimeToLive?.ToEntity(),
+            ChangeTable = ChangeTable.ToEntity(),
         };
     }
 }

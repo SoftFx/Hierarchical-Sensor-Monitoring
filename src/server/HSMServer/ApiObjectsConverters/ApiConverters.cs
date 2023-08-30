@@ -7,6 +7,7 @@ using HSMServer.Core.Model;
 using HSMServer.Core.Model.HistoryValues;
 using HSMServer.Core.Model.Policies;
 using HSMServer.Core.Model.Requests;
+using HSMServer.Core.TableOfChanges;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -237,7 +238,7 @@ namespace HSMServer.ApiObjectsConverters
                 TTL = request.TTL.ToTimeInterval(),
                 TTLPolicy = request.TtlAlert?.Convert(keyName),
                 Policies = request.Alerts?.Select(policy => policy.Convert(keyName)).ToList(),
-                Initiator = $"Datacollector ({keyName})",
+                Initiator = InitiatorInfo.AsCollector(keyName),
             };
 
 
@@ -252,7 +253,7 @@ namespace HSMServer.ApiObjectsConverters
             Template = request.Template,
             Icon = request.Icon,
             IsDisabled = request.IsDisabled,
-            Initiator = $"Datacollector ({keyName})",
+            Initiator = InitiatorInfo.AsCollector(keyName),
         };
 
 

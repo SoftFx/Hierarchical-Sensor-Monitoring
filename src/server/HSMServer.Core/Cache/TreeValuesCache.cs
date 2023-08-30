@@ -8,6 +8,7 @@ using HSMServer.Core.Model;
 using HSMServer.Core.Model.Policies;
 using HSMServer.Core.Model.Requests;
 using HSMServer.Core.SensorsUpdatesQueue;
+using HSMServer.Core.TableOfChanges;
 using HSMServer.Core.TreeStateSnapshot;
 using NLog;
 using System;
@@ -25,7 +26,6 @@ namespace HSMServer.Core.Cache
         private const string ErrorMasterKey = "Master key is invalid for this request because product is not specified.";
 
         public const int MaxHistoryCount = 50000;
-        public const string System = "System";
 
         private readonly ConcurrentDictionary<Guid, BaseSensorModel> _sensors = new();
         private readonly ConcurrentDictionary<Guid, AccessKeyModel> _keys = new();
@@ -299,7 +299,7 @@ namespace HSMServer.Core.Cache
 
                 if (sensor.TryUpdateLastValue(value, request.ChangeLast))
                 {
-                    _journalService.AddRecord(new JournalRecordModel(request.Id, request.Initiator ?? System)
+                    _journalService.AddRecord(new JournalRecordModel(request.Id, request.Initiator)
                     {
                         PropertyName = request.PropertyName,
                         Enviroment = request.Environment,
@@ -313,7 +313,7 @@ namespace HSMServer.Core.Cache
             }
         }
 
-        public void RemoveSensor(Guid sensorId, string initiator = null)
+        public void RemoveSensor(Guid sensorId, InitiatorInfo initiator = null)
         {
             if (!_sensors.TryRemove(sensorId, out var sensor))
                 return;
@@ -323,12 +323,11 @@ namespace HSMServer.Core.Cache
                 parent.Sensors.TryRemove(sensorId, out _);
                 _journalService.RemoveRecords(sensorId, parent.Id);
 
-                if (initiator is not null)
-                    _journalService.AddRecord(new JournalRecordModel(parent.Id, initiator)
-                    {
-                        Enviroment = "Remove sensor",
-                        Path = sensor.FullPath,
-                    });
+                _journalService.AddRecord(new JournalRecordModel(parent.Id, initiator)
+                {
+                    Enviroment = "Remove sensor",
+                    Path = sensor.FullPath,
+                });
             }
             else
                 _journalService.RemoveRecords(sensorId);
@@ -341,7 +340,7 @@ namespace HSMServer.Core.Cache
             ChangeSensorEvent?.Invoke(sensor, ActionType.Delete);
         }
 
-        public void UpdateMutedSensorState(Guid sensorId, DateTime? endOfMuting = null, string initiator = null)
+        public void UpdateMutedSensorState(Guid sensorId, InitiatorInfo initiator, DateTime? endOfMuting = null)
         {
             if (!_sensors.TryGetValue(sensorId, out var sensor) || sensor.State is SensorState.Blocked)
                 return;
@@ -1149,7 +1148,7 @@ namespace HSMServer.Core.Cache
 
             foreach (var sensor in GetSensors())
                 if (sensor.EndOfMuting <= DateTime.UtcNow)
-                    UpdateMutedSensorState(sensor.Id);
+                    UpdateMutedSensorState(sensor.Id, InitiatorInfo.System);
         }
 
         private void SetExpiredSnapshot(BaseSensorModel sensor, bool timeout)
