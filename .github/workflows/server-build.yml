@@ -16,10 +16,10 @@ env:
   SOLUTION_PATH: src/server/HSMServer/HSMServer.sln
   SERVER_PATH: src/server/HSMServer/HSMServer.csproj
 
-  DOCKER_DOCKERHUB_ORG: hsmonitoring
+  DOCKER_DOCKERHUB_ORG: pawgyrocopter
   DOCKER_DEPS_REPOS: hierarchical_sensor_monitoring_deps
   DOCKER_DEPS_TAG: latest
-  DOCKER_MAIN_REPOS: hierarchical_sensor_monitoring
+  DOCKER_MAIN_REPOS: pawgyrocopter
 
 jobs:
   build:
