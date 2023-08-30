@@ -297,7 +297,7 @@ namespace HSMServer.Core.Cache
             {
                 var value = request.BuildNewValue(sensor.Storage.GetEmptyValue(), lastValue);
 
-                if (sensor.Storage.TryChangeLastValue(value, request.ChangeLast))
+                if (sensor.TryUpdateLastValue(value, request.ChangeLast))
                 {
                     _journalService.AddRecord(new JournalRecordModel(request.Id, request.Initiator ?? System)
                     {

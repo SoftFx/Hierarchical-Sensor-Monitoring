@@ -44,6 +44,21 @@ namespace HSMServer.Core.Model
             return canStore;
         }
 
+        internal override bool TryUpdateLastValue(BaseValue value, bool changeLast = false)
+        {
+            if (Storage.TryChangeLastValue(value, changeLast))
+            {
+                var isLastValue = Storage.LastValue is null || value.Time >= Storage.LastValue.Time;
+                var canStore = Policies.TryValidate(value, out _, isLastValue);
+
+                ReceivedNewValue?.Invoke(value);
+
+                return canStore;
+            }
+
+            return false;
+        }
+
 
         internal override bool CheckTimeout() => Policies.SensorTimeout(LastValue);
 
