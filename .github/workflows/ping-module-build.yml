@@ -171,10 +171,10 @@ jobs:
           password: ${{ secrets.DOCKERHUBTOKEN }}
 
       - name: Build full deps url
-        run: echo "DockerDepsUrl=${{ env.DockerHubDepsRegistry }}/${{ env.DOCKER_DOCKERHUB_ORG }}/${{ env.DOCKER_DEPS_REPOS }}:${{ env.DOCKER_DEPS_TAG }}" >> $GITHUB_ENV
+        run: echo "DockerDepsUrl=${{ env.DockerHubDepsRegistry }}/pawgyrocopter/${{ env.DOCKER_DEPS_REPOS }}:${{ env.DOCKER_DEPS_TAG }}" >> $GITHUB_ENV
 
       - name: Build full main repos name
-        run: echo "DockerMainName=${{ env.DOCKER_DOCKERHUB_ORG }}/${{ env.DOCKER_MAIN_REPOS }}" >> $GITHUB_ENV
+        run: echo "DockerMainName=pawgyrocopter/${{ env.DOCKER_MAIN_REPOS }}" >> $GITHUB_ENV
 
       - name: Build Linux image for Docker
         run: dotnet publish ${{ env.SERVER_PATH }} -c Release --os linux --arch x64 -p:PublishProfile=DefaultContainer -p:ContainerBaseImage=${{ env.DockerDepsUrl }} -p:ContainerImageName=${{ env.DockerMainName }}
