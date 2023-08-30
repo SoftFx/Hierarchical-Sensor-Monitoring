@@ -52,11 +52,9 @@ public sealed class JournalRecordViewModel
         var value = string.Empty;
 
         if (string.IsNullOrEmpty(model.NewValue))
-        {
-            header = "Removed";
-            value = model.OldValue;
-        }
-        else if (string.IsNullOrEmpty(model.OldValue))
+            return ($"""{model.PropertyName} has been removed""", $"{model.PropertyName} {model.OldValue} {model.Initiator}");
+
+        if (string.IsNullOrEmpty(model.OldValue))
         {
             header = "Added new";
             value = model.NewValue;
