@@ -140,12 +140,12 @@ namespace HSMServer.Controllers
             if (_treeViewModel.Nodes.TryGetValue(decodedId, out _))
             {
                 foreach (var sensorId in GetNodeSensors(decodedId))
-                    _treeValuesCache.UpdateMutedSensorState(sensorId, newMutingPeriod, CurrentInitiator);
+                    _treeValuesCache.UpdateMutedSensorState(sensorId, CurrentInitiator, newMutingPeriod);
             }
             else
             {
                 if (_treeViewModel.Sensors.TryGetValue(decodedId, out var sensor))
-                    _treeValuesCache.UpdateMutedSensorState(sensor.Id, newMutingPeriod, CurrentInitiator);
+                    _treeValuesCache.UpdateMutedSensorState(sensor.Id, CurrentInitiator, newMutingPeriod);
             }
 
             UpdateUserNotificationSettings(decodedId, (s, g) => s.Ignore(g, model.EndOfIgnorePeriod));
@@ -160,12 +160,12 @@ namespace HSMServer.Controllers
             if (_treeViewModel.Nodes.TryGetValue(decodedId, out _))
             {
                 foreach (var sensorId in GetNodeSensors(decodedId))
-                    _treeValuesCache.UpdateMutedSensorState(sensorId, initiator: CurrentInitiator);
+                    _treeValuesCache.UpdateMutedSensorState(sensorId, CurrentInitiator);
             }
             else
             {
                 if (_treeViewModel.Sensors.TryGetValue(decodedId, out var sensor))
-                    _treeValuesCache.UpdateMutedSensorState(sensor.Id, initiator: CurrentInitiator);
+                    _treeValuesCache.UpdateMutedSensorState(sensor.Id, CurrentInitiator);
             }
 
             UpdateUserNotificationSettings(decodedId, (s, g) => s.RemoveIgnore(g));
@@ -304,7 +304,7 @@ namespace HSMServer.Controllers
         [HttpPost]
         public void ClearHistoryNode([FromQuery] string selectedId)
         {
-            ClearHistoryRequest GetRequest(Guid id) => new(id, CurrentUser.Name);
+            ClearHistoryRequest GetRequest(Guid id) => new(id, CurrentInitiator);
 
             var decodedId = SensorPathHelper.DecodeGuid(selectedId);
 

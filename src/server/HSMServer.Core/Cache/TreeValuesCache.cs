@@ -26,7 +26,6 @@ namespace HSMServer.Core.Cache
         private const string ErrorMasterKey = "Master key is invalid for this request because product is not specified.";
 
         public const int MaxHistoryCount = 50000;
-        public const string System = "System";
 
         private readonly ConcurrentDictionary<Guid, BaseSensorModel> _sensors = new();
         private readonly ConcurrentDictionary<Guid, AccessKeyModel> _keys = new();
@@ -341,7 +340,7 @@ namespace HSMServer.Core.Cache
             ChangeSensorEvent?.Invoke(sensor, ActionType.Delete);
         }
 
-        public void UpdateMutedSensorState(Guid sensorId, DateTime? endOfMuting = null, InitiatorInfo initiator = null)
+        public void UpdateMutedSensorState(Guid sensorId, InitiatorInfo initiator, DateTime? endOfMuting = null)
         {
             if (!_sensors.TryGetValue(sensorId, out var sensor) || sensor.State is SensorState.Blocked)
                 return;
@@ -1133,7 +1132,7 @@ namespace HSMServer.Core.Cache
 
             foreach (var sensor in GetSensors())
                 if (sensor.EndOfMuting <= DateTime.UtcNow)
-                    UpdateMutedSensorState(sensor.Id);
+                    UpdateMutedSensorState(sensor.Id, InitiatorInfo.System);
         }
 
         private void SetExpiredSnapshot(BaseSensorModel sensor, bool timeout)

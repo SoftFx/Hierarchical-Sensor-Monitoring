@@ -112,11 +112,11 @@ namespace HSMServer.Core.Model
         }
 
 
-        protected T UpdateProperty<T>(T oldValue, T newValue, InitiatorInfo initiator, [CallerArgumentExpression(nameof(oldValue))] string propName = "")
+        protected T UpdateProperty<T>(T oldValue, T newValue, InitiatorInfo initiator, [CallerArgumentExpression(nameof(oldValue))] string propName = "", bool forced = false)
         {
             var infoNode = ChangeTable.Properties[propName];
 
-            if (!infoNode.CanChange(initiator))
+            if (!forced && !infoNode.CanChange(initiator))
                 return oldValue;
 
             if (newValue is not null && !newValue.Equals(oldValue ?? newValue))

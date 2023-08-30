@@ -121,14 +121,16 @@ namespace HSMServer.Core.Model.Policies
         }
 
 
-        protected void CallJournal(Guid alertId, string oldValue, string newValue, InitiatorInfo initiator)
+        protected void CallJournal(Guid alertId, string oldValue, string newValue, InitiatorInfo initiator, bool isParentCall = false)
         {
             if (oldValue != newValue)
             {
+                var propertyName = isParentCall ? "Alert change" : "Alert change by parent";
+
                 CallJournal(new JournalRecordModel(_sensor.Id, initiator)
                 {
                     Enviroment = "Alert collection",
-                    PropertyName = "Alert",
+                    PropertyName = propertyName,
                     OldValue = oldValue,
                     NewValue = newValue,
                     Path = _sensor.FullPath,
