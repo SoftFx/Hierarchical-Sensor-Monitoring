@@ -40,6 +40,8 @@ namespace HSMServer.Core.Model.Policies
         Mean = 103,
         Count = 104,
         LastValue = 105,
+
+        OriginalSize = 151,
     }
 
 

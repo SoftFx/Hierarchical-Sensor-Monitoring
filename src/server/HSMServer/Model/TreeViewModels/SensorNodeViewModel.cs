@@ -96,7 +96,7 @@ namespace HSMServer.Model.TreeViewModel
 
         private DataAlertViewModelBase BuildAlert(Policy policy) => policy switch
         {
-            FilePolicy p => new DataAlertViewModel<FileValue>(p, this),
+            FilePolicy p => new FileDataAlertViewModel(p, this),
             StringPolicy p => new DataAlertViewModel<StringValue>(p, this),
             BooleanPolicy p => new DataAlertViewModel<BooleanValue>(p, this),
             VersionPolicy p => new DataAlertViewModel<VersionValue>(p, this),

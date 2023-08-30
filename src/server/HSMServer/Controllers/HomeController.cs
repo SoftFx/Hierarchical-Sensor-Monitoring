@@ -594,7 +594,7 @@ namespace HSMServer.Controllers
 
             DataAlertViewModelBase viewModel = type switch
             {
-                (byte)SensorType.File => new DataAlertViewModel<FileValue>(entity),
+                (byte)SensorType.File => new FileDataAlertViewModel(entity),
                 (byte)SensorType.String => new DataAlertViewModel<StringValue>(entity),
                 (byte)SensorType.Boolean => new DataAlertViewModel<BooleanValue>(entity),
                 (byte)SensorType.Version => new DataAlertViewModel<VersionValue>(entity),

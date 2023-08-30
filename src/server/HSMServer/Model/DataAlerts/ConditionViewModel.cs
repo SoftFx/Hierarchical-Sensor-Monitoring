@@ -21,6 +21,7 @@ namespace HSMServer.Model.DataAlerts
         Mean,
         Count,
         LastValue,
+        OriginalSize,
         Sensitivity,
         [Display(Name = "Inactivity period")]
         TimeToLive,
@@ -106,15 +107,8 @@ namespace HSMServer.Model.DataAlerts
     }
 
 
-    public sealed class SingleConditionViewModel<T, U> : ConditionViewModel where T : BaseValue<U>, new()
+    public abstract class NumberConditionViewModel : ConditionViewModel
     {
-        protected override List<AlertProperty> Properties { get; } = new()
-        {
-            AlertProperty.Value,
-            AlertProperty.Status,
-            AlertProperty.Comment,
-        };
-
         protected override List<PolicyOperation> Operations { get; } = new()
         {
             PolicyOperation.LessThanOrEqual,
@@ -124,11 +118,39 @@ namespace HSMServer.Model.DataAlerts
         };
 
 
+        protected NumberConditionViewModel(bool isMain) : base(isMain) { }
+    }
+
+
+    public class SingleConditionViewModel<T, U> : NumberConditionViewModel where T : BaseValue<U>, new()
+    {
+        protected override List<AlertProperty> Properties { get; } = new()
+        {
+            AlertProperty.Value,
+            AlertProperty.Status,
+            AlertProperty.Comment,
+        };
+
+
         public SingleConditionViewModel(bool isMain) : base(isMain) { }
     }
 
 
-    public sealed class BarConditionViewModel<T, U> : ConditionViewModel where T : BarBaseValue<U>, new() where U : INumber<U>
+    public sealed class FileConditionViewModel : NumberConditionViewModel
+    {
+        protected override List<AlertProperty> Properties { get; } = new()
+        {
+            AlertProperty.OriginalSize,
+            AlertProperty.Status,
+            AlertProperty.Comment,
+        };
+
+
+        public FileConditionViewModel(bool isMain) : base(isMain) { }
+    }
+
+
+    public sealed class BarConditionViewModel<T, U> : NumberConditionViewModel where T : BarBaseValue<U>, new() where U : INumber<U>
     {
         protected override List<AlertProperty> Properties { get; } = new()
         {
@@ -139,14 +161,6 @@ namespace HSMServer.Model.DataAlerts
             AlertProperty.Count,
             AlertProperty.Status,
             AlertProperty.Comment,
-        };
-
-        protected override List<PolicyOperation> Operations { get; } = new()
-        {
-            PolicyOperation.LessThanOrEqual,
-            PolicyOperation.LessThan,
-            PolicyOperation.GreaterThan,
-            PolicyOperation.GreaterThanOrEqual,
         };
 
 

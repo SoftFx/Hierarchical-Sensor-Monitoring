@@ -307,6 +307,7 @@ namespace HSMServer.ApiObjectsConverters
                 AlertProperty.Mean => PolicyProperty.Mean,
                 AlertProperty.Count => PolicyProperty.Count,
                 AlertProperty.LastValue => PolicyProperty.LastValue,
+                AlertProperty.OriginalSize => PolicyProperty.OriginalSize,
                 _ => throw new NotImplementedException(),
             };
 

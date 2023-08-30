@@ -37,14 +37,15 @@ namespace HSMServer.Core.Model.Policies
     }
 
 
-    internal sealed class PolicyExecutorInt : PolicyExecutorNumberBase<int>
+    internal sealed class PolicyExecutorLong : PolicyExecutorNumberBase<long>
     {
-        internal PolicyExecutorInt(PolicyProperty property)
+        internal PolicyExecutorLong(PolicyProperty property)
         {
             _getCheckedValue = property switch
             {
                 PolicyProperty.Count => v => ((BarBaseValue)v).Count,
-                _ => throw new NotImplementedException($"Invalid property {property} for {nameof(PolicyExecutorInt)}")
+                PolicyProperty.OriginalSize => v => ((FileValue)v).OriginalSize,
+                _ => throw new NotImplementedException($"Invalid property {property} for {nameof(PolicyExecutorLong)}")
             };
         }
     }

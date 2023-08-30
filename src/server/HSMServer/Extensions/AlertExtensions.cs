@@ -19,6 +19,7 @@ namespace HSMServer.Extensions
                 PolicyProperty.Mean => AlertProperty.Mean,
                 PolicyProperty.Count => AlertProperty.Count,
                 PolicyProperty.LastValue => AlertProperty.LastValue,
+                PolicyProperty.OriginalSize => AlertProperty.OriginalSize,
                 _ => throw new NotImplementedException()
             };
 
@@ -33,6 +34,7 @@ namespace HSMServer.Extensions
                 AlertProperty.Mean => PolicyProperty.Mean,
                 AlertProperty.Count => PolicyProperty.Count,
                 AlertProperty.LastValue => PolicyProperty.LastValue,
+                AlertProperty.OriginalSize => PolicyProperty.OriginalSize,
                 _ => throw new NotImplementedException()
             };
     }
