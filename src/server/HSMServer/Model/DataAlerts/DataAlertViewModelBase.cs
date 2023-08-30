@@ -4,6 +4,7 @@ using HSMServer.Extensions;
 using HSMServer.Model.TreeViewModel;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace HSMServer.Model.DataAlerts
 {
@@ -123,11 +124,20 @@ namespace HSMServer.Model.DataAlerts
 
             var availableChats = node.GetAllChats();
 
+            Dictionary<Guid, string> policyChats = new();
+            if (policy.Destination?.Chats is not null)
+            {
+                var availableChatsDict = availableChats.ToDictionary(k => k.SystemId, v => v.Name);
+
+                foreach (var (chatId, name) in policy.Destination.Chats)
+                    policyChats.Add(chatId, string.IsNullOrEmpty(name) && availableChatsDict.TryGetValue(chatId, out var chatName) ? chatName : name);
+            }
+
             Actions.Add(new ActionViewModel(true, availableChats)
             {
                 Action = ActionType.SendNotification,
                 Comment = policy.Template,
-                Chats = policy.Destination.AllChats ? new Dictionary<Guid, string>(1) { { ActionViewModel.AllChatsId, null } } : policy.Destination.Chats,
+                Chats = policy.Destination.AllChats ? new Dictionary<Guid, string>(1) { { ActionViewModel.AllChatsId, null } } : policyChats,
                 DisplayComment = node is SensorNodeViewModel ? policy.RebuildState() : policy.Template
             });
 
