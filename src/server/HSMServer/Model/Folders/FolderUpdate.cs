@@ -1,14 +1,16 @@
 ﻿using HSMServer.ConcurrentStorage;
+using HSMServer.Core.TableOfChanges;
 using HSMServer.Notification.Settings;
 using System;
 using System.Drawing;
-using HSMServer.Core.Cache;
 
 namespace HSMServer.Model.Folders
 {
     public record FolderUpdate : IUpdateModel
     {
         public required Guid Id { get; init; }
+
+        public required InitiatorInfo Initiator { get; init; }
 
 
         public TimeIntervalViewModel TTL { get; init; }
@@ -25,7 +27,5 @@ namespace HSMServer.Model.Folders
         public Color? Color { get; init; }
 
         public string Name { get; init; }
-
-        public required string Initiator { get; init; } = TreeValuesCache.System;
     }
 }

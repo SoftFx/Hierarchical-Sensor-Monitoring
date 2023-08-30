@@ -1,4 +1,5 @@
 ﻿using HSMServer.Core.Model;
+using HSMServer.Core.TableOfChanges;
 using System;
 
 namespace HSMServer.Core.Cache.UpdateEntities
@@ -15,7 +16,7 @@ namespace HSMServer.Core.Cache.UpdateEntities
         public TimeIntervalModel TTL { get; init; }
 
 
-        public string Initiator { get; init; } = TreeValuesCache.System;
+        public InitiatorInfo Initiator { get; init; } = InitiatorInfo.System;
 
 
         public string Description { get; init; }

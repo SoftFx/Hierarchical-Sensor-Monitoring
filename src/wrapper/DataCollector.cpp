@@ -100,6 +100,13 @@ void DataCollectorImpl::InitializeCollectorMonitoring(bool is_alive, bool versio
 	if (status) data_collector->Windows->AddCollectorStatus(options_info);
 }
 
+void DataCollectorImpl::AddServiceStateMonitoring(const string& service_name, const std::string& specific_path /*= ""*/)
+{
+	ServiceSensorOptions^ options = gcnew ServiceSensorOptions();
+	options->NodePath = !specific_path.empty() ? gcnew String(specific_path.c_str()) : nullptr;
+	options->ServiceName = gcnew String(service_name.c_str());
+	data_collector->Windows->SubscribeToWindowsServiceStatus(options);
+}
 
 void hsm_wrapper::DataCollectorImpl::SendFileAsync(const std::string& sensor_path, const std::string& file_path, HSMSensorStatus status /*= HSMSensorStatus::Ok*/, const std::string& description /*= {}*/)
 {
@@ -254,6 +261,18 @@ void hsm_wrapper::DataCollectorImplWrapper::InitializeOsMonitoring(bool is_updat
 	try
 	{
 		impl->InitializeOsMonitoring(is_updated, last_update, last_restart, specific_path);
+	}
+	catch (System::Exception^ ex)
+	{
+		throw std::exception(msclr::interop::marshal_as<std::string>(ex->Message).c_str());
+	}
+}
+
+void DataCollectorImplWrapper::AddServiceStateMonitoring(const string& service_name, const std::string& specific_path /*= ""*/)
+{
+	try
+	{
+		impl->AddServiceStateMonitoring(service_name, specific_path);
 	}
 	catch (System::Exception^ ex)
 	{
@@ -466,6 +485,11 @@ void DataCollectorProxy::InitializeProcessMonitoring(bool is_cpu, bool is_memory
 void hsm_wrapper::DataCollectorProxy::InitializeOsMonitoring(bool is_updated, bool last_update, bool last_restart, const std::string& specific_path /*= ""*/)
 {
 	impl_wrapper->InitializeOsMonitoring(is_updated, last_update, last_restart, specific_path);
+}
+
+void DataCollectorProxy::AddServiceStateMonitoring(const string& service_name, const std::string& specific_path /*= ""*/)
+{
+	impl_wrapper->AddServiceStateMonitoring(service_name, specific_path);
 }
 
 void DataCollectorProxy::SendFileAsync(const std::string& sensor_path, const std::string& file_path, HSMSensorStatus status /*= HSMSensorStatus::Ok*/, const std::string& description /*= {}*/)

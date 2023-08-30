@@ -1,9 +1,25 @@
-﻿using System;
+﻿using HSMServer.Core.TableOfChanges;
+using System;
 
 namespace HSMServer.Core.Model.Requests;
 
-public sealed record UpdateSensorValueRequestModel(Guid Id, SensorStatus Status, string Comment, string Initiator, string Value, bool ChangeLast = false)
+public sealed record UpdateSensorValueRequestModel
 {
+    public required Guid Id { get; init; }
+
+
+    public InitiatorInfo Initiator { get; init; } = InitiatorInfo.System;
+
+    public SensorStatus Status { get; init; }
+
+
+    public string Comment { get; init; }
+
+    public string Value { get; init; }
+
+    public bool ChangeLast { get; init; }
+
+
     public string PropertyName => ChangeLast ? "Last value" : "Value";
 
     public string Environment => ChangeLast ? "Change last value" : "Added new value";

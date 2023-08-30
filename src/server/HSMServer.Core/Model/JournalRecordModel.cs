@@ -1,4 +1,5 @@
 using HSMDatabase.AccessManager.DatabaseEntities;
+using HSMServer.Core.TableOfChanges;
 using System;
 
 namespace HSMServer.Core.Model;
@@ -35,10 +36,10 @@ public sealed class JournalRecordModel
         Path = entity.Path;
     }
 
-    public JournalRecordModel(Guid id, string initiator)
+    public JournalRecordModel(Guid id, InitiatorInfo initiator)
     {
         Key = new JournalKey(id, DateTime.UtcNow.Ticks);
-        Initiator = initiator;
+        Initiator = (initiator ?? InitiatorInfo.System).ToString();
     }
 
 

@@ -2,6 +2,7 @@
 using HSMServer.Core.Cache;
 using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Journal;
+using HSMServer.Core.TableOfChanges;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -22,7 +23,7 @@ namespace HSMServer.Core.Model.Policies
         public event Action<JournalRecordModel> ChangesHandler;
 
 
-        internal abstract void Update(List<PolicyUpdate> updates, string initiator);
+        internal abstract void Update(List<PolicyUpdate> updates, InitiatorInfo initiator);
 
         internal abstract void Attach(BaseSensorModel sensor);
 
@@ -43,6 +44,9 @@ namespace HSMServer.Core.Model.Policies
     {
         private protected BaseSensorModel _sensor;
         private CorrectTypePolicy<T> _typePolicy;
+
+
+        private protected ChangeCollection AlertChangeInfo => _sensor.ChangeTable.Policies;
 
 
         protected abstract bool CalculateStorageResult(T value, bool updateSensor);
@@ -72,7 +76,7 @@ namespace HSMServer.Core.Model.Policies
 
             base.UpdateTTL(update);
 
-            CallJournal(update.Id == Guid.Empty ? string.Empty : oldValue, TimeToLive.ToString(), update.Initiator);
+            CallJournal(update.Id, update.Id == Guid.Empty ? string.Empty : oldValue, TimeToLive.ToString(), update.Initiator);
         }
 
 
@@ -117,17 +121,24 @@ namespace HSMServer.Core.Model.Policies
         }
 
 
-        protected void CallJournal(string oldValue, string newValue, string initiator)
+        protected void CallJournal(Guid alertId, string oldValue, string newValue, InitiatorInfo initiator, bool isParentCall = false)
         {
             if (oldValue != newValue)
+            {
+                var propertyName = isParentCall ? "Alert change" : "Alert change by parent";
+
                 CallJournal(new JournalRecordModel(_sensor.Id, initiator)
                 {
                     Enviroment = "Alert collection",
-                    PropertyName = "Alert",
+                    PropertyName = propertyName,
                     OldValue = oldValue,
                     NewValue = newValue,
                     Path = _sensor.FullPath,
                 });
+
+                if (alertId != Guid.Empty)
+                    AlertChangeInfo[alertId.ToString()].SetUpdate(initiator);
+            }
         }
 
         private void RemoveAlert(Policy policy)
@@ -172,29 +183,28 @@ namespace HSMServer.Core.Model.Policies
                 _storage.TryAdd(policy.Id, typedPolicy);
         }
 
-        internal override void Update(List<PolicyUpdate> updatesList, string initiator)
+        internal override void Update(List<PolicyUpdate> updatesList, InitiatorInfo initiator)
         {
             var updates = updatesList.Where(u => u.Id != Guid.Empty).ToDictionary(u => u.Id);
 
             foreach (var (id, policy) in _storage)
-            {
-                if (updates.TryGetValue(id, out var update))
+                if (AlertChangeInfo[id.ToString()].CanChange(initiator))
                 {
-                    var oldPolicy = policy.ToString();
+                    if (updates.TryGetValue(id, out var update))
+                    {
+                        var oldPolicy = policy.ToString();
 
-                    policy.Update(update);
+                        policy.Update(update);
 
-                    CallJournal(oldPolicy, policy.ToString(), initiator);
-
-                    Uploaded?.Invoke(ActionType.Update, policy);
+                        CallJournal(id, oldPolicy, policy.ToString(), initiator);
+                        Uploaded?.Invoke(ActionType.Update, policy);
+                    }
+                    else if (_storage.TryRemove(id, out var oldPolicy))
+                    {
+                        CallJournal(id, oldPolicy.ToString(), string.Empty, initiator);
+                        Uploaded?.Invoke(ActionType.Delete, oldPolicy);
+                    }
                 }
-                else if (_storage.TryRemove(id, out var oldPolicy))
-                {
-                    CallJournal(oldPolicy.ToString(), string.Empty, initiator);
-
-                    Uploaded?.Invoke(ActionType.Delete, oldPolicy);
-                }
-            }
 
             foreach (var update in updatesList)
                 if (update.Id == Guid.Empty)
@@ -204,8 +214,8 @@ namespace HSMServer.Core.Model.Policies
                     policy.Update(update, _sensor);
 
                     AddPolicy(policy);
-                    CallJournal(string.Empty, policy.ToString(), initiator);
 
+                    CallJournal(policy.Id, string.Empty, policy.ToString(), initiator);
                     Uploaded?.Invoke(ActionType.Add, policy);
                 }
 
