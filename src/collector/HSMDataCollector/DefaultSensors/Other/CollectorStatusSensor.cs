@@ -1,4 +1,5 @@
-﻿using HSMDataCollector.Core;
+﻿using HSMDataCollector.Client;
+using HSMDataCollector.Core;
 using HSMDataCollector.Extensions;
 using HSMDataCollector.Options;
 using HSMSensorDataObjects;
@@ -8,17 +9,14 @@ namespace HSMDataCollector.DefaultSensors.Other
 {
     internal sealed class CollectorStatusSensor : SensorBase<string>
     {
-        protected override string SensorName => "Collector status";
+        public CollectorStatusSensor(InstantSensorOptions options) : base(options) { }
 
 
-        public CollectorStatusSensor(SensorOptions options) : base(options) { }
-
-
-        public void BuildAndSendValue(HSMClient client, CollectorStatus collectorStatus, string error)
+        public void BuildAndSendValue(HsmHttpsClient client, CollectorStatus collectorStatus, string error)
         {
             var dataStatus = string.IsNullOrEmpty(error) ? SensorStatus.Ok : SensorStatus.Error;
 
-            client.SendData(new StringSensorValue
+            client.Data.SendRequest(new StringSensorValue
             {
                 Path = SensorPath,
                 Value = $"{collectorStatus}",

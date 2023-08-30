@@ -70,6 +70,9 @@ namespace HSMServer.Core.Model.Policies
         public string LastValueBar { get; private set; }
 
 
+        [AlertVariable("$property", "Alert property")]
+        public string Property { get; set; }
+
         [AlertVariable("$operation", "Alert operation")]
         public string Operation { get; set; }
 
@@ -139,7 +142,7 @@ namespace HSMServer.Core.Model.Policies
 
         public string BuildComment(string template = null) => string.Format(template ?? Template?.Text ?? string.Empty,
             Product, Path, Sensor, Status, Time, Comment, PrevStatus, ValueSingle, MinValueBar, MaxValueBar, MeanValueBar,
-            LastValueBar, Operation, Target);
+            LastValueBar, Property, Operation, GetCorrectTarget());
 
         public static AlertSystemTemplate BuildSystemTemplate(string raw)
         {
@@ -201,5 +204,7 @@ namespace HSMServer.Core.Model.Policies
 
 
         private bool UseProperty(string name) => Template?.Contains(name) ?? false;
+
+        private string GetCorrectTarget() => Guid.TryParse(Target, out _) ? Sensor : Target; //skipping for guid
     }
 }

@@ -8,18 +8,19 @@ namespace HSMDataCollector.DefaultSensors.SystemInfo
         private readonly DriveInfo _driveInfo;
 
 
-        public string Name { get; }
-
         public long FreeSpace => _driveInfo.AvailableFreeSpace;
 
         public long FreeSpaceMb => FreeSpace.BytesToMegabytes();
+
+
+        public string DiskLetter { get; }
 
 
         internal WindowsDiskInfo(string targetPath)
         {
             _driveInfo = new DriveInfo(targetPath);
 
-            Name = $" {_driveInfo.Name[0]}";
+            DiskLetter = $"{_driveInfo.Name[0]}";
         }
     }
 }

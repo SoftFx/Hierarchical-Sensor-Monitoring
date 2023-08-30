@@ -18,6 +18,19 @@ namespace HSMServer.Core.Model.Policies
             };
 
 
+        internal static Func<TimeSpan, TimeSpan, bool> GetTimeSpanOperation(PolicyOperation action) =>
+            action switch
+            {
+                PolicyOperation.LessThan => (TimeSpan src, TimeSpan target) => src < target,
+                PolicyOperation.GreaterThan => (TimeSpan src, TimeSpan target) => src > target,
+                PolicyOperation.LessThanOrEqual => (TimeSpan src, TimeSpan target) => src <= target,
+                PolicyOperation.GreaterThanOrEqual => (TimeSpan src, TimeSpan target) => src >= target,
+                PolicyOperation.Equal => (TimeSpan src, TimeSpan target) => src == target,
+                PolicyOperation.NotEqual => (TimeSpan src, TimeSpan target) => src != target,
+                _ => throw new NotImplementedException()
+            };
+
+
         internal static Func<string, string, bool> GetStringOperation(PolicyOperation? action) =>
             action switch
             {
@@ -50,6 +63,8 @@ namespace HSMServer.Core.Model.Policies
 
             PolicyProperty.Value or PolicyProperty.Min or PolicyProperty.Max or
             PolicyProperty.Mean or PolicyProperty.LastValue when typeof(U) == typeof(double) => new PolicyExecutorNumber<double>(property),
+
+            PolicyProperty.Value when typeof(U) == typeof(TimeSpan) => new PolicyExecutorTimeSpan(),
 
             PolicyProperty.Status => new PolicyExecutorStatus(),
 

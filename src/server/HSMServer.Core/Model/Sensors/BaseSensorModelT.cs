@@ -6,7 +6,7 @@ using System.Linq;
 
 namespace HSMServer.Core.Model
 {
-    public abstract class BaseSensorModel<T> : BaseSensorModel where T : BaseValue
+    public abstract class BaseSensorModel<T> : BaseSensorModel where T : BaseValue, new()
     {
         public override SensorPolicyCollection<T> Policies { get; }
 
@@ -31,7 +31,11 @@ namespace HSMServer.Core.Model
 
             if (canStore)
             {
-                Storage.AddValue(valueT);
+                if (AggregateValues)
+                    Storage.AggregateValue(valueT);
+                else
+                    Storage.AddValue(valueT);
+
                 Policies.SensorTimeout(valueT);
 
                 ReceivedNewValue?.Invoke(valueT);
@@ -40,7 +44,21 @@ namespace HSMServer.Core.Model
             return canStore;
         }
 
-        internal override IEnumerable<BaseValue> ConvertValues(List<byte[]> pages) => pages.Select(Convert);
+        internal override bool TryUpdateLastValue(BaseValue value, bool changeLast = false)
+        {
+            if (Storage.TryChangeLastValue(value, changeLast))
+            {
+                var isLastValue = Storage.LastValue is null || value.Time >= Storage.LastValue.Time;
+                var canStore = Policies.TryValidate(value, out _, isLastValue);
+
+                ReceivedNewValue?.Invoke(value);
+
+                return canStore;
+            }
+
+            return false;
+        }
+
 
         internal override bool CheckTimeout() => Policies.SensorTimeout(LastValue);
 
@@ -58,6 +76,8 @@ namespace HSMServer.Core.Model
         }
 
 
-        private BaseValue Convert(byte[] bytes) => bytes.ToValue<T>();
+        internal override IEnumerable<BaseValue> Convert(List<byte[]> pages) => pages.Select(Convert);
+
+        internal override BaseValue Convert(byte[] bytes) => bytes.ToValue<T>();
     }
 }

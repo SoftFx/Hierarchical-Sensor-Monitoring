@@ -11,5 +11,7 @@
         internal static int BytesToMegabytes(this long value) => (int)(value / ByteToMbDivisor);
 
         internal static int KilobytesToMegabytes(this long value) => (int)(value / KbToMbDivisor);
+
+        internal static int GigobytesToMegabytes(this int value) => value * 1024;
     }
 }

@@ -1,4 +1,5 @@
 ﻿using HSMServer.Authentication;
+using HSMServer.Core.TableOfChanges;
 using HSMServer.Filters.FolderRoleFilters;
 using HSMServer.Folders;
 using HSMServer.Model.Authentication;
@@ -59,7 +60,7 @@ namespace HSMServer.Controllers
             foreach (var product in editFolder.GetFolderProducts(_tree))
                 folder.Products.Add(product.Id, product);
 
-            if (await _folderManager.TryUpdate(editFolder.ToFolderUpdate(CurrentUser.Name)))
+            if (await _folderManager.TryUpdate(editFolder.ToFolderUpdate(CurrentInitiator)))
             {
                 foreach (var (productId, _) in oldProducts.Except(folder.Products))
                     await _folderManager.RemoveProductFromFolder(productId, folder.Id);
@@ -101,7 +102,7 @@ namespace HSMServer.Controllers
                 Id = folderCleanup.Id,
                 KeepHistory = folderCleanup.SavedHistoryPeriod,
                 SelfDestroy = folderCleanup.SelfDestoryPeriod,
-                Initiator = CurrentUser.Name
+                Initiator = CurrentInitiator
             };
 
             await _folderManager.TryUpdate(update);
@@ -118,7 +119,7 @@ namespace HSMServer.Controllers
             {
                 Id = folderAlerts.Id,
                 TTL = folderAlerts.ExpectedUpdateInterval,
-                Initiator = CurrentUser.Name
+                Initiator = CurrentInitiator
             };
 
             await _folderManager.TryUpdate(update);

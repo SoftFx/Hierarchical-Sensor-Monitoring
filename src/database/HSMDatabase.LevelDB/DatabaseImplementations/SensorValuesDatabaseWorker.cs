@@ -11,10 +11,10 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
 {
     internal sealed class SensorValuesDatabaseWorker : ISensorValuesDatabase
     {
-        private static readonly JsonSerializerOptions _options = new() 
+        private static readonly JsonSerializerOptions _options = new()
         {
-            IgnoreReadOnlyProperties = true, 
-            NumberHandling = JsonNumberHandling.AllowNamedFloatingPointLiterals 
+            IgnoreReadOnlyProperties = true,
+            NumberHandling = JsonNumberHandling.AllowNamedFloatingPointLiterals
         };
 
         private readonly Logger _logger = LogManager.GetCurrentClassLogger();
@@ -92,6 +92,20 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             catch (Exception e)
             {
                 _logger.Error($"Failed getting value {key.GetString()} - {e.Message}");
+
+                return Array.Empty<byte>();
+            }
+        }
+
+        public byte[] GetLatest(byte[] key, byte[] sensorId)
+        {
+            try
+            {
+                return _openedDb.GetLatest(key, sensorId);
+            }
+            catch (Exception e)
+            {
+                _logger.Error($"Failed getting latest value {key.GetString()} - {e.Message}");
 
                 return Array.Empty<byte>();
             }

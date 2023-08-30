@@ -3,6 +3,7 @@ using HSMServer.Core.Model.Policies;
 using HSMServer.Extensions;
 using HSMServer.Model.DataAlerts;
 using System;
+using System.Collections.Generic;
 using System.Linq;
 
 namespace HSMServer.Model.TreeViewModel
@@ -29,6 +30,13 @@ namespace HSMServer.Model.TreeViewModel
 
         public string ValidationError { get; private set; }
 
+        public bool SaveOnlyUniqueValues { get; private set; }
+
+
+        public List<Unit> AvailableUnits { get; private set; }
+
+        public Unit? SelectedUnit { get; private set; }
+
 
         public bool IsValidationErrorVisible => !string.IsNullOrEmpty(ValidationError);
 
@@ -52,6 +60,8 @@ namespace HSMServer.Model.TreeViewModel
             Integration = model.Integration;
             UpdateTime = model.LastUpdate;
             Status = model.Status.ToClient();
+            SelectedUnit = model.OriginalUnit;
+            SaveOnlyUniqueValues = model.AggregateValues;
 
             if (State is SensorState.Muted)
                 ValidationError = GetMutedErrorTooltip(model.EndOfMuting);
@@ -90,7 +100,7 @@ namespace HSMServer.Model.TreeViewModel
             StringPolicy p => new DataAlertViewModel<StringValue>(p, this),
             BooleanPolicy p => new DataAlertViewModel<BooleanValue>(p, this),
             VersionPolicy p => new DataAlertViewModel<VersionValue>(p, this),
-            TimeSpanPolicy p => new DataAlertViewModel<TimeSpanValue>(p, this),
+            TimeSpanPolicy p => new SingleDataAlertViewModel<TimeSpanValue, TimeSpan>(p, this),
             IntegerPolicy p => new SingleDataAlertViewModel<IntegerValue, int>(p, this),
             DoublePolicy p => new SingleDataAlertViewModel<DoubleValue, double>(p, this),
             IntegerBarPolicy p => new BarDataAlertViewModel<IntegerBarValue, int>(p, this),

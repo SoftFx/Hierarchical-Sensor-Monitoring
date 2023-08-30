@@ -1,5 +1,6 @@
 ﻿using HSMServer.Core.Model;
 using HSMServer.Core.Model.Policies;
+using HSMServer.Core.TableOfChanges;
 using System;
 using System.Collections.Generic;
 
@@ -15,9 +16,13 @@ namespace HSMServer.Core.Cache.UpdateEntities
 
         public DateTime? EndOfMutingPeriod { get; init; }
 
+        public bool? SaveOnlyUniqueValues { get; init; }
+
         public Integration? Integration { get; init; }
 
         public SensorState? State { get; init; }
+
+        public Unit? SelectedUnit { get; init; }
     }
 
 
@@ -41,7 +46,7 @@ namespace HSMServer.Core.Cache.UpdateEntities
         public string Icon { get; init; }
 
 
-        public string Initiator { get; init; } = TreeValuesCache.System;
+        public InitiatorInfo Initiator { get; init; }
     }
 
 
@@ -52,5 +57,27 @@ namespace HSMServer.Core.Cache.UpdateEntities
         PolicyCombination Combination = PolicyCombination.And);
 
 
-    public sealed record PolicyDestinationUpdate(bool AllChats, Dictionary<Guid, string> Chats);
+    public sealed record PolicyDestinationUpdate
+    {
+        public Dictionary<Guid, string> Chats { get; } = new();
+
+        public bool AllChats { get; }
+
+
+        public PolicyDestinationUpdate()
+        {
+            AllChats = true;
+        }
+
+        public PolicyDestinationUpdate(Dictionary<Guid, string> chats)
+        {
+            Chats = chats;
+        }
+
+        public PolicyDestinationUpdate(bool allChats, Dictionary<Guid, string> chats) //TODO should be removed after Destination megration
+        {
+            AllChats = allChats;
+            Chats = chats;
+        }
+    }
 }

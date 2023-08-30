@@ -8,15 +8,11 @@ namespace HSMDataCollector.DefaultSensors.Other
         private readonly Version _version;
         private readonly DateTime _startTime;
 
-        protected override string SensorName { get; }
-
-
+        
         public ProductVersionSensor(VersionSensorOptions options) : base(options)
         {
             _version = options.Version;
-            _startTime = options.StartTime;
-
-            SensorName = options.SensorName;
+            _startTime = options.StartTime.ToUniversalTime();
         }
 
 

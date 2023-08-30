@@ -6,24 +6,41 @@ namespace HSMServer.Core.Model
     public record BooleanValue : BaseValue<bool>
     {
         public override SensorType Type => SensorType.Boolean;
+
+
+        public override bool TryParseValue(string value, out bool parsedValue) => bool.TryParse(value, out parsedValue);
     }
 
 
     public record IntegerValue : BaseValue<int>
     {
         public override SensorType Type => SensorType.Integer;
+
+
+        public override bool TryParseValue(string value, out int parsedValue) => int.TryParse(value, out parsedValue);
     }
 
 
     public record DoubleValue : BaseValue<double>
     {
         public override SensorType Type => SensorType.Double;
+
+
+        public override bool TryParseValue(string value, out double parsedValue) => double.TryParse(value, out parsedValue);
     }
 
 
     public record StringValue : BaseValue<string>
     {
         public override SensorType Type => SensorType.String;
+
+
+        public override bool TryParseValue(string value, out string parsedValue)
+        {
+            parsedValue = value;
+
+            return !string.IsNullOrWhiteSpace(value);
+        }
     }
 
 
@@ -32,6 +49,9 @@ namespace HSMServer.Core.Model
         public override SensorType Type => SensorType.TimeSpan;
 
         public override object RawValue => Value.Ticks;
+
+
+        public override bool TryParseValue(string value, out TimeSpan parsedValue) => TimeSpan.TryParse(value, out parsedValue);
     }
 
 
@@ -40,6 +60,9 @@ namespace HSMServer.Core.Model
         public override SensorType Type => SensorType.Version;
 
         public override string ShortInfo => Value.Revision == 0 ? Value.ToString(3) : Value.ToString();
+
+
+        public override bool TryParseValue(string value, out Version parsedValue) => Version.TryParse(value, out parsedValue);
     }
 
 
@@ -60,12 +83,10 @@ namespace HSMServer.Core.Model
         public override string ShortInfo => GetShortDescription();
 
 
-        private string GetShortDescription()
+        public override bool TryParseValue(string value, out byte[] parsedValue)
         {
-            string sizeString = FileSizeToNormalString();
-            string fileNameString = GetFileNameString();
-
-            return $"File size: {sizeString}. {fileNameString}";
+            parsedValue = Array.Empty<byte>();
+            return false;
         }
 
         public string FileSizeToNormalString()
@@ -87,6 +108,16 @@ namespace HSMServer.Core.Model
             };
 
             return $"{size:F2} {units}";
+        }
+
+        protected override bool IsEqual(BaseValue value) => false;
+
+        private string GetShortDescription()
+        {
+            string sizeString = FileSizeToNormalString();
+            string fileNameString = GetFileNameString();
+
+            return $"File size: {sizeString}. {fileNameString}";
         }
 
         private string GetFileNameString()

@@ -8,13 +8,7 @@ namespace HSMDataCollector.DefaultSensors
         where BarType : MonitoringBarBase<T>, new()
         where T : struct
     {
-        protected override string SensorName { get; }
-
-
-        public PublicBarMonitoringSensor(BarSensorOptions options) : base(options)
-        {
-            SensorName = options.SensorName;
-        }
+        public PublicBarMonitoringSensor(BarSensorOptions options) : base(options) { }
 
 
         public void AddValue(T value) => _internalBar.AddValue(value);
