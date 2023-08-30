@@ -1,4 +1,4 @@
-name: HSMServer build
+name: HSMPingModule build
 on:
   push:
     branches: [master, develop]
@@ -35,27 +35,19 @@ jobs:
       with:
         dotnet-version: 7.0.x
 
-    - name: Setup Node.js
-      uses: actions/setup-node@v3
-      with:
-        node-version: 18
-
     - name: Install dependencies
       run: dotnet restore ${{ env.SOLUTION_PATH }}
 
-    - name: Build & Test Solution
-      run: dotnet test ${{ env.SOLUTION_PATH }} --no-restore -c Release
-
-    - name: Publish HSMServer
+    - name: Publish HSMPingModule
       run: dotnet publish ${{ env.SERVER_PATH }} -c Release -o ${{ env.OUTPUT_FOLDER }}
 
     - id: save-version
       name: Try to get server version
-      run: echo "version=$((Get-Item ${{ env.OUTPUT_FOLDER }}/HSMServer.exe).VersionInfo.ProductVersion)" >> $env:GITHUB_OUTPUT
+      run: echo "version=$((Get-Item ${{ env.OUTPUT_FOLDER }}/HSMPingModule.exe).VersionInfo.ProductVersion)" >> $env:GITHUB_OUTPUT
 
     - id: build-artifact-name
       name: Build artifact name
-      run: echo "name=HSMServer v${{ steps.save-version.outputs.version }}" >> $env:GITHUB_OUTPUT
+      run: echo "name=HSMPingModule v${{ steps.save-version.outputs.version }}" >> $env:GITHUB_OUTPUT
 
     - name: Upload artifact
       uses: actions/upload-artifact@v3
@@ -79,11 +71,11 @@ jobs:
 
       - name: Build release tag message
         if: ${{ !github.event.inputs.isPreRelease }}
-        run: echo "TagMessage=Release version HSMServer-${{ needs.build.outputs.VERSION }}" >> $GITHUB_ENV
+        run: echo "TagMessage=Release version HSMPingModule-${{ needs.build.outputs.VERSION }}" >> $GITHUB_ENV
 
       - name: Build prerelease tag message
         if: ${{ github.event.inputs.isPreRelease }}
-        run: echo "TagMessage=PreRelease version HSMServer-${{ needs.build.outputs.VERSION }} for developers" >> $GITHUB_ENV
+        run: echo "TagMessage=PreRelease version HSMPingModule-${{ needs.build.outputs.VERSION }} for developers" >> $GITHUB_ENV
 
       - name: Push tag
         uses: rickstaa/action-create-tag@v1
@@ -108,7 +100,7 @@ jobs:
           path: ${{ env.OUTPUT_FOLDER }}
 
       - name: Create archive name
-        run: echo "ArtifactZip=HSMServer-${{ needs.build.outputs.VERSION }}.zip" >> $GITHUB_ENV
+        run: echo "ArtifactZip=HSMPingModule-${{ needs.build.outputs.VERSION }}.zip" >> $GITHUB_ENV
 
       - name: Check archive name
         run: echo $ArtifactZip
