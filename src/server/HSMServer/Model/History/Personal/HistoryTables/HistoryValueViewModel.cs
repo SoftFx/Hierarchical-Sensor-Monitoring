@@ -29,6 +29,10 @@ namespace HSMServer.Model.History
 
     public class BarSensorValueViewModel : TableValueViewModel
     {
+        public DateTime OpenTime { get; init; }
+
+        public DateTime CloseTime { get; init; }
+
         public int Count { get; init; }
 
         public string Min { get; init; }
