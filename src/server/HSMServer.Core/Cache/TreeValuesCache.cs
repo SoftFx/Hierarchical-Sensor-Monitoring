@@ -8,6 +8,7 @@ using HSMServer.Core.Model;
 using HSMServer.Core.Model.Policies;
 using HSMServer.Core.Model.Requests;
 using HSMServer.Core.SensorsUpdatesQueue;
+using HSMServer.Core.TableOfChanges;
 using HSMServer.Core.TreeStateSnapshot;
 using NLog;
 using System;
@@ -25,7 +26,6 @@ namespace HSMServer.Core.Cache
         private const string ErrorMasterKey = "Master key is invalid for this request because product is not specified.";
 
         public const int MaxHistoryCount = 50000;
-        public const string System = "System";
 
         private readonly ConcurrentDictionary<Guid, BaseSensorModel> _sensors = new();
         private readonly ConcurrentDictionary<Guid, AccessKeyModel> _keys = new();
@@ -172,11 +172,11 @@ namespace HSMServer.Core.Cache
             GetAccessKeyModel(request).IsValid(KeyPermissions.CanReadSensorData, out message) &&
             TryGetSensor(request, product, null, out _, out message);
 
-        public bool TryCheckSensorUpdateKeyPermission(BaseRequestModel request, out Guid sensorId, out string message)
+        public bool TryCheckSensorUpdateKeyPermission(BaseRequestModel request, out ProductModel product, out Guid sensorId, out string message)
         {
             sensorId = Guid.Empty;
 
-            if (!TryCheckProductKey(request, out var product, out message))
+            if (!TryCheckProductKey(request, out product, out message))
                 return false;
 
             var accessKey = GetAccessKeyModel(request);
@@ -288,7 +288,32 @@ namespace HSMServer.Core.Cache
             SensorUpdateView(sensor);
         }
 
-        public void RemoveSensor(Guid sensorId, string initiator = null)
+        public void UpdateSensorValue(UpdateSensorValueRequestModel request)
+        {
+            var sensor = GetSensor(request.Id);
+            var lastValue = sensor.LastValue;
+
+            if (request.Comment is not null && lastValue is not null)
+            {
+                var value = request.BuildNewValue(sensor.Storage.GetEmptyValue(), lastValue);
+
+                if (sensor.TryUpdateLastValue(value, request.ChangeLast))
+                {
+                    _journalService.AddRecord(new JournalRecordModel(request.Id, request.Initiator)
+                    {
+                        PropertyName = request.PropertyName,
+                        Enviroment = request.Environment,
+                        Path = sensor.FullPath,
+                        OldValue = request.BuildComment(lastValue.Status, lastValue.Comment, lastValue.RawValue.ToString()),
+                        NewValue = request.BuildComment(value: value.RawValue.ToString())
+                    });
+
+                    _database.AddSensorValue(value.ToEntity(request.Id));
+                }
+            }
+        }
+
+        public void RemoveSensor(Guid sensorId, InitiatorInfo initiator = null)
         {
             if (!_sensors.TryRemove(sensorId, out var sensor))
                 return;
@@ -298,12 +323,11 @@ namespace HSMServer.Core.Cache
                 parent.Sensors.TryRemove(sensorId, out _);
                 _journalService.RemoveRecords(sensorId, parent.Id);
 
-                if (initiator is not null)
-                    _journalService.AddRecord(new JournalRecordModel(parent.Id, initiator)
-                    {
-                        Enviroment = "Remove sensor",
-                        Path = sensor.FullPath,
-                    });
+                _journalService.AddRecord(new JournalRecordModel(parent.Id, initiator)
+                {
+                    Enviroment = "Remove sensor",
+                    Path = sensor.FullPath,
+                });
             }
             else
                 _journalService.RemoveRecords(sensorId);
@@ -316,7 +340,7 @@ namespace HSMServer.Core.Cache
             ChangeSensorEvent?.Invoke(sensor, ActionType.Delete);
         }
 
-        public void UpdateMutedSensorState(Guid sensorId, DateTime? endOfMuting = null, string initiator = null)
+        public void UpdateMutedSensorState(Guid sensorId, InitiatorInfo initiator, DateTime? endOfMuting = null)
         {
             if (!_sensors.TryGetValue(sensorId, out var sensor) || sensor.State is SensorState.Blocked)
                 return;
@@ -371,7 +395,7 @@ namespace HSMServer.Core.Cache
             if (!sensor.HasData)
                 sensor.ResetSensor();
 
-            if (sensor.SaveOnlyUniqueValues)
+            if (sensor.AggregateValues)
             {
                 if (IsBorderedValue(sensor, from.Ticks - 1, out var latestFrom) && from <= latestFrom.LastUpdateTime && latestFrom.LastUpdateTime <= to)
                     from = latestFrom.ReceivingTime;
@@ -441,7 +465,7 @@ namespace HSMServer.Core.Cache
             {
                 var includeTtl = options.HasFlag(RequestOptions.IncludeTtl);
 
-                if (sensor.SaveOnlyUniqueValues && IsBorderedValue(sensor, from.Ticks - 1, out var latest) && (includeTtl || IsNotTimout(latest)))
+                if (sensor.AggregateValues && IsBorderedValue(sensor, from.Ticks - 1, out var latest) && (includeTtl || IsNotTimout(latest)))
                     from = latest.ReceivingTime;
 
                 await foreach (var page in _database.GetSensorValuesPage(sensorId, from, to, count))
@@ -453,6 +477,53 @@ namespace HSMServer.Core.Cache
             }
         }
 
+
+        public void AddNewChat(Guid chatId, string name, string productName)
+        {
+            foreach (var (_, sensor) in _sensors)
+                if (productName is null || sensor.RootProductName == productName)
+                {
+                    foreach (var policy in sensor.Policies)
+                        if (policy.Destination.AllChats && !policy.Destination.Chats.ContainsKey(chatId))
+                        {
+                            policy.Destination.Chats.Add(chatId, name);
+                            policy.RebuildState();
+
+                            UpdatePolicy(ActionType.Update, policy);
+                        }
+
+                    if (sensor.Policies.TimeToLive.AddChat(chatId, name))
+                        UpdatePolicy(ActionType.Update, sensor.Policies.TimeToLive);
+                }
+
+            foreach (var (_, product) in _tree)
+                if (productName is null || product.RootProductName == productName)
+                    if (product.Policies.TimeToLive.AddChat(chatId, name))
+                        UpdatePolicy(ActionType.Update, product.Policies.TimeToLive);
+        }
+
+        public void RemoveChat(Guid chatId, string productName)
+        {
+            foreach (var (_, sensor) in _sensors)
+                if (productName is null || sensor.RootProductName == productName)
+                {
+                    foreach (var policy in sensor.Policies)
+                        if (policy.Destination.Chats.Remove(chatId))
+                        {
+                            policy.RebuildState();
+
+                            UpdatePolicy(ActionType.Update, policy);
+                        }
+
+                    if (sensor.Policies.TimeToLive.RemoveChat(chatId))
+                        UpdatePolicy(ActionType.Update, sensor.Policies.TimeToLive);
+                }
+
+            foreach (var (_, product) in _tree)
+                if (productName is null || product.RootProductName == productName)
+                    if (product.Policies.TimeToLive.RemoveChat(chatId))
+                        UpdatePolicy(ActionType.Update, product.Policies.TimeToLive);
+        }
 
         private void UpdatePolicy(ActionType type, Policy policy)
         {
@@ -739,6 +810,8 @@ namespace HSMServer.Core.Cache
                     subProduct = new ProductModel(subProductName, authorId);
 
                     parentProduct.AddSubProduct(subProduct);
+                    if (!subProduct.Settings.TTL.IsSet)
+                        subProduct.Policies.TimeToLive.ApplyParent(parentProduct.Policies.TimeToLive);
 
                     AddProduct(subProduct);
                     UpdateProduct(parentProduct);
@@ -793,9 +866,16 @@ namespace HSMServer.Core.Cache
 
             var sensor = SensorModelFactory.Build(entity);
             parent.AddSensor(sensor);
+            if (!sensor.Settings.TTL.IsSet)
+                sensor.Policies.TimeToLive.ApplyParent(parent.Policies.TimeToLive);
+
+            SubscribeSensorToPolicyUpdate(sensor);
 
             if (request is StoreInfo)
-                sensor.Policies.AddDefault();
+            {
+                var root = GetProductByName(sensor.RootProductName);
+                sensor.Policies.AddDefault(root?.NotificationsSettings?.TelegramSettings?.Chats?.ToDictionary(u => new Guid(u.SystemId), v => v.Name));
+            }
 
             AddSensor(sensor);
             UpdateProduct(parent);
@@ -807,8 +887,6 @@ namespace HSMServer.Core.Cache
         {
             _sensors.TryAdd(sensor.Id, sensor);
             _database.AddSensor(sensor.ToEntity());
-
-            SubscribeSensorToPolicyUpdate(sensor);
 
             ChangeSensorEvent?.Invoke(sensor, ActionType.Add);
         }
@@ -974,7 +1052,7 @@ namespace HSMServer.Core.Cache
 
             foreach (var sensor in GetSensors())
                 if (sensor.EndOfMuting <= DateTime.UtcNow)
-                    UpdateMutedSensorState(sensor.Id);
+                    UpdateMutedSensorState(sensor.Id, InitiatorInfo.System);
         }
 
         private void SetExpiredSnapshot(BaseSensorModel sensor, bool timeout)

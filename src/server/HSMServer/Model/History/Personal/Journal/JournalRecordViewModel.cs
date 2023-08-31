@@ -51,27 +51,27 @@ public sealed class JournalRecordViewModel
         var header = string.Empty;
         var value = string.Empty;
 
+        if (string.IsNullOrEmpty(model.NewValue))
+            return ($"""{model.PropertyName} has been removed""", $"{model.PropertyName} {model.OldValue} {model.Initiator}");
+
         if (string.IsNullOrEmpty(model.OldValue))
         {
             header = "Added new";
             value = model.NewValue;
         }
-        else if (string.IsNullOrEmpty(model.NewValue))
-        {   
-            header = "Removed";
-            value = model.OldValue;
-        }
+
+        var changeText = $"{model.PropertyName} {model.OldValue} {model.NewValue} {model.Initiator}";
 
         if (header != string.Empty)
             return ($"""
             {header} {model.PropertyName}:
             <strong>{value}</strong>
-            """, $"{model.PropertyName} {model.OldValue} {model.NewValue} {model.Initiator}");
-        
+            """, changeText);
+
         return ($"""
             {model.PropertyName} was modified
             Old value: {model.OldValue}
             <strong>New value: {model.NewValue}</strong>
-            """, $"{model.PropertyName} {model.OldValue} {model.NewValue} {model.Initiator}");
+            """, changeText);
     }
 }

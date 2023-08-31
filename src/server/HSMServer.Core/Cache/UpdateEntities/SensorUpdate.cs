@@ -1,5 +1,6 @@
 ﻿using HSMServer.Core.Model;
 using HSMServer.Core.Model.Policies;
+using HSMServer.Core.TableOfChanges;
 using System;
 using System.Collections.Generic;
 
@@ -45,7 +46,7 @@ namespace HSMServer.Core.Cache.UpdateEntities
         public string Icon { get; init; }
 
 
-        public string Initiator { get; init; } = TreeValuesCache.System;
+        public InitiatorInfo Initiator { get; init; }
     }
 
 
@@ -63,17 +64,7 @@ namespace HSMServer.Core.Cache.UpdateEntities
         public bool AllChats { get; }
 
 
-        public PolicyDestinationUpdate()
-        {
-            AllChats = true;
-        }
-
-        public PolicyDestinationUpdate(Dictionary<Guid, string> chats)
-        {
-            Chats = chats;
-        }
-
-        public PolicyDestinationUpdate(bool allChats, Dictionary<Guid, string> chats) //TODO should be removed after Destination megration
+        public PolicyDestinationUpdate(bool allChats, Dictionary<Guid, string> chats)
         {
             AllChats = allChats;
             Chats = chats;

@@ -66,6 +66,9 @@ namespace HSMServer.Core.Model
         public virtual string ShortInfo { get; }
 
 
+        public abstract BaseValue TrySetValue(string str);
+
+
         internal bool TryAggregateValue(BaseValue value)
         {
             if (IsEqual(value))
@@ -100,6 +103,20 @@ namespace HSMServer.Core.Model
 
         public override object RawValue => Value;
 
+
+        public abstract bool TryParseValue(string value, out T parsedValue);
+
+
+        public override BaseValue TrySetValue(string newValue)
+        {
+            if (TryParseValue(newValue, out var parsedValue))
+                return this with
+                {
+                    Value = parsedValue
+                };
+
+            return this;
+        }
 
         protected override bool IsEqual(BaseValue value)
         {

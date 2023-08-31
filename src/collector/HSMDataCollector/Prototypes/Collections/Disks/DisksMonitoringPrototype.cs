@@ -9,7 +9,7 @@ namespace HSMDataCollector.Prototypes
 {
     internal abstract class BarDisksMonitoringPrototype : BarSensorOptionsPrototype<DiskBarSensorOptions>
     {
-        internal const string BaseDescription = "The sensor sends information about {0} with a period of {1}. The information is read using " +
+        internal const string BaseDescription = "The sensor sends information about {0} with a period of {1} and aggregated into bars of {2}. The information is read using " +
             "[**Performance counter**](https://learn.microsoft.com/en-us/dotnet/api/system.diagnostics.performancecounter?view=netframework-4.7.2) by path *PhysicalDisk/% Disk Time*";
 
 
@@ -27,7 +27,7 @@ namespace HSMDataCollector.Prototypes
             options = SetDiskInfo(options);
 
             options.Path = DefaultPrototype.BuildDefaultPath(Category, SensorName);
-            options.Description = string.Format(BaseDescription, SensorName, options.PostDataPeriod.ToReadableView());
+            options.Description = string.Format(BaseDescription, SensorName, options.PostDataPeriod.ToReadableView(), options.BarPeriod.ToReadableView());
 
             return options;
         }
@@ -39,6 +39,8 @@ namespace HSMDataCollector.Prototypes
 
             foreach (var drive in DriveInfo.GetDrives())
             {
+                prototype.Alerts.Clear();
+
                 if (drive.DriveType == DriveType.Fixed)
                 {
                     prototype.TargetPath = drive.Name;
@@ -89,6 +91,8 @@ namespace HSMDataCollector.Prototypes
 
             foreach (var drive in DriveInfo.GetDrives())
             {
+                prototype.Alerts.Clear();
+
                 if (drive.DriveType == DriveType.Fixed)
                 {
                     prototype.TargetPath = drive.Name;

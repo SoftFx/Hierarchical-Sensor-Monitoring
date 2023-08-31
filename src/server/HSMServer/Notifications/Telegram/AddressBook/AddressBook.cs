@@ -1,6 +1,6 @@
-﻿using HSMServer.Notification.Settings;
+﻿using HSMCommon.Collections;
+using HSMServer.Notification.Settings;
 using HSMServer.Notifications.Telegram;
-using HSMServer.Notifications.Telegram.AddressBook.MessageBuilder;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -43,14 +43,16 @@ namespace HSMServer.Notifications
 
         internal void RemoveToken(Guid token) => _tokens.TryRemove(token, out _);
 
-        internal void RegisterChat(Message message, InvitationToken token, bool isUserChat)
+        internal TelegramChat RegisterChat(Message message, InvitationToken token, bool isUserChat)
         {
             var entity = token.Entity;
             var chats = entity.Chats;
 
+            TelegramChat chatModel = null;
+
             if (!chats.ContainsKey(message.Chat))
             {
-                var chatModel = new TelegramChat()
+                chatModel = new TelegramChat()
                 {
                     Id = message.Chat,
                     Name = isUserChat ? message.From.Username : message.Chat.Title,
@@ -66,6 +68,8 @@ namespace HSMServer.Notifications
             }
 
             RemoveToken(token.Token);
+
+            return chatModel;
         }
 
         internal void RegisterChat(INotificatable entity, TelegramChat chat)
@@ -80,12 +84,14 @@ namespace HSMServer.Notifications
             _telegramBook[chat.Id].Add(entity);
         }
 
-        internal void RemoveChat(INotificatable entity, ChatId chatId)
+        internal TelegramChat RemoveChat(INotificatable entity, ChatId chatId)
         {
+            TelegramChat removedChat = null;
+
             if (ServerBook.TryGetValue(entity, out var chats))
                 if (chats.TryRemove(chatId, out _))
                 {
-                    entity.Chats.TryRemove(chatId, out _);
+                    entity.Chats.TryRemove(chatId, out removedChat);
                     entity.Notifications.PartiallyIgnored.TryRemove(chatId, out _);
 
                     if (entity.Chats.IsEmpty)
@@ -93,6 +99,8 @@ namespace HSMServer.Notifications
                 }
 
             RemoveEntity(entity, chatId);
+
+            return removedChat;
         }
 
         internal void RemoveAllChats(INotificatable entity)

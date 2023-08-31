@@ -19,11 +19,11 @@ namespace HSMServer.Notifications
                     Command = Help,
                     Description = "statuses (with icons) ascending priority"
                 },
-                new BotCommand()
-                {
-                    Command = Info,
-                    Description = "authorized entities",
-                },
+                //new BotCommand()
+                //{
+                //    Command = Info,
+                //    Description = "authorized entities",
+                //},
                 new BotCommand()
                 {
                     Command = Server,

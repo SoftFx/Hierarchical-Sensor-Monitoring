@@ -16,6 +16,9 @@ namespace HSMServer.Core.Model
 
     public abstract record BarBaseValue<T> : BarBaseValue where T : INumber<T>
     {
+        public Dictionary<double, T> Percentiles { get; init; } = new();
+
+
         public T Min { get; init; }
 
         public T Max { get; init; }
@@ -24,11 +27,11 @@ namespace HSMServer.Core.Model
 
         public T LastValue { get; init; }
 
-        public Dictionary<double, T> Percentiles { get; init; } = new();
-
         public override string ShortInfo =>
             $"Min = {Min}, Mean = {Mean}, Max = {Max}, Count = {Count}, Last = {LastValue}.";
 
+
+        public override BaseValue TrySetValue(string str) => this;
 
         protected override bool IsEqual(BaseValue value) => false;
     }

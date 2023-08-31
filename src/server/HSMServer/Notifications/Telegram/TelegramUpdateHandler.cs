@@ -1,5 +1,6 @@
 ﻿using HSMServer.Authentication;
 using HSMServer.Core;
+using HSMServer.Core.Cache;
 using HSMServer.Extensions;
 using HSMServer.Model.TreeViewModel;
 using HSMServer.Notification.Settings;
@@ -26,15 +27,18 @@ namespace HSMServer.Notifications
         private readonly IUserManager _userManager;
         private readonly TreeViewModel _tree;
         private readonly TelegramConfig _config;
+        private readonly ITreeValuesCache _cache;
 
         private string BotName => $"@{_config.BotName.ToLower()}";
 
 
-        internal TelegramUpdateHandler(AddressBook addressBook, IUserManager userManager, TreeViewModel tree, TelegramConfig config)
+        internal TelegramUpdateHandler(AddressBook addressBook, IUserManager userManager,
+            TreeViewModel tree, ITreeValuesCache cache, TelegramConfig config)
         {
             _addressBook = addressBook;
             _userManager = userManager;
             _config = config;
+            _cache = cache;
             _tree = tree;
         }
 
@@ -102,8 +106,11 @@ namespace HSMServer.Notifications
                 }
                 else
                 {
-                    _addressBook.RegisterChat(message, token, isUserChat);
+                    var newChat = _addressBook.RegisterChat(message, token, isUserChat);
                     token.Entity.UpdateEntity(_userManager, _tree);
+
+                    if (newChat is not null)
+                        _cache.AddNewChat(newChat.SystemId, newChat.Name, isUserChat ? null : token.Entity.Name);
 
                     response.Append(token.Entity.BuildSuccessfullResponse());
                 }

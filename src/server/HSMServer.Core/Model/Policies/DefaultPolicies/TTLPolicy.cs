@@ -42,11 +42,56 @@ namespace HSMServer.Core.Model.Policies
         }
 
 
+        internal void ApplyParent(TTLPolicy parent)
+        {
+            var update = new PolicyUpdate()
+            {
+                Destination = parent.Destination is null ? null : new PolicyDestinationUpdate(parent.Destination.AllChats, parent.Destination.Chats), // TODO: null checking should be removed after policies migration,
+                Id = Id,
+                Template = parent.Template,
+                Icon = parent.Icon,
+            };
+
+            FullUpdate(update, _sensor);
+        }
+
+
         internal void FullUpdate(PolicyUpdate update, BaseSensorModel sensor = null)
         {
             Update(update, sensor);
 
             _okPolicy.Update(update with { Template = _okPolicy.OkTemplate, Icon = null }, sensor);
+        }
+
+        internal bool AddChat(Guid id, string name)
+        {
+            if (Destination.AllChats && !Destination.Chats.ContainsKey(id))
+            {
+                Destination.Chats.Add(id, name);
+                _okPolicy.Destination.Chats.Add(id, name);
+
+                RebuildState();
+                _okPolicy.RebuildState();
+
+                return true;
+            }
+
+            return false;
+        }
+
+        internal bool RemoveChat(Guid id)
+        {
+            if (Destination.Chats.Remove(id))
+            {
+                _okPolicy.Destination.Chats.Remove(id);
+
+                RebuildState();
+                _okPolicy.RebuildState();
+
+                return true;
+            }
+
+            return false;
         }
 
         internal bool HasTimeout(DateTime? time) => !_ttl.IsEmpty && time.HasValue && _ttl.Value.TimeIsUp(time.Value);

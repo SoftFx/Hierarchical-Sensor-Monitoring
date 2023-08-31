@@ -1,5 +1,8 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.ConcurrentStorage;
+using HSMServer.Core.Journal;
+using HSMServer.Core.Model;
+using HSMServer.Core.TableOfChanges;
 using HSMServer.Extensions;
 using HSMServer.Model.Authentication;
 using HSMServer.Model.TreeViewModel;
@@ -8,8 +11,6 @@ using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.Runtime.CompilerServices;
-using HSMServer.Core.Journal;
-using HSMServer.Core.Model;
 
 namespace HSMServer.Model.Folders
 {
@@ -78,13 +79,13 @@ namespace HSMServer.Model.Folders
                 TTL = UpdateSetting(TTL, new TimeIntervalViewModel(update.TTL, PredefinedIntervals.ForFolderTimeout), update.Initiator);
 
             if (update.KeepHistory != null)
-                KeepHistory = UpdateSetting(KeepHistory, new TimeIntervalViewModel(update.KeepHistory, PredefinedIntervals.ForKeepHistory), update.Initiator, "Keep sensor history");
+                KeepHistory = UpdateSetting(KeepHistory, new TimeIntervalViewModel(update.KeepHistory, PredefinedIntervals.ForKeepHistory), update.Initiator, "Keep sensor history", NoneValues.Forever);
 
             if (update.SelfDestroy != null)
                 SelfDestroy = UpdateSetting(SelfDestroy, new TimeIntervalViewModel(update.SelfDestroy, PredefinedIntervals.ForSelfDestory), update.Initiator, "Remove sensor after inactivity");
         }
 
-        private TimeIntervalViewModel UpdateSetting(TimeIntervalViewModel currentValue, TimeIntervalViewModel newValue, string initiator, [CallerArgumentExpression(nameof(currentValue))] string propName = "")
+        private TimeIntervalViewModel UpdateSetting(TimeIntervalViewModel currentValue, TimeIntervalViewModel newValue, InitiatorInfo initiator, [CallerArgumentExpression(nameof(currentValue))] string propName = "", NoneValues none = NoneValues.Never)
         {
             var oldModel = currentValue.ToModel(currentValue);
             var newModel = newValue.ToModel(newValue);
@@ -94,8 +95,8 @@ namespace HSMServer.Model.Folders
                 ChangesHandler?.Invoke(new JournalRecordModel(Id, initiator)
                 {
                     Enviroment = "Folder settings update",
-                    OldValue = $"{oldModel}",
-                    NewValue = $"{newModel}",
+                    OldValue = oldModel.IsNone ? $"{none}" : $"{oldModel}",
+                    NewValue = newModel.IsNone ? $"{none}" : $"{newModel}",
 
                     PropertyName = propName,
                     Path = Name,
@@ -104,8 +105,8 @@ namespace HSMServer.Model.Folders
 
             return newValue;
         }
-        
-        private T UpdateProperty<T>(T oldValue, T newValue, string initiator, [CallerArgumentExpression(nameof(oldValue))] string propName = "")
+
+        private T UpdateProperty<T>(T oldValue, T newValue, InitiatorInfo initiator, [CallerArgumentExpression(nameof(oldValue))] string propName = "")
         {
             if (newValue is not null && !newValue.Equals(oldValue ?? newValue))
                 ChangesHandler?.Invoke(new JournalRecordModel(Id, initiator)
