@@ -10,7 +10,7 @@ namespace HSMPingModule.Config;
 internal sealed class ServiceConfig
 {
     private IConfigurationRoot _configuration;
-
+    private Logger _logger;
 
 #if RELEASE
         public const string ConfigName = "appsettings.json";
@@ -51,6 +51,8 @@ internal sealed class ServiceConfig
             logger.Log(new LogEventInfo(LogLevel.Debug, "qwe", "no config found"));
             FileManager.SafeCreateDirectory(ConfigPath);
         }
+
+        _logger = logger;
         logger.Log(new LogEventInfo(LogLevel.Debug, "qwe", $"{Directory.Exists(ConfigPath)}"));
         _configuration = configuration;
         Read();
@@ -76,6 +78,10 @@ internal sealed class ServiceConfig
     {
         CollectorSettings = Read<CollectorSettings>(nameof(CollectorSettings));
         ResourceSettings = Read<ResourceSettings>(nameof(ResourceSettings)).ApplyDefaultSettings();
+        _logger.Log(new LogEventInfo(LogLevel.Debug, "qwe", $"{CollectorSettings.Key}"));
+        _logger.Log(new LogEventInfo(LogLevel.Debug, "qwe", $"{CollectorSettings.Port}"));
+        _logger.Log(new LogEventInfo(LogLevel.Debug, "qwe", $"{CollectorSettings.ServerAddress}"));
+
         OnChange?.Invoke();
     }
 }
