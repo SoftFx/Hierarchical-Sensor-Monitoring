@@ -8,7 +8,7 @@ docker pull $ExpectedImageTag
 Write-Host "Removing all stopped/unused containers"
 docker container prune -f
 
-$ContainerName = HSMPingModule
+$ContainerName = "HSMPingModule"
 
 Write-Host "Current running container"
 $CurrentContainerId = docker ps -q -f "name=$ContainerName"
