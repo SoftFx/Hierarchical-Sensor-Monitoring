@@ -14,8 +14,10 @@
 * New setting **Unit** has been added. The setting shows in which units the sensor values stored.
 
 ## Alerts
-* **Value** property for TimeSpan sensor has been added
+* **Value** property for TimeSpan sensor has been added.
+* **Count** property for Bar sensors has been added.
 * New variable **$property** has been added.
+* New varoable **$count** for Bar sensors has been added.
 * $target for **Status OnChange** property returns sensor name instead guid.
 
 ## History
@@ -43,6 +45,7 @@
 ## Other
 * View format for TimeSpan has been improved. (From 31d 0h 0m 0s -> 31 days)
 * System has been added as initiator to Muted->Available update
+* New predefined values 1 min and 5 min for TTL has been added
 
 # HSM DataCollector v. 3.2.0
 
