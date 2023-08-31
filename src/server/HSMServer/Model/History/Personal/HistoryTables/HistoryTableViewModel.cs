@@ -29,6 +29,8 @@ namespace HSMServer.Model.History
         public string SensorId { get; }
 
 
+        public bool AggregateValues => _model.AggregateValues;
+
         public bool IsBarSensor => _model.Type.IsBar();
 
         public int LastIndex => Pages.Count - 1;

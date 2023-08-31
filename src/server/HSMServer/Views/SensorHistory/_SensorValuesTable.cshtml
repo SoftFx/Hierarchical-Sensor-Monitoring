@@ -26,9 +26,14 @@ else
                     @if (Model.IsBarSensor)
                     {
                         <th>Open time</th>
-                        <th>Close time</th>
+                        <th id="lastUpdateTime_header" class="d-none">Last update time</th>
+                        <th id="closeTime_header" class="d-none">Close time</th>
                     }
-                    <th id="time_header" class="@(Model.IsBarSensor ? "d-none" : string.Empty)">Date</th>
+                    else
+                    {
+                        <th title="Creating time">Date</th>
+                        <th id="lastUpdateTime_header" class="@(Model.AggregateValues ? string.Empty : "d-none")">Last update time</th>
+                    }
                     <th id="receivingTime_header" class="d-none">Receiving time</th>
                     @if (Model.IsBarSensor)
                     {
@@ -40,7 +45,6 @@ else
                     }
                     else
                     {
-                        <th id="lastUpdateTime_header" class="d-none">Last update time</th>
                         <th id="aggregatedValuesCount_header" class="d-none">Aggregated values count</th>
                         <th>Value</th>
                     }
@@ -53,14 +57,27 @@ else
                 {
                     var value = currentPage[i];
                     var barValue = value as BarSensorValueViewModel;
+                    var simpleValue = value as SimpleSensorValueViewModel;
 
                     <tr>
                         @if (Model.IsBarSensor)
                         {
                             <td>@barValue.OpenTime.ToDefaultFormat()</td>
-                            <td>@barValue.CloseTime.ToDefaultFormat()</td>
+                            <td id="lastUpdateTime_value@(i)" class="d-none">@value.Time.ToDefaultFormat()</td>
+                            <td id="closeTime_value@(i)" class="d-none">@barValue.CloseTime.ToDefaultFormat()</td>
                         }
-                        <td id="time_value@(i)" class="@(Model.IsBarSensor ? "d-none" : string.Empty)">@value.Time.ToDefaultFormat()</td>
+                        else
+                        {
+                            <td>@value.Time.ToDefaultFormat()</td>
+                            if (value.IsTimeout)
+                            {
+                                <td id="lastUpdateTime_value@(i)" class="@(Model.AggregateValues ? string.Empty : "d-none")"></td>
+                            }
+                            else
+                            {
+                                <td id="lastUpdateTime_value@(i)" class="@(Model.AggregateValues ? string.Empty : "d-none")">@simpleValue.LastUpdateTime.ToDefaultFormat()</td>
+                            }
+                        }
                         <td id="receivingTime_value@(i)" class="d-none">@value.ReceivingTime.ToDefaultFormat()</td>
                         @if (Model.IsBarSensor)
                         {
@@ -85,18 +102,14 @@ else
                         }
                         else
                         {
-                            var simpleValue = value as SimpleSensorValueViewModel;
-
                             if (value.IsTimeout)
                             {
-                                <td id="lastUpdateTime_value@(i)" class="d-none"></td>
                                 <td id="aggregatedValuesCount_value@(i)" class="d-none"></td>
                                 <td></td>
                                 <td></td>
                             }
                             else
                             {
-                                <td id="lastUpdateTime_value@(i)" class="d-none">@simpleValue.LastUpdateTime.ToDefaultFormat()</td>
                                 <td id="aggregatedValuesCount_value@(i)" class="d-none">@simpleValue.AggregatedValuesCount</td>
                                 <td>@simpleValue.Value</td>
                                 <td>@value.Status.ToIconStatus()</td>

@@ -319,14 +319,14 @@
             $('[id^="receivingTime_value"]').removeClass('d-none');
 
             if ('@(Model.Type is SensorType.DoubleBar or SensorType.IntegerBar)' === 'True') {
-                $("#time_header").removeClass('d-none');
-                $('[id^="time_value"]').removeClass('d-none');
+                $("#lastUpdateTime_header").removeClass('d-none');
+                $("#closeTime_header").removeClass('d-none');
+                $('[id^="lastUpdateTime_value"]').removeClass('d-none');
+                $('[id^="closeTime_value"]').removeClass('d-none');
             }
 
             if ('@Model.SaveOnlyUniqueValues' === 'True') {
-                $("#lastUpdateTime_header").removeClass('d-none');
                 $("#aggregatedValuesCount_header").removeClass('d-none');
-                $('[id^="lastUpdateTime_value"]').removeClass('d-none');
                 $('[id^="aggregatedValuesCount_value"]').removeClass('d-none');
             }
 
@@ -337,14 +337,14 @@
             $('[id^="receivingTime_value"]').addClass('d-none');
 
             if ('@(Model.Type is SensorType.DoubleBar or SensorType.IntegerBar)' === 'True') {
-                $("#time_header").addClass('d-none');
-                $('[id^="time_value"]').addClass('d-none');
+                $("#lastUpdateTime_header").addClass('d-none');
+                $("#closeTime_header").addClass('d-none');
+                $('[id^="lastUpdateTime_value"]').addClass('d-none');
+                $('[id^="closeTime_value"]').addClass('d-none');
             }
 
             if ('@Model.SaveOnlyUniqueValues' === 'True') {
-                $("#lastUpdateTime_header").addClass('d-none');
                 $("#aggregatedValuesCount_header").addClass('d-none');
-                $('[id^="lastUpdateTime_value"]').addClass('d-none');
                 $('[id^="aggregatedValuesCount_value"]').addClass('d-none');
             }
 
