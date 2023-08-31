@@ -8,4 +8,5 @@ RUN apt-get update && apt-get install -y curl
 
 RUN curl https://purevpn-dialer-assets.s3.amazonaws.com/cross-platform/linux-cli/production/cli-install.sh | bash
 
-RUN echo "export PATH=$PATH:/opt/purevpn-cli/bin" >> ~/.bashrc && source ~/.bashrc
+RUN echo "export PATH=$PATH:/opt/purevpn-cli/bin" >> ~/.bashrc && . ~/.bashrc
+
