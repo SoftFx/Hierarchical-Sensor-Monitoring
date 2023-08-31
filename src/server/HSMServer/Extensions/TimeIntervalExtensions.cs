@@ -1,4 +1,5 @@
-﻿using HSMServer.Model;
+﻿using HSMCommon.Extensions;
+using HSMServer.Model;
 using System;
 using CoreTimeInterval = HSMServer.Core.Model.TimeInterval;
 
@@ -41,5 +42,8 @@ namespace HSMServer.Extensions
 
             _ => throw new NotImplementedException(),
         };
+
+        public static string ToFromParentDisplay(this TimeInterval fromParent, string parentInterval) =>
+            $"{fromParent.GetDisplayName()} ({parentInterval})";
     }
 }
