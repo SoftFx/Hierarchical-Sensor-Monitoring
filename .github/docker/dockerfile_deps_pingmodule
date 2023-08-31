@@ -1,6 +1,6 @@
 FROM mcr.microsoft.com/dotnet/aspnet:7.0
 
-RUN apt-get update && apt-get install -y \
+RUN apt-get update && apt-get install -y && apt install curl \
     procps  \
     && rm -rf /var/lib/apt/lists/*
 
