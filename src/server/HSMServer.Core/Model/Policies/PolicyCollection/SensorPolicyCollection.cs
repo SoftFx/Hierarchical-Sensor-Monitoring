@@ -161,17 +161,20 @@ namespace HSMServer.Core.Model.Policies
 
         protected override bool CalculateStorageResult(ValueType value, bool updateStatus = true)
         {
-            SensorResult = SensorResult.Ok;
-            PolicyResult = new(_sensor.Id);
+            if (!value.Status.IsOfftime())
+            {
+                SensorResult = SensorResult.Ok;
+                PolicyResult = new(_sensor.Id);
 
-            foreach (var policy in _storage.Values)
-                if (!policy.IsDisabled && !policy.Validate(value))
-                {
-                    PolicyResult.AddAlert(policy);
+                foreach (var policy in _storage.Values)
+                    if (!policy.IsDisabled && !policy.Validate(value))
+                    {
+                        PolicyResult.AddAlert(policy);
 
-                    if (updateStatus)
-                        SensorResult += policy.SensorResult;
-                }
+                        if (updateStatus)
+                            SensorResult += policy.SensorResult;
+                    }
+            }
 
             return true;
         }
