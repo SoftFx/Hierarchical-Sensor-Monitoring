@@ -129,14 +129,14 @@ jobs:
     runs-on: ubuntu-latest
     environment: DockerHub
     env:
-      DockerfilePath: .github/docker/dockerfile_deps
+      DockerfilePath: .github/docker/dockerfile_deps_pingmodule
     steps:
       - uses: actions/checkout@v3
 
       - name: Log in to Docker Hub
         uses: docker/login-action@v2
         with:
-          username: pawgyrocopter
+          username: ${{ secrets.DOCKERHUBUSERNAME }}
           password: ${{ secrets.DOCKERHUBTOKEN }}
 
       - name: Build and push docker deps
@@ -161,13 +161,13 @@ jobs:
         uses: docker/login-action@v2
         with:
           registry: ${{ env.DockerHubDepsRegistry }}
-          username: pawgyrocopter
+          username: ${{ secrets.DOCKERHUBUSERNAME }}
           password: ${{ secrets.DOCKERHUBTOKEN }}
 
       - name: Log in to Docker Hub
         uses: docker/login-action@v2
         with:
-          username: pawgyrocopter
+          username: ${{ secrets.DOCKERHUBUSERNAME }}
           password: ${{ secrets.DOCKERHUBTOKEN }}
 
       - name: Build full deps url
