@@ -38,7 +38,13 @@ internal sealed class ServiceConfig
         Version = assembly.Version;
 
         if (!Directory.Exists(ConfigPath))
+        {
+            Console.WriteLine("Doesnt exist");   
+            Console.WriteLine(ConfigPath);   
             FileManager.SafeCreateDirectory(ConfigPath);
+        }
+        
+        Console.WriteLine(ConfigPath);   
     }
 
 
