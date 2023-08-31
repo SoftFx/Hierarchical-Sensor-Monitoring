@@ -2,6 +2,8 @@ using System.Reflection;
 using System.Text.Json.Serialization;
 using HSMCommon;
 using HSMPingModule.Settings;
+using NLog;
+using LogLevel = NLog.LogLevel;
 
 namespace HSMPingModule.Config;
 
@@ -38,18 +40,18 @@ internal sealed class ServiceConfig
         Version = assembly.Version;
 
         if (!Directory.Exists(ConfigPath))
-        {
-            Console.WriteLine("Doesnt exist");   
-            Console.WriteLine(ConfigPath);   
             FileManager.SafeCreateDirectory(ConfigPath);
-        }
-        
-        Console.WriteLine(ConfigPath);   
     }
 
 
-    public void SetUpConfig(IConfigurationRoot configuration)
+    public void SetUpConfig(IConfigurationRoot configuration, Logger logger)
     {
+        if (!Directory.Exists(ConfigPath))
+        {
+            logger.Log(new LogEventInfo(LogLevel.Debug, "qwe", "no config found"));
+            FileManager.SafeCreateDirectory(ConfigPath);
+        }
+        logger.Log(new LogEventInfo(LogLevel.Debug, "qwe", $"{Directory.Exists(ConfigPath)}"));
         _configuration = configuration;
         Read();
     }
