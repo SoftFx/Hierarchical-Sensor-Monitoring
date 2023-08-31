@@ -225,7 +225,7 @@ namespace HSMServer.ApiObjectsConverters
             };
 
 
-        public static SensorUpdate Convert(this AddOrUpdateSensorRequest request, Guid sensorId, string keyName) =>
+        public static SensorUpdate Convert(this AddOrUpdateSensorRequest request, Guid sensorId, Dictionary<Guid, string> allChats, string keyName) =>
             new()
             {
                 Id = sensorId,
@@ -236,16 +236,16 @@ namespace HSMServer.ApiObjectsConverters
                 KeepHistory = request.KeepHistory.ToTimeInterval(),
                 SelfDestroy = request.SelfDestroy.ToTimeInterval(),
                 TTL = request.TTL.ToTimeInterval(),
-                TTLPolicy = request.TtlAlert?.Convert(keyName),
-                Policies = request.Alerts?.Select(policy => policy.Convert(keyName)).ToList(),
+                TTLPolicy = request.TtlAlert?.Convert(allChats, keyName),
+                Policies = request.Alerts?.Select(policy => policy.Convert(allChats, keyName)).ToList(),
                 Initiator = InitiatorInfo.AsCollector(keyName),
             };
 
 
-        public static PolicyUpdate Convert(this AlertUpdateRequest request, string keyName) => new()
+        public static PolicyUpdate Convert(this AlertUpdateRequest request, Dictionary<Guid, string> allChats, string keyName) => new()
         {
             Conditions = request.Conditions?.Select(c => c.Convert()).ToList(),
-            Destination = new PolicyDestinationUpdate(),
+            Destination = new PolicyDestinationUpdate(true, allChats),
             Sensitivity = request.Sensitivity.ToTimeInterval(),
 
             Id = Guid.Empty,
