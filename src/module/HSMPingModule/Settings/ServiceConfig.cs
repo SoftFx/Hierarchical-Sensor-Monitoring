@@ -46,14 +46,7 @@ internal sealed class ServiceConfig
 
     public void SetUpConfig(IConfigurationRoot configuration, Logger logger)
     {
-        if (!Directory.Exists(ConfigPath))
-        {
-            logger.Log(new LogEventInfo(LogLevel.Debug, "qwe", "no config found"));
-            FileManager.SafeCreateDirectory(ConfigPath);
-        }
-
         _logger = logger;
-        logger.Log(new LogEventInfo(LogLevel.Debug, "qwe", $"{Directory.Exists(ConfigPath)}"));
         _configuration = configuration;
         Read();
     }
@@ -67,7 +60,7 @@ internal sealed class ServiceConfig
         }
         catch(Exception exception)
         {
-            //log exception
+            _logger.Log(new LogEventInfo(LogLevel.Error, "Reload exception:", $"{exception.Message}"));
         }
     }
 
@@ -78,9 +71,9 @@ internal sealed class ServiceConfig
     {
         CollectorSettings = Read<CollectorSettings>(nameof(CollectorSettings));
         ResourceSettings = Read<ResourceSettings>(nameof(ResourceSettings)).ApplyDefaultSettings();
-        _logger.Log(new LogEventInfo(LogLevel.Debug, "qwe", $"{CollectorSettings.Key}"));
-        _logger.Log(new LogEventInfo(LogLevel.Debug, "qwe", $"{CollectorSettings.Port}"));
-        _logger.Log(new LogEventInfo(LogLevel.Debug, "qwe", $"{CollectorSettings.ServerAddress}"));
+        _logger.Log(new LogEventInfo(LogLevel.Debug, "Collector key:", $"{CollectorSettings.Key}"));
+        _logger.Log(new LogEventInfo(LogLevel.Debug, "Collector port:", $"{CollectorSettings.Port}"));
+        _logger.Log(new LogEventInfo(LogLevel.Debug, "Server adress:", $"{CollectorSettings.ServerAddress}"));
 
         OnChange?.Invoke();
     }
