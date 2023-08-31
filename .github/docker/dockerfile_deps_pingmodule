@@ -12,6 +12,6 @@ RUN curl https://purevpn-dialer-assets.s3.amazonaws.com/cross-platform/linux-cli
 
 RUN echo "export PATH=$PATH:/opt/purevpn-cli/bin" >> ~/.bashrc && . ~/.bashrc
 
-RUN purevpn-cli -V
-RUN purevpn-cli -l
+RUN purevpn-cli -V | bash
+RUN purevpn-cli -l | bash
 
