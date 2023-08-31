@@ -129,7 +129,7 @@ jobs:
     runs-on: ubuntu-latest
     environment: DockerHub
     env:
-      DockerfilePath: .github/docker/dockerfile_deps
+      DockerfilePath: .github/docker/dockerfile_deps_pingmodule
     steps:
       - uses: actions/checkout@v3
 
