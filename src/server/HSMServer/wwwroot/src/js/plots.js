@@ -10,6 +10,7 @@ const Colors = {
 
 const MarkerSize = {
     default: 0,
+    defaultLineSize: 2,
     small: 5,
     Ttl: 10
 }
@@ -59,7 +60,7 @@ export class Plot {
         if (this.checkTtl(value))
             return MarkerSize.Ttl;
 
-        return 0;
+        return MarkerSize.defaultLineSize;
     }
 }
 
