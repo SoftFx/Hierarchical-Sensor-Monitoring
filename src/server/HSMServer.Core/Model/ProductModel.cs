@@ -112,7 +112,8 @@ namespace HSMServer.Core.Model
                 model.Policies.UpdateTTL(update);
 
                 foreach (var (_, subProduct) in model.SubProducts)
-                    UpdateTTLPolicy(subProduct, update);
+                    if (!subProduct.Settings.TTL.IsSet)
+                        UpdateTTLPolicy(subProduct, update);
 
                 foreach (var (_, sensor) in model.Sensors)
                     if (!sensor.Settings.TTL.IsSet)
