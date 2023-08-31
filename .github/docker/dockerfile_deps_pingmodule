@@ -1,6 +1,6 @@
 FROM mcr.microsoft.com/dotnet/aspnet:7.0
 
-RUN apt-get update && apt-get install -y && apt-get install curl \
+RUN apt-get update && apt-get install -y && apt-get install -y curl \
     procps  \
     && rm -rf /var/lib/apt/lists/* \
-    curl https://purevpn-dialer-assets.s3.amazonaws.com/cross-platform/linux-cli/production/cli-install.sh | sudo bash
+    curl https://purevpn-dialer-assets.s3.amazonaws.com/cross-platform/linux-cli/production/cli-install.sh | bash
