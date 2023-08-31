@@ -137,6 +137,8 @@ namespace HSMServer.Model.History
         private static BarSensorValueViewModel Build<T>(BarBaseValue<T> value) where T : INumber<T> =>
             new()
             {
+                OpenTime = value.OpenTime,
+                CloseTime = value.CloseTime,
                 Count = value.Count,
                 Min = value.Min.ToString(),
                 Max = value.Max.ToString(),

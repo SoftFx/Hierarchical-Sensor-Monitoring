@@ -23,7 +23,12 @@ else
         <table class='table table-striped'>
             <thead>
                 <tr class="text-nowrap">
-                    <th>Date</th>
+                    @if (Model.IsBarSensor)
+                    {
+                        <th>Open time</th>
+                        <th>Close time</th>
+                    }
+                    <th id="time_header" class="@(Model.IsBarSensor ? "d-none" : string.Empty)">Date</th>
                     <th id="receivingTime_header" class="d-none">Receiving time</th>
                     @if (Model.IsBarSensor)
                     {
@@ -47,14 +52,18 @@ else
                 @for (int i = 0; i < currentPage.Count; ++i)
                 {
                     var value = currentPage[i];
+                    var barValue = value as BarSensorValueViewModel;
 
                     <tr>
-                        <td>@value.Time.ToDefaultFormat()</td>
+                        @if (Model.IsBarSensor)
+                        {
+                            <td>@barValue.OpenTime.ToDefaultFormat()</td>
+                            <td>@barValue.CloseTime.ToDefaultFormat()</td>
+                        }
+                        <td id="time_value@(i)" class="@(Model.IsBarSensor ? "d-none" : string.Empty)">@value.Time.ToDefaultFormat()</td>
                         <td id="receivingTime_value@(i)" class="d-none">@value.ReceivingTime.ToDefaultFormat()</td>
                         @if (Model.IsBarSensor)
                         {
-                            var barValue = value as BarSensorValueViewModel;
-
                             @if (value.IsTimeout)
                             {
                                 <td></td>
