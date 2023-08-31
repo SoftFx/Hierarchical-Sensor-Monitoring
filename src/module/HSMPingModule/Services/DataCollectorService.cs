@@ -11,20 +11,23 @@ namespace HSMPingModule.Collector;
 
 internal sealed class DataCollectorService : BackgroundService, IDataCollectorService, IDisposable
 {
+    private readonly ILogger<DataCollectorService> _logger;
     private readonly ConcurrentDictionary<string, IInstantValueSensor<double>> _sensors = new ();
     private readonly IInstantValueSensor<string> _exceptionSensor;
     private readonly IDataCollector _collector;
     private readonly ServiceConfig _config;
 
 
-    public DataCollectorService(IOptionsMonitor<ServiceConfig> config)
+    public DataCollectorService(IOptionsMonitor<ServiceConfig> config, ILogger<DataCollectorService> logger)
     {
+        _logger = logger;
         _config = config.CurrentValue;
 
         var productInfoOptions = new VersionSensorOptions()
         {
             Version = ServiceConfig.Version,
         };
+        _logger.LogInformation($"Product version: {productInfoOptions.Version}");
 
         var collectorOptions = new CollectorOptions()
         {
@@ -32,6 +35,9 @@ internal sealed class DataCollectorService : BackgroundService, IDataCollectorSe
             ServerAddress = _config.CollectorSettings.ServerAddress,
             Port = _config.CollectorSettings.Port
         };
+        _logger.LogInformation($"Access key: {collectorOptions.AccessKey}");
+        _logger.LogInformation($"Server address: {collectorOptions.ServerAddress}");
+        _logger.LogInformation($"Server port: {collectorOptions.Port}");
 
         _collector = new DataCollector(collectorOptions).AddNLog();
 
@@ -45,6 +51,7 @@ internal sealed class DataCollectorService : BackgroundService, IDataCollectorSe
             _collector.Unix.AddProductVersion(productInfoOptions)
                            .AddCollectorMonitoringSensors();
         }
+
 
         _exceptionSensor = _collector.CreateStringSensor("Exception");
     }
@@ -64,7 +71,7 @@ internal sealed class DataCollectorService : BackgroundService, IDataCollectorSe
 
     public override Task StartAsync(CancellationToken token)
     {
-        _collector.Start();
+        _collector.Start().ContinueWith((reply) => _logger.LogInformation("Collector started"), token);
         return base.StartAsync(token);
     }
 
