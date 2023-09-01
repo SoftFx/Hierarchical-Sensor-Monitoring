@@ -49,6 +49,18 @@ namespace HSMServer.Core.Model.Policies
         }
     }
 
+    internal sealed class PolicyExecutorDouble : PolicyExecutorNumberBase<double>
+    {
+        internal PolicyExecutorDouble(PolicyProperty property)
+        {
+            _getCheckedValue = property switch
+            {
+                PolicyProperty.Count => v => ((BarBaseValue)v).Count,
+                _ => throw new NotImplementedException($"Invalid property {property} for {nameof(PolicyExecutorDouble)}")
+            };
+        }
+    }
+
 
     internal sealed class PolicyExecutorString : PolicyExecutorSimple<string>
     {
