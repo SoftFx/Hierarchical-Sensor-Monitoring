@@ -67,6 +67,7 @@ internal class PingService : BackgroundService
                     });
 
                 ping.StartPinging($"{hostname}/{country}");
+                _logger.LogInformation($"New pinging sensor added at {hostname}/{country}");
             }
     }
 }

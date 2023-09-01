@@ -4,9 +4,9 @@ namespace HSMPingModule.Settings;
 
 internal sealed class ResourceSettings
 {
-    public Dictionary<string, WebSite> WebSites { get; set; }
+    public Dictionary<string, WebSite> WebSites { get; set; } = new();
 
-    public WebSite DefaultSiteNodeSettings { get; set; }
+    public WebSite DefaultSiteNodeSettings { get; set; } = new ();
 
 
     public ResourceSettings ApplyDefaultSettings()

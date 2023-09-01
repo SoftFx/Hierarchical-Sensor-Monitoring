@@ -16,9 +16,9 @@ try
     builder.Logging.AddNLog();
 
     builder.Configuration.SetBasePath(ServiceConfig.ConfigPath)
-        .AddJsonFile(ServiceConfig.ConfigName, true);
+                         .AddJsonFile(ServiceConfig.ConfigName, true);
 
-    builder.Services.Configure<ServiceConfig>(config => config.SetUpConfig(builder.Configuration));
+    builder.Services.Configure<ServiceConfig>(config => config.SetUpConfig(builder.Configuration, logger));
 
     builder.Services.AddSingleton<IDataCollectorService, DataCollectorService>();
 

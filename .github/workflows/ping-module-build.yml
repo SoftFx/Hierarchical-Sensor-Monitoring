@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       isPreRelease:
-        description: 'PreRelease'
+        description: "PreRelease"
         type: boolean
         required: true
         default: false
@@ -14,12 +14,12 @@ env:
   OUTPUT_FOLDER: ${{ github.workspace }}/BuildOutput
 
   SOLUTION_PATH: src/server/HSMServer/HSMServer.sln
-  SERVER_PATH: src/server/HSMServer/HSMServer.csproj
+  SERVER_PATH: src/module/HSMPingModule/HSMPingModule.csproj
 
   DOCKER_DOCKERHUB_ORG: hsmonitoring
-  DOCKER_DEPS_REPOS: hierarchical_sensor_monitoring_deps
+  DOCKER_DEPS_REPOS: hierarchical_sensor_monitoring_pingmodule_deps
   DOCKER_DEPS_TAG: latest
-  DOCKER_MAIN_REPOS: hierarchical_sensor_monitoring
+  DOCKER_MAIN_REPOS: hsmpingmodule
 
 jobs:
   build:
@@ -28,116 +28,39 @@ jobs:
       VERSION: ${{ steps.save-version.outputs.version }}
       ARTIFACT_NAME: ${{ steps.build-artifact-name.outputs.name}}
     steps:
-    - uses: actions/checkout@v3
-
-    - name: Setup .NET Core
-      uses: actions/setup-dotnet@v2
-      with:
-        dotnet-version: 7.0.x
-
-    - name: Setup Node.js
-      uses: actions/setup-node@v3
-      with:
-        node-version: 18
-
-    - name: Install dependencies
-      run: dotnet restore ${{ env.SOLUTION_PATH }}
-
-    - name: Build & Test Solution
-      run: dotnet test ${{ env.SOLUTION_PATH }} --no-restore -c Release
-
-    - name: Publish HSMServer
-      run: dotnet publish ${{ env.SERVER_PATH }} -c Release -o ${{ env.OUTPUT_FOLDER }}
-
-    - id: save-version
-      name: Try to get server version
-      run: echo "version=$((Get-Item ${{ env.OUTPUT_FOLDER }}/HSMServer.exe).VersionInfo.ProductVersion)" >> $env:GITHUB_OUTPUT
-
-    - id: build-artifact-name
-      name: Build artifact name
-      run: echo "name=HSMServer v${{ steps.save-version.outputs.version }}" >> $env:GITHUB_OUTPUT
-
-    - name: Upload artifact
-      uses: actions/upload-artifact@v3
-      with:
-        path: ${{ env.OUTPUT_FOLDER }}
-        name: ${{ steps.build-artifact-name.outputs.name }}
-
-
-  create-tag:
-    if: ${{ github.event_name == 'workflow_dispatch' }}
-    runs-on: ubuntu-latest
-    needs: build
-    outputs:
-      BUILD_TAG: ${{ steps.save-tag.outputs.tag }}
-    steps:
       - uses: actions/checkout@v3
 
-      - id: save-tag
-        name: Create tag
-        run: echo "tag=server-v${{ needs.build.outputs.VERSION }}" >> $GITHUB_OUTPUT
-
-      - name: Build release tag message
-        if: ${{ !github.event.inputs.isPreRelease }}
-        run: echo "TagMessage=Release version HSMServer-${{ needs.build.outputs.VERSION }}" >> $GITHUB_ENV
-
-      - name: Build prerelease tag message
-        if: ${{ github.event.inputs.isPreRelease }}
-        run: echo "TagMessage=PreRelease version HSMServer-${{ needs.build.outputs.VERSION }} for developers" >> $GITHUB_ENV
-
-      - name: Push tag
-        uses: rickstaa/action-create-tag@v1
+      - name: Setup .NET Core
+        uses: actions/setup-dotnet@v2
         with:
-          tag: ${{ steps.save-tag.outputs.tag }}
-          message: ${{ env.TagMessage }}
-          force_push_tag: true
+          dotnet-version: 7.0.x
 
+      - name: Install dependencies
+        run: dotnet restore ${{ env.SOLUTION_PATH }}
 
-  create-release:
-    runs-on: ubuntu-latest
-    needs: [build, create-tag]
-    env:
-      ReleaseNote: "ReleaseNote.md"
-    steps:
-      - uses: actions/checkout@v3
+      - name: Publish HSMPingModule
+        run: dotnet publish ${{ env.SERVER_PATH }} -c Release -o ${{ env.OUTPUT_FOLDER }}
 
-      - name: Download artifacts
-        uses: actions/download-artifact@v3
+      - id: save-version
+        name: Try to get server version
+        run: echo "version=$((Get-Item ${{ env.OUTPUT_FOLDER }}/HSMPingModule.exe).VersionInfo.ProductVersion)" >> $env:GITHUB_OUTPUT
+
+      - id: build-artifact-name
+        name: Build artifact name
+        run: echo "name=HSMPingModule v${{ steps.save-version.outputs.version }}" >> $env:GITHUB_OUTPUT
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v3
         with:
-          name: ${{ needs.build.outputs.ARTIFACT_NAME }}
           path: ${{ env.OUTPUT_FOLDER }}
-
-      - name: Create archive name
-        run: echo "ArtifactZip=HSMServer-${{ needs.build.outputs.VERSION }}.zip" >> $GITHUB_ENV
-
-      - name: Check archive name
-        run: echo $ArtifactZip
-
-      - name: Archive artifacts
-        uses: thedoctor0/zip-release@main
-        with:
-          type: 'zip'
-          path: ${{ env.OUTPUT_FOLDER }}
-          filename: ${{ env.ArtifactZip }}
-
-      - name: Create release
-        uses: ncipollo/release-action@v1
-        with:
-          name: ${{ needs.build.outputs.ARTIFACT_NAME }}
-          tag: ${{ needs.create-tag.outputs.BUILD_TAG }}
-          token: ${{ secrets.GITHUB_TOKEN }}
-          artifacts: ${{ env.ArtifactZip }}
-          prerelease: ${{ github.event.inputs.isPreRelease }}
-          bodyFile: ${{ env.ReleaseNote }}
-          allowUpdates: true
-
+          name: ${{ steps.build-artifact-name.outputs.name }}
 
   publish-docker-deps:
     if: ${{ github.event_name == 'workflow_dispatch' }}
     runs-on: ubuntu-latest
     environment: DockerHub
     env:
-      DockerfilePath: .github/docker/dockerfile_deps
+      DockerfilePath: .github/docker/dockerfile_deps_pingmodule
     steps:
       - uses: actions/checkout@v3
 
@@ -154,7 +77,6 @@ jobs:
           push: true
           file: ${{ env.DockerfilePath }}
           tags: ${{ env.DOCKER_DOCKERHUB_ORG }}/${{ env.DOCKER_DEPS_REPOS }}:${{ env.DOCKER_DEPS_TAG }}
-
 
   publish-docker-image:
     runs-on: ubuntu-latest
@@ -185,7 +107,10 @@ jobs:
         run: echo "DockerMainName=${{ env.DOCKER_DOCKERHUB_ORG }}/${{ env.DOCKER_MAIN_REPOS }}" >> $GITHUB_ENV
 
       - name: Build Linux image for Docker
-        run: dotnet publish ${{ env.SERVER_PATH }} -c Release --os linux --arch x64 -p:PublishProfile=DefaultContainer -p:ContainerBaseImage=${{ env.DockerDepsUrl }} -p:ContainerImageName=${{ env.DockerMainName }}
+        run: dotnet publish ${{ env.SERVER_PATH }} -c Release --os linux --arch x64 /t:PublishContainer -p:ContainerBaseImage=${{ env.DockerDepsUrl }} -p:ContainerImageName=${{ env.DockerMainName }}
+
+      - name: check
+        run: docker images
 
       - name: Push image to remote Docker
         run: docker push "${{ env.DockerMainName }}:${{ needs.build.outputs.VERSION }}"
