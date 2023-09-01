@@ -37,16 +37,27 @@ public sealed record UpdateSensorValueRequestModel
             Comment = Comment,
         };
 
-        return (ChangeLast ? SetLastValueTime(value, oldValue) : SetUtcNowTime(value)).TrySetValue(Value);
+        var configuredValue = ChangeLast ? SetLastValueTime(value, oldValue) : SetUtcNowTime(value);
+
+        return configuredValue is BarBaseValue ? configuredValue.TrySetValue(ChangeLast ? oldValue : null) : configuredValue.TrySetValue(Value);
     }
 
 
-    private static BaseValue SetLastValueTime(BaseValue value, BaseValue oldValue) =>
-        value with
+    private static BaseValue SetLastValueTime(BaseValue value, BaseValue oldValue)
+    {
+        if (oldValue is BarBaseValue barValue && value is BarBaseValue barBaseValue)
+            value = barBaseValue with
+            {
+                CloseTime = barValue.CloseTime,
+                OpenTime = barValue.OpenTime,
+            };
+        
+        return value with
         {
             ReceivingTime = oldValue.ReceivingTime,
             Time = oldValue.Time
         };
+    }
 
     private static BaseValue SetUtcNowTime(BaseValue value)
     {
