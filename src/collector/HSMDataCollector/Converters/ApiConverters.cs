@@ -43,8 +43,9 @@ namespace HSMDataCollector.Converters
                 SelfDestroy = options.SelfDestroy?.Ticks,
 
                 EnableGrafana = options.EnableForGrafana,
-
                 AggregateData = options.AggregateData,
+
+                IsForceUpdate = options.IsForceUpdate,
             };
 
 
