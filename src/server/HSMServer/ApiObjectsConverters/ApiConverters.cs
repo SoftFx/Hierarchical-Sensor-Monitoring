@@ -227,7 +227,7 @@ namespace HSMServer.ApiObjectsConverters
 
         public static SensorUpdate Convert(this AddOrUpdateSensorRequest request, Guid sensorId, Dictionary<Guid, string> allChats, string keyName)
         {
-            var initiator = InitiatorInfo.AsCollector(keyName, request.ForceUpdate);
+            var initiator = InitiatorInfo.AsCollector(keyName, request.IsForceUpdate);
 
             return new()
             {

@@ -39,8 +39,6 @@ namespace HSMDataCollector.Prototypes
 
             foreach (var drive in DriveInfo.GetDrives())
             {
-                prototype.Alerts.Clear();
-
                 if (drive.DriveType == DriveType.Fixed)
                 {
                     prototype.TargetPath = drive.Name;
@@ -91,8 +89,6 @@ namespace HSMDataCollector.Prototypes
 
             foreach (var drive in DriveInfo.GetDrives())
             {
-                prototype.Alerts.Clear();
-
                 if (drive.DriveType == DriveType.Fixed)
                 {
                     prototype.TargetPath = drive.Name;
