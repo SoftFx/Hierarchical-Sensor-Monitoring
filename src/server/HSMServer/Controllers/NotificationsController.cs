@@ -4,12 +4,16 @@ using HSMServer.Folders;
 using HSMServer.Helpers;
 using HSMServer.Model;
 using HSMServer.Model.Authentication;
+using HSMServer.Model.NotificationViewModels;
 using HSMServer.Model.TreeViewModel;
 using HSMServer.Notification.Settings;
 using HSMServer.Notifications;
+using HSMServer.Notifications.Telegram;
 using Microsoft.AspNetCore.Mvc;
 using System;
+using System.Collections.Concurrent;
 using System.Threading.Tasks;
+
 
 namespace HSMServer.Controllers
 {
@@ -33,7 +37,19 @@ namespace HSMServer.Controllers
 
         public IActionResult Index()
         {
-            return View(new TelegramSettingsViewModel(CurrentUser.Notifications.UsedTelegram, CurrentUser.Id));
+            var groups = new ConcurrentDictionary<Telegram.Bot.Types.ChatId, TelegramChat>();
+            foreach (var (_, product) in _tree.Nodes)
+                foreach (var (chatId, chat) in product.Notifications.UsedTelegram.Chats)
+                    if (!groups.ContainsKey(chatId))
+                        groups.TryAdd(chatId, chat);
+
+            var privates = new ConcurrentDictionary<Telegram.Bot.Types.ChatId, TelegramChat>();
+            foreach (var user in _userManager.GetUsers())
+                foreach (var (chatId, chat) in user.Notifications.UsedTelegram.Chats)
+                    if (!privates.ContainsKey(chatId))
+                        privates.TryAdd(chatId, chat);
+
+            return View(new ChatsViewModel(privates, groups));
         }
 
         [HttpPost]

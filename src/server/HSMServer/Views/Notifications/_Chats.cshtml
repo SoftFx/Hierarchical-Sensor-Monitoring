@@ -1,26 +1,28 @@
 ﻿@using HSMServer.Constants
 @using HSMServer.Controllers
 @using HSMServer.Notifications
-@using HSMServer.Model
+@using HSMServer.Model.NotificationViewModels
 
 @inject NotificationsCenter NotificationsCenter
 
-@model TelegramSettingsViewModel
+@model ChatsViewModelBase
 
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
 
 
 <div class="my-2">
     <div class="row">
-        <h6 class="col-auto fw-bold">Groups</h6>
+        <h6 class="col-auto fw-bold">@Model.Title</h6>
         @if (Model.Chats.Count == 0)
         {
-            <h6 class="col-auto p-0">(There are no authorized groups)</h6>
+            <h6 class="col-auto p-0">(There are no authorized @Model.Title.ToLower())</h6>
         }
     </div>
 
-    <div class="row mx-2 my-0">
-        <ul class="settingsList list-group">
+    @if (Model is GroupChatsViewModel)
+    {
+        <div class="row mx-2 my-0">
+            <ul class="settingsList list-group">
             <li class="list-group-item pt-0">1. Create group chat in Telegram.</li>
             <li class="list-group-item">2. Add Telegram Bot (@NotificationsCenter.TelegramBot.BotName) to group chat.</li>
             <li class="list-group-item">3. Give Admin right to Telegram Bot (@NotificationsCenter.TelegramBot.BotName).</li>
@@ -28,26 +30,44 @@
             <li class="list-group-item">5. Send message from clipboard to group chat.</li>
             <li class="list-group-item">The bot will send a notification that it has been successfully initialized.</li>
         </ul>
-    </div>
+        </div>
+    }
+    else if (Model is PrivateChatsViewModel)
+    {
+        <div class="row mx-4 my-1">
+            <label class="col-auto p-0">If you want to start getting messages in telegram chat click</label>
+            <div class="col-auto">
+                <a asp-action="@nameof(NotificationsController.OpenInvitationLink)" target="_blank">invitation link</a>
+            </div>
+        </div>
+    }
+
     @if (Model.Chats.Count > 0)
     {
         <table class="table mx-4">
             <tr>
-                <th>Group name</th>
+                <th>@Model.NameColumn</th>
                 <th>Authorized</th>
                 <th style="text-align:center">Actions</th>
             </tr>
-            @foreach (var group in Model.Chats)
+            @foreach (var chat in Model.Chats)
             {
                 <tr>
                     <td>
-                        <a target="_blank" asp-controller="@ViewConstants.NotificationsController"
-                           asp-action="@nameof(NotificationsController.OpenTelegramGroup)"
-                           asp-route-chatId="@group.ChatId">
-                            @group.Name
-                        </a>
+                        @if (chat.IsUserChat)
+                        {
+                            <span>@chat.Name</span>
+                        }
+                        else
+                        {
+                            <a target="_blank" asp-controller="@ViewConstants.NotificationsController"
+                               asp-action="@nameof(NotificationsController.OpenTelegramGroup)"
+                               asp-route-chatId="@chat.ChatId">
+                                @chat.Name
+                            </a>
+                        }
                     </td>
-                    <td>@group.AuthorizationTime</td>
+                    <td>@chat.AuthorizationTime</td>
                     <td style="text-align:center">
                         <div class="dropdown">
                             <button id="actionButton" class="btn" data-bs-toggle="dropdown" data-bs-auto-close="true" aria-haspopup="true" aria-expanded="false">
@@ -55,20 +75,42 @@
                             </button>
                             <ul class="dropdown-menu overflow-auto">
                                 <li>
-                                    <a class="dropdown-item text-decoration-none fw-normal" asp-controller="@ViewConstants.NotificationsController"
-                                       asp-action="@nameof(NotificationsController.SendTestTelegramMessage)"
-                                       asp-route-entityId="@Model.EntityId"
-                                       asp-route-chatId="@group.ChatId">
-                                        Send test message
-                                    </a>
+                                    <a>Send test message</a> @*TODO: should be realized for private and group chats*@
+                                    @*@if (chat.IsUserChat)
+                                    {
+                                        <a class="dropdown-item text-decoration-none fw-normal" asp-action="@nameof(NotificationsController.SendTestTelegramMessage)"
+                                           asp-route-chatId="@chat.ChatId">
+                                            Send test message
+                                        </a>
+                                    }
+                                    else
+                                    {
+                                        <a class="dropdown-item text-decoration-none fw-normal" asp-controller="@ViewConstants.NotificationsController"
+                                           asp-action="@nameof(NotificationsController.SendTestTelegramMessage)"
+                                           asp-route-entityId="@Model.EntityId"
+                                           asp-route-chatId="@chat.ChatId">
+                                            Send test message
+                                        </a>
+                                    }*@
                                 </li>
                                 <li>
-                                    <a class="dropdown-item text-decoration-none fw-normal" asp-controller="@ViewConstants.NotificationsController"
-                                       asp-action="@nameof(NotificationsController.RemoveTelegramAuthorization)"
-                                       asp-route-entityId="@Model.EntityId"
-                                       asp-route-chatId="@group.ChatId">
-                                        Remove authorization
-                                    </a>
+                                            <a>Remove authorization</a> @*TODO: should be realized for private and group chats*@
+                                    @*@if (chat.IsUserChat)
+                                    {
+                                        <a class="dropdown-item text-decoration-none fw-normal" asp-action="@nameof(NotificationsController.RemoveTelegramAuthorization)"
+                                           asp-route-chatId="@chat.ChatId">
+                                            Remove authorization
+                                        </a>
+                                    }
+                                    else
+                                    {
+                                        <a class="dropdown-item text-decoration-none fw-normal" asp-controller="@ViewConstants.NotificationsController"
+                                           asp-action="@nameof(NotificationsController.RemoveTelegramAuthorization)"
+                                           asp-route-entityId="@Model.EntityId"
+                                           asp-route-chatId="@chat.ChatId">
+                                            Remove authorization
+                                        </a>
+                                    }*@
                                 </li>
                             </ul>
                         </div>
@@ -81,16 +123,17 @@
 
 
 <script>
-    function getGroupStartCommand() {
-        $.ajax({
-            type: 'GET',
-            url: `@Html.Raw(Url.Action(nameof(NotificationsController.CopyStartCommandForGroup), ViewConstants.NotificationsController))?entityId=@Model.EntityId`,
-            dataType: 'html',
-            contentType: 'application/json',
-            cache: false,
-            async: true
-        }).done(function (command) {
-            copyToClipboard(command);
-        });
-    }
+    //TODO: we need Model.EntityId
+    //function getGroupStartCommand() {
+    //    $.ajax({
+    //        type: 'GET',
+    //        url: `@Html.Raw(Url.Action(nameof(NotificationsController.CopyStartCommandForGroup), ViewConstants.NotificationsController))?entityId=`,
+    //        dataType: 'html',
+    //        contentType: 'application/json',
+    //        cache: false,
+    //        async: true
+    //    }).done(function (command) {
+    //        copyToClipboard(command);
+    //    });
+    //}
 </script>
