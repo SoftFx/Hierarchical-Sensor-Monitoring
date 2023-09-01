@@ -6,7 +6,7 @@ namespace HSMServer.Notifications.Telegram
 {
     public sealed class TelegramChat
     {
-        public Guid SystemId { get; set; } // TODO: remove setter after TelegramChat migration
+        public Guid SystemId { get; }
 
         public ChatId Id { get; init; }
 
@@ -26,12 +26,10 @@ namespace HSMServer.Notifications.Telegram
         internal TelegramChat(TelegramChatEntity entity)
         {
             Id = new(entity.Id);
+            SystemId = new Guid(entity.SystemId);
             IsUserChat = entity.IsUserChat;
             Name = entity.Name;
             AuthorizationTime = new DateTime(entity.AuthorizationTime);
-
-            if (entity.SystemId is not null) // TODO: remove this check after TelegramChat migration
-                SystemId = new Guid(entity.SystemId);
         }
 
 

@@ -70,7 +70,7 @@ namespace HSMServer.Core.Model.Policies
             _typePolicy.RebuildState();
         }
 
-        public override void UpdateTTL(PolicyUpdate update)
+        internal override void UpdateTTL(PolicyUpdate update)
         {
             var oldValue = TimeToLive.ToString();
 
