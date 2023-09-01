@@ -327,7 +327,7 @@ function buildContextMenu(node) {
                     "label": `Mute ${getKeyByValue(curType)} for...`,
                     "separator_after": true,
                     "separator_before": true,
-                    "action": _ => ignoreNotificationsRequest(node, TelegramTarget.Groups, 'true')
+                    "action": _ => ignoreNotificationsRequest(node, TelegramTarget.Groups)
                 }
             }
             else {
@@ -420,60 +420,8 @@ function buildContextMenu(node) {
             };
         }
     }
-
-    notificationSubmenu = {}
-    isAccEnabled = node.data.jstree.isAccountsEnable === "True";
-
-    if (isAccEnabled) {
-        notificationSubmenu["Accounts ignore"] = {
-            "label": "Ignore for accounts...",
-            "icon": "fab fa-telegram",
-            "action": _ => ignoreNotificationsRequest(node, TelegramTarget.Accounts),
-        }
-    }
-    else {
-        notificationSubmenu["Accounts enable"] = {
-            "label": "Enable for accounts...",
-            "icon": "fab fa-telegram",
-            "action": _ => enableNotificationsRequest(node, TelegramTarget.Accounts),
-        }
-    }
-
-    if (isManager) {
-        let groups = node.data.jstree.groups;
-
-        for (let chatId in groups) {
-            let group = groups[chatId].Name;
-
-            if (groups[chatId].IsEnabled && !groups[chatId].IsIgnored) {
-                notificationSubmenu[`Groups ignore ${chatId}`] = {
-                    "label": `Ignore for '${group}'...`,
-                    "icon": "fab fa-telegram",
-                    "action": _ => ignoreNotificationsRequest(node, TelegramTarget.Groups, false, chatId),
-                }
-            }
-            else {
-                notificationSubmenu[`Groups enable ${chatId}`] = {
-                    "label": `Enable for '${group}'...`,
-                    "icon": "fab fa-telegram",
-                    "action": _ => enableNotificationsRequest(node, TelegramTarget.Groups, chatId),
-                }
-            }
-        }
-    }
-
-    //if ((curType === NodeType.Folder && node.children.length != 0) || (isMutedState !== '' && isMutedState !== undefined))
-    //    contextMenu["Notifications"] = {
-    //        "label": "Notifications",
-    //        "separator_before": true,
-    //        "submenu": notificationSubmenu,
-    //    };
     
     return contextMenu;
-}
-
-function enableNotificationsRequest(node, target, chat = null) {
-    return $.ajax(`${enableNotificationsAction}?selectedId=${node.id}&target=${target}&chat=${chat}`, AjaxPost).done(updateTreeTimer);
 }
 
 function unmuteRequest(node){
@@ -483,8 +431,8 @@ function unmuteRequest(node){
     });
 }
 
-function ignoreNotificationsRequest(node, target, isOffTimeModal = 'false', chat = null) {
-    return $.ajax(`${ignoreNotificationsAction}?selectedId=${node.id}&target=${target}&isOffTimeModal=${isOffTimeModal}&chat=${chat}`, {
+function ignoreNotificationsRequest(node, target) {
+    return $.ajax(`${ignoreNotificationsAction}?selectedId=${node.id}&target=${target}`, {
         cache: false,
         success: (v) => $("#ignoreNotificatios_partial").html(v),
     }).done(() => $('#ignoreNotifications_modal').modal('show'))

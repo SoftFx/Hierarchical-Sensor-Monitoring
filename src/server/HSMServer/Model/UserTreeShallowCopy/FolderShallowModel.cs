@@ -13,17 +13,11 @@ namespace HSMServer.Model.UserTreeShallowCopy
 
         public IntegrationState GrafanaState { get; } = new();
 
-        public UserNotificationsState AccountState { get; } = new();
-
 
         public override bool CurUserIsManager { get; }
 
 
         public override bool IsGrafanaEnabled => GrafanaState.IsAllEnabled;
-
-        public override bool IsAccountsEnable => AccountState.IsAllEnabled;
-
-        public override bool IsAccountsIgnore => AccountState.IsAllIgnored;
 
 
         public bool IsEmpty => Products.All(n => n.Data.IsEmpty);
@@ -39,12 +33,6 @@ namespace HSMServer.Model.UserTreeShallowCopy
         {
             node.Parent = this;
 
-            if (!node.IsMutedState)
-            {
-                AccountState.CalculateState(node.AccountState);
-                UpdateGroupsState(node);
-            }
-
             GrafanaState.CalculateState(node.GrafanaState);
 
             if (node.VisibleSubtreeSensorsCount > 0 || user.IsEmptyProductVisible(node.Data))
@@ -59,8 +47,6 @@ namespace HSMServer.Model.UserTreeShallowCopy
             "time": "{{Data.UpdateTime.Ticks}}",
             "isManager": "{{CurUserIsManager}}",
             "isGrafanaEnabled": "{{IsGrafanaEnabled}}",
-            "isAccountsEnable": "{{IsAccountsEnable}}",
-            "groups": {{GroupsJsonDict}}
         }
         """;
     }

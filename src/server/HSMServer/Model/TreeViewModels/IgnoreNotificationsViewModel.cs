@@ -29,8 +29,6 @@ namespace HSMServer.Model
 
         public TimeIntervalViewModel IgnorePeriod { get; set; }
 
-        public long? Chat { get; set; }
-
         public int Days { get; set; }
 
         public int Hours { get; set; }
@@ -42,10 +40,8 @@ namespace HSMServer.Model
         public DateTime EndOfIgnorePeriod => IgnorePeriod.TimeInterval is TimeInterval.Forever ?
                                              DateTime.MaxValue : DateTimeNow.AddDays(Days).AddHours(Hours).AddMinutes(Minutes);
 
-        public bool IsOffTimeModal { get; set; }
 
-
-        private IgnoreNotificationsViewModel(BaseNodeViewModel node, NotificationsTarget target, bool isOffTimeModal)
+        private IgnoreNotificationsViewModel(BaseNodeViewModel node, NotificationsTarget target)
         {
             TreeElement = node switch
             {
@@ -59,14 +55,13 @@ namespace HSMServer.Model
 
             DateTimeNow = DateTime.UtcNow.RoundToMin();
             NotificationsTarget = target;
-            IsOffTimeModal = isOffTimeModal;
         }
 
         // public constructor without parameters for action Home/IgnoreNotifications
         public IgnoreNotificationsViewModel() { }
 
-        public IgnoreNotificationsViewModel(NodeViewModel node, NotificationsTarget target, bool isOffTimeModal)
-            : this((BaseNodeViewModel)node, target, isOffTimeModal)
+        public IgnoreNotificationsViewModel(NodeViewModel node, NotificationsTarget target)
+            : this((BaseNodeViewModel)node, target)
         {
             EncodedId = node.EncodedId;
             Path = node.FullPath;
@@ -75,8 +70,8 @@ namespace HSMServer.Model
                 TreeElement = ProductTreeElement;
         }
 
-        public IgnoreNotificationsViewModel(FolderModel folder, NotificationsTarget target, bool isOffTimeModal)
-            : this((BaseNodeViewModel)folder, target, isOffTimeModal)
+        public IgnoreNotificationsViewModel(FolderModel folder, NotificationsTarget target)
+            : this((BaseNodeViewModel)folder, target)
         {
             EncodedId = folder.Id.ToString();
             Path = folder.Name;
