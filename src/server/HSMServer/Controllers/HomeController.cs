@@ -5,7 +5,6 @@ using HSMServer.Core.Extensions;
 using HSMServer.Core.Journal;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Requests;
-using HSMServer.Core.TableOfChanges;
 using HSMServer.Extensions;
 using HSMServer.Folders;
 using HSMServer.Helpers;
@@ -315,31 +314,25 @@ namespace HSMServer.Controllers
         }
 
         [HttpGet]
-        public IActionResult IgnoreNotifications(string selectedId, NotificationsTarget target, bool isOffTimeModal, long? chat)
+        public IActionResult IgnoreNotifications(string selectedId, NotificationsTarget target)
         {
             var decodedId = SensorPathHelper.DecodeGuid(selectedId);
 
             IgnoreNotificationsViewModel viewModel = null;
 
             if (_treeViewModel.Nodes.TryGetValue(decodedId, out var node))
-                viewModel = new IgnoreNotificationsViewModel(node, target, isOffTimeModal);
+                viewModel = new IgnoreNotificationsViewModel(node, target);
             else if (_treeViewModel.Sensors.TryGetValue(decodedId, out var sensor))
-                viewModel = new IgnoreNotificationsViewModel(sensor, target, isOffTimeModal);
+                viewModel = new IgnoreNotificationsViewModel(sensor, target);
             else if (_folderManager.TryGetValue(decodedId, out var folder))
-                viewModel = new IgnoreNotificationsViewModel(folder, target, isOffTimeModal);
-
-            viewModel.Chat = chat;
+                viewModel = new IgnoreNotificationsViewModel(folder, target);
 
             return PartialView("_IgnoreNotificationsModal", viewModel);
         }
 
         [HttpPost]
-        public void EnableNotifications(string selectedId, NotificationsTarget target, long? chat) =>
-            GetHandler(target)(SensorPathHelper.DecodeGuid(selectedId), (s, g) => s.Enable(g, chat));
-
-        [HttpPost]
         public void IgnoreNotifications(IgnoreNotificationsViewModel model) =>
-            GetHandler(model.NotificationsTarget)(SensorPathHelper.DecodeGuid(model.EncodedId), (s, g) => s.Ignore(g, model.EndOfIgnorePeriod, model.Chat));
+            GetHandler(model.NotificationsTarget)(SensorPathHelper.DecodeGuid(model.EncodedId), (s, g) => s.Ignore(g, model.EndOfIgnorePeriod));
 
         [HttpPost]
         public string GetNodePath([FromQuery] string selectedId, [FromQuery] bool isFullPath = false)

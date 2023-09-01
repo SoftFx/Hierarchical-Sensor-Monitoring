@@ -15,32 +15,6 @@
 
     @if (!Model.IsEmpty && showIcons)
     {
-        @if (Model.IsAccountsEnable)
-        {
-            <span>
-                <img class="tree-png-icon" src="~/dist/user.png" alt="!" />
-            </span>
-        }
-        else if (Model.IsAccountsIgnore)
-        {
-            <span>
-                <img class="tree-png-icon" src="~/dist/user-crossed.png" alt="!" />
-            </span>
-        }
-
-        @if (Model.IsGroupsEnable)
-        {
-            <span>
-                <img class="tree-png-icon" src="~/dist/users.png" alt="!" />
-            </span>
-        }
-        else if (Model.IsGroupsIgnore)
-        {
-            <span>
-                <img class="tree-png-icon" src="~/dist/users-crossed.png" alt="!" />
-            </span>
-        }
-
         @if (Model.IsGrafanaEnabled)
         {
             <span>
