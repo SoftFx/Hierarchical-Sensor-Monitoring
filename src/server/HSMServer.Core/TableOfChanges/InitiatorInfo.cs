@@ -20,11 +20,15 @@ namespace HSMServer.Core.TableOfChanges
 
         public string Info { get; }
 
+        public bool IsForceUpdate { get; }
 
-        private InitiatorInfo(InitiatorType type, string info = null)
+
+        private InitiatorInfo(InitiatorType type, string info = null, bool isForce = false)
         {
             Type = type;
             Info = info;
+
+            IsForceUpdate = isForce;
         }
 
         public InitiatorInfo(InitiatorInfoEntity entity)
@@ -38,7 +42,7 @@ namespace HSMServer.Core.TableOfChanges
 
         public static InitiatorInfo AsUser(string username) => new(InitiatorType.User, username);
 
-        public static InitiatorInfo AsCollector(string key) => new(InitiatorType.DataCollector, key);
+        public static InitiatorInfo AsCollector(string key, bool isForce) => new(InitiatorType.DataCollector, key, isForce);
 
 
         public InitiatorInfoEntity ToEntity() => new()

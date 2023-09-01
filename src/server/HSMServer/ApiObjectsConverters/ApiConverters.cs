@@ -225,8 +225,11 @@ namespace HSMServer.ApiObjectsConverters
             };
 
 
-        public static SensorUpdate Convert(this AddOrUpdateSensorRequest request, Guid sensorId, Dictionary<Guid, string> allChats, string keyName) =>
-            new()
+        public static SensorUpdate Convert(this AddOrUpdateSensorRequest request, Guid sensorId, Dictionary<Guid, string> allChats, string keyName)
+        {
+            var initiator = InitiatorInfo.AsCollector(keyName, request.ForceUpdate);
+
+            return new()
             {
                 Id = sensorId,
                 Description = request.Description,
@@ -236,13 +239,14 @@ namespace HSMServer.ApiObjectsConverters
                 KeepHistory = request.KeepHistory.ToTimeInterval(),
                 SelfDestroy = request.SelfDestroy.ToTimeInterval(),
                 TTL = request.TTL.ToTimeInterval(),
-                TTLPolicy = request.TtlAlert?.Convert(allChats, keyName),
-                Policies = request.Alerts?.Select(policy => policy.Convert(allChats, keyName)).ToList(),
-                Initiator = InitiatorInfo.AsCollector(keyName),
+                TTLPolicy = request.TtlAlert?.Convert(allChats, initiator),
+                Policies = request.Alerts?.Select(policy => policy.Convert(allChats, initiator)).ToList(),
+                Initiator = initiator,
             };
+        }
 
 
-        public static PolicyUpdate Convert(this AlertUpdateRequest request, Dictionary<Guid, string> allChats, string keyName) => new()
+        public static PolicyUpdate Convert(this AlertUpdateRequest request, Dictionary<Guid, string> allChats, InitiatorInfo initiator) => new()
         {
             Conditions = request.Conditions?.Select(c => c.Convert()).ToList(),
             Destination = new PolicyDestinationUpdate(true, allChats),
@@ -253,7 +257,7 @@ namespace HSMServer.ApiObjectsConverters
             Template = request.Template,
             Icon = request.Icon,
             IsDisabled = request.IsDisabled,
-            Initiator = InitiatorInfo.AsCollector(keyName),
+            Initiator = initiator,
         };
 
 
