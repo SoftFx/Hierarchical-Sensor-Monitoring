@@ -14,14 +14,6 @@ namespace HSMServer.Model.ViewModel
         public bool IsEmptyHistory { get; set; }
 
 
-        public bool IsGroupNotificationsEnabled { get; set; }
-
-        public bool IsAccountNotificationsEnabled { get; set; }
-
-        public bool IsGroupNotificationsIgnored { get; set; }
-
-        public bool IsAccountNotificationsIgnored { get; set; }
-
         public bool IsGrafanaEnabled { get; set; }
 
         public bool AreIconsVisible { get; set; }
@@ -46,11 +38,6 @@ namespace HSMServer.Model.ViewModel
             IsEmptyHistory = filter.ByVisibility.Empty.Value;
             AreIconsVisible = filter.ByVisibility.Icons.Value;
 
-            IsAccountNotificationsIgnored = filter.ByNotifications.AccountIgnored.Value;
-            IsGroupNotificationsIgnored = filter.ByNotifications.GroupIgnored.Value;
-            IsAccountNotificationsEnabled = filter.ByNotifications.AccountEnabled.Value;
-            IsGroupNotificationsEnabled = filter.ByNotifications.GroupEnabled.Value;
-
             IsGrafanaEnabled = filter.ByIntegrations.GrafanaEnabled.Value;
 
             IsMutedSensorsState = filter.ByState.Muted.Value;
@@ -74,11 +61,6 @@ namespace HSMServer.Model.ViewModel
 
             filter.ByVisibility.Empty.Value = IsEmptyHistory;
             filter.ByVisibility.Icons.Value = AreIconsVisible;
-
-            filter.ByNotifications.AccountEnabled.Value = IsAccountNotificationsEnabled;
-            filter.ByNotifications.GroupEnabled.Value = IsGroupNotificationsEnabled;
-            filter.ByNotifications.AccountIgnored.Value = IsAccountNotificationsIgnored;
-            filter.ByNotifications.GroupIgnored.Value = IsGroupNotificationsIgnored;
 
             filter.ByIntegrations.GrafanaEnabled.Value = IsGrafanaEnabled;
 
