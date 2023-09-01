@@ -12,6 +12,8 @@ namespace HSMDataCollector.Alerts
 
         public AlertAction<T> ThenSetIcon(string icon) => BuildAlertAction().AndSetIcon(icon);
 
+        public AlertAction<T> ThenSetIcon(AlertIcon icon) => BuildAlertAction().AndSetIcon(icon);
+
         public AlertAction<T> ThenSetSensorError() => BuildAlertAction().AndSetSensorError();
 
 

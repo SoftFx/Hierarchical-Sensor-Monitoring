@@ -47,6 +47,11 @@ namespace HSMDataCollector.Alerts
             return new BarAlertCondition().AndLastValue(operation, value);
         }
 
+        public static BarAlertCondition IfCount(AlertOperation operation, int value)
+        {
+            return new BarAlertCondition().AndCount(operation, value);
+        }
+
         public static BarAlertCondition IfBarComment(AlertOperation operation)
         {
             return (BarAlertCondition)new BarAlertCondition().AndComment(operation);
