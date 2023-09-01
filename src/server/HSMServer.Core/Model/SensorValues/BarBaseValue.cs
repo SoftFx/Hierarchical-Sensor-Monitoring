@@ -33,6 +33,22 @@ namespace HSMServer.Core.Model
 
         public override BaseValue TrySetValue(string str) => this;
 
+        public override BaseValue TrySetValue(BaseValue value)
+        {
+            if (value is null)
+                return this;
+            
+            var currValue = (BarBaseValue<T>)value;
+            return this with
+            {
+                Min = currValue.Min,
+                Max = currValue.Max,
+                Count = currValue.Count,
+                LastValue = currValue.LastValue,
+                Mean = currValue.Mean,
+            };
+        }
+
         protected override bool IsEqual(BaseValue value) => false;
     }
 }
