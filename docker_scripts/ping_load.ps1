@@ -1,5 +1,5 @@
 $Version = $args[0]
-$Repository = "pawgyrocopter/hsmpingmodule"
+$Repository = "hsmonitoring/hsmpingmodule"
 $ExpectedImageTag = "${Repository}:$Version"
 
 Write-Host "Load image v.$Version"
