@@ -66,7 +66,8 @@ namespace HSMServer.Core.Model.Policies
             PolicyProperty.Value or PolicyProperty.Min or PolicyProperty.Max or PolicyProperty.Mean or
             PolicyProperty.LastValue when typeof(U) == typeof(double) => new PolicyExecutorNumber<double>(property),
 
-            PolicyProperty.Count => new PolicyExecutorInt(property),
+            PolicyProperty.Count when typeof(U) == typeof(int) => new PolicyExecutorInt(property),
+            PolicyProperty.Count when typeof(U) == typeof(double) => new PolicyExecutorDouble(property),
 
             PolicyProperty.Value when typeof(U) == typeof(TimeSpan) => new PolicyExecutorTimeSpan(),
 
