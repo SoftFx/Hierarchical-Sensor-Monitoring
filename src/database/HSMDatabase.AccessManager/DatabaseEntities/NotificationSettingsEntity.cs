@@ -4,7 +4,7 @@ namespace HSMDatabase.AccessManager.DatabaseEntities
 {
     public class NotificationSettingsEntity
     {
-        public TelegramSettingsEntity TelegramSettings { get; init; }
+        public TelegramSettingsEntityOld TelegramSettings { get; init; }
 
         public Dictionary<long, Dictionary<string, long>> PartiallyIgnored { get; init; }
 
@@ -14,9 +14,9 @@ namespace HSMDatabase.AccessManager.DatabaseEntities
     }
 
 
-    public sealed class TelegramSettingsEntity
+    public sealed class TelegramSettingsEntityOld
     {
-        public List<TelegramChatEntity> Chats { get; init; }
+        public List<TelegramChatEntityOld> Chats { get; init; }
 
         public byte MessagesMinStatus { get; init; }
 
@@ -28,7 +28,7 @@ namespace HSMDatabase.AccessManager.DatabaseEntities
     }
 
 
-    public sealed class TelegramChatEntity
+    public sealed class TelegramChatEntityOld
     {
         public byte[] SystemId { get; init; }
 

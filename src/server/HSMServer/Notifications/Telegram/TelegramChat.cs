@@ -23,7 +23,7 @@ namespace HSMServer.Notifications.Telegram
             SystemId = Guid.NewGuid();
         }
 
-        internal TelegramChat(TelegramChatEntity entity)
+        internal TelegramChat(TelegramChatEntityOld entity)
         {
             Id = new(entity.Id);
             SystemId = new Guid(entity.SystemId);
@@ -33,7 +33,7 @@ namespace HSMServer.Notifications.Telegram
         }
 
 
-        internal TelegramChatEntity ToEntity() =>
+        internal TelegramChatEntityOld ToEntity() =>
             new()
             {
                 SystemId = SystemId.ToByteArray(),

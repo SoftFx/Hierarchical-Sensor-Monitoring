@@ -31,7 +31,7 @@ namespace HSMServer.Notification.Settings
 
         public TelegramSettings() { }
 
-        internal TelegramSettings(TelegramSettingsEntity entity)
+        internal TelegramSettings(TelegramSettingsEntityOld entity)
         {
             if (entity == null)
                 return;
@@ -55,7 +55,7 @@ namespace HSMServer.Notification.Settings
             Inheritance = settingsUpdate.Inheritance ?? Inheritance;
         }
 
-        internal TelegramSettingsEntity ToEntity() =>
+        internal TelegramSettingsEntityOld ToEntity() =>
             new()
             {
                 MessagesMinStatus = (byte)MessagesMinStatus,
