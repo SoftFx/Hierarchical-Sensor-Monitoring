@@ -58,7 +58,7 @@ window.displayGraph = function (graphData, graphType, graphElementId, graphName)
     }
 
     var serviceButtonName = 'Show/Hide service status plot';
-    var heartBeatButtonName = 'Show/Hide service heart beat plot';
+    var heartBeatButtonName = 'Show/Hide service alive plot';
     var config = {
         responsive: true,
         displaylogo: false,
