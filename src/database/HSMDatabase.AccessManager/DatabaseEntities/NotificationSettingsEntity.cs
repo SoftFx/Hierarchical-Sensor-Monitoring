@@ -51,9 +51,9 @@ namespace HSMDatabase.AccessManager.DatabaseEntities
         public long Id { get; init; }
 
 
-        public Guid Author { get; init; }
-
         public string Name { get; init; }
+
+        public Guid Author { get; init; }
 
         public bool IsUserChat { get; init; }
 
@@ -64,7 +64,5 @@ namespace HSMDatabase.AccessManager.DatabaseEntities
         public bool MessagesAreEnabled { get; init; }
 
         public int MessagesAggregationTime { get; init; }
-
-        public bool AutoSubscription { get; init; } = true;
     }
 }

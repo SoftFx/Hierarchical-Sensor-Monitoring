@@ -23,6 +23,7 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
         private readonly byte[] _sensorIdsKey = "SensorIds"u8.ToArray();
         private readonly byte[] _policyIdsKey = "NewPolicyIds"u8.ToArray();
         private readonly byte[] _folderIdsKey = "FolderIds"u8.ToArray();
+        private readonly byte[] _telegramChatIdsKey = "TelegramChats"u8.ToArray();
 
         private readonly LevelDBDatabaseAdapter _database;
         private readonly Logger _logger;
@@ -573,6 +574,85 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
             }
 
             return users;
+        }
+
+        #endregion
+
+        #region Telegram chats
+
+        public List<byte[]> GetTelegramChatsList() => GetListOfBytes(_telegramChatIdsKey, "Failed to get telegram chats ids list");
+
+        public TelegramChatEntity GetTelegramChat(byte[] chatId)
+        {
+            try
+            {
+                return _database.TryRead(chatId, out byte[] value)
+                    ? JsonSerializer.Deserialize<TelegramChatEntity>(Encoding.UTF8.GetString(value))
+                    : null;
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, $"Failed to read info for telegram chat {new Guid(chatId)}");
+            }
+
+            return null;
+        }
+
+        public void AddTelegramChat(TelegramChatEntity chat)
+        {
+            try
+            {
+                _database.Put(chat.SystemId, JsonSerializer.SerializeToUtf8Bytes(chat));
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, $"Failed to add telegram chat info for {chat.SystemId}");
+            }
+        }
+
+        public void RemoveTelegramChat(byte[] chatId)
+        {
+            try
+            {
+                _database.Delete(chatId);
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, $"Failed to remove info for telegram chat {new Guid(chatId)}");
+            }
+        }
+
+        public void AddTelegramChatToList(byte[] chatId)
+        {
+            try
+            {
+                var currentList = GetTelegramChatsList();
+
+                if (!currentList.Contains(chatId))
+                    currentList.Add(chatId);
+
+                _database.Put(_telegramChatIdsKey, JsonSerializer.SerializeToUtf8Bytes(currentList));
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, "Failed to add telegram chat id to list");
+            }
+        }
+
+        public void RemoveTelegramChatFromList(byte[] chatId)
+        {
+            try
+            {
+                var currentList = GetTelegramChatsList();
+
+                currentList.Remove(chatId);
+
+                _database.Put(_telegramChatIdsKey, JsonSerializer.SerializeToUtf8Bytes(currentList));
+            }
+            catch (Exception e)
+            {
+                _logger.Error(e, $"Failed to remove telegram chat id {chatId} from list");
+            }
         }
 
         #endregion
