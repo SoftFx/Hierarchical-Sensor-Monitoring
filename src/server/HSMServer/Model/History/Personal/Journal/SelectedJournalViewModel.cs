@@ -97,29 +97,31 @@ public sealed class SelectedJournalViewModel : ConcurrentDictionary<Guid, Concur
         //    return _journals;
         //_tableFilters = filter;
 
-        var records = GetFilteredList(filter.Search.Value);
+        string FilterFunc(JournalRecordViewModel r, ColumnName type) => r[type];
+        DateTime FilterByDate(JournalRecordViewModel r) => r.Time;
+        var records = GetFilteredList(filter.Search.Value).OrderBy(x => 1);
+
+        IOrderedEnumerable<JournalRecordViewModel> Order(ColumnName type, bool asc) => type is ColumnName.Date ?
+            asc ? records.ThenBy(FilterByDate) : records.ThenByDescending(FilterByDate) : 
+            asc ? records.ThenBy(x => FilterFunc(x, type)) : records.ThenByDescending(x => FilterFunc(x, type));
 
         foreach (var order in filter.Order)
             if (Enum.TryParse<ColumnName>(filter.Columns[order.Column].Name, out var type))
-            {
-                var ascending = order.Dir == "asc";
+                records = Order(type, order.Dir == "asc");
 
-                string FilterFunc(JournalRecordViewModel r) => r[type];
-                DateTime FilterByDate(JournalRecordViewModel r) => r.Time;
-                records = (type is ColumnName.Date ?ascending ? records.OrderBy(FilterByDate) : records.OrderByDescending(FilterByDate) : ascending ? records.OrderBy(FilterFunc) : records.OrderByDescending(FilterFunc)).ToList();
-            }
+        var resultRecord = records.ToList();
 
-        return (records.Skip(filter.Start).Take(filter.Length), records.Count);
+        return (resultRecord.Skip(filter.Start).Take(filter.Length), resultRecord.Count);
     }
 
-    private List<JournalRecordViewModel> GetFilteredList(string search)
+    private IEnumerable<JournalRecordViewModel> GetFilteredList(string search)
     {
         bool Filter(JournalRecordViewModel record) => record.SearchValue.Contains(search, StringComparison.OrdinalIgnoreCase);
         bool EmptyFilter(JournalRecordViewModel _) => true;
 
         Func<JournalRecordViewModel, bool> filter = string.IsNullOrEmpty(search) ? EmptyFilter : Filter;
 
-        return Values.SelectMany(x => x.Where(filter)).ToList();
+        return Values.SelectMany(x => x.Where(filter));
     }
 
     private void SaveNewRecords(JournalRecordModel record)
