@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 
 namespace HSMDatabase.AccessManager.DatabaseEntities
 {
@@ -40,5 +41,30 @@ namespace HSMDatabase.AccessManager.DatabaseEntities
         public bool IsUserChat { get; init; }
 
         public long AuthorizationTime { get; init; }
+    }
+
+
+    public sealed class TelegramChatEntity
+    {
+        public byte[] SystemId { get; init; }
+
+        public long Id { get; init; }
+
+
+        public Guid Author { get; init; }
+
+        public string Name { get; init; }
+
+        public bool IsUserChat { get; init; }
+
+        public string Description { get; init; }
+
+        public long AuthorizationTime { get; init; }
+
+        public bool MessagesAreEnabled { get; init; }
+
+        public int MessagesAggregationTime { get; init; }
+
+        public bool AutoSubscription { get; init; } = true;
     }
 }
