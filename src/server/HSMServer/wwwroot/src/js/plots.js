@@ -339,7 +339,7 @@ export class EnumPlot extends Plot {
         this.customdata = [];
         this.isServiceStatus = isServiceStatus;
         this.hovertemplate = '%{customdata}<extra></extra>';
-        this.colorscale = [[0, '#FF0000'], [0.5, '#00FF00'], [1, 'blue']];
+        this.colorscale = [[0, '#FF0000'], [0.5, '#00FF00'], [1, 'grey']];
         this.zmin = 0;
         this.zmax = 1;
         this.showscale = false;
@@ -350,20 +350,54 @@ export class EnumPlot extends Plot {
 
     setUpData(data) {
         let currDate = new Date(new Date(Date.now()).toUTCString()).toISOString();
-        data.push({
-            time: currDate
-        })
-        for (let i = 0; i < data.length - 1; i++) {
-            this.x.push(data[i].time);
-            if (this.isServiceStatus) {
-                this.customdata.push(`${ServiceStatus[`${data[i].value}`][1]} <br> ${new Date(data[i].time).toUTCString()} - ${i + 1 >= data.length ? 'now' : new Date(data[i + 1].time).toUTCString()}`)
-                this.z.push(ServiceStatus[`${data[i].value}`][0] === ServiceStatus["4"][0] ? 0.5 : 0)
-            } else {
-                this.customdata.push(`${data[i].value === true ? ServiceStatus["4"][1] : ServiceStatus["1"][1]} <br> ${new Date(data[i].time).toUTCString()} - ${i + 1 >= data.length ? 'now' : new Date(data[i + 1].time).toUTCString()}`)
-                this.z.push(data[i].value === true ? 0.5 : 0);
+        // data.push({
+        //     time: currDate
+        // })
+        
+        let timeObject = {
+            beginTime: "",
+            endTime: "",
+
+            data: data,
+
+            getCustomString: function () {
+                return `${this.beginTime} - ${this.endTime}`;
+            },
+            
+            setUpTime: function (index){
+                this.beginTime = new Date(this.data[index].time).toUTCString();
+
+                if (this.data[index].lastReceivingTime !== null)
+                    this.endTime = new Date(this.data[index].lastReceivingTime).toUTCString()
+                else
+                {
+                    if (index + 1 < this.data.length)
+                        this.endTime = new Date(this.data[index + 1].time).toUTCString()
+                    else
+                        this.endTime = 'now';
+                }
             }
         }
-        this.x.push(currDate);
+        for (let i = 0; i < data.length; i++) {
+            timeObject.setUpTime(i);
+
+            this.x.push(data[i].lastReceivingTime ?? data[i].time);
+            if (this.isServiceStatus) {
+                this.customdata.push(`${ServiceStatus[`${data[i].value}`][1]} <br>`)
+                this.z.push(ServiceStatus[`${data[i].value}`][0] === ServiceStatus["4"][0] ? 0.5 : 0)
+            } else {
+                if (this.checkTtl(data[i])) {
+                    this.z.push(1);
+                    this.customdata.push(`${ServiceStatus["8"][1]} <br>`)
+                }
+                else {
+                    this.z.push(data[i].value === true ? 0.5 : 0);
+                    this.customdata.push(`${data[i].value === true ? ServiceStatus["4"][1] : ServiceStatus["1"][1]} <br>`)
+                }
+            }
+            
+            this.customdata[this.customdata.length - 1] += timeObject.getCustomString();
+        }
     }
 
     getPlotData(name = 'custom', minValue = 0, maxValue = 1) {

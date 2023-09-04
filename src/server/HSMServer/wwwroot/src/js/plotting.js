@@ -203,5 +203,6 @@ export const ServiceStatus = {
     5: ['#FFB403', 'Continue Pending'],
     6: ['#809EFF', 'Pause Pending'],
     7: ['#0314FF', 'Paused'],
+    8: ['#666699', 'Timeout'],
     0: ['#000000', 'Unknown']
 }
