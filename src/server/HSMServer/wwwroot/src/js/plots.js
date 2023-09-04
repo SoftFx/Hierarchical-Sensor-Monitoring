@@ -349,11 +349,6 @@ export class EnumPlot extends Plot {
     }
 
     setUpData(data) {
-        let currDate = new Date(new Date(Date.now()).toUTCString()).toISOString();
-        // data.push({
-        //     time: currDate
-        // })
-        
         let timeObject = {
             beginTime: "",
             endTime: "",
