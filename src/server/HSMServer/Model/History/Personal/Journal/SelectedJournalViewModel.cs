@@ -105,8 +105,8 @@ public sealed class SelectedJournalViewModel : ConcurrentDictionary<Guid, Concur
                 var ascending = order.Dir == "asc";
 
                 string FilterFunc(JournalRecordViewModel r) => r[type];
-
-                records = (ascending ? records.OrderBy(FilterFunc) : records.OrderByDescending(FilterFunc)).ToList();
+                DateTime FilterByDate(JournalRecordViewModel r) => r.Time;
+                records = (type is ColumnName.Date ?ascending ? records.OrderBy(FilterByDate) : records.OrderByDescending(FilterByDate) : ascending ? records.OrderBy(FilterFunc) : records.OrderByDescending(FilterFunc)).ToList();
             }
 
         return (records.Skip(filter.Start).Take(filter.Length), records.Count);
