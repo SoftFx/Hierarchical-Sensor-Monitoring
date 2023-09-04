@@ -99,7 +99,7 @@ public sealed class SelectedJournalViewModel : ConcurrentDictionary<Guid, Concur
 
         string FilterFunc(JournalRecordViewModel r, ColumnName type) => r[type];
         DateTime FilterByDate(JournalRecordViewModel r) => r.Time;
-        var records = GetFilteredList(filter.Search.Value).OrderBy(x => 1);
+        var records = GetOrderedRecords(filter.Search.Value);
 
         IOrderedEnumerable<JournalRecordViewModel> Order(ColumnName type, bool asc) => type is ColumnName.Date ?
             asc ? records.ThenBy(FilterByDate) : records.ThenByDescending(FilterByDate) : 
@@ -109,19 +109,19 @@ public sealed class SelectedJournalViewModel : ConcurrentDictionary<Guid, Concur
             if (Enum.TryParse<ColumnName>(filter.Columns[order.Column].Name, out var type))
                 records = Order(type, order.Dir == "asc");
 
-        var resultRecord = records.ToList();
+        var resultRecords = records.ToList();
 
-        return (resultRecord.Skip(filter.Start).Take(filter.Length), resultRecord.Count);
+        return (resultRecords.Skip(filter.Start).Take(filter.Length), resultRecords.Count);
     }
 
-    private IEnumerable<JournalRecordViewModel> GetFilteredList(string search)
+    private IOrderedEnumerable<JournalRecordViewModel> GetOrderedRecords(string search)
     {
         bool Filter(JournalRecordViewModel record) => record.SearchValue.Contains(search, StringComparison.OrdinalIgnoreCase);
         bool EmptyFilter(JournalRecordViewModel _) => true;
 
         Func<JournalRecordViewModel, bool> filter = string.IsNullOrEmpty(search) ? EmptyFilter : Filter;
 
-        return Values.SelectMany(x => x.Where(filter));
+        return Values.SelectMany(x => x.Where(filter)).OrderBy(x => 1);
     }
 
     private void SaveNewRecords(JournalRecordModel record)
