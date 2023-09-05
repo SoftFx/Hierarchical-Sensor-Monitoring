@@ -71,6 +71,7 @@ internal sealed class ServiceConfig
     {
         CollectorSettings = Read<CollectorSettings>(nameof(CollectorSettings));
         ResourceSettings = Read<ResourceSettings>(nameof(ResourceSettings)).ApplyDefaultSettings();
+
         _logger.Log(new LogEventInfo(LogLevel.Debug, "Collector key:", $"{CollectorSettings.Key}"));
         _logger.Log(new LogEventInfo(LogLevel.Debug, "Collector port:", $"{CollectorSettings.Port}"));
         _logger.Log(new LogEventInfo(LogLevel.Debug, "Server address:", $"{CollectorSettings.ServerAddress}"));

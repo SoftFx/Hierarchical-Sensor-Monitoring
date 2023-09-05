@@ -1,5 +1,4 @@
 using HSMDataCollector.Alerts;
-using HSMDataCollector.Extensions;
 using HSMDataCollector.Options;
 using HSMSensorDataObjects.SensorRequests;
 
@@ -11,19 +10,22 @@ internal sealed class WebSite
 
     public TimeSpan? TTL { get; set; }
 
+
     public int? PingTimeoutValue { get; set; }
-    
+
     public int? PingDelay { get; set; }
+
 
     public InstantSensorOptions GetOptions => new()
     {
         TTL = TTL,
-        TtlAlert = AlertsFactory.IfInactivityPeriodIs().ThenSetIcon(AlertIcon.Clock.ToUtf8()).AndSendNotification("$product $path test").Build(),
+        SensorUnit = Unit.Seconds,
+
+        TtlAlert = AlertsFactory.IfInactivityPeriodIs().ThenSetIcon(AlertIcon.Clock).AndSendNotification("$product $path test").Build(),
         Alerts = new List<InstantAlertTemplate>()
         {
-            AlertsFactory.IfValue(AlertOperation.GreaterThan, PingTimeoutValue).ThenSetIcon(AlertIcon.Warning.ToUtf8()).AndSendNotification("$product $path ping timeout").Build(),
-            AlertsFactory.IfStatus(AlertOperation.IsError).ThenSetIcon("❌").Build()
+            AlertsFactory.IfValue(AlertOperation.GreaterThan, PingTimeoutValue).ThenSetIcon(AlertIcon.Warning).AndSendNotification("$product $path ping timeout").Build(),
+            AlertsFactory.IfStatus(AlertOperation.IsError).ThenSetIcon(AlertIcon.Error).Build(),
         },
-        SensorUnit = Unit.Seconds
     };
 }
