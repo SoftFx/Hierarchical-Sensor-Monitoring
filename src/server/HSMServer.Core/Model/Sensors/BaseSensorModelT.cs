@@ -31,14 +31,17 @@ namespace HSMServer.Core.Model
 
             if (canStore)
             {
+                var isNewValue = true;
+
                 if (AggregateValues)
-                    Storage.AggregateValue(valueT);
+                    isNewValue &= !Storage.TryAggregateValue(valueT);
                 else
                     Storage.AddValue(valueT);
 
                 Policies.SensorTimeout(valueT);
 
-                ReceivedNewValue?.Invoke(valueT);
+                if (isNewValue)
+                    ReceivedNewValue?.Invoke(valueT);
             }
 
             return canStore;
