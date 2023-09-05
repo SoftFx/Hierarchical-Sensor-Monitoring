@@ -7,6 +7,7 @@ using HSMServer.Core.Model;
 using HSMServer.Core.Model.HistoryValues;
 using HSMServer.Core.Model.Policies;
 using HSMServer.Core.Model.Requests;
+using HSMServer.Core.TableOfChanges;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -26,6 +27,7 @@ namespace HSMServer.ApiObjectsConverters
                 Value = value.Value
             };
 
+
         public static IntegerValue Convert(this IntSensorValue value) =>
             new()
             {
@@ -34,6 +36,7 @@ namespace HSMServer.ApiObjectsConverters
                 Status = value.Status.Convert(),
                 Value = value.Value
             };
+
 
         public static DoubleValue Convert(this DoubleSensorValue value) =>
             new()
@@ -44,6 +47,7 @@ namespace HSMServer.ApiObjectsConverters
                 Value = value.Value
             };
 
+
         public static StringValue Convert(this StringSensorValue value) =>
             new()
             {
@@ -53,6 +57,7 @@ namespace HSMServer.ApiObjectsConverters
                 Value = value.Value
             };
 
+
         public static TimeSpanValue Convert(this TimeSpanSensorValue value) =>
             new()
             {
@@ -61,6 +66,7 @@ namespace HSMServer.ApiObjectsConverters
                 Status = value.Status.Convert(),
                 Value = value.Value
             };
+
 
         public static VersionValue Convert(this VersionSensorValue value)
         {
@@ -73,6 +79,7 @@ namespace HSMServer.ApiObjectsConverters
             };
         }
 
+
         public static FileValue Convert(this FileSensorValue value) =>
             new()
             {
@@ -84,6 +91,7 @@ namespace HSMServer.ApiObjectsConverters
                 Extension = value.Extension,
                 OriginalSize = value.Value?.Count ?? 0L
             };
+
 
         public static IntegerBarValue Convert(this IntBarSensorValue value) =>
             new()
@@ -101,6 +109,7 @@ namespace HSMServer.ApiObjectsConverters
                 Percentiles = value.Percentiles ?? new(),
             };
 
+
         public static DoubleBarValue Convert(this DoubleBarSensorValue value) =>
             new()
             {
@@ -116,6 +125,7 @@ namespace HSMServer.ApiObjectsConverters
                 LastValue = value.LastValue,
                 Percentiles = value.Percentiles ?? new(),
             };
+
 
         public static BaseValue Convert(this SensorValueBase value) =>
             value switch
@@ -133,7 +143,6 @@ namespace HSMServer.ApiObjectsConverters
             };
 
 
-
         public static SimpleSensorHistory Convert<T>(this BaseValue<T> value) =>
             new()
             {
@@ -142,6 +151,7 @@ namespace HSMServer.ApiObjectsConverters
                 Status = value.Status.ToString(),
                 Value = value.Value.ToString(),
             };
+
 
         public static FileSensorHistory Convert(this FileValue fileValue)
         {
@@ -157,6 +167,7 @@ namespace HSMServer.ApiObjectsConverters
                 Extension = value.Extension
             };
         }
+
 
         public static BarSensorHistory Convert<T>(this BarBaseValue<T> value) where T : INumber<T> =>
             new()
@@ -174,6 +185,7 @@ namespace HSMServer.ApiObjectsConverters
                 Percentiles = value.Percentiles?.Select(p => new PercentileValue { Percentile = p.Key, Value = p.Value.ToString() }).ToList() ?? new(),
             };
 
+
         public static object Convert(this BaseValue value) =>
             value switch
             {
@@ -186,6 +198,7 @@ namespace HSMServer.ApiObjectsConverters
                 FileValue sv => sv.Convert(),
                 _ => null,
             };
+
 
         public static List<object> Convert(this List<BaseValue> values)
         {
@@ -212,8 +225,11 @@ namespace HSMServer.ApiObjectsConverters
             };
 
 
-        public static SensorUpdate Convert(this AddOrUpdateSensorRequest request, Guid sensorId, string keyName) =>
-            new()
+        public static SensorUpdate Convert(this AddOrUpdateSensorRequest request, Guid sensorId, Dictionary<Guid, string> allChats, string keyName)
+        {
+            var initiator = InitiatorInfo.AsCollector(keyName, request.IsForceUpdate);
+
+            return new()
             {
                 Id = sensorId,
                 Description = request.Description,
@@ -223,16 +239,17 @@ namespace HSMServer.ApiObjectsConverters
                 KeepHistory = request.KeepHistory.ToTimeInterval(),
                 SelfDestroy = request.SelfDestroy.ToTimeInterval(),
                 TTL = request.TTL.ToTimeInterval(),
-                TTLPolicy = request.TtlAlert?.Convert(keyName),
-                Policies = request.Alerts?.Select(policy => policy.Convert(keyName)).ToList(),
-                Initiator = $"Datacollector ({keyName})",
+                TTLPolicy = request.TtlAlert?.Convert(allChats, initiator),
+                Policies = request.Alerts?.Select(policy => policy.Convert(allChats, initiator)).ToList(),
+                Initiator = initiator,
             };
+        }
 
 
-        public static PolicyUpdate Convert(this AlertUpdateRequest request, string keyName) => new()
+        public static PolicyUpdate Convert(this AlertUpdateRequest request, Dictionary<Guid, string> allChats, InitiatorInfo initiator) => new()
         {
             Conditions = request.Conditions?.Select(c => c.Convert()).ToList(),
-            Destination = new PolicyDestinationUpdate(),
+            Destination = new PolicyDestinationUpdate(true, allChats),
             Sensitivity = request.Sensitivity.ToTimeInterval(),
 
             Id = Guid.Empty,
@@ -240,7 +257,7 @@ namespace HSMServer.ApiObjectsConverters
             Template = request.Template,
             Icon = request.Icon,
             IsDisabled = request.IsDisabled,
-            Initiator = $"Datacollector ({keyName})",
+            Initiator = initiator,
         };
 
 
@@ -256,29 +273,6 @@ namespace HSMServer.ApiObjectsConverters
             return !ticks.HasValue ? null : ticks.Value == TimeSpan.MaxValue.Ticks ? new TimeIntervalModel(TimeInterval.None) : new(ticks.Value);
         }
 
-
-        public static SensorValueBase CreateNewSensorValue(SensorType sensorType) => sensorType switch
-        {
-            SensorType.Boolean => new BoolSensorValue(),
-            SensorType.IntegerBar => new IntBarSensorValue(),
-            SensorType.DoubleBar => new DoubleBarSensorValue(),
-            SensorType.Double => new DoubleSensorValue(),
-            SensorType.Integer => new IntSensorValue(),
-            SensorType.String => new StringSensorValue(),
-            SensorType.File => new FileSensorValue(),
-            SensorType.TimeSpan => new TimeSpanSensorValue(),
-            SensorType.Version => new VersionSensorValue(),
-            _ => null
-        };
-
-        public static ApiSensorStatus ToApi(this Model.TreeViewModel.SensorStatus status) =>
-            status switch
-            {
-                Model.TreeViewModel.SensorStatus.Ok => ApiSensorStatus.Ok,
-                Model.TreeViewModel.SensorStatus.Error => ApiSensorStatus.Error,
-                Model.TreeViewModel.SensorStatus.OffTime => ApiSensorStatus.OffTime,
-                _ => ApiSensorStatus.Ok,
-            };
 
         public static SensorType Convert(this HSMSensorDataObjects.SensorType type) =>
             type switch
@@ -305,6 +299,7 @@ namespace HSMServer.ApiObjectsConverters
                 _ => SensorStatus.Ok
             };
 
+
         private static PolicyProperty Convert(this AlertProperty property) =>
             property switch
             {
@@ -318,6 +313,7 @@ namespace HSMServer.ApiObjectsConverters
                 AlertProperty.LastValue => PolicyProperty.LastValue,
                 _ => throw new NotImplementedException(),
             };
+
 
         private static PolicyOperation Convert(this AlertOperation operation) =>
             operation switch
@@ -334,6 +330,7 @@ namespace HSMServer.ApiObjectsConverters
                 _ => throw new NotImplementedException(),
             };
 
+
         private static Core.Model.Policies.TargetType Convert(this HSMSensorDataObjects.SensorRequests.TargetType target) =>
             target switch
             {
@@ -342,6 +339,7 @@ namespace HSMServer.ApiObjectsConverters
                 _ => throw new NotImplementedException(),
             };
 
+
         private static PolicyCombination Convert(this AlertCombination combination) =>
             combination switch
             {
@@ -349,6 +347,7 @@ namespace HSMServer.ApiObjectsConverters
                 AlertCombination.Or => PolicyCombination.Or,
                 _ => throw new NotImplementedException(),
             };
+
 
         private static Core.Model.Unit Convert(this HSMSensorDataObjects.SensorRequests.Unit unit) =>
             unit switch

@@ -11,77 +11,77 @@
 
 
 <div id="alertLabel_@Model.Id" class="ms-3 @(Model.IsModify ? "d-none" : string.Empty) @(Model.IsDisabled ? "disabledAlertLabel" : string.Empty)">
-    <span>If</span>
-    @for (int i = 0; i < Model.Conditions.Count; ++i)
+    @if (Model.IsAlertDisplayed)
     {
-        var condition = Model.Conditions[i];
-
-        @if (i > 0)
+        <span>If</span>
+        @for (int i = 0; i < Model.Conditions.Count; ++i)
         {
-            <span>and</span>
-        }
+            var condition = Model.Conditions[i];
 
-        <span>
-            @if (condition.Property == AlertProperty.TimeToLive)
-            {
-                <b>Inactivity period is @condition.TimeToLive.DisplayValue</b>
-            }
-            else if (condition.Property == AlertProperty.Sensitivity)
-            {
-                <b>Sensitivity is more than @condition.Sensitivity.DisplayValue</b>
-            }
-            else
-            {
-                <b>@condition.Property @condition.Operation.GetDisplayName()</b>
-                @if (condition.Property is not (AlertProperty.Status or AlertProperty.Comment))
-                {
-                    <b>@condition.Target</b>
-                }
-            }
-        </span>
-    }
-
-    @{
-        var actions = new List<HtmlString>();
-    }
-
-    @foreach (var action in Model.Actions)
-    {
-        @if (action.Action == ActionType.SendNotification && action.Chats.Count > 0)
-        {
-            actions.Add(new HtmlString($"<span>send notification <i>{action.DisplayComment}</i> at </span><span style='color: #0366d6;'>{(action.Chats.ContainsKey(ActionViewModel.AllChatsId) ? "all chats" : string.Join(", ", action.Chats.Values))}</span>"));
-        }
-        else if (action.Action == ActionType.ShowIcon)
-        {
-            actions.Add(new HtmlString($"<span>show icon {action.Icon}</span>"));
-        }
-        else if (action.Action == ActionType.SetStatus)
-        {
-            actions.Add(new HtmlString($"<span>{ActionViewModel.SetErrorStatus}</span>"));
-        }
-    }
-
-    <span>then</span>
-    @if (actions.Count > 0)
-    {
-        @for (int i = 0; i < actions.Count; ++i)
-        {
             @if (i > 0)
             {
                 <span>and</span>
             }
 
-            @Html.Raw(actions[i]);
+            <span>
+                @if (condition.Property == AlertProperty.TimeToLive)
+                {
+                    <b>Inactivity period is @condition.TimeToLive.DisplayValue</b>
+                }
+                else if (condition.Property == AlertProperty.Sensitivity)
+                {
+                    <b>Sensitivity is more than @condition.Sensitivity.DisplayValue</b>
+                }
+                else
+                {
+                    <b>@condition.Property @condition.Operation.GetDisplayName()</b>
+                    @if (condition.Property is not (AlertProperty.Status or AlertProperty.Comment))
+                    {
+                        <b>@condition.Target</b>
+                    }
+                }
+            </span>
         }
-    }
-    else
-    {
-        <span>... (<i>add any action</i>)</span>
-    }
 
-    @if (Model.IsDisabled)
-    {
-        <span style="opacity:1; text-decoration:none"><b>(disabled)</b></span>
+        var actions = new List<HtmlString>();
+        @foreach (var action in Model.Actions)
+        {
+            @if (action.Action == ActionType.SendNotification && action.Chats.Count > 0)
+            {
+                actions.Add(new HtmlString($"<span>send notification <i>{action.DisplayComment}</i> to </span><span style='color: #0366d6;'>{(action.Chats.ContainsKey(ActionViewModel.AllChatsId) ? "all chats" : string.Join(", ", action.Chats.Values))}</span>"));
+            }
+            else if (action.Action == ActionType.ShowIcon)
+            {
+                actions.Add(new HtmlString($"<span>show icon {action.Icon}</span>"));
+            }
+            else if (action.Action == ActionType.SetStatus)
+            {
+                actions.Add(new HtmlString($"<span>{ActionViewModel.SetErrorStatus}</span>"));
+            }
+        }
+
+        <span>then</span>
+        @if (actions.Count > 0)
+        {
+            @for (int i = 0; i < actions.Count; ++i)
+            {
+                @if (i > 0)
+                {
+                    <span>and</span>
+                }
+
+                @Html.Raw(actions[i]);
+            }
+        }
+        else
+        {
+            <span>... (<i>add any action</i>)</span>
+        }
+
+        @if (Model.IsDisabled)
+        {
+            <span style="opacity:1; text-decoration:none"><b>(disabled)</b></span>
+        }
     }
 </div>
 

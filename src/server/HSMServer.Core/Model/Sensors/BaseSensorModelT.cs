@@ -6,7 +6,7 @@ using System.Linq;
 
 namespace HSMServer.Core.Model
 {
-    public abstract class BaseSensorModel<T> : BaseSensorModel where T : BaseValue
+    public abstract class BaseSensorModel<T> : BaseSensorModel where T : BaseValue, new()
     {
         public override SensorPolicyCollection<T> Policies { get; }
 
@@ -31,17 +31,35 @@ namespace HSMServer.Core.Model
 
             if (canStore)
             {
+                var isNewValue = true;
+
                 if (AggregateValues)
-                    Storage.AggregateValue(valueT);
+                    isNewValue &= !Storage.TryAggregateValue(valueT);
                 else
                     Storage.AddValue(valueT);
 
                 Policies.SensorTimeout(valueT);
 
-                ReceivedNewValue?.Invoke(valueT);
+                if (isNewValue)
+                    ReceivedNewValue?.Invoke(valueT);
             }
 
             return canStore;
+        }
+
+        internal override bool TryUpdateLastValue(BaseValue value, bool changeLast = false)
+        {
+            if (Storage.TryChangeLastValue(value, changeLast))
+            {
+                var isLastValue = Storage.LastValue is null || value.Time >= Storage.LastValue.Time;
+                var canStore = Policies.TryValidate(value, out _, isLastValue);
+
+                ReceivedNewValue?.Invoke(value);
+
+                return canStore;
+            }
+
+            return false;
         }
 
 

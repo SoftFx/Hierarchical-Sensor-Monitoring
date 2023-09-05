@@ -42,6 +42,9 @@ namespace HSMDataCollector.Options
         public bool? EnableForGrafana { get; set; }
 
         public bool? AggregateData { get; set; }
+
+
+        public bool IsForceUpdate { get; set; } // if true then DataCollector can chage user settings
     }
 
 

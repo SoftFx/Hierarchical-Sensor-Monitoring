@@ -48,5 +48,8 @@ namespace HSMSensorDataObjects.SensorRequests
         public bool? EnableGrafana { get; set; }
 
         public Unit? OriginalUnit { get; set; }
+
+
+        public bool IsForceUpdate { get; set; } // if true then DataCollector can chage user settings
     }
 }

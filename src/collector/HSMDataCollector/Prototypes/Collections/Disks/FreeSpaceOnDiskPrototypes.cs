@@ -3,6 +3,7 @@ using HSMDataCollector.Extensions;
 using HSMDataCollector.Options;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.SensorRequests;
+using System.Collections.Generic;
 
 namespace HSMDataCollector.Prototypes
 {
@@ -19,9 +20,12 @@ namespace HSMDataCollector.Prototypes
         {
             var options = base.Get(customOptions);
 
-            options.Alerts.Add(AlertsFactory.IfValue(AlertOperation.LessThanOrEqual, 5.GigobytesToMegabytes())
-                                            .ThenSendNotification($"[$product] {SensorName} is running out. Current free space is $value {options.SensorUnit}")
-                                            .AndSetIcon(AlertIcon.ArrowDown).AndSetSensorError().Build());
+            options.Alerts = new List<InstantAlertTemplate>()
+            {
+                AlertsFactory.IfValue(AlertOperation.LessThanOrEqual, 5.GigobytesToMegabytes())
+                             .ThenSendNotification($"[$product] {SensorName} is running out. Current free space is $value {options.SensorUnit}")
+                             .AndSetIcon(AlertIcon.ArrowDown).AndSetSensorError().Build()
+            };
 
             return options;
         }

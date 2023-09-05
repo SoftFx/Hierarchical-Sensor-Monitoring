@@ -1,5 +1,6 @@
 using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Core.Model;
+using HSMServer.Core.TableOfChanges;
 using HSMServer.Core.Tests.Infrastructure;
 
 namespace HSMDatabase.LevelDB.Tests.JournalDBTests;
@@ -18,7 +19,7 @@ internal static class JournalFactory
         new(id ?? Guid.NewGuid(), time ?? RandomGenerator.GetRandomInt(), type ?? default);
 
 
-    internal static JournalRecordModel GetRecord(Guid id, string initiator = "System") => new(id, initiator)
+    internal static JournalRecordModel GetRecord(Guid id, InitiatorInfo initiator = null) => new(id, initiator)
     {
         PropertyName = RandomGenerator.GetRandomString(),
         OldValue = RandomGenerator.GetRandomString(),

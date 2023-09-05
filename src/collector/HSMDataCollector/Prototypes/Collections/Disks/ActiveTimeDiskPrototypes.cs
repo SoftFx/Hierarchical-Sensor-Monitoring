@@ -3,6 +3,7 @@ using HSMDataCollector.DefaultSensors.SystemInfo;
 using HSMDataCollector.Options;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.SensorRequests;
+using System.Collections.Generic;
 
 namespace HSMDataCollector.Prototypes.Collections.Disks
 {
@@ -21,9 +22,12 @@ namespace HSMDataCollector.Prototypes.Collections.Disks
             Type = SensorType.DoubleBarSensor;
             SensorUnit = Unit.Percents;
 
-            Alerts.Add(AlertsFactory.IfMean(AlertOperation.GreaterThanOrEqual, 80)
-                                    .ThenSendNotification("[$product]$path $property $operation $target%")
-                                    .AndSetIcon(AlertIcon.Warning).Build());
+            Alerts = new List<BarAlertTemplate>()
+            {
+                AlertsFactory.IfMean(AlertOperation.GreaterThanOrEqual, 80)
+                             .ThenSendNotification("[$product]$path $property $operation $target%")
+                             .AndSetIcon(AlertIcon.Warning).Build()
+            };
         }
 
 

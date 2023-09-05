@@ -10,10 +10,10 @@ namespace HSMServer.Core.Model.Policies
     {
         public Dictionary<Guid, string> Chats { get; } = new();
 
-        public bool AllChats { get; set; } // TODO: should be private set after policies destination migration
+        public bool AllChats { get; private set; }
 
 
-        public PolicyDestination() { } // TODO: should be internal after policies destination migration
+        internal PolicyDestination() { }
 
         internal PolicyDestination(PolicyDestinationEntity entity)
         {
@@ -31,8 +31,9 @@ namespace HSMServer.Core.Model.Policies
             AllChats = update.AllChats;
             Chats.Clear();
 
-            foreach (var (chatId, name) in update.Chats)
-                Chats.Add(chatId, name);
+            if (update.Chats is not null)
+                foreach (var (chatId, name) in update.Chats)
+                    Chats.Add(chatId, name);
         }
 
         internal PolicyDestinationEntity ToEntity() => new()

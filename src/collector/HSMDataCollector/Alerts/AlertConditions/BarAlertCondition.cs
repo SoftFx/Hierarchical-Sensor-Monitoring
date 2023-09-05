@@ -30,5 +30,11 @@ namespace HSMDataCollector.Alerts
             BuildCondition(AlertProperty.LastValue, operation, target.ToString());
             return this;
         }
+
+        public BarAlertCondition AndCount(AlertOperation operation, int target)
+        {
+            BuildCondition(AlertProperty.Count, operation, target.ToString());
+            return this;
+        }
     }
 }

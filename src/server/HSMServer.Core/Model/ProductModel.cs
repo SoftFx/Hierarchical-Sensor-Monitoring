@@ -101,6 +101,7 @@ namespace HSMServer.Core.Model
             Policies = Policies.Ids.Select(u => $"{u}").ToList(),
             Settings = Settings.ToEntity(),
             TTLPolicy = Policies.TimeToLive?.ToEntity(),
+            ChangeTable = ChangeTable.ToEntity(),
         };
 
 
@@ -108,15 +109,16 @@ namespace HSMServer.Core.Model
         {
             static void UpdateTTLPolicy(ProductModel model, PolicyUpdate update)
             {
-                model.Policies.TimeToLive.Update(update);
+                model.Policies.UpdateTTL(update);
 
                 foreach (var (_, subProduct) in model.SubProducts)
-                    UpdateTTLPolicy(subProduct, update);
+                    if (!subProduct.Settings.TTL.IsSet)
+                        UpdateTTLPolicy(subProduct, update);
 
                 foreach (var (_, sensor) in model.Sensors)
                     if (!sensor.Settings.TTL.IsSet)
                     {
-                        sensor.Policies.TimeToLive.Update(update);
+                        sensor.Policies.UpdateTTL(update);
                         sensor.UpdateFromParentSettings?.Invoke(sensor.ToEntity());
                     }
             }

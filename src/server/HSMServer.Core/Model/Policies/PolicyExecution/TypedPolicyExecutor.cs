@@ -9,11 +9,19 @@ namespace HSMServer.Core.Model.Policies
     }
 
 
-    internal sealed class PolicyExecutorNumber<T> : PolicyExecutorSimple<T> where T : INumber<T>
+    internal abstract class PolicyExecutorNumberBase<T> : PolicyExecutorSimple<T> where T : INumber<T>
     {
-        private readonly Func<BaseValue, T> _getCheckedValue;
+        protected Func<BaseValue, T> _getCheckedValue;
 
 
+        protected override Func<T, T, bool> GetTypedOperation(PolicyOperation operation) => PolicyExecutorBuilder.GetNumberOperation<T>(operation);
+
+        protected override T GetCheckedValue(BaseValue value) => _getCheckedValue(value);
+    }
+
+
+    internal sealed class PolicyExecutorNumber<T> : PolicyExecutorNumberBase<T> where T : INumber<T>
+    {
         internal PolicyExecutorNumber(PolicyProperty property)
         {
             _getCheckedValue = property switch
@@ -23,14 +31,34 @@ namespace HSMServer.Core.Model.Policies
                 PolicyProperty.Max => v => ((BarBaseValue<T>)v).Max,
                 PolicyProperty.Mean => v => ((BarBaseValue<T>)v).Mean,
                 PolicyProperty.LastValue => v => ((BarBaseValue<T>)v).LastValue,
-                _ => throw new NotImplementedException($"Invalid property {property} fro {nameof(PolicyExecutorNumber<T>)}")
+                _ => throw new NotImplementedException($"Invalid property {property} for {nameof(PolicyExecutorNumber<T>)}")
             };
         }
+    }
 
 
-        protected override Func<T, T, bool> GetTypedOperation(PolicyOperation operation) => PolicyExecutorBuilder.GetNumberOperation<T>(operation);
+    internal sealed class PolicyExecutorInt : PolicyExecutorNumberBase<int>
+    {
+        internal PolicyExecutorInt(PolicyProperty property)
+        {
+            _getCheckedValue = property switch
+            {
+                PolicyProperty.Count => v => ((BarBaseValue)v).Count,
+                _ => throw new NotImplementedException($"Invalid property {property} for {nameof(PolicyExecutorInt)}")
+            };
+        }
+    }
 
-        protected override T GetCheckedValue(BaseValue value) => _getCheckedValue(value);
+    internal sealed class PolicyExecutorDouble : PolicyExecutorNumberBase<double>
+    {
+        internal PolicyExecutorDouble(PolicyProperty property)
+        {
+            _getCheckedValue = property switch
+            {
+                PolicyProperty.Count => v => ((BarBaseValue)v).Count,
+                _ => throw new NotImplementedException($"Invalid property {property} for {nameof(PolicyExecutorDouble)}")
+            };
+        }
     }
 
 

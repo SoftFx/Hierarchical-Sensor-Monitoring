@@ -27,13 +27,17 @@ namespace HSMServer.Core.Model
 
         internal abstract List<BaseValue> GetValues(int count);
 
+        internal abstract bool TryChangeLastValue(BaseValue value, bool changeLast = false);
+
+        internal abstract BaseValue GetEmptyValue();
+
         internal abstract void Clear(DateTime to);
 
         internal abstract void Clear();
     }
 
 
-    public abstract class ValuesStorage<T> : ValuesStorage where T : BaseValue
+    public abstract class ValuesStorage<T> : ValuesStorage where T : BaseValue, new()
     {
         private readonly ConcurrentQueue<T> _cache = new();
 
@@ -70,11 +74,34 @@ namespace HSMServer.Core.Model
             }
         }
 
+        internal override bool TryChangeLastValue(BaseValue value, bool changeLast = false)
+        {
+            if (!changeLast)
+            {
+                AddValue((T)value);
+                return true;
+            }
 
-        internal virtual void AggregateValue(T value)
+            if (_cache.TryDequeue(out _) || _cache.IsEmpty)
+            {
+                AddValue((T)value);
+                return true;
+            }
+
+            return false;
+        }
+
+        internal override BaseValue GetEmptyValue() => new T();
+
+        internal bool TryAggregateValue(T value)
         {
             if (LastValue is null || LastTimeout?.ReceivingTime > LastValue.ReceivingTime || !LastValue.TryAggregateValue(value))
+            {
                 AddValue(value);
+                return false;
+            }
+
+            return true;
         }
 
 

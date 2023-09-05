@@ -49,8 +49,6 @@ namespace HSMServer.Core.Model
 
 
         private static readonly SensorResult _muteResult = new(SensorStatus.OffTime, "Muted");
-        private readonly PolicyEntity _ttlEntity;
-
 
         public override SensorPolicyCollection Policies { get; }
 
@@ -105,8 +103,6 @@ namespace HSMServer.Core.Model
 
         public BaseSensorModel(SensorEntity entity) : base(entity)
         {
-            _ttlEntity = entity.TTLPolicy;
-
             State = (SensorState)entity.State;
             OriginalUnit = (Unit?)entity.OriginalUnit;
             Integration = (Integration)entity.Integration;
@@ -123,30 +119,24 @@ namespace HSMServer.Core.Model
 
         internal abstract void AddDbValue(byte[] bytes);
 
+        internal abstract bool TryUpdateLastValue(BaseValue value, bool changeLast = false);
+
 
         internal abstract IEnumerable<BaseValue> Convert(List<byte[]> valuesBytes);
 
         internal abstract BaseValue Convert(byte[] bytes);
 
 
-        internal override BaseNodeModel AddParent(ProductModel parent)
-        {
-            base.AddParent(parent);
-
-            Policies.BuildDefault(this, _ttlEntity); //need for correct calculating $product and $path properties
-
-            return this;
-        }
-
         internal void Update(SensorUpdate update)
         {
             base.Update(update);
 
-            State = UpdateProperty(State, update.State ?? State, update.Initiator);
             Integration = UpdateProperty(Integration, update.Integration ?? Integration, update.Initiator);
-            EndOfMuting = UpdateProperty(EndOfMuting, update.EndOfMutingPeriod, update.Initiator, "End of muting");
             OriginalUnit = UpdateProperty(OriginalUnit, update.SelectedUnit ?? OriginalUnit, update.Initiator, "Unit");
             AggregateValues = UpdateProperty(AggregateValues, update.SaveOnlyUniqueValues ?? AggregateValues, update.Initiator, "Save only unique values");
+
+            State = UpdateProperty(State, update.State ?? State, update.Initiator, forced: true);
+            EndOfMuting = UpdateProperty(EndOfMuting, update.EndOfMutingPeriod, update.Initiator, "End of muting", true);
 
             if (State == SensorState.Available)
                 EndOfMuting = null;
@@ -178,6 +168,7 @@ namespace HSMServer.Core.Model
             EndOfMuting = EndOfMuting?.Ticks ?? 0L,
             Settings = Settings.ToEntity(),
             TTLPolicy = Policies.TimeToLive?.ToEntity(),
+            ChangeTable = ChangeTable.ToEntity(),
         };
     }
 }

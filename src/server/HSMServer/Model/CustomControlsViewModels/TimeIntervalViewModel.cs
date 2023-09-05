@@ -5,7 +5,6 @@ using HSMServer.Extensions;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Reflection;
 using CoreTimeInterval = HSMServer.Core.Model.TimeInterval;
 
@@ -24,14 +23,15 @@ namespace HSMServer.Model
         private string _customString;
 
 
-        private TimeIntervalViewModel ParentValue => _parentRequest?.Invoke().Value;
-
         private bool HasParentValue => ParentValue is not null;
 
         private bool HasFolder => _parentRequest?.Invoke().IsFolder ?? false;
 
 
         internal delegate (TimeIntervalViewModel Value, bool IsFolder) ParentRequest();
+
+
+        internal TimeIntervalViewModel ParentValue => _parentRequest?.Invoke().Value;
 
 
         public List<SelectListItem> IntervalItems { get; }
@@ -49,7 +49,7 @@ namespace HSMServer.Model
             {
                 var used = GetUsedValue(this);
 
-                return TimeInterval.IsParent() ? $"From parent ({used})" : used;
+                return TimeInterval.IsParent() ? TimeInterval.ToFromParentDisplay(used) : used;
             }
         }
 
@@ -105,7 +105,7 @@ namespace HSMServer.Model
 
         internal TimeIntervalViewModel(HashSet<TimeInterval> intervals, ParentRequest request = null, bool useCustomTemplate = true) : this(request)
         {
-            string KeyBuilder(TimeInterval interval) => interval.IsParent() ? $"From parent ({GetUsedValue(ParentValue)})" : interval.GetDisplayName();
+            string KeyBuilder(TimeInterval interval) => interval.IsParent() ? interval.ToFromParentDisplay(GetUsedValue(ParentValue)) : interval.GetDisplayName();
 
             IntervalItems = intervals.ToSelectedItems(KeyBuilder);
             UseCustomInputTemplate = useCustomTemplate;

@@ -1,6 +1,7 @@
 using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Journal;
+using HSMServer.Core.TableOfChanges;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -31,27 +32,32 @@ namespace HSMServer.Core.Model.NodeSettings
         }
 
 
-        internal void Update(BaseNodeUpdate update, string path)
+        internal void Update(BaseNodeUpdate update, ChangeInfoTable table)
         {
-            void Update(SettingProperty<TimeIntervalModel> setting, TimeIntervalModel newVal, [CallerArgumentExpression(nameof(setting))] string propName = "")
+            void Update(SettingProperty<TimeIntervalModel> setting, TimeIntervalModel newVal, [CallerArgumentExpression(nameof(setting))] string propName = "", NoneValues none = NoneValues.Never)
             {
+                var nodeInfo = table.Settings[propName];
                 var oldVal = setting.CurValue;
 
-                if (setting.TrySetValue(newVal))
+                if (nodeInfo.CanChange(update.Initiator) && setting.TrySetValue(newVal))
+                {
                     ChangesHandler?.Invoke(new JournalRecordModel(update.Id, update.Initiator)
                     {
                         Enviroment = "Settings update",
-                        OldValue = $"{oldVal}",
-                        NewValue = $"{newVal}",
+                        OldValue = oldVal.IsNone ? $"{none}" : $"{oldVal}",
+                        NewValue = newVal.IsNone ? $"{none}" : $"{newVal}",
 
                         PropertyName = propName,
-                        Path = path,
+                        Path = table.Path,
                     });
+
+                    nodeInfo.SetUpdate(update.Initiator);
+                }
             }
 
             Update(TTL, update.TTL);
             Update(SelfDestroy, update.SelfDestroy, "Remove sensor after inactivity");
-            Update(KeepHistory, update.KeepHistory, "Keep sensor history");
+            Update(KeepHistory, update.KeepHistory, "Keep sensor history", NoneValues.Forever);
         }
 
 
