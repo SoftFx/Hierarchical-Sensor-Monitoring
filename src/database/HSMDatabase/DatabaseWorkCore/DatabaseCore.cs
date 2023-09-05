@@ -403,6 +403,41 @@ namespace HSMDatabase.DatabaseWorkCore
 
         #endregion
 
+        #region Environment database : Telegram chat
+
+        public void AddTelegramChat(TelegramChatEntity chat)
+        {
+            _environmentDatabase.AddTelegramChatToList(chat.SystemId);
+            _environmentDatabase.AddTelegramChat(chat);
+        }
+
+        public void UpdateTelegramChat(TelegramChatEntity chat) => _environmentDatabase.AddTelegramChat(chat);
+
+        public void RemoveTelegramChat(byte[] chatId)
+        {
+            _environmentDatabase.RemoveTelegramChat(chatId);
+            _environmentDatabase.RemoveTelegramChatFromList(chatId);
+        }
+
+        public TelegramChatEntity GetTelegramChat(byte[] chatId) => _environmentDatabase.GetTelegramChat(chatId);
+
+        public List<TelegramChatEntity> GetTelegramChats()
+        {
+            var chats = new List<TelegramChatEntity>(1 << 4);
+            var ids = _environmentDatabase.GetTelegramChatsList();
+
+            foreach (var id in ids)
+            {
+                var keyEntity = _environmentDatabase.GetTelegramChat(id);
+                if (keyEntity != null)
+                    chats.Add(keyEntity);
+            }
+
+            return chats;
+        }
+
+        #endregion
+
         #region Journal
 
         public void AddJournalValue(JournalKey journalKey, JournalRecordEntity value)
