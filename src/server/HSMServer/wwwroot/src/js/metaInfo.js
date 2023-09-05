@@ -1,4 +1,4 @@
-﻿export function GetPlotInfo(id){
+﻿export function GetSensortInfo(id){
     return $.ajax({
         type: "GET",
         url: getSensorPlotInfo + `?id=${id}`,

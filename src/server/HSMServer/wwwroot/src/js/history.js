@@ -1,4 +1,4 @@
-﻿import {GetPlotInfo} from "./metaInfo";
+﻿import {GetSensortInfo} from "./metaInfo";
 
 window.getFromAndTo = function (encodedId) {
     let from = $(`#from_${encodedId}`).val();
@@ -50,10 +50,10 @@ window.initialize = function () {
 }
 
 window.searchHistory = function (encodedId) {
-    let type = getTypeForSensor(encodedId);
     const {from, to} = getFromAndTo(encodedId);
-
-    requestHistory(encodedId, historyAction, rawHistoryAction, type, Data(to, from, type, encodedId));
+    GetSensortInfo(encodedId).done(function (types){
+        requestHistory(encodedId, historyAction, rawHistoryAction, types, Data(to, from, types.realType, encodedId));
+    })
 }
 
 function initializeSensorAccordion() {
@@ -89,17 +89,19 @@ function InitializeHistory() {
         return;
 
     let encodedId = info.substring("meta_info_".length)
-    let type = getTypeForSensor(encodedId);
     let date = new Date();
 
-    if (isFileSensor(type))
-        return;
+    GetSensortInfo(encodedId).done(function (types){
+        if (isFileSensor(types.realPlot))
+            return;
 
-    if (isGraphAvailable(type)) {
-        initializeGraph(encodedId, rawHistoryLatestAction, type, Data(date, date, type, encodedId), true);
-    } else {
-        initializeTable(encodedId, historyLatestAction, type, Data(date, date, type, encodedId), true);
-    }
+        if (isGraphAvailable(types.realType)) {
+            initializeGraph(encodedId, rawHistoryLatestAction, types, Data(date, date, types.realType, encodedId), true);
+        } else {
+            initializeTable(encodedId, historyLatestAction, types.realPlot, Data(date, date, types.realType, encodedId), true);
+        }
+    });
+   
 }
 
 function initializeTabLinksRequests() {
@@ -109,24 +111,26 @@ function initializeTabLinksRequests() {
 
 function requestGraph() {
     let encodedId = this.id.substring("link_graph_".length);
-    let type = getTypeForSensor(encodedId);
     const {from, to} = getFromAndTo(encodedId);
-    let body = Data(to, from, type, encodedId);
-
+    
     showBarsCount(encodedId);
     enableFromTo()
-    initializeGraph(encodedId, rawHistoryAction, type, body);
+    GetSensortInfo(encodedId).done(function (types){
+        let body = Data(to, from, types.realType, encodedId);
+        initializeGraph(encodedId, rawHistoryAction, types, body);
+    })
 }
 
 function requestTable() {
     let encodedId = this.id.substring("link_table_".length);
-    let type = getTypeForSensor(encodedId);
     const {from, to} = getFromAndTo(encodedId);
-    let body = Data(to, from, type, encodedId);
 
     hideBarsCount(encodedId);
     enableFromTo()
-    initializeTable(encodedId, historyAction, type, body);
+    GetSensortInfo(encodedId).done(function (types){
+        let body = Data(to, from, types.realType, encodedId);
+        initializeTable(encodedId, historyAction, types.realType, body);
+    })
 }
 
 function InitializePeriodRequests() {
@@ -136,25 +140,26 @@ function InitializePeriodRequests() {
 
 //Request methods
 
-function requestHistory(encodedId, action, rawAction, type, reqData) {
-    if (!isGraphAvailable(type)) {
-        initializeTable(encodedId, action, type, reqData);
+function requestHistory(encodedId, action, rawAction, types, reqData) {
+    if (!isGraphAvailable(types.realType)) {
+        initializeTable(encodedId, action, types.realType, reqData);
         return;
     }
 
     if (isTableHistorySelected(encodedId)) {
-        initializeTable(encodedId, action, type, reqData);
+        initializeTable(encodedId, action, types.realType, reqData);
     } else {
-        initializeGraph(encodedId, rawAction, type, reqData);
+        initializeGraph(encodedId, rawAction, types, reqData);
     }
 }
 
 function exportCsv() {
     let encodedId = this.id.substring("button_export_csv_".length);
-    let type = getTypeForSensor(encodedId);
     const {from, to} = getFromAndTo(encodedId);
 
-    window.location.href = exportHistoryAction + "?EncodedId=" + encodedId + "&Type=" + type + "&From=" + from + "&To=" + to;
+    GetSensortInfo(encodedId).done(function (types){
+        window.location.href = exportHistoryAction + "?EncodedId=" + encodedId + "&Type=" + types.realType + "&From=" + from + "&To=" + to;
+    })
 }
 
 function initializeTable(encodedId, tableAction, type, body, needFillFromTo = false) {
@@ -200,49 +205,42 @@ function initializeTable(encodedId, tableAction, type, body, needFillFromTo = fa
     });
 }
 
-function initializeGraph(encodedId, rawHistoryAction, type, body, needFillFromTo = false) {
-    let sensorTypes = GetPlotInfo(encodedId);
+function initializeGraph(encodedId, rawHistoryAction, types, body, needFillFromTo = false) {
+    $.ajax({
+        type: 'POST',
+        data: JSON.stringify(body),
+        url: rawHistoryAction + "?EncodedId=" + encodedId + "&Type=" + types.realType,
+        contentType: 'application/json',
+        dataType: 'html',
+        cache: false,
+        async: true
+    }).done(function (data) {
+        $("#tableHistoryRefreshButton").addClass("d-none");
+        $('#allColumnsButton').addClass("d-none");
+        let parsedData = JSON.parse(data);
+        if (parsedData.length === 0) {
+            $('#history_' + encodedId).hide();
+            $('#no_data_' + encodedId).show();
+            return;
+        }
 
-    sensorTypes.done(function (types){
-        $.ajax({
-            type: 'POST',
-            data: JSON.stringify(body),
-            url: rawHistoryAction + "?EncodedId=" + encodedId + "&Type=" + type,
-            contentType: 'application/json',
-            dataType: 'html',
-            cache: false,
-            async: true
-        }).done(function (data) {
-            $("#tableHistoryRefreshButton").addClass("d-none");
-            $('#allColumnsButton').addClass("d-none");
+        $('#history_' + encodedId).show();
+        $('#no_data_' + encodedId).hide();
 
-            let parsedData = JSON.parse(data);
+        if (needFillFromTo) {
+            let from = new Date(parsedData[0].receivingTime);
+            let to = getToDate();
 
-            if (parsedData.length === 0) {
-                $('#history_' + encodedId).hide();
-                $('#no_data_' + encodedId).show();
-                return;
-            }
+            $(`#from_${encodedId}`).val(datetimeLocal(from));
+            $(`#to_${encodedId}`).val(datetimeLocal(to.getTime()));
 
-            $('#history_' + encodedId).show();
-            $('#no_data_' + encodedId).hide();
+            reloadHistoryRequest(from, to, body);
+        }
+        displayGraph(data, types, `graph_${encodedId}`, encodedId);
 
-            if (needFillFromTo) {
-                let from = new Date(parsedData[0].receivingTime);
-                let to = getToDate();
-
-                $(`#from_${encodedId}`).val(datetimeLocal(from));
-                $(`#to_${encodedId}`).val(datetimeLocal(to.getTime()));
-
-                reloadHistoryRequest(from, to, body);
-            }
-
-            displayGraph(data, types, `graph_${encodedId}`, encodedId);
-
-            $("#sensorHistorySpinner").addClass("d-none");
-            $('#historyDataPanel').removeClass('hidden_element');
-        });
-    })
+        $("#sensorHistorySpinner").addClass("d-none");
+        $('#historyDataPanel').removeClass('hidden_element');
+    });
 }
 
 function reloadHistoryRequest(from, to, body) {
@@ -262,11 +260,11 @@ function reloadHistoryRequest(from, to, body) {
 // Sub-methods
 
 function isFileSensor(type) {
-    return type === "6";
+    return type === 6;
 }
 
 function isGraphAvailable(type) {
-    return !(type === "3" || type === "6" || type === "8");
+    return !(type === 3 || type === 6 || type === 8);
 }
 
 function isTableHistorySelected(encodedId) {
@@ -319,10 +317,6 @@ function setBarsCount(encodedId, count) {
     $(`#barsCount_${encodedId}`).val(count);
 
     return count
-}
-
-function getTypeForSensor(encodedId) {
-    return $('#sensor_type_' + encodedId).first().val();
 }
 
 
