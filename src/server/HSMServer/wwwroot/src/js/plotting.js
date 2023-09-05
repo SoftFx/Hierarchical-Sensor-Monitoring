@@ -46,10 +46,11 @@ window.removeBarPlot = function (name, isInit = false) {
     }
 }
 
-window.displayGraph = function (graphData, graphType, graphElementId, graphName) {
+window.displayGraph = function (graphData, sensorTypes, graphElementId, graphName) {
     barGraphData.graph.id = graphElementId
     barGraphData.graph.self = $(`#${graphElementId}`)[0];
-    let plot = convertToGraphData(graphData, graphType, graphName);
+
+    let plot = convertToGraphData(graphData, sensorTypes, graphName);
     let zoomData = getPreviousZoomData(graphElementId);
     var plotIcon = {
         'width': 500,
@@ -76,7 +77,7 @@ window.displayGraph = function (graphData, graphType, graphElementId, graphName)
         ]
     }
     let layout;
-    if (graphType === "9" || graphType === "7")
+    if (sensorTypes.plotType === 9 || sensorTypes.plotType === 7)
         layout = plot.getLayout();
     else {
         if (zoomData === undefined || zoomData === null)
@@ -126,23 +127,26 @@ function getPreviousZoomData(graphElementId) {
     return window.sessionStorage.getItem(graphElementId);
 }
 
-function convertToGraphData(graphData, graphType, graphName) {
+function convertToGraphData(graphData, sensorTypes, graphName) {
     let escapedData = JSON.parse(graphData);
 
-    switch (graphType) {
-        case "0":
+    switch (sensorTypes.plotType) {
+        case 0:
             return new BoolPlot(escapedData);
-        case "1":
+        case 1:
             return new IntegerPlot(escapedData);
-        case "2":
+        case 2:
             return new DoublePlot(escapedData);
-        case "4":
+        case 4:
             return new BarPLot(escapedData, graphName);
-        case "5":
+        case 5:
             return new BarPLot(escapedData, graphName);
-        case "7":
+        case 7:
             return new TimeSpanPlot(escapedData);
-        case "9":
+        case 9:
+            if (sensorTypes.realType === 0)
+                return new EnumPlot(escapedData, false)
+
             return new EnumPlot(escapedData, true);
         default:
             return undefined;

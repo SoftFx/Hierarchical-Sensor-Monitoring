@@ -80,6 +80,21 @@ namespace HSMServer.Controllers
             return ChartHistory(SpecifyLatestHistoryModel(model));
         }
 
+        [HttpGet]
+        public IActionResult GetSensorPlotInfo([FromQuery] Guid id)
+        {
+            if (_tree.Sensors.TryGetValue(id, out var sensorNodeViewModel))
+                return Json(new
+                {
+                    realType = sensorNodeViewModel.Type,
+                    plotType = sensorNodeViewModel.Name is "Service alive" or "Service status" ? SensorType.Enum : sensorNodeViewModel.Type
+                });
+            
+            
+            return _emptyJsonResult;
+        }
+        
+        
         [HttpPost]
         public async Task<JsonResult> ChartHistory([FromBody] GetSensorHistoryModel model)
         {

@@ -1,4 +1,6 @@
-﻿window.getFromAndTo = function (encodedId) {
+﻿import {GetPlotInfo} from "./metaInfo";
+
+window.getFromAndTo = function (encodedId) {
     let from = $(`#from_${encodedId}`).val();
     let to = $(`#to_${encodedId}`).val();
 
@@ -199,44 +201,48 @@ function initializeTable(encodedId, tableAction, type, body, needFillFromTo = fa
 }
 
 function initializeGraph(encodedId, rawHistoryAction, type, body, needFillFromTo = false) {
-    $.ajax({
-        type: 'POST',
-        data: JSON.stringify(body),
-        url: rawHistoryAction + "?EncodedId=" + encodedId + "&Type=" + type,
-        contentType: 'application/json',
-        dataType: 'html',
-        cache: false,
-        async: true
-    }).done(function (data) {
-        $("#tableHistoryRefreshButton").addClass("d-none");
-        $('#allColumnsButton').addClass("d-none");
+    let sensorTypes = GetPlotInfo(encodedId);
 
-        let parsedData = JSON.parse(data);
+    sensorTypes.done(function (types){
+        $.ajax({
+            type: 'POST',
+            data: JSON.stringify(body),
+            url: rawHistoryAction + "?EncodedId=" + encodedId + "&Type=" + type,
+            contentType: 'application/json',
+            dataType: 'html',
+            cache: false,
+            async: true
+        }).done(function (data) {
+            $("#tableHistoryRefreshButton").addClass("d-none");
+            $('#allColumnsButton').addClass("d-none");
 
-        if (parsedData.length === 0) {
-            $('#history_' + encodedId).hide();
-            $('#no_data_' + encodedId).show();
-            return;
-        }
+            let parsedData = JSON.parse(data);
 
-        $('#history_' + encodedId).show();
-        $('#no_data_' + encodedId).hide();
+            if (parsedData.length === 0) {
+                $('#history_' + encodedId).hide();
+                $('#no_data_' + encodedId).show();
+                return;
+            }
 
-        if (needFillFromTo) {
-            let from = new Date(parsedData[0].receivingTime);
-            let to = getToDate();
+            $('#history_' + encodedId).show();
+            $('#no_data_' + encodedId).hide();
 
-            $(`#from_${encodedId}`).val(datetimeLocal(from));
-            $(`#to_${encodedId}`).val(datetimeLocal(to.getTime()));
+            if (needFillFromTo) {
+                let from = new Date(parsedData[0].receivingTime);
+                let to = getToDate();
 
-            reloadHistoryRequest(from, to, body);
-        }
+                $(`#from_${encodedId}`).val(datetimeLocal(from));
+                $(`#to_${encodedId}`).val(datetimeLocal(to.getTime()));
 
-        displayGraph(data, type, `graph_${encodedId}`, encodedId);
+                reloadHistoryRequest(from, to, body);
+            }
 
-        $("#sensorHistorySpinner").addClass("d-none");
-        $('#historyDataPanel').removeClass('hidden_element');
-    });
+            displayGraph(data, types, `graph_${encodedId}`, encodedId);
+
+            $("#sensorHistorySpinner").addClass("d-none");
+            $('#historyDataPanel').removeClass('hidden_element');
+        });
+    })
 }
 
 function reloadHistoryRequest(from, to, body) {
