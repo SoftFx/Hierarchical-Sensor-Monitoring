@@ -1,6 +1,6 @@
-﻿using HSMDatabase.AccessManager.DatabaseEntities;
+﻿using HSMCommon.Extensions;
+using HSMDatabase.AccessManager.DatabaseEntities;
 using System.ComponentModel.DataAnnotations;
-using HSMCommon.Extensions;
 
 namespace HSMServer.Core.Model.Policies
 {
@@ -25,6 +25,10 @@ namespace HSMServer.Core.Model.Policies
         IsError = 21,
         [Display(Name = "is \U0001f7e2 OK")]
         IsOk = 22,
+        [Display(Name = "is changed to 🔴 Error")]
+        IsChangedToError = 23,
+        [Display(Name = "is changed to \U0001f7e2 OK")]
+        IsChangedToOk = 24,
     }
 
 

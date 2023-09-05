@@ -93,10 +93,15 @@ namespace HSMServer.Core.Model
 
         internal override BaseValue GetEmptyValue() => new T();
 
-        internal virtual void AggregateValue(T value)
+        internal bool TryAggregateValue(T value)
         {
             if (LastValue is null || LastTimeout?.ReceivingTime > LastValue.ReceivingTime || !LastValue.TryAggregateValue(value))
+            {
                 AddValue(value);
+                return false;
+            }
+
+            return true;
         }
 
 
