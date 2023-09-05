@@ -45,6 +45,8 @@ namespace HSMServer.Core.Model.Policies
                 PolicyOperation.IsChanged => IsChangedStatus,
                 PolicyOperation.IsOk => (SensorStatus? newVal, SensorStatus? _) => newVal == SensorStatus.Ok,
                 PolicyOperation.IsError => (SensorStatus? newVal, SensorStatus? _) => newVal == SensorStatus.Error,
+                PolicyOperation.IsChangedToError => (SensorStatus? newVal, SensorStatus? oldVal) => IsChangedStatus(newVal, oldVal) && newVal == SensorStatus.Error,
+                PolicyOperation.IsChangedToOk => (SensorStatus? newVal, SensorStatus? oldVal) => IsChangedStatus(newVal, oldVal) && newVal == SensorStatus.Ok,
                 _ => throw new NotImplementedException()
             };
 

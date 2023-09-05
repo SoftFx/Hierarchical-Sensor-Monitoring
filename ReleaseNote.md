@@ -16,9 +16,12 @@
 ## Alerts
 * **Value** property for TimeSpan sensor has been added.
 * **Count** property for Bar sensors has been added.
+* **Change to Ok** property has been added for Status.
+* **Change to Error** property has been added for Status.
 * New variable **$property** has been added.
 * New varoable **$count** for Bar sensors has been added.
 * $target for **Status OnChange** property returns sensor name instead guid.
+* Aggregation has been fixed for Alert with different AlertState
 
 ## History
 * **Last update** and **Aggregation count** columns have been added for sensors with **Aggregate data** setting

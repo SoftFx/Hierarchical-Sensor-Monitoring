@@ -97,29 +97,31 @@ public sealed class SelectedJournalViewModel : ConcurrentDictionary<Guid, Concur
         //    return _journals;
         //_tableFilters = filter;
 
-        var records = GetFilteredList(filter.Search.Value);
+        string FilterFunc(JournalRecordViewModel r, ColumnName type) => r[type];
+        DateTime FilterByDate(JournalRecordViewModel r) => r.Time;
+        var records = GetOrderedRecords(filter.Search.Value);
+
+        IOrderedEnumerable<JournalRecordViewModel> Order(ColumnName type, bool asc) => type is ColumnName.Date ?
+            asc ? records.ThenBy(FilterByDate) : records.ThenByDescending(FilterByDate) : 
+            asc ? records.ThenBy(x => FilterFunc(x, type)) : records.ThenByDescending(x => FilterFunc(x, type));
 
         foreach (var order in filter.Order)
             if (Enum.TryParse<ColumnName>(filter.Columns[order.Column].Name, out var type))
-            {
-                var ascending = order.Dir == "asc";
+                records = Order(type, order.Dir == "asc");
 
-                string FilterFunc(JournalRecordViewModel r) => r[type];
+        var resultRecords = records.ToList();
 
-                records = (ascending ? records.OrderBy(FilterFunc) : records.OrderByDescending(FilterFunc)).ToList();
-            }
-
-        return (records.Skip(filter.Start).Take(filter.Length), records.Count);
+        return (resultRecords.Skip(filter.Start).Take(filter.Length), resultRecords.Count);
     }
 
-    private List<JournalRecordViewModel> GetFilteredList(string search)
+    private IOrderedEnumerable<JournalRecordViewModel> GetOrderedRecords(string search)
     {
         bool Filter(JournalRecordViewModel record) => record.SearchValue.Contains(search, StringComparison.OrdinalIgnoreCase);
         bool EmptyFilter(JournalRecordViewModel _) => true;
 
         Func<JournalRecordViewModel, bool> filter = string.IsNullOrEmpty(search) ? EmptyFilter : Filter;
 
-        return Values.SelectMany(x => x.Where(filter)).ToList();
+        return Values.SelectMany(x => x.Where(filter)).OrderBy(x => 1);
     }
 
     private void SaveNewRecords(JournalRecordModel record)

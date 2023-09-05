@@ -304,8 +304,8 @@ namespace HSMServer.Core.Cache
                         PropertyName = request.PropertyName,
                         Enviroment = request.Environment,
                         Path = sensor.FullPath,
-                        OldValue = request.BuildComment(lastValue.Status, lastValue.Comment, lastValue.RawValue.ToString()),
-                        NewValue = request.BuildComment(value: value.RawValue.ToString())
+                        OldValue = request.BuildComment(lastValue.Status, lastValue.Comment, lastValue.RawValue?.ToString()),
+                        NewValue = request.BuildComment(value: value.RawValue?.ToString())
                     });
 
                     _database.AddSensorValue(value.ToEntity(request.Id));
