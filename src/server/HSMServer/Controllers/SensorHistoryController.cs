@@ -93,8 +93,7 @@ namespace HSMServer.Controllers
             
             return _emptyJsonResult;
         }
-        
-        
+
         [HttpPost]
         public async Task<JsonResult> ChartHistory([FromBody] GetSensorHistoryModel model)
         {
