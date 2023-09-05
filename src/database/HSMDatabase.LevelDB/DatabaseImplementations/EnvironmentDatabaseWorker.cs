@@ -602,11 +602,11 @@ namespace HSMDatabase.LevelDB.DatabaseImplementations
         {
             try
             {
-                _database.Put(chat.SystemId, JsonSerializer.SerializeToUtf8Bytes(chat));
+                _database.Put(chat.Id, JsonSerializer.SerializeToUtf8Bytes(chat));
             }
             catch (Exception e)
             {
-                _logger.Error(e, $"Failed to add telegram chat info for {chat.SystemId}");
+                _logger.Error(e, $"Failed to add telegram chat info for {chat.Id}");
             }
         }
 

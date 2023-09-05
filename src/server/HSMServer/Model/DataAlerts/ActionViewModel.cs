@@ -1,7 +1,7 @@
 ﻿using HSMCommon.Extensions;
 using HSMServer.Extensions;
 using HSMServer.Model.TreeViewModel;
-using HSMServer.Notifications.Telegram;
+using HSMServer.Notifications;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using System;
 using System.Collections.Generic;
@@ -65,6 +65,6 @@ namespace HSMServer.Model.DataAlerts
 
         public List<TelegramChat> GetChats(bool isUser) => AvailableChats.Where(ch => ch.IsUserChat == isUser).ToList();
 
-        public bool ChatIsSelected(TelegramChat chat) => Chats?.ContainsKey(chat.SystemId) ?? false;
+        public bool ChatIsSelected(TelegramChat chat) => Chats?.ContainsKey(chat.Id) ?? false;
     }
 }

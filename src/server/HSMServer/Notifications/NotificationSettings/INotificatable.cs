@@ -1,4 +1,4 @@
-﻿using HSMServer.Notifications.Telegram;
+﻿using HSMServer.Notifications;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;

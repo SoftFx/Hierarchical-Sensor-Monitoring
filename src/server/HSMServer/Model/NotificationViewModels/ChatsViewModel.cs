@@ -1,5 +1,5 @@
 ﻿using HSMServer.Extensions;
-using HSMServer.Notifications.Telegram;
+using HSMServer.Notifications;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -73,9 +73,9 @@ namespace HSMServer.Model.NotificationViewModels
 
         public TelegramChatViewModel(TelegramChat chat)
         {
-            ChatId = chat.Id.Identifier ?? 0L;
+            ChatId = chat.ChatId.Identifier ?? 0L;
             IsUserChat = chat.IsUserChat;
-            SystemId = chat.SystemId;
+            SystemId = chat.Id;
             Name = chat.Name;
             AuthorizationTime = chat.AuthorizationTime == DateTime.MinValue
                 ? "-"

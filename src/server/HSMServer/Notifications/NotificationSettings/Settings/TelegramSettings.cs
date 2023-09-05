@@ -1,7 +1,7 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Core;
 using HSMServer.Core.Model;
-using HSMServer.Notifications.Telegram;
+using HSMServer.Notifications;
 using System.Collections.Concurrent;
 using System.Linq;
 using Telegram.Bot.Types;
@@ -62,7 +62,7 @@ namespace HSMServer.Notification.Settings
                 MessagesAreEnabled = MessagesAreEnabled,
                 MessagesDelay = MessagesDelaySec,
                 Inheritance = (byte)Inheritance,
-                Chats = Chats.Select(ch => ch.Value.ToEntity()).ToList(),
+                Chats = Chats.Select(ch => ch.Value.ToEntityOld()).ToList(),
             };
     }
 }

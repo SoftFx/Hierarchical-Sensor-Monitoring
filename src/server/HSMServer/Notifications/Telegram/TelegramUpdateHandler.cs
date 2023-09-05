@@ -110,7 +110,7 @@ namespace HSMServer.Notifications
                     token.Entity.UpdateEntity(_userManager, _tree);
 
                     if (newChat is not null)
-                        _cache.AddNewChat(newChat.SystemId, newChat.Name, isUserChat ? null : token.Entity.Name);
+                        _cache.AddNewChat(newChat.Id, newChat.Name, isUserChat ? null : token.Entity.Name);
 
                     response.Append(token.Entity.BuildSuccessfullResponse());
                 }

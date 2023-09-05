@@ -46,7 +46,7 @@ namespace HSMServer.Model.UserTreeShallowCopy
             "icon": "fa-regular fa-folder",
             "time": "{{Data.UpdateTime.Ticks}}",
             "isManager": "{{CurUserIsManager}}",
-            "isGrafanaEnabled": "{{IsGrafanaEnabled}}",
+            "isGrafanaEnabled": "{{IsGrafanaEnabled}}"
         }
         """;
     }

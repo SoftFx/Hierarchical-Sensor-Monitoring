@@ -407,7 +407,7 @@ namespace HSMDatabase.DatabaseWorkCore
 
         public void AddTelegramChat(TelegramChatEntity chat)
         {
-            _environmentDatabase.AddTelegramChatToList(chat.SystemId);
+            _environmentDatabase.AddTelegramChatToList(chat.Id);
             _environmentDatabase.AddTelegramChat(chat);
         }
 
