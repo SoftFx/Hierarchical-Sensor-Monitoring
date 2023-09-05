@@ -5,7 +5,7 @@ using System.Threading.Tasks;
 
 namespace HSMServer.ConcurrentStorage
 {
-    public abstract class ConcurrentStorage<ModelType, EntityType, UpdateType> : ConcurrentDictionary<Guid, ModelType>
+    public abstract class ConcurrentStorageNames<ModelType, EntityType, UpdateType> : ConcurrentDictionary<Guid, ModelType>
         where ModelType : class, IServerModel<EntityType, UpdateType>
         where UpdateType : IUpdateModel
     {

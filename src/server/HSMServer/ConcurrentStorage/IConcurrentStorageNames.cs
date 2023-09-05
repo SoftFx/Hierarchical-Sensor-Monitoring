@@ -3,7 +3,7 @@ using System.Threading.Tasks;
 
 namespace HSMServer.ConcurrentStorage
 {
-    public interface IConcurrentStorage<ModelType, EntityType, UpdateType> : IDisposable
+    public interface IConcurrentStorageNames<ModelType, EntityType, UpdateType> : IDisposable
         where ModelType : class, IServerModel<EntityType, UpdateType>
         where UpdateType : IUpdateModel
     {

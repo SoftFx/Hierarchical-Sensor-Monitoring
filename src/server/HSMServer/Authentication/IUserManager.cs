@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 
 namespace HSMServer.Authentication
 {
-    public interface IUserManager : IConcurrentStorage<User, UserEntity, UserUpdate>
+    public interface IUserManager : IConcurrentStorageNames<User, UserEntity, UserUpdate>
     {
         /// <summary>
         /// Add new user with the specified parameters
