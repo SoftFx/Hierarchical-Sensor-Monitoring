@@ -51,17 +51,17 @@ namespace HSMDatabase.AccessManager.DatabaseEntities
         public long ChatId { get; init; }
 
 
+        public byte Type { get; init; }
+
         public string Name { get; init; }
 
-        public Guid Author { get; init; }
+        public byte[] Author { get; init; }
 
-        public bool IsUserChat { get; init; }
+        public bool SendMessages { get; init; }
 
         public string Description { get; init; }
 
         public long AuthorizationTime { get; init; }
-
-        public bool MessagesAreEnabled { get; init; }
 
         public int MessagesAggregationTime { get; init; }
     }
