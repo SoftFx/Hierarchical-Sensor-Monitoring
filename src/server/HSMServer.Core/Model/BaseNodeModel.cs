@@ -75,6 +75,8 @@ namespace HSMServer.Core.Model
 
             if (entity.Settings is not null)
                 Settings.SetSettings(entity.Settings);
+
+            Policies.Attach(this);
         }
 
 

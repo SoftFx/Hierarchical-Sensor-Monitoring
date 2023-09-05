@@ -544,18 +544,19 @@ namespace HSMServer.Core.Cache
         private void AddBaseNodeSubscription(BaseNodeModel model)
         {
             model.Settings.ChangesHandler += _journalService.AddRecord;
+            model.Policies.ChangesHandler += _journalService.AddRecord;
             model.ChangesHandler += _journalService.AddRecord;
         }
 
         private void RemoveBaseNodeSubscription(BaseNodeModel model)
         {
             model.Settings.ChangesHandler -= _journalService.AddRecord;
+            model.Policies.ChangesHandler -= _journalService.AddRecord;
             model.ChangesHandler -= _journalService.AddRecord;
         }
 
         private void SubscribeSensorToPolicyUpdate(BaseSensorModel sensor)
         {
-            sensor.Policies.ChangesHandler += _journalService.AddRecord;
             sensor.Policies.SensorExpired += SetExpiredSnapshot;
             sensor.Policies.Uploaded += UpdatePolicy;
 
@@ -566,7 +567,6 @@ namespace HSMServer.Core.Cache
 
         private void RemoveSensorPolicies(BaseSensorModel sensor)
         {
-            sensor.Policies.ChangesHandler -= _journalService.AddRecord;
             sensor.Policies.SensorExpired -= SetExpiredSnapshot;
             sensor.Policies.Uploaded -= UpdatePolicy;
 

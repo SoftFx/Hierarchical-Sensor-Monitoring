@@ -103,8 +103,6 @@ namespace HSMServer.Core.Model
             Integration = (Integration)entity.Integration;
             AggregateValues = entity.AggregateValues;
             EndOfMuting = entity.EndOfMuting > 0L ? new DateTime(entity.EndOfMuting) : null;
-
-            Policies.Attach(this);
         }
 
 

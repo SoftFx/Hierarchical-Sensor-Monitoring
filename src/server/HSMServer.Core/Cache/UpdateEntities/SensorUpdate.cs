@@ -47,6 +47,8 @@ namespace HSMServer.Core.Cache.UpdateEntities
 
 
         public InitiatorInfo Initiator { get; init; }
+
+        public bool IsParentRequest { get; init; }
     }
 
 
