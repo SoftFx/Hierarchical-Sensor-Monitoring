@@ -25,6 +25,8 @@ public sealed class JournalRecordViewModel
     public string Initiator { get; set; }
 
     public string TimeAsString { get; set; }
+    
+    public DateTime Time { get; set; }
 
     public string Value { get; set; }
 
@@ -37,7 +39,8 @@ public sealed class JournalRecordViewModel
     {
         (Value, SearchValue) = BuildSearchAndViewValue(model);
         Type = model.Key.Type;
-        TimeAsString = new DateTime(model.Key.Time).ToDefaultFormat();
+        Time = new DateTime(model.Key.Time);
+        TimeAsString = Time.ToDefaultFormat();
         Initiator = model.Initiator;
         Path = model.Path;
     }
