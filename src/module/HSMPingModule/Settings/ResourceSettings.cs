@@ -1,4 +1,4 @@
-using HSMPingModule.Resourses;
+using HSMPingModule.Models;
 
 namespace HSMPingModule.Settings;
 

@@ -1,28 +1,31 @@
+using HSMPingModule.Models;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
-using HSMPingModule.Resourses;
 
 namespace HSMPingModule.Services;
 
 internal sealed class PingAdapter : Ping
 {
     private readonly byte[] _buffer = new byte[32];
-    private readonly PingOptions _options = new();
-    private readonly CancellationTokenSource _token = new ();
 
+    private readonly CancellationTokenSource _token = new();
+    private readonly PingOptions _options = new();
+
+    private readonly WebSite _webSite;
+    private readonly string _hostName;
 
     public static event Func<WebSite, string, Task<PingResponse>, Task> SendResult;
 
 
-    public WebSite WebSite { get; }
-
-    public string HostName { get; }
+    internal string SensorPath { get; }
 
 
-    public PingAdapter(WebSite webSite, string host) : base()
+    public PingAdapter(WebSite webSite, string host, string country) : base()
     {
-        WebSite = webSite;
-        HostName = host;
+        _webSite = webSite;
+        _hostName = host;
+
+        SensorPath = $"{_hostName}/{country}";
     }
 
 
@@ -30,7 +33,7 @@ internal sealed class PingAdapter : Ping
     {
         try
         {
-            return new PingResponse(await SendPingAsync(HostName, WebSite.PingTimeoutValue.Value, _buffer, _options));
+            return new PingResponse(await SendPingAsync(_hostName, _webSite.PingTimeoutValue.Value, _buffer, _options));
         }
         catch (Exception ex)
         {
@@ -43,13 +46,13 @@ internal sealed class PingAdapter : Ping
     }
 
 
-    public Task StartPinging(string path) => Task.Run(async () =>
+    public async Task StartPinging()
     {
-        var timer = new PeriodicTimer(TimeSpan.FromSeconds(WebSite.PingDelay.Value));
+        var timer = new PeriodicTimer(TimeSpan.FromSeconds(_webSite.PingDelay.Value));
 
         while (await timer.WaitForNextTickAsync(_token.Token))
-            _ = SendPingRequest().ContinueWith(reply => SendResult?.Invoke(WebSite, path, reply), _token.Token).Unwrap();
-    }, _token.Token);
+            _ = SendPingRequest().ContinueWith(reply => SendResult?.Invoke(_webSite, SensorPath, reply), _token.Token).Unwrap();
+    }
 
 
     internal void CancelToken() => _token.Cancel();

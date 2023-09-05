@@ -2,7 +2,7 @@ using HSMDataCollector.Alerts;
 using HSMDataCollector.Options;
 using HSMSensorDataObjects.SensorRequests;
 
-namespace HSMPingModule.Resourses;
+namespace HSMPingModule.Models;
 
 internal sealed class WebSite
 {

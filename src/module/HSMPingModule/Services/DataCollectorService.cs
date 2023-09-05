@@ -3,7 +3,7 @@ using HSMDataCollector.Core;
 using HSMDataCollector.Options;
 using HSMDataCollector.PublicInterface;
 using HSMPingModule.Config;
-using HSMPingModule.Resourses;
+using HSMPingModule.Models;
 using HSMPingModule.Services.Interfaces;
 using Microsoft.Extensions.Options;
 
@@ -27,6 +27,7 @@ internal sealed class DataCollectorService : BackgroundService, IDataCollectorSe
         {
             Version = ServiceConfig.Version,
         };
+
         _logger.LogInformation($"Product version: {productInfoOptions.Version}");
 
         var collectorOptions = new CollectorOptions()

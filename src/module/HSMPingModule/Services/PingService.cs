@@ -25,11 +25,11 @@ internal class PingService : BackgroundService
         foreach (var (hostname, website) in _config.ResourceSettings.WebSites)
             foreach (var country in website.Countries)
                 if (_newPings.TryGetValue(country, out var dict))
-                    dict.TryAdd(hostname, new(website, hostname));
+                    dict.TryAdd(hostname, new(website, hostname, country));
                 else
                     _newPings.TryAdd(country, new ConcurrentDictionary<string, PingAdapter>()
                     {
-                        [hostname] = new (website, hostname)
+                        [hostname] = new (website, hostname, country)
                     });
     }
 
@@ -37,8 +37,8 @@ internal class PingService : BackgroundService
     protected override Task ExecuteAsync(CancellationToken stoppingToken)
     {
         foreach (var (country, pings) in _newPings)
-            foreach (var (hostname, ping) in pings)
-                _ = ping.StartPinging($"{hostname}/{country}");
+            foreach (var (_, ping) in pings)
+                _ = ping.StartPinging();
 
         return Task.CompletedTask;
     }
@@ -56,7 +56,7 @@ internal class PingService : BackgroundService
         foreach (var (hostname, website) in _config.ResourceSettings.WebSites)
             foreach (var country in website.Countries)
             {
-                var ping = new PingAdapter(website, hostname);
+                var ping = new PingAdapter(website, hostname, country);
 
                 if (_newPings.TryGetValue(country, out var dict))
                     dict.TryAdd(hostname, ping);
@@ -66,8 +66,8 @@ internal class PingService : BackgroundService
                         [hostname] = ping
                     });
 
-                ping.StartPinging($"{hostname}/{country}");
-                _logger.LogInformation($"New pinging sensor added at {hostname}/{country}");
+                _ = ping.StartPinging();
+                _logger.LogInformation($"New pinging sensor added at {_newPings[country][hostname].SensorPath}");
             }
     }
 }
