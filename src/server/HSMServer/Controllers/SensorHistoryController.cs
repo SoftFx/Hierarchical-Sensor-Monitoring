@@ -119,50 +119,30 @@ namespace HSMServer.Controllers
             StoredUser.History.Reload(model);
         }
 
+        [HttpGet]
+        public IActionResult GetBackgroundSensorId([FromQuery] Guid currentId, [FromQuery] bool isStatusService = false)
+        {
+            if (TryGetBackgroundSensorId(currentId, isStatusService, out var id))
+                return Json(id);
+
+            return _emptyJsonResult;
+        }
+
+        private bool TryGetBackgroundSensorId(Guid currentId, bool isStatusService, out Guid id)
+        {
+            if (!_tree.Sensors.TryGetValue(currentId, out var sensor))
+                id = Guid.Empty;
+
+            id = _tree.GetBackgroundPlotId(sensor, isStatusService);
+            return id != Guid.Empty;
+        }
+        
         [HttpPost]
         public Task<JsonResult> GetServiceStatusHistory([FromBody] GetSensorHistoryModel model, [FromQuery] bool isStatusService = false)
         {
-            if (!_tree.Sensors.TryGetValue(SensorPathHelper.DecodeGuid(model.EncodedId), out var sensor))
-                return Task.FromResult(_emptyJsonResult);
-
-            var compareFunc = GetCompareFunc();
-
-            var splittedPath = sensor.FullPath.Split('/');
-            var nodeIds = _tree.GetAllNodeSensors(sensor.RootProduct.Id);
-
-            var sensorId = Guid.Empty;
-            var pathComparisonValue = int.MinValue;
-            var pathLength = int.MaxValue;
-
-            foreach (var id in nodeIds)
-                if (_tree.Sensors.TryGetValue(id, out var foundSensor))
-                    if (compareFunc(foundSensor))
-                        CheckPath(foundSensor);
-
-
-            Func<SensorNodeViewModel, bool> GetCompareFunc()
-            {
-                var name = isStatusService ? "Service status" : "Service alive";
-
-                return sensor => sensor.Path.EndsWith($".module/Module Info/{name}");
-            }
-
-            void CheckPath(NodeViewModel sensor)
-            {
-                var comparedPath = sensor.FullPath.Split('/');
-                var i = 0;
-                while (i < comparedPath.Length && i < splittedPath.Length && comparedPath[i] == splittedPath[i])
-                    i++;
-
-                if (i > pathComparisonValue || (i == pathComparisonValue && pathLength > comparedPath.Length))
-                {
-                    sensorId = sensor.Id;
-                    pathComparisonValue = i;
-                    pathLength = comparedPath.Length;
-                }
-            }
-            
-            return sensorId == Guid.Empty ? Task.FromResult(_emptyJsonResult) : ChartHistory(model with { EncodedId = sensorId.ToString() });
+            return TryGetBackgroundSensorId(SensorPathHelper.DecodeGuid(model.EncodedId), isStatusService, out var id) 
+                ? ChartHistory(model with { EncodedId = id.ToString() })
+                : Task.FromResult(_emptyJsonResult);
         }
 
         public async Task<FileResult> ExportHistory([FromQuery(Name = "EncodedId")] string encodedId, [FromQuery(Name = "Type")] int type,

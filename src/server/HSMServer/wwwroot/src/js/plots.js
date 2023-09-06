@@ -357,7 +357,7 @@ export class EnumPlot extends Plot {
         this.showscale = false;
         this.type = 'heatmap';
         this.opacity = 0.25;
-        this.setUpData(data)
+        this.setUpData(data);
     }
 
     setUpData(data) {
@@ -422,7 +422,24 @@ export class EnumPlot extends Plot {
                 visible: false,
             },
             automargin: "width+height",
-            autosize: true
+            autosize: true,
+        }
+    }
+    
+    getTitle(){
+        return  {
+            text: 'Background path: ./mqqwe/qeqwe/asda/das',
+                font: {
+                size: 12
+            },
+            yref: 'paper',
+                xref: 'paper',
+                automargin: true,
+                xanchor: 'left',
+                pad: {
+                b: 10
+            },
+            x: 0
         }
     }
 }

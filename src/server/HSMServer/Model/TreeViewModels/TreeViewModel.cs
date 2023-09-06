@@ -100,6 +100,52 @@ namespace HSMServer.Model.TreeViewModel
             return sensors;
         }
 
+        internal Guid GetBackgroundPlotId(SensorNodeViewModel sensor, bool isStatusService)
+        {
+            var sensorId = Guid.Empty;
+
+            if (sensor is null)
+                return sensorId;
+            
+            var compareFunc = GetCompareFunc();
+
+            var splittedPath = sensor.FullPath.Split('/');
+            var nodeIds = GetAllNodeSensors(sensor.RootProduct.Id);
+
+            var pathComparisonValue = int.MinValue;
+            var pathLength = int.MaxValue;
+
+            foreach (var id in nodeIds)
+                if (Sensors.TryGetValue(id, out var foundSensor))
+                    if (compareFunc(foundSensor))
+                        CheckPath(foundSensor);
+
+
+            Func<SensorNodeViewModel, bool> GetCompareFunc()
+            {
+                var name = isStatusService ? "Service status" : "Service alive";
+
+                return sensor => sensor.Path.EndsWith($".module/Module Info/{name}");
+            }
+
+            void CheckPath(NodeViewModel sensor)
+            {
+                var comparedPath = sensor.FullPath.Split('/');
+                var i = 0;
+                while (i < comparedPath.Length && i < splittedPath.Length && comparedPath[i] == splittedPath[i])
+                    i++;
+
+                if (i > pathComparisonValue || (i == pathComparisonValue && pathLength > comparedPath.Length))
+                {
+                    sensorId = sensor.Id;
+                    pathComparisonValue = i;
+                    pathLength = comparedPath.Length;
+                }
+            }
+
+            return sensorId;
+        }
+
         internal void UpdateProductNotificationSettings(ProductNodeViewModel product)
         {
             var update = new ProductUpdate

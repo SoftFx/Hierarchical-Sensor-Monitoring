@@ -159,6 +159,20 @@ function convertToGraphData(graphData, sensorTypes, graphName) {
     }
 }
 
+function getDataForPlotButton(graphName, isStatusService) {
+    let {from, to} = getFromAndTo(graphName);
+    let body = Data(to, from, 1, graphName)
+    return $.ajax({
+        type: 'POST',
+        data: JSON.stringify(body),
+        url: `${getSensorStatus}?isStatusService=${isStatusService}`,
+        contentType: 'application/json',
+        dataType: 'html',
+        cache: false,
+        async: true,
+    });
+}
+
 function getAddPlotButton(name, isStatusService, icon, graphElementId, graphName) {
     return {
         name: name, //changing name doesn't work
@@ -177,30 +191,26 @@ function getAddPlotButton(name, isStatusService, icon, graphElementId, graphName
 
                 if (indexToDelete !== undefined)
                     Plotly.deleteTraces(graphElementId, indexToDelete);
-            } 
-            else {
-                let {from, to} = getFromAndTo(graphName);
-                let body = Data(to, from, 1, graphName)
-                $.ajax({
-                    type: 'POST',
-                    data: JSON.stringify(body),
-                    url: `${getSensorStatus}?isStatusService=${isStatusService}`,
-                    contentType: 'application/json',
-                    dataType: 'html',
-                    cache: false,
-                    async: true,
-                    success: function (data) {
-                        let escapedData = JSON.parse(data);
-                        let ranges = graph._fullLayout.yaxis.range;
-                        let heatPlot = new EnumPlot(escapedData, isStatusService)
-                        Plotly.addTraces(graphElementId, heatPlot.getPlotData(name, ranges[0], ranges[1]));
-                        Plotly.update(graphElementId, {}, {hovermode: 'x'});
-                    }
-                })
+            } else {
+                getDataForPlotButton(graphName, isStatusService).done(function (data){
+                    let escapedData = JSON.parse(data);
+                    let ranges = graph._fullLayout.yaxis.range;
+                    let heatPlot = new EnumPlot(escapedData, isStatusService)
+                    let updateLayout = {
+                        title: heatPlot.getTitle(),
+                        hovermode: 'x'
+                    };
+
+                    Plotly.addTraces(graphElementId, heatPlot.getPlotData(name, ranges[0], ranges[1]));
+                    Plotly.update(graphElementId, {}, updateLayout);
+                });
             }
 
             if (graph._fullData.length === 1)
-                Plotly.update(graphElementId, {}, {hovermode: 'closest'});
+                Plotly.update(graphElementId, {}, {
+                    hovermode: 'closest',
+                    title: {}
+                });
         }
     }
 }
