@@ -120,27 +120,36 @@ namespace HSMServer.Controllers
         }
 
         [HttpGet]
-        public IActionResult GetBackgroundSensorId([FromQuery] Guid currentId, [FromQuery] bool isStatusService = false)
+        public IActionResult GetBackgroundSensorInfo([FromQuery] Guid currentId, [FromQuery] bool isStatusService = false)
         {
-            if (TryGetBackgroundSensorId(currentId, isStatusService, out var id))
-                return Json(id);
+            if (TryGetBackgroundSensorInfo(currentId, isStatusService, out var id, out string path))
+                return Json(new
+                {
+                    id,
+                    path
+                });
 
             return _emptyJsonResult;
         }
 
-        private bool TryGetBackgroundSensorId(Guid currentId, bool isStatusService, out Guid id)
+        private bool TryGetBackgroundSensorInfo(Guid currentId, bool isStatusService, out Guid id, out string path)
         {
-            if (!_tree.Sensors.TryGetValue(currentId, out var sensor))
-                id = Guid.Empty;
+            id = _tree.Sensors.TryGetValue(currentId, out var sensor) ? _tree.GetBackgroundPlotId(sensor, isStatusService) : Guid.Empty;
 
-            id = _tree.GetBackgroundPlotId(sensor, isStatusService);
+            _tree.Sensors.TryGetValue(id, out var sensorNodeViewModel);
+            path = sensorNodeViewModel?.FullPath;
+
             return id != Guid.Empty;
         }
         
         [HttpPost]
         public Task<JsonResult> GetServiceStatusHistory([FromBody] GetSensorHistoryModel model, [FromQuery] bool isStatusService = false)
         {
-            return TryGetBackgroundSensorId(SensorPathHelper.DecodeGuid(model.EncodedId), isStatusService, out var id) 
+            var currentId = SensorPathHelper.DecodeGuid(model.EncodedId);
+            if (_tree.Sensors.TryGetValue(currentId, out var sensor) && sensor.Path.EndsWith($".module/Module Info/{(isStatusService ? "Service status" : "Service alive")}"))
+                return ChartHistory(model with { EncodedId = sensor.Id.ToString() });
+            
+            return TryGetBackgroundSensorInfo(currentId, isStatusService, out var id, out _) 
                 ? ChartHistory(model with { EncodedId = id.ToString() })
                 : Task.FromResult(_emptyJsonResult);
         }

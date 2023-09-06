@@ -426,9 +426,9 @@ export class EnumPlot extends Plot {
         }
     }
     
-    getTitle(){
+    getTitle(path){
         return  {
-            text: 'Background path: ./mqqwe/qeqwe/asda/das',
+            text: `Background path: ${path}`,
                 font: {
                 size: 12
             },

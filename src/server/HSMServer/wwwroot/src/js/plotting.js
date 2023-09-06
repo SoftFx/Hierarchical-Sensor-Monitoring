@@ -64,15 +64,10 @@ window.displayGraph = function (graphData, sensorTypes, graphElementId, graphNam
     let plot = convertToGraphData(graphData, sensorTypes, graphName);
     let zoomData = getPreviousZoomData(graphElementId);
 
-    var serviceButtonName = 'Show/Hide service status plot';
-    var heartBeatButtonName = 'Show/Hide service alive plot';
-    var config = {
+    let config = {
         responsive: true,
         displaylogo: false,
-        modeBarButtonsToAdd: [
-            getAddPlotButton(serviceButtonName, true, ServiceStatusIcon, graphElementId, graphName),
-            getAddPlotButton(heartBeatButtonName, false, ServiceAliveIcon, graphElementId, graphName),
-        ],
+        modeBarButtonsToAdd: getModeBarButtons(graphName, graphElementId),
         modeBarButtonsToRemove: [
             'pan',
             'lasso2d',
@@ -159,6 +154,15 @@ function convertToGraphData(graphData, sensorTypes, graphName) {
     }
 }
 
+function getBackgroundSensorId(id, isStatusService){
+    return $.ajax({
+        type: 'GET',
+        url: `${getBackgroundId}?currentId=${id}&isStatusService=${isStatusService}`,
+        cache: false,
+        async: false,
+    });
+}
+
 function getDataForPlotButton(graphName, isStatusService) {
     let {from, to} = getFromAndTo(graphName);
     let body = Data(to, from, 1, graphName)
@@ -173,12 +177,28 @@ function getDataForPlotButton(graphName, isStatusService) {
     });
 }
 
-function getAddPlotButton(name, isStatusService, icon, graphElementId, graphName) {
+function getModeBarButtons(id, graphId){
+    let modeBarButtons = [];
+    let serviceButtonName = 'Show/Hide service status plot';
+    let heartBeatButtonName = 'Show/Hide service alive plot';
+  
+    $.when(getBackgroundSensorId(id, true), getBackgroundSensorId(id, false)).done(function(status, alive){
+        if(!jQuery.isEmptyObject(status[0]))
+            modeBarButtons.push(addPlotButton(serviceButtonName, true, ServiceStatusIcon, graphId, status[0].id, status[0].path))
+
+        if(!jQuery.isEmptyObject(alive[0]))
+            modeBarButtons.push(addPlotButton(heartBeatButtonName, false, ServiceAliveIcon, graphId, alive[0].id, alive[0].path))
+    });
+
+    return modeBarButtons;
+}
+
+function addPlotButton(name, isStatusService, icon, graphId, id, path){
     return {
-        name: name, //changing name doesn't work
+        name: name,
         icon: icon,
         click: function (gd) {
-            let graph = $(`#${graphElementId}`)[0];
+            let graph = $(`#${graphId}`)[0];
             let plots = graph._fullData;
             if (plots.length > 1) {
                 let indexToDelete = undefined;
@@ -190,24 +210,24 @@ function getAddPlotButton(name, isStatusService, icon, graphElementId, graphName
                 }
 
                 if (indexToDelete !== undefined)
-                    Plotly.deleteTraces(graphElementId, indexToDelete);
+                    Plotly.deleteTraces(graphId, indexToDelete);
             } else {
-                getDataForPlotButton(graphName, isStatusService).done(function (data){
+                getDataForPlotButton(id, isStatusService).done(function (data){
                     let escapedData = JSON.parse(data);
                     let ranges = graph._fullLayout.yaxis.range;
                     let heatPlot = new EnumPlot(escapedData, isStatusService)
                     let updateLayout = {
-                        title: heatPlot.getTitle(),
+                        title: heatPlot.getTitle(path),
                         hovermode: 'x'
                     };
 
-                    Plotly.addTraces(graphElementId, heatPlot.getPlotData(name, ranges[0], ranges[1]));
-                    Plotly.update(graphElementId, {}, updateLayout);
+                    Plotly.addTraces(graphId, heatPlot.getPlotData(name, ranges[0], ranges[1]));
+                    Plotly.update(graphId, {}, updateLayout);
                 });
             }
 
             if (graph._fullData.length === 1)
-                Plotly.update(graphElementId, {}, {
+                Plotly.update(graphId, {}, {
                     hovermode: 'closest',
                     title: {}
                 });
