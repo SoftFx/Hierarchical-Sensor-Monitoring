@@ -42,7 +42,7 @@ namespace HSMServer.Core.Model.Policies
         }
 
 
-        internal void ApplyParent(TTLPolicy parent)
+        internal void ApplyParent(TTLPolicy parent, bool disable = false)
         {
             var update = new PolicyUpdate()
             {
@@ -50,6 +50,7 @@ namespace HSMServer.Core.Model.Policies
                 Id = Id,
                 Template = parent.Template,
                 Icon = parent.Icon,
+                IsDisabled = disable,
             };
 
             FullUpdate(update, _sensor);

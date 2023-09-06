@@ -14,11 +14,13 @@ namespace HSMServer.Core.Model
         Blocked = byte.MaxValue,
     }
 
+
     [Flags]
     public enum Integration : int
     {
         Grafana = 1,
     }
+
 
     public enum Unit : int
     {
@@ -29,6 +31,15 @@ namespace HSMServer.Core.Model
         GB = 4,
 
         Percents = 100,
+    }
+
+
+    [Flags]
+    public enum DefaultAlertsOptions : long
+    {
+        None = 0,
+        DisableTtl = 1,
+        DisableStatusChange = 2,
     }
 
 

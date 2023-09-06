@@ -22,7 +22,7 @@ namespace HSMServer.Core.Model.Policies
 
         internal abstract void Update(List<PolicyUpdate> updates, InitiatorInfo initiator);
 
-        internal abstract void AddDefault(Dictionary<Guid, string> connectedChats);
+        internal abstract void AddDefault(Dictionary<Guid, string> connectedChats, DefaultAlertsOptions options);
 
 
         internal void Reset()
@@ -206,7 +206,7 @@ namespace HSMServer.Core.Model.Policies
                 }
         }
 
-        internal override void AddDefault(Dictionary<Guid, string> connectedChats)
+        internal override void AddDefault(Dictionary<Guid, string> connectedChats, DefaultAlertsOptions options)
         {
             var policy = new PolicyType();
 
@@ -223,6 +223,7 @@ namespace HSMServer.Core.Model.Policies
                         PolicyProperty.Status,
                         new TargetValue(TargetType.LastValue, _sensor.Id.ToString())),
                 },
+                IsDisabled = options.HasFlag(DefaultAlertsOptions.DisableStatusChange)
             };
 
             policy.Update(statusUpdate, _sensor);

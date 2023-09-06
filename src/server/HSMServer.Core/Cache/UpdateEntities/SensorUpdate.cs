@@ -23,6 +23,9 @@ namespace HSMServer.Core.Cache.UpdateEntities
         public SensorState? State { get; init; }
 
         public Unit? SelectedUnit { get; init; }
+
+
+        public DefaultAlertsOptions DefaultAlertsOptions { get; init; }
     }
 
 

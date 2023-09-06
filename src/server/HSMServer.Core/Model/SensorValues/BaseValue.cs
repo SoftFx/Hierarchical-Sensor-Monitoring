@@ -11,6 +11,7 @@ namespace HSMServer.Core.Model
         OffTime = byte.MaxValue,
     }
 
+
     public enum SensorType : byte
     {
         Boolean,
@@ -122,9 +123,9 @@ namespace HSMServer.Core.Model
 
         public override BaseValue TrySetValue(BaseValue baseValue) => this with
         {
-            Value = ((BaseValue<T>) baseValue).Value
+            Value = ((BaseValue<T>)baseValue).Value
         };
-        
+
 
         protected override bool IsEqual(BaseValue value)
         {
