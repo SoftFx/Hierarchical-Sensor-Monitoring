@@ -9,7 +9,7 @@ using Microsoft.Extensions.Options;
 
 namespace HSMPingModule.Collector;
 
-internal sealed class DataCollectorService : BackgroundService, IDataCollectorService, IDisposable
+internal sealed class DataCollectorService : IDataCollectorService, IDisposable
 {
     private readonly ILogger<DataCollectorService> _logger;
     private readonly ConcurrentDictionary<string, IInstantValueSensor<double>> _sensors = new ();
@@ -36,9 +36,10 @@ internal sealed class DataCollectorService : BackgroundService, IDataCollectorSe
             ServerAddress = _config.CollectorSettings.ServerAddress,
             Port = _config.CollectorSettings.Port
         };
-        _logger.LogInformation($"Access key: {collectorOptions.AccessKey}");
-        _logger.LogInformation($"Server address: {collectorOptions.ServerAddress}");
-        _logger.LogInformation($"Server port: {collectorOptions.Port}");
+
+        _logger.LogInformation("Access key: {key}", collectorOptions.AccessKey);
+        _logger.LogInformation("Server address: {address}", collectorOptions.ServerAddress);
+        _logger.LogInformation("Server port: {port}", collectorOptions.Port);
 
         _collector = new DataCollector(collectorOptions).AddNLog();
 
@@ -58,22 +59,14 @@ internal sealed class DataCollectorService : BackgroundService, IDataCollectorSe
     }
 
 
-    public override async Task StopAsync(CancellationToken cancellationToken)
+    public async Task StopAsync()
     {
-        await _collector.Stop();
-        await base.StopAsync(cancellationToken);
-    }
-    
-
-    protected override Task ExecuteAsync(CancellationToken stoppingToken)
-    {
-        return Task.CompletedTask;
+       await _collector.Stop();
     }
 
-    public override Task StartAsync(CancellationToken token)
+    public async Task StartAsync()
     {
-        _collector.Start().ContinueWith((reply) => _logger.LogInformation("Collector started"), token);
-        return base.StartAsync(token);
+        await _collector.Start().ContinueWith(_ => _logger.LogInformation("Collector started"));
     }
 
 
@@ -95,9 +88,8 @@ internal sealed class DataCollectorService : BackgroundService, IDataCollectorSe
             _sensors.TryAdd(path, sensor);
     }
     
-    public override void Dispose()
+    public void Dispose()
     {
         _collector?.Dispose();
-        base.Dispose();
     }
 }

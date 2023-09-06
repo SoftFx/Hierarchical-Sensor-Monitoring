@@ -22,7 +22,6 @@ try
 
     builder.Services.AddSingleton<IDataCollectorService, DataCollectorService>();
 
-    builder.Services.AddHostedService(provider => provider.GetService(typeof(IDataCollectorService)) as BackgroundService);
     builder.Services.AddHostedService<SettingsWatcherService>();
     builder.Services.AddHostedService<PingService>();
 

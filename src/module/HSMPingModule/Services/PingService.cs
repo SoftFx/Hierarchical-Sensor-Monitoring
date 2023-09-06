@@ -36,11 +36,19 @@ internal class PingService : BackgroundService
 
     protected override Task ExecuteAsync(CancellationToken stoppingToken)
     {
+        _collectorService.StartAsync();
+        
         foreach (var (country, pings) in _newPings)
             foreach (var (_, ping) in pings)
                 _ = ping.StartPinging();
 
         return Task.CompletedTask;
+    }
+
+    public override Task StopAsync(CancellationToken cancellationToken)
+    {
+        _collectorService.StopAsync();
+        return base.StopAsync(cancellationToken);
     }
 
 
