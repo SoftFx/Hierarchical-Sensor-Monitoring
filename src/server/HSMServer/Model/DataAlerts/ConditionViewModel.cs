@@ -49,6 +49,8 @@ namespace HSMServer.Model.DataAlerts
         private readonly List<PolicyOperation> _statusOperations = new()
         {
             PolicyOperation.IsChanged,
+            PolicyOperation.IsChangedToOk,
+            PolicyOperation.IsChangedToError,
             PolicyOperation.IsOk,
             PolicyOperation.IsError
         };

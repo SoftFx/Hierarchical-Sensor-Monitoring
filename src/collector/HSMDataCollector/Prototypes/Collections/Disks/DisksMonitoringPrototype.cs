@@ -37,8 +37,6 @@ namespace HSMDataCollector.Prototypes
         {
             var prototype = Get(userOptions);
 
-            prototype.Alerts.Clear();
-
             foreach (var drive in DriveInfo.GetDrives())
             {
                 if (drive.DriveType == DriveType.Fixed)
@@ -88,8 +86,6 @@ namespace HSMDataCollector.Prototypes
         internal IEnumerable<DiskSensorOptions> GetAllDisksOptions(DiskSensorOptions userOptions)
         {
             var prototype = Get(userOptions);
-
-            prototype.Alerts.Clear();
 
             foreach (var drive in DriveInfo.GetDrives())
             {

@@ -1,4 +1,5 @@
-﻿using HSMServer.Core.Cache.UpdateEntities;
+﻿using HSMCommon.Extensions;
+using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Model.Policies;
 using HSMServer.Core.TableOfChanges;
 using HSMServer.Extensions;
@@ -24,6 +25,26 @@ namespace HSMServer.Model.DataAlerts
 
 
         public bool IsModify { get; protected set; }
+
+
+        internal bool IsAlertDisplayed
+        {
+            get
+            {
+                var firstConfition = Conditions.FirstOrDefault();
+
+                if (firstConfition?.Property == AlertProperty.TimeToLive)
+                {
+                    var displayValue = firstConfition.TimeToLive.DisplayValue;
+                    var neverInterval = TimeInterval.None.GetDisplayName();
+                    var isTtlNever = displayValue == TimeInterval.FromParent.ToFromParentDisplay(neverInterval) || displayValue == neverInterval;
+
+                    return !isTtlNever;
+                }
+
+                return true;
+            }
+        }
 
 
         internal PolicyUpdate ToUpdate(Dictionary<Guid, string> availavleChats)

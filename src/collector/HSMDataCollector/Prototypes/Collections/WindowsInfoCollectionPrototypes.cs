@@ -4,6 +4,7 @@ using HSMDataCollector.Options;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.SensorRequests;
 using System;
+using System.Collections.Generic;
 
 namespace HSMDataCollector.Prototypes
 {
@@ -51,9 +52,12 @@ namespace HSMDataCollector.Prototypes
 
             Type = SensorType.TimeSpanSensor;
 
-            Alerts.Add(AlertsFactory.IfValue(AlertOperation.GreaterThan, TimeSpan.FromDays(90))
-                                    .ThenSendNotification($"[$product] $sensor. Windows hasn't been updated for $value")
-                                    .AndSetSensorError().Build());
+            Alerts = new List<InstantAlertTemplate>()
+            {
+                AlertsFactory.IfValue(AlertOperation.GreaterThan, TimeSpan.FromDays(90))
+                             .ThenSendNotification($"[$product] $sensor. Windows hasn't been updated for $value")
+                             .AndSetSensorError().Build()
+            };
         }
     }
 }

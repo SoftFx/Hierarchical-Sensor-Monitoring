@@ -1,7 +1,6 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Cache.UpdateEntities;
-using HSMServer.Core.Journal;
 using HSMServer.Core.TableOfChanges;
 using System;
 using System.Collections.Concurrent;
@@ -10,7 +9,7 @@ using System.Linq;
 
 namespace HSMServer.Core.Model.Policies
 {
-    public abstract class SensorPolicyCollection : PolicyCollectionBase, IChangesEntity
+    public abstract class SensorPolicyCollection : PolicyCollectionBase
     {
         internal protected SensorResult SensorResult { get; protected set; } = SensorResult.Ok;
 
@@ -20,14 +19,10 @@ namespace HSMServer.Core.Model.Policies
         internal Action<ActionType, Policy> Uploaded;
         internal Action<BaseSensorModel, bool> SensorExpired;
 
-        public event Action<JournalRecordModel> ChangesHandler;
-
 
         internal abstract void Update(List<PolicyUpdate> updates, InitiatorInfo initiator);
 
-        internal abstract void Attach(BaseSensorModel sensor);
-
-        internal abstract void AddDefault(Dictionary<Guid, string> connectedChats);
+        internal abstract void AddDefault(Dictionary<Guid, string> connectedChats, DefaultAlertsOptions options);
 
 
         internal void Reset()
@@ -35,27 +30,24 @@ namespace HSMServer.Core.Model.Policies
             SensorResult = SensorResult.Ok;
             PolicyResult = PolicyResult.Ok;
         }
-
-        protected void CallJournal(JournalRecordModel record) => ChangesHandler?.Invoke(record);
     }
 
 
     public abstract class SensorPolicyCollection<T> : SensorPolicyCollection where T : BaseValue
     {
+        private protected CorrectTypePolicy<T> _typePolicy;
         private protected BaseSensorModel _sensor;
-        private CorrectTypePolicy<T> _typePolicy;
-
-
-        private protected ChangeCollection AlertChangeInfo => _sensor.ChangeTable.Policies;
 
 
         protected abstract bool CalculateStorageResult(T value, bool updateSensor);
 
 
-        internal override void Attach(BaseSensorModel sensor)
+        internal override void Attach(BaseNodeModel sensor)
         {
-            _typePolicy = new CorrectTypePolicy<T>(sensor);
-            _sensor = sensor;
+            base.Attach(sensor);
+
+            _sensor = (BaseSensorModel)_model;
+            _typePolicy = new CorrectTypePolicy<T>(_sensor);
 
             PolicyResult = new(sensor.Id);
 
@@ -68,15 +60,6 @@ namespace HSMServer.Core.Model.Policies
 
             _typePolicy.Destination = node.Policies.TimeToLive.Destination;
             _typePolicy.RebuildState();
-        }
-
-        public override void UpdateTTL(PolicyUpdate update)
-        {
-            var oldValue = TimeToLive.ToString();
-
-            base.UpdateTTL(update);
-
-            CallJournal(update.Id, update.Id == Guid.Empty ? string.Empty : oldValue, TimeToLive.ToString(), update.Initiator);
         }
 
 
@@ -120,27 +103,6 @@ namespace HSMServer.Core.Model.Policies
             return timeout;
         }
 
-
-        protected void CallJournal(Guid alertId, string oldValue, string newValue, InitiatorInfo initiator, bool isParentCall = false)
-        {
-            if (oldValue != newValue)
-            {
-                var propertyName = isParentCall ? "Alert change" : "Alert change by parent";
-
-                CallJournal(new JournalRecordModel(_sensor.Id, initiator)
-                {
-                    Enviroment = "Alert collection",
-                    PropertyName = propertyName,
-                    OldValue = oldValue,
-                    NewValue = newValue,
-                    Path = _sensor.FullPath,
-                });
-
-                if (alertId != Guid.Empty)
-                    AlertChangeInfo[alertId.ToString()].SetUpdate(initiator);
-            }
-        }
-
         private void RemoveAlert(Policy policy)
         {
             PolicyResult.RemoveAlert(policy);
@@ -161,17 +123,20 @@ namespace HSMServer.Core.Model.Policies
 
         protected override bool CalculateStorageResult(ValueType value, bool updateStatus = true)
         {
-            SensorResult = SensorResult.Ok;
-            PolicyResult = new(_sensor.Id);
+            if (!value.Status.IsOfftime())
+            {
+                SensorResult = SensorResult.Ok;
+                PolicyResult = new(_sensor.Id);
 
-            foreach (var policy in _storage.Values)
-                if (!policy.IsDisabled && !policy.Validate(value))
-                {
-                    PolicyResult.AddAlert(policy);
+                foreach (var policy in _storage.Values)
+                    if (!policy.IsDisabled && !policy.Validate(value))
+                    {
+                        PolicyResult.AddAlert(policy);
 
-                    if (updateStatus)
-                        SensorResult += policy.SensorResult;
-                }
+                        if (updateStatus)
+                            SensorResult += policy.SensorResult;
+                    }
+            }
 
             return true;
         }
@@ -241,7 +206,7 @@ namespace HSMServer.Core.Model.Policies
                 }
         }
 
-        internal override void AddDefault(Dictionary<Guid, string> connectedChats)
+        internal override void AddDefault(Dictionary<Guid, string> connectedChats, DefaultAlertsOptions options)
         {
             var policy = new PolicyType();
 
@@ -258,6 +223,7 @@ namespace HSMServer.Core.Model.Policies
                         PolicyProperty.Status,
                         new TargetValue(TargetType.LastValue, _sensor.Id.ToString())),
                 },
+                IsDisabled = options.HasFlag(DefaultAlertsOptions.DisableStatusChange)
             };
 
             policy.Update(statusUpdate, _sensor);

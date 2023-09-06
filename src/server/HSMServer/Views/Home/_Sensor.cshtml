@@ -318,10 +318,15 @@
             $("#receivingTime_header").removeClass('d-none');
             $('[id^="receivingTime_value"]').removeClass('d-none');
 
-            if ('@Model.SaveOnlyUniqueValues' === 'True') {
+            if ('@(Model.Type is SensorType.DoubleBar or SensorType.IntegerBar)' === 'True') {
                 $("#lastUpdateTime_header").removeClass('d-none');
-                $("#aggregatedValuesCount_header").removeClass('d-none');
+                $("#closeTime_header").removeClass('d-none');
                 $('[id^="lastUpdateTime_value"]').removeClass('d-none');
+                $('[id^="closeTime_value"]').removeClass('d-none');
+            }
+
+            if ('@Model.SaveOnlyUniqueValues' === 'True') {
+                $("#aggregatedValuesCount_header").removeClass('d-none');
                 $('[id^="aggregatedValuesCount_value"]').removeClass('d-none');
             }
 
@@ -331,10 +336,15 @@
             $("#receivingTime_header").addClass('d-none');
             $('[id^="receivingTime_value"]').addClass('d-none');
 
-            if ('@Model.SaveOnlyUniqueValues' === 'True') {
+            if ('@(Model.Type is SensorType.DoubleBar or SensorType.IntegerBar)' === 'True') {
                 $("#lastUpdateTime_header").addClass('d-none');
-                $("#aggregatedValuesCount_header").addClass('d-none');
+                $("#closeTime_header").addClass('d-none');
                 $('[id^="lastUpdateTime_value"]').addClass('d-none');
+                $('[id^="closeTime_value"]').addClass('d-none');
+            }
+
+            if ('@Model.SaveOnlyUniqueValues' === 'True') {
+                $("#aggregatedValuesCount_header").addClass('d-none');
                 $('[id^="aggregatedValuesCount_value"]').addClass('d-none');
             }
 

@@ -75,6 +75,8 @@ namespace HSMServer.Core.Model
 
             if (entity.Settings is not null)
                 Settings.SetSettings(entity.Settings);
+
+            Policies.Attach(this);
         }
 
 
@@ -89,9 +91,6 @@ namespace HSMServer.Core.Model
 
             Settings.SetParentSettings(parent.Settings);
             Policies.BuildDefault(this, _ttlEntity); //need for correct calculating $product and $path properties
-
-            //if (!Settings.TTL.IsSet)
-            //    Policies.TimeToLive.ApplyParent(parent.Policies.TimeToLive);
 
             return this;
         }
@@ -112,11 +111,12 @@ namespace HSMServer.Core.Model
         }
 
 
-        protected T UpdateProperty<T>(T oldValue, T newValue, InitiatorInfo initiator, [CallerArgumentExpression(nameof(oldValue))] string propName = "", bool forced = false)
+        protected T UpdateProperty<T>(T oldValue, T newValue, InitiatorInfo initiator, [CallerArgumentExpression(nameof(oldValue))] string propName = "", bool? forced = null)
         {
             var infoNode = ChangeTable.Properties[propName];
+            var forceUpdate = forced ?? initiator.IsForceUpdate;
 
-            if (!forced && !infoNode.CanChange(initiator))
+            if (!forceUpdate && !infoNode.CanChange(initiator))
                 return oldValue;
 
             if (newValue is not null && !newValue.Equals(oldValue ?? newValue))

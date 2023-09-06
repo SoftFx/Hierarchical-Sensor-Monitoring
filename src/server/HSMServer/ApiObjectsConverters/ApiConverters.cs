@@ -14,6 +14,7 @@ using System.Linq;
 using System.Numerics;
 using ApiSensorStatus = HSMSensorDataObjects.SensorStatus;
 
+
 namespace HSMServer.ApiObjectsConverters
 {
     public static class ApiConverters
@@ -225,8 +226,11 @@ namespace HSMServer.ApiObjectsConverters
             };
 
 
-        public static SensorUpdate Convert(this AddOrUpdateSensorRequest request, Guid sensorId, string keyName) =>
-            new()
+        public static SensorUpdate Convert(this AddOrUpdateSensorRequest request, Guid sensorId, Dictionary<Guid, string> allChats, string keyName)
+        {
+            var initiator = InitiatorInfo.AsCollector(keyName, request.IsForceUpdate);
+
+            return new()
             {
                 Id = sensorId,
                 Description = request.Description,
@@ -236,16 +240,18 @@ namespace HSMServer.ApiObjectsConverters
                 KeepHistory = request.KeepHistory.ToTimeInterval(),
                 SelfDestroy = request.SelfDestroy.ToTimeInterval(),
                 TTL = request.TTL.ToTimeInterval(),
-                TTLPolicy = request.TtlAlert?.Convert(keyName),
-                Policies = request.Alerts?.Select(policy => policy.Convert(keyName)).ToList(),
-                Initiator = InitiatorInfo.AsCollector(keyName),
+                TTLPolicy = request.TtlAlert?.Convert(allChats, initiator),
+                Policies = request.Alerts?.Select(policy => policy.Convert(allChats, initiator)).ToList(),
+                DefaultAlertsOptions = (Core.Model.DefaultAlertsOptions)request.DefaultAlertsOptions,
+                Initiator = initiator,
             };
+        }
 
 
-        public static PolicyUpdate Convert(this AlertUpdateRequest request, string keyName) => new()
+        public static PolicyUpdate Convert(this AlertUpdateRequest request, Dictionary<Guid, string> allChats, InitiatorInfo initiator) => new()
         {
             Conditions = request.Conditions?.Select(c => c.Convert()).ToList(),
-            Destination = new PolicyDestinationUpdate(),
+            Destination = new PolicyDestinationUpdate(true, allChats),
             Sensitivity = request.Sensitivity.ToTimeInterval(),
 
             Id = Guid.Empty,
@@ -253,7 +259,7 @@ namespace HSMServer.ApiObjectsConverters
             Template = request.Template,
             Icon = request.Icon,
             IsDisabled = request.IsDisabled,
-            Initiator = InitiatorInfo.AsCollector(keyName),
+            Initiator = initiator,
         };
 
 

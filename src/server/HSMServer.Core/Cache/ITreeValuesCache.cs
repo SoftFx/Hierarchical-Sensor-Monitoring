@@ -1,7 +1,6 @@
 ﻿using HSMSensorDataObjects.HistoryRequests;
 using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Model;
-using HSMServer.Core.Model.Policies;
 using HSMServer.Core.Model.Requests;
 using HSMServer.Core.TableOfChanges;
 using System;
@@ -39,7 +38,7 @@ namespace HSMServer.Core.Cache
 
         bool TryCheckKeyWritePermissions(BaseRequestModel request, out string message);
         bool TryCheckKeyReadPermissions(BaseRequestModel request, out string message);
-        bool TryCheckSensorUpdateKeyPermission(BaseRequestModel request, out Guid sensorId, out string message);
+        bool TryCheckSensorUpdateKeyPermission(BaseRequestModel request, out ProductModel product, out Guid sensorId, out string message);
 
         AccessKeyModel AddAccessKey(AccessKeyModel key);
         AccessKeyModel RemoveAccessKey(Guid id);
@@ -68,11 +67,5 @@ namespace HSMServer.Core.Cache
         void AddNewChat(Guid chatId, string name, string productName);
 
         void RemoveChat(Guid chatId, string productName);
-
-        [Obsolete("Should be removed after policies chats migration")]
-        void UpdatePolicy(Policy policy);
-
-        [Obsolete("Should be removed after policies chats migration")]
-        void UpdateSensor(Guid sensorId);
     }
 }

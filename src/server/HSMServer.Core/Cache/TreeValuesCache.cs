@@ -172,11 +172,11 @@ namespace HSMServer.Core.Cache
             GetAccessKeyModel(request).IsValid(KeyPermissions.CanReadSensorData, out message) &&
             TryGetSensor(request, product, null, out _, out message);
 
-        public bool TryCheckSensorUpdateKeyPermission(BaseRequestModel request, out Guid sensorId, out string message)
+        public bool TryCheckSensorUpdateKeyPermission(BaseRequestModel request, out ProductModel product, out Guid sensorId, out string message)
         {
             sensorId = Guid.Empty;
 
-            if (!TryCheckProductKey(request, out var product, out message))
+            if (!TryCheckProductKey(request, out product, out message))
                 return false;
 
             var accessKey = GetAccessKeyModel(request);
@@ -269,7 +269,7 @@ namespace HSMServer.Core.Cache
                     return;
 
                 var parentProduct = AddNonExistingProductsAndGetParentProduct(product, request);
-                var sensor = AddSensor(request, request.Type, parentProduct);
+                var sensor = AddSensor(request, request.Type, parentProduct, request.Update.DefaultAlertsOptions);
 
                 update = update with { Id = sensor.Id };
             }
@@ -304,8 +304,8 @@ namespace HSMServer.Core.Cache
                         PropertyName = request.PropertyName,
                         Enviroment = request.Environment,
                         Path = sensor.FullPath,
-                        OldValue = request.BuildComment(lastValue.Status, lastValue.Comment, lastValue.RawValue.ToString()),
-                        NewValue = request.BuildComment(value: value.RawValue.ToString())
+                        OldValue = request.BuildComment(lastValue.Status, lastValue.Comment, lastValue.RawValue?.ToString()),
+                        NewValue = request.BuildComment(value: value.RawValue?.ToString())
                     });
 
                     _database.AddSensorValue(value.ToEntity(request.Id));
@@ -544,18 +544,19 @@ namespace HSMServer.Core.Cache
         private void AddBaseNodeSubscription(BaseNodeModel model)
         {
             model.Settings.ChangesHandler += _journalService.AddRecord;
+            model.Policies.ChangesHandler += _journalService.AddRecord;
             model.ChangesHandler += _journalService.AddRecord;
         }
 
         private void RemoveBaseNodeSubscription(BaseNodeModel model)
         {
             model.Settings.ChangesHandler -= _journalService.AddRecord;
+            model.Policies.ChangesHandler -= _journalService.AddRecord;
             model.ChangesHandler -= _journalService.AddRecord;
         }
 
         private void SubscribeSensorToPolicyUpdate(BaseSensorModel sensor)
         {
-            sensor.Policies.ChangesHandler += _journalService.AddRecord;
             sensor.Policies.SensorExpired += SetExpiredSnapshot;
             sensor.Policies.Uploaded += UpdatePolicy;
 
@@ -566,7 +567,6 @@ namespace HSMServer.Core.Cache
 
         private void RemoveSensorPolicies(BaseSensorModel sensor)
         {
-            sensor.Policies.ChangesHandler -= _journalService.AddRecord;
             sensor.Policies.SensorExpired -= SetExpiredSnapshot;
             sensor.Policies.Uploaded -= UpdatePolicy;
 
@@ -602,7 +602,7 @@ namespace HSMServer.Core.Cache
             var sensor = parentProduct.Sensors.FirstOrDefault(s => s.Value.DisplayName == sensorName).Value;
 
             if (sensor == null)
-                sensor = AddSensor(storeInfo, value.Type, parentProduct);
+                sensor = AddSensor(storeInfo, value.Type, parentProduct, DefaultAlertsOptions.None);
             else if (sensor.State == SensorState.Blocked)
                 return;
 
@@ -660,70 +660,7 @@ namespace HSMServer.Core.Cache
 
             _logger.Info($"{nameof(TreeValuesCache)} initialized");
 
-            PoliciesDestinationMigration();
-
             UpdateCacheState();
-        }
-
-        [Obsolete("Should be removed after policies chats migration")]
-        private void PoliciesDestinationMigration()
-        {
-            _logger.Info($"Starting policies destination migration for products...");
-
-            var productsToResave = new HashSet<Guid>(_tree.Count);
-
-            var productsChats = new Dictionary<string, Dictionary<Guid, string>>();
-            foreach (var product in GetProducts())
-            {
-                var chats = new Dictionary<Guid, string>();
-                if (product?.NotificationsSettings?.TelegramSettings?.Chats?.Count > 0)
-                    foreach (var chat in product.NotificationsSettings.TelegramSettings.Chats)
-                        chats.Add(new Guid(chat.SystemId), chat.Name);
-
-                productsChats.Add(product.DisplayName, chats);
-            }
-
-            foreach (var (productId, product) in _tree)
-            {
-                var policy = product.Policies.TimeToLive;
-                if (policy.Destination is not null)
-                    continue;
-
-                var ttlUpdate = new PolicyUpdate
-                {
-                    Id = policy.Id,
-                    Conditions = policy.Conditions.Select(u => new PolicyConditionUpdate(u.Operation, u.Property, u.Target, u.Combination)).ToList(),
-                    Destination = new PolicyDestinationUpdate(true, productsChats.TryGetValue(product.RootProductName, out var chats) ? chats : new()),
-                    Sensitivity = policy.Sensitivity,
-                    Status = policy.Status,
-                    Template = policy.Template,
-                    IsDisabled = policy.IsDisabled,
-                    Icon = policy.Icon,
-                };
-
-                product.Policies.UpdateTTL(ttlUpdate);
-                productsToResave.Add(productId);
-            }
-
-            foreach (var productId in productsToResave)
-                if (_tree.TryGetValue(productId, out var product))
-                    _database.UpdateProduct(product.ToEntity());
-
-            _logger.Info($"{productsToResave.Count} polices destination migration is finished for products");
-        }
-
-        [Obsolete("Should be removed after policies chats migration")]
-        public void UpdatePolicy(Policy policy)
-        {
-            policy.RebuildState();
-            _database.UpdatePolicy(policy.ToEntity());
-        }
-
-        [Obsolete("Should be removed after policies chats migration")]
-        public void UpdateSensor(Guid sensorId)
-        {
-            if (_sensors.TryGetValue(sensorId, out var sensor))
-                _database.UpdateSensor(sensor.ToEntity());
         }
 
 
@@ -751,58 +688,7 @@ namespace HSMServer.Core.Cache
             var policyEntities = _database.GetAllPolicies();
             _logger.Info($"{nameof(IDatabaseCore.GetAllPolicies)} requested");
 
-            //TODO should be removed after migration
-            for (int i = 0; i < policyEntities.Count; ++i)
-                if (policyEntities[i].Conditions.Count == 1)
-                {
-                    var entity = policyEntities[i];
-                    var cond = entity.Conditions[0];
-                    var template = entity.Template;
-
-                    if (cond.Property == (byte)PolicyProperty.Status && cond.Operation == (byte)PolicyOperation.IsChanged && template.StartsWith("$status"))
-                    {
-                        var newEntity = entity with
-                        {
-                            Template = $"$prevStatus->{template}"
-                        };
-
-                        _database.UpdatePolicy(newEntity);
-                        policyEntities[i] = newEntity;
-                    }
-                }
-
             return policyEntities.ToDictionary(k => new Guid(k.Id).ToString(), v => v);
-        }
-
-        [Obsolete("Should be removed after telegram chat IDs migration")]
-        private void TelegramChatsMigration()
-        {
-            _logger.Info($"Starting products telegram chats migration...");
-
-            var productsToResave = new HashSet<Guid>();
-            var chatIds = new Dictionary<long, byte[]>(1 << 4);
-
-            foreach (var (_, node) in _tree)
-                if (node.NotificationsSettings?.TelegramSettings?.Chats is not null)
-                    foreach (var chat in node.NotificationsSettings.TelegramSettings.Chats)
-                        if (chat.SystemId is null)
-                        {
-                            if (chatIds.TryGetValue(chat.Id, out var systemChatId))
-                                chat.SystemId = systemChatId;
-                            else
-                            {
-                                chat.SystemId = Guid.NewGuid().ToByteArray();
-                                chatIds.Add(chat.Id, chat.SystemId);
-                            }
-
-                            productsToResave.Add(node.Id);
-                        }
-
-            foreach (var productId in productsToResave)
-                if (_tree.TryGetValue(productId, out var product))
-                    _database.UpdateProduct(product.ToEntity());
-
-            _logger.Info($"{productsToResave.Count} products telegram chats migration is finished");
         }
 
         private void ApplyProducts(List<ProductEntity> productEntities)
@@ -818,8 +704,6 @@ namespace HSMServer.Core.Cache
             }
 
             _logger.Info($"{nameof(productEntities)} applied");
-
-            TelegramChatsMigration();
 
             _logger.Info("Links between products are building");
 
@@ -951,7 +835,7 @@ namespace HSMServer.Core.Cache
             return product;
         }
 
-        private BaseSensorModel AddSensor(BaseRequestModel request, SensorType type, ProductModel parent)
+        private BaseSensorModel AddSensor(BaseRequestModel request, SensorType type, ProductModel parent, DefaultAlertsOptions options)
         {
             SensorEntity entity = new()
             {
@@ -962,16 +846,14 @@ namespace HSMServer.Core.Cache
 
             var sensor = SensorModelFactory.Build(entity);
             parent.AddSensor(sensor);
+
             if (!sensor.Settings.TTL.IsSet)
-                sensor.Policies.TimeToLive.ApplyParent(parent.Policies.TimeToLive);
+                sensor.Policies.TimeToLive.ApplyParent(parent.Policies.TimeToLive, options.HasFlag(DefaultAlertsOptions.DisableTtl));
 
             SubscribeSensorToPolicyUpdate(sensor);
 
-            if (request is StoreInfo)
-            {
-                var root = GetProductByName(sensor.RootProductName);
-                sensor.Policies.AddDefault(root?.NotificationsSettings?.TelegramSettings?.Chats?.ToDictionary(u => new Guid(u.SystemId), v => v.Name));
-            }
+            var root = GetProductByName(sensor.RootProductName);
+            sensor.Policies.AddDefault(root?.NotificationsSettings?.TelegramSettings?.Chats?.ToDictionary(u => new Guid(u.SystemId), v => v.Name), options);
 
             AddSensor(sensor);
             UpdateProduct(parent);

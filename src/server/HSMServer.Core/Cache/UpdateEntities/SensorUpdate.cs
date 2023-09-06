@@ -23,6 +23,9 @@ namespace HSMServer.Core.Cache.UpdateEntities
         public SensorState? State { get; init; }
 
         public Unit? SelectedUnit { get; init; }
+
+
+        public DefaultAlertsOptions DefaultAlertsOptions { get; init; }
     }
 
 
@@ -47,6 +50,8 @@ namespace HSMServer.Core.Cache.UpdateEntities
 
 
         public InitiatorInfo Initiator { get; init; }
+
+        public bool IsParentRequest { get; init; }
     }
 
 
@@ -64,17 +69,7 @@ namespace HSMServer.Core.Cache.UpdateEntities
         public bool AllChats { get; }
 
 
-        public PolicyDestinationUpdate()
-        {
-            AllChats = true;
-        }
-
-        public PolicyDestinationUpdate(Dictionary<Guid, string> chats)
-        {
-            Chats = chats;
-        }
-
-        public PolicyDestinationUpdate(bool allChats, Dictionary<Guid, string> chats) //TODO should be removed after Destination megration
+        public PolicyDestinationUpdate(bool allChats, Dictionary<Guid, string> chats)
         {
             AllChats = allChats;
             Chats = chats;

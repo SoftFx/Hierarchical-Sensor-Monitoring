@@ -42,12 +42,17 @@ namespace HSMDataCollector.Options
         public bool? EnableForGrafana { get; set; }
 
         public bool? AggregateData { get; set; }
+
+
+        public DefaultAlertsOptions DefaultAlertsOptions { get; set; }
+
+        public bool IsForceUpdate { get; set; } // if true then DataCollector can chage user settings
     }
 
 
     public class InstantSensorOptions : SensorOptions
     {
-        public List<InstantAlertTemplate> Alerts { get; set; } = new List<InstantAlertTemplate>();
+        public List<InstantAlertTemplate> Alerts { get; set; }
 
         internal override AddOrUpdateSensorRequest ApiRequest => this.ToApi();
     }
@@ -61,7 +66,7 @@ namespace HSMDataCollector.Options
 
     public class BarSensorOptions : SensorOptions, IMonitoringOptions
     {
-        public List<BarAlertTemplate> Alerts { get; set; } = new List<BarAlertTemplate>();
+        public List<BarAlertTemplate> Alerts { get; set; }
 
 
         public TimeSpan PostDataPeriod { get; set; } = TimeSpan.FromSeconds(15);

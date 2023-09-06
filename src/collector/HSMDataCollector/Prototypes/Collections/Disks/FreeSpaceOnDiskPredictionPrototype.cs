@@ -3,6 +3,7 @@ using HSMDataCollector.Options;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.SensorRequests;
 using System;
+using System.Collections.Generic;
 
 namespace HSMDataCollector.Prototypes
 {
@@ -14,6 +15,13 @@ namespace HSMDataCollector.Prototypes
         public FreeSpaceOnDiskPredictionPrototype() : base()
         {
             Type = SensorType.TimeSpanSensor;
+
+            Alerts = new List<InstantAlertTemplate>()
+            {
+                AlertsFactory.IfValue(AlertOperation.LessThanOrEqual, TimeSpan.FromDays(2))
+                             .ThenSendNotification($"[$product] $sensor. Free disk space will run out in about $value")
+                             .AndSetSensorError().Build(),
+            };
         }
 
 
@@ -22,10 +30,6 @@ namespace HSMDataCollector.Prototypes
             var options = base.Get(customOptions);
 
             options.Description = $"{options.Description} {string.Format(CalibrationInfo, options.CalibrationRequests)}";
-
-            options.Alerts.Add(AlertsFactory.IfValue(AlertOperation.LessThanOrEqual, TimeSpan.FromDays(2))
-                                            .ThenSendNotification($"[$product] $sensor. Free disk space will run out in about $value")
-                                            .AndSetSensorError().Build());
 
             return options;
         }

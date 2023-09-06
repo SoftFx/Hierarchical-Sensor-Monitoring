@@ -9,8 +9,10 @@ const Colors = {
 }
 
 const MarkerSize = {
-    default: 10,
-    Ttl: 15
+    default: 0,
+    defaultLineSize: 2,
+    small: 5,
+    Ttl: 10
 }
 
 export class Plot {
@@ -21,7 +23,7 @@ export class Plot {
     mode = '';
     showlegend = false;
     hovertemplate = "%{x}, %{customdata}<extra></extra>";
-    
+
     constructor(data) { }
 
     setUpData(data) {}
@@ -35,15 +37,15 @@ export class Plot {
             autosize: true
         }
     }
-    
+
     checkTtl(value) {
         return !!value.isTimeout;
     }
-    
+
     addCustomData(value, compareFunc = null, customField = 'value') {
         if (this.checkTtl(value))
             this.customdata.push(value.comment);
-        else  
+        else
             this.customdata.push(compareFunc === null ? value[customField] : compareFunc(value));
     }
 
@@ -53,12 +55,12 @@ export class Plot {
 
         return Colors.default;
     }
-    
+
     getMarkerSize (value) {
         if (this.checkTtl(value))
             return MarkerSize.Ttl;
-        
-        return MarkerSize.default;
+
+        return MarkerSize.defaultLineSize;
     }
 }
 
@@ -91,18 +93,18 @@ export class BoolPlot extends Plot {
 
         this.hovertemplate = "%{x}, %{customdata}<extra></extra>";
     }
-    
+
     customDataCompareFunc(value) {
         return value.value === true;
     }
-    
+
     markerColorCompareFunc(value) {
         if (this.checkTtl(value))
             return Colors.TtlGrey;
-        
+
         return this.customDataCompareFunc(value) ? Colors.blue : Colors.red;
     }
-    
+
     getLayout() {
         return {
             autosize: true,
@@ -113,6 +115,13 @@ export class BoolPlot extends Plot {
                 nticks: 2
             }
         }
+    }
+
+    getMarkerSize(value) {
+        if (this.checkTtl(value))
+            return MarkerSize.Ttl;
+
+        return MarkerSize.small;
     }
 }
 
@@ -170,7 +179,7 @@ export class DoublePlot extends Plot {
         for (let i of data) {
             this.x.push(i.time)
             this.y.push(i[customField])
-            
+
             this.addCustomData(i, null, customField);
             this.marker.size.push(this.getMarkerSize(i));
             this.marker.color.push(this.markerColorCompareFunc(i));
@@ -215,7 +224,7 @@ export class BarPLot extends Plot {
             this.mean.push(i.mean);
             this.count.push(i.count);
         }
-        
+
         window.barGraphData.plot = this;
         window.barGraphData.plotData = data;
     }
@@ -266,7 +275,7 @@ export class TimeSpanPlot extends Plot {
 
         this.hovertemplate = '%{customdata}<extra></extra>'
     }
-    
+
     getTimeSpanValue(value) {
         let time = value.value.split(':');
         let temp = time[0].split('.')
@@ -287,7 +296,7 @@ export class TimeSpanPlot extends Plot {
     getTimeSpanCustomData(timespan, value) {
         if (this.checkTtl(value))
             return value.comment;
-        
+
         if (timespan === undefined)
             return '0h 0m 0s';
 

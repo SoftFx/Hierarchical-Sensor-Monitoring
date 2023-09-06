@@ -107,22 +107,25 @@ namespace HSMServer.Core.Model
 
         protected override void UpdateTTL(PolicyUpdate update)
         {
-            static void UpdateTTLPolicy(ProductModel model, PolicyUpdate update)
+            var parentRequest = update with { IsParentRequest = true };
+
+            void UpdateTTLPolicy(ProductModel model)
             {
-                model.Policies.UpdateTTL(update);
+                model.Policies.UpdateTTL(model == this ? update : parentRequest);
 
                 foreach (var (_, subProduct) in model.SubProducts)
-                    UpdateTTLPolicy(subProduct, update);
+                    if (!subProduct.Settings.TTL.IsSet)
+                        UpdateTTLPolicy(subProduct);
 
                 foreach (var (_, sensor) in model.Sensors)
                     if (!sensor.Settings.TTL.IsSet)
                     {
-                        sensor.Policies.UpdateTTL(update);
+                        sensor.Policies.UpdateTTL(parentRequest);
                         sensor.UpdateFromParentSettings?.Invoke(sensor.ToEntity());
                     }
             }
 
-            UpdateTTLPolicy(this, update);
+            UpdateTTLPolicy(this);
         }
     }
 }

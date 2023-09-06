@@ -11,6 +11,7 @@ namespace HSMServer.Core.Model
         OffTime = byte.MaxValue,
     }
 
+
     public enum SensorType : byte
     {
         Boolean,
@@ -68,6 +69,8 @@ namespace HSMServer.Core.Model
 
         public abstract BaseValue TrySetValue(string str);
 
+        public abstract BaseValue TrySetValue(BaseValue baseValue);
+
 
         internal bool TryAggregateValue(BaseValue value)
         {
@@ -117,6 +120,12 @@ namespace HSMServer.Core.Model
 
             return this;
         }
+
+        public override BaseValue TrySetValue(BaseValue baseValue) => this with
+        {
+            Value = ((BaseValue<T>)baseValue).Value
+        };
+
 
         protected override bool IsEqual(BaseValue value)
         {
