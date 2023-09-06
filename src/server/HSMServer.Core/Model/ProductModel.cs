@@ -36,7 +36,7 @@ namespace HSMServer.Core.Model
         [Obsolete("Should be removed after telegram chats migration")]
         public NotificationSettingsEntity NotificationsSettings { get; private set; }
 
-        public List<Guid> TelegramChats { get; private set; } // TODO: should be without set and = new() after telegram chats migration
+        public HashSet<Guid> TelegramChats { get; private set; } // TODO: should be without set and = new() after telegram chats migration
 
 
         public ProductModel(string name, Guid? authorId = default) : base(name.Trim(), authorId)
@@ -50,10 +50,12 @@ namespace HSMServer.Core.Model
         {
             State = (ProductState)entity.State;
             NotificationsSettings = entity.NotificationSettings;
-            TelegramChats = entity.TelegramChats?.Select(Guid.Parse)?.ToList();
             FolderId = Guid.TryParse(entity.FolderId, out var folderId) ? folderId : null;
 
             Policies.BuildDefault(this, entity.TTLPolicy);
+
+            if (entity.TelegramChats is not null)
+                TelegramChats = new HashSet<Guid>(entity.TelegramChats.Select(c => new Guid(c)));
         }
 
 
@@ -75,7 +77,7 @@ namespace HSMServer.Core.Model
                 FolderId = update.FolderId != Guid.Empty ? update.FolderId : null;
 
             if (update.TelegramChats is not null)
-                TelegramChats = update.TelegramChats; // TODO: should be Clear and then AddRange after telegram chats migration
+                TelegramChats = update.TelegramChats;
 
             NotificationsSettings = update?.NotificationSettings ?? NotificationsSettings;
 
@@ -106,7 +108,7 @@ namespace HSMServer.Core.Model
             Description = Description,
             CreationDate = CreationDate.Ticks,
             NotificationSettings = NotificationsSettings,
-            TelegramChats = TelegramChats.Select(u => $"{u}").ToList(),
+            TelegramChats = TelegramChats.Select(c => c.ToByteArray()).ToList(),
             Policies = Policies.Ids.Select(u => $"{u}").ToList(),
             Settings = Settings.ToEntity(),
             TTLPolicy = Policies.TimeToLive?.ToEntity(),

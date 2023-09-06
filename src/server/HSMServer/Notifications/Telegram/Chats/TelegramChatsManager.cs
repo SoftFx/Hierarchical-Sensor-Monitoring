@@ -57,14 +57,14 @@ namespace HSMServer.Notifications
         private void ChatsMigration()
         {
             var chatsToResave = new Dictionary<Guid, TelegramChat>(1 << 4);
-            var productChats = new Dictionary<Guid, List<Guid>>(1 << 4);
+            var productChats = new Dictionary<Guid, HashSet<Guid>>(1 << 4);
             var productNamesToId = new Dictionary<string, Guid>(1 << 4);
             var usersToResave = new List<User>(1 << 4);
 
             foreach (var product in _cache.GetProducts())
                 if (product.TelegramChats is null)
                 {
-                    productChats.Add(product.Id, new List<Guid>());
+                    productChats.Add(product.Id, new HashSet<Guid>());
                     productNamesToId.Add(product.DisplayName, product.Id);
 
                     if (product.NotificationsSettings?.TelegramSettings?.Chats?.Count > 0)
@@ -82,7 +82,7 @@ namespace HSMServer.Notifications
                                     Name = oldChat.Name,
                                     SendMessages = true,
                                     AuthorizationTime = new DateTime(oldChat.AuthorizationTime),
-                                    MessagesAggregationTime = 60,
+                                    MessagesAggregationTimeSec = 60,
                                 };
 
                                 chatsToResave.Add(id, chat);
@@ -111,7 +111,7 @@ namespace HSMServer.Notifications
                                     Name = oldChat.Name,
                                     SendMessages = true,
                                     AuthorizationTime = oldChat.AuthorizationTime,
-                                    MessagesAggregationTime = 60,
+                                    MessagesAggregationTimeSec = 60,
                                 };
 
                                 chatsToResave.Add(id, chat);
@@ -130,17 +130,13 @@ namespace HSMServer.Notifications
 
                         foreach (var policy in sensorPolicies)
                             foreach (var (chatId, _) in policy.Destination.Chats)
-                            {
-                                if (!productChats[productId].Contains(chatId))
-                                    productChats[productId].Add(chatId);
-                            }
+                                productChats[productId].Add(chatId);
                     }
 
                 foreach (var product in _cache.GetAllNodes())
                     if (productNamesToId.TryGetValue(product.RootProductName, out var parentId))
                         foreach (var (chatId, _) in product.Policies.TimeToLive.Destination.Chats)
-                            if (!productChats[parentId].Contains(chatId))
-                                productChats[parentId].Add(chatId);
+                            productChats[parentId].Add(chatId);
             }
 
             foreach (var (_, chat) in chatsToResave)

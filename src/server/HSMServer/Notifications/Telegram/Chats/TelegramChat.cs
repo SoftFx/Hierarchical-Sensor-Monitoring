@@ -27,24 +27,24 @@ namespace HSMServer.Notifications
 
         public ChatId ChatId { get; init; }
 
-
-        [Obsolete("Should be removed after telegram chats migration")]
-        public bool IsUserChat { get; init; }
-
-        public bool SendMessages { get; init; }
-
-        public string Description { get; init; }
-
         public ConnectedChatType Type { get; init; }
 
         public DateTime AuthorizationTime { get; init; }
 
-        public int MessagesAggregationTime { get; init; }
+        [Obsolete("Should be removed after telegram chats migration")]
+        public bool IsUserChat { get; init; }
 
 
-        public string Name { get; set; }
+        public bool SendMessages { get; init; }
+
+        public int MessagesAggregationTimeSec { get; init; }
+
+
+        public string Description { get; init; }
 
         public string Author { get; set; }
+
+        public string Name { get; set; }
 
 
         public TelegramChat()
@@ -71,7 +71,7 @@ namespace HSMServer.Notifications
             Description = entity.Description;
             SendMessages = entity.SendMessages;
             Type = (ConnectedChatType)entity.Type;
-            MessagesAggregationTime = entity.MessagesAggregationTime;
+            MessagesAggregationTimeSec = entity.MessagesAggregationTimeSec;
             AuthorizationTime = new DateTime(entity.AuthorizationTime);
         }
 
@@ -102,7 +102,7 @@ namespace HSMServer.Notifications
                 Author = AuthorId?.ToByteArray(),
                 ChatId = ChatId?.Identifier ?? 0L,
                 AuthorizationTime = AuthorizationTime.Ticks,
-                MessagesAggregationTime = MessagesAggregationTime,
+                MessagesAggregationTimeSec = MessagesAggregationTimeSec,
             };
     }
 }
