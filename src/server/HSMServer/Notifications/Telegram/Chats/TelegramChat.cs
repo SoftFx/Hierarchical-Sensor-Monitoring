@@ -1,6 +1,8 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.ConcurrentStorage;
+using HSMServer.Model.TreeViewModel;
 using System;
+using System.Collections.Concurrent;
 using Telegram.Bot.Types;
 
 namespace HSMServer.Notifications
@@ -14,6 +16,11 @@ namespace HSMServer.Notifications
 
     public sealed class TelegramChat : IServerModel<TelegramChatEntity, TelegramChatUpdate>
     {
+        public ConcurrentDictionary<Guid, User> Managers { get; } = new();
+
+        public ConcurrentDictionary<Guid, ProductNodeViewModel> Products { get; } = new();
+
+
         public Guid Id { get; }
 
         public Guid? AuthorId { get; }
