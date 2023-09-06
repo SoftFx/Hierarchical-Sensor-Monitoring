@@ -24,7 +24,8 @@ namespace HSMServer.Model.Authentication
 
         public string Password { get; init; }
 
-        public ClientNotifications Notifications { get; init; }
+        [Obsolete("Should be removed after telegram chats migration")]
+        public ClientNotifications Notifications { get; set; }
 
         public List<(Guid, ProductRoleEnum)> ProductsRoles { get; set; } = new();
 

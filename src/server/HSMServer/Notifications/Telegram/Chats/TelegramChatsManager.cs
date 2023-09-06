@@ -4,8 +4,10 @@ using HSMServer.ConcurrentStorage;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.DataLayer;
+using HSMServer.Model.Authentication;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 
 namespace HSMServer.Notifications
@@ -56,11 +58,14 @@ namespace HSMServer.Notifications
         {
             var chatsToResave = new Dictionary<Guid, TelegramChat>(1 << 4);
             var productChats = new Dictionary<Guid, List<Guid>>(1 << 4);
+            var productNamesToId = new Dictionary<string, Guid>(1 << 4);
+            var usersToResave = new List<User>(1 << 4);
 
             foreach (var product in _cache.GetProducts())
                 if (product.TelegramChats is null)
                 {
                     productChats.Add(product.Id, new List<Guid>());
+                    productNamesToId.Add(product.DisplayName, product.Id);
 
                     if (product.NotificationsSettings?.TelegramSettings?.Chats?.Count > 0)
                         foreach (var oldChat in product.NotificationsSettings.TelegramSettings.Chats)
@@ -73,7 +78,7 @@ namespace HSMServer.Notifications
                                 {
                                     Id = id,
                                     ChatId = oldChat.Id,
-                                    Type = oldChat.IsUserChat ? ConnectedChatType.TelegramPrivate : ConnectedChatType.TelegramGroup,
+                                    Type = ConnectedChatType.TelegramGroup,
                                     Name = oldChat.Name,
                                     SendMessages = true,
                                     AuthorizationTime = new DateTime(oldChat.AuthorizationTime),
@@ -87,8 +92,62 @@ namespace HSMServer.Notifications
                         }
                 }
 
+            if (productChats.Count > 0)
+            {
+                foreach (var user in _userManager.GetUsers())
+                {
+                    if (user.Notifications?.Telegram?.Chats?.Count > 0)
+                        foreach (var (_, oldChat) in user.Notifications.Telegram.Chats)
+                        {
+                            var id = oldChat.Id;
+
+                            if (!chatsToResave.ContainsKey(id))
+                            {
+                                var chat = new TelegramChat()
+                                {
+                                    Id = id,
+                                    ChatId = oldChat.ChatId,
+                                    Type = ConnectedChatType.TelegramPrivate,
+                                    Name = oldChat.Name,
+                                    SendMessages = true,
+                                    AuthorizationTime = oldChat.AuthorizationTime,
+                                    MessagesAggregationTime = 60,
+                                };
+
+                                chatsToResave.Add(id, chat);
+                            }
+                        }
+
+                    user.Notifications = new(new() { TelegramSettings = null, EnabledSensors = null, PartiallyIgnored = null, AutoSubscription = false });
+                    usersToResave.Add(user);
+                }
+
+                foreach (var sensor in _cache.GetSensors())
+                    if (productNamesToId.TryGetValue(sensor.RootProductName, out var productId))
+                    {
+                        var sensorPolicies = sensor.Policies.ToList();
+                        sensorPolicies.Add(sensor.Policies.TimeToLive);
+
+                        foreach (var policy in sensorPolicies)
+                            foreach (var (chatId, _) in policy.Destination.Chats)
+                            {
+                                if (!productChats[productId].Contains(chatId))
+                                    productChats[productId].Add(chatId);
+                            }
+                    }
+
+                foreach (var product in _cache.GetAllNodes())
+                    if (productNamesToId.TryGetValue(product.RootProductName, out var parentId))
+                        foreach (var (chatId, _) in product.Policies.TimeToLive.Destination.Chats)
+                            if (!productChats[parentId].Contains(chatId))
+                                productChats[parentId].Add(chatId);
+            }
+
             foreach (var (_, chat) in chatsToResave)
                 _database.AddTelegramChat(chat.ToEntity());
+
+            foreach (var user in usersToResave)
+                _userManager.UpdateUser(user);
 
             foreach (var (productId, chats) in productChats)
             {
