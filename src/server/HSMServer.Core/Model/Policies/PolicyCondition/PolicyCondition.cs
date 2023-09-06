@@ -1,5 +1,6 @@
 ﻿using HSMCommon.Extensions;
 using HSMDatabase.AccessManager.DatabaseEntities;
+using System;
 using System.ComponentModel.DataAnnotations;
 
 namespace HSMServer.Core.Model.Policies
@@ -45,6 +46,8 @@ namespace HSMServer.Core.Model.Policies
         Count = 104,
         LastValue = 105,
 
+        Length = 120,
+
         OriginalSize = 151,
     }
 
@@ -70,6 +73,9 @@ namespace HSMServer.Core.Model.Policies
 
     public abstract class PolicyCondition
     {
+        private protected Func<BaseValue> _getLastValue;
+
+
         public abstract PolicyOperation Operation { get; set; }
 
         public abstract PolicyProperty Property { get; set; }
@@ -78,6 +84,14 @@ namespace HSMServer.Core.Model.Policies
 
 
         public PolicyCombination Combination { get; set; }
+
+
+        internal PolicyCondition SetLastValueGetter(Func<BaseValue> getLastValue)
+        {
+            _getLastValue = getLastValue;
+
+            return this;
+        }
 
 
         internal PolicyCondition FromEntity(PolicyConditionEntity entity)

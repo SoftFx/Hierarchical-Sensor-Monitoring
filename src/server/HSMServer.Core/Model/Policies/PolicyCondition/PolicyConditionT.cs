@@ -2,7 +2,13 @@
 
 namespace HSMServer.Core.Model.Policies
 {
-    public class PolicyCondition<T, U> : PolicyCondition where T : BaseValue
+    internal interface IPolicyCondition<T> where T : BaseValue
+    {
+        internal bool Check(T value);
+    }
+
+
+    public abstract class PolicyCondition<T, U> : PolicyCondition, IPolicyCondition<T> where T : BaseValue
     {
         private PolicyOperation _operationName;
         private PolicyProperty _propertyName;
@@ -12,9 +18,7 @@ namespace HSMServer.Core.Model.Policies
         private U _constTargetValue;
 
 
-        internal Func<string, U> ConstTargetValueConverter { get; init; }
-
-        internal Func<BaseValue> GetLastTargetValue { get; init; }
+        internal abstract U ConstTargetValueConverter(string str);
 
 
         public override PolicyOperation Operation
@@ -53,7 +57,7 @@ namespace HSMServer.Core.Model.Policies
         }
 
 
-        internal bool Check(T value) => _executor.Execute(value);
+        bool IPolicyCondition<T>.Check(T value) => _executor.Execute(value);
 
 
         private void SetTarget(TargetValue value)
@@ -73,7 +77,7 @@ namespace HSMServer.Core.Model.Policies
             object targetBuilder = value.Type switch
             {
                 TargetType.Const => BuildConstTargetBuilder(value.Value),
-                TargetType.LastValue => GetLastTargetValue,
+                TargetType.LastValue => _getLastValue,
                 _ => throw new NotImplementedException($"Unsupported target type {value.Type}"),
             };
 

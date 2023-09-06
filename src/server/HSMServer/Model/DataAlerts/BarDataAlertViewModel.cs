@@ -9,7 +9,7 @@ namespace HSMServer.Model.DataAlerts
     {
         public BarDataAlertViewModel(NodeViewModel node) : base(node) { }
 
-        public BarDataAlertViewModel(Policy<T, U> policy, SensorNodeViewModel sensor) : base(policy, sensor) { }
+        public BarDataAlertViewModel(Policy<T> policy, SensorNodeViewModel sensor) : base(policy, sensor) { }
 
 
         protected override ConditionViewModel CreateCondition(bool isMain) => new BarConditionViewModel<T, U>(isMain);
