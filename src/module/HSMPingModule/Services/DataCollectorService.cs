@@ -27,8 +27,7 @@ internal sealed class DataCollectorService : IDataCollectorService, IDisposable
         {
             Version = ServiceConfig.Version,
         };
-
-        _logger.LogInformation($"Product version: {productInfoOptions.Version}");
+        _logger.LogInformation("Product version: {version}", productInfoOptions.Version);
 
         var collectorOptions = new CollectorOptions()
         {
@@ -36,9 +35,8 @@ internal sealed class DataCollectorService : IDataCollectorService, IDisposable
             ServerAddress = _config.CollectorSettings.ServerAddress,
             Port = _config.CollectorSettings.Port
         };
-
         _logger.LogInformation("Access key: {key}", collectorOptions.AccessKey);
-        _logger.LogInformation("Server address: {address}", collectorOptions.ServerAddress);
+        _logger.LogInformation("Access key: {key}", collectorOptions.ServerAddress);
         _logger.LogInformation("Server port: {port}", collectorOptions.Port);
 
         _collector = new DataCollector(collectorOptions).AddNLog();

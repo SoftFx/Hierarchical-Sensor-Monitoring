@@ -2,15 +2,13 @@ using System.Reflection;
 using System.Text.Json.Serialization;
 using HSMCommon;
 using HSMPingModule.Settings;
-using NLog;
-using LogLevel = NLog.LogLevel;
 
 namespace HSMPingModule.Config;
 
 internal sealed class ServiceConfig
 {
     private IConfigurationRoot _configuration;
-    private Logger _logger;
+    private NLog.ILogger _logger;
 
 #if RELEASE
         public const string ConfigName = "appsettings.json";
@@ -44,7 +42,7 @@ internal sealed class ServiceConfig
     }
 
 
-    public void SetUpConfig(IConfigurationRoot configuration, Logger logger)
+    public void SetUpConfig(IConfigurationRoot configuration, NLog.ILogger logger)
     {
         _logger = logger;
         _configuration = configuration;
@@ -60,7 +58,7 @@ internal sealed class ServiceConfig
         }
         catch(Exception exception)
         {
-            _logger.Log(new LogEventInfo(LogLevel.Error, "Reload exception:", $"{exception.Message}"));
+            _logger.Info("Reload exception: {message}", exception.Message);
         }
     }
 
@@ -72,9 +70,9 @@ internal sealed class ServiceConfig
         CollectorSettings = Read<CollectorSettings>(nameof(CollectorSettings));
         ResourceSettings = Read<ResourceSettings>(nameof(ResourceSettings)).ApplyDefaultSettings();
 
-        _logger.Log(new LogEventInfo(LogLevel.Debug, "Collector key:", $"{CollectorSettings.Key}"));
-        _logger.Log(new LogEventInfo(LogLevel.Debug, "Collector port:", $"{CollectorSettings.Port}"));
-        _logger.Log(new LogEventInfo(LogLevel.Debug, "Server address:", $"{CollectorSettings.ServerAddress}"));
+        _logger.Info("Read collector key: {key}", CollectorSettings.Key);
+        _logger.Info("Read collector port: {port}", CollectorSettings.Port);
+        _logger.Info("Read server address: {adress}", CollectorSettings.ServerAddress);
 
         OnChange?.Invoke();
     }

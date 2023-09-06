@@ -75,7 +75,7 @@ internal class PingService : BackgroundService
                     });
 
                 _ = ping.StartPinging();
-                _logger.LogInformation($"New pinging sensor added at {_newPings[country][hostname].SensorPath}");
+                _logger.LogInformation("New pinging sensor added at {path}", _newPings[country][hostname].SensorPath);
             }
     }
 }
