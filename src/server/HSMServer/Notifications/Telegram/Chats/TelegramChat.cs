@@ -21,14 +21,14 @@ namespace HSMServer.Notifications
         public ConcurrentDictionary<Guid, ProductNodeViewModel> Products { get; } = new();
 
 
-        public Guid Id { get; }
+        public Guid Id { get; init; } // TODO: should be just get after telegram chats migration
 
         public Guid? AuthorId { get; }
 
         public ChatId ChatId { get; init; }
 
 
-        [Obsolete]
+        [Obsolete("Should be removed after telegram chats migration")]
         public bool IsUserChat { get; init; }
 
         public bool SendMessages { get; init; }

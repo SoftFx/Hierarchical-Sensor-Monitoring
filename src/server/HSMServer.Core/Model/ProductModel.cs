@@ -3,6 +3,7 @@ using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Model.Policies;
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Linq;
 
 namespace HSMServer.Core.Model
@@ -32,7 +33,10 @@ namespace HSMServer.Core.Model
         public Guid? FolderId { get; private set; }
 
 
+        [Obsolete("Should be removed after telegram chats migration")]
         public NotificationSettingsEntity NotificationsSettings { get; private set; }
+
+        public List<Guid> TelegramChats { get; private set; } // TODO: should be without set and = new() after telegram chats migration
 
 
         public ProductModel(string name, Guid? authorId = default) : base(name.Trim(), authorId)
@@ -46,6 +50,7 @@ namespace HSMServer.Core.Model
         {
             State = (ProductState)entity.State;
             NotificationsSettings = entity.NotificationSettings;
+            TelegramChats = entity.TelegramChats?.Select(Guid.Parse)?.ToList();
             FolderId = Guid.TryParse(entity.FolderId, out var folderId) ? folderId : null;
 
             Policies.BuildDefault(this, entity.TTLPolicy);
@@ -68,6 +73,9 @@ namespace HSMServer.Core.Model
 
             if (update.FolderId is not null)
                 FolderId = update.FolderId != Guid.Empty ? update.FolderId : null;
+
+            if (update.TelegramChats is not null)
+                TelegramChats = update.TelegramChats; // TODO: should be Clear and then AddRange after telegram chats migration
 
             NotificationsSettings = update?.NotificationSettings ?? NotificationsSettings;
 
@@ -98,6 +106,7 @@ namespace HSMServer.Core.Model
             Description = Description,
             CreationDate = CreationDate.Ticks,
             NotificationSettings = NotificationsSettings,
+            TelegramChats = TelegramChats.Select(u => $"{u}").ToList(),
             Policies = Policies.Ids.Select(u => $"{u}").ToList(),
             Settings = Settings.ToEntity(),
             TTLPolicy = Policies.TimeToLive?.ToEntity(),
