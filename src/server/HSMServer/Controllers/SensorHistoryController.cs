@@ -80,6 +80,20 @@ namespace HSMServer.Controllers
             return ChartHistory(SpecifyLatestHistoryModel(model));
         }
 
+        [HttpGet]
+        public IActionResult GetSensorPlotInfo([FromQuery] Guid id)
+        {
+            if (_tree.Sensors.TryGetValue(id, out var sensorNodeViewModel))
+                return Json(new
+                {
+                    realType = sensorNodeViewModel.Type,
+                    plotType = sensorNodeViewModel.Name is "Service alive" or "Service status" ? SensorType.Enum : sensorNodeViewModel.Type
+                });
+            
+            
+            return _emptyJsonResult;
+        }
+
         [HttpPost]
         public async Task<JsonResult> ChartHistory([FromBody] GetSensorHistoryModel model)
         {
@@ -105,50 +119,39 @@ namespace HSMServer.Controllers
             StoredUser.History.Reload(model);
         }
 
+        [HttpGet]
+        public IActionResult GetBackgroundSensorInfo([FromQuery] Guid currentId, [FromQuery] bool isStatusService = false)
+        {
+            if (TryGetBackgroundSensorInfo(currentId, isStatusService, out var id, out string path))
+                return Json(new
+                {
+                    id,
+                    path
+                });
+
+            return _emptyJsonResult;
+        }
+
+        private bool TryGetBackgroundSensorInfo(Guid currentId, bool isStatusService, out Guid id, out string path)
+        {
+            id = _tree.Sensors.TryGetValue(currentId, out var sensor) ? _tree.GetBackgroundPlotId(sensor, isStatusService) : Guid.Empty;
+
+            _tree.Sensors.TryGetValue(id, out var sensorNodeViewModel);
+            path = sensorNodeViewModel?.FullPath;
+
+            return id != Guid.Empty;
+        }
+        
         [HttpPost]
         public Task<JsonResult> GetServiceStatusHistory([FromBody] GetSensorHistoryModel model, [FromQuery] bool isStatusService = false)
         {
-            if (!_tree.Sensors.TryGetValue(SensorPathHelper.DecodeGuid(model.EncodedId), out var sensor))
-                return Task.FromResult(_emptyJsonResult);
-
-            var compareFunc = GetCompareFunc();
-
-            var splittedPath = sensor.FullPath.Split('/');
-            var nodeIds = _tree.GetAllNodeSensors(sensor.RootProduct.Id);
-
-            var sensorId = Guid.Empty;
-            var pathComparisonValue = int.MinValue;
-            var pathLength = int.MaxValue;
-
-            foreach (var id in nodeIds)
-                if (_tree.Sensors.TryGetValue(id, out var foundSensor))
-                    if (compareFunc(foundSensor))
-                        CheckPath(foundSensor);
-
-
-            Func<SensorNodeViewModel, bool> GetCompareFunc()
-            {
-                var name = isStatusService ? "Service status" : "Service alive";
-
-                return sensor => sensor.Path.EndsWith($".module/Module Info/{name}");
-            }
-
-            void CheckPath(NodeViewModel sensor)
-            {
-                var comparedPath = sensor.FullPath.Split('/');
-                var i = 0;
-                while (i < comparedPath.Length && i < splittedPath.Length && comparedPath[i] == splittedPath[i])
-                    i++;
-
-                if (i > pathComparisonValue || (i == pathComparisonValue && pathLength > comparedPath.Length))
-                {
-                    sensorId = sensor.Id;
-                    pathComparisonValue = i;
-                    pathLength = comparedPath.Length;
-                }
-            }
+            var currentId = SensorPathHelper.DecodeGuid(model.EncodedId);
+            if (_tree.Sensors.TryGetValue(currentId, out var sensor) && sensor.Path.EndsWith($".module/Module Info/{(isStatusService ? "Service status" : "Service alive")}"))
+                return ChartHistory(model with { EncodedId = sensor.Id.ToString() });
             
-            return sensorId == Guid.Empty ? Task.FromResult(_emptyJsonResult) : ChartHistory(model with { EncodedId = sensorId.ToString() });
+            return TryGetBackgroundSensorInfo(currentId, isStatusService, out var id, out _) 
+                ? ChartHistory(model with { EncodedId = id.ToString() })
+                : Task.FromResult(_emptyJsonResult);
         }
 
         public async Task<FileResult> ExportHistory([FromQuery(Name = "EncodedId")] string encodedId, [FromQuery(Name = "Type")] int type,
