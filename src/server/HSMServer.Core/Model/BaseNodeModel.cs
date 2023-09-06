@@ -75,6 +75,8 @@ namespace HSMServer.Core.Model
 
             if (entity.Settings is not null)
                 Settings.SetSettings(entity.Settings);
+
+            Policies.Attach(this);
         }
 
 
@@ -89,9 +91,6 @@ namespace HSMServer.Core.Model
 
             Settings.SetParentSettings(parent.Settings);
             Policies.BuildDefault(this, _ttlEntity); //need for correct calculating $product and $path properties
-
-            //if (!Settings.TTL.IsSet)
-            //    Policies.TimeToLive.ApplyParent(parent.Policies.TimeToLive);
 
             return this;
         }

@@ -45,6 +45,7 @@ namespace HSMDataCollector.Converters
                 EnableGrafana = options.EnableForGrafana,
                 AggregateData = options.AggregateData,
 
+                DefaultAlertsOptions = options.DefaultAlertsOptions,
                 IsForceUpdate = options.IsForceUpdate,
             };
 
