@@ -107,7 +107,7 @@ namespace HSMServer.Model.TreeViewModel
             if (sensor is null)
                 return sensorId;
             
-            var compareFunc = GetCompareFunc();
+            var name = isStatusService ? "Service status" : "Service alive";
 
             var splittedPath = sensor.FullPath.Split('/');
             var nodeIds = GetAllNodeSensors(sensor.RootProduct.Id);
@@ -117,33 +117,24 @@ namespace HSMServer.Model.TreeViewModel
 
             foreach (var id in nodeIds)
                 if (Sensors.TryGetValue(id, out var foundSensor))
-                    if (compareFunc(foundSensor))
-                        CheckPath(foundSensor);
+                    if (CompareFunc(foundSensor))
+                    {
+                        var comparedPath = foundSensor.FullPath.Split('/');
+                        var i = 0;
+                        while (i < comparedPath.Length && i < splittedPath.Length && comparedPath[i] == splittedPath[i])
+                            i++;
 
-
-            Func<SensorNodeViewModel, bool> GetCompareFunc()
-            {
-                var name = isStatusService ? "Service status" : "Service alive";
-
-                return sensor => sensor.Path.EndsWith($".module/Module Info/{name}");
-            }
-
-            void CheckPath(NodeViewModel sensor)
-            {
-                var comparedPath = sensor.FullPath.Split('/');
-                var i = 0;
-                while (i < comparedPath.Length && i < splittedPath.Length && comparedPath[i] == splittedPath[i])
-                    i++;
-
-                if (i > pathComparisonValue || (i == pathComparisonValue && pathLength > comparedPath.Length))
-                {
-                    sensorId = sensor.Id;
-                    pathComparisonValue = i;
-                    pathLength = comparedPath.Length;
-                }
-            }
+                        if (i > pathComparisonValue || (i == pathComparisonValue && pathLength > comparedPath.Length))
+                        {
+                            sensorId = foundSensor.Id;
+                            pathComparisonValue = i;
+                            pathLength = comparedPath.Length;
+                        }
+                    }
 
             return sensorId;
+
+            bool CompareFunc(SensorNodeViewModel sensor) => sensor.Path.EndsWith($".module/Module Info/{name}");
         }
 
         internal void UpdateProductNotificationSettings(ProductNodeViewModel product)
