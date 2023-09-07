@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 
 namespace HSMServer.ConcurrentStorage
@@ -11,7 +12,6 @@ namespace HSMServer.ConcurrentStorage
 
         ModelType this[Guid? id] { get; }
 
-        ModelType this[string name] { get; }
 
 
         event Action<ModelType> Added;
@@ -23,11 +23,13 @@ namespace HSMServer.ConcurrentStorage
 
         Task<bool> TryUpdate(ModelType value);
 
-        Task<bool> TryRemove(Guid folderId);
+        Task<bool> TryRemove(Guid id);
 
         bool TryGetValue(Guid id, out ModelType model);
 
         bool TryGetValueById(Guid? id, out ModelType model);
+
+        List<ModelType> GetValues();
 
         Task Initialize();
     }

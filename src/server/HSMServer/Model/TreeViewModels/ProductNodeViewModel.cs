@@ -5,7 +5,7 @@ using HSMServer.Model.AccessKeysViewModels;
 using HSMServer.Model.Authentication;
 using HSMServer.Model.Folders;
 using HSMServer.Notification.Settings;
-using HSMServer.Notifications.Telegram;
+using HSMServer.Notifications;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;

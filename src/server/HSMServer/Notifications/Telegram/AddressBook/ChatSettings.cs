@@ -10,9 +10,9 @@ namespace HSMServer.Notifications
 
         internal MessageBuilder MessageBuilder { get; } = new();
 
-        internal ChatId ChatId => Chat?.Id;
+        internal ChatId ChatId => Chat?.ChatId;
 
-        internal Guid SystemId => Chat.SystemId;
+        internal Guid SystemId => Chat.Id;
 
 
         internal ChatSettings(TelegramChat chat)

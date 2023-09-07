@@ -14,7 +14,7 @@ using System.Threading.Tasks;
 
 namespace HSMServer.Authentication
 {
-    public sealed class UserManager : ConcurrentStorage<User, UserEntity, UserUpdate>, IUserManager
+    public sealed class UserManager : ConcurrentStorageNames<User, UserEntity, UserUpdate>, IUserManager
     {
         private const string DefaultUserUsername = "default";
 

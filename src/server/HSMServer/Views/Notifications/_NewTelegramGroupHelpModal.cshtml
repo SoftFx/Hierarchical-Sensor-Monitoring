@@ -1,0 +1,55 @@
+﻿@using HSMServer.Notifications
+@using HSMServer.Constants
+@using HSMServer.Controllers
+
+@inject NotificationsCenter NotificationsCenter
+
+
+<div class="modal fade" tabindex="-1" role="dialog" id="newTelegramGroupHelp_modal">
+    <div class="modal-dialog modal-dialog-centered" role="document">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Add telegram group help</h5>
+                <button type="button" class="btn-close" onclick="hideAddTelegramGroupHelpModal()" aria-label="Close"></button>
+            </div>
+
+            <div id="newTelegramGroupHelp_modalBody" class="modal-body">
+                <ul class="settingsList list-group">
+                    <li class="list-group-item pt-0">1. Create group chat in Telegram.</li>
+                    <li class="list-group-item">2. Add Telegram Bot (@NotificationsCenter.TelegramBot.BotName) to group chat.</li>
+                    <li class="list-group-item">3. Give Admin right to Telegram Bot (@NotificationsCenter.TelegramBot.BotName).</li>
+                    <li class="list-group-item">4. Send <a href="javascript:getGroupStartCommand()">this message</a> from clipboard to group chat.</li>
+                    <li class="list-group-item">The bot will send a notification that it has been successfully initialized.</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+
+
+<script>
+    function showAddTelegramGroupHelpModal() {
+        $(`#newTelegramGroupHelp_modal`).modal({
+            backdrop: 'static'
+        });
+        $(`#newTelegramGroupHelp_modal`).modal('show');
+    }
+
+    function hideAddTelegramGroupHelpModal() {
+        $(`#newTelegramGroupHelp_modal`).modal('hide');
+    }
+
+    //TODO: we need Model.EntityId
+    //function getGroupStartCommand() {
+    //    $.ajax({
+    //        type: 'GET',
+    //        url: `@Html.Raw(Url.Action(nameof(NotificationsController.CopyStartCommandForGroup), ViewConstants.NotificationsController))?entityId=`,
+    //        dataType: 'html',
+    //        contentType: 'application/json',
+    //        cache: false,
+    //        async: true
+    //    }).done(function (command) {
+    //        copyToClipboard(command);
+    //    });
+    //}
+</script>

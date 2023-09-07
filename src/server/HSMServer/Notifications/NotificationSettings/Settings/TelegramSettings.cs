@@ -1,7 +1,7 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.Core;
 using HSMServer.Core.Model;
-using HSMServer.Notifications.Telegram;
+using HSMServer.Notifications;
 using System.Collections.Concurrent;
 using System.Linq;
 using Telegram.Bot.Types;
@@ -31,7 +31,7 @@ namespace HSMServer.Notification.Settings
 
         public TelegramSettings() { }
 
-        internal TelegramSettings(TelegramSettingsEntity entity)
+        internal TelegramSettings(TelegramSettingsEntityOld entity)
         {
             if (entity == null)
                 return;
@@ -55,14 +55,14 @@ namespace HSMServer.Notification.Settings
             Inheritance = settingsUpdate.Inheritance ?? Inheritance;
         }
 
-        internal TelegramSettingsEntity ToEntity() =>
+        internal TelegramSettingsEntityOld ToEntity() =>
             new()
             {
                 MessagesMinStatus = (byte)MessagesMinStatus,
                 MessagesAreEnabled = MessagesAreEnabled,
                 MessagesDelay = MessagesDelaySec,
                 Inheritance = (byte)Inheritance,
-                Chats = Chats.Select(ch => ch.Value.ToEntity()).ToList(),
+                Chats = Chats.Select(ch => ch.Value.ToEntityOld()).ToList(),
             };
     }
 }

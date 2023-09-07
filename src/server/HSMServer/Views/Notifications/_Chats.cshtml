@@ -11,45 +11,34 @@
 
 
 <div class="my-2">
-    <div class="row">
-        <h6 class="col-auto fw-bold">@Model.Title</h6>
-        @if (Model.Chats.Count == 0)
-        {
-            <h6 class="col-auto p-0">(There are no authorized @Model.Title.ToLower())</h6>
-        }
-    </div>
+    <div class="d-flex justify-content-between my-2">
+        <div class="d-flex">
+            <h6 class="col-auto fw-bold">@Model.Title</h6>
+            @if (Model.Chats.Count == 0)
+            {
+                <h6 class="col-auto p-0">(There are no authorized @Model.Title.ToLower())</h6>
+            }
+        </div>
 
-    @if (Model is GroupChatsViewModel)
-    {
-        <div class="row mx-2 my-0">
-            <ul class="settingsList list-group">
-            <li class="list-group-item pt-0">1. Create group chat in Telegram.</li>
-            <li class="list-group-item">2. Add Telegram Bot (@NotificationsCenter.TelegramBot.BotName) to group chat.</li>
-            <li class="list-group-item">3. Give Admin right to Telegram Bot (@NotificationsCenter.TelegramBot.BotName).</li>
-            <li class="list-group-item">4. <a href="javascript:getGroupStartCommand()">Copy message</a></li>
-            <li class="list-group-item">5. Send message from clipboard to group chat.</li>
-            <li class="list-group-item">The bot will send a notification that it has been successfully initialized.</li>
-        </ul>
+        <div class="d-flex mx-0 my-0">
+            @if (Model is GroupChatsViewModel)
+            {
+                <a href="javascript:showAddTelegramGroupHelp();">Add group help</a>
+            }
+            else if (Model is PrivateChatsViewModel)
+            {
+                <a asp-action="@nameof(NotificationsController.OpenInvitationLink)" target="_blank">Invitation link</a>
+            }
         </div>
-    }
-    else if (Model is PrivateChatsViewModel)
-    {
-        <div class="row mx-4 my-1">
-            <label class="col-auto p-0">If you want to start getting messages in telegram chat click</label>
-            <div class="col-auto">
-                <a asp-action="@nameof(NotificationsController.OpenInvitationLink)" target="_blank">invitation link</a>
-            </div>
-        </div>
-    }
+    </div>
 
     @if (Model.Chats.Count > 0)
     {
-        <table class="table mx-4">
+        <table class="table">
             <tr>
                 <th>@Model.NameColumn</th>
                 <th>Products</th>
                 <th>Admins</th>
-                <th>Authorized</th>
                 <th style="text-align:center">Actions</th>
             </tr>
             @foreach (var chat in Model.Chats)
@@ -71,7 +60,6 @@
                     </td>
                     <td>List of connected products</td>
                     <td>List of admins for groups/user for accounts</td>
-                    <td>@chat.AuthorizationTime</td>
                     <td style="text-align:center">
                         <div class="dropdown">
                             <button id="actionButton" class="btn" data-bs-toggle="dropdown" data-bs-auto-close="true" aria-haspopup="true" aria-expanded="false">
@@ -127,17 +115,7 @@
 
 
 <script>
-    //TODO: we need Model.EntityId
-    //function getGroupStartCommand() {
-    //    $.ajax({
-    //        type: 'GET',
-    //        url: `@Html.Raw(Url.Action(nameof(NotificationsController.CopyStartCommandForGroup), ViewConstants.NotificationsController))?entityId=`,
-    //        dataType: 'html',
-    //        contentType: 'application/json',
-    //        cache: false,
-    //        async: true
-    //    }).done(function (command) {
-    //        copyToClipboard(command);
-    //    });
-    //}
+    function showAddTelegramGroupHelp() {
+        showAddTelegramGroupHelpModal();
+    }
 </script>

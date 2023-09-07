@@ -1,10 +1,7 @@
 ﻿using HSMServer.Extensions;
-using HSMServer.Notifications.Telegram;
+using HSMServer.Notifications;
 using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Linq;
-using Telegram.Bot.Types;
 
 namespace HSMServer.Model.NotificationViewModels
 {
@@ -15,8 +12,21 @@ namespace HSMServer.Model.NotificationViewModels
         public GroupChatsViewModel GroupChats { get; }
 
 
-        internal ChatsViewModel(ConcurrentDictionary<ChatId, TelegramChat> privates, ConcurrentDictionary<ChatId, TelegramChat> groups)
+        internal ChatsViewModel(List<TelegramChat> chats)
         {
+            var privates = new List<TelegramChatViewModel>(1 << 3);
+            var groups = new List<TelegramChatViewModel>(1 << 3);
+
+            foreach (var chat in chats)
+            {
+                var viewModel = new TelegramChatViewModel(chat);
+
+                if (chat.Type is ConnectedChatType.TelegramPrivate)
+                    privates.Add(viewModel);
+                else
+                    groups.Add(viewModel);
+            }
+
             PrivateChats = new PrivateChatsViewModel(privates);
             GroupChats = new GroupChatsViewModel(groups);
         }
@@ -31,9 +41,9 @@ namespace HSMServer.Model.NotificationViewModels
         public abstract string NameColumn { get; }
 
 
-        internal ChatsViewModelBase(ConcurrentDictionary<ChatId, TelegramChat> chats)
+        internal ChatsViewModelBase(List<TelegramChatViewModel> chats)
         {
-            Chats = chats.Values.Select(ch => new TelegramChatViewModel(ch)).ToList();
+            Chats = chats;
         }
     }
 
@@ -44,7 +54,7 @@ namespace HSMServer.Model.NotificationViewModels
         public override string NameColumn => "Username";
 
 
-        public PrivateChatsViewModel(ConcurrentDictionary<ChatId, TelegramChat> chats) : base(chats) { }
+        public PrivateChatsViewModel(List<TelegramChatViewModel> chats) : base(chats) { }
     }
 
     public sealed class GroupChatsViewModel : ChatsViewModelBase
@@ -54,7 +64,7 @@ namespace HSMServer.Model.NotificationViewModels
         public override string NameColumn => "Group name";
 
 
-        public GroupChatsViewModel(ConcurrentDictionary<ChatId, TelegramChat> chats) : base(chats) { }
+        public GroupChatsViewModel(List<TelegramChatViewModel> chats) : base(chats) { }
     }
 
 
@@ -73,9 +83,9 @@ namespace HSMServer.Model.NotificationViewModels
 
         public TelegramChatViewModel(TelegramChat chat)
         {
-            ChatId = chat.Id.Identifier ?? 0L;
+            ChatId = chat.ChatId.Identifier ?? 0L;
             IsUserChat = chat.IsUserChat;
-            SystemId = chat.SystemId;
+            SystemId = chat.Id;
             Name = chat.Name;
             AuthorizationTime = chat.AuthorizationTime == DateTime.MinValue
                 ? "-"

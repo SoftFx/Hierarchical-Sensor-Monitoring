@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 
 namespace HSMServer.ConcurrentStorage
@@ -9,9 +10,6 @@ namespace HSMServer.ConcurrentStorage
         where ModelType : class, IServerModel<EntityType, UpdateType>
         where UpdateType : IUpdateModel
     {
-        private readonly ConcurrentDictionary<string, Guid> _modelNames = new();
-
-
         protected abstract Action<EntityType> AddToDb { get; }
 
         protected abstract Action<EntityType> UpdateInDb { get; }
@@ -25,9 +23,6 @@ namespace HSMServer.ConcurrentStorage
 
         public ModelType this[Guid? id] => id.HasValue ? this[id.Value] : null;
 
-        public ModelType this[string name] => !string.IsNullOrEmpty(name) &&
-            TryGetIdByName(name, out var id) && TryGetValue(id, out var model) ? model : null;
-
 
         public event Action<ModelType> Added;
         public event Action<ModelType> Updated;
@@ -36,8 +31,6 @@ namespace HSMServer.ConcurrentStorage
 
         protected abstract ModelType FromEntity(EntityType entity);
 
-        public bool TryGetIdByName(string name, out Guid id) => _modelNames.TryGetValue(name, out id);
-
         public bool TryGetValueById(Guid? id, out ModelType model)
         {
             model = null;
@@ -45,16 +38,18 @@ namespace HSMServer.ConcurrentStorage
             return id is not null && TryGetValue(id.Value, out model);
         }
 
-        public bool TryAdd(EntityType entity)
-        {
-            var model = FromEntity(entity);
+        public List<ModelType> GetValues() => Values.ToList();
 
-            return TryAdd(model.Id, model) && _modelNames.TryAdd(model.Name, model.Id);
+        public virtual bool TryAdd(EntityType entity, out ModelType model)
+        {
+            model = FromEntity(entity);
+
+            return TryAdd(model.Id, model);
         }
 
         public virtual Task<bool> TryAdd(ModelType model)
         {
-            var result = TryAdd(model.Id, model) && _modelNames.TryAdd(model.Name, model.Id);
+            var result = TryAdd(model.Id, model);
 
             if (result)
             {
@@ -71,9 +66,6 @@ namespace HSMServer.ConcurrentStorage
 
             if (result)
             {
-                if (update.Name != null && _modelNames.TryRemove(model.Name, out var id))
-                    _modelNames.TryAdd(update.Name, id);
-
                 model.Update(update);
                 result &= await TryUpdate(model);
             }
@@ -96,7 +88,7 @@ namespace HSMServer.ConcurrentStorage
 
         public virtual Task<bool> TryRemove(Guid id)
         {
-            var result = TryRemove(id, out var model) && _modelNames.TryRemove(model.Name, out _);
+            var result = TryRemove(id, out var model);
 
             if (result)
             {
@@ -110,7 +102,7 @@ namespace HSMServer.ConcurrentStorage
         public virtual Task Initialize()
         {
             foreach (var entity in GetFromDb())
-                TryAdd(entity);
+                TryAdd(entity, out var _);
 
             return Task.CompletedTask;
         }

@@ -54,7 +54,7 @@ namespace HSMServer.Notifications
             {
                 chatModel = new TelegramChat()
                 {
-                    Id = message.Chat,
+                    ChatId = message.Chat,
                     Name = isUserChat ? message.From.Username : message.Chat.Title,
                     IsUserChat = isUserChat,
                     AuthorizationTime = DateTime.UtcNow,
@@ -77,11 +77,11 @@ namespace HSMServer.Notifications
             if (!ServerBook.ContainsKey(entity))
                 ServerBook[entity] = new ConcurrentDictionary<ChatId, ChatSettings>();
 
-            if (!_telegramBook.ContainsKey(chat.Id))
-                _telegramBook[chat.Id] = new CHash<INotificatable>(new NotificatableComparator());
+            if (!_telegramBook.ContainsKey(chat.ChatId))
+                _telegramBook[chat.ChatId] = new CHash<INotificatable>(new NotificatableComparator());
 
-            ServerBook[entity].TryAdd(chat.Id, new ChatSettings(chat));
-            _telegramBook[chat.Id].Add(entity);
+            ServerBook[entity].TryAdd(chat.ChatId, new ChatSettings(chat));
+            _telegramBook[chat.ChatId].Add(entity);
         }
 
         internal TelegramChat RemoveChat(INotificatable entity, ChatId chatId)

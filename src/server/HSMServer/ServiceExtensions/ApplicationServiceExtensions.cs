@@ -3,6 +3,7 @@ using HSMServer.Authentication;
 using HSMServer.BackgroundServices;
 using HSMServer.Core.Cache;
 using HSMServer.Core.DataLayer;
+using HSMServer.Core.Journal;
 using HSMServer.Core.SensorsUpdatesQueue;
 using HSMServer.Core.TreeStateSnapshot;
 using HSMServer.Filters;
@@ -21,7 +22,6 @@ using Microsoft.OpenApi.Models;
 using System;
 using System.IO;
 using System.Security.Authentication;
-using HSMServer.Core.Journal;
 
 namespace HSMServer.ServiceExtensions;
 
@@ -37,6 +37,7 @@ public static class ApplicationServiceExtensions
                 .AddSingleton<ITreeValuesCache, TreeValuesCache>()
                 .AddSingleton<IUserManager, UserManager>()
                 .AddSingleton<IFolderManager, FolderManager>()
+                .AddSingleton<ITelegramChatsManager, TelegramChatsManager>()
                 .AddSingleton<IJournalService, JournalService>();
 
         services.AddSingleton<NotificationsCenter>()

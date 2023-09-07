@@ -1,7 +1,7 @@
 using HSMServer.Model.Authentication;
 using HSMServer.Model.TreeViewModel;
 using HSMServer.Model.ViewModel;
-using HSMServer.Notifications.Telegram;
+using HSMServer.Notifications;
 using HSMServer.UserFilters;
 using Microsoft.AspNetCore.Html;
 using System;
@@ -26,7 +26,7 @@ namespace HSMServer.Extensions
         }
 
         internal static Dictionary<Guid, string> GetAvailableChats(this NodeViewModel node) =>
-            node.GetAllChats().ToDictionary(k => k.SystemId, v => v.Name);
+            node.GetAllChats().ToDictionary(k => k.Id, v => v.Name);
 
 
         internal static string ToCssIconClass(this SensorStatus status) =>

@@ -30,6 +30,7 @@ namespace HSMServer.Notifications
         };
 
         private readonly TelegramUpdateHandler _updateHandler;
+        private readonly ITelegramChatsManager _chatsManager;
         private readonly IUserManager _userManager;
         private readonly ITreeValuesCache _cache;
         private readonly TelegramConfig _config;
@@ -46,8 +47,10 @@ namespace HSMServer.Notifications
         private bool IsBotRunning => _bot is not null;
 
 
-        internal TelegramBot(IUserManager userManager, ITreeValuesCache cache, TreeViewModel tree, TelegramConfig config)
+        internal TelegramBot(ITelegramChatsManager chatsManager, IUserManager userManager, ITreeValuesCache cache, TreeViewModel tree, TelegramConfig config)
         {
+            _chatsManager = chatsManager;
+
             _userManager = userManager;
             _userManager.Removed += _addressBook.RemoveAllChats;
 
@@ -91,7 +94,7 @@ namespace HSMServer.Notifications
             entity.UpdateEntity(_userManager, _tree);
 
             if (removedChat is not null)
-                _cache.RemoveChat(removedChat.SystemId, removedChat.IsUserChat ? null : entity.Name);
+                _cache.RemoveChat(removedChat.Id, removedChat.IsUserChat ? null : entity.Name);
         }
 
         internal void SendTestMessage(ChatId chatId, string message)

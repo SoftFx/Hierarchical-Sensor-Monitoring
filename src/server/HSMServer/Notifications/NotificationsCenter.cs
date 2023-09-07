@@ -12,9 +12,9 @@ namespace HSMServer.Notifications
         public TelegramBot TelegramBot { get; }
 
 
-        public NotificationsCenter(IUserManager userManager, TreeViewModel tree, ITreeValuesCache cache, IServerConfig config)
+        public NotificationsCenter(ITelegramChatsManager telegramChats, IUserManager userManager, TreeViewModel tree, ITreeValuesCache cache, IServerConfig config)
         {
-            TelegramBot = new(userManager, cache, tree, config.Telegram);
+            TelegramBot = new(telegramChats, userManager, cache, tree, config.Telegram);
         }
 
 

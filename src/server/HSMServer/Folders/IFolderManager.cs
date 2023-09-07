@@ -9,7 +9,7 @@ using System.Threading.Tasks;
 
 namespace HSMServer.Folders
 {
-    public interface IFolderManager : IConcurrentStorage<FolderModel, FolderEntity, FolderUpdate>
+    public interface IFolderManager : IConcurrentStorageNames<FolderModel, FolderEntity, FolderUpdate>
     {
         event Action<Guid> ResetProductTelegramInheritance;
 

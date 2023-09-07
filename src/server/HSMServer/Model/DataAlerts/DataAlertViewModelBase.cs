@@ -149,7 +149,7 @@ namespace HSMServer.Model.DataAlerts
             Dictionary<Guid, string> policyChats = new();
             if ((policy.Destination?.Chats?.Count ?? 0) > 0)
             {
-                var availableChatsDict = availableChats.ToDictionary(k => k.SystemId, v => v.Name);
+                var availableChatsDict = availableChats.ToDictionary(k => k.Id, v => v.Name);
 
                 foreach (var (chatId, name) in policy.Destination.Chats)
                     policyChats.Add(chatId, string.IsNullOrEmpty(name) && availableChatsDict.TryGetValue(chatId, out var chatName) ? chatName : name);

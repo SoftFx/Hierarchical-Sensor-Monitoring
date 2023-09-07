@@ -9,10 +9,12 @@
 
 
 <div class="container mt-3">
-    <div class="row">
+    <div class="row w-100">
         <h4>Telegram <i class="fab fa-telegram"></i></h4>
 
         @await Html.PartialAsync("_Chats", Model.GroupChats)
         @await Html.PartialAsync("_Chats", Model.PrivateChats)
+
+        @await Html.PartialAsync("_NewTelegramGroupHelpModal")
     </div>
 </div>

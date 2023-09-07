@@ -3,6 +3,7 @@ using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Model.Policies;
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Linq;
 
 namespace HSMServer.Core.Model
@@ -32,7 +33,10 @@ namespace HSMServer.Core.Model
         public Guid? FolderId { get; private set; }
 
 
+        [Obsolete("Should be removed after telegram chats migration")]
         public NotificationSettingsEntity NotificationsSettings { get; private set; }
+
+        public HashSet<Guid> TelegramChats { get; private set; } // TODO: should be without set and = new() after telegram chats migration
 
 
         public ProductModel(string name, Guid? authorId = default) : base(name.Trim(), authorId)
@@ -49,6 +53,9 @@ namespace HSMServer.Core.Model
             FolderId = Guid.TryParse(entity.FolderId, out var folderId) ? folderId : null;
 
             Policies.BuildDefault(this, entity.TTLPolicy);
+
+            if (entity.TelegramChats is not null)
+                TelegramChats = new HashSet<Guid>(entity.TelegramChats.Select(c => new Guid(c)));
         }
 
 
@@ -68,6 +75,9 @@ namespace HSMServer.Core.Model
 
             if (update.FolderId is not null)
                 FolderId = update.FolderId != Guid.Empty ? update.FolderId : null;
+
+            if (update.TelegramChats is not null)
+                TelegramChats = update.TelegramChats;
 
             NotificationsSettings = update?.NotificationSettings ?? NotificationsSettings;
 
@@ -98,6 +108,7 @@ namespace HSMServer.Core.Model
             Description = Description,
             CreationDate = CreationDate.Ticks,
             NotificationSettings = NotificationsSettings,
+            TelegramChats = TelegramChats?.Select(c => c.ToByteArray()).ToList() ?? new(), // TODO: remove nullable operation after telegram chats migration
             Policies = Policies.Ids.Select(u => $"{u}").ToList(),
             Settings = Settings.ToEntity(),
             TTLPolicy = Policies.TimeToLive?.ToEntity(),

@@ -1,10 +1,9 @@
 ﻿using HSMServer.Extensions;
 using HSMServer.Notification.Settings;
-using HSMServer.Notifications.Telegram;
+using HSMServer.Notifications;
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
-using System.Text;
 using SensorStatus = HSMServer.Model.TreeViewModel.SensorStatus;
 
 namespace HSMServer.Model
@@ -69,7 +68,7 @@ namespace HSMServer.Model
 
         public TelegramChatViewModel(TelegramChat chat)
         {
-            ChatId = chat.Id.Identifier ?? 0L;
+            ChatId = chat.ChatId.Identifier ?? 0L;
             Name = chat.Name?.Length == 0
                 ? "Please, reinitialize account"
                 : chat.Name;

@@ -19,7 +19,7 @@ using HSMServer.Core.Journal;
 
 namespace HSMServer.Folders
 {
-    public sealed class FolderManager : ConcurrentStorage<FolderModel, FolderEntity, FolderUpdate>, IFolderManager
+    public sealed class FolderManager : ConcurrentStorageNames<FolderModel, FolderEntity, FolderUpdate>, IFolderManager
     {
         private readonly ITreeValuesCache _cache;
         private readonly IUserManager _userManager;
