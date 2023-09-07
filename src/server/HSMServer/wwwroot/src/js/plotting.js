@@ -88,7 +88,10 @@ window.displayGraph = function (graphData, sensorTypes, graphElementId, graphNam
     }
 
     Plotly.newPlot(graphElementId, plot.getPlotData(), layout, config);
-
+    config.modeBarButtonsToAdd.forEach(x => {
+        if(x.name === "Show/Hide service alive plot")
+            x.click();
+    })
     let savedPlots = localStorage.getItem(barGraphData.graph.id);
     if (savedPlots) {
         removeBarPlot('bar', true)
@@ -186,8 +189,9 @@ function getModeBarButtons(id, graphId){
         if(!jQuery.isEmptyObject(status[0]))
             modeBarButtons.push(addPlotButton(id, serviceButtonName, true, ServiceStatusIcon, graphId, status[0].id, status[0].path))
 
-        if(!jQuery.isEmptyObject(alive[0]))
+        if(!jQuery.isEmptyObject(alive[0])){
             modeBarButtons.push(addPlotButton(id, heartBeatButtonName, false, ServiceAliveIcon, graphId, alive[0].id, alive[0].path))
+        }
     });
 
     return modeBarButtons;
@@ -198,41 +202,45 @@ function addPlotButton(graphName, name, isStatusService, icon, graphId, id, path
         name: name,
         icon: icon,
         click: function (gd) {
-            let graph = $(`#${graphId}`)[0];
-            let plots = graph._fullData;
-            if (plots.length > 1) {
-                let indexToDelete = undefined;
-                for (let i = 0; i < plots.length; i++) {
-                    if (plots[i].name === name) {
-                        indexToDelete = i;
-                        break;
-                    }
-                }
-
-                if (indexToDelete !== undefined)
-                    Plotly.deleteTraces(graphId, indexToDelete);
-            } else {
-                getDataForPlotButton(graphName, id, isStatusService).done(function (data){
-                    let escapedData = JSON.parse(data);
-                    let ranges = graph._fullLayout.yaxis.range;
-                    let heatPlot = new EnumPlot(escapedData, isStatusService)
-                    let updateLayout = {
-                        title: heatPlot.getTitle(path),
-                        hovermode: 'x'
-                    };
-
-                    Plotly.addTraces(graphId, heatPlot.getPlotData(name, ranges[0], ranges[1]));
-                    Plotly.update(graphId, {}, updateLayout);
-                });
-            }
-
-            if (graph._fullData.length === 1)
-                Plotly.update(graphId, {}, {
-                    hovermode: 'closest',
-                    title: {}
-                });
+            addEnumPlot(graphId, graphName, id, isStatusService, path);
         }
     }
+}
+
+function addEnumPlot(graphId, graphName, id, isStatusService, path){
+    let graph = $(`#${graphId}`)[0];
+    let plots = graph._fullData;
+    if (plots.length > 1) {
+        let indexToDelete = undefined;
+        for (let i = 0; i < plots.length; i++) {
+            if (plots[i].name === name) {
+                indexToDelete = i;
+                break;
+            }
+        }
+
+        if (indexToDelete !== undefined)
+            Plotly.deleteTraces(graphId, indexToDelete);
+    } else {
+        getDataForPlotButton(graphName, id, isStatusService).done(function (data){
+            let escapedData = JSON.parse(data);
+            let ranges = graph._fullLayout.yaxis.range;
+            let heatPlot = new EnumPlot(escapedData, isStatusService)
+            let updateLayout = {
+                title: heatPlot.getTitle(path),
+                hovermode: 'x'
+            };
+
+            Plotly.addTraces(graphId, heatPlot.getPlotData(name, ranges[0], ranges[1]));
+            Plotly.update(graphId, {}, updateLayout);
+        });
+    }
+
+    if (graph._fullData.length === 1)
+        Plotly.update(graphId, {}, {
+            hovermode: 'closest',
+            title: {}
+        });
 }
 
 export const ServiceStatus = {

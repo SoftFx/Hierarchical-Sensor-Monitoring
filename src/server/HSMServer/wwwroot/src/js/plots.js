@@ -36,7 +36,7 @@ export class Plot {
     showlegend = false;
     hovertemplate = "%{x}, %{customdata}<extra></extra>";
 
-    constructor(data) { }
+    constructor(data) {}
 
     setUpData(data) {}
 
@@ -68,7 +68,7 @@ export class Plot {
         return Colors.default;
     }
 
-    getMarkerSize (value) {
+    getMarkerSize(value) {
         if (this.checkTtl(value))
             return MarkerSize.Ttl;
 
@@ -351,7 +351,7 @@ export class EnumPlot extends Plot {
         this.customdata = [];
         this.isServiceStatus = isServiceStatus;
         this.hovertemplate = '%{customdata}<extra></extra>';
-        this.colorscale = [[0, '#FF0000'], [0.5, '#00FF00'], [1, 'grey']];
+        this.colorscale = [[0, '#FF0000'], [0.5, '#00FF00'], [0.7, 'white'], [1, 'grey']];
         this.zmin = 0;
         this.zmax = 1;
         this.showscale = false;
@@ -370,8 +370,8 @@ export class EnumPlot extends Plot {
             getCustomString: function () {
                 return `${this.beginTime} - ${this.endTime}`;
             },
-            
-            setUpTime: function (index){
+
+            setUpTime: function (index) {
                 this.beginTime = new Date(this.data[index].time).toUTCString();
 
                 if (this.data[index].lastReceivingTime !== null && !!!this.data[index].isTimeout)
@@ -393,17 +393,17 @@ export class EnumPlot extends Plot {
             if (this.isServiceStatus) {
                 this.customdata.push(`${ServiceStatus[`${data[i].value}`][1]} <br>`)
                 this.z.push(ServiceStatus[`${data[i].value}`][0] === ServiceStatus["4"][0] ? 0.5 : 0)
-            } else {
+            } 
+            else {
                 if (this.checkTtl(data[i])) {
-                    this.z.push(1);
+                    this.z.push(0);
                     this.customdata.push(`${ServiceStatus["8"][1]} <br>`)
-                }
-                else {
-                    this.z.push(data[i].value === true ? 0.5 : 0);
+                } else {
+                    this.z.push(0.7);
                     this.customdata.push(`${data[i].value === true ? ServiceStatus["4"][1] : ServiceStatus["1"][1]} <br>`)
                 }
             }
-            
+
             this.customdata[this.customdata.length - 1] += timeObject.getCustomString();
         }
 
@@ -429,18 +429,18 @@ export class EnumPlot extends Plot {
             autosize: true,
         }
     }
-    
-    getTitle(path){
-        return  {
+
+    getTitle(path) {
+        return {
             text: `Background path: ${path}`,
-                font: {
+            font: {
                 size: 12
             },
             yref: 'paper',
-                xref: 'paper',
-                automargin: true,
-                xanchor: 'left',
-                pad: {
+            xref: 'paper',
+            automargin: true,
+            xanchor: 'left',
+            pad: {
                 b: 10
             },
             x: 0
