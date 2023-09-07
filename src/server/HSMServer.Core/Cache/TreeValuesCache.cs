@@ -269,7 +269,7 @@ namespace HSMServer.Core.Cache
                     return;
 
                 var parentProduct = AddNonExistingProductsAndGetParentProduct(product, request);
-                var sensor = AddSensor(request, request.Type, parentProduct);
+                var sensor = AddSensor(request, request.Type, parentProduct, request.Update.DefaultAlertsOptions);
 
                 update = update with { Id = sensor.Id };
             }
@@ -544,18 +544,19 @@ namespace HSMServer.Core.Cache
         private void AddBaseNodeSubscription(BaseNodeModel model)
         {
             model.Settings.ChangesHandler += _journalService.AddRecord;
+            model.Policies.ChangesHandler += _journalService.AddRecord;
             model.ChangesHandler += _journalService.AddRecord;
         }
 
         private void RemoveBaseNodeSubscription(BaseNodeModel model)
         {
             model.Settings.ChangesHandler -= _journalService.AddRecord;
+            model.Policies.ChangesHandler -= _journalService.AddRecord;
             model.ChangesHandler -= _journalService.AddRecord;
         }
 
         private void SubscribeSensorToPolicyUpdate(BaseSensorModel sensor)
         {
-            sensor.Policies.ChangesHandler += _journalService.AddRecord;
             sensor.Policies.SensorExpired += SetExpiredSnapshot;
             sensor.Policies.Uploaded += UpdatePolicy;
 
@@ -566,7 +567,6 @@ namespace HSMServer.Core.Cache
 
         private void RemoveSensorPolicies(BaseSensorModel sensor)
         {
-            sensor.Policies.ChangesHandler -= _journalService.AddRecord;
             sensor.Policies.SensorExpired -= SetExpiredSnapshot;
             sensor.Policies.Uploaded -= UpdatePolicy;
 
@@ -602,7 +602,7 @@ namespace HSMServer.Core.Cache
             var sensor = parentProduct.Sensors.FirstOrDefault(s => s.Value.DisplayName == sensorName).Value;
 
             if (sensor == null)
-                sensor = AddSensor(storeInfo, value.Type, parentProduct);
+                sensor = AddSensor(storeInfo, value.Type, parentProduct, DefaultAlertsOptions.None);
             else if (sensor.State == SensorState.Blocked)
                 return;
 
@@ -835,7 +835,7 @@ namespace HSMServer.Core.Cache
             return product;
         }
 
-        private BaseSensorModel AddSensor(BaseRequestModel request, SensorType type, ProductModel parent)
+        private BaseSensorModel AddSensor(BaseRequestModel request, SensorType type, ProductModel parent, DefaultAlertsOptions options)
         {
             SensorEntity entity = new()
             {
@@ -846,16 +846,14 @@ namespace HSMServer.Core.Cache
 
             var sensor = SensorModelFactory.Build(entity);
             parent.AddSensor(sensor);
+
             if (!sensor.Settings.TTL.IsSet)
-                sensor.Policies.TimeToLive.ApplyParent(parent.Policies.TimeToLive);
+                sensor.Policies.TimeToLive.ApplyParent(parent.Policies.TimeToLive, options.HasFlag(DefaultAlertsOptions.DisableTtl));
 
             SubscribeSensorToPolicyUpdate(sensor);
 
-            if (request is StoreInfo)
-            {
-                var root = GetProductByName(sensor.RootProductName);
-                sensor.Policies.AddDefault(root?.NotificationsSettings?.TelegramSettings?.Chats?.ToDictionary(u => new Guid(u.SystemId), v => v.Name));
-            }
+            var root = GetProductByName(sensor.RootProductName);
+            sensor.Policies.AddDefault(root?.NotificationsSettings?.TelegramSettings?.Chats?.ToDictionary(u => new Guid(u.SystemId), v => v.Name), options);
 
             AddSensor(sensor);
             UpdateProduct(parent);

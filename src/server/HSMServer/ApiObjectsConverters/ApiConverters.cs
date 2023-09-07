@@ -14,6 +14,7 @@ using System.Linq;
 using System.Numerics;
 using ApiSensorStatus = HSMSensorDataObjects.SensorStatus;
 
+
 namespace HSMServer.ApiObjectsConverters
 {
     public static class ApiConverters
@@ -241,6 +242,7 @@ namespace HSMServer.ApiObjectsConverters
                 TTL = request.TTL.ToTimeInterval(),
                 TTLPolicy = request.TtlAlert?.Convert(allChats, initiator),
                 Policies = request.Alerts?.Select(policy => policy.Convert(allChats, initiator)).ToList(),
+                DefaultAlertsOptions = (Core.Model.DefaultAlertsOptions)request.DefaultAlertsOptions,
                 Initiator = initiator,
             };
         }

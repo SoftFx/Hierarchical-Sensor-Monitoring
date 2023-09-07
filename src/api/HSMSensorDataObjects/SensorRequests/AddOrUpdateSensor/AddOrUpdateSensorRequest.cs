@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.ComponentModel;
 
 namespace HSMSensorDataObjects.SensorRequests
@@ -17,6 +18,15 @@ namespace HSMSensorDataObjects.SensorRequests
         Milliseconds = 1010,
         Seconds = 1011,
         Minutes = 1012
+    }
+
+
+    [Flags]
+    public enum DefaultAlertsOptions : long
+    {
+        None = 0,
+        DisableTtl = 1,
+        DisableStatusChange = 2,
     }
 
 
@@ -49,6 +59,8 @@ namespace HSMSensorDataObjects.SensorRequests
 
         public Unit? OriginalUnit { get; set; }
 
+
+        public DefaultAlertsOptions DefaultAlertsOptions { get; set; }
 
         public bool IsForceUpdate { get; set; } // if true then DataCollector can chage user settings
     }

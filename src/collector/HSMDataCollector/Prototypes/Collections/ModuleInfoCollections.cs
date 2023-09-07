@@ -4,6 +4,7 @@ using HSMDataCollector.Options;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.SensorRequests;
 using System;
+using System.Collections.Generic;
 
 namespace HSMDataCollector.Prototypes
 {
@@ -72,6 +73,9 @@ namespace HSMDataCollector.Prototypes
         public override ServiceSensorOptions Get(ServiceSensorOptions customOptions)
         {
             var options = base.Get(customOptions);
+
+            if (options.Alerts == null)
+                options.Alerts = new List<InstantAlertTemplate>();
 
             options.Alerts.Add(AlertsFactory.IfStatus(AlertOperation.IsOk).ThenSendNotification($"[$product] $value - $comment").Build());
 
