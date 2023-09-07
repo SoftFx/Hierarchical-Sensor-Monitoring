@@ -20,7 +20,21 @@ namespace HSMServer.Model.History
         private IAsyncEnumerator<List<BaseValue>> _pagesEnumerator;
 
 
-        public List<TableValueViewModel> CurrentTablePage => CurrentPage.Select(Build).OrderByDescending(u => u.Time).ToList();
+        public List<TableValueViewModel> CurrentTablePage
+        {
+            get
+            {
+                DateTime ByReceivingTime(TableValueViewModel value) => value.ReceivingTime;
+
+                DateTime ByTime(TableValueViewModel value) => value.Time;
+
+
+                Func<TableValueViewModel, DateTime> orderBy = _model.AggregateValues ? ByReceivingTime : ByTime;
+                Func<TableValueViewModel, DateTime> thenBy = _model.AggregateValues ? ByTime : ByReceivingTime;
+
+                return CurrentPage.Select(Build).OrderByDescending(orderBy).ThenByDescending(thenBy).ToList();
+            }
+        }
 
         public List<BaseValue> CurrentPage => Pages.Count > CurrentIndex ? Pages[CurrentIndex] : new();
 
