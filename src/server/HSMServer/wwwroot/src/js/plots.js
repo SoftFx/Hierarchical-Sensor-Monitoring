@@ -374,7 +374,7 @@ export class EnumPlot extends Plot {
             setUpTime: function (index){
                 this.beginTime = new Date(this.data[index].time).toUTCString();
 
-                if (this.data[index].lastReceivingTime !== null)
+                if (this.data[index].lastReceivingTime !== null && !!!this.data[index].isTimeout)
                     this.endTime = new Date(this.data[index].lastReceivingTime).toUTCString()
                 else
                 {
@@ -385,10 +385,11 @@ export class EnumPlot extends Plot {
                 }
             }
         }
+
         for (let i = 0; i < data.length; i++) {
             timeObject.setUpTime(i);
 
-            this.x.push(data[i].lastReceivingTime ?? data[i].time);
+            this.x.push(data[i].time);
             if (this.isServiceStatus) {
                 this.customdata.push(`${ServiceStatus[`${data[i].value}`][1]} <br>`)
                 this.z.push(ServiceStatus[`${data[i].value}`][0] === ServiceStatus["4"][0] ? 0.5 : 0)
@@ -405,6 +406,9 @@ export class EnumPlot extends Plot {
             
             this.customdata[this.customdata.length - 1] += timeObject.getCustomString();
         }
+
+        let currDate = new Date(new Date(Date.now()).toUTCString()).toISOString();
+        this.x.push(currDate);
     }
 
     getPlotData(name = 'custom', minValue = 0, maxValue = 1) {
