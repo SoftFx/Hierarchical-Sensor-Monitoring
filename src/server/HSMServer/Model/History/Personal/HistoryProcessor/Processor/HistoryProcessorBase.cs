@@ -1,4 +1,5 @@
 ﻿using HSMServer.Core.Model;
+using HSMServer.Model.TreeViewModel;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -7,10 +8,18 @@ namespace HSMServer.Model.History
 {
     internal abstract class HistoryProcessorBase
     {
-        public List<BaseValue> ProcessingAndCompression(List<BaseValue> values, int compressedValuesCount)
+        public List<BaseValue> ProcessingAndCompression(SensorNodeViewModel sensor, List<BaseValue> values, int compressedValuesCount)
         {
-            values = values.OrderBy(v => v.Time)
-                           .ThenBy(v => v.ReceivingTime)
+            DateTime ByReceivingTime(BaseValue value) => value.ReceivingTime;
+
+            DateTime ByTime(BaseValue value) => value.Time;
+
+
+            Func<BaseValue, DateTime> orderByFilter = sensor.SaveOnlyUniqueValues ? ByReceivingTime : ByTime;
+            Func<BaseValue, DateTime> thenByFilter = sensor.SaveOnlyUniqueValues ? ByTime : ByReceivingTime;
+
+            values = values.OrderBy(orderByFilter)
+                           .ThenBy(thenByFilter)
                            .Select(v => v with { Time = v.Time.ToUniversalTime() })
                            .ToList();
 

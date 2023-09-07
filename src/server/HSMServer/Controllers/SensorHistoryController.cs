@@ -1,4 +1,5 @@
-﻿using HSMServer.ApiObjectsConverters;
+﻿using HSMSensorDataObjects.HistoryRequests;
+using HSMServer.ApiObjectsConverters;
 using HSMServer.Authentication;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Model;
@@ -14,7 +15,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
-using HSMSensorDataObjects.HistoryRequests;
 
 namespace HSMServer.Controllers
 {
@@ -89,8 +89,8 @@ namespace HSMServer.Controllers
                     realType = sensorNodeViewModel.Type,
                     plotType = sensorNodeViewModel.Name is "Service alive" or "Service status" ? SensorType.Enum : sensorNodeViewModel.Type
                 });
-            
-            
+
+
             return _emptyJsonResult;
         }
 
@@ -100,6 +100,7 @@ namespace HSMServer.Controllers
             if (model == null)
                 return _emptyJsonResult;
 
+            var sensor = GetSensor(model.EncodedId);
             var values = await GetSensorValues(model.EncodedId, model.FromUtc, model.ToUtc, model.Count, model.Options);
 
             var localValue = GetLocalLastValue(model.EncodedId, model.FromUtc, model.ToUtc);
@@ -108,7 +109,7 @@ namespace HSMServer.Controllers
                 values.Add(localValue);
 
             return new JsonResult(HistoryProcessorFactory.BuildProcessor(model.Type)
-                                                         .ProcessingAndCompression(values, model.BarsCount)
+                                                         .ProcessingAndCompression(sensor, values, model.BarsCount)
                                                          .Select(v => (object)v));
         }
 
@@ -141,15 +142,15 @@ namespace HSMServer.Controllers
 
             return id != Guid.Empty;
         }
-        
+
         [HttpPost]
         public Task<JsonResult> GetServiceStatusHistory([FromBody] GetSensorHistoryModel model, [FromQuery] bool isStatusService = false)
         {
             var currentId = SensorPathHelper.DecodeGuid(model.EncodedId);
             if (_tree.Sensors.TryGetValue(currentId, out var sensor) && sensor.Path.EndsWith($".module/Module Info/{(isStatusService ? "Service status" : "Service alive")}"))
                 return ChartHistory(model with { EncodedId = sensor.Id.ToString() });
-            
-            return TryGetBackgroundSensorInfo(currentId, isStatusService, out var id, out _) 
+
+            return TryGetBackgroundSensorInfo(currentId, isStatusService, out var id, out _)
                 ? ChartHistory(model with { EncodedId = id.ToString() })
                 : Task.FromResult(_emptyJsonResult);
         }
@@ -157,7 +158,7 @@ namespace HSMServer.Controllers
         public async Task<FileResult> ExportHistory([FromQuery(Name = "EncodedId")] string encodedId, [FromQuery(Name = "Type")] int type,
             [FromQuery(Name = "From")] DateTime from, [FromQuery(Name = "To")] DateTime to)
         {
-            _tree.Sensors.TryGetValue(SensorPathHelper.DecodeGuid(encodedId), out var sensor);
+            var sensor = GetSensor(encodedId);
 
             string fileName = $"{sensor.FullPath.Replace('/', '_')}_from_{from:s}_to{to:s}.csv";
             Response.Headers.Add("Content-Disposition", $"attachment;filename={fileName}");
@@ -182,8 +183,7 @@ namespace HSMServer.Controllers
 
         private GetSensorHistoryModel SpecifyLatestHistoryModel(GetSensorHistoryModel model)
         {
-            _tree.Sensors.TryGetValue(SensorPathHelper.DecodeGuid(model.EncodedId), out var sensor);
-
+            var sensor = GetSensor(model.EncodedId);
             var lastUpdate = sensor?.LastValue?.ReceivingTime ?? DateTime.MinValue;
             var lastTimeout = sensor?.LastTimeout?.ReceivingTime ?? DateTime.MinValue;
 
@@ -202,6 +202,13 @@ namespace HSMServer.Controllers
             var localValue = sensor is IBarSensor barSensor ? barSensor.LocalLastValue : null;
 
             return localValue?.ReceivingTime >= from && localValue?.ReceivingTime <= to ? localValue : null;
+        }
+
+        private SensorNodeViewModel GetSensor(string encodedId)
+        {
+            _tree.Sensors.TryGetValue(encodedId.ToGuid(), out var sensor);
+
+            return sensor;
         }
     }
 }
