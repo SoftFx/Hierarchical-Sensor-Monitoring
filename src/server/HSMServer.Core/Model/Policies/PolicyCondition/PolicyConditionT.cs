@@ -15,10 +15,10 @@ namespace HSMServer.Core.Model.Policies
         private TargetValue _targetName;
 
         private PolicyExecutor _executor;
-        private U _constTargetValue;
+        private U _targetConstConverter;
 
 
-        internal abstract U ConstTargetValueConverter(string str);
+        internal abstract U TargetConstConverter(string str);
 
 
         public override PolicyOperation Operation
@@ -62,15 +62,6 @@ namespace HSMServer.Core.Model.Policies
 
         private void SetTarget(TargetValue value)
         {
-            Func<U> BuildConstTargetBuilder(string val)
-            {
-                U GetConstTarget() => _constTargetValue;
-
-                _constTargetValue = ConstTargetValueConverter(val);
-
-                return GetConstTarget;
-            }
-
             if (value is null)
                 return;
 
@@ -82,6 +73,15 @@ namespace HSMServer.Core.Model.Policies
             };
 
             _executor?.SetTarget(targetBuilder);
+        }
+
+        private Func<U> BuildConstTargetBuilder(string val)
+        {
+            U GetConstTarget() => _targetConstConverter;
+
+            _targetConstConverter = TargetConstConverter(val);
+
+            return GetConstTarget;
         }
     }
 }
