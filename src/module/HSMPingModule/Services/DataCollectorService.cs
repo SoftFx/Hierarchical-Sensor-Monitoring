@@ -36,7 +36,7 @@ internal sealed class DataCollectorService : IDataCollectorService, IDisposable
             Port = _config.CollectorSettings.Port
         };
         _logger.LogInformation("Access key: {key}", collectorOptions.AccessKey);
-        _logger.LogInformation("Access key: {key}", collectorOptions.ServerAddress);
+        _logger.LogInformation("Server address: {key}", collectorOptions.ServerAddress);
         _logger.LogInformation("Server port: {port}", collectorOptions.Port);
 
         _collector = new DataCollector(collectorOptions).AddNLog();
