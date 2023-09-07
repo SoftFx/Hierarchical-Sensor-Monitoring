@@ -20,8 +20,6 @@ internal class PingService : BackgroundService
         _config = config.CurrentValue;
         _config.OnChange += RebuildPings;
 
-        PingAdapter.SendResult += _collectorService.PingResultSend;
-
         foreach (var (hostname, website) in _config.ResourceSettings.WebSites)
             foreach (var country in website.Countries)
                 if (_newPings.TryGetValue(country, out var dict))
@@ -57,7 +55,10 @@ internal class PingService : BackgroundService
         _logger.LogInformation("Settings file was updated, starting reloading");
 
         foreach (var (_, pingAdapter) in _newPings.SelectMany(x => x.Value))
+        {
             pingAdapter.CancelToken();
+            pingAdapter.SendResult -= _collectorService.PingResultSend;
+        }
 
         _newPings.Clear();
 
@@ -65,7 +66,7 @@ internal class PingService : BackgroundService
             foreach (var country in website.Countries)
             {
                 var ping = new PingAdapter(website, hostname, country);
-
+                ping.SendResult += _collectorService.PingResultSend;
                 if (_newPings.TryGetValue(country, out var dict))
                     dict.TryAdd(hostname, ping);
                 else

@@ -14,7 +14,7 @@ internal sealed class PingAdapter : Ping
     private readonly WebSite _webSite;
     private readonly string _hostName;
 
-    public static event Func<WebSite, string, Task<PingResponse>, Task> SendResult;
+    public event Func<WebSite, string, Task<PingResponse>, Task> SendResult;
 
 
     internal string SensorPath { get; }
