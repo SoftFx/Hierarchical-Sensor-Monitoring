@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 
 namespace HSMServer.ConcurrentStorage
@@ -27,6 +28,8 @@ namespace HSMServer.ConcurrentStorage
         bool TryGetValue(Guid id, out ModelType model);
 
         bool TryGetValueById(Guid? id, out ModelType model);
+
+        List<ModelType> GetValues();
 
         Task Initialize();
     }

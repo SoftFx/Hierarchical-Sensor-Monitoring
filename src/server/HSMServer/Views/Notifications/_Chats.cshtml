@@ -49,7 +49,6 @@
                 <th>@Model.NameColumn</th>
                 <th>Products</th>
                 <th>Admins</th>
-                <th>Authorized</th>
                 <th style="text-align:center">Actions</th>
             </tr>
             @foreach (var chat in Model.Chats)
@@ -71,7 +70,6 @@
                     </td>
                     <td>List of connected products</td>
                     <td>List of admins for groups/user for accounts</td>
-                    <td>@chat.AuthorizationTime</td>
                     <td style="text-align:center">
                         <div class="dropdown">
                             <button id="actionButton" class="btn" data-bs-toggle="dropdown" data-bs-auto-close="true" aria-haspopup="true" aria-expanded="false">

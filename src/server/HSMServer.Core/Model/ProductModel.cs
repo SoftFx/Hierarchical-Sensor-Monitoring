@@ -108,7 +108,7 @@ namespace HSMServer.Core.Model
             Description = Description,
             CreationDate = CreationDate.Ticks,
             NotificationSettings = NotificationsSettings,
-            TelegramChats = TelegramChats.Select(c => c.ToByteArray()).ToList(),
+            TelegramChats = TelegramChats?.Select(c => c.ToByteArray()).ToList() ?? new(), // TODO: remove nullable operation after telegram chats migration
             Policies = Policies.Ids.Select(u => $"{u}").ToList(),
             Settings = Settings.ToEntity(),
             TTLPolicy = Policies.TimeToLive?.ToEntity(),

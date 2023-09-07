@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 
 namespace HSMServer.ConcurrentStorage
@@ -36,6 +37,8 @@ namespace HSMServer.ConcurrentStorage
 
             return id is not null && TryGetValue(id.Value, out model);
         }
+
+        public List<ModelType> GetValues() => Values.ToList();
 
         public virtual bool TryAdd(EntityType entity, out ModelType model)
         {

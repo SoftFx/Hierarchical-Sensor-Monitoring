@@ -8,7 +8,6 @@ using HSMServer.Model.NotificationViewModels;
 using HSMServer.Model.TreeViewModel;
 using HSMServer.Notification.Settings;
 using HSMServer.Notifications;
-using HSMServer.Notifications.Telegram;
 using Microsoft.AspNetCore.Mvc;
 using System;
 using System.Collections.Concurrent;
@@ -20,14 +19,16 @@ namespace HSMServer.Controllers
     [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
     public class NotificationsController : BaseController
     {
+        private readonly ITelegramChatsManager _chatsManager;
         private readonly IFolderManager _folderManager;
         private readonly TelegramBot _telegramBot;
         private readonly TreeViewModel _tree;
 
 
-        public NotificationsController(IUserManager userManager, IFolderManager folderManager,
+        public NotificationsController(ITelegramChatsManager chatsManager, IUserManager userManager, IFolderManager folderManager,
             TreeViewModel tree, NotificationsCenter notifications) : base(userManager)
         {
+            _chatsManager = chatsManager;
             _folderManager = folderManager;
             _tree = tree;
 
@@ -35,22 +36,7 @@ namespace HSMServer.Controllers
         }
 
 
-        public IActionResult Index()
-        {
-            var groups = new ConcurrentDictionary<Telegram.Bot.Types.ChatId, TelegramChat>();
-            foreach (var (_, product) in _tree.Nodes)
-                foreach (var (chatId, chat) in product.Notifications.UsedTelegram.Chats)
-                    if (!groups.ContainsKey(chatId))
-                        groups.TryAdd(chatId, chat);
-
-            var privates = new ConcurrentDictionary<Telegram.Bot.Types.ChatId, TelegramChat>();
-            foreach (var user in _userManager.GetUsers())
-                foreach (var (chatId, chat) in user.Notifications.UsedTelegram.Chats)
-                    if (!privates.ContainsKey(chatId))
-                        privates.TryAdd(chatId, chat);
-
-            return View(new ChatsViewModel(privates, groups));
-        }
+        public IActionResult Index() => View(new ChatsViewModel(_chatsManager.GetValues()));
 
         [HttpPost]
         public IActionResult ChangeInheritance(string productId, bool fromParent)
