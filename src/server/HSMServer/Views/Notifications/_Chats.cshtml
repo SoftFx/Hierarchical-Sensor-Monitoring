@@ -22,13 +22,10 @@
     @if (Model is GroupChatsViewModel)
     {
         <div class="row mx-2 my-0">
-            <ul class="settingsList list-group">
-            <li class="list-group-item pt-0">1. Create group chat in Telegram.</li>
-            <li class="list-group-item">2. Add Telegram Bot (@NotificationsCenter.TelegramBot.BotName) to group chat.</li>
-            <li class="list-group-item">3. Give Admin right to Telegram Bot (@NotificationsCenter.TelegramBot.BotName).</li>
-            <li class="list-group-item">4. Send <a href="javascript:getGroupStartCommand()">this message</a> from clipboard to group chat.</li>
-            <li class="list-group-item">The bot will send a notification that it has been successfully initialized.</li>
-        </ul>
+            <label class="col-auto p-0">Add telegram group</label>
+            <div class="col-auto">
+                <a href="javascript:showAddTelegramGroupHelp();">help</a>
+            </div>
         </div>
     }
     else if (Model is PrivateChatsViewModel)
@@ -124,17 +121,7 @@
 
 
 <script>
-    //TODO: we need Model.EntityId
-    //function getGroupStartCommand() {
-    //    $.ajax({
-    //        type: 'GET',
-    //        url: `@Html.Raw(Url.Action(nameof(NotificationsController.CopyStartCommandForGroup), ViewConstants.NotificationsController))?entityId=`,
-    //        dataType: 'html',
-    //        contentType: 'application/json',
-    //        cache: false,
-    //        async: true
-    //    }).done(function (command) {
-    //        copyToClipboard(command);
-    //    });
-    //}
+    function showAddTelegramGroupHelp() {
+        showAddTelegramGroupHelpModal();
+    }
 </script>
