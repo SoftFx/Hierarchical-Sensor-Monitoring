@@ -163,9 +163,9 @@ function getBackgroundSensorId(id, isStatusService){
     });
 }
 
-function getDataForPlotButton(graphName, isStatusService) {
+function getDataForPlotButton(graphName, id, isStatusService) {
     let {from, to} = getFromAndTo(graphName);
-    let body = Data(to, from, 1, graphName)
+    let body = Data(to, from, 1, id)
     return $.ajax({
         type: 'POST',
         data: JSON.stringify(body),
@@ -184,16 +184,16 @@ function getModeBarButtons(id, graphId){
   
     $.when(getBackgroundSensorId(id, true), getBackgroundSensorId(id, false)).done(function(status, alive){
         if(!jQuery.isEmptyObject(status[0]))
-            modeBarButtons.push(addPlotButton(serviceButtonName, true, ServiceStatusIcon, graphId, status[0].id, status[0].path))
+            modeBarButtons.push(addPlotButton(id, serviceButtonName, true, ServiceStatusIcon, graphId, status[0].id, status[0].path))
 
         if(!jQuery.isEmptyObject(alive[0]))
-            modeBarButtons.push(addPlotButton(heartBeatButtonName, false, ServiceAliveIcon, graphId, alive[0].id, alive[0].path))
+            modeBarButtons.push(addPlotButton(id, heartBeatButtonName, false, ServiceAliveIcon, graphId, alive[0].id, alive[0].path))
     });
 
     return modeBarButtons;
 }
 
-function addPlotButton(name, isStatusService, icon, graphId, id, path){
+function addPlotButton(graphName, name, isStatusService, icon, graphId, id, path){
     return {
         name: name,
         icon: icon,
@@ -212,7 +212,7 @@ function addPlotButton(name, isStatusService, icon, graphId, id, path){
                 if (indexToDelete !== undefined)
                     Plotly.deleteTraces(graphId, indexToDelete);
             } else {
-                getDataForPlotButton(id, isStatusService).done(function (data){
+                getDataForPlotButton(graphName, id, isStatusService).done(function (data){
                     let escapedData = JSON.parse(data);
                     let ranges = graph._fullLayout.yaxis.range;
                     let heatPlot = new EnumPlot(escapedData, isStatusService)
