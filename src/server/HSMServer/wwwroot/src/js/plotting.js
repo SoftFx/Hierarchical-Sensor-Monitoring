@@ -88,10 +88,12 @@ window.displayGraph = function (graphData, sensorTypes, graphElementId, graphNam
     }
 
     Plotly.newPlot(graphElementId, plot.getPlotData(), layout, config);
+
     config.modeBarButtonsToAdd.forEach(x => {
         if(x.name === "Show/Hide service alive plot")
             x.click();
     })
+
     let savedPlots = localStorage.getItem(barGraphData.graph.id);
     if (savedPlots) {
         removeBarPlot('bar', true)

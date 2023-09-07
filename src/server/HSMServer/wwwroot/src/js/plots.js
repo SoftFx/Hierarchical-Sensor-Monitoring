@@ -434,16 +434,16 @@ export class EnumPlot extends Plot {
         return {
             text: `Background path: ${path}`,
             font: {
-                size: 12
+                size: 10
             },
             yref: 'paper',
             xref: 'paper',
             automargin: true,
-            xanchor: 'left',
+            xanchor: 'rigth',
             pad: {
                 b: 10
             },
-            x: 0
+            x: 1
         }
     }
 }
