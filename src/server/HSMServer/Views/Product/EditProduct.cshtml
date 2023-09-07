@@ -190,13 +190,7 @@
         </div>
     
         <div class="my-1">
-            @{
-                ViewBag.FromParent = Model.IsNotificationsInherited;
-            }
-
             <h5 class="col-auto my-1">Telegram <i class="fab fa-telegram"></i></h5>
-
-            @await Html.PartialAsync("~/Views/Notifications/_Chats.cshtml", Model.Telegram)
         </div>
     </div>
 </div>
