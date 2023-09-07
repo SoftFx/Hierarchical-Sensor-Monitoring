@@ -15,11 +15,11 @@ namespace HSMServer.Model.History
             DateTime ByTime(BaseValue value) => value.Time;
 
 
-            Func<BaseValue, DateTime> orderBy = sensor.SaveOnlyUniqueValues ? ByReceivingTime : ByTime;
-            Func<BaseValue, DateTime> thenBy = sensor.SaveOnlyUniqueValues ? ByTime : ByReceivingTime;
+            Func<BaseValue, DateTime> orderByFilter = sensor.SaveOnlyUniqueValues ? ByReceivingTime : ByTime;
+            Func<BaseValue, DateTime> thenByFilter = sensor.SaveOnlyUniqueValues ? ByTime : ByReceivingTime;
 
-            values = values.OrderBy(orderBy)
-                           .ThenBy(thenBy)
+            values = values.OrderBy(orderByFilter)
+                           .ThenBy(thenByFilter)
                            .Select(v => v with { Time = v.Time.ToUniversalTime() })
                            .ToList();
 

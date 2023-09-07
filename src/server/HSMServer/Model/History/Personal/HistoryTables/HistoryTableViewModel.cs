@@ -29,10 +29,10 @@ namespace HSMServer.Model.History
                 DateTime ByTime(TableValueViewModel value) => value.Time;
 
 
-                Func<TableValueViewModel, DateTime> orderBy = _model.AggregateValues ? ByReceivingTime : ByTime;
-                Func<TableValueViewModel, DateTime> thenBy = _model.AggregateValues ? ByTime : ByReceivingTime;
+                Func<TableValueViewModel, DateTime> orderByFilter = _model.AggregateValues ? ByReceivingTime : ByTime;
+                Func<TableValueViewModel, DateTime> thenByFilter = _model.AggregateValues ? ByTime : ByReceivingTime;
 
-                return CurrentPage.Select(Build).OrderByDescending(orderBy).ThenByDescending(thenBy).ToList();
+                return CurrentPage.Select(Build).OrderByDescending(orderByFilter).ThenByDescending(thenByFilter).ToList();
             }
         }
 

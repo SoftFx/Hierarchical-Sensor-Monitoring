@@ -206,7 +206,7 @@ namespace HSMServer.Controllers
 
         private SensorNodeViewModel GetSensor(string encodedId)
         {
-            _tree.Sensors.TryGetValue(SensorPathHelper.DecodeGuid(encodedId), out var sensor);
+            _tree.Sensors.TryGetValue(encodedId.ToGuid(), out var sensor);
 
             return sensor;
         }
