@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using HSMDataCollector.Alerts;
 using HSMDataCollector.Options;
 using HSMSensorDataObjects.SensorRequests;
@@ -6,16 +7,17 @@ namespace HSMPingModule.Models;
 
 internal sealed class WebSite
 {
-    public List<string> Countries { get; set; }
+    public List<string> Countries { get; set; } = new ();
 
-    public TimeSpan? TTL { get; set; }
-
-
-    public int? PingTimeoutValue { get; set; }
-
-    public int? PingDelay { get; set; }
+    public TimeSpan? TTL { get; set; } = TimeSpan.FromMinutes(15);
 
 
+    public int? PingTimeoutValue { get; set; } = 15;
+
+    public int? PingDelay { get; set; } = 15;
+
+
+    [JsonIgnore]
     public InstantSensorOptions GetOptions => new()
     {
         TTL = TTL,

@@ -1,4 +1,5 @@
 using System.Reflection;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 using HSMCommon;
 using HSMPingModule.Settings;
@@ -7,6 +8,14 @@ namespace HSMPingModule.Config;
 
 internal sealed class ServiceConfig
 {
+    private static readonly JsonSerializerOptions _options = new()
+    {
+        WriteIndented = true,
+    };
+    
+    private readonly string _settingsPath = Path.Combine(ConfigPath, ConfigName);
+
+
     private IConfigurationRoot _configuration;
     private NLog.ILogger _logger;
 
@@ -25,10 +34,10 @@ internal sealed class ServiceConfig
 
 
     internal event Action OnChange;
-    
-    public CollectorSettings CollectorSettings { get; private set; }
 
-    public ResourceSettings ResourceSettings { get; private set; }
+    public CollectorSettings CollectorSettings { get; private set; } = new();
+
+    public ResourceSettings ResourceSettings { get; private set; } = new();
 
 
     static ServiceConfig()
@@ -46,7 +55,14 @@ internal sealed class ServiceConfig
     {
         _logger = logger;
         _configuration = configuration;
-        Read();
+
+        if (!File.Exists(_settingsPath))
+        {
+            using var file = File.Open(_settingsPath, FileMode.Create);
+            file.Write( JsonSerializer.SerializeToUtf8Bytes(this, _options));
+        }
+        else 
+            Read();
     }
 
     public void Reload()
