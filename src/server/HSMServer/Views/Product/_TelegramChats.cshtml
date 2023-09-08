@@ -1,0 +1,83 @@
+﻿@using HSMServer.Model.ViewModel
+@using HSMServer.Extensions
+@using HSMServer.Notifications
+
+@model ProductTelegramViewModel
+
+@addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
+
+
+<form>
+    <div id="chatsSelect" class="selectpicker">
+        <select class="selectpicker" asp-for="NewChats" multiple
+                data-width="100%" data-live-search="true" data-placeholder="Choose chats to add">
+            <option disabled>Groups</option>
+            @foreach (var chat in Model.ChatsToAdd.GetGroups())
+            {
+                <option value="@chat.Id">@chat.Name</option>
+            }
+
+            <option data-divider="true"></option>
+            <option disabled>Users</option>
+            @foreach (var chat in Model.ChatsToAdd.GetPrivates())
+            {
+                <option value="@chat.Id">@chat.Name</option>
+            }
+        </select>
+    </div>
+
+    <table id="productChats" class="table table-striped">
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th class="text-center">Type</th>
+                <th class="text-center">Send messages</th>
+                <th class="text-center">Messages aggregation time (sec)</th>
+                <th class="text-center">Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var chat in Model.ConnectedChats)
+            {
+                <tr id="row_chat_@chat.Id">
+                    <td class="text-break">@chat.Name</td>
+                    <td class="text-center">@(chat.Type == ConnectedChatType.TelegramPrivate ? "User" : "Group")</td>
+                    <td class="text-break text-center">
+                        @if (chat.SendMessages)
+                        {
+                            <i class="fa-solid fa-check fa-xl"></i>
+                        }
+                    </td>
+                    <td class="text-break text-center">@chat.MessagesAggregationTimeSec</td>
+                    <td nowrap class="text-center w-10">
+                        <div class='btn-group'>
+                            <button id="actionButton" class="btn" data-bs-toggle="dropdown" data-bs-auto-close="true" aria-haspopup="true" aria-expanded="false">
+                                <i class="fa-solid fa-ellipsis-vertical" style="cursor: pointer"></i>
+                            </button>
+                            <ul class='dropdown-menu overflow-auto' aria-labelledby="dropdownMenuButton">
+                                <li>
+                                    <a id='remove_@chat.Id' class='dropdown-item text-decoration-none fw-normal' style="cursor: pointer;">
+                                        Remove
+                                    </a>
+                                </li>
+                            </ul>
+                        </div>
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+
+    <div class="d-flex justify-content-end my-2">
+        <button type="submit" class="btn btn-secondary independentSizeButton">Save</button>
+    </div>
+</form>
+
+
+<script>
+    $('[id^=remove_]').on('click', function () {
+        var chatId = this.id.substring("remove_".length, this.id.length);
+
+        $(`#row_chat_${chatId}`).remove();
+    });
+</script>

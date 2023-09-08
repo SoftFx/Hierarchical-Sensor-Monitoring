@@ -30,14 +30,14 @@
 
             <option data-divider="true"></option>
             <option disabled>Groups</option>
-            @foreach (var chat in Model.GetChats(false))
+            @foreach (var chat in Model.AvailableChats.GetGroups())
             {
                 <option value="@chat.Id" selected="@Model.ChatIsSelected(chat)">@chat.Name</option>
             }
 
             <option data-divider="true"></option>
             <option disabled>Users</option>
-            @foreach (var chat in Model.GetChats(true))
+            @foreach (var chat in Model.AvailableChats.GetPrivates())
             {
                 <option value="@chat.Id" selected="@Model.ChatIsSelected(chat)">@chat.Name</option>
             }

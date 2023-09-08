@@ -63,8 +63,6 @@ namespace HSMServer.Model.DataAlerts
         }
 
 
-        public List<TelegramChat> GetChats(bool isUser) => AvailableChats.Where(ch => ch.IsUserChat == isUser).ToList();
-
         public bool ChatIsSelected(TelegramChat chat) => Chats?.ContainsKey(chat.Id) ?? false;
     }
 }
