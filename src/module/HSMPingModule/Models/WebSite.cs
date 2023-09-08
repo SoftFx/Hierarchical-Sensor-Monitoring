@@ -22,7 +22,7 @@ internal sealed class WebSite
             TTL = TTL,
             SensorUnit = Unit.Seconds,
 
-            TtlAlert = AlertsFactory.IfInactivityPeriodIs().ThenSetIcon(AlertIcon.Clock).AndSendNotification("$product $path Ping timeout").Build(),
+            TtlAlert = AlertsFactory.IfInactivityPeriodIs().ThenSetIcon(AlertIcon.Clock).AndSendNotification("[$product]$path Ping timeout").Build(),
             Alerts = new List<InstantAlertTemplate>()
             {
                 AlertsFactory.IfValue(AlertOperation.GreaterThan, PingTimeoutValue).ThenSetIcon(AlertIcon.Warning).AndSendNotification("[$product]$path Ping $operation $target seconds").Build(),
