@@ -53,7 +53,7 @@ internal sealed class DataCollectorService : IDataCollectorService, IDisposable
         }
 
 
-        _exceptionSensor = _collector.CreateStringSensor("Exception");
+        _exceptionSensor = _collector.CreateStringSensor("Infrastructure/AppException");
     }
 
 
@@ -68,9 +68,10 @@ internal sealed class DataCollectorService : IDataCollectorService, IDisposable
     }
 
 
-    public async Task PingResultSend(WebSite webSite, string path, Task<PingResponse> taskReply)
+    public async Task PingResultSend(WebSite webSite, string country, string hostname, Task<PingResponse> taskReply)
     {
         var reply = await taskReply;
+        var path = $"{hostname}/{country}";
 
         if (reply.IsException)
         {
@@ -78,7 +79,7 @@ internal sealed class DataCollectorService : IDataCollectorService, IDisposable
             return;
         }
 
-        var sensor = _collector.CreateDoubleSensor(path, webSite.GetOptions);
+        var sensor = _collector.CreateDoubleSensor(path, webSite.GetOptions(country, hostname, _config.ResourceSettings.DefaultSiteNodeSettings.PingDelay.Value));
 
         sensor.AddValue(reply.Value, reply.Status, reply.Comment);
 

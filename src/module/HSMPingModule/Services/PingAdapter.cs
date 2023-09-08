@@ -13,8 +13,9 @@ internal sealed class PingAdapter : Ping
 
     private readonly WebSite _webSite;
     private readonly string _hostName;
+    private readonly string _country;
 
-    public event Func<WebSite, string, Task<PingResponse>, Task> SendResult;
+    public event Func<WebSite, string, string, Task<PingResponse>, Task> SendResult;
 
 
     internal string SensorPath { get; }
@@ -24,8 +25,9 @@ internal sealed class PingAdapter : Ping
     {
         _webSite = webSite;
         _hostName = host;
+        _country = country;
 
-        SensorPath = $"{_hostName}/{country}";
+        SensorPath = $"{_hostName}/{_country}";
     }
 
 
@@ -51,7 +53,7 @@ internal sealed class PingAdapter : Ping
         var timer = new PeriodicTimer(TimeSpan.FromSeconds(_webSite.PingDelay.Value));
 
         while (await timer.WaitForNextTickAsync(_token.Token))
-            _ = SendPingRequest().ContinueWith(reply => SendResult?.Invoke(_webSite, SensorPath, reply), _token.Token).Unwrap();
+            _ = SendPingRequest().ContinueWith(reply => SendResult?.Invoke(_webSite, _country, _hostName, reply), _token.Token).Unwrap();
     }
 
 

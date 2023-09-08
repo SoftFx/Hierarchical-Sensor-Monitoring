@@ -16,17 +16,20 @@ internal sealed class WebSite
     public int? PingDelay { get; set; }
 
 
-    [JsonIgnore]
-    public InstantSensorOptions GetOptions => new()
+    public InstantSensorOptions GetOptions(string country, string hostname, int delay)
     {
-        TTL = TTL,
-        SensorUnit = Unit.Seconds,
-
-        TtlAlert = AlertsFactory.IfInactivityPeriodIs().ThenSetIcon(AlertIcon.Clock).AndSendNotification("$product $path test").Build(),
-        Alerts = new List<InstantAlertTemplate>()
+        return new()
         {
-            AlertsFactory.IfValue(AlertOperation.GreaterThan, PingTimeoutValue).ThenSetIcon(AlertIcon.Warning).AndSendNotification("$product $path ping timeout").Build(),
-            AlertsFactory.IfStatus(AlertOperation.IsError).ThenSetIcon(AlertIcon.Error).Build(),
-        },
-    };
+            TTL = TTL,
+            SensorUnit = Unit.Seconds,
+
+            TtlAlert = AlertsFactory.IfInactivityPeriodIs().ThenSetIcon(AlertIcon.Clock).AndSendNotification("$product $path Ping timeout").Build(),
+            Alerts = new List<InstantAlertTemplate>()
+            {
+                AlertsFactory.IfValue(AlertOperation.GreaterThan, PingTimeoutValue).ThenSetIcon(AlertIcon.Warning).AndSendNotification("[$product]$path Ping $operation $target").Build(),
+                AlertsFactory.IfStatus(AlertOperation.IsError).ThenSetIcon(AlertIcon.Error).AndSendNotification("[$product]$path $comment").Build(),
+            },
+            Description = $"This sensor receives ping timeout value from **{country}** to **{hostname}** every **{delay}** minutes"
+        };
+    }
 }
