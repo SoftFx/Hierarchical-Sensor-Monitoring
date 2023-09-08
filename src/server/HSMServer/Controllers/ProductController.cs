@@ -1,6 +1,7 @@
 ﻿using HSMServer.Authentication;
 using HSMServer.Constants;
 using HSMServer.Core.Cache;
+using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Extensions;
 using HSMServer.Extensions;
 using HSMServer.Filters.ProductRoleFilters;
@@ -151,6 +152,25 @@ namespace HSMServer.Controllers
             }
 
             return View(new EditProductViewModel(productNode, pairs, notAdminUsers, chats));
+        }
+
+        [HttpPost]
+        public void UpdateTelegram(ProductTelegramViewModel viewModel)
+        {
+            if (_treeViewModel.Nodes.TryGetValue(viewModel.ProductId, out var product))
+            {
+                var chats = viewModel.ConnectedChatIds?.Where(ch => ch != Guid.Empty).ToList() ?? new();
+                if (viewModel.NewChats is not null)
+                    chats.AddRange(viewModel.NewChats);
+
+                var update = new ProductUpdate()
+                {
+                    Id = product.Id,
+                    TelegramChats = new HashSet<Guid>(chats),
+                };
+
+                _treeValuesCache.UpdateProduct(update);
+            }
         }
 
         [HttpPost]
