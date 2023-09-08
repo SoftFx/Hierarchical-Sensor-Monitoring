@@ -437,7 +437,8 @@ export class EnumPlot extends Plot {
         return {
             text: `Background path: ${path}`,
             font: {
-                size: 10
+                size: 10,
+                color: Colors.TtlGrey
             },
             yref: 'paper',
             xref: 'paper',
