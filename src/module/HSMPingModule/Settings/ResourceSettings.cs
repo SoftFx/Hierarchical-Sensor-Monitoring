@@ -11,18 +11,11 @@ internal sealed class ResourceSettings
         TTL = TimeSpan.FromMinutes(15),
         PingTimeoutValue = 15,
         PingDelay = 15,
-        Countries = new List<string>
-        {
-            "Belarus",
-            "USA",
-        }
     };
 
 
     public ResourceSettings ApplyDefaultSettings()
     {
-        DefaultSiteNodeSettings.Countries = DefaultSiteNodeSettings.Countries.Distinct().ToList();
-
         foreach (var (_, value) in WebSites)
         {
             value.PingDelay = DefaultSiteNodeSettings.PingDelay;
