@@ -1,7 +1,10 @@
 ﻿@using HSMServer.Extensions
+@using HSMServer.Notifications
 @using HSMServer.Model.DataAlerts
 
 @model ActionViewModel
+
+@inject ITelegramChatsManager ChatsManager
 
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
 
@@ -13,6 +16,13 @@
     var isShowAction = action == ActionType.ShowIcon;
 
     var isSecondaryCondition = !Model.IsMain;
+
+    var availableChats = new List<TelegramChat>();
+    foreach (var chat in ChatsManager.GetValues())
+    {
+        if (Model.AvailableChats.Contains(chat.Id))
+            availableChats.Add(chat);
+    }
 }
 
 
@@ -26,18 +36,18 @@
         <div class="alert-text-block operation-select">at</div>
         <select class="selectpicker" name="Chats" multiple
                 data-width="100%" data-live-search="true" data-style="alert-block target-input target-multiselect" data-placeholder="telegram chats" data-actions-box="true" data-container="body">
-            <option value="@ActionViewModel.AllChatsId" selected="@(Model.Chats?.ContainsKey(ActionViewModel.AllChatsId) ?? true)">All chats</option>
+            <option value="@ActionViewModel.AllChatsId" selected="@(Model.Chats?.Contains(ActionViewModel.AllChatsId) ?? true)">All chats</option>
 
             <option data-divider="true"></option>
             <option disabled>Groups</option>
-            @foreach (var chat in Model.AvailableChats.GetGroups())
+            @foreach (var chat in availableChats.GetGroups())
             {
                 <option value="@chat.Id" selected="@Model.ChatIsSelected(chat)">@chat.Name</option>
             }
 
             <option data-divider="true"></option>
             <option disabled>Users</option>
-            @foreach (var chat in Model.AvailableChats.GetPrivates())
+            @foreach (var chat in availableChats.GetPrivates())
             {
                 <option value="@chat.Id" selected="@Model.ChatIsSelected(chat)">@chat.Name</option>
             }

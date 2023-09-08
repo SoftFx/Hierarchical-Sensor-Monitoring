@@ -35,6 +35,7 @@ namespace HSMServer.Controllers
     [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
     public class HomeController : BaseController
     {
+        private readonly ITelegramChatsManager _telegramChatsManager;
         private readonly ITreeValuesCache _treeValuesCache;
         private readonly IFolderManager _folderManager;
         private readonly TreeViewModel _treeViewModel;
@@ -43,13 +44,15 @@ namespace HSMServer.Controllers
 
 
         public HomeController(ITreeValuesCache treeValuesCache, IFolderManager folderManager, TreeViewModel treeViewModel,
-                              IUserManager userManager, NotificationsCenter notifications, IJournalService journalService) : base(userManager)
+                              IUserManager userManager, NotificationsCenter notifications, IJournalService journalService,
+                              ITelegramChatsManager telegramChatsManager) : base(userManager)
         {
             _telegramBot = notifications.TelegramBot;
             _treeValuesCache = treeValuesCache;
             _treeViewModel = treeViewModel;
             _folderManager = folderManager;
             _journalService = journalService;
+            _telegramChatsManager = telegramChatsManager;
         }
 
         public IActionResult Index()
@@ -627,7 +630,7 @@ namespace HSMServer.Controllers
 
         public IActionResult AddAlertAction(Guid entityId) =>
             TryGetSelectedNode(entityId, out var entity)
-                ? PartialView("~/Views/Home/Alerts/_ActionBlock.cshtml", new ActionViewModel(false, entity.GetAllChats()))
+                ? PartialView("~/Views/Home/Alerts/_ActionBlock.cshtml", new ActionViewModel(false, entity.RootProduct.TelegramChats))
                 : _emptyResult;
 
         private bool TryGetSelectedNode(Guid entityId, out NodeViewModel entity)
@@ -721,8 +724,12 @@ namespace HSMServer.Controllers
             if (!ModelState.IsValid)
                 return PartialView("_MetaInfo", new ProductInfoViewModel(product));
 
-            var availableChats = product.RootProduct.GetAvailableChats();
             var ttl = newModel.DataAlerts.TryGetValue(TimeToLiveAlertViewModel.AlertKey, out var alerts) && alerts.Count > 0 ? alerts[0] : null;
+
+            var availableChats = new Dictionary<Guid, string>(1 << 3);
+            foreach (var chat in _telegramChatsManager.GetValues())
+                if (product.RootProduct.TelegramChats.Contains(chat.Id))
+                    availableChats.Add(chat.Id, chat.Name);
 
             var update = new ProductUpdate
             {

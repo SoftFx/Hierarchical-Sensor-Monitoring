@@ -113,8 +113,10 @@ namespace HSMServer.Model.DataAlerts
             {
                 if (action.Action == ActionType.SendNotification)
                 {
-                    bool allChats = action.Chats?.ContainsKey(ActionViewModel.AllChatsId) ?? false;
-                    Dictionary<Guid, string> chats = allChats ? availavleChats : action.Chats ?? new(0);
+                    bool allChats = action.Chats?.Contains(ActionViewModel.AllChatsId) ?? false;
+                    Dictionary<Guid, string> chats = allChats
+                        ? availavleChats
+                        : action.Chats?.ToDictionary(k => k, v => availavleChats[v]) ?? new(0);
 
                     destination = new PolicyDestinationUpdate(allChats, chats);
                     comment = action.Comment;
@@ -144,23 +146,16 @@ namespace HSMServer.Model.DataAlerts
 
             IsDisabled = policy.IsDisabled;
 
-            var availableChats = node.GetAllChats();
-
-            Dictionary<Guid, string> policyChats = new();
-            if ((policy.Destination?.Chats?.Count ?? 0) > 0)
-            {
-                var availableChatsDict = availableChats.ToDictionary(k => k.Id, v => v.Name);
-
-                foreach (var (chatId, name) in policy.Destination.Chats)
-                    policyChats.Add(chatId, string.IsNullOrEmpty(name) && availableChatsDict.TryGetValue(chatId, out var chatName) ? chatName : name);
-            }
+            var availableChats = node.RootProduct.TelegramChats;
 
             Actions.Add(new ActionViewModel(true, availableChats)
             {
                 Action = ActionType.SendNotification,
                 Comment = policy.Template,
-                Chats = policy.Destination.AllChats ? new Dictionary<Guid, string>(1) { { ActionViewModel.AllChatsId, null } } : policyChats,
-                DisplayComment = node is SensorNodeViewModel ? policy.RebuildState() : policy.Template
+                DisplayComment = node is SensorNodeViewModel ? policy.RebuildState() : policy.Template,
+                Chats = policy.Destination.AllChats
+                    ? new HashSet<Guid>() { ActionViewModel.AllChatsId }
+                    : new HashSet<Guid>(policy.Destination.Chats.Keys),
             });
 
             if (!string.IsNullOrEmpty(policy.Icon))
@@ -177,7 +172,7 @@ namespace HSMServer.Model.DataAlerts
 
             Conditions.Add(CreateCondition(true));
 
-            var availableChats = node.GetAllChats();
+            var availableChats = node.RootProduct.TelegramChats;
 
             Actions.Add(new ActionViewModel(true, availableChats) { Comment = DefaultCommentTemplate });
             Actions.Add(new ActionViewModel(false, availableChats) { Action = ActionType.ShowIcon, Icon = DefaultIcon });
