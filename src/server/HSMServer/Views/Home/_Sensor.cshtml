@@ -306,10 +306,10 @@
     $('[id^="plot_"]').change(function () {
         const name = this.id.substring("plot_".length, this.id.length);
         if ($(this).is(':checked')){
-            addBarPlot(name);   
+            addPlot(name);   
         }
         else {
-            removeBarPlot(name);  
+            removePlot(name);  
         }
     });
     

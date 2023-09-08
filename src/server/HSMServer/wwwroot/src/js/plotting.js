@@ -10,8 +10,10 @@
     TimeSpanPlot
 } from "./plots";
 
+export const serviceAlivePlotName  = "ServiceAlive";
+export const serviceStatusPlotName  = "ServiceStatus";
 
-window.barGraphData = {
+window.graphData = {
     plot: undefined,
     plotData: [],
 
@@ -22,25 +24,25 @@ window.barGraphData = {
     }
 };
 
-window.addBarPlot = function (name, isInit = false) {
+window.addPlot = function (name, isInit = false) {
     if (name === 'bar')
-        Plotly.addTraces(barGraphData.graph.id, barGraphData.plot.getPlotData());
+        Plotly.addTraces(graphData.graph.id, graphData.plot.getPlotData());
     else {
-        let currPlot = new DoublePlot(barGraphData.plotData, name, name);
-        Plotly.addTraces(barGraphData.graph.id, currPlot.getPlotData());
+        let currPlot = new DoublePlot(graphData.plotData, name, name);
+        Plotly.addTraces(graphData.graph.id, currPlot.getPlotData());
     }
 
     if (!isInit) {
-        barGraphData.graph.displayedPlots.push(name);
-        localStorage.setItem(barGraphData.graph.id, barGraphData.graph.displayedPlots)
+        graphData.graph.displayedPlots.push(name);
+        localStorage.setItem(graphData.graph.id, graphData.graph.displayedPlots)
     }
 
-    Plotly.update(barGraphData.graph.id, {}, {hovermode: 'x'});
+    Plotly.update(graphData.graph.id, {}, {hovermode: 'x'});
 };
 
-window.removeBarPlot = function (name, isInit = false) {
+window.removePlot = function (name, isInit = false) {
     let indexToDelete = undefined;
-    let plots = barGraphData.graph.self._fullData;
+    let plots = graphData.graph.self._fullData;
     for (let i = 0; i < plots.length; i++) {
         if (plots[i].name === name) {
             indexToDelete = i;
@@ -49,19 +51,19 @@ window.removeBarPlot = function (name, isInit = false) {
     }
 
     if (indexToDelete !== undefined) {
-        Plotly.deleteTraces(barGraphData.graph.id, indexToDelete);
+        Plotly.deleteTraces(graphData.graph.id, indexToDelete);
         if (!isInit) {
-            barGraphData.graph.displayedPlots.splice(barGraphData.graph.displayedPlots.indexOf(name), 1);
-            localStorage.setItem(barGraphData.graph.id, barGraphData.graph.displayedPlots)
+            graphData.graph.displayedPlots.splice(graphData.graph.displayedPlots.indexOf(name), 1);
+            localStorage.setItem(graphData.graph.id, graphData.graph.displayedPlots)
         }
     }
 }
 
-window.displayGraph = function (graphData, sensorTypes, graphElementId, graphName) {
-    barGraphData.graph.id = graphElementId
-    barGraphData.graph.self = $(`#${graphElementId}`)[0];
+window.displayGraph = function (data, sensorTypes, graphElementId, graphName) {
+    graphData.graph.id = graphElementId;
+    graphData.graph.self = $(`#${graphElementId}`)[0];
 
-    let plot = convertToGraphData(graphData, sensorTypes, graphName);
+    let plot = convertToGraphData(data, sensorTypes, graphName);
     let zoomData = getPreviousZoomData(graphElementId);
 
     let config = {
@@ -89,20 +91,21 @@ window.displayGraph = function (graphData, sensorTypes, graphElementId, graphNam
 
     Plotly.newPlot(graphElementId, plot.getPlotData(), layout, config);
 
-    config.modeBarButtonsToAdd.forEach(x => {
-        if(x.name === "Show/Hide service alive plot")
-            x.click();
-    })
+    if (plot.name !== serviceAlivePlotName)
+        config.modeBarButtonsToAdd.forEach(x => {
+            if(x.name === "Show/Hide service alive plot")
+                x.click();
+        })
 
-    let savedPlots = localStorage.getItem(barGraphData.graph.id);
+    let savedPlots = localStorage.getItem(graphData.graph.id);
     if (savedPlots) {
-        removeBarPlot('bar', true)
-        removeBarPlot('min', true)
-        removeBarPlot('max', true)
-        removeBarPlot('mean', true)
-        removeBarPlot('count', true)
+        removePlot('bar', true)
+        removePlot('min', true)
+        removePlot('max', true)
+        removePlot('mean', true)
+        removePlot('count', true)
         savedPlots.split(',').forEach((name) => {
-            addBarPlot(name, true)
+            addPlot(name, true)
         })
     }
 
@@ -212,14 +215,17 @@ function addPlotButton(graphName, name, isStatusService, icon, graphId, id, path
 function addEnumPlot(graphId, graphName, id, isStatusService, path){
     let graph = $(`#${graphId}`)[0];
     let plots = graph._fullData;
-    if (plots.length > 1) {
+
+    let currentName = isStatusService ? serviceStatusPlotName : serviceAlivePlotName;
+
+    if (plots.map((x) => x.name).includes(currentName) && plots.length !== 1)
+    {
         let indexToDelete = undefined;
-        for (let i = 0; i < plots.length; i++) {
-            if (plots[i].name === name) {
+        for (let i = 0; i < plots.length; i++) 
+            if (plots[i].name === currentName) {
                 indexToDelete = i;
                 break;
             }
-        }
 
         if (indexToDelete !== undefined)
             Plotly.deleteTraces(graphId, indexToDelete);
@@ -233,7 +239,7 @@ function addEnumPlot(graphId, graphName, id, isStatusService, path){
                 hovermode: 'x'
             };
 
-            Plotly.addTraces(graphId, heatPlot.getPlotData(name, ranges[0], ranges[1]));
+            Plotly.addTraces(graphId, heatPlot.getPlotData(currentName, ranges[0], ranges[1]));
             Plotly.update(graphId, {}, updateLayout);
         });
     }

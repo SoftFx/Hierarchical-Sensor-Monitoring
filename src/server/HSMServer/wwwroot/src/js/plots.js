@@ -1,4 +1,4 @@
-﻿import {ServiceStatus} from "./plotting";
+﻿import {serviceAlivePlotName, ServiceStatus, serviceStatusPlotName} from "./plotting";
 
 export const ServiceAliveIcon = {
     'width': 500,
@@ -237,8 +237,8 @@ export class BarPLot extends Plot {
             this.count.push(i.count);
         }
 
-        window.barGraphData.plot = this;
-        window.barGraphData.plotData = data;
+        window.graphData.plot = this;
+        window.graphData.plotData = data;
     }
 }
 
@@ -357,6 +357,7 @@ export class EnumPlot extends Plot {
         this.showscale = false;
         this.type = 'heatmap';
         this.opacity = 0.25;
+        this.name = isServiceStatus ? serviceStatusPlotName : serviceAlivePlotName;
         this.setUpData(data);
     }
 
@@ -415,7 +416,9 @@ export class EnumPlot extends Plot {
         this.y = [minValue, maxValue];
         this.z = [this.z];
         this.customdata = [this.customdata];
-        this.name = name;
+        
+        if (!this.name)
+            this.name = name;
 
         return super.getPlotData();
     }
