@@ -25,7 +25,7 @@ internal sealed class ResourceSettings
 
         foreach (var (_, value) in WebSites)
         {
-            value.PingDelay ??= DefaultSiteNodeSettings.PingDelay;
+            value.PingDelay = DefaultSiteNodeSettings.PingDelay;
             value.PingTimeoutValue ??= DefaultSiteNodeSettings.PingTimeoutValue;
             value.Countries ??= DefaultSiteNodeSettings.Countries;
             value.TTL ??= DefaultSiteNodeSettings.TTL;
