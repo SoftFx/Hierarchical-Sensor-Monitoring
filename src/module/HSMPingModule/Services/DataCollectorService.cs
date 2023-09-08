@@ -27,6 +27,7 @@ internal sealed class DataCollectorService : IDataCollectorService, IDisposable
         {
             Version = ServiceConfig.Version,
         };
+
         _logger.LogInformation("Product version: {version}", productInfoOptions.Version);
 
         var collectorOptions = new CollectorOptions()
@@ -35,6 +36,7 @@ internal sealed class DataCollectorService : IDataCollectorService, IDisposable
             ServerAddress = _config.CollectorSettings.ServerAddress,
             Port = _config.CollectorSettings.Port
         };
+
         _logger.LogInformation("Access key: {key}", collectorOptions.AccessKey);
         _logger.LogInformation("Server address: {key}", collectorOptions.ServerAddress);
         _logger.LogInformation("Server port: {port}", collectorOptions.Port);
@@ -51,7 +53,6 @@ internal sealed class DataCollectorService : IDataCollectorService, IDisposable
             _collector.Unix.AddProductVersion(productInfoOptions)
                            .AddCollectorMonitoringSensors();
         }
-
 
         _exceptionSensor = _collector.CreateStringSensor("Infrastructure/AppException");
     }
