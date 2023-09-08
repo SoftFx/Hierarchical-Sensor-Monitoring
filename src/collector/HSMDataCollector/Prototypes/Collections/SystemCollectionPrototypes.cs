@@ -17,7 +17,6 @@ namespace HSMDataCollector.Prototypes
     {
         protected override string SensorName => "Free RAM memory";
 
-
         public FreeRamMemoryPrototype() : base()
         {
             Description = "Free memory, which is memory available to the operating system," +
@@ -26,6 +25,8 @@ namespace HSMDataCollector.Prototypes
 
             SensorUnit = Unit.MB;
             Type = SensorType.DoubleBarSensor;
+
+            IsComputerSensor = true;
         }
     }
 
@@ -43,6 +44,8 @@ namespace HSMDataCollector.Prototypes
 
             SensorUnit = Unit.Percents;
             Type = SensorType.DoubleBarSensor;
+
+            IsComputerSensor = true;
 
             Alerts = new List<BarAlertTemplate>()
             {

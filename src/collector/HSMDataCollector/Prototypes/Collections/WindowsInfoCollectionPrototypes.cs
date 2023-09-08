@@ -15,6 +15,12 @@ namespace HSMDataCollector.Prototypes
         protected override string Category => "Windows OS info";
 
 
+        protected WindowsInfoMonitoringPrototype() : base()
+        {
+            IsComputerSensor = true;
+        }
+
+
         public override WindowsInfoSensorOptions Get(WindowsInfoSensorOptions customOptions)
         {
             var options = base.Get(customOptions);

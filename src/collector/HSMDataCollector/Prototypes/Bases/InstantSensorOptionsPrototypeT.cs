@@ -13,7 +13,6 @@ namespace HSMDataCollector.Prototypes
 
         protected InstantSensorOptionsPrototype()
         {
-            Path = DefaultPrototype.BuildDefaultPath(Category, SensorName);
             EnableForGrafana = true;
 
             TTL = TimeSpan.MaxValue; //Never
@@ -24,9 +23,13 @@ namespace HSMDataCollector.Prototypes
         {
             var options = DefaultPrototype.Merge(this, customOptions);
 
+            options.Path = RebuildPath();
             options.Alerts = customOptions?.Alerts ?? Alerts;
 
             return options;
         }
+
+
+        protected string RebuildPath() => DefaultPrototype.RevealDefaultPath(this, Category, SensorName);
     }
 }

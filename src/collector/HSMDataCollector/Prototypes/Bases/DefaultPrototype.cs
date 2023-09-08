@@ -5,13 +5,16 @@ namespace HSMDataCollector.Prototypes
 {
     internal static class DefaultPrototype
     {
+        private const string ComputerFolder = ".computer";
+        private const string ModuleFolder = ".module";
         private const string PathSeparator = "/";
-        private const string SystemPath = ".module";
 
 
         internal static T Merge<T>(SensorOptions defaultOptions, T customOptions) where T : SensorOptions, new() =>
             new T()
             {
+                IsComputerSensor = defaultOptions.IsComputerSensor,
+                ComputerName = defaultOptions.ComputerName,
                 Module = defaultOptions.Module,
                 Path = defaultOptions.Path,
                 Type = defaultOptions.Type,
@@ -26,14 +29,16 @@ namespace HSMDataCollector.Prototypes
                 TTL = customOptions?.TTL ?? defaultOptions.TTL,
 
                 EnableForGrafana = customOptions?.EnableForGrafana ?? defaultOptions.EnableForGrafana,
+
+                IsSingletonSensor = customOptions?.IsSingletonSensor ?? defaultOptions.IsSingletonSensor,
                 AggregateData = customOptions?.AggregateData ?? defaultOptions.AggregateData,
             };
 
 
-        internal static string BuildDefaultPath(string category, string path) =>
+        internal static string RevealDefaultPath(SensorOptions options, string category, string path) =>
             BuildPath(new string[]
             {
-                SystemPath,
+                options.IsComputerSensor ? ComputerFolder : ModuleFolder,
                 category,
                 path,
             });

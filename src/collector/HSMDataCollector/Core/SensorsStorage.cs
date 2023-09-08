@@ -117,6 +117,7 @@ namespace HSMDataCollector.Core
 
         private T FillOptions<T>(string path, SensorType type, T options) where T : SensorOptions
         {
+            options.ComputerName = _collector.ComputerName;
             options.Module = _collector.Module;
             options.Path = path;
             options.Type = type;
