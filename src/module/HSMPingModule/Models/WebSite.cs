@@ -7,14 +7,13 @@ namespace HSMPingModule.Models;
 
 internal sealed class WebSite
 {
-    public List<string> Countries { get; set; } = new ();
+    public List<string> Countries { get; set; }
 
-    public TimeSpan? TTL { get; set; } = TimeSpan.FromMinutes(15);
+    public TimeSpan? TTL { get; set; }
 
+    public int? PingTimeoutValue { get; set; }
 
-    public int? PingTimeoutValue { get; set; } = 15;
-
-    public int? PingDelay { get; set; } = 15;
+    public int? PingDelay { get; set; }
 
 
     [JsonIgnore]
