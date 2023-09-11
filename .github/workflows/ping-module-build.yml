@@ -1,17 +1,8 @@
 name: HSMPingModule build
 on:
-  push:
-    branches: [master, develop]
-
   workflow_dispatch:
-    inputs:
-      isPreRelease:
-        description: "PreRelease"
-        type: boolean
-        required: true
-        default: false
 env:
-  OUTPUT_FOLDER: ${{ github.workspace }}/BuildOutput
+  OUTPUT_FOLDER: ${{ github.workspace }}/BuildPingerOutput
 
   MODULE_PATH: src/module/HSMPingModule/HSMPingModule.csproj
 
