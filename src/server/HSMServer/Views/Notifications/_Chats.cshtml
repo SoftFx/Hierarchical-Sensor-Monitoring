@@ -38,7 +38,7 @@
             <tr>
                 <th>@Model.NameColumn</th>
                 <th>Products</th>
-                <th>Admins</th>
+                <th>Managers</th>
                 <th style="text-align:center">Actions</th>
             </tr>
             @foreach (var chat in Model.Chats)
@@ -58,10 +58,12 @@
                             </a>
                         }
                     </td>
-                    <td class="w-30" style="word-wrap: break-word">
-                        <span>@string.Join(", ", chat.Products.Values)</span>
+                    <td style="word-wrap: break-word; overflow-wrap: anywhere;">
+                        @string.Join(", ", chat.Products.Values)
                     </td>
-                    <td>List of admins for groups/user for accounts</td>
+                    <td style="word-wrap: break-word; overflow-wrap: anywhere;">
+                        @string.Join(", ", chat.Managers.Values)
+                    </td>
                     <td style="text-align:center">
                         <div class="dropdown">
                             <button id="actionButton" class="btn" data-bs-toggle="dropdown" data-bs-auto-close="true" aria-haspopup="true" aria-expanded="false">

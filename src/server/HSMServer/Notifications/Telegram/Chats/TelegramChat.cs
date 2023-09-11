@@ -15,8 +15,6 @@ namespace HSMServer.Notifications
 
     public sealed class TelegramChat : IServerModel<TelegramChatEntity, TelegramChatUpdate>
     {
-        public HashSet<Guid> Managers { get; } = new();
-
         public HashSet<Guid> Products { get; } = new();
 
 
