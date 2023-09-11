@@ -11,6 +11,6 @@ docker network rm $ConnectionNetworkName
 
 docker network create -d bridge $ConnectionNetworkName
 
-docker network connect --alias hsmserver $ConnectionNetworkName "HSMServer_$HsmVersion"
+docker network connect $ConnectionNetworkName "HSMServer_$HsmVersion" --alias
 
 docker network connect $ConnectionNetworkName "HSMPingModule_$PingVersion"
