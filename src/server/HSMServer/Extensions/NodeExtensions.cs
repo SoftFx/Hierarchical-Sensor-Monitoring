@@ -17,16 +17,16 @@ namespace HSMServer.Extensions
         private const int IconSize = 3;
 
 
-        internal static List<TelegramChat> GetAllChats(this NodeViewModel node)
+        internal static Dictionary<Guid, string> GetAvailableChats(this NodeViewModel node, ITelegramChatsManager chatsManager)
         {
-            var availableGroups = node.RootProduct.Notifications.Telegram.Chats.Values;
-            var availableUsers = node.RootProduct.GetAllUserChats().Values;
+            var availableChats = new Dictionary<Guid, string>(1 << 3);
 
-            return availableGroups.Union(availableUsers).OrderBy(chat => chat.IsUserChat).ThenBy(chat => chat.Name).ToList();
+            foreach (var chat in chatsManager.GetValues())
+                if (node.RootProduct.TelegramChats.Contains(chat.Id))
+                    availableChats.Add(chat.Id, chat.Name);
+
+            return availableChats;
         }
-
-        internal static Dictionary<Guid, string> GetAvailableChats(this NodeViewModel node) =>
-            node.GetAllChats().ToDictionary(k => k.Id, v => v.Name);
 
 
         internal static string ToCssIconClass(this SensorStatus status) =>

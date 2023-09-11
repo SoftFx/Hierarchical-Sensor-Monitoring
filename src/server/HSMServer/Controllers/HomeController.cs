@@ -558,7 +558,7 @@ namespace HSMServer.Controllers
             if (!ModelState.IsValid)
                 return PartialView("_MetaInfo", new SensorInfoViewModel(sensor));
 
-            var availableChats = sensor.RootProduct.GetAvailableChats();
+            var availableChats = sensor.RootProduct.GetAvailableChats(_telegramChatsManager);
 
             var ttl = newModel.DataAlerts.TryGetValue(TimeToLiveAlertViewModel.AlertKey, out var alerts) && alerts.Count > 0 ? alerts[0] : null;
             var policyUpdates = newModel.DataAlerts.TryGetValue((byte)sensor.Type, out var list) ? list.Select(a => a.ToUpdate(availableChats)).ToList() : new();
@@ -724,12 +724,8 @@ namespace HSMServer.Controllers
             if (!ModelState.IsValid)
                 return PartialView("_MetaInfo", new ProductInfoViewModel(product));
 
+            var availableChats = product.RootProduct.GetAvailableChats(_telegramChatsManager);
             var ttl = newModel.DataAlerts.TryGetValue(TimeToLiveAlertViewModel.AlertKey, out var alerts) && alerts.Count > 0 ? alerts[0] : null;
-
-            var availableChats = new Dictionary<Guid, string>(1 << 3);
-            foreach (var chat in _telegramChatsManager.GetValues())
-                if (product.RootProduct.TelegramChats.Contains(chat.Id))
-                    availableChats.Add(chat.Id, chat.Name);
 
             var update = new ProductUpdate
             {
