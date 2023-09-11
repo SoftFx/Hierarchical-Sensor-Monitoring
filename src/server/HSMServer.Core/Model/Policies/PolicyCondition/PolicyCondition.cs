@@ -30,6 +30,8 @@ namespace HSMServer.Core.Model.Policies
         IsChangedToError = 23,
         [Display(Name = "is changed to \U0001f7e2 OK")]
         IsChangedToOk = 24,
+
+        ReceivedNewValue = 50,
     }
 
 
@@ -37,6 +39,8 @@ namespace HSMServer.Core.Model.Policies
     {
         Status = 0,
         Comment = 1,
+
+        NewSensorData = 10,
 
         Value = 20,
 
