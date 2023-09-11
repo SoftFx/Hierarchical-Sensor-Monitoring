@@ -107,6 +107,7 @@ namespace HSMServer.Model.NotificationViewModels
                 if (tree.Nodes.TryGetValue(productId, out var product))
                     Products.Add(productId, product.Name);
 
+            // TODO : fix managers for private chats
             foreach (var user in userManager.GetUsers())
                 foreach (var (productId, role) in user.ProductsRoles)
                     if (Products.ContainsKey(productId) && role == Authentication.ProductRoleEnum.ProductManager && !Managers.ContainsKey(user.Id))

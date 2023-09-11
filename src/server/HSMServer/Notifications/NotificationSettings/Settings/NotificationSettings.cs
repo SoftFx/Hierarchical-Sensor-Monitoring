@@ -6,8 +6,6 @@ namespace HSMServer.Notification.Settings
     {
         public TelegramSettings Telegram { get; }
 
-        public bool AutoSubscription { get; set; } = true;
-
 
         internal NotificationSettings()
         {
@@ -17,9 +15,6 @@ namespace HSMServer.Notification.Settings
         internal NotificationSettings(NotificationSettingsEntity entity)
         {
             Telegram = new(entity?.TelegramSettings);
-
-            if (entity != null)
-                AutoSubscription = entity.AutoSubscription;
         }
 
 

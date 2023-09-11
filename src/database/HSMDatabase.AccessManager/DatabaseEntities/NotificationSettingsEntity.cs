@@ -9,8 +9,6 @@ namespace HSMDatabase.AccessManager.DatabaseEntities
         public Dictionary<long, Dictionary<string, long>> PartiallyIgnored { get; init; }
 
         public List<string> EnabledSensors { get; init; }
-
-        public bool AutoSubscription { get; init; } = true;
     }
 
 

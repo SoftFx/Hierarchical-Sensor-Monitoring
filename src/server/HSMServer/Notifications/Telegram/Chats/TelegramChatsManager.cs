@@ -123,7 +123,7 @@ namespace HSMServer.Notifications
                             }
                         }
 
-                    user.Notifications = new(new() { TelegramSettings = null, EnabledSensors = null, PartiallyIgnored = null, AutoSubscription = false });
+                    user.Notifications = new(new() { TelegramSettings = null, EnabledSensors = null, PartiallyIgnored = null });
                     usersToResave.Add(user);
                 }
 
@@ -156,7 +156,7 @@ namespace HSMServer.Notifications
                 {
                     Id = productId,
                     TelegramChats = chats,
-                    NotificationSettings = new() { TelegramSettings = null, AutoSubscription = false }
+                    NotificationSettings = new() { TelegramSettings = null }
                 };
 
                 _cache.UpdateProduct(update);
