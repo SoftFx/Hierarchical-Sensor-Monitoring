@@ -39,14 +39,12 @@ namespace HSMServer.Authentication
 
             _treeValuesCache = cache;
             _treeValuesCache.ChangeProductEvent += ChangeProductEventHandler;
-            _treeValuesCache.ChangeSensorEvent += ChangeSensorEventHandler;
         }
 
 
         public void Dispose()
         {
             _treeValuesCache.ChangeProductEvent -= ChangeProductEventHandler;
-            _treeValuesCache.ChangeSensorEvent -= ChangeSensorEventHandler;
         }
 
         public Task<bool> AddUser(string userName, string passwordHash, bool isAdmin, List<(Guid, ProductRoleEnum)> productRoles = null)
@@ -159,20 +157,6 @@ namespace HSMServer.Authentication
 
                 foreach (var userToEdit in updatedUsers)
                     TryUpdate(userToEdit);
-            }
-        }
-
-        private void ChangeSensorEventHandler(BaseSensorModel sensor, ActionType transaction)
-        {
-            if (transaction == ActionType.Delete)
-            {
-                foreach (var (_, user) in this)
-                {
-                    if (!user.Notifications.RemoveSensor(sensor.Id))
-                        continue;
-
-                    TryUpdate(user);
-                }
             }
         }
     }

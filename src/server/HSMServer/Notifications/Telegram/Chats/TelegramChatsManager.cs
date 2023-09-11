@@ -123,7 +123,7 @@ namespace HSMServer.Notifications
                             }
                         }
 
-                    user.Notifications = new(new() { TelegramSettings = null, EnabledSensors = null, PartiallyIgnored = null });
+                    user.Notifications = new(new());
                     usersToResave.Add(user);
                 }
 

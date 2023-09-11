@@ -192,7 +192,6 @@ function selectNodeInfoTab(tab, selectedId) {
         tabLink.click();
 }
 
-const TelegramTarget = { Groups: 0, Accounts: 1 };
 window.NodeType = { Folder: 0, Product: 1, Node: 2, Sensor: 3, Disabled: 4 };
 
 const AjaxPost = {
@@ -327,7 +326,7 @@ function buildContextMenu(node) {
                     "label": `Mute ${getKeyByValue(curType)} for...`,
                     "separator_after": true,
                     "separator_before": true,
-                    "action": _ => ignoreNotificationsRequest(node, TelegramTarget.Groups)
+                    "action": _ => muteRequest(node)
                 }
             }
             else {
@@ -431,8 +430,8 @@ function unmuteRequest(node){
     });
 }
 
-function ignoreNotificationsRequest(node, target) {
-    return $.ajax(`${ignoreNotificationsAction}?selectedId=${node.id}&target=${target}`, {
+function muteRequest(node) {
+    return $.ajax(`${muteAction}?selectedId=${node.id}`, {
         cache: false,
         success: (v) => $("#ignoreNotificatios_partial").html(v),
     }).done(() => $('#ignoreNotifications_modal').modal('show'))

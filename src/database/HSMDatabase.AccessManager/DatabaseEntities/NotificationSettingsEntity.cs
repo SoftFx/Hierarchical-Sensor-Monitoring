@@ -5,10 +5,6 @@ namespace HSMDatabase.AccessManager.DatabaseEntities
     public class NotificationSettingsEntity
     {
         public TelegramSettingsEntityOld TelegramSettings { get; init; }
-
-        public Dictionary<long, Dictionary<string, long>> PartiallyIgnored { get; init; }
-
-        public List<string> EnabledSensors { get; init; }
     }
 
 

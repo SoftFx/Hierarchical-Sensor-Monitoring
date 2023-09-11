@@ -17,7 +17,6 @@ using HSMServer.Model.Model.History;
 using HSMServer.Model.TreeViewModel;
 using HSMServer.Model.TreeViewModels;
 using HSMServer.Model.ViewModel;
-using HSMServer.Notification.Settings;
 using HSMServer.Notifications;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -149,9 +148,6 @@ namespace HSMServer.Controllers
                 if (_treeViewModel.Sensors.TryGetValue(decodedId, out var sensor))
                     _treeValuesCache.UpdateMutedSensorState(sensor.Id, CurrentInitiator, newMutingPeriod);
             }
-
-            UpdateUserNotificationSettings(decodedId, (s, g) => s.Ignore(g, model.EndOfIgnorePeriod));
-            UpdateGroupNotificationSettings(decodedId, (s, g) => s.Ignore(g, model.EndOfIgnorePeriod));
         }
 
         [HttpPost]
@@ -169,9 +165,6 @@ namespace HSMServer.Controllers
                 if (_treeViewModel.Sensors.TryGetValue(decodedId, out var sensor))
                     _treeValuesCache.UpdateMutedSensorState(sensor.Id, CurrentInitiator);
             }
-
-            UpdateUserNotificationSettings(decodedId, (s, g) => s.RemoveIgnore(g));
-            UpdateGroupNotificationSettings(decodedId, (s, g) => s.RemoveIgnore(g));
         }
 
         [HttpPost]
@@ -317,25 +310,21 @@ namespace HSMServer.Controllers
         }
 
         [HttpGet]
-        public IActionResult IgnoreNotifications(string selectedId, NotificationsTarget target)
+        public IActionResult MuteSensors(string selectedId)
         {
             var decodedId = SensorPathHelper.DecodeGuid(selectedId);
 
             IgnoreNotificationsViewModel viewModel = null;
 
             if (_treeViewModel.Nodes.TryGetValue(decodedId, out var node))
-                viewModel = new IgnoreNotificationsViewModel(node, target);
+                viewModel = new IgnoreNotificationsViewModel(node);
             else if (_treeViewModel.Sensors.TryGetValue(decodedId, out var sensor))
-                viewModel = new IgnoreNotificationsViewModel(sensor, target);
+                viewModel = new IgnoreNotificationsViewModel(sensor);
             else if (_folderManager.TryGetValue(decodedId, out var folder))
-                viewModel = new IgnoreNotificationsViewModel(folder, target);
+                viewModel = new IgnoreNotificationsViewModel(folder);
 
             return PartialView("_IgnoreNotificationsModal", viewModel);
         }
-
-        [HttpPost]
-        public void IgnoreNotifications(IgnoreNotificationsViewModel model) =>
-            GetHandler(model.NotificationsTarget)(SensorPathHelper.DecodeGuid(model.EncodedId), (s, g) => s.Ignore(g, model.EndOfIgnorePeriod));
 
         [HttpPost]
         public string GetNodePath([FromQuery] string selectedId, [FromQuery] bool isFullPath = false)
@@ -369,38 +358,6 @@ namespace HSMServer.Controllers
 
                 _treeValuesCache.UpdateSensor(update);
             }
-        }
-
-        private Action<Guid, Action<ClientNotifications, Guid>> GetHandler(NotificationsTarget actionType) => actionType switch
-        {
-            NotificationsTarget.Groups => UpdateGroupNotificationSettings,
-            NotificationsTarget.Accounts => UpdateUserNotificationSettings
-        };
-
-        private void UpdateUserNotificationSettings(Guid selectedNode, Action<ClientNotifications, Guid> updateSettings)
-        {
-            foreach (var sensorId in GetNodeSensors(selectedNode))
-            {
-                updateSettings?.Invoke(StoredUser.Notifications, sensorId);
-            }
-
-            _userManager.UpdateUser(StoredUser);
-        }
-
-        private void UpdateGroupNotificationSettings(Guid selectedNode, Action<ClientNotifications, Guid> updateSettings)
-        {
-            var updatedProducts = new HashSet<ProductNodeViewModel>();
-
-            foreach (var sensorId in GetNodeSensors(selectedNode))
-                if (_treeViewModel.Sensors.TryGetValue(sensorId, out var sensor) && sensor.RootProduct != null)
-                {
-                    updateSettings?.Invoke(sensor.RootProduct.Notifications, sensorId);
-
-                    updatedProducts.Add(sensor.RootProduct);
-                }
-
-            foreach (var product in updatedProducts)
-                _treeViewModel.UpdateProductNotificationSettings(product);
         }
 
         private List<Guid> GetNodeSensors(Guid id) => _treeViewModel.GetAllNodeSensors(id);
