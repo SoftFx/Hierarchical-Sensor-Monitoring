@@ -45,7 +45,7 @@
             {
                 <tr>
                     <td>
-                        @if (chat.IsUserChat)
+                        @if (chat.Type == ConnectedChatType.TelegramPrivate)
                         {
                             <span>@chat.Name</span>
                         }
@@ -58,7 +58,9 @@
                             </a>
                         }
                     </td>
-                    <td>List of connected products</td>
+                    <td class="w-30" style="word-wrap: break-word">
+                        <span>@string.Join(", ", chat.Products.Values)</span>
+                    </td>
                     <td>List of admins for groups/user for accounts</td>
                     <td style="text-align:center">
                         <div class="dropdown">

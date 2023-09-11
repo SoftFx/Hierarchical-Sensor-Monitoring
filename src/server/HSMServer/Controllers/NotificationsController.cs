@@ -35,7 +35,7 @@ namespace HSMServer.Controllers
         }
 
 
-        public IActionResult Index() => View(new ChatsViewModel(_chatsManager.GetValues()));
+        public IActionResult Index() => View(new ChatsViewModel(_chatsManager.GetValues(), _tree, _userManager));
 
         [HttpPost]
         public IActionResult UpdateTelegramSettings(TelegramSettingsViewModel telegramSettings, string entityId)

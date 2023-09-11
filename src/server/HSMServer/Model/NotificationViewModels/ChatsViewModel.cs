@@ -1,4 +1,5 @@
-﻿using HSMServer.Extensions;
+﻿using HSMServer.Authentication;
+using HSMServer.Extensions;
 using HSMServer.Notifications;
 using System;
 using System.Collections.Generic;
@@ -12,14 +13,14 @@ namespace HSMServer.Model.NotificationViewModels
         public GroupChatsViewModel GroupChats { get; }
 
 
-        internal ChatsViewModel(List<TelegramChat> chats)
+        internal ChatsViewModel(List<TelegramChat> chats, TreeViewModel.TreeViewModel tree, IUserManager userManager)
         {
             var privates = new List<TelegramChatViewModel>(1 << 3);
             var groups = new List<TelegramChatViewModel>(1 << 3);
 
             foreach (var chat in chats)
             {
-                var viewModel = new TelegramChatViewModel(chat);
+                var viewModel = new TelegramChatViewModel(chat, tree, userManager);
 
                 if (chat.Type is ConnectedChatType.TelegramPrivate)
                     privates.Add(viewModel);
@@ -70,9 +71,14 @@ namespace HSMServer.Model.NotificationViewModels
 
     public class TelegramChatViewModel
     {
+        public Dictionary<Guid, string> Products { get; } = new();
+
+        public Dictionary<Guid, string> Managers { get; } = new();
+
+
         public string AuthorizationTime { get; }
 
-        public bool IsUserChat { get; }
+        public ConnectedChatType Type { get; }
 
         public Guid SystemId { get; }
 
@@ -81,15 +87,25 @@ namespace HSMServer.Model.NotificationViewModels
         public string Name { get; }
 
 
-        public TelegramChatViewModel(TelegramChat chat)
+        public TelegramChatViewModel(TelegramChat chat, TreeViewModel.TreeViewModel tree, IUserManager userManager)
         {
-            ChatId = chat.ChatId.Identifier ?? 0L;
-            IsUserChat = chat.IsUserChat;
             SystemId = chat.Id;
+            ChatId = chat.ChatId.Identifier ?? 0L;
             Name = chat.Name;
+            Type = chat.Type;
             AuthorizationTime = chat.AuthorizationTime == DateTime.MinValue
                 ? "-"
                 : chat.AuthorizationTime.ToDefaultFormat();
+
+            Initialize(chat, tree, userManager);
+        }
+
+
+        private void Initialize(TelegramChat chat, TreeViewModel.TreeViewModel tree, IUserManager userManager)
+        {
+            foreach (var productId in chat.Products)
+                if (tree.Nodes.TryGetValue(productId, out var product))
+                    Products.Add(productId, product.Name);
         }
     }
 }

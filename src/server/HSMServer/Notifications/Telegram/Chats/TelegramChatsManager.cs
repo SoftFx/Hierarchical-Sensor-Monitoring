@@ -49,6 +49,11 @@ namespace HSMServer.Notifications
                 if (_userManager.TryGetValueById(chat.AuthorId, out var author))
                     chat.Author = author.Name;
             }
+
+            foreach (var product in _cache.GetProducts())
+                foreach (var chatId in product.TelegramChats)
+                    if (TryGetValue(chatId, out var chat))
+                        chat.Products.Add(product.Id);
         }
 
         protected override TelegramChat FromEntity(TelegramChatEntity entity) => new(entity);
