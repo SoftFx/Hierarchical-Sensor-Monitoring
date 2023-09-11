@@ -43,6 +43,8 @@ namespace HSMDataCollector.Converters
                 SelfDestroy = options.SelfDestroy?.Ticks,
 
                 EnableGrafana = options.EnableForGrafana,
+
+                IsSingletonSensor = options.IsSingletonSensor,
                 AggregateData = options.AggregateData,
 
                 DefaultAlertsOptions = options.DefaultAlertsOptions,

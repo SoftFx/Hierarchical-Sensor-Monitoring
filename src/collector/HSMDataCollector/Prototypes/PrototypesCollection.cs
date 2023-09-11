@@ -1,4 +1,5 @@
-﻿using HSMDataCollector.Prototypes;
+﻿using HSMDataCollector.Core;
+using HSMDataCollector.Prototypes;
 using HSMDataCollector.Prototypes.Collections.Disks;
 
 namespace HSMDataCollector.Options
@@ -63,11 +64,12 @@ namespace HSMDataCollector.Options
         #endregion
 
 
-        internal PrototypesCollection(string module)
+        internal PrototypesCollection(CollectorOptions options)
         {
             T Register<T>() where T : SensorOptions, new() => new T()
             {
-                Module = module
+                ComputerName = options.ComputerName,
+                Module = options.Module,
             };
 
 

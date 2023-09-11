@@ -48,7 +48,10 @@ namespace HSMSensorDataObjects.SensorRequests
         public long? TTL { get; set; }
 
 
+        public bool? IsSingletonSensor { get; set; }
+
         public bool? AggregateData { get; set; }
+
 
         public bool? EnableGrafana { get; set; }
 

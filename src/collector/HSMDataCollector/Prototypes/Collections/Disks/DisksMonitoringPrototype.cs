@@ -16,6 +16,12 @@ namespace HSMDataCollector.Prototypes
         protected override string Category => DisksMonitoringPrototype.DiskCategory;
 
 
+        protected BarDisksMonitoringPrototype() : base()
+        {
+            IsComputerSensor = true;
+        }
+
+
         protected abstract DiskBarSensorOptions SetDiskInfo(DiskBarSensorOptions options);
 
         public override DiskBarSensorOptions Get(DiskBarSensorOptions customOptions)
@@ -26,7 +32,7 @@ namespace HSMDataCollector.Prototypes
 
             options = SetDiskInfo(options);
 
-            options.Path = DefaultPrototype.BuildDefaultPath(Category, SensorName);
+            options.Path = RebuildPath();
             options.Description = string.Format(BaseDescription, SensorName, options.PostDataPeriod.ToReadableView(), options.BarPeriod.ToReadableView());
 
             return options;
@@ -67,6 +73,12 @@ namespace HSMDataCollector.Prototypes
         protected abstract string OsDiskInfo { get; }
 
 
+        protected DisksMonitoringPrototype() : base()
+        {
+            IsComputerSensor = true;
+        }
+
+
         public override DiskSensorOptions Get(DiskSensorOptions customOptions)
         {
             var options = base.Get(customOptions);
@@ -76,7 +88,7 @@ namespace HSMDataCollector.Prototypes
 
             options = SetDiskInfo(options);
 
-            options.Path = DefaultPrototype.BuildDefaultPath(Category, SensorName);
+            options.Path = RebuildPath();
             options.Description = string.Format(BaseDescription, SensorName, options.PostDataPeriod.ToReadableView(), OsDiskInfo);
 
             return options;

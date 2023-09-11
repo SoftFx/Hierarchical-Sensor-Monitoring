@@ -29,7 +29,7 @@ public sealed class SelectedJournalViewModel : ConcurrentDictionary<Guid, Concur
 
     public Task ConnectJournal(BaseNodeViewModel baseNode, IJournalService journal)
     {
-        if (_node?.Id == baseNode?.Id)
+        if (baseNode is null || _node?.Id == baseNode?.Id)
             return Task.CompletedTask;
 
         if (_journal is null)
