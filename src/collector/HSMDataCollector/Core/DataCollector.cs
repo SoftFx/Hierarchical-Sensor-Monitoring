@@ -57,6 +57,8 @@ namespace HSMDataCollector.Core
 
         public CollectorStatus Status { get; private set; } = CollectorStatus.Stopped;
 
+        public string ComputerName => _options?.ComputerName;
+
         public string Module => _options?.Module;
 
 
@@ -80,7 +82,7 @@ namespace HSMDataCollector.Core
 
             _queueManager = new QueueManager(options, _logger);
             _sensorsStorage = new SensorsStorage(this, _queueManager, _logger);
-            _prototypes = new PrototypesCollection(options.Module);
+            _prototypes = new PrototypesCollection(options);
 
             Windows = new WindowsSensorsCollection(_sensorsStorage, _prototypes);
             Unix = new UnixSensorsCollection(_sensorsStorage, _prototypes);

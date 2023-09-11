@@ -55,7 +55,10 @@ public sealed class JournalRecordViewModel
         var value = string.Empty;
 
         if (string.IsNullOrEmpty(model.NewValue))
-            return ($"""{model.PropertyName} has been removed""", $"{model.PropertyName} {model.OldValue} {model.Initiator}");
+            return ($"""
+                     {model.PropertyName} has been removed: 
+                     <strong>{model.OldValue}</strong>
+                     """, $"{model.PropertyName} {model.OldValue} {model.Initiator}");
 
         if (string.IsNullOrEmpty(model.OldValue))
         {

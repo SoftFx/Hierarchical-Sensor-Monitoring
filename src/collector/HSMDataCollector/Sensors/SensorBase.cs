@@ -25,7 +25,7 @@ namespace HSMDataCollector.DefaultSensors
 
         protected SensorBase(SensorOptions options)
         {
-            options.Path = DefaultPrototype.BuildPath(options.Module, options.Path);
+            options.Path = options.CalculateSystemPath();
 
             _metainfo = options;
         }

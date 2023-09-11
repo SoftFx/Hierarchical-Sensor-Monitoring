@@ -13,7 +13,6 @@ namespace HSMDataCollector.Prototypes.Collections.Disks
 
         private string _sensorName;
 
-
         protected override string SensorName => _sensorName;
 
 
