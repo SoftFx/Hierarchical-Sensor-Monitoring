@@ -31,6 +31,11 @@ namespace HSMServer.Core.Model
         GB = 4,
 
         Percents = 100,
+
+        Ticks = 1000,
+        Milliseconds = 1010,
+        Seconds = 1011,
+        Minutes = 1012
     }
 
 
