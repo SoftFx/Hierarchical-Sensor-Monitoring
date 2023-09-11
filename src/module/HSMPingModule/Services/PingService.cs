@@ -9,8 +9,9 @@ internal class PingService : BackgroundService
 {
     private readonly ConcurrentDictionary<string, ConcurrentDictionary<string, PingAdapter>> _newPings = new();
     private readonly IDataCollectorService _collectorService;
-    private readonly ServiceConfig _config;
     private readonly ILogger<PingService> _logger;
+    private readonly ServiceConfig _config;
+
 
     public PingService(IOptionsMonitor<ServiceConfig> config, IDataCollectorService collectorService, ILogger<PingService> logger)
     {
@@ -70,6 +71,7 @@ internal class PingService : BackgroundService
             {
                 var ping = new PingAdapter(website, hostname, country);
                 ping.SendResult += _collectorService.PingResultSend;
+
                 if (_newPings.TryGetValue(country, out var dict))
                     dict.TryAdd(hostname, ping);
                 else

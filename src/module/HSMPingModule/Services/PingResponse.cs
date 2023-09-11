@@ -1,19 +1,21 @@
-using System.Net.NetworkInformation;
 using HSMSensorDataObjects;
+using System.Net.NetworkInformation;
 
 namespace HSMPingModule;
 
 internal record PingResponse
 {
     private const double Milleseconds = 1000;
-    
-    public double Value { get; init; }
+
 
     public SensorStatus Status { get; init; }
 
+    public double Value { get; init; }
+
     public string Comment { get; init; }
 
-    public bool IsException { get; } = false;
+
+    public bool IsException { get; }
 
 
     public PingResponse(PingReply reply)
