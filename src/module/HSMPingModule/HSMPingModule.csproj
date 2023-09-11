@@ -4,8 +4,7 @@
         <TargetFramework>net7.0</TargetFramework>
         <Nullable>disable</Nullable>
         <ImplicitUsings>enable</ImplicitUsings>
-        <UserSecretsId>dotnet-HSMPingModule-71CF568D-B617-46BA-A8F9-6AFE241BF8AE</UserSecretsId>
-        <Version>1.0.1</Version>
+        <Version>0.0.1</Version>
     </PropertyGroup>
 
     <PropertyGroup>
