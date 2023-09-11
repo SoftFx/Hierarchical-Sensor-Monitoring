@@ -1,0 +1,106 @@
+name: HSMPingModule build
+on:
+  workflow_dispatch:
+env:
+  OUTPUT_FOLDER: ${{ github.workspace }}/BuildPingerOutput
+
+  MODULE_PATH: src/module/HSMPingModule/HSMPingModule.csproj
+
+  DOCKER_DOCKERHUB_ORG: hsmonitoring
+  DOCKER_DEPS_REPOS: pingmodule_deps
+  DOCKER_DEPS_TAG: latest
+  DOCKER_MAIN_REPOS: hsmpingmodule
+
+jobs:
+  build:
+    runs-on: windows-latest
+    outputs:
+      VERSION: ${{ steps.save-version.outputs.version }}
+      ARTIFACT_NAME: ${{ steps.build-artifact-name.outputs.name}}
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Setup .NET Core
+        uses: actions/setup-dotnet@v2
+        with:
+          dotnet-version: 7.0.x
+
+      - name: Install dependencies
+        run: dotnet restore ${{ env.MODULE_PATH }}
+
+      - name: Publish HSMPingModule
+        run: dotnet publish ${{ env.MODULE_PATH }} -c Release -o ${{ env.OUTPUT_FOLDER }}
+
+      - id: save-version
+        name: Try to get server version
+        run: echo "version=$((Get-Item ${{ env.OUTPUT_FOLDER }}/HSMPingModule.exe).VersionInfo.ProductVersion)" >> $env:GITHUB_OUTPUT
+
+      - id: build-artifact-name
+        name: Build artifact name
+        run: echo "name=HSMPingModule v${{ steps.save-version.outputs.version }}" >> $env:GITHUB_OUTPUT
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v3
+        with:
+          path: ${{ env.OUTPUT_FOLDER }}
+          name: ${{ steps.build-artifact-name.outputs.name }}
+
+  publish-docker-deps:
+    if: ${{ github.event_name == 'workflow_dispatch' }}
+    runs-on: ubuntu-latest
+    environment: DockerHub
+    env:
+      DockerfilePath: .github/docker/dockerfile_deps_pingmodule
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKERHUBUSERNAME }}
+          password: ${{ secrets.DOCKERHUBTOKEN }}
+
+      - name: Build and push docker deps
+        uses: docker/build-push-action@v4
+        with:
+          context: .
+          push: true
+          file: ${{ env.DockerfilePath }}
+          tags: ${{ env.DOCKER_DOCKERHUB_ORG }}/${{ env.DOCKER_DEPS_REPOS }}:${{ env.DOCKER_DEPS_TAG }}
+
+  publish-docker-image:
+    runs-on: ubuntu-latest
+    environment: DockerHub
+    needs: [publish-docker-deps, build]
+    env:
+      DockerHubDepsRegistry: index.docker.io
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Log in to Docker Hub for deps repos pull
+        uses: docker/login-action@v2
+        with:
+          registry: ${{ env.DockerHubDepsRegistry }}
+          username: ${{ secrets.DOCKERHUBUSERNAME }}
+          password: ${{ secrets.DOCKERHUBTOKEN }}
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKERHUBUSERNAME }}
+          password: ${{ secrets.DOCKERHUBTOKEN }}
+
+      - name: Build full deps url
+        run: echo "DockerDepsUrl=${{ env.DockerHubDepsRegistry }}/${{ env.DOCKER_DOCKERHUB_ORG }}/${{ env.DOCKER_DEPS_REPOS }}:${{ env.DOCKER_DEPS_TAG }}" >> $GITHUB_ENV
+
+      - name: Build full main repos name
+        run: echo "DockerMainName=${{ env.DOCKER_DOCKERHUB_ORG }}/${{ env.DOCKER_MAIN_REPOS }}" >> $GITHUB_ENV
+
+      - name: Build Linux image for Docker
+        run: dotnet publish ${{ env.MODULE_PATH }} -c Release --os linux --arch x64 /t:PublishContainer -p:ContainerBaseImage=${{ env.DockerDepsUrl }} -p:ContainerImageName=${{ env.DockerMainName }}
+
+      - name: check
+        run: docker images
+
+      - name: Push image to remote Docker
+        run: docker push "${{ env.DockerMainName }}:${{ needs.build.outputs.VERSION }}"

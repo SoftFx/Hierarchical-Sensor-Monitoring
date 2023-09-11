@@ -13,7 +13,9 @@ namespace HSMDataCollector.Core
         public string AccessKey { get; set; }
 
         public int Port { get; set; } = DefaultPort;
-        
+
+
+        public string ComputerName { get; set; }
 
         public string Module { get; set; }
 

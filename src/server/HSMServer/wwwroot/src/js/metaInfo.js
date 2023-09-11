@@ -1,4 +1,11 @@
-﻿window.editInfoButtonClick = function () {
+﻿export function GetSensortInfo(id){
+    return $.ajax({
+        type: "GET",
+        url: getSensorPlotInfo + `?id=${id}`,
+    });
+}
+
+window.editInfoButtonClick = function () {
     $('#saveInfo').removeAttr("hidden");
     $('#revertInfo').removeAttr("hidden");
     $('#editButtonMetaInfo').addClass('d-none');
