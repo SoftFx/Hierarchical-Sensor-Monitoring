@@ -17,10 +17,6 @@ namespace HSMServer.Notification.Settings
 
         public ConcurrentDictionary<ChatId, TelegramChat> Chats =>
             Notifications?.Telegram.Chats ?? new();
-
-
-        public bool CanSendData(Guid sensorId, ChatId chatId) =>
-            Notifications.UsedTelegram.MessagesAreEnabled;
     }
 
 

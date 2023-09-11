@@ -3,8 +3,6 @@
 @using HSMServer.Controllers
 @using HSMServer.Model.Authentication
 @using HSMServer.Model.AccessKeysViewModels
-@using Microsoft.AspNetCore.Mvc.TagHelpers
-@using HSMServer.Notification.Settings;
 
 @model EditProductViewModel
 
@@ -19,9 +17,6 @@
     var editUserRole = "@Html.Raw(Url.Action(ViewConstants.EditUserRoleAction, ViewConstants.ProductController))";
     var deleteUserRole = "@Html.Raw(Url.Action(ViewConstants.RemoveUserRoleAction, ViewConstants.ProductController))";
     var invite = "@Html.Raw(Url.Action(ViewConstants.InviteAction, ViewConstants.ProductController))";
-
-    var changeInheritance = "@Url.Action(nameof(NotificationsController.ChangeInheritance), ViewConstants.NotificationsController)"
-    var changeAutoSubscription = "@Url.Action(nameof(NotificationsController.ChangeAutoSubscription), ViewConstants.NotificationsController)"
 </script>
 
 <div class="modal fade" id="modalDelete" tabindex="-1" aria-labelledby="modalDeleteLabel" aria-hidden="true">
@@ -364,38 +359,5 @@
 
     $('#accessKeys_modal').on('hidden.bs.modal', function(e) {
         document.location.reload();
-    });
-</script>
-
-
-<script>
-    $("#telegramInheritance").change(function () {
-        let productId = $('#encodedProductId').val();
-
-        $.ajax({
-            type: 'POST',
-            url: `${changeInheritance}?productId=${productId}&fromParent=${this.checked}`,
-            datatype: 'html',
-            contenttype: 'application/json',
-            cache: false,
-            success: function () {
-                document.location.reload();
-            }
-        });
-    });
-
-    $("#notificationsAutoSubscription").change(function () {
-        let productId = $('#encodedProductId').val();
-
-        $.ajax({
-            type: 'POST',
-            url: `${changeAutoSubscription}?productId=${productId}&autoSubscription=${this.checked}`,
-            datatype: 'html',
-            contenttype: 'application/json',
-            cache: false,
-            success: function () {
-                document.location.reload();
-            }
-        });
     });
 </script>

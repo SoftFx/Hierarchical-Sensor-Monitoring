@@ -130,7 +130,7 @@ namespace HSMServer.Notifications
 
             foreach (var entity in _addressBook.GetAuthorizedEntities(chat))
             {
-                var telegramSetting = entity.Notifications.UsedTelegram;
+                var telegramSetting = entity.Notifications.Telegram;
 
                 response.AppendLine($"{entityStr} *{entity.Name.EscapeMarkdownV2()}*");
                 response.AppendLine($"    Messages delay: {telegramSetting.MessagesDelaySec} sec".EscapeMarkdownV2());

@@ -190,19 +190,19 @@ namespace HSMServer.Notifications
                     }
 
                     foreach (var (_, chat) in uniqueChats)
-                    //if (entity.CanSendData(result.SensorId, chat.ChatId))
-                    {
-                        var isInstant = false; //entity.Notifications.UsedTelegram.MessagesDelaySec == 0;
+                        if (chat.Chat.SendMessages)
+                        {
+                            var isInstant = chat.Chat.MessagesAggregationTimeSec == 0;
 
-                        foreach (var alert in result)
-                            if (chat is not null && (alert.Destination?.Chats?.Contains(chat.SystemId) ?? false))
-                            {
-                                if (isInstant)
-                                    SendMessage(chat.ChatId, alert.ToString());
-                                else
-                                    chat.MessageBuilder.AddMessage(alert);
-                            }
-                    }
+                            foreach (var alert in result)
+                                if (chat is not null && (alert.Destination?.Chats?.Contains(chat.SystemId) ?? false))
+                                {
+                                    if (isInstant)
+                                        SendMessage(chat.ChatId, alert.ToString());
+                                    else
+                                        chat.MessageBuilder.AddMessage(alert);
+                                }
+                        }
                 }
             }
             catch (Exception ex)
@@ -229,7 +229,7 @@ namespace HSMServer.Notifications
                     {
                         try
                         {
-                            var messagesDelay = 60; //entity.Notifications.UsedTelegram.MessagesDelaySec;
+                            var messagesDelay = chat.Chat.MessagesAggregationTimeSec;
 
                             if (messagesDelay > 0 && chat.MessageBuilder.ExpectedSendingTime <= DateTime.UtcNow)
                             {

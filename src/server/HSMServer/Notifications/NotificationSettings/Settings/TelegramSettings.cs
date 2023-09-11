@@ -8,12 +8,6 @@ using Telegram.Bot.Types;
 
 namespace HSMServer.Notification.Settings
 {
-    public enum InheritedSettings : byte
-    {
-        Custom,
-        FromParent
-    }
-
     public sealed class TelegramSettings
     {
         public ConcurrentDictionary<ChatId, TelegramChat> Chats { get; } = new();
@@ -26,9 +20,6 @@ namespace HSMServer.Notification.Settings
         public int MessagesDelaySec { get; private set; } = 60;
 
 
-        public InheritedSettings Inheritance { get; private set; } = InheritedSettings.Custom;
-
-
         public TelegramSettings() { }
 
         internal TelegramSettings(TelegramSettingsEntityOld entity)
@@ -39,7 +30,6 @@ namespace HSMServer.Notification.Settings
             MessagesMinStatus = entity.MessagesMinStatus.ToStatus();
             MessagesAreEnabled = entity.MessagesAreEnabled;
             MessagesDelaySec = entity.MessagesDelay;
-            Inheritance = (InheritedSettings)entity.Inheritance;
 
             if (entity.Chats != null)
                 foreach (var chat in entity.Chats)
@@ -52,7 +42,6 @@ namespace HSMServer.Notification.Settings
             MessagesMinStatus = settingsUpdate.MinStatus ?? MessagesMinStatus;
             MessagesAreEnabled = settingsUpdate.Enabled ?? MessagesAreEnabled;
             MessagesDelaySec = settingsUpdate.Delay ?? MessagesDelaySec;
-            Inheritance = settingsUpdate.Inheritance ?? Inheritance;
         }
 
         internal TelegramSettingsEntityOld ToEntity() =>
@@ -61,7 +50,6 @@ namespace HSMServer.Notification.Settings
                 MessagesMinStatus = (byte)MessagesMinStatus,
                 MessagesAreEnabled = MessagesAreEnabled,
                 MessagesDelay = MessagesDelaySec,
-                Inheritance = (byte)Inheritance,
                 Chats = Chats.Select(ch => ch.Value.ToEntityOld()).ToList(),
             };
     }

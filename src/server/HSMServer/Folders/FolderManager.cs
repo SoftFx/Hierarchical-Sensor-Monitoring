@@ -4,18 +4,17 @@ using HSMServer.ConcurrentStorage;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.DataLayer;
+using HSMServer.Core.Journal;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.NodeSettings;
 using HSMServer.Model;
 using HSMServer.Model.Authentication;
 using HSMServer.Model.Folders;
 using HSMServer.Model.TreeViewModel;
-using HSMServer.Notification.Settings;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using HSMServer.Core.Journal;
 
 namespace HSMServer.Folders
 {
@@ -25,9 +24,6 @@ namespace HSMServer.Folders
         private readonly IUserManager _userManager;
         private readonly IJournalService _journalService;
         private readonly IDatabaseCore _databaseCore;
-
-
-        public event Action<Guid> ResetProductTelegramInheritance;
 
 
         protected override Action<FolderEntity> AddToDb => _databaseCore.AddFolder;
@@ -124,7 +120,7 @@ namespace HSMServer.Folders
                 if (_userManager.TryGetValue(folder.AuthorId, out var author))
                     folder.Author = author.Name;
             }
-       
+
 
             foreach (var user in _userManager.GetUsers())
             {
@@ -183,9 +179,6 @@ namespace HSMServer.Folders
         {
             if (TryGetValue(folderId, out var folder) && TryUpdateProductInFolder(productId, null))
             {
-                if (_cache.GetProduct(productId).NotificationsSettings?.TelegramSettings?.Inheritance == (byte)InheritedSettings.FromParent)
-                    ResetProductTelegramInheritance?.Invoke(productId);
-
                 foreach (var (user, role) in folder.UserRoles)
                     if (user.ProductsRoles.Remove((productId, role)))
                         await _userManager.UpdateUser(user);

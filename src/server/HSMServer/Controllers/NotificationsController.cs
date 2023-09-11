@@ -10,7 +10,6 @@ using HSMServer.Notification.Settings;
 using HSMServer.Notifications;
 using Microsoft.AspNetCore.Mvc;
 using System;
-using System.Collections.Concurrent;
 using System.Threading.Tasks;
 
 
@@ -37,28 +36,6 @@ namespace HSMServer.Controllers
 
 
         public IActionResult Index() => View(new ChatsViewModel(_chatsManager.GetValues()));
-
-        [HttpPost]
-        public IActionResult ChangeInheritance(string productId, bool fromParent)
-        {
-            var update = new TelegramMessagesSettingsUpdate()
-            {
-                Inheritance = fromParent ? InheritedSettings.FromParent : InheritedSettings.Custom
-            };
-
-            return UpdateTelegramMessageSettings(productId, update);
-        }
-
-        [HttpPost]
-        public void ChangeAutoSubscription(string productId, bool autoSubscription)
-        {
-            if (_tree.Nodes.TryGetValue(SensorPathHelper.DecodeGuid(productId), out var product))
-            {
-                product.Notifications.AutoSubscription = autoSubscription;
-
-                _tree.UpdateProductNotificationSettings(product);
-            }
-        }
 
         [HttpPost]
         public IActionResult UpdateTelegramSettings(TelegramSettingsViewModel telegramSettings, string entityId)
