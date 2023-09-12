@@ -15,7 +15,7 @@ namespace HSMServer.Core.Model.Policies
         GreaterThan = 2,
         [Display(Name = ">=")]
         GreaterThanOrEqual = 3,
-        [Display(Name = "==")]
+        [Display(Name = "equal")]
         Equal = 4,
         [Display(Name = "!=")]
         NotEqual = 5,

@@ -19,6 +19,7 @@ namespace HSMServer.Extensions
                 PolicyProperty.Mean => AlertProperty.Mean,
                 PolicyProperty.Count => AlertProperty.Count,
                 PolicyProperty.LastValue => AlertProperty.LastValue,
+                PolicyProperty.Length => AlertProperty.Length,
                 PolicyProperty.OriginalSize => AlertProperty.OriginalSize,
                 PolicyProperty.NewSensorData => AlertProperty.NewSensorData,
                 _ => throw new NotImplementedException()
@@ -35,6 +36,7 @@ namespace HSMServer.Extensions
                 AlertProperty.Mean => PolicyProperty.Mean,
                 AlertProperty.Count => PolicyProperty.Count,
                 AlertProperty.LastValue => PolicyProperty.LastValue,
+                AlertProperty.Length => PolicyProperty.Length,
                 AlertProperty.OriginalSize => PolicyProperty.OriginalSize,
                 AlertProperty.NewSensorData => PolicyProperty.NewSensorData,
                 _ => throw new NotImplementedException()

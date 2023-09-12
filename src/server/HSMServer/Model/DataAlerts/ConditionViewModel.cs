@@ -21,6 +21,8 @@ namespace HSMServer.Model.DataAlerts
         Mean,
         Count,
         LastValue,
+        Length,
+        [Display(Name = "Size")]
         OriginalSize,
         [Display(Name = "New data")]
         NewSensorData,
@@ -120,6 +122,8 @@ namespace HSMServer.Model.DataAlerts
             PolicyOperation.LessThan,
             PolicyOperation.GreaterThan,
             PolicyOperation.GreaterThanOrEqual,
+            PolicyOperation.NotEqual,
+            PolicyOperation.Equal,
         };
 
 
