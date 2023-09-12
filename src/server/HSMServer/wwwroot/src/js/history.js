@@ -91,7 +91,11 @@ function InitializeHistory() {
     let encodedId = info.substring("meta_info_".length)
     let date = new Date();
 
-    GetSensortInfo(encodedId).done(function (types){
+    GetSensortInfo(encodedId).done(function (types) {
+        if (Object.keys(types).length === 0) {
+            return;
+        }
+
         if (isFileSensor(types.realPlot))
             return;
 
@@ -101,7 +105,6 @@ function InitializeHistory() {
             initializeTable(encodedId, historyLatestAction, types.realPlot, Data(date, date, types.realType, encodedId), true);
         }
     });
-   
 }
 
 function initializeTabLinksRequests() {
