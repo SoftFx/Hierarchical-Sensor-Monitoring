@@ -14,6 +14,8 @@
 
         public int? OriginalUnit { get; init; }
 
+        public bool IsSingleton { get; init; }
+
         public long EndOfMuting { get; init; }
 
         public int Integration { get; init; }
