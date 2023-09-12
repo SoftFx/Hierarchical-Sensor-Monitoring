@@ -106,7 +106,7 @@ namespace HSMServer.Core.Model
 
         internal bool TryAddAsSingleton(T value)
         {
-            if (LastValue is null || LastTimeout?.ReceivingTime > LastTimeout.ReceivingTime || LastValue.Time <= value.Time)
+            if (LastValue is null || LastTimeout?.ReceivingTime > LastValue.ReceivingTime || LastValue.Time <= value.Time)
             {
                 AddValue(value);
                 return true;
