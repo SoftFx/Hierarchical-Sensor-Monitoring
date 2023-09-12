@@ -71,6 +71,12 @@ namespace HSMServer.Core.Model.Policies
     }
 
 
+    internal sealed class PolicyExecutorVersion : PolicyExecutorSimple<Version>
+    {
+        protected override Func<Version, Version, bool> GetTypedOperation(PolicyOperation operation) => PolicyExecutorBuilder.GetVersionOperation(operation);
+    }
+
+
     internal sealed class PolicyExecutorTimeSpan : PolicyExecutorSimple<TimeSpan>
     {
         protected override Func<TimeSpan, TimeSpan, bool> GetTypedOperation(PolicyOperation operation) => PolicyExecutorBuilder.GetTimeSpanOperation(operation);

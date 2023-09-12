@@ -31,6 +31,19 @@ namespace HSMServer.Core.Model.Policies
             };
 
 
+        internal static Func<Version, Version, bool> GetVersionOperation(PolicyOperation action) =>
+            action switch
+            {
+                PolicyOperation.LessThan => (Version src, Version target) => src < target,
+                PolicyOperation.GreaterThan => (Version src, Version target) => src > target,
+                PolicyOperation.LessThanOrEqual => (Version src, Version target) => src <= target,
+                PolicyOperation.GreaterThanOrEqual => (Version src, Version target) => src >= target,
+                PolicyOperation.Equal => (Version src, Version target) => src == target,
+                PolicyOperation.NotEqual => (Version src, Version target) => src != target,
+                _ => throw new NotImplementedException()
+            };
+
+
         internal static Func<string, string, bool> GetStringOperation(PolicyOperation? action) =>
             action switch
             {
@@ -67,6 +80,7 @@ namespace HSMServer.Core.Model.Policies
             PolicyProperty.LastValue when typeof(U) == typeof(double) => new PolicyExecutorNumber<double>(property),
 
             PolicyProperty.Value when typeof(U) == typeof(TimeSpan) => new PolicyExecutorTimeSpan(),
+            PolicyProperty.Value when typeof(U) == typeof(Version) => new PolicyExecutorVersion(),
 
             PolicyProperty.OriginalSize or PolicyProperty.Count => new PolicyExecutorLong(property),
 
