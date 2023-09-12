@@ -14,6 +14,12 @@ namespace HSMSensorDataObjects.SensorRequests
         IsChanged = 20,
         IsError = 21,
         IsOk = 22,
+        IsChangedToError = 23,
+        IsChangedToOk = 24,
+
+        Contains = 30,
+        StartsWith = 31,
+        EndsWith = 32,
 
         ReceivedNewValue = 50,
     }
@@ -31,6 +37,8 @@ namespace HSMSensorDataObjects.SensorRequests
         Mean = 103,
         Count = 104,
         LastValue = 105,
+
+        Length = 120,
 
         OriginalSize = 151,
 
