@@ -327,7 +327,7 @@
                 $('[id^="closeTime_value"]').removeClass('d-none');
             }
 
-            if ('@Model.SaveOnlyUniqueValues' === 'True') {
+            if ('@Model.AggregateValues' === 'True') {
                 $("#aggregatedValuesCount_header").removeClass('d-none');
                 $('[id^="aggregatedValuesCount_value"]').removeClass('d-none');
             }
@@ -345,7 +345,7 @@
                 $('[id^="closeTime_value"]').addClass('d-none');
             }
 
-            if ('@Model.SaveOnlyUniqueValues' === 'True') {
+            if ('@Model.AggregateValues' === 'True') {
                 $("#aggregatedValuesCount_header").addClass('d-none');
                 $('[id^="aggregatedValuesCount_value"]').addClass('d-none');
             }

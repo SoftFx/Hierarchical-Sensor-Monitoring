@@ -16,13 +16,15 @@ namespace HSMServer.Core.Cache.UpdateEntities
 
         public DateTime? EndOfMutingPeriod { get; init; }
 
-        public bool? SaveOnlyUniqueValues { get; init; }
-
         public Integration? Integration { get; init; }
+
+        public bool? AggregateValues { get; init; }
 
         public SensorState? State { get; init; }
 
         public Unit? SelectedUnit { get; init; }
+
+        public bool? IsSingleton { get; init; }
 
 
         public DefaultAlertsOptions DefaultAlertsOptions { get; init; }

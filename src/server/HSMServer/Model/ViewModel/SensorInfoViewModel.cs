@@ -19,9 +19,11 @@ namespace HSMServer.Model.ViewModel
         public bool IsMuted { get; }
 
 
-        public bool SaveOnlyUniqueValues { get; set; }
+        public bool IsSingleton { get; set; }
 
         public Unit? SelectedUnit { get; set; }
+
+        public bool AggregateValues { get; set; }
 
 
         // public constructor without parameters for action Home/UpdateSensorInfo
@@ -34,9 +36,10 @@ namespace HSMServer.Model.ViewModel
             HasGrafana = sensor.Integration.HasGrafana();
             IsMuted = sensor.State == SensorState.Muted;
 
+            IsSingleton = sensor.IsSingleton;
             SelectedUnit = sensor.SelectedUnit;
             AvailableUnits = sensor.AvailableUnits;
-            SaveOnlyUniqueValues = sensor.SaveOnlyUniqueValues;
+            AggregateValues = sensor.AggregateValues;
         }
     }
 }
