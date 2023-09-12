@@ -40,8 +40,6 @@ namespace HSMServer.Core.Model.Policies
         Status = 0,
         Comment = 1,
 
-        NewSensorData = 10,
-
         Value = 20,
 
         Min = 101,
@@ -53,6 +51,8 @@ namespace HSMServer.Core.Model.Policies
         Length = 120,
 
         OriginalSize = 151,
+
+        NewSensorData = 200,
     }
 
 
