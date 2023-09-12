@@ -9,14 +9,17 @@ namespace HSMServer.Core.Model.Policies
     }
 
 
-    internal abstract class PolicyExecutorNumberBase<T> : PolicyExecutorSimple<T> where T : INumber<T>
+    internal abstract class PolicyMultiplePropertyExecutor<T> : PolicyExecutorSimple<T>
     {
         protected Func<BaseValue, T> _getCheckedValue;
 
-
-        protected override Func<T, T, bool> GetTypedOperation(PolicyOperation operation) => PolicyExecutorBuilder.GetNumberOperation<T>(operation);
-
         protected override T GetCheckedValue(BaseValue value) => _getCheckedValue(value);
+    }
+
+
+    internal abstract class PolicyExecutorNumberBase<T> : PolicyMultiplePropertyExecutor<T> where T : INumber<T>
+    {
+        protected override Func<T, T, bool> GetTypedOperation(PolicyOperation operation) => PolicyExecutorBuilder.GetNumberOperation<T>(operation);
     }
 
 
@@ -50,24 +53,21 @@ namespace HSMServer.Core.Model.Policies
         }
     }
 
-    internal sealed class PolicyExecutorDouble : PolicyExecutorNumberBase<double>
+
+    internal sealed class PolicyExecutorString : PolicyMultiplePropertyExecutor<string>
     {
-        internal PolicyExecutorDouble(PolicyProperty property)
+        internal PolicyExecutorString(PolicyProperty property)
         {
             _getCheckedValue = property switch
             {
-                PolicyProperty.Count => v => ((BarBaseValue)v).Count,
-                _ => throw new NotImplementedException($"Invalid property {property} for {nameof(PolicyExecutorDouble)}")
+                PolicyProperty.Comment => v => v?.Comment,
+                PolicyProperty.Value => v => ((StringValue)v)?.Value,
+                _ => throw new NotImplementedException($"Invalid property {property} for {nameof(PolicyExecutorString)}")
             };
         }
-    }
 
 
-    internal sealed class PolicyExecutorString : PolicyExecutorSimple<string>
-    {
         protected override Func<string, string, bool> GetTypedOperation(PolicyOperation operation) => PolicyExecutorBuilder.GetStringOperation(operation);
-
-        protected override string GetCheckedValue(BaseValue value) => value?.Comment;
     }
 
 

@@ -48,6 +48,11 @@ namespace HSMServer.Core.Model.Policies
             action switch
             {
                 PolicyOperation.IsChanged => (string newVal, string oldVal) => oldVal != newVal,
+                PolicyOperation.Equal => (string src, string target) => src == target,
+                PolicyOperation.NotEqual => (string src, string target) => src != target,
+                PolicyOperation.Contains => (string src, string target) => src.Contains(target),
+                PolicyOperation.StartsWith => (string src, string target) => src.StartsWith(target),
+                PolicyOperation.EndsWith => (string src, string target) => src.EndsWith(target),
                 _ => throw new NotImplementedException()
             };
 
@@ -81,12 +86,13 @@ namespace HSMServer.Core.Model.Policies
 
             PolicyProperty.Value when typeof(U) == typeof(TimeSpan) => new PolicyExecutorTimeSpan(),
             PolicyProperty.Value when typeof(U) == typeof(Version) => new PolicyExecutorVersion(),
+            PolicyProperty.Value when typeof(U) == typeof(string) => new PolicyExecutorString(property),
 
             PolicyProperty.OriginalSize or PolicyProperty.Count => new PolicyExecutorLong(property),
 
             PolicyProperty.Status => new PolicyExecutorStatus(),
-            PolicyProperty.Comment => new PolicyExecutorString(),
             PolicyProperty.NewSensorData => new PolicyNewValueExecutor(),
+            PolicyProperty.Comment => new PolicyExecutorString(property),
 
             _ => throw new NotImplementedException($"Unsupported policy property {property} with type {typeof(U).Name}"),
         };
