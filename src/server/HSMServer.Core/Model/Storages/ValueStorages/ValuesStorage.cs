@@ -104,6 +104,17 @@ namespace HSMServer.Core.Model
             return true;
         }
 
+        internal bool TryAddAsSingleton(T value)
+        {
+            if (LastValue is null || LastTimeout?.ReceivingTime > LastTimeout.ReceivingTime || LastValue.Time <= value.Time)
+            {
+                AddValue(value);
+                return true;
+            }
+
+            return false;
+        }
+
 
         internal override List<BaseValue> GetValues(int count) =>
             _cache.Take(count).Select(v => (BaseValue)v).ToList();
