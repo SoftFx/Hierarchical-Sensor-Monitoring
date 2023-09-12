@@ -1,6 +1,5 @@
 ﻿using HSMServer.ConcurrentStorage;
 using HSMServer.Core.TableOfChanges;
-using HSMServer.Notification.Settings;
 using System;
 using System.Drawing;
 
@@ -19,8 +18,6 @@ namespace HSMServer.Model.Folders
 
         public TimeIntervalViewModel SelfDestroy { get; init; }
 
-
-        public NotificationSettings Notifications { get; init; }
 
         public string Description { get; init; }
 

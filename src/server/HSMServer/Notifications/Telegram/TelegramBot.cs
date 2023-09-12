@@ -164,6 +164,7 @@ namespace HSMServer.Notifications
             return string.Empty;
         }
 
+        // TODO: FillAddressBook should be from telegram chats manager
         private void FillAddressBook()
         {
             foreach (var user in _userManager.GetUsers())

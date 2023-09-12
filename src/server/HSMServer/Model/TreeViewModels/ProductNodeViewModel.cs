@@ -23,6 +23,7 @@ namespace HSMServer.Model.TreeViewModel
         public HashSet<Guid> TelegramChats { get; } = new();
 
 
+        [Obsolete("Should be removed after telegram chats migration")]
         public ClientNotifications Notifications { get; }
 
         public int AllSensorsCount { get; private set; }

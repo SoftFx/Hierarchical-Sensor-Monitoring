@@ -66,7 +66,7 @@ namespace HSMServer.Notifications
                 var response = parts[0] switch
                 {
                     TelegramBotCommands.Start => StartBot(parts, message, isUserChat),
-                    TelegramBotCommands.Info => EntitiesInfo(message.Chat, isUserChat),
+                    TelegramBotCommands.Info => EntitiesInfo(message.Chat),
                     TelegramBotCommands.Server => ServerStatus(),
                     TelegramBotCommands.Help => Help(),
                     _ => null,
@@ -121,21 +121,14 @@ namespace HSMServer.Notifications
             return response.ToString().EscapeMarkdownV2();
         }
 
-        private string EntitiesInfo(ChatId chat, bool isUserChat)
+        // TODO: /info command should return chat settings (delay, enable) and all connected products
+        private string EntitiesInfo(ChatId chat)
         {
             var response = new StringBuilder(1 << 6);
-            var entityStr = isUserChat ? "user" : "product";
 
-            response.AppendLine($"{(isUserChat ? "Authorized" : "Added")} {entityStr}(s) settings:".EscapeMarkdownV2());
-
-            foreach (var entity in _addressBook.GetAuthorizedEntities(chat))
-            {
-                var telegramSetting = entity.Notifications.Telegram;
-
-                response.AppendLine($"{entityStr} *{entity.Name.EscapeMarkdownV2()}*");
-                response.AppendLine($"    Messages delay: {telegramSetting.MessagesDelaySec} sec".EscapeMarkdownV2());
-                response.AppendLine($"    Messages are enabled: {telegramSetting.MessagesAreEnabled}".EscapeMarkdownV2());
-            }
+            response.AppendLine("Chat settings:".EscapeMarkdownV2());
+            response.AppendLine($"Messages delay: 60 sec".EscapeMarkdownV2());
+            response.AppendLine($"Messages are enabled: True".EscapeMarkdownV2());
 
             return response.ToString();
         }

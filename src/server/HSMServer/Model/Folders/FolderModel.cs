@@ -6,7 +6,6 @@ using HSMServer.Core.TableOfChanges;
 using HSMServer.Extensions;
 using HSMServer.Model.Authentication;
 using HSMServer.Model.TreeViewModel;
-using HSMServer.Notification.Settings;
 using System;
 using System.Collections.Generic;
 using System.Drawing;
@@ -25,8 +24,6 @@ namespace HSMServer.Model.Folders
         public Guid AuthorId { get; }
 
 
-        public NotificationSettings Notifications { get; private set; } = new();
-
         public Color Color { get; private set; }
 
         public string Author { get; set; }
@@ -43,7 +40,6 @@ namespace HSMServer.Model.Folders
             Color = Color.FromArgb(entity.Color);
             AuthorId = Guid.Parse(entity.AuthorId);
             CreationDate = new DateTime(entity.CreationDate);
-            Notifications = new NotificationSettings(entity.Notifications);
 
             KeepHistory = LoadKeepHistory(entity.Settings.GetValueOrDefault(nameof(KeepHistory)));
             SelfDestroy = LoadSelfDestroy(entity.Settings.GetValueOrDefault(nameof(SelfDestroy)));
@@ -70,7 +66,6 @@ namespace HSMServer.Model.Folders
 
         public void Update(FolderUpdate update)
         {
-            Notifications = update.Notifications ?? Notifications;
             Description = UpdateProperty(Description, update.Description, update.Initiator);
             Color = update.Color ?? Color;
             Name = update.Name ?? Name;
@@ -132,7 +127,6 @@ namespace HSMServer.Model.Folders
                 CreationDate = CreationDate.Ticks,
                 Description = Description,
                 Color = Color.ToArgb(),
-                Notifications = Notifications.ToEntity(),
                 Settings = new Dictionary<string, TimeIntervalEntity>
                 {
                     [nameof(TTL)] = TTL.ToEntity(),

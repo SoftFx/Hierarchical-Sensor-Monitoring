@@ -1,4 +1,5 @@
 ﻿using HSMServer.Attributes;
+using HSMServer.Core.TableOfChanges;
 using HSMServer.Extensions;
 using HSMServer.Model.Authentication;
 using HSMServer.Model.TreeViewModel;
@@ -7,15 +8,11 @@ using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.Drawing;
 using System.Linq;
-using HSMServer.Core.Cache;
-using HSMServer.Core.TableOfChanges;
 
 namespace HSMServer.Model.Folders.ViewModels
 {
     public sealed class EditFolderViewModel
     {
-        public TelegramSettingsViewModel Telegram { get; }
-
         public FolderCleanupViewModel Cleanup { get; }
 
         public FolderAlertsViewModel Alerts { get; }
@@ -66,7 +63,6 @@ namespace HSMServer.Model.Folders.ViewModels
             Description = folder.Description;
             Color = folder.Color;
 
-            Telegram = new(folder.Notifications.Telegram, Id);
             Products.InitFolderProducts(folder.Products);
             Cleanup = new FolderCleanupViewModel(folder);
             Alerts = new FolderAlertsViewModel(folder);

@@ -2,14 +2,12 @@
 using HSMServer.Constants;
 using HSMServer.Folders;
 using HSMServer.Helpers;
-using HSMServer.Model;
 using HSMServer.Model.Authentication;
 using HSMServer.Model.NotificationViewModels;
 using HSMServer.Model.TreeViewModel;
 using HSMServer.Notification.Settings;
 using HSMServer.Notifications;
 using Microsoft.AspNetCore.Mvc;
-using System;
 using System.Threading.Tasks;
 
 
@@ -36,24 +34,6 @@ namespace HSMServer.Controllers
 
 
         public IActionResult Index() => View(new ChatsViewModel(_chatsManager.GetValues(), _tree, _userManager));
-
-        [HttpPost]
-        public IActionResult UpdateTelegramSettings(TelegramSettingsViewModel telegramSettings, string entityId)
-        {
-            var update = telegramSettings.GetUpdateModel();
-
-            if (!string.IsNullOrEmpty(entityId) && Guid.TryParse(entityId, out var id) &&
-                _folderManager.TryGetValue(id, out var folder))
-            {
-                folder.Notifications.Telegram.Update(update);
-
-                _folderManager.TryUpdate(folder);
-
-                return PartialView("_MessagesSettings", new TelegramSettingsViewModel(folder.Notifications.Telegram, folder.Id));
-            }
-
-            return UpdateTelegramMessageSettings(entityId, update);
-        }
 
         public RedirectResult OpenInvitationLink() =>
             Redirect(_telegramBot.GetInvitationLink(GetCurrentUser()));
@@ -87,16 +67,6 @@ namespace HSMServer.Controllers
             _telegramBot.RemoveChat(GetEntity(entityId), chatId);
 
             return GetResult(entityId);
-        }
-
-        private IActionResult UpdateTelegramMessageSettings(string productId, TelegramMessagesSettingsUpdate update)
-        {
-            var entity = GetEntity(productId);
-            entity.Notifications.Telegram.Update(update);
-
-            entity.UpdateEntity(_userManager, _tree);
-
-            return GetResult(productId);
         }
 
         private INotificatable GetEntity(string entityId) =>
