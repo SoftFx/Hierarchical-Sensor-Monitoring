@@ -66,15 +66,13 @@ namespace HSMServer.Core.Model.Policies
             PolicyProperty.Value or PolicyProperty.Min or PolicyProperty.Max or PolicyProperty.Mean or
             PolicyProperty.LastValue when typeof(U) == typeof(double) => new PolicyExecutorNumber<double>(property),
 
-            PolicyProperty.OriginalSize => new PolicyExecutorLong(property),
-            PolicyProperty.Count when typeof(U) == typeof(int) => new PolicyExecutorLong(property),
-            PolicyProperty.Count when typeof(U) == typeof(double) => new PolicyExecutorDouble(property),
-
             PolicyProperty.Value when typeof(U) == typeof(TimeSpan) => new PolicyExecutorTimeSpan(),
 
-            PolicyProperty.Status => new PolicyExecutorStatus(),
+            PolicyProperty.OriginalSize or PolicyProperty.Count => new PolicyExecutorLong(property),
 
+            PolicyProperty.Status => new PolicyExecutorStatus(),
             PolicyProperty.Comment => new PolicyExecutorString(),
+            PolicyProperty.NewSensorData => new PolicyNewValueExecutor(),
 
             _ => throw new NotImplementedException($"Unsupported policy property {property} with type {typeof(U).Name}"),
         };

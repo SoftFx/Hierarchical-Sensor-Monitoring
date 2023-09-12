@@ -30,6 +30,9 @@ namespace HSMServer.Core.Model.Policies
         IsChangedToError = 23,
         [Display(Name = "is changed to \U0001f7e2 OK")]
         IsChangedToOk = 24,
+
+        [Display(Name = "has been received")]
+        ReceivedNewValue = 50,
     }
 
 
@@ -49,6 +52,8 @@ namespace HSMServer.Core.Model.Policies
         Length = 120,
 
         OriginalSize = 151,
+
+        NewSensorData = 200,
     }
 
 

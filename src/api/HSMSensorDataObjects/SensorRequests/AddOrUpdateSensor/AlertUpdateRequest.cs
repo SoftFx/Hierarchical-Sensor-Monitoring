@@ -14,6 +14,8 @@ namespace HSMSensorDataObjects.SensorRequests
         IsChanged = 20,
         IsError = 21,
         IsOk = 22,
+
+        ReceivedNewValue = 50,
     }
 
 
@@ -31,6 +33,8 @@ namespace HSMSensorDataObjects.SensorRequests
         LastValue = 105,
 
         OriginalSize = 151,
+
+        NewSensorData = 200,
     }
 
 

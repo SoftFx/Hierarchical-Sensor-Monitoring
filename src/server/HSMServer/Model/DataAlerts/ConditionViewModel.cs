@@ -22,6 +22,8 @@ namespace HSMServer.Model.DataAlerts
         Count,
         LastValue,
         OriginalSize,
+        [Display(Name = "New data")]
+        NewSensorData,
         Sensitivity,
         [Display(Name = "Inactivity period")]
         TimeToLive,
@@ -99,7 +101,8 @@ namespace HSMServer.Model.DataAlerts
         protected override List<AlertProperty> Properties { get; } = new()
         {
             AlertProperty.Status,
-            AlertProperty.Comment
+            AlertProperty.Comment,
+            AlertProperty.NewSensorData,
         };
 
         protected override List<PolicyOperation> Operations { get; }
@@ -131,6 +134,7 @@ namespace HSMServer.Model.DataAlerts
             AlertProperty.Value,
             AlertProperty.Status,
             AlertProperty.Comment,
+            AlertProperty.NewSensorData,
         };
 
 
@@ -145,6 +149,7 @@ namespace HSMServer.Model.DataAlerts
             AlertProperty.OriginalSize,
             AlertProperty.Status,
             AlertProperty.Comment,
+            AlertProperty.NewSensorData,
         };
 
 
@@ -163,6 +168,7 @@ namespace HSMServer.Model.DataAlerts
             AlertProperty.Count,
             AlertProperty.Status,
             AlertProperty.Comment,
+            AlertProperty.NewSensorData,
         };
 
 

@@ -1,5 +1,6 @@
 ﻿@using HSMServer.Extensions
 @using HSMServer.Model.DataAlerts
+@using HSMServer.Core.Model.Policies
 
 @model ConditionViewModel
 
@@ -12,8 +13,9 @@
     var isStatusCondition = condition == AlertProperty.Status;
     var isStringCondition = condition == AlertProperty.Comment;
     var isTtlCondition = condition == AlertProperty.TimeToLive;
+    var isNewDataCondition = condition == AlertProperty.NewSensorData;
     var isSensitivityCondition = condition == AlertProperty.Sensitivity;
-    var isValueCondition = !isStatusCondition && !isTtlCondition && !isSensitivityCondition && !isStringCondition;
+    var isValueCondition = !isStatusCondition && !isTtlCondition && !isSensitivityCondition && !isStringCondition && !isNewDataCondition;
 
     var isSecondaryCondition = !Model.IsMain;
 }
@@ -37,6 +39,11 @@
         <select class="alert-block alert-select operation-select" asp-for="Operation" asp-items="@Model.StringOperationsItems"></select>
     </div>
 
+    <div name="newDataCondition" class="@isNewDataCondition.ToVisibility() flex-row align-items-center">
+        <div class="alert-text-block operation-select">has been received</div>
+        <input class="d-none" asp-for="Operation" value="@PolicyOperation.ReceivedNewValue" />
+    </div>
+
     <div name="sensitivityCondition" class="@isSensitivityCondition.ToVisibility() flex-row align-items-center">
         <div class="alert-text-block operation-select">is more than</div>
         <partial name="_TimeIntervalSelect" for="Sensitivity" />
@@ -58,6 +65,7 @@
         let value = conditionBlock.find($(`div[name='valueCondition']`));
         let status = conditionBlock.find($(`div[name='statusCondition']`));
         let string = conditionBlock.find($(`div[name='stringCondition']`));
+        let newData = conditionBlock.find($(`div[name='newDataCondition']`));
         let sensitivity = conditionBlock.find($(`div[name='sensitivityCondition']`));
 
         let targetInput = value.find($(`input[name='Target']`));
@@ -67,6 +75,7 @@
             targetInput.attr('required', false);
             value.removeClass("d-flex").addClass('d-none');
             string.removeClass("d-flex").addClass('d-none');
+            newData.removeClass("d-flex").addClass('d-none');
             sensitivity.removeClass("d-flex").addClass('d-none');
 
             status.removeClass("d-none").addClass('d-flex');
@@ -75,6 +84,7 @@
             targetInput.attr('required', false);
             value.removeClass("d-flex").addClass('d-none');
             status.removeClass("d-flex").addClass('d-none');
+            newData.removeClass("d-flex").addClass('d-none');
             sensitivity.removeClass("d-flex").addClass('d-none');
 
             string.removeClass("d-none").addClass('d-flex');
@@ -84,12 +94,23 @@
             value.removeClass("d-flex").addClass('d-none');
             status.removeClass("d-flex").addClass('d-none');
             string.removeClass("d-flex").addClass('d-none');
+            newData.removeClass("d-flex").addClass('d-none');
 
             sensitivity.removeClass("d-none").addClass('d-flex');
+        }
+        else if (condition === '@AlertProperty.NewSensorData') {
+            targetInput.attr('required', false);
+            value.removeClass("d-flex").addClass('d-none');
+            status.removeClass("d-flex").addClass('d-none');
+            string.removeClass("d-flex").addClass('d-none');
+            sensitivity.removeClass("d-flex").addClass('d-none');
+
+            newData.removeClass("d-none").addClass('d-flex');
         }
         else {
             status.removeClass("d-flex").addClass('d-none');
             string.removeClass("d-flex").addClass('d-none');
+            newData.removeClass("d-flex").addClass('d-none');
             sensitivity.removeClass("d-flex").addClass('d-none');
 
             targetInput.attr('required', true);

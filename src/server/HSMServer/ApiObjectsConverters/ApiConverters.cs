@@ -314,6 +314,7 @@ namespace HSMServer.ApiObjectsConverters
                 AlertProperty.Count => PolicyProperty.Count,
                 AlertProperty.LastValue => PolicyProperty.LastValue,
                 AlertProperty.OriginalSize => PolicyProperty.OriginalSize,
+                AlertProperty.NewSensorData => PolicyProperty.NewSensorData,
                 _ => throw new NotImplementedException(),
             };
 

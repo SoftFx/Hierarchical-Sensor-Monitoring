@@ -83,4 +83,12 @@ namespace HSMServer.Core.Model.Policies
 
         protected override SensorStatus? GetCheckedValue(BaseValue value) => value?.Status;
     }
+
+
+    internal sealed class PolicyNewValueExecutor : PolicyExecutor<BaseValue>
+    {
+        protected override BaseValue GetCheckedValue(BaseValue value) => value;
+
+        protected override Func<BaseValue, BaseValue, bool> GetTypedOperation(PolicyOperation operation) => (_, _) => true;
+    }
 }
