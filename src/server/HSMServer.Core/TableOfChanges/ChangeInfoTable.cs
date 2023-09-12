@@ -17,7 +17,7 @@ namespace HSMServer.Core.TableOfChanges
         public ChangeCollection Policies { get; private set; } = new();
 
 
-        public ChangeInfo TtlPolicy { get; private set; }
+        public ChangeInfo TtlPolicy { get; private set; } = new();
 
 
         public string Path => _getFullPath?.Invoke();
@@ -49,6 +49,8 @@ namespace HSMServer.Core.TableOfChanges
                 Policies = Policies.ToEntity(),
                 Settings = Settings.ToEntity(),
                 Properties = Properties.ToEntity(),
+
+                TTLPolicy = TtlPolicy.ToEntity(),
             };
     }
 }
