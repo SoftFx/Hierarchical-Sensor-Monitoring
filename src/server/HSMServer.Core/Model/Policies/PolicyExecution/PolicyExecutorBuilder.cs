@@ -88,7 +88,8 @@ namespace HSMServer.Core.Model.Policies
             PolicyProperty.Value when typeof(U) == typeof(Version) => new PolicyExecutorVersion(),
             PolicyProperty.Value when typeof(U) == typeof(string) => new PolicyExecutorString(property),
 
-            PolicyProperty.OriginalSize or PolicyProperty.Count => new PolicyExecutorLong(property),
+            PolicyProperty.OriginalSize => new PolicyExecutorLong(property),
+            PolicyProperty.Length or PolicyProperty.Count => new PolicyExecutorInt(property),
 
             PolicyProperty.Status => new PolicyExecutorStatus(),
             PolicyProperty.NewSensorData => new PolicyNewValueExecutor(),
