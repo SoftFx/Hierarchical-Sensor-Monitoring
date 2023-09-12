@@ -33,13 +33,9 @@ if ($ExpectedImageId)
 	Write-Host "Image id to run = $ExpectedImageId"
 
 	$LogsFolder = "/usr/HSMPingModule/Logs:/app/Logs"
-	$SensorConfigFolder = "/usr/HSMPingModule/Config:/app/Config"
-	$EnvironmentDatabaseFolder = "/usr/HSMPingModule/Databases:/app/Databases"
+	$ConfigFolder = "/usr/HSMPingModule/Config:/app/Config"
 
-	$SensorDataPort = "50000:50000"
-	$SensorSitePort = "50003:50003"
-
-	docker run -d -it --name "${ContainerName}_$Version" -v $LogsFolder -v $SensorConfigFolder -v $EnvironmentDatabaseFolder -p $SensorDataPort -p $SensorSitePort $ExpectedImageId
+	docker run -d -it --name "${ContainerName}_$Version" -v $LogsFolder -v $ConfigFolder $ExpectedImageId
 }
 else
 {

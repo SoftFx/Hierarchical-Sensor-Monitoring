@@ -8,7 +8,7 @@ namespace HSMDataCollector.Prototypes
     {
         protected abstract string SensorName { get; }
 
-        protected abstract string Category { get; }
+        protected virtual string Category { get; }
 
 
         protected InstantSensorOptionsPrototype()
