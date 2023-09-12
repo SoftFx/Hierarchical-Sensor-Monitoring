@@ -30,7 +30,9 @@ namespace HSMServer.Model.TreeViewModel
 
         public string ValidationError { get; private set; }
 
-        public bool SaveOnlyUniqueValues { get; private set; }
+        public bool AggregateValues { get; private set; }
+
+        public bool IsSingleton { get; private set; }
 
 
         public List<Unit> AvailableUnits { get; private set; }
@@ -59,9 +61,10 @@ namespace HSMServer.Model.TreeViewModel
             State = model.State;
             Integration = model.Integration;
             UpdateTime = model.LastUpdate;
+            IsSingleton = model.IsSingleton;
             Status = model.Status.ToClient();
             SelectedUnit = model.OriginalUnit;
-            SaveOnlyUniqueValues = model.AggregateValues;
+            AggregateValues = model.AggregateValues;
 
             if (State is SensorState.Muted)
                 ValidationError = GetMutedErrorTooltip(model.EndOfMuting);

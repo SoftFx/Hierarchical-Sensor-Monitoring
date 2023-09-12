@@ -5,7 +5,6 @@ using HSMServer.Core.Extensions;
 using HSMServer.Core.Journal;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Requests;
-using HSMServer.Core.TableOfChanges;
 using HSMServer.Extensions;
 using HSMServer.Folders;
 using HSMServer.Helpers;
@@ -576,8 +575,9 @@ namespace HSMServer.Controllers
                 KeepHistory = newModel.SavedHistoryPeriod.ToModel(),
                 SelfDestroy = newModel.SelfDestroyPeriod.ToModel(),
                 Policies = policyUpdates,
+                IsSingleton = newModel.IsSingleton,
                 SelectedUnit = newModel.SelectedUnit,
-                SaveOnlyUniqueValues = newModel.SaveOnlyUniqueValues,
+                AggregateValues = newModel.AggregateValues,
                 Initiator = CurrentInitiator
             };
 
