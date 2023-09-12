@@ -24,7 +24,7 @@
 
         protected abstract U GetConstTarget(string strValue);
 
-        private BaseValue GetLastValue() => _sensor?.LastValue;
+        private BaseValue GetLastValue() => Sensor?.LastValue;
 
 
         private bool CheckConditions(T value, out PolicyCondition failed)

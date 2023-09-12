@@ -53,7 +53,7 @@ namespace HSMServer.Core.Model.Policies
                 IsDisabled = disable,
             };
 
-            FullUpdate(update, _sensor);
+            FullUpdate(update, Sensor);
         }
 
 

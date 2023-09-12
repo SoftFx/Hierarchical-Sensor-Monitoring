@@ -318,7 +318,7 @@ namespace HSMServer.Core.Cache
 
             if (sensor.Parent is not null && _tree.TryGetValue(sensor.Parent.Id, out var parent))
             {
-                parent.Sensors.TryRemove(sensorId, out _);
+                parent.RemoveSensor(sensorId);
                 _journalService.RemoveRecords(sensorId, parent.Id);
 
                 _journalService.AddRecord(new JournalRecordModel(parent.Id, initiator)

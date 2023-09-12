@@ -6,7 +6,7 @@ namespace HSMServer.Core.Model.Policies
 {
     public abstract class SingleSensorPolicy<T, U> : Policy<T, U> where T : BaseValue<U>, new()
     {
-        protected override AlertState GetState(BaseValue value) => AlertState.Build((T)value, _sensor);
+        protected override AlertState GetState(BaseValue value) => AlertState.Build((T)value, Sensor);
     }
 
 
@@ -14,7 +14,7 @@ namespace HSMServer.Core.Model.Policies
         where T : BarBaseValue<U>, new()
         where U : INumber<U>
     {
-        protected override AlertState GetState(BaseValue value) => AlertState.Build((T)value, _sensor);
+        protected override AlertState GetState(BaseValue value) => AlertState.Build((T)value, Sensor);
     }
 
 
