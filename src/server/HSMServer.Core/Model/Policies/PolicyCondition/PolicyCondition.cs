@@ -31,6 +31,7 @@ namespace HSMServer.Core.Model.Policies
         [Display(Name = "is changed to \U0001f7e2 OK")]
         IsChangedToOk = 24,
 
+        [Display(Name = "has been received")]
         ReceivedNewValue = 50,
     }
 

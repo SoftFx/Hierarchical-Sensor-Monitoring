@@ -179,6 +179,11 @@
                     setFormDataAlertsListProperty(formData, type, i, j, stringBlock, "Conditions", "select", "Operation");
                 }
 
+                let newDataBlock = $(this).find('div[name="newDataCondition"]');
+                if (newDataBlock.hasClass('d-flex')) {
+                    setFormDataAlertsListProperty(formData, type, i, j, newDataBlock, "Conditions", "input", "Operation");
+                }
+
                 let sensitivityBlock = $(this).find('div[name="sensitivityCondition"]');
                 if (sensitivityBlock.hasClass('d-flex')) {
                     setFormDataAlertsConditionIntervals(formData, type, i, j, sensitivityBlock, "Sensitivity", "select", "Interval");
