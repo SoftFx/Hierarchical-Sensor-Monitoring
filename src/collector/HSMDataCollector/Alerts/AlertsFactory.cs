@@ -16,6 +16,16 @@ namespace HSMDataCollector.Alerts
             return new InstantAlertCondition().AndValue(operation, target);
         }
 
+        public static InstantAlertCondition IfLenght<T>(AlertOperation operation, T target)
+        {
+            return new InstantAlertCondition().AndLength(operation, target);
+        }
+
+        public static InstantAlertCondition IfFileSize<T>(AlertOperation operation, T target)
+        {
+            return new InstantAlertCondition().AndFileSize(operation, target);
+        }
+
 
         public static InstantAlertCondition IfReceivedNewValue()
         {
