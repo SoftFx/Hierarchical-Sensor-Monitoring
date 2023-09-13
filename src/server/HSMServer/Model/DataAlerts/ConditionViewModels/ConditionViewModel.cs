@@ -84,8 +84,6 @@ namespace HSMServer.Model.DataAlerts
 
         public List<SelectListItem> StringOperationsItems { get; }
 
-        public OperationViewModel OperationViewModel { get; set; }
-
 
         public ConditionViewModel(bool isMain)
         {

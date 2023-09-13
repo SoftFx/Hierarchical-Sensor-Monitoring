@@ -637,6 +637,11 @@ namespace HSMServer.Controllers
                 ? PartialView("~/Views/Home/Alerts/_ActionBlock.cshtml", new ActionViewModel(false, entity.GetAllChats()))
                 : _emptyResult;
 
+        public IActionResult GetOperation(string propertyStr) =>
+            Enum.TryParse<AlertProperty>(propertyStr, out var property)
+                ? PartialView("~/Views/Home/Alerts/_ConditionOperation.cshtml", property.GetOperations())
+                : _emptyResult;
+
         private bool TryGetSelectedNode(Guid entityId, out NodeViewModel entity)
         {
             entity = null;

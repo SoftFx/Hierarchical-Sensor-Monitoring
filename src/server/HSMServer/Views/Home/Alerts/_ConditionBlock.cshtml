@@ -1,4 +1,6 @@
 ﻿@using HSMServer.Extensions
+@using HSMServer.Controllers
+@using HSMServer.Constants
 @using HSMServer.Model.DataAlerts
 @using HSMServer.Core.Model.Policies
 
@@ -27,7 +29,7 @@
     <select class="alert-block alert-select property-select" asp-for="Property" asp-items="@Model.PropertiesItems"></select>
 
     <div name="simpleCondition" class="flex-row align-items-center">
-        @*@await Html.PartialAsync("_ConditionOperation", Model.OperationViewModel)*@
+        @await Html.PartialAsync("~/Views/Home/Alerts/_ConditionOperation.cshtml", Model.Property.GetOperations(Model.Operation, Model.Target))
     </div>
 
     @*<div name="valueCondition" class="@isValueCondition.ToVisibility() flex-row align-items-center">
@@ -66,63 +68,78 @@
 <script>
     $('select[name="Property"]').off("change").on("change", function () {
         let conditionBlock = $(this).parents("div[name='alertCondition']:first");
+        let simpleCondition = conditionBlock.find($(`div[name='simpleCondition']`));
+
+        let property = $(this).val();
+
+        $.ajax({
+            url: `@Url.Action(nameof(HomeController.GetOperation), ViewConstants.HomeController)?propertyStr=${property}`,
+            cache: false
+        }).done(function (viewData) {
+
+            console.log(simpleCondition);
+            console.log(viewData);
+            simpleCondition.html(viewData);
+        });
+
+        //let conditionBlock = $(this).parents("div[name='alertCondition']:first");
         
-        let value = conditionBlock.find($(`div[name='valueCondition']`));
-        let status = conditionBlock.find($(`div[name='statusCondition']`));
-        let string = conditionBlock.find($(`div[name='stringCondition']`));
-        let newData = conditionBlock.find($(`div[name='newDataCondition']`));
-        let sensitivity = conditionBlock.find($(`div[name='sensitivityCondition']`));
+        //let value = conditionBlock.find($(`div[name='valueCondition']`));
+        //let status = conditionBlock.find($(`div[name='statusCondition']`));
+        //let string = conditionBlock.find($(`div[name='stringCondition']`));
+        //let newData = conditionBlock.find($(`div[name='newDataCondition']`));
+        //let sensitivity = conditionBlock.find($(`div[name='sensitivityCondition']`));
 
-        let targetInput = value.find($(`input[name='Target']`));
+        //let targetInput = value.find($(`input[name='Target']`));
 
-        let condition = $(this).val();
-        if (condition === '@AlertProperty.Status') {
-            targetInput.attr('required', false);
-            value.removeClass("d-flex").addClass('d-none');
-            string.removeClass("d-flex").addClass('d-none');
-            newData.removeClass("d-flex").addClass('d-none');
-            sensitivity.removeClass("d-flex").addClass('d-none');
+        //let condition = $(this).val();
+        //if (condition === '@AlertProperty.Status') {
+        //    targetInput.attr('required', false);
+        //    value.removeClass("d-flex").addClass('d-none');
+        //    string.removeClass("d-flex").addClass('d-none');
+        //    newData.removeClass("d-flex").addClass('d-none');
+        //    sensitivity.removeClass("d-flex").addClass('d-none');
 
-            status.removeClass("d-none").addClass('d-flex');
-        }
-        else if (condition == '@AlertProperty.Comment' || ('@(Model is StringConditionViewModel)' === 'True' && condition == '@AlertProperty.Value')) {
-            console.log("string");
-            targetInput.attr('required', false);
-            value.removeClass("d-flex").addClass('d-none');
-            status.removeClass("d-flex").addClass('d-none');
-            newData.removeClass("d-flex").addClass('d-none');
-            sensitivity.removeClass("d-flex").addClass('d-none');
+        //    status.removeClass("d-none").addClass('d-flex');
+        //}
+        //else if (condition == '@AlertProperty.Comment' || ('@(Model is StringConditionViewModel)' === 'True' && condition == '@AlertProperty.Value')) {
+        //    console.log("string");
+        //    targetInput.attr('required', false);
+        //    value.removeClass("d-flex").addClass('d-none');
+        //    status.removeClass("d-flex").addClass('d-none');
+        //    newData.removeClass("d-flex").addClass('d-none');
+        //    sensitivity.removeClass("d-flex").addClass('d-none');
 
-            string.removeClass("d-none").addClass('d-flex');
-        }
-        else if (condition === '@AlertProperty.Sensitivity') {
-            targetInput.attr('required', false);
-            value.removeClass("d-flex").addClass('d-none');
-            status.removeClass("d-flex").addClass('d-none');
-            string.removeClass("d-flex").addClass('d-none');
-            newData.removeClass("d-flex").addClass('d-none');
+        //    string.removeClass("d-none").addClass('d-flex');
+        //}
+        //else if (condition === '@AlertProperty.Sensitivity') {
+        //    targetInput.attr('required', false);
+        //    value.removeClass("d-flex").addClass('d-none');
+        //    status.removeClass("d-flex").addClass('d-none');
+        //    string.removeClass("d-flex").addClass('d-none');
+        //    newData.removeClass("d-flex").addClass('d-none');
 
-            sensitivity.removeClass("d-none").addClass('d-flex');
-        }
-        else if (condition === '@AlertProperty.NewSensorData') {
-            targetInput.attr('required', false);
-            value.removeClass("d-flex").addClass('d-none');
-            status.removeClass("d-flex").addClass('d-none');
-            string.removeClass("d-flex").addClass('d-none');
-            sensitivity.removeClass("d-flex").addClass('d-none');
+        //    sensitivity.removeClass("d-none").addClass('d-flex');
+        //}
+        //else if (condition === '@AlertProperty.NewSensorData') {
+        //    targetInput.attr('required', false);
+        //    value.removeClass("d-flex").addClass('d-none');
+        //    status.removeClass("d-flex").addClass('d-none');
+        //    string.removeClass("d-flex").addClass('d-none');
+        //    sensitivity.removeClass("d-flex").addClass('d-none');
 
-            newData.removeClass("d-none").addClass('d-flex');
-        }
-        else {
-            console.log("number");
-            status.removeClass("d-flex").addClass('d-none');
-            string.removeClass("d-flex").addClass('d-none');
-            newData.removeClass("d-flex").addClass('d-none');
-            sensitivity.removeClass("d-flex").addClass('d-none');
+        //    newData.removeClass("d-none").addClass('d-flex');
+        //}
+        //else {
+        //    console.log("number");
+        //    status.removeClass("d-flex").addClass('d-none');
+        //    string.removeClass("d-flex").addClass('d-none');
+        //    newData.removeClass("d-flex").addClass('d-none');
+        //    sensitivity.removeClass("d-flex").addClass('d-none');
 
-            targetInput.attr('required', true);
-            value.removeClass("d-none").addClass('d-flex');
-        }
+        //    targetInput.attr('required', true);
+        //    value.removeClass("d-none").addClass('d-flex');
+        //}
     });
 
     $('div[name="stringCondition"] select[name="Operation"]').off("change").on("change", function () {

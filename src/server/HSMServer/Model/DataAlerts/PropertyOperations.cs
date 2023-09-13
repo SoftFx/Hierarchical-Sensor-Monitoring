@@ -67,5 +67,21 @@ namespace HSMServer.Model.DataAlerts
                 AlertProperty.NewSensorData or AlertProperty.Sensitivity or AlertProperty.TimeToLive => new(),
                 _ => throw new NotSupportedException(),
             };
+
+
+        public static OperationViewModel GetOperations(this AlertProperty property,
+            PolicyOperation? selectedOperation = null, string target = null)
+        {
+            OperationViewModel viewModel = property switch
+            {
+                AlertProperty.Status => new StatusOperation(),
+                AlertProperty.Comment => new CommentOperation(),
+                _ => null //throw new NotSupportedException(),
+            };
+
+            viewModel?.SetData(selectedOperation, target);
+
+            return viewModel;
+        }
     }
 }

@@ -203,7 +203,6 @@ namespace HSMServer.Model.DataAlerts
                 viewModel.Property = condition.Property.ToClient();
                 viewModel.Operation = condition.Operation;
                 viewModel.Target = condition.Target.Value;
-                viewModel.OperationViewModel = new OperationViewModel(viewModel);
 
                 Conditions.Add(viewModel);
             }

@@ -7,6 +7,11 @@
 
 @if (Model is not null)
 {
-    <select class="alert-block alert-select operation-select" asp-for="Operation" asp-items="@Model.OperationsItems"></select>
+    <select class="alert-block alert-select operation-select" asp-for="SelectedOperation" asp-items="@Model.OperationsItems"></select>
     <input class="alert-block target-input target-value d-none" type="text" placeholder="<enter a value>" asp-for="Target" value="@Model.Target" />
 }
+
+
+<script>
+    
+</script>
