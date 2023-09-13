@@ -15,9 +15,9 @@ namespace HSMServer.Core.Model.Policies
         GreaterThan = 2,
         [Display(Name = ">=")]
         GreaterThanOrEqual = 3,
-        [Display(Name = "equal")]
+        [Display(Name = "=")]
         Equal = 4,
-        [Display(Name = "!=")]
+        [Display(Name = "≠")]
         NotEqual = 5,
 
         [Display(Name = "is changed")]
@@ -31,8 +31,11 @@ namespace HSMServer.Core.Model.Policies
         [Display(Name = "is changed to \U0001f7e2 OK")]
         IsChangedToOk = 24,
 
+        [Display(Name = "contains")]
         Contains = 30,
+        [Display(Name = "starts with")]
         StartsWith = 31,
+        [Display(Name = "ends with")]
         EndsWith = 32,
 
         [Display(Name = "has been received")]

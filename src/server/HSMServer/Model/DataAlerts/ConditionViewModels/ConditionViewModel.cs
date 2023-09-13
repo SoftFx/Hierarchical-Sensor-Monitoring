@@ -7,7 +7,6 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.Linq;
-using System.Numerics;
 
 namespace HSMServer.Model.DataAlerts
 {
@@ -59,7 +58,15 @@ namespace HSMServer.Model.DataAlerts
             PolicyOperation.IsError
         };
 
-        private readonly List<PolicyOperation> _stringOperations = new() { PolicyOperation.IsChanged };
+        protected readonly List<PolicyOperation> _stringOperations = new()
+        {
+            PolicyOperation.Equal,
+            PolicyOperation.NotEqual,
+            PolicyOperation.Contains,
+            PolicyOperation.StartsWith,
+            PolicyOperation.EndsWith,
+            PolicyOperation.IsChanged,
+        };
 
 
         protected abstract List<AlertProperty> Properties { get; }
@@ -76,6 +83,8 @@ namespace HSMServer.Model.DataAlerts
         public List<SelectListItem> StatusOperationsItems { get; }
 
         public List<SelectListItem> StringOperationsItems { get; }
+
+        public OperationViewModel OperationViewModel { get; set; }
 
 
         public ConditionViewModel(bool isMain)
@@ -111,82 +120,5 @@ namespace HSMServer.Model.DataAlerts
 
 
         public ConditionViewModel(bool isMain) : base(isMain) { }
-    }
-
-
-    public abstract class NumberConditionViewModel : ConditionViewModel
-    {
-        protected override List<PolicyOperation> Operations { get; } = new()
-        {
-            PolicyOperation.LessThanOrEqual,
-            PolicyOperation.LessThan,
-            PolicyOperation.GreaterThan,
-            PolicyOperation.GreaterThanOrEqual,
-            PolicyOperation.NotEqual,
-            PolicyOperation.Equal,
-        };
-
-
-        protected NumberConditionViewModel(bool isMain) : base(isMain) { }
-    }
-
-
-    public class SingleConditionViewModel<T, U> : NumberConditionViewModel where T : BaseValue<U>, new()
-    {
-        protected override List<AlertProperty> Properties { get; } = new()
-        {
-            AlertProperty.Value,
-            AlertProperty.Status,
-            AlertProperty.Comment,
-            AlertProperty.NewSensorData,
-        };
-
-
-        public SingleConditionViewModel(bool isMain) : base(isMain) { }
-    }
-
-
-    public sealed class FileConditionViewModel : NumberConditionViewModel
-    {
-        protected override List<AlertProperty> Properties { get; } = new()
-        {
-            AlertProperty.OriginalSize,
-            AlertProperty.Status,
-            AlertProperty.Comment,
-            AlertProperty.NewSensorData,
-        };
-
-
-        public FileConditionViewModel(bool isMain) : base(isMain) { }
-    }
-
-
-    public sealed class BarConditionViewModel<T, U> : NumberConditionViewModel where T : BarBaseValue<U>, new() where U : INumber<U>
-    {
-        protected override List<AlertProperty> Properties { get; } = new()
-        {
-            AlertProperty.Min,
-            AlertProperty.Max,
-            AlertProperty.Mean,
-            AlertProperty.LastValue,
-            AlertProperty.Count,
-            AlertProperty.Status,
-            AlertProperty.Comment,
-            AlertProperty.NewSensorData,
-        };
-
-
-        public BarConditionViewModel(bool isMain) : base(isMain) { }
-    }
-
-
-    public sealed class TimeToLiveConditionViewModel : ConditionViewModel
-    {
-        protected override List<AlertProperty> Properties { get; } = new() { AlertProperty.TimeToLive };
-
-        protected override List<PolicyOperation> Operations { get; }
-
-
-        public TimeToLiveConditionViewModel(bool isMain = true) : base(isMain) { }
     }
 }

@@ -11,7 +11,7 @@
     var condition = Model.Property;
 
     var isStatusCondition = condition == AlertProperty.Status;
-    var isStringCondition = condition == AlertProperty.Comment;
+    var isStringCondition = condition == AlertProperty.Comment || (Model is StringConditionViewModel && condition == AlertProperty.Value);
     var isTtlCondition = condition == AlertProperty.TimeToLive;
     var isNewDataCondition = condition == AlertProperty.NewSensorData;
     var isSensitivityCondition = condition == AlertProperty.Sensitivity;
@@ -26,7 +26,11 @@
 
     <select class="alert-block alert-select property-select" asp-for="Property" asp-items="@Model.PropertiesItems"></select>
 
-    <div name="valueCondition" class="@isValueCondition.ToVisibility() flex-row align-items-center">
+    <div name="simpleCondition" class="flex-row align-items-center">
+        @*@await Html.PartialAsync("_ConditionOperation", Model.OperationViewModel)*@
+    </div>
+
+    @*<div name="valueCondition" class="@isValueCondition.ToVisibility() flex-row align-items-center">
         <select class="alert-block alert-select operation-select" asp-for="Operation" asp-items="@Model.OperationsItems"></select>
         <input class="alert-block target-input target-value" type="text" placeholder="<enter a value>" asp-for="Target" value="@Model.Target" required="@(isValueCondition ? true : false)"/>
     </div>
@@ -37,7 +41,8 @@
 
     <div name="stringCondition" class="@isStringCondition.ToVisibility() flex-row align-items-center">
         <select class="alert-block alert-select operation-select" asp-for="Operation" asp-items="@Model.StringOperationsItems"></select>
-    </div>
+        <input class="alert-block target-input target-value d-none" type="text" placeholder="<enter a value>" asp-for="Target" value="@Model.Target" />
+    </div>*@
 
     <div name="newDataCondition" class="@isNewDataCondition.ToVisibility() flex-row align-items-center">
         <div class="alert-text-block operation-select">has been received</div>
@@ -80,7 +85,8 @@
 
             status.removeClass("d-none").addClass('d-flex');
         }
-        else if (condition == '@AlertProperty.Comment') {
+        else if (condition == '@AlertProperty.Comment' || ('@(Model is StringConditionViewModel)' === 'True' && condition == '@AlertProperty.Value')) {
+            console.log("string");
             targetInput.attr('required', false);
             value.removeClass("d-flex").addClass('d-none');
             status.removeClass("d-flex").addClass('d-none');
@@ -108,6 +114,7 @@
             newData.removeClass("d-none").addClass('d-flex');
         }
         else {
+            console.log("number");
             status.removeClass("d-flex").addClass('d-none');
             string.removeClass("d-flex").addClass('d-none');
             newData.removeClass("d-flex").addClass('d-none');
@@ -116,6 +123,11 @@
             targetInput.attr('required', true);
             value.removeClass("d-none").addClass('d-flex');
         }
+    });
+
+    $('div[name="stringCondition"] select[name="Operation"]').off("change").on("change", function () {
+        console.log("changed");
+        console.log($(this));
     });
 
     $("a.deleteCondition").off("click").on("click", function () {
