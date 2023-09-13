@@ -28,31 +28,33 @@ namespace HSMDataCollector.PublicInterface
 
         IWindowsCollection AddFreeDisksSpacePrediction(DiskSensorOptions options = null);
 
-        IWindowsCollection AddDiskMonitoringSensors(DiskSensorOptions options = null);
+        IWindowsCollection AddActiveDiskTime(DiskBarSensorOptions options = null);
+
+        IWindowsCollection AddActiveDisksTime(DiskBarSensorOptions options = null);
+
+        IWindowsCollection AddDiskMonitoringSensors(DiskSensorOptions options = null, DiskBarSensorOptions activeTimeOptions = null);
+
+        IWindowsCollection AddAllDisksMonitoringSensors(DiskSensorOptions options = null, DiskBarSensorOptions activeTimeOptions = null);
 
 
-        IWindowsCollection AddWindowsNeedUpdate(WindowsSensorOptions options = null);
+        IWindowsCollection AddWindowsLastUpdate(WindowsInfoSensorOptions options = null);
 
-        IWindowsCollection AddWindowsLastUpdate(WindowsSensorOptions options = null);
+        IWindowsCollection AddWindowsLastRestart(WindowsInfoSensorOptions options = null);
 
-        IWindowsCollection AddWindowsLastRestart(WindowsSensorOptions options = null);
-
-        IWindowsCollection AddWindowsInfoMonitoringSensors(WindowsSensorOptions options = null);
+        IWindowsCollection AddWindowsInfoMonitoringSensors(WindowsInfoSensorOptions options = null);
 
 
         IWindowsCollection AddCollectorAlive(CollectorMonitoringInfoOptions options = null);
 
-        IWindowsCollection AddCollectorVersion(CollectorInfoOptions options = null);
-
-        IWindowsCollection AddCollectorStatus(CollectorInfoOptions options = null);
+        IWindowsCollection AddCollectorVersion();
 
         IWindowsCollection AddCollectorMonitoringSensors(CollectorMonitoringInfoOptions options = null);
 
 
-        IWindowsCollection AddProductVersion(VersionSensorOptions options = null);
+        IWindowsCollection AddProductVersion(VersionSensorOptions options);
 
 
-        IWindowsCollection SubscribeToWindowsServiceStatus(string serviceName, string module = "");
+        IWindowsCollection SubscribeToWindowsServiceStatus(string serviceName);
 
         IWindowsCollection SubscribeToWindowsServiceStatus(ServiceSensorOptions options);
     }

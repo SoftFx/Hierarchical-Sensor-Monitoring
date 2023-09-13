@@ -75,7 +75,7 @@ namespace HSMServer.BackgroundServices
             if (OperatingSystem.IsWindows())
             {
                 _collector.Windows.AddProcessMonitoringSensors()
-                                  .AddDiskMonitoringSensors()
+                                  .AddAllDisksMonitoringSensors()
                                   .AddSystemMonitoringSensors()
                                   .AddWindowsInfoMonitoringSensors()
                                   .AddProductVersion(productInfoOptions)

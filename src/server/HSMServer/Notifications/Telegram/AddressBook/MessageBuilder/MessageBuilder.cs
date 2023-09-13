@@ -1,6 +1,6 @@
-﻿using HSMServer.Core.Model.Policies;
+﻿using HSMCommon.Collections;
+using HSMServer.Core.Model.Policies;
 using HSMServer.Extensions;
-using HSMServer.Notification.Settings;
 using HSMServer.Notifications.Telegram.AddressBook.MessageBuilder;
 using System;
 using System.Collections.Concurrent;
@@ -10,7 +10,7 @@ namespace HSMServer.Notifications
 {
     internal sealed class MessageBuilder
     {
-        private readonly CDict<ConcurrentDictionary<Guid, AlertResult>> _alertsTree = new(); //template -> policyId -> AlertResult
+        private readonly CDict<CDict<ConcurrentDictionary<Guid, AlertResult>>> _alertsTree = new(); //template -> policyId -> Message as string -> AlertResult
         private readonly AlertsCompressor _compressor = new();
 
         internal DateTime ExpectedSendingTime { get; private set; } = DateTime.UtcNow;
@@ -18,7 +18,7 @@ namespace HSMServer.Notifications
 
         internal void AddMessage(AlertResult alert)
         {
-            var branch = _alertsTree[alert.Template];
+            var branch = _alertsTree[alert.Template][alert.LastComment];
 
             if (branch.TryGetValue(alert.PolicyId, out var policy))
                 policy.TryAddResult(alert);
@@ -28,12 +28,17 @@ namespace HSMServer.Notifications
 
         internal string GetAggregateMessage(int delay)
         {
-            foreach (var (_, alerts) in _alertsTree)
+            foreach (var (_, sensorAlerts) in _alertsTree)
             {
-                foreach (var (_, aggrAlert) in alerts)
-                    _compressor.ApplyToGroup(aggrAlert);
+                foreach (var (_, alerts) in sensorAlerts)
+                {
+                    foreach (var (_, aggrAlert) in alerts)
+                        _compressor.ApplyToGroup(aggrAlert);
 
-                alerts.Clear();
+                    alerts.Clear();
+                }
+
+                sensorAlerts.Clear();
             }
 
             _alertsTree.Clear();

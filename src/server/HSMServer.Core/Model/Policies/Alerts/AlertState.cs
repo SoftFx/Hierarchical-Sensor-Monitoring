@@ -53,22 +53,28 @@ namespace HSMServer.Core.Model.Policies
         public string PrevStatus { get; init; }
 
 
-        [AlertVariable("$value", "Sensor value")]
+        [AlertVariable("$value", "Sensor Value")]
         public string ValueSingle { get; private set; }
 
 
-        [AlertVariable("$min", "Bar sensor min value")]
+        [AlertVariable("$min", "Bar sensor Min value")]
         public string MinValueBar { get; private set; }
 
-        [AlertVariable("$max", "Bar sensor max value")]
+        [AlertVariable("$max", "Bar sensor Max value")]
         public string MaxValueBar { get; private set; }
 
-        [AlertVariable("$mean", "Bar sensor mean value")]
+        [AlertVariable("$mean", "Bar sensor Mean value")]
         public string MeanValueBar { get; private set; }
 
-        [AlertVariable("$lastValue", "Bar sensor lastValue value")]
+        [AlertVariable("$lastValue", "Bar sensor LastValue value")]
         public string LastValueBar { get; private set; }
 
+        [AlertVariable("$count", "Bar sensor Count value")]
+        public string CountBar { get; private set; }
+
+
+        [AlertVariable("$property", "Alert property")]
+        public string Property { get; set; }
 
         [AlertVariable("$operation", "Alert operation")]
         public string Operation { get; set; }
@@ -139,7 +145,7 @@ namespace HSMServer.Core.Model.Policies
 
         public string BuildComment(string template = null) => string.Format(template ?? Template?.Text ?? string.Empty,
             Product, Path, Sensor, Status, Time, Comment, PrevStatus, ValueSingle, MinValueBar, MaxValueBar, MeanValueBar,
-            LastValueBar, Operation, Target);
+            LastValueBar, CountBar, Property, Operation, GetCorrectTarget());
 
         public static AlertSystemTemplate BuildSystemTemplate(string raw)
         {
@@ -182,6 +188,7 @@ namespace HSMServer.Core.Model.Policies
             state.MaxValueBar = value?.Max.ToString();
             state.MeanValueBar = value?.Mean.ToString();
             state.LastValueBar = value?.LastValue.ToString();
+            state.CountBar = value?.Count.ToString();
 
             return state;
         }
@@ -201,5 +208,7 @@ namespace HSMServer.Core.Model.Policies
 
 
         private bool UseProperty(string name) => Template?.Contains(name) ?? false;
+
+        private string GetCorrectTarget() => Guid.TryParse(Target, out _) ? Sensor : Target; //skipping for guid
     }
 }

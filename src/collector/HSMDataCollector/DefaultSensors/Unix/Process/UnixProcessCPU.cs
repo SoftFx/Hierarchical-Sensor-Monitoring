@@ -12,8 +12,6 @@ namespace HSMDataCollector.DefaultSensors.Unix
         private TimeSpan _startCpuUsage;
         private DateTime _startTime;
 
-        protected override string SensorName => "Process CPU";
-
 
         internal UnixProcessCpu(BarSensorOptions options) : base(options)
         {

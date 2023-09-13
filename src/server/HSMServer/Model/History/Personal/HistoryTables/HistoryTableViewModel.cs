@@ -20,7 +20,21 @@ namespace HSMServer.Model.History
         private IAsyncEnumerator<List<BaseValue>> _pagesEnumerator;
 
 
-        public List<TableValueViewModel> CurrentTablePage => CurrentPage.Select(Build).OrderByDescending(u => u.Time).ToList();
+        public List<TableValueViewModel> CurrentTablePage
+        {
+            get
+            {
+                DateTime ByReceivingTime(TableValueViewModel value) => value.ReceivingTime;
+
+                DateTime ByTime(TableValueViewModel value) => value.Time;
+
+
+                Func<TableValueViewModel, DateTime> orderByFilter = _model.AggregateValues ? ByReceivingTime : ByTime;
+                Func<TableValueViewModel, DateTime> thenByFilter = _model.AggregateValues ? ByTime : ByReceivingTime;
+
+                return CurrentPage.Select(Build).OrderByDescending(orderByFilter).ThenByDescending(thenByFilter).ToList();
+            }
+        }
 
         public List<BaseValue> CurrentPage => Pages.Count > CurrentIndex ? Pages[CurrentIndex] : new();
 
@@ -28,6 +42,8 @@ namespace HSMServer.Model.History
 
         public string SensorId { get; }
 
+
+        public bool AggregateValues => _model.AggregateValues;
 
         public bool IsBarSensor => _model.Type.IsBar();
 
@@ -129,12 +145,16 @@ namespace HSMServer.Model.History
                 Status = value.Status.ToClient(),
                 Comment = value.Comment,
                 ReceivingTime = value.ReceivingTime,
+                LastUpdateTime = value.LastUpdateTime,
+                AggregatedValuesCount = value.AggregatedValuesCount,
                 IsTimeout = value.IsTimeout
             };
 
         private static BarSensorValueViewModel Build<T>(BarBaseValue<T> value) where T : INumber<T> =>
             new()
             {
+                OpenTime = value.OpenTime,
+                CloseTime = value.CloseTime,
                 Count = value.Count,
                 Min = value.Min.ToString(),
                 Max = value.Max.ToString(),

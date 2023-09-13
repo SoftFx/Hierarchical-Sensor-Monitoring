@@ -1,4 +1,4 @@
-using HSMServer.Core.Cache;
+using HSMServer.Core.TableOfChanges;
 using System;
 using System.Diagnostics.CodeAnalysis;
 
@@ -9,7 +9,7 @@ public sealed record ClearHistoryRequest
     public required Guid Id { get; init; }
 
 
-    public string Initiator { get; init; } = TreeValuesCache.System;
+    public InitiatorInfo Initiator { get; init; } = InitiatorInfo.System;
 
     public DateTime To { get; init; } = DateTime.MaxValue;
 
@@ -27,7 +27,7 @@ public sealed record ClearHistoryRequest
     }
 
     [SetsRequiredMembers]
-    public ClearHistoryRequest(Guid id, string initiator) : this(id)
+    public ClearHistoryRequest(Guid id, InitiatorInfo initiator) : this(id)
     {
         Initiator = initiator;
     }

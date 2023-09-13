@@ -1,4 +1,11 @@
-﻿window.editInfoButtonClick = function () {
+﻿export function GetSensortInfo(id){
+    return $.ajax({
+        type: "GET",
+        url: getSensorPlotInfo + `?id=${id}`,
+    });
+}
+
+window.editInfoButtonClick = function () {
     $('#saveInfo').removeAttr("hidden");
     $('#revertInfo').removeAttr("hidden");
     $('#editButtonMetaInfo').addClass('d-none');
@@ -17,6 +24,9 @@
 
     $('#markdown_span_description').addClass('d-none');
     $('#meta_info_collapse').addClass('d-none');
+
+    $('#saveOnlyUniqueValuesSwitch').attr("disabled", false);
+    $('#sensorUnit').attr("disabled", false);
 
     $('#folder_ttl').removeClass('d-none');
     $('#partialSavedHistorySelect').removeClass('d-none');

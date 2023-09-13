@@ -48,6 +48,8 @@ namespace HSMServer.Model.DataAlerts
         private readonly List<PolicyOperation> _statusOperations = new()
         {
             PolicyOperation.IsChanged,
+            PolicyOperation.IsChangedToOk,
+            PolicyOperation.IsChangedToError,
             PolicyOperation.IsOk,
             PolicyOperation.IsError
         };
@@ -136,6 +138,7 @@ namespace HSMServer.Model.DataAlerts
             AlertProperty.Max,
             AlertProperty.Mean,
             AlertProperty.LastValue,
+            AlertProperty.Count,
             AlertProperty.Status,
             AlertProperty.Comment,
         };

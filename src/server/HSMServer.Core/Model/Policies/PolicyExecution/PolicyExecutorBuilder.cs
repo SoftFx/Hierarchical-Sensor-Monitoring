@@ -18,6 +18,19 @@ namespace HSMServer.Core.Model.Policies
             };
 
 
+        internal static Func<TimeSpan, TimeSpan, bool> GetTimeSpanOperation(PolicyOperation action) =>
+            action switch
+            {
+                PolicyOperation.LessThan => (TimeSpan src, TimeSpan target) => src < target,
+                PolicyOperation.GreaterThan => (TimeSpan src, TimeSpan target) => src > target,
+                PolicyOperation.LessThanOrEqual => (TimeSpan src, TimeSpan target) => src <= target,
+                PolicyOperation.GreaterThanOrEqual => (TimeSpan src, TimeSpan target) => src >= target,
+                PolicyOperation.Equal => (TimeSpan src, TimeSpan target) => src == target,
+                PolicyOperation.NotEqual => (TimeSpan src, TimeSpan target) => src != target,
+                _ => throw new NotImplementedException()
+            };
+
+
         internal static Func<string, string, bool> GetStringOperation(PolicyOperation? action) =>
             action switch
             {
@@ -32,6 +45,8 @@ namespace HSMServer.Core.Model.Policies
                 PolicyOperation.IsChanged => IsChangedStatus,
                 PolicyOperation.IsOk => (SensorStatus? newVal, SensorStatus? _) => newVal == SensorStatus.Ok,
                 PolicyOperation.IsError => (SensorStatus? newVal, SensorStatus? _) => newVal == SensorStatus.Error,
+                PolicyOperation.IsChangedToError => (SensorStatus? newVal, SensorStatus? oldVal) => IsChangedStatus(newVal, oldVal) && newVal == SensorStatus.Error,
+                PolicyOperation.IsChangedToOk => (SensorStatus? newVal, SensorStatus? oldVal) => IsChangedStatus(newVal, oldVal) && newVal == SensorStatus.Ok,
                 _ => throw new NotImplementedException()
             };
 
@@ -48,8 +63,13 @@ namespace HSMServer.Core.Model.Policies
             PolicyProperty.Value or PolicyProperty.Min or PolicyProperty.Max or PolicyProperty.Mean or
             PolicyProperty.LastValue when typeof(U) == typeof(int) => new PolicyExecutorNumber<int>(property),
 
-            PolicyProperty.Value or PolicyProperty.Min or PolicyProperty.Max or
-            PolicyProperty.Mean or PolicyProperty.LastValue when typeof(U) == typeof(double) => new PolicyExecutorNumber<double>(property),
+            PolicyProperty.Value or PolicyProperty.Min or PolicyProperty.Max or PolicyProperty.Mean or
+            PolicyProperty.LastValue when typeof(U) == typeof(double) => new PolicyExecutorNumber<double>(property),
+
+            PolicyProperty.Count when typeof(U) == typeof(int) => new PolicyExecutorInt(property),
+            PolicyProperty.Count when typeof(U) == typeof(double) => new PolicyExecutorDouble(property),
+
+            PolicyProperty.Value when typeof(U) == typeof(TimeSpan) => new PolicyExecutorTimeSpan(),
 
             PolicyProperty.Status => new PolicyExecutorStatus(),
 

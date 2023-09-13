@@ -1,4 +1,5 @@
 ﻿using HSMServer.Authentication;
+using HSMServer.Core.TableOfChanges;
 using HSMServer.Model.Authentication;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -13,6 +14,8 @@ namespace HSMServer.Controllers
 
         protected readonly IUserManager _userManager;
 
+
+        public InitiatorInfo CurrentInitiator => InitiatorInfo.AsUser(CurrentUser.Name);
 
         public User CurrentUser => HttpContext.User as User;
 

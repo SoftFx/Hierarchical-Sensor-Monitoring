@@ -14,10 +14,32 @@ namespace HSMServer.Core.Model
         Blocked = byte.MaxValue,
     }
 
+
     [Flags]
     public enum Integration : int
     {
         Grafana = 1,
+    }
+
+
+    public enum Unit : int
+    {
+        bits = 0,
+        bytes = 1,
+        KB = 2,
+        MB = 3,
+        GB = 4,
+
+        Percents = 100,
+    }
+
+
+    [Flags]
+    public enum DefaultAlertsOptions : long
+    {
+        None = 0,
+        DisableTtl = 1,
+        DisableStatusChange = 2,
     }
 
 
@@ -42,9 +64,13 @@ namespace HSMServer.Core.Model
         public abstract SensorType Type { get; }
 
 
+        public bool AggregateValues { get; private set; }
+
         public Integration Integration { get; private set; }
 
         public DateTime? EndOfMuting { get; private set; }
+
+        public Unit? OriginalUnit { get; private set; }
 
         public SensorState State { get; private set; }
 
@@ -65,7 +91,7 @@ namespace HSMServer.Core.Model
         public bool ShouldDestroy => Settings.SelfDestroy.Value?.TimeIsUp(LastUpdate) ?? false;
 
 
-        public DateTime LastUpdate => Storage.LastValue?.ReceivingTime ?? DateTime.MinValue;
+        public DateTime LastUpdate => Storage.LastValue?.LastUpdateTime ?? DateTime.MinValue;
 
         public BaseValue LastDbValue => Storage.LastDbValue;
 
@@ -84,10 +110,10 @@ namespace HSMServer.Core.Model
         public BaseSensorModel(SensorEntity entity) : base(entity)
         {
             State = (SensorState)entity.State;
+            OriginalUnit = (Unit?)entity.OriginalUnit;
             Integration = (Integration)entity.Integration;
+            AggregateValues = entity.AggregateValues;
             EndOfMuting = entity.EndOfMuting > 0L ? new DateTime(entity.EndOfMuting) : null;
-
-            Policies.Attach(this);
         }
 
 
@@ -97,16 +123,24 @@ namespace HSMServer.Core.Model
 
         internal abstract void AddDbValue(byte[] bytes);
 
-        internal abstract IEnumerable<BaseValue> ConvertValues(List<byte[]> valuesBytes);
+        internal abstract bool TryUpdateLastValue(BaseValue value, bool changeLast = false);
+
+
+        internal abstract IEnumerable<BaseValue> Convert(List<byte[]> valuesBytes);
+
+        internal abstract BaseValue Convert(byte[] bytes);
 
 
         internal void Update(SensorUpdate update)
         {
             base.Update(update);
 
-            State = UpdateProperty(State, update.State ?? State, update.Initiator);
             Integration = UpdateProperty(Integration, update.Integration ?? Integration, update.Initiator);
-            EndOfMuting = UpdateProperty(EndOfMuting, update.EndOfMutingPeriod, update.Initiator, "End of muting");
+            OriginalUnit = UpdateProperty(OriginalUnit, update.SelectedUnit ?? OriginalUnit, update.Initiator, "Unit");
+            AggregateValues = UpdateProperty(AggregateValues, update.SaveOnlyUniqueValues ?? AggregateValues, update.Initiator, "Save only unique values");
+
+            State = UpdateProperty(State, update.State ?? State, update.Initiator, forced: true);
+            EndOfMuting = UpdateProperty(EndOfMuting, update.EndOfMutingPeriod, update.Initiator, "End of muting", true);
 
             if (State == SensorState.Available)
                 EndOfMuting = null;
@@ -132,10 +166,13 @@ namespace HSMServer.Core.Model
             Type = (byte)Type,
             State = (byte)State,
             Integration = (int)Integration,
+            OriginalUnit = (int?)OriginalUnit,
+            AggregateValues = AggregateValues,
             Policies = Policies.Ids.Select(u => u.ToString()).ToList(),
             EndOfMuting = EndOfMuting?.Ticks ?? 0L,
             Settings = Settings.ToEntity(),
             TTLPolicy = Policies.TimeToLive?.ToEntity(),
+            ChangeTable = ChangeTable.ToEntity(),
         };
     }
 }

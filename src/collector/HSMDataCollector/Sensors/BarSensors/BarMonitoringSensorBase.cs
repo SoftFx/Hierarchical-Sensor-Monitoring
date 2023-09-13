@@ -22,7 +22,7 @@ namespace HSMDataCollector.DefaultSensors
 
         protected BarMonitoringSensorBase(BarSensorOptions options) : base(options)
         {
-            _collectBarPeriod = options.CollectBarPeriod;
+            _collectBarPeriod = options.BarTickPeriod;
             _barPeriod = options.BarPeriod;
             _precision = options.Precision;
 

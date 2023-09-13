@@ -1,10 +1,11 @@
 ﻿using HSMSensorDataObjects.HistoryRequests;
 using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Model;
-using HSMServer.Core.Model.Policies;
 using HSMServer.Core.Model.Requests;
+using HSMServer.Core.TableOfChanges;
 using System;
 using System.Collections.Generic;
+
 
 namespace HSMServer.Core.Cache
 {
@@ -37,6 +38,7 @@ namespace HSMServer.Core.Cache
 
         bool TryCheckKeyWritePermissions(BaseRequestModel request, out string message);
         bool TryCheckKeyReadPermissions(BaseRequestModel request, out string message);
+        bool TryCheckSensorUpdateKeyPermission(BaseRequestModel request, out ProductModel product, out Guid sensorId, out string message);
 
         AccessKeyModel AddAccessKey(AccessKeyModel key);
         AccessKeyModel RemoveAccessKey(Guid id);
@@ -45,9 +47,11 @@ namespace HSMServer.Core.Cache
         AccessKeyModel GetAccessKey(Guid id);
         List<AccessKeyModel> GetMasterKeys();
 
+        void AddOrUpdateSensor(SensorAddOrUpdateRequestModel update);
         void UpdateSensor(SensorUpdate updatedSensor);
-        void RemoveSensor(Guid sensorId, string initiator = null);
-        void UpdateMutedSensorState(Guid sensorId, DateTime? endOfMuting = null, string initiator = null);
+        void UpdateSensorValue(UpdateSensorValueRequestModel request);
+        void RemoveSensor(Guid sensorId, InitiatorInfo initiator = null);
+        void UpdateMutedSensorState(Guid sensorId, InitiatorInfo initiator, DateTime? endOfMuting = null);
         void ClearSensorHistory(ClearHistoryRequest request);
         void CheckSensorHistory(Guid sensorId);
         void ClearNodeHistory(ClearHistoryRequest request);
@@ -63,11 +67,5 @@ namespace HSMServer.Core.Cache
         void AddNewChat(Guid chatId, string name, string productName);
 
         void RemoveChat(Guid chatId, string productName);
-
-        [Obsolete("Should be removed after policies chats migration")]
-        void UpdatePolicy(Policy policy);
-
-        [Obsolete("Should be removed after policies chats migration")]
-        void UpdateSensor(Guid sensorId);
     }
 }

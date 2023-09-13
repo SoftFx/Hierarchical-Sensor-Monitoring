@@ -306,27 +306,53 @@
     $('[id^="plot_"]').change(function () {
         const name = this.id.substring("plot_".length, this.id.length);
         if ($(this).is(':checked')){
-            addBarPlot(name);   
+            addPlot(name);   
         }
         else {
-            removeBarPlot(name);  
+            removePlot(name);  
         }
-    })
+    });
     
     $('#allColumnsButton').off('click').on('click', function (e) {
         if (this.innerText.includes('Show')) {
             $("#receivingTime_header").removeClass('d-none');
             $('[id^="receivingTime_value"]').removeClass('d-none');
+
+            if ('@(Model.Type is SensorType.DoubleBar or SensorType.IntegerBar)' === 'True') {
+                $("#lastUpdateTime_header").removeClass('d-none');
+                $("#closeTime_header").removeClass('d-none');
+                $('[id^="lastUpdateTime_value"]').removeClass('d-none');
+                $('[id^="closeTime_value"]').removeClass('d-none');
+            }
+
+            if ('@Model.SaveOnlyUniqueValues' === 'True') {
+                $("#aggregatedValuesCount_header").removeClass('d-none');
+                $('[id^="aggregatedValuesCount_value"]').removeClass('d-none');
+            }
+
             this.innerText = "Hide extra columns"
         }
         else {
             $("#receivingTime_header").addClass('d-none');
             $('[id^="receivingTime_value"]').addClass('d-none');
+
+            if ('@(Model.Type is SensorType.DoubleBar or SensorType.IntegerBar)' === 'True') {
+                $("#lastUpdateTime_header").addClass('d-none');
+                $("#closeTime_header").addClass('d-none');
+                $('[id^="lastUpdateTime_value"]').addClass('d-none');
+                $('[id^="closeTime_value"]').addClass('d-none');
+            }
+
+            if ('@Model.SaveOnlyUniqueValues' === 'True') {
+                $("#aggregatedValuesCount_header").addClass('d-none');
+                $('[id^="aggregatedValuesCount_value"]').addClass('d-none');
+            }
+
             this.innerText = "Show all columns";
         }
     });
     
-    $('[id^="link_journal_"]').off('click').on('click', () => initializeJournal(NodeType.Sensor))
+    $('[id^="link_journal_"]').off('click').on('click', () => initializeJournal(NodeType.Sensor));
 
     $(document).ready(function () {
         if ('@(Model.Type is SensorType.File)' === 'True') {
@@ -335,7 +361,6 @@
 
         let savedPlots = localStorage.getItem(`graph_@sensorId`);
         if (savedPlots) {
-            console.log(savedPlots)
             let plots = savedPlots.split(',');
             let jqueryPlots = $('[id^="plot_"]');
             jqueryPlots.each(x => {

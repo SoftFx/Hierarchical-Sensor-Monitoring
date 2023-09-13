@@ -1,5 +1,6 @@
 ﻿using HSMSensorDataObjects;
 using HSMSensorDataObjects.HistoryRequests;
+using HSMSensorDataObjects.SensorRequests;
 using HSMSensorDataObjects.SensorValueRequests;
 using HSMServer.ApiObjectsConverters;
 using HSMServer.BackgroundServices;
@@ -17,6 +18,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Net.Mime;
 using System.Text;
 using System.Text.Json;
@@ -462,6 +464,88 @@ namespace HSMServer.Controllers
         }
 
 
+        /// <summary>
+        /// Add new sensor with selected properties or update sensor meta info
+        /// </summary>
+        /// <param name="sensorUpdate"></param>
+        /// <returns></returns>
+        [HttpPost("addOrUpdate")]
+        [Consumes(MediaTypeNames.Application.Json)]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status406NotAcceptable)]
+        public ActionResult<AddOrUpdateSensorRequest> Post([FromBody] AddOrUpdateSensorRequest sensorUpdate)
+        {
+            try
+            {
+                var keyName = GetCollectorKeyName();
+
+                if (TryBuildSensorUpdate(sensorUpdate, keyName, out var update, out var message))
+                {
+                    _cache.AddOrUpdateSensor(update);
+                    return Ok(sensorUpdate);
+                }
+
+                return StatusCode(406, message);
+            }
+            catch (Exception e)
+            {
+                var message = $"Failed to update sensor! Update request: {JsonSerializer.Serialize(sensorUpdate)}";
+
+                _logger.LogError(e, message);
+                return BadRequest(message);
+            }
+        }
+
+        /// <summary>
+        /// List of sensor commands
+        /// </summary>
+        /// <param name="sensorCommands"></param>
+        /// <returns>Dictionary that contains commands error. Key is path to sensor, Value is error</returns>
+        [HttpPost("commands")]
+        [Consumes(MediaTypeNames.Application.Json)]
+        [ProducesResponseType(StatusCodes.Status200OK)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status406NotAcceptable)]
+        public ActionResult<Dictionary<string, string>> Post([FromBody, ModelBinder(typeof(SensorCommandModelBinder))] List<CommandRequestBase> sensorCommands)
+        {
+            var result = new Dictionary<string, string>(sensorCommands.Count);
+
+            try
+            {
+                var keyName = GetCollectorKeyName();
+
+                foreach (var command in sensorCommands)
+                {
+                    if (command is AddOrUpdateSensorRequest sensorUpdate)
+                    {
+                        if (TryBuildSensorUpdate(sensorUpdate, keyName, out var update, out var message))
+                            _cache.AddOrUpdateSensor(update);
+                        else
+                            result[sensorUpdate.Path] = message;
+                    }
+                    else
+                        result[command.Path] = $"This type of command is not supported now";
+                }
+
+                return result.Count == 0 ? Ok(result) : StatusCode(406, result);
+            }
+            catch (Exception e)
+            {
+                _logger.LogError(e, "Failed to update sensors!");
+                return BadRequest(result);
+            }
+        }
+
+
+        private string GetCollectorKeyName()
+        {
+            if (HttpContext.Request.Headers.TryGetValue(nameof(BaseRequest.Key), out var keyVal))
+                return _cache.GetAccessKey(Guid.Parse(keyVal)).DisplayName;
+            else
+                throw new Exception("Key is required");
+        }
+
         private bool CanAddToQueue(StoreInfo storeInfo, out string message)
         {
             if (storeInfo.TryCheckRequest(out message) &&
@@ -485,14 +569,43 @@ namespace HSMServer.Controllers
                    _cache.TryCheckKeyReadPermissions(requestModel, out message);
         }
 
-        private StoreInfo BuildStoreInfo(SensorValueBase valueBase, BaseValue baseValue)
+        private StoreInfo BuildStoreInfo(SensorValueBase valueBase, BaseValue baseValue) =>
+            new(GetKey(valueBase), valueBase.Path) { BaseValue = baseValue };
+
+        private bool TryBuildSensorUpdate(AddOrUpdateSensorRequest request, string keyName, out SensorAddOrUpdateRequestModel requestModel, out string message)
+        {
+            requestModel = new SensorAddOrUpdateRequestModel(GetKey(request), request.Path);
+
+            if (requestModel.TryCheckRequest(out message) &&
+                _cache.TryCheckSensorUpdateKeyPermission(requestModel, out var product, out var sensorId, out message))
+            {
+                if (sensorId == Guid.Empty && request.SensorType is null)
+                {
+                    message = $"{nameof(request.SensorType)} property is required, because sensor {request.Path} doesn't exist";
+                    return false;
+                }
+
+                var productChats = product.NotificationsSettings?.TelegramSettings?.Chats?.ToDictionary(k => new Guid(k.SystemId), v => v.Name) ?? new();
+
+                requestModel.Update = request.Convert(sensorId, productChats, keyName);
+
+                if (request.SensorType.HasValue)
+                    requestModel.Type = request.SensorType.Value.Convert();
+
+                return true;
+            }
+
+            return false;
+        }
+
+        private string GetKey(BaseRequest request)
         {
             Request.Headers.TryGetValue(nameof(BaseRequest.Key), out var key);
 
             if (string.IsNullOrEmpty(key))
-                key = valueBase.Key;
+                key = request?.Key;
 
-            return new(key, valueBase.Path) { BaseValue = baseValue };
+            return key;
         }
 
         private bool TryCheckKey(out string message)

@@ -101,27 +101,31 @@ namespace HSMServer.Core.Model
             Policies = Policies.Ids.Select(u => $"{u}").ToList(),
             Settings = Settings.ToEntity(),
             TTLPolicy = Policies.TimeToLive?.ToEntity(),
+            ChangeTable = ChangeTable.ToEntity(),
         };
 
 
         protected override void UpdateTTL(PolicyUpdate update)
         {
-            static void UpdateTTLPolicy(ProductModel model, PolicyUpdate update)
+            var parentRequest = update with { IsParentRequest = true };
+
+            void UpdateTTLPolicy(ProductModel model)
             {
-                model.Policies.TimeToLive.Update(update);
+                model.Policies.UpdateTTL(model == this ? update : parentRequest);
 
                 foreach (var (_, subProduct) in model.SubProducts)
-                    UpdateTTLPolicy(subProduct, update);
+                    if (!subProduct.Settings.TTL.IsSet)
+                        UpdateTTLPolicy(subProduct);
 
                 foreach (var (_, sensor) in model.Sensors)
                     if (!sensor.Settings.TTL.IsSet)
                     {
-                        sensor.Policies.TimeToLive.Update(update);
+                        sensor.Policies.UpdateTTL(parentRequest);
                         sensor.UpdateFromParentSettings?.Invoke(sensor.ToEntity());
                     }
             }
 
-            UpdateTTLPolicy(this, update);
+            UpdateTTLPolicy(this);
         }
     }
 }

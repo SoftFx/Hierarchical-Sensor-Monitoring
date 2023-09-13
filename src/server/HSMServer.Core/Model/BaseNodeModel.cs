@@ -3,6 +3,7 @@ using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Journal;
 using HSMServer.Core.Model.NodeSettings;
 using HSMServer.Core.Model.Policies;
+using HSMServer.Core.TableOfChanges;
 using System;
 using System.Runtime.CompilerServices;
 
@@ -12,6 +13,8 @@ namespace HSMServer.Core.Model
     {
         private readonly PolicyEntity _ttlEntity;
 
+
+        internal ChangeInfoTable ChangeTable { get; }
 
         public abstract PolicyCollectionBase Policies { get; }
 
@@ -45,8 +48,12 @@ namespace HSMServer.Core.Model
 
         protected BaseNodeModel()
         {
+            ChangeTable = new ChangeInfoTable(() => FullPath);
+
             Id = Guid.NewGuid();
             CreationDate = DateTime.UtcNow;
+
+            Policies.Attach(this);
         }
 
         protected BaseNodeModel(string name, Guid? authorId) : this()
@@ -66,6 +73,8 @@ namespace HSMServer.Core.Model
             DisplayName = entity.DisplayName;
             Description = entity.Description;
 
+            ChangeTable.FromEntity(entity.ChangeTable);
+
             if (entity.Settings is not null)
                 Settings.SetSettings(entity.Settings);
         }
@@ -83,9 +92,6 @@ namespace HSMServer.Core.Model
             Settings.SetParentSettings(parent.Settings);
             Policies.BuildDefault(this, _ttlEntity); //need for correct calculating $product and $path properties
 
-            //if (!Settings.TTL.IsSet)
-            //    Policies.TimeToLive.ApplyParent(parent.Policies.TimeToLive);
-
             return this;
         }
 
@@ -93,18 +99,28 @@ namespace HSMServer.Core.Model
         {
             Description = UpdateProperty(Description, update.Description ?? Description, update.Initiator);
 
-            Settings.Update(update, FullPath);
+            Settings.Update(update, ChangeTable);
 
-            if (update.TTLPolicy is not null)
+            if (update.TTLPolicy is not null && ChangeTable.TtlPolicy.CanChange(update.Initiator))
+            {
                 UpdateTTL(update.TTLPolicy);
+                ChangeTable.TtlPolicy.SetUpdate(update.Initiator);
+            }
 
             CheckTimeout();
         }
 
 
-        protected T UpdateProperty<T>(T oldValue, T newValue, string initiator, [CallerArgumentExpression(nameof(oldValue))] string propName = "")
+        protected T UpdateProperty<T>(T oldValue, T newValue, InitiatorInfo initiator, [CallerArgumentExpression(nameof(oldValue))] string propName = "", bool? forced = null)
         {
+            var infoNode = ChangeTable.Properties[propName];
+            var forceUpdate = forced ?? initiator.IsForceUpdate;
+
+            if (!forceUpdate && !infoNode.CanChange(initiator))
+                return oldValue;
+
             if (newValue is not null && !newValue.Equals(oldValue ?? newValue))
+            {
                 ChangesHandler?.Invoke(new JournalRecordModel(Id, initiator)
                 {
                     Enviroment = "General info update",
@@ -114,6 +130,9 @@ namespace HSMServer.Core.Model
                     PropertyName = propName,
                     Path = FullPath,
                 });
+
+                infoNode.SetUpdate(initiator);
+            }
 
             return newValue ?? oldValue;
         }

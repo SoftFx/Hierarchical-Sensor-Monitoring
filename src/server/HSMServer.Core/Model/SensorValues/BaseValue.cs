@@ -11,6 +11,7 @@ namespace HSMServer.Core.Model
         OffTime = byte.MaxValue,
     }
 
+
     public enum SensorType : byte
     {
         Boolean,
@@ -47,6 +48,15 @@ namespace HSMServer.Core.Model
         public bool IsTimeout { get; init; }
 
 
+        public DateTime? LastReceivingTime { get; set; }
+
+        public long AggregatedValuesCount { get; set; } = 1;
+
+
+        [JsonIgnore]
+        public DateTime LastUpdateTime => LastReceivingTime ?? ReceivingTime;
+
+
         [JsonIgnore]
         public virtual SensorType Type { get; } //abstract not work with JsonIgnore, so use virtual
 
@@ -57,6 +67,24 @@ namespace HSMServer.Core.Model
         public virtual string ShortInfo { get; }
 
 
+        public abstract BaseValue TrySetValue(string str);
+
+        public abstract BaseValue TrySetValue(BaseValue baseValue);
+
+
+        internal bool TryAggregateValue(BaseValue value)
+        {
+            if (IsEqual(value))
+            {
+                LastReceivingTime = value.ReceivingTime;
+                AggregatedValuesCount++;
+
+                return true;
+            }
+
+            return false;
+        }
+
         internal SensorValueEntity ToEntity(Guid sensorId) =>
             new()
             {
@@ -64,6 +92,8 @@ namespace HSMServer.Core.Model
                 ReceivingTime = ReceivingTime.Ticks,
                 Value = this,
             };
+
+        protected virtual bool IsEqual(BaseValue value) => (Status, Comment) == (value.Status, value.Comment);
     }
 
 
@@ -75,5 +105,32 @@ namespace HSMServer.Core.Model
         public override string ShortInfo => Value?.ToString();
 
         public override object RawValue => Value;
+
+
+        public abstract bool TryParseValue(string value, out T parsedValue);
+
+
+        public override BaseValue TrySetValue(string newValue)
+        {
+            if (TryParseValue(newValue, out var parsedValue))
+                return this with
+                {
+                    Value = parsedValue
+                };
+
+            return this;
+        }
+
+        public override BaseValue TrySetValue(BaseValue baseValue) => this with
+        {
+            Value = ((BaseValue<T>)baseValue).Value
+        };
+
+
+        protected override bool IsEqual(BaseValue value)
+        {
+            return base.IsEqual(value) && value is BaseValue<T> valueT &&
+                   ((Value is null && valueT.Value is null) || (Value?.Equals(valueT.Value) ?? false));
+        }
     }
 }

@@ -1,4 +1,3 @@
-using HSMServer.ApiObjectsConverters;
 using HSMServer.Authentication;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Cache.UpdateEntities;
@@ -6,6 +5,7 @@ using HSMServer.Core.Extensions;
 using HSMServer.Core.Journal;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Requests;
+using HSMServer.Core.TableOfChanges;
 using HSMServer.Extensions;
 using HSMServer.Folders;
 using HSMServer.Helpers;
@@ -140,12 +140,12 @@ namespace HSMServer.Controllers
             if (_treeViewModel.Nodes.TryGetValue(decodedId, out _))
             {
                 foreach (var sensorId in GetNodeSensors(decodedId))
-                    _treeValuesCache.UpdateMutedSensorState(sensorId, newMutingPeriod, CurrentUser.Name);
+                    _treeValuesCache.UpdateMutedSensorState(sensorId, CurrentInitiator, newMutingPeriod);
             }
             else
             {
                 if (_treeViewModel.Sensors.TryGetValue(decodedId, out var sensor))
-                    _treeValuesCache.UpdateMutedSensorState(sensor.Id, newMutingPeriod, CurrentUser.Name);
+                    _treeValuesCache.UpdateMutedSensorState(sensor.Id, CurrentInitiator, newMutingPeriod);
             }
 
             UpdateUserNotificationSettings(decodedId, (s, g) => s.Ignore(g, model.EndOfIgnorePeriod));
@@ -160,12 +160,12 @@ namespace HSMServer.Controllers
             if (_treeViewModel.Nodes.TryGetValue(decodedId, out _))
             {
                 foreach (var sensorId in GetNodeSensors(decodedId))
-                    _treeValuesCache.UpdateMutedSensorState(sensorId, initiator: CurrentUser.Name);
+                    _treeValuesCache.UpdateMutedSensorState(sensorId, CurrentInitiator);
             }
             else
             {
                 if (_treeViewModel.Sensors.TryGetValue(decodedId, out var sensor))
-                    _treeValuesCache.UpdateMutedSensorState(sensor.Id, initiator: CurrentUser.Name);
+                    _treeValuesCache.UpdateMutedSensorState(sensor.Id, CurrentInitiator);
             }
 
             UpdateUserNotificationSettings(decodedId, (s, g) => s.RemoveIgnore(g));
@@ -204,7 +204,7 @@ namespace HSMServer.Controllers
                         continue;
                     }
 
-                    _treeValuesCache.RemoveSensor(sensor.Id, CurrentUser.Name);
+                    _treeValuesCache.RemoveSensor(sensor.Id, CurrentInitiator);
                     model.AddItem(sensor);
                 }
             }
@@ -240,7 +240,7 @@ namespace HSMServer.Controllers
                     {
                         Id = id,
                         TTL = !isExpectedFromParent ? model.ExpectedUpdateInterval : null,
-                        Initiator = CurrentUser.Name
+                        Initiator = CurrentInitiator,
                     };
 
                     if (isExpectedFromParent)
@@ -290,7 +290,7 @@ namespace HSMServer.Controllers
                     {
                         Id = sensor.Id,
                         TTL = model.ExpectedUpdateInterval?.ToModel(),
-                        Initiator = CurrentUser.Name
+                        Initiator = CurrentInitiator
                     };
 
                     toastViewModel.AddItem(sensor);
@@ -304,7 +304,7 @@ namespace HSMServer.Controllers
         [HttpPost]
         public void ClearHistoryNode([FromQuery] string selectedId)
         {
-            ClearHistoryRequest GetRequest(Guid id) => new(id, CurrentUser.Name);
+            ClearHistoryRequest GetRequest(Guid id) => new(id, CurrentInitiator);
 
             var decodedId = SensorPathHelper.DecodeGuid(selectedId);
 
@@ -368,7 +368,7 @@ namespace HSMServer.Controllers
                 {
                     Id = sensorId,
                     Integration = integration,
-                    Initiator = CurrentUser.Name
+                    Initiator = CurrentInitiator
                 };
 
                 _treeValuesCache.UpdateSensor(update);
@@ -572,11 +572,13 @@ namespace HSMServer.Controllers
                 Id = sensor.Id,
                 Description = newModel.Description ?? string.Empty,
                 TTL = ttl?.Conditions[0].TimeToLive.ToModel() ?? TimeIntervalModel.None,
-                TTLPolicy = ttl?.ToTimeToLiveUpdate(CurrentUser.Name, availableChats),
+                TTLPolicy = ttl?.ToTimeToLiveUpdate(CurrentInitiator, availableChats),
                 KeepHistory = newModel.SavedHistoryPeriod.ToModel(),
                 SelfDestroy = newModel.SelfDestroyPeriod.ToModel(),
                 Policies = policyUpdates,
-                Initiator = CurrentUser.Name
+                SelectedUnit = newModel.SelectedUnit,
+                SaveOnlyUniqueValues = newModel.SaveOnlyUniqueValues,
+                Initiator = CurrentInitiator
             };
 
             _treeValuesCache.UpdateSensor(update);
@@ -596,7 +598,7 @@ namespace HSMServer.Controllers
                 (byte)SensorType.String => new DataAlertViewModel<StringValue>(entity),
                 (byte)SensorType.Boolean => new DataAlertViewModel<BooleanValue>(entity),
                 (byte)SensorType.Version => new DataAlertViewModel<VersionValue>(entity),
-                (byte)SensorType.TimeSpan => new DataAlertViewModel<TimeSpanValue>(entity),
+                (byte)SensorType.TimeSpan => new SingleDataAlertViewModel<TimeSpanValue, TimeSpan>(entity),
                 (byte)SensorType.Integer => new SingleDataAlertViewModel<IntegerValue, int>(entity),
                 (byte)SensorType.Double => new SingleDataAlertViewModel<DoubleValue, double>(entity),
                 (byte)SensorType.IntegerBar => new BarDataAlertViewModel<IntegerBarValue, int>(entity),
@@ -619,7 +621,7 @@ namespace HSMServer.Controllers
                 SensorType.String => new ConditionViewModel<StringValue>(false),
                 SensorType.Boolean => new ConditionViewModel<BooleanValue>(false),
                 SensorType.Version => new ConditionViewModel<VersionValue>(false),
-                SensorType.TimeSpan => new ConditionViewModel<TimeSpanValue>(false),
+                SensorType.TimeSpan => new SingleConditionViewModel<TimeSpanValue, TimeSpan>(false),
                 SensorType.Integer => new SingleConditionViewModel<IntegerValue, int>(false),
                 SensorType.Double => new SingleConditionViewModel<DoubleValue, double>(false),
                 SensorType.IntegerBar => new BarConditionViewModel<IntegerBarValue, int>(false),
@@ -687,22 +689,23 @@ namespace HSMServer.Controllers
             }
 
             var sensor = _treeValuesCache.GetSensor(modal.SensorId);
-            var comment = $"User: {CurrentUser.Name}. Reason: {modal.Reason}";
-
-            var sensorValue = ApiConverters.CreateNewSensorValue(sensor.Type);
-
-            if (sensorValue is null)
-                return BadRequest();
-
-            sensorValue.Comment = comment;
-            sensorValue.Path = sensor.Path;
-            sensorValue.Status = modal.NewStatus.ToApi();
-
-            return Ok(new
+            var comment = modal.Comment;
+            var updateRequest = new UpdateSensorValueRequestModel
             {
-                Sensor = sensorValue,
-                Key = key
-            });
+                Id = sensor.Id,
+                Status = modal.NewStatus.ToCore(),
+                Comment = comment,
+                Value = modal.NewValue,
+                ChangeLast = modal.ChangeLast,
+
+                Initiator = CurrentInitiator,
+            };
+
+            _treeValuesCache.UpdateSensorValue(updateRequest);
+            _treeViewModel.Sensors.TryGetValue(updateRequest.Id, out var sensorNodeViewModel);
+            sensorNodeViewModel?.Update(sensor);
+
+            return Ok();
         }
 
         #endregion
@@ -732,12 +735,12 @@ namespace HSMServer.Controllers
             {
                 Id = product.Id,
                 TTL = ttl?.Conditions[0].TimeToLive.ToModel(product.TTL) ?? TimeIntervalModel.None,
-                TTLPolicy = ttl?.ToTimeToLiveUpdate(CurrentUser.Name, availableChats),
+                TTLPolicy = ttl?.ToTimeToLiveUpdate(CurrentInitiator, availableChats),
 
                 KeepHistory = newModel.SavedHistoryPeriod.ToModel(product.KeepHistory),
                 SelfDestroy = newModel.SelfDestroyPeriod.ToModel(product.SelfDestroy),
                 Description = newModel.Description ?? string.Empty,
-                Initiator = CurrentUser.Name
+                Initiator = CurrentInitiator
             };
 
             _treeValuesCache.UpdateProduct(update);
@@ -766,7 +769,7 @@ namespace HSMServer.Controllers
                 TTL = newModel.ExpectedUpdateInterval,
                 KeepHistory = newModel.SavedHistoryPeriod,
                 SelfDestroy = newModel.SelfDestroyPeriod,
-                Initiator = CurrentUser.Name
+                Initiator = CurrentInitiator,
             };
 
             return await _folderManager.TryUpdate(update)

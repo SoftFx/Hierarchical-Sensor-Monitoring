@@ -1,9 +1,12 @@
-﻿using HSMServer.Core.Cache.UpdateEntities;
+﻿using HSMCommon.Extensions;
+using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Model.Policies;
+using HSMServer.Core.TableOfChanges;
 using HSMServer.Extensions;
 using HSMServer.Model.TreeViewModel;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace HSMServer.Model.DataAlerts
 {
@@ -22,6 +25,26 @@ namespace HSMServer.Model.DataAlerts
 
 
         public bool IsModify { get; protected set; }
+
+
+        internal bool IsAlertDisplayed
+        {
+            get
+            {
+                var firstConfition = Conditions.FirstOrDefault();
+
+                if (firstConfition?.Property == AlertProperty.TimeToLive)
+                {
+                    var displayValue = firstConfition.TimeToLive.DisplayValue;
+                    var neverInterval = TimeInterval.None.GetDisplayName();
+                    var isTtlNever = displayValue == TimeInterval.FromParent.ToFromParentDisplay(neverInterval) || displayValue == neverInterval;
+
+                    return !isTtlNever;
+                }
+
+                return true;
+            }
+        }
 
 
         internal PolicyUpdate ToUpdate(Dictionary<Guid, string> availavleChats)
@@ -62,7 +85,7 @@ namespace HSMServer.Model.DataAlerts
             };
         }
 
-        internal PolicyUpdate ToTimeToLiveUpdate(string initiator, Dictionary<Guid, string> availavleChats)
+        internal PolicyUpdate ToTimeToLiveUpdate(InitiatorInfo initiator, Dictionary<Guid, string> availavleChats)
         {
             (var status, var destination, var comment, var icon) = GetActions(availavleChats);
 
@@ -123,11 +146,20 @@ namespace HSMServer.Model.DataAlerts
 
             var availableChats = node.GetAllChats();
 
+            Dictionary<Guid, string> policyChats = new();
+            if ((policy.Destination?.Chats?.Count ?? 0) > 0)
+            {
+                var availableChatsDict = availableChats.ToDictionary(k => k.SystemId, v => v.Name);
+
+                foreach (var (chatId, name) in policy.Destination.Chats)
+                    policyChats.Add(chatId, string.IsNullOrEmpty(name) && availableChatsDict.TryGetValue(chatId, out var chatName) ? chatName : name);
+            }
+
             Actions.Add(new ActionViewModel(true, availableChats)
             {
                 Action = ActionType.SendNotification,
                 Comment = policy.Template,
-                Chats = policy.Destination.AllChats ? new Dictionary<Guid, string>(1) { { ActionViewModel.AllChatsId, null } } : policy.Destination.Chats,
+                Chats = policy.Destination.AllChats ? new Dictionary<Guid, string>(1) { { ActionViewModel.AllChatsId, null } } : policyChats,
                 DisplayComment = node is SensorNodeViewModel ? policy.RebuildState() : policy.Template
             });
 
