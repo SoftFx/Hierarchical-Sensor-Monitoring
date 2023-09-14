@@ -400,7 +400,7 @@ export class EnumPlot extends Plot {
                     this.z.push(0);
                     this.customdata.push(`${ServiceStatus["8"][1]} <br>`)
                 } else {
-                    this.z.push(0.7);
+                    this.z.push(0.5);
                     this.customdata.push(`${data[i].value === true ? ServiceStatus["4"][1] : ServiceStatus["1"][1]} <br>`)
                 }
             }
