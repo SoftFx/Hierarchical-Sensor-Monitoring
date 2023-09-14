@@ -40,7 +40,7 @@ public static class ApplicationServiceExtensions
                 .AddSingleton<IJournalService, JournalService>();
 
         services.AddSingleton<NotificationsCenter>()
-                .AddSingleton<DataCollectorWrapper>()
+                //.AddSingleton<DataCollectorWrapper>()
                 .AddSingleton<TreeViewModel>();
 
         services.AddHostedService<TreeSnapshotService>()
@@ -129,7 +129,7 @@ public static class ApplicationServiceExtensions
         applicationBuilder.UseAuthentication();
         applicationBuilder.UseAuthorization();
 
-        applicationBuilder.UseMiddleware<RequestStatisticsMiddleware>();
+        //applicationBuilder.UseMiddleware<RequestStatisticsMiddleware>();
         applicationBuilder.UseMiddleware<UserProcessorMiddleware>();
         applicationBuilder.UseMiddleware<LoggingExceptionMiddleware>();
 
