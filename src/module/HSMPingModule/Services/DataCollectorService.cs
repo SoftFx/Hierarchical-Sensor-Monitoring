@@ -31,9 +31,9 @@ internal sealed class DataCollectorService : IDataCollectorService, IDisposable
 
         var collectorOptions = new CollectorOptions()
         {
-            AccessKey = _config.CollectorSettings.Key,
-            ServerAddress = _config.CollectorSettings.ServerAddress,
-            Port = _config.CollectorSettings.Port
+            AccessKey = _config.HSMDataCollectorSettings.Key,
+            ServerAddress = _config.HSMDataCollectorSettings.ServerAddress,
+            Port = _config.HSMDataCollectorSettings.Port
         };
 
         _logger.LogInformation("Access key: {key}", collectorOptions.AccessKey);
@@ -75,7 +75,7 @@ internal sealed class DataCollectorService : IDataCollectorService, IDisposable
 
         if (!_sensors.TryGetValue(path, out var sensor))
         {
-            sensor = _collector.CreateDoubleSensor(path, webSite.GetOptions(country, hostname, _config.ResourceSettings.DefaultSiteNodeSettings.PingDelay.Value));
+            sensor = _collector.CreateDoubleSensor(path, webSite.GetOptions(country, hostname, _config.ResourceSettings.DefaultSiteNodeSettings.PingRequestDelaySec.Value));
 
             _sensors.TryAdd(path, sensor);
         }

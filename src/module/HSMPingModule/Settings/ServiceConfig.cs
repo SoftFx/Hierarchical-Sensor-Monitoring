@@ -35,7 +35,7 @@ internal sealed class ServiceConfig
 
     internal event Action OnChange;
 
-    public CollectorSettings CollectorSettings { get; private set; } = new();
+    public CollectorSettings HSMDataCollectorSettings { get; private set; } = new();
 
     public ResourceSettings ResourceSettings { get; private set; } = new();
 
@@ -83,12 +83,12 @@ internal sealed class ServiceConfig
 
     private void Read()
     {
-        CollectorSettings = Read<CollectorSettings>(nameof(CollectorSettings));
+        HSMDataCollectorSettings = Read<CollectorSettings>(nameof(HSMDataCollectorSettings));
         ResourceSettings = Read<ResourceSettings>(nameof(ResourceSettings)).ApplyDefaultSettings();
 
-        _logger.Info("Read collector key: {key}", CollectorSettings.Key);
-        _logger.Info("Read collector port: {port}", CollectorSettings.Port);
-        _logger.Info("Read server address: {adress}", CollectorSettings.ServerAddress);
+        _logger.Info("Read collector key: {key}", HSMDataCollectorSettings.Key);
+        _logger.Info("Read collector port: {port}", HSMDataCollectorSettings.Port);
+        _logger.Info("Read server address: {adress}", HSMDataCollectorSettings.ServerAddress);
 
         OnChange?.Invoke();
     }

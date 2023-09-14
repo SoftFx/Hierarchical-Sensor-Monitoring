@@ -12,7 +12,7 @@ internal sealed class WebSite
 
     public int? PingTimeoutValue { get; set; }
 
-    public int? PingDelay { get; set; }
+    public int? PingRequestDelaySec { get; set; }
 
 
     public InstantSensorOptions GetOptions(string country, string hostname, int delay)
