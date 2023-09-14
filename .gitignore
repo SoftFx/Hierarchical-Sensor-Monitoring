@@ -129,3 +129,4 @@ src/server/HSMServer/TestResults/
 
 # Custom configs
 src/server/HSMServer/Config/*
+src/module/HSMPingModule/Config/*

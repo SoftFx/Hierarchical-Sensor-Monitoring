@@ -24,4 +24,8 @@
       <ProjectReference Include="..\..\collector\HSMDataCollector\HSMDataCollector.csproj" />
       <ProjectReference Include="..\..\server\HSMCommon\HSMCommon.csproj" />
     </ItemGroup>
+
+    <ItemGroup>
+      <Folder Include="Config\" />
+    </ItemGroup>
 </Project>

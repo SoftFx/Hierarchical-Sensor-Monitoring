@@ -9,7 +9,7 @@ internal sealed class ResourceSettings
     public WebSite DefaultSiteNodeSettings { get; set; } = new()
     {
         TTL = TimeSpan.FromMinutes(15),
-        PingTimeoutValue = 15,
+        PingErrorValue = 15,
         PingRequestDelaySec = 15,
     };
 
@@ -19,7 +19,7 @@ internal sealed class ResourceSettings
         foreach (var (_, value) in WebSites)
         {
             value.PingRequestDelaySec = DefaultSiteNodeSettings.PingRequestDelaySec;
-            value.PingTimeoutValue ??= DefaultSiteNodeSettings.PingTimeoutValue;
+            value.PingErrorValue ??= DefaultSiteNodeSettings.PingErrorValue;
             value.Countries ??= DefaultSiteNodeSettings.Countries;
             value.TTL ??= DefaultSiteNodeSettings.TTL;
         }

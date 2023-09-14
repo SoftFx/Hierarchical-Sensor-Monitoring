@@ -1,42 +1,11 @@
+using HSMCommon.Extensions;
 using System;
-using System.Text;
 namespace HSMServer.Extensions;
 
 public static class TimeSpanExtensions
 {
-    public static string ToTableView(this TimeSpan time)
-    {
-        bool hasPrevious = false;
-
-        string BuildUnit(string unit, int val)
-        {
-            if (val == 0)
-                return string.Empty;
-
-            var str = $"{val} {unit}";
-
-            if (hasPrevious)
-                str = $" {str}";
-
-            if (val > 1)
-                str = $"{str}s";
-
-            hasPrevious = true;
-
-            return str;
-        }
-
-        var tooltip = new StringBuilder(1 << 4);
-
-        return tooltip.Append(BuildUnit("day", time.Days))
-                      .Append(BuildUnit("hour", time.Hours))
-                      .Append(BuildUnit("minute", time.Minutes))
-                      .Append(BuildUnit("second", time.Seconds))
-                      .ToString();
-    }
-
     public static string ToTableView(this string timeSpanStr) =>
-        TimeSpan.TryParse(timeSpanStr, out var timeSpan) ? timeSpan.ToTableView() : string.Empty;
+        TimeSpan.TryParse(timeSpanStr, out var timeSpan) ? timeSpan.ToReadableView() : string.Empty;
 
     public static string TicksToString(this long ticks)
     {

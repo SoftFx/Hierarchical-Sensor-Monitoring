@@ -35,7 +35,7 @@ internal sealed class PingAdapter : Ping
     {
         try
         {
-            return new PingResponse(await SendPingAsync(_hostName, _webSite.PingTimeoutValue.Value, _buffer, _options));
+            return new PingResponse(await SendPingAsync(_hostName, _webSite.PingErrorValue.Value, _buffer, _options));
         }
         catch (Exception ex)
         {
