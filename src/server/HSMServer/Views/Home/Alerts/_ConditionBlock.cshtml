@@ -28,8 +28,12 @@
 
     <select class="alert-block alert-select property-select" asp-for="Property" asp-items="@Model.PropertiesItems"></select>
 
-    <div name="simpleCondition" class="flex-row align-items-center">
-        @if (isNewDataCondition)
+    <div name="operation" class="flex-row align-items-center">
+        @if (isTtlCondition || isSensitivityCondition)
+        {
+            @await Html.PartialAsync("~/Views/Home/Alerts/ConditionOperations/_IntervalOperation.cshtml", Model.GetIntervalOperations())
+        }
+        else if (isNewDataCondition)
         {
             @await Html.PartialAsync("~/Views/Home/Alerts/ConditionOperations/_NewDataOperation.cshtml")
         }
@@ -58,7 +62,7 @@
         <input class="d-none" asp-for="Operation" value="@PolicyOperation.ReceivedNewValue" />
     </div>*@
 
-    <div name="sensitivityCondition" class="@isSensitivityCondition.ToVisibility() flex-row align-items-center">
+   @* <div name="sensitivityCondition" class="@isSensitivityCondition.ToVisibility() flex-row align-items-center">
         <div class="alert-text-block operation-select">is more than</div>
         <partial name="_TimeIntervalSelect" for="Sensitivity" />
     </div>
@@ -66,7 +70,7 @@
     <div name="ttlCondition" class="@isTtlCondition.ToVisibility() flex-row align-items-center">
         <div class="alert-text-block operation-select">is</div>
         <partial name="_TimeIntervalSelect" for="TimeToLive" />
-    </div>
+    </div>*@
 
     <a class="deleteCondition"><i class="@isSecondaryCondition.ToVisibility() fa-solid fa-xmark alert-delete-button"></i></a>
 </div>
@@ -78,7 +82,7 @@
         let sensorId = dataAlert.find($(`input[name='EntityId']`)).val();
 
         let conditionBlock = $(this).parents("div[name='alertCondition']:first");
-        let simpleCondition = conditionBlock.find($(`div[name='simpleCondition']`));
+        let operation = conditionBlock.find($(`div[name='operation']`));
 
         let property = $(this).val();
 
@@ -86,7 +90,7 @@
             url: `@Url.Action(nameof(HomeController.GetOperation), ViewConstants.HomeController)?sensorId=${sensorId}&property=${property}`,
             cache: false
         }).done(function (viewData) {
-            simpleCondition.html(viewData);
+            operation.html(viewData);
         });
 
         //let conditionBlock = $(this).parents("div[name='alertCondition']:first");
@@ -147,11 +151,6 @@
         //    targetInput.attr('required', true);
         //    value.removeClass("d-none").addClass('d-flex');
         //}
-    });
-
-    $('div[name="stringCondition"] select[name="Operation"]').off("change").on("change", function () {
-        console.log("changed");
-        console.log($(this));
     });
 
     $("a.deleteCondition").off("click").on("click", function () {

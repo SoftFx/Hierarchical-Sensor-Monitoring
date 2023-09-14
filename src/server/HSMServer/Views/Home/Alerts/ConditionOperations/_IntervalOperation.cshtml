@@ -1,0 +1,11 @@
+﻿@using HSMServer.Model.DataAlerts
+
+@model IntervalOperationViewModel
+
+@addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
+
+
+<div name="@Model.TargetName" class="d-flex flex-row align-items-center">
+    <div class="alert-text-block operation-select">@Model.Operation</div>
+    <partial name="_TimeIntervalSelect" for="Target" />
+</div>

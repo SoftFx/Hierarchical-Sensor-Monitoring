@@ -626,12 +626,16 @@ namespace HSMServer.Controllers
             if (!_treeViewModel.Sensors.TryGetValue(sensorId, out var sensor))
                 return _emptyResult;
 
-            var operationViewModel = BuildAlertCondition(sensor).GetOperations(property);
+            var condition = BuildAlertCondition(sensor);
 
             return property switch
             {
                 AlertProperty.NewSensorData => PartialView("~/Views/Home/Alerts/ConditionOperations/_NewDataOperation.cshtml"),
-                _ => PartialView("~/Views/Home/Alerts/ConditionOperations/_SimpleOperation.cshtml", operationViewModel),
+
+                AlertProperty.TimeToLive or AlertProperty.Sensitivity =>
+                    PartialView("~/Views/Home/Alerts/ConditionOperations/_IntervalOperation.cshtml", condition.GetIntervalOperations(property)),
+
+                _ => PartialView("~/Views/Home/Alerts/ConditionOperations/_SimpleOperation.cshtml", condition.GetOperations(property)),
             };
         }
 
