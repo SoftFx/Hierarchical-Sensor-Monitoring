@@ -1,8 +1,5 @@
 name: HSMPingModule build
 on:
-  push:
-    branches: [master, develop]
-
   workflow_dispatch:
     inputs:
       isPreRelease:
