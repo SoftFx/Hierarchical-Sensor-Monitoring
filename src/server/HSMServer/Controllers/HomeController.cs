@@ -4,6 +4,7 @@ using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Extensions;
 using HSMServer.Core.Journal;
 using HSMServer.Core.Model;
+using HSMServer.Core.Model.Policies;
 using HSMServer.Core.Model.Requests;
 using HSMServer.Extensions;
 using HSMServer.Folders;
@@ -620,23 +621,21 @@ namespace HSMServer.Controllers
                 ? PartialView("~/Views/Home/Alerts/_ActionBlock.cshtml", new ActionViewModel(false, entity.GetAllChats()))
                 : _emptyResult;
 
-        public IActionResult GetOperation(Guid sensorId, string property)
+        public IActionResult GetOperation(Guid sensorId, AlertProperty property)
         {
-            if (_treeViewModel.Sensors.TryGetValue(sensorId, out var sensor) &&
-                Enum.TryParse<AlertProperty>(property, out var alertProperty))
+            if (!_treeViewModel.Sensors.TryGetValue(sensorId, out var sensor))
+                return _emptyResult;
+
+            var operationViewModel = BuildAlertCondition(sensor).GetOperations(property);
+
+            return property switch
             {
-                var operationViewModel = BuildAlertCondition(sensor).GetOperations(alertProperty);
-
-
-                return alertProperty switch
-                {
-                    AlertProperty.NewSensorData => PartialView("~/Views/Home/Alerts/ConditionOperations/_NewDataOperation.cshtml"),
-                    _ => PartialView("~/Views/Home/Alerts/ConditionOperations/_SimpleOperation.cshtml", operationViewModel),
-                };
-            }
-
-            return _emptyResult;
+                AlertProperty.NewSensorData => PartialView("~/Views/Home/Alerts/ConditionOperations/_NewDataOperation.cshtml"),
+                _ => PartialView("~/Views/Home/Alerts/ConditionOperations/_SimpleOperation.cshtml", operationViewModel),
+            };
         }
+
+        public IActionResult IsTargetVisible(PolicyOperation operation) => Json(operation.IsTargetVisible());
 
         private static ConditionViewModel BuildAlertCondition(SensorNodeViewModel sensor) =>
             sensor.Type switch

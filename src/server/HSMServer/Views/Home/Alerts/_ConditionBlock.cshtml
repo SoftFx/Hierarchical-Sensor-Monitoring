@@ -86,9 +86,6 @@
             url: `@Url.Action(nameof(HomeController.GetOperation), ViewConstants.HomeController)?sensorId=${sensorId}&property=${property}`,
             cache: false
         }).done(function (viewData) {
-
-            console.log(simpleCondition);
-            console.log(viewData);
             simpleCondition.html(viewData);
         });
 

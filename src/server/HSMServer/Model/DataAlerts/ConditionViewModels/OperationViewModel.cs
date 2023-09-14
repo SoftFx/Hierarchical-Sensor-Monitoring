@@ -3,6 +3,7 @@ using HSMServer.Core.Model.Policies;
 using HSMServer.Extensions;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace HSMServer.Model.DataAlerts
 {
@@ -22,6 +23,7 @@ namespace HSMServer.Model.DataAlerts
         internal OperationViewModel()
         {
             OperationsItems = Operations.ToSelectedItems(i => i.GetDisplayName());
+            Operation = Operations.FirstOrDefault();
         }
 
 

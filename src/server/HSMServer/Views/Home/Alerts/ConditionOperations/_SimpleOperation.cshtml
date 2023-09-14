@@ -1,17 +1,34 @@
-﻿@using HSMServer.Model.DataAlerts
+﻿@using HSMServer.Controllers
+@using HSMServer.Constants
+@using HSMServer.Model.DataAlerts
+@using HSMServer.Core.Model.Policies
 
 @model OperationViewModel
 
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
 
 
-@if (Model is not null)
-{
-    <select class="alert-block alert-select operation-select" asp-for="Operation" asp-items="@Model.OperationsItems"></select>
-    <input class="alert-block target-input target-value d-none" type="text" placeholder="<enter a value>" asp-for="Target" value="@Model.Target" />
-}
+<select class="alert-block alert-select operation-select" asp-for="Operation" asp-items="@Model.OperationsItems"></select>
+<input class="alert-block target-input target-value @(Model.Operation.IsTargetVisible() ? string.Empty : "d-none")" type="text" asp-for="Target" value="@Model.Target" placeholder="<enter a value>" required/>
 
 
 <script>
-    
+    $('select[name="Operation"]').off("change").on("change", function () {
+        let conditionBlock = $(this).parents("div[name='alertCondition']:first");
+        let target = conditionBlock.find($(`input[name='Target']`));
+
+        let operation = $(this).val();
+
+        $.ajax({
+            url: `@Url.Action(nameof(HomeController.IsTargetVisible), ViewConstants.HomeController)?operation=${operation}`,
+            cache: false
+        }).done(function (isTargetVisible) {
+            if (isTargetVisible) {
+                target.removeClass("d-none");
+            }
+            else {
+                target.addClass('d-none');
+            }
+        });
+    });
 </script>
