@@ -72,6 +72,11 @@ namespace HSMDataCollector.DefaultSensors
         {
             return ToWindows(new WindowsActiveTimeDisk(_prototype.WindowsActiveTimeDisk.Get(options)));
         }
+        
+        public IWindowsCollection AddDiskQueueLength(DiskBarSensorOptions options)
+        {
+            return ToWindows(new WindowsDiskQueueLength(_prototype.WindowsDiskQueueLength.Get(options)));
+        }
 
         public IWindowsCollection AddFreeDisksSpace(DiskSensorOptions options)
         {

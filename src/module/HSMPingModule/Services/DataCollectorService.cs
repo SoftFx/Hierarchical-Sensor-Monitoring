@@ -45,7 +45,7 @@ internal sealed class DataCollectorService : IDataCollectorService, IDisposable
         if (OperatingSystem.IsWindows())
         {
             _collector.Windows.AddProductVersion(productInfoOptions)
-                              .AddCollectorMonitoringSensors();
+                .AddCollectorMonitoringSensors();
         }
         else
         {

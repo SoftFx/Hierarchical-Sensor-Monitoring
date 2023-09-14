@@ -31,6 +31,8 @@ namespace HSMDataCollector.PublicInterface
         IWindowsCollection AddActiveDiskTime(DiskBarSensorOptions options = null);
 
         IWindowsCollection AddActiveDisksTime(DiskBarSensorOptions options = null);
+        
+        IWindowsCollection AddDiskQueueLength(DiskBarSensorOptions options = null);
 
         IWindowsCollection AddDiskMonitoringSensors(DiskSensorOptions options = null, DiskBarSensorOptions activeTimeOptions = null);
 
