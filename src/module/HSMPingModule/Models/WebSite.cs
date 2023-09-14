@@ -9,6 +9,7 @@ internal sealed class WebSite
 {
     public List<string> Countries { get; set; }
 
+
     public int? PingRequestDelaySec { get; set; }
 
     public int? PingErrorValue { get; set; }
