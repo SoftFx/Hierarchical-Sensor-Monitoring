@@ -1,54 +1,19 @@
-﻿using HSMServer.Core.Model.Policies;
-using System;
-using System.Collections.Generic;
+﻿using System;
 
 namespace HSMServer.Model.DataAlerts
 {
     public static class PropertyOperations
     {
-        private static readonly List<PolicyOperation> _status = new()
+        public static OperationViewModel GetOperations(this ConditionViewModel condition)
         {
-            PolicyOperation.IsChanged,
-            PolicyOperation.IsChangedToOk,
-            PolicyOperation.IsChangedToError,
-            PolicyOperation.IsOk,
-            PolicyOperation.IsError
-        };
+            var viewModel = condition.GetOperations(condition.Property);
 
-        private static readonly List<PolicyOperation> _comment = new()
-        {
-            PolicyOperation.Equal,
-            PolicyOperation.NotEqual,
-            PolicyOperation.Contains,
-            PolicyOperation.StartsWith,
-            PolicyOperation.EndsWith,
-            PolicyOperation.IsChanged,
-        };
+            viewModel?.SetData(condition.Operation, condition.Target);
 
-        private static readonly List<PolicyOperation> _string = new()
-        {
-            PolicyOperation.Equal,
-            PolicyOperation.NotEqual,
-            PolicyOperation.Contains,
-            PolicyOperation.StartsWith,
-            PolicyOperation.EndsWith,
-        };
+            return viewModel;
+        }
 
-        private static readonly List<PolicyOperation> _numeric = new()
-        {
-            PolicyOperation.LessThanOrEqual,
-            PolicyOperation.LessThan,
-            PolicyOperation.GreaterThan,
-            PolicyOperation.GreaterThanOrEqual,
-            PolicyOperation.NotEqual,
-            PolicyOperation.Equal,
-        };
-
-
-        public static List<PolicyOperation> GetOperations(this ConditionViewModel condition) =>
-            condition.GetOperations(condition.Property);
-
-        public static List<PolicyOperation> GetOperations(this ConditionViewModel condition, string propertyStr)
+        public static OperationViewModel GetOperations(this ConditionViewModel condition, string propertyStr)
         {
             if (Enum.TryParse<AlertProperty>(propertyStr, out var property))
                 return condition.GetOperations(property);
@@ -56,32 +21,16 @@ namespace HSMServer.Model.DataAlerts
             throw new ArgumentException("Incorrect property");
         }
 
-        private static List<PolicyOperation> GetOperations(this ConditionViewModel condition, AlertProperty property) =>
+        private static OperationViewModel GetOperations(this ConditionViewModel condition, AlertProperty property) =>
             property switch
-            {
-                AlertProperty.Status => _status,
-                AlertProperty.Comment => _comment,
-                AlertProperty.Value => condition is StringConditionViewModel ? _string : _numeric,
-                AlertProperty.Min or AlertProperty.Max or AlertProperty.Mean or AlertProperty.Count or AlertProperty.LastValue
-                                  or AlertProperty.Length or AlertProperty.OriginalSize => _numeric,
-                AlertProperty.NewSensorData or AlertProperty.Sensitivity or AlertProperty.TimeToLive => new(),
-                _ => throw new NotSupportedException(),
-            };
-
-
-        public static OperationViewModel GetOperations(this AlertProperty property,
-            PolicyOperation? selectedOperation = null, string target = null)
-        {
-            OperationViewModel viewModel = property switch
             {
                 AlertProperty.Status => new StatusOperation(),
                 AlertProperty.Comment => new CommentOperation(),
-                _ => null //throw new NotSupportedException(),
+                AlertProperty.Value => condition is StringConditionViewModel ? new StringOperation() : new NumericOperation(),
+                AlertProperty.Min or AlertProperty.Max or AlertProperty.Mean or AlertProperty.Count or AlertProperty.LastValue
+                                  or AlertProperty.Length or AlertProperty.OriginalSize => new NumericOperation(),
+                AlertProperty.NewSensorData or AlertProperty.Sensitivity or AlertProperty.TimeToLive => null,
+                _ => throw new NotSupportedException(),
             };
-
-            viewModel?.SetData(selectedOperation, target);
-
-            return viewModel;
-        }
     }
 }

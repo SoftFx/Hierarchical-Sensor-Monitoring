@@ -174,21 +174,6 @@
             $(this).parents("div.dataAlertRow:first").remove();
         });
 
-        $("a.advancedMode").off("click").on("click", function () {
-            let element = $(this).parents("div.dataAlertRow:first");
-            let advancedPanel = element.find($(`div[id='alertActions']`));
-
-            let see = $(this).text().includes("See");
-            if (see) {
-                $(this).text("Hide actions panel");
-                advancedPanel.removeClass("d-none");
-            }
-            else {
-                $(this).text("See actions panel");
-                advancedPanel.addClass("d-none");
-            }
-        });
-
         $("a.showMessage").off("click").on("click", function () {
             var element = $(this).parents("div.dataAlertRow:first");
 

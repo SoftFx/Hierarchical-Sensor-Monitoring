@@ -610,12 +610,23 @@ namespace HSMServer.Controllers
             return PartialView("~/Views/Home/Alerts/_DataAlert.cshtml", viewModel);
         }
 
-        public IActionResult AddAlertCondition(Guid sensorId)
-        {
-            if (!_treeViewModel.Sensors.TryGetValue(sensorId, out var sensor))
-                return _emptyResult;
+        public IActionResult AddAlertCondition(Guid sensorId) =>
+            _treeViewModel.Sensors.TryGetValue(sensorId, out var sensor)
+                ? PartialView("~/Views/Home/Alerts/_ConditionBlock.cshtml", BuildAlertCondition(sensor))
+                : _emptyResult;
 
-            ConditionViewModel viewModel = sensor.Type switch
+        public IActionResult AddAlertAction(Guid entityId) =>
+            TryGetSelectedNode(entityId, out var entity)
+                ? PartialView("~/Views/Home/Alerts/_ActionBlock.cshtml", new ActionViewModel(false, entity.GetAllChats()))
+                : _emptyResult;
+
+        public IActionResult GetOperation(Guid sensorId, string property) =>
+            _treeViewModel.Sensors.TryGetValue(sensorId, out var sensor)
+                ? PartialView("~/Views/Home/Alerts/_ConditionOperation.cshtml", BuildAlertCondition(sensor).GetOperations(property))
+                : _emptyResult;
+
+        private static ConditionViewModel BuildAlertCondition(SensorNodeViewModel sensor) =>
+            sensor.Type switch
             {
                 SensorType.File => new FileConditionViewModel(false),
                 SensorType.String => new StringConditionViewModel(false),
@@ -628,19 +639,6 @@ namespace HSMServer.Controllers
                 SensorType.DoubleBar => new BarConditionViewModel<DoubleBarValue, double>(false),
                 _ => null,
             };
-
-            return PartialView("~/Views/Home/Alerts/_ConditionBlock.cshtml", viewModel);
-        }
-
-        public IActionResult AddAlertAction(Guid entityId) =>
-            TryGetSelectedNode(entityId, out var entity)
-                ? PartialView("~/Views/Home/Alerts/_ActionBlock.cshtml", new ActionViewModel(false, entity.GetAllChats()))
-                : _emptyResult;
-
-        public IActionResult GetOperation(string propertyStr) =>
-            Enum.TryParse<AlertProperty>(propertyStr, out var property)
-                ? PartialView("~/Views/Home/Alerts/_ConditionOperation.cshtml", property.GetOperations())
-                : _emptyResult;
 
         private bool TryGetSelectedNode(Guid entityId, out NodeViewModel entity)
         {

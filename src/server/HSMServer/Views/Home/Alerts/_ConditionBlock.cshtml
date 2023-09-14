@@ -29,7 +29,7 @@
     <select class="alert-block alert-select property-select" asp-for="Property" asp-items="@Model.PropertiesItems"></select>
 
     <div name="simpleCondition" class="flex-row align-items-center">
-        @await Html.PartialAsync("~/Views/Home/Alerts/_ConditionOperation.cshtml", Model.Property.GetOperations(Model.Operation, Model.Target))
+        @await Html.PartialAsync("~/Views/Home/Alerts/_ConditionOperation.cshtml", Model.GetOperations())
     </div>
 
     @*<div name="valueCondition" class="@isValueCondition.ToVisibility() flex-row align-items-center">
@@ -67,13 +67,16 @@
 
 <script>
     $('select[name="Property"]').off("change").on("change", function () {
+        let dataAlert = $(this).parents("div.dataAlertRow:first");
+        let sensorId = dataAlert.find($(`input[name='EntityId']`)).val();
+
         let conditionBlock = $(this).parents("div[name='alertCondition']:first");
         let simpleCondition = conditionBlock.find($(`div[name='simpleCondition']`));
 
         let property = $(this).val();
 
         $.ajax({
-            url: `@Url.Action(nameof(HomeController.GetOperation), ViewConstants.HomeController)?propertyStr=${property}`,
+            url: `@Url.Action(nameof(HomeController.GetOperation), ViewConstants.HomeController)?sensorId=${sensorId}&property=${property}`,
             cache: false
         }).done(function (viewData) {
 
