@@ -24,12 +24,13 @@ using System::Collections::Generic::List;
 using namespace std;
 using namespace hsm_wrapper;
 
-DataCollectorImpl::DataCollectorImpl(const std::string& product_key, const std::string& address, int port)
+hsm_wrapper::DataCollectorImpl::DataCollectorImpl(const std::string& product_key, const std::string& address, int port, const string& module)
 {
 	CollectorOptions^ options = gcnew CollectorOptions();
 	options->AccessKey = gcnew String(product_key.c_str());
 	options->ServerAddress = gcnew String(address.c_str());
 	options->Port = port;
+	options->Module = gcnew String(module.c_str());
 	data_collector = gcnew DataCollector(options);
 }
 
@@ -45,7 +46,7 @@ void DataCollectorImpl::Initialize(const std::string& config_path, bool write_de
 
 void DataCollectorImpl::Start()
 {
-	auto task = data_collector->Start();
+	data_collector->Start();
 }
 
 
@@ -54,56 +55,45 @@ void DataCollectorImpl::Stop()
 	data_collector->Stop();
 }
 
-void hsm_wrapper::DataCollectorImpl::InitializeSystemMonitoring(bool is_cpu, bool is_free_ram, const std::string& specific_path)
+void hsm_wrapper::DataCollectorImpl::InitializeSystemMonitoring(bool is_cpu, bool is_free_ram)
 {
 	BarSensorOptions^ options = gcnew BarSensorOptions();
-	options->NodePath = !specific_path.empty() ? gcnew String(specific_path.c_str()) : nullptr;
 	if (is_cpu) data_collector->Windows->AddTotalCpu(options);
 	if (is_free_ram) data_collector->Windows->AddFreeRamMemory(options);
 }
 
-void DataCollectorImpl::InitializeProcessMonitoring(bool is_cpu, bool is_memory, bool is_threads, const std::string& specific_path)
+void hsm_wrapper::DataCollectorImpl::InitializeProcessMonitoring(bool is_cpu, bool is_memory, bool is_threads)
 {
 	BarSensorOptions^ options = gcnew BarSensorOptions();
-	options->NodePath = !specific_path.empty() ? gcnew String(specific_path.c_str()) : nullptr;
 	if (is_cpu) data_collector->Windows->AddProcessCpu(options);
 	if (is_memory) data_collector->Windows->AddProcessMemory(options);
 	if (is_threads) data_collector->Windows->AddProcessThreadCount(options);
 }
 
-void hsm_wrapper::DataCollectorImpl::InitializeOsMonitoring(bool is_updated, bool last_update, bool last_restart, const std::string& specific_path /*= ""*/)
+void hsm_wrapper::DataCollectorImpl::InitializeOsMonitoring(bool last_update, bool last_restart)
 {
-	WindowsSensorOptions^ options = gcnew WindowsSensorOptions();
-	options->NodePath = !specific_path.empty() ? gcnew String(specific_path.c_str()) : nullptr;
-	if (is_updated) data_collector->Windows->AddWindowsNeedUpdate(options);
+	WindowsInfoSensorOptions^ options = gcnew WindowsInfoSensorOptions();
  	if (last_update) data_collector->Windows->AddWindowsLastRestart(options);
  	if (last_restart) data_collector->Windows->AddWindowsLastUpdate(options);
 }
 
-void DataCollectorImpl::InitializeProductVersion(const string& version, const std::string& specific_path /*= ""*/)
+void hsm_wrapper::DataCollectorImpl::InitializeProductVersion(const std::string& version)
 {
 	VersionSensorOptions^ options = gcnew VersionSensorOptions();
-	options->NodePath = !specific_path.empty() ? gcnew String(specific_path.c_str()) : nullptr;
 	options->Version = gcnew System::Version(gcnew String(version.c_str()));
 	data_collector->Windows->AddProductVersion(options);
 }
 
-void DataCollectorImpl::InitializeCollectorMonitoring(bool is_alive, bool version, bool status, const std::string& specific_path /*= ""*/)
+void hsm_wrapper::DataCollectorImpl::InitializeCollectorMonitoring(bool is_alive, bool version)
 {
 	CollectorMonitoringInfoOptions^ options = gcnew CollectorMonitoringInfoOptions();
-	options->NodePath = !specific_path.empty() ? gcnew String(specific_path.c_str()) : nullptr;
 	if (is_alive) data_collector->Windows->AddCollectorAlive(options);
-
-	CollectorInfoOptions^ options_info = gcnew CollectorInfoOptions();
-	options_info->NodePath = !specific_path.empty() ? gcnew String(specific_path.c_str()) : nullptr;
-	if (version) data_collector->Windows->AddCollectorVersion(options_info);
-	if (status) data_collector->Windows->AddCollectorStatus(options_info);
+	if (version) data_collector->Windows->AddCollectorVersion();
 }
 
-void DataCollectorImpl::AddServiceStateMonitoring(const string& service_name, const std::string& specific_path /*= ""*/)
+void hsm_wrapper::DataCollectorImpl::AddServiceStateMonitoring(const std::string& service_name)
 {
 	ServiceSensorOptions^ options = gcnew ServiceSensorOptions();
-	options->NodePath = !specific_path.empty() ? gcnew String(specific_path.c_str()) : nullptr;
 	options->ServiceName = gcnew String(service_name.c_str());
 	data_collector->Windows->SubscribeToWindowsServiceStatus(options);
 }
@@ -176,7 +166,8 @@ HSMBarSensor<double> DataCollectorImpl::CreateDoubleBarSensor(const std::string&
 
 
 
-DataCollectorImplWrapper::DataCollectorImplWrapper(const std::string& product_key, const std::string& address, int port) try : impl( std::make_shared<DataCollectorImpl>(product_key, address, port))
+DataCollectorImplWrapper::DataCollectorImplWrapper(const std::string& product_key, const std::string& address, int port, const std::string& module) 
+try : impl( std::make_shared<DataCollectorImpl>(product_key, address, port, module))
 {
 }
 catch (System::Exception^ ex)
@@ -220,11 +211,11 @@ void DataCollectorImplWrapper::Start()
 	}
 }
 
-void hsm_wrapper::DataCollectorImplWrapper::InitializeSystemMonitoring(bool is_cpu, bool is_free_ram, const string& specific_path)
+void hsm_wrapper::DataCollectorImplWrapper::InitializeSystemMonitoring(bool is_cpu, bool is_free_ram)
 {
 	try
 	{
-		impl->InitializeSystemMonitoring(is_cpu, is_free_ram, specific_path);
+		impl->InitializeSystemMonitoring(is_cpu, is_free_ram);
 	}
 	catch (System::Exception^ ex)
 	{
@@ -232,11 +223,11 @@ void hsm_wrapper::DataCollectorImplWrapper::InitializeSystemMonitoring(bool is_c
 	}
 }
 
-void DataCollectorImplWrapper::InitializeCollectorMonitoring(bool is_alive, bool version, bool status, const std::string& specific_path) 
+void hsm_wrapper::DataCollectorImplWrapper::InitializeCollectorMonitoring(bool is_alive, bool version, bool status) 
 {
 	try
 	{
-		impl->InitializeCollectorMonitoring(is_alive, version, status, specific_path);
+		impl->InitializeCollectorMonitoring(is_alive, version);
 	}
 	catch (System::Exception^ ex)
 	{
@@ -244,11 +235,11 @@ void DataCollectorImplWrapper::InitializeCollectorMonitoring(bool is_alive, bool
 	}
 }
 
-void DataCollectorImplWrapper::InitializeProcessMonitoring(bool is_cpu, bool is_memory, bool is_threads, const string& specific_path)
+void hsm_wrapper::DataCollectorImplWrapper::InitializeProcessMonitoring(bool is_cpu, bool is_memory, bool is_threads)
 {
 	try
 	{
-		impl->InitializeProcessMonitoring(is_cpu, is_memory, is_threads, specific_path);
+		impl->InitializeProcessMonitoring(is_cpu, is_memory, is_threads);
 	}
 	catch (System::Exception^ ex)
 	{
@@ -256,11 +247,11 @@ void DataCollectorImplWrapper::InitializeProcessMonitoring(bool is_cpu, bool is_
 	}
 }
 
-void hsm_wrapper::DataCollectorImplWrapper::InitializeOsMonitoring(bool is_updated, bool last_update, bool last_restart, const std::string& specific_path /*= ""*/)
+void hsm_wrapper::DataCollectorImplWrapper::InitializeOsMonitoring(bool is_updated, bool last_update, bool last_restart)
 {
 	try
 	{
-		impl->InitializeOsMonitoring(is_updated, last_update, last_restart, specific_path);
+		impl->InitializeOsMonitoring(last_update, last_restart);
 	}
 	catch (System::Exception^ ex)
 	{
@@ -268,11 +259,11 @@ void hsm_wrapper::DataCollectorImplWrapper::InitializeOsMonitoring(bool is_updat
 	}
 }
 
-void DataCollectorImplWrapper::AddServiceStateMonitoring(const string& service_name, const std::string& specific_path /*= ""*/)
+void hsm_wrapper::DataCollectorImplWrapper::AddServiceStateMonitoring(const std::string& service_name)
 {
 	try
 	{
-		impl->AddServiceStateMonitoring(service_name, specific_path);
+		impl->AddServiceStateMonitoring(service_name);
 	}
 	catch (System::Exception^ ex)
 	{
@@ -292,11 +283,11 @@ void DataCollectorImplWrapper::SendFileAsync(const std::string& sensor_path, con
 	}
 }
 
-void DataCollectorImplWrapper::InitializeProductVersion(const string& version, const std::string& specific_path) 
+void hsm_wrapper::DataCollectorImplWrapper::InitializeProductVersion(const std::string& version) 
 {
 	try
 	{
-		impl->InitializeProductVersion(version, specific_path);
+		impl->InitializeProductVersion(version);
 	}
 	catch (System::Exception^ ex)
 	{
@@ -453,7 +444,8 @@ shared_ptr<HSMParamsFuncSensorImplWrapper<T, U>> DataCollectorImplWrapper::Creat
 }
 
 
-DataCollectorProxy::DataCollectorProxy(const std::string& product_key, const std::string& address, int port) : impl_wrapper(std::make_shared<DataCollectorImplWrapper>(product_key, address, port))
+hsm_wrapper::DataCollectorProxy::DataCollectorProxy(const std::string& product_key, const std::string& address, int port, const std::string& module) 
+	: impl_wrapper(std::make_shared<DataCollectorImplWrapper>(product_key, address, port, module))
 {
 }
 
@@ -472,24 +464,24 @@ void DataCollectorProxy::Start()
 	impl_wrapper->Start();
 }
 
-void hsm_wrapper::DataCollectorProxy::InitializeSystemMonitoring(bool is_cpu, bool is_free_ram, const string& specific_path)
+void hsm_wrapper::DataCollectorProxy::InitializeSystemMonitoring(bool is_cpu, bool is_free_ram)
 {
-	impl_wrapper->InitializeSystemMonitoring(is_cpu, is_free_ram, specific_path);
+	impl_wrapper->InitializeSystemMonitoring(is_cpu, is_free_ram);
 }
 
-void DataCollectorProxy::InitializeProcessMonitoring(bool is_cpu, bool is_memory, bool is_threads, const string& specific_path)
+void hsm_wrapper::DataCollectorProxy::InitializeProcessMonitoring(bool is_cpu, bool is_memory, bool is_threads)
 {
-	impl_wrapper->InitializeProcessMonitoring(is_cpu, is_memory, is_threads, specific_path);
+	impl_wrapper->InitializeProcessMonitoring(is_cpu, is_memory, is_threads);
 }
 
-void hsm_wrapper::DataCollectorProxy::InitializeOsMonitoring(bool is_updated, bool last_update, bool last_restart, const std::string& specific_path /*= ""*/)
+void hsm_wrapper::DataCollectorProxy::InitializeOsMonitoring(bool is_updated, bool last_update, bool last_restart)
 {
-	impl_wrapper->InitializeOsMonitoring(is_updated, last_update, last_restart, specific_path);
+	impl_wrapper->InitializeOsMonitoring(is_updated, last_update, last_restart);
 }
 
-void DataCollectorProxy::AddServiceStateMonitoring(const string& service_name, const std::string& specific_path /*= ""*/)
+void hsm_wrapper::DataCollectorProxy::AddServiceStateMonitoring(const std::string& service_name)
 {
-	impl_wrapper->AddServiceStateMonitoring(service_name, specific_path);
+	impl_wrapper->AddServiceStateMonitoring(service_name);
 }
 
 void DataCollectorProxy::SendFileAsync(const std::string& sensor_path, const std::string& file_path, HSMSensorStatus status /*= HSMSensorStatus::Ok*/, const std::string& description /*= {}*/)
@@ -497,14 +489,14 @@ void DataCollectorProxy::SendFileAsync(const std::string& sensor_path, const std
 	impl_wrapper->SendFileAsync(sensor_path, file_path, status, description);
 }
 
-void DataCollectorProxy::InitializeProductVersion(const string& version, const std::string& specific_path /*= ""*/)
+void hsm_wrapper::DataCollectorProxy::InitializeProductVersion(const std::string& version)
 {
-	impl_wrapper->InitializeProductVersion(version, specific_path);
+	impl_wrapper->InitializeProductVersion(version);
 }
 
-void DataCollectorProxy::InitializeCollectorMonitoring(bool is_alive, bool version, bool status, const std::string& specific_path /*= ""*/)
+void hsm_wrapper::DataCollectorProxy::InitializeCollectorMonitoring(bool is_alive, bool version, bool status)
 {
-	impl_wrapper->InitializeCollectorMonitoring(is_alive, version, status, specific_path);
+	impl_wrapper->InitializeCollectorMonitoring(is_alive, version, status);
 }
 
 BoolSensor DataCollectorProxy::CreateBoolSensor(const std::string& path, const std::string& description)
