@@ -13,15 +13,7 @@ namespace HSMServer.Model.DataAlerts
             return viewModel;
         }
 
-        public static OperationViewModel GetOperations(this ConditionViewModel condition, string propertyStr)
-        {
-            if (Enum.TryParse<AlertProperty>(propertyStr, out var property))
-                return condition.GetOperations(property);
-
-            throw new ArgumentException("Incorrect property");
-        }
-
-        private static OperationViewModel GetOperations(this ConditionViewModel condition, AlertProperty property) =>
+        public static OperationViewModel GetOperations(this ConditionViewModel condition, AlertProperty property) =>
             property switch
             {
                 AlertProperty.Status => new StatusOperation(),

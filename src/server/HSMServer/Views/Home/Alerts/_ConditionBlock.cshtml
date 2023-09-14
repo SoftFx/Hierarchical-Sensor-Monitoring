@@ -29,7 +29,14 @@
     <select class="alert-block alert-select property-select" asp-for="Property" asp-items="@Model.PropertiesItems"></select>
 
     <div name="simpleCondition" class="flex-row align-items-center">
-        @await Html.PartialAsync("~/Views/Home/Alerts/_ConditionOperation.cshtml", Model.GetOperations())
+        @if (isNewDataCondition)
+        {
+            @await Html.PartialAsync("~/Views/Home/Alerts/ConditionOperations/_NewDataOperation.cshtml")
+        }
+        else
+        {
+            @await Html.PartialAsync("~/Views/Home/Alerts/ConditionOperations/_SimpleOperation.cshtml", Model.GetOperations())
+        }
     </div>
 
     @*<div name="valueCondition" class="@isValueCondition.ToVisibility() flex-row align-items-center">
@@ -46,10 +53,10 @@
         <input class="alert-block target-input target-value d-none" type="text" placeholder="<enter a value>" asp-for="Target" value="@Model.Target" />
     </div>*@
 
-    <div name="newDataCondition" class="@isNewDataCondition.ToVisibility() flex-row align-items-center">
+   @* <div name="newDataCondition" class="@isNewDataCondition.ToVisibility() flex-row align-items-center">
         <div class="alert-text-block operation-select">has been received</div>
         <input class="d-none" asp-for="Operation" value="@PolicyOperation.ReceivedNewValue" />
-    </div>
+    </div>*@
 
     <div name="sensitivityCondition" class="@isSensitivityCondition.ToVisibility() flex-row align-items-center">
         <div class="alert-text-block operation-select">is more than</div>

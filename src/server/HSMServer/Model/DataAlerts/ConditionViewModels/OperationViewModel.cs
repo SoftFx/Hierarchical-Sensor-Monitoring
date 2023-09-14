@@ -14,7 +14,7 @@ namespace HSMServer.Model.DataAlerts
         public List<SelectListItem> OperationsItems { get; }
 
 
-        public PolicyOperation SelectedOperation { get; private set; }
+        public PolicyOperation Operation { get; private set; }
 
         public string Target { get; private set; }
 
@@ -27,7 +27,7 @@ namespace HSMServer.Model.DataAlerts
 
         internal OperationViewModel SetData(PolicyOperation operation, string target)
         {
-            SelectedOperation = operation;
+            Operation = operation;
             Target = target;
 
             return this;

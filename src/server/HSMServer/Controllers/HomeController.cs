@@ -620,10 +620,23 @@ namespace HSMServer.Controllers
                 ? PartialView("~/Views/Home/Alerts/_ActionBlock.cshtml", new ActionViewModel(false, entity.GetAllChats()))
                 : _emptyResult;
 
-        public IActionResult GetOperation(Guid sensorId, string property) =>
-            _treeViewModel.Sensors.TryGetValue(sensorId, out var sensor)
-                ? PartialView("~/Views/Home/Alerts/_ConditionOperation.cshtml", BuildAlertCondition(sensor).GetOperations(property))
-                : _emptyResult;
+        public IActionResult GetOperation(Guid sensorId, string property)
+        {
+            if (_treeViewModel.Sensors.TryGetValue(sensorId, out var sensor) &&
+                Enum.TryParse<AlertProperty>(property, out var alertProperty))
+            {
+                var operationViewModel = BuildAlertCondition(sensor).GetOperations(alertProperty);
+
+
+                return alertProperty switch
+                {
+                    AlertProperty.NewSensorData => PartialView("~/Views/Home/Alerts/ConditionOperations/_NewDataOperation.cshtml"),
+                    _ => PartialView("~/Views/Home/Alerts/ConditionOperations/_SimpleOperation.cshtml", operationViewModel),
+                };
+            }
+
+            return _emptyResult;
+        }
 
         private static ConditionViewModel BuildAlertCondition(SensorNodeViewModel sensor) =>
             sensor.Type switch
