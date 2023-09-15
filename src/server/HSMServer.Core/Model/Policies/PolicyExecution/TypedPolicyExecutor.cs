@@ -53,7 +53,7 @@ namespace HSMServer.Core.Model.Policies
     }
 
 
-    internal sealed class PolicyExecutorInt : PolicyExecutorNumberBase<long>
+    internal sealed class PolicyExecutorInt : PolicyExecutorNumberBase<int>
     {
         internal PolicyExecutorInt(PolicyProperty property)
         {
