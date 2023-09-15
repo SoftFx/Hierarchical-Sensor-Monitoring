@@ -64,7 +64,7 @@ namespace HSMServer.BackgroundServices
 
             var loggerOptions = new LoggerOptions()
             {
-                WriteDebug = true,
+                WriteDebug = false,
             };
 
             _collector = new DataCollector(GetSelfMonitoringKey(cache)).AddNLog(loggerOptions);
