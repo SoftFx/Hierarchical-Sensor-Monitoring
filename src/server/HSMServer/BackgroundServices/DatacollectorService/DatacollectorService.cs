@@ -6,7 +6,7 @@ namespace HSMServer.BackgroundServices
 {
     public class DatacollectorService : BaseDelayedBackgroundService
     {
-        private readonly TimeSpan _initDelay = TimeSpan.FromSeconds(10);
+        private readonly TimeSpan _initDelay = TimeSpan.FromMinutes(1);
         private readonly DataCollectorWrapper _collector;
 
 
