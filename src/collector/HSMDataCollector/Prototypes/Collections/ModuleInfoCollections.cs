@@ -136,6 +136,8 @@ namespace HSMDataCollector.Prototypes
             Type = SensorType.BooleanSensor;
             AggregateData = true;
 
+            IsComputerSensor = true;
+
             TTL = TimeSpan.FromMinutes(1);
             KeepHistory = TimeSpan.FromDays(180);
 
