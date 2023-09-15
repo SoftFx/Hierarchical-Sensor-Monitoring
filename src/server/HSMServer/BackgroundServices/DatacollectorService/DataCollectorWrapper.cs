@@ -56,12 +56,6 @@ namespace HSMServer.BackgroundServices
         {
             _database = database;
 
-            var collectorOptions = new CollectorOptions()
-            {
-                AccessKey = GetSelfMonitoringKey(cache),
-                ServerAddress = "https://localhost",
-            };
-
             var productInfoOptions = new VersionSensorOptions()
             {
                 Version = Assembly.GetEntryAssembly()?.GetName().GetVersion()
@@ -70,7 +64,7 @@ namespace HSMServer.BackgroundServices
             var collectorInfoOptions = new CollectorMonitoringInfoOptions();
 
 
-            _collector = new DataCollector(collectorOptions).AddNLog();
+            _collector = new DataCollector(GetSelfMonitoringKey(cache)).AddNLog();
 
             if (OperatingSystem.IsWindows())
             {
