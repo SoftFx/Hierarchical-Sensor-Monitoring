@@ -4,6 +4,7 @@ using HSMDataCollector.Options;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.SensorRequests;
 using System.Collections.Generic;
+using HSMDataCollector.Extensions;
 
 namespace HSMDataCollector.Prototypes.Collections.Disks
 {
@@ -35,6 +36,15 @@ namespace HSMDataCollector.Prototypes.Collections.Disks
             options.SetInfo(new WindowsDiskInfo(options.TargetPath));
 
             _sensorName = string.Format(SensorNameTemplate, options.DiskInfo.DiskLetter);
+
+            return options;
+        }
+        
+        public override DiskBarSensorOptions Get(DiskBarSensorOptions customOptions)
+        {
+            var options = base.Get(customOptions);
+
+            options.Description = string.Format(BaseDescription, SensorName, options.PostDataPeriod.ToReadableView(), options.BarPeriod.ToReadableView(), "PhysicalDisk/% Disk Time");
 
             return options;
         }
