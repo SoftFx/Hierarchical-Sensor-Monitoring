@@ -20,6 +20,7 @@ namespace HSMDataCollector.Prototypes.Collections.Disks
         public WindowsDiskQueueLengthPrototype() : base()
         {
             Type = SensorType.DoubleBarSensor;
+            SensorUnit = Unit.Percents;
 
             Alerts = new List<BarAlertTemplate>()
             {
