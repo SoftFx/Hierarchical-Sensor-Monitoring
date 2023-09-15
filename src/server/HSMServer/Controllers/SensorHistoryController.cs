@@ -97,10 +97,9 @@ namespace HSMServer.Controllers
         [HttpPost]
         public async Task<JsonResult> ChartHistory([FromBody] GetSensorHistoryModel model)
         {
-            if (model == null)
+            if (model == null || !TryGetSensor(model.EncodedId, out var sensor))
                 return _emptyJsonResult;
 
-            var sensor = GetSensor(model.EncodedId);
             var values = await GetSensorValues(model.EncodedId, model.FromUtc, model.ToUtc, model.Count, model.Options);
 
             var localValue = GetLocalLastValue(model.EncodedId, model.FromUtc, model.ToUtc);
@@ -158,7 +157,8 @@ namespace HSMServer.Controllers
         public async Task<FileResult> ExportHistory([FromQuery(Name = "EncodedId")] string encodedId, [FromQuery(Name = "Type")] int type,
             [FromQuery(Name = "From")] DateTime from, [FromQuery(Name = "To")] DateTime to)
         {
-            var sensor = GetSensor(encodedId);
+            if (!TryGetSensor(encodedId, out var sensor))
+                return null;
 
             string fileName = $"{sensor.FullPath.Replace('/', '_')}_from_{from:s}_to{to:s}.csv";
             Response.Headers.Add("Content-Disposition", $"attachment;filename={fileName}");
@@ -183,7 +183,9 @@ namespace HSMServer.Controllers
 
         private GetSensorHistoryModel SpecifyLatestHistoryModel(GetSensorHistoryModel model)
         {
-            var sensor = GetSensor(model.EncodedId);
+            if (!TryGetSensor(model.EncodedId, out var sensor))
+                return null;
+
             var lastUpdate = sensor?.LastValue?.ReceivingTime ?? DateTime.MinValue;
             var lastTimeout = sensor?.LastTimeout?.ReceivingTime ?? DateTime.MinValue;
 
@@ -204,11 +206,7 @@ namespace HSMServer.Controllers
             return localValue?.ReceivingTime >= from && localValue?.ReceivingTime <= to ? localValue : null;
         }
 
-        private SensorNodeViewModel GetSensor(string encodedId)
-        {
-            _tree.Sensors.TryGetValue(encodedId.ToGuid(), out var sensor);
-
-            return sensor;
-        }
+        private bool TryGetSensor(string encodedId, out SensorNodeViewModel sensor) =>
+            _tree.Sensors.TryGetValue(encodedId.ToGuid(), out sensor);
     }
 }

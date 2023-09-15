@@ -205,34 +205,34 @@
                                         <button class="btn button-plot-selection px-0" id="dropdownMenuButton" data-bs-toggle="dropdown" aria-haspopup="true" aria-expanded="true">
                                             <i class="fa-solid fa-ellipsis-vertical button-link"></i>
                                         </button>
-                                        <ul class="dropdown-menu" style="max-width: 8rem; min-width: 2rem" aria-labelledby="dropdownMenuButton">
+                                        <ul id="barPicker" class="dropdown-menu" style="max-width: 8rem; min-width: 2rem" aria-labelledby="dropdownMenuButton">
                                             <li class="dropdown-item text-start px-2 mx-0">
                                                 <input type="checkbox" value="" checked id="plot_bar">
-                                                <label class="noHover" for="plot_bar">
+                                                <label for="plot_bar">
                                                     Bar
                                                 </label>
                                             </li>
                                             <li class="dropdown-item text-start px-2 mx-0">
                                                 <input type="checkbox" value="" id="plot_max">
-                                                <label class="noHover" for="plot_max">
+                                                <label for="plot_max">
                                                     Max
                                                 </label>
                                             </li>
                                             <li class="dropdown-item text-start px-2  mx-0">
                                                 <input type="checkbox" value="" id="plot_min">
-                                                <label class="noHover" for="plot_min">
+                                                <label for="plot_min">
                                                     Min
                                                 </label>
                                             </li>
                                             <li class="dropdown-item text-start px-2 mx-0">
                                                 <input type="checkbox" value="" id="plot_mean">
-                                                <label class="noHover" for="plot_mean">
+                                                <label for="plot_mean">
                                                     Mean
                                                 </label>
                                             </li>
                                             <li class="dropdown-item text-start px-2 mx-0">
                                                 <input type="checkbox" value="" id="plot_count">
-                                                <label class="noHover" for="plot_count">
+                                                <label for="plot_count">
                                                     Count
                                                 </label>
                                             </li>
@@ -303,6 +303,8 @@
 <script>
     var previousReceivedTime = undefined;
 
+    $('#barPicker').on('click', (e) => e.stopPropagation())
+    
     $('[id^="plot_"]').change(function () {
         const name = this.id.substring("plot_".length, this.id.length);
         if ($(this).is(':checked')){
@@ -325,7 +327,7 @@
                 $('[id^="closeTime_value"]').removeClass('d-none');
             }
 
-            if ('@Model.SaveOnlyUniqueValues' === 'True') {
+            if ('@Model.AggregateValues' === 'True') {
                 $("#aggregatedValuesCount_header").removeClass('d-none');
                 $('[id^="aggregatedValuesCount_value"]').removeClass('d-none');
             }
@@ -343,7 +345,7 @@
                 $('[id^="closeTime_value"]').addClass('d-none');
             }
 
-            if ('@Model.SaveOnlyUniqueValues' === 'True') {
+            if ('@Model.AggregateValues' === 'True') {
                 $("#aggregatedValuesCount_header").addClass('d-none');
                 $('[id^="aggregatedValuesCount_value"]').addClass('d-none');
             }

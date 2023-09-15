@@ -35,6 +35,8 @@ namespace HSMServer.Core.Model
 
                 if (AggregateValues)
                     isNewValue &= !Storage.TryAggregateValue(valueT);
+                else if (IsSingleton)
+                    isNewValue &= Storage.TryAddAsSingleton(valueT);
                 else
                     Storage.AddValue(valueT);
 

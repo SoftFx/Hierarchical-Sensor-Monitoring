@@ -15,8 +15,8 @@ namespace HSMServer.Model.History
             DateTime ByTime(BaseValue value) => value.Time;
 
 
-            Func<BaseValue, DateTime> orderByFilter = sensor.SaveOnlyUniqueValues ? ByReceivingTime : ByTime;
-            Func<BaseValue, DateTime> thenByFilter = sensor.SaveOnlyUniqueValues ? ByTime : ByReceivingTime;
+            Func<BaseValue, DateTime> orderByFilter = sensor.AggregateValues ? ByReceivingTime : ByTime;
+            Func<BaseValue, DateTime> thenByFilter = sensor.AggregateValues ? ByTime : ByReceivingTime;
 
             values = values.OrderBy(orderByFilter)
                            .ThenBy(thenByFilter)

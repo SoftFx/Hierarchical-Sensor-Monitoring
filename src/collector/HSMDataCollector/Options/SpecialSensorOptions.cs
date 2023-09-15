@@ -47,12 +47,28 @@ namespace HSMDataCollector.Options
         public Version Version { get; set; }
 
         public DateTime StartTime { get; set; }
+
+
+        public VersionSensorOptions() { }
+
+        public VersionSensorOptions(Version version)
+        {
+            Version = version;
+        }
     }
 
 
     public sealed class ServiceSensorOptions : InstantSensorOptions
     {
         public string ServiceName { get; set; }
+
+
+        public ServiceSensorOptions() { }
+
+        public ServiceSensorOptions(string serviceName)
+        {
+            ServiceName = serviceName;
+        }
     }
 
 

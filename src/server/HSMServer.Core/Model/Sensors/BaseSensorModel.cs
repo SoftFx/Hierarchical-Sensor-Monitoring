@@ -31,6 +31,11 @@ namespace HSMServer.Core.Model
         GB = 4,
 
         Percents = 100,
+
+        Ticks = 1000,
+        Milliseconds = 1010,
+        Seconds = 1011,
+        Minutes = 1012
     }
 
 
@@ -63,6 +68,8 @@ namespace HSMServer.Core.Model
 
         public abstract SensorType Type { get; }
 
+
+        public bool IsSingleton { get; private set; }
 
         public bool AggregateValues { get; private set; }
 
@@ -113,6 +120,7 @@ namespace HSMServer.Core.Model
             OriginalUnit = (Unit?)entity.OriginalUnit;
             Integration = (Integration)entity.Integration;
             AggregateValues = entity.AggregateValues;
+            IsSingleton = entity.IsSingleton;
             EndOfMuting = entity.EndOfMuting > 0L ? new DateTime(entity.EndOfMuting) : null;
         }
 
@@ -137,7 +145,8 @@ namespace HSMServer.Core.Model
 
             Integration = UpdateProperty(Integration, update.Integration ?? Integration, update.Initiator);
             OriginalUnit = UpdateProperty(OriginalUnit, update.SelectedUnit ?? OriginalUnit, update.Initiator, "Unit");
-            AggregateValues = UpdateProperty(AggregateValues, update.SaveOnlyUniqueValues ?? AggregateValues, update.Initiator, "Save only unique values");
+            IsSingleton = UpdateProperty(IsSingleton, update.IsSingleton ?? IsSingleton, update.Initiator, "Singleton");
+            AggregateValues = UpdateProperty(AggregateValues, update.AggregateValues ?? AggregateValues, update.Initiator, "Aggregate values");
 
             State = UpdateProperty(State, update.State ?? State, update.Initiator, forced: true);
             EndOfMuting = UpdateProperty(EndOfMuting, update.EndOfMutingPeriod, update.Initiator, "End of muting", true);
@@ -165,6 +174,7 @@ namespace HSMServer.Core.Model
             CreationDate = CreationDate.Ticks,
             Type = (byte)Type,
             State = (byte)State,
+            IsSingleton = IsSingleton,
             Integration = (int)Integration,
             OriginalUnit = (int?)OriginalUnit,
             AggregateValues = AggregateValues,

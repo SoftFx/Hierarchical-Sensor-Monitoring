@@ -13,6 +13,11 @@ namespace HSMSensorDataObjects.SensorRequests
         GB = 4,
 
         Percents = 100,
+
+        Ticks = 1000,
+        Milliseconds = 1010,
+        Seconds = 1011,
+        Minutes = 1012
     }
 
 
@@ -48,7 +53,10 @@ namespace HSMSensorDataObjects.SensorRequests
         public long? TTL { get; set; }
 
 
+        public bool? IsSingletonSensor { get; set; }
+
         public bool? AggregateData { get; set; }
+
 
         public bool? EnableGrafana { get; set; }
 

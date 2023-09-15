@@ -86,8 +86,21 @@
             <span style="min-width: 9rem">Aggregate values:</span>
         </div>
         <div class="d-flex form-check form-switch m-0">
-            <input id="saveOnlyUniqueValuesSwitch" class="form-check-input" type="checkbox" role="switch" asp-for="SaveOnlyUniqueValues" disabled>
+            <input id="saveOnlyUniqueValuesSwitch" class="form-check-input" type="checkbox" role="switch" asp-for="AggregateValues" disabled>
         </div>
         <i class='fas fa-question-circle' title='The option helps to optimize the database storage. If the option is switched on, only unique sensor values are stored in the database. A sensor value is unique if the previous value has a different Value, Status or Comment.'></i>
+    </div>
+}
+
+@if (Model.SensorType is not SensorType.File)
+{
+    <div class="d-flex justify-content-start align-items-center">
+        <div class="d-flex ms-3 text-nowrap">
+            <span style="min-width: 9rem">Singleton:</span>
+        </div>
+        <div class="d-flex form-check form-switch m-0">
+            <input id="singletonSwitch" class="form-check-input" type="checkbox" role="switch" asp-for="IsSingleton" disabled>
+        </div>
+        <i class='fas fa-question-circle' title='If the option is switched on and data comes from multiple sources at the same time, only first sensor data are stored in the database.'></i>
     </div>
 }

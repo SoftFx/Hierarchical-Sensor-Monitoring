@@ -234,8 +234,9 @@ namespace HSMServer.ApiObjectsConverters
             {
                 Id = sensorId,
                 Description = request.Description,
+                IsSingleton = request.IsSingletonSensor,
+                AggregateValues = request.AggregateData,
                 SelectedUnit = request.OriginalUnit?.Convert(),
-                SaveOnlyUniqueValues = request.AggregateData,
                 Integration = request.EnableGrafana.HasValue && request.EnableGrafana.Value ? Integration.Grafana : null,
                 KeepHistory = request.KeepHistory.ToTimeInterval(),
                 SelfDestroy = request.SelfDestroy.ToTimeInterval(),
@@ -360,6 +361,10 @@ namespace HSMServer.ApiObjectsConverters
                 HSMSensorDataObjects.SensorRequests.Unit.MB => Core.Model.Unit.MB,
                 HSMSensorDataObjects.SensorRequests.Unit.GB => Core.Model.Unit.GB,
                 HSMSensorDataObjects.SensorRequests.Unit.Percents => Core.Model.Unit.Percents,
+                HSMSensorDataObjects.SensorRequests.Unit.Ticks => Core.Model.Unit.Ticks,
+                HSMSensorDataObjects.SensorRequests.Unit.Milliseconds => Core.Model.Unit.Milliseconds,
+                HSMSensorDataObjects.SensorRequests.Unit.Seconds => Core.Model.Unit.Seconds,
+                HSMSensorDataObjects.SensorRequests.Unit.Minutes  => Core.Model.Unit.Minutes ,
                 _ => throw new NotImplementedException(),
             };
     }

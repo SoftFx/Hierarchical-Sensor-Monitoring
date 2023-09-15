@@ -17,6 +17,8 @@ namespace HSMDataCollector.Core
 
         CollectorStatus Status { get; }
 
+        string ComputerName { get; }
+
         string Module { get; }
 
 

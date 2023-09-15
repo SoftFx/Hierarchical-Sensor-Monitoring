@@ -5,6 +5,7 @@ using HSMSensorDataObjects;
 using HSMSensorDataObjects.SensorRequests;
 using System;
 using System.Collections.Generic;
+using System.Linq.Expressions;
 
 namespace HSMDataCollector.Prototypes
 {
@@ -13,6 +14,12 @@ namespace HSMDataCollector.Prototypes
         protected override TimeSpan DefaultPostDataPeriod => TimeSpan.FromHours(12);
 
         protected override string Category => "Windows OS info";
+
+
+        protected WindowsInfoMonitoringPrototype() : base()
+        {
+            IsComputerSensor = true;
+        }
 
 
         public override WindowsInfoSensorOptions Get(WindowsInfoSensorOptions customOptions)

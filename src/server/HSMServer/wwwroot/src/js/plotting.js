@@ -76,7 +76,6 @@ window.displayGraph = function (data, sensorTypes, graphElementId, graphName) {
             'pan2d',
             'select2d',
             'autoScale2d',
-            'resetScale2d'
         ]
     }
     let layout;
