@@ -8,6 +8,8 @@ namespace HSMDataCollector.DefaultSensors.Windows
 {
     public abstract class WindowsSensorBase : CollectableBarMonitoringSensorBase<DoubleMonitoringBar, double>
     {
+        public const string Category = "PhysicalDisk";
+
         protected const string TotalInstance = "_Total";
 
         private PerformanceCounter _performanceCounter;

@@ -79,8 +79,7 @@ namespace HSMServer.BackgroundServices
                                   .AddSystemMonitoringSensors()
                                   .AddWindowsInfoMonitoringSensors()
                                   .AddProductVersion(productInfoOptions)
-                                  .AddCollectorMonitoringSensors(collectorInfoOptions)
-                                  .AddDiskQueueLength();
+                                  .AddCollectorMonitoringSensors(collectorInfoOptions);
             }
             else
             {

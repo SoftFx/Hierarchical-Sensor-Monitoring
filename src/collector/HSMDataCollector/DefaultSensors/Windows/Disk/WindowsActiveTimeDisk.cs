@@ -4,9 +4,12 @@ namespace HSMDataCollector.DefaultSensors.Windows
 {
     internal class WindowsActiveTimeDisk : WindowsSensorBase
     {
-        protected override string CategoryName => "PhysicalDisk";
+        public const string Counter = "% Disk Time";
 
-        protected override string CounterName => "% Disk Time";
+
+        protected override string CategoryName => Category;
+
+        protected override string CounterName => Counter;
 
         protected override string InstanceName { get; }
 

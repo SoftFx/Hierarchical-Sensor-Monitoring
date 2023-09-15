@@ -4,6 +4,7 @@ using HSMDataCollector.Options;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.SensorRequests;
 using System.Collections.Generic;
+using HSMDataCollector.DefaultSensors.Windows;
 using HSMDataCollector.Extensions;
 
 namespace HSMDataCollector.Prototypes.Collections.Disks
@@ -44,7 +45,7 @@ namespace HSMDataCollector.Prototypes.Collections.Disks
         {
             var options = base.Get(customOptions);
 
-            options.Description = string.Format(BaseDescription, SensorName, options.PostDataPeriod.ToReadableView(), options.BarPeriod.ToReadableView(), "PhysicalDisk/% Disk Time");
+            options.Description = string.Format(BaseDescription, SensorName, options.PostDataPeriod.ToReadableView(), options.BarPeriod.ToReadableView(), $"{WindowsSensorBase.Category}/{WindowsActiveTimeDisk.Counter}");
 
             return options;
         }
