@@ -163,37 +163,16 @@
             $(this).find(`div[name='alertCondition']`).each(function (j) {
                 setFormDataAlertsListProperty(formData, type, i, j, $(this), "Conditions", "select", "Property");
 
-                let valueBlock = $(this).find('div[name="valueCondition"]');
-                if (valueBlock.hasClass('d-flex')) {
-                    setFormDataAlertsListProperty(formData, type, i, j, valueBlock, "Conditions", "select", "Operation");
-                    setFormDataAlertsListProperty(formData, type, i, j, valueBlock, "Conditions", "input", "Target");
+                let intervalOperationBlock = $(this).find('div.interval-operation');
+                if (intervalOperationBlock.hasClass("d-flex")) {
+                    setFormDataAlertsConditionIntervals(formData, type, i, j, intervalOperationBlock, "select", "Interval");
+                    setFormDataAlertsConditionIntervals(formData, type, i, j, intervalOperationBlock, "input", "CustomString");
                 }
+                else {
+                    let operationBlock = $(this).find('div.operation');
 
-                let statusBlock = $(this).find('div[name="statusCondition"]');
-                if (statusBlock.hasClass('d-flex')) {
-                    setFormDataAlertsListProperty(formData, type, i, j, statusBlock, "Conditions", "select", "Operation");
-                }
-
-                let stringBlock = $(this).find('div[name="stringCondition"]');
-                if (stringBlock.hasClass('d-flex')) {
-                    setFormDataAlertsListProperty(formData, type, i, j, stringBlock, "Conditions", "select", "Operation");
-                }
-
-                let newDataBlock = $(this).find('div[name="newDataCondition"]');
-                if (newDataBlock.hasClass('d-flex')) {
-                    setFormDataAlertsListProperty(formData, type, i, j, newDataBlock, "Conditions", "input", "Operation");
-                }
-
-                let sensitivityBlock = $(this).find('div[name="sensitivityCondition"]');
-                if (sensitivityBlock.hasClass('d-flex')) {
-                    setFormDataAlertsConditionIntervals(formData, type, i, j, sensitivityBlock, "Sensitivity", "select", "Interval");
-                    setFormDataAlertsConditionIntervals(formData, type, i, j, sensitivityBlock, "Sensitivity", "input", "CustomString");
-                }
-
-                let ttlBlock = $(this).find('div[name="ttlCondition"]');
-                if (ttlBlock.hasClass('d-flex')) {
-                    setFormDataAlertsConditionIntervals(formData, type, i, j, ttlBlock, "TimeToLive", "select", "Interval");
-                    setFormDataAlertsConditionIntervals(formData, type, i, j, ttlBlock, "TimeToLive", "input", "CustomString");
+                    setFormDataAlertsListProperty(formData, type, i, j, operationBlock, "Conditions", "select", "Operation");
+                    setFormDataAlertsListProperty(formData, type, i, j, operationBlock, "Conditions", "input", "Target");
                 }
             });
 
@@ -228,9 +207,11 @@
         });
     }
 
-    function setFormDataAlertsConditionIntervals(formData, type, i, j, block, intervalName, element, propertyName) {
-        block.find(`${element}[name='${intervalName}.${propertyName}']`).each(function () {
-            formData.append(`DataAlerts[${type}][${i}].Conditions[${j}].${intervalName}.${propertyName}`, $(this).val());
+    function setFormDataAlertsConditionIntervals(formData, type, i, j, block, element, propertyName) {
+        var targetName = block.attr("name");
+
+        block.find(`${element}[name='Target.${propertyName}']`).each(function () {
+            formData.append(`DataAlerts[${type}][${i}].Conditions[${j}].${targetName}.${propertyName}`, $(this).val());
         });
     }
 

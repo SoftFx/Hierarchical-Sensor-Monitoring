@@ -2,7 +2,6 @@
 @using HSMServer.Controllers
 @using HSMServer.Constants
 @using HSMServer.Model.DataAlerts
-@using HSMServer.Core.Model.Policies
 
 @model ConditionViewModel
 
@@ -11,14 +10,6 @@
 
 @{
     var condition = Model.Property;
-
-    var isStatusCondition = condition == AlertProperty.Status;
-    var isStringCondition = condition == AlertProperty.Comment || (Model is StringConditionViewModel && condition == AlertProperty.Value);
-    var isTtlCondition = condition == AlertProperty.TimeToLive;
-    var isNewDataCondition = condition == AlertProperty.NewSensorData;
-    var isSensitivityCondition = condition == AlertProperty.Sensitivity;
-    var isValueCondition = !isStatusCondition && !isTtlCondition && !isSensitivityCondition && !isStringCondition && !isNewDataCondition;
-
     var isSecondaryCondition = !Model.IsMain;
 }
 
@@ -28,12 +19,12 @@
 
     <select class="alert-block alert-select property-select" asp-for="Property" asp-items="@Model.PropertiesItems"></select>
 
-    <div name="operation" class="flex-row align-items-center">
-        @if (isTtlCondition || isSensitivityCondition)
+    <div class="flex-row align-items-center operation">
+        @if (condition is AlertProperty.TimeToLive or AlertProperty.Sensitivity)
         {
             @await Html.PartialAsync("~/Views/Home/Alerts/ConditionOperations/_IntervalOperation.cshtml", Model.GetIntervalOperations())
         }
-        else if (isNewDataCondition)
+        else if (condition is AlertProperty.NewSensorData)
         {
             @await Html.PartialAsync("~/Views/Home/Alerts/ConditionOperations/_NewDataOperation.cshtml")
         }
@@ -42,35 +33,6 @@
             @await Html.PartialAsync("~/Views/Home/Alerts/ConditionOperations/_SimpleOperation.cshtml", Model.GetOperations())
         }
     </div>
-
-    @*<div name="valueCondition" class="@isValueCondition.ToVisibility() flex-row align-items-center">
-        <select class="alert-block alert-select operation-select" asp-for="Operation" asp-items="@Model.OperationsItems"></select>
-        <input class="alert-block target-input target-value" type="text" placeholder="<enter a value>" asp-for="Target" value="@Model.Target" required="@(isValueCondition ? true : false)"/>
-    </div>
-
-    <div name="statusCondition" class="@isStatusCondition.ToVisibility() flex-row align-items-center">
-        <select class="alert-block alert-select operation-select" asp-for="Operation" asp-items="@Model.StatusOperationsItems"></select>
-    </div>
-
-    <div name="stringCondition" class="@isStringCondition.ToVisibility() flex-row align-items-center">
-        <select class="alert-block alert-select operation-select" asp-for="Operation" asp-items="@Model.StringOperationsItems"></select>
-        <input class="alert-block target-input target-value d-none" type="text" placeholder="<enter a value>" asp-for="Target" value="@Model.Target" />
-    </div>*@
-
-   @* <div name="newDataCondition" class="@isNewDataCondition.ToVisibility() flex-row align-items-center">
-        <div class="alert-text-block operation-select">has been received</div>
-        <input class="d-none" asp-for="Operation" value="@PolicyOperation.ReceivedNewValue" />
-    </div>*@
-
-   @* <div name="sensitivityCondition" class="@isSensitivityCondition.ToVisibility() flex-row align-items-center">
-        <div class="alert-text-block operation-select">is more than</div>
-        <partial name="_TimeIntervalSelect" for="Sensitivity" />
-    </div>
-
-    <div name="ttlCondition" class="@isTtlCondition.ToVisibility() flex-row align-items-center">
-        <div class="alert-text-block operation-select">is</div>
-        <partial name="_TimeIntervalSelect" for="TimeToLive" />
-    </div>*@
 
     <a class="deleteCondition"><i class="@isSecondaryCondition.ToVisibility() fa-solid fa-xmark alert-delete-button"></i></a>
 </div>
@@ -82,7 +44,7 @@
         let sensorId = dataAlert.find($(`input[name='EntityId']`)).val();
 
         let conditionBlock = $(this).parents("div[name='alertCondition']:first");
-        let operation = conditionBlock.find($(`div[name='operation']`));
+        let operation = conditionBlock.find($(`div.operation`));
 
         let property = $(this).val();
 
@@ -92,65 +54,6 @@
         }).done(function (viewData) {
             operation.html(viewData);
         });
-
-        //let conditionBlock = $(this).parents("div[name='alertCondition']:first");
-        
-        //let value = conditionBlock.find($(`div[name='valueCondition']`));
-        //let status = conditionBlock.find($(`div[name='statusCondition']`));
-        //let string = conditionBlock.find($(`div[name='stringCondition']`));
-        //let newData = conditionBlock.find($(`div[name='newDataCondition']`));
-        //let sensitivity = conditionBlock.find($(`div[name='sensitivityCondition']`));
-
-        //let targetInput = value.find($(`input[name='Target']`));
-
-        //let condition = $(this).val();
-        //if (condition === '@AlertProperty.Status') {
-        //    targetInput.attr('required', false);
-        //    value.removeClass("d-flex").addClass('d-none');
-        //    string.removeClass("d-flex").addClass('d-none');
-        //    newData.removeClass("d-flex").addClass('d-none');
-        //    sensitivity.removeClass("d-flex").addClass('d-none');
-
-        //    status.removeClass("d-none").addClass('d-flex');
-        //}
-        //else if (condition == '@AlertProperty.Comment' || ('@(Model is StringConditionViewModel)' === 'True' && condition == '@AlertProperty.Value')) {
-        //    console.log("string");
-        //    targetInput.attr('required', false);
-        //    value.removeClass("d-flex").addClass('d-none');
-        //    status.removeClass("d-flex").addClass('d-none');
-        //    newData.removeClass("d-flex").addClass('d-none');
-        //    sensitivity.removeClass("d-flex").addClass('d-none');
-
-        //    string.removeClass("d-none").addClass('d-flex');
-        //}
-        //else if (condition === '@AlertProperty.Sensitivity') {
-        //    targetInput.attr('required', false);
-        //    value.removeClass("d-flex").addClass('d-none');
-        //    status.removeClass("d-flex").addClass('d-none');
-        //    string.removeClass("d-flex").addClass('d-none');
-        //    newData.removeClass("d-flex").addClass('d-none');
-
-        //    sensitivity.removeClass("d-none").addClass('d-flex');
-        //}
-        //else if (condition === '@AlertProperty.NewSensorData') {
-        //    targetInput.attr('required', false);
-        //    value.removeClass("d-flex").addClass('d-none');
-        //    status.removeClass("d-flex").addClass('d-none');
-        //    string.removeClass("d-flex").addClass('d-none');
-        //    sensitivity.removeClass("d-flex").addClass('d-none');
-
-        //    newData.removeClass("d-none").addClass('d-flex');
-        //}
-        //else {
-        //    console.log("number");
-        //    status.removeClass("d-flex").addClass('d-none');
-        //    string.removeClass("d-flex").addClass('d-none');
-        //    newData.removeClass("d-flex").addClass('d-none');
-        //    sensitivity.removeClass("d-flex").addClass('d-none');
-
-        //    targetInput.attr('required', true);
-        //    value.removeClass("d-none").addClass('d-flex');
-        //}
     });
 
     $("a.deleteCondition").off("click").on("click", function () {
