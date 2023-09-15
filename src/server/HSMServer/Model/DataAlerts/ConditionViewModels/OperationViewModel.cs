@@ -11,6 +11,8 @@ namespace HSMServer.Model.DataAlerts
     {
         protected abstract List<PolicyOperation> Operations { get; }
 
+        public abstract bool IsTargetRequired { get; }
+
 
         public List<SelectListItem> OperationsItems { get; }
 
@@ -47,6 +49,8 @@ namespace HSMServer.Model.DataAlerts
             PolicyOperation.IsOk,
             PolicyOperation.IsError
         };
+
+        public override bool IsTargetRequired { get; } = false;
     }
 
 
@@ -61,6 +65,8 @@ namespace HSMServer.Model.DataAlerts
             PolicyOperation.EndsWith,
             PolicyOperation.IsChanged,
         };
+
+        public override bool IsTargetRequired { get; } = false;
     }
 
 
@@ -75,6 +81,8 @@ namespace HSMServer.Model.DataAlerts
             PolicyOperation.NotEqual,
             PolicyOperation.Equal,
         };
+
+        public override bool IsTargetRequired { get; } = true;
     }
 
 
@@ -88,6 +96,8 @@ namespace HSMServer.Model.DataAlerts
             PolicyOperation.StartsWith,
             PolicyOperation.EndsWith,
         };
+
+        public override bool IsTargetRequired { get; } = false;
     }
 
 

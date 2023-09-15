@@ -50,9 +50,9 @@ namespace HSMServer.Core.Model.Policies
                 PolicyOperation.IsChanged => (string newVal, string oldVal) => oldVal != newVal,
                 PolicyOperation.Equal => (string src, string target) => src == target,
                 PolicyOperation.NotEqual => (string src, string target) => src != target,
-                PolicyOperation.Contains => (string src, string target) => IsSuitableString(src, target, src?.Contains(target)),
-                PolicyOperation.StartsWith => (string src, string target) => IsSuitableString(src, target, src?.StartsWith(target)),
-                PolicyOperation.EndsWith => (string src, string target) => IsSuitableString(src, target, src?.EndsWith(target)),
+                PolicyOperation.Contains => (string src, string target) => IsSuitableString(src, target, () => src?.Contains(target)),
+                PolicyOperation.StartsWith => (string src, string target) => IsSuitableString(src, target, () => src?.StartsWith(target)),
+                PolicyOperation.EndsWith => (string src, string target) => IsSuitableString(src, target, () => src?.EndsWith(target)),
                 _ => throw new NotImplementedException()
             };
 
@@ -92,13 +92,8 @@ namespace HSMServer.Core.Model.Policies
         };
 
 
-        private static bool IsSuitableString(string src, string target, bool? methodResult)
-        {
-            if (src is null && target is null)
-                return true;
-
-            return target is not null && (methodResult ?? false);
-        }
+        private static bool IsSuitableString(string src, string target, Func<bool?> method) =>
+            target is null || (target is not null && (method() ?? false));
 
         private static bool IsChangedStatus(SensorStatus? newVal, SensorStatus? oldVal)
         {
