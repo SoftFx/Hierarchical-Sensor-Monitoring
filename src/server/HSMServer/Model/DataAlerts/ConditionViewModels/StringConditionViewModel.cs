@@ -2,7 +2,7 @@
 
 namespace HSMServer.Model.DataAlerts
 {
-    public sealed class StringConditionViewModel : NumberConditionViewModel
+    public sealed class StringConditionViewModel : ConditionViewModel
     {
         protected override List<AlertProperty> Properties { get; } = new()
         {

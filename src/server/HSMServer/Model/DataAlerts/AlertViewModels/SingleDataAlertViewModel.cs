@@ -11,6 +11,6 @@ namespace HSMServer.Model.DataAlerts
         public SingleDataAlertViewModel(Policy<T> policy, SensorNodeViewModel sensor) : base(policy, sensor) { }
 
 
-        protected override ConditionViewModel CreateCondition(bool isMain) => new SingleConditionViewModel<T>(isMain);
+        protected override ConditionViewModel CreateCondition(bool isMain) => new SingleConditionViewModel(isMain);
     }
 }

@@ -646,13 +646,13 @@ namespace HSMServer.Controllers
             {
                 SensorType.File => new FileConditionViewModel(false),
                 SensorType.String => new StringConditionViewModel(false),
-                SensorType.Boolean => new ConditionViewModel<BooleanValue>(false),
-                SensorType.Version => new SingleConditionViewModel<VersionValue>(false),
-                SensorType.TimeSpan => new SingleConditionViewModel<TimeSpanValue>(false),
-                SensorType.Integer => new SingleConditionViewModel<IntegerValue>(false),
-                SensorType.Double => new SingleConditionViewModel<DoubleValue>(false),
-                SensorType.IntegerBar => new BarConditionViewModel<IntegerBarValue>(false),
-                SensorType.DoubleBar => new BarConditionViewModel<DoubleBarValue>(false),
+                SensorType.Boolean => new CommonConditionViewModel(false),
+                SensorType.Version => new SingleConditionViewModel(false),
+                SensorType.TimeSpan => new SingleConditionViewModel(false),
+                SensorType.Integer => new SingleConditionViewModel(false),
+                SensorType.Double => new SingleConditionViewModel(false),
+                SensorType.IntegerBar => new BarConditionViewModel(false),
+                SensorType.DoubleBar => new BarConditionViewModel(false),
                 _ => null,
             };
 

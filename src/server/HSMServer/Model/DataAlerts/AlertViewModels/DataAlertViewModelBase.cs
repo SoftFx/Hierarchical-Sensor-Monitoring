@@ -220,6 +220,6 @@ namespace HSMServer.Model.DataAlerts
         }
 
 
-        protected override ConditionViewModel CreateCondition(bool isMain) => new ConditionViewModel<T>(isMain);
+        protected override ConditionViewModel CreateCondition(bool isMain) => new CommonConditionViewModel(isMain);
     }
 }

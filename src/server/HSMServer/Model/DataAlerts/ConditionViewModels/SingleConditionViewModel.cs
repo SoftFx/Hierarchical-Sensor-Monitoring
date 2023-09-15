@@ -2,17 +2,17 @@
 
 namespace HSMServer.Model.DataAlerts
 {
-    public sealed class FileConditionViewModel : ConditionViewModel
+    public class SingleConditionViewModel : ConditionViewModel
     {
         protected override List<AlertProperty> Properties { get; } = new()
         {
-            AlertProperty.OriginalSize,
+            AlertProperty.Value,
             AlertProperty.Status,
             AlertProperty.Comment,
             AlertProperty.NewSensorData,
         };
 
 
-        public FileConditionViewModel(bool isMain) : base(isMain) { }
+        public SingleConditionViewModel(bool isMain) : base(isMain) { }
     }
 }
