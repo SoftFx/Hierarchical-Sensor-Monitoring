@@ -1,4 +1,5 @@
-﻿using System.IO;
+﻿using System;
+using System.IO;
 
 namespace HSMDatabase.Extensions
 {
@@ -11,21 +12,31 @@ namespace HSMDatabase.Extensions
         {
             var size = 0L;
 
-            if (directory.Exists)
+            try
             {
-                foreach (var file in directory.GetFiles())
+                if (directory.Exists)
                 {
-                    try
+                    foreach (var file in directory.GetFiles())
                     {
-                        size += file.Length;
+                        try
+                        {
+                            size += file.Length;
+                        }
+                        catch (Exception ex)
+                        {
+                            Console.WriteLine(ex.ToString());
+                        }
                     }
-                    catch { }
-                }
 
-                foreach (var dir in directory.GetDirectories())
-                {
-                    size += dir.GetSize();
+                    foreach (var dir in directory.GetDirectories())
+                    {
+                        size += dir.GetSize();
+                    }
                 }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine(ex.ToString());
             }
 
             return size;
