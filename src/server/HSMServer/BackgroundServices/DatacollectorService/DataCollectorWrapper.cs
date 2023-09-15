@@ -1,5 +1,6 @@
 ﻿using HSMCommon.Constants;
 using HSMDataCollector.Core;
+using HSMDataCollector.Logging;
 using HSMDataCollector.Options;
 using HSMDataCollector.PublicInterface;
 using HSMServer.Core.Cache;
@@ -61,10 +62,12 @@ namespace HSMServer.BackgroundServices
                 Version = Assembly.GetEntryAssembly()?.GetName().GetVersion()
             };
 
-            var collectorInfoOptions = new CollectorMonitoringInfoOptions();
+            var loggerOptions = new LoggerOptions()
+            {
+                WriteDebug = true,
+            };
 
-
-            _collector = new DataCollector(GetSelfMonitoringKey(cache)).AddNLog();
+            _collector = new DataCollector(GetSelfMonitoringKey(cache)).AddNLog(loggerOptions);
 
             if (OperatingSystem.IsWindows())
             {
@@ -73,7 +76,7 @@ namespace HSMServer.BackgroundServices
                                   .AddSystemMonitoringSensors()
                                   .AddWindowsInfoMonitoringSensors()
                                   .AddProductVersion(productInfoOptions)
-                                  .AddCollectorMonitoringSensors(collectorInfoOptions);
+                                  .AddCollectorMonitoringSensors();
             }
             else
             {
@@ -81,7 +84,7 @@ namespace HSMServer.BackgroundServices
                                .AddDiskMonitoringSensors()
                                .AddSystemMonitoringSensors()
                                .AddProductVersion(productInfoOptions)
-                               .AddCollectorMonitoringSensors(collectorInfoOptions);
+                               .AddCollectorMonitoringSensors();
             }
 
             RequestSizeSensor = RegisterParamSensor<double>(RequestSizePath);
