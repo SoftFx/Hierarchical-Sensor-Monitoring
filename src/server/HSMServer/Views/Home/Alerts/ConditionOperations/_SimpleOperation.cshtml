@@ -25,6 +25,7 @@
             cache: false
         }).done(function (isTargetVisible) {
             if (isTargetVisible) {
+                target.val("");
                 target.removeClass("d-none");
             }
             else {

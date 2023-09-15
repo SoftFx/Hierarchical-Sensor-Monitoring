@@ -63,9 +63,9 @@ namespace HSMServer.Model.DataAlerts
                     continue;
                 }
 
-                var target = condition.Property is AlertProperty.Status or AlertProperty.Comment or AlertProperty.NewSensorData
-                    ? new TargetValue(TargetType.LastValue, EntityId.ToString())
-                    : new TargetValue(TargetType.Const, condition.Target);
+                var target = condition.Operation.IsTargetVisible()
+                    ? new TargetValue(TargetType.Const, condition.Target)
+                    : new TargetValue(TargetType.LastValue, EntityId.ToString());
 
                 conditions.Add(new PolicyConditionUpdate(condition.Operation, condition.Property.ToCore(), target));
             }

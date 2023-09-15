@@ -50,9 +50,9 @@ namespace HSMServer.Core.Model.Policies
                 PolicyOperation.IsChanged => (string newVal, string oldVal) => oldVal != newVal,
                 PolicyOperation.Equal => (string src, string target) => src == target,
                 PolicyOperation.NotEqual => (string src, string target) => src != target,
-                PolicyOperation.Contains => (string src, string target) => src.Contains(target),
-                PolicyOperation.StartsWith => (string src, string target) => src.StartsWith(target),
-                PolicyOperation.EndsWith => (string src, string target) => src.EndsWith(target),
+                PolicyOperation.Contains => (string src, string target) => IsSuitableString(src, target, src?.Contains(target)),
+                PolicyOperation.StartsWith => (string src, string target) => IsSuitableString(src, target, src?.StartsWith(target)),
+                PolicyOperation.EndsWith => (string src, string target) => IsSuitableString(src, target, src?.EndsWith(target)),
                 _ => throw new NotImplementedException()
             };
 
@@ -67,13 +67,6 @@ namespace HSMServer.Core.Model.Policies
                 PolicyOperation.IsChangedToOk => (SensorStatus? newVal, SensorStatus? oldVal) => IsChangedStatus(newVal, oldVal) && newVal == SensorStatus.Ok,
                 _ => throw new NotImplementedException()
             };
-
-        private static bool IsChangedStatus(SensorStatus? newVal, SensorStatus? oldVal)
-        {
-            var newValue = newVal.Value;
-
-            return oldVal is not null && oldVal != newVal && !newValue.IsOfftime() && (!oldVal.Value.IsOfftime() || newValue.IsError());
-        }
 
 
         internal static PolicyExecutor BuildExecutor<U>(PolicyProperty property) => property switch
@@ -97,5 +90,21 @@ namespace HSMServer.Core.Model.Policies
 
             _ => throw new NotImplementedException($"Unsupported policy property {property} with type {typeof(U).Name}"),
         };
+
+
+        private static bool IsSuitableString(string src, string target, bool? methodResult)
+        {
+            if (src is null && target is null)
+                return true;
+
+            return target is not null && (methodResult ?? false);
+        }
+
+        private static bool IsChangedStatus(SensorStatus? newVal, SensorStatus? oldVal)
+        {
+            var newValue = newVal.Value;
+
+            return oldVal is not null && oldVal != newVal && !newValue.IsOfftime() && (!oldVal.Value.IsOfftime() || newValue.IsError());
+        }
     }
 }

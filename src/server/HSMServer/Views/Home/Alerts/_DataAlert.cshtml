@@ -35,7 +35,7 @@
                 else
                 {
                     <b>@condition.Property.GetDisplayName() @condition.Operation.GetDisplayName()</b>
-                    @if (condition.Property is not (AlertProperty.Status or AlertProperty.Comment or AlertProperty.NewSensorData))
+                    @if (condition.Operation.IsTargetVisible())
                     {
                         <b>@condition.Target</b>
                     }
