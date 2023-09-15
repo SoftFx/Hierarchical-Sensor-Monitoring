@@ -1,7 +1,6 @@
 ﻿using HSMServer.Core.Model;
 using HSMServer.Core.Model.Policies;
 using System.Collections.Generic;
-using System.Numerics;
 
 namespace HSMServer.Model.DataAlerts
 {
@@ -22,7 +21,7 @@ namespace HSMServer.Model.DataAlerts
     }
 
 
-    public class SingleConditionViewModel<T, U> : NumberConditionViewModel where T : BaseValue<U>, new()
+    public class SingleConditionViewModel<T> : NumberConditionViewModel where T : BaseValue
     {
         protected override List<AlertProperty> Properties { get; } = new()
         {
@@ -37,7 +36,7 @@ namespace HSMServer.Model.DataAlerts
     }
 
 
-    public sealed class BarConditionViewModel<T, U> : NumberConditionViewModel where T : BarBaseValue<U>, new() where U : INumber<U>
+    public sealed class BarConditionViewModel<T> : NumberConditionViewModel where T : BarBaseValue
     {
         protected override List<AlertProperty> Properties { get; } = new()
         {

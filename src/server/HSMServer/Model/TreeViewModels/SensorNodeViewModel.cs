@@ -102,12 +102,12 @@ namespace HSMServer.Model.TreeViewModel
             FilePolicy p => new FileDataAlertViewModel(p, this),
             StringPolicy p => new StringDataAlertViewModel(p, this),
             BooleanPolicy p => new DataAlertViewModel<BooleanValue>(p, this),
-            VersionPolicy p => new SingleDataAlertViewModel<VersionValue, Version>(p, this),
-            TimeSpanPolicy p => new SingleDataAlertViewModel<TimeSpanValue, TimeSpan>(p, this),
-            IntegerPolicy p => new SingleDataAlertViewModel<IntegerValue, int>(p, this),
-            DoublePolicy p => new SingleDataAlertViewModel<DoubleValue, double>(p, this),
-            IntegerBarPolicy p => new BarDataAlertViewModel<IntegerBarValue, int>(p, this),
-            DoubleBarPolicy p => new BarDataAlertViewModel<DoubleBarValue, double>(p, this),
+            VersionPolicy p => new SingleDataAlertViewModel<VersionValue>(p, this),
+            TimeSpanPolicy p => new SingleDataAlertViewModel<TimeSpanValue>(p, this),
+            IntegerPolicy p => new SingleDataAlertViewModel<IntegerValue>(p, this),
+            DoublePolicy p => new SingleDataAlertViewModel<DoubleValue>(p, this),
+            IntegerBarPolicy p => new BarDataAlertViewModel<IntegerBarValue>(p, this),
+            DoubleBarPolicy p => new BarDataAlertViewModel<DoubleBarValue>(p, this),
             _ => null,
         };
 
