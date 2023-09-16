@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk.Worker">
+﻿<Project Sdk="Microsoft.NET.Sdk.Worker">
 
     <PropertyGroup>
         <TargetFramework>net7.0</TargetFramework>
@@ -14,18 +14,15 @@
     </PropertyGroup>
 
     <ItemGroup>
+      <Compile Remove="Config\**" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <PackageReference Include="HSMDataCollector.HSMDataCollector" Version="3.2.0" />
+        <PackageReference Include="HSMDataCollector.HSMSensorDataObjects" Version="3.0.3" />
         <PackageReference Include="Microsoft.Extensions.Hosting" Version="7.0.0" />
         <PackageReference Include="Microsoft.NET.Build.Containers" Version="7.0.400" />
         <PackageReference Include="NLog.Extensions.Logging" Version="5.2.2" />
         <PackageReference Include="NLog.Web.AspNetCore" Version="5.2.2" />
-    </ItemGroup>
-
-    <ItemGroup>
-      <ProjectReference Include="..\..\collector\HSMDataCollector\HSMDataCollector.csproj" />
-      <ProjectReference Include="..\..\server\HSMCommon\HSMCommon.csproj" />
-    </ItemGroup>
-
-    <ItemGroup>
-      <Folder Include="Config\" />
     </ItemGroup>
 </Project>

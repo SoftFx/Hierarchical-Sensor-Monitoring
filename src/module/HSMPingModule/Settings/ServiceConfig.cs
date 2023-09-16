@@ -1,7 +1,6 @@
 using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using HSMCommon;
 using HSMPingModule.Settings;
 
 namespace HSMPingModule.Config;
@@ -47,7 +46,7 @@ internal sealed class ServiceConfig
         Version = assembly.Version;
 
         if (!Directory.Exists(ConfigPath))
-            FileManager.SafeCreateDirectory(ConfigPath);
+            Directory.CreateDirectory(ConfigPath);
     }
 
 

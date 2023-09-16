@@ -1,4 +1,4 @@
-using HSMCommon.Extensions;
+using HSMDataCollector.Extensions;
 using HSMDataCollector.Alerts;
 using HSMDataCollector.Options;
 using HSMSensorDataObjects.SensorRequests;
