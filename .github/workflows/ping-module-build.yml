@@ -5,7 +5,7 @@ env:
   OUTPUT_FOLDER: ${{ github.workspace }}/BuildPingerOutput
 
   MODULE_PATH: src/module/HSMPingModule/HSMPingModule.csproj
-  DOCKER_CONTEXT_PATH: ./src/module/HSMPingModule/
+  DOCKER_CONTEXT_PATH: /src/module/HSMPingModule/Dockerfile
 
   DOCKER_DOCKERHUB_ORG: hsmonitoring
   DOCKER_REPOS: hsmpingmodule
@@ -67,6 +67,6 @@ jobs:
       - name: Build and push
         uses: docker/build-push-action@v5
         with:
-          context: ${{ env.DOCKER_CONTEXT_PATH }}
+          context: "{{defaultContext}}:src/module/HSMPingModule/"
           tags: ${{ env.DockerMainName }}
           push: true
