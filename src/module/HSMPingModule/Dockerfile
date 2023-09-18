@@ -7,7 +7,6 @@ RUN apt-get install -y dotnet-sdk-7.0
 COPY . /HSMPingModuleSrc
 
 WORKDIR /HSMPingModuleSrc
-RUN dotnet nuget add source /HSMPingModuleSrc/nugets/
 RUN dotnet publish -c Release --os linux --arch x64 -o /HSMPingModule
 
 WORKDIR /
