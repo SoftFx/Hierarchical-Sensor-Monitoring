@@ -201,6 +201,12 @@ const AjaxPost = {
     async: true
 };
 
+const AjaxGet = {
+    type: 'GET',
+    cache: false,
+    async: true
+};
+
 function buildContextMenu(node) {
     var contextMenu = {};
     
@@ -418,6 +424,19 @@ function buildContextMenu(node) {
                 "icon": "/dist/grafana.svg",
                 "action": _ => grafanaRequest(node, enableGrafanaAction),
             };
+        }
+
+        if (isManager && (curType === NodeType.Product || curType === NodeType.Node)) {
+            contextMenu["Export"] = {
+                "label": `Export sensors alerts`,
+                "separator_before": true,
+                "action": _ => $.ajax(`${exportAlerts}?selectedId=${node.id}`, AjaxGet).done(copyToClipboard)
+            }
+
+            contextMenu["Import"] = {
+                "label": `Import sensors alerts`,
+                "action": _ => true
+            }
         }
     }
 

@@ -5,12 +5,12 @@ namespace HSMServer.Core.Model.Policies
 {
     public sealed class PolicyGroup
     {
-        private readonly ConcurrentDictionary<Guid, Policy> _policy = new();
+        private readonly ConcurrentDictionary<Guid, Policy> _policies = new();
 
 
         public Guid Id { get; } = Guid.NewGuid();
 
-        public bool IsEmpty => _policy.Count == 0;
+        public bool IsEmpty => _policies.IsEmpty;
 
         public string Template { get; private set; }
 
@@ -20,9 +20,9 @@ namespace HSMServer.Core.Model.Policies
             if (IsEmpty)
                 Template = policy.ToString();
 
-            _policy.TryAdd(policy.Id, policy);
+            _policies.TryAdd(policy.Id, policy);
         }
 
-        public void RemovePolicy(Guid id) => _policy.TryRemove(id, out _);
+        public void RemovePolicy(Guid id) => _policies.TryRemove(id, out _);
     }
 }

@@ -27,6 +27,8 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text.Json.Serialization;
+using System.Text.Json;
 using System.Threading.Tasks;
 using TimeInterval = HSMServer.Model.TimeInterval;
 
@@ -795,6 +797,25 @@ namespace HSMServer.Controllers
                 ? PartialView("_MetaInfo", new FolderInfoViewModel(_folderManager[update.Id]))
                 : _emptyResult;
         }
+
+
+        [HttpGet]
+        public IActionResult ExportAlerts(Guid selectedId)
+        {
+            var node = _treeValuesCache.GetProduct(selectedId);
+            
+            if (node is not null)
+            {
+                var options = new JsonSerializerOptions() { WriteIndented = true };
+                options.Converters.Add(new JsonStringEnumConverter());
+
+                return new JsonResult(JsonSerializer.Serialize(node.Policies.GroupedPolicies, options));
+            }
+
+
+            return _emptyJsonResult;
+        }
+
 
         private string GetSensorPath(string encodedId)
         {
