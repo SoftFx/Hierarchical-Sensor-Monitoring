@@ -27,8 +27,9 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Text.Json.Serialization;
+using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 using TimeInterval = HSMServer.Model.TimeInterval;
 
@@ -803,19 +804,18 @@ namespace HSMServer.Controllers
         public IActionResult ExportAlerts(Guid selectedId)
         {
             var node = _treeValuesCache.GetProduct(selectedId);
-            
-            if (node is not null)
-            {
-                var options = new JsonSerializerOptions() { WriteIndented = true };
-                options.Converters.Add(new JsonStringEnumConverter());
+            if (node is null)
+                return _emptyResult;
 
-                var policies = JsonSerializer.Serialize(node.Policies.GroupedPolicies.Select(p => new AlertExportViewModel(p)), options);
+            var options = new JsonSerializerOptions() { WriteIndented = true };
+            options.Converters.Add(new JsonStringEnumConverter());
 
-                return new JsonResult(policies);
-            }
+            var policies = JsonSerializer.Serialize(node.Policies.GroupedPolicies.Select(p => new AlertExportViewModel(p)), options);
 
+            var fileName = $"{node.FullPath.Replace('/', '_')}-alerts.json";
+            Response.Headers.Add("Content-Disposition", $"attachment;filename={fileName}");
 
-            return _emptyJsonResult;
+            return File(Encoding.UTF8.GetBytes(policies), fileName.GetContentType(), fileName);
         }
 
 

@@ -5,21 +5,21 @@ using System.Linq;
 
 namespace HSMServer.Model.DataAlerts
 {
-    internal sealed class AlertExportViewModel
+    public sealed class AlertExportViewModel
     {
-        internal List<string> Sensors { get; }
+        public List<string> Sensors { get; }
 
-        internal List<ConditionExportViewModel> Conditions { get; }
+        public List<ConditionExportViewModel> Conditions { get; }
 
-        internal string Template { get; }
+        public string Template { get; }
 
-        internal string Icon { get; }
+        public string Icon { get; }
 
-        internal SensorStatus Status { get; }
+        public SensorStatus Status { get; }
 
-        internal List<string> Destination { get; }
+        public List<string> Destination { get; }
 
-        internal bool IsDisabled { get; }
+        public bool IsDisabled { get; }
 
 
         internal AlertExportViewModel(PolicyGroup group)
@@ -41,13 +41,13 @@ namespace HSMServer.Model.DataAlerts
     }
 
 
-    internal sealed class ConditionExportViewModel
+    public sealed class ConditionExportViewModel
     {
-        internal PolicyProperty Property { get; }
+        public PolicyProperty Property { get; }
 
-        internal PolicyOperation Operation { get; }
+        public PolicyOperation Operation { get; }
 
-        internal string Target { get; }
+        public string Target { get; }
 
 
         internal ConditionExportViewModel(PolicyCondition condition)

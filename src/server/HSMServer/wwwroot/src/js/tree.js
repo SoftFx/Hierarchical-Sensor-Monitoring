@@ -201,12 +201,6 @@ const AjaxPost = {
     async: true
 };
 
-const AjaxGet = {
-    type: 'GET',
-    cache: false,
-    async: true
-};
-
 function buildContextMenu(node) {
     var contextMenu = {};
     
@@ -432,7 +426,7 @@ function buildContextMenu(node) {
             alertsSubmenu["Export"] = {
                 "label": `Export`,
                 "icon": "fa-solid fa-download",
-                "action": _ => $.ajax(`${exportAlerts}?selectedId=${node.id}`, AjaxGet).done(copyToClipboard)
+                "action": _ => window.location.href = `${exportAlerts}?selectedId=${node.id}`
             }
 
             alertsSubmenu["Import"] = {
