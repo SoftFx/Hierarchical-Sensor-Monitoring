@@ -64,7 +64,7 @@ jobs:
           password: ${{ secrets.DOCKERHUBTOKEN }}
       
       - name: check
-        run: dir
+        run: ls
 
       - name: Build full main repos name
         # run: echo "DockerMainName=${{ env.DOCKER_DOCKERHUB_ORG }}/${{ env.DOCKER_REPOS }}:${{ needs.build.outputs.VERSION }}" >> $GITHUB_ENV
