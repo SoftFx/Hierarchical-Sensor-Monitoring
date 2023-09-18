@@ -9,6 +9,6 @@ namespace HSMServer.Core.Model.Policies
 
         protected override AlertState GetState(BaseValue value) => AlertState.BuildBase(value, Sensor);
 
-        protected override PolicyCondition GetCondition() => throw new NotImplementedException();
+        protected override PolicyCondition GetCondition(PolicyProperty _) => throw new NotImplementedException();
     }
 }

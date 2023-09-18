@@ -231,14 +231,16 @@ function addEnumPlot(graphId, graphName, id, isStatusService, path){
     } else {
         getDataForPlotButton(graphName, id, isStatusService).done(function (data){
             let escapedData = JSON.parse(data);
-            let ranges = graph._fullLayout.yaxis.range;
+            let yranges = graph._fullLayout.yaxis.range;
+            let xranges = graph._fullLayout.xaxis.range;
             let heatPlot = new EnumPlot(escapedData, isStatusService)
             let updateLayout = {
                 title: heatPlot.getTitle(path),
-                hovermode: 'x'
+                hovermode: 'x',
+                'xaxis.range': xranges
             };
 
-            Plotly.addTraces(graphId, heatPlot.getPlotData(currentName, ranges[0], ranges[1]));
+            Plotly.addTraces(graphId, heatPlot.getPlotData(currentName, yranges[0], yranges[1]));
             Plotly.update(graphId, {}, updateLayout);
         });
     }

@@ -6,7 +6,6 @@ namespace HSMServer.BackgroundServices
 {
     public class DatacollectorService : BaseDelayedBackgroundService
     {
-        private readonly TimeSpan _initDelay = TimeSpan.FromSeconds(10);
         private readonly DataCollectorWrapper _collector;
 
 
@@ -19,14 +18,14 @@ namespace HSMServer.BackgroundServices
         }
 
 
-        public override Task StopAsync(CancellationToken _) => _collector.Stop();
+        public override Task StopAsync(CancellationToken token) =>
+            RunAction(_collector.Stop, "Stop self collector").ContinueWith(_ => base.StopAsync(token)).Unwrap();
 
 
         protected override async Task ExecuteAsync(CancellationToken token)
         {
-            await Task.Delay(_initDelay, token); //small delay wait server initializing
-            await _collector.Start();
-
+            await Task.Delay(TimeSpan.FromSeconds(30), token);
+            await RunAction(_collector.Start, "Start self collector");
             await base.ExecuteAsync(token);
         }
 

@@ -141,6 +141,9 @@ namespace HSMDatabase.LevelDB
                 if (CheckValue())
                     return iterator.Value();
 
+                if (!iterator.IsValid)
+                    return null;
+
                 iterator.Prev();
 
                 return CheckValue() ? iterator.Value() : null;
