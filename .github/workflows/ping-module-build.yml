@@ -5,51 +5,51 @@ env:
   OUTPUT_FOLDER: ${{ github.workspace }}/BuildPingerOutput
 
   MODULE_PATH: src/module/HSMPingModule/HSMPingModule.csproj
-  DOCKER_CONTEXT_PATH: ./src/module/HSMPingModule
+  DOCKER_CONTEXT_PATH: src/module/HSMPingModule
 
   DOCKER_DOCKERHUB_ORG: hsmonitoring
   DOCKER_REPOS: hsmpingmodule
 jobs:
-  build:
-    runs-on: windows-latest
-    outputs:
-      VERSION: ${{ steps.save-version.outputs.version }}
-      ARTIFACT_NAME: ${{ steps.build-artifact-name.outputs.name}}
-    steps:
-      - uses: actions/checkout@v3
+  # build:
+  #   runs-on: windows-latest
+  #   outputs:
+  #     VERSION: ${{ steps.save-version.outputs.version }}
+  #     ARTIFACT_NAME: ${{ steps.build-artifact-name.outputs.name}}
+  #   steps:
+  #     - uses: actions/checkout@v3
 
-      - name: Setup .NET Core
-        uses: actions/setup-dotnet@v2
-        with:
-          dotnet-version: 7.0.x
+  #     - name: Setup .NET Core
+  #       uses: actions/setup-dotnet@v3
+  #       with:
+  #         dotnet-version: 7.0.x
 
-      - name: Check directory
-        run: dir
+  #     - name: Check directory
+  #       run: dir
 
-      - name: Install dependencies
-        run: dotnet restore ${{ env.MODULE_PATH }}
+  #     - name: Install dependencies
+  #       run: dotnet restore ${{ env.MODULE_PATH }}
 
-      - name: Publish HSMPingModule
-        run: dotnet publish ${{ env.MODULE_PATH }} -c Release -o ${{ env.OUTPUT_FOLDER }}
+  #     - name: Publish HSMPingModule
+  #       run: dotnet publish ${{ env.MODULE_PATH }} -c Release -o ${{ env.OUTPUT_FOLDER }}
 
-      - id: save-version
-        name: Try to get server version
-        run: echo "version=$((Get-Item ${{ env.OUTPUT_FOLDER }}/HSMPingModule.exe).VersionInfo.ProductVersion)" >> $env:GITHUB_OUTPUT
+  #     - id: save-version
+  #       name: Try to get server version
+  #       run: echo "version=$((Get-Item ${{ env.OUTPUT_FOLDER }}/HSMPingModule.exe).VersionInfo.ProductVersion)" >> $env:GITHUB_OUTPUT
 
-      - id: build-artifact-name
-        name: Build artifact name
-        run: echo "name=HSMPingModule v${{ steps.save-version.outputs.version }}" >> $env:GITHUB_OUTPUT
+  #     - id: build-artifact-name
+  #       name: Build artifact name
+  #       run: echo "name=HSMPingModule v${{ steps.save-version.outputs.version }}" >> $env:GITHUB_OUTPUT
 
-      - name: Upload artifact
-        uses: actions/upload-artifact@v3
-        with:
-          path: ${{ env.OUTPUT_FOLDER }}
-          name: ${{ steps.build-artifact-name.outputs.name }}
+  #     - name: Upload artifact
+  #       uses: actions/upload-artifact@v3
+  #       with:
+  #         path: ${{ env.OUTPUT_FOLDER }}
+  #         name: ${{ steps.build-artifact-name.outputs.name }}
 
   publish-docker-image:
     runs-on: ubuntu-latest
     environment: DockerHub
-    needs: [build]
+    # needs: [build]
     steps:
       - name: Set up QEMU
         uses: docker/setup-qemu-action@v3
