@@ -1,5 +1,6 @@
 ﻿using HSMCommon.Extensions;
 using HSMDatabase.AccessManager.DatabaseEntities;
+using System;
 using System.ComponentModel.DataAnnotations;
 
 namespace HSMServer.Core.Model.Policies
@@ -14,9 +15,9 @@ namespace HSMServer.Core.Model.Policies
         GreaterThan = 2,
         [Display(Name = ">=")]
         GreaterThanOrEqual = 3,
-        [Display(Name = "==")]
+        [Display(Name = "=")]
         Equal = 4,
-        [Display(Name = "!=")]
+        [Display(Name = "≠")]
         NotEqual = 5,
 
         [Display(Name = "is changed")]
@@ -29,6 +30,16 @@ namespace HSMServer.Core.Model.Policies
         IsChangedToError = 23,
         [Display(Name = "is changed to \U0001f7e2 OK")]
         IsChangedToOk = 24,
+
+        [Display(Name = "contains")]
+        Contains = 30,
+        [Display(Name = "starts with")]
+        StartsWith = 31,
+        [Display(Name = "ends with")]
+        EndsWith = 32,
+
+        [Display(Name = "has been received")]
+        ReceivedNewValue = 50,
     }
 
 
@@ -44,6 +55,12 @@ namespace HSMServer.Core.Model.Policies
         Mean = 103,
         Count = 104,
         LastValue = 105,
+
+        Length = 120,
+
+        OriginalSize = 151,
+
+        NewSensorData = 200,
     }
 
 
@@ -68,6 +85,9 @@ namespace HSMServer.Core.Model.Policies
 
     public abstract class PolicyCondition
     {
+        private protected Func<BaseValue> _getLastValue;
+
+
         public abstract PolicyOperation Operation { get; set; }
 
         public abstract PolicyProperty Property { get; set; }
@@ -76,6 +96,14 @@ namespace HSMServer.Core.Model.Policies
 
 
         public PolicyCombination Combination { get; set; }
+
+
+        internal PolicyCondition SetLastValueGetter(Func<BaseValue> getLastValue)
+        {
+            _getLastValue = getLastValue;
+
+            return this;
+        }
 
 
         internal PolicyCondition FromEntity(PolicyConditionEntity entity)

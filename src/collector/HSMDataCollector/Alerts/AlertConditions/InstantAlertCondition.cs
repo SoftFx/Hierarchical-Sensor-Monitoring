@@ -12,5 +12,17 @@ namespace HSMDataCollector.Alerts
             BuildCondition(AlertProperty.Value, operation, target.ToString());
             return this;
         }
+
+        public InstantAlertCondition AndLength<T>(AlertOperation operation, T target)
+        {
+            BuildCondition(AlertProperty.Length, operation, target.ToString());
+            return this;
+        }
+
+        public InstantAlertCondition AndFileSize<T>(AlertOperation operation, T target)
+        {
+            BuildCondition(AlertProperty.OriginalSize, operation, target.ToString());
+            return this;
+        }
     }
 }

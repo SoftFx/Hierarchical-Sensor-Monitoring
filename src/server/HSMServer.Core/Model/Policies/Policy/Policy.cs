@@ -66,7 +66,7 @@ namespace HSMServer.Core.Model.Policies
 
         protected abstract AlertState GetState(BaseValue value);
 
-        protected abstract PolicyCondition GetCondition();
+        protected abstract PolicyCondition GetCondition(PolicyProperty property);
 
 
         public string RebuildState(PolicyCondition condition = null, BaseValue value = null)
@@ -93,8 +93,10 @@ namespace HSMServer.Core.Model.Policies
 
         internal void Update(PolicyUpdate update, BaseSensorModel sensor = null)
         {
-            PolicyCondition Update(PolicyCondition condition, PolicyConditionUpdate update)
+            PolicyCondition Update(PolicyConditionUpdate update)
             {
+                var condition = BuildCondition(update.Property);
+
                 condition.Combination = update.Combination;
                 condition.Operation = update.Operation;
                 condition.Property = update.Property;
@@ -122,7 +124,7 @@ namespace HSMServer.Core.Model.Policies
 
         internal void Apply(PolicyEntity entity, BaseSensorModel sensor = null)
         {
-            PolicyCondition Update(PolicyCondition condition, PolicyConditionEntity entity) => condition.FromEntity(entity);
+            PolicyCondition Update(PolicyConditionEntity entity) => BuildCondition((PolicyProperty)entity.Property).FromEntity(entity);
 
             _sensor ??= sensor;
 
@@ -163,14 +165,22 @@ namespace HSMServer.Core.Model.Policies
             PolicyResult = PolicyResult.Ok;
         }
 
-        private void UpdateConditions<T>(List<T> updates, Func<PolicyCondition, T, PolicyCondition> updateHandler)
+
+        private PolicyCondition BuildCondition(PolicyProperty property)
+        {
+            BaseValue GetLastValue() => _sensor?.LastValue;
+
+            return GetCondition(property).SetLastValueGetter(GetLastValue);
+        }
+
+        private void UpdateConditions<T>(List<T> updates, Func<T, PolicyCondition> updateHandler)
         {
             if (updates?.Count > 0)
             {
                 Conditions.Clear();
 
                 foreach (var update in updates)
-                    Conditions.Add(updateHandler(GetCondition(), update));
+                    Conditions.Add(updateHandler(update));
             }
 
             RebuildState();

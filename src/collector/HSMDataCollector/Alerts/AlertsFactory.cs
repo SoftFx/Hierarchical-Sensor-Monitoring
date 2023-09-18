@@ -16,6 +16,22 @@ namespace HSMDataCollector.Alerts
             return new InstantAlertCondition().AndValue(operation, target);
         }
 
+        public static InstantAlertCondition IfLenght<T>(AlertOperation operation, T target)
+        {
+            return new InstantAlertCondition().AndLength(operation, target);
+        }
+
+        public static InstantAlertCondition IfFileSize<T>(AlertOperation operation, T target)
+        {
+            return new InstantAlertCondition().AndFileSize(operation, target);
+        }
+
+
+        public static InstantAlertCondition IfReceivedNewValue()
+        {
+            return (InstantAlertCondition)new InstantAlertCondition().AndReceivedNewValue();
+        }
+
         public static InstantAlertCondition IfComment(AlertOperation operation)
         {
             return (InstantAlertCondition)new InstantAlertCondition().AndComment(operation);
@@ -60,6 +76,11 @@ namespace HSMDataCollector.Alerts
         public static BarAlertCondition IfBarStatus(AlertOperation operation)
         {
             return (BarAlertCondition)new BarAlertCondition().AndComment(operation).AndStatus(operation);
+        }
+
+        public static BarAlertCondition IfReceivedNewBarValue()
+        {
+            return (BarAlertCondition)new BarAlertCondition().AndReceivedNewValue();
         }
     }
 }
