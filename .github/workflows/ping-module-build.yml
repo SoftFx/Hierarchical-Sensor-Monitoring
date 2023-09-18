@@ -64,7 +64,8 @@ jobs:
           password: ${{ secrets.DOCKERHUBTOKEN }}
 
       - name: Build full main repos name
-        run: echo "DockerMainName=${{ env.DOCKER_DOCKERHUB_ORG }}/${{ env.DOCKER_REPOS }}:${{ needs.build.outputs.VERSION }}" >> $GITHUB_ENV
+        # run: echo "DockerMainName=${{ env.DOCKER_DOCKERHUB_ORG }}/${{ env.DOCKER_REPOS }}:${{ needs.build.outputs.VERSION }}" >> $GITHUB_ENV
+        run: echo "DockerMainName=${{ env.DOCKER_DOCKERHUB_ORG }}/${{ env.DOCKER_REPOS }}:0.0.1" >> $GITHUB_ENV
 
       - name: Build and push
         uses: docker/build-push-action@v5
