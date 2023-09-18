@@ -23,6 +23,9 @@ jobs:
         with:
           dotnet-version: 7.0.x
 
+      - name: Check directory
+        run: ls -l
+
       - name: Install dependencies
         run: dotnet restore ${{ env.MODULE_PATH }}
 
