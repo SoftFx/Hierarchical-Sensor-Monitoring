@@ -427,9 +427,11 @@ function buildContextMenu(node) {
         }
 
         if (isManager && (curType === NodeType.Product || curType === NodeType.Node)) {
-            contextMenu["Export"] = {
-                "label": `Export sensors alerts`,
-                "separator_before": true,
+            alertsSubmenu = {}
+
+            alertsSubmenu["Export"] = {
+                "label": `Export`,
+                "icon": "fa-solid fa-download",
                 "action": _ => {
                     $.ajax(`${exportAlerts}?selectedId=${node.id}`, AjaxGet).done(function (data) {
                         console.log(data);
@@ -437,10 +439,17 @@ function buildContextMenu(node) {
                 }
             }
 
-            contextMenu["Import"] = {
-                "label": `Import sensors alerts`,
+            alertsSubmenu["Import"] = {
+                "label": `Import`,
+                "icon": "fa-solid fa-upload",
                 "action": _ => true
             }
+
+            contextMenu["Alerts"] = {
+                "label": "Alerts",
+                "separator_before": true,
+                "submenu": alertsSubmenu,
+            };
         }
     }
 
