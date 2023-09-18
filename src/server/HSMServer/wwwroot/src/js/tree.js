@@ -432,11 +432,7 @@ function buildContextMenu(node) {
             alertsSubmenu["Export"] = {
                 "label": `Export`,
                 "icon": "fa-solid fa-download",
-                "action": _ => {
-                    $.ajax(`${exportAlerts}?selectedId=${node.id}`, AjaxGet).done(function (data) {
-                        console.log(data);
-                    });
-                }
+                "action": _ => $.ajax(`${exportAlerts}?selectedId=${node.id}`, AjaxGet).done(copyToClipboard)
             }
 
             alertsSubmenu["Import"] = {

@@ -22,11 +22,12 @@ namespace HSMServer.Core.Model.Policies
 
         internal PolicyResult PolicyResult { get; private set; } = PolicyResult.Ok;
 
-        internal BaseSensorModel Sensor { get; private set; }
-
         internal AlertState State { get; private set; }
 
         internal string Comment { get; private set; }
+
+
+        public BaseSensorModel Sensor { get; private set; }
 
 
         public TimeIntervalModel Sensitivity { get; private set; }

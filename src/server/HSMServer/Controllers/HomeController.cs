@@ -809,7 +809,9 @@ namespace HSMServer.Controllers
                 var options = new JsonSerializerOptions() { WriteIndented = true };
                 options.Converters.Add(new JsonStringEnumConverter());
 
-                return new JsonResult(JsonSerializer.Serialize(node.Policies.GroupedPolicies.Select(p => p.Policy), options));
+                var policies = JsonSerializer.Serialize(node.Policies.GroupedPolicies.Select(p => new AlertExportViewModel(p)), options);
+
+                return new JsonResult(policies);
             }
 
 
