@@ -14,11 +14,16 @@ namespace HSMServer.Core.Model.Policies
 
         public string Template { get; private set; }
 
+        public Policy Policy { get; private set; }
+
 
         public void AddPolicy(Policy policy)
         {
             if (IsEmpty)
+            {
                 Template = policy.ToString();
+                Policy = policy;
+            }
 
             _policies.TryAdd(policy.Id, policy);
         }

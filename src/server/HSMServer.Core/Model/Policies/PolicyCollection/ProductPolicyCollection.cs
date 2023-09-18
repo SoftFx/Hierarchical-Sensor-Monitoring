@@ -32,7 +32,7 @@ namespace HSMServer.Core.Model.Policies
         }
 
 
-        private void AddPolicy(Policy policy)
+        internal void AddPolicy(Policy policy)
         {
             var template = policy.ToString();
             var policyId = policy.Id;
@@ -47,7 +47,7 @@ namespace HSMServer.Core.Model.Policies
                 _groups.TryAdd(groudId, newGroup);
             }
 
-            if (_policyToGroup.TryRemove(policyId, out _) && _policyToGroup.TryAdd(policyId, groudId))
+            if ((!_policyToGroup.ContainsKey(policyId) || _policyToGroup.TryRemove(policyId, out _)) && _policyToGroup.TryAdd(policyId, groudId))
                 _groups[groudId].AddPolicy(policy);
         }
 

@@ -430,7 +430,11 @@ function buildContextMenu(node) {
             contextMenu["Export"] = {
                 "label": `Export sensors alerts`,
                 "separator_before": true,
-                "action": _ => $.ajax(`${exportAlerts}?selectedId=${node.id}`, AjaxGet).done(copyToClipboard)
+                "action": _ => {
+                    $.ajax(`${exportAlerts}?selectedId=${node.id}`, AjaxGet).done(function (data) {
+                        console.log(data);
+                    });
+                }
             }
 
             contextMenu["Import"] = {

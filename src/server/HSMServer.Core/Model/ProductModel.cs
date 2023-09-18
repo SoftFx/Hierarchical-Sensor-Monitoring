@@ -61,6 +61,9 @@ namespace HSMServer.Core.Model
             Sensors.TryAdd(sensor.Id, (BaseSensorModel)sensor.AddParent(this));
 
             sensor.Policies.Uploaded += Policies.ReceivePolicyUpdate;
+
+            foreach (var policy in sensor.Policies)
+                Policies.AddPolicy(policy);
         }
 
         internal void RemoveSensor(Guid sensorId)
