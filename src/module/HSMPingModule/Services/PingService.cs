@@ -10,13 +10,15 @@ internal class PingService : BackgroundService
     private readonly ConcurrentDictionary<string, ConcurrentDictionary<string, PingAdapter>> _newPings = new();
     private readonly IDataCollectorService _collectorService;
     private readonly ILogger<PingService> _logger;
+    private readonly VpnService _service;
     private readonly ServiceConfig _config;
 
 
-    public PingService(IOptionsMonitor<ServiceConfig> config, IDataCollectorService collectorService, ILogger<PingService> logger)
+    public PingService(IOptionsMonitor<ServiceConfig> config, IDataCollectorService collectorService, ILogger<PingService> logger, VpnService service)
     {
         _logger = logger;
-        
+        _service = service;
+
         _collectorService = collectorService;
         _config = config.CurrentValue;
         _config.OnChange += RebuildPings;
@@ -33,9 +35,9 @@ internal class PingService : BackgroundService
     }
 
 
-    protected override Task ExecuteAsync(CancellationToken stoppingToken)
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        _collectorService.StartAsync();
+        await _collectorService.StartAsync();
 
         foreach (var (country, pings) in _newPings)
             foreach (var (_, ping) in pings)
@@ -43,8 +45,6 @@ internal class PingService : BackgroundService
                 ping.SendResult += _collectorService.PingResultSend;
                 _ = ping.StartPinging();
             }
-
-        return Task.CompletedTask;
     }
 
     public override Task StopAsync(CancellationToken cancellationToken)

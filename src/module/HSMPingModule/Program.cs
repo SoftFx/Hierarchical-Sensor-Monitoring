@@ -21,6 +21,7 @@ try
     builder.Services.Configure<ServiceConfig>(config => config.SetUpConfig(builder.Configuration, logger));
 
     builder.Services.AddSingleton<IDataCollectorService, DataCollectorService>();
+    builder.Services.AddSingleton<VpnService>();
 
     builder.Services.AddHostedService<SettingsWatcherService>();
     builder.Services.AddHostedService<PingService>();
