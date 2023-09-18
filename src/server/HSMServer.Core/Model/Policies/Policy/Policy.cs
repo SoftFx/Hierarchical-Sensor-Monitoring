@@ -165,7 +165,7 @@ namespace HSMServer.Core.Model.Policies
 
         private PolicyCondition BuildCondition(PolicyProperty property)
         {
-            BaseValue GetLastValue() => _sensor?.LastValue;
+            BaseValue GetLastValue() => Sensor?.LastValue;
 
             return GetCondition(property).SetLastValueGetter(GetLastValue);
         }
