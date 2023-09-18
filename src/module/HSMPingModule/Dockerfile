@@ -23,5 +23,4 @@ RUN rm -rf /HSMPingModuleSrc
 
 # WORKDIR /publish
 
-
 # ENTRYPOINT ["dotnet", "HSMPingModule.dll"]
