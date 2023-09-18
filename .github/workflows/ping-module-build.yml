@@ -5,6 +5,7 @@ env:
   OUTPUT_FOLDER: ${{ github.workspace }}/BuildPingerOutput
 
   MODULE_PATH: src/module/HSMPingModule/HSMPingModule.csproj
+  DOCKER_CONTEXT_PATH: src/module/HSMPingModule/
 
   DOCKER_DOCKERHUB_ORG: hsmonitoring
   DOCKER_REPOS: hsmpingmodule
@@ -47,7 +48,11 @@ jobs:
     environment: DockerHub
     needs: [build]
     steps:
-      - uses: actions/checkout@v3
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
       - name: Log in to Docker Hub
         uses: docker/login-action@v2
@@ -58,8 +63,9 @@ jobs:
       - name: Build full main repos name
         run: echo "DockerMainName=${{ env.DOCKER_DOCKERHUB_ORG }}/${{ env.DOCKER_REPOS }}:${{ needs.build.outputs.VERSION }}" >> $GITHUB_ENV
 
-      - name: Build Linux image for Docker
-        run: docker build . -t ${{ env.DockerMainName }}
-
-      - name: Push image to remote Docker
-        run: docker push ${{ env.DockerMainName }}
+      name: Build and push
+        uses: docker/build-push-action@v5
+        with:
+          context: ${{ env.MODULE_PATH }}
+          tags: ${{ env.DockerMainName }}
+          push: true
