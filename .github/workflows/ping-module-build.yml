@@ -26,6 +26,9 @@ jobs:
       - name: Install dependencies
         run: dotnet restore ${{ env.MODULE_PATH }}
 
+      - name: Add custom nuget storage
+        run: dotnet nuget add source /HSMPingModuleSrc/nugets/
+
       - name: Publish HSMPingModule
         run: dotnet publish ${{ env.MODULE_PATH }} -c Release -o ${{ env.OUTPUT_FOLDER }}
 
