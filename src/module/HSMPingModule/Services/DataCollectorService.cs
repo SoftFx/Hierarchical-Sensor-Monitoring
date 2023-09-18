@@ -6,6 +6,7 @@ using HSMPingModule.Models;
 using HSMPingModule.Services.Interfaces;
 using Microsoft.Extensions.Options;
 using System.Collections.Concurrent;
+using HSMSensorDataObjects;
 
 namespace HSMPingModule.Collector;
 
@@ -81,7 +82,10 @@ internal sealed class DataCollectorService : IDataCollectorService, IDisposable
         }
 
         sensor.AddValue(reply.Value, reply.Status, reply.Comment);
+        _logger.LogInformation("Added new value to the sensor {0}, Value: {1}", path, reply.Value);
     }
+
+    public void AddApplicationException(string exceptionMessage) => _exceptionSensor.AddValue(exceptionMessage, SensorStatus.Ok);
 
     public void Dispose()
     {

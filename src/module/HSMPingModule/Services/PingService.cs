@@ -8,6 +8,7 @@ namespace HSMPingModule.Services;
 internal class PingService : BackgroundService
 {
     private readonly ConcurrentDictionary<string, ConcurrentDictionary<string, PingAdapter>> _newPings = new();
+    private readonly CancellationTokenSource _tokenSource = new ();
     private readonly IDataCollectorService _collectorService;
     private readonly ILogger<PingService> _logger;
     private readonly VpnService _service;
@@ -23,15 +24,7 @@ internal class PingService : BackgroundService
         _config = config.CurrentValue;
         _config.OnChange += RebuildPings;
 
-        foreach (var (hostname, website) in _config.ResourceSettings.WebSites)
-            foreach (var country in website.Countries)
-                if (_newPings.TryGetValue(country, out var dict))
-                    dict.TryAdd(hostname, new(website, hostname, country));
-                else
-                    _newPings.TryAdd(country, new ConcurrentDictionary<string, PingAdapter>()
-                    {
-                        [hostname] = new (website, hostname, country)
-                    });
+        InitPings();
     }
 
 
@@ -39,12 +32,7 @@ internal class PingService : BackgroundService
     {
         await _collectorService.StartAsync();
 
-        foreach (var (country, pings) in _newPings)
-            foreach (var (_, ping) in pings)
-            {
-                ping.SendResult += _collectorService.PingResultSend;
-                _ = ping.StartPinging();
-            }
+        _ = StartPinging();
     }
 
     public override Task StopAsync(CancellationToken cancellationToken)
@@ -57,12 +45,39 @@ internal class PingService : BackgroundService
     private void RebuildPings()
     { 
         _logger.LogInformation("Settings file was updated, starting reloading");
+        
+        CancelAndResetToken();
 
+        InitPings();
+    }
+
+    private async Task StartPinging()
+    {
+        var timer = new PeriodicTimer(TimeSpan.FromSeconds(_config.ResourceSettings.DefaultSiteNodeSettings.PingRequestDelaySec.Value));
+        var sendingPings = new List<Task>();
+
+        while (await timer.WaitForNextTickAsync(_tokenSource.Token))
+            foreach (var (country, pings) in _newPings)
+            {
+                if (await _service.ChangeCountry(country, out var result))
+                {
+                    foreach (var (_, ping) in pings)
+                        sendingPings.Add(Task.Run(() => ping.Ping()));
+
+                    await Task.WhenAll(sendingPings).ContinueWith(_ => sendingPings.Clear());
+                }
+                else
+                {
+                    _logger.LogInformation("Couldn't change country to {0}", country);
+                    _collectorService.AddApplicationException($"Error occured during country change to {country}. Error message: {result}");
+                }
+            }
+    }
+
+    private void InitPings()
+    {
         foreach (var (_, pingAdapter) in _newPings.SelectMany(x => x.Value))
-        {
-            pingAdapter.CancelToken();
             pingAdapter.SendResult -= _collectorService.PingResultSend;
-        }
 
         _newPings.Clear();
 
@@ -70,7 +85,6 @@ internal class PingService : BackgroundService
             foreach (var country in website.Countries)
             {
                 var ping = new PingAdapter(website, hostname, country);
-                ping.SendResult += _collectorService.PingResultSend;
 
                 if (_newPings.TryGetValue(country, out var dict))
                     dict.TryAdd(hostname, ping);
@@ -80,8 +94,15 @@ internal class PingService : BackgroundService
                         [hostname] = ping
                     });
 
-                _ = ping.StartPinging();
+                ping.SendResult += _collectorService.PingResultSend;
+
                 _logger.LogInformation("New pinging sensor added at {path}", _newPings[country][hostname].SensorPath);
             }
+    }
+
+    private void CancelAndResetToken()
+    {
+        _tokenSource.Cancel();
+        _tokenSource.TryReset();
     }
 }

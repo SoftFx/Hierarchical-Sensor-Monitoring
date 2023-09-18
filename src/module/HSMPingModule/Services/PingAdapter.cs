@@ -31,7 +31,10 @@ internal sealed class PingAdapter : Ping
     }
 
 
-    public async Task<PingResponse> SendPingRequest()
+    public Task Ping() => SendPingRequest().ContinueWith(reply => SendResult?.Invoke(_webSite, _country, _hostName, reply), _token.Token).Unwrap();
+
+
+    private async Task<PingResponse> SendPingRequest()
     {
         try
         {
@@ -46,16 +49,4 @@ internal sealed class PingAdapter : Ping
             };
         }
     }
-
-
-    public async Task StartPinging()
-    {
-        var timer = new PeriodicTimer(TimeSpan.FromSeconds(_webSite.PingRequestDelaySec.Value));
-
-        while (await timer.WaitForNextTickAsync(_token.Token))
-            _ = SendPingRequest().ContinueWith(reply => SendResult?.Invoke(_webSite, _country, _hostName, reply), _token.Token).Unwrap();
-    }
-
-
-    internal void CancelToken() => _token.Cancel();
 }
