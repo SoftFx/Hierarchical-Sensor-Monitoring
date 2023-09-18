@@ -4,6 +4,7 @@ using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Extensions;
 using HSMServer.Core.Journal;
 using HSMServer.Core.Model;
+using HSMServer.Core.Model.Policies;
 using HSMServer.Core.Model.Requests;
 using HSMServer.Extensions;
 using HSMServer.Folders;
@@ -594,15 +595,15 @@ namespace HSMServer.Controllers
 
             DataAlertViewModelBase viewModel = type switch
             {
-                (byte)SensorType.File => new DataAlertViewModel<FileValue>(entity),
-                (byte)SensorType.String => new DataAlertViewModel<StringValue>(entity),
+                (byte)SensorType.File => new FileDataAlertViewModel(entity),
+                (byte)SensorType.String => new StringDataAlertViewModel(entity),
                 (byte)SensorType.Boolean => new DataAlertViewModel<BooleanValue>(entity),
-                (byte)SensorType.Version => new DataAlertViewModel<VersionValue>(entity),
-                (byte)SensorType.TimeSpan => new SingleDataAlertViewModel<TimeSpanValue, TimeSpan>(entity),
-                (byte)SensorType.Integer => new SingleDataAlertViewModel<IntegerValue, int>(entity),
-                (byte)SensorType.Double => new SingleDataAlertViewModel<DoubleValue, double>(entity),
-                (byte)SensorType.IntegerBar => new BarDataAlertViewModel<IntegerBarValue, int>(entity),
-                (byte)SensorType.DoubleBar => new BarDataAlertViewModel<DoubleBarValue, double>(entity),
+                (byte)SensorType.Version => new SingleDataAlertViewModel<VersionValue>(entity),
+                (byte)SensorType.TimeSpan => new SingleDataAlertViewModel<TimeSpanValue>(entity),
+                (byte)SensorType.Integer => new SingleDataAlertViewModel<IntegerValue>(entity),
+                (byte)SensorType.Double => new SingleDataAlertViewModel<DoubleValue>(entity),
+                (byte)SensorType.IntegerBar => new BarDataAlertViewModel<IntegerBarValue>(entity),
+                (byte)SensorType.DoubleBar => new BarDataAlertViewModel<DoubleBarValue>(entity),
                 TimeToLiveAlertViewModel.AlertKey => new TimeToLiveAlertViewModel(entity),
                 _ => null,
             };
@@ -610,32 +611,50 @@ namespace HSMServer.Controllers
             return PartialView("~/Views/Home/Alerts/_DataAlert.cshtml", viewModel);
         }
 
-        public IActionResult AddAlertCondition(Guid sensorId)
-        {
-            if (!_treeViewModel.Sensors.TryGetValue(sensorId, out var sensor))
-                return _emptyResult;
-
-            ConditionViewModel viewModel = sensor.Type switch
-            {
-                SensorType.File => new ConditionViewModel<FileValue>(false),
-                SensorType.String => new ConditionViewModel<StringValue>(false),
-                SensorType.Boolean => new ConditionViewModel<BooleanValue>(false),
-                SensorType.Version => new ConditionViewModel<VersionValue>(false),
-                SensorType.TimeSpan => new SingleConditionViewModel<TimeSpanValue, TimeSpan>(false),
-                SensorType.Integer => new SingleConditionViewModel<IntegerValue, int>(false),
-                SensorType.Double => new SingleConditionViewModel<DoubleValue, double>(false),
-                SensorType.IntegerBar => new BarConditionViewModel<IntegerBarValue, int>(false),
-                SensorType.DoubleBar => new BarConditionViewModel<DoubleBarValue, double>(false),
-                _ => null,
-            };
-
-            return PartialView("~/Views/Home/Alerts/_ConditionBlock.cshtml", viewModel);
-        }
+        public IActionResult AddAlertCondition(Guid sensorId) =>
+            _treeViewModel.Sensors.TryGetValue(sensorId, out var sensor)
+                ? PartialView("~/Views/Home/Alerts/_ConditionBlock.cshtml", BuildAlertCondition(sensor))
+                : _emptyResult;
 
         public IActionResult AddAlertAction(Guid entityId) =>
             TryGetSelectedNode(entityId, out var entity)
                 ? PartialView("~/Views/Home/Alerts/_ActionBlock.cshtml", new ActionViewModel(false, entity.GetAllChats()))
                 : _emptyResult;
+
+        public IActionResult GetOperation(Guid sensorId, AlertProperty property)
+        {
+            if (!_treeViewModel.Sensors.TryGetValue(sensorId, out var sensor))
+                return _emptyResult;
+
+            var condition = BuildAlertCondition(sensor);
+
+            return property switch
+            {
+                AlertProperty.NewSensorData => PartialView("~/Views/Home/Alerts/ConditionOperations/_NewDataOperation.cshtml"),
+
+                AlertProperty.TimeToLive or AlertProperty.Sensitivity =>
+                    PartialView("~/Views/Home/Alerts/ConditionOperations/_IntervalOperation.cshtml", condition.GetIntervalOperations(property)),
+
+                _ => PartialView("~/Views/Home/Alerts/ConditionOperations/_SimpleOperation.cshtml", condition.GetOperations(property)),
+            };
+        }
+
+        public IActionResult IsTargetVisible(PolicyOperation operation) => Json(operation.IsTargetVisible());
+
+        private static ConditionViewModel BuildAlertCondition(SensorNodeViewModel sensor) =>
+            sensor.Type switch
+            {
+                SensorType.File => new FileConditionViewModel(false),
+                SensorType.String => new StringConditionViewModel(false),
+                SensorType.Boolean => new CommonConditionViewModel(false),
+                SensorType.Version => new SingleConditionViewModel(false),
+                SensorType.TimeSpan => new SingleConditionViewModel(false),
+                SensorType.Integer => new SingleConditionViewModel(false),
+                SensorType.Double => new SingleConditionViewModel(false),
+                SensorType.IntegerBar => new BarConditionViewModel(false),
+                SensorType.DoubleBar => new BarConditionViewModel(false),
+                _ => null,
+            };
 
         private bool TryGetSelectedNode(Guid entityId, out NodeViewModel entity)
         {

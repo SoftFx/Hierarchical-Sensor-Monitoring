@@ -1,5 +1,6 @@
 ﻿using HSMCommon.Constants;
 using HSMDataCollector.Core;
+using HSMDataCollector.Logging;
 using HSMDataCollector.Options;
 using HSMDataCollector.PublicInterface;
 using HSMServer.Core.Cache;
@@ -56,21 +57,17 @@ namespace HSMServer.BackgroundServices
         {
             _database = database;
 
-            var collectorOptions = new CollectorOptions()
-            {
-                AccessKey = GetSelfMonitoringKey(cache),
-                ServerAddress = "https://localhost",
-            };
-
             var productInfoOptions = new VersionSensorOptions()
             {
                 Version = Assembly.GetEntryAssembly()?.GetName().GetVersion()
             };
 
-            var collectorInfoOptions = new CollectorMonitoringInfoOptions();
+            var loggerOptions = new LoggerOptions()
+            {
+                WriteDebug = false,
+            };
 
-
-            _collector = new DataCollector(collectorOptions).AddNLog();
+            _collector = new DataCollector(GetSelfMonitoringKey(cache)).AddNLog(loggerOptions);
 
             if (OperatingSystem.IsWindows())
             {
@@ -79,7 +76,7 @@ namespace HSMServer.BackgroundServices
                                   .AddSystemMonitoringSensors()
                                   .AddWindowsInfoMonitoringSensors()
                                   .AddProductVersion(productInfoOptions)
-                                  .AddCollectorMonitoringSensors(collectorInfoOptions);
+                                  .AddCollectorMonitoringSensors();
             }
             else
             {
@@ -87,7 +84,7 @@ namespace HSMServer.BackgroundServices
                                .AddDiskMonitoringSensors()
                                .AddSystemMonitoringSensors()
                                .AddProductVersion(productInfoOptions)
-                               .AddCollectorMonitoringSensors(collectorInfoOptions);
+                               .AddCollectorMonitoringSensors();
             }
 
             RequestSizeSensor = RegisterParamSensor<double>(RequestSizePath);

@@ -1,73 +1,106 @@
 ﻿using System;
 using System.Numerics;
-using System.Text;
 
 namespace HSMServer.Core.Model.Policies
 {
-    public abstract class SingleSensorPolicy<T, U> : Policy<T, U> where T : BaseValue<U>, new()
+    public abstract class SingleSensorPolicy<T, U> : Policy<T> where T : BaseValue<U>, new()
     {
+        protected abstract PolicyCondition<T, U> BasePolicyCondition { get; }
+
+
         protected override AlertState GetState(BaseValue value) => AlertState.Build((T)value, _sensor);
+
+        protected override PolicyCondition GetCondition(PolicyProperty property) => property switch
+        {
+            PolicyProperty.Value or PolicyProperty.Status or PolicyProperty.Comment or
+            PolicyProperty.NewSensorData => BasePolicyCondition,
+            _ => throw new NotImplementedException($"Not supported property {property} for {GetType().Name}"),
+        };
     }
 
 
-    public abstract class BarSensorPolicy<T, U> : Policy<T, U>
+    public abstract class BarSensorPolicy<T, U> : Policy<T>
         where T : BarBaseValue<U>, new()
         where U : INumber<U>
     {
+        protected abstract PolicyCondition<T, U> BasePolicyCondition { get; }
+
+
         protected override AlertState GetState(BaseValue value) => AlertState.Build((T)value, _sensor);
+
+        protected override PolicyCondition GetCondition(PolicyProperty property) => property switch
+        {
+            PolicyProperty.Min or PolicyProperty.Max or PolicyProperty.Mean or PolicyProperty.LastValue or
+            PolicyProperty.Status or PolicyProperty.Comment or PolicyProperty.NewSensorData => BasePolicyCondition,
+            PolicyProperty.Count => new PolicyIntegerCondition<T>(),
+            _ => throw new NotImplementedException($"Not supported property {property} for {GetType().Name}"),
+        };
     }
 
 
     public sealed class IntegerPolicy : SingleSensorPolicy<IntegerValue, int>
     {
-        protected override int GetConstTarget(string strValue) => int.Parse(strValue);
+        protected override PolicyCondition<IntegerValue, int> BasePolicyCondition => new PolicyIntegerCondition<IntegerValue>();
     }
 
 
     public sealed class DoublePolicy : SingleSensorPolicy<DoubleValue, double>
     {
-        protected override double GetConstTarget(string strValue) => double.Parse(strValue);
+        protected override PolicyCondition<DoubleValue, double> BasePolicyCondition => new PolicyDoubleCondition<DoubleValue>();
     }
 
 
     public sealed class BooleanPolicy : SingleSensorPolicy<BooleanValue, bool>
     {
-        protected override bool GetConstTarget(string strValue) => bool.Parse(strValue);
+        protected override PolicyCondition<BooleanValue, bool> BasePolicyCondition => new PolicyBooleanCondition<BooleanValue>();
     }
 
 
     public sealed class StringPolicy : SingleSensorPolicy<StringValue, string>
     {
-        protected override string GetConstTarget(string strValue) => strValue;
+        protected override PolicyCondition<StringValue, string> BasePolicyCondition => new PolicyStringCondition<StringValue>();
+
+        protected override PolicyCondition GetCondition(PolicyProperty property) => property switch
+        {
+            PolicyProperty.Length => new PolicyIntegerCondition<StringValue>(),
+            _ => base.GetCondition(property)
+        };
     }
 
 
     public sealed class TimeSpanPolicy : SingleSensorPolicy<TimeSpanValue, TimeSpan>
     {
-        protected override TimeSpan GetConstTarget(string strValue) => TimeSpan.Parse(strValue);
+        protected override PolicyCondition<TimeSpanValue, TimeSpan> BasePolicyCondition => new PolicyTimeSpanCondition<TimeSpanValue>();
     }
 
 
     public sealed class VersionPolicy : SingleSensorPolicy<VersionValue, Version>
     {
-        protected override Version GetConstTarget(string strValue) => Version.Parse(strValue);
+        protected override PolicyCondition<VersionValue, Version> BasePolicyCondition => new PolicyVersionCondition<VersionValue>();
     }
 
 
     public sealed class FilePolicy : SingleSensorPolicy<FileValue, byte[]>
     {
-        protected override byte[] GetConstTarget(string strValue) => Encoding.UTF8.GetBytes(strValue);
+        protected override PolicyCondition<FileValue, byte[]> BasePolicyCondition => new PolicyByteArrayCondition<FileValue>();
+
+
+        protected override PolicyCondition GetCondition(PolicyProperty property) => property switch
+        {
+            PolicyProperty.OriginalSize => new PolicyLongCondition<FileValue>(),
+            _ => base.GetCondition(property)
+        };
     }
 
 
     public sealed class IntegerBarPolicy : BarSensorPolicy<IntegerBarValue, int>
     {
-        protected override int GetConstTarget(string strValue) => int.Parse(strValue);
+        protected override PolicyCondition<IntegerBarValue, int> BasePolicyCondition => new PolicyIntegerCondition<IntegerBarValue>();
     }
 
 
     public sealed class DoubleBarPolicy : BarSensorPolicy<DoubleBarValue, double>
     {
-        protected override double GetConstTarget(string strValue) => double.Parse(strValue);
+        protected override PolicyCondition<DoubleBarValue, double> BasePolicyCondition => new PolicyDoubleCondition<DoubleBarValue>();
     }
 }

@@ -44,6 +44,12 @@ namespace HSMDataCollector.Alerts
         protected internal DataAlertCondition() { }
 
 
+        public DataAlertCondition<T> AndReceivedNewValue()
+        {
+            BuildCondition(AlertProperty.NewSensorData, AlertOperation.ReceivedNewValue);
+            return this;
+        }
+
         public DataAlertCondition<T> AndComment(AlertOperation operation)
         {
             BuildCondition(AlertProperty.Comment, operation);
