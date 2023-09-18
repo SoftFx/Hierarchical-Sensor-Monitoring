@@ -5,7 +5,7 @@ env:
   OUTPUT_FOLDER: ${{ github.workspace }}/BuildPingerOutput
 
   MODULE_PATH: src/module/HSMPingModule/HSMPingModule.csproj
-  CUSTOM_NUGET_STORAGE: src/module/HSMPingModule/nugets/
+  CUSTOM_NUGET_STORAGE: src/module/HSMPingModule/nugets
 
   DOCKER_DOCKERHUB_ORG: hsmonitoring
   DOCKER_REPOS: hsmpingmodule
