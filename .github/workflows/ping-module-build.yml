@@ -63,7 +63,7 @@ jobs:
       - name: Build full main repos name
         run: echo "DockerMainName=${{ env.DOCKER_DOCKERHUB_ORG }}/${{ env.DOCKER_REPOS }}:${{ needs.build.outputs.VERSION }}" >> $GITHUB_ENV
 
-      name: Build and push
+      - name: Build and push
         uses: docker/build-push-action@v5
         with:
           context: ${{ env.MODULE_PATH }}
