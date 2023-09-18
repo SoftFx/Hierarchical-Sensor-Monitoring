@@ -5,10 +5,10 @@ env:
   OUTPUT_FOLDER: ${{ github.workspace }}/BuildPingerOutput
 
   MODULE_PATH: src/module/HSMPingModule/HSMPingModule.csproj
+  CUSTOM_NUGET_STORAGE: src/module/HSMPingModuleSrc/nugets/
 
   DOCKER_DOCKERHUB_ORG: hsmonitoring
   DOCKER_REPOS: hsmpingmodule
-
 jobs:
   build:
     runs-on: windows-latest
@@ -27,7 +27,7 @@ jobs:
         run: dotnet restore ${{ env.MODULE_PATH }}
 
       - name: Add custom nuget storage
-        run: dotnet nuget add source /HSMPingModuleSrc/nugets/
+        run: dotnet nuget add source ${{ env.CUSTOM_NUGET_STORAGE }}
 
       - name: Publish HSMPingModule
         run: dotnet publish ${{ env.MODULE_PATH }} -c Release -o ${{ env.OUTPUT_FOLDER }}
