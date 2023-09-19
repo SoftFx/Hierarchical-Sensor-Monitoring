@@ -5,7 +5,7 @@ namespace HSMServer.Model.MultiToastViewModels
 {
     public sealed class ImportAlertsToastViewModel
     {
-        private readonly Dictionary<string, LimitedQueue<string>> _errorUpdates;
+        private readonly Dictionary<string, LimitedQueue<string>> _errorUpdates = new();
 
 
         public void AddError(string error, string sensorName)
@@ -21,7 +21,7 @@ namespace HSMServer.Model.MultiToastViewModels
             var builder = new StringBuilder(1 << 5);
 
             foreach (var (errorMessage, sensors) in _errorUpdates)
-                sensors.ToBuilder(builder, errorMessage);
+                sensors.ToBuilder(builder, $"{errorMessage} - ");
 
             return builder.ToString();
         }
