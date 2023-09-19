@@ -15,6 +15,7 @@ using HSMServer.Model.Folders;
 using HSMServer.Model.Folders.ViewModels;
 using HSMServer.Model.History;
 using HSMServer.Model.Model.History;
+using HSMServer.Model.MultiToastViewModels;
 using HSMServer.Model.TreeViewModel;
 using HSMServer.Model.TreeViewModels;
 using HSMServer.Model.ViewModel;
@@ -183,7 +184,7 @@ namespace HSMServer.Controllers
         [HttpPost]
         public ActionResult RemoveNode([FromBody] string[] ids)
         {
-            var model = new MultiActionToastViewModel();
+            var model = new MultiActionsToastViewModel();
 
             foreach (var id in ids)
             {
@@ -231,7 +232,7 @@ namespace HSMServer.Controllers
 
             model.Upload();
 
-            var toastViewModel = new MultiActionToastViewModel();
+            var toastViewModel = new MultiActionsToastViewModel();
             var isExpectedFromParent = model.ExpectedUpdateInterval?.TimeInterval is TimeInterval.FromParent;
 
             foreach (var id in model.SelectedNodes)
@@ -825,16 +826,19 @@ namespace HSMServer.Controllers
         [HttpPost]
         public string ImportAlerts([FromBody] AlertImportViewModel model)
         {
+            var toastViewModel = new ImportAlertsToastViewModel();
+
             if (_treeViewModel.Nodes.TryGetValue(model.NodeId, out var node))
             {
                 try
                 {
                     var alerts = JsonSerializer.Deserialize<List<AlertExportViewModel>>(model.FileContent, _alertsSerializationOptions);
 
-                    var availableChats = node.GetAllChats().ToDictionary(k => k.Name, v => v.SystemId);
                     var availableSensors = node.Sensors.ToDictionary(k => k.Value.Name, v => v.Key);
+                    var availableChats = node.GetAllChats().ToDictionary(k => k.Name, v => v.SystemId);
 
                     var sensorAlerts = new Dictionary<Guid, List<PolicyUpdate>>();
+
                     foreach (var alert in alerts)
                     {
                         var updates = alert.ToUpdates(availableSensors, availableChats, CurrentInitiator);
@@ -850,13 +854,20 @@ namespace HSMServer.Controllers
 
                     foreach (var (sensorId, alertUpdates) in sensorAlerts)
                     {
-                        var update = new SensorUpdate()
+                        try
                         {
-                            Id = sensorId,
-                            Policies = alertUpdates,
-                        };
+                            var update = new SensorUpdate()
+                            {
+                                Id = sensorId,
+                                Policies = alertUpdates,
+                            };
 
-                        _treeValuesCache.UpdateSensor(update);
+                            _treeValuesCache.UpdateSensor(update);
+                        }
+                        catch (Exception ex)
+                        {
+                            toastViewModel.AddError(ex.Message, _treeViewModel.Sensors[sensorId].Name);
+                        }
                     }
                 }
                 catch (Exception ex)
@@ -865,7 +876,7 @@ namespace HSMServer.Controllers
                 }
             }
 
-            return null;
+            return toastViewModel.ToResponse();
         }
 
 
