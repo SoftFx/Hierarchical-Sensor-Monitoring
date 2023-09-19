@@ -19,7 +19,6 @@ using HSMServer.Model.TreeViewModel;
 using HSMServer.Model.TreeViewModels;
 using HSMServer.Model.ViewModel;
 using HSMServer.Notification.Settings;
-using HSMServer.Notifications;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System;
@@ -39,22 +38,28 @@ namespace HSMServer.Controllers
     [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
     public class HomeController : BaseController
     {
+        private readonly JsonSerializerOptions _alertsSerializationOptions = new JsonSerializerOptions()
+        {
+            WriteIndented = true
+        };
+
         private readonly ITreeValuesCache _treeValuesCache;
         private readonly IFolderManager _folderManager;
         private readonly TreeViewModel _treeViewModel;
-        private readonly TelegramBot _telegramBot;
         private readonly IJournalService _journalService;
 
 
         public HomeController(ITreeValuesCache treeValuesCache, IFolderManager folderManager, TreeViewModel treeViewModel,
-                              IUserManager userManager, NotificationsCenter notifications, IJournalService journalService) : base(userManager)
+                              IUserManager userManager, IJournalService journalService) : base(userManager)
         {
-            _telegramBot = notifications.TelegramBot;
             _treeValuesCache = treeValuesCache;
             _treeViewModel = treeViewModel;
             _folderManager = folderManager;
             _journalService = journalService;
+
+            _alertsSerializationOptions.Converters.Add(new JsonStringEnumConverter());
         }
+
 
         public IActionResult Index()
         {
@@ -804,13 +809,12 @@ namespace HSMServer.Controllers
         public IActionResult ExportAlerts(Guid selectedId)
         {
             var node = _treeValuesCache.GetProduct(selectedId);
+
             if (node is null)
                 return _emptyResult;
 
-            var options = new JsonSerializerOptions() { WriteIndented = true };
-            options.Converters.Add(new JsonStringEnumConverter());
 
-            var policies = JsonSerializer.Serialize(node.Policies.GroupedPolicies.Select(p => new AlertExportViewModel(p)), options);
+            var policies = JsonSerializer.Serialize(node.Policies.GroupedPolicies.Select(p => new AlertExportViewModel(p)), _alertsSerializationOptions);
 
             var fileName = $"{node.FullPath.Replace('/', '_')}-alerts.json";
             Response.Headers.Add("Content-Disposition", $"attachment;filename={fileName}");
@@ -821,20 +825,43 @@ namespace HSMServer.Controllers
         [HttpPost]
         public string ImportAlerts([FromBody] AlertImportViewModel model)
         {
-            var node = _treeValuesCache.GetProduct(model.NodeId);
-
-            if (node is not null)
+            if (_treeViewModel.Nodes.TryGetValue(model.NodeId, out var node))
             {
                 try
                 {
-                    var options = new JsonSerializerOptions() { WriteIndented = true };
-                    options.Converters.Add(new JsonStringEnumConverter());
+                    var alerts = JsonSerializer.Deserialize<List<AlertExportViewModel>>(model.FileContent, _alertsSerializationOptions);
 
-                    var policies = JsonSerializer.Deserialize<List<AlertExportViewModel>>(model.FileContent, options);
+                    var availableChats = node.GetAllChats().ToDictionary(k => k.Name, v => v.SystemId);
+                    var availableSensors = node.Sensors.ToDictionary(k => k.Value.Name, v => v.Key);
+
+                    var sensorAlerts = new Dictionary<Guid, List<PolicyUpdate>>();
+                    foreach (var alert in alerts)
+                    {
+                        var updates = alert.ToUpdates(availableSensors, availableChats, CurrentInitiator);
+
+                        foreach (var (sensorId, update) in updates)
+                        {
+                            if (!sensorAlerts.ContainsKey(sensorId))
+                                sensorAlerts[sensorId] = new List<PolicyUpdate>();
+
+                            sensorAlerts[sensorId].Add(update);
+                        }
+                    }
+
+                    foreach (var (sensorId, alertUpdates) in sensorAlerts)
+                    {
+                        var update = new SensorUpdate()
+                        {
+                            Id = sensorId,
+                            Policies = alertUpdates,
+                        };
+
+                        _treeValuesCache.UpdateSensor(update);
+                    }
                 }
-                catch (Exception ex) 
+                catch (Exception ex)
                 {
-                    return ex.Message; 
+                    return ex.Message;
                 }
             }
 

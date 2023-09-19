@@ -1,5 +1,9 @@
-﻿using HSMServer.Core.Model;
+﻿using HSMServer.Core.Cache.UpdateEntities;
+using HSMServer.Core.Model;
 using HSMServer.Core.Model.Policies;
+using HSMServer.Core.TableOfChanges;
+using HSMServer.Extensions;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -40,6 +44,34 @@ namespace HSMServer.Model.DataAlerts
 
             Conditions = policy.Conditions.Select(c => new ConditionExportViewModel(c)).ToList();
         }
+
+
+        internal Dictionary<Guid, PolicyUpdate> ToUpdates(Dictionary<string, Guid> availableSensors, Dictionary<string, Guid> availableChats, InitiatorInfo initiator)
+        {
+            var result = new Dictionary<Guid, PolicyUpdate>(Sensors.Count);
+
+            foreach (var sensorName in Sensors)
+                if (availableSensors.TryGetValue(sensorName, out var sensorId) && !result.ContainsKey(sensorId))
+                {
+                    var policyUpdate = new PolicyUpdate()
+                    {
+                        Icon = Icon,
+                        Status = Status,
+                        Template = Template,
+                        IsDisabled = IsDisabled,
+                        Conditions = Conditions.Select(c => c.ToUpdate(sensorId)).ToList(),
+                        Destination = Destination is null
+                            ? new PolicyDestinationUpdate(true, availableChats.ToDictionary(k => k.Value, v => v.Key))
+                            : new PolicyDestinationUpdate(false, Destination.Where(availableChats.ContainsKey).ToDictionary(k => availableChats[k], v => v)),
+
+                        Initiator = initiator,
+                    };
+
+                    result.Add(sensorId, policyUpdate);
+                }
+
+            return result;
+        }
     }
 
 
@@ -60,5 +92,13 @@ namespace HSMServer.Model.DataAlerts
             Operation = condition.Operation;
             Target = condition.Target.Type == TargetType.Const ? condition.Target.Value : null;
         }
+
+
+        internal PolicyConditionUpdate ToUpdate(Guid sensorId) =>
+            new(Operation,
+                Property,
+                Operation.IsTargetVisible()
+                    ? new(TargetType.Const, Target)
+                    : new(TargetType.LastValue, sensorId.ToString()));
     }
 }
