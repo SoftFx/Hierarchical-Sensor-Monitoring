@@ -818,6 +818,29 @@ namespace HSMServer.Controllers
             return File(Encoding.UTF8.GetBytes(policies), fileName.GetContentType(), fileName);
         }
 
+        [HttpPost]
+        public string ImportAlerts([FromBody] AlertImportViewModel model)
+        {
+            var node = _treeValuesCache.GetProduct(model.NodeId);
+
+            if (node is not null)
+            {
+                try
+                {
+                    var options = new JsonSerializerOptions() { WriteIndented = true };
+                    options.Converters.Add(new JsonStringEnumConverter());
+
+                    var policies = JsonSerializer.Deserialize<List<AlertExportViewModel>>(model.FileContent, options);
+                }
+                catch (Exception ex) 
+                {
+                    return ex.Message; 
+                }
+            }
+
+            return null;
+        }
+
 
         private string GetSensorPath(string encodedId)
         {

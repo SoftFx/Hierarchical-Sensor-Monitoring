@@ -432,7 +432,47 @@ function buildContextMenu(node) {
             alertsSubmenu["Import"] = {
                 "label": `Import`,
                 "icon": "fa-solid fa-upload",
-                "action": _ => true
+                "action": _ => {
+                    var $input = $('<input type="file" />');
+
+                    $input.on("change", function () {
+                        var file = $(this).prop('files')[0];
+                        var fileName = file.name;
+
+                        if (file) {
+                            var reader = new FileReader();
+
+                            reader.readAsText(file, "UTF-8");
+
+                            reader.onload = function (evt) {
+                                var data = {
+                                    "NodeId": node.id,
+                                    "FileContent": evt.target.result
+                                };
+
+                                $.ajax({
+                                    type: 'POST',
+                                    data: JSON.stringify(data),
+                                    contentType: 'application/json',
+                                    url: importAlerts
+                                }).done((errorMessage) => {
+                                    if (errorMessage) {
+                                        showToast(`There is the error while parsing the file '${fileName}': ${errorMessage}`, "Error!");
+                                    }
+                                    else {
+                                        showToast(`Alerts have been successfully imported.`);
+                                    }
+                                });
+                            }
+
+                            reader.onerror = function () {
+                                showToast(`There is some errors while reading the file '${fileName}'.`, "Error!");
+                            }
+                        }
+                    });
+
+                    $input.trigger('click');
+                }
             }
 
             contextMenu["Alerts"] = {
