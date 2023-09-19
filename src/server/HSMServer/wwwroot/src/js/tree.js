@@ -457,7 +457,7 @@ function buildContextMenu(node) {
                                     url: importAlerts
                                 }).done((errorMessage) => {
                                     if (errorMessage) {
-                                        showToast(`There is some errors while parsing the file '${fileName}':\n${errorMessage}`, "Error!");
+                                        showToast(errorMessage, "Importing error!");
                                     }
                                     else {
                                         showToast(`Alerts have been successfully imported.`);
