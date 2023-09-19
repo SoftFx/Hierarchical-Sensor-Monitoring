@@ -50,9 +50,9 @@ namespace HSMDataCollector.Alerts
             return this;
         }
 
-        public DataAlertCondition<T> AndComment(AlertOperation operation)
+        public DataAlertCondition<T> AndComment(AlertOperation operation, string target = null)
         {
-            BuildCondition(AlertProperty.Comment, operation);
+            BuildCondition(AlertProperty.Comment, operation, target);
             return this;
         }
 
