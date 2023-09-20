@@ -14,23 +14,30 @@ public sealed class VpnService
     }
 
 
-    public Task<bool> Connect(string country, out string result) => GetResult(string.Format(ConnectCommand, country).BashExecute(), out result);
+    public Task<bool> Connect(string country) => GetResult(string.Format(ConnectCommand).BashExecute());
 
-    public Task<bool> Disconnect(out string error) => GetResult(DisconnectCommand.BashExecute(), out error);
+    public Task<bool> Disconnect() => GetResult(DisconnectCommand.BashExecute());
 
     public Task<bool> ChangeCountry(string country, out string result)
     {
-        if (_countries.TryGetValue(country, out _))
-            return Connect(country, out result);
-
         result = string.Empty;
+
+        if (_countries.TryGetValue(country, out _))
+            return Connect(country);
+
         return Task.FromResult(false);
     }
 
-    private static Task<bool> GetResult(string result, out string message)
+    private static async Task<bool> GetResult(string result)
     {
-        message = result;
-        return Task.FromResult(!result.StartsWith(ErrorStarted));
+        //message = result;
+
+        if (result.StartsWith(ErrorStarted))
+            return false;
+
+        await Task.Delay(TimeSpan.FromSeconds(10));
+
+        return true;
     }
 }
 
