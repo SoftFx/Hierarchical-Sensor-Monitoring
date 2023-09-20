@@ -127,6 +127,6 @@ namespace HSMServer.Core.Model.Policies
         };
 
 
-        public override string ToString() => $"{Property} {Operation.GetDisplayName()} {Target.Value}";
+        public override string ToString() => $"{Property} {Operation.GetDisplayName()}{(Target.Type is TargetType.Const ? $" {Target.Value}" : string.Empty)}";
     }
 }

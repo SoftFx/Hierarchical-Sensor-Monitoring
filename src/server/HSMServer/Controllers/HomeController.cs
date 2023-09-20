@@ -841,7 +841,7 @@ namespace HSMServer.Controllers
 
                     foreach (var alert in alerts)
                     {
-                        var updates = alert.ToUpdates(availableSensors, availableChats, CurrentInitiator);
+                        var updates = alert.ToUpdates(availableSensors, availableChats);
 
                         foreach (var (sensorId, update) in updates)
                         {
@@ -860,6 +860,7 @@ namespace HSMServer.Controllers
                             {
                                 Id = sensorId,
                                 Policies = alertUpdates,
+                                Initiator = CurrentInitiator,
                             };
 
                             _treeValuesCache.UpdateSensor(update);

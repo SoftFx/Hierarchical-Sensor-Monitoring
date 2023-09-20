@@ -1,7 +1,6 @@
 ﻿using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Policies;
-using HSMServer.Core.TableOfChanges;
 using HSMServer.Extensions;
 using System;
 using System.Collections.Generic;
@@ -46,7 +45,7 @@ namespace HSMServer.Model.DataAlerts
         }
 
 
-        internal Dictionary<Guid, PolicyUpdate> ToUpdates(Dictionary<string, Guid> availableSensors, Dictionary<string, Guid> availableChats, InitiatorInfo initiator)
+        internal Dictionary<Guid, PolicyUpdate> ToUpdates(Dictionary<string, Guid> availableSensors, Dictionary<string, Guid> availableChats)
         {
             var result = new Dictionary<Guid, PolicyUpdate>(Sensors.Count);
 
@@ -63,8 +62,6 @@ namespace HSMServer.Model.DataAlerts
                         Destination = Destination is null
                             ? new PolicyDestinationUpdate(true, availableChats.ToDictionary(k => k.Value, v => v.Key))
                             : new PolicyDestinationUpdate(false, Destination.Where(availableChats.ContainsKey).ToDictionary(k => availableChats[k], v => v)),
-
-                        Initiator = initiator,
                     };
 
                     result.Add(sensorId, policyUpdate);
