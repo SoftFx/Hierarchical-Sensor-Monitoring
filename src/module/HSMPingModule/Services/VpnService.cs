@@ -3,9 +3,15 @@ using static HSMPingModule.Services.VpnCommands;
 
 namespace HSMPingModule.Services;
 
-public class VpnService
+public sealed class VpnService
 {
-    private readonly HashSet<string> _countries = LoadCountries();
+    private readonly HashSet<string> _countries;
+
+
+    public VpnService()
+    {
+        _countries = CountriesCommand.BashExecute().Split(", ").ToHashSet();
+    }
 
 
     public Task<bool> Connect(string country, out string result) => GetResult(string.Format(ConnectCommand, country).BashExecute(), out result);
@@ -20,8 +26,6 @@ public class VpnService
         result = string.Empty;
         return Task.FromResult(false);
     }
-
-    private static HashSet<string> LoadCountries() => CountriesCommand.BashExecute().Split(", ").ToHashSet();
 
     private static Task<bool> GetResult(string result, out string message)
     {

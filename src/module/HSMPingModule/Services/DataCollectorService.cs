@@ -82,7 +82,7 @@ internal sealed class DataCollectorService : IDataCollectorService, IDisposable
         }
 
         sensor.AddValue(reply.Value, reply.Status, reply.Comment);
-        _logger.LogInformation("Added new value to the sensor {0}, Value: {1}", path, reply.Value);
+        _logger.LogInformation("Added new value to the sensor {path}, Value: {value}", path, reply.Value);
     }
 
     public void AddApplicationException(string exceptionMessage) => _exceptionSensor.AddValue(exceptionMessage, SensorStatus.Ok);

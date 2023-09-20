@@ -66,6 +66,6 @@ jobs:
       - name: Build and push
         uses: docker/build-push-action@v5
         with:
-          context: "{{defaultContext}}:${{  env.DOCKER_CONTEXT_PATH }}"
+          context: "{{defaultContext}}:${{ env.DOCKER_CONTEXT_PATH }}"
           tags: ${{ env.DockerMainName }}
           push: true

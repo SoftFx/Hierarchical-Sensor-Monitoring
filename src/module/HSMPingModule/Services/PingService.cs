@@ -8,6 +8,7 @@ namespace HSMPingModule.Services;
 internal class PingService : BackgroundService
 {
     private readonly ConcurrentDictionary<string, ConcurrentDictionary<string, PingAdapter>> _newPings = new();
+
     private readonly CancellationTokenSource _tokenSource = new ();
     private readonly IDataCollectorService _collectorService;
     private readonly ILogger<PingService> _logger;
