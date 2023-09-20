@@ -1,7 +1,7 @@
-using HSMPingModule.Collector;
 using HSMPingModule.Config;
+using HSMPingModule.DataCollectorWrapper;
 using HSMPingModule.Services;
-using HSMPingModule.Services.Interfaces;
+using HSMPingModule.VpnManager;
 using NLog;
 using NLog.Extensions.Logging;
 using NLog.Web;
@@ -18,12 +18,12 @@ try
     builder.Configuration.SetBasePath(ServiceConfig.ConfigPath)
                          .AddJsonFile(ServiceConfig.ConfigName, true);
 
-    builder.Services.Configure<ServiceConfig>(config => config.SetUpConfig(builder.Configuration, logger));
+    var config = new ServiceConfig(builder.Configuration, logger);
 
-    builder.Services.AddSingleton<IDataCollectorService, DataCollectorService>();
-    builder.Services.AddSingleton<VpnService>();
+    builder.Services.AddSingleton(config)
+                    .AddSingleton(VpnFactory.GetVpn(config.VpnSettings))
+                    .AddSingleton<IDataCollectorWrapper, DataCollectorWrapper>();
 
-    builder.Services.AddHostedService<SettingsWatcherService>();
     builder.Services.AddHostedService<PingService>();
 
     var app = builder.Build();

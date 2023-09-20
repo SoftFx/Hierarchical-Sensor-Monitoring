@@ -50,11 +50,11 @@ $ConfigFolder = "C:\HSMPinger\Config:/HSMPingModule/Config"
 $SecondConfig = "C:\HSMPinger\SecondConfig:/Config"
 
 #--net=host
-$ContainerId = docker run --user 0 -ti -d --name $FullContainerName --cap-add=NET_ADMIN  --net=HSM-Ping-network --cap-add=NET_RAW -e TOKEN= -e TECHNOLOGY=NordLynx -v $LogsFolder -v $ConfigFolder -v $SecondConfig $ExpectedImageId
+$ContainerId = docker run --user 0 -ti -d --name $FullContainerName --cap-add=NET_ADMIN --net=HSM-Ping-network --cap-add=NET_RAW -e TOKEN= -e TECHNOLOGY=NordLynx -v $LogsFolder -v $ConfigFolder -v $SecondConfig $ExpectedImageId
 
 # docker network create $NetworkName
 
-$ServerContainerId = docker ps -q -f "name=$ServerPrefix"
+# $ServerContainerId = docker ps -q -f "name=$ServerPrefix"
 # if (!$ServerContainerId)
 # {
 #     Write-Host "Running HSM server container hasn't be found"

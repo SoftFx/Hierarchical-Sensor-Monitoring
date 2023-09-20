@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using HSMPingModule.Config;
-using HSMPingModule.Services.Interfaces;
+using HSMPingModule.DataCollectorWrapper;
+using HSMPingModule.VpnManager;
 using Microsoft.Extensions.Options;
 
 namespace HSMPingModule.Services;
@@ -10,20 +11,20 @@ internal class PingService : BackgroundService
     private readonly ConcurrentDictionary<string, ConcurrentDictionary<string, PingAdapter>> _newPings = new();
 
     private readonly CancellationTokenSource _tokenSource = new ();
-    private readonly IDataCollectorService _collectorService;
+    private readonly IDataCollectorWrapper _collector;
     private readonly ILogger<PingService> _logger;
-    private readonly VpnService _service;
+    private readonly BaseVpnManager _vpn;
     private readonly ServiceConfig _config;
 
 
-    public PingService(IOptionsMonitor<ServiceConfig> config, IDataCollectorService collectorService, ILogger<PingService> logger, VpnService service)
+    public PingService(IOptionsMonitor<ServiceConfig> config, IDataCollectorWrapper collector, ILogger<PingService> logger, BaseVpnManager vpn)
     {
         _logger = logger;
-        _service = service;
+        _vpn = vpn;
 
-        _collectorService = collectorService;
+        _collector = collector;
         _config = config.CurrentValue;
-        _config.OnChange += RebuildPings;
+        _config.OnChanged += RebuildPings;
 
         InitPings();
     }
@@ -31,14 +32,14 @@ internal class PingService : BackgroundService
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        await _collectorService.StartAsync();
+        await _collector.Start();
 
         _ = StartPinging();
     }
 
     public override Task StopAsync(CancellationToken cancellationToken)
     {
-        _collectorService.StopAsync();
+        _collector.Stop();
         return base.StopAsync(cancellationToken);
     }
 
@@ -60,7 +61,9 @@ internal class PingService : BackgroundService
         while (await timer.WaitForNextTickAsync(_tokenSource.Token))
             foreach (var (country, pings) in _newPings)
             {
-                if (await _service.ChangeCountry(country, out var result))
+                var answer = await _vpn.SwitchCountry(country);
+
+                if (answer.IsOk)
                 {
                     foreach (var (_, ping) in pings)
                         sendingPings.Add(Task.Run(() => ping.Ping()));
@@ -70,7 +73,7 @@ internal class PingService : BackgroundService
                 else
                 {
                     _logger.LogInformation("Couldn't change country to {0}", country);
-                    _collectorService.AddApplicationException($"Error occured during country change to {country}. Error message: {result}");
+                    _collector.AddApplicationException($"Error occured during country change to {country}. Error message: {answer.Error}");
                 }
             }
     }
@@ -78,7 +81,7 @@ internal class PingService : BackgroundService
     private void InitPings()
     {
         foreach (var (_, pingAdapter) in _newPings.SelectMany(x => x.Value))
-            pingAdapter.SendResult -= _collectorService.PingResultSend;
+            pingAdapter.SendResult -= _collector.PingResultSend;
 
         _newPings.Clear();
 
@@ -95,7 +98,7 @@ internal class PingService : BackgroundService
                         [hostname] = ping
                     });
 
-                ping.SendResult += _collectorService.PingResultSend;
+                ping.SendResult += _collector.PingResultSend;
 
                 _logger.LogInformation("New pinging sensor added at {path}", _newPings[country][hostname].SensorPath);
             }

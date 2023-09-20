@@ -9,8 +9,8 @@ internal sealed class ResourceSettings
     public WebSite DefaultSiteNodeSettings { get; set; } = new()
     {
         TTL = TimeSpan.FromMinutes(15),
-        PingErrorValue = 15,
         PingRequestDelaySec = 15,
+        PingErrorValue = 15,
     };
 
 
