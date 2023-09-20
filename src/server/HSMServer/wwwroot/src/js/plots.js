@@ -309,6 +309,10 @@ export class TimeSpanPlot extends Plot {
         if (this.checkTtl(value))
             return value.comment;
 
+        return this.getTimeSpanAsText(timespan);
+    }
+
+    getTimeSpanAsText(timespan){
         if (timespan === undefined)
             return '0h 0m 0s';
 
@@ -321,17 +325,21 @@ export class TimeSpanPlot extends Plot {
         const MAX_TIME_POINTS = 10
 
         let maxVal = Math.max(...this.y)
-        let step = Math.max(maxVal / MAX_TIME_POINTS, 1);
+        let step = Math.max(maxVal / MAX_TIME_POINTS, 1)
+
         let tVals = []
+        let tValsCustomData = []
+
         let cur = 0
         while (cur <= maxVal) {
             tVals.push(cur);
+            tValsCustomData.push(this.getTimeSpanAsText(new TimeSpan.TimeSpan(cur)))
             cur += step;
         }
 
         return {
             yaxis: {
-                ticktext: this.customdata,
+                ticktext: tValsCustomData,
                 tickvals: tVals,
                 tickfont: {
                     size: 10
