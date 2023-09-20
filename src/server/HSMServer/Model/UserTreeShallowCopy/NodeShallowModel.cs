@@ -48,7 +48,7 @@ namespace HSMServer.Model.UserTreeShallowCopy
                     ? $"{Data.AllSensorsCount}"
                     : $"{VisibleSubtreeSensorsCount}/{Data.AllSensorsCount}";
 
-                return $"({sensorsCount} sensors)";
+                return $"{sensorsCount} sensors";
             }
         }
 

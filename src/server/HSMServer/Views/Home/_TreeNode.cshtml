@@ -17,7 +17,7 @@
 <li class="@arrowIcon" id='@data.EncodedId' title='@data.Tooltip' data-jstree='@Model.ToJSTree()'>
     <span class="@(Model.IsMutedState ? "muted-state-text" : "")">
         @await Html.PartialAsync("~/Views/Home/Alerts/_AlertIconsList.cshtml", new AlertIconsViewModel(data.AlertIcons))
-        @Html.Raw(data.Name.GetShortNodeName()) @Model.SensorsCountString
+        @Html.Raw(data.Name.GetShortNodeName())
     </span>
 
     @if (!data.IsEmpty && !Model.IsMutedState && showIcons)
@@ -55,6 +55,8 @@
             </span>
         }
     }
+
+    <span class="tree-sensors-count">@Model.SensorsCountString</span>
 
     @if (Model.ErrorsCount > 0)
     {
