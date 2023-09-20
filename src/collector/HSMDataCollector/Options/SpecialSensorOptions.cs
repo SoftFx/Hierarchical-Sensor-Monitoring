@@ -1,5 +1,6 @@
 ﻿using HSMDataCollector.DefaultSensors.SystemInfo;
 using System;
+using HSMSensorDataObjects;
 
 namespace HSMDataCollector.Options
 {
@@ -75,4 +76,32 @@ namespace HSMDataCollector.Options
     public sealed class WindowsInfoSensorOptions : MonitoringInstantSensorOptions { }
 
     public sealed class CollectorMonitoringInfoOptions : MonitoringInstantSensorOptions { }
+
+    public sealed class WindowsLogsOptions : InstantSensorOptions
+    {
+        public bool IsError { get; private set; }
+        
+        public bool IsWarning { get; private set; }
+        
+        public WindowsLogsOptions ErrorLogs()
+        {
+            Path = "Windows Logs/Windows Error Logs";
+            IsError = true;
+
+            return this;
+        }
+        
+        public WindowsLogsOptions WarningLogs()
+        {
+            Path = "Windows Logs/Windows Warning Logs";
+            IsWarning = true;
+
+            return this;
+        }
+
+        public WindowsLogsOptions()
+        {
+            Type = SensorType.StringSensor;
+        }
+    }
 }

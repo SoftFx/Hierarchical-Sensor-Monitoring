@@ -121,6 +121,9 @@ namespace HSMDataCollector.DefaultSensors
         public IWindowsCollection AddWindowsInfoMonitoringSensors(WindowsInfoSensorOptions options) =>
             AddWindowsLastUpdate(options).AddWindowsLastRestart(options);
 
+        public IWindowsCollection AddWindowsLogs(WindowsLogsOptions options) =>
+            ToWindows(new WindowsErrorLogs(new WindowsLogsOptions().ErrorLogs())).ToWindows(new WindowsWarningLogs(new WindowsLogsOptions().WarningLogs()));
+
         #endregion
 
 
