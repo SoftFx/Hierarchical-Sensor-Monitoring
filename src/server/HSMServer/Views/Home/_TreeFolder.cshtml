@@ -49,6 +49,11 @@
         }
     }
 
+    @if (Model.ErrorsCount > 0)
+    {
+        <span class="tree-errors-count">@Model.Errors</span>
+    }
+
     @foreach (var child in Model.Products)
     {
         <ul>@await Html.PartialAsync("_TreeNode", child)</ul>

@@ -22,6 +22,12 @@
     padding: 0px 0px 0px 12px;
 }
 
+.tree-errors-count {
+    color: rgb(169, 15, 26);
+    font-size: smaller;
+    font-weight: normal;
+}
+
 .time-ago-div {
     color: grey;
 }

@@ -85,6 +85,8 @@ namespace HSMServer.Model.UserTreeShallowCopy
             if (user.IsSensorVisible(sensor))
                 VisibleSubtreeSensorsCount++;
 
+            ErrorsCount += shallowSensor.ErrorsCount;
+
             return shallowSensor;
         }
 
@@ -108,6 +110,7 @@ namespace HSMServer.Model.UserTreeShallowCopy
             GrafanaState.CalculateState(node.GrafanaState);
 
             VisibleSubtreeSensorsCount += node.VisibleSubtreeSensorsCount;
+            ErrorsCount += node.ErrorsCount;
 
             return node;
         }
