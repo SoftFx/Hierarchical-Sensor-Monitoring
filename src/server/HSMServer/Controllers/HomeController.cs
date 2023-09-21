@@ -39,7 +39,7 @@ namespace HSMServer.Controllers
     [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
     public class HomeController : BaseController
     {
-        private readonly JsonSerializerOptions _alertsSerializationOptions = new JsonSerializerOptions()
+        private readonly JsonSerializerOptions _alertsSerializationOptions = new()
         {
             WriteIndented = true
         };

@@ -20,7 +20,7 @@ namespace HSMServer.Model.DataAlerts
 
         public SensorStatus Status { get; set; }
 
-        public List<string> Destination { get; set; }
+        public List<string> Chats { get; set; }
 
         public bool IsDisabled { get; set; }
 
@@ -39,7 +39,7 @@ namespace HSMServer.Model.DataAlerts
             IsDisabled = policy.IsDisabled;
 
             if (!policy.Destination.AllChats)
-                Destination = policy.Destination.Chats.Values.ToList();
+                Chats = policy.Destination.Chats.Values.ToList();
 
             Conditions = policy.Conditions.Select(c => new ConditionExportViewModel(c)).ToList();
         }
@@ -59,9 +59,9 @@ namespace HSMServer.Model.DataAlerts
                         Template = Template,
                         IsDisabled = IsDisabled,
                         Conditions = Conditions.Select(c => c.ToUpdate(sensorId)).ToList(),
-                        Destination = Destination is null
+                        Destination = Chats is null
                             ? new PolicyDestinationUpdate(true, availableChats.ToDictionary(k => k.Value, v => v.Key))
-                            : new PolicyDestinationUpdate(false, Destination.Where(availableChats.ContainsKey).ToDictionary(k => availableChats[k], v => v)),
+                            : new PolicyDestinationUpdate(false, Chats.Where(availableChats.ContainsKey).ToDictionary(k => availableChats[k], v => v)),
                     };
 
                     result.Add(sensorId, policyUpdate);

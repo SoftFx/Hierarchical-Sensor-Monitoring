@@ -7,8 +7,5 @@ namespace HSMServer.Model.DataAlerts
         public Guid NodeId { get; set; }
 
         public string FileContent { get; set; }
-
-
-        public AlertImportViewModel() { }
     }
 }
