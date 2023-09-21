@@ -178,7 +178,7 @@ namespace HSMServer.Core.Model
             Integration = (int)Integration,
             OriginalUnit = (int?)OriginalUnit,
             AggregateValues = AggregateValues,
-            Policies = Policies.Ids.Select(u => u.ToString()).ToList(),
+            Policies = Policies.Select(u => u.Id.ToString()).ToList(),
             EndOfMuting = EndOfMuting?.Ticks ?? 0L,
             Settings = Settings.ToEntity(),
             TTLPolicy = Policies.TimeToLive?.ToEntity(),

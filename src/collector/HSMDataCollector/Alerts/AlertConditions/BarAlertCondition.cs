@@ -9,31 +9,31 @@ namespace HSMDataCollector.Alerts
 
         public BarAlertCondition AndMax<T>(AlertOperation operation, T target) where T : struct
         {
-            BuildCondition(AlertProperty.Max, operation, target.ToString());
+            BuildConstCondition(AlertProperty.Max, operation, target.ToString());
             return this;
         }
 
         public BarAlertCondition AndMean<T>(AlertOperation operation, T target) where T : struct
         {
-            BuildCondition(AlertProperty.Mean, operation, target.ToString());
+            BuildConstCondition(AlertProperty.Mean, operation, target.ToString());
             return this;
         }
 
         public BarAlertCondition AndMin<T>(AlertOperation operation, T target) where T : struct
         {
-            BuildCondition(AlertProperty.Min, operation, target.ToString());
+            BuildConstCondition(AlertProperty.Min, operation, target.ToString());
             return this;
         }
 
         public BarAlertCondition AndLastValue<T>(AlertOperation operation, T target) where T : struct
         {
-            BuildCondition(AlertProperty.LastValue, operation, target.ToString());
+            BuildConstCondition(AlertProperty.LastValue, operation, target.ToString());
             return this;
         }
 
         public BarAlertCondition AndCount(AlertOperation operation, int target)
         {
-            BuildCondition(AlertProperty.Count, operation, target.ToString());
+            BuildConstCondition(AlertProperty.Count, operation, target.ToString());
             return this;
         }
     }

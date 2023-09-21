@@ -32,9 +32,9 @@ namespace HSMDataCollector.Alerts
             return (InstantAlertCondition)new InstantAlertCondition().AndReceivedNewValue();
         }
 
-        public static InstantAlertCondition IfComment(AlertOperation operation)
+        public static InstantAlertCondition IfComment(AlertOperation operation, string target = null)
         {
-            return (InstantAlertCondition)new InstantAlertCondition().AndComment(operation);
+            return (InstantAlertCondition)new InstantAlertCondition().AndComment(operation, target);
         }
 
         public static InstantAlertCondition IfStatus(AlertOperation operation)
@@ -68,14 +68,14 @@ namespace HSMDataCollector.Alerts
             return new BarAlertCondition().AndCount(operation, value);
         }
 
-        public static BarAlertCondition IfBarComment(AlertOperation operation)
+        public static BarAlertCondition IfBarComment(AlertOperation operation, string target = null)
         {
-            return (BarAlertCondition)new BarAlertCondition().AndComment(operation);
+            return (BarAlertCondition)new BarAlertCondition().AndComment(operation, target);
         }
 
         public static BarAlertCondition IfBarStatus(AlertOperation operation)
         {
-            return (BarAlertCondition)new BarAlertCondition().AndComment(operation).AndStatus(operation);
+            return (BarAlertCondition)new BarAlertCondition().AndStatus(operation);
         }
 
         public static BarAlertCondition IfReceivedNewBarValue()
