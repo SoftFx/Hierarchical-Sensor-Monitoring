@@ -19,6 +19,9 @@ namespace HSMServer.Model.UserTreeShallowCopy
         {
             IsGrafanaEnabled = data.Integration.HasGrafana();
 
+            if (data.Status is TreeViewModel.SensorStatus.Error)
+                ErrorsCount = 1;
+
             _mutedValue = data.State == SensorState.Muted;
 
             var notifications = data.RootProduct.Notifications;
