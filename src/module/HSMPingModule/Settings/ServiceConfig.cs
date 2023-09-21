@@ -37,7 +37,7 @@ internal sealed class ServiceConfig
 
     public ResourceSettings ResourceSettings { get; private set; } = new();
 
-    public VpnSettings VpnSettings { get; private set; } = new();
+    public PingSettings PingSettings { get; private set; } = new();
 
 
     internal event Action OnChanged;
@@ -79,7 +79,7 @@ internal sealed class ServiceConfig
 
         HSMDataCollectorSettings = Read<CollectorSettings>(nameof(HSMDataCollectorSettings));
         ResourceSettings = Read<ResourceSettings>(nameof(ResourceSettings)).ApplyDefaultSettings();
-        VpnSettings = Read<VpnSettings>(nameof(VpnSettings));
+        PingSettings = Read<PingSettings>(nameof(PingSettings));
 
         _logger.Info("Read collector key: {key}", HSMDataCollectorSettings.Key);
         _logger.Info("Read collector port: {port}", HSMDataCollectorSettings.Port);

@@ -2,7 +2,7 @@
 using HSMDataCollector.Options;
 using HSMDataCollector.PublicInterface;
 using HSMPingModule.Config;
-using HSMPingModule.Models;
+using HSMPingModule.PingServices;
 using HSMPingModule.Settings;
 using HSMSensorDataObjects;
 using NLog;
@@ -10,7 +10,8 @@ using System.Collections.Concurrent;
 
 namespace HSMPingModule.DataCollectorWrapper;
 
-internal sealed class DataCollectorWrapper : IDataCollectorWrapper, IDisposable
+
+internal sealed class DataCollectorWrapper : IDataCollectorWrapper
 {
     private readonly ConcurrentDictionary<string, IInstantValueSensor<double>> _sensors = new();
 
@@ -62,32 +63,23 @@ internal sealed class DataCollectorWrapper : IDataCollectorWrapper, IDisposable
     public Task Start() => _collector.Start().ContinueWith(_ => _logger.Info("Collector started"));
 
 
-    public async Task PingResultSend(WebSite webSite, string country, string hostname, Task<PingResponse> taskReply)
+    public void SendPingResult(ResourceSensor resource, PingResponse result)
     {
-        var reply = await taskReply;
-        var path = $"{hostname}/{country}";
+        var sensorPath = resource.SensorPath;
 
-        if (reply.IsException)
+        if (!_sensors.TryGetValue(sensorPath, out var sensor))
         {
-            _exceptionSensor.AddValue(reply.Comment, reply.Status, $"Path: {path}");
-            return;
+            sensor = _collector.CreateDoubleSensor(sensorPath, resource.SensorOptions);
+
+            _sensors.TryAdd(sensorPath, sensor);
+
+            _logger.Info("New sensor has been added: {path}", sensorPath);
         }
 
-        if (!_sensors.TryGetValue(path, out var sensor))
-        {
-            sensor = _collector.CreateDoubleSensor(path, webSite.GetOptions(country, hostname, 60));
+        sensor.AddValue(result.Value, result.Status, result.Comment);
 
-            _sensors.TryAdd(path, sensor);
-        }
-
-        sensor.AddValue(reply.Value, reply.Status, reply.Comment);
-        _logger.Info("Added new value to the sensor {path}, Value: {value}", path, reply.Value);
+        _logger.Info("New sensor value has been sent: {path} -> {value}", sensorPath, result);
     }
 
     public void AddApplicationException(string exceptionMessage) => _exceptionSensor.AddValue(exceptionMessage, SensorStatus.Ok);
-
-    public void Dispose()
-    {
-        _collector?.Dispose();
-    }
 }

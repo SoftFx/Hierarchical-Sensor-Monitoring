@@ -4,7 +4,7 @@ namespace HSMPingModule.VpnManager
 {
     internal static class VpnFactory
     {
-        internal static BaseVpnManager GetVpn(VpnSettings settings)
+        internal static BaseVpnManager GetVpn(PingSettings settings)
         {
             return settings.UseNordVpn ? new NordVpnManager() : new NoVpnManager();
         }

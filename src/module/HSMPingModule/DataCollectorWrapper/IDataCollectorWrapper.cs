@@ -1,10 +1,10 @@
-using HSMPingModule.Models;
+using HSMPingModule.PingServices;
 
 namespace HSMPingModule.DataCollectorWrapper;
 
 internal interface IDataCollectorWrapper
 {
-    internal Task PingResultSend(WebSite webSite, string country, string hostname, Task<PingResponse> taskReply);
+    internal void SendPingResult(ResourceSensor resource, PingResponse pingResponse);
 
     internal void AddApplicationException(string exceptionMessage);
 

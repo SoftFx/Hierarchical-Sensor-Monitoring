@@ -1,112 +1,93 @@
-using System.Collections.Concurrent;
 using HSMPingModule.Config;
 using HSMPingModule.DataCollectorWrapper;
 using HSMPingModule.VpnManager;
-using Microsoft.Extensions.Options;
+using NLog;
+using System.Collections.Concurrent;
 
-namespace HSMPingModule.Services;
+namespace HSMPingModule.PingServices;
 
 internal class PingService : BackgroundService
 {
-    private readonly ConcurrentDictionary<string, ConcurrentDictionary<string, PingAdapter>> _newPings = new();
+    private readonly ConcurrentDictionary<string, ResourceSensor> _pingRequests = new();
 
-    private readonly CancellationTokenSource _tokenSource = new ();
+    private readonly CancellationTokenSource _tokenSource = new();
+    private readonly Logger _logger = LogManager.GetCurrentClassLogger();
+
     private readonly IDataCollectorWrapper _collector;
-    private readonly ILogger<PingService> _logger;
-    private readonly BaseVpnManager _vpn;
     private readonly ServiceConfig _config;
+    private readonly BaseVpnManager _vpn;
+    private readonly ResourceTree _tree;
 
 
-    public PingService(IOptionsMonitor<ServiceConfig> config, IDataCollectorWrapper collector, ILogger<PingService> logger, BaseVpnManager vpn)
+    private TimeSpan PingDelay => _config.PingSettings.RequestsPeriod;
+
+
+    public PingService(ResourceTree tree, ServiceConfig config, IDataCollectorWrapper collector, BaseVpnManager vpn)
     {
-        _logger = logger;
-        _vpn = vpn;
-
         _collector = collector;
-        _config = config.CurrentValue;
-        _config.OnChanged += RebuildPings;
+        _config = config;
+        _tree = tree;
+        _vpn = vpn;
+    }
 
-        InitPings();
+
+    public override Task StartAsync(CancellationToken token) => _collector.Start().ContinueWith(_ => base.StartAsync(token)).Unwrap();
+
+    public override Task StopAsync(CancellationToken token)
+    {
+        _tokenSource.Cancel();
+
+        return _collector.Stop().ContinueWith(_ => base.StopAsync(token)).Unwrap();
     }
 
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        await _collector.Start();
+        do
+        {
+            var start = Ceil(DateTime.UtcNow, PingDelay);
 
-        _ = StartPinging();
-    }
+            await Task.Delay(start - DateTime.UtcNow, _tokenSource.Token);
 
-    public override Task StopAsync(CancellationToken cancellationToken)
-    {
-        _collector.Stop();
-        return base.StopAsync(cancellationToken);
-    }
-
-
-    private void RebuildPings()
-    { 
-        _logger.LogInformation("Settings file was updated, starting reloading");
-        
-        CancelAndResetToken();
-
-        InitPings();
-    }
-
-    private async Task StartPinging()
-    {
-        var timer = new PeriodicTimer(TimeSpan.FromSeconds(_config.ResourceSettings.DefaultSiteNodeSettings.PingRequestDelaySec.Value));
-        var sendingPings = new List<Task>();
-
-        while (await timer.WaitForNextTickAsync(_tokenSource.Token))
-            foreach (var (country, pings) in _newPings)
+            foreach ((var country, var sensors) in _tree.CountrySet)
             {
-                var answer = await _vpn.SwitchCountry(country);
-
-                if (answer.IsOk)
+                try
                 {
-                    foreach (var (_, ping) in pings)
-                        sendingPings.Add(Task.Run(() => ping.Ping()));
+                    var trySwitch = await _vpn.SwitchCountry(country);
 
-                    await Task.WhenAll(sendingPings).ContinueWith(_ => sendingPings.Clear());
-                }
-                else
-                {
-                    _logger.LogInformation("Couldn't change country to {0}", country);
-                    _collector.AddApplicationException($"Error occured during country change to {country}. Error message: {answer.Error}");
-                }
-            }
-    }
-
-    private void InitPings()
-    {
-        foreach (var (_, pingAdapter) in _newPings.SelectMany(x => x.Value))
-            pingAdapter.SendResult -= _collector.PingResultSend;
-
-        _newPings.Clear();
-
-        foreach (var (hostname, website) in _config.ResourceSettings.WebSites)
-            foreach (var country in website.Countries)
-            {
-                var ping = new PingAdapter(website, hostname, country);
-
-                if (_newPings.TryGetValue(country, out var dict))
-                    dict.TryAdd(hostname, ping);
-                else
-                    _newPings.TryAdd(country, new ConcurrentDictionary<string, PingAdapter>
+                    if (!trySwitch.IsOk)
                     {
-                        [hostname] = ping
-                    });
+                        _logger.Error($"Cannot switch to {country}");
+                        continue;
+                    }
 
-                ping.SendResult += _collector.PingResultSend;
+                    _pingRequests.Clear();
 
-                _logger.LogInformation("New pinging sensor added at {path}", _newPings[country][hostname].SensorPath);
+                    foreach (var sensor in sensors)
+                        _pingRequests.TryAdd(sensor.SensorPath, sensor.CallPingRequest());
+
+                    await Task.WhenAll(_pingRequests.Select(u => u.Value.PingRequestTask));
+
+                    foreach ((var _, var request) in _pingRequests)
+                        _collector.SendPingResult(request, request.PingRequestTask.Result);
+                }
+                catch (Exception ex)
+                {
+                    var message = $"{country} processing... {ex.Message}";
+
+                    _logger.Info(message);
+                    _collector.AddApplicationException(message);
+                }
             }
+        }
+        while (!_tokenSource.IsCancellationRequested);
     }
 
-    private void CancelAndResetToken()
+
+    private static DateTime Ceil(DateTime time, TimeSpan span)
     {
-        _tokenSource.Cancel();
-        _tokenSource.TryReset();
+        var roundTicks = span.Ticks;
+
+        return roundTicks == 0 ? time : new DateTime(time.Ticks / roundTicks * roundTicks + roundTicks);
     }
 }

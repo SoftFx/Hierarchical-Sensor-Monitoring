@@ -1,8 +1,8 @@
-using HSMPingModule.Models;
+using HSMPingModule.Settings;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
 
-namespace HSMPingModule.Services;
+namespace HSMPingModule.PingServices;
 
 internal sealed class PingAdapter : Ping
 {
@@ -11,17 +11,17 @@ internal sealed class PingAdapter : Ping
     private readonly CancellationTokenSource _token = new();
     private readonly PingOptions _options = new();
 
-    private readonly WebSite _webSite;
+    private readonly NodeSettings _webSite;
     private readonly string _hostName;
     private readonly string _country;
 
-    public event Func<WebSite, string, string, Task<PingResponse>, Task> SendResult;
+    public event Func<NodeSettings, string, string, Task<PingResponse>, Task> SendResult;
 
 
     internal string SensorPath { get; }
 
 
-    public PingAdapter(WebSite webSite, string host, string country) : base()
+    public PingAdapter(NodeSettings webSite, string host, string country) : base()
     {
         _webSite = webSite;
         _hostName = host;
@@ -38,7 +38,7 @@ internal sealed class PingAdapter : Ping
     {
         try
         {
-            return new PingResponse(await SendPingAsync(_hostName, _webSite.PingErrorValue.Value, _buffer, _options));
+            return new PingResponse(await SendPingAsync(_hostName, _webSite.PingThresholdValue.Value, _buffer, _options));
         }
         catch (Exception ex)
         {

@@ -1,6 +1,6 @@
 using HSMPingModule.Config;
 using HSMPingModule.DataCollectorWrapper;
-using HSMPingModule.Services;
+using HSMPingModule.PingServices;
 using HSMPingModule.VpnManager;
 using NLog;
 using NLog.Extensions.Logging;
@@ -21,7 +21,8 @@ try
     var config = new ServiceConfig(builder.Configuration, logger);
 
     builder.Services.AddSingleton(config)
-                    .AddSingleton(VpnFactory.GetVpn(config.VpnSettings))
+                    .AddSingleton(VpnFactory.GetVpn(config.PingSettings))
+                    .AddSingleton<ResourceTree>()
                     .AddSingleton<IDataCollectorWrapper, DataCollectorWrapper>();
 
     builder.Services.AddHostedService<PingService>();
