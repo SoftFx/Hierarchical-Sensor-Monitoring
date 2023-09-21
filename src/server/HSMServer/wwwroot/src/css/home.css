@@ -23,7 +23,7 @@
 }
 
 .tree-sensors-count {
-    color: rgb(0, 128, 229);
+    color: #adb5bd;
     font-size: smaller;
     font-weight: normal;
 }
@@ -31,7 +31,7 @@
 .tree-errors-count {
     color: rgb(169, 15, 26);
     font-size: smaller;
-    font-weight: normal;
+    font-weight: bold;
 }
 
 .time-ago-div {
