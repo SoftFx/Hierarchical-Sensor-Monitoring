@@ -103,7 +103,8 @@ function InitializeHistory() {
 
         if (isGraphAvailable(types.realType)) {
             initializeGraph(encodedId, rawHistoryLatestAction, types, Data(date, date, types.realType, encodedId), true);
-        } else {
+        } 
+        else if (isTableAvailable(types.realType)) {
             initializeTable(encodedId, historyLatestAction, types.realPlot, Data(date, date, types.realType, encodedId), true);
         }
     });
@@ -153,7 +154,9 @@ function InitializePeriodRequests() {
 
 function requestHistory(encodedId, action, rawAction, types, reqData) {
     if (!isGraphAvailable(types.realType)) {
-        initializeTable(encodedId, action, types.realType, reqData);
+        if (isTableAvailable(types.realType))
+            initializeTable(encodedId, action, types.realType, reqData);
+
         return;
     }
 
@@ -279,6 +282,10 @@ function isFileSensor(type) {
 
 function isGraphAvailable(type) {
     return !(type === 3 || type === 6 || type === 8);
+}
+
+function isTableAvailable(type) {
+    return type !== 6
 }
 
 function isTableHistorySelected(encodedId) {

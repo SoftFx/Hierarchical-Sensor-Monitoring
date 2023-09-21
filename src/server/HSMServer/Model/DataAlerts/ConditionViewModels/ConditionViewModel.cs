@@ -40,7 +40,7 @@ namespace HSMServer.Model.DataAlerts
         public TimeIntervalViewModel TimeToLive { get; set; }
 
 
-        public PolicyOperation Operation { get; set; }
+        public PolicyOperation? Operation { get; set; }
 
         public string Target { get; set; }
     }
