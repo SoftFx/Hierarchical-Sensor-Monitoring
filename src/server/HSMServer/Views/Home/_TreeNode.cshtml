@@ -6,9 +6,12 @@
 @model NodeShallowModel
 
 @{
+    var user = User as User;
     var data = Model.Data;
 
-    var showIcons = (User as User).TreeFilter.ByVisibility.Icons.Value;
+    var showIcons = user.TreeFilter.ByVisibility.Icons.Value;
+    var showErrorsCount = user.TreeFilter.ByVisibility.ErrorsCount.Value;
+    var showSensorsCount = user.TreeFilter.ByVisibility.SensorsCount.Value;
 
     var arrowIcon = Model.VisibleSubtreeSensorsCount > 0 || Model.Data.Nodes.Count > 0 ? "jstree-closed" : string.Empty;
 }
@@ -56,9 +59,12 @@
         }
     }
 
-    <span class="tree-sensors-count">@Model.SensorsCountString</span>
+    @if (showSensorsCount)
+    {
+        <span class="tree-sensors-count">@Model.SensorsCountString</span>
+    }
 
-    @if (Model.ErrorsCount > 0)
+    @if (showErrorsCount && Model.ErrorsCount > 0)
     {
         <span class="tree-errors-count">@Model.Errors</span>
     }
