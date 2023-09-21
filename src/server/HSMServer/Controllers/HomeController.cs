@@ -1,3 +1,4 @@
+using HSMCommon.Collections;
 using HSMServer.Authentication;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Cache.UpdateEntities;
@@ -39,7 +40,7 @@ namespace HSMServer.Controllers
     [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
     public class HomeController : BaseController
     {
-        private readonly JsonSerializerOptions _alertsSerializationOptions = new()
+        private static readonly JsonSerializerOptions _alertsSerializationOptions = new()
         {
             WriteIndented = true
         };
@@ -50,6 +51,11 @@ namespace HSMServer.Controllers
         private readonly IJournalService _journalService;
 
 
+        static HomeController()
+        {
+            _alertsSerializationOptions.Converters.Add(new JsonStringEnumConverter());
+        }
+
         public HomeController(ITreeValuesCache treeValuesCache, IFolderManager folderManager, TreeViewModel treeViewModel,
                               IUserManager userManager, IJournalService journalService) : base(userManager)
         {
@@ -57,8 +63,6 @@ namespace HSMServer.Controllers
             _treeViewModel = treeViewModel;
             _folderManager = folderManager;
             _journalService = journalService;
-
-            _alertsSerializationOptions.Converters.Add(new JsonStringEnumConverter());
         }
 
 
@@ -837,19 +841,14 @@ namespace HSMServer.Controllers
                     var availableSensors = node.Sensors.ToDictionary(k => k.Value.Name, v => v.Key);
                     var availableChats = node.GetAllChats().ToDictionary(k => k.Name, v => v.SystemId);
 
-                    var sensorAlerts = new Dictionary<Guid, List<PolicyUpdate>>();
+                    var sensorAlerts = new CGuidDict<List<PolicyUpdate>>();
 
                     foreach (var alert in alerts)
                     {
                         var updates = alert.ToUpdates(availableSensors, availableChats);
 
                         foreach (var (sensorId, update) in updates)
-                        {
-                            if (!sensorAlerts.ContainsKey(sensorId))
-                                sensorAlerts[sensorId] = new List<PolicyUpdate>();
-
                             sensorAlerts[sensorId].Add(update);
-                        }
                     }
 
                     foreach (var (sensorId, alertUpdates) in sensorAlerts)
