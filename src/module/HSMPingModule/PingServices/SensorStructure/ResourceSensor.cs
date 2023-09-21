@@ -9,16 +9,20 @@ namespace HSMPingModule.PingServices
     {
         internal InstantSensorOptions SensorOptions { get; }
 
+        internal PingAdapter PingAdapter { get; }
+
+
         internal string SensorPath { get; }
 
         internal string Country { get; }
 
 
-        internal Task<PingResponse> PingRequestTask { get; private set; }
-
-
         internal ResourceSensor(string host, string country, NodeSettings settings)
         {
+            var timeout = settings.PingThresholdValue.Value.TotalMilliseconds * 2;
+
+            PingAdapter = new PingAdapter(host, (int)timeout);
+
             SensorPath = $"{host}/{country}";
             Country = country;
 
@@ -39,15 +43,6 @@ namespace HSMPingModule.PingServices
         }
 
 
-        internal ResourceSensor CallPingRequest()
-        {
-            return this;
-        }
-
-
-        public void Dispose()
-        {
-            throw new NotImplementedException();
-        }
+        public void Dispose() => PingAdapter?.Dispose();
     }
 }

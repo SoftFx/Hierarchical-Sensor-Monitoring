@@ -6,8 +6,8 @@ internal sealed class ResourceSettings
 
     public NodeSettings DefaultSiteNodeSettings { get; set; } = new()
     {
+        PingThresholdValue = TimeSpan.FromSeconds(15),
         TTL = TimeSpan.FromMinutes(15),
-        PingThresholdValue = 15,
     };
 
 

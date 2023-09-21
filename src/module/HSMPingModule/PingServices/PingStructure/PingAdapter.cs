@@ -6,39 +6,29 @@ namespace HSMPingModule.PingServices;
 
 internal sealed class PingAdapter : Ping
 {
+    private static readonly PingOptions _options = new();
+
     private readonly byte[] _buffer = new byte[32];
 
-    private readonly CancellationTokenSource _token = new();
-    private readonly PingOptions _options = new();
-
-    private readonly NodeSettings _webSite;
     private readonly string _hostName;
-    private readonly string _country;
-
-    public event Func<NodeSettings, string, string, Task<PingResponse>, Task> SendResult;
+    private readonly int _timeoutMsc;
 
 
     internal string SensorPath { get; }
 
 
-    public PingAdapter(NodeSettings webSite, string host, string country) : base()
+    public PingAdapter(string host, int timeoutMsc) : base()
     {
-        _webSite = webSite;
+        _timeoutMsc = timeoutMsc;
         _hostName = host;
-        _country = country;
-
-        SensorPath = $"{_hostName}/{_country}";
     }
 
 
-    public Task Ping() => SendPingRequest().ContinueWith(reply => SendResult?.Invoke(_webSite, _country, _hostName, reply), _token.Token).Unwrap();
-
-
-    private async Task<PingResponse> SendPingRequest()
+    internal async Task<PingResponse> SendPingRequest()
     {
         try
         {
-            return new PingResponse(await SendPingAsync(_hostName, _webSite.PingThresholdValue.Value, _buffer, _options));
+            return new PingResponse(await SendPingAsync(_hostName, _timeoutMsc, _buffer, _options));
         }
         catch (Exception ex)
         {

@@ -8,7 +8,7 @@ namespace HSMPingModule.PingServices;
 
 internal class PingService : BackgroundService
 {
-    private readonly ConcurrentDictionary<string, ResourceSensor> _pingRequests = new();
+    private readonly ConcurrentQueue<(ResourceSensor resource, Task<PingResponse> request)> _pingRequests = new();
 
     private readonly CancellationTokenSource _tokenSource = new();
     private readonly Logger _logger = LogManager.GetCurrentClassLogger();
@@ -64,12 +64,12 @@ internal class PingService : BackgroundService
                     _pingRequests.Clear();
 
                     foreach (var sensor in sensors)
-                        _pingRequests.TryAdd(sensor.SensorPath, sensor.CallPingRequest());
+                        _pingRequests.Enqueue((sensor, sensor.PingAdapter.SendPingRequest()));
 
-                    await Task.WhenAll(_pingRequests.Select(u => u.Value.PingRequestTask));
+                    await Task.WhenAll(_pingRequests.Select(u => u.request));
 
-                    foreach ((var _, var request) in _pingRequests)
-                        _collector.SendPingResult(request, request.PingRequestTask.Result);
+                    foreach ((var resource, var request) in _pingRequests)
+                        _collector.SendPingResult(resource, request.Result);
                 }
                 catch (Exception ex)
                 {
