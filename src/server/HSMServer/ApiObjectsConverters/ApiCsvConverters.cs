@@ -82,7 +82,7 @@ namespace HSMServer.ApiObjectsConverters
         private static List<string> GetHeader(this List<BaseValue> values) =>
             values[0] switch
             {
-                BooleanValue or IntegerValue or DoubleValue or StringValue => _simpleSensorHeader,
+                BooleanValue or IntegerValue or DoubleValue or StringValue or VersionValue or TimeSpanValue => _simpleSensorHeader,
                 IntegerBarValue or DoubleBarValue => _barSensorHeader,
                 FileValue => _fileSensorHeader,
                 _ => new(),

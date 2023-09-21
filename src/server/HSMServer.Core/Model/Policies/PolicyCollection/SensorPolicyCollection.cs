@@ -3,13 +3,14 @@ using HSMServer.Core.Cache;
 using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.TableOfChanges;
 using System;
+using System.Collections;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 
 namespace HSMServer.Core.Model.Policies
 {
-    public abstract class SensorPolicyCollection : PolicyCollectionBase
+    public abstract class SensorPolicyCollection : PolicyCollectionBase, IEnumerable<Policy>
     {
         internal protected SensorResult SensorResult { get; protected set; } = SensorResult.Ok;
 
@@ -20,9 +21,13 @@ namespace HSMServer.Core.Model.Policies
         internal Action<BaseSensorModel, bool> SensorExpired;
 
 
-        internal abstract void Update(List<PolicyUpdate> updates, InitiatorInfo initiator);
+        internal abstract void AddPolicy<U>(U policy) where U : Policy;
 
         internal abstract void AddDefault(Dictionary<Guid, string> connectedChats, DefaultAlertsOptions options);
+
+        internal abstract void ApplyPolicies(List<string> policyIds, Dictionary<string, PolicyEntity> allPolicies);
+
+        internal abstract void Update(List<PolicyUpdate> updates, InitiatorInfo initiator);
 
 
         internal void Reset()
@@ -30,6 +35,11 @@ namespace HSMServer.Core.Model.Policies
             SensorResult = SensorResult.Ok;
             PolicyResult = PolicyResult.Ok;
         }
+
+
+        public abstract IEnumerator<Policy> GetEnumerator();
+
+        IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
     }
 
 
@@ -118,9 +128,6 @@ namespace HSMServer.Core.Model.Policies
         private readonly ConcurrentDictionary<Guid, PolicyType> _storage = new();
 
 
-        internal override IEnumerable<Guid> Ids => _storage.Keys;
-
-
         protected override bool CalculateStorageResult(ValueType value, bool updateStatus = true)
         {
             if (!value.Status.IsOfftime())
@@ -153,7 +160,7 @@ namespace HSMServer.Core.Model.Policies
             var updates = updatesList.Where(u => u.Id != Guid.Empty).ToDictionary(u => u.Id);
 
             foreach (var (id, policy) in _storage)
-                if (AlertChangeInfo[id.ToString()].CanChange(initiator))
+                if (AlertChangeTable[id.ToString()].CanChange(initiator))
                 {
                     if (updates.TryGetValue(id, out var update))
                     {
@@ -190,8 +197,6 @@ namespace HSMServer.Core.Model.Policies
                 SensorTimeout(valueT);
             }
         }
-
-        public override IEnumerator<Policy> GetEnumerator() => _storage.Values.GetEnumerator();
 
         internal override void ApplyPolicies(List<string> policyIds, Dictionary<string, PolicyEntity> allPolicies)
         {
@@ -231,5 +236,8 @@ namespace HSMServer.Core.Model.Policies
             AddPolicy(policy);
             Uploaded?.Invoke(ActionType.Add, policy);
         }
+
+
+        public override IEnumerator<Policy> GetEnumerator() => _storage.Values.GetEnumerator();
     }
 }

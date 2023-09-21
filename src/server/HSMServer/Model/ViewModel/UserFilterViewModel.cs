@@ -16,6 +16,11 @@ namespace HSMServer.Model.ViewModel
 
         public bool IsGrafanaEnabled { get; set; }
 
+
+        public bool IsSensorsCountVisible { get; set; }
+
+        public bool IsErrorsCountVisible { get; set; }
+
         public bool AreIconsVisible { get; set; }
 
 
@@ -36,6 +41,8 @@ namespace HSMServer.Model.ViewModel
             HasOffTimeStatus = filter.ByStatus.OffTime.Value;
 
             IsEmptyHistory = filter.ByVisibility.Empty.Value;
+            IsSensorsCountVisible = filter.ByVisibility.SensorsCount.Value;
+            IsErrorsCountVisible = filter.ByVisibility.ErrorsCount.Value;
             AreIconsVisible = filter.ByVisibility.Icons.Value;
 
             IsGrafanaEnabled = filter.ByIntegrations.GrafanaEnabled.Value;
@@ -60,6 +67,8 @@ namespace HSMServer.Model.ViewModel
             filter.ByStatus.OffTime.Value = HasOffTimeStatus;
 
             filter.ByVisibility.Empty.Value = IsEmptyHistory;
+            filter.ByVisibility.SensorsCount.Value = IsSensorsCountVisible;
+            filter.ByVisibility.ErrorsCount.Value = IsErrorsCountVisible;
             filter.ByVisibility.Icons.Value = AreIconsVisible;
 
             filter.ByIntegrations.GrafanaEnabled.Value = IsGrafanaEnabled;

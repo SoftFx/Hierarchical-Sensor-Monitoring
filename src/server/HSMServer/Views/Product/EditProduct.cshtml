@@ -125,12 +125,9 @@
                             var userRight = Model.UsersRights[i];
                             <tr>
                                 <th scope='row'>@(i + 1)</th>
-                                <td class="text-break">
-                                    @userRight.Item1.Username
-                                    <input id='userId_@userRight.Item1.Username' class="d-none" value='@userRight.Item1.UserId'/>
-                                </td>
+                                <td class="text-break">@userRight.Item1.Username</td>
                                 <td>
-                                    <select class='form-select' disabled id='role_@userRight.Item1.Username'>
+                                    <select class='form-select' disabled id='role_@userRight.Item1.UserId'>
                                         @foreach (ProductRoleEnum role in Enum.GetValues<ProductRoleEnum>())
                                         {
                                             if (role == userRight.Item2)
@@ -145,22 +142,22 @@
                                     </select>
                                 </td>
                                 <td class="d-inline-flex">
-                                    <button id='change_@userRight.Item1.Username'
+                                    <button id='change_@userRight.Item1.UserId'
                                             type='button' class='btn btn-secondary ms-1' title='edit'>
                                         <i class='fas fa-edit'></i>
                                     </button>
-    
-                                    <button id='delete_@userRight.Item1.Username'
+
+                                    <button id='delete_@userRight.Item1.UserId' name="@userRight.Item1.Username"
                                             type='button' class='btn btn-secondary ms-1' title='delete'>
                                         <i class='fas fa-trash-alt'></i>
                                     </button>
-    
-                                    <button disabled id='ok_@userRight.Item1.Username'
+
+                                    <button disabled id='ok_@userRight.Item1.UserId'
                                             type='button' class='btn btn-secondary ms-1' title='ok'>
                                         <i class='fas fa-check'></i>
                                     </button>
-    
-                                    <button disabled id='cancel_@userRight.Item1.Username'
+
+                                    <button disabled id='cancel_@userRight.Item1.UserId'
                                             type='button' class='btn btn-secondary ms-1' title='cancel'>
                                         <i class='fas fa-times'></i>
                                     </button>
@@ -273,8 +270,7 @@
 
     //delete user
     $('[id^=delete_]').on('click', function () {
-        username = this.id.substring('delete_'.length, this.id.length);
-        userId = $('#userId_' + username).val();
+        userId = this.id.substring('delete_'.length, this.id.length);
         productKey = $('#productKey').val();
 
         var data = createUserRightData(userId, 0, productKey);
@@ -282,7 +278,7 @@
         $('#modalDeleteLabel').empty();
         $('#modalDeleteLabel').append('Remove user right');
         $('#modalDeleteBody').empty();
-        $('#modalDeleteBody').append('Do you really want to remove "' + username + '" user right?');
+        $('#modalDeleteBody').append('Do you really want to remove "' + this.name + '" user right?');
         var modal = new bootstrap.Modal(document.getElementById('modalDelete'));
         modal.show();
 
@@ -311,15 +307,15 @@
 
     //change user
     $('[id^=change_]').on('click', function () {
-        username = this.id.substring('change_'.length, this.id.length);
+        userId = this.id.substring('change_'.length, this.id.length);
 
         $('[id^=role_]').attr('disabled', true);
         $('[id^=ok_]').attr('disabled', true);
         $('[id^=cancel_]').attr('disabled', true);
 
-        $('#role_' + username).removeAttr("disabled");
-        $('#ok_' + username).removeAttr("disabled");
-        $('#cancel_' + username).removeAttr("disabled");
+        $('#role_' + userId).removeAttr("disabled");
+        $('#ok_' + userId).removeAttr("disabled");
+        $('#cancel_' + userId).removeAttr("disabled");
     });
 
     $('[id^=cancel_]').on('click', function () {
@@ -327,10 +323,9 @@
     });
 
     $('[id^=ok_]').on('click', function () {
-        username = this.id.substring('ok_'.length, this.id.length);
+        userId = this.id.substring('ok_'.length, this.id.length);
 
-        userId = $('#userId_' + username).val();
-        role = $('#role_' + username).val();
+        role = $('#role_' + userId).val();
         productKey = $('#productKey').val();
 
         var data = createUserRightData(userId, role, productKey);

@@ -52,9 +52,21 @@
         </label>
     </div>
     <div class="form-check">
+        <input type="checkbox" class="form-check-input" id="sensorsCount" asp-for="IsSensorsCountVisible" />
+        <label class="form-check-label text-nowrap" for="sensorsCount">
+            Sensors count
+        </label>
+    </div>
+    <div class="form-check">
+        <input type="checkbox" class="form-check-input" id="errorsCount" asp-for="IsErrorsCountVisible" />
+        <label class="form-check-label text-nowrap" for="errorsCount">
+            Errors count
+        </label>
+    </div>
+    <div class="form-check">
          <input type="checkbox" class="form-check-input" id="showIcons" asp-for="AreIconsVisible"/>
          <label class="form-check-label text-nowrap" for="showIcons">
-             Show icons
+             Icons
          </label>
     </div>
     <div class="dropdown-divider"></div>

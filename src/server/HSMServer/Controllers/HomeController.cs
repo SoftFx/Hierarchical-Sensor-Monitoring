@@ -1,9 +1,11 @@
+using HSMCommon.Collections;
 using HSMServer.Authentication;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Extensions;
 using HSMServer.Core.Journal;
 using HSMServer.Core.Model;
+using HSMServer.Core.Model.Policies;
 using HSMServer.Core.Model.Requests;
 using HSMServer.Extensions;
 using HSMServer.Folders;
@@ -14,6 +16,7 @@ using HSMServer.Model.Folders;
 using HSMServer.Model.Folders.ViewModels;
 using HSMServer.Model.History;
 using HSMServer.Model.Model.History;
+using HSMServer.Model.MultiToastViewModels;
 using HSMServer.Model.TreeViewModel;
 using HSMServer.Model.TreeViewModels;
 using HSMServer.Model.ViewModel;
@@ -25,6 +28,9 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 using TimeInterval = HSMServer.Model.TimeInterval;
 
@@ -34,25 +40,33 @@ namespace HSMServer.Controllers
     [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
     public class HomeController : BaseController
     {
+        private static readonly JsonSerializerOptions _alertsSerializationOptions = new()
+        {
+            WriteIndented = true
+        };
+
         private readonly ITelegramChatsManager _telegramChatsManager;
         private readonly ITreeValuesCache _treeValuesCache;
         private readonly IFolderManager _folderManager;
         private readonly TreeViewModel _treeViewModel;
-        private readonly TelegramBot _telegramBot;
         private readonly IJournalService _journalService;
 
 
-        public HomeController(ITreeValuesCache treeValuesCache, IFolderManager folderManager, TreeViewModel treeViewModel,
-                              IUserManager userManager, NotificationsCenter notifications, IJournalService journalService,
-                              ITelegramChatsManager telegramChatsManager) : base(userManager)
+        static HomeController()
         {
-            _telegramBot = notifications.TelegramBot;
+            _alertsSerializationOptions.Converters.Add(new JsonStringEnumConverter());
+        }
+
+        public HomeController(ITreeValuesCache treeValuesCache, IFolderManager folderManager, TreeViewModel treeViewModel,
+                              IUserManager userManager, IJournalService journalService, ITelegramChatsManager telegramChatsManager) : base(userManager)
+        {
             _treeValuesCache = treeValuesCache;
             _treeViewModel = treeViewModel;
             _folderManager = folderManager;
             _journalService = journalService;
             _telegramChatsManager = telegramChatsManager;
         }
+
 
         public IActionResult Index()
         {
@@ -170,7 +184,7 @@ namespace HSMServer.Controllers
         [HttpPost]
         public ActionResult RemoveNode([FromBody] string[] ids)
         {
-            var model = new MultiActionToastViewModel();
+            var model = new MultiActionsToastViewModel();
 
             foreach (var id in ids)
             {
@@ -218,7 +232,7 @@ namespace HSMServer.Controllers
 
             model.Upload();
 
-            var toastViewModel = new MultiActionToastViewModel();
+            var toastViewModel = new MultiActionsToastViewModel();
             var isExpectedFromParent = model.ExpectedUpdateInterval?.TimeInterval is TimeInterval.FromParent;
 
             foreach (var id in model.SelectedNodes)
@@ -529,8 +543,9 @@ namespace HSMServer.Controllers
                 KeepHistory = newModel.SavedHistoryPeriod.ToModel(),
                 SelfDestroy = newModel.SelfDestroyPeriod.ToModel(),
                 Policies = policyUpdates,
+                IsSingleton = newModel.IsSingleton,
                 SelectedUnit = newModel.SelectedUnit,
-                SaveOnlyUniqueValues = newModel.SaveOnlyUniqueValues,
+                AggregateValues = newModel.AggregateValues,
                 Initiator = CurrentInitiator
             };
 
@@ -547,15 +562,15 @@ namespace HSMServer.Controllers
 
             DataAlertViewModelBase viewModel = type switch
             {
-                (byte)SensorType.File => new DataAlertViewModel<FileValue>(entity),
-                (byte)SensorType.String => new DataAlertViewModel<StringValue>(entity),
+                (byte)SensorType.File => new FileDataAlertViewModel(entity),
+                (byte)SensorType.String => new StringDataAlertViewModel(entity),
                 (byte)SensorType.Boolean => new DataAlertViewModel<BooleanValue>(entity),
-                (byte)SensorType.Version => new DataAlertViewModel<VersionValue>(entity),
-                (byte)SensorType.TimeSpan => new SingleDataAlertViewModel<TimeSpanValue, TimeSpan>(entity),
-                (byte)SensorType.Integer => new SingleDataAlertViewModel<IntegerValue, int>(entity),
-                (byte)SensorType.Double => new SingleDataAlertViewModel<DoubleValue, double>(entity),
-                (byte)SensorType.IntegerBar => new BarDataAlertViewModel<IntegerBarValue, int>(entity),
-                (byte)SensorType.DoubleBar => new BarDataAlertViewModel<DoubleBarValue, double>(entity),
+                (byte)SensorType.Version => new SingleDataAlertViewModel<VersionValue>(entity),
+                (byte)SensorType.TimeSpan => new SingleDataAlertViewModel<TimeSpanValue>(entity),
+                (byte)SensorType.Integer => new SingleDataAlertViewModel<IntegerValue>(entity),
+                (byte)SensorType.Double => new SingleDataAlertViewModel<DoubleValue>(entity),
+                (byte)SensorType.IntegerBar => new BarDataAlertViewModel<IntegerBarValue>(entity),
+                (byte)SensorType.DoubleBar => new BarDataAlertViewModel<DoubleBarValue>(entity),
                 TimeToLiveAlertViewModel.AlertKey => new TimeToLiveAlertViewModel(entity),
                 _ => null,
             };
@@ -563,32 +578,50 @@ namespace HSMServer.Controllers
             return PartialView("~/Views/Home/Alerts/_DataAlert.cshtml", viewModel);
         }
 
-        public IActionResult AddAlertCondition(Guid sensorId)
-        {
-            if (!_treeViewModel.Sensors.TryGetValue(sensorId, out var sensor))
-                return _emptyResult;
-
-            ConditionViewModel viewModel = sensor.Type switch
-            {
-                SensorType.File => new ConditionViewModel<FileValue>(false),
-                SensorType.String => new ConditionViewModel<StringValue>(false),
-                SensorType.Boolean => new ConditionViewModel<BooleanValue>(false),
-                SensorType.Version => new ConditionViewModel<VersionValue>(false),
-                SensorType.TimeSpan => new SingleConditionViewModel<TimeSpanValue, TimeSpan>(false),
-                SensorType.Integer => new SingleConditionViewModel<IntegerValue, int>(false),
-                SensorType.Double => new SingleConditionViewModel<DoubleValue, double>(false),
-                SensorType.IntegerBar => new BarConditionViewModel<IntegerBarValue, int>(false),
-                SensorType.DoubleBar => new BarConditionViewModel<DoubleBarValue, double>(false),
-                _ => null,
-            };
-
-            return PartialView("~/Views/Home/Alerts/_ConditionBlock.cshtml", viewModel);
-        }
+        public IActionResult AddAlertCondition(Guid sensorId) =>
+            _treeViewModel.Sensors.TryGetValue(sensorId, out var sensor)
+                ? PartialView("~/Views/Home/Alerts/_ConditionBlock.cshtml", BuildAlertCondition(sensor))
+                : _emptyResult;
 
         public IActionResult AddAlertAction(Guid entityId) =>
             TryGetSelectedNode(entityId, out var entity)
                 ? PartialView("~/Views/Home/Alerts/_ActionBlock.cshtml", new ActionViewModel(false, entity.RootProduct.TelegramChats))
                 : _emptyResult;
+
+        public IActionResult GetOperation(Guid sensorId, AlertProperty property)
+        {
+            if (!_treeViewModel.Sensors.TryGetValue(sensorId, out var sensor))
+                return _emptyResult;
+
+            var condition = BuildAlertCondition(sensor);
+
+            return property switch
+            {
+                AlertProperty.NewSensorData => PartialView("~/Views/Home/Alerts/ConditionOperations/_NewDataOperation.cshtml"),
+
+                AlertProperty.TimeToLive or AlertProperty.Sensitivity =>
+                    PartialView("~/Views/Home/Alerts/ConditionOperations/_IntervalOperation.cshtml", condition.GetIntervalOperations(property)),
+
+                _ => PartialView("~/Views/Home/Alerts/ConditionOperations/_SimpleOperation.cshtml", condition.GetOperations(property)),
+            };
+        }
+
+        public IActionResult IsTargetVisible(PolicyOperation operation) => Json(operation.IsTargetVisible());
+
+        private static ConditionViewModel BuildAlertCondition(SensorNodeViewModel sensor) =>
+            sensor.Type switch
+            {
+                SensorType.File => new FileConditionViewModel(false),
+                SensorType.String => new StringConditionViewModel(false),
+                SensorType.Boolean => new CommonConditionViewModel(false),
+                SensorType.Version => new SingleConditionViewModel(false),
+                SensorType.TimeSpan => new SingleConditionViewModel(false),
+                SensorType.Integer => new SingleConditionViewModel(false),
+                SensorType.Double => new SingleConditionViewModel(false),
+                SensorType.IntegerBar => new BarConditionViewModel(false),
+                SensorType.DoubleBar => new BarConditionViewModel(false),
+                _ => null,
+            };
 
         private bool TryGetSelectedNode(Guid entityId, out NodeViewModel entity)
         {
@@ -729,6 +762,77 @@ namespace HSMServer.Controllers
                 ? PartialView("_MetaInfo", new FolderInfoViewModel(_folderManager[update.Id]))
                 : _emptyResult;
         }
+
+
+        [HttpGet]
+        public IActionResult ExportAlerts(Guid selectedId)
+        {
+            var node = _treeValuesCache.GetProduct(selectedId);
+
+            if (node is null)
+                return _emptyResult;
+
+
+            var policies = JsonSerializer.Serialize(node.Policies.GroupedPolicies.Select(p => new AlertExportViewModel(p)), _alertsSerializationOptions);
+
+            var fileName = $"{node.FullPath.Replace('/', '_')}-alerts.json";
+            Response.Headers.Add("Content-Disposition", $"attachment;filename={fileName}");
+
+            return File(Encoding.UTF8.GetBytes(policies), fileName.GetContentType(), fileName);
+        }
+
+        [HttpPost]
+        public string ImportAlerts([FromBody] AlertImportViewModel model)
+        {
+            var toastViewModel = new ImportAlertsToastViewModel();
+
+            if (_treeViewModel.Nodes.TryGetValue(model.NodeId, out var node))
+            {
+                try
+                {
+                    var alerts = JsonSerializer.Deserialize<List<AlertExportViewModel>>(model.FileContent, _alertsSerializationOptions);
+
+                    var availableSensors = node.Sensors.ToDictionary(k => k.Value.Name, v => v.Key);
+                    var availableChats = node.GetAvailableChats(_telegramChatsManager).ToDictionary(k => k.Value, v => v.Key);
+
+                    var sensorAlerts = new CGuidDict<List<PolicyUpdate>>();
+
+                    foreach (var alert in alerts)
+                    {
+                        var updates = alert.ToUpdates(availableSensors, availableChats);
+
+                        foreach (var (sensorId, update) in updates)
+                            sensorAlerts[sensorId].Add(update);
+                    }
+
+                    foreach (var (sensorId, alertUpdates) in sensorAlerts)
+                    {
+                        try
+                        {
+                            var update = new SensorUpdate()
+                            {
+                                Id = sensorId,
+                                Policies = alertUpdates,
+                                Initiator = CurrentInitiator,
+                            };
+
+                            _treeValuesCache.UpdateSensor(update);
+                        }
+                        catch (Exception ex)
+                        {
+                            toastViewModel.AddError(ex.Message, _treeViewModel.Sensors[sensorId].Name);
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    return ex.Message;
+                }
+            }
+
+            return toastViewModel.ToResponse();
+        }
+
 
         private string GetSensorPath(string encodedId)
         {

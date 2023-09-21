@@ -27,7 +27,7 @@ namespace HSMServer.Core.TableOfChanges
             LastUpdate = DateTime.UtcNow;
         }
 
-        public bool CanChange(InitiatorInfo newInfo) => Initiator.Type <= newInfo.Type;
+        public bool CanChange(InitiatorInfo newInfo) => newInfo.IsForceUpdate || Initiator.Type <= newInfo.Type;
 
         public ChangeInfoEntity ToEntity() => new()
         {

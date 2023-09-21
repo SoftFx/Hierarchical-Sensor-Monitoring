@@ -22,7 +22,7 @@ namespace HSMServer.Model.Authentication
 
         public string Name { get; init; }
 
-        public string Password { get; init; }
+        public string Password { get; set; }
 
         [Obsolete("Should be removed after telegram chats migration")]
         public ClientNotifications Notifications { get; set; }
@@ -82,6 +82,7 @@ namespace HSMServer.Model.Authentication
         public void Update(UserUpdate update)
         {
             IsAdmin = update.IsAdmin ?? IsAdmin;
+            Password = update.Password ?? Password;
         }
 
         public UserEntity ToEntity() =>

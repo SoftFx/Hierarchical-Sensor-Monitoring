@@ -33,6 +33,8 @@ namespace HSMServer.Model.UserTreeShallowCopy
         {
             node.Parent = this;
 
+            ErrorsCount += node.ErrorsCount;
+
             GrafanaState.CalculateState(node.GrafanaState);
 
             if (node.VisibleSubtreeSensorsCount > 0 || user.IsEmptyProductVisible(node.Data))

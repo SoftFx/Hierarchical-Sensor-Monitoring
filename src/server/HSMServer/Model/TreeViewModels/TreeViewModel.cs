@@ -131,7 +131,7 @@ namespace HSMServer.Model.TreeViewModel
 
             return sensorId;
 
-            bool CompareFunc(SensorNodeViewModel sensor) => sensor.Path.EndsWith($".module/Module Info/{name}");
+            bool CompareFunc(SensorNodeViewModel sensor) => sensor.Path.EndsWith($".module/Module Info/{name}") || sensor.Path.EndsWith($".module/{name}");
         }
 
         internal void UpdateProductNotificationSettings(ProductNodeViewModel product)

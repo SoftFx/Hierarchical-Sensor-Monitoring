@@ -6,6 +6,7 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 
+
 namespace HSMServer.Core.Model
 {
     [Flags]
@@ -67,6 +68,17 @@ namespace HSMServer.Core.Model
         internal void AddSensor(BaseSensorModel sensor)
         {
             Sensors.TryAdd(sensor.Id, (BaseSensorModel)sensor.AddParent(this));
+
+            sensor.Policies.Uploaded += Policies.ReceivePolicyUpdate;
+
+            foreach (var policy in sensor.Policies)
+                Policies.AddPolicy(policy);
+        }
+
+        internal void RemoveSensor(Guid sensorId)
+        {
+            if (Sensors.TryRemove(sensorId, out var sensor))
+                sensor.Policies.Uploaded -= Policies.ReceivePolicyUpdate;
         }
 
         internal ProductModel Update(ProductUpdate update)
@@ -109,7 +121,6 @@ namespace HSMServer.Core.Model
             CreationDate = CreationDate.Ticks,
             NotificationSettings = NotificationsSettings,
             TelegramChats = TelegramChats?.Select(c => c.ToByteArray()).ToList() ?? new(), // TODO: remove nullable operation after telegram chats migration
-            Policies = Policies.Ids.Select(u => $"{u}").ToList(),
             Settings = Settings.ToEntity(),
             TTLPolicy = Policies.TimeToLive?.ToEntity(),
             ChangeTable = ChangeTable.ToEntity(),

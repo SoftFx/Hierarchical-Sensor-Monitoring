@@ -5,6 +5,7 @@ using HSMSensorDataObjects;
 using HSMSensorDataObjects.SensorRequests;
 using System;
 using System.Collections.Generic;
+using System.Linq.Expressions;
 
 namespace HSMDataCollector.Prototypes
 {

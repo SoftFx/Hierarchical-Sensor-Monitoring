@@ -5,8 +5,11 @@
 @model FolderShallowModel
 
 @{
+    var user = User as User;
     var data = Model.Data;
-    var showIcons = (User as User).TreeFilter.ByVisibility.Icons.Value;
+
+    var showIcons = user.TreeFilter.ByVisibility.Icons.Value;
+    var showErrorsCount = user.TreeFilter.ByVisibility.ErrorsCount.Value;
 }
 
 
@@ -21,6 +24,11 @@
                 <img class="tree-png-icon" src="~/dist/grafana.svg" alt="!" title="Grafana" />
             </span>
         }
+    }
+
+    @if (showErrorsCount && Model.ErrorsCount > 0)
+    {
+        <span class="tree-errors-count">@Model.Errors</span>
     }
 
     @foreach (var child in Model.Products)

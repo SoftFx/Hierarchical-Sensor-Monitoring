@@ -33,7 +33,7 @@
 
     <div name="sendNotificationAction" class="@isSendAction.ToVisibility()">
         <input type="text" class="alert-block target-input target-comment" placeholder="message template" asp-for="Comment" value="@Model.Comment" required="@(isSendAction ? true : false)">
-        <div class="alert-text-block operation-select">at</div>
+        <div class="alert-text-block operation-select">to</div>
         <select class="selectpicker" name="Chats" multiple
                 data-width="100%" data-live-search="true" data-style="alert-block target-input target-multiselect" data-placeholder="telegram chats" data-actions-box="true" data-container="body">
             <option value="@ActionViewModel.AllChatsId" selected="@(Model.Chats?.Contains(ActionViewModel.AllChatsId) ?? true)">All chats</option>

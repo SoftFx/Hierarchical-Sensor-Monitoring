@@ -44,7 +44,7 @@ namespace HSMDataCollector.Converters
 
                 EnableGrafana = options.EnableForGrafana,
 
-                IsSingletonSensor = options.IsSingletonSensor,
+                IsSingletonSensor = options.IsSingletonSensor | options.IsComputerSensor,
                 AggregateData = options.AggregateData,
 
                 DefaultAlertsOptions = options.DefaultAlertsOptions,

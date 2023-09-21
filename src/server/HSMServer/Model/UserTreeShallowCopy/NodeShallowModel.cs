@@ -38,11 +38,21 @@ namespace HSMServer.Model.UserTreeShallowCopy
         {
             get
             {
-                var sensorsCount = VisibleSubtreeSensorsCount == Data.AllSensorsCount
-                    ? $"{Data.AllSensorsCount}"
-                    : $"{VisibleSubtreeSensorsCount}/{Data.AllSensorsCount}";
+                string sensorsCount;
+                bool isOneSensor;
 
-                return $"({sensorsCount} sensors)";
+                if (VisibleSubtreeSensorsCount == Data.AllSensorsCount)
+                {
+                    sensorsCount = $"{Data.AllSensorsCount}";
+                    isOneSensor = Data.AllSensorsCount == 1;
+                }
+                else
+                {
+                    sensorsCount = $"{VisibleSubtreeSensorsCount}/{Data.AllSensorsCount}";
+                    isOneSensor = VisibleSubtreeSensorsCount == 1;
+                }
+
+                return $"{sensorsCount} sensor{(isOneSensor ? string.Empty : "s")}";
             }
         }
 
@@ -72,6 +82,8 @@ namespace HSMServer.Model.UserTreeShallowCopy
             if (user.IsSensorVisible(sensor))
                 VisibleSubtreeSensorsCount++;
 
+            ErrorsCount += shallowSensor.ErrorsCount;
+
             return shallowSensor;
         }
 
@@ -87,6 +99,7 @@ namespace HSMServer.Model.UserTreeShallowCopy
             GrafanaState.CalculateState(node.GrafanaState);
 
             VisibleSubtreeSensorsCount += node.VisibleSubtreeSensorsCount;
+            ErrorsCount += node.ErrorsCount;
 
             return node;
         }

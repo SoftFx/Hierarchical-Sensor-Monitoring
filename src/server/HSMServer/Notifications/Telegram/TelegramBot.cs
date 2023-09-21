@@ -168,8 +168,9 @@ namespace HSMServer.Notifications
         private void FillAddressBook()
         {
             foreach (var user in _userManager.GetUsers())
-                foreach (var (_, chat) in user.Notifications.Telegram.Chats)
-                    _addressBook.RegisterChat(user, chat);
+                if (user.Notifications?.Telegram?.Chats?.Count > 0)
+                    foreach (var (_, chat) in user.Notifications.Telegram.Chats)
+                        _addressBook.RegisterChat(user, chat);
 
             foreach (var product in _tree.GetRootProducts())
                 foreach (var (_, chat) in product.Notifications.Telegram.Chats)

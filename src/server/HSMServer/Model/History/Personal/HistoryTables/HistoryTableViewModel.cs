@@ -1,4 +1,5 @@
-﻿using HSMServer.Core;
+﻿using HSMCommon.Extensions;
+using HSMServer.Core;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Model;
 using HSMServer.Extensions;

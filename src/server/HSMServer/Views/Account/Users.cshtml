@@ -64,9 +64,12 @@
                         <tr>
                             <th scope='row'>@(i + 1)</th>
                             <td class="text-break">@userItem.Username.Trim()</td>
-                            <td>**************</td>
                             <td>
-                                <input id='isAdmin_@userItem.Username' type='checkbox' class='form-check-input ms-0'
+                                <span id="hiddenPassword_@userItem.UserId">**************</span>
+                                <input id="password_@userItem.UserId" class="form-control d-none"/>
+                            </td>
+                            <td>
+                                <input id='isAdmin_@userItem.UserId' type='checkbox' class='form-check-input ms-0'
                                        disabled value='@userItem.IsAdmin' @(userItem.IsAdmin ? "checked" : "")/>
                             </td>
                             <td class="text-break">
@@ -91,22 +94,22 @@
                             <td class="w-25">
                                 @if (UserRoleHelper.IsUserCRUDAllowed(Context.User as User))
                                 {
-                                    <button id='delete_@userItem.Username'
+                                    <button id='delete_@userItem.UserId' name="@userItem.Username"
                                             type='button' class='btn btn-secondary ms-1' title='delete'>
                                         <i class='fas fa-trash-alt'></i>
                                     </button>
                                 }
-                                <button id='change_@userItem.Username'
+                                <button id='change_@userItem.UserId'
                                         type='button' class='btn btn-secondary ms-1' title='change'>
                                     <i class='fas fa-user-edit'></i>
                                 </button>
                                 
-                                <button disabled id='ok_@userItem.Username'
+                                <button disabled id='ok_@userItem.UserId' name="@userItem.Username"
                                         type='button' class='btn btn-secondary ms-1' title='ok'>
                                     <i class='fas fa-check'></i>
                                 </button>
                                 
-                                <button disabled id='cancel_@userItem.Username'
+                                <button disabled id='cancel_@userItem.UserId'
                                         type='button' class='btn btn-secondary ms-1' title='cancel'>
                                     <i class='fas fa-times'></i>
                                 </button>
@@ -140,11 +143,10 @@
 </div>
 
 <script>
-    function createData(userName, password, role, isAdmin, products) {
+    function createData(userName, password, isAdmin, products) {
         return {
             "Username": userName,
             "Password": password,
-            "Role": Number(role),
             "IsAdmin": isAdmin,
             "ProductKeys": products
         }
@@ -167,10 +169,9 @@
     $('#createButton').on('click', function () {
         username = $('#createName').val();
         password = $('#createPassword').val();
-        role = $('#createRole').val();
         isAdmin = $('#createIsAdmin').is(":checked");
 
-        var data = createData(username, password, role, isAdmin, null);
+        var data = createData(username, password, isAdmin, null);
         
         $.ajax({
             type: 'POST',
@@ -186,8 +187,7 @@
 
     //delete action
     $('[id^=delete_]').on('click', function () {
-        username = this.id.substring('delete_'.length, this.id.length);
-        //console.log(username);
+        username = this.name;
 
         $('#modalDeleteBody').empty();
         $('#modalDeleteBody').append('Do you really want to remove "' + username.substring(0,100) + '" user?');
@@ -222,17 +222,22 @@
 
     //change action
     $('[id^=change_]').on('click', function () {
-        username = this.id.substring('change_'.length, this.id.length);
+        userId = this.id.substring('change_'.length, this.id.length);
 
-        $('[id^=role_]').attr('disabled', true);
         $('[id^=ok_]').attr('disabled', true);
         $('[id^=cancel_]').attr('disabled', true);
         $('[id^=isAdmin_]').attr('disabled', true);
 
-        $('#role_' + username).removeAttr("disabled");
-        $('#ok_' + username).removeAttr("disabled");
-        $('#cancel_' + username).removeAttr("disabled");
-        $('#isAdmin_' + username).removeAttr("disabled");
+        $('[id^=password_]').addClass("d-none");
+        $('[id^=hiddenPassword_]').removeClass("d-none");
+
+
+        $('#ok_' + userId).removeAttr("disabled");
+        $('#cancel_' + userId).removeAttr("disabled");
+        $('#isAdmin_' + userId).removeAttr("disabled");
+
+        $(`#password_${userId}`).removeClass("d-none");
+        $(`#hiddenPassword_${userId}`).addClass("d-none");
     });
 
     $('[id^=cancel_]').on('click', function() {
@@ -240,11 +245,12 @@
     });
 
     $('[id^=ok_]').on('click', function () {
-        username = this.id.substring('ok_'.length, this.id.length);
-        role = $('#role_' + username).val();
-        isAdmin = $('#isAdmin_' + username).is(":checked");
+        userId = this.id.substring('ok_'.length, this.id.length);
 
-        var data = createData(username, null, role, isAdmin, null);
+        isAdmin = $('#isAdmin_' + userId).is(":checked");
+        let password = $(`#password_${userId}`).val();
+
+        var data = createData(this.name, password, isAdmin, null);
         $.ajax({
             type: 'POST',
             url: updateAction,
@@ -256,5 +262,4 @@
             document.location.reload();
         })
     });
-
 </script>
