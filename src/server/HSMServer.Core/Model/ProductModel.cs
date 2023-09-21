@@ -3,7 +3,6 @@ using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Model.Policies;
 using System;
 using System.Collections.Concurrent;
-using System.Linq;
 
 namespace HSMServer.Core.Model
 {
@@ -60,6 +59,17 @@ namespace HSMServer.Core.Model
         internal void AddSensor(BaseSensorModel sensor)
         {
             Sensors.TryAdd(sensor.Id, (BaseSensorModel)sensor.AddParent(this));
+
+            sensor.Policies.Uploaded += Policies.ReceivePolicyUpdate;
+
+            foreach (var policy in sensor.Policies)
+                Policies.AddPolicy(policy);
+        }
+
+        internal void RemoveSensor(Guid sensorId)
+        {
+            if (Sensors.TryRemove(sensorId, out var sensor))
+                sensor.Policies.Uploaded -= Policies.ReceivePolicyUpdate;
         }
 
         internal ProductModel Update(ProductUpdate update)
@@ -98,7 +108,6 @@ namespace HSMServer.Core.Model
             Description = Description,
             CreationDate = CreationDate.Ticks,
             NotificationSettings = NotificationsSettings,
-            Policies = Policies.Ids.Select(u => $"{u}").ToList(),
             Settings = Settings.ToEntity(),
             TTLPolicy = Policies.TimeToLive?.ToEntity(),
             ChangeTable = ChangeTable.ToEntity(),
