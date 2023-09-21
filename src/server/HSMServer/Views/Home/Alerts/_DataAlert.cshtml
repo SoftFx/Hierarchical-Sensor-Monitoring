@@ -34,8 +34,8 @@
                 }
                 else
                 {
-                    <b>@condition.Property.GetDisplayName() @condition.Operation.GetDisplayName()</b>
-                    @if (condition.Operation.IsTargetVisible())
+                    <b>@condition.Property.GetDisplayName() @condition.Operation?.GetDisplayName()</b>
+                    @if (condition.Operation?.IsTargetVisible() ?? false)
                     {
                         <b>@condition.Target</b>
                     }

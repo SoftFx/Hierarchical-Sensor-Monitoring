@@ -63,11 +63,11 @@ namespace HSMServer.Model.DataAlerts
                     continue;
                 }
 
-                var target = condition.Operation.IsTargetVisible()
+                var target = condition.Operation.Value.IsTargetVisible()
                     ? new TargetValue(TargetType.Const, condition.Target)
                     : new TargetValue(TargetType.LastValue, EntityId.ToString());
 
-                conditions.Add(new PolicyConditionUpdate(condition.Operation, condition.Property.ToCore(), target));
+                conditions.Add(new PolicyConditionUpdate(condition.Operation.Value, condition.Property.ToCore(), target));
             }
 
             (var status, var destination, var comment, var icon) = GetActions(availavleChats);
