@@ -29,7 +29,7 @@ namespace HSMPingModule.SensorStructure
 
             SensorOptions = new()
             {
-                Description = $"This sensor receives ping timeout value from **{country}** to [**{host}**]({host})",
+                Description = $"This sensor receives ping timeout value from **{country}** to [**{host}**]({new UriBuilder(host)})",
 
                 TTL = settings.TTL,
                 SensorUnit = Unit.Seconds,
