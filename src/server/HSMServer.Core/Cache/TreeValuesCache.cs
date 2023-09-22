@@ -121,8 +121,6 @@ namespace HSMServer.Core.Cache
                 foreach (var (id, _) in product.AccessKeys)
                     RemoveAccessKey(id);
 
-                RemoveEntityPolicies(product);
-
                 ChangeProductEvent?.Invoke(product, ActionType.Delete);
             }
 
@@ -320,7 +318,7 @@ namespace HSMServer.Core.Cache
 
             if (sensor.Parent is not null && _tree.TryGetValue(sensor.Parent.Id, out var parent))
             {
-                parent.Sensors.TryRemove(sensorId, out _);
+                parent.RemoveSensor(sensorId);
                 _journalService.RemoveRecords(sensorId, parent.Id);
 
                 _journalService.AddRecord(new JournalRecordModel(parent.Id, initiator)
@@ -573,16 +571,10 @@ namespace HSMServer.Core.Cache
             sensor.UpdateFromParentSettings -= _database.UpdateSensor;
 
             RemoveBaseNodeSubscription(sensor);
-            RemoveEntityPolicies(sensor);
-            RemoveEntityPolicies(sensor);
-        }
 
-        private void RemoveEntityPolicies(BaseNodeModel entity)
-        {
-            foreach (var policyId in entity.Policies.Ids)
+            foreach (var policyId in sensor.Policies.Select(u => u.Id))
                 _database.RemovePolicy(policyId);
         }
-
 
         private void UpdatesQueueNewItemsHandler(IEnumerable<StoreInfo> storeInfos)
         {

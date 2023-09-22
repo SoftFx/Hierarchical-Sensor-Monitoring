@@ -1,5 +1,6 @@
-﻿using HSMDatabase.AccessManager.DatabaseEntities;
+﻿using HSMServer.Core.Cache;
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -7,60 +8,61 @@ namespace HSMServer.Core.Model.Policies
 {
     public sealed class ProductPolicyCollection : PolicyCollectionBase
     {
-        private readonly Dictionary<SensorType, SensorPolicyCollection> _bySensorType = new();
-        private readonly Dictionary<Type, SensorPolicyCollection> _byPolicyType = new();
+        private readonly ConcurrentDictionary<string, Guid> _templateToGroup = new();
 
-        private readonly List<Policy> _basePolicies = new(1 << 4);
+        private readonly ConcurrentDictionary<Guid, PolicyGroup> _groups = new();
+        private readonly ConcurrentDictionary<Guid, Guid> _policyToGroup = new();
 
-
-        internal SensorPolicyCollection this[SensorType type] => _bySensorType[type];
-
-        internal override IEnumerable<Guid> Ids => _basePolicies.Select(u => u.Id);
+        public List<PolicyGroup> GroupedPolicies => _groups.Values.ToList();
 
 
-        internal ProductPolicyCollection()
+        internal void ReceivePolicyUpdate(ActionType type, Policy policy)
         {
-            Register<IntegerValue, IntegerPolicy>(SensorType.Integer);
-            Register<DoubleValue, DoublePolicy>(SensorType.Double);
+            var policyId = policy.Id;
 
-            Register<BooleanValue, BooleanPolicy>(SensorType.Boolean);
-            Register<StringValue, StringPolicy>(SensorType.String);
-            Register<FileValue, FilePolicy>(SensorType.File);
-
-            Register<IntegerBarValue, IntegerBarPolicy>(SensorType.IntegerBar);
-            Register<DoubleBarValue, DoubleBarPolicy>(SensorType.DoubleBar);
-
-            Register<VersionValue, VersionPolicy>(SensorType.Version);
-            Register<TimeSpanValue, TimeSpanPolicy>(SensorType.TimeSpan);
-        }
-
-        internal override void AddPolicy<T>(T policy)
-        {
-            if (_byPolicyType.TryGetValue(typeof(T), out var collection))
+            if (type is ActionType.Add)
+                AddPolicy(policy);
+            else if (type is ActionType.Delete)
+                RemovePolicy(policyId);
+            else if (type is ActionType.Update)
             {
-                collection.AddPolicy(policy);
-
-                _basePolicies.Add(policy);
+                RemovePolicy(policyId);
+                AddPolicy(policy);
             }
         }
 
 
-        public override IEnumerator<Policy> GetEnumerator() => _basePolicies.GetEnumerator();
-
-
-        private void Register<ValueType, PolicyType>(SensorType type)
-            where ValueType : BaseValue
-            where PolicyType : Policy<ValueType>, new()
+        internal void AddPolicy(Policy policy)
         {
-            var collection = new SensorPolicyCollection<ValueType, PolicyType>();
+            var template = policy.ToString();
+            var policyId = policy.Id;
 
-            _bySensorType.Add(type, collection);
-            _byPolicyType.Add(typeof(PolicyType), collection);
+            if (!_templateToGroup.TryGetValue(template, out var groudId))
+            {
+                var newGroup = new PolicyGroup();
+
+                groudId = newGroup.Id;
+
+                _templateToGroup.TryAdd(template, groudId);
+                _groups.TryAdd(groudId, newGroup);
+            }
+
+            if ((!_policyToGroup.ContainsKey(policyId) || _policyToGroup.TryRemove(policyId, out _)) && _policyToGroup.TryAdd(policyId, groudId))
+                _groups[groudId].AddPolicy(policy);
         }
 
-        internal override void ApplyPolicies(List<string> policyIds, Dictionary<string, PolicyEntity> allPolicies)
+        private void RemovePolicy(Guid policyId)
         {
-            throw new NotImplementedException();
+            if (_policyToGroup.TryRemove(policyId, out var groupId) && _groups.TryGetValue(groupId, out var group))
+            {
+                group.RemovePolicy(policyId);
+
+                if (group.IsEmpty)
+                {
+                    _templateToGroup.TryRemove(group.Template, out _);
+                    _groups.Remove(groupId, out _);
+                }
+            }
         }
     }
 }

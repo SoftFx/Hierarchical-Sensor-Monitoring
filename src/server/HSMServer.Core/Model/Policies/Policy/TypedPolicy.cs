@@ -8,7 +8,7 @@ namespace HSMServer.Core.Model.Policies
         protected abstract PolicyCondition<T, U> BasePolicyCondition { get; }
 
 
-        protected override AlertState GetState(BaseValue value) => AlertState.Build((T)value, _sensor);
+        protected override AlertState GetState(BaseValue value) => AlertState.Build((T)value, Sensor);
 
         protected override PolicyCondition GetCondition(PolicyProperty property) => property switch
         {
@@ -26,7 +26,7 @@ namespace HSMServer.Core.Model.Policies
         protected abstract PolicyCondition<T, U> BasePolicyCondition { get; }
 
 
-        protected override AlertState GetState(BaseValue value) => AlertState.Build((T)value, _sensor);
+        protected override AlertState GetState(BaseValue value) => AlertState.Build((T)value, Sensor);
 
         protected override PolicyCondition GetCondition(PolicyProperty property) => property switch
         {

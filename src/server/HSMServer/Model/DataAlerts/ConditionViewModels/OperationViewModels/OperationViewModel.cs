@@ -29,10 +29,13 @@ namespace HSMServer.Model.DataAlerts
         }
 
 
-        internal OperationViewModel SetData(PolicyOperation operation, string target)
+        internal OperationViewModel SetData(PolicyOperation? operation, string target)
         {
-            Operation = operation;
-            Target = target;
+            if (operation.HasValue)
+            {
+                Operation = operation.Value;
+                Target = target;
+            }
 
             return this;
         }

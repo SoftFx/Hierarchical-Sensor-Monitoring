@@ -39,6 +39,8 @@ namespace HSMServer.Model.UserTreeShallowCopy
         {
             node.Parent = this;
 
+            ErrorsCount += node.ErrorsCount;
+
             if (!node.IsMutedState)
             {
                 AccountState.CalculateState(node.AccountState);

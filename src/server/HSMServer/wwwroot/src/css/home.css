@@ -22,6 +22,18 @@
     padding: 0px 0px 0px 12px;
 }
 
+.tree-sensors-count {
+    color: #adb5bd;
+    font-size: smaller;
+    font-weight: normal;
+}
+
+.tree-errors-count {
+    color: rgb(169, 15, 26);
+    font-size: smaller;
+    font-weight: bold;
+}
+
 .time-ago-div {
     color: grey;
 }

@@ -1,3 +1,4 @@
+using HSMCommon.Collections;
 using HSMServer.Authentication;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Cache.UpdateEntities;
@@ -15,11 +16,11 @@ using HSMServer.Model.Folders;
 using HSMServer.Model.Folders.ViewModels;
 using HSMServer.Model.History;
 using HSMServer.Model.Model.History;
+using HSMServer.Model.MultiToastViewModels;
 using HSMServer.Model.TreeViewModel;
 using HSMServer.Model.TreeViewModels;
 using HSMServer.Model.ViewModel;
 using HSMServer.Notification.Settings;
-using HSMServer.Notifications;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System;
@@ -27,6 +28,9 @@ using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Threading.Tasks;
 using TimeInterval = HSMServer.Model.TimeInterval;
 
@@ -36,22 +40,31 @@ namespace HSMServer.Controllers
     [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
     public class HomeController : BaseController
     {
+        private static readonly JsonSerializerOptions _alertsSerializationOptions = new()
+        {
+            WriteIndented = true
+        };
+
         private readonly ITreeValuesCache _treeValuesCache;
         private readonly IFolderManager _folderManager;
         private readonly TreeViewModel _treeViewModel;
-        private readonly TelegramBot _telegramBot;
         private readonly IJournalService _journalService;
 
 
-        public HomeController(ITreeValuesCache treeValuesCache, IFolderManager folderManager, TreeViewModel treeViewModel,
-                              IUserManager userManager, NotificationsCenter notifications, IJournalService journalService) : base(userManager)
+        static HomeController()
         {
-            _telegramBot = notifications.TelegramBot;
+            _alertsSerializationOptions.Converters.Add(new JsonStringEnumConverter());
+        }
+
+        public HomeController(ITreeValuesCache treeValuesCache, IFolderManager folderManager, TreeViewModel treeViewModel,
+                              IUserManager userManager, IJournalService journalService) : base(userManager)
+        {
             _treeValuesCache = treeValuesCache;
             _treeViewModel = treeViewModel;
             _folderManager = folderManager;
             _journalService = journalService;
         }
+
 
         public IActionResult Index()
         {
@@ -175,7 +188,7 @@ namespace HSMServer.Controllers
         [HttpPost]
         public ActionResult RemoveNode([FromBody] string[] ids)
         {
-            var model = new MultiActionToastViewModel();
+            var model = new MultiActionsToastViewModel();
 
             foreach (var id in ids)
             {
@@ -223,7 +236,7 @@ namespace HSMServer.Controllers
 
             model.Upload();
 
-            var toastViewModel = new MultiActionToastViewModel();
+            var toastViewModel = new MultiActionsToastViewModel();
             var isExpectedFromParent = model.ExpectedUpdateInterval?.TimeInterval is TimeInterval.FromParent;
 
             foreach (var id in model.SelectedNodes)
@@ -795,6 +808,77 @@ namespace HSMServer.Controllers
                 ? PartialView("_MetaInfo", new FolderInfoViewModel(_folderManager[update.Id]))
                 : _emptyResult;
         }
+
+
+        [HttpGet]
+        public IActionResult ExportAlerts(Guid selectedId)
+        {
+            var node = _treeValuesCache.GetProduct(selectedId);
+
+            if (node is null)
+                return _emptyResult;
+
+
+            var policies = JsonSerializer.Serialize(node.Policies.GroupedPolicies.Select(p => new AlertExportViewModel(p)), _alertsSerializationOptions);
+
+            var fileName = $"{node.FullPath.Replace('/', '_')}-alerts.json";
+            Response.Headers.Add("Content-Disposition", $"attachment;filename={fileName}");
+
+            return File(Encoding.UTF8.GetBytes(policies), fileName.GetContentType(), fileName);
+        }
+
+        [HttpPost]
+        public string ImportAlerts([FromBody] AlertImportViewModel model)
+        {
+            var toastViewModel = new ImportAlertsToastViewModel();
+
+            if (_treeViewModel.Nodes.TryGetValue(model.NodeId, out var node))
+            {
+                try
+                {
+                    var alerts = JsonSerializer.Deserialize<List<AlertExportViewModel>>(model.FileContent, _alertsSerializationOptions);
+
+                    var availableSensors = node.Sensors.ToDictionary(k => k.Value.Name, v => v.Key);
+                    var availableChats = node.GetAllChats().ToDictionary(k => k.Name, v => v.SystemId);
+
+                    var sensorAlerts = new CGuidDict<List<PolicyUpdate>>();
+
+                    foreach (var alert in alerts)
+                    {
+                        var updates = alert.ToUpdates(availableSensors, availableChats);
+
+                        foreach (var (sensorId, update) in updates)
+                            sensorAlerts[sensorId].Add(update);
+                    }
+
+                    foreach (var (sensorId, alertUpdates) in sensorAlerts)
+                    {
+                        try
+                        {
+                            var update = new SensorUpdate()
+                            {
+                                Id = sensorId,
+                                Policies = alertUpdates,
+                                Initiator = CurrentInitiator,
+                            };
+
+                            _treeValuesCache.UpdateSensor(update);
+                        }
+                        catch (Exception ex)
+                        {
+                            toastViewModel.AddError(ex.Message, _treeViewModel.Sensors[sensorId].Name);
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    return ex.Message;
+                }
+            }
+
+            return toastViewModel.ToResponse();
+        }
+
 
         private string GetSensorPath(string encodedId)
         {
