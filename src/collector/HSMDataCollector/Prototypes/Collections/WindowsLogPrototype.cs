@@ -3,7 +3,7 @@ using HSMSensorDataObjects;
 
 namespace HSMDataCollector.Prototypes.Collections
 {
-    internal abstract class WindowsLogPrototype : InstantSensorOptionsPrototype<WindowsLogsOptions>
+    internal abstract class WindowsLogPrototype : InstantSensorOptionsPrototype<InstantSensorOptions>
     {
         protected override string Category => "Windows OS info/Windows Logs";
 

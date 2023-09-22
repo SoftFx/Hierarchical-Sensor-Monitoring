@@ -5,6 +5,6 @@ namespace HSMDataCollector.DefaultSensors.Windows
 {
     public class WindowsWarningLogs : WindowsLogsSensorBase
     {
-        public WindowsWarningLogs(WindowsLogsOptions options) : base(options, EventLogEntryType.Warning) { }
+        public WindowsWarningLogs(InstantSensorOptions options) : base(options, EventLogEntryType.Warning) { }
     }
 }

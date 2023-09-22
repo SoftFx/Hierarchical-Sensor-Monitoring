@@ -5,6 +5,6 @@ namespace HSMDataCollector.DefaultSensors.Windows
 {
     public class WindowsErrorLogs : WindowsLogsSensorBase
     {
-        public WindowsErrorLogs(WindowsLogsOptions options) : base(options, EventLogEntryType.Error) { }
+        public WindowsErrorLogs(InstantSensorOptions options) : base(options, EventLogEntryType.Error) { }
     }
 }
