@@ -6,12 +6,7 @@ namespace HSMDataCollector.DefaultSensors.Windows
     {
         protected override string CounterName => "Avg. Disk Queue Length";
 
-        protected override string InstanceName { get; }
 
-
-        public WindowsDiskQueueLength(DiskBarSensorOptions options) : base(options)
-        {
-            InstanceName = $"{options.DiskInfo.DiskLetter}:";
-        }
+        public WindowsDiskQueueLength(DiskBarSensorOptions options) : base(options) { }
     }
 }

@@ -6,12 +6,7 @@ namespace HSMDataCollector.DefaultSensors.Windows
     {
         protected override string CounterName => "% Disk Time";
 
-        protected override string InstanceName { get; }
 
-
-        public WindowsActiveTimeDisk(DiskBarSensorOptions options) : base(options)
-        {
-            InstanceName = options.DiskInfo.DiskLetter;
-        }
+        public WindowsActiveTimeDisk(DiskBarSensorOptions options) : base(options) { }
     }
 }

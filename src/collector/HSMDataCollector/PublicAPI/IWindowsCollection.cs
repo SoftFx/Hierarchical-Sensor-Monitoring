@@ -36,9 +36,9 @@ namespace HSMDataCollector.PublicInterface
 
         IWindowsCollection AddDisksQueueLength(DiskBarSensorOptions options = null);
 
-        IWindowsCollection AddDiskMonitoringSensors(DiskSensorOptions options = null, DiskBarSensorOptions diskOptions = null);
+        IWindowsCollection AddDiskMonitoringSensors(DiskSensorOptions options = null, DiskBarSensorOptions diskBarOptions = null);
 
-        IWindowsCollection AddAllDisksMonitoringSensors(DiskSensorOptions options = null, DiskBarSensorOptions diskOptions = null);
+        IWindowsCollection AddAllDisksMonitoringSensors(DiskSensorOptions options = null, DiskBarSensorOptions diskBarOptions = null);
 
 
         IWindowsCollection AddWindowsLastUpdate(WindowsInfoSensorOptions options = null);
