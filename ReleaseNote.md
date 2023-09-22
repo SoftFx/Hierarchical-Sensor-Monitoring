@@ -1,77 +1,69 @@
 # HSM Server
 
-## New instanse **Table of change** has been added
-* Table of change has been added for product/sensor **Properties**, **Settings**, **Alerts**
-* Table of change saved update time and last change initiator for each object
-* An object can only be modified if the Type of the initiator is higher than a initiator of The last change.
-* Priority System -> DataCollector -> User
-    * **System** - Can only change its own objects
-    * **DataCollector** - A collector can only update objects that were last updated by either a collector or system 
-    * **User** - A user can change any objects
+## Import/Export alerts logic have been added
+You can import all alerts from one node and export them to another node. Copy depth is 1 level.  
+Exported alert object contains the next properties:
+1. Sensors - list of sensor names, that have this alert
+2. Conditions - list of alert conditions. Condition has:
 
-## Sensors
-* New setting **Aggregate data** has been added. If the setting is enable only data that differs in comment, value or status from the previous value is stored in a database.
-* New setting **Unit** has been added. The setting shows in which units the sensor values stored.
+    - **Property**: "Status", "Comment", "Value", "Min", "Max", "Mean", "Count", "LastValue", "Length", "OriginalSize", "NewSensorData"
+    - **Operation**: "LessThanOrEqual", "LessThan", "GreaterThan", "GreaterThanOrEqual", "Equal", "NotEqual", "IsChanged", "IsError", "IsOk", "IsChangedToError", "IsChangedToOk", "Contains", "StartsWith", "EndsWith", "ReceivedNewValue"
+    - **Target**: null for "IsChanged", "IsError", "IsOk", "IsChangedToError", "IsChangedToOk", "ReceivedNewValue" operations and some value for other
+3. Template - notification template
+4. Icon - tree icon
+5. Status - "Ok" or "Error"
+6. Chats - list of chats to send alert or null if destination is all chats
+7. IsDisabled - true or false
 
-## Alerts
-* **Value** property for TimeSpan sensor has been added.
-* **Count** property for Bar sensors has been added.
-* **Change to Ok** property has been added for Status.
-* **Change to Error** property has been added for Status.
-* New variable **$property** has been added.
-* New varoable **$count** for Bar sensors has been added.
-* $target for **Status OnChange** property returns sensor name instead guid.
-* Aggregation has been fixed for Alert with different AlertState
+## Alert constructor
+* **Value** for **Version** sensor has been added with operations (<, >, <=, >=, =, !=)
+* **New data** operation has been added. Alert send message every new value on a sensor.
+* **Value** fir **String** sensor has been added with operations (==, !=, contains, startsWith, endsWith)
+* **Length** peroperty for **String** sensor has been added (<, >, <=, >=, =, !=)
+* **File Size** property for **File** sensor has been added (<, >, <=, >=, =, !=)
+* New operations for **Comment** have been added (==, !=, contains, startsWith, endsWith)
+* Operations = and != have been added for all number properties
 
-## History
-* **Last update** and **Aggregation count** columns have been added for sensors with **Aggregate data** setting
+## Tree
+* **Sensors count** view has been improved
+* **Errors count** view has been added
+* Filters for **Sensors count** and **Errors count** have been added
+* **Alerts -> Import/Export** items in context menu have been added
 
-## Journal
-* Initiator type has been added. (System, DataCollector, User)
-* Records about change by parent for all **From parent** alerts have been added
-* Never and Forever values have been added to Journal records (instead of None)
-* A Journal tab is hidden if the journal is empty
-
-## Manual status change
-* Input for **Value** has been added for instant sensors (int, double, string, bool, Version, TimeSpan)
-* Checkbox to change last value has been added
+## Sensor
+* New setting **IsSingleton** has been added. If several Datacolelctors send data to the same path, only first value stored
 
 ## Charts
-* A button to display the nearest **Service status** as a background has been added
-* A button to display the nearest **Service alive** as a background has been added
-* Sensor TTL is displayed as gray dots on the graph
+* **Reset** button has been restored on Plotly bar
+* Label cheking for Bar properties has been added
+* Green color for original **Service alive** chart has been restored 
 
-## Rest API
-* New endpoint **/addOrUpdate** has been added. This endpoint allows you to configure any sensor through DataCollector
-* New endpoint **/commands** has been added. Allows you to batch send commands to the server (*ex. /addOrUpdate*)
+## Users
+* Ability to **change password** has been added in Users tab
+* Removing/editing user with specific chars in name has been fixed 
 
 ## Other
-* View format for TimeSpan has been improved. (From 31d 0h 0m 0s -> 31 days)
-* System has been added as initiator to Muted->Available update
-* New predefined values 1 min and 5 min for TTL has been added
-
-# HSM DataCollector v. 3.2.0
-
-## Settings
-* New setting **Module** has been added. The module is automatically inserted at the start of the paths of all collector sensors
-
-## Sensor settings
-* The user can configure all sensors through DataCollector. More information can be found [**here**](https://github.com/SoftFx/Hierarchical-Sensor-Monitoring/wiki/DataCollector-sensor-settings)
-* The user can override all default sensors settings.  More information can be found [**here**](https://github.com/SoftFx/Hierarchical-Sensor-Monitoring/wiki/DataCollector-sensor-settings)
-* New setting **Unit** (bytes, MB, GB and etc.) has been added to sensor settings
-
-## Default sensors
-* Description, alerts, ttl and other settings have been added for all default sensors
-* New default sensor **Active disk time** has been added
-* **Is need update** sensor has been removed. It's logic has been added as alert to **Last update** sensor
-
-## Alerts API
-* Alerts API in fluent style has been added to Datacollector. More info about alerts can be found [**here**](https://github.com/SoftFx/Hierarchical-Sensor-Monitoring/wiki/Alerts-constructor). How to use Alerts API examples can be found [**here**](https://github.com/SoftFx/Hierarchical-Sensor-Monitoring/wiki/DataCollector-sensor-settings)
+* Message for removed alerts has been improved for Journal tab
+* TimeSpan value view has been improved for notifications
 
 ## Bugfixing
-* **Mean**  calculation for Bar sensors has been fixed
+* Server crush after reading sensor with set AggregatedValues setting if history is empty has been fixed
 
-# HSM HSM SensorDataObjects 3.0.3
-* Requests for sensors settings have been added
-* Requests for alerts settings have been added
-* Command requests for server settings have been added
+
+# HSM DataCollector 
+
+## v. 3.2.1
+* New extension method for readable Timespan value has been added
+* New module **Computer name** has been added. Current module contains only global machine sensors like Total CPU, Free RAM, Disks monitoring and etc.
+* All default sensors have been splitted into 2 parts: computer and module sensors
+* Default process (CPU, RAM, Thread count) sensors have been moved to node with main **process name**
+* **IsSingleton** new setting for sensors has been added
+
+## v. 3.2.2
+* Count synchronization for PublicBar sensor have been fixed
+
+# HSM SensorDataObjects
+
+## v. 3.0.4
+* Alert operations for **String values**, **Comment** and **Receive new data** have been added
+* Time units like **ticks**, **milliseconds**, **seconds**, **minutes** have been added
