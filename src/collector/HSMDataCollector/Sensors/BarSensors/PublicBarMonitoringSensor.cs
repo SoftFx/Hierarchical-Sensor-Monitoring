@@ -11,10 +11,20 @@ namespace HSMDataCollector.DefaultSensors
         public PublicBarMonitoringSensor(BarSensorOptions options) : base(options) { }
 
 
-        public void AddValue(T value) => _internalBar.AddValue(value);
+        public void AddValue(T value)
+        {
+            CheckCurrentBar();
 
-        public void AddPartial(T min, T max, T mean, T _, T last, int count) =>
+            _internalBar.AddValue(value);
+        }
+
+        public void AddPartial(T min, T max, T mean, T _, T last, int count)
+        {
+            CheckCurrentBar();
+
             _internalBar.AddPartial(min, max, mean, last, count);
+        }
+
 
         public void AddValues(IEnumerable<T> values)
         {

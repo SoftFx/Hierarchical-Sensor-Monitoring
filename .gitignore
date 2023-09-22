@@ -44,7 +44,7 @@ _ReSharper*/
 *.dotCover
 
 # NuGet Packages
-*.nupkg
+*.nupkg need for local nugets
 # The packages folder can be ignored because of Package Restore
 **/packages/*
 # except build/, which is used as an MSBuild target.
@@ -129,3 +129,4 @@ src/server/HSMServer/TestResults/
 
 # Custom configs
 src/server/HSMServer/Config/*
+src/module/HSMPingModule/Config/*

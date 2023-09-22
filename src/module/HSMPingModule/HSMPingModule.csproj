@@ -14,7 +14,11 @@
     </PropertyGroup>
 
     <ItemGroup>
-        <PackageReference Include="HSMDataCollector.HSMDataCollector" Version="3.2.0" />
+      <Compile Remove="Config\**" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <PackageReference Include="HSMDataCollector.HSMDataCollector" Version="3.2.1" />
         <PackageReference Include="HSMDataCollector.HSMSensorDataObjects" Version="3.0.4" />
         <PackageReference Include="Microsoft.Extensions.Hosting" Version="7.0.0" />
         <PackageReference Include="Microsoft.NET.Build.Containers" Version="7.0.400" />
@@ -23,6 +27,6 @@
     </ItemGroup>
 
     <ItemGroup>
-      <ProjectReference Include="..\..\server\HSMCommon\HSMCommon.csproj" />
+      <Folder Include="Config\" />
     </ItemGroup>
 </Project>

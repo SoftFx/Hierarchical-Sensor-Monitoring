@@ -1,5 +1,7 @@
-﻿using HSMDataCollector.Options;
+﻿using HSMDataCollector.Alerts;
+using HSMDataCollector.Options;
 using System;
+using System.Collections.Generic;
 
 namespace HSMDataCollector.Prototypes
 {
@@ -13,9 +15,10 @@ namespace HSMDataCollector.Prototypes
 
         protected InstantSensorOptionsPrototype()
         {
-            EnableForGrafana = true;
+            Alerts = new List<InstantAlertTemplate>();
 
             TTL = TimeSpan.MaxValue; //Never
+            EnableForGrafana = true;
         }
 
 

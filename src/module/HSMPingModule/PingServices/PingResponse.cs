@@ -1,11 +1,14 @@
 using HSMSensorDataObjects;
 using System.Net.NetworkInformation;
+using System.Text;
 
-namespace HSMPingModule;
+namespace HSMPingModule.PingServices;
 
 internal record PingResponse
 {
     private const double Milleseconds = 1000;
+
+    private readonly string _str;
 
 
     public SensorStatus Status { get; init; }
@@ -13,9 +16,6 @@ internal record PingResponse
     public double Value { get; init; }
 
     public string Comment { get; init; }
-
-
-    public bool IsException { get; }
 
 
     public PingResponse(PingReply reply)
@@ -32,6 +32,8 @@ internal record PingResponse
             Comment = reply.Status.ToString();
             Value = reply.RoundtripTime / Milleseconds;
         }
+
+        _str = BuildStrState();
     }
 
     public PingResponse(Exception exception)
@@ -39,6 +41,22 @@ internal record PingResponse
         Status = SensorStatus.Error;
         Comment = exception.Message;
         Value = 0;
-        IsException = true;
+
+        _str = BuildStrState();
+    }
+
+
+    public override string ToString() => _str;
+
+
+    private string BuildStrState()
+    {
+        var sb = new StringBuilder(1 << 5);
+
+        sb.Append($"{nameof(Status)}={Status}, ")
+          .Append($"{nameof(Value)}={Value}, ")
+          .Append($"{nameof(Comment)}={Comment}");
+
+        return sb.ToString();
     }
 }

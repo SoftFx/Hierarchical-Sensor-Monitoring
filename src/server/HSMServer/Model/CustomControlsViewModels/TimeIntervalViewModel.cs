@@ -170,7 +170,7 @@ namespace HSMServer.Model
         private static string GetUsedValue(TimeIntervalViewModel model) =>
             model?.Interval switch
             {
-                TimeInterval.Custom => model.CustomSpan.ToTableView(),
+                TimeInterval.Custom => model.CustomSpan.ToReadableView(),
                 TimeInterval.FromParent => GetUsedValue(model.ParentValue),
                 _ => model?.TimeInterval.GetDisplayName()
             };

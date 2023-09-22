@@ -6,5 +6,5 @@ internal sealed class CollectorSettings
 
     public string ServerAddress { get; set; } = "localhost";
 
-    public int Port { get; set; } = 44333;
+    public int Port { get; set; } = 44330;
 }
