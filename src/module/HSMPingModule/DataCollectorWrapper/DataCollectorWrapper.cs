@@ -3,8 +3,8 @@ using HSMDataCollector.Options;
 using HSMDataCollector.PublicInterface;
 using HSMPingModule.Config;
 using HSMPingModule.PingServices;
+using HSMPingModule.SensorStructure;
 using HSMPingModule.Settings;
-using HSMSensorDataObjects;
 using NLog;
 using System.Collections.Concurrent;
 
@@ -16,11 +16,11 @@ internal sealed class DataCollectorWrapper : IDataCollectorWrapper
     private readonly ConcurrentDictionary<string, IInstantValueSensor<double>> _sensors = new();
 
     private readonly Logger _logger = LogManager.GetCurrentClassLogger();
-
-    private readonly IInstantValueSensor<string> _exceptionSensor;
-
     private readonly CollectorSettings _config;
     private readonly IDataCollector _collector;
+
+
+    public ApplicationNode AppNode { get; }
 
 
     public DataCollectorWrapper(ServiceConfig config)
@@ -54,7 +54,7 @@ internal sealed class DataCollectorWrapper : IDataCollectorWrapper
                            .AddCollectorMonitoringSensors();
         }
 
-        _exceptionSensor = _collector.CreateStringSensor("Infrastructure/AppException");
+        AppNode = new ApplicationNode(_collector);
     }
 
 
@@ -80,6 +80,4 @@ internal sealed class DataCollectorWrapper : IDataCollectorWrapper
 
         _logger.Info("New sensor value has been sent: {path} -> {value}", sensorPath, result);
     }
-
-    public void AddApplicationException(string exceptionMessage) => _exceptionSensor.AddValue(exceptionMessage, SensorStatus.Ok);
 }

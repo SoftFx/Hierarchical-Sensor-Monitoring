@@ -1,9 +1,10 @@
 ﻿using HSMDataCollector.Alerts;
 using HSMDataCollector.Options;
+using HSMPingModule.PingServices;
 using HSMPingModule.Settings;
 using HSMSensorDataObjects.SensorRequests;
 
-namespace HSMPingModule.PingServices
+namespace HSMPingModule.SensorStructure
 {
     internal class ResourceSensor : IDisposable
     {

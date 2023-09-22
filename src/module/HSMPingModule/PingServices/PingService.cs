@@ -1,6 +1,8 @@
 using HSMPingModule.Config;
 using HSMPingModule.DataCollectorWrapper;
+using HSMPingModule.SensorStructure;
 using HSMPingModule.VpnManager;
+using HSMSensorDataObjects;
 using NLog;
 using System.Collections.Concurrent;
 
@@ -31,7 +33,16 @@ internal class PingService : BackgroundService
     }
 
 
-    public override Task StartAsync(CancellationToken token) => _collector.Start().ContinueWith(_ => base.StartAsync(token)).Unwrap();
+    public override async Task StartAsync(CancellationToken token)
+    {
+        await _collector.Start();
+
+        var vpnStatus = await _vpn.LoadCountries();
+
+        _collector.AppNode.SendVpnStatus(vpnStatus.IsOk, _vpn.VpnDescription, vpnStatus.Error);
+
+        await base.StartAsync(token);
+    }
 
     public override Task StopAsync(CancellationToken token)
     {
@@ -76,7 +87,7 @@ internal class PingService : BackgroundService
                     var message = $"{country} processing... {ex.Message}";
 
                     _logger.Info(message);
-                    _collector.AddApplicationException(message);
+                    _collector.AppNode.Exceptions.AddValue(message, SensorStatus.Error);
                 }
             }
         }

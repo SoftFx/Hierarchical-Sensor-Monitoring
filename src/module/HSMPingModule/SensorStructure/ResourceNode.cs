@@ -1,6 +1,6 @@
 ﻿using HSMPingModule.Settings;
 
-namespace HSMPingModule.PingServices
+namespace HSMPingModule.SensorStructure
 {
     internal sealed class ResourceNode : IDisposable
     {

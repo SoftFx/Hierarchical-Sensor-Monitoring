@@ -1,14 +1,17 @@
 using HSMPingModule.PingServices;
+using HSMPingModule.SensorStructure;
 
 namespace HSMPingModule.DataCollectorWrapper;
 
 internal interface IDataCollectorWrapper
 {
-    internal void SendPingResult(ResourceSensor resource, PingResponse pingResponse);
+    internal ApplicationNode AppNode { get; }
 
-    internal void AddApplicationException(string exceptionMessage);
 
     internal Task Start();
 
     internal Task Stop();
+
+
+    internal void SendPingResult(ResourceSensor resource, PingResponse pingResponse);
 }

@@ -4,11 +4,15 @@ namespace HSMPingModule.VpnManager
 {
     internal sealed class NoVpnManager : BaseVpnManager
     {
-        protected override Task<List<string>> GetAvailableCountries() => Task.FromResult<List<string>>(new()
-        {
-            "Latvia",
-            "United_Kingdom"
-        });
+        internal override string VpnDescription { get; } = $"Test start without using any VPN";
+
+
+        protected override Task<TaskResult<List<string>>> LoadAvailableCountries() =>
+            Task.FromResult(TaskResult<List<string>>.GetOk(new()
+            {
+                "Latvia",
+                "United_Kingdom"
+            }));
 
 
         internal override Task<TaskResult> Connect() => TaskResult.OkTask;

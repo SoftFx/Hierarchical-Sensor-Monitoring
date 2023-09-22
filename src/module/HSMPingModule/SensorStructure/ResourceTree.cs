@@ -2,7 +2,7 @@
 using NLog;
 using System.Collections.Concurrent;
 
-namespace HSMPingModule.PingServices
+namespace HSMPingModule.SensorStructure
 {
     internal sealed class ResourceTree : IDisposable
     {
@@ -15,7 +15,7 @@ namespace HSMPingModule.PingServices
         internal Dictionary<string, List<ResourceSensor>> CountrySet { get; private set; }
 
 
-        internal ResourceTree(ServiceConfig config)
+        public ResourceTree(ServiceConfig config)
         {
             _config = config;
             _config.OnChanged += RebuildTree;
@@ -40,7 +40,6 @@ namespace HSMPingModule.PingServices
             _logger.Info($"All requests canceled");
 
             _resources.Clear();
-            CountrySet.Clear();
 
             foreach (var nodeSetting in _config.ResourceSettings.WebSites)
                 _resources.TryAdd(nodeSetting.Key, new ResourceNode(nodeSetting));

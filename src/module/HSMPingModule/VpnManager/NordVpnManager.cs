@@ -12,6 +12,11 @@ namespace HSMPingModule.VpnManager
         private const string SwitchCountryCommand = "connect";
         private const string DisconnectCommand = "disconnect";
 
+        private string _description = $"[**Nord VPN**](https://nordvpn.com/) is used to check configured resources.";
+
+
+        internal override string VpnDescription => _description;
+
 
         internal override Task<TaskResult> Connect() => TaskResult.OkTask;
 
@@ -36,14 +41,22 @@ namespace HSMPingModule.VpnManager
         }
 
 
-        protected override async Task<List<string>> GetAvailableCountries()
+        protected override async Task<TaskResult<List<string>>> LoadAvailableCountries()
         {
             var result = await RunCommand(CountriesListCommand);
 
-            return result.IsOk
-                   ? result.Result.Split(",", StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList()
-                   : Enumerable.Empty<string>().ToList();
+            if (result.IsOk)
+            {
+                _description = $"{_description}  \nAvailable countires:  \n{result.Result}";
+
+                var countries = result.Result.Split(",", StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList();
+
+                return TaskResult<List<string>>.GetOk(countries);
+            }
+
+            return new TaskResult<List<string>>(result.Error);
         }
+
 
         private static async Task<TaskResult<string>> RunCommand(string command)
         {

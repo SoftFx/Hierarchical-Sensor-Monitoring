@@ -35,9 +35,9 @@ internal sealed class ServiceConfig
 
     public CollectorSettings HSMDataCollectorSettings { get; private set; } = new();
 
-    public ResourceSettings ResourceSettings { get; private set; } = new();
-
     public PingSettings PingSettings { get; private set; } = new();
+
+    public ResourceSettings ResourceSettings { get; private set; } = new();
 
 
     internal event Action OnChanged;
@@ -63,7 +63,7 @@ internal sealed class ServiceConfig
 
         Init();
 
-        _watcher = new FileSystemWatcher(_fullFilePath)
+        _watcher = new FileSystemWatcher(ConfigPath, ConfigName)
         {
             NotifyFilter = NotifyFilters.LastWrite,
             EnableRaisingEvents = true

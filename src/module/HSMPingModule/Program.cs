@@ -1,6 +1,7 @@
 using HSMPingModule.Config;
 using HSMPingModule.DataCollectorWrapper;
 using HSMPingModule.PingServices;
+using HSMPingModule.SensorStructure;
 using HSMPingModule.VpnManager;
 using NLog;
 using NLog.Extensions.Logging;
