@@ -76,8 +76,7 @@ namespace HSMServer.BackgroundServices
                                   .AddSystemMonitoringSensors()
                                   .AddWindowsInfoMonitoringSensors()
                                   .AddProductVersion(productInfoOptions)
-                                  .AddCollectorMonitoringSensors()
-                                  .AddWindowsLogs(new WindowsLogsOptions());
+                                  .AddCollectorMonitoringSensors();
             }
             else
             {

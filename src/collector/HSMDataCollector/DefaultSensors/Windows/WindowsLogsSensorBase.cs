@@ -35,24 +35,24 @@ namespace HSMDataCollector.DefaultSensors.Windows
             foreach (EventLogEntryCollection eventLogEntry in new List<object> { _eventLog.Entries })
                 foreach (var eventLog in eventLogEntry.Cast<EventLogEntry>())
                     if (eventLog.TimeGenerated >= _startTime && eventLog.EntryType == _eventType)
-                        SendValue(new StringSensorValue()
-                        {
-                            Value = eventLog.Message,
-                            Time = eventLog.TimeGenerated,
-                            Status = SensorStatus.Ok,
-                            Path = SensorPath,
-                            Comment = eventLog.Source
-                        });
-                
+                        SendValue(BuildValue(eventLog.Message, eventLog.TimeGenerated, eventLog.Source));
 
             return base.Start();
         }
 
+        private StringSensorValue BuildValue(string value, DateTime time, string source) => new StringSensorValue()
+            {
+                Value = value,
+                Time = time,
+                Status = SensorStatus.Ok,
+                Path = SensorPath,
+                Comment = source
+            };
 
         private void Handler(object obj, EventRecordWrittenEventArgs arg)
         {
             if (arg.EventRecord != null)
-                SendValue(arg.EventRecord.FormatDescription()); 
+                SendValue(BuildValue(arg.EventRecord.FormatDescription(), arg.EventRecord.TimeCreated ?? DateTime.Now, arg.EventRecord.ProviderName)); 
         }
 
         private string GetCurrentLogLevel()
