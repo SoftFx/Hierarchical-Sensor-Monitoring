@@ -26,13 +26,14 @@ namespace HSMDataCollector.DefaultSensors.Windows
         
         internal override Task<bool> Start()
         {
-            foreach (var eventLog in from EventLogEntryCollection eventLogEntry in new List<object> { _eventLog.Entries } from EventLogEntry eventLog in eventLogEntry where eventLog.TimeGenerated >= _startTime && eventLog.EntryType is EventLogEntryType.Warning select eventLog)
+            foreach (var eventLog in from EventLogEntryCollection eventLogEntry in new List<object> { _eventLog.Entries } from EventLogEntry eventLog in eventLogEntry where eventLog.EntryType is EventLogEntryType.Warning select eventLog)
                 SendValue(new StringSensorValue()
                 {
                     Value = eventLog.Message,
                     Time = eventLog.TimeGenerated,
                     Status = SensorStatus.Ok,
-                    Path = SensorPath
+                    Path = SensorPath,
+                    Comment = eventLog.Source
                 });
 
             return base.Start();
