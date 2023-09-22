@@ -12,7 +12,11 @@ namespace HSMCommon.Collections
 
     public abstract class CDictBase<T, U> : ConcurrentDictionary<T, U> where U : new()
     {
-        public new U this[T key] => GetOrAdd(key);
+        public new U this[T key]
+        {
+            get => GetOrAdd(key);
+            set => base[key] = value;
+        }
 
 
         protected CDictBase() : base() { }
