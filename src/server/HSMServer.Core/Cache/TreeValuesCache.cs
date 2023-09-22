@@ -1,4 +1,5 @@
-﻿using HSMCommon.Constants;
+﻿using HSMCommon.Collections;
+using HSMCommon.Constants;
 using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMSensorDataObjects.HistoryRequests;
 using HSMServer.Core.Cache.UpdateEntities;
@@ -30,6 +31,8 @@ namespace HSMServer.Core.Cache
         private readonly ConcurrentDictionary<Guid, BaseSensorModel> _sensors = new();
         private readonly ConcurrentDictionary<Guid, AccessKeyModel> _keys = new();
         private readonly ConcurrentDictionary<Guid, ProductModel> _tree = new();
+
+        private readonly CGuidDict<bool> _getHistoryLocks = new();
 
         private readonly Logger _logger = LogManager.GetLogger(CommonConstants.InfrastructureLoggerName);
 
@@ -459,8 +462,15 @@ namespace HSMServer.Core.Cache
         {
             bool IsNotTimout(BaseValue value) => !value.IsTimeout;
 
+
             if (_sensors.TryGetValue(sensorId, out var sensor))
             {
+                if (_getHistoryLocks[sensorId])
+                    yield return new List<BaseValue>();
+
+                _getHistoryLocks[sensorId] = true;
+
+
                 var includeTtl = options.HasFlag(RequestOptions.IncludeTtl);
 
                 if (sensor.AggregateValues && IsBorderedValue(sensor, from.Ticks - 1, out var latest) && (includeTtl || IsNotTimout(latest)))
@@ -472,6 +482,9 @@ namespace HSMServer.Core.Cache
 
                     yield return (includeTtl ? convertedValues : convertedValues.Where(IsNotTimout)).ToList();
                 }
+
+
+                _getHistoryLocks[sensorId] = false;
             }
         }
 
