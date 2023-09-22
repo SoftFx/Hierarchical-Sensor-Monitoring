@@ -110,11 +110,11 @@ namespace HSMDataCollector.DefaultSensors
             return this;
         }
 
-        public IWindowsCollection AddDiskMonitoringSensors(DiskSensorOptions options = null, DiskBarSensorOptions activeTimeOptions = null, DiskBarSensorOptions queueLengthOptions = null) =>
-            AddFreeDiskSpace(options).AddFreeDiskSpacePrediction(options).AddActiveDiskTime(activeTimeOptions).AddDiskQueueLength(queueLengthOptions);
+        public IWindowsCollection AddDiskMonitoringSensors(DiskSensorOptions options = null, DiskBarSensorOptions diskOptions = null) =>
+            AddFreeDiskSpace(options).AddFreeDiskSpacePrediction(options).AddActiveDiskTime(diskOptions).AddDiskQueueLength(diskOptions);
 
-        public IWindowsCollection AddAllDisksMonitoringSensors(DiskSensorOptions options = null, DiskBarSensorOptions activeTimeOptions = null, DiskBarSensorOptions queueLengthOptions = null) =>
-            AddFreeDisksSpace(options).AddFreeDisksSpacePrediction(options).AddActiveDisksTime(activeTimeOptions).AddDisksQueueLength(queueLengthOptions);
+        public IWindowsCollection AddAllDisksMonitoringSensors(DiskSensorOptions options = null, DiskBarSensorOptions diskOptions = null) =>
+            AddFreeDisksSpace(options).AddFreeDisksSpacePrediction(options).AddActiveDisksTime(diskOptions).AddDisksQueueLength(diskOptions);
 
         #endregion
 
