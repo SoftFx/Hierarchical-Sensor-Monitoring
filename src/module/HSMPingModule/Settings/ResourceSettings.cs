@@ -11,7 +11,7 @@ internal sealed class ResourceSettings
     {
         Countries = new HashSet<string>() { "Latvia" },
 
-        PingThresholdValue = TimeSpan.FromSeconds(15),
+        PingThresholdValueSec = 15,
         TTL = TimeSpan.FromMinutes(15),
     };
 
@@ -22,7 +22,7 @@ internal sealed class ResourceSettings
         {
             value.Countries ??= new HashSet<string>(DefaultSiteNodeSettings.Countries);
 
-            value.PingThresholdValue ??= DefaultSiteNodeSettings.PingThresholdValue;
+            value.PingThresholdValueSec ??= DefaultSiteNodeSettings.PingThresholdValueSec;
             value.TTL ??= DefaultSiteNodeSettings.TTL;
         }
 

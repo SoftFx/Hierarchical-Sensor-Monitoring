@@ -20,7 +20,7 @@ namespace HSMPingModule.SensorStructure
 
         internal ResourceSensor(string host, string country, NodeSettings settings)
         {
-            var timeout = settings.PingThresholdValue.Value.TotalMilliseconds * 2;
+            var timeout = TimeSpan.FromSeconds(settings.PingThresholdValueSec.Value).TotalMilliseconds * 2;
 
             PingAdapter = new PingAdapter(host, (int)timeout);
 
@@ -37,7 +37,7 @@ namespace HSMPingModule.SensorStructure
                 TtlAlert = AlertsFactory.IfInactivityPeriodIs().ThenSetIcon(AlertIcon.Clock).AndSendNotification("[$product]$path Ping timeout").Build(),
                 Alerts = new List<InstantAlertTemplate>()
                 {
-                    AlertsFactory.IfValue(AlertOperation.GreaterThan, settings.PingThresholdValue).ThenSetIcon(AlertIcon.Warning).AndSendNotification("[$product]$path Ping $operation $target seconds").Build(),
+                    AlertsFactory.IfValue(AlertOperation.GreaterThan, settings.PingThresholdValueSec).ThenSetIcon(AlertIcon.Warning).AndSendNotification("[$product]$path Ping $operation $target seconds").Build(),
                     AlertsFactory.IfStatus(AlertOperation.IsError).ThenSetIcon(AlertIcon.Error).AndSendNotification("[$product]$path $comment").Build(),
                 }
             };
