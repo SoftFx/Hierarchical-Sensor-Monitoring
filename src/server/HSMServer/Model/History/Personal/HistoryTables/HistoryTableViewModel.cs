@@ -1,5 +1,4 @@
 ﻿using HSMCommon.Extensions;
-using HSMDataCollector.Extensions;
 using HSMServer.Core;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Model;

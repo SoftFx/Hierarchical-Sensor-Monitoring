@@ -1,6 +1,5 @@
 ﻿using HSMCommon.Extensions;
 using HSMDatabase.AccessManager.DatabaseEntities;
-using HSMDataCollector.Extensions;
 using HSMServer.Core.Model;
 using HSMServer.Extensions;
 using Microsoft.AspNetCore.Mvc.Rendering;

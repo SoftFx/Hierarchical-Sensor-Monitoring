@@ -5,7 +5,7 @@ namespace HSMCommon.Extensions
 {
     public static class TimeSpanExtensions
     {
-        public static string ToTableView(this TimeSpan time)
+        public static string ToReadableView(this TimeSpan time)
         {
             bool hasPrevious = false;
 
@@ -37,7 +37,7 @@ namespace HSMCommon.Extensions
         }
 
         public static string ToTableView(this string timeSpanStr) =>
-            TimeSpan.TryParse(timeSpanStr, out var timeSpan) ? timeSpan.ToTableView() : string.Empty;
+            TimeSpan.TryParse(timeSpanStr, out var timeSpan) ? timeSpan.ToReadableView() : string.Empty;
 
         public static string TicksToString(this long ticks)
         {

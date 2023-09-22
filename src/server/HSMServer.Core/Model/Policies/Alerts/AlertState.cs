@@ -177,7 +177,7 @@ namespace HSMServer.Core.Model.Policies
 
             state.ValueSingle = value switch
             {
-                TimeSpanValue timeSpan => timeSpan.Value.ToTableView(),
+                TimeSpanValue timeSpan => timeSpan.Value.ToReadableView(),
                 _ => value?.Value?.ToString(),
             };
 
