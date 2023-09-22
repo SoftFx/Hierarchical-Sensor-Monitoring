@@ -3,30 +3,28 @@ using HSMSensorDataObjects;
 
 namespace HSMDataCollector.Prototypes.Collections
 {
-    internal class WindowsLogPrototype : InstantSensorOptionsPrototype<WindowsLogsOptions>
+    internal abstract class WindowsLogPrototype : InstantSensorOptionsPrototype<WindowsLogsOptions>
     {
-        private string _sensorName;
-        
-        protected override string SensorName => _sensorName;
-
-        protected override string Category => "Windows Logs";
-
-        public override WindowsLogsOptions Get(WindowsLogsOptions customOptions)
-        {
-            _sensorName = customOptions.IsError ? "Windows Error Logs" : customOptions.IsWarning ? "Windows Warning Logs" : string.Empty;
-
-            var options = base.Get(customOptions);
-
-            options.Type = SensorType.StringSensor;
-            
-            return options;
-        }
+        protected override string Category => "Windows OS info/Windows Logs";
 
 
-        public WindowsLogPrototype() : base()
+        protected WindowsLogPrototype() : base()
         {
             Description = "some desc";
             IsSingletonSensor = true;
+            IsComputerSensor = true;
+            
+            Type = SensorType.StringSensor;
         }
+    }
+
+    internal class WindowsErrorLogsPrototype : WindowsLogPrototype
+    {
+        protected override string SensorName => "Windows Error Logs";
+    }
+    
+    internal class WindowsWarningLogsPrototype : WindowsLogPrototype
+    {
+        protected override string SensorName => "Windows Warning Logs";
     }
 }

@@ -43,6 +43,10 @@ namespace HSMDataCollector.PublicInterface
 
         IWindowsCollection AddWindowsLogs(WindowsLogsOptions options = null);
 
+        IWindowsCollection AddErrorWindowsLogs(WindowsLogsOptions options = null);
+
+        IWindowsCollection AddWarningWindowsLogs(WindowsLogsOptions options = null);
+
         IWindowsCollection AddWindowsInfoMonitoringSensors(WindowsInfoSensorOptions options = null);
 
 

@@ -1,5 +1,6 @@
 ﻿using HSMDataCollector.Core;
 using HSMDataCollector.Prototypes;
+using HSMDataCollector.Prototypes.Collections;
 using HSMDataCollector.Prototypes.Collections.Disks;
 
 namespace HSMDataCollector.Options
@@ -43,6 +44,10 @@ namespace HSMDataCollector.Options
         internal WindowsLastRestartPrototype WindowsLastRestart { get; }
 
         internal WindowsLastUpdatePrototype WindowsLastUpdate { get; }
+
+        internal WindowsErrorLogsPrototype WindowsErrorLogsPrototype { get; }
+
+        internal WindowsWarningLogsPrototype WindowsWarningLogsPrototype { get; }
 
         #endregion
 
@@ -88,6 +93,8 @@ namespace HSMDataCollector.Options
 
             WindowsLastRestart = Register<WindowsLastRestartPrototype>();
             WindowsLastUpdate = Register<WindowsLastUpdatePrototype>();
+            WindowsErrorLogsPrototype = Register<WindowsErrorLogsPrototype>();
+            WindowsWarningLogsPrototype = Register<WindowsWarningLogsPrototype>();
 
             CollectorVersion = Register<CollectorVersionPrototype>();
             CollectorAlive = Register<ServiceAlivePrototype>();
