@@ -2,6 +2,7 @@
 using HSMServer.Attributes;
 using HSMServer.Authentication;
 using HSMServer.Constants;
+using HSMServer.Extensions;
 using HSMServer.Filters;
 using HSMServer.Model.Authentication;
 using HSMServer.Model.TreeViewModel;
@@ -16,7 +17,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Security.Claims;
 using System.Threading.Tasks;
-using HSMServer.Extensions;
 
 namespace HSMServer.Controllers
 {
@@ -172,13 +172,21 @@ namespace HSMServer.Controllers
         [HttpPost]
         public Task UpdateUser([FromBody] UserViewModel userViewModel)
         {
-            if (_userManager.TryGetIdByName(userViewModel.Username, out var userId))
+            var validator = new EditUserValidator();
+            var results = validator.Validate(userViewModel);
+
+            if (!results.IsValid)
+                TempData[TextConstants.TempDataErrorText] = ValidatorHelper.GetErrorString(results.Errors);
+            else if (_userManager.TryGetIdByName(userViewModel.Username, out var userId))
             {
                 var updateUser = new UserUpdate
                 {
                     Id = userId,
                     IsAdmin = userViewModel.IsAdmin,
                 };
+
+                if (!string.IsNullOrEmpty(userViewModel.Password))
+                    updateUser.Password = HashComputer.ComputePasswordHash(userViewModel.Password);
 
                 return _userManager.TryUpdate(updateUser);
             }

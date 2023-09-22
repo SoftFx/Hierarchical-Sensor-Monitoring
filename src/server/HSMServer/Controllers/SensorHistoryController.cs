@@ -146,7 +146,11 @@ namespace HSMServer.Controllers
         public Task<JsonResult> GetServiceStatusHistory([FromBody] GetSensorHistoryModel model, [FromQuery] bool isStatusService = false)
         {
             var currentId = SensorPathHelper.DecodeGuid(model.EncodedId);
-            if (_tree.Sensors.TryGetValue(currentId, out var sensor) && sensor.Path.EndsWith($".module/Module Info/{(isStatusService ? "Service status" : "Service alive")}"))
+
+            var oldPath = $".module/Module Info/{(isStatusService ? "Service status" : "Service alive")}";
+            var newPath = $".module/{(isStatusService ? "Service status" : "Service alive")}";
+
+            if (_tree.Sensors.TryGetValue(currentId, out var sensor) && (sensor.Path.EndsWith(oldPath) || sensor.Path.EndsWith(newPath)))
                 return ChartHistory(model with { EncodedId = sensor.Id.ToString() });
 
             return TryGetBackgroundSensorInfo(currentId, isStatusService, out var id, out _)

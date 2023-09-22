@@ -314,6 +314,9 @@ namespace HSMServer.ApiObjectsConverters
                 AlertProperty.Mean => PolicyProperty.Mean,
                 AlertProperty.Count => PolicyProperty.Count,
                 AlertProperty.LastValue => PolicyProperty.LastValue,
+                AlertProperty.Length => PolicyProperty.Length,
+                AlertProperty.OriginalSize => PolicyProperty.OriginalSize,
+                AlertProperty.NewSensorData => PolicyProperty.NewSensorData,
                 _ => throw new NotImplementedException(),
             };
 
@@ -330,6 +333,12 @@ namespace HSMServer.ApiObjectsConverters
                 AlertOperation.IsChanged => PolicyOperation.IsChanged,
                 AlertOperation.IsError => PolicyOperation.IsError,
                 AlertOperation.IsOk => PolicyOperation.IsOk,
+                AlertOperation.IsChangedToError => PolicyOperation.IsChangedToError,
+                AlertOperation.IsChangedToOk => PolicyOperation.IsChangedToOk,
+                AlertOperation.Contains => PolicyOperation.Contains,
+                AlertOperation.StartsWith => PolicyOperation.StartsWith,
+                AlertOperation.EndsWith => PolicyOperation.EndsWith,
+                AlertOperation.ReceivedNewValue => PolicyOperation.ReceivedNewValue,
                 _ => throw new NotImplementedException(),
             };
 
@@ -364,7 +373,7 @@ namespace HSMServer.ApiObjectsConverters
                 HSMSensorDataObjects.SensorRequests.Unit.Ticks => Core.Model.Unit.Ticks,
                 HSMSensorDataObjects.SensorRequests.Unit.Milliseconds => Core.Model.Unit.Milliseconds,
                 HSMSensorDataObjects.SensorRequests.Unit.Seconds => Core.Model.Unit.Seconds,
-                HSMSensorDataObjects.SensorRequests.Unit.Minutes  => Core.Model.Unit.Minutes ,
+                HSMSensorDataObjects.SensorRequests.Unit.Minutes => Core.Model.Unit.Minutes,
                 _ => throw new NotImplementedException(),
             };
     }

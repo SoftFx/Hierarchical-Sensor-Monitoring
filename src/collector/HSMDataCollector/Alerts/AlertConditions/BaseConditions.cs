@@ -19,13 +19,19 @@ namespace HSMDataCollector.Alerts
 
         protected virtual AlertAction<T> BuildAlertAction() => new AlertAction<T>(_conditions);
 
-        protected void BuildCondition(AlertProperty property, AlertOperation operation, string value = null)
+        protected void BuildConstCondition(AlertProperty property, AlertOperation operation, string value) =>
+            BuildCondition(property, operation, TargetType.Const, value);
+
+        protected void BuildLastValueCondition(AlertProperty property, AlertOperation operation) =>
+            BuildCondition(property, operation, TargetType.LastValue);
+
+        private void BuildCondition(AlertProperty property, AlertOperation operation, TargetType target, string value = null)
         {
             _conditions.Add(new AlertConditionTemplate()
             {
                 Target = new AlertTargetTemplate()
                 {
-                    Type = string.IsNullOrEmpty(value) ? TargetType.LastValue : TargetType.Const,
+                    Type = target,
                     Value = value,
                 },
 
@@ -44,15 +50,25 @@ namespace HSMDataCollector.Alerts
         protected internal DataAlertCondition() { }
 
 
-        public DataAlertCondition<T> AndComment(AlertOperation operation)
+        public DataAlertCondition<T> AndReceivedNewValue()
         {
-            BuildCondition(AlertProperty.Comment, operation);
+            BuildLastValueCondition(AlertProperty.NewSensorData, AlertOperation.ReceivedNewValue);
+            return this;
+        }
+
+        public DataAlertCondition<T> AndComment(AlertOperation operation, string target = null)
+        {
+            if (operation == AlertOperation.IsChanged)
+                BuildLastValueCondition(AlertProperty.Comment, operation);
+            else
+                BuildConstCondition(AlertProperty.Comment, operation, target);
+
             return this;
         }
 
         public DataAlertCondition<T> AndStatus(AlertOperation operation)
         {
-            BuildCondition(AlertProperty.Status, operation);
+            BuildLastValueCondition(AlertProperty.Status, operation);
             return this;
         }
     }

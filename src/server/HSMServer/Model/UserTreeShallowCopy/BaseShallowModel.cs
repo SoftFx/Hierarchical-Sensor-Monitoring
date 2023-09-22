@@ -30,6 +30,11 @@ namespace HSMServer.Model.UserTreeShallowCopy
         public abstract bool IsAccountsIgnore { get; }
 
 
+        public int ErrorsCount { get; protected set; }
+
+        public string Errors => $"{ErrorsCount} error{(ErrorsCount > 1 ? "s" : string.Empty)}";
+
+
         public abstract string ToJSTree();
 
 

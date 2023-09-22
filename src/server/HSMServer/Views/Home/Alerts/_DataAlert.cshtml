@@ -34,8 +34,8 @@
                 }
                 else
                 {
-                    <b>@condition.Property @condition.Operation.GetDisplayName()</b>
-                    @if (condition.Property is not (AlertProperty.Status or AlertProperty.Comment))
+                    <b>@condition.Property.GetDisplayName() @condition.Operation?.GetDisplayName()</b>
+                    @if (condition.Operation?.IsTargetVisible() ?? false)
                     {
                         <b>@condition.Target</b>
                     }
@@ -174,21 +174,6 @@
             $(this).parents("div.dataAlertRow:first").remove();
         });
 
-        $("a.advancedMode").off("click").on("click", function () {
-            let element = $(this).parents("div.dataAlertRow:first");
-            let advancedPanel = element.find($(`div[id='alertActions']`));
-
-            let see = $(this).text().includes("See");
-            if (see) {
-                $(this).text("Hide actions panel");
-                advancedPanel.removeClass("d-none");
-            }
-            else {
-                $(this).text("See actions panel");
-                advancedPanel.addClass("d-none");
-            }
-        });
-
         $("a.showMessage").off("click").on("click", function () {
             var element = $(this).parents("div.dataAlertRow:first");
 
@@ -265,6 +250,6 @@
     function tryValidate(element, propertyElement, propertyName) {
         var input = element.find($(`${propertyElement}[name='${propertyName}']`));
         
-        return input[0].reportValidity();
+        return input.length === 0 || input[0].reportValidity();
     }
 </script>

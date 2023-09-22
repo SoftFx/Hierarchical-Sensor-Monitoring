@@ -1,4 +1,5 @@
-﻿using System;
+﻿using HSMCommon.Extensions;
+using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
@@ -174,7 +175,11 @@ namespace HSMServer.Core.Model.Policies
         {
             var state = BuildBase(value, sensor);
 
-            state.ValueSingle = value?.Value?.ToString();
+            state.ValueSingle = value switch
+            {
+                TimeSpanValue timeSpan => timeSpan.Value.ToTableView(),
+                _ => value?.Value?.ToString(),
+            };
 
             return state;
         }

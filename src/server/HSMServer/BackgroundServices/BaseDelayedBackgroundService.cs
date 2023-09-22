@@ -55,5 +55,23 @@ namespace HSMServer.BackgroundServices
                 _logger.Error($"{methodName} failed: {ex}");
             }
         }
+
+        protected virtual async Task RunAction(Func<Task> action, string methodName = null)
+        {
+            methodName ??= action.Method.Name;
+
+            try
+            {
+                _logger.Info($"Start method: {methodName}");
+
+                await action();
+
+                _logger.Info($"Stop method: {methodName}");
+            }
+            catch (Exception ex)
+            {
+                _logger.Error($"{methodName} failed: {ex}");
+            }
+        }
     }
 }

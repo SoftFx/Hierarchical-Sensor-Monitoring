@@ -1,10 +1,9 @@
 ﻿using FluentValidation;
 using HSMServer.Authentication;
-using HSMServer.Model.ViewModel;
 
 namespace HSMServer.Model.Validators
 {
-    public class NewUserValidator : BaseUserValidator<UserViewModel>
+    public class NewUserValidator : EditUserValidator
     {
         public NewUserValidator(IUserManager userManager) : base(userManager)
         {
@@ -18,9 +17,7 @@ namespace HSMServer.Model.Validators
                                            .WithMessage(UsernameValidSymbolsMessage);
 
             RuleFor(x => x.Password).NotEmpty()
-                                    .WithMessage(PasswordNotNullMessage)
-                                    .MinimumLength(MinPasswordLenght)
-                                    .WithMessage(PasswordMinLengthMessage);
+                                    .WithMessage(PasswordNotNullMessage);
         }
     }
 }
