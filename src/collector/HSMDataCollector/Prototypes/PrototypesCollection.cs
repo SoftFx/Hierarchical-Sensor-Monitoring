@@ -1,4 +1,5 @@
 ﻿using HSMDataCollector.Core;
+using HSMDataCollector.DefaultSensors.Windows;
 using HSMDataCollector.Prototypes;
 using HSMDataCollector.Prototypes.Collections.Disks;
 
@@ -29,6 +30,8 @@ namespace HSMDataCollector.Options
         internal WindowsFreeSpaceOnDiskPrototype WindowsFreeSpaceOnDisk { get; }
 
         internal WindowsActiveTimeDiskPrototype WindowsActiveTimeDisk { get; }
+
+        internal WindowsDiskQueueLengthPrototype WindowsDiskQueueLength { get; }
 
 
         internal UnixFreeSpaceOnDiskPredictionPrototype UnixFreeSpaceOnDiskPrediction { get; }
@@ -82,6 +85,7 @@ namespace HSMDataCollector.Options
             WindowsFreeSpaceOnDiskPrediction = Register<WindowsFreeSpaceOnDiskPredictionPrototype>();
             WindowsFreeSpaceOnDisk = Register<WindowsFreeSpaceOnDiskPrototype>();
             WindowsActiveTimeDisk = Register<WindowsActiveTimeDiskPrototype>();
+            WindowsDiskQueueLength = Register<WindowsDiskQueueLengthPrototype>();
 
             UnixFreeSpaceOnDiskPrediction = Register<UnixFreeSpaceOnDiskPredictionPrototype>();
             UnixFreeSpaceOnDisk = Register<UnixFreeSpaceOnDiskPrototype>();
