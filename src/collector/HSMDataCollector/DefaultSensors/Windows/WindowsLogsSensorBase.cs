@@ -32,11 +32,18 @@ namespace HSMDataCollector.DefaultSensors.Windows
 
         internal override Task<bool> Start()
         {
-            foreach (EventLogEntryCollection eventLogEntry in new List<object> { _eventLog.Entries })
-                foreach (var eventLog in eventLogEntry.Cast<EventLogEntry>())
-                    if (eventLog.TimeGenerated >= _startTime && eventLog.EntryType == _eventType)
-                        SendValue(BuildValue(eventLog.Message, eventLog.TimeGenerated, eventLog.Source));
-
+            try
+            {
+                foreach (EventLogEntryCollection eventLogEntry in new List<object> {_eventLog.Entries})
+                    foreach (var eventLog in eventLogEntry.Cast<EventLogEntry>())
+                        if (eventLog.TimeGenerated >= _startTime && eventLog.EntryType == _eventType)
+                            SendValue(BuildValue(eventLog.Message, eventLog.TimeGenerated, eventLog.Source));
+            }
+            catch (Exception exception)
+            {
+                ThrowException(exception);
+            }
+          
             return base.Start();
         }
 
@@ -51,8 +58,16 @@ namespace HSMDataCollector.DefaultSensors.Windows
 
         private void Handler(object obj, EventRecordWrittenEventArgs arg)
         {
-            if (arg.EventRecord != null)
-                SendValue(BuildValue(arg.EventRecord.FormatDescription(), arg.EventRecord.TimeCreated ?? DateTime.Now, arg.EventRecord.ProviderName)); 
+            try
+            {
+                if (arg.EventRecord != null)
+                    SendValue(BuildValue(arg.EventRecord.FormatDescription(),
+                        arg.EventRecord.TimeCreated ?? DateTime.Now, arg.EventRecord.ProviderName));
+            }
+            catch (Exception exception)
+            {
+                ThrowException(exception);
+            }
         }
 
         private string GetCurrentLogLevel()
