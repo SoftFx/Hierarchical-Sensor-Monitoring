@@ -1,7 +1,8 @@
+@using HSMCommon.Constants;
+@using HSMCommon.Extensions;
 @using HSMServer.Helpers
 @using HSMServer.Model.Authentication
 @using HSMServer.Extensions
-@using HSMCommon.Extensions
 @using HSMServer.Model.Folders.ViewModels
 @using HSMServer.Model.ViewModel
 @using HSMServer.Constants
@@ -85,7 +86,7 @@
                                 @if (product.ProductUpdateIsExpired)
                                 {
                                     <span>
-                                        <img title="Product sensor(s) haven't been updated for @ProductViewModel.ProductExpiredTime.ToTableView()" src="~/dist/warning.svg" id="svg_exclamation" alt="warning icon"/>
+                                        <img title="Product sensor(s) haven't been updated for @ProductViewModel.ProductExpiredTime.ToReadableView()" src="~/dist/warning.svg" id="svg_exclamation" alt="warning icon" />
                                     </span>
                                 }
                             </td>

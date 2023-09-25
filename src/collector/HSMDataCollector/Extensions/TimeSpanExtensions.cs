@@ -3,7 +3,7 @@ using System.Text;
 
 namespace HSMDataCollector.Extensions
 {
-    internal static class TimeSpanExtensions
+    public static class TimeSpanExtensions
     {
         public static string ToReadableView(this TimeSpan time)
         {

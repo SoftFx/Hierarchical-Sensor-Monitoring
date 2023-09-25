@@ -66,7 +66,7 @@ namespace HSMDataCollector.Prototypes
             if (options.Alerts == null)
                 options.Alerts = new List<InstantAlertTemplate>();
 
-            options.Alerts.Add(AlertsFactory.IfStatus(AlertOperation.IsOk).ThenSendNotification($"[$product] $value - $comment").Build());
+            options.Alerts.Add(AlertsFactory.IfReceivedNewValue().ThenSendNotification($"[$product] $value - $comment").Build());
 
             return options;
         }

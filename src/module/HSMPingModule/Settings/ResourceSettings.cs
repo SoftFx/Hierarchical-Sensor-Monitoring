@@ -1,16 +1,18 @@
-using HSMPingModule.Models;
-
 namespace HSMPingModule.Settings;
 
 internal sealed class ResourceSettings
 {
-    public Dictionary<string, WebSite> WebSites { get; set; } = new();
-
-    public WebSite DefaultSiteNodeSettings { get; set; } = new()
+    public Dictionary<string, NodeSettings> WebSites { get; set; } = new()
     {
+        ["google.com"] = new NodeSettings()
+    };
+
+    public NodeSettings DefaultSiteNodeSettings { get; set; } = new()
+    {
+        Countries = new HashSet<string>() { "Latvia" },
+
+        PingThresholdValueSec = 15,
         TTL = TimeSpan.FromMinutes(15),
-        PingTimeoutValue = 15,
-        PingDelay = 15,
     };
 
 
@@ -18,9 +20,9 @@ internal sealed class ResourceSettings
     {
         foreach (var (_, value) in WebSites)
         {
-            value.PingDelay = DefaultSiteNodeSettings.PingDelay;
-            value.PingTimeoutValue ??= DefaultSiteNodeSettings.PingTimeoutValue;
-            value.Countries ??= DefaultSiteNodeSettings.Countries;
+            value.Countries ??= new HashSet<string>(DefaultSiteNodeSettings.Countries);
+
+            value.PingThresholdValueSec ??= DefaultSiteNodeSettings.PingThresholdValueSec;
             value.TTL ??= DefaultSiteNodeSettings.TTL;
         }
 

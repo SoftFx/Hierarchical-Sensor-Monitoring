@@ -1,7 +1,7 @@
-﻿@using HSMServer.Model.Folders.ViewModels
+﻿@using HSMCommon.Extensions;
+@using HSMServer.Model.Folders.ViewModels
 @using HSMServer.Helpers
 @using HSMServer.Extensions
-@using HSMCommon.Extensions
 @using HSMCommon.Constants
 
 @model FolderProductsViewModel
@@ -60,7 +60,7 @@ else
                         @if ((DateTime.UtcNow - product.UpdateTime).Ticks >= ConfigurationConstants.DefaultExpirationTime.Ticks)
                         {
                             <span>
-                                <img title="Product sensor(s) haven't been updated for @ConfigurationConstants.DefaultExpirationTime.ToTableView()" src="~/dist/warning.svg" id="svg_exclamation" alt="warning icon" />
+                                <img title="Product sensor(s) haven't been updated for @ConfigurationConstants.DefaultExpirationTime.ToReadableView()" src="~/dist/warning.svg" id="svg_exclamation" alt="warning icon" />
                             </span>
                         }
                     </td>
