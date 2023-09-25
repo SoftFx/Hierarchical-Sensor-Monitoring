@@ -15,13 +15,13 @@ Imported/Exported alert object contains the next properties:
 7. **IsDisabled** - enable/disable alert (true/false)
 
 ## Alert constructor
-* **Value** for **Version** sensor has been added with operations (<, >, <=, >=, =, !=)
-* **New data** operation has been added. Alert send message every new value on a sensor.
-* **Value** fir **String** sensor has been added with operations (==, !=, contains, startsWith, endsWith)
-* **Length** peroperty for **String** sensor has been added (<, >, <=, >=, =, !=)
-* **File Size** property for **File** sensor has been added (<, >, <=, >=, =, !=)
-* New operations for **Comment** have been added (==, !=, contains, startsWith, endsWith)
-* Operations = and != have been added for all number properties
+* **Value** for **Version** sensor has been added (with operations <, >, <=, >=, =, ≠)
+* **New data** operation has been added. Alert sends message every new data on a sensor.
+* **Value** for **String** sensor has been added (with operations ==, ≠, contains, startsWith, endsWith)
+* **Length** peroperty for **String** sensor has been added (<, >, <=, >=, =, ≠)
+* **Size** property for **File** sensor has been added (<, >, <=, >=, =, ≠)
+* New operations for **Comment** have been added (=, ≠, contains, startsWith, endsWith)
+* Operations = and ≠ have been added for all number properties
 
 ## Tree
 * **Sensors count** view has been improved
@@ -62,16 +62,15 @@ Imported/Exported alert object contains the next properties:
 * New module **Computer name** has been added. Current module contains only global machine sensors like Total CPU, Free RAM, Disks monitoring and etc.
 * All default sensors have been splitted into 2 parts: computer and module sensors
 * Default process (CPU, RAM, Thread count) sensors have been moved to node with main **process name**
-* **IsSingleton** new setting for sensors has been added
+* New setting **IsSingleton** for sensors has been added
 
 ## v. 3.2.2
 * Count synchronization for PublicBar sensor have been fixed
 * All server alerts have been removed for default sensors
 * **Version** and **Time** instant sensors have been added
-* **Target** has been added for all String properties for Alert countructor
-* **FileSize** and **Lenght** alert properties have been added to Alert builder
+* **OriginalSize** and **Lenght** alert properties have been added to Alert builder
 * **Target** for string properies (String value, Comment) has been added
-* [**WindowsLogs**](https://github.com/SoftFx/Hierarchical-Sensor-Monitoring/wiki/DefaultSensor.-Windows-logs) New default sensor for computer module has been added. Sends information about Windows error and warning events
+* [**WindowsLogs**](https://github.com/SoftFx/Hierarchical-Sensor-Monitoring/wiki/DefaultSensor.-Windows-logs) New default sensor for computer module has been added. Sends information about Windows errors and warning events
 * [**DiskQueueLength**](https://github.com/SoftFx/Hierarchical-Sensor-Monitoring/wiki/DefaultSensor.-DiskQueueLength). New default sensor for computer module has been added
 
 
