@@ -13,9 +13,9 @@ namespace HSMDataCollector.DefaultSensors.Windows
     public abstract class WindowsLogsSensorBase : SensorBase<string>
     {
         private readonly DateTime _startTime = DateTime.Now;
+        private readonly EventLogWatcher _eventLogWatcher;
         private readonly EventLogEntryType _eventType;
         private readonly EventLog _eventLog;
-        private readonly EventLogWatcher _eventLogWatcher;
 
 
         protected WindowsLogsSensorBase(SensorOptions options, EventLogEntryType type) : base(options)

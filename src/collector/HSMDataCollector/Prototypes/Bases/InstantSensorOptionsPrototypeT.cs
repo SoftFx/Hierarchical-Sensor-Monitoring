@@ -6,6 +6,9 @@ namespace HSMDataCollector.Prototypes
     internal abstract class InstantSensorOptionsPrototype<T> : InstantSensorOptions
         where T : InstantSensorOptions, new()
     {
+        protected const string WindowsOsInfo = "Windows OS info";
+
+
         protected abstract string SensorName { get; }
 
         protected virtual string Category { get; }

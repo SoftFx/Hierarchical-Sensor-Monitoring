@@ -119,9 +119,9 @@ namespace HSMDataCollector.DefaultSensors
         }
 
         public IWindowsCollection AddWindowsInfoMonitoringSensors(WindowsInfoSensorOptions options) =>
-            AddWindowsLastUpdate(options).AddWindowsLastRestart(options).AddWindowsLogs();
+            AddWindowsLastUpdate(options).AddWindowsLastRestart(options).AddAllWindowsLogs();
 
-        public IWindowsCollection AddWindowsLogs(InstantSensorOptions options) => AddErrorWindowsLogs(_prototype.WindowsErrorLogsPrototype.Get(options)).AddWarningWindowsLogs(_prototype.WindowsWarningLogsPrototype.Get(options));
+        public IWindowsCollection AddAllWindowsLogs(InstantSensorOptions options) => AddErrorWindowsLogs(_prototype.WindowsErrorLogsPrototype.Get(options)).AddWarningWindowsLogs(_prototype.WindowsWarningLogsPrototype.Get(options));
 
         public IWindowsCollection AddErrorWindowsLogs(InstantSensorOptions options = null) => ToWindows(new WindowsErrorLogs(_prototype.WindowsErrorLogsPrototype.Get(options)));
 
