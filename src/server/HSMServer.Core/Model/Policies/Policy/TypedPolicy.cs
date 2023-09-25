@@ -12,8 +12,8 @@ namespace HSMServer.Core.Model.Policies
 
         protected override PolicyCondition GetCondition(PolicyProperty property) => property switch
         {
-            PolicyProperty.Value or PolicyProperty.Status or PolicyProperty.Comment or
-            PolicyProperty.NewSensorData => BasePolicyCondition,
+            PolicyProperty.Value or PolicyProperty.Status or PolicyProperty.NewSensorData => BasePolicyCondition,
+            PolicyProperty.Comment => new PolicyStringCondition<T>(),
             _ => throw new NotImplementedException($"Not supported property {property} for {GetType().Name}"),
         };
     }
@@ -31,7 +31,8 @@ namespace HSMServer.Core.Model.Policies
         protected override PolicyCondition GetCondition(PolicyProperty property) => property switch
         {
             PolicyProperty.Min or PolicyProperty.Max or PolicyProperty.Mean or PolicyProperty.LastValue or
-            PolicyProperty.Status or PolicyProperty.Comment or PolicyProperty.NewSensorData => BasePolicyCondition,
+            PolicyProperty.Status or PolicyProperty.NewSensorData => BasePolicyCondition,
+            PolicyProperty.Comment => new PolicyStringCondition<T>(),
             PolicyProperty.Count => new PolicyIntegerCondition<T>(),
             _ => throw new NotImplementedException($"Not supported property {property} for {GetType().Name}"),
         };
