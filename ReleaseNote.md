@@ -2,18 +2,17 @@
 
 ## Import/Export alerts logic have been added
 You can import all alerts from one node and export them to another node. Copy depth is 1 level.  
-Exported alert object contains the next properties:
-1. Sensors - list of sensor names, that have this alert
-2. Conditions - list of alert conditions. Condition has:
-
+Imported/Exported alert object contains the next properties:
+1. **Sensors** - list of sensor names, that have this alert
+2. **Conditions** - list of alert conditions. Condition has:
     - **Property**: "Status", "Comment", "Value", "Min", "Max", "Mean", "Count", "LastValue", "Length", "OriginalSize", "NewSensorData"
     - **Operation**: "LessThanOrEqual", "LessThan", "GreaterThan", "GreaterThanOrEqual", "Equal", "NotEqual", "IsChanged", "IsError", "IsOk", "IsChangedToError", "IsChangedToOk", "Contains", "StartsWith", "EndsWith", "ReceivedNewValue"
     - **Target**: null for "IsChanged", "IsError", "IsOk", "IsChangedToError", "IsChangedToOk", "ReceivedNewValue" operations and some value for other
-3. Template - notification template
-4. Icon - tree icon
-5. Status - "Ok" or "Error"
-6. Chats - list of chats to send alert or null if destination is all chats
-7. IsDisabled - true or false
+3. **Template** - notification template for connected chats
+4. **Icon** - alert icon
+5. **Status** - "Ok" or "Error". Final state of the sensor after the alert is triggered
+6. **Chats** - list of chats to send alert or null if destination is all chats
+7. **IsDisabled** - enable/disable alert (true/false)
 
 ## Alert constructor
 * **Value** for **Version** sensor has been added with operations (<, >, <=, >=, =, !=)
@@ -37,17 +36,23 @@ Exported alert object contains the next properties:
 * **Reset** button has been restored on Plotly bar
 * Label cheking for Bar properties has been added
 * Green color for original **Service alive** chart has been restored 
+* Red points have been added for instant values with Status = Error
 
 ## Users
 * Ability to **change password** has been added in Users tab
 * Removing/editing user with specific chars in name has been fixed 
 
 ## Other
+* History synchronization for requests to the same sensor has been added
 * Message for removed alerts has been improved for Journal tab
 * TimeSpan value view has been improved for notifications
 
 ## Bugfixing
 * Server crush after reading sensor with set AggregatedValues setting if history is empty has been fixed
+* Y/X scaling for TimeSpan sensors have been fixed
+* Searching path for **Service Alive** background chart has been fixed
+* Double request for **File Preview** has been fixed
+* Null ref for history compressor has been fixed
 
 
 # HSM DataCollector 
@@ -61,6 +66,14 @@ Exported alert object contains the next properties:
 
 ## v. 3.2.2
 * Count synchronization for PublicBar sensor have been fixed
+* All server alerts have been removed for default sensors
+* **Version** and **Time** instant sensors have been added
+* **Target** has been added for all String properties for Alert countructor
+* **FileSize** and **Lenght** alert properties have been added to Alert builder
+* **Target** for string properies (String value, Comment) has been added
+* [**WindowsLogs**](https://github.com/SoftFx/Hierarchical-Sensor-Monitoring/wiki/DefaultSensor.-Windows-logs) New default sensor for computer module has been added. Sends information about Windows error and warning events
+* [**DiskQueueLength**](https://github.com/SoftFx/Hierarchical-Sensor-Monitoring/wiki/DefaultSensor.-DiskQueueLength). New default sensor for computer module has been added
+
 
 # HSM SensorDataObjects
 
