@@ -4,6 +4,7 @@
 @using HSMServer.Controllers
 @using HSMServer.Constants
 @using Microsoft.AspNetCore.Html
+@using HSMServer.Core.Model.Policies
 
 @model DataAlertViewModelBase
 
@@ -24,11 +25,11 @@
             }
 
             <span>
-                @if (condition.Property == AlertProperty.TimeToLive)
+                @if (condition.Property == PolicyProperty.TimeToLive)
                 {
                     <b>Inactivity period is @condition.TimeToLive.DisplayValue</b>
                 }
-                else if (condition.Property == AlertProperty.Sensitivity)
+                else if (condition.Property == PolicyProperty.Sensitivity)
                 {
                     <b>Sensitivity is more than @condition.Sensitivity.DisplayValue</b>
                 }
@@ -90,7 +91,7 @@
         <div class="card-body py-2">
             <div class="d-flex flex-row align-items-center fullCondition">
                 @{
-                    var isTtlCondition = Model.Conditions[0].Property is AlertProperty.TimeToLive;
+                    var isTtlCondition = Model.Conditions[0].Property is PolicyProperty.TimeToLive;
                 }
 
                 <div class="alert-text-block alert-add">If</div>

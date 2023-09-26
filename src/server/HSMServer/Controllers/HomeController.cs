@@ -634,7 +634,7 @@ namespace HSMServer.Controllers
                 ? PartialView("~/Views/Home/Alerts/_ActionBlock.cshtml", new ActionViewModel(false, entity.GetAllChats()))
                 : _emptyResult;
 
-        public IActionResult GetOperation(Guid sensorId, AlertProperty property)
+        public IActionResult GetOperation(Guid sensorId, PolicyProperty property)
         {
             if (!_treeViewModel.Sensors.TryGetValue(sensorId, out var sensor))
                 return _emptyResult;
@@ -643,9 +643,9 @@ namespace HSMServer.Controllers
 
             return property switch
             {
-                AlertProperty.NewSensorData => PartialView("~/Views/Home/Alerts/ConditionOperations/_NewDataOperation.cshtml"),
+                PolicyProperty.NewSensorData => PartialView("~/Views/Home/Alerts/ConditionOperations/_NewDataOperation.cshtml"),
 
-                AlertProperty.TimeToLive or AlertProperty.Sensitivity =>
+                PolicyProperty.TimeToLive or PolicyProperty.Sensitivity =>
                     PartialView("~/Views/Home/Alerts/ConditionOperations/_IntervalOperation.cshtml", condition.GetIntervalOperations(property)),
 
                 _ => PartialView("~/Views/Home/Alerts/ConditionOperations/_SimpleOperation.cshtml", condition.GetOperations(property)),

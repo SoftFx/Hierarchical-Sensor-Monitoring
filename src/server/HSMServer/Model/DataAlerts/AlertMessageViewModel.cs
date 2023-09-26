@@ -9,7 +9,7 @@ public class AlertMessageViewModel
 {
     public Guid EntityId { get; set; }
 
-    public AlertProperty Property { get; set; }
+    public PolicyProperty Property { get; set; }
 
     public PolicyOperation? Operation { get; set; }
 

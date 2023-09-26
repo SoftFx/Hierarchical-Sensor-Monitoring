@@ -1,14 +1,15 @@
-﻿using System.Collections.Generic;
+﻿using HSMServer.Core.Model.Policies;
+using System.Collections.Generic;
 
 namespace HSMServer.Model.DataAlerts
 {
     public sealed class CommonConditionViewModel : ConditionViewModel
     {
-        protected override List<AlertProperty> Properties { get; } = new()
+        protected override List<PolicyProperty> Properties { get; } = new()
         {
-            AlertProperty.Status,
-            AlertProperty.Comment,
-            AlertProperty.NewSensorData,
+            PolicyProperty.Status,
+            PolicyProperty.Comment,
+            PolicyProperty.NewSensorData,
         };
 
 

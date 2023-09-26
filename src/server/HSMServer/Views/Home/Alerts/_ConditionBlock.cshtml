@@ -2,6 +2,7 @@
 @using HSMServer.Controllers
 @using HSMServer.Constants
 @using HSMServer.Model.DataAlerts
+@using HSMServer.Core.Model.Policies
 
 @model ConditionViewModel
 
@@ -20,11 +21,11 @@
     <select class="alert-block alert-select property-select" asp-for="Property" asp-items="@Model.PropertiesItems"></select>
 
     <div class="flex-row align-items-center operation">
-        @if (condition is AlertProperty.TimeToLive or AlertProperty.Sensitivity)
+        @if (condition is PolicyProperty.TimeToLive or PolicyProperty.Sensitivity)
         {
             @await Html.PartialAsync("~/Views/Home/Alerts/ConditionOperations/_IntervalOperation.cshtml", Model.GetIntervalOperations())
         }
-        else if (condition is AlertProperty.NewSensorData)
+        else if (condition is PolicyProperty.NewSensorData)
         {
             @await Html.PartialAsync("~/Views/Home/Alerts/ConditionOperations/_NewDataOperation.cshtml")
         }

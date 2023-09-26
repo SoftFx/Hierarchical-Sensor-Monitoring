@@ -58,9 +58,17 @@ namespace HSMServer.Core.Model.Policies
 
         Length = 120,
 
+        [Display(Name = "Size")]
         OriginalSize = 151,
 
+        [Display(Name = "New data")]
         NewSensorData = 200,
+
+
+        Sensitivity = 254,
+
+        [Display(Name = "Inactivity period")]
+        TimeToLive = 255,
     }
 
 
