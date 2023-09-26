@@ -51,7 +51,7 @@ $LogsFolder = "C:\HSMPinger\Logs:/HSMPingModule/Logs"
 $ConfigFolder = "C:\HSMPinger\Config:/HSMPingModule/Config"
 $SecondConfig = "C:\HSMPinger\SecondConfig:/Config"
 
-$ContainerId = docker run --user 0 -ti -d --name $FullContainerName  --net=$NetworkName --cap-add=NET_ADMIN --cap-add=NET_RAW -e TOKEN=$NordVpnToken -e TECHNOLOGY=NordLynx -v $LogsFolder -v $ConfigFolder -v $SecondConfig $ExpectedImageId
+$ContainerId = docker run --user 0 -ti -d --name $FullContainerName --net=$NetworkName --cap-add=NET_ADMIN --cap-add=NET_RAW -e TOKEN=$NordVpnToken -e TECHNOLOGY=NordLynx -v $LogsFolder -v $ConfigFolder -v $SecondConfig $ExpectedImageId
 
 
 $ServerContainerId = docker ps -q -f "name=$ServerPrefix"
