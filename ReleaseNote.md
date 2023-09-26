@@ -1,3 +1,6 @@
+# HSM Ping module
+New module for HSM server has been added. This module uses [**NordVPN**](https://nordvpn.com/) and allows you to check the availability of sites from different countries of the world. The module is currently running in test mode.
+
 # HSM Server
 
 ## Import/Export alerts logic have been added
