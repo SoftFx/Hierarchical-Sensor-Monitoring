@@ -8,8 +8,8 @@ $FullContainerName = "${ContainerPrefix}_$Version"
 $NetworkName = "HSM-Ping-network"
 $ServerPrefix = "HSMServer_"
 
-$ServerHost = ""
-$NordVpnToken = ""
+$ServerHost = '' # must be defined
+$NordVpnToken = '' # must be defined
 
 Write-Host "Check running pinger container"
 $CurrentContainerId = docker ps -a -q -f "name=$ContainerPrefix"
@@ -31,6 +31,8 @@ else
     Write-Host "Running container hasn't be found"
 }
 
+docker network create $NetworkName
+
 $ExpectedImageId = docker images --filter=reference=$ExpectedImageTag -q
 if (!$ExpectedImageId)
 {
@@ -49,24 +51,20 @@ $LogsFolder = "C:\HSMPinger\Logs:/HSMPingModule/Logs"
 $ConfigFolder = "C:\HSMPinger\Config:/HSMPingModule/Config"
 $SecondConfig = "C:\HSMPinger\SecondConfig:/Config"
 
-#--net=host
-$ContainerId = docker run --user 0 -ti -d --name $FullContainerName --cap-add=NET_ADMIN --net=HSM-Ping-network --cap-add=NET_RAW -e TOKEN= -e TECHNOLOGY=NordLynx -v $LogsFolder -v $ConfigFolder -v $SecondConfig $ExpectedImageId
+$ContainerId = docker run --user 0 -ti -d --name $FullContainerName  --net=$NetworkName --cap-add=NET_ADMIN --cap-add=NET_RAW -e TOKEN=$NordVpnToken -e TECHNOLOGY=NordLynx -v $LogsFolder -v $ConfigFolder -v $SecondConfig $ExpectedImageId
 
-# docker network create $NetworkName
 
-# $ServerContainerId = docker ps -q -f "name=$ServerPrefix"
-# if (!$ServerContainerId)
-# {
-#     Write-Host "Running HSM server container hasn't be found"
-#     exit
-# }
+$ServerContainerId = docker ps -q -f "name=$ServerPrefix"
+if ($ServerContainerId)
+{
+    docker network connect $NetworkName $ServerContainerId --alias $ServerHost
+}
+else
+{
+    Write-Host "Running HSM server container hasn't be found"
+}
 
-# docker network connect $NetworkName $ServerContainerId --alias localhost
+Start-Sleep -Seconds 10 # delay for vpn initialization
 
-# Start-Sleep -Seconds 10 # delay for vpn initialization 
-# docker network connect $NetworkName $FullContainerName
-
-Start-Sleep -Seconds 10 # delay for network initialization 
-
-$StartPingerCommand = "dotnet HSMPingModule/HSMPingModule.dll"
+$StartPingerCommand = "nordvpn d && dotnet HSMPingModule/HSMPingModule.dll"
 docker exec -u root -ti -d $ContainerId sh -c $StartPingerCommand

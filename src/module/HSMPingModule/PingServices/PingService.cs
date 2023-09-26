@@ -37,6 +37,15 @@ internal class PingService : BackgroundService
     {
         await _collector.Start();
 
+        var connect = await _vpn.Connect();
+
+        if (!connect.IsOk)
+        {
+            _collector.AppNode.SendVpnStatus(connect.IsOk, _vpn.VpnDescription, connect.Error);
+            _logger.Error($"Connection check is failed! {connect.Error}");
+            return;
+        }
+
         var vpnStatus = await _vpn.LoadCountries();
 
         _collector.AppNode.SendVpnStatus(vpnStatus.IsOk, _vpn.VpnDescription, vpnStatus.Error);
@@ -68,7 +77,7 @@ internal class PingService : BackgroundService
 
                     if (!trySwitch.IsOk)
                     {
-                        _logger.Error($"Cannot switch to {country}");
+                        _logger.Error($"Cannot switch to {country}. {trySwitch.Error}");
                         continue;
                     }
 
@@ -78,6 +87,7 @@ internal class PingService : BackgroundService
                         _pingRequests.Enqueue((sensor, sensor.PingAdapter.SendPingRequest()));
 
                     await Task.WhenAll(_pingRequests.Select(u => u.request));
+                    await _vpn.Disconnect();
 
                     foreach ((var resource, var request) in _pingRequests)
                         _collector.SendPingResult(resource, request.Result);

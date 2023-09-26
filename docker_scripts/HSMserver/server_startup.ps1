@@ -25,9 +25,15 @@ if ($ExpectedImageId)
 {
 	Write-Host "Image id to run = $ExpectedImageId"
 
-	$LogsFolder = "/usr/HSM/Logs:/app/Logs"
-	$SensorConfigFolder = "/usr/HSM/Config:/app/Config"
-	$EnvironmentDatabaseFolder = "/usr/HSM/Databases:/app/Databases"
+    # Unix directories
+	# $LogsFolder = "/usr/HSM/Logs:/app/Logs"
+	# $SensorConfigFolder = "/usr/HSM/Config:/app/Config"
+	# $EnvironmentDatabaseFolder = "/usr/HSM/Databases:/app/Databases"
+
+    # Windows directories
+	$LogsFolder = "C:\HSM\Logs:/app/Logs"
+	$SensorConfigFolder = "C:\HSM\Config:/app/Config"
+	$EnvironmentDatabaseFolder = "C:\HSM\Databases:/app/Databases"
 
 	$SensorDataPort = "44330:44330"
 	$SensorSitePort = "44333:44333"
