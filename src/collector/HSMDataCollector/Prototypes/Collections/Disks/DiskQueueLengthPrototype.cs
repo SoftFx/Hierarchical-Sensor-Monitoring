@@ -1,6 +1,7 @@
 ﻿using HSMDataCollector.Alerts;
-using HSMSensorDataObjects;
 using HSMDataCollector.DefaultSensors.Windows;
+using HSMSensorDataObjects.SensorRequests;
+using System.Collections.Generic;
 
 namespace HSMDataCollector.Prototypes.Collections.Disks
 {
@@ -13,7 +14,14 @@ namespace HSMDataCollector.Prototypes.Collections.Disks
 
         public WindowsDiskQueueLengthPrototype() : base()
         {
-            Type = SensorType.DoubleBarSensor;
+            SensorUnit = Unit.Seconds;
+
+            Alerts = new List<BarAlertTemplate>()
+            {
+                AlertsFactory.IfMean(AlertOperation.GreaterThanOrEqual, 100)
+                             .ThenSendNotification($"[$product]$path $property $operation $target {SensorUnit}")
+                             .AndSetIcon(AlertIcon.Warning).Build()
+            };
         }
     }
 }

@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using HSMDataCollector.DefaultSensors.Windows;
+using HSMSensorDataObjects;
 
 namespace HSMDataCollector.Prototypes
 {
@@ -28,6 +29,7 @@ namespace HSMDataCollector.Prototypes
 
         protected BarDisksMonitoringPrototype() : base()
         {
+            Type = SensorType.DoubleBarSensor;
             IsComputerSensor = true;
         }
 
