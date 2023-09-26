@@ -33,7 +33,7 @@ namespace HSMServer.Model.DataAlerts
             {
                 var firstConfition = Conditions.FirstOrDefault();
 
-                if (firstConfition?.Property == PolicyProperty.TimeToLive)
+                if (firstConfition?.Property == AlertProperty.TimeToLive)
                 {
                     var displayValue = firstConfition.TimeToLive.DisplayValue;
                     var neverInterval = TimeInterval.None.GetDisplayName();
@@ -54,10 +54,10 @@ namespace HSMServer.Model.DataAlerts
 
             foreach (var condition in Conditions)
             {
-                if (condition.Property == PolicyProperty.TimeToLive)
+                if (condition.Property == AlertProperty.TimeToLive)
                     continue;
 
-                if (condition.Property == PolicyProperty.Sensitivity)
+                if (condition.Property == AlertProperty.Sensitivity)
                 {
                     sensitivity = condition.Sensitivity.ToModel();
                     continue;
@@ -67,7 +67,7 @@ namespace HSMServer.Model.DataAlerts
                     ? new TargetValue(TargetType.Const, condition.Target)
                     : new TargetValue(TargetType.LastValue, EntityId.ToString());
 
-                conditions.Add(new PolicyConditionUpdate(condition.Operation.Value, condition.Property, target));
+                conditions.Add(new PolicyConditionUpdate(condition.Operation.Value, condition.Property.ToCore(), target));
             }
 
             (var status, var destination, var comment, var icon) = GetActions(availavleChats);
@@ -200,7 +200,7 @@ namespace HSMServer.Model.DataAlerts
                 var viewModel = CreateCondition(i == 0);
                 var condition = policy.Conditions[i];
 
-                viewModel.Property = condition.Property;
+                viewModel.Property = condition.Property.ToClient();
                 viewModel.Operation = condition.Operation;
                 viewModel.Target = condition.Target.Value;
 
@@ -212,7 +212,7 @@ namespace HSMServer.Model.DataAlerts
                 var condition = CreateCondition(false);
                 var sensitivityViewModel = new TimeIntervalViewModel(null).FromModel(policy.Sensitivity, PredefinedIntervals.ForRestore);
 
-                condition.Property = PolicyProperty.Sensitivity;
+                condition.Property = AlertProperty.Sensitivity;
                 condition.Sensitivity = new TimeIntervalViewModel(sensitivityViewModel, PredefinedIntervals.ForRestore) { IsAlertBlock = true };
 
                 Conditions.Add(condition);

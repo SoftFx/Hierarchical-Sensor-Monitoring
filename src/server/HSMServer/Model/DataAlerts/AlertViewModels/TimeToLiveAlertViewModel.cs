@@ -35,7 +35,7 @@ namespace HSMServer.Model.DataAlerts
             Conditions.Clear();
             Conditions.Add(new TimeToLiveConditionViewModel()
             {
-                Property = PolicyProperty.TimeToLive,
+                Property = AlertProperty.TimeToLive,
                 TimeToLive = intervalBlock,
             });
         }

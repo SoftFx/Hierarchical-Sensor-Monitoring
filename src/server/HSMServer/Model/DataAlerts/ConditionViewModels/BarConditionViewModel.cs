@@ -1,20 +1,19 @@
-﻿using HSMServer.Core.Model.Policies;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 
 namespace HSMServer.Model.DataAlerts
 {
     public sealed class BarConditionViewModel : ConditionViewModel
     {
-        protected override List<PolicyProperty> Properties { get; } = new()
+        protected override List<AlertProperty> Properties { get; } = new()
         {
-            PolicyProperty.Min,
-            PolicyProperty.Max,
-            PolicyProperty.Mean,
-            PolicyProperty.LastValue,
-            PolicyProperty.Count,
-            PolicyProperty.Status,
-            PolicyProperty.Comment,
-            PolicyProperty.NewSensorData,
+            AlertProperty.Min,
+            AlertProperty.Max,
+            AlertProperty.Mean,
+            AlertProperty.LastValue,
+            AlertProperty.Count,
+            AlertProperty.Status,
+            AlertProperty.Comment,
+            AlertProperty.NewSensorData,
         };
 
 

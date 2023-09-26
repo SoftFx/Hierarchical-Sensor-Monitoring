@@ -1,11 +1,10 @@
-﻿using HSMServer.Core.Model.Policies;
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 
 namespace HSMServer.Model.DataAlerts
 {
     public sealed class TimeToLiveConditionViewModel : ConditionViewModel
     {
-        protected override List<PolicyProperty> Properties { get; } = new() { PolicyProperty.TimeToLive };
+        protected override List<AlertProperty> Properties { get; } = new() { AlertProperty.TimeToLive };
 
 
         public TimeToLiveConditionViewModel(bool isMain = true) : base(isMain) { }

@@ -4,13 +4,35 @@ using HSMServer.Extensions;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 using System.Linq;
 
 namespace HSMServer.Model.DataAlerts
 {
+    public enum AlertProperty
+    {
+        Status,
+        Comment,
+        Value,
+        Min,
+        Max,
+        Mean,
+        Count,
+        LastValue,
+        Length,
+        [Display(Name = "Size")]
+        OriginalSize,
+        [Display(Name = "New data")]
+        NewSensorData,
+        Sensitivity,
+        [Display(Name = "Inactivity period")]
+        TimeToLive,
+    }
+
+
     public class AlertConditionBase
     {
-        public PolicyProperty Property { get; set; }
+        public AlertProperty Property { get; set; }
 
 
         public TimeIntervalViewModel Sensitivity { get; set; }
@@ -26,7 +48,7 @@ namespace HSMServer.Model.DataAlerts
 
     public abstract class ConditionViewModel : AlertConditionBase
     {
-        protected abstract List<PolicyProperty> Properties { get; }
+        protected abstract List<AlertProperty> Properties { get; }
 
 
         public bool IsMain { get; }
@@ -46,7 +68,7 @@ namespace HSMServer.Model.DataAlerts
             //if (!isMain)
             //    PropertiesItems.Add(new SelectListItem(AlertProperty.Sensitivity.GetDisplayName(), nameof(AlertProperty.Sensitivity)));
 
-            Property = Enum.Parse<PolicyProperty>(PropertiesItems.FirstOrDefault()?.Value);
+            Property = Enum.Parse<AlertProperty>(PropertiesItems.FirstOrDefault()?.Value);
         }
     }
 }

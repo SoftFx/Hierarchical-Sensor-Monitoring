@@ -9,6 +9,41 @@ namespace HSMServer.Extensions
         public static string ToVisibility(this bool isVisible) => isVisible ? "d-flex" : "d-none";
 
 
+        public static AlertProperty ToClient(this PolicyProperty property) =>
+            property switch
+            {
+                PolicyProperty.Status => AlertProperty.Status,
+                PolicyProperty.Comment => AlertProperty.Comment,
+                PolicyProperty.Value => AlertProperty.Value,
+                PolicyProperty.Min => AlertProperty.Min,
+                PolicyProperty.Max => AlertProperty.Max,
+                PolicyProperty.Mean => AlertProperty.Mean,
+                PolicyProperty.Count => AlertProperty.Count,
+                PolicyProperty.LastValue => AlertProperty.LastValue,
+                PolicyProperty.Length => AlertProperty.Length,
+                PolicyProperty.OriginalSize => AlertProperty.OriginalSize,
+                PolicyProperty.NewSensorData => AlertProperty.NewSensorData,
+                _ => throw new NotImplementedException()
+            };
+
+        public static PolicyProperty ToCore(this AlertProperty property) =>
+            property switch
+            {
+                AlertProperty.Status => PolicyProperty.Status,
+                AlertProperty.Comment => PolicyProperty.Comment,
+                AlertProperty.Value => PolicyProperty.Value,
+                AlertProperty.Min => PolicyProperty.Min,
+                AlertProperty.Max => PolicyProperty.Max,
+                AlertProperty.Mean => PolicyProperty.Mean,
+                AlertProperty.Count => PolicyProperty.Count,
+                AlertProperty.LastValue => PolicyProperty.LastValue,
+                AlertProperty.Length => PolicyProperty.Length,
+                AlertProperty.OriginalSize => PolicyProperty.OriginalSize,
+                AlertProperty.NewSensorData => PolicyProperty.NewSensorData,
+                _ => throw new NotImplementedException()
+            };
+
+
         public static OperationViewModel GetOperations(this ConditionViewModel condition)
         {
             var viewModel = condition.GetOperations(condition.Property);
@@ -18,16 +53,16 @@ namespace HSMServer.Extensions
             return viewModel;
         }
 
-        public static OperationViewModel GetOperations(this ConditionViewModel condition, PolicyProperty property) =>
+        public static OperationViewModel GetOperations(this ConditionViewModel condition, AlertProperty property) =>
             property switch
             {
-                PolicyProperty.Status => new StatusOperation(),
-                PolicyProperty.Comment => new CommentOperation(),
+                AlertProperty.Status => new StatusOperation(),
+                AlertProperty.Comment => new CommentOperation(),
 
-                PolicyProperty.Value when condition is StringConditionViewModel => new StringOperation(),
+                AlertProperty.Value when condition is StringConditionViewModel => new StringOperation(),
 
-                PolicyProperty.Value or PolicyProperty.Min or PolicyProperty.Max or PolicyProperty.Mean or PolicyProperty.Count or
-                PolicyProperty.LastValue or PolicyProperty.Length or PolicyProperty.OriginalSize => new NumericOperation(),
+                AlertProperty.Value or AlertProperty.Min or AlertProperty.Max or AlertProperty.Mean or AlertProperty.Count or
+                AlertProperty.LastValue or AlertProperty.Length or AlertProperty.OriginalSize => new NumericOperation(),
 
                 _ => throw new NotSupportedException(),
             };
@@ -35,11 +70,11 @@ namespace HSMServer.Extensions
         public static IntervalOperationViewModel GetIntervalOperations(this ConditionViewModel condition) =>
             condition.GetIntervalOperations(condition.Property);
 
-        public static IntervalOperationViewModel GetIntervalOperations(this ConditionViewModel condition, PolicyProperty property) =>
+        public static IntervalOperationViewModel GetIntervalOperations(this ConditionViewModel condition, AlertProperty property) =>
             property switch
             {
-                PolicyProperty.Sensitivity => new SensitivityOperation(condition.Sensitivity),
-                PolicyProperty.TimeToLive => new TimeToLiveOperation(condition.TimeToLive),
+                AlertProperty.Sensitivity => new SensitivityOperation(condition.Sensitivity),
+                AlertProperty.TimeToLive => new TimeToLiveOperation(condition.TimeToLive),
                 _ => throw new NotSupportedException(),
             };
 
