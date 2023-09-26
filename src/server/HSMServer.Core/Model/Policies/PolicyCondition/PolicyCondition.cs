@@ -56,10 +56,13 @@ namespace HSMServer.Core.Model.Policies
         Count = 104,
         LastValue = 105,
 
+        [Display(Name = "Value length")]
         Length = 120,
 
+        [Display(Name = "Size")]
         OriginalSize = 151,
 
+        [Display(Name = "New data")]
         NewSensorData = 200,
     }
 
