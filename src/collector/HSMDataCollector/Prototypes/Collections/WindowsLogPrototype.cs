@@ -35,6 +35,7 @@ namespace HSMDataCollector.Prototypes.Collections
             IsComputerSensor = true;
             
             Type = SensorType.StringSensor;
+            AggregateData = true;
         }
     }
 }
