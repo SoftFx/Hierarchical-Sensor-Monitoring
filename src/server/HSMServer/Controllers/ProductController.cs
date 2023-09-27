@@ -121,7 +121,7 @@ namespace HSMServer.Controllers
         public async Task MoveProduct(Guid productId, Guid? fromFolderId, Guid? toFolderId)
         {
             if (_treeViewModel.Nodes.TryGetValue(productId, out var product))
-                await _folderManager.MoveProduct(product, fromFolderId, toFolderId);
+                await _folderManager.MoveProduct(product, fromFolderId, toFolderId, CurrentInitiator);
         }
 
         #endregion

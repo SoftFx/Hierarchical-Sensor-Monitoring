@@ -16,6 +16,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using HSMServer.Core.Journal;
+using HSMServer.Core.TableOfChanges;
 
 namespace HSMServer.Folders
 {
@@ -63,17 +64,17 @@ namespace HSMServer.Folders
         {
             folder = new FolderModel(folderAdd);
 
-            return TryAdd(folder);
+            return TryAdd(folder, folderAdd.Initiator);
         }
 
-        public async override Task<bool> TryAdd(FolderModel model)
+        public async Task<bool> TryAdd(FolderModel model, InitiatorInfo info)
         {
             var result = await base.TryAdd(model);
 
             if (result)
             {
                 foreach (var productId in model.Products.Keys)
-                    await AddProductToFolder(productId, model.Id);
+                    await AddProductToFolder(productId, model.Id, info);
 
                 model.ChangesHandler += _journalService.AddRecord;
             }
@@ -81,25 +82,30 @@ namespace HSMServer.Folders
             return result;
         }
 
+        public override Task<bool> TryAdd(FolderModel model) => TryAdd(model, InitiatorInfo.System); //TODO initiator should be added in ConcurrentStorage
+
+
         public async override Task<bool> TryUpdate(FolderUpdate update)
         {
             var result = TryGetValue(update.Id, out var folder) && await base.TryUpdate(update);
 
             if (result && (update.TTL != null || update.KeepHistory != null || update.SelfDestroy != null))
                 foreach (var productId in folder.Products.Keys)
-                    TryUpdateProductInFolder(productId, folder);
+                    TryUpdateProductInFolder(productId, folder, update.Initiator);
 
             return result;
         }
 
-        public async override Task<bool> TryRemove(Guid folderId)
+        public override Task<bool> TryRemove(Guid folderId) => TryRemove(folderId, InitiatorInfo.System); //TODO initiator should be added in ConcurrentStorage
+
+        public async Task<bool> TryRemove(Guid folderId, InitiatorInfo initiator)
         {
             var result = TryGetValue(folderId, out var folder);
 
             if (result)
             {
                 foreach (var productId in folder.Products.Keys)
-                    await RemoveProductFromFolder(productId, folderId);
+                    await RemoveProductFromFolder(productId, folderId, initiator);
 
                 foreach (var user in folder.UserRoles.Keys)
                 {
@@ -113,6 +119,7 @@ namespace HSMServer.Folders
 
             return result;
         }
+
 
         public override async Task Initialize()
         {
@@ -151,24 +158,24 @@ namespace HSMServer.Folders
             return folders.Where(f => user.IsFolderAvailable(f.Id)).ToList();
         }
 
-        public async Task MoveProduct(ProductNodeViewModel product, Guid? fromFolderId, Guid? toFolderId)
+        public async Task MoveProduct(ProductNodeViewModel product, Guid? fromFolderId, Guid? toFolderId, InitiatorInfo initiator)
         {
             if (TryGetValueById(fromFolderId, out var fromFolder))
             {
                 fromFolder.Products.Remove(product.Id);
-                await RemoveProductFromFolder(product.Id, fromFolderId.Value);
+                await RemoveProductFromFolder(product.Id, fromFolderId.Value, initiator);
             }
 
             if (TryGetValueById(toFolderId, out var toFolder))
             {
                 toFolder.Products.Add(product.Id, product);
-                await AddProductToFolder(product.Id, toFolderId.Value);
+                await AddProductToFolder(product.Id, toFolderId.Value, initiator);
             }
         }
 
-        public async Task AddProductToFolder(Guid productId, Guid folderId)
+        public async Task AddProductToFolder(Guid productId, Guid folderId, InitiatorInfo initiator)
         {
-            if (TryGetValue(folderId, out var folder) && TryUpdateProductInFolder(productId, folder))
+            if (TryGetValue(folderId, out var folder) && TryUpdateProductInFolder(productId, folder, initiator))
             {
                 foreach (var (user, role) in folder.UserRoles)
                     if (!user.IsUserProduct(productId))
@@ -179,9 +186,9 @@ namespace HSMServer.Folders
             }
         }
 
-        public async Task RemoveProductFromFolder(Guid productId, Guid folderId)
+        public async Task RemoveProductFromFolder(Guid productId, Guid folderId, InitiatorInfo initiator)
         {
-            if (TryGetValue(folderId, out var folder) && TryUpdateProductInFolder(productId, null))
+            if (TryGetValue(folderId, out var folder) && TryUpdateProductInFolder(productId, null, initiator))
             {
                 if (_cache.GetProduct(productId).NotificationsSettings?.TelegramSettings?.Inheritance == (byte)InheritedSettings.FromParent)
                     ResetProductTelegramInheritance?.Invoke(productId);
@@ -192,7 +199,7 @@ namespace HSMServer.Folders
             }
         }
 
-        private bool TryUpdateProductInFolder(Guid productId, FolderModel folder)
+        private bool TryUpdateProductInFolder(Guid productId, FolderModel folder, InitiatorInfo initiator)
         {
             var product = _cache.GetProduct(productId);
 
@@ -209,6 +216,7 @@ namespace HSMServer.Folders
                     TTL = GetCorePolicy(ttl, folder?.TTL),
                     KeepHistory = GetCorePolicy(savedHistory, folder?.KeepHistory),
                     SelfDestroy = GetCorePolicy(selfDestroy, folder?.SelfDestroy),
+                    Initiator = initiator,
                 };
 
                 _cache.UpdateProduct(update);
@@ -245,7 +253,7 @@ namespace HSMServer.Folders
         {
             var childInterval = folder is null ? Core.Model.TimeInterval.Ticks : Core.Model.TimeInterval.FromFolder;
 
-            return model.IsFromFolder ? new TimeIntervalModel(childInterval, model.Ticks) : null;
+            return model.IsFromFolder ? new TimeIntervalModel(childInterval, folder.CustomSpan.Ticks) : null;
         }
 
         private void ResetServerPolicyForFolderProducts()
