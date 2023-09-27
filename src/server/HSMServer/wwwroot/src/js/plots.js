@@ -91,6 +91,10 @@ export class Plot {
 }
 
 class ErrorColorPlot extends Plot{
+    line = {
+        color: Colors.defaultTrace
+    }
+
     markerColorCompareFunc(value){
         if (this.checkTtl(value))
             return Colors.TtlGrey
@@ -211,9 +215,6 @@ export class DoublePlot extends ErrorColorPlot {
 
         this.type = 'scatter';
         this.name = name;
-        this.line = {
-            color: Colors.defaultTrace
-        }
         this.marker = {
             color: [],
             size: [],
