@@ -69,7 +69,7 @@ internal class PingService : BackgroundService
 
             await Task.Delay(start - DateTime.UtcNow, _tokenSource.Token);
 
-            foreach ((var country, var sensors) in _tree.CountrySet)
+            foreach (var (country, sensors) in _tree.CountrySet)
             {
                 try
                 {
