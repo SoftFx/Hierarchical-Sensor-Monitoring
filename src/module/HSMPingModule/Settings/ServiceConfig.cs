@@ -16,6 +16,7 @@ internal sealed class ServiceConfig
     private static readonly JsonSerializerOptions _options = new()
     {
         WriteIndented = true,
+        Converters = { new WebSitesJsonConverter() }
     };
 
     private readonly string _fullFilePath = Path.Combine(ConfigPath, ConfigName);
@@ -33,11 +34,11 @@ internal sealed class ServiceConfig
     internal static Version Version { get; }
 
 
-    public CollectorSettings HSMDataCollectorSettings { get; private set; } = new();
+    public CollectorSettings HSMDataCollectorSettings { get; set; } = new();
 
-    public PingSettings PingSettings { get; private set; } = new();
+    public PingSettings PingSettings { get;  set; } = new();
 
-    public ResourceSettings ResourceSettings { get; private set; } = new();
+    public ResourceSettings ResourceSettings { get; set; } = new();
 
 
     internal event Action OnChanged;
@@ -52,6 +53,8 @@ internal sealed class ServiceConfig
         if (!Directory.Exists(ConfigPath))
             Directory.CreateDirectory(ConfigPath);
     }
+
+    public ServiceConfig(){}
 
     internal ServiceConfig(IConfigurationRoot configuration, NLog.ILogger logger)
     {
@@ -75,11 +78,11 @@ internal sealed class ServiceConfig
 
     private void Init()
     {
-        T Read<T>(string sectionName) where T : class, new() => _root.GetSection(sectionName).Get<T>() ?? new T();
+        var deserializedConfig = JsonSerializer.Deserialize<ServiceConfig>(File.ReadAllText(_fullFilePath), _options);
 
-        HSMDataCollectorSettings = Read<CollectorSettings>(nameof(HSMDataCollectorSettings));
-        ResourceSettings = Read<ResourceSettings>(nameof(ResourceSettings)).ApplyDefaultSettings();
-        PingSettings = Read<PingSettings>(nameof(PingSettings));
+        HSMDataCollectorSettings = deserializedConfig.HSMDataCollectorSettings;
+        ResourceSettings = deserializedConfig.ResourceSettings.ApplyDefaultSettings();
+        PingSettings = deserializedConfig.PingSettings;
 
         _logger.Info("Read collector key: {key}", HSMDataCollectorSettings.Key);
         _logger.Info("Read collector port: {port}", HSMDataCollectorSettings.Port);
