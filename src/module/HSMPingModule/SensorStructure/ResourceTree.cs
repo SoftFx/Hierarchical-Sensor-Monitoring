@@ -42,7 +42,7 @@ namespace HSMPingModule.SensorStructure
             _resources.Clear();
 
             foreach (var nodeSetting in _config.ResourceSettings.WebSites)
-                _resources.TryAdd(nodeSetting.Key, new ResourceNode(nodeSetting));
+                _resources.TryAdd(nodeSetting.Key, new ResourceNode(nodeSetting, _config.PingSettings.RequestsPeriod));
 
             CountrySet = _resources.SelectMany(u => u.Value.Countries).GroupBy(u => u.Country).ToDictionary(u => u.Key, u => u.ToList());
 

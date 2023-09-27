@@ -1,4 +1,5 @@
 ﻿using HSMDataCollector.Alerts;
+using HSMDataCollector.Extensions;
 using HSMDataCollector.Options;
 using HSMPingModule.PingServices;
 using HSMPingModule.Settings;
@@ -18,7 +19,7 @@ namespace HSMPingModule.SensorStructure
         internal string Country { get; }
 
 
-        internal ResourceSensor(string host, string country, NodeSettings settings)
+        internal ResourceSensor(string host, string country, NodeSettings settings, TimeSpan requestPeriod)
         {
             var timeout = TimeSpan.FromSeconds(settings.PingThresholdValueSec.Value).TotalMilliseconds * 2;
 
@@ -29,7 +30,10 @@ namespace HSMPingModule.SensorStructure
 
             SensorOptions = new()
             {
-                Description = $"This sensor receives ping timeout value from **{country}** to [**{host}**]({new UriBuilder(host)})",
+                Description = $"""
+                               This sensor receives ping timeout value from **{country}** to [**{host}**]({new UriBuilder(host)}).
+                               Ping requests are send every {requestPeriod.ToReadableView()}
+                               """,
 
                 TTL = settings.TTL,
                 SensorUnit = Unit.Seconds,
