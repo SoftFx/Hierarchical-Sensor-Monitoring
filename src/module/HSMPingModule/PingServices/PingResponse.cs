@@ -40,7 +40,7 @@ internal record PingResponse
     {
         Status = SensorStatus.Error;
         Comment = exception.Message;
-        Value = 0;
+        Value = double.NaN;
 
         _str = BuildStrState();
     }
