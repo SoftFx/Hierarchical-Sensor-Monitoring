@@ -61,11 +61,6 @@ internal sealed class ServiceConfig
         _root = configuration;
         _logger = logger;
 
-        if (!File.Exists(_fullFilePath))
-            SaveDefaultConfig();
-
-        Init();
-
         _watcher = new FileSystemWatcher(ConfigPath, ConfigName)
         {
             NotifyFilter = NotifyFilters.LastWrite,
@@ -73,6 +68,11 @@ internal sealed class ServiceConfig
         };
 
         _watcher.Changed += Reload;
+
+        if (!File.Exists(_fullFilePath))
+            SaveOrCreate();
+
+        Init();
     }
 
 
@@ -89,6 +89,8 @@ internal sealed class ServiceConfig
         _logger.Info("Read server address: {adress}", HSMDataCollectorSettings.ServerAddress);
 
         OnChanged?.Invoke();
+    
+        SaveOrCreate();
     }
 
     private void Reload(object sender, FileSystemEventArgs e)
@@ -117,9 +119,11 @@ internal sealed class ServiceConfig
         }
     }
 
-    private void SaveDefaultConfig()
+    private void SaveOrCreate()
     {
-        using var file = File.Open(_fullFilePath, FileMode.Create);
+        _watcher.EnableRaisingEvents = false;
+        using var file = File.Open(_fullFilePath, FileMode.OpenOrCreate);
         file.Write(JsonSerializer.SerializeToUtf8Bytes(this, _options));
+        _watcher.EnableRaisingEvents = true;
     }
 }
