@@ -4,8 +4,10 @@ using HSMServer.ConcurrentStorage;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.DataLayer;
+using HSMServer.Core.Journal;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.NodeSettings;
+using HSMServer.Core.TableOfChanges;
 using HSMServer.Model;
 using HSMServer.Model.Authentication;
 using HSMServer.Model.Folders;
@@ -15,8 +17,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using HSMServer.Core.Journal;
-using HSMServer.Core.TableOfChanges;
 
 namespace HSMServer.Folders
 {
@@ -131,7 +131,6 @@ namespace HSMServer.Folders
                 if (_userManager.TryGetValue(folder.AuthorId, out var author))
                     folder.Author = author.Name;
             }
-       
 
             foreach (var user in _userManager.GetUsers())
             {
@@ -188,7 +187,7 @@ namespace HSMServer.Folders
 
         public async Task RemoveProductFromFolder(Guid productId, Guid folderId, InitiatorInfo initiator)
         {
-            if (TryGetValue(folderId, out var folder) && TryUpdateProductInFolder(productId, null, initiator))
+            if (TryGetValue(folderId, out var folder) && TryUpdateProductInFolder(productId, folder, initiator, ActionType.Delete))
             {
                 if (_cache.GetProduct(productId).NotificationsSettings?.TelegramSettings?.Inheritance == (byte)InheritedSettings.FromParent)
                     ResetProductTelegramInheritance?.Invoke(productId);
@@ -199,7 +198,7 @@ namespace HSMServer.Folders
             }
         }
 
-        private bool TryUpdateProductInFolder(Guid productId, FolderModel folder, InitiatorInfo initiator)
+        private bool TryUpdateProductInFolder(Guid productId, FolderModel folder, InitiatorInfo initiator, ActionType action = ActionType.Update)
         {
             var product = _cache.GetProduct(productId);
 
@@ -212,10 +211,10 @@ namespace HSMServer.Folders
                 var update = new ProductUpdate()
                 {
                     Id = productId,
-                    FolderId = folder?.Id ?? Guid.Empty,
-                    TTL = GetCorePolicy(ttl, folder?.TTL),
-                    KeepHistory = GetCorePolicy(savedHistory, folder?.KeepHistory),
-                    SelfDestroy = GetCorePolicy(selfDestroy, folder?.SelfDestroy),
+                    FolderId = action is ActionType.Delete ? Guid.Empty : folder.Id,
+                    TTL = GetCorePolicy(ttl, folder.TTL, action),
+                    KeepHistory = GetCorePolicy(savedHistory, folder.KeepHistory, action),
+                    SelfDestroy = GetCorePolicy(selfDestroy, folder.SelfDestroy, action),
                     Initiator = initiator,
                 };
 
@@ -249,9 +248,9 @@ namespace HSMServer.Folders
         }
 
 
-        private static TimeIntervalModel GetCorePolicy(TimeIntervalModel model, TimeIntervalViewModel folder)
+        private static TimeIntervalModel GetCorePolicy(TimeIntervalModel model, TimeIntervalViewModel folder, ActionType action)
         {
-            var childInterval = folder is null ? Core.Model.TimeInterval.Ticks : Core.Model.TimeInterval.FromFolder;
+            var childInterval = action is ActionType.Delete ? Core.Model.TimeInterval.Ticks : Core.Model.TimeInterval.FromFolder;
 
             return model.IsFromFolder ? new TimeIntervalModel(childInterval, folder.CustomSpan.Ticks) : null;
         }
