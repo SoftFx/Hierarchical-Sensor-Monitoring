@@ -39,6 +39,7 @@ internal sealed class ResourceSettings
     }
 }
 
+
 internal class WebSitesJsonConverter : JsonConverter<Dictionary<string, NodeSettings>>
 {
     public override Dictionary<string, NodeSettings> Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
@@ -46,15 +47,22 @@ internal class WebSitesJsonConverter : JsonConverter<Dictionary<string, NodeSett
         var dictionary = new Dictionary<string, NodeSettings>();
         using var jsonDocument = JsonDocument.ParseValue(ref reader);
         foreach (var property in jsonDocument.RootElement.EnumerateObject())
-        {
             dictionary.Add(property.Name, property.Value.ValueKind == JsonValueKind.Null ? null : property.Value.Deserialize<NodeSettings>());
-        }
 
         return dictionary;
     }
 
     public override void Write(Utf8JsonWriter writer, Dictionary<string, NodeSettings> value, JsonSerializerOptions options)
     {
-        throw new NotImplementedException();
+        writer.WriteStartObject();
+        foreach (var item in value)
+        {
+            writer.WritePropertyName(item.Key);
+            if (item.Value == null)
+                writer.WriteNullValue();
+            else
+                JsonSerializer.Serialize(writer, item.Value, options);
+        }
+        writer.WriteEndObject();
     }
 }
