@@ -76,7 +76,7 @@ internal sealed class DataCollectorWrapper : IDataCollectorWrapper
             _logger.Info("New sensor has been added: {path}", sensorPath);
         }
 
-        sensor.AddValue(result.Value, result.Status, result.Comment);
+        sensor.AddValue(result.Value == 0 ? double.NaN : result.Value, result.Status, result.Comment);
 
         _logger.Info("New sensor value has been sent: {path} -> {value}", sensorPath, result);
     }
