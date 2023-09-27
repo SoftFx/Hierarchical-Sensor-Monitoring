@@ -18,6 +18,7 @@ const SensorsStatus = {
 }
 
 const Colors = {
+    defaultTrace: '#1f77b4',
     default: 'rgba(31, 119, 180, 1)',
     red: 'rgba(255,0,0,1)',
     TtlGrey: 'rgba(192,192,192,1)',
@@ -41,6 +42,9 @@ export class Plot {
     mode = '';
     showlegend = false;
     hovertemplate = "%{x}, %{customdata}<extra></extra>";
+    marker = {
+        color: Colors.defaultTrace
+    }
 
     constructor(data) {}
 
@@ -207,6 +211,9 @@ export class DoublePlot extends ErrorColorPlot {
 
         this.type = 'scatter';
         this.name = name;
+        this.line = {
+            color: Colors.defaultTrace
+        }
         this.marker = {
             color: [],
             size: [],
