@@ -241,11 +241,11 @@ function addEnumPlot(graphId, graphName, id, isStatusService, path){
             let heatPlot = new EnumPlot(escapedData, isStatusService)
             let updateLayout = {
                 title: heatPlot.getTitle(path),
-                hovermode: 'x',
+                hovermode: 'closest',
                 'xaxis.range': xranges
             };
 
-            Plotly.addTraces(graphId, heatPlot.getPlotData(currentName, yranges[0], yranges[1]));
+            Plotly.addTraces(graphId, heatPlot.getPlotData(currentName, yranges[0], yranges[1]), 0);
             Plotly.update(graphId, {}, updateLayout);
         });
     }
