@@ -22,6 +22,8 @@ internal sealed class DataCollectorWrapper : IDataCollectorWrapper
 
     public ApplicationNode AppNode { get; }
 
+    public TimeSpan PostPeriod { get; } = TimeSpan.FromSeconds(10);
+
 
     public DataCollectorWrapper(ServiceConfig config)
     {
@@ -33,12 +35,14 @@ internal sealed class DataCollectorWrapper : IDataCollectorWrapper
         {
             ServerAddress = _config.ServerAddress,
             AccessKey = _config.Key,
-            Port = _config.Port
+            Port = _config.Port,
+
+            PackageCollectPeriod = PostPeriod,
         };
 
         _logger.Info("Product version: {version}", versionOptions.Version);
         _logger.Info("Access key: {key}", options.AccessKey);
-        _logger.Info("Server address: {key}", options.ServerAddress);
+        _logger.Info("Server address: {uri}", options.ServerAddress);
         _logger.Info("Server port: {port}", options.Port);
 
         _collector = new DataCollector(options).AddNLog();

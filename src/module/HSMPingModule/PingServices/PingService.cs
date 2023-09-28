@@ -35,16 +35,37 @@ internal class PingService : BackgroundService
 
     public override async Task StartAsync(CancellationToken token)
     {
+        _logger.Info($"{nameof(PingService)} is starting...");
+
+        await _vpn.Disconnect(); // protection from external VPN
         await _collector.Start();
 
-        var connect = await _vpn.Connect();
+        _logger.Info($"Collector started");
 
-        if (!connect.IsOk)
+        await Task.Delay(_collector.PostPeriod * 2, token);
+
+        var isConnected = false;
+
+        _logger.Info("Try find available country");
+
+        for (int i = 0; i < 10; ++i)
         {
-            _collector.AppNode.SendVpnStatus(connect.IsOk, _vpn.VpnDescription, connect.Error);
+            var connect = await _vpn.Connect();
+            var message = connect.IsOk ? connect.Result : connect.Error;
+
+            _collector.AppNode.SendVpnStatus(connect.IsOk, _vpn.VpnDescription, $"Attempt #{i + 1}: {message}");
+
+            if (connect.IsOk)
+            {
+                _logger.Info($"Successful connect! {connect.Result}");
+                break;
+            }
+
             _logger.Error($"Connection check is failed! {connect.Error}");
-            return;
         }
+
+        if (!isConnected)
+            return;
 
         var vpnStatus = await _vpn.LoadCountries();
 
@@ -65,6 +86,8 @@ internal class PingService : BackgroundService
     {
         do
         {
+            _logger.Info("Start ping round...");
+
             var start = Ceil(DateTime.UtcNow, PingDelay);
 
             await Task.Delay(start - DateTime.UtcNow, _tokenSource.Token);
@@ -89,8 +112,12 @@ internal class PingService : BackgroundService
                     await Task.WhenAll(_pingRequests.Select(u => u.request));
                     await _vpn.Disconnect();
 
+                    _logger.Info("Stop ping round. Start sending results...");
+
                     foreach ((var resource, var request) in _pingRequests)
                         _collector.SendPingResult(resource, request.Result);
+
+                    await Task.Delay(_collector.PostPeriod, _tokenSource.Token);
                 }
                 catch (Exception ex)
                 {

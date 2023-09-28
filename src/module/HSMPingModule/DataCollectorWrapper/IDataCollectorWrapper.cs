@@ -7,6 +7,8 @@ internal interface IDataCollectorWrapper
 {
     internal ApplicationNode AppNode { get; }
 
+    internal TimeSpan PostPeriod { get; }
+
 
     internal Task Start();
 

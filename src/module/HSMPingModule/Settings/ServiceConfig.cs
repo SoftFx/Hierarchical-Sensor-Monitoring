@@ -124,8 +124,10 @@ internal sealed class ServiceConfig
     private void SaveOrCreate()
     {
         _watcher.EnableRaisingEvents = false;
+
         using var file = File.Open(_fullFilePath, FileMode.OpenOrCreate);
         file.Write(JsonSerializer.SerializeToUtf8Bytes(this, _options));
+
         _watcher.EnableRaisingEvents = true;
     }
 }
