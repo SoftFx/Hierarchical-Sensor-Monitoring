@@ -167,7 +167,7 @@ namespace HSMServer.Controllers
             string fileName = $"{sensor.FullPath.Replace('/', '_')}_from_{from:s}_to{to:s}.csv";
             Response.Headers.Add("Content-Disposition", $"attachment;filename={fileName}");
 
-            var values = await GetSensorValues(encodedId, from.ToUtcKind(), to.ToUtcKind(), MaxHistoryCount);
+            var values = await GetSensorValues(encodedId, from.ToUtcKind(), to.ToUtcKind(), MaxHistoryCount, RequestOptions.IncludeTtl);
             var content = Encoding.UTF8.GetBytes(values.ConvertToCsv(addHiddenColumns));
 
             return File(content, fileName.GetContentType(), fileName);
