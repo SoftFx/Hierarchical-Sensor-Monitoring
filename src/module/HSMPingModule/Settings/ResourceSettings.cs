@@ -47,7 +47,7 @@ internal class WebSitesJsonConverter : JsonConverter<Dictionary<string, NodeSett
         var dictionary = new Dictionary<string, NodeSettings>();
         using var jsonDocument = JsonDocument.ParseValue(ref reader);
         foreach (var property in jsonDocument.RootElement.EnumerateObject())
-            dictionary.Add(property.Name.Replace('/', '_'), property.Value.ValueKind == JsonValueKind.Null ? null : property.Value.Deserialize<NodeSettings>());
+            dictionary.Add(property.Name, property.Value.ValueKind == JsonValueKind.Null ? null : property.Value.Deserialize<NodeSettings>());
 
         return dictionary;
     }
@@ -57,7 +57,7 @@ internal class WebSitesJsonConverter : JsonConverter<Dictionary<string, NodeSett
         writer.WriteStartObject();
         foreach (var item in value)
         {
-            writer.WritePropertyName(item.Key.Replace('_', '/'));
+            writer.WritePropertyName(item.Key);
             if (item.Value == null)
                 writer.WriteNullValue();
             else

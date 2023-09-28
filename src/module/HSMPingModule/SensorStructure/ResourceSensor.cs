@@ -25,7 +25,7 @@ namespace HSMPingModule.SensorStructure
 
             PingAdapter = new PingAdapter(host, (int)timeout);
 
-            SensorPath = $"{host}/{country}";
+            SensorPath = $"{host.Replace('/', '_')}/{country}";
             Country = country;
 
             SensorOptions = new()
