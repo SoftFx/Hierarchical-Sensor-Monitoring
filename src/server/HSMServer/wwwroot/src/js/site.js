@@ -26,36 +26,33 @@
     },
     
     init(id){
-        if (this.self === undefined){
-            this.self = $('#allColumnsButton');
-            this.self.removeClass('d-none');
+        this.self = $('#allColumnsButton');
 
-            this.self.off('click').on('click', function (e) {
-                if (hiddenColumns.isVisible)
-                    hiddenColumns.hideFromTable();
-                else
-                    hiddenColumns.showInTable();
-            });
-        }
+        this.self.off('click').on('click', function (e) {
+            if (hiddenColumns.isVisible)
+                hiddenColumns.hideFromTable();
+            else
+                hiddenColumns.showInTable();
+        });
+        
+        this.self.removeClass('d-none');
+        this.tablecells = [];
 
-        if (this.id === id) {
-            this.tablecells = [];
+        this.tablecellsIds.forEach(x => {
+            this.tablecells.push($(x))
+        })
 
-            this.tablecellsIds.forEach(x => {
-                this.tablecells.push($(x))
-            })
-
-            if (this.isVisible)
-                this.showInTable();
-        }
-        else {
-            this.tablecellsIds.forEach(x => {
-                this.tablecells.push($(x))
-            })
+        if (this.id === id && this.isVisible)
+            this.showInTable();
             
-            this.id = id;
-        }
+        this.id = id;
     },
+    
+    clear(){
+        this.tablecells = [];
+        this.tablecellsIds = [];
+        this.isVisible = false;
+    }
 }
 
 window.copyToClipboard = function(text) {

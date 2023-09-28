@@ -13,7 +13,10 @@ namespace HSMServer.ApiObjectsConverters
     internal static class ApiCsvConverters
     {
         private static readonly string _columnSeparator = CultureInfo.CurrentUICulture.TextInfo.ListSeparator;
-        private static readonly JsonSerializerOptions _serializerOptions = new();
+        private static readonly JsonSerializerOptions _serializerOptions = new()
+        { 
+            NumberHandling = JsonNumberHandling.AllowNamedFloatingPointLiterals 
+        };
 
         private static readonly List<string> _simpleSensorHeader = new()
         {
