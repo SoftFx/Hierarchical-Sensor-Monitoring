@@ -1,7 +1,7 @@
 ﻿using HSMDataCollector.Alerts;
-using HSMSensorDataObjects;
-using HSMSensorDataObjects.SensorRequests;
 using HSMDataCollector.DefaultSensors.Windows;
+using HSMSensorDataObjects.SensorRequests;
+using System.Collections.Generic;
 
 namespace HSMDataCollector.Prototypes.Collections.Disks
 {
@@ -14,8 +14,14 @@ namespace HSMDataCollector.Prototypes.Collections.Disks
 
         public WindowsActiveTimeDiskPrototype() : base()
         {
-            Type = SensorType.DoubleBarSensor;
             SensorUnit = Unit.Percents;
+
+            Alerts = new List<BarAlertTemplate>()
+            {
+                AlertsFactory.IfMean(AlertOperation.GreaterThanOrEqual, 80)
+                             .ThenSendNotification($"[$product]$path $property $operation $target{SensorUnit}")
+                             .AndSetIcon(AlertIcon.Warning).Build()
+            };
         }
     }
 }

@@ -1,4 +1,5 @@
-﻿using HSMServer.Model.TreeViewModel;
+﻿using HSMServer.Core.TableOfChanges;
+using HSMServer.Model.TreeViewModel;
 using System;
 using System.Collections.Generic;
 using System.Drawing;
@@ -18,5 +19,8 @@ namespace HSMServer.Model.Folders
         public string Author { get; init; }
 
         public string Description { get; init; }
+
+
+        public required InitiatorInfo Initiator { get; init; }
     }
 }

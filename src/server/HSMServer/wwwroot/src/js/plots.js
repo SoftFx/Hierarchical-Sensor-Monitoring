@@ -18,6 +18,7 @@ const SensorsStatus = {
 }
 
 const Colors = {
+    defaultTrace: '#1f77b4',
     default: 'rgba(31, 119, 180, 1)',
     red: 'rgba(255,0,0,1)',
     TtlGrey: 'rgba(192,192,192,1)',
@@ -41,6 +42,9 @@ export class Plot {
     mode = '';
     showlegend = false;
     hovertemplate = "%{x}, %{customdata}<extra></extra>";
+    marker = {
+        color: Colors.defaultTrace
+    }
 
     constructor(data) {}
 
@@ -87,6 +91,10 @@ export class Plot {
 }
 
 class ErrorColorPlot extends Plot{
+    line = {
+        color: Colors.defaultTrace
+    }
+
     markerColorCompareFunc(value){
         if (this.checkTtl(value))
             return Colors.TtlGrey
@@ -175,9 +183,7 @@ export class IntegerPlot extends ErrorColorPlot {
 
         this.type = 'scatter';
         this.mode = 'lines+markers';
-        this.line = {
-            shape: 'hv'
-        }
+        this.line.shape = 'hv';
         this.marker = {
             color: [],
             size: [],
@@ -384,9 +390,10 @@ export class TimeSpanPlot extends ErrorColorPlot {
 }
 
 export class EnumPlot extends Plot {
-    constructor(data, isServiceStatus) {
+    constructor(data, isServiceStatus, isBackgroundPlot = true) {
         super();
 
+        this.isBackgroundPlot = isBackgroundPlot;
         this.z = [];
         this.customdata = [];
         this.isServiceStatus = isServiceStatus;
@@ -433,14 +440,14 @@ export class EnumPlot extends Plot {
             this.x.push(data[i].time);
             if (this.isServiceStatus) {
                 this.customdata.push(`${ServiceStatus[`${data[i].value}`][1]} <br>`)
-                this.z.push(ServiceStatus[`${data[i].value}`][0] === ServiceStatus["4"][0] ? 0.5 : 0)
+                this.z.push(ServiceStatus[`${data[i].value}`][0] === ServiceStatus["4"][0] ? this.isBackgroundPlot ?  0.7 : 0.5 : 0)
             } 
             else {
                 if (this.checkTtl(data[i])) {
                     this.z.push(0);
                     this.customdata.push(`${ServiceStatus["8"][1]} <br>`)
                 } else {
-                    this.z.push(0.5);
+                    this.z.push(this.isBackgroundPlot ?  0.7 : 0.5);
                     this.customdata.push(`${data[i].value === true ? ServiceStatus["4"][1] : ServiceStatus["1"][1]} <br>`)
                 }
             }

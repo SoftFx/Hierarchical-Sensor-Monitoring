@@ -1,4 +1,5 @@
 using HSMPingModule.Config;
+using HSMPingModule.Console;
 using HSMPingModule.DataCollectorWrapper;
 using HSMPingModule.PingServices;
 using HSMPingModule.SensorStructure;
@@ -39,5 +40,6 @@ catch (Exception exception)
 }
 finally
 {
+    await ConsoleExecutor.Stop();
     LogManager.Shutdown();
 }

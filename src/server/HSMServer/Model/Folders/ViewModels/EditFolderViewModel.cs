@@ -73,7 +73,7 @@ namespace HSMServer.Model.Folders.ViewModels
         internal List<ProductNodeViewModel> GetFolderProducts(TreeViewModel.TreeViewModel treeViewModel) =>
             Products?.GetProducts(treeViewModel) ?? new();
 
-        internal FolderAdd ToFolderAdd(User author, TreeViewModel.TreeViewModel treeViewModel) =>
+        internal FolderAdd ToFolderAdd(User author, InitiatorInfo initiator, TreeViewModel.TreeViewModel treeViewModel) =>
             new()
             {
                 Name = Name,
@@ -82,6 +82,7 @@ namespace HSMServer.Model.Folders.ViewModels
                 AuthorId = author.Id,
                 Author = author.Name,
                 Products = GetFolderProducts(treeViewModel).ToDictionary(f => f.Id),
+                Initiator = initiator,
             };
 
         internal FolderUpdate ToFolderUpdate(InitiatorInfo initiator = null) =>

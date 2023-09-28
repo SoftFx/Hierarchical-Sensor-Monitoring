@@ -19,6 +19,7 @@ namespace HSMServer.Model.DataAlerts
         Mean,
         Count,
         LastValue,
+        [Display(Name = "Value length")]
         Length,
         [Display(Name = "Size")]
         OriginalSize,

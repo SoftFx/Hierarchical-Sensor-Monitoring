@@ -1,6 +1,4 @@
-﻿using System.Runtime.CompilerServices;
-
-namespace HSMPingModule.Common
+﻿namespace HSMPingModule.Common
 {
     internal class TaskResult
     {
