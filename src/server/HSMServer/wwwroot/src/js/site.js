@@ -1,4 +1,6 @@
 ﻿window.hiddenColumns = {
+    id: undefined,
+    
     showText: "Show all columns",
     hideText: "Hide extra columns",
     self: undefined,
@@ -23,22 +25,37 @@
         this.isVisible = true;
     },
     
-    init(){
-        this.isVisible = false;
-        this.tablecellsIds.forEach(x => {
-            this.tablecells.push($(x))
-        })
-        
-        this.self = $('#allColumnsButton');
-        this.self.removeClass('d-none');
-        
-        this.self.off('click').on('click', function (e) {
-            if (hiddenColumns.isVisible)
-                hiddenColumns.hideFromTable();
-            else
-                hiddenColumns.showInTable();
-        });
-    }
+    init(id){
+        if (this.self === undefined){
+            this.self = $('#allColumnsButton');
+            this.self.removeClass('d-none');
+
+            this.self.off('click').on('click', function (e) {
+                if (hiddenColumns.isVisible)
+                    hiddenColumns.hideFromTable();
+                else
+                    hiddenColumns.showInTable();
+            });
+        }
+
+        if (this.id === id) {
+            this.tablecells = [];
+
+            this.tablecellsIds.forEach(x => {
+                this.tablecells.push($(x))
+            })
+
+            if (this.isVisible)
+                this.showInTable();
+        }
+        else {
+            this.tablecellsIds.forEach(x => {
+                this.tablecells.push($(x))
+            })
+            
+            this.id = id;
+        }
+    },
 }
 
 window.copyToClipboard = function(text) {
