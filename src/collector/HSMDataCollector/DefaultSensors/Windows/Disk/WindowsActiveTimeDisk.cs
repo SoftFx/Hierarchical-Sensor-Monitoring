@@ -2,18 +2,11 @@
 
 namespace HSMDataCollector.DefaultSensors.Windows
 {
-    internal class WindowsActiveTimeDisk : WindowsSensorBase
+    internal class WindowsActiveTimeDisk : WindowsDiskBarSensorBase
     {
-        protected override string CategoryName => "PhysicalDisk";
-
         protected override string CounterName => "% Disk Time";
 
-        protected override string InstanceName { get; }
 
-
-        public WindowsActiveTimeDisk(DiskBarSensorOptions options) : base(options)
-        {
-            InstanceName = options.DiskInfo.DiskLetter;
-        }
+        public WindowsActiveTimeDisk(DiskBarSensorOptions options) : base(options) { }
     }
 }

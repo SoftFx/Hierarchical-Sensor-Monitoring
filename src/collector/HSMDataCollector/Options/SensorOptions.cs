@@ -1,5 +1,6 @@
 ﻿using HSMDataCollector.Alerts;
 using HSMDataCollector.Converters;
+using HSMDataCollector.Prototypes;
 using HSMSensorDataObjects;
 using HSMSensorDataObjects.SensorRequests;
 using System;
@@ -19,9 +20,14 @@ namespace HSMDataCollector.Options
 
         internal SensorType Type { get; set; }
 
+
+        internal string ComputerName { get; set; }
+
         internal string Module { get; set; }
 
         internal string Path { get; set; }
+
+        internal bool IsComputerSensor { get; set; }
 
 
         public SpecialAlertTemplate TtlAlert { get; set; }
@@ -41,12 +47,29 @@ namespace HSMDataCollector.Options
 
         public bool? EnableForGrafana { get; set; }
 
+        public bool? IsSingletonSensor { get; set; }
+
         public bool? AggregateData { get; set; }
 
 
         public DefaultAlertsOptions DefaultAlertsOptions { get; set; }
 
         public bool IsForceUpdate { get; set; } // if true then DataCollector can chage user settings
+
+
+        internal string CalculateSystemPath()
+        {
+            var computer = ComputerName;
+            var module = IsComputerSensor ? null : Module;
+
+            if (string.IsNullOrEmpty(computer))
+            {
+                computer = module;
+                module = null;
+            }
+
+            return DefaultPrototype.BuildPath(computer, module, Path);
+        }
     }
 
 

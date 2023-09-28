@@ -4,19 +4,44 @@ using HSMDataCollector.Options;
 using System;
 using System.Collections.Generic;
 using System.IO;
+using HSMDataCollector.DefaultSensors.Windows;
+using HSMSensorDataObjects;
 
 namespace HSMDataCollector.Prototypes
 {
     internal abstract class BarDisksMonitoringPrototype : BarSensorOptionsPrototype<DiskBarSensorOptions>
     {
-        internal const string BaseDescription = "The sensor sends information about {0} with a period of {1} and aggregated into bars of {2}. The information is read using " +
-            "[**Performance counter**](https://learn.microsoft.com/en-us/dotnet/api/system.diagnostics.performancecounter?view=netframework-4.7.2) by path *PhysicalDisk/% Disk Time*";
+        private const string BaseDescription = "The sensor sends information about {0} with a period of {1} and aggregated into bars of {2}. The information is read using " +
+                                                "[**Performance counter**](https://learn.microsoft.com/en-us/dotnet/api/system.diagnostics.performancecounter?view=netframework-4.7.2) by path *{3}*";
 
+
+        private string _sensorName;
+
+
+        protected abstract string DescriptionPath { get;}
 
         protected override string Category => DisksMonitoringPrototype.DiskCategory;
 
+        protected override string SensorName => _sensorName;
 
-        protected abstract DiskBarSensorOptions SetDiskInfo(DiskBarSensorOptions options);
+        protected abstract string SensorNameTemplate { get; }
+
+
+        protected BarDisksMonitoringPrototype() : base()
+        {
+            Type = SensorType.DoubleBarSensor;
+            IsComputerSensor = true;
+        }
+
+
+        protected DiskBarSensorOptions SetDiskInfo(DiskBarSensorOptions options)
+        {
+            options.SetInfo(new WindowsDiskInfo(options.TargetPath));
+
+            _sensorName = string.Format(SensorNameTemplate, options.DiskInfo.DiskLetter);
+
+            return options;
+        }
 
         public override DiskBarSensorOptions Get(DiskBarSensorOptions customOptions)
         {
@@ -26,8 +51,9 @@ namespace HSMDataCollector.Prototypes
 
             options = SetDiskInfo(options);
 
-            options.Path = DefaultPrototype.BuildDefaultPath(Category, SensorName);
-            options.Description = string.Format(BaseDescription, SensorName, options.PostDataPeriod.ToReadableView(), options.BarPeriod.ToReadableView());
+            options.Description = string.Format(BaseDescription, SensorName, options.PostDataPeriod.ToReadableView(), options.BarPeriod.ToReadableView(), $"{WindowsDiskBarSensorBase.Category}/{DescriptionPath}");
+
+            options.Path = RebuildPath();
 
             return options;
         }
@@ -67,6 +93,12 @@ namespace HSMDataCollector.Prototypes
         protected abstract string OsDiskInfo { get; }
 
 
+        protected DisksMonitoringPrototype() : base()
+        {
+            IsComputerSensor = true;
+        }
+
+
         public override DiskSensorOptions Get(DiskSensorOptions customOptions)
         {
             var options = base.Get(customOptions);
@@ -76,7 +108,7 @@ namespace HSMDataCollector.Prototypes
 
             options = SetDiskInfo(options);
 
-            options.Path = DefaultPrototype.BuildDefaultPath(Category, SensorName);
+            options.Path = RebuildPath();
             options.Description = string.Format(BaseDescription, SensorName, options.PostDataPeriod.ToReadableView(), OsDiskInfo);
 
             return options;

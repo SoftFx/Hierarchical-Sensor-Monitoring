@@ -10,6 +10,8 @@ namespace HSMDataCollector.DefaultSensors
         where BarType : MonitoringBarBase<T>, new()
         where T : struct
     {
+        private readonly object _lockBar = new object();
+
         private readonly TimeSpan _collectBarPeriod;
         private readonly TimeSpan _barPeriod;
         private readonly int _precision;
@@ -50,27 +52,16 @@ namespace HSMDataCollector.DefaultSensors
         }
 
 
-        protected virtual void CollectBar(object _)
-        {
-            try
-            {
-                if (_internalBar.CloseTime < DateTime.UtcNow)
-                {
-                    OnTimerTick();
-                    BuildNewBar();
-                }
-            }
-            catch (Exception ex)
-            {
-                ThrowException(ex);
-            }
-        }
+        protected virtual void CollectBar(object _) => CheckCurrentBar();
 
         protected sealed override BarType GetValue()
         {
-            _needSendValue = _internalBar.Count > 0;
+            lock (_lockBar)
+            {
+                _needSendValue = _internalBar.Count > 0;
 
-            return _internalBar.Complete().Copy() as BarType; //need copy for correct partialBar serialization
+                return _internalBar.Complete().Copy() as BarType; //need copy for correct partialBar serialization
+            }
         }
 
         protected sealed override BarType GetDefaultValue() =>
@@ -80,6 +71,25 @@ namespace HSMDataCollector.DefaultSensors
                 CloseTime = _internalBar?.CloseTime ?? DateTime.UtcNow,
                 Count = 1,
             };
+
+        protected void CheckCurrentBar()
+        {
+            try
+            {
+                lock (_lockBar)
+                {
+                    if (_internalBar.CloseTime < DateTime.UtcNow)
+                    {
+                        OnTimerTick();
+                        BuildNewBar();
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                ThrowException(ex);
+            }
+        }
 
 
         private void BuildNewBar()

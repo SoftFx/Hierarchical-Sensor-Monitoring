@@ -1,4 +1,7 @@
-﻿using HSMDataCollector.Prototypes;
+﻿using HSMDataCollector.Core;
+using HSMDataCollector.DefaultSensors.Windows;
+using HSMDataCollector.Prototypes;
+using HSMDataCollector.Prototypes.Collections;
 using HSMDataCollector.Prototypes.Collections.Disks;
 
 namespace HSMDataCollector.Options
@@ -29,6 +32,8 @@ namespace HSMDataCollector.Options
 
         internal WindowsActiveTimeDiskPrototype WindowsActiveTimeDisk { get; }
 
+        internal WindowsDiskQueueLengthPrototype WindowsDiskQueueLength { get; }
+
 
         internal UnixFreeSpaceOnDiskPredictionPrototype UnixFreeSpaceOnDiskPrediction { get; }
 
@@ -42,6 +47,10 @@ namespace HSMDataCollector.Options
         internal WindowsLastRestartPrototype WindowsLastRestart { get; }
 
         internal WindowsLastUpdatePrototype WindowsLastUpdate { get; }
+
+        internal WindowsErrorLogsPrototype WindowsErrorLogsPrototype { get; }
+
+        internal WindowsWarningLogsPrototype WindowsWarningLogsPrototype { get; }
 
         #endregion
 
@@ -63,11 +72,12 @@ namespace HSMDataCollector.Options
         #endregion
 
 
-        internal PrototypesCollection(string module)
+        internal PrototypesCollection(CollectorOptions options)
         {
             T Register<T>() where T : SensorOptions, new() => new T()
             {
-                Module = module
+                ComputerName = options.ComputerName,
+                Module = options.Module,
             };
 
 
@@ -80,12 +90,15 @@ namespace HSMDataCollector.Options
             WindowsFreeSpaceOnDiskPrediction = Register<WindowsFreeSpaceOnDiskPredictionPrototype>();
             WindowsFreeSpaceOnDisk = Register<WindowsFreeSpaceOnDiskPrototype>();
             WindowsActiveTimeDisk = Register<WindowsActiveTimeDiskPrototype>();
+            WindowsDiskQueueLength = Register<WindowsDiskQueueLengthPrototype>();
 
             UnixFreeSpaceOnDiskPrediction = Register<UnixFreeSpaceOnDiskPredictionPrototype>();
             UnixFreeSpaceOnDisk = Register<UnixFreeSpaceOnDiskPrototype>();
 
             WindowsLastRestart = Register<WindowsLastRestartPrototype>();
             WindowsLastUpdate = Register<WindowsLastUpdatePrototype>();
+            WindowsErrorLogsPrototype = Register<WindowsErrorLogsPrototype>();
+            WindowsWarningLogsPrototype = Register<WindowsWarningLogsPrototype>();
 
             CollectorVersion = Register<CollectorVersionPrototype>();
             CollectorAlive = Register<ServiceAlivePrototype>();

@@ -9,14 +9,17 @@ namespace HSMServer.Core.Model.Policies
     }
 
 
-    internal abstract class PolicyExecutorNumberBase<T> : PolicyExecutorSimple<T> where T : INumber<T>
+    internal abstract class PolicyMultiplePropertyExecutor<T> : PolicyExecutorSimple<T>
     {
         protected Func<BaseValue, T> _getCheckedValue;
 
-
-        protected override Func<T, T, bool> GetTypedOperation(PolicyOperation operation) => PolicyExecutorBuilder.GetNumberOperation<T>(operation);
-
         protected override T GetCheckedValue(BaseValue value) => _getCheckedValue(value);
+    }
+
+
+    internal abstract class PolicyExecutorNumberBase<T> : PolicyMultiplePropertyExecutor<T> where T : INumber<T>
+    {
+        protected override Func<T, T, bool> GetTypedOperation(PolicyOperation operation) => PolicyExecutorBuilder.GetNumberOperation<T>(operation);
     }
 
 
@@ -37,6 +40,19 @@ namespace HSMServer.Core.Model.Policies
     }
 
 
+    internal sealed class PolicyExecutorLong : PolicyExecutorNumberBase<long>
+    {
+        internal PolicyExecutorLong(PolicyProperty property)
+        {
+            _getCheckedValue = property switch
+            {
+                PolicyProperty.OriginalSize => v => ((FileValue)v).OriginalSize,
+                _ => throw new NotImplementedException($"Invalid property {property} for {nameof(PolicyExecutorLong)}")
+            };
+        }
+    }
+
+
     internal sealed class PolicyExecutorInt : PolicyExecutorNumberBase<int>
     {
         internal PolicyExecutorInt(PolicyProperty property)
@@ -44,29 +60,33 @@ namespace HSMServer.Core.Model.Policies
             _getCheckedValue = property switch
             {
                 PolicyProperty.Count => v => ((BarBaseValue)v).Count,
+                PolicyProperty.Length => v => ((StringValue)v).Value.Length,
                 _ => throw new NotImplementedException($"Invalid property {property} for {nameof(PolicyExecutorInt)}")
             };
         }
     }
 
-    internal sealed class PolicyExecutorDouble : PolicyExecutorNumberBase<double>
+
+    internal sealed class PolicyExecutorString : PolicyMultiplePropertyExecutor<string>
     {
-        internal PolicyExecutorDouble(PolicyProperty property)
+        internal PolicyExecutorString(PolicyProperty property)
         {
             _getCheckedValue = property switch
             {
-                PolicyProperty.Count => v => ((BarBaseValue)v).Count,
-                _ => throw new NotImplementedException($"Invalid property {property} for {nameof(PolicyExecutorDouble)}")
+                PolicyProperty.Comment => v => v?.Comment,
+                PolicyProperty.Value => v => ((StringValue)v)?.Value,
+                _ => throw new NotImplementedException($"Invalid property {property} for {nameof(PolicyExecutorString)}")
             };
         }
+
+
+        protected override Func<string, string, bool> GetTypedOperation(PolicyOperation operation) => PolicyExecutorBuilder.GetStringOperation(operation);
     }
 
 
-    internal sealed class PolicyExecutorString : PolicyExecutorSimple<string>
+    internal sealed class PolicyExecutorVersion : PolicyExecutorSimple<Version>
     {
-        protected override Func<string, string, bool> GetTypedOperation(PolicyOperation operation) => PolicyExecutorBuilder.GetStringOperation(operation);
-
-        protected override string GetCheckedValue(BaseValue value) => value?.Comment;
+        protected override Func<Version, Version, bool> GetTypedOperation(PolicyOperation operation) => PolicyExecutorBuilder.GetVersionOperation(operation);
     }
 
 
@@ -81,5 +101,13 @@ namespace HSMServer.Core.Model.Policies
         protected override Func<SensorStatus?, SensorStatus?, bool> GetTypedOperation(PolicyOperation operation) => PolicyExecutorBuilder.GetStatusOperation(operation);
 
         protected override SensorStatus? GetCheckedValue(BaseValue value) => value?.Status;
+    }
+
+
+    internal sealed class PolicyNewValueExecutor : PolicyExecutor<BaseValue>
+    {
+        protected override BaseValue GetCheckedValue(BaseValue value) => value;
+
+        protected override Func<BaseValue, BaseValue, bool> GetTypedOperation(PolicyOperation operation) => (_, _) => true;
     }
 }

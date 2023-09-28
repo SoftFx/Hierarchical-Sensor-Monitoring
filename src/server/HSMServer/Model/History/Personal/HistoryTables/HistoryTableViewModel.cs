@@ -1,4 +1,5 @@
-﻿using HSMServer.Core;
+﻿using HSMCommon.Extensions;
+using HSMServer.Core;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Model;
 using HSMServer.Extensions;
@@ -170,7 +171,7 @@ namespace HSMServer.Model.History
         private static string GetTableValue<T>(BaseValue<T> value) => value switch
         {
             VersionValue version => version.Value?.RemoveTailZeroes() ?? string.Empty,
-            TimeSpanValue timespan => timespan.Value.ToTableView(),
+            TimeSpanValue timespan => timespan.Value.ToReadableView(),
             _ => value.Value?.ToString(),
         };
     }

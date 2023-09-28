@@ -31,12 +31,35 @@ namespace HSMServer.Core.Model.Policies
             };
 
 
-        internal static Func<string, string, bool> GetStringOperation(PolicyOperation? action) =>
+        internal static Func<Version, Version, bool> GetVersionOperation(PolicyOperation action) =>
             action switch
             {
-                PolicyOperation.IsChanged => (string newVal, string oldVal) => oldVal != newVal,
+                PolicyOperation.LessThan => (Version src, Version target) => src < target,
+                PolicyOperation.GreaterThan => (Version src, Version target) => src > target,
+                PolicyOperation.LessThanOrEqual => (Version src, Version target) => src <= target,
+                PolicyOperation.GreaterThanOrEqual => (Version src, Version target) => src >= target,
+                PolicyOperation.Equal => (Version src, Version target) => src == target,
+                PolicyOperation.NotEqual => (Version src, Version target) => src != target,
                 _ => throw new NotImplementedException()
             };
+
+
+        internal static Func<string, string, bool> GetStringOperation(PolicyOperation? action)
+        {
+            static bool IsSuitableString(string target, Func<bool?> method) => target is null || (method() ?? false);
+
+
+            return action switch
+            {
+                PolicyOperation.IsChanged => (string newVal, string oldVal) => oldVal != newVal,
+                PolicyOperation.Equal => (string src, string target) => src == target,
+                PolicyOperation.NotEqual => (string src, string target) => src != target,
+                PolicyOperation.Contains => (string src, string target) => IsSuitableString(target, () => src?.Contains(target)),
+                PolicyOperation.StartsWith => (string src, string target) => IsSuitableString(target, () => src?.StartsWith(target)),
+                PolicyOperation.EndsWith => (string src, string target) => IsSuitableString(target, () => src?.EndsWith(target)),
+                _ => throw new NotImplementedException()
+            };
+        }
 
 
         internal static Func<SensorStatus?, SensorStatus?, bool> GetStatusOperation(PolicyOperation? action) =>
@@ -50,13 +73,6 @@ namespace HSMServer.Core.Model.Policies
                 _ => throw new NotImplementedException()
             };
 
-        private static bool IsChangedStatus(SensorStatus? newVal, SensorStatus? oldVal)
-        {
-            var newValue = newVal.Value;
-
-            return oldVal is not null && oldVal != newVal && !newValue.IsOfftime() && (!oldVal.Value.IsOfftime() || newValue.IsError());
-        }
-
 
         internal static PolicyExecutor BuildExecutor<U>(PolicyProperty property) => property switch
         {
@@ -66,16 +82,26 @@ namespace HSMServer.Core.Model.Policies
             PolicyProperty.Value or PolicyProperty.Min or PolicyProperty.Max or PolicyProperty.Mean or
             PolicyProperty.LastValue when typeof(U) == typeof(double) => new PolicyExecutorNumber<double>(property),
 
-            PolicyProperty.Count when typeof(U) == typeof(int) => new PolicyExecutorInt(property),
-            PolicyProperty.Count when typeof(U) == typeof(double) => new PolicyExecutorDouble(property),
-
             PolicyProperty.Value when typeof(U) == typeof(TimeSpan) => new PolicyExecutorTimeSpan(),
+            PolicyProperty.Value when typeof(U) == typeof(Version) => new PolicyExecutorVersion(),
+            PolicyProperty.Value when typeof(U) == typeof(string) => new PolicyExecutorString(property),
+
+            PolicyProperty.OriginalSize => new PolicyExecutorLong(property),
+            PolicyProperty.Length or PolicyProperty.Count => new PolicyExecutorInt(property),
 
             PolicyProperty.Status => new PolicyExecutorStatus(),
-
-            PolicyProperty.Comment => new PolicyExecutorString(),
+            PolicyProperty.NewSensorData => new PolicyNewValueExecutor(),
+            PolicyProperty.Comment => new PolicyExecutorString(property),
 
             _ => throw new NotImplementedException($"Unsupported policy property {property} with type {typeof(U).Name}"),
         };
+
+
+        private static bool IsChangedStatus(SensorStatus? newVal, SensorStatus? oldVal)
+        {
+            var newValue = newVal.Value;
+
+            return oldVal is not null && oldVal != newVal && !newValue.IsOfftime() && (!oldVal.Value.IsOfftime() || newValue.IsError());
+        }
     }
 }

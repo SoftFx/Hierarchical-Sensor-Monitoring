@@ -76,7 +76,6 @@ window.displayGraph = function (data, sensorTypes, graphElementId, graphName) {
             'pan2d',
             'select2d',
             'autoScale2d',
-            'resetScale2d'
         ]
     }
     let layout;
@@ -95,6 +94,11 @@ window.displayGraph = function (data, sensorTypes, graphElementId, graphName) {
         config.modeBarButtonsToAdd.forEach(x => {
             if(x.name === "Show/Hide service alive plot")
                 x.click();
+        })
+    else
+        config.modeBarButtonsToAdd.forEach(x => {
+            if(x.name === "Show/Hide service alive plot")
+                x.click = function (){};
         })
 
     let savedPlots = localStorage.getItem(graphData.graph.id);
@@ -154,9 +158,9 @@ function convertToGraphData(graphData, sensorTypes, graphName) {
             return new TimeSpanPlot(escapedData);
         case 9:
             if (sensorTypes.realType === 0)
-                return new EnumPlot(escapedData, false)
+                return new EnumPlot(escapedData, false, false)
 
-            return new EnumPlot(escapedData, true);
+            return new EnumPlot(escapedData, true, false);
         default:
             return undefined;
     }
@@ -232,14 +236,16 @@ function addEnumPlot(graphId, graphName, id, isStatusService, path){
     } else {
         getDataForPlotButton(graphName, id, isStatusService).done(function (data){
             let escapedData = JSON.parse(data);
-            let ranges = graph._fullLayout.yaxis.range;
+            let yranges = graph._fullLayout.yaxis.range;
+            let xranges = graph._fullLayout.xaxis.range;
             let heatPlot = new EnumPlot(escapedData, isStatusService)
             let updateLayout = {
                 title: heatPlot.getTitle(path),
-                hovermode: 'x'
+                hovermode: 'closest',
+                'xaxis.range': xranges
             };
 
-            Plotly.addTraces(graphId, heatPlot.getPlotData(currentName, ranges[0], ranges[1]));
+            Plotly.addTraces(graphId, heatPlot.getPlotData(currentName, yranges[0], yranges[1]), 0);
             Plotly.update(graphId, {}, updateLayout);
         });
     }

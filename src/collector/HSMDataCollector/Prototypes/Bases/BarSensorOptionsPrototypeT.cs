@@ -1,5 +1,7 @@
-﻿using HSMDataCollector.Options;
+﻿using HSMDataCollector.Alerts;
+using HSMDataCollector.Options;
 using System;
+using System.Collections.Generic;
 
 namespace HSMDataCollector.Prototypes
 {
@@ -8,15 +10,15 @@ namespace HSMDataCollector.Prototypes
     {
         protected abstract string SensorName { get; }
 
-        protected abstract string Category { get; }
+        protected virtual string Category { get; }
 
 
         protected BarSensorOptionsPrototype()
         {
-            Path = DefaultPrototype.BuildDefaultPath(Category, SensorName);
-            EnableForGrafana = true;
+            Alerts = new List<BarAlertTemplate>();
 
             TTL = TimeSpan.MaxValue; //Never
+            EnableForGrafana = true;
         }
 
 
@@ -24,6 +26,7 @@ namespace HSMDataCollector.Prototypes
         {
             var options = DefaultPrototype.Merge(this, customOptions);
 
+            options.Path = RebuildPath();
             options.Alerts = customOptions?.Alerts ?? Alerts;
 
             options.PostDataPeriod = customOptions?.PostDataPeriod ?? PostDataPeriod;
@@ -34,5 +37,8 @@ namespace HSMDataCollector.Prototypes
 
             return options;
         }
+
+
+        protected string RebuildPath() => DefaultPrototype.RevealDefaultPath(this, Category, SensorName);
     }
 }

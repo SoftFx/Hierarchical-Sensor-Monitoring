@@ -17,6 +17,8 @@ namespace HSMDataCollector.Core
 
         CollectorStatus Status { get; }
 
+        string ComputerName { get; }
+
         string Module { get; }
 
 
@@ -163,6 +165,16 @@ namespace HSMDataCollector.Core
         IInstantValueSensor<string> CreateStringSensor(string path, string description = "");
 
         IInstantValueSensor<string> CreateStringSensor(string path, InstantSensorOptions options);
+
+
+        IInstantValueSensor<Version> CreateVersionSensor(string path, string description = "");
+
+        IInstantValueSensor<Version> CreateVersionSensor(string path, InstantSensorOptions options);
+
+
+        IInstantValueSensor<TimeSpan> CreateTimeSensor(string path, string description = "");
+
+        IInstantValueSensor<TimeSpan> CreateTimeSensor(string path, InstantSensorOptions options);
 
         /// <summary>
         /// Creates the instance of <see cref="IInstantValueSensor{T}"/> where T is string

@@ -52,6 +52,9 @@ window.initialize = function () {
 window.searchHistory = function (encodedId) {
     const {from, to} = getFromAndTo(encodedId);
     GetSensortInfo(encodedId).done(function (types){
+        if (Object.keys(types).length === 0)
+            return;
+
         requestHistory(encodedId, historyAction, rawHistoryAction, types, Data(to, from, types.realType, encodedId));
     })
 }
@@ -92,16 +95,16 @@ function InitializeHistory() {
     let date = new Date();
 
     GetSensortInfo(encodedId).done(function (types) {
-        if (Object.keys(types).length === 0) {
+        if (Object.keys(types).length === 0)
             return;
-        }
 
         if (isFileSensor(types.realPlot))
             return;
 
         if (isGraphAvailable(types.realType)) {
             initializeGraph(encodedId, rawHistoryLatestAction, types, Data(date, date, types.realType, encodedId), true);
-        } else {
+        } 
+        else if (isTableAvailable(types.realType)) {
             initializeTable(encodedId, historyLatestAction, types.realPlot, Data(date, date, types.realType, encodedId), true);
         }
     });
@@ -119,6 +122,9 @@ function requestGraph() {
     showBarsCount(encodedId);
     enableFromTo()
     GetSensortInfo(encodedId).done(function (types){
+        if (Object.keys(types).length === 0)
+            return;
+        
         let body = Data(to, from, types.realType, encodedId);
         initializeGraph(encodedId, rawHistoryAction, types, body);
     })
@@ -131,6 +137,9 @@ function requestTable() {
     hideBarsCount(encodedId);
     enableFromTo()
     GetSensortInfo(encodedId).done(function (types){
+        if (Object.keys(types).length === 0)
+            return;
+
         let body = Data(to, from, types.realType, encodedId);
         initializeTable(encodedId, historyAction, types.realType, body);
     })
@@ -145,7 +154,9 @@ function InitializePeriodRequests() {
 
 function requestHistory(encodedId, action, rawAction, types, reqData) {
     if (!isGraphAvailable(types.realType)) {
-        initializeTable(encodedId, action, types.realType, reqData);
+        if (isTableAvailable(types.realType))
+            initializeTable(encodedId, action, types.realType, reqData);
+
         return;
     }
 
@@ -161,6 +172,9 @@ function exportCsv() {
     const {from, to} = getFromAndTo(encodedId);
 
     GetSensortInfo(encodedId).done(function (types){
+        if (Object.keys(types).length === 0)
+            return;
+
         window.location.href = exportHistoryAction + "?EncodedId=" + encodedId + "&Type=" + types.realType + "&From=" + from + "&To=" + to;
     })
 }
@@ -268,6 +282,10 @@ function isFileSensor(type) {
 
 function isGraphAvailable(type) {
     return !(type === 3 || type === 6 || type === 8);
+}
+
+function isTableAvailable(type) {
+    return type !== 6
 }
 
 function isTableHistorySelected(encodedId) {

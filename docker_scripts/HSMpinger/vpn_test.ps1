@@ -1,0 +1,1 @@
+docker run -ti --cap-add=NET_ADMIN --cap-add=NET_RAW --name vpn -e TOKEN=... -e TECHNOLOGY=NordLynx -d ghcr.io/bubuntux/nordvpn

@@ -12,7 +12,13 @@ export const ServiceStatusIcon = {
     'path': 'M32 32c17.7 0 32 14.3 32 32V400c0 8.8 7.2 16 16 16H480c17.7 0 32 14.3 32 32s-14.3 32-32 32H80c-44.2 0-80-35.8-80-80V64C0 46.3 14.3 32 32 32zM160 224c17.7 0 32 14.3 32 32v64c0 17.7-14.3 32-32 32s-32-14.3-32-32V256c0-17.7 14.3-32 32-32zm128-64V320c0 17.7-14.3 32-32 32s-32-14.3-32-32V160c0-17.7 14.3-32 32-32s32 14.3 32 32zm64 32c17.7 0 32 14.3 32 32v96c0 17.7-14.3 32-32 32s-32-14.3-32-32V224c0-17.7 14.3-32 32-32zM480 96V320c0 17.7-14.3 32-32 32s-32-14.3-32-32V96c0-17.7 14.3-32 32-32s32 14.3 32 32z'
 }
 
+const SensorsStatus = {
+    Ok: 0,
+    Error: 1
+}
+
 const Colors = {
+    defaultTrace: '#1f77b4',
     default: 'rgba(31, 119, 180, 1)',
     red: 'rgba(255,0,0,1)',
     TtlGrey: 'rgba(192,192,192,1)',
@@ -24,7 +30,8 @@ const MarkerSize = {
     default: 0,
     defaultLineSize: 2,
     small: 5,
-    Ttl: 10
+    Ttl: 10,
+    Error: 10
 }
 
 export class Plot {
@@ -35,6 +42,9 @@ export class Plot {
     mode = '';
     showlegend = false;
     hovertemplate = "%{x}, %{customdata}<extra></extra>";
+    line = {
+        color: Colors.defaultTrace
+    }
 
     constructor(data) {}
 
@@ -52,6 +62,10 @@ export class Plot {
 
     checkTtl(value) {
         return !!value.isTimeout;
+    }
+    
+    checkError(value) {
+        return value.status === SensorsStatus.Error
     }
 
     addCustomData(value, compareFunc = null, customField = 'value') {
@@ -72,6 +86,33 @@ export class Plot {
         if (this.checkTtl(value))
             return MarkerSize.Ttl;
 
+        return MarkerSize.defaultLineSize;
+    }
+}
+
+class ErrorColorPlot extends Plot{
+    line = {
+        color: Colors.defaultTrace
+    }
+    mode = "markers+lines";
+
+    markerColorCompareFunc(value){
+        if (this.checkTtl(value))
+            return Colors.TtlGrey
+
+        if (this.checkError(value))
+            return Colors.red
+        
+        return Colors.default;
+    }
+
+    getMarkerSize(value) {
+        if (this.checkTtl(value))
+            return MarkerSize.Ttl;
+
+        if (this.checkError(value))
+            return MarkerSize.Error;
+        
         return MarkerSize.defaultLineSize;
     }
 }
@@ -137,15 +178,13 @@ export class BoolPlot extends Plot {
     }
 }
 
-export class IntegerPlot extends Plot {
+export class IntegerPlot extends ErrorColorPlot {
     constructor(data) {
         super();
 
         this.type = 'scatter';
         this.mode = 'lines+markers';
-        this.line = {
-            shape: 'hv'
-        }
+        this.line.shape = 'hv';
         this.marker = {
             color: [],
             size: [],
@@ -169,7 +208,7 @@ export class IntegerPlot extends Plot {
     }
 }
 
-export class DoublePlot extends Plot {
+export class DoublePlot extends ErrorColorPlot {
     constructor(data, name, field = 'value') {
         super();
 
@@ -242,7 +281,7 @@ export class BarPLot extends Plot {
     }
 }
 
-export class TimeSpanPlot extends Plot {
+export class TimeSpanPlot extends ErrorColorPlot {
     constructor(data) {
         super();
 
@@ -309,6 +348,10 @@ export class TimeSpanPlot extends Plot {
         if (this.checkTtl(value))
             return value.comment;
 
+        return this.getTimeSpanAsText(timespan);
+    }
+
+    getTimeSpanAsText(timespan){
         if (timespan === undefined)
             return '0h 0m 0s';
 
@@ -321,17 +364,21 @@ export class TimeSpanPlot extends Plot {
         const MAX_TIME_POINTS = 10
 
         let maxVal = Math.max(...this.y)
-        let step = Math.max(maxVal / MAX_TIME_POINTS, 1);
+        let step = Math.max(maxVal / MAX_TIME_POINTS, 1)
+
         let tVals = []
+        let tValsCustomData = []
+
         let cur = 0
         while (cur <= maxVal) {
             tVals.push(cur);
+            tValsCustomData.push(this.getTimeSpanAsText(new TimeSpan.TimeSpan(cur)))
             cur += step;
         }
 
         return {
             yaxis: {
-                ticktext: this.customdata,
+                ticktext: tValsCustomData,
                 tickvals: tVals,
                 tickfont: {
                     size: 10
@@ -344,9 +391,10 @@ export class TimeSpanPlot extends Plot {
 }
 
 export class EnumPlot extends Plot {
-    constructor(data, isServiceStatus) {
+    constructor(data, isServiceStatus, isBackgroundPlot = true) {
         super();
 
+        this.isBackgroundPlot = isBackgroundPlot;
         this.z = [];
         this.customdata = [];
         this.isServiceStatus = isServiceStatus;
@@ -393,14 +441,14 @@ export class EnumPlot extends Plot {
             this.x.push(data[i].time);
             if (this.isServiceStatus) {
                 this.customdata.push(`${ServiceStatus[`${data[i].value}`][1]} <br>`)
-                this.z.push(ServiceStatus[`${data[i].value}`][0] === ServiceStatus["4"][0] ? 0.5 : 0)
+                this.z.push(ServiceStatus[`${data[i].value}`][0] === ServiceStatus["4"][0] ? this.isBackgroundPlot ?  0.7 : 0.5 : 0)
             } 
             else {
                 if (this.checkTtl(data[i])) {
                     this.z.push(0);
                     this.customdata.push(`${ServiceStatus["8"][1]} <br>`)
                 } else {
-                    this.z.push(0.7);
+                    this.z.push(this.isBackgroundPlot ?  0.7 : 0.5);
                     this.customdata.push(`${data[i].value === true ? ServiceStatus["4"][1] : ServiceStatus["1"][1]} <br>`)
                 }
             }

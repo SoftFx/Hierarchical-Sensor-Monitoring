@@ -63,10 +63,10 @@ namespace HSMServer.Controllers
             if (await _folderManager.TryUpdate(editFolder.ToFolderUpdate(CurrentInitiator)))
             {
                 foreach (var (productId, _) in oldProducts.Except(folder.Products))
-                    await _folderManager.RemoveProductFromFolder(productId, folder.Id);
+                    await _folderManager.RemoveProductFromFolder(productId, folder.Id, CurrentInitiator);
 
                 foreach (var (productId, _) in folder.Products.Except(oldProducts))
-                    await _folderManager.AddProductToFolder(productId, folder.Id);
+                    await _folderManager.AddProductToFolder(productId, folder.Id, CurrentInitiator);
             }
 
             return View(nameof(EditFolder), BuildEditFolder(folder.Id));
@@ -83,14 +83,14 @@ namespace HSMServer.Controllers
                 return View(nameof(EditFolder), editFolder);
             }
 
-            await _folderManager.TryAdd(editFolder.ToFolderAdd(CurrentUser, _tree), out var newFolder);
+            await _folderManager.TryAdd(editFolder.ToFolderAdd(CurrentUser, CurrentInitiator, _tree), out var newFolder);
 
             return View(nameof(EditFolder), BuildEditFolder(newFolder.Id));
         }
 
         [HttpPost]
         [FolderRoleFilterByFolderId(nameof(folderId), ProductRoleEnum.ProductManager)]
-        public Task RemoveFolder(Guid folderId) => _folderManager.TryRemove(folderId);
+        public Task RemoveFolder(Guid folderId) => _folderManager.TryRemove(folderId, CurrentInitiator);
 
 
         [HttpPost]

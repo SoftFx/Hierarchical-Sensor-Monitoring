@@ -122,7 +122,7 @@ namespace HSMServer.Notifications
             {
                 await _bot.GetMeAsync(_tokenSource.Token);
             }
-            catch (ApiRequestException exc)
+            catch (Exception exc)
             {
                 _bot = null;
                 return $"An error ({exc.Message}) has been occurred while starting the Bot. Please check Bot configurations. The current state of the Bot is stopped.";

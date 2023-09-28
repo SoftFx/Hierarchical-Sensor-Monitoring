@@ -1,6 +1,6 @@
-﻿using HSMDataCollector.Options;
+﻿using HSMDataCollector.Extensions;
+using HSMDataCollector.Options;
 using System;
-using System.Threading.Tasks;
 
 namespace HSMDataCollector.DefaultSensors.Windows
 {
@@ -8,19 +8,14 @@ namespace HSMDataCollector.DefaultSensors.Windows
     {
         private readonly DateTime _lastUpdateDate;
 
+        protected override TimeSpan TimerDueTime => _receiveDataPeriod.GetTimerDueTime();
+
 
         public WindowsLastUpdate(WindowsInfoSensorOptions options) : base(options)
         {
             _lastUpdateDate = RegistryInfo.GetInstallationDate();
         }
 
-
-        internal override Task<bool> Start() //send data on start
-        {
-            OnTimerTick();
-
-            return base.Start();
-        }
 
         protected override TimeSpan GetValue() => DateTime.UtcNow - _lastUpdateDate;
     }

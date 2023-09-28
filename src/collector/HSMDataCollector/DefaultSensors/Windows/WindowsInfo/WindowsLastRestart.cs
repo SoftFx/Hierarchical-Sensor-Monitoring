@@ -1,4 +1,5 @@
-﻿using HSMDataCollector.Options;
+﻿using HSMDataCollector.Extensions;
+using HSMDataCollector.Options;
 using System;
 using System.Diagnostics;
 using System.Threading.Tasks;
@@ -12,6 +13,8 @@ namespace HSMDataCollector.DefaultSensors.Windows
 
         private readonly PerformanceCounter _performanceCounter;
 
+        protected override TimeSpan TimerDueTime => _receiveDataPeriod.GetTimerDueTime();
+
 
         public WindowsLastRestart(WindowsInfoSensorOptions options) : base(options)
         {
@@ -20,19 +23,12 @@ namespace HSMDataCollector.DefaultSensors.Windows
         }
 
 
-        internal override Task<bool> Start() //send data on start
-        {
-            OnTimerTick();
-
-            return base.Start();
-        }
-
         protected override TimeSpan GetValue() => TimeSpan.FromSeconds(_performanceCounter.NextValue());
 
         internal override Task Stop()
         {
             _performanceCounter?.Dispose();
-            
+
             return base.Stop();
         }
     }

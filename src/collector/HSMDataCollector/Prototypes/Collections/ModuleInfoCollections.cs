@@ -8,19 +8,8 @@ using System.Collections.Generic;
 
 namespace HSMDataCollector.Prototypes
 {
-    internal abstract class ModuleInfoPrototype : InstantSensorOptionsPrototype<ServiceSensorOptions>
-    {
-        internal const string ProductInfoCategory = "Module Info";
-
-        protected override string Category => ProductInfoCategory;
-    }
-
-
     internal abstract class ProductVersionInfoPrototype : InstantSensorOptionsPrototype<VersionSensorOptions>
     {
-        protected override string Category => ModuleInfoPrototype.ProductInfoCategory;
-
-
         public override VersionSensorOptions Get(VersionSensorOptions customOptions)
         {
             var options = base.Get(customOptions);
@@ -58,7 +47,7 @@ namespace HSMDataCollector.Prototypes
     }
 
 
-    internal sealed class ServiceCommandsPrototype : ModuleInfoPrototype
+    internal sealed class ServiceCommandsPrototype : InstantSensorOptionsPrototype<ServiceSensorOptions>
     {
         protected override string SensorName => "Service commands";
 
@@ -77,14 +66,14 @@ namespace HSMDataCollector.Prototypes
             if (options.Alerts == null)
                 options.Alerts = new List<InstantAlertTemplate>();
 
-            options.Alerts.Add(AlertsFactory.IfStatus(AlertOperation.IsOk).ThenSendNotification($"[$product] $value - $comment").Build());
+            options.Alerts.Add(AlertsFactory.IfReceivedNewValue().ThenSendNotification($"[$product] $value - $comment").Build());
 
             return options;
         }
     }
 
 
-    internal sealed class ServiceStatusPrototype : ModuleInfoPrototype
+    internal sealed class ServiceStatusPrototype : InstantSensorOptionsPrototype<ServiceSensorOptions>
     {
         protected override string SensorName => "Service status";
 
@@ -135,8 +124,6 @@ namespace HSMDataCollector.Prototypes
         private const string DescriptionTemplate = "This sensor sends DataCollector heartbits with a period of {0}. " +
             "If TTL triggered and HSM server stopped receiving data, you need to check the status of the connected application.";
 
-
-        protected override string Category => ModuleInfoPrototype.ProductInfoCategory;
 
         protected override TimeSpan DefaultPostDataPeriod => TimeSpan.FromSeconds(15);
 

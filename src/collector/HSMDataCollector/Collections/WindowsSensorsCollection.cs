@@ -72,6 +72,11 @@ namespace HSMDataCollector.DefaultSensors
         {
             return ToWindows(new WindowsActiveTimeDisk(_prototype.WindowsActiveTimeDisk.Get(options)));
         }
+        
+        public IWindowsCollection AddDiskQueueLength(DiskBarSensorOptions options)
+        {
+            return ToWindows(new WindowsDiskQueueLength(_prototype.WindowsDiskQueueLength.Get(options)));
+        }
 
         public IWindowsCollection AddFreeDisksSpace(DiskSensorOptions options)
         {
@@ -96,12 +101,20 @@ namespace HSMDataCollector.DefaultSensors
 
             return this;
         }
+        
+        public IWindowsCollection AddDisksQueueLength(DiskBarSensorOptions options = null)
+        {
+            foreach (var diskOptions in _prototype.WindowsDiskQueueLength.GetAllDisksOptions(options))
+                ToWindows(new WindowsDiskQueueLength(diskOptions));
 
-        public IWindowsCollection AddDiskMonitoringSensors(DiskSensorOptions options = null, DiskBarSensorOptions activeTimeOptions = null) =>
-            AddFreeDiskSpace(options).AddFreeDiskSpacePrediction(options).AddActiveDiskTime(activeTimeOptions);
+            return this;
+        }
 
-        public IWindowsCollection AddAllDisksMonitoringSensors(DiskSensorOptions options = null, DiskBarSensorOptions activeTimeOptions = null) =>
-            AddFreeDisksSpace(options).AddFreeDisksSpacePrediction(options).AddActiveDisksTime(activeTimeOptions);
+        public IWindowsCollection AddDiskMonitoringSensors(DiskSensorOptions options = null, DiskBarSensorOptions diskBarOptions = null) =>
+            AddFreeDiskSpace(options).AddFreeDiskSpacePrediction(options).AddActiveDiskTime(diskBarOptions).AddDiskQueueLength(diskBarOptions);
+
+        public IWindowsCollection AddAllDisksMonitoringSensors(DiskSensorOptions options = null, DiskBarSensorOptions diskBarOptions = null) =>
+            AddFreeDisksSpace(options).AddFreeDisksSpacePrediction(options).AddActiveDisksTime(diskBarOptions).AddDisksQueueLength(diskBarOptions);
 
         #endregion
 
@@ -119,7 +132,13 @@ namespace HSMDataCollector.DefaultSensors
         }
 
         public IWindowsCollection AddWindowsInfoMonitoringSensors(WindowsInfoSensorOptions options) =>
-            AddWindowsLastUpdate(options).AddWindowsLastRestart(options);
+            AddWindowsLastUpdate(options).AddWindowsLastRestart(options).AddAllWindowsLogs();
+
+        public IWindowsCollection AddAllWindowsLogs(InstantSensorOptions options) => AddErrorWindowsLogs(_prototype.WindowsErrorLogsPrototype.Get(options)).AddWarningWindowsLogs(_prototype.WindowsWarningLogsPrototype.Get(options));
+
+        public IWindowsCollection AddErrorWindowsLogs(InstantSensorOptions options = null) => ToWindows(new WindowsErrorLogs(_prototype.WindowsErrorLogsPrototype.Get(options)));
+
+        public IWindowsCollection AddWarningWindowsLogs(InstantSensorOptions options = null) => ToWindows(new WindowsWarningLogs(_prototype.WindowsWarningLogsPrototype.Get(options)));
 
         #endregion
 

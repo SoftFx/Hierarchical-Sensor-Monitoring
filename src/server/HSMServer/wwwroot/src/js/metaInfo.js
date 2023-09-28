@@ -26,6 +26,7 @@ window.editInfoButtonClick = function () {
     $('#meta_info_collapse').addClass('d-none');
 
     $('#saveOnlyUniqueValuesSwitch').attr("disabled", false);
+    $('#singletonSwitch').attr("disabled", false);
     $('#sensorUnit').attr("disabled", false);
 
     $('#folder_ttl').removeClass('d-none');

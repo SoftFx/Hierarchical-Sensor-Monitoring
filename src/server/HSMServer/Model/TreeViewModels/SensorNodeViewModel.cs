@@ -30,7 +30,9 @@ namespace HSMServer.Model.TreeViewModel
 
         public string ValidationError { get; private set; }
 
-        public bool SaveOnlyUniqueValues { get; private set; }
+        public bool AggregateValues { get; private set; }
+
+        public bool IsSingleton { get; private set; }
 
 
         public List<Unit> AvailableUnits { get; private set; }
@@ -59,9 +61,10 @@ namespace HSMServer.Model.TreeViewModel
             State = model.State;
             Integration = model.Integration;
             UpdateTime = model.LastUpdate;
+            IsSingleton = model.IsSingleton;
             Status = model.Status.ToClient();
             SelectedUnit = model.OriginalUnit;
-            SaveOnlyUniqueValues = model.AggregateValues;
+            AggregateValues = model.AggregateValues;
 
             if (State is SensorState.Muted)
                 ValidationError = GetMutedErrorTooltip(model.EndOfMuting);
@@ -96,15 +99,15 @@ namespace HSMServer.Model.TreeViewModel
 
         private DataAlertViewModelBase BuildAlert(Policy policy) => policy switch
         {
-            FilePolicy p => new DataAlertViewModel<FileValue>(p, this),
-            StringPolicy p => new DataAlertViewModel<StringValue>(p, this),
+            FilePolicy p => new FileDataAlertViewModel(p, this),
+            StringPolicy p => new StringDataAlertViewModel(p, this),
             BooleanPolicy p => new DataAlertViewModel<BooleanValue>(p, this),
-            VersionPolicy p => new DataAlertViewModel<VersionValue>(p, this),
-            TimeSpanPolicy p => new SingleDataAlertViewModel<TimeSpanValue, TimeSpan>(p, this),
-            IntegerPolicy p => new SingleDataAlertViewModel<IntegerValue, int>(p, this),
-            DoublePolicy p => new SingleDataAlertViewModel<DoubleValue, double>(p, this),
-            IntegerBarPolicy p => new BarDataAlertViewModel<IntegerBarValue, int>(p, this),
-            DoubleBarPolicy p => new BarDataAlertViewModel<DoubleBarValue, double>(p, this),
+            VersionPolicy p => new SingleDataAlertViewModel<VersionValue>(p, this),
+            TimeSpanPolicy p => new SingleDataAlertViewModel<TimeSpanValue>(p, this),
+            IntegerPolicy p => new SingleDataAlertViewModel<IntegerValue>(p, this),
+            DoublePolicy p => new SingleDataAlertViewModel<DoubleValue>(p, this),
+            IntegerBarPolicy p => new BarDataAlertViewModel<IntegerBarValue>(p, this),
+            DoubleBarPolicy p => new BarDataAlertViewModel<DoubleBarValue>(p, this),
             _ => null,
         };
 

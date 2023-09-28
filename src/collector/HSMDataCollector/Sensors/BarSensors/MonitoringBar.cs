@@ -25,9 +25,6 @@ namespace HSMDataCollector.DefaultSensors
         {
             lock (_lock)
             {
-                if (DateTime.UtcNow > CloseTime)
-                    return;
-
                 if (Count == 0)
                 {
                     Mean = value;
@@ -48,7 +45,7 @@ namespace HSMDataCollector.DefaultSensors
         {
             lock (_lock)
             {
-                if (DateTime.UtcNow > CloseTime || count < 1)
+                if (count < 1)
                     return;
 
                 if (Count == 0)

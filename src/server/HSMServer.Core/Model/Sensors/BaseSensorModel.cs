@@ -31,6 +31,11 @@ namespace HSMServer.Core.Model
         GB = 4,
 
         Percents = 100,
+
+        Ticks = 1000,
+        Milliseconds = 1010,
+        Seconds = 1011,
+        Minutes = 1012
     }
 
 
@@ -63,6 +68,8 @@ namespace HSMServer.Core.Model
 
         public abstract SensorType Type { get; }
 
+
+        public bool IsSingleton { get; private set; }
 
         public bool AggregateValues { get; private set; }
 
@@ -113,6 +120,7 @@ namespace HSMServer.Core.Model
             OriginalUnit = (Unit?)entity.OriginalUnit;
             Integration = (Integration)entity.Integration;
             AggregateValues = entity.AggregateValues;
+            IsSingleton = entity.IsSingleton;
             EndOfMuting = entity.EndOfMuting > 0L ? new DateTime(entity.EndOfMuting) : null;
         }
 
@@ -131,13 +139,14 @@ namespace HSMServer.Core.Model
         internal abstract BaseValue Convert(byte[] bytes);
 
 
-        internal void Update(SensorUpdate update)
+        internal void Update(SensorUpdate update) // TODO: out error parameter should be added for this method (to show error message in DataCollector)
         {
             base.Update(update);
 
             Integration = UpdateProperty(Integration, update.Integration ?? Integration, update.Initiator);
             OriginalUnit = UpdateProperty(OriginalUnit, update.SelectedUnit ?? OriginalUnit, update.Initiator, "Unit");
-            AggregateValues = UpdateProperty(AggregateValues, update.SaveOnlyUniqueValues ?? AggregateValues, update.Initiator, "Save only unique values");
+            IsSingleton = UpdateProperty(IsSingleton, update.IsSingleton ?? IsSingleton, update.Initiator, "Singleton");
+            AggregateValues = UpdateProperty(AggregateValues, update.AggregateValues ?? AggregateValues, update.Initiator, "Aggregate values");
 
             State = UpdateProperty(State, update.State ?? State, update.Initiator, forced: true);
             EndOfMuting = UpdateProperty(EndOfMuting, update.EndOfMutingPeriod, update.Initiator, "End of muting", true);
@@ -145,8 +154,17 @@ namespace HSMServer.Core.Model
             if (State == SensorState.Available)
                 EndOfMuting = null;
 
+            TryUpdatePolicies(update, out _);
+        }
+
+        internal bool TryUpdatePolicies(SensorUpdate update, out string error)
+        {
+            error = null;
+
             if (update.Policies != null)
-                Policies.Update(update.Policies, update.Initiator);
+                Policies.TryUpdate(update.Policies, update.Initiator, out error);
+
+            return string.IsNullOrEmpty(error);
         }
 
         internal void ResetSensor()
@@ -165,10 +183,11 @@ namespace HSMServer.Core.Model
             CreationDate = CreationDate.Ticks,
             Type = (byte)Type,
             State = (byte)State,
+            IsSingleton = IsSingleton,
             Integration = (int)Integration,
             OriginalUnit = (int?)OriginalUnit,
             AggregateValues = AggregateValues,
-            Policies = Policies.Ids.Select(u => u.ToString()).ToList(),
+            Policies = Policies.Select(u => u.Id.ToString()).ToList(),
             EndOfMuting = EndOfMuting?.Ticks ?? 0L,
             Settings = Settings.ToEntity(),
             TTLPolicy = Policies.TimeToLive?.ToEntity(),

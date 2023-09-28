@@ -1,0 +1,32 @@
+﻿<Project Sdk="Microsoft.NET.Sdk.Worker">
+
+    <PropertyGroup>
+        <TargetFramework>net7.0</TargetFramework>
+        <Nullable>disable</Nullable>
+        <ImplicitUsings>enable</ImplicitUsings>
+        <Version>0.0.2</Version>
+    </PropertyGroup>
+
+    <PropertyGroup>
+        <EnableSDKContainerSupport>true</EnableSDKContainerSupport>
+        <ContainerImageTags>$(Version)</ContainerImageTags>
+        <ContainerImageName>$(MSBuildProjectName)</ContainerImageName>
+    </PropertyGroup>
+
+    <ItemGroup>
+      <Compile Remove="Config\**" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <PackageReference Include="HSMDataCollector.HSMDataCollector" Version="3.2.1" />
+        <PackageReference Include="HSMDataCollector.HSMSensorDataObjects" Version="3.0.4" />
+        <PackageReference Include="Microsoft.Extensions.Hosting" Version="7.0.0" />
+        <PackageReference Include="Microsoft.NET.Build.Containers" Version="7.0.400" />
+        <PackageReference Include="NLog.Extensions.Logging" Version="5.2.2" />
+        <PackageReference Include="NLog.Web.AspNetCore" Version="5.2.2" />
+    </ItemGroup>
+
+    <ItemGroup>
+      <Folder Include="Config\" />
+    </ItemGroup>
+</Project>

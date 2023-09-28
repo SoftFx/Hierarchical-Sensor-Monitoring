@@ -1,4 +1,5 @@
-﻿using System.Collections.Concurrent;
+﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 
 namespace HSMCommon.Collections
@@ -6,9 +7,16 @@ namespace HSMCommon.Collections
     public sealed class CDict<T> : CDictBase<string, T> where T : new() { }
 
 
+    public sealed class CGuidDict<T> : CDictBase<Guid, T> where T : new() { }
+
+
     public abstract class CDictBase<T, U> : ConcurrentDictionary<T, U> where U : new()
     {
-        public new U this[T key] => GetOrAdd(key);
+        public new U this[T key]
+        {
+            get => GetOrAdd(key);
+            set => base[key] = value;
+        }
 
 
         protected CDictBase() : base() { }
