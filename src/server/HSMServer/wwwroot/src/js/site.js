@@ -1,4 +1,45 @@
-﻿window.copyToClipboard = function(text) {
+﻿window.hiddenColumns = {
+    showText: "Show all columns",
+    hideText: "Hide extra columns",
+    self: undefined,
+    isVisible: false,
+    
+    tablecellsIds: [], 
+    tablecells: [],
+    
+    hideFromTable(){
+        this.tablecells.forEach((x) => {
+            x.addClass('d-none')
+        })
+        this.self[0].innerText = this.showText;
+        this.isVisible = false;
+    },
+
+    showInTable(){
+        this.tablecells.forEach((x) => {
+            x.removeClass('d-none')
+        })
+        this.self[0].innerText = this.hideText;
+        this.isVisible = true;
+    },
+    
+    init(){
+        this.isVisible = false;
+        this.tablecellsIds.forEach(x => {
+            this.tablecells.push($(x))
+        })
+        
+        this.self = $('#allColumnsButton');
+        this.self.off('click').on('click', function (e) {
+            if (hiddenColumns.isVisible)
+                hiddenColumns.hideFromTable();
+            else
+                hiddenColumns.showInTable();
+        });
+    }
+}
+
+window.copyToClipboard = function(text) {
     const copyToClipboardAsync = str => {
         if (navigator && navigator.clipboard && navigator.clipboard.writeText) {
             return navigator.clipboard.writeText(str);
