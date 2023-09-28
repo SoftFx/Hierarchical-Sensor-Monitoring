@@ -40,6 +40,5 @@ catch (Exception exception)
 }
 finally
 {
-    await ConsoleExecutor.Stop();
     LogManager.Shutdown();
 }
