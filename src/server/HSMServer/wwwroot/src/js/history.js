@@ -175,7 +175,7 @@ function exportCsv() {
         if (Object.keys(types).length === 0)
             return;
 
-        window.location.href = exportHistoryAction + "?EncodedId=" + encodedId + "&Type=" + types.realType + "&From=" + from + "&To=" + to;
+        window.location.href = exportHistoryAction + "?EncodedId=" + encodedId + "&Type=" + types.realType + "&addHiddenColumns=" + hiddenColumns.isVisible + "&From=" + from + "&To=" + to;
     })
 }
 

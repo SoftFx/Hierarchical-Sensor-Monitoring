@@ -3,6 +3,7 @@ using HSMServer.Core.Extensions;
 using HSMServer.Core.Model;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -24,16 +25,30 @@ namespace HSMServer.ApiObjectsConverters
 
         private static readonly List<string> _barSensorHeader = new()
         {
-            nameof(SensorValueBase.Time),
             nameof(IntBarSensorValue.OpenTime),
-            nameof(IntBarSensorValue.CloseTime),
             nameof(IntBarSensorValue.Min),
-            nameof(IntBarSensorValue.Max),
             nameof(IntBarSensorValue.Mean),
+            nameof(IntBarSensorValue.Max),
             nameof(IntBarSensorValue.Count),
             nameof(IntBarSensorValue.LastValue),
             nameof(SensorValueBase.Status),
             nameof(SensorValueBase.Comment),
+        };
+
+        private static readonly List<string> _simpleHiddenHeader = new()
+        {
+            nameof(BaseValue.AggregatedValuesCount)
+        };
+        
+        private static readonly List<string> _barHiddenHeader = new()
+        {
+            nameof(DoubleBarValue.Time),
+            nameof(DoubleBarValue.CloseTime)
+        };
+
+        private static readonly List<string> _defaultHiddenHeader = new()
+        {
+            nameof(BaseValue.ReceivingTime)
         };
 
         private static readonly List<string> _fileSensorHeader = new()
@@ -53,13 +68,13 @@ namespace HSMServer.ApiObjectsConverters
         }
 
 
-        internal static string ConvertToCsv(this List<BaseValue> values)
+        internal static string ConvertToCsv(this List<BaseValue> values, bool addHiddenColumns = true)
         {
             if ((values?.Count ?? 0) == 0)
                 return string.Empty;
 
             var content = new StringBuilder(1 << 7);
-            var header = values.GetHeader();
+            var header = values.GetHeader(addHiddenColumns);
 
             content.AppendLine(header.BuildRow());
 
@@ -79,14 +94,20 @@ namespace HSMServer.ApiObjectsConverters
             return content.ToString();
         }
 
-        private static List<string> GetHeader(this List<BaseValue> values) =>
-            values[0] switch
+        private static List<string> GetHeader(this List<BaseValue> values, bool addHiddenColumns)
+        {
+            return values[0] switch
             {
-                BooleanValue or IntegerValue or DoubleValue or StringValue or VersionValue or TimeSpanValue => _simpleSensorHeader,
-                IntegerBarValue or DoubleBarValue => _barSensorHeader,
+                BooleanValue or IntegerValue or DoubleValue or StringValue or VersionValue or TimeSpanValue => addHiddenColumns
+                    ? _simpleSensorHeader.Concat(_defaultHiddenHeader).Concat(_simpleHiddenHeader).ToList()
+                    : _simpleSensorHeader,
+                IntegerBarValue or DoubleBarValue => addHiddenColumns
+                    ? _barSensorHeader.Concat(_defaultHiddenHeader).Concat(_barHiddenHeader).ToList()
+                    : _barSensorHeader,
                 FileValue => _fileSensorHeader,
-                _ => new(),
+                _ => new List<string>()
             };
+        }
 
         private static string BuildRow(this List<string> values) => string.Join(_columnSeparator, values);
     }

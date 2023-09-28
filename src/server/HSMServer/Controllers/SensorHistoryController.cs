@@ -158,8 +158,8 @@ namespace HSMServer.Controllers
                 : Task.FromResult(_emptyJsonResult);
         }
 
-        public async Task<FileResult> ExportHistory([FromQuery(Name = "EncodedId")] string encodedId, [FromQuery(Name = "Type")] int type,
-            [FromQuery(Name = "From")] DateTime from, [FromQuery(Name = "To")] DateTime to)
+        public async Task<FileResult> ExportHistory([FromQuery(Name = "EncodedId")] string encodedId, [FromQuery(Name = "Type")] int type, 
+            [FromQuery] bool addHiddenColumns, [FromQuery(Name = "From")] DateTime from, [FromQuery(Name = "To")] DateTime to)
         {
             if (!TryGetSensor(encodedId, out var sensor))
                 return null;
@@ -168,7 +168,7 @@ namespace HSMServer.Controllers
             Response.Headers.Add("Content-Disposition", $"attachment;filename={fileName}");
 
             var values = await GetSensorValues(encodedId, from.ToUtcKind(), to.ToUtcKind(), MaxHistoryCount);
-            var content = Encoding.UTF8.GetBytes(values.ConvertToCsv());
+            var content = Encoding.UTF8.GetBytes(values.ConvertToCsv(addHiddenColumns));
 
             return File(content, fileName.GetContentType(), fileName);
         }
