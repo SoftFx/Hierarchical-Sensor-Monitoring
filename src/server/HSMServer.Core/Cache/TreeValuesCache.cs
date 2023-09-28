@@ -289,6 +289,19 @@ namespace HSMServer.Core.Cache
             SensorUpdateView(sensor);
         }
 
+        public void UpdateSensorPolicies(SensorUpdate update, out string error)
+        {
+            error = null;
+
+            if (!_sensors.TryGetValue(update.Id, out var sensor))
+                return;
+
+            sensor.TryUpdatePolicies(update, out error);
+            _database.UpdateSensor(sensor.ToEntity());
+
+            SensorUpdateView(sensor);
+        }
+
         public void UpdateSensorValue(UpdateSensorValueRequestModel request)
         {
             var sensor = GetSensor(request.Id);

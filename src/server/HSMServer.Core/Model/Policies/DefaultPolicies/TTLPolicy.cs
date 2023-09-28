@@ -59,9 +59,9 @@ namespace HSMServer.Core.Model.Policies
 
         internal void FullUpdate(PolicyUpdate update, BaseSensorModel sensor = null)
         {
-            Update(update, sensor);
+            TryUpdate(update, out _, sensor);
 
-            _okPolicy.Update(update with { Template = _okPolicy.OkTemplate, Icon = null }, sensor);
+            _okPolicy.TryUpdate(update with { Template = _okPolicy.OkTemplate, Icon = null }, out _, sensor);
         }
 
         internal bool AddChat(Guid id, string name)

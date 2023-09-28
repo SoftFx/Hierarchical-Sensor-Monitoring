@@ -89,35 +89,46 @@ namespace HSMServer.Core.Model.Policies
             return Comment;
         }
 
-        internal void Update(PolicyUpdate update, BaseSensorModel sensor = null)
+        internal bool TryUpdate(PolicyUpdate update, out string error, BaseSensorModel sensor = null)
         {
-            PolicyCondition Update(PolicyConditionUpdate update)
+            error = null;
+
+            try
             {
-                var condition = BuildCondition(update.Property);
+                PolicyCondition Update(PolicyConditionUpdate update)
+                {
+                    var condition = BuildCondition(update.Property);
 
-                condition.Combination = update.Combination;
-                condition.Operation = update.Operation;
-                condition.Property = update.Property;
+                    condition.Combination = update.Combination;
+                    condition.Operation = update.Operation;
+                    condition.Property = update.Property;
 
-                var target = update.Target;
-                if (target is not null && target.Type == TargetType.LastValue && target.Value is null)
-                    target = update.Target with { Value = Sensor?.Id.ToString() };
+                    var target = update.Target;
+                    if (target is not null && target.Type == TargetType.LastValue && target.Value is null)
+                        target = update.Target with { Value = Sensor?.Id.ToString() };
 
-                condition.Target = target;
+                    condition.Target = target;
 
-                return condition;
+                    return condition;
+                }
+
+                Sensor ??= sensor;
+
+                Destination.Update(update.Destination);
+                Sensitivity = update.Sensitivity;
+                IsDisabled = update.IsDisabled;
+                Template = update.Template;
+                Status = update.Status;
+                Icon = update.Icon;
+
+                UpdateConditions(update.Conditions, Update);
+            }
+            catch (Exception ex)
+            {
+                error = ex.Message;
             }
 
-            Sensor ??= sensor;
-
-            Destination.Update(update.Destination);
-            Sensitivity = update.Sensitivity;
-            IsDisabled = update.IsDisabled;
-            Template = update.Template;
-            Status = update.Status;
-            Icon = update.Icon;
-
-            UpdateConditions(update.Conditions, Update);
+            return string.IsNullOrEmpty(error);
         }
 
         internal void Apply(PolicyEntity entity, BaseSensorModel sensor = null)

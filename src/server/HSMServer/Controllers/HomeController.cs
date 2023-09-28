@@ -853,21 +853,17 @@ namespace HSMServer.Controllers
 
                     foreach (var (sensorId, alertUpdates) in sensorAlerts)
                     {
-                        try
+                        var update = new SensorUpdate()
                         {
-                            var update = new SensorUpdate()
-                            {
-                                Id = sensorId,
-                                Policies = alertUpdates,
-                                Initiator = CurrentInitiator,
-                            };
+                            Id = sensorId,
+                            Policies = alertUpdates,
+                            Initiator = CurrentInitiator,
+                        };
 
-                            _treeValuesCache.UpdateSensor(update);
-                        }
-                        catch (Exception ex)
-                        {
-                            toastViewModel.AddError(ex.Message, _treeViewModel.Sensors[sensorId].Name);
-                        }
+                        _treeValuesCache.UpdateSensorPolicies(update, out var error);
+
+                        if (!string.IsNullOrEmpty(error))
+                            toastViewModel.AddError(error, _treeViewModel.Sensors[sensorId].Name);
                     }
                 }
                 catch (Exception ex)
