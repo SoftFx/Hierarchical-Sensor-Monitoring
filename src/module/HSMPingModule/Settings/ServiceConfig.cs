@@ -8,8 +8,10 @@ namespace HSMPingModule.Config;
 internal sealed class ServiceConfig
 {
 #if RELEASE
+    private static readonly string _environmentDirectory = Path.Combine(Environment.CurrentDirectory, Assembly.GetExecutingAssembly().GetName().Name);
     public const string ConfigName = "appsettings.json";
 #else
+    private static readonly string _environmentDirectory = Environment.CurrentDirectory;
     public const string ConfigName = "appsettings.Development.json";
 #endif
 
@@ -28,7 +30,7 @@ internal sealed class ServiceConfig
 
 
     [JsonIgnore]
-    internal static string ConfigPath { get; } = Path.Combine(Environment.CurrentDirectory, "Config");
+    internal static string ConfigPath { get; } = Path.Combine(_environmentDirectory, "Config");
 
     [JsonIgnore]
     internal static Version Version { get; }
