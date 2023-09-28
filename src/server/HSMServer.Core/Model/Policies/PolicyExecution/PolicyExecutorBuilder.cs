@@ -44,17 +44,22 @@ namespace HSMServer.Core.Model.Policies
             };
 
 
-        internal static Func<string, string, bool> GetStringOperation(PolicyOperation? action) =>
-            action switch
+        internal static Func<string, string, bool> GetStringOperation(PolicyOperation? action)
+        {
+            static bool IsSuitableString(string target, Func<bool?> method) => target is null || (method() ?? false);
+
+
+            return action switch
             {
                 PolicyOperation.IsChanged => (string newVal, string oldVal) => oldVal != newVal,
                 PolicyOperation.Equal => (string src, string target) => src == target,
                 PolicyOperation.NotEqual => (string src, string target) => src != target,
-                PolicyOperation.Contains => (string src, string target) => IsSuitableString(src, target, () => src?.Contains(target)),
-                PolicyOperation.StartsWith => (string src, string target) => IsSuitableString(src, target, () => src?.StartsWith(target)),
-                PolicyOperation.EndsWith => (string src, string target) => IsSuitableString(src, target, () => src?.EndsWith(target)),
+                PolicyOperation.Contains => (string src, string target) => IsSuitableString(target, () => src?.Contains(target)),
+                PolicyOperation.StartsWith => (string src, string target) => IsSuitableString(target, () => src?.StartsWith(target)),
+                PolicyOperation.EndsWith => (string src, string target) => IsSuitableString(target, () => src?.EndsWith(target)),
                 _ => throw new NotImplementedException()
             };
+        }
 
 
         internal static Func<SensorStatus?, SensorStatus?, bool> GetStatusOperation(PolicyOperation? action) =>
@@ -91,9 +96,6 @@ namespace HSMServer.Core.Model.Policies
             _ => throw new NotImplementedException($"Unsupported policy property {property} with type {typeof(U).Name}"),
         };
 
-
-        private static bool IsSuitableString(string src, string target, Func<bool?> method) =>
-            target is null || (target is not null && (method() ?? false));
 
         private static bool IsChangedStatus(SensorStatus? newVal, SensorStatus? oldVal)
         {
