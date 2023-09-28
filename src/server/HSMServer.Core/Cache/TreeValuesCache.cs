@@ -291,10 +291,11 @@ namespace HSMServer.Core.Cache
 
         public void UpdateSensorPolicies(SensorUpdate update, out string error)
         {
-            error = null;
-
             if (!_sensors.TryGetValue(update.Id, out var sensor))
+            {
+                error = "Sensor doesn't exist";
                 return;
+            }
 
             sensor.TryUpdatePolicies(update, out error);
             _database.UpdateSensor(sensor.ToEntity());

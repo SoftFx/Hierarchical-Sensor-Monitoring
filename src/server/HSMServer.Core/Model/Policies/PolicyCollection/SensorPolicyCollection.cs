@@ -243,10 +243,11 @@ namespace HSMServer.Core.Model.Policies
                 IsDisabled = options.HasFlag(DefaultAlertsOptions.DisableStatusChange)
             };
 
-            policy.TryUpdate(statusUpdate, out _, _sensor);
-
-            AddPolicy(policy);
-            Uploaded?.Invoke(ActionType.Add, policy);
+            if (policy.TryUpdate(statusUpdate, out _, _sensor))
+            {
+                AddPolicy(policy);
+                Uploaded?.Invoke(ActionType.Add, policy);
+            }
         }
 
 
