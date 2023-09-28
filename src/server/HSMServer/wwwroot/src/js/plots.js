@@ -183,9 +183,7 @@ export class IntegerPlot extends ErrorColorPlot {
 
         this.type = 'scatter';
         this.mode = 'lines+markers';
-        this.line = {
-            shape: 'hv'
-        }
+        this.line.shape = 'hv';
         this.marker = {
             color: [],
             size: [],
