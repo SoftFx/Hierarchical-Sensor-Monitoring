@@ -90,7 +90,7 @@
         <div class="card-body py-2">
             <div class="d-flex flex-row align-items-center fullCondition">
                 @{
-                    var isTtlCondition = Model.Conditions[0].Property is AlertProperty.TimeToLive;
+                    var isTtlCondition = Model.Conditions.FirstOrDefault()?.Property is AlertProperty.TimeToLive;
                 }
 
                 <div class="alert-text-block alert-add">If</div>
