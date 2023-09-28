@@ -30,6 +30,8 @@
         })
         
         this.self = $('#allColumnsButton');
+        this.self.removeClass('d-none');
+        
         this.self.off('click').on('click', function (e) {
             if (hiddenColumns.isVisible)
                 hiddenColumns.hideFromTable();

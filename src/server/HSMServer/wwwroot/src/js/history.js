@@ -191,8 +191,6 @@ function initializeTable(encodedId, tableAction, type, body, needFillFromTo = fa
     }).done(function (data) {
         $("#newValuesCount").empty();
         $("#tableHistoryRefreshButton").addClass("d-none");
-        $('#allColumnsButton').removeClass('d-none');
-        $('#allColumnsButton')[0].innerText = 'Show all columns';
 
         $(`#values_${encodedId}`).html(data);
 
