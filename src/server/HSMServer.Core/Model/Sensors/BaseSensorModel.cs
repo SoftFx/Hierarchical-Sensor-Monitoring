@@ -139,7 +139,7 @@ namespace HSMServer.Core.Model
         internal abstract BaseValue Convert(byte[] bytes);
 
 
-        internal void Update(SensorUpdate update)
+        internal void Update(SensorUpdate update) // TODO: out error parameter should be added for this method (to show error message in DataCollector)
         {
             base.Update(update);
 
@@ -154,8 +154,17 @@ namespace HSMServer.Core.Model
             if (State == SensorState.Available)
                 EndOfMuting = null;
 
+            TryUpdatePolicies(update, out _);
+        }
+
+        internal bool TryUpdatePolicies(SensorUpdate update, out string error)
+        {
+            error = null;
+
             if (update.Policies != null)
-                Policies.Update(update.Policies, update.Initiator);
+                Policies.TryUpdate(update.Policies, update.Initiator, out error);
+
+            return string.IsNullOrEmpty(error);
         }
 
         internal void ResetSensor()
