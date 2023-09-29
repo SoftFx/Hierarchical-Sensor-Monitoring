@@ -2,14 +2,13 @@ $Version = $args[0]
 $ContainerPrefix = "HSMPingModule"
 $Repository = "hsmonitoring/hsmpingmodule"
 
-
 $ExpectedImageTag = "${Repository}:$Version"
 $FullContainerName = "${ContainerPrefix}_$Version"
 
 $NetworkName = "HSM-Ping-network"
 $ServerPrefix = "HSMServer_"
 
-$ServerHost = '' # must be defined
+$ServerHost = 'hsm.dev.com' # must be defined
 $NordVpnToken = '' # must be defined
 
 Write-Host "Check running pinger container"
@@ -65,7 +64,7 @@ else
     Write-Host "Running HSM server container hasn't be found"
 }
 
-Start-Sleep -Seconds 10 # delay for vpn initialization
+Start-Sleep -Seconds 30 # delay for vpn initialization
 
 $StartPingerCommand = "nordvpn d && dotnet HSMPingModule/HSMPingModule.dll"
 docker exec -u root -ti -d $ContainerId sh -c $StartPingerCommand

@@ -1,4 +1,5 @@
 ﻿using NLog;
+using System;
 using System.Diagnostics;
 using System.Text;
 
@@ -33,19 +34,22 @@ namespace HSMPingModule.Console
                 process.Start();
 
                 var reader = process.StandardOutput;
-                var longTaskCancel = new TaskCompletionSource();
+                var longTaskCancel = new CancellationTokenSource();
 
                 _sb.Clear();
 
                 _ = Task.Run(async () =>
                 {
                     await Task.Delay(TimeSpan.FromSeconds(MaxRequestDelay));
-                    longTaskCancel.SetCanceled();
+
+                    _logger.Info($"Send cancel request");
+
+                    longTaskCancel.Cancel();
                 });
 
                 while (!reader.EndOfStream)
                 {
-                    var line = (await reader.ReadLineAsync()).Trim();
+                    var line = (await reader.ReadLineAsync(longTaskCancel.Token)).Trim();
 
                     if (!string.IsNullOrEmpty(line) && !(skipOutput?.Contains(line) ?? false))
                     {
@@ -54,13 +58,12 @@ namespace HSMPingModule.Console
                         _logger.Debug(line);
                     }
 
-                    if (longTaskCancel.Task.IsCanceled)
+                    if (longTaskCancel.IsCancellationRequested)
                         break;
 
                     await Task.Delay(100);
                 }
 
-                await process.WaitForExitAsync();
 
                 return _sb.ToString();
             }

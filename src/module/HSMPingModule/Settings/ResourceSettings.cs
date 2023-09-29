@@ -5,8 +5,14 @@ namespace HSMPingModule.Settings;
 
 internal sealed class ResourceSettings
 {
-    [JsonConverter(typeof(WebSitesJsonConverter))]
-    public Dictionary<string, NodeSettings> WebSites { get; set; } = new()
+    public List<string> MasterSites { get; set; } = new()
+    {
+        "google.com",
+        "facebook.com",
+    };
+
+    //[JsonConverter(typeof(WebSitesJsonConverter))]
+    public Dictionary<string, NodeSettings> PingSites { get; set; } = new()
     {
         ["google.com"] = new NodeSettings()
     };
@@ -22,18 +28,15 @@ internal sealed class ResourceSettings
 
     public ResourceSettings ApplyDefaultSettings()
     {
-        foreach (var (key, value) in WebSites)
-        {
-            if (value is null)
+        foreach (var (key, value) in PingSites)
+            if (value is not null)
             {
-                WebSites[key] = DefaultSiteNodeSettings;
-                continue;
+                value.Countries ??= new HashSet<string>(DefaultSiteNodeSettings.Countries);
+                value.PingThresholdValueSec ??= DefaultSiteNodeSettings.PingThresholdValueSec;
+                value.TTL ??= DefaultSiteNodeSettings.TTL;
             }
-
-            value.Countries ??= new HashSet<string>(DefaultSiteNodeSettings.Countries);
-            value.PingThresholdValueSec ??= DefaultSiteNodeSettings.PingThresholdValueSec;
-            value.TTL ??= DefaultSiteNodeSettings.TTL;
-        }
+            else
+                PingSites[key] = DefaultSiteNodeSettings;
 
         return this;
     }
