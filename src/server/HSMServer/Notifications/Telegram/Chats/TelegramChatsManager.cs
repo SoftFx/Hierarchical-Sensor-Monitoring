@@ -4,8 +4,12 @@ using HSMServer.ConcurrentStorage;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.DataLayer;
+using HSMServer.Core.Model.Policies;
+using HSMServer.Core.TableOfChanges;
 using HSMServer.Folders;
 using HSMServer.Model.Authentication;
+using HSMServer.Model.Folders;
+using HSMServer.Model.TreeViewModel;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -30,7 +34,7 @@ namespace HSMServer.Notifications
         protected override Func<List<TelegramChatEntity>> GetFromDb => _database.GetTelegramChats;
 
 
-        public TelegramChatsManager(IDatabaseCore database, ITreeValuesCache cache, IUserManager userManager, IFolderManager folderManager)
+        public TelegramChatsManager(IDatabaseCore database, ITreeValuesCache cache, IUserManager userManager, IFolderManager folderManager, TreeViewModel _) // TODO: TreeViewModel should be removed after te;egram chats migration
         {
             _cache = cache;
             _database = database;
@@ -43,7 +47,7 @@ namespace HSMServer.Notifications
 
         public override async Task Initialize()
         {
-            ChatsMigration();
+            await ChatsMigration();
 
             await base.Initialize();
 
@@ -62,45 +66,51 @@ namespace HSMServer.Notifications
         protected override TelegramChat FromEntity(TelegramChatEntity entity) => new(entity);
 
         [Obsolete("Should be removed after telegram chats migration")]
-        private void ChatsMigration()
+        private async Task ChatsMigration()
         {
             var chatsToResave = new Dictionary<Guid, TelegramChat>(1 << 4);
-            var productChats = new Dictionary<Guid, HashSet<Guid>>(1 << 4);
-            var productNamesToId = new Dictionary<string, Guid>(1 << 4);
+            var folderChats = new Dictionary<Guid, HashSet<Guid>>(1 << 4);
+            var productNamesToFolderId = new Dictionary<string, Guid>(1 << 4);
             var usersToResave = new List<User>(1 << 4);
+            var sensorsToResave = new List<SensorUpdate>(1 << 5); // sensors and nodes without folder should have empty chats in alerts
+            var nodesToResave = new List<ProductUpdate>(1 << 5); // sensors and nodes without folder should have empty chats in alerts
 
-            foreach (var product in _cache.GetProducts())
-                if (product.TelegramChats is null)
+            foreach (var folder in _folderManager.GetValues())
+                if (folder.TelegramChats is null)
                 {
-                    productChats.Add(product.Id, new HashSet<Guid>());
-                    productNamesToId.Add(product.DisplayName, product.Id);
+                    folderChats.Add(folder.Id, new HashSet<Guid>());
 
-                    if (product.NotificationsSettings?.TelegramSettings?.Chats?.Count > 0)
-                        foreach (var oldChat in product.NotificationsSettings.TelegramSettings.Chats)
-                        {
-                            var id = new Guid(oldChat.SystemId);
+                    foreach (var (_, product) in folder.Products)
+                    {
+                        productNamesToFolderId.Add(product.Name, folder.Id);
 
-                            if (!chatsToResave.ContainsKey(id))
+                        if (product.Notifications?.Telegram?.Chats?.Count > 0)
+                            foreach (var (_, oldChat) in product.Notifications.Telegram.Chats)
                             {
-                                var chat = new TelegramChat()
+                                var id = oldChat.Id;
+
+                                if (!chatsToResave.ContainsKey(id))
                                 {
-                                    Id = id,
-                                    ChatId = oldChat.Id,
-                                    Type = ConnectedChatType.TelegramGroup,
-                                    Name = oldChat.Name,
-                                    SendMessages = true,
-                                    AuthorizationTime = new DateTime(oldChat.AuthorizationTime),
-                                    MessagesAggregationTimeSec = 60,
-                                };
+                                    var chat = new TelegramChat()
+                                    {
+                                        Id = id,
+                                        ChatId = oldChat.ChatId,
+                                        Type = ConnectedChatType.TelegramGroup,
+                                        Name = oldChat.Name,
+                                        SendMessages = true,
+                                        AuthorizationTime = oldChat.AuthorizationTime,
+                                        MessagesAggregationTimeSec = 60,
+                                    };
 
-                                chatsToResave.Add(id, chat);
+                                    chatsToResave.Add(id, chat);
+                                }
+
+                                folderChats[folder.Id].Add(id);
                             }
-
-                            productChats[product.Id].Add(id);
-                        }
+                    }
                 }
 
-            if (productChats.Count > 0)
+            if (folderChats.Count > 0)
             {
                 foreach (var user in _userManager.GetUsers())
                 {
@@ -131,39 +141,95 @@ namespace HSMServer.Notifications
                 }
 
                 foreach (var sensor in _cache.GetSensors())
-                    if (productNamesToId.TryGetValue(sensor.RootProductName, out var productId))
+                {
+                    if (productNamesToFolderId.TryGetValue(sensor.RootProductName, out var folderId))
                     {
                         var sensorPolicies = sensor.Policies.ToList();
                         sensorPolicies.Add(sensor.Policies.TimeToLive);
 
                         foreach (var policy in sensorPolicies)
                             foreach (var (chatId, _) in policy.Destination.Chats)
-                                productChats[productId].Add(chatId);
+                                folderChats[folderId].Add(chatId);
                     }
+                    else
+                    {
+                        var update = new SensorUpdate()
+                        {
+                            Id = sensor.Id,
+                            Policies = sensor.Policies.Select(BuildUpdateWithEmptyDestination).ToList(),
+                            TTLPolicy = BuildUpdateWithEmptyDestination(sensor.Policies.TimeToLive),
+                        };
+
+                        sensorsToResave.Add(update);
+                    }
+                }
 
                 foreach (var product in _cache.GetAllNodes())
-                    if (productNamesToId.TryGetValue(product.RootProductName, out var parentId))
+                {
+                    if (productNamesToFolderId.TryGetValue(product.RootProductName, out var folderId))
                         foreach (var (chatId, _) in product.Policies.TimeToLive.Destination.Chats)
-                            productChats[parentId].Add(chatId);
+                            folderChats[folderId].Add(chatId);
+                    else
+                    {
+                        var update = new ProductUpdate()
+                        {
+                            Id = product.Id,
+                            TTLPolicy = BuildUpdateWithEmptyDestination(product.Policies.TimeToLive),
+                        };
+
+                        nodesToResave.Add(update);
+                    }
+                }
             }
 
             foreach (var (_, chat) in chatsToResave)
                 _database.AddTelegramChat(chat.ToEntity());
 
-            foreach (var user in usersToResave)
-                _userManager.UpdateUser(user);
+            foreach (var (folderId, chats) in folderChats)
+            {
+                var update = new FolderUpdate()
+                {
+                    Id = folderId,
+                    TelegramChats = chats,
+                    Initiator = InitiatorInfo.System,
+                };
 
-            foreach (var (productId, chats) in productChats)
+                await _folderManager.TryUpdate(update);
+            }
+
+            foreach (var update in sensorsToResave)
+                _cache.UpdateSensor(update);
+
+            foreach (var update in nodesToResave)
+                _cache.UpdateProduct(update);
+
+            foreach (var user in usersToResave)
+                await _userManager.UpdateUser(user);
+
+            foreach (var product in _cache.GetProducts())
             {
                 var update = new ProductUpdate()
                 {
-                    Id = productId,
-                    TelegramChats = chats,
-                    NotificationSettings = new() { TelegramSettings = null }
+                    Id = product.Id,
+                    NotificationSettings = new() { TelegramSettings = null },
                 };
 
                 _cache.UpdateProduct(update);
             }
         }
+
+        private static PolicyUpdate BuildUpdateWithEmptyDestination(Policy policy) =>
+            new()
+            {
+                Id = policy.Id,
+                Conditions = policy.Conditions.Select(c => new PolicyConditionUpdate(c.Operation, c.Property, c.Target, c.Combination)).ToList(),
+                Sensitivity = policy.Sensitivity,
+                Status = policy.Status,
+                Template = policy.Template,
+                Icon = policy.Icon,
+                IsDisabled = policy.IsDisabled,
+                Destination = new PolicyDestinationUpdate(true, new(0)),
+                Initiator = InitiatorInfo.System
+            };
     }
 }
