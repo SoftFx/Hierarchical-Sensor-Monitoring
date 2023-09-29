@@ -9,7 +9,7 @@ $NetworkName = "HSM-Ping-network"
 $ServerPrefix = "HSMServer_"
 
 $ServerHost = 'hsm.dev.com' # must be defined
-$NordVpnToken = '' # must be defined
+$NordVpnToken = 'e9f2ab403980a0af16dcafad14d2f22b7b275270c98d3ad706337fa09a4358a5' # must be defined
 
 Write-Host "Check running pinger container"
 $CurrentContainerId = docker ps -a -q -f "name=$ContainerPrefix"
@@ -49,9 +49,8 @@ Write-Host "Image id to run = $ExpectedImageId"
 #Windows directories
 $LogsFolder = "C:\HSMPinger\Logs:/HSMPingModule/Logs"
 $ConfigFolder = "C:\HSMPinger\Config:/HSMPingModule/Config"
-$SecondConfig = "C:\HSMPinger\SecondConfig:/Config"
 
-$ContainerId = docker run --user 0 -ti -d --name $FullContainerName --net=$NetworkName --cap-add=NET_ADMIN --cap-add=NET_RAW -e TOKEN=$NordVpnToken -e TECHNOLOGY=NordLynx -v $LogsFolder -v $ConfigFolder -v $SecondConfig $ExpectedImageId
+$ContainerId = docker run --user 0 -ti -d --name $FullContainerName --net=$NetworkName --cap-add=NET_ADMIN --cap-add=NET_RAW -e TOKEN=$NordVpnToken -e TECHNOLOGY=NordLynx -v $LogsFolder -v $ConfigFolder $ExpectedImageId
 
 
 $ServerContainerId = docker ps -q -f "name=$ServerPrefix"

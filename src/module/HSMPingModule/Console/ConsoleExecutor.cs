@@ -7,7 +7,7 @@ namespace HSMPingModule.Console
 {
     internal static class ConsoleExecutor
     {
-        private const int MaxRequestDelay = 10;
+        private const int MaxRequestDelay = 30;
 
         private static readonly Logger _logger = LogManager.GetCurrentClassLogger();
         private static readonly StringBuilder _sb = new(1 << 5);
