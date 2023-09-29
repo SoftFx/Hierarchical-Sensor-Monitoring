@@ -75,6 +75,8 @@ namespace HSMServer.Notifications
             var sensorsToResave = new List<SensorUpdate>(1 << 5); // sensors and nodes without folder should have empty chats in alerts
             var nodesToResave = new List<ProductUpdate>(1 << 5); // sensors and nodes without folder should have empty chats in alerts
 
+            var sensorsToRemove = new List<Guid>(1 << 2); // remove all sensors without parent
+
             foreach (var folder in _folderManager.GetValues())
                 if (folder.TelegramChats is null)
                 {
@@ -142,6 +144,12 @@ namespace HSMServer.Notifications
 
                 foreach (var sensor in _cache.GetSensors())
                 {
+                    if (sensor.Parent is null)
+                    {
+                        sensorsToRemove.Add(sensor.Id);
+                        continue;
+                    }
+
                     if (productNamesToFolderId.TryGetValue(sensor.RootProductName, out var folderId))
                     {
                         var sensorPolicies = sensor.Policies.ToList();
@@ -158,6 +166,7 @@ namespace HSMServer.Notifications
                             Id = sensor.Id,
                             Policies = sensor.Policies.Select(BuildUpdateWithEmptyDestination).ToList(),
                             TTLPolicy = BuildUpdateWithEmptyDestination(sensor.Policies.TimeToLive),
+                            Initiator = InitiatorInfo.AsSystemForce(),
                         };
 
                         sensorsToResave.Add(update);
@@ -175,6 +184,7 @@ namespace HSMServer.Notifications
                         {
                             Id = product.Id,
                             TTLPolicy = BuildUpdateWithEmptyDestination(product.Policies.TimeToLive),
+                            Initiator = InitiatorInfo.AsSystemForce(),
                         };
 
                         nodesToResave.Add(update);
@@ -191,7 +201,7 @@ namespace HSMServer.Notifications
                 {
                     Id = folderId,
                     TelegramChats = chats,
-                    Initiator = InitiatorInfo.System,
+                    Initiator = InitiatorInfo.AsSystemForce(),
                 };
 
                 await _folderManager.TryUpdate(update);
@@ -212,13 +222,17 @@ namespace HSMServer.Notifications
                 {
                     Id = product.Id,
                     NotificationSettings = new() { TelegramSettings = null },
+                    Initiator = InitiatorInfo.AsSystemForce(),
                 };
 
                 _cache.UpdateProduct(update);
             }
+
+            foreach (var sensorId in sensorsToRemove)
+                _cache.RemoveSensor(sensorId);
         }
 
-        private static PolicyUpdate BuildUpdateWithEmptyDestination(Policy policy) =>
+        private PolicyUpdate BuildUpdateWithEmptyDestination(Policy policy) =>
             new()
             {
                 Id = policy.Id,
@@ -229,7 +243,7 @@ namespace HSMServer.Notifications
                 Icon = policy.Icon,
                 IsDisabled = policy.IsDisabled,
                 Destination = new PolicyDestinationUpdate(true, new(0)),
-                Initiator = InitiatorInfo.System
+                Initiator = InitiatorInfo.AsSystemForce(),
             };
     }
 }
