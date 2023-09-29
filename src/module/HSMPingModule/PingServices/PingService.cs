@@ -39,7 +39,7 @@ internal class PingService : BackgroundService
 
         var connect = await _vpn.Connect();
 
-        if (!connect.IsOk)
+        if (connect != null && !connect.IsOk)
         {
             _collector.AppNode.SendVpnStatus(connect.IsOk, _vpn.VpnDescription, connect.Error);
             _logger.Error($"Connection check is failed! {connect.Error}");
