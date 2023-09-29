@@ -5,6 +5,9 @@ namespace HSMServer.Core.Model.Requests;
 
 public sealed record UpdateSensorValueRequestModel
 {
+    private bool _isCommentWithoutValue = false;
+
+
     public required Guid Id { get; init; }
 
 
@@ -25,14 +28,17 @@ public sealed record UpdateSensorValueRequestModel
     public string Environment => ChangeLast ? "Change last value" : "Added new value";
 
 
-    public string BuildComment(SensorStatus? status = null, string comment = null, string value = null) =>
-        $"Status - {status ?? Status}; Comment - '{comment ?? Comment}; Value - '{value ?? Value}''";
-
+    public string BuildComment(SensorStatus? status = null, string comment = null, string value = null) => _isCommentWithoutValue 
+        ? $"Status - {status ?? Status}; Comment - '{comment ?? Comment}'"
+        : $"Status - {status ?? Status}; Comment - '{comment ?? Comment}'; Value - '{value ?? Value}'";
 
     public BaseValue BuildNewValue(BaseValue value, BaseValue oldValue)
     {
         if (value is FileValue && oldValue is FileValue oldFileValue)
+        {
             value = oldFileValue;
+            _isCommentWithoutValue = true;
+        }
         
         value = value with
         {
