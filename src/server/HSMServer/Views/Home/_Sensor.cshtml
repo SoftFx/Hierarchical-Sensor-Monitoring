@@ -55,7 +55,7 @@
 
                                                 @if (Model.HasData)
                                                 {
-                                                    @Model.FileNameString
+                                                    <span id="file_name_@sensorId">@Model.FileNameString</span>
                                                     <div class="text-break pt-2">
                                                         <span id='validation_@sensorId'>
                                                             @if (!string.IsNullOrEmpty(Model.LastValue.Comment))
@@ -73,7 +73,7 @@
                                                 }
                                                 else
                                                 {
-                                                    @Model.Name
+                                                    <span id="file_name_@sensorId">@Model.Name</span>
                                                 }
                                             </div>
                                         </div>

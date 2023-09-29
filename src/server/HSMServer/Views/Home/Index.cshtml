@@ -198,6 +198,8 @@
         $('#file_status_' + id).removeClass('tree-icon-offTime tree-icon-ok tree-icon-warning tree-icon-error')
                                .addClass(dataObject.statusIconColorClass)
                                .prop('title', `Status: ${dataObject.status}`)
+                               
+        $('#file_name_' + id).text(dataObject.fileNameString)                     
 
         $("#newValuesCount").empty().html(dataObject.newValuesCount);
         if (dataObject.newValuesCount != null && $(`#link_table_${id}`).hasClass("active")) {
