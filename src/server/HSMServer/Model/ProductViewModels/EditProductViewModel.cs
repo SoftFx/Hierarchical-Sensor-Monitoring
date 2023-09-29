@@ -1,7 +1,6 @@
 ﻿using HSMServer.Model.AccessKeysViewModels;
 using HSMServer.Model.Authentication;
 using HSMServer.Model.TreeViewModel;
-using HSMServer.Notifications;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -20,8 +19,6 @@ namespace HSMServer.Model.ViewModel
 
         public HashSet<UserViewModel> NotAdminUsers { get; }
 
-        public ProductTelegramViewModel Telegram { get; }
-
         public string EncodedProductId { get; }
 
         public string ProductName { get; }
@@ -31,8 +28,7 @@ namespace HSMServer.Model.ViewModel
 
         public EditProductViewModel(ProductNodeViewModel product,
                                     List<(User, ProductRoleEnum)> usersRights,
-                                    List<User> notAdminUsers,
-                                    List<TelegramChat> telegramChats)
+                                    List<User> notAdminUsers)
         {
             ProductId = product.Id;
             ProductName = product.Name;
@@ -44,8 +40,6 @@ namespace HSMServer.Model.ViewModel
             _usedUsers = UsersRights.Select(ur => ur.Item1).ToList();
             NotAdminUsers = notAdminUsers.Select(x => new UserViewModel(x)).ToHashSet();
             NotAdminUsers.ExceptWith(_usedUsers);
-
-            Telegram = new ProductTelegramViewModel(product, telegramChats);
         }
     }
 }

@@ -20,8 +20,6 @@ namespace HSMServer.Model.TreeViewModel
 
         public ConcurrentDictionary<Guid, AccessKeyViewModel> AccessKeys { get; } = new();
 
-        public HashSet<Guid> TelegramChats { get; } = new();
-
 
         [Obsolete("Should be removed after telegram chats migration")]
         public ClientNotifications Notifications { get; }
@@ -49,16 +47,6 @@ namespace HSMServer.Model.TreeViewModel
 
         public bool IsChangingAccessKeysAvailable(User user) =>
             user.IsAdmin || ProductRoleHelper.IsManager(Id, user.ProductsRoles);
-
-        internal void Update(ProductModel model)
-        {
-            base.Update(model);
-
-            TelegramChats.Clear();
-            if (model.TelegramChats is not null)
-                foreach (var chat in model.TelegramChats)
-                    TelegramChats.Add(chat);
-        }
 
         internal void AddSubNode(ProductNodeViewModel node)
         {

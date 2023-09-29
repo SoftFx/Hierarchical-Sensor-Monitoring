@@ -13,6 +13,8 @@ namespace HSMServer.Model.Folders.ViewModels
 {
     public sealed class EditFolderViewModel
     {
+        public FolderTelegramViewModel Telegram { get; }
+
         public FolderCleanupViewModel Cleanup { get; }
 
         public FolderAlertsViewModel Alerts { get; }
@@ -53,7 +55,7 @@ namespace HSMServer.Model.Folders.ViewModels
         }
 
         internal EditFolderViewModel(FolderModel folder, FolderProductsViewModel products,
-            FolderUsersViewModel users) : this(products)
+            FolderUsersViewModel users, FolderTelegramViewModel telegram) : this(products)
         {
             CreationDate = folder.CreationDate.ToDefaultFormat();
             Author = folder.Author;
@@ -66,6 +68,7 @@ namespace HSMServer.Model.Folders.ViewModels
             Products.InitFolderProducts(folder.Products);
             Cleanup = new FolderCleanupViewModel(folder);
             Alerts = new FolderAlertsViewModel(folder);
+            Telegram = telegram;
             Users = users;
         }
 

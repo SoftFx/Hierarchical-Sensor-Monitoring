@@ -1,12 +1,11 @@
-﻿using HSMServer.Model.TreeViewModel;
-using HSMServer.Notifications;
+﻿using HSMServer.Notifications;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace HSMServer.Model.ViewModel
+namespace HSMServer.Model.Folders.ViewModels
 {
-    public sealed class ProductTelegramViewModel
+    public sealed class FolderTelegramViewModel
     {
         public List<TelegramChat> ConnectedChats { get; } = new();
 
@@ -17,18 +16,18 @@ namespace HSMServer.Model.ViewModel
 
         public List<Guid> NewChats { get; set; }
 
-        public Guid ProductId { get; set; }
+        public Guid FolderId { get; set; }
 
 
-        public ProductTelegramViewModel() { }
+        public FolderTelegramViewModel() { }
 
-        public ProductTelegramViewModel(ProductNodeViewModel product, List<TelegramChat> telegramChats)
+        public FolderTelegramViewModel(FolderModel folder, List<TelegramChat> telegramChats)
         {
-            ProductId = product.Id;
+            FolderId = folder.Id;
 
             foreach (var chat in telegramChats)
             {
-                if (product.TelegramChats.Contains(chat.Id))
+                if (folder.TelegramChats.Contains(chat.Id))
                     ConnectedChats.Add(chat);
                 else
                     ChatsToAdd.Add(chat);

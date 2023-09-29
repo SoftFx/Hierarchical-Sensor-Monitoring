@@ -146,7 +146,7 @@ namespace HSMServer.Model.DataAlerts
 
             IsDisabled = policy.IsDisabled;
 
-            var availableChats = node.RootProduct.TelegramChats;
+            node.TryGetChats(out var availableChats);
 
             Actions.Add(new ActionViewModel(true, availableChats)
             {
@@ -172,7 +172,7 @@ namespace HSMServer.Model.DataAlerts
 
             Conditions.Add(CreateCondition(true));
 
-            var availableChats = node.RootProduct.TelegramChats;
+            node.TryGetChats(out var availableChats);
 
             Actions.Add(new ActionViewModel(true, availableChats) { Comment = DefaultCommentTemplate });
             Actions.Add(new ActionViewModel(false, availableChats) { Action = ActionType.ShowIcon, Icon = DefaultIcon });

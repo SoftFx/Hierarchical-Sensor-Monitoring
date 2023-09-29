@@ -4,6 +4,7 @@ using HSMServer.ConcurrentStorage;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.DataLayer;
+using HSMServer.Folders;
 using HSMServer.Model.Authentication;
 using System;
 using System.Collections.Generic;
@@ -17,6 +18,7 @@ namespace HSMServer.Notifications
         private readonly IDatabaseCore _database;
         private readonly ITreeValuesCache _cache;
         private readonly IUserManager _userManager;
+        private readonly IFolderManager _folderManager;
 
 
         protected override Action<TelegramChatEntity> AddToDb => _database.AddTelegramChat;
@@ -28,11 +30,12 @@ namespace HSMServer.Notifications
         protected override Func<List<TelegramChatEntity>> GetFromDb => _database.GetTelegramChats;
 
 
-        public TelegramChatsManager(IDatabaseCore database, ITreeValuesCache cache, IUserManager userManager)
+        public TelegramChatsManager(IDatabaseCore database, ITreeValuesCache cache, IUserManager userManager, IFolderManager folderManager)
         {
             _cache = cache;
             _database = database;
             _userManager = userManager;
+            _folderManager = folderManager;
         }
 
 
@@ -50,10 +53,10 @@ namespace HSMServer.Notifications
                     chat.Author = author.Name;
             }
 
-            foreach (var product in _cache.GetProducts())
-                foreach (var chatId in product.TelegramChats)
+            foreach (var folder in _folderManager.GetValues())
+                foreach (var chatId in folder.TelegramChats)
                     if (TryGetValue(chatId, out var chat))
-                        chat.Products.Add(product.Id);
+                        chat.Folders.Add(folder.Id);
         }
 
         protected override TelegramChat FromEntity(TelegramChatEntity entity) => new(entity);

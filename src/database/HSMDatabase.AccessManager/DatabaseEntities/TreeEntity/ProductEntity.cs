@@ -1,5 +1,4 @@
 ﻿using System;
-using System.Collections.Generic;
 
 namespace HSMDatabase.AccessManager.DatabaseEntities
 {
@@ -7,8 +6,6 @@ namespace HSMDatabase.AccessManager.DatabaseEntities
     {
         [Obsolete("Should be removed after telegram chats migration")]
         public NotificationSettingsEntity NotificationSettings { get; init; }
-
-        public List<byte[]> TelegramChats { get; init; }
 
 
         public string ParentProductId { get; init; }

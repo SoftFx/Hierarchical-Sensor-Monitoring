@@ -1,6 +1,7 @@
 ﻿using HSMServer.ConcurrentStorage;
 using HSMServer.Core.TableOfChanges;
 using System;
+using System.Collections.Generic;
 using System.Drawing;
 
 namespace HSMServer.Model.Folders
@@ -10,6 +11,9 @@ namespace HSMServer.Model.Folders
         public required Guid Id { get; init; }
 
         public required InitiatorInfo Initiator { get; init; }
+
+
+        public HashSet<Guid> TelegramChats { get; init; }
 
 
         public TimeIntervalViewModel TTL { get; init; }

@@ -1,5 +1,4 @@
 ﻿using HSMServer.Authentication;
-using HSMServer.Core.TableOfChanges;
 using HSMServer.Filters.FolderRoleFilters;
 using HSMServer.Folders;
 using HSMServer.Model.Authentication;
@@ -7,6 +6,7 @@ using HSMServer.Model.Folders;
 using HSMServer.Model.Folders.ViewModels;
 using HSMServer.Model.TreeViewModel;
 using HSMServer.Model.ViewModel;
+using HSMServer.Notifications;
 using Microsoft.AspNetCore.Mvc;
 using System;
 using System.Collections.Generic;
@@ -17,12 +17,15 @@ namespace HSMServer.Controllers
 {
     public class FoldersController : BaseController
     {
+        private readonly ITelegramChatsManager _telegramChatsManager;
         private readonly IFolderManager _folderManager;
         private readonly TreeViewModel _tree;
 
 
-        public FoldersController(IFolderManager folderManager, IUserManager userManager, TreeViewModel treeViewModel) : base(userManager)
+        public FoldersController(IFolderManager folderManager, IUserManager userManager,
+            TreeViewModel treeViewModel, ITelegramChatsManager chatsManager) : base(userManager)
         {
+            _telegramChatsManager = chatsManager;
             _folderManager = folderManager;
             _tree = treeViewModel;
         }
@@ -128,6 +131,26 @@ namespace HSMServer.Controllers
         }
 
 
+        [HttpPost]
+        public async Task<IActionResult> UpdateTelegram(FolderTelegramViewModel viewModel)
+        {
+            var chats = viewModel.ConnectedChatIds?.Where(ch => ch != Guid.Empty).ToList() ?? new();
+            if (viewModel.NewChats is not null)
+                chats.AddRange(viewModel.NewChats);
+
+            var update = new FolderUpdate()
+            {
+                Id = viewModel.FolderId,
+                TelegramChats = new HashSet<Guid>(chats),
+                Initiator = CurrentInitiator
+            };
+
+            await _folderManager.TryUpdate(update);
+
+            return PartialView("_TelegramChats", BuildFolderTelegram(_folderManager[update.Id]));
+        }
+
+
         [HttpGet]
         public IActionResult ResetUsers(Guid folderId) => GetUsersPartialView(_folderManager[folderId]);
 
@@ -199,7 +222,7 @@ namespace HSMServer.Controllers
         {
             var folder = _folderManager[folderId];
 
-            return new(folder, BuildFolderProducts(), BuildFolderUsers(folder));
+            return new(folder, BuildFolderProducts(), BuildFolderUsers(folder), BuildFolderTelegram(folder));
         }
 
         private FolderProductsViewModel BuildFolderProducts(List<string> selectedProducts = null)
@@ -211,5 +234,12 @@ namespace HSMServer.Controllers
 
         private FolderUsersViewModel BuildFolderUsers(FolderModel folder) =>
             new(folder, _userManager.GetUsers(u => !u.IsAdmin));
+
+        private FolderTelegramViewModel BuildFolderTelegram(FolderModel folder)
+        {
+            var chats = _telegramChatsManager.GetValues();
+
+            return new(folder, chats);
+        }
     }
 }

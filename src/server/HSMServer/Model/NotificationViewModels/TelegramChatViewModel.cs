@@ -40,7 +40,7 @@ namespace HSMServer.Model.NotificationViewModels
 
         private void Initialize(TelegramChat chat, TreeViewModel.TreeViewModel tree, IUserManager userManager)
         {
-            foreach (var productId in chat.Products)
+            foreach (var productId in chat.Folders)
                 if (tree.Nodes.TryGetValue(productId, out var product))
                     Products.Add(productId, product.Name);
 

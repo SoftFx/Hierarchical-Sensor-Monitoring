@@ -180,12 +180,6 @@
                 
             @await Html.PartialAsync("~/Views/AccessKeys/_AllAccessKeys.cshtml",new AccessKeyTableViewModel(){Keys  = Model.AccessKeys})
         </div>
-    
-        <div class="my-1">
-            <h5 class="col-auto my-1">Telegram <i class="fab fa-telegram"></i></h5>
-
-            @await Html.PartialAsync("_TelegramChats", Model.Telegram)
-        </div>
     </div>
 </div>
 

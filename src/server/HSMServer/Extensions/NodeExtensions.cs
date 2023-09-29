@@ -1,4 +1,5 @@
 using HSMServer.Model.Authentication;
+using HSMServer.Model.Folders;
 using HSMServer.Model.TreeViewModel;
 using HSMServer.Model.ViewModel;
 using HSMServer.Notifications;
@@ -21,11 +22,24 @@ namespace HSMServer.Extensions
         {
             var availableChats = new Dictionary<Guid, string>(1 << 3);
 
-            foreach (var chat in chatsManager.GetValues())
-                if (node.RootProduct.TelegramChats.Contains(chat.Id))
-                    availableChats.Add(chat.Id, chat.Name);
+            if (node.TryGetChats(out var folderChats))
+                foreach (var chat in chatsManager.GetValues())
+                    if (folderChats.Contains(chat.Id))
+                        availableChats.Add(chat.Id, chat.Name);
 
             return availableChats;
+        }
+
+        internal static bool TryGetChats(this NodeViewModel node, out HashSet<Guid> chats)
+        {
+            if (node.RootProduct.Parent is FolderModel folder)
+            {
+                chats = folder.TelegramChats;
+                return true;
+            }
+
+            chats = new();
+            return false;
         }
 
 

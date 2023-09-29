@@ -529,7 +529,7 @@ namespace HSMServer.Controllers
             if (!ModelState.IsValid)
                 return PartialView("_MetaInfo", new SensorInfoViewModel(sensor));
 
-            var availableChats = sensor.RootProduct.GetAvailableChats(_telegramChatsManager);
+            var availableChats = sensor.GetAvailableChats(_telegramChatsManager);
 
             var ttl = newModel.DataAlerts.TryGetValue(TimeToLiveAlertViewModel.AlertKey, out var alerts) && alerts.Count > 0 ? alerts[0] : null;
             var policyUpdates = newModel.DataAlerts.TryGetValue((byte)sensor.Type, out var list) ? list.Select(a => a.ToUpdate(availableChats)).ToList() : new();
@@ -583,10 +583,15 @@ namespace HSMServer.Controllers
                 ? PartialView("~/Views/Home/Alerts/_ConditionBlock.cshtml", BuildAlertCondition(sensor))
                 : _emptyResult;
 
-        public IActionResult AddAlertAction(Guid entityId) =>
-            TryGetSelectedNode(entityId, out var entity)
-                ? PartialView("~/Views/Home/Alerts/_ActionBlock.cshtml", new ActionViewModel(false, entity.RootProduct.TelegramChats))
-                : _emptyResult;
+        public IActionResult AddAlertAction(Guid entityId)
+        {
+            if (!TryGetSelectedNode(entityId, out var entity))
+                return _emptyResult;
+
+            entity.TryGetChats(out var availableChats);
+
+            return PartialView("~/Views/Home/Alerts/_ActionBlock.cshtml", new ActionViewModel(false, availableChats));
+        }
 
         public IActionResult GetOperation(Guid sensorId, AlertProperty property)
         {
@@ -714,7 +719,7 @@ namespace HSMServer.Controllers
             if (!ModelState.IsValid)
                 return PartialView("_MetaInfo", new ProductInfoViewModel(product));
 
-            var availableChats = product.RootProduct.GetAvailableChats(_telegramChatsManager);
+            var availableChats = product.GetAvailableChats(_telegramChatsManager);
             var ttl = newModel.DataAlerts.TryGetValue(TimeToLiveAlertViewModel.AlertKey, out var alerts) && alerts.Count > 0 ? alerts[0] : null;
 
             var update = new ProductUpdate
