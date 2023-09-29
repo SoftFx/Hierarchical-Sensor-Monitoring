@@ -31,6 +31,9 @@ public sealed record UpdateSensorValueRequestModel
 
     public BaseValue BuildNewValue(BaseValue value, BaseValue oldValue)
     {
+        if (value is FileValue && oldValue is FileValue oldFileValue)
+            value = oldFileValue;
+        
         value = value with
         {
             Status = Status,
