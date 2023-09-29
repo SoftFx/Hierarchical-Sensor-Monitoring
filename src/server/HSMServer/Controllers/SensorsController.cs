@@ -9,7 +9,9 @@ using HSMServer.Core.Model;
 using HSMServer.Core.Model.Requests;
 using HSMServer.Core.SensorsUpdatesQueue;
 using HSMServer.Extensions;
+using HSMServer.Model.TreeViewModel;
 using HSMServer.ModelBinders;
+using HSMServer.Notifications;
 using HSMServer.ObsoleteUnitedSensorValue;
 using HSMServer.Validation;
 using Microsoft.AspNetCore.Authorization;
@@ -18,7 +20,6 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Net.Mime;
 using System.Text;
 using System.Text.Json;
@@ -38,18 +39,22 @@ namespace HSMServer.Controllers
         private readonly ILogger<SensorsController> _logger;
         private readonly IUpdatesQueue _updatesQueue;
         private readonly DataCollectorWrapper _dataCollector;
+        private readonly ITelegramChatsManager _chatsManager;
         private readonly ITreeValuesCache _cache;
+        private readonly TreeViewModel _tree;
 
         protected static readonly EmptyResult _emptyResult = new();
 
 
         public SensorsController(IUpdatesQueue updatesQueue, DataCollectorWrapper dataCollector,
-            ILogger<SensorsController> logger, ITreeValuesCache cache)
+            ILogger<SensorsController> logger, ITreeValuesCache cache, TreeViewModel tree, ITelegramChatsManager chatsManager)
         {
             _updatesQueue = updatesQueue;
             _dataCollector = dataCollector;
+            _chatsManager = chatsManager;
             _logger = logger;
             _cache = cache;
+            _tree = tree;
         }
 
 
@@ -577,7 +582,7 @@ namespace HSMServer.Controllers
             requestModel = new SensorAddOrUpdateRequestModel(GetKey(request), request.Path);
 
             if (requestModel.TryCheckRequest(out message) &&
-                _cache.TryCheckSensorUpdateKeyPermission(requestModel, out var product, out var sensorId, out message))
+                _cache.TryCheckSensorUpdateKeyPermission(requestModel, out var sensorId, out message))
             {
                 if (sensorId == Guid.Empty && request.SensorType is null)
                 {
@@ -585,9 +590,12 @@ namespace HSMServer.Controllers
                     return false;
                 }
 
-                var productChats = product.NotificationsSettings?.TelegramSettings?.Chats?.ToDictionary(k => new Guid(k.SystemId), v => v.Name) ?? new();
+                var availableChats = new Dictionary<Guid, string>(0);
 
-                requestModel.Update = request.Convert(sensorId, productChats, keyName);
+                if (_tree.Sensors.TryGetValue(sensorId, out var sensor))
+                    availableChats = sensor.GetAvailableChats(_chatsManager);
+
+                requestModel.Update = request.Convert(sensorId, availableChats, keyName);
 
                 if (request.SensorType.HasValue)
                     requestModel.Type = request.SensorType.Value.Convert();

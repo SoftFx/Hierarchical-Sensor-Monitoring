@@ -4,7 +4,6 @@ using HSMServer.Core.Model.Policies;
 using System;
 using System.Collections.Concurrent;
 
-
 namespace HSMServer.Core.Model
 {
     [Flags]

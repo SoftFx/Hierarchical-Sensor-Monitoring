@@ -173,11 +173,11 @@ namespace HSMServer.Core.Cache
             GetAccessKeyModel(request).IsValid(KeyPermissions.CanReadSensorData, out message) &&
             TryGetSensor(request, product, null, out _, out message);
 
-        public bool TryCheckSensorUpdateKeyPermission(BaseRequestModel request, out ProductModel product, out Guid sensorId, out string message)
+        public bool TryCheckSensorUpdateKeyPermission(BaseRequestModel request, out Guid sensorId, out string message)
         {
             sensorId = Guid.Empty;
 
-            if (!TryCheckProductKey(request, out product, out message))
+            if (!TryCheckProductKey(request, out var product, out message))
                 return false;
 
             var accessKey = GetAccessKeyModel(request);

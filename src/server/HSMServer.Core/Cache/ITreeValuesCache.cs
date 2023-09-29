@@ -39,7 +39,7 @@ namespace HSMServer.Core.Cache
 
         bool TryCheckKeyWritePermissions(BaseRequestModel request, out string message);
         bool TryCheckKeyReadPermissions(BaseRequestModel request, out string message);
-        bool TryCheckSensorUpdateKeyPermission(BaseRequestModel request, out ProductModel product, out Guid sensorId, out string message);
+        bool TryCheckSensorUpdateKeyPermission(BaseRequestModel request, out Guid sensorId, out string message);
 
         AccessKeyModel AddAccessKey(AccessKeyModel key);
         AccessKeyModel RemoveAccessKey(Guid id);
