@@ -9,7 +9,7 @@ $NetworkName = "HSM-Ping-network"
 $ServerPrefix = "HSMServer_"
 
 $ServerHost = 'hsm.dev.com' # must be defined
-$NordVpnToken = 'e9f2ab403980a0af16dcafad14d2f22b7b275270c98d3ad706337fa09a4358a5' # must be defined
+$NordVpnToken = '' # must be defined
 
 Write-Host "Check running pinger container"
 $CurrentContainerId = docker ps -a -q -f "name=$ContainerPrefix"
