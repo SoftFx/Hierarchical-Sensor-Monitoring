@@ -1,4 +1,61 @@
-﻿window.copyToClipboard = function(text) {
+﻿window.hiddenColumns = {
+    id: undefined,
+    
+    showText: "Show all columns",
+    hideText: "Hide extra columns",
+    self: undefined,
+    isVisible: false,
+    
+    tablecellsIds: [], 
+    tablecells: [],
+    
+    hideFromTable(){
+        this.tablecells.forEach((x) => {
+            x.addClass('d-none')
+        })
+        this.self[0].innerText = this.showText;
+        this.isVisible = false;
+    },
+
+    showInTable(){
+        this.tablecells.forEach((x) => {
+            x.removeClass('d-none')
+        })
+        this.self[0].innerText = this.hideText;
+        this.isVisible = true;
+    },
+    
+    init(id){
+        this.self = $('#allColumnsButton');
+
+        this.self.off('click').on('click', function (e) {
+            if (hiddenColumns.isVisible)
+                hiddenColumns.hideFromTable();
+            else
+                hiddenColumns.showInTable();
+        });
+        
+        this.self.removeClass('d-none');
+        this.tablecells = [];
+
+        this.tablecellsIds.forEach(x => {
+            this.tablecells.push($(x))
+        })
+
+        if (this.id === id && this.isVisible)
+            this.showInTable();
+            
+        this.id = id;
+    },
+    
+    clear(){
+        this.tablecells = [];
+        this.tablecellsIds = [];
+        this.isVisible = false;
+    }
+}
+
+window.copyToClipboard = function(text) {
     const copyToClipboardAsync = str => {
         if (navigator && navigator.clipboard && navigator.clipboard.writeText) {
             return navigator.clipboard.writeText(str);
