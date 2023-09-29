@@ -168,7 +168,9 @@ namespace HSMServer.Controllers
             Response.Headers.Add("Content-Disposition", $"attachment;filename={fileName}");
 
             var values = await GetSensorValues(encodedId, from.ToUtcKind(), to.ToUtcKind(), MaxHistoryCount, RequestOptions.IncludeTtl);
-            var content = Encoding.UTF8.GetBytes(values.ConvertToCsv(addHiddenColumns));
+            _tree.Sensors.TryGetValue(Guid.Parse(encodedId), out var currentSensor);
+            var exportOptions = addHiddenColumns ? currentSensor.AggregateValues ? ExportOptions.Aggregated : ExportOptions.Hidden : ExportOptions.Simple;
+            var content = Encoding.UTF8.GetBytes(values.ConvertToCsv(exportOptions));
 
             return File(content, fileName.GetContentType(), fileName);
         }

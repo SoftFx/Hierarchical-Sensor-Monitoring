@@ -1,4 +1,5 @@
-﻿using HSMSensorDataObjects.SensorValueRequests;
+﻿using System;
+using HSMSensorDataObjects.SensorValueRequests;
 using HSMServer.Core.Extensions;
 using HSMServer.Core.Model;
 using System.Collections.Generic;
@@ -10,6 +11,43 @@ using System.Text.Json.Serialization;
 
 namespace HSMServer.ApiObjectsConverters
 {
+    [Flags]
+    internal enum ExportOptions : byte
+    {
+        Simple,
+        Hidden,
+        Aggregated,
+        Full
+    }
+
+
+    internal sealed record Header
+    {
+        private readonly string _propertyName;
+        private readonly Func<BaseValue, string> _getPropertyName;
+
+
+        public string DisplayName { get; }
+
+
+        public Header(string displayName, string propertyName, Func<BaseValue, string> getPropFunc = null)
+        {
+            _propertyName = propertyName;
+            _getPropertyName = getPropFunc;
+            DisplayName = displayName;
+        }
+
+        public Header(string name)
+        {
+            _propertyName = name;
+            DisplayName = name;
+        }
+
+
+        public string GetPropertyName(BaseValue value) => _getPropertyName?.Invoke(value) ?? _propertyName;
+    }
+
+
     internal static class ApiCsvConverters
     {
         private static readonly string _columnSeparator = CultureInfo.CurrentUICulture.TextInfo.ListSeparator;
@@ -18,52 +56,43 @@ namespace HSMServer.ApiObjectsConverters
             NumberHandling = JsonNumberHandling.AllowNamedFloatingPointLiterals 
         };
 
-        private static readonly List<string> _simpleSensorHeader = new()
+        private static readonly Func<BaseValue, string> _baseLastUpdateLambda = value => value.LastReceivingTime is null ? nameof(BaseValue.ReceivingTime) : nameof(BaseValue.LastReceivingTime);
+
+        private static readonly Dictionary<Header, ExportOptions> _simpleSensorHeader = new()
         {
-            nameof(SensorValueBase.Time),
-            nameof(BoolSensorValue.Value),
-            nameof(SensorValueBase.Status),
-            nameof(SensorValueBase.Comment),
+            { new ("Date", nameof(SensorValueBase.Time)), ExportOptions.Simple },
+            { new ("Last update time", nameof(BaseValue.LastUpdateTime),value => _baseLastUpdateLambda(value)), ExportOptions.Aggregated},
+            { new("Receiving time",nameof(BaseValue.ReceivingTime)), ExportOptions.Hidden },
+            { new ("Aggregated values count", nameof(BaseValue.AggregatedValuesCount)), ExportOptions.Aggregated},
+            { new (nameof(BoolSensorValue.Value)), ExportOptions.Simple },
+            { new (nameof(SensorValueBase.Status)), ExportOptions.Simple },
+            { new (nameof(SensorValueBase.Comment)), ExportOptions.Simple }
         };
 
-        private static readonly List<string> _barSensorHeader = new()
+        private static readonly Dictionary<Header, ExportOptions> _barSensorHeader = new()
         {
-            nameof(IntBarSensorValue.OpenTime),
-            nameof(IntBarSensorValue.Min),
-            nameof(IntBarSensorValue.Mean),
-            nameof(IntBarSensorValue.Max),
-            nameof(IntBarSensorValue.Count),
-            nameof(IntBarSensorValue.LastValue),
-            nameof(SensorValueBase.Status),
-            nameof(SensorValueBase.Comment),
+            { new ("Open time", nameof(IntBarSensorValue.OpenTime)), ExportOptions.Simple },
+            { new ("Last update time" ,nameof(DoubleBarValue.Time)), ExportOptions.Hidden },
+            { new ("Close time", nameof(DoubleBarValue.CloseTime)), ExportOptions.Hidden },
+            { new("Receiving time",nameof(BaseValue.ReceivingTime)), ExportOptions.Hidden },
+            { new (nameof(IntBarSensorValue.Min)), ExportOptions.Simple },
+            { new (nameof(IntBarSensorValue.Mean)), ExportOptions.Simple },
+            { new (nameof(IntBarSensorValue.Max)), ExportOptions.Simple },
+            { new(nameof(IntBarSensorValue.Count)), ExportOptions.Simple },
+            { new ("Last value", nameof(IntBarSensorValue.LastValue)), ExportOptions.Simple },
+            { new (nameof(SensorValueBase.Status)), ExportOptions.Simple },
+            { new (nameof(SensorValueBase.Comment)), ExportOptions.Simple },
         };
 
-        private static readonly List<string> _simpleHiddenHeader = new()
+        private static readonly List<Header> _fileSensorHeader = new()
         {
-            nameof(BaseValue.AggregatedValuesCount)
+            new (nameof(SensorValueBase.Time)),
+            new ( nameof(FileSensorValue.Value)),
+            new (nameof(FileSensorValue.Name)),
+            new (nameof(FileSensorValue.Extension)),
+            new (nameof(SensorValueBase.Status)),
+            new (nameof(SensorValueBase.Comment)),
         };
-        
-        private static readonly List<string> _barHiddenHeader = new()
-        {
-            nameof(DoubleBarValue.Time),
-            nameof(DoubleBarValue.CloseTime)
-        };
-
-        private static readonly List<string> _defaultHiddenHeader = new()
-        {
-            nameof(BaseValue.ReceivingTime)
-        };
-
-        private static readonly List<string> _fileSensorHeader = new()
-        {
-            nameof(SensorValueBase.Time),
-            nameof(FileSensorValue.Value),
-            nameof(FileSensorValue.Name),
-            nameof(FileSensorValue.Extension),
-            nameof(SensorValueBase.Status),
-            nameof(SensorValueBase.Comment),
-        };
-
 
         static ApiCsvConverters()
         {
@@ -71,15 +100,15 @@ namespace HSMServer.ApiObjectsConverters
         }
 
 
-        internal static string ConvertToCsv(this List<BaseValue> values, bool addHiddenColumns = true)
+        internal static string ConvertToCsv(this List<BaseValue> values, ExportOptions options = ExportOptions.Hidden)
         {
             if ((values?.Count ?? 0) == 0)
                 return string.Empty;
 
             var content = new StringBuilder(1 << 7);
-            var header = values.GetHeader(addHiddenColumns);
+            var header = values.GetHeader(options);
 
-            content.AppendLine(header.BuildRow());
+            content.AppendLine(header.Select(x => x.DisplayName).ToList().BuildRow());
 
             var rowValues = new List<string>(header.Count);
             foreach (var value in values)
@@ -88,7 +117,7 @@ namespace HSMServer.ApiObjectsConverters
                 var properties = JsonSerializer.SerializeToElement<object>(rowValue, _serializerOptions);
 
                 foreach (var column in header)
-                    rowValues.Add(properties.GetProperty(column).ToString());
+                    rowValues.Add(properties.GetProperty(column.GetPropertyName(value)).ToString());
 
                 content.AppendLine(rowValues.BuildRow());
                 rowValues.Clear();
@@ -97,18 +126,16 @@ namespace HSMServer.ApiObjectsConverters
             return content.ToString();
         }
 
-        private static List<string> GetHeader(this List<BaseValue> values, bool addHiddenColumns)
+        private static List<Header> GetHeader(this List<BaseValue> values, ExportOptions options)
         {
             return values[0] switch
             {
-                BooleanValue or IntegerValue or DoubleValue or StringValue or VersionValue or TimeSpanValue => addHiddenColumns
-                    ? _simpleSensorHeader.Concat(_defaultHiddenHeader).Concat(_simpleHiddenHeader).ToList()
-                    : _simpleSensorHeader,
-                IntegerBarValue or DoubleBarValue => addHiddenColumns
-                    ? _barSensorHeader.Concat(_defaultHiddenHeader).Concat(_barHiddenHeader).ToList()
-                    : _barSensorHeader,
+                BooleanValue or IntegerValue or DoubleValue or StringValue or VersionValue or TimeSpanValue => 
+                    _simpleSensorHeader.Where(x => x.Value <= options).Select(x => x.Key).ToList(),
+                IntegerBarValue or DoubleBarValue => 
+                    _barSensorHeader.Where(x => x.Value <= options).Select(x => x.Key).ToList(),
                 FileValue => _fileSensorHeader,
-                _ => new List<string>()
+                _ => new List<Header>()
             };
         }
 
