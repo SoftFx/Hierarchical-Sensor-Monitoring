@@ -53,6 +53,7 @@ window.activateNode = function (currentNodeId, nodeIdToActivate) {
     needToActivateListTab = $(`#list_${currentNodeId}`).hasClass('active');
 
     $('#jstree').jstree('activate_node', nodeIdToActivate);
+    $('#jstree').jstree('open_node', nodeIdToActivate);
 
     if (currentSelectedNodeId != nodeIdToActivate) {
         selectNodeAjax(nodeIdToActivate);
