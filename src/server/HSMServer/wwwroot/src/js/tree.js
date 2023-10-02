@@ -38,7 +38,7 @@ window.initializeTree = function () {
     }).on('close_node.jstree', function (e, data) {
         $.ajax({
             type: 'put',
-            url: `${closeNode}?nodeId=${data.node.id}`,
+            url: `${closeNode}?nodeIds=${data.node.id}`,
             cache: false
         })
     }).on('refresh.jstree', function (e, data){

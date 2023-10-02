@@ -48,6 +48,7 @@ import './js/metaInfo.js';
 import './js/products.js';
 import './js/tree.js';
 import './js/site.js';
+import './js/treeCollapse';
 
 import './css/site.css';
 import './css/accessKey.css';
