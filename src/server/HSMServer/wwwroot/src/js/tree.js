@@ -36,6 +36,9 @@ window.initializeTree = function () {
     }).on("state_ready.jstree", function () {
         selectNodeAjax($(this).jstree('get_selected')[0]);
     }).on('close_node.jstree', function (e, data) {
+        if (collapseButton.isTriggered)
+            return;
+
         $.ajax({
             type: 'put',
             url: `${closeNode}?nodeIds=${data.node.id}`,
@@ -44,6 +47,8 @@ window.initializeTree = function () {
     }).on('refresh.jstree', function (e, data){
         refreshTreeTimeoutId = setTimeout(updateTreeTimer, interval);
         updateSelectedNodeDataTimeoutId = setTimeout(updateSelectedNodeData, interval);
+    }).on('open_node.jstree', function (e, data){
+        collapseButton.reset();
     });
 
     initializeActivateNodeTree();
