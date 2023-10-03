@@ -67,6 +67,10 @@ export class Plot {
     checkError(value) {
         return value.status === SensorsStatus.Error
     }
+    
+    checkNaN(value) {
+        return value === "NaN";
+    }
 
     addCustomData(value, compareFunc = null, customField = 'value') {
         if (this.checkTtl(value))
@@ -137,8 +141,12 @@ export class BoolPlot extends Plot {
     setUpData(data) {
         for (let i of data) {
             this.x.push(i.time)
-
-            this.y.push(i.value === true ? 1 : 0)
+            
+            if (this.checkNaN(i.value))
+                this.y.push(0)
+            else
+                this.y.push(i.value === true ? 1 : 0)
+            
             this.addCustomData(i, this.customDataCompareFunc)
             this.marker.color.push(this.markerColorCompareFunc(i));
             this.marker.size.push(this.getMarkerSize(i))
@@ -200,7 +208,10 @@ export class IntegerPlot extends ErrorColorPlot {
     setUpData(data) {
         for (let i of data) {
             this.x.push(i.time)
-            this.y.push(i.value)
+            if (this.checkNaN(i.value))
+                this.y.push(0)
+            else 
+                this.y.push(i.value)
             this.addCustomData(i);
             this.marker.size.push(this.getMarkerSize(i));
             this.marker.color.push(this.markerColorCompareFunc(i));
@@ -229,7 +240,11 @@ export class DoublePlot extends ErrorColorPlot {
     setUpData(data, customField = 'value') {
         for (let i of data) {
             this.x.push(i.time)
-            this.y.push(i[customField])
+            
+            if (this.checkNaN(i[customField]))
+                this.y.push(0)
+            else
+                this.y.push(i[customField])
 
             this.addCustomData(i, null, customField);
             this.marker.size.push(this.getMarkerSize(i));
@@ -328,7 +343,10 @@ export class TimeSpanPlot extends ErrorColorPlot {
     }
 
     getTimeSpanValue(value) {
-        let time = value.value.split(':');
+        if (this.checkNaN(value.value))
+            return new TimeSpan.TimeSpan(0,0,0,0,0);
+
+            let time = value.value.split(':');
         let temp = time[0].split('.')
         let days, hours, minutes, seconds;
         if (temp.length > 1) {
