@@ -56,7 +56,17 @@ export class Plot {
 
     getLayout() {
         return {
-            autosize: true
+            autosize: true,
+            xaxis: {
+                title: {
+                    text: 'Time',
+                    font: {
+                        family: 'Courier New, monospace',
+                        size: 18,
+                        color: '#7f7f7f'
+                    }
+                },
+            }
         }
     }
 
@@ -168,6 +178,7 @@ export class BoolPlot extends Plot {
 
     getLayout() {
         return {
+            ...super.getLayout(),
             autosize: true,
             yaxis: {
                 tickmode: 'auto',
@@ -345,8 +356,8 @@ export class TimeSpanPlot extends ErrorColorPlot {
     getTimeSpanValue(value) {
         if (this.checkNaN(value.value))
             return new TimeSpan.TimeSpan(0,0,0,0,0);
-
-            let time = value.value.split(':');
+        
+        let time = value.value.split(':');
         let temp = time[0].split('.')
         let days, hours, minutes, seconds;
         if (temp.length > 1) {
@@ -380,7 +391,9 @@ export class TimeSpanPlot extends ErrorColorPlot {
 
     getLayout() {
         const MAX_TIME_POINTS = 10
-
+    
+        console.log(...this.y);
+        console.log(Math.max(...this.y));
         let maxVal = Math.max(...this.y)
         let step = Math.max(maxVal / MAX_TIME_POINTS, 1)
 
@@ -395,6 +408,7 @@ export class TimeSpanPlot extends ErrorColorPlot {
         }
 
         return {
+            ...super.getLayout(),
             yaxis: {
                 ticktext: tValsCustomData,
                 tickvals: tVals,
@@ -491,6 +505,7 @@ export class EnumPlot extends Plot {
 
     getLayout() {
         return {
+            ...super.getLayout(),
             yaxis: {
                 visible: false,
             },

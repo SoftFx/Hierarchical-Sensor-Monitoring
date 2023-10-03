@@ -94,18 +94,18 @@ function InitializeHistory() {
     let encodedId = info.substring("meta_info_".length)
     let date = new Date();
 
-    GetSensortInfo(encodedId).done(function (types) {
-        if (Object.keys(types).length === 0)
+    GetSensortInfo(encodedId).done(function (sensorInfo) {
+        if (Object.keys(sensorInfo).length === 0)
             return;
 
-        if (isFileSensor(types.realPlot))
+        if (isFileSensor(sensorInfo.realPlot))
             return;
 
-        if (isGraphAvailable(types.realType)) {
-            initializeGraph(encodedId, rawHistoryLatestAction, types, Data(date, date, types.realType, encodedId), true);
+        if (isGraphAvailable(sensorInfo.realType)) {
+            initializeGraph(encodedId, rawHistoryLatestAction, sensorInfo, Data(date, date, sensorInfo.realType, encodedId), true);
         } 
-        else if (isTableAvailable(types.realType)) {
-            initializeTable(encodedId, historyLatestAction, types.realPlot, Data(date, date, types.realType, encodedId), true);
+        else if (isTableAvailable(sensorInfo.realType)) {
+            initializeTable(encodedId, historyLatestAction, sensorInfo.realPlot, Data(date, date, sensorInfo.realType, encodedId), true);
         }
     });
 }
@@ -220,11 +220,11 @@ function initializeTable(encodedId, tableAction, type, body, needFillFromTo = fa
     });
 }
 
-function initializeGraph(encodedId, rawHistoryAction, types, body, needFillFromTo = false) {
+function initializeGraph(encodedId, rawHistoryAction, sensorInfo, body, needFillFromTo = false) {
     $.ajax({
         type: 'POST',
         data: JSON.stringify(body),
-        url: rawHistoryAction + "?EncodedId=" + encodedId + "&Type=" + types.realType,
+        url: rawHistoryAction + "?EncodedId=" + encodedId + "&Type=" + sensorInfo.realType,
         contentType: 'application/json',
         dataType: 'html',
         cache: false,
@@ -251,7 +251,7 @@ function initializeGraph(encodedId, rawHistoryAction, types, body, needFillFromT
 
             reloadHistoryRequest(from, to, body);
         }
-        displayGraph(data, types, `graph_${encodedId}`, encodedId);
+        displayGraph(data, sensorInfo, `graph_${encodedId}`, encodedId);
 
         $("#sensorHistorySpinner").addClass("d-none");
         $('#historyDataPanel').removeClass('hidden_element');

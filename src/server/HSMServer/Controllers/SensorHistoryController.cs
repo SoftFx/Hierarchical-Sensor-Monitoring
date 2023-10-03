@@ -15,6 +15,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using HSMServer.DTOs.SensorInfo;
 
 namespace HSMServer.Controllers
 {
@@ -81,15 +82,10 @@ namespace HSMServer.Controllers
         }
 
         [HttpGet]
-        public IActionResult GetSensorPlotInfo([FromQuery] Guid id)
+        public ActionResult<SensorInfoDTO> GetSensorPlotInfo([FromQuery] Guid id)
         {
             if (_tree.Sensors.TryGetValue(id, out var sensorNodeViewModel))
-                return Json(new
-                {
-                    realType = sensorNodeViewModel.Type,
-                    plotType = sensorNodeViewModel.Name is "Service alive" or "Service status" ? SensorType.Enum : sensorNodeViewModel.Type
-                });
-
+                return new SensorInfoDTO(sensorNodeViewModel.Type, sensorNodeViewModel.Name is "Service alive" or "Service status" ? SensorType.Enum : sensorNodeViewModel.Type, sensorNodeViewModel.SelectedUnit);
 
             return _emptyJsonResult;
         }

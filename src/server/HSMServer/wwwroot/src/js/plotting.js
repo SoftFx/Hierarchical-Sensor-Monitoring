@@ -59,11 +59,11 @@ window.removePlot = function (name, isInit = false) {
     }
 }
 
-window.displayGraph = function (data, sensorTypes, graphElementId, graphName) {
+window.displayGraph = function (data, sensorInfo, graphElementId, graphName) {
     graphData.graph.id = graphElementId;
     graphData.graph.self = $(`#${graphElementId}`)[0];
 
-    let plot = convertToGraphData(data, sensorTypes, graphName);
+    let plot = convertToGraphData(data, sensorInfo, graphName);
     let zoomData = getPreviousZoomData(graphElementId);
 
     let config = {
@@ -79,7 +79,7 @@ window.displayGraph = function (data, sensorTypes, graphElementId, graphName) {
         ]
     }
     let layout;
-    if (sensorTypes.plotType === 9 || sensorTypes.plotType === 7)
+    if (sensorInfo.plotType === 9 || sensorInfo.plotType === 7)
         layout = plot.getLayout();
     else {
         if (zoomData === undefined || zoomData === null)
@@ -140,10 +140,10 @@ function getPreviousZoomData(graphElementId) {
     return window.sessionStorage.getItem(graphElementId);
 }
 
-function convertToGraphData(graphData, sensorTypes, graphName) {
+function convertToGraphData(graphData, sensorInfo, graphName) {
     let escapedData = JSON.parse(graphData);
 
-    switch (sensorTypes.plotType) {
+    switch (sensorInfo.plotType) {
         case 0:
             return new BoolPlot(escapedData);
         case 1:
@@ -157,7 +157,7 @@ function convertToGraphData(graphData, sensorTypes, graphName) {
         case 7:
             return new TimeSpanPlot(escapedData);
         case 9:
-            if (sensorTypes.realType === 0)
+            if (sensorInfo.realType === 0)
                 return new EnumPlot(escapedData, false, false)
 
             return new EnumPlot(escapedData, true, false);
