@@ -145,17 +145,17 @@ function convertToGraphData(graphData, sensorInfo, graphName) {
 
     switch (sensorInfo.plotType) {
         case 0:
-            return new BoolPlot(escapedData);
+            return new BoolPlot(escapedData, sensorInfo.units);
         case 1:
-            return new IntegerPlot(escapedData);
+            return new IntegerPlot(escapedData, sensorInfo.units);
         case 2:
-            return new DoublePlot(escapedData);
+            return new DoublePlot(escapedData, sensorInfo.units);
         case 4:
-            return new BarPLot(escapedData, graphName);
+            return new BarPLot(escapedData, graphName, sensorInfo.units);
         case 5:
-            return new BarPLot(escapedData, graphName);
+            return new BarPLot(escapedData, graphName, sensorInfo.units);
         case 7:
-            return new TimeSpanPlot(escapedData);
+            return new TimeSpanPlot(escapedData, sensorInfo.units);
         case 9:
             if (sensorInfo.realType === 0)
                 return new EnumPlot(escapedData, false, false)

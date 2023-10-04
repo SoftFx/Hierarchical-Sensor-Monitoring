@@ -45,8 +45,13 @@ export class Plot {
     line = {
         color: Colors.defaultTrace
     }
+    
+    #customYaxisName = undefined;
 
-    constructor(data) {}
+    constructor(data, customYaxisName = undefined) {
+        this.#customYaxisName = customYaxisName;
+        // this.#customYaxisName = 'test units';
+    }
 
     setUpData(data) {}
 
@@ -55,6 +60,32 @@ export class Plot {
     }
 
     getLayout() {
+        if (this.#customYaxisName !== undefined) {
+            return {
+                autosize: true,
+                xaxis: {
+                    title: {
+                        text: 'Time',
+                        font: {
+                            family: 'Courier New, monospace',
+                            size: 18,
+                            color: '#7f7f7f'
+                        }
+                    },
+                },
+                yaxis: {
+                    title: {
+                        text: this.#customYaxisName,
+                        font: {
+                            family: 'Courier New, monospace',
+                            size: 18,
+                            color: '#7f7f7f'
+                        }
+                    },
+                }
+            }
+        }
+        
         return {
             autosize: true,
             xaxis: {
@@ -132,8 +163,8 @@ class ErrorColorPlot extends Plot{
 }
 
 export class BoolPlot extends Plot {
-    constructor(data) {
-        super();
+    constructor(data, unitType = undefined) {
+        super(data, unitType);
         this.type = 'scatter';
         this.mode = 'markers';
         this.marker = {
@@ -198,8 +229,8 @@ export class BoolPlot extends Plot {
 }
 
 export class IntegerPlot extends ErrorColorPlot {
-    constructor(data) {
-        super();
+    constructor(data, unitType = undefined) {
+        super(data, unitType);
 
         this.type = 'scatter';
         this.mode = 'lines+markers';
@@ -231,8 +262,8 @@ export class IntegerPlot extends ErrorColorPlot {
 }
 
 export class DoublePlot extends ErrorColorPlot {
-    constructor(data, name, field = 'value') {
-        super();
+    constructor(data, name, field = 'value', unitType = undefined) {
+        super(data, unitType);
 
         this.type = 'scatter';
         this.name = name;
@@ -269,8 +300,8 @@ export class DoublePlot extends ErrorColorPlot {
 }
 
 export class BarPLot extends Plot {
-    constructor(data, name) {
-        super();
+    constructor(data, name, unitType = undefined) {
+        super(data, unitType);
 
         this.type = 'box';
         this.name = 'bar';
@@ -308,8 +339,8 @@ export class BarPLot extends Plot {
 }
 
 export class TimeSpanPlot extends ErrorColorPlot {
-    constructor(data) {
-        super();
+    constructor(data, unitType = undefined) {
+        super(data, unitType);
 
         this.type = 'scatter';
         this.mode = 'lines+markers';

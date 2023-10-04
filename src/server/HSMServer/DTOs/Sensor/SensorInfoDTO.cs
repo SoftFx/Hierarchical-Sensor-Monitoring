@@ -2,4 +2,4 @@
 
 namespace HSMServer.DTOs.SensorInfo;
 
-public record SensorInfoDTO(SensorType realType, SensorType plotType, Unit? unit);
+public record SensorInfoDTO(SensorType realType, SensorType plotType, string units);
