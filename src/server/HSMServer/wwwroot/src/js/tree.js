@@ -29,10 +29,28 @@ window.initializeTree = function () {
                 }
             }
         },
+        "search": {
+            "case_insensitive": false,
+            "ajax": {
+                url: searchNode,
+                'data': function (str){
+                    console.log('sensing search str to the server')
+                    return {
+                        'searchNamePattern': str
+                    }
+                },
+                success: function (response) {
+                    //updateTreeTimer();
+
+                    console.log('response from server')
+                    console.log(response)
+                }
+            }
+        },
         "contextmenu": {
             "items": buildContextMenu
         },
-        "plugins": ["state", "contextmenu", "themes", "wholerow"],
+        "plugins": ["state", "contextmenu", "themes", "wholerow", "search"],
     }).on("state_ready.jstree", function () {
         selectNodeAjax($(this).jstree('get_selected')[0]);
     }).on('close_node.jstree', function (e, data) {
@@ -42,8 +60,19 @@ window.initializeTree = function () {
             cache: false
         })
     }).on('refresh.jstree', function (e, data){
+        console.log('refreshing')
         refreshTreeTimeoutId = setTimeout(updateTreeTimer, interval);
         updateSelectedNodeDataTimeoutId = setTimeout(updateSelectedNodeData, interval);
+    })
+        .on('search.jstree', function (nodes, str){
+            console.log('after search')
+            console.log(nodes)
+            console.log(str)
+        });
+
+    $("#search_tree").on('click', function () {
+        let value = $('#search_field').val();
+        $("#jstree").jstree("search",value)
     });
 
     initializeActivateNodeTree();

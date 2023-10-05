@@ -110,6 +110,16 @@ namespace HSMServer.Controllers
                 ? PartialView("_TreeNode", CurrentUser.Tree.LoadNode(node))
                 : NotFound();
 
+        [HttpGet]
+        public ActionResult<List<Guid>> SearchNode([FromQuery(Name = "str")] string searchNamePattern)
+        {
+            var response = new List<Guid>(1 << 6);
+            response.AddRange(_treeViewModel.Sensors.Where(x => x.Value.Name.Contains(searchNamePattern, StringComparison.OrdinalIgnoreCase)).Select(x => x.Key));
+            response.AddRange(_treeViewModel.Nodes.Where(x => x.Value.Name.Contains(searchNamePattern, StringComparison.OrdinalIgnoreCase)).Select(x => x.Key));
+            
+            return response;
+        }
+
         [HttpPut]
         public void RemoveRenderingNode(Guid nodeId) => CurrentUser.Tree.RemoveOpenedNode(nodeId);
 

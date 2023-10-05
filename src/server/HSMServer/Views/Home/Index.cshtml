@@ -26,6 +26,7 @@
     var selectNode = "@Url.Action(nameof(HomeController.SelectNode), ViewConstants.HomeController)";
     var refreshTree = "@Url.Action(nameof(HomeController.RefreshTree), ViewConstants.HomeController)";
     var getNode = "@Url.Action(nameof(HomeController.GetNode), ViewConstants.HomeController)";
+    var searchNode = "@Url.Action(nameof(HomeController.SearchNode), ViewConstants.HomeController)";
     var closeNode = "@Url.Action(nameof(HomeController.RemoveRenderingNode), ViewConstants.HomeController)";
 
     var getJournalPage = "@Url.Action(nameof(JournalController.GetPage), ViewConstants.JournalController)";
@@ -122,7 +123,10 @@
         <div class="d-flex justify-content-center tree-wrapper reserved-scroll-y overflow-y-auto">
             <div class="d-flex me-auto">
                 <div class="ms-2 mb-1"> @await Html.PartialAsync("_TreeFilter.cshtml", new UserFilterViewModel(user.TreeFilter)) </div>
-
+                <div>
+                    <button id="search_tree">Search</button>
+                    <input id="search_field"/>
+                </div>
                 <div class="row justify-content-start mw-100 me-1">
                     <div class="tree-height-weight-parameters col-auto ms-2 pe-0">
                         <div class="col-md-auto">
