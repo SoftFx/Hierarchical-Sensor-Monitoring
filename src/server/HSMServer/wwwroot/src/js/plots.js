@@ -422,16 +422,15 @@ export class TimeSpanPlot extends ErrorColorPlot {
 
     getLayout() {
         const MAX_TIME_POINTS = 10
-    
-        console.log(...this.y);
-        console.log(Math.max(...this.y));
+
         let maxVal = Math.max(...this.y)
-        let step = Math.max(maxVal / MAX_TIME_POINTS, 1)
+        let minVal = Math.min(...this.y)
+        let step = Math.max((maxVal - minVal) / Math.min(MAX_TIME_POINTS, this.y.length), 1)
 
         let tVals = []
         let tValsCustomData = []
 
-        let cur = 0
+        let cur = minVal;
         while (cur <= maxVal) {
             tVals.push(cur);
             tValsCustomData.push(this.getTimeSpanAsText(new TimeSpan.TimeSpan(cur)))
