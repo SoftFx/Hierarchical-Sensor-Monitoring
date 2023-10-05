@@ -23,28 +23,29 @@ namespace HSMServer.ApiObjectsConverters
 
     internal sealed record Header
     {
-        private readonly string _propertyName;
         private readonly Func<BaseValue, string> _getPropertyName;
 
 
         public string DisplayName { get; }
 
+        public string PropertyName { get; }
+
 
         public Header(string displayName, string propertyName, Func<BaseValue, string> getPropFunc = null)
         {
-            _propertyName = propertyName;
+            PropertyName = propertyName;
             _getPropertyName = getPropFunc;
             DisplayName = displayName;
         }
 
         public Header(string name)
         {
-            _propertyName = name;
+            PropertyName = name;
             DisplayName = name;
         }
 
 
-        public string GetPropertyName(BaseValue value) => _getPropertyName?.Invoke(value) ?? _propertyName;
+        public string GetPropertyName(BaseValue value) => _getPropertyName?.Invoke(value) ?? PropertyName;
     }
 
 
@@ -94,6 +95,29 @@ namespace HSMServer.ApiObjectsConverters
             new (nameof(SensorValueBase.Comment)),
         };
 
+        private static readonly HashSet<string> _timeProperties = new()
+        {
+            nameof(DoubleBarValue.Time),
+            nameof(IntBarSensorValue.OpenTime),
+            nameof(DoubleBarValue.CloseTime),
+            nameof(BaseValue.ReceivingTime),
+            nameof(BaseValue.LastUpdateTime),
+            nameof(BoolSensorValue.Value)
+        };
+        
+        private static readonly HashSet<string> _timeoutProperties = new()
+        {
+            nameof(IntBarSensorValue.Min),
+            nameof(IntBarSensorValue.Mean),
+            nameof(IntBarSensorValue.Max),
+            nameof(IntBarSensorValue.Count),
+            nameof(IntBarSensorValue.LastValue),
+            nameof(BoolSensorValue.Value),
+            nameof(BaseValue.LastUpdateTime),
+            nameof(BaseValue.AggregatedValuesCount),
+            nameof(BaseValue.Status),
+        };
+
         static ApiCsvConverters()
         {
             _serializerOptions.Converters.Add(new JsonStringEnumConverter());
@@ -117,7 +141,18 @@ namespace HSMServer.ApiObjectsConverters
                 var properties = JsonSerializer.SerializeToElement<object>(rowValue, _serializerOptions);
 
                 foreach (var column in header)
-                    rowValues.Add(properties.GetProperty(column.GetPropertyName(value)).ToString());
+                {
+                    var jsonPropertyName = column.GetPropertyName(value);
+                    var propValue = properties.GetProperty(jsonPropertyName).ToString();
+
+                    if (_timeProperties.TryGetValue(column.PropertyName, out _) && DateTime.TryParse(propValue, out var dateTime))
+                        propValue = $"'{dateTime.ToDefaultFormat()}'";
+
+                    if (value.IsTimeout && _timeoutProperties.TryGetValue(column.PropertyName, out _))
+                        propValue = string.Empty;
+                    
+                    rowValues.Add(propValue);
+                }
 
                 content.AppendLine(rowValues.BuildRow());
                 rowValues.Clear();
