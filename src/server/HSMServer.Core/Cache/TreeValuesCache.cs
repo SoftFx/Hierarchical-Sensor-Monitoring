@@ -314,13 +314,15 @@ namespace HSMServer.Core.Cache
 
                 if (sensor.TryUpdateLastValue(value, request.ChangeLast))
                 {
+                    var (oldValue, newValue) = request.GetValues(lastValue, value);
+                    
                     _journalService.AddRecord(new JournalRecordModel(request.Id, request.Initiator)
                     {
                         PropertyName = request.PropertyName,
                         Enviroment = request.Environment,
                         Path = sensor.FullPath,
-                        OldValue = request.BuildComment(lastValue.Status, lastValue.Comment, lastValue.RawValue?.ToString()),
-                        NewValue = request.BuildComment(value: value.RawValue?.ToString())
+                        OldValue = request.BuildComment(lastValue.Status, lastValue.Comment, oldValue),
+                        NewValue = request.BuildComment(value: newValue)
                     });
 
                     _database.AddSensorValue(value.ToEntity(request.Id));
