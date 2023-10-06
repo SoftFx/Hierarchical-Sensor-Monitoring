@@ -96,16 +96,6 @@ namespace HSMServer.ApiObjectsConverters
             new(nameof(SensorValueBase.Comment)),
         };
 
-        private static readonly HashSet<string> _timeProperties = new()
-        {
-            nameof(DoubleBarValue.Time),
-            nameof(IntBarSensorValue.OpenTime),
-            nameof(DoubleBarValue.CloseTime),
-            nameof(BaseValue.ReceivingTime),
-            nameof(BaseValue.LastUpdateTime),
-            nameof(TimeSpanSensorValue.Value)
-        };
-
         private static readonly HashSet<string> _validProperties = new()
         {
             nameof(DoubleBarValue.Time),
@@ -142,8 +132,8 @@ namespace HSMServer.ApiObjectsConverters
                     var jsonPropertyName = column.GetPropertyName(value);
                     var propValue = properties.GetProperty(jsonPropertyName).ToString();
 
-                    if (_timeProperties.TryGetValue(column.PropertyName, out _) && DateTime.TryParse(propValue, out var dateTime))
-                        propValue = $"'{dateTime.ToDefaultFormat()}'";
+                    if (column.PropertyName != nameof(BaseValue.Comment) && DateTime.TryParse(propValue, out var dateTime))
+                        propValue = dateTime.ToDefaultFormat();
 
                     if (value.IsTimeout && !_validProperties.TryGetValue(column.PropertyName, out _))
                         propValue = string.Empty;
