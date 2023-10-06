@@ -50,7 +50,6 @@ export class Plot {
 
     constructor(data, customYaxisName = undefined) {
         this.#customYaxisName = customYaxisName;
-        // this.#customYaxisName = 'test units';
     }
 
     setUpData(data) {}
