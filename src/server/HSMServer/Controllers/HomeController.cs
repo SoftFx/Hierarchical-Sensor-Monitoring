@@ -111,13 +111,35 @@ namespace HSMServer.Controllers
                 : NotFound();
 
         [HttpGet]
-        public ActionResult<List<Guid>> SearchNode([FromQuery(Name = "str")] string searchNamePattern)
+        public ActionResult<HashSet<string>> SearchNode([FromQuery(Name = "str")] string searchNamePattern)
         {
-            var response = new List<Guid>(1 << 6);
-            response.AddRange(_treeViewModel.Sensors.Where(x => x.Value.Name.Contains(searchNamePattern, StringComparison.OrdinalIgnoreCase)).Select(x => x.Key));
-            response.AddRange(_treeViewModel.Nodes.Where(x => x.Value.Name.Contains(searchNamePattern, StringComparison.OrdinalIgnoreCase)).Select(x => x.Key));
+            var idsPath = new HashSet<string>();
+
+            foreach (var (_, value) in _treeViewModel.Sensors.Where(x => x.Value.Name.Contains(searchNamePattern, StringComparison.OrdinalIgnoreCase)))
+                GenerateIdPath(value);
+
+            foreach (var (_, value) in _treeViewModel.Nodes.Where(x => x.Value.Name.Contains(searchNamePattern, StringComparison.OrdinalIgnoreCase)))
+               GenerateIdPath(value);
+
+
+            void GenerateIdPath(NodeViewModel model)
+            {
+                var idPath = new List<Guid>(1 << 4);
+                var current = model.Parent as NodeViewModel;
+                while (current is not null)
+                {
+                    idPath.Add(current.Id);
+                    Console.Write(current.Name);
+                    Console.Write("/");
+                    current = current.Parent as NodeViewModel;
+                }
+                
+                Console.WriteLine();
+                idPath.Reverse();
+                idsPath.Add(string.Join("/", idPath));
+            }
             
-            return response;
+            return idsPath;
         }
 
         [HttpPut]

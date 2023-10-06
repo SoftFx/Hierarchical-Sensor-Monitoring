@@ -25,32 +25,33 @@ window.initializeTree = function () {
                     return getNode;
                 },
                 data: function (node) {
+                    console.log(node)
                     return { 'id' : node.id };
                 }
             }
         },
-        "search": {
-            "case_insensitive": false,
-            "ajax": {
-                url: searchNode,
-                'data': function (str){
-                    console.log('sensing search str to the server')
-                    return {
-                        'searchNamePattern': str
-                    }
-                },
-                success: function (response) {
-                    //updateTreeTimer();
-
-                    console.log('response from server')
-                    console.log(response)
-                }
-            }
-        },
+        // "search": {
+        //     "case_insensitive": false,
+        //     "ajax": {
+        //         url: searchNode,
+        //         'data': function (str){
+        //             console.log('sensing search str to the server')
+        //             return {
+        //                 'searchNamePattern': str
+        //             }
+        //         },
+        //         success: function (response) {
+        //             //updateTreeTimer();
+        //             $('#jstree').jstree('load_node', response);
+        //             console.log('response from server')
+        //             console.log(response)
+        //         }
+        //     }
+        // },
         "contextmenu": {
             "items": buildContextMenu
         },
-        "plugins": ["state", "contextmenu", "themes", "wholerow", "search"],
+        "plugins": ["state", "contextmenu", "themes", "wholerow"],
     }).on("state_ready.jstree", function () {
         selectNodeAjax($(this).jstree('get_selected')[0]);
     }).on('close_node.jstree', function (e, data) {
@@ -72,7 +73,21 @@ window.initializeTree = function () {
 
     $("#search_tree").on('click', function () {
         let value = $('#search_field').val();
-        $("#jstree").jstree("search",value)
+        
+        $.ajax({
+            url: searchNode + '?str=' + value,
+            type: 'GET',
+            cache: false
+        }).done(function (response){
+            let ids = [];
+            response.forEach(function (x){
+                ids.push(...x.split('/'))
+            })
+            $('#jstree').jstree('open_node', ids)
+           
+            console.log(ids)
+        })
+        //$("#jstree").jstree("search",value)
     });
 
     initializeActivateNodeTree();
