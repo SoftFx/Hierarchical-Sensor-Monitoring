@@ -32,7 +32,7 @@ namespace HSMServer.Core.Cache
         private readonly ConcurrentDictionary<Guid, AccessKeyModel> _keys = new();
         private readonly ConcurrentDictionary<Guid, ProductModel> _tree = new();
 
-        private readonly CGuidDict<bool> _getHistoryLocks = new();
+        private readonly CGuidDict<bool> _fileHistoryLocks = new(); // TODO: get file history should be fixed without this crutch
 
         private readonly Logger _logger = LogManager.GetLogger(CommonConstants.InfrastructureLoggerName);
 
@@ -315,7 +315,7 @@ namespace HSMServer.Core.Cache
                 if (sensor.TryUpdateLastValue(value, request.ChangeLast))
                 {
                     var (oldValue, newValue) = request.GetValues(lastValue, value);
-                    
+
                     _journalService.AddRecord(new JournalRecordModel(request.Id, request.Initiator)
                     {
                         PropertyName = request.PropertyName,
@@ -481,26 +481,30 @@ namespace HSMServer.Core.Cache
 
             if (_sensors.TryGetValue(sensorId, out var sensor))
             {
-                if (_getHistoryLocks[sensorId])
+                if (sensor is FileSensorModel && _fileHistoryLocks[sensorId])
                     yield return new List<BaseValue>();
-
-                _getHistoryLocks[sensorId] = true;
-
-
-                var includeTtl = options.HasFlag(RequestOptions.IncludeTtl);
-
-                if (sensor.AggregateValues && IsBorderedValue(sensor, from.Ticks - 1, out var latest) && (includeTtl || IsNotTimout(latest)))
-                    from = latest.ReceivingTime;
-
-                await foreach (var page in _database.GetSensorValuesPage(sensorId, from, to, count))
+                else
                 {
-                    var convertedValues = sensor.Convert(page);
+                    if (sensor is FileSensorModel)
+                        _fileHistoryLocks[sensorId] = true;
 
-                    yield return (includeTtl ? convertedValues : convertedValues.Where(IsNotTimout)).ToList();
+
+                    var includeTtl = options.HasFlag(RequestOptions.IncludeTtl);
+
+                    if (sensor.AggregateValues && IsBorderedValue(sensor, from.Ticks - 1, out var latest) && (includeTtl || IsNotTimout(latest)))
+                        from = latest.ReceivingTime;
+
+                    await foreach (var page in _database.GetSensorValuesPage(sensorId, from, to, count))
+                    {
+                        var convertedValues = sensor.Convert(page);
+
+                        yield return (includeTtl ? convertedValues : convertedValues.Where(IsNotTimout)).ToList();
+                    }
+
+
+                    if (sensor is FileSensorModel)
+                        _fileHistoryLocks[sensorId] = false;
                 }
-
-
-                _getHistoryLocks[sensorId] = false;
             }
         }
 

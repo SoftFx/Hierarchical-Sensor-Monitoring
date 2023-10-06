@@ -542,7 +542,7 @@ namespace HSMServer.Controllers
             var request = new GetSensorHistoryModel()
             {
                 EncodedId = encodedId,
-                BarsCount = -20,
+                Count = -20,
             };
 
             await StoredUser.History.Reload(_treeValuesCache, request);
