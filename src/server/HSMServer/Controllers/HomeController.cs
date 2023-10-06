@@ -129,6 +129,7 @@ namespace HSMServer.Controllers
                 while (current is not null)
                 {
                     idPath.Add(current.Id);
+                    CurrentUser.Tree.AddOpenedNode(current.Id);
                     Console.Write(current.Name);
                     Console.Write("/");
                     current = current.Parent as NodeViewModel;

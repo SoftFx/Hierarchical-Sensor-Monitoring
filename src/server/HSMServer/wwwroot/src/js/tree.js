@@ -25,29 +25,11 @@ window.initializeTree = function () {
                     return getNode;
                 },
                 data: function (node) {
-                    console.log(node)
                     return { 'id' : node.id };
                 }
-            }
+            },
+            animation : false
         },
-        // "search": {
-        //     "case_insensitive": false,
-        //     "ajax": {
-        //         url: searchNode,
-        //         'data': function (str){
-        //             console.log('sensing search str to the server')
-        //             return {
-        //                 'searchNamePattern': str
-        //             }
-        //         },
-        //         success: function (response) {
-        //             //updateTreeTimer();
-        //             $('#jstree').jstree('load_node', response);
-        //             console.log('response from server')
-        //             console.log(response)
-        //         }
-        //     }
-        // },
         "contextmenu": {
             "items": buildContextMenu
         },
@@ -81,13 +63,27 @@ window.initializeTree = function () {
         }).done(function (response){
             let ids = [];
             response.forEach(function (x){
-                ids.push(...x.split('/'))
+                ids.push(x.split('/'))
             })
-            $('#jstree').jstree('open_node', ids)
-           
-            console.log(ids)
+            
+            ids.forEach(function (x){
+                let i = 0;
+                openNode(x[i], getCallBack)
+
+                function getCallBack(){
+                    i++;
+                    if (i === x.length)
+                        return () => {};
+                    
+                    return openNode(x[i], getCallBack);
+                }
+            })
+            
+            function openNode(id, callBack){
+                $('#jstree').jstree('open_node', id, callBack);
+            }
+            
         })
-        //$("#jstree").jstree("search",value)
     });
 
     initializeActivateNodeTree();
