@@ -31,7 +31,7 @@ else
                     }
                     else
                     {
-                        <th title="Creating time">Date</th>
+                        <th class="text-nowrap" title="Creating time">Date</th>
                         <th id="lastUpdateTime_header" class="@(Model.AggregateValues ? string.Empty : "d-none")">Last update time</th>
                     }
                     <th id="receivingTime_header" class="d-none">Receiving time</th>
@@ -68,7 +68,7 @@ else
                         }
                         else
                         {
-                            <td>@value.Time.ToDefaultFormat()</td>
+                            <td class="text-nowrap">@value.Time.ToDefaultFormat()</td>
                             if (value.IsTimeout)
                             {
                                 <td id="lastUpdateTime_value@(i)" class="@(Model.AggregateValues ? string.Empty : "d-none")"></td>
