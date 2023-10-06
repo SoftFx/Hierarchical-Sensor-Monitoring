@@ -10,6 +10,8 @@ namespace HSMPingModule.PingServices;
 
 internal class PingService : BackgroundService
 {
+    private const int PingAttemnpCount = 5;
+
     private readonly ConcurrentQueue<(ResourceSensor resource, Task<PingResponse> request)> _pingRequests = new();
 
     private readonly Logger _logger = LogManager.GetCurrentClassLogger();
@@ -130,8 +132,7 @@ internal class PingService : BackgroundService
                     _logger.Info("Stop ping round. Start sending results...");
 
                     foreach ((var resource, var responses) in results)
-                        foreach (var response in responses)
-                            _collector.SendPingResult(resource, response);
+                        _collector.SendPingResult(resource, responses);
 
                     await Delay(_collector.PostPeriod);
                 }
@@ -152,16 +153,13 @@ internal class PingService : BackgroundService
     {
         _logger.Info($"Run master pinging round");
 
-        bool isOk = true;
+        bool isOk = false;
 
         foreach (var (master, ping) in _tree.MasterSites)
         {
             var result = await ping.SendPingRequest();
 
-            isOk &= result.Status == SensorStatus.Ok;
-
-            if (!isOk)
-                break;
+            isOk |= result.Status == SensorStatus.Ok;
         }
 
         _logger.Info($"Stop master pinging round");
@@ -180,7 +178,7 @@ internal class PingService : BackgroundService
 
         _logger.Info($"Run pinging round");
 
-        while (cnt++ < 3)
+        while (cnt++ < PingAttemnpCount)
         {
             _pingRequests.Clear();
 

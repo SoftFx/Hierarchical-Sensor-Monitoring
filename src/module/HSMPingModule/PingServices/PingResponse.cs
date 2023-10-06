@@ -23,7 +23,7 @@ internal record PingResponse
         if (reply.Status is IPStatus.Success)
         {
             Status = SensorStatus.Ok;
-            Comment = string.Empty;
+            Comment = nameof(SensorStatus.Ok);
             Value = reply.RoundtripTime / Milleseconds;
         }
         else
