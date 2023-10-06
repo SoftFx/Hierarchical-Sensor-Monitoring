@@ -113,7 +113,7 @@ namespace HSMServer.Controllers
                 : NotFound();
 
         [HttpPut]
-        public void RemoveRenderingNode(Guid nodeId) => CurrentUser.Tree.RemoveOpenedNode(nodeId);
+        public void RemoveRenderingNode(params Guid[] nodeIds) => CurrentUser.Tree.RemoveOpenedNode(nodeIds);
 
         [HttpGet]
         public IActionResult GetGrid(ChildrenPageRequest pageRequest)
@@ -496,7 +496,7 @@ namespace HSMServer.Controllers
             var request = new GetSensorHistoryModel()
             {
                 EncodedId = encodedId,
-                BarsCount = -20,
+                Count = -20,
             };
 
             await StoredUser.History.Reload(_treeValuesCache, request);

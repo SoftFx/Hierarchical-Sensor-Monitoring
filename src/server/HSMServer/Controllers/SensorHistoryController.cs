@@ -158,8 +158,8 @@ namespace HSMServer.Controllers
                 : Task.FromResult(_emptyJsonResult);
         }
 
-        public async Task<FileResult> ExportHistory([FromQuery(Name = "EncodedId")] string encodedId, [FromQuery(Name = "Type")] int type,
-            [FromQuery(Name = "From")] DateTime from, [FromQuery(Name = "To")] DateTime to)
+        public async Task<FileResult> ExportHistory([FromQuery(Name = "EncodedId")] string encodedId, [FromQuery(Name = "Type")] int type, 
+            [FromQuery] bool addHiddenColumns, [FromQuery(Name = "From")] DateTime from, [FromQuery(Name = "To")] DateTime to)
         {
             if (!TryGetSensor(encodedId, out var sensor))
                 return null;
@@ -167,8 +167,10 @@ namespace HSMServer.Controllers
             string fileName = $"{sensor.FullPath.Replace('/', '_')}_from_{from:s}_to{to:s}.csv";
             Response.Headers.Add("Content-Disposition", $"attachment;filename={fileName}");
 
-            var values = await GetSensorValues(encodedId, from.ToUtcKind(), to.ToUtcKind(), MaxHistoryCount);
-            var content = Encoding.UTF8.GetBytes(values.ConvertToCsv());
+            var values = await GetSensorValues(encodedId, from.ToUtcKind(), to.ToUtcKind(), MaxHistoryCount, RequestOptions.IncludeTtl);
+            _tree.Sensors.TryGetValue(Guid.Parse(encodedId), out var currentSensor);
+            var exportOptions = addHiddenColumns ? currentSensor.AggregateValues ? ExportOptions.Aggregated : ExportOptions.Hidden : ExportOptions.Simple;
+            var content = Encoding.UTF8.GetBytes(values.ConvertToCsv(exportOptions));
 
             return File(content, fileName.GetContentType(), fileName);
         }
