@@ -20,12 +20,18 @@ namespace HSMServer.Extensions
 
         internal static Dictionary<Guid, string> GetAvailableChats(this NodeViewModel node, ITelegramChatsManager chatsManager)
         {
+            node.TryGetChats(out var folderChats);
+
+            return GetAvailableChats(folderChats, chatsManager);
+        }
+
+        internal static Dictionary<Guid, string> GetAvailableChats(this HashSet<Guid> folderChats, ITelegramChatsManager chatsManager)
+        {
             var availableChats = new Dictionary<Guid, string>(1 << 3);
 
-            if (node.TryGetChats(out var folderChats))
-                foreach (var chat in chatsManager.GetValues())
-                    if (folderChats.Contains(chat.Id))
-                        availableChats.Add(chat.Id, chat.Name);
+            foreach (var chat in chatsManager.GetValues())
+                if (folderChats.Contains(chat.Id))
+                    availableChats.Add(chat.Id, chat.Name);
 
             return availableChats;
         }

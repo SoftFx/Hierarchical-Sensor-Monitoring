@@ -1,10 +1,13 @@
 ﻿@using HSMServer.Constants
 @using HSMServer.Controllers
 @using HSMServer.Extensions
+@using HSMServer.Notifications
 @using HSMServer.Model.Authentication
 @using HSMServer.Model.Folders.ViewModels
 
 @model FolderViewModel
+
+@inject ITelegramChatsManager TelegramChatsManager
 
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
 
@@ -33,6 +36,13 @@
         <div id='collapse_@Model.Id' class='accordion-collapse collapse show text-break' aria-labelledby='heading_@Model.Id' data-bs-parent='#folderData_@Model.Id'>
             <div id="accordionBody_@Model.Id" class='accordion-body p-3'>
                 @await Html.PartialAsync("_ProductList", Model)
+
+                @if (Model.TelegramChats is not null)
+                {
+                    <div>
+                        <b>Telegram chats:</b> <span style='color: #0366d6;'>@string.Join(", ", Model.TelegramChats.GetAvailableChats(TelegramChatsManager).Values.OrderBy(s => s))</span>
+                    </div>
+                }
             </div>
         </div>
     </div>
