@@ -452,7 +452,7 @@ namespace HSMServer.Core.Cache
 
         public void SendPolicyResult(BaseSensorModel sensor, PolicyResult? policy = null)
         {
-            if (sensor.State != SensorState.Muted)
+            if (sensor.State != SensorState.Muted && (!sensor.Status?.IsOfftime ?? true))
                 ChangePolicyResultEvent?.Invoke(policy ?? sensor.PolicyResult);
         }
 
