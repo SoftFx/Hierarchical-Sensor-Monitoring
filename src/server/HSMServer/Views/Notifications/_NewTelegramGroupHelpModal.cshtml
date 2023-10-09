@@ -4,23 +4,32 @@
 
 @inject NotificationsCenter NotificationsCenter
 
+@addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
+
 
 <div class="modal fade" tabindex="-1" role="dialog" id="newTelegramGroupHelp_modal">
     <div class="modal-dialog modal-dialog-centered" role="document">
         <div class="modal-content">
             <div class="modal-header">
-                <h5 class="modal-title">Add telegram group help</h5>
+                <h5 class="modal-title">Add new telegram chat help</h5>
                 <button type="button" class="btn-close" onclick="hideAddTelegramGroupHelpModal()" aria-label="Close"></button>
             </div>
 
             <div id="newTelegramGroupHelp_modalBody" class="modal-body">
-                <ul class="settingsList list-group">
-                    <li class="list-group-item pt-0">1. Create group chat in Telegram.</li>
-                    <li class="list-group-item">2. Add Telegram Bot (@NotificationsCenter.TelegramBot.BotName) to group chat.</li>
-                    <li class="list-group-item">3. Give Admin right to Telegram Bot (@NotificationsCenter.TelegramBot.BotName).</li>
-                    <li class="list-group-item">4. Send <a href="javascript:getGroupStartCommand()">this message</a> from clipboard to group chat.</li>
-                    <li class="list-group-item">The bot will send a notification that it has been successfully initialized.</li>
-                </ul>
+                <h5>For group chat</h5>
+                <p class="ms-2">
+                    1. <a href='https://telegram.org/faq?setln=uz#q-how-do-i-create-a-group' target='_blank'>Create</a> group chat in Telegram. <br />
+                    2. <a href='https://telegram.org/faq?setln=uz#q-how-do-i-add-more-members-what-39s-an-invite-link' target='_blank'>Add</a> Telegram Bot (@NotificationsCenter.TelegramBot.BotName) to group chat. <br />
+                    3. <a href='https://telegram.org/faq?setln=uz#q-can-i-assign-administrators' target='_blank'>Give Admin right</a> to Telegram Bot (@NotificationsCenter.TelegramBot.BotName). <br />
+                    4. Send <a href="javascript:getGroupStartCommand()">this message</a> from clipboard to group chat.
+                </p>
+
+                <hr />
+
+                <h5>For direct chat</h5>
+                <p class="ms-2">
+                    Click <a asp-action="@nameof(NotificationsController.OpenInvitationLink)" target="_blank">invitation link</a>. and press <b>Start</b> button at opened direct chat with Telegram Bot (@NotificationsCenter.TelegramBot.BotName).
+                </p>
             </div>
         </div>
     </div>

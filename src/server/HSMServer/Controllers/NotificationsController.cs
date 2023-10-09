@@ -3,7 +3,6 @@ using HSMServer.Constants;
 using HSMServer.Folders;
 using HSMServer.Helpers;
 using HSMServer.Model.Authentication;
-using HSMServer.Model.NotificationViewModels;
 using HSMServer.Model.TreeViewModel;
 using HSMServer.Notification.Settings;
 using HSMServer.Notifications;
@@ -32,8 +31,6 @@ namespace HSMServer.Controllers
             _telegramBot = notifications.TelegramBot;
         }
 
-
-        public IActionResult Index() => View(new ChatsViewModel(_chatsManager.GetValues(), _tree, _userManager));
 
         public RedirectResult OpenInvitationLink() =>
             Redirect(_telegramBot.GetInvitationLink(GetCurrentUser()));
@@ -78,7 +75,7 @@ namespace HSMServer.Controllers
 
         private RedirectToActionResult GetResult(string entityId) =>
             string.IsNullOrEmpty(entityId)
-                ? RedirectToAction(nameof(Index))
+                ? RedirectToAction("Index")
                 : RedirectToAction(nameof(ProductController.EditProduct), ViewConstants.ProductController, new { Product = entityId });
     }
 }

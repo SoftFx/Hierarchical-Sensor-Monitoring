@@ -1,7 +1,6 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.ConcurrentStorage;
 using System;
-using System.Collections.Generic;
 using Telegram.Bot.Types;
 
 namespace HSMServer.Notifications
@@ -15,9 +14,6 @@ namespace HSMServer.Notifications
 
     public sealed class TelegramChat : IServerModel<TelegramChatEntity, TelegramChatUpdate>
     {
-        public HashSet<Guid> Folders { get; } = new();
-
-
         public Guid Id { get; init; } // TODO: should be just get after telegram chats migration
 
         public Guid? AuthorId { get; }
@@ -72,16 +68,6 @@ namespace HSMServer.Notifications
             AuthorizationTime = new DateTime(entity.AuthorizationTime);
         }
 
-
-        internal TelegramChatEntityOld ToEntityOld() =>
-            new()
-            {
-                SystemId = Id.ToByteArray(),
-                Id = ChatId?.Identifier ?? 0L,
-                IsUserChat = IsUserChat,
-                Name = Name,
-                AuthorizationTime = AuthorizationTime.Ticks,
-            };
 
         public void Update(TelegramChatUpdate update)
         {

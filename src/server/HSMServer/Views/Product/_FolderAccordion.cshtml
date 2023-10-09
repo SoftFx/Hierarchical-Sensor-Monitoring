@@ -39,9 +39,16 @@
 
                 @if (Model.TelegramChats is not null)
                 {
-                    <div>
-                        <b>Telegram chats:</b> <span style='color: #0366d6;'>@string.Join(", ", Model.TelegramChats.GetAvailableChats(TelegramChatsManager).Values.OrderBy(s => s))</span>
-                    </div>
+                    @if (Model.TelegramChats.Count > 0)
+                    {
+                        <div>
+                            <b>Telegram chats:</b> <span style='color: #0366d6;'>@string.Join(", ", Model.TelegramChats.GetAvailableChats(TelegramChatsManager).Values.OrderBy(s => s))</span>
+                        </div>
+                    }
+                    else
+                    {
+                        <b>No telegram chats</b>
+                    }
                 }
             </div>
         </div>

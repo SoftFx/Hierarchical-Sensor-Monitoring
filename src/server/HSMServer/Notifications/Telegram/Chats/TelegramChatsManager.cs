@@ -56,11 +56,6 @@ namespace HSMServer.Notifications
                 if (_userManager.TryGetValueById(chat.AuthorId, out var author))
                     chat.Author = author.Name;
             }
-
-            foreach (var folder in _folderManager.GetValues())
-                foreach (var chatId in folder.TelegramChats)
-                    if (TryGetValue(chatId, out var chat))
-                        chat.Folders.Add(folder.Id);
         }
 
         protected override TelegramChat FromEntity(TelegramChatEntity entity) => new(entity);

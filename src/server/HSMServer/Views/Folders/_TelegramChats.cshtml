@@ -1,6 +1,7 @@
 ﻿@using HSMServer.Extensions
 @using HSMServer.Notifications
 @using HSMServer.Controllers
+@using HSMServer.Constants
 @using HSMServer.Model.Folders.ViewModels
 
 @model FolderTelegramViewModel
@@ -8,25 +9,34 @@
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
 
 
-<div class="mt-2">
-    <div id="chatsSelect" class="selectpicker">
-        <select class="selectpicker" asp-for="NewChats" multiple
-                data-width="100%" data-live-search="true" data-placeholder="Choose chats to add">
-            <option disabled>Groups</option>
-            @foreach (var chat in Model.ChatsToAdd.GetGroups())
-            {
-                <option value="@chat.Id">@chat.Name</option>
-            }
+@await Html.PartialAsync("~/Views/Notifications/_NewTelegramGroupHelpModal.cshtml")
 
-            <option data-divider="true"></option>
-            <option disabled>Users</option>
-            @foreach (var chat in Model.ChatsToAdd.GetPrivates())
-            {
-                <option value="@chat.Id">@chat.Name</option>
-            }
-        </select>
-    </div>
+<div class="my-2" align="right">
+    <a href="javascript:showAddTelegramGroupHelpModal();" class="btn btn-link p-0">
+        <i class="fa-solid fa-plus"></i> Add new chat
+    </a>
+</div>
 
+<div id="chatsSelect" class="selectpicker">
+    <select class="selectpicker" asp-for="NewChats" multiple
+            data-width="100%" data-live-search="true" data-placeholder="Choose chats to add">
+        <option disabled>Groups</option>
+        @foreach (var chat in Model.ChatsToAdd.GetGroups())
+        {
+            <option value="@chat.Id">@chat.Name</option>
+        }
+
+        <option data-divider="true"></option>
+        <option disabled>Users</option>
+        @foreach (var chat in Model.ChatsToAdd.GetPrivates())
+        {
+            <option value="@chat.Id">@chat.Name</option>
+        }
+    </select>
+</div>
+
+@if (Model.ConnectedChats.Count > 0)
+{
     <table class="table table-striped">
         <thead>
             <tr>
@@ -41,8 +51,21 @@
             @foreach (var chat in Model.ConnectedChats)
             {
                 <tr id="row_chat_@chat.Id">
-                    <td class="text-break">@chat.Name</td>
-                    <td class="text-center">@(chat.Type == ConnectedChatType.TelegramPrivate ? "User" : "Group")</td>
+                    <td class="text-break">
+                        @if (chat.Type == ConnectedChatType.TelegramPrivate)
+                        {
+                            <span>@chat.Name</span>
+                        }
+                        else
+                        {
+                            <a target="_blank" asp-controller="@ViewConstants.NotificationsController" asp-action="@nameof(NotificationsController.OpenTelegramGroup)" asp-route-chatId="@chat.ChatId">
+                                @chat.Name
+                            </a>
+                        }
+                    </td>
+                    <td class="text-center">@(
+                chat.Type == ConnectedChatType.TelegramPrivate ? "Direct" : "Group"
+                )</td>
                     <td class="text-break text-center">
                         @if (chat.SendMessages)
                         {
@@ -61,6 +84,25 @@
                                         Remove
                                     </a>
                                 </li>
+                                <li>
+                                    <a>Send test message</a> @*TODO: should be realized for private and group chats*@
+                                    @*@if (chat.IsUserChat)
+                                    {
+                                        <a class="dropdown-item text-decoration-none fw-normal" asp-action="@nameof(NotificationsController.SendTestTelegramMessage)"
+                                            asp-route-chatId="@chat.ChatId">
+                                            Send test message
+                                        </a>
+                                    }
+                                    else
+                                    {
+                                        <a class="dropdown-item text-decoration-none fw-normal" asp-controller="@ViewConstants.NotificationsController"
+                                            asp-action="@nameof(NotificationsController.SendTestTelegramMessage)"
+                                            asp-route-entityId="@Model.EntityId"
+                                            asp-route-chatId="@chat.ChatId">
+                                            Send test message
+                                        </a>
+                                    }*@
+                                </li>
                             </ul>
                         </div>
                     </td>
@@ -68,21 +110,21 @@
             }
         </tbody>
     </table>
+}
 
-    <div class="d-flex justify-content-end my-2">
-        <button type="submit" class="btn btn-secondary independentSizeButton">Save</button>
-    </div>
-
-    @*There is info about chats for FormData*@
-    <div style="display:none">
-        @for (int i = 0; i < Model.ConnectedChatIds.Count; i++)
-        {
-            <input id="folder_chat_@Model.ConnectedChatIds[i]" asp-for="ConnectedChatIds[i]" value="@Model.ConnectedChatIds[i]" />
-        }
-    </div>
-
-    <input asp-for="FolderId" value="@Model.FolderId" style="display: none" />
+<div class="d-flex justify-content-end my-2">
+    <button type="submit" class="btn btn-secondary independentSizeButton">Save</button>
 </div>
+
+@*There is info about chats for FormData*@
+<div style="display:none">
+    @for (int i = 0; i < Model.ConnectedChatIds.Count; i++)
+    {
+        <input id="folder_chat_@Model.ConnectedChatIds[i]" asp-for="ConnectedChatIds[i]" value="@Model.ConnectedChatIds[i]" />
+    }
+</div>
+
+<input asp-for="FolderId" value="@Model.FolderId" style="display: none" />
 
 
 <script>
