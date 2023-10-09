@@ -97,37 +97,21 @@ namespace HSMServer.Controllers
 
 
         [HttpPost]
-        [FolderRoleFilterByEditCleanup(nameof(folderCleanup), ProductRoleEnum.ProductManager)]
-        public async Task<IActionResult> EditCleanup(FolderCleanupViewModel folderCleanup)
+        [FolderRoleFilterByEditSettings(nameof(folderSettings), ProductRoleEnum.ProductManager)]
+        public async Task<IActionResult> EditSettings(FolderSettingsViewModel folderSettings)
         {
             var update = new FolderUpdate()
             {
-                Id = folderCleanup.Id,
-                KeepHistory = folderCleanup.SavedHistoryPeriod,
-                SelfDestroy = folderCleanup.SelfDestoryPeriod,
+                Id = folderSettings.Id,
+                TTL = folderSettings.ExpectedUpdateInterval,
+                KeepHistory = folderSettings.SavedHistoryPeriod,
+                SelfDestroy = folderSettings.SelfDestoryPeriod,
                 Initiator = CurrentInitiator
             };
 
             await _folderManager.TryUpdate(update);
 
-            return PartialView("_Cleanup", new FolderCleanupViewModel(_folderManager[update.Id]));
-        }
-
-
-        [HttpPost]
-        [FolderRoleFilterByEditAlerts(nameof(folderAlerts), ProductRoleEnum.ProductManager)]
-        public async Task<IActionResult> EditAlerts(FolderAlertsViewModel folderAlerts)
-        {
-            var update = new FolderUpdate()
-            {
-                Id = folderAlerts.Id,
-                TTL = folderAlerts.ExpectedUpdateInterval,
-                Initiator = CurrentInitiator
-            };
-
-            await _folderManager.TryUpdate(update);
-
-            return PartialView("_Alerts", new FolderAlertsViewModel(_folderManager[update.Id]));
+            return PartialView("_Settings", new FolderSettingsViewModel(_folderManager[update.Id]));
         }
 
 
