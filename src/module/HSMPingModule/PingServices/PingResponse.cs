@@ -23,7 +23,7 @@ internal record PingResponse
         if (reply.Status is IPStatus.Success)
         {
             Status = SensorStatus.Ok;
-            Comment = string.Empty;
+            Comment = nameof(SensorStatus.Ok);
             Value = reply.RoundtripTime / Milleseconds;
         }
         else
@@ -40,6 +40,7 @@ internal record PingResponse
     {
         Status = SensorStatus.Error;
         Comment = exception.Message;
+        // Value = double.NaN; TODO: should be uncomment after chart fixes
         Value = 0;
 
         _str = BuildStrState();

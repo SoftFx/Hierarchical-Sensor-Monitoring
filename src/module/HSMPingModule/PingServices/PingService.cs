@@ -10,9 +10,10 @@ namespace HSMPingModule.PingServices;
 
 internal class PingService : BackgroundService
 {
+    private const int PingAttemnpCount = 5;
+
     private readonly ConcurrentQueue<(ResourceSensor resource, Task<PingResponse> request)> _pingRequests = new();
 
-    private readonly CancellationTokenSource _tokenSource = new();
     private readonly Logger _logger = LogManager.GetCurrentClassLogger();
 
     private readonly IDataCollectorWrapper _collector;
@@ -35,16 +36,36 @@ internal class PingService : BackgroundService
 
     public override async Task StartAsync(CancellationToken token)
     {
+        _logger.Info($"{nameof(PingService)} is starting...");
+
+        await _vpn.Disconnect(); // protection from external VPN
         await _collector.Start();
 
-        var connect = await _vpn.Connect();
+        await Task.Delay(_collector.PostPeriod * 2, token);
 
-        if (connect != null && !connect.IsOk)
+        var isConnected = false;
+
+        _logger.Info("Try find available country");
+
+        for (int i = 0; i < 10; ++i)
         {
-            _collector.AppNode.SendVpnStatus(connect.IsOk, _vpn.VpnDescription, connect.Error);
+            var connect = await _vpn.Connect();
+            var message = connect.IsOk ? connect.Result : connect.Error;
+            isConnected = connect.IsOk;
+
+            _collector.AppNode.SendVpnStatus(connect.IsOk, _vpn.VpnDescription, $"Attempt #{i + 1}: {message}");
+
+            if (connect.IsOk)
+            {
+                _logger.Info($"Successful connect! {connect.Result}");
+                break;
+            }
+
             _logger.Error($"Connection check is failed! {connect.Error}");
-            return;
         }
+
+        if (!isConnected)
+            return;
 
         var vpnStatus = await _vpn.LoadCountries();
 
@@ -55,21 +76,25 @@ internal class PingService : BackgroundService
 
     public override Task StopAsync(CancellationToken token)
     {
-        _tokenSource.Cancel();
-
         return _collector.Stop().ContinueWith(_ => base.StopAsync(token)).Unwrap();
     }
 
 
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    protected override async Task ExecuteAsync(CancellationToken token)
     {
+        Task Delay(TimeSpan time) => Task.Delay(time, token);
+
         do
         {
+            _logger.Info("Await next activation...");
+
             var start = Ceil(DateTime.UtcNow, PingDelay);
 
-            await Task.Delay(start - DateTime.UtcNow, _tokenSource.Token);
+            await Delay(start - DateTime.UtcNow);
 
-            foreach ((var country, var sensors) in _tree.CountrySet)
+            _logger.Info("Ping activation...");
+
+            foreach (var (country, sensors) in _tree.CountrySet)
             {
                 try
                 {
@@ -81,16 +106,35 @@ internal class PingService : BackgroundService
                         continue;
                     }
 
-                    _pingRequests.Clear();
+                    await Delay(TimeSpan.FromSeconds(2));
 
-                    foreach (var sensor in sensors)
-                        _pingRequests.Enqueue((sensor, sensor.PingAdapter.SendPingRequest()));
+                    var masterResult = await MasterPingRound();
 
-                    await Task.WhenAll(_pingRequests.Select(u => u.request));
+                    if (!masterResult)
+                    {
+                        await _vpn.Disconnect();
+                        await Delay(TimeSpan.FromSeconds(2));
+
+                        var message = $"Master ping for {country} is failed. Current ping round skipped";
+
+                        _collector.AppNode.MasterPingFail.AddValue(message);
+                        _logger.Error(message);
+                        continue;
+                    }
+
+                    await Delay(TimeSpan.FromSeconds(2));
+
+                    var results = await RunPingRound(sensors);
+
                     await _vpn.Disconnect();
+                    await Delay(TimeSpan.FromSeconds(2));
 
-                    foreach ((var resource, var request) in _pingRequests)
-                        _collector.SendPingResult(resource, request.Result);
+                    _logger.Info("Stop ping round. Start sending results...");
+
+                    foreach ((var resource, var responses) in results)
+                        _collector.SendPingResult(resource, responses);
+
+                    await Delay(_collector.PostPeriod);
                 }
                 catch (Exception ex)
                 {
@@ -101,7 +145,64 @@ internal class PingService : BackgroundService
                 }
             }
         }
-        while (!_tokenSource.IsCancellationRequested);
+        while (!token.IsCancellationRequested);
+    }
+
+
+    private async Task<bool> MasterPingRound()
+    {
+        _logger.Info($"Run master pinging round");
+
+        bool isOk = false;
+
+        foreach (var (master, ping) in _tree.MasterSites)
+        {
+            var result = await ping.SendPingRequest();
+
+            isOk |= result.Status == SensorStatus.Ok;
+        }
+
+        _logger.Info($"Stop master pinging round");
+
+        return isOk;
+    }
+
+    private async Task<List<(ResourceSensor, List<PingResponse>)>> RunPingRound(List<ResourceSensor> sensors)
+    {
+        var results = new ConcurrentDictionary<string, List<PingResponse>>();
+
+        foreach (var sensor in sensors)
+            results.TryAdd(sensor.SensorPath, new List<PingResponse>());
+
+        var cnt = 0;
+
+        _logger.Info($"Run pinging round");
+
+        while (cnt++ < PingAttemnpCount)
+        {
+            _pingRequests.Clear();
+
+            _logger.Info($"Round {cnt}");
+
+            foreach (var sensor in sensors)
+                _pingRequests.Enqueue((sensor, sensor.PingAdapter.SendPingRequest()));
+
+            await Task.WhenAll(_pingRequests.Select(u => u.request));
+
+            foreach ((var resource, var request) in _pingRequests)
+                results[resource.SensorPath].Add(request.Result);
+
+            await Task.Delay(TimeSpan.FromSeconds(1));
+        }
+
+        _logger.Info($"Stop pinging round");
+
+        var ans = new List<(ResourceSensor, List<PingResponse>)>();
+
+        foreach (var (name, pings) in results)
+            ans.Add((sensors.FirstOrDefault(u => u.SensorPath == name), pings));
+
+        return ans;
     }
 
 

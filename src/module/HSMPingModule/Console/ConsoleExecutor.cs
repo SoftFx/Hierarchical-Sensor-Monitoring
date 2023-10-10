@@ -1,4 +1,5 @@
 ﻿using NLog;
+using System;
 using System.Diagnostics;
 using System.Text;
 
@@ -6,148 +7,72 @@ namespace HSMPingModule.Console
 {
     internal static class ConsoleExecutor
     {
+        private const int MaxRequestDelay = 30;
+
         private static readonly Logger _logger = LogManager.GetCurrentClassLogger();
-
-        private static readonly StreamWriter _commandWriter;
-        private static readonly Process _cli;
-
-
-        //static ConsoleExecutor()
-        //{
-        //    //try
-        //    //{
-        //    //    _cli = new Process()
-        //    //    {
-        //    //        StartInfo = new ProcessStartInfo("/bin/bash")
-        //    //        {
-        //    //            RedirectStandardInput = true,
-        //    //            RedirectStandardOutput = true,
-        //    //            UseShellExecute = false,
-        //    //            CreateNoWindow = true,
-        //    //        },
-        //    //    };
-
-        //    //    _cli.Start();
-
-        //    //    _commandWriter = _cli.StandardInput;
-        //    //}
-        //    //catch (Exception ex)
-        //    //{
-        //    //    _logger.Error(ex);
-        //    //}
-        //}
+        private static readonly StringBuilder _sb = new(1 << 5);
 
 
         public static async Task<string> Run(string command, HashSet<string> skipOutput = null)
         {
-            _logger.Info($"Run command: {command}");
-
-            using var process = new Process()
+            try
             {
-                StartInfo = new ProcessStartInfo
+                _logger.Info($"Run command: {command}");
+
+                using var process = new Process()
                 {
-                    FileName = "/bin/bash",
-                    Arguments = $"-c \"{command}\"",
-                    RedirectStandardOutput = true,
-                    UseShellExecute = false,
-                    CreateNoWindow = true,
-                },
-            };
+                    StartInfo = new ProcessStartInfo
+                    {
+                        FileName = "/bin/bash",
+                        Arguments = $"-c \"{command}\"",
+                        RedirectStandardOutput = true,
+                        UseShellExecute = false,
+                        CreateNoWindow = true,
+                    },
+                };
 
-            process.Start();
+                process.Start();
 
-            //await Task.Delay(5000); // TODO should be changed to disconnect task
+                var reader = process.StandardOutput;
+                var longTaskCancel = new CancellationTokenSource();
 
-            var reader = process.StandardOutput;
+                _sb.Clear();
 
-            //var result = await process.StandardOutput.ReadToEndAsync();
-
-            var sb = new StringBuilder(1 << 5);
-
-            while (!reader.EndOfStream)
-            {
-                var line = (await reader.ReadLineAsync()).Trim();
-
-                if (!string.IsNullOrEmpty(line) && !(skipOutput?.Contains(line) ?? false))
+                _ = Task.Run(async () =>
                 {
-                    sb.AppendLine(line);
+                    await Task.Delay(TimeSpan.FromSeconds(MaxRequestDelay));
 
-                    _logger.Debug(line);
+                    _logger.Info($"Send cancel request");
+
+                    longTaskCancel.Cancel();
+                });
+
+                while (!reader.EndOfStream)
+                {
+                    var line = (await reader.ReadLineAsync(longTaskCancel.Token)).Trim();
+
+                    if (!string.IsNullOrEmpty(line) && !(skipOutput?.Contains(line) ?? false))
+                    {
+                        _sb.AppendLine(line);
+
+                        _logger.Debug(line);
+                    }
+
+                    if (longTaskCancel.IsCancellationRequested)
+                        break;
+
+                    await Task.Delay(100);
                 }
 
-                await Task.Delay(100);
+
+                return _sb.ToString();
+            }
+            catch (Exception ex)
+            {
+                _logger.Error(ex);
             }
 
-
-            //await Task.Delay(5000); // TODO should be changed to disconnect task
-
-            await process.WaitForExitAsync();
-
-            return sb.ToString();
-
-            //if (_commandWriter.BaseStream.CanWrite)
-            //{
-            //    _commandWriter.WriteLine($"-c ({command})");
-
-            //    await Task.Delay(5000); // TODO should be changed to disconnect task
-
-            //    var result = await _cli.StandardOutput.ReadToEndAsync();
-
-            //    _logger.Debug(result);
-
-            //    return result;
-            //}
-            //else
-            //    _logger.Error("Cannot write command to cli");
-
-            //return string.Empty;
-
-            //var cli = new Process()
-            //{
-            //    StartInfo = new ProcessStartInfo()
-            //    {
-            //        FileName = "/bin/bash",
-            //        Arguments = $"-c '{command}'",
-            //        RedirectStandardOutput = true,
-            //        UseShellExecute = false,
-            //        CreateNoWindow = true,
-            //    },
-            //};
-
-            //cli.Start();
-
-            //await Task.Delay(5000); // TODO should be changed to disconnect task
-
-            //var result = await cli.StandardOutput.ReadToEndAsync();
-
-            //_logger.Debug(result);
-
-            //await cli.WaitForExitAsync();
-
-            //return result;
-
-            ////if (_commandWriter.BaseStream.CanWrite)
-            ////{
-            ////    _commandWriter.WriteLine($"-c ({command})");
-
-            ////    await Task.Delay(5000); // TODO should be changed to disconnect task
-
-            ////    var result = await _cli.StandardOutput.ReadToEndAsync();
-
-            ////    _logger.Debug(result);
-
-            ////    return result;
-            ////}
-            ////else
-            ////    _logger.Error("Cannot write command to cli");
-
-            ////return string.Empty;
-        }
-
-        public static Task Stop()
-        {
-            _commandWriter.Dispose();
-            return _cli.WaitForExitAsync();
+            return string.Empty;
         }
     }
 }

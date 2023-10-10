@@ -5,6 +5,7 @@ using HSMPingModule.Config;
 using HSMPingModule.PingServices;
 using HSMPingModule.SensorStructure;
 using HSMPingModule.Settings;
+using HSMSensorDataObjects;
 using NLog;
 using System.Collections.Concurrent;
 
@@ -22,6 +23,8 @@ internal sealed class DataCollectorWrapper : IDataCollectorWrapper
 
     public ApplicationNode AppNode { get; }
 
+    public TimeSpan PostPeriod { get; } = TimeSpan.FromSeconds(10);
+
 
     public DataCollectorWrapper(ServiceConfig config)
     {
@@ -33,12 +36,14 @@ internal sealed class DataCollectorWrapper : IDataCollectorWrapper
         {
             ServerAddress = _config.ServerAddress,
             AccessKey = _config.Key,
-            Port = _config.Port
+            Port = _config.Port,
+
+            PackageCollectPeriod = PostPeriod,
         };
 
         _logger.Info("Product version: {version}", versionOptions.Version);
         _logger.Info("Access key: {key}", options.AccessKey);
-        _logger.Info("Server address: {key}", options.ServerAddress);
+        _logger.Info("Server address: {uri}", options.ServerAddress);
         _logger.Info("Server port: {port}", options.Port);
 
         _collector = new DataCollector(options).AddNLog();
@@ -63,7 +68,7 @@ internal sealed class DataCollectorWrapper : IDataCollectorWrapper
     public Task Start() => _collector.Start().ContinueWith(_ => _logger.Info("Collector started"));
 
 
-    public void SendPingResult(ResourceSensor resource, PingResponse result)
+    public void SendPingResult(ResourceSensor resource, List<PingResponse> results)
     {
         var sensorPath = resource.SensorPath;
 
@@ -76,8 +81,17 @@ internal sealed class DataCollectorWrapper : IDataCollectorWrapper
             _logger.Info("New sensor has been added: {path}", sensorPath);
         }
 
-        sensor.AddValue(result.Value, result.Status, result.Comment);
+        var comments = string.Join('-', results.Select(u => u.Comment));
 
-        _logger.Info("New sensor value has been sent: {path} -> {value}", sensorPath, result);
+        if (results.Any(u => u.Status == SensorStatus.Ok))
+        {
+            var avr = results.Where(u => !double.IsNaN(u.Value)).Average(u => u.Value);
+
+            sensor.AddValue(avr, SensorStatus.Ok, comments);
+        }
+        else
+            sensor.AddValue(0, SensorStatus.Error, $"All {results.Count} requests have been failded: {comments}");
+
+        _logger.Info("New sensor value has been sent: {path} -> {value}", sensorPath, comments);
     }
 }
