@@ -6,13 +6,16 @@ namespace HSMServer.Core.Model.Policies
 {
     public sealed record AlertResult
     {
+        public TimeIntervalModel Sensativity { get; }
+
         public AlertDestination Destination { get; }
 
-        public string Icon { get; }
+        public Guid PolicyId { get; }
+
 
         public string Template { get; }
 
-        public Guid PolicyId { get; }
+        public string Icon { get; }
 
 
         public AlertState LastState { get; private set; }
@@ -27,10 +30,11 @@ namespace HSMServer.Core.Model.Policies
 
         internal AlertResult(Policy policy)
         {
-            Icon = policy.Icon;
-            PolicyId = policy.Id;
-            Template = policy.Template;
             Destination = new(policy.Destination.AllChats, new HashSet<Guid>(policy.Destination.Chats.Keys));
+            Sensativity = policy.Sensitivity;
+            Template = policy.Template;
+            PolicyId = policy.Id;
+            Icon = policy.Icon;
 
             AddPolicyResult(policy);
         }

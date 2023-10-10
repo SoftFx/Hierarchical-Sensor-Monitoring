@@ -8,6 +8,7 @@ namespace HSMPingModule.SensorStructure
     {
         private const string ApplicationNodeName = "Application";
         private const string ExceptionSensorName = "Exceptions";
+        private const string MasterPingFailtSensorName = "Master ping fails";
         private const string VpnStatusSensorName = "Vpn status";
 
         private readonly IDataCollector _collector;
@@ -16,12 +17,15 @@ namespace HSMPingModule.SensorStructure
 
         internal IInstantValueSensor<string> Exceptions { get; }
 
+        internal IInstantValueSensor<string> MasterPingFail { get; }
+
 
         internal ApplicationNode(IDataCollector collector)
         {
             _collector = collector;
 
             Exceptions = _collector.CreateStringSensor(GetAppPath(ExceptionSensorName));
+            MasterPingFail = _collector.CreateStringSensor(GetAppPath(MasterPingFailtSensorName));
         }
 
 

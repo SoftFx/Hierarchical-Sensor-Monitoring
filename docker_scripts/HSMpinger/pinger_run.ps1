@@ -8,7 +8,7 @@ $FullContainerName = "${ContainerPrefix}_$Version"
 $NetworkName = "HSM-Ping-network"
 $ServerPrefix = "HSMServer_"
 
-$ServerHost = '' # must be defined
+$ServerHost = 'hsm.dev.com' # must be defined
 $NordVpnToken = '' # must be defined
 
 Write-Host "Check running pinger container"
@@ -49,9 +49,8 @@ Write-Host "Image id to run = $ExpectedImageId"
 #Windows directories
 $LogsFolder = "C:\HSMPinger\Logs:/HSMPingModule/Logs"
 $ConfigFolder = "C:\HSMPinger\Config:/HSMPingModule/Config"
-$SecondConfig = "C:\HSMPinger\SecondConfig:/Config"
 
-$ContainerId = docker run --user 0 -ti -d --name $FullContainerName --net=$NetworkName --cap-add=NET_ADMIN --cap-add=NET_RAW -e TOKEN=$NordVpnToken -e TECHNOLOGY=NordLynx -v $LogsFolder -v $ConfigFolder -v $SecondConfig $ExpectedImageId
+$ContainerId = docker run --user 0 -ti -d --name $FullContainerName --net=$NetworkName --cap-add=NET_ADMIN --cap-add=NET_RAW -e TOKEN=$NordVpnToken -e TECHNOLOGY=NordLynx -v $LogsFolder -v $ConfigFolder $ExpectedImageId
 
 
 $ServerContainerId = docker ps -q -f "name=$ServerPrefix"
@@ -64,7 +63,7 @@ else
     Write-Host "Running HSM server container hasn't be found"
 }
 
-Start-Sleep -Seconds 10 # delay for vpn initialization
+Start-Sleep -Seconds 30 # delay for vpn initialization
 
 $StartPingerCommand = "nordvpn d && dotnet HSMPingModule/HSMPingModule.dll"
 docker exec -u root -ti -d $ContainerId sh -c $StartPingerCommand

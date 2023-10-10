@@ -1,6 +1,7 @@
 ﻿using HSMSensorDataObjects.HistoryRequests;
 using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Model;
+using HSMServer.Core.Model.Policies;
 using HSMServer.Core.Model.Requests;
 using HSMServer.Core.TableOfChanges;
 using System;
@@ -23,7 +24,7 @@ namespace HSMServer.Core.Cache
         event Action<BaseSensorModel, ActionType> ChangeSensorEvent;
         event Action<AccessKeyModel, ActionType> ChangeAccessKeyEvent;
 
-        event Action<PolicyResult> ChangePolicyResultEvent;
+        event Action<List<AlertResult>> ThrowAlertResultsEvent;
 
         List<BaseSensorModel> GetSensors();
         List<AccessKeyModel> GetAccessKeys();

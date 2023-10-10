@@ -97,6 +97,8 @@ namespace HSMServer.Core.Model
 
         public bool ShouldDestroy => Settings.SelfDestroy.Value?.TimeIsUp(LastUpdate) ?? false;
 
+        public bool CanSendNotifications => State is SensorState.Available && (!Status?.IsOfftime ?? true);
+
 
         public DateTime LastUpdate => Storage.LastValue?.LastUpdateTime ?? DateTime.MinValue;
 

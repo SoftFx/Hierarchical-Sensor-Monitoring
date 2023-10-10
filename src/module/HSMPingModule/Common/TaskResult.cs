@@ -2,9 +2,9 @@
 {
     internal class TaskResult
     {
-        internal static Task<TaskResult> OkTask { get; } = Task.FromResult(Ok);
-
         internal static TaskResult Ok { get; } = new();
+
+        internal static Task<TaskResult> OkTask { get; } = Task.FromResult(Ok);
 
 
         public bool IsOk { get; }

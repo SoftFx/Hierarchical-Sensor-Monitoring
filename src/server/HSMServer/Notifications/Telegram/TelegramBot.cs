@@ -1,11 +1,13 @@
 ﻿using HSMServer.Authentication;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Model;
+using HSMServer.Core.Model.Policies;
 using HSMServer.Model.TreeViewModel;
 using HSMServer.Notification.Settings;
 using HSMServer.ServerConfiguration;
 using System;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -59,7 +61,7 @@ namespace HSMServer.Notifications
             _tree = tree;
 
             _cache.ChangeProductEvent += RemoveProductEventHandler;
-            _cache.ChangePolicyResultEvent += SendMessage;
+            _cache.ThrowAlertResultsEvent += SendMessage;
 
             _updateHandler = new(_addressBook, _userManager, _tree, _cache, config);
 
@@ -177,7 +179,7 @@ namespace HSMServer.Notifications
                     _addressBook.RegisterChat(product, chat);
         }
 
-        private void SendMessage(PolicyResult result)
+        private void SendMessage(List<AlertResult> result)
         {
             try
             {
