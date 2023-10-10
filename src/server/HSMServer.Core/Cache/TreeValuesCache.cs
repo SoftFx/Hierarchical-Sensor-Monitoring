@@ -8,6 +8,7 @@ using HSMServer.Core.Journal;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Policies;
 using HSMServer.Core.Model.Requests;
+using HSMServer.Core.Sensitivity;
 using HSMServer.Core.SensorsUpdatesQueue;
 using HSMServer.Core.TableOfChanges;
 using HSMServer.Core.TreeStateSnapshot;
@@ -35,6 +36,7 @@ namespace HSMServer.Core.Cache
         private readonly CGuidDict<bool> _fileHistoryLocks = new(); // TODO: get file history should be fixed without this crutch
 
         private readonly Logger _logger = LogManager.GetLogger(CommonConstants.InfrastructureLoggerName);
+        private readonly SensitivityStorage _sensativityStorage = new();
 
         private readonly ITreeStateSnapshot _snapshot;
         private readonly IUpdatesQueue _updatesQueue;
@@ -45,7 +47,7 @@ namespace HSMServer.Core.Cache
         public event Action<AccessKeyModel, ActionType> ChangeAccessKeyEvent;
         public event Action<BaseSensorModel, ActionType> ChangeSensorEvent;
         public event Action<ProductModel, ActionType> ChangeProductEvent;
-        public event Action<PolicyResult> ChangePolicyResultEvent;
+        public event Action<List<AlertResult>> ThrowAlertResultsEvent;
 
 
         public TreeValuesCache(IDatabaseCore database, ITreeStateSnapshot snapshot, IUpdatesQueue updatesQueue, IJournalService journalService)
@@ -55,7 +57,9 @@ namespace HSMServer.Core.Cache
 
             _updatesQueue = updatesQueue;
             _journalService = journalService;
+
             _updatesQueue.NewItemsEvent += UpdatesQueueNewItemsHandler;
+            _sensativityStorage.ThrowAlertResultsEvent += ThrowAlertResults;
 
             Initialize();
         }
@@ -70,10 +74,10 @@ namespace HSMServer.Core.Cache
 
         public void Dispose()
         {
+            _sensativityStorage.ThrowAlertResultsEvent -= ThrowAlertResults;
             _updatesQueue.NewItemsEvent -= UpdatesQueueNewItemsHandler;
-            _updatesQueue?.Dispose();
 
-
+            _updatesQueue.Dispose();
             _database.Dispose();
         }
 
@@ -450,10 +454,10 @@ namespace HSMServer.Core.Cache
         public BaseSensorModel GetSensor(Guid sensorId) => _sensors.GetValueOrDefault(sensorId);
 
 
-        public void SendPolicyResult(BaseSensorModel sensor, PolicyResult? policy = null)
+        public void ThrowAlertResults(Guid sensorId, List<AlertResult> alertResults)
         {
-            if (sensor.State != SensorState.Muted && (!sensor.Status?.IsOfftime ?? true))
-                ChangePolicyResultEvent?.Invoke(policy ?? sensor.PolicyResult);
+            if (_sensors.TryGetValue(sensorId, out var sensor) && sensor.CanSendNotifications)
+                ThrowAlertResultsEvent?.Invoke(alertResults);
         }
 
         public void SensorUpdateView(BaseSensorModel sensor) => ChangeSensorEvent?.Invoke(sensor, ActionType.Update);
@@ -636,8 +640,7 @@ namespace HSMServer.Core.Cache
             if (sensor.TryAddValue(value) && sensor.LastDbValue != null)
                 SaveSensorValueToDb(sensor.LastDbValue, sensor.Id);
 
-            if (!sensor.PolicyResult.IsOk)
-                SendPolicyResult(sensor);
+            _sensativityStorage.SaveOrSendPolicies(sensor.PolicyResult);
 
             SensorUpdateView(sensor);
         }
@@ -1075,7 +1078,7 @@ namespace HSMServer.Core.Cache
                         SaveSensorValueToDb(value, sensor.Id);
                 }
 
-                SendPolicyResult(sensor, timeout ? ttl.PolicyResult : ttl.Ok);
+                _sensativityStorage.SaveOrSendPolicies(timeout ? ttl.PolicyResult : ttl.Ok);
             }
 
             SensorUpdateView(sensor);

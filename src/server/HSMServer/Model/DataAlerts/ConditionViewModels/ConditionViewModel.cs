@@ -66,8 +66,8 @@ namespace HSMServer.Model.DataAlerts
 
             PropertiesItems = Properties.ToSelectedItems(k => k.GetDisplayName());
 
-            //if (!isMain)
-            //    PropertiesItems.Add(new SelectListItem(AlertProperty.Sensitivity.GetDisplayName(), nameof(AlertProperty.Sensitivity)));
+            if (!isMain)
+                PropertiesItems.Add(new SelectListItem(AlertProperty.Sensitivity.GetDisplayName(), nameof(AlertProperty.Sensitivity)));
 
             Property = Enum.Parse<AlertProperty>(PropertiesItems.FirstOrDefault()?.Value);
         }
