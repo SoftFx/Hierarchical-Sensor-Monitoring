@@ -210,10 +210,12 @@ namespace HSMServer.Model.DataAlerts
             if (policy.Sensitivity != null)
             {
                 var condition = CreateCondition(false);
-                var sensitivityViewModel = new TimeIntervalViewModel(null).FromModel(policy.Sensitivity, PredefinedIntervals.ForRestore);
 
                 condition.Property = AlertProperty.Sensitivity;
-                condition.Sensitivity = new TimeIntervalViewModel(sensitivityViewModel, PredefinedIntervals.ForRestore) { IsAlertBlock = true };
+                condition.Sensitivity = new TimeIntervalViewModel(PredefinedIntervals.ForRestore)
+                {
+                    IsAlertBlock = true,
+                }.FromModel(policy.Sensitivity, PredefinedIntervals.ForRestore);
 
                 Conditions.Add(condition);
             }
