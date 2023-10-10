@@ -25,12 +25,23 @@ public sealed record UpdateSensorValueRequestModel
     public string Environment => ChangeLast ? "Change last value" : "Added new value";
 
 
-    public string BuildComment(SensorStatus? status = null, string comment = null, string value = null) =>
-        $"Status - {status ?? Status}; Comment - '{comment ?? Comment}; Value - '{value ?? Value}''";
+    public (string oldValue, string newValue) GetValues(BaseValue oldValue, BaseValue newValue) => oldValue is not FileValue ? (oldValue.RawValue?.ToString(), newValue.RawValue?.ToString()) : (null, null);
 
+    public string BuildComment(SensorStatus? status = null, string comment = null, string value = null)
+    {
+        var response = $"Status - {status ?? Status}; Comment - '{comment ?? Comment}';";
+        
+        if (!string.IsNullOrEmpty(value) || !string.IsNullOrEmpty(Value))
+            response += $"Value - '{value ?? Value}'";
+
+        return response;
+    }
 
     public BaseValue BuildNewValue(BaseValue value, BaseValue oldValue)
     {
+        if (value is FileValue && oldValue is FileValue oldFileValue)
+            value = oldFileValue;
+
         value = value with
         {
             Status = Status,

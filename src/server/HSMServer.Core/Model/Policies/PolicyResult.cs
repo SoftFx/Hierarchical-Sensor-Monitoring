@@ -15,7 +15,7 @@ namespace HSMServer.Core.Model
         public Guid SensorId { get; }
 
 
-        public bool IsOk => Alerts.Count == 0;
+        public bool IsEmpty => Alerts.Count == 0;
 
 
         public PolicyResult()
@@ -52,7 +52,10 @@ namespace HSMServer.Core.Model
                 Alerts.Add(key, new AlertResult(policy));
         }
 
+
         internal void RemoveAlert(Policy policy) => Alerts.Remove(policy.Id, out var _);
+
+        internal void RemoveAlert(AlertResult alert) => Alerts.Remove(alert.PolicyId, out var _);
 
 
         public IEnumerator<AlertResult> GetEnumerator() => Alerts.Values.GetEnumerator();

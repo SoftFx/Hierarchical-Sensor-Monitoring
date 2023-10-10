@@ -111,7 +111,7 @@ namespace HSMServer.Controllers
                 : NotFound();
 
         [HttpPut]
-        public void RemoveRenderingNode(Guid nodeId) => CurrentUser.Tree.RemoveOpenedNode(nodeId);
+        public void RemoveRenderingNode(params Guid[] nodeIds) => CurrentUser.Tree.RemoveOpenedNode(nodeIds);
 
         [HttpGet]
         public IActionResult GetGrid(ChildrenPageRequest pageRequest)
@@ -542,7 +542,7 @@ namespace HSMServer.Controllers
             var request = new GetSensorHistoryModel()
             {
                 EncodedId = encodedId,
-                BarsCount = -20,
+                Count = -20,
             };
 
             await StoredUser.History.Reload(_treeValuesCache, request);
@@ -853,21 +853,17 @@ namespace HSMServer.Controllers
 
                     foreach (var (sensorId, alertUpdates) in sensorAlerts)
                     {
-                        try
+                        var update = new SensorUpdate()
                         {
-                            var update = new SensorUpdate()
-                            {
-                                Id = sensorId,
-                                Policies = alertUpdates,
-                                Initiator = CurrentInitiator,
-                            };
+                            Id = sensorId,
+                            Policies = alertUpdates,
+                            Initiator = CurrentInitiator,
+                        };
 
-                            _treeValuesCache.UpdateSensor(update);
-                        }
-                        catch (Exception ex)
-                        {
-                            toastViewModel.AddError(ex.Message, _treeViewModel.Sensors[sensorId].Name);
-                        }
+                        _treeValuesCache.UpdateSensorPolicies(update, out var error);
+
+                        if (!string.IsNullOrEmpty(error))
+                            toastViewModel.AddError(error, _treeViewModel.Sensors[sensorId].Name);
                     }
                 }
                 catch (Exception ex)

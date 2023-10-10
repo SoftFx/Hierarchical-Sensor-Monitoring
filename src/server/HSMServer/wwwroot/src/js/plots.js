@@ -42,7 +42,7 @@ export class Plot {
     mode = '';
     showlegend = false;
     hovertemplate = "%{x}, %{customdata}<extra></extra>";
-    marker = {
+    line = {
         color: Colors.defaultTrace
     }
 
@@ -94,6 +94,7 @@ class ErrorColorPlot extends Plot{
     line = {
         color: Colors.defaultTrace
     }
+    mode = "markers+lines";
 
     markerColorCompareFunc(value){
         if (this.checkTtl(value))
@@ -183,9 +184,7 @@ export class IntegerPlot extends ErrorColorPlot {
 
         this.type = 'scatter';
         this.mode = 'lines+markers';
-        this.line = {
-            shape: 'hv'
-        }
+        this.line.shape = 'hv';
         this.marker = {
             color: [],
             size: [],

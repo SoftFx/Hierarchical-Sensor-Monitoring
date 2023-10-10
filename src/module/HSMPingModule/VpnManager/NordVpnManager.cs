@@ -20,7 +20,7 @@ namespace HSMPingModule.VpnManager
             "/", "|", "-", "\\", "A new version of NordVPN is available! Please update the application."
         };
 
-        private static Logger _logger = LogManager.GetCurrentClassLogger();
+        private static readonly Logger _logger = LogManager.GetCurrentClassLogger();
 
         private string _description = $"[**Nord VPN**](https://nordvpn.com/) is used to check configured resources.";
 

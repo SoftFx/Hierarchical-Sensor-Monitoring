@@ -11,3 +11,5 @@ RUN dotnet publish -c Release --os linux --arch x64 -o /HSMPingModule
 
 WORKDIR /
 RUN rm -rf /HSMPingModuleSrc
+
+ENTRYPOINT ["dotnet", "/HSMPingModule/HSMPingModule.dll"]

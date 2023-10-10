@@ -35,11 +35,12 @@ public sealed class VisibleTreeViewModel
         }
     }
 
-    public void RemoveOpenedNode(Guid id)
+    public void RemoveOpenedNode(params Guid[] ids)
     {
         lock (_user)
         {
-            _openedNodes.Remove(id);
+            foreach (var id in ids)
+                _openedNodes.Remove(id);
         }
     }
 
