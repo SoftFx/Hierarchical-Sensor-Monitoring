@@ -75,7 +75,8 @@ namespace HSMServer.Core.Sensitivity
                     if (sensorAlerts.IsEmpty)
                         _tree.TryRemove(sensorId, out _);
 
-                    ThrowAlertResultsEvent?.Invoke(sensorId, thrownAlerts);
+                    if (thrownAlerts.Count > 0)
+                        ThrowAlertResultsEvent?.Invoke(sensorId, thrownAlerts);
                 }
             }
             catch (Exception ex)

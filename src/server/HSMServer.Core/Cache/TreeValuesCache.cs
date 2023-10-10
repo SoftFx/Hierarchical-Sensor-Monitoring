@@ -1049,6 +1049,8 @@ namespace HSMServer.Core.Cache
 
         public void UpdateCacheState()
         {
+            _sensativityStorage.FlushStorage();
+
             foreach (var sensor in GetSensors())
                 sensor.CheckTimeout();
 

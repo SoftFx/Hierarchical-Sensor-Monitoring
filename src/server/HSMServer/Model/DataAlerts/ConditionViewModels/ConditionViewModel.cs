@@ -52,9 +52,9 @@ namespace HSMServer.Model.DataAlerts
         protected abstract List<AlertProperty> Properties { get; }
 
 
-        public bool IsMain { get; }
-
         public List<SelectListItem> PropertiesItems { get; }
+
+        public bool IsMain { get; }
 
 
         public ConditionViewModel(bool isMain)
