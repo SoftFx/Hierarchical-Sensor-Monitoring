@@ -1,25 +1,26 @@
 ﻿using HSMCommon.Collections;
+using HSMServer.Model.Folders;
 using HSMServer.Notification.Settings;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using Telegram.Bot.Types;
+using Telegram.Bot.Types.Enums;
 
 namespace HSMServer.Notifications
 {
     internal sealed class AddressBook
     {
+        private readonly ConcurrentDictionary<ChatId, TelegramChat> _chats = new();
         private readonly ConcurrentDictionary<Guid, InvitationToken> _tokens = new();
-        private readonly ConcurrentDictionary<ChatId, CHash<INotificatable>> _telegramBook = new();
+        //private readonly ConcurrentDictionary<ChatId, CHash<FolderModel>> _telegramBook = new();
 
-        internal ConcurrentDictionary<INotificatable, ConcurrentDictionary<ChatId, ChatSettings>> ServerBook { get; } = new(new NotificatableComparator());
+        //internal ConcurrentDictionary<INotificatable, ConcurrentDictionary<ChatId, ChatSettings>> ServerBook { get; } = new(new NotificatableComparator());
 
 
-        internal CHash<INotificatable> GetAuthorizedEntities(ChatId chat) => _telegramBook.GetValueOrDefault(chat) ?? new(new NotificatableComparator());
-
-        internal Guid BuildInvitationToken(INotificatable entity)
+        internal Guid BuildInvitationToken(Guid folderId, Model.Authentication.User user)
         {
-            var invitationToken = new InvitationToken(entity);
+            var invitationToken = new InvitationToken(folderId, user);
 
             _tokens[invitationToken.Token] = invitationToken;
 
@@ -42,42 +43,40 @@ namespace HSMServer.Notifications
 
         internal void RemoveToken(Guid token) => _tokens.TryRemove(token, out _);
 
-        internal TelegramChat RegisterChat(Message message, InvitationToken token, bool isUserChat)
+        internal TelegramChat RegisterChat(Message message, InvitationToken token, FolderModel folder)
         {
-            var entity = token.Entity;
-            var chats = entity.Chats;
-
-            TelegramChat chatModel = null;
-
-            if (!chats.ContainsKey(message.Chat))
+            if (!_chats.TryGetValue(message.Chat, out var chatModel))
             {
+                bool isUserChat = message?.Chat?.Type == ChatType.Private;
+
                 chatModel = new TelegramChat()
                 {
                     ChatId = message.Chat,
-                    Name = isUserChat ? message.From.Username : message.Chat.Title,
-                    IsUserChat = isUserChat,
+                    AuthorId = token.User.Id,
+                    Author = token.User.Name,
                     AuthorizationTime = DateTime.UtcNow,
+                    Name = isUserChat ? message.From.Username : message.Chat.Title,
+                    Type = isUserChat ? ConnectedChatType.TelegramPrivate : ConnectedChatType.TelegramGroup,
                 };
-
-                if (chats.TryAdd(message.Chat, chatModel))
-                    RegisterChat(entity, chatModel);
             }
 
+            RegisterChat(folder, chatModel);
             RemoveToken(token.Token);
 
             return chatModel;
         }
 
-        internal void RegisterChat(INotificatable entity, TelegramChat chat)
+        internal void RegisterChat(FolderModel folder, TelegramChat chat)
         {
-            if (!ServerBook.ContainsKey(entity))
-                ServerBook[entity] = new ConcurrentDictionary<ChatId, ChatSettings>();
+            //if (!ServerBook.ContainsKey(folder))
+            //    ServerBook[folder] = new ConcurrentDictionary<ChatId, ChatSettings>();
 
-            if (!_telegramBook.ContainsKey(chat.ChatId))
-                _telegramBook[chat.ChatId] = new CHash<INotificatable>(new NotificatableComparator());
+            //if (!_telegramBook.ContainsKey(chat.ChatId))
+            //    _telegramBook[chat.ChatId] = new CHash<INotificatable>(new NotificatableComparator());
 
-            ServerBook[entity].TryAdd(chat.ChatId, new ChatSettings(chat));
-            _telegramBook[chat.ChatId].Add(entity);
+            //ServerBook[folder].TryAdd(chat.ChatId, new ChatSettings(chat));
+            //_telegramBook[chat.ChatId].Add(folder);
+            _chats.TryAdd(chat.ChatId, chat);
         }
 
         internal TelegramChat RemoveChat(INotificatable entity, ChatId chatId)
@@ -103,8 +102,8 @@ namespace HSMServer.Notifications
 
         private void RemoveEntity(INotificatable entity, ChatId chatId)
         {
-            if (_telegramBook.TryGetValue(chatId, out var entities))
-                entities.Remove(entity);
+            //if (_telegramBook.TryGetValue(chatId, out var entities))
+            //    entities.Remove(entity);
         }
     }
 }

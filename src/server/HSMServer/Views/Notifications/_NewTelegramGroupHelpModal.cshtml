@@ -2,6 +2,8 @@
 @using HSMServer.Constants
 @using HSMServer.Controllers
 
+@model Guid
+
 @inject NotificationsCenter NotificationsCenter
 
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
@@ -28,7 +30,7 @@
 
                 <h5>For direct chat</h5>
                 <p class="ms-2">
-                    Click <a asp-action="@nameof(NotificationsController.OpenInvitationLink)" target="_blank">invitation link</a>. and press <b>Start</b> button at opened direct chat with Telegram Bot (@NotificationsCenter.TelegramBot.BotName).
+                    Click <a asp-action="@nameof(NotificationsController.OpenInvitationLink)" asp-route-folderId="@Model" target="_blank">invitation link</a> and press <b>Start</b> button at opened direct chat with Telegram Bot (@NotificationsCenter.TelegramBot.BotName).
                 </p>
             </div>
         </div>
@@ -48,17 +50,16 @@
         $(`#newTelegramGroupHelp_modal`).modal('hide');
     }
 
-    //TODO: we need Model.EntityId
-    //function getGroupStartCommand() {
-    //    $.ajax({
-    //        type: 'GET',
-    //        url: `@Html.Raw(Url.Action(nameof(NotificationsController.CopyStartCommandForGroup), ViewConstants.NotificationsController))?entityId=`,
-    //        dataType: 'html',
-    //        contentType: 'application/json',
-    //        cache: false,
-    //        async: true
-    //    }).done(function (command) {
-    //        copyToClipboard(command);
-    //    });
-    //}
+    function getGroupStartCommand() {
+        $.ajax({
+            type: 'GET',
+            url: `@Html.Raw(Url.Action(nameof(NotificationsController.CopyStartCommandForGroup), ViewConstants.NotificationsController))?folderId=@Model`,
+            dataType: 'html',
+            contentType: 'application/json',
+            cache: false,
+            async: true
+        }).done(function (command) {
+            copyToClipboard(command);
+        });
+    }
 </script>

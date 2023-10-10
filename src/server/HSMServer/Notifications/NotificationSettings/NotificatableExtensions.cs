@@ -40,21 +40,5 @@ namespace HSMServer.Notification.Settings
             else if (entity is ProductNodeViewModel product)
                 tree.UpdateProductNotificationSettings(product);
         }
-
-        internal static string BuildGreetings(this INotificatable entity) =>
-            entity switch
-            {
-                User user => $"Hi, {user.Name}. ",
-                ProductNodeViewModel => $"Hi. ",
-                _ => string.Empty,
-            };
-
-        internal static string BuildSuccessfullResponse(this INotificatable entity) =>
-            entity switch
-            {
-                User => "You are succesfully authorized.",
-                ProductNodeViewModel product => $"Product '{product.Name}' is successfully added to group.",
-                _ => string.Empty,
-            };
     }
 }

@@ -1,5 +1,6 @@
 ﻿using HSMServer.Authentication;
 using HSMServer.Core.Cache;
+using HSMServer.Folders;
 using HSMServer.Model.TreeViewModel;
 using HSMServer.ServerConfiguration;
 using System;
@@ -12,9 +13,9 @@ namespace HSMServer.Notifications
         public TelegramBot TelegramBot { get; }
 
 
-        public NotificationsCenter(ITelegramChatsManager telegramChats, IUserManager userManager, TreeViewModel tree, ITreeValuesCache cache, IServerConfig config)
+        public NotificationsCenter(ITelegramChatsManager telegramChats, IFolderManager folderManager, IUserManager userManager, TreeViewModel tree, ITreeValuesCache cache, IServerConfig config)
         {
-            TelegramBot = new(telegramChats, userManager, cache, tree, config.Telegram);
+            TelegramBot = new(telegramChats, folderManager, userManager, cache, tree, config.Telegram);
         }
 
 

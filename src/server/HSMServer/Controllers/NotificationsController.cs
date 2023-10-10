@@ -1,12 +1,12 @@
 ﻿using HSMServer.Authentication;
 using HSMServer.Constants;
-using HSMServer.Folders;
 using HSMServer.Helpers;
 using HSMServer.Model.Authentication;
 using HSMServer.Model.TreeViewModel;
 using HSMServer.Notification.Settings;
 using HSMServer.Notifications;
 using Microsoft.AspNetCore.Mvc;
+using System;
 using System.Threading.Tasks;
 
 
@@ -16,37 +16,28 @@ namespace HSMServer.Controllers
     public class NotificationsController : BaseController
     {
         private readonly ITelegramChatsManager _chatsManager;
-        private readonly IFolderManager _folderManager;
         private readonly TelegramBot _telegramBot;
         private readonly TreeViewModel _tree;
 
 
-        public NotificationsController(ITelegramChatsManager chatsManager, IUserManager userManager, IFolderManager folderManager,
+        public NotificationsController(ITelegramChatsManager chatsManager, IUserManager userManager,
             TreeViewModel tree, NotificationsCenter notifications) : base(userManager)
         {
             _chatsManager = chatsManager;
-            _folderManager = folderManager;
             _tree = tree;
 
             _telegramBot = notifications.TelegramBot;
         }
 
 
-        public RedirectResult OpenInvitationLink() =>
-            Redirect(_telegramBot.GetInvitationLink(GetCurrentUser()));
+        public RedirectResult OpenInvitationLink(Guid folderId) =>
+            Redirect(_telegramBot.GetInvitationLink(folderId, GetCurrentUser()));
+
+        [HttpGet]
+        public string CopyStartCommandForGroup(Guid folderId) => _telegramBot.GetStartCommandForGroup(folderId, GetCurrentUser());
 
         public async Task<RedirectResult> OpenTelegramGroup(long chatId) =>
             Redirect(await _telegramBot.GetChatLink(chatId));
-
-        [HttpGet]
-        public string CopyStartCommandForGroup(string entityId)
-        {
-            var id = SensorPathHelper.DecodeGuid(entityId);
-
-            _tree.Nodes.TryGetValue(id, out var product);
-
-            return _telegramBot.GetStartCommandForGroup(product);
-        }
 
         public IActionResult SendTestTelegramMessage(long chatId, string entityId)
         {

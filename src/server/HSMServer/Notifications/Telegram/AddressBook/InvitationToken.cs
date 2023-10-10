@@ -1,4 +1,4 @@
-﻿using HSMServer.Notification.Settings;
+﻿using HSMServer.Model.Authentication;
 using System;
 
 namespace HSMServer.Notifications
@@ -10,18 +10,18 @@ namespace HSMServer.Notifications
         internal static InvitationToken Empty { get; } = new();
 
 
-        internal INotificatable Entity { get; }
+        internal User User { get; }
 
         internal Guid Token { get; }
 
         internal DateTime ExpirationTime { get; }
 
 
-        internal InvitationToken(INotificatable entity)
+        internal InvitationToken(Guid folderId, User user)
         {
-            Token = Guid.NewGuid();
+            User = user;
+            Token = folderId;
             ExpirationTime = DateTime.UtcNow.AddMinutes(TokenExpirationMinutes);
-            Entity = entity;
         }
     }
 }

@@ -2,6 +2,7 @@
 using HSMServer.Core.Cache;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Policies;
+using HSMServer.Folders;
 using HSMServer.Model.TreeViewModel;
 using HSMServer.Notification.Settings;
 using HSMServer.ServerConfiguration;
@@ -12,7 +13,6 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Telegram.Bot;
-using Telegram.Bot.Exceptions;
 using Telegram.Bot.Polling;
 using Telegram.Bot.Types;
 using User = HSMServer.Model.Authentication.User;
@@ -33,6 +33,7 @@ namespace HSMServer.Notifications
 
         private readonly TelegramUpdateHandler _updateHandler;
         private readonly ITelegramChatsManager _chatsManager;
+        private readonly IFolderManager _folderManager;
         private readonly IUserManager _userManager;
         private readonly ITreeValuesCache _cache;
         private readonly TelegramConfig _config;
@@ -49,8 +50,9 @@ namespace HSMServer.Notifications
         private bool IsBotRunning => _bot is not null;
 
 
-        internal TelegramBot(ITelegramChatsManager chatsManager, IUserManager userManager, ITreeValuesCache cache, TreeViewModel tree, TelegramConfig config)
+        internal TelegramBot(ITelegramChatsManager chatsManager, IFolderManager folderManager, IUserManager userManager, ITreeValuesCache cache, TreeViewModel tree, TelegramConfig config)
         {
+            _folderManager = folderManager;
             _chatsManager = chatsManager;
 
             _userManager = userManager;
@@ -63,7 +65,7 @@ namespace HSMServer.Notifications
             _cache.ChangeProductEvent += RemoveProductEventHandler;
             _cache.ThrowAlertResultsEvent += SendMessage;
 
-            _updateHandler = new(_addressBook, _userManager, _tree, _cache, config);
+            _updateHandler = new(_addressBook, _cache, _folderManager, config);
 
             FillAddressBook();
         }
@@ -75,11 +77,11 @@ namespace HSMServer.Notifications
             await StopBot();
         }
 
-        internal string GetInvitationLink(User user) =>
-            $"https://t.me/{BotName}?start={_addressBook.BuildInvitationToken(user)}";
+        internal string GetInvitationLink(Guid folderId, User user) =>
+            $"https://t.me/{BotName}?start={_addressBook.BuildInvitationToken(folderId, user)}";
 
-        internal string GetStartCommandForGroup(ProductNodeViewModel product) =>
-            $"{TelegramBotCommands.Start}@{BotName} {_addressBook.BuildInvitationToken(product)}";
+        internal string GetStartCommandForGroup(Guid folderId, User user) =>
+            $"{TelegramBotCommands.Start}@{BotName} {_addressBook.BuildInvitationToken(folderId, user)}";
 
         internal async Task<string> GetChatLink(long chatId)
         {
@@ -169,6 +171,12 @@ namespace HSMServer.Notifications
         // TODO: FillAddressBook should be from telegram chats manager
         private void FillAddressBook()
         {
+            foreach (var folder in _folderManager.GetValues())
+                foreach (var chatId in folder.TelegramChats)
+                    _addressBook.RegisterChat(folder, _chatsManager[chatId]);
+
+
+
             foreach (var user in _userManager.GetUsers())
                 if (user.Notifications?.Telegram?.Chats?.Count > 0)
                     foreach (var (_, chat) in user.Notifications.Telegram.Chats)
@@ -179,27 +187,18 @@ namespace HSMServer.Notifications
                     _addressBook.RegisterChat(product, chat);
         }
 
-        private void SendMessage(List<AlertResult> result)
+        private void SendMessage(List<AlertResult> result, Guid folderId)
         {
             try
             {
-                if (IsBotRunning && _config.IsRunning)
-                {
-                    var uniqueChats = new ConcurrentDictionary<Guid, ChatSettings>();
-
-                    foreach (var (entity, chats) in _addressBook.ServerBook)
-                    {
-                        foreach (var (_, chat) in chats)
-                            uniqueChats.TryAdd(chat.SystemId, chat);
-                    }
-
-                    foreach (var (_, chat) in uniqueChats)
-                        if (chat.Chat.SendMessages)
+                if (IsBotRunning && _config.IsRunning && _folderManager.TryGetValue(folderId, out var folder))
+                    foreach (var chatId in folder.TelegramChats)
+                        if (_chatsManager.TryGetValue(chatId, out var chat) && chat.SendMessages)
                         {
-                            var isInstant = chat.Chat.MessagesAggregationTimeSec == 0;
+                            var isInstant = chat.MessagesAggregationTimeSec == 0;
 
                             foreach (var alert in result)
-                                if (chat is not null && (alert.Destination?.Chats?.Contains(chat.SystemId) ?? false))
+                                if (chat is not null && (alert.Destination?.Chats?.Contains(chat.Id) ?? false)) // TODO: all chats shoul be checked
                                 {
                                     if (isInstant)
                                         SendMessage(chat.ChatId, alert.ToString());
@@ -207,7 +206,6 @@ namespace HSMServer.Notifications
                                         chat.MessageBuilder.AddMessage(alert);
                                 }
                         }
-                }
             }
             catch (Exception ex)
             {
@@ -221,19 +219,11 @@ namespace HSMServer.Notifications
             {
                 try
                 {
-                    var uniqueChats = new ConcurrentDictionary<Guid, ChatSettings>();
-
-                    foreach (var (entity, chats) in _addressBook.ServerBook)
-                    {
-                        foreach (var (_, chat) in chats)
-                            uniqueChats.TryAdd(chat.SystemId, chat);
-                    }
-
-                    foreach (var (_, chat) in uniqueChats)
+                    foreach (var chat in _chatsManager.GetValues())
                     {
                         try
                         {
-                            var messagesDelay = chat.Chat.MessagesAggregationTimeSec;
+                            var messagesDelay = chat.MessagesAggregationTimeSec;
 
                             if (messagesDelay > 0 && chat.MessageBuilder.ExpectedSendingTime <= DateTime.UtcNow)
                             {
@@ -244,7 +234,7 @@ namespace HSMServer.Notifications
                         }
                         catch (Exception ex)
                         {
-                            _logger.Error($"Error getting message: {chat.Chat.Name} - {ex}");
+                            _logger.Error($"Error getting message: {chat.Name} - {ex}");
                         }
                     }
 

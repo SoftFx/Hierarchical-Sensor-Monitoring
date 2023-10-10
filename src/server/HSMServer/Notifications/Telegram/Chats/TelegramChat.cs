@@ -14,11 +14,18 @@ namespace HSMServer.Notifications
 
     public sealed class TelegramChat : IServerModel<TelegramChatEntity, TelegramChatUpdate>
     {
+        private const bool DefaultSendMessages = true;
+        private const int DefaultMessagesAggregationTimeSec = 60;
+
+
+        internal MessageBuilder MessageBuilder { get; } = new();
+
+
         public Guid Id { get; init; } // TODO: should be just get after telegram chats migration
 
-        public Guid? AuthorId { get; }
-
         public ChatId ChatId { get; init; }
+
+        public Guid? AuthorId { get; init; }
 
         public ConnectedChatType Type { get; init; }
 
@@ -43,6 +50,8 @@ namespace HSMServer.Notifications
         public TelegramChat()
         {
             Id = Guid.NewGuid();
+            SendMessages = DefaultSendMessages;
+            MessagesAggregationTimeSec = DefaultMessagesAggregationTimeSec;
         }
 
         internal TelegramChat(TelegramChatEntityOld entity)

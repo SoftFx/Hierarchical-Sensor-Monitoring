@@ -47,7 +47,7 @@ namespace HSMServer.Core.Cache
         public event Action<AccessKeyModel, ActionType> ChangeAccessKeyEvent;
         public event Action<BaseSensorModel, ActionType> ChangeSensorEvent;
         public event Action<ProductModel, ActionType> ChangeProductEvent;
-        public event Action<List<AlertResult>> ThrowAlertResultsEvent;
+        public event Action<List<AlertResult>, Guid> ThrowAlertResultsEvent;
 
 
         public TreeValuesCache(IDatabaseCore database, ITreeStateSnapshot snapshot, IUpdatesQueue updatesQueue, IJournalService journalService)
@@ -457,7 +457,12 @@ namespace HSMServer.Core.Cache
         public void ThrowAlertResults(Guid sensorId, List<AlertResult> alertResults)
         {
             if (_sensors.TryGetValue(sensorId, out var sensor) && sensor.CanSendNotifications)
-                ThrowAlertResultsEvent?.Invoke(alertResults);
+            {
+                var product = GetProductByName(sensor.RootProductName);
+
+                if (product.FolderId.HasValue)
+                    ThrowAlertResultsEvent?.Invoke(alertResults, product.FolderId.Value);
+            }
         }
 
         public void SensorUpdateView(BaseSensorModel sensor) => ChangeSensorEvent?.Invoke(sensor, ActionType.Update);

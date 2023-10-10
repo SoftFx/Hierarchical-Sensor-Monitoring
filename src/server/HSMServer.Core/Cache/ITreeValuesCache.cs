@@ -24,7 +24,7 @@ namespace HSMServer.Core.Cache
         event Action<BaseSensorModel, ActionType> ChangeSensorEvent;
         event Action<AccessKeyModel, ActionType> ChangeAccessKeyEvent;
 
-        event Action<List<AlertResult>> ThrowAlertResultsEvent;
+        event Action<List<AlertResult>, Guid> ThrowAlertResultsEvent;
 
         List<BaseSensorModel> GetSensors();
         List<AccessKeyModel> GetAccessKeys();
@@ -67,8 +67,8 @@ namespace HSMServer.Core.Cache
 
         void SaveLastStateToDb();
 
-        void AddNewChat(Guid chatId, string name, string productName);
+        void AddNewChat(Guid chatId, string name, string productName); // TODO: should be removed after reworking with allchats in alerts
 
-        void RemoveChat(Guid chatId, string productName);
+        void RemoveChat(Guid chatId, string productName); // TODO: should be removed after reworking with allchats in alerts
     }
 }

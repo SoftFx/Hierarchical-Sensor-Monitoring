@@ -1,8 +1,7 @@
-﻿using HSMServer.Authentication;
-using HSMServer.Core;
+﻿using HSMServer.Core;
 using HSMServer.Core.Cache;
 using HSMServer.Extensions;
-using HSMServer.Model.TreeViewModel;
+using HSMServer.Folders;
 using HSMServer.Notification.Settings;
 using HSMServer.ServerConfiguration;
 using NLog;
@@ -23,23 +22,20 @@ namespace HSMServer.Notifications
     public sealed class TelegramUpdateHandler : IUpdateHandler
     {
         private readonly Logger _logger = LogManager.GetCurrentClassLogger();
+        private readonly IFolderManager _folderManager;
         private readonly AddressBook _addressBook;
-        private readonly IUserManager _userManager;
-        private readonly TreeViewModel _tree;
         private readonly TelegramConfig _config;
         private readonly ITreeValuesCache _cache;
 
         private string BotName => $"@{_config.BotName.ToLower()}";
 
 
-        internal TelegramUpdateHandler(AddressBook addressBook, IUserManager userManager,
-            TreeViewModel tree, ITreeValuesCache cache, TelegramConfig config)
+        internal TelegramUpdateHandler(AddressBook addressBook, ITreeValuesCache cache, IFolderManager folderManager, TelegramConfig config)
         {
+            _folderManager = folderManager;
             _addressBook = addressBook;
-            _userManager = userManager;
             _config = config;
             _cache = cache;
-            _tree = tree;
         }
 
 
@@ -48,14 +44,13 @@ namespace HSMServer.Notifications
             if (update?.Type == UpdateType.Message)
             {
                 var message = update?.Message;
-                var isUserChat = message?.Chat?.Type == ChatType.Private;
                 var msgText = message?.Text?.ToLowerInvariant();
                 var parts = msgText?.Split(' ');
 
                 if (parts == null || parts.Length == 0)
                     return;
 
-                if (!isUserChat)
+                if (message?.Chat?.Type != ChatType.Private)
                 {
                     if (!parts[0].Contains(BotName))
                         return;
@@ -65,7 +60,7 @@ namespace HSMServer.Notifications
 
                 var response = parts[0] switch
                 {
-                    TelegramBotCommands.Start => StartBot(parts, message, isUserChat),
+                    TelegramBotCommands.Start => StartBot(parts, message),
                     TelegramBotCommands.Info => EntitiesInfo(message.Chat),
                     TelegramBotCommands.Server => ServerStatus(),
                     TelegramBotCommands.Help => Help(),
@@ -87,7 +82,7 @@ namespace HSMServer.Notifications
         }
 
 
-        private string StartBot(string[] commandParts, Message message, bool isUserChat)
+        private string StartBot(string[] commandParts, Message message)
         {
             if (commandParts.Length != 2)
                 return null;
@@ -96,7 +91,7 @@ namespace HSMServer.Notifications
 
             if (_addressBook.TryGetToken(commandParts[1], out var token))
             {
-                response.Append(token.Entity.BuildGreetings());
+                response.Append($"Hi. ");
 
                 if (token.ExpirationTime < DateTime.UtcNow)
                 {
@@ -104,15 +99,21 @@ namespace HSMServer.Notifications
 
                     response.Append("Sorry, your invitation token is expired.");
                 }
+                else if (!_folderManager.TryGetValue(token.Token, out var folder))
+                {
+                    _addressBook.RemoveToken(token.Token);
+
+                    response.Append("Sorry, your token is invalid (folder doesn't exsist).");
+                }
                 else
                 {
-                    var newChat = _addressBook.RegisterChat(message, token, isUserChat);
-                    token.Entity.UpdateEntity(_userManager, _tree);
+                    var newChat = _addressBook.RegisterChat(message, token, folder);
+                    var isUserChat = newChat.Type is ConnectedChatType.TelegramPrivate;
 
                     if (newChat is not null)
-                        _cache.AddNewChat(newChat.Id, newChat.Name, isUserChat ? null : token.Entity.Name);
+                        _cache.AddNewChat(newChat.Id, newChat.Name, isUserChat ? null : token.User.Name);
 
-                    response.Append(token.Entity.BuildSuccessfullResponse());
+                    response.Append($"Folder '{folder.Name}' is successfully added to ${(isUserChat ? "direct" : $"group by {token.User.Name}")}.");
                 }
             }
             else
