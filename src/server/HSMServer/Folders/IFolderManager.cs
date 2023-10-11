@@ -22,6 +22,8 @@ namespace HSMServer.Folders
 
         Task RemoveProductFromFolder(Guid productId, Guid folderId, InitiatorInfo initiator);
 
+        Task<string> AddChatToFolder(Guid chatId, Guid folderId, string userName);
+
         List<FolderModel> GetUserFolders(User user);
     }
 }

@@ -22,18 +22,18 @@ namespace HSMServer.Notifications
     public sealed class TelegramUpdateHandler : IUpdateHandler
     {
         private readonly Logger _logger = LogManager.GetCurrentClassLogger();
+        private readonly ITelegramChatsManager _chatsManager;
         private readonly IFolderManager _folderManager;
-        private readonly AddressBook _addressBook;
-        private readonly TelegramConfig _config;
         private readonly ITreeValuesCache _cache;
+        private readonly TelegramConfig _config;
 
         private string BotName => $"@{_config.BotName.ToLower()}";
 
 
-        internal TelegramUpdateHandler(AddressBook addressBook, ITreeValuesCache cache, IFolderManager folderManager, TelegramConfig config)
+        internal TelegramUpdateHandler(ITelegramChatsManager chatsManager, ITreeValuesCache cache, IFolderManager folderManager, TelegramConfig config)
         {
             _folderManager = folderManager;
-            _addressBook = addressBook;
+            _chatsManager = chatsManager;
             _config = config;
             _cache = cache;
         }
@@ -60,7 +60,7 @@ namespace HSMServer.Notifications
 
                 var response = parts[0] switch
                 {
-                    TelegramBotCommands.Start => StartBot(parts, message),
+                    TelegramBotCommands.Start => await StartBot(parts, message),
                     TelegramBotCommands.Info => EntitiesInfo(message.Chat),
                     TelegramBotCommands.Server => ServerStatus(),
                     TelegramBotCommands.Help => Help(),
@@ -82,41 +82,30 @@ namespace HSMServer.Notifications
         }
 
 
-        private string StartBot(string[] commandParts, Message message)
+        private async Task<string> StartBot(string[] commandParts, Message message)
         {
             if (commandParts.Length != 2)
                 return null;
 
-            var response = new StringBuilder(1 << 5);
+            var response = new StringBuilder($"Hi. ");
 
-            if (_addressBook.TryGetToken(commandParts[1], out var token))
+            if (_chatsManager.TokenManager.TryRemoveToken(commandParts[1], out var token))
             {
-                response.Append($"Hi. ");
-
-                if (token.ExpirationTime < DateTime.UtcNow)
+                if (token.ExpirationTime >= DateTime.UtcNow)
                 {
-                    _addressBook.RemoveToken(token.Token);
+                    var folderName = await _chatsManager.TryConnect(message, token);
 
-                    response.Append("Sorry, your invitation token is expired.");
-                }
-                else if (!_folderManager.TryGetValue(token.FolderId, out var folder))
-                {
-                    _addressBook.RemoveToken(token.Token);
+                    if (string.IsNullOrEmpty(folderName))
+                        response.Append("Sorry, your token is invalid or folder doesn't exsist.");
+                    else
+                    {
+                        var isUserChat = message?.Chat?.Type == ChatType.Private;
 
-                    response.Append("Sorry, your token is invalid (folder doesn't exsist).");
+                        response.Append($"Folder '{folderName}' is successfully added to {(isUserChat ? "direct" : $"group by {token.User.Name}")}.");
+                    }
                 }
                 else
-                {
-                    var newChat = _addressBook.RegisterChat(message, token);
-                    var isUserChat = newChat.Type is ConnectedChatType.TelegramPrivate;
-
-                    // TODO: newChat should be saved in chatsManager if doesn't exist and added to foleder.TelegramChats (folder should be saved)
-
-                    if (newChat is not null)
-                        _cache.AddNewChat(newChat.Id, newChat.Name, isUserChat ? null : token.User.Name);
-
-                    response.Append($"Folder '{folder.Name}' is successfully added to ${(isUserChat ? "direct" : $"group by {token.User.Name}")}.");
-                }
+                    response.Append("Sorry, your invitation token is expired.");
             }
             else
                 response.Append("Your token is invalid or expired.");

@@ -140,6 +140,24 @@ namespace HSMServer.Folders
             ResetServerPolicyForFolderProducts();
         }
 
+
+        public async Task<string> AddChatToFolder(Guid chatId, Guid folderId, string userName)
+        {
+            if (TryGetValue(folderId, out var folder) && !folder.TelegramChats.Contains(chatId))
+            {
+                var update = new FolderUpdate()
+                {
+                    Id = folderId,
+                    TelegramChats = new HashSet<Guid>(folder.TelegramChats) { chatId },
+                    Initiator = InitiatorInfo.AsUser(userName),
+                };
+
+                await TryUpdate(update);
+            }
+
+            return folder?.Name;
+        }
+
         public List<FolderModel> GetUserFolders(User user)
         {
             var folders = GetFolders();

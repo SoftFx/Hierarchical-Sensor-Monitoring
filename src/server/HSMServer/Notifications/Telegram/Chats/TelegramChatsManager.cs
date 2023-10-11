@@ -7,22 +7,33 @@ using HSMServer.Core.DataLayer;
 using HSMServer.Core.Model.Policies;
 using HSMServer.Core.TableOfChanges;
 using HSMServer.Folders;
-using HSMServer.Model.Authentication;
 using HSMServer.Model.Folders;
-using HSMServer.Model.TreeViewModel;
+using HSMServer.Notifications.Telegram.Tokens;
+using HSMServer.ServerConfiguration;
 using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using Telegram.Bot.Types;
+using Telegram.Bot.Types.Enums;
+using User = HSMServer.Model.Authentication.User;
 
 namespace HSMServer.Notifications
 {
     public sealed class TelegramChatsManager : ConcurrentStorage<TelegramChat, TelegramChatEntity, TelegramChatUpdate>, ITelegramChatsManager
     {
+        private readonly ConcurrentDictionary<ChatId, TelegramChat> _telegramChatIds = new();
+
+        private readonly TelegramConfig _config;
         private readonly IDatabaseCore _database;
         private readonly ITreeValuesCache _cache;
         private readonly IUserManager _userManager;
         private readonly IFolderManager _folderManager;
+
+        public TokenManager TokenManager { get; } = new();
+
+        internal string BotName => _config.BotName;
 
 
         protected override Action<TelegramChatEntity> AddToDb => _database.AddTelegramChat;
@@ -34,16 +45,63 @@ namespace HSMServer.Notifications
         protected override Func<List<TelegramChatEntity>> GetFromDb => _database.GetTelegramChats;
 
 
-        public TelegramChatsManager(IDatabaseCore database, ITreeValuesCache cache, IUserManager userManager, IFolderManager folderManager, TreeViewModel _) // TODO: TreeViewModel should be removed after te;egram chats migration
+        public event Func<Guid, Guid, string, Task<string>> ConnectChatToFolder;
+
+
+        public TelegramChatsManager(IDatabaseCore database, ITreeValuesCache cache, IUserManager userManager, IFolderManager folderManager, IServerConfig config)
         {
             _cache = cache;
             _database = database;
+            _config = config.Telegram;
             _userManager = userManager;
             _folderManager = folderManager;
         }
 
 
         public void Dispose() { }
+
+
+        public async Task<string> TryConnect(Message message, InvitationToken token)
+        {
+            var isChatExist = _telegramChatIds.TryGetValue(message.Chat, out var chatModel);
+
+            if (!isChatExist)
+            {
+                bool isUserChat = message?.Chat?.Type == ChatType.Private;
+
+                chatModel = new TelegramChat()
+                {
+                    ChatId = message.Chat,
+                    AuthorId = token.User.Id,
+                    Author = token.User.Name,
+                    AuthorizationTime = DateTime.UtcNow,
+                    Name = isUserChat ? message.From.Username : message.Chat.Title,
+                    Type = isUserChat ? ConnectedChatType.TelegramPrivate : ConnectedChatType.TelegramGroup,
+                };
+            }
+
+            var folderName = await ConnectChatToFolder?.Invoke(chatModel.Id, token.FolderId, token.User.Name);
+
+            if (!string.IsNullOrEmpty(folderName) && !isChatExist)
+                await TryAdd(chatModel);
+
+            return folderName;
+        }
+
+        public async override Task<bool> TryAdd(TelegramChat model)
+        {
+            var result = await base.TryAdd(model);
+
+            return result ? _telegramChatIds.TryAdd(model.ChatId, model) : result;
+        }
+
+        public async override Task<bool> TryRemove(Guid id)
+        {
+            var result = TryGetValue(id, out var chat) && await base.TryRemove(id);
+
+            return result ? _telegramChatIds.TryRemove(chat.ChatId, out _) : result;
+        }
+
 
         public override async Task Initialize()
         {
@@ -55,8 +113,18 @@ namespace HSMServer.Notifications
             {
                 if (_userManager.TryGetValueById(chat.AuthorId, out var author))
                     chat.Author = author.Name;
+
+                _telegramChatIds.TryAdd(chat.ChatId, chat);
             }
         }
+
+
+        public string GetInvitationLink(Guid folderId, User user) =>
+            $"https://t.me/{BotName}?start={TokenManager.BuildInvitationToken(folderId, user)}";
+
+        public string GetGroupInvitation(Guid folderId, User user) =>
+            $"{TelegramBotCommands.Start}@{BotName} {TokenManager.BuildInvitationToken(folderId, user)}";
+
 
         protected override TelegramChat FromEntity(TelegramChatEntity entity) => new(entity);
 

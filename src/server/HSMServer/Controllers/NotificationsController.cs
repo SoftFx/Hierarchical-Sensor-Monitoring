@@ -1,9 +1,7 @@
 ﻿using HSMServer.Authentication;
 using HSMServer.Constants;
-using HSMServer.Helpers;
 using HSMServer.Model.Authentication;
 using HSMServer.Model.TreeViewModel;
-using HSMServer.Notification.Settings;
 using HSMServer.Notifications;
 using Microsoft.AspNetCore.Mvc;
 using System;
@@ -31,10 +29,10 @@ namespace HSMServer.Controllers
 
 
         public RedirectResult OpenInvitationLink(Guid folderId) =>
-            Redirect(_telegramBot.GetInvitationLink(folderId, GetCurrentUser()));
+            Redirect(_chatsManager.GetInvitationLink(folderId, GetCurrentUser()));
 
         [HttpGet]
-        public string CopyStartCommandForGroup(Guid folderId) => _telegramBot.GetStartCommandForGroup(folderId, GetCurrentUser());
+        public string CopyStartCommandForGroup(Guid folderId) => _chatsManager.GetGroupInvitation(folderId, GetCurrentUser());
 
         public async Task<RedirectResult> OpenTelegramGroup(long chatId) =>
             Redirect(await _telegramBot.GetChatLink(chatId));
@@ -48,9 +46,9 @@ namespace HSMServer.Controllers
             return GetResult(entityId);
         }
 
-        public IActionResult RemoveTelegramAuthorization(long chatId)
+        public IActionResult RemoveTelegramAuthorization(Guid id)
         {
-            _telegramBot.RemoveChat(chatId);
+            _chatsManager.TryRemove(id);
 
             return _emptyResult;
         }

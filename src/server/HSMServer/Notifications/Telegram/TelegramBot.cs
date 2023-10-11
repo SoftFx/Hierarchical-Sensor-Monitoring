@@ -9,7 +9,6 @@ using System.Threading.Tasks;
 using Telegram.Bot;
 using Telegram.Bot.Polling;
 using Telegram.Bot.Types;
-using User = HSMServer.Model.Authentication.User;
 
 namespace HSMServer.Notifications
 {
@@ -19,7 +18,6 @@ namespace HSMServer.Notifications
 
         private readonly NLog.Logger _logger = NLog.LogManager.GetCurrentClassLogger();
 
-        private readonly AddressBook _addressBook = new();
         private readonly ReceiverOptions _options = new()
         {
             AllowedUpdates = { }, // receive all update types
@@ -34,8 +32,6 @@ namespace HSMServer.Notifications
         private CancellationTokenSource _tokenSource = new();
         private TelegramBotClient _bot;
 
-
-        internal string BotName => _config.BotName;
 
         private string BotToken => _config.BotToken;
 
@@ -52,9 +48,7 @@ namespace HSMServer.Notifications
 
             _cache.ThrowAlertResultsEvent += SendMessage;
 
-            _updateHandler = new(_addressBook, _cache, _folderManager, config);
-
-            FillAddressBook();
+            _updateHandler = new(_chatsManager, _cache, _folderManager, config);
         }
 
         public async ValueTask DisposeAsync()
@@ -62,22 +56,12 @@ namespace HSMServer.Notifications
             await StopBot();
         }
 
-        internal string GetInvitationLink(Guid folderId, User user) =>
-            $"https://t.me/{BotName}?start={_addressBook.BuildInvitationToken(folderId, user)}";
-
-        internal string GetStartCommandForGroup(Guid folderId, User user) =>
-            $"{TelegramBotCommands.Start}@{BotName} {_addressBook.BuildInvitationToken(folderId, user)}";
-
         internal async Task<string> GetChatLink(long chatId)
         {
             var link = await _bot.CreateChatInviteLinkAsync(new ChatId(chatId), cancellationToken: _tokenSource.Token);
 
             return link.InviteLink;
         }
-
-        internal void RemoveOldInvitationTokens() => _addressBook.RemoveOldTokens();
-
-        internal void RemoveChat(long chatId) => _addressBook.RemoveChat(chatId);
 
         internal void SendTestMessage(ChatId chatId, string message)
         {
@@ -144,13 +128,6 @@ namespace HSMServer.Notifications
             }
 
             return string.Empty;
-        }
-
-        // TODO: FillAddressBook should be from telegram chats manager
-        private void FillAddressBook()
-        {
-            foreach (var chat in _chatsManager.GetValues())
-                _addressBook.RegisterChat(chat);
         }
 
         private void SendMessage(List<AlertResult> result, Guid folderId)

@@ -1,9 +1,9 @@
 ﻿using HSMServer.Model.Authentication;
 using System;
 
-namespace HSMServer.Notifications
+namespace HSMServer.Notifications.Telegram.Tokens
 {
-    internal readonly struct InvitationToken
+    public readonly struct InvitationToken
     {
         private const int TokenExpirationMinutes = 2;
 
