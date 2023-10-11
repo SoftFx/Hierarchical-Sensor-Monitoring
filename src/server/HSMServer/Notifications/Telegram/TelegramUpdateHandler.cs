@@ -107,7 +107,7 @@ namespace HSMServer.Notifications
                 }
                 else
                 {
-                    var newChat = _addressBook.RegisterChat(message, token, folder);
+                    var newChat = _addressBook.RegisterChat(message, token);
                     var isUserChat = newChat.Type is ConnectedChatType.TelegramPrivate;
 
                     if (newChat is not null)

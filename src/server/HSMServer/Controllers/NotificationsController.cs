@@ -50,11 +50,11 @@ namespace HSMServer.Controllers
             return GetResult(entityId);
         }
 
-        public IActionResult RemoveTelegramAuthorization(long chatId, string entityId)
+        public IActionResult RemoveTelegramAuthorization(long chatId)
         {
-            _telegramBot.RemoveChat(GetEntity(entityId), chatId);
+            _telegramBot.RemoveChat(chatId);
 
-            return GetResult(entityId);
+            return _emptyResult;
         }
 
         private INotificatable GetEntity(string entityId) =>

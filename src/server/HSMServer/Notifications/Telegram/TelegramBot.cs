@@ -1,15 +1,9 @@
-﻿using HSMServer.Authentication;
-using HSMServer.Core.Cache;
-using HSMServer.Core.Model;
+﻿using HSMServer.Core.Cache;
 using HSMServer.Core.Model.Policies;
 using HSMServer.Folders;
-using HSMServer.Model.TreeViewModel;
-using HSMServer.Notification.Settings;
 using HSMServer.ServerConfiguration;
 using System;
-using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Telegram.Bot;
@@ -34,10 +28,8 @@ namespace HSMServer.Notifications
         private readonly TelegramUpdateHandler _updateHandler;
         private readonly ITelegramChatsManager _chatsManager;
         private readonly IFolderManager _folderManager;
-        private readonly IUserManager _userManager;
         private readonly ITreeValuesCache _cache;
         private readonly TelegramConfig _config;
-        private readonly TreeViewModel _tree;
 
         private CancellationTokenSource _tokenSource = new();
         private TelegramBotClient _bot;
@@ -50,19 +42,14 @@ namespace HSMServer.Notifications
         private bool IsBotRunning => _bot is not null;
 
 
-        internal TelegramBot(ITelegramChatsManager chatsManager, IFolderManager folderManager, IUserManager userManager, ITreeValuesCache cache, TreeViewModel tree, TelegramConfig config)
+        internal TelegramBot(ITelegramChatsManager chatsManager, IFolderManager folderManager, ITreeValuesCache cache, TelegramConfig config)
         {
             _folderManager = folderManager;
             _chatsManager = chatsManager;
 
-            _userManager = userManager;
-            _userManager.Removed += _addressBook.RemoveAllChats;
-
             _config = config;
             _cache = cache;
-            _tree = tree;
 
-            _cache.ChangeProductEvent += RemoveProductEventHandler;
             _cache.ThrowAlertResultsEvent += SendMessage;
 
             _updateHandler = new(_addressBook, _cache, _folderManager, config);
@@ -72,8 +59,6 @@ namespace HSMServer.Notifications
 
         public async ValueTask DisposeAsync()
         {
-            _userManager.Removed -= _addressBook.RemoveAllChats;
-
             await StopBot();
         }
 
@@ -92,14 +77,7 @@ namespace HSMServer.Notifications
 
         internal void RemoveOldInvitationTokens() => _addressBook.RemoveOldTokens();
 
-        internal void RemoveChat(INotificatable entity, long chatId)
-        {
-            var removedChat = _addressBook.RemoveChat(entity, new ChatId(chatId));
-            entity.UpdateEntity(_userManager, _tree);
-
-            if (removedChat is not null)
-                _cache.RemoveChat(removedChat.Id, removedChat.IsUserChat ? null : entity.Name);
-        }
+        internal void RemoveChat(long chatId) => _addressBook.RemoveChat(chatId);
 
         internal void SendTestMessage(ChatId chatId, string message)
         {
@@ -171,20 +149,8 @@ namespace HSMServer.Notifications
         // TODO: FillAddressBook should be from telegram chats manager
         private void FillAddressBook()
         {
-            foreach (var folder in _folderManager.GetValues())
-                foreach (var chatId in folder.TelegramChats)
-                    _addressBook.RegisterChat(folder, _chatsManager[chatId]);
-
-
-
-            foreach (var user in _userManager.GetUsers())
-                if (user.Notifications?.Telegram?.Chats?.Count > 0)
-                    foreach (var (_, chat) in user.Notifications.Telegram.Chats)
-                        _addressBook.RegisterChat(user, chat);
-
-            foreach (var product in _tree.GetRootProducts())
-                foreach (var (_, chat) in product.Notifications.Telegram.Chats)
-                    _addressBook.RegisterChat(product, chat);
+            foreach (var chat in _chatsManager.GetValues())
+                _addressBook.RegisterChat(chat);
         }
 
         private void SendMessage(List<AlertResult> result, Guid folderId)
@@ -260,40 +226,25 @@ namespace HSMServer.Notifications
                 _bot?.SendTextMessageAsync(chat, message, cancellationToken: _tokenSource.Token);
         }
 
-        private void RemoveProductEventHandler(ProductModel model, ActionType transaction)
-        {
-            if (transaction == ActionType.Delete)
-            {
-                var product = _addressBook.ServerBook.Keys.FirstOrDefault(e => e.Id == model.Id);
-
-                if (product != null)
-                    _addressBook.RemoveAllChats(product);
-            }
-        }
-
         private async Task ChatNamesSynchronization()
         {
-            foreach (var (entity, chats) in _addressBook.ServerBook)
+            foreach (var chat in _chatsManager.GetValues())
             {
-                foreach (var (chatId, chatSetting) in chats)
+                try
                 {
-                    try
-                    {
-                        var chat = await _bot?.GetChatAsync(chatId, _tokenSource.Token);
-                        var chatName = chatSetting.Chat.IsUserChat ? chat.Username : chat.Title;
+                    var telegramChat = await _bot?.GetChatAsync(chat.ChatId, _tokenSource.Token);
+                    var chatName = chat.Type is ConnectedChatType.TelegramPrivate ? telegramChat.Username : telegramChat.Title;
 
-                        if (chatSetting.Chat.Name != chatName)
-                        {
-                            chatSetting.Chat.Name = chatName;
-                            entity.Chats[chatId].Name = chatName;
-
-                            entity.UpdateEntity(_userManager, _tree);
-                        }
-                    }
-                    catch (Exception ex)
+                    if (chat.Name != chatName)
                     {
-                        _logger.Error($"Telegram chat name '{chatSetting.Chat.Name}' updating is failed - {ex}");
+                        chat.Name = chatName;
+
+                        await _chatsManager.TryUpdate(chat);
                     }
+                }
+                catch (Exception ex)
+                {
+                    _logger.Error($"Telegram chat name '{chat.Name}' updating is failed - {ex}");
                 }
             }
         }
