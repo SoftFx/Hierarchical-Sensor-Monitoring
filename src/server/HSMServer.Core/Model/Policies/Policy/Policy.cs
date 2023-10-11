@@ -231,6 +231,9 @@ namespace HSMServer.Core.Model.Policies
             if (!Status.IsOk())
                 actions.Add($"change status to = {Status}");
 
+            if (Sensitivity is not null)
+                actions.Add($"after sensativity={Sensitivity}");
+
             sb.Append($" then {string.Join(", ", actions)}");
 
             if (IsDisabled)
