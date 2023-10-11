@@ -115,10 +115,10 @@ namespace HSMServer.Model.DataAlerts
                 {
                     bool allChats = action.Chats?.Contains(ActionViewModel.AllChatsId) ?? false;
                     Dictionary<Guid, string> chats = allChats
-                        ? availavleChats
+                        ? new(0)
                         : action.Chats?.ToDictionary(k => k, v => availavleChats[v]) ?? new(0);
 
-                    destination = new PolicyDestinationUpdate(allChats, chats);
+                    destination = new PolicyDestinationUpdate(chats, allChats);
                     comment = action.Comment;
                 }
                 else if (action.Action == ActionType.ShowIcon)

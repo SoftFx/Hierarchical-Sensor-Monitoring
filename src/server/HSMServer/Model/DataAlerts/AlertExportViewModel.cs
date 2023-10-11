@@ -60,8 +60,8 @@ namespace HSMServer.Model.DataAlerts
                         IsDisabled = IsDisabled,
                         Conditions = Conditions.Select(c => c.ToUpdate(sensorId)).ToList(),
                         Destination = Chats is null
-                            ? new PolicyDestinationUpdate(true, availableChats.ToDictionary(k => k.Value, v => v.Key))
-                            : new PolicyDestinationUpdate(false, Chats.Where(availableChats.ContainsKey).ToDictionary(k => availableChats[k], v => v)),
+                            ? new PolicyDestinationUpdate()
+                            : new PolicyDestinationUpdate(Chats.Where(availableChats.ContainsKey).ToDictionary(k => availableChats[k], v => v)),
                     };
 
                     result.Add(sensorId, policyUpdate);

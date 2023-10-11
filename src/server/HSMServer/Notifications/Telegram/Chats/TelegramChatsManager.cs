@@ -237,7 +237,7 @@ namespace HSMServer.Notifications
                 Template = policy.Template,
                 Icon = policy.Icon,
                 IsDisabled = policy.IsDisabled,
-                Destination = new PolicyDestinationUpdate(true, new(0)),
+                Destination = new(),
                 Initiator = InitiatorInfo.AsSystemForce(),
             };
     }

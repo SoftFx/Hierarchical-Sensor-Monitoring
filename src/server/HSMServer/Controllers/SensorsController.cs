@@ -9,9 +9,7 @@ using HSMServer.Core.Model;
 using HSMServer.Core.Model.Requests;
 using HSMServer.Core.SensorsUpdatesQueue;
 using HSMServer.Extensions;
-using HSMServer.Model.TreeViewModel;
 using HSMServer.ModelBinders;
-using HSMServer.Notifications;
 using HSMServer.ObsoleteUnitedSensorValue;
 using HSMServer.Validation;
 using Microsoft.AspNetCore.Authorization;
@@ -39,22 +37,17 @@ namespace HSMServer.Controllers
         private readonly ILogger<SensorsController> _logger;
         private readonly IUpdatesQueue _updatesQueue;
         private readonly DataCollectorWrapper _dataCollector;
-        private readonly ITelegramChatsManager _chatsManager;
         private readonly ITreeValuesCache _cache;
-        private readonly TreeViewModel _tree;
 
         protected static readonly EmptyResult _emptyResult = new();
 
 
-        public SensorsController(IUpdatesQueue updatesQueue, DataCollectorWrapper dataCollector,
-            ILogger<SensorsController> logger, ITreeValuesCache cache, TreeViewModel tree, ITelegramChatsManager chatsManager)
+        public SensorsController(IUpdatesQueue updatesQueue, DataCollectorWrapper dataCollector, ILogger<SensorsController> logger, ITreeValuesCache cache)
         {
             _updatesQueue = updatesQueue;
             _dataCollector = dataCollector;
-            _chatsManager = chatsManager;
             _logger = logger;
             _cache = cache;
-            _tree = tree;
         }
 
 
@@ -590,12 +583,7 @@ namespace HSMServer.Controllers
                     return false;
                 }
 
-                var availableChats = new Dictionary<Guid, string>(0);
-
-                if (_tree.Sensors.TryGetValue(sensorId, out var sensor))
-                    availableChats = sensor.GetAvailableChats(_chatsManager);
-
-                requestModel.Update = request.Convert(sensorId, availableChats, keyName);
+                requestModel.Update = request.Convert(sensorId, keyName);
 
                 if (request.SensorType.HasValue)
                     requestModel.Type = request.SensorType.Value.Convert();

@@ -885,8 +885,7 @@ namespace HSMServer.Core.Cache
 
             SubscribeSensorToPolicyUpdate(sensor);
 
-            var root = GetProductByName(sensor.RootProductName);
-            sensor.Policies.AddDefault(root?.NotificationsSettings?.TelegramSettings?.Chats?.ToDictionary(u => new Guid(u.SystemId), v => v.Name), options);
+            sensor.Policies.AddDefault(options);
 
             AddSensor(sensor);
             UpdateProduct(parent);

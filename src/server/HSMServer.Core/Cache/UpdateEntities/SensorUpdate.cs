@@ -71,9 +71,13 @@ namespace HSMServer.Core.Cache.UpdateEntities
         public bool AllChats { get; }
 
 
-        public PolicyDestinationUpdate(bool allChats, Dictionary<Guid, string> chats)
+        public PolicyDestinationUpdate(bool allChats = true)
         {
             AllChats = allChats;
+        }
+
+        public PolicyDestinationUpdate(Dictionary<Guid, string> chats, bool allChats = false) : this(allChats)
+        {
             Chats = chats;
         }
     }

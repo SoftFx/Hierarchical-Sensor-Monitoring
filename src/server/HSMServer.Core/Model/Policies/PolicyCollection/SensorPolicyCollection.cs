@@ -24,7 +24,7 @@ namespace HSMServer.Core.Model.Policies
 
         internal abstract void AddPolicy<U>(U policy) where U : Policy;
 
-        internal abstract void AddDefault(Dictionary<Guid, string> connectedChats, DefaultAlertsOptions options);
+        internal abstract void AddDefault(DefaultAlertsOptions options);
 
         internal abstract void ApplyPolicies(List<string> policyIds, Dictionary<string, PolicyEntity> allPolicies);
 
@@ -223,7 +223,7 @@ namespace HSMServer.Core.Model.Policies
                 }
         }
 
-        internal override void AddDefault(Dictionary<Guid, string> connectedChats, DefaultAlertsOptions options)
+        internal override void AddDefault(DefaultAlertsOptions options)
         {
             var policy = new PolicyType();
 
@@ -232,7 +232,7 @@ namespace HSMServer.Core.Model.Policies
                 Id = Guid.NewGuid(),
                 Status = SensorStatus.Ok,
                 Template = $"$prevStatus->$status [$product]$path = $comment",
-                Destination = new(true, connectedChats),
+                Destination = new(),
                 Conditions = new(1)
                 {
                     new PolicyConditionUpdate(
