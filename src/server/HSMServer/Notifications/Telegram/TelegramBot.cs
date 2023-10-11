@@ -158,20 +158,19 @@ namespace HSMServer.Notifications
             try
             {
                 if (IsBotRunning && _config.IsRunning && _folderManager.TryGetValue(folderId, out var folder))
-                    foreach (var chatId in folder.TelegramChats)
-                        if (_chatsManager.TryGetValue(chatId, out var chat) && chat.SendMessages)
-                        {
-                            var isInstant = chat.MessagesAggregationTimeSec == 0;
+                    foreach (var alert in result)
+                    {
+                        var chatIds = alert.Destination.AllChats ? folder.TelegramChats : alert.Destination.Chats;
 
-                            foreach (var alert in result)
-                                if (chat is not null && (alert.Destination?.Chats?.Contains(chat.Id) ?? false)) // TODO: all chats shoul be checked
-                                {
-                                    if (isInstant)
-                                        SendMessage(chat.ChatId, alert.ToString());
-                                    else
-                                        chat.MessageBuilder.AddMessage(alert);
-                                }
-                        }
+                        foreach (var chatId in chatIds)
+                            if (_chatsManager.TryGetValue(chatId, out var chat) && chat.SendMessages)
+                            {
+                                if (chat.MessagesAggregationTimeSec == 0)
+                                    SendMessage(chat.ChatId, alert.ToString());
+                                else
+                                    chat.MessageBuilder.AddMessage(alert);
+                            }
+                    }
             }
             catch (Exception ex)
             {

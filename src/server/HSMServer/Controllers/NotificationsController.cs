@@ -42,8 +42,6 @@ namespace HSMServer.Controllers
         public IActionResult SendTestTelegramMessage(long chatId, string entityId)
         {
             var testMessage = $"Test message for {CurrentUser.Name}.";
-            if (GetEntity(entityId) is ProductNodeViewModel product)
-                testMessage = $"{testMessage} (Product {product.Name})";
 
             _telegramBot.SendTestMessage(chatId, testMessage);
 
@@ -56,11 +54,6 @@ namespace HSMServer.Controllers
 
             return _emptyResult;
         }
-
-        private INotificatable GetEntity(string entityId) =>
-            !string.IsNullOrEmpty(entityId)
-                ? _tree.Nodes[SensorPathHelper.DecodeGuid(entityId)]
-                : GetCurrentUser();
 
         private User GetCurrentUser() => _userManager[CurrentUser.Id];
 

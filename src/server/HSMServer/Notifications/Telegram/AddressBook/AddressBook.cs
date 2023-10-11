@@ -7,8 +7,8 @@ namespace HSMServer.Notifications
 {
     internal sealed class AddressBook
     {
-        private readonly ConcurrentDictionary<ChatId, TelegramChat> _chats = new();
         private readonly ConcurrentDictionary<Guid, InvitationToken> _tokens = new();
+        private readonly ConcurrentDictionary<ChatId, TelegramChat> _chats = new();
 
 
         internal Guid BuildInvitationToken(Guid folderId, Model.Authentication.User user)
@@ -24,7 +24,7 @@ namespace HSMServer.Notifications
         {
             foreach (var (tokenId, token) in _tokens)
                 if (DateTime.UtcNow >= token.ExpirationTime.AddHours(1))
-                    _tokens.TryRemove(tokenId, out _);
+                    RemoveToken(tokenId);
         }
 
         internal bool TryGetToken(string tokenIdStr, out InvitationToken token)

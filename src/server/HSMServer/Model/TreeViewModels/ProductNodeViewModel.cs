@@ -12,7 +12,7 @@ using System.Linq;
 
 namespace HSMServer.Model.TreeViewModel
 {
-    public class ProductNodeViewModel : NodeViewModel, INotificatable
+    public class ProductNodeViewModel : NodeViewModel
     {
         public ConcurrentDictionary<Guid, ProductNodeViewModel> Nodes { get; } = new();
 

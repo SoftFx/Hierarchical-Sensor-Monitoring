@@ -14,7 +14,7 @@ using System.Text.Json;
 
 namespace HSMServer.Model.Authentication
 {
-    public class User : ClaimsPrincipal, IServerModel<UserEntity, UserUpdate>, INotificatable
+    public class User : ClaimsPrincipal, IServerModel<UserEntity, UserUpdate>
     {
         public Guid Id { get; init; }
 

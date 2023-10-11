@@ -99,7 +99,7 @@ namespace HSMServer.Notifications
 
                     response.Append("Sorry, your invitation token is expired.");
                 }
-                else if (!_folderManager.TryGetValue(token.Token, out var folder))
+                else if (!_folderManager.TryGetValue(token.FolderId, out var folder))
                 {
                     _addressBook.RemoveToken(token.Token);
 
@@ -109,6 +109,8 @@ namespace HSMServer.Notifications
                 {
                     var newChat = _addressBook.RegisterChat(message, token);
                     var isUserChat = newChat.Type is ConnectedChatType.TelegramPrivate;
+
+                    // TODO: newChat should be saved in chatsManager if doesn't exist and added to foleder.TelegramChats (folder should be saved)
 
                     if (newChat is not null)
                         _cache.AddNewChat(newChat.Id, newChat.Name, isUserChat ? null : token.User.Name);

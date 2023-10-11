@@ -14,13 +14,16 @@ namespace HSMServer.Notifications
 
         internal Guid Token { get; }
 
+        internal Guid FolderId { get; }
+
         internal DateTime ExpirationTime { get; }
 
 
         internal InvitationToken(Guid folderId, User user)
         {
             User = user;
-            Token = folderId;
+            FolderId = folderId;
+            Token = Guid.NewGuid();
             ExpirationTime = DateTime.UtcNow.AddMinutes(TokenExpirationMinutes);
         }
     }

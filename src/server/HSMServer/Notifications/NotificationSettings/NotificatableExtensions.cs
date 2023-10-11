@@ -1,8 +1,4 @@
-﻿using HSMServer.Authentication;
-using HSMServer.Model.Authentication;
-using HSMServer.Model.TreeViewModel;
-
-namespace HSMServer.Notification.Settings
+﻿namespace HSMServer.Notification.Settings
 {
     internal static class NotificatableExtensions
     {
@@ -31,14 +27,6 @@ namespace HSMServer.Notification.Settings
                 message = message.Replace(_specialSymbolsMarkdownV2[i], _escapedSymbols[i]);
 
             return message;
-        }
-
-        internal static void UpdateEntity(this INotificatable entity, IUserManager userManager, TreeViewModel tree)
-        {
-            if (entity is User user)
-                userManager.UpdateUser(user);
-            else if (entity is ProductNodeViewModel product)
-                tree.UpdateProductNotificationSettings(product);
         }
     }
 }
