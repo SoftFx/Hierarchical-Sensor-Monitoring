@@ -20,7 +20,7 @@ namespace HSMServer.Model.DataAlerts
 
         public SensorStatus Status { get; set; }
 
-        public TimeSpan? Sensativity { get; set; }
+        public TimeSpan? Sensitivity { get; set; }
 
         public List<string> Chats { get; set; }
 
@@ -38,7 +38,7 @@ namespace HSMServer.Model.DataAlerts
             Icon = policy.Icon;
             Status = policy.Status;
             Template = policy.Template;
-            Sensativity = policy.Sensitivity?.ToTimeSpan();
+            Sensitivity = policy.Sensitivity?.ToTimeSpan();
             IsDisabled = policy.IsDisabled;
 
             if (!policy.Destination.AllChats)
@@ -61,7 +61,7 @@ namespace HSMServer.Model.DataAlerts
                         Status = Status,
                         Template = Template,
                         IsDisabled = IsDisabled,
-                        Sensitivity = Sensativity.HasValue ? new TimeIntervalModel(Sensativity.Value.Ticks) : null,
+                        Sensitivity = Sensitivity.HasValue ? new TimeIntervalModel(Sensitivity.Value.Ticks) : null,
                         Conditions = Conditions.Select(c => c.ToUpdate(sensorId)).ToList(),
                         Destination = Chats is null
                             ? new PolicyDestinationUpdate(true, availableChats.ToDictionary(k => k.Value, v => v.Key))

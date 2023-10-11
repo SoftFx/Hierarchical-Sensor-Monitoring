@@ -232,7 +232,7 @@ namespace HSMServer.Core.Model.Policies
                 actions.Add($"change status to = {Status}");
 
             if (Sensitivity is not null)
-                actions.Add($"after sensativity={Sensitivity}");
+                actions.Add($"after sensitivity={Sensitivity}");
 
             sb.Append($" then {string.Join(", ", actions)}");
 

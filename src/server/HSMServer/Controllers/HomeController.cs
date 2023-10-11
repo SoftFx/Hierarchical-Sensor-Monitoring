@@ -1,4 +1,5 @@
 using HSMCommon.Collections;
+using HSMServer.ApiObjectsConverters;
 using HSMServer.Authentication;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Cache.UpdateEntities;
@@ -40,20 +41,22 @@ namespace HSMServer.Controllers
     [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
     public class HomeController : BaseController
     {
-        private static readonly JsonSerializerOptions _alertsSerializationOptions = new()
+        private static readonly JsonSerializerOptions _alertJsonOptions = new()
         {
-            WriteIndented = true
+            AllowTrailingCommas = true,
+            WriteIndented = true,
         };
 
         private readonly ITreeValuesCache _treeValuesCache;
+        private readonly IJournalService _journalService;
         private readonly IFolderManager _folderManager;
         private readonly TreeViewModel _treeViewModel;
-        private readonly IJournalService _journalService;
 
 
         static HomeController()
         {
-            _alertsSerializationOptions.Converters.Add(new JsonStringEnumConverter());
+            _alertJsonOptions.Converters.Add(new ListAsJsonStringConverter());
+            _alertJsonOptions.Converters.Add(new JsonStringEnumConverter());
         }
 
         public HomeController(ITreeValuesCache treeValuesCache, IFolderManager folderManager, TreeViewModel treeViewModel,
@@ -819,7 +822,7 @@ namespace HSMServer.Controllers
                 return _emptyResult;
 
 
-            var policies = JsonSerializer.Serialize(node.Policies.GroupedPolicies.Select(p => new AlertExportViewModel(p)), _alertsSerializationOptions);
+            var policies = JsonSerializer.Serialize(node.Policies.GroupedPolicies.Select(p => new AlertExportViewModel(p)), _alertJsonOptions);
 
             var fileName = $"{node.FullPath.Replace('/', '_')}-alerts.json";
             Response.Headers.Add("Content-Disposition", $"attachment;filename={fileName}");
@@ -836,7 +839,7 @@ namespace HSMServer.Controllers
             {
                 try
                 {
-                    var alerts = JsonSerializer.Deserialize<List<AlertExportViewModel>>(model.FileContent, _alertsSerializationOptions);
+                    var alerts = JsonSerializer.Deserialize<List<AlertExportViewModel>>(model.FileContent, _alertJsonOptions);
 
                     var availableSensors = node.Sensors.ToDictionary(k => k.Value.Name, v => v.Key);
                     var availableChats = node.GetAllChats().ToDictionary(k => k.Name, v => v.SystemId);
