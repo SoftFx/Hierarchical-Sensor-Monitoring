@@ -28,8 +28,11 @@ namespace hsm_wrapper
 		void Start();
 		void Stop();
 		void InitializeSystemMonitoring(bool is_cpu, bool is_free_ram);
+		void InitializeDiskMonitoring(const std::string& target, bool is_free_space, bool is_free_space_prediction, bool is_active_time, bool is_queue_lenght);
+		void InitializeAllDisksMonitoring(bool is_free_space, bool is_free_space_prediction, bool is_active_time, bool is_queue_lenght);
 		void InitializeProcessMonitoring(bool is_cpu, bool is_memory, bool is_threads);
-		void InitializeOsMonitoring(bool last_update, bool last_restart);
+		void InitializeOsMonitoring(bool is_last_update, bool is_last_restart);
+		void InitializeOsLogsMonitoring(bool is_warnig, bool is_error);
 		void InitializeProductVersion(const std::string& version);
 		void InitializeCollectorMonitoring(bool is_alive, bool version);
 		void AddServiceStateMonitoring(const std::string& service_name);

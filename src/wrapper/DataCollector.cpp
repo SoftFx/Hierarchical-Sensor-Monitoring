@@ -60,25 +60,52 @@ void DataCollectorImpl::Stop()
 
 void hsm_wrapper::DataCollectorImpl::InitializeSystemMonitoring(bool is_cpu, bool is_free_ram)
 {
-	auto options = gcnew HSMDataCollector::Options::BarSensorOptions();
-	if (is_cpu) data_collector->Windows->AddTotalCpu(options);
-	if (is_free_ram) data_collector->Windows->AddFreeRamMemory(options);
+	if (is_cpu) data_collector->Windows->AddTotalCpu();
+	if (is_free_ram) data_collector->Windows->AddFreeRamMemory();
+}
+
+void DataCollectorImpl::InitializeDiskMonitoring(const string& target, bool is_free_space, bool is_free_space_prediction, bool is_active_time, bool is_queue_lenght)
+{
+	auto disk_options = gcnew HSMDataCollector::Options::DiskSensorOptions();
+	disk_options->TargetPath = gcnew System::String(target.c_str());
+
+	if (is_free_space) data_collector->Windows->AddFreeDiskSpace(disk_options);
+	if (is_free_space_prediction) data_collector->Windows->AddFreeDisksSpacePrediction(disk_options);
+
+	auto disk_bar_options = gcnew HSMDataCollector::Options::DiskBarSensorOptions();
+	disk_bar_options->TargetPath = gcnew System::String(target.c_str());
+
+	if (is_active_time) data_collector->Windows->AddActiveDisksTime(disk_bar_options);
+	if (is_queue_lenght) data_collector->Windows->AddDisksQueueLength(disk_bar_options);
+}
+
+void hsm_wrapper::DataCollectorImpl::InitializeAllDisksMonitoring(bool is_free_space, bool is_free_space_prediction, bool is_active_time, bool is_queue_lenght)
+{
+	if (is_free_space) data_collector->Windows->AddFreeDisksSpace();
+	if (is_free_space_prediction) data_collector->Windows->AddFreeDisksSpacePrediction();
+	if (is_active_time) data_collector->Windows->AddActiveDisksTime();
+	if (is_queue_lenght) data_collector->Windows->AddDisksQueueLength();
 }
 
 void hsm_wrapper::DataCollectorImpl::InitializeProcessMonitoring(bool is_cpu, bool is_memory, bool is_threads)
 {
-	auto options = gcnew HSMDataCollector::Options::BarSensorOptions();
-	if (is_cpu) data_collector->Windows->AddProcessCpu(options);
-	if (is_memory) data_collector->Windows->AddProcessMemory(options);
-	if (is_threads) data_collector->Windows->AddProcessThreadCount(options);
+	if (is_cpu) data_collector->Windows->AddProcessCpu();
+	if (is_memory) data_collector->Windows->AddProcessMemory();
+	if (is_threads) data_collector->Windows->AddProcessThreadCount();
 }
 
-void hsm_wrapper::DataCollectorImpl::InitializeOsMonitoring(bool last_update, bool last_restart)
+void hsm_wrapper::DataCollectorImpl::InitializeOsMonitoring(bool is_last_update, bool is_last_restart)
 {
-	WindowsInfoSensorOptions^ options = gcnew WindowsInfoSensorOptions();
- 	if (last_update) data_collector->Windows->AddWindowsLastRestart(options);
- 	if (last_restart) data_collector->Windows->AddWindowsLastUpdate(options);
+ 	if (is_last_update) data_collector->Windows->AddWindowsLastUpdate();
+ 	if (is_last_restart) data_collector->Windows->AddWindowsLastRestart();
 }
+
+void hsm_wrapper::DataCollectorImpl::InitializeOsLogsMonitoring(bool is_warnig, bool is_error)
+{
+	if (is_warnig) data_collector->Windows->AddWarningWindowsLogs();
+	if (is_error) data_collector->Windows->AddErrorWindowsLogs();
+}
+
 
 void hsm_wrapper::DataCollectorImpl::InitializeProductVersion(const std::string& version)
 {
@@ -89,16 +116,13 @@ void hsm_wrapper::DataCollectorImpl::InitializeProductVersion(const std::string&
 
 void hsm_wrapper::DataCollectorImpl::InitializeCollectorMonitoring(bool is_alive, bool version)
 {
-	CollectorMonitoringInfoOptions^ options = gcnew CollectorMonitoringInfoOptions();
-	if (is_alive) data_collector->Windows->AddCollectorAlive(options);
+	if (is_alive) data_collector->Windows->AddCollectorAlive();
 	if (version) data_collector->Windows->AddCollectorVersion();
 }
 
 void hsm_wrapper::DataCollectorImpl::AddServiceStateMonitoring(const std::string& service_name)
 {
-	ServiceSensorOptions^ options = gcnew ServiceSensorOptions();
-	options->ServiceName = gcnew String(service_name.c_str());
-	data_collector->Windows->SubscribeToWindowsServiceStatus(options);
+	data_collector->Windows->SubscribeToWindowsServiceStatus(gcnew String(service_name.c_str()));
 }
 
 void hsm_wrapper::DataCollectorImpl::SendFileAsync(const std::string& sensor_path, const std::string& file_path, HSMSensorStatus status /*= HSMSensorStatus::Ok*/, const std::string& description /*= {}*/)
@@ -329,11 +353,23 @@ void hsm_wrapper::DataCollectorImplWrapper::InitializeProcessMonitoring(bool is_
 	}
 }
 
-void hsm_wrapper::DataCollectorImplWrapper::InitializeOsMonitoring(bool is_updated, bool last_update, bool last_restart)
+void hsm_wrapper::DataCollectorImplWrapper::InitializeOsMonitoring(bool is_last_update, bool is_last_restart)
 {
 	try
 	{
-		impl->InitializeOsMonitoring(last_update, last_restart);
+		impl->InitializeOsMonitoring(is_last_update, is_last_restart);
+	}
+	catch (System::Exception^ ex)
+	{
+		throw std::exception(msclr::interop::marshal_as<std::string>(ex->Message).c_str());
+	}
+}
+
+void DataCollectorImplWrapper::InitializeOsLogsMonitoring(bool is_warnig, bool is_error)
+{
+	try
+	{
+		impl->InitializeOsLogsMonitoring(is_warnig, is_error);
 	}
 	catch (System::Exception^ ex)
 	{
@@ -346,6 +382,30 @@ void hsm_wrapper::DataCollectorImplWrapper::AddServiceStateMonitoring(const std:
 	try
 	{
 		impl->AddServiceStateMonitoring(service_name);
+	}
+	catch (System::Exception^ ex)
+	{
+		throw std::exception(msclr::interop::marshal_as<std::string>(ex->Message).c_str());
+	}
+}
+
+void DataCollectorImplWrapper::InitializeDiskMonitoring(const string& target, bool is_free_space, bool is_free_space_prediction, bool is_active_time, bool is_queue_lenght)
+{
+	try
+	{
+		impl->InitializeDiskMonitoring(target, is_free_space, is_free_space_prediction, is_active_time, is_queue_lenght);
+	}
+	catch (System::Exception^ ex)
+	{
+		throw std::exception(msclr::interop::marshal_as<std::string>(ex->Message).c_str());
+	}
+}
+
+void DataCollectorImplWrapper::InitializeAllDisksMonitoring(bool is_free_space, bool is_free_space_prediction, bool is_active_time, bool is_queue_lenght)
+{
+	try
+	{
+		impl->InitializeAllDisksMonitoring(is_free_space, is_free_space_prediction, is_active_time, is_queue_lenght);
 	}
 	catch (System::Exception^ ex)
 	{
@@ -628,14 +688,29 @@ void hsm_wrapper::DataCollectorProxy::InitializeSystemMonitoring(bool is_cpu, bo
 	impl_wrapper->InitializeSystemMonitoring(is_cpu, is_free_ram);
 }
 
+void DataCollectorProxy::InitializeDiskMonitoring(const string& target, bool is_free_space, bool is_free_space_prediction, bool is_active_time, bool is_queue_lenght)
+{
+	impl_wrapper->InitializeDiskMonitoring(target, is_free_space, is_free_space_prediction, is_active_time, is_queue_lenght);
+}
+
+void hsm_wrapper::DataCollectorProxy::InitializeAllDisksMonitoring(bool is_free_space, bool is_free_space_prediction, bool is_active_time, bool is_queue_lenght)
+{
+	impl_wrapper->InitializeAllDisksMonitoring(is_free_space, is_free_space_prediction, is_active_time, is_queue_lenght);
+}
+
 void hsm_wrapper::DataCollectorProxy::InitializeProcessMonitoring(bool is_cpu, bool is_memory, bool is_threads)
 {
 	impl_wrapper->InitializeProcessMonitoring(is_cpu, is_memory, is_threads);
 }
 
-void hsm_wrapper::DataCollectorProxy::InitializeOsMonitoring(bool is_updated, bool last_update, bool last_restart)
+void hsm_wrapper::DataCollectorProxy::InitializeOsMonitoring(bool is_last_update, bool is_last_restart)
 {
-	impl_wrapper->InitializeOsMonitoring(is_updated, last_update, last_restart);
+	impl_wrapper->InitializeOsMonitoring(is_last_update, is_last_restart);
+}
+
+void DataCollectorProxy::InitializeOsLogsMonitoring(bool is_warnig, bool is_error)
+{
+	impl_wrapper->InitializeOsLogsMonitoring(is_warnig, is_error);
 }
 
 void hsm_wrapper::DataCollectorProxy::AddServiceStateMonitoring(const std::string& service_name)
