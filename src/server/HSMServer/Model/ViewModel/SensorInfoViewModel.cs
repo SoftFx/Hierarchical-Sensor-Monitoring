@@ -14,12 +14,12 @@ namespace HSMServer.Model.ViewModel
 
         public string StatusComment { get; }
 
+        public bool IsSingleton { get; }
+
         public bool HasGrafana { get; }
 
         public bool IsMuted { get; }
 
-
-        public bool IsSingleton { get; set; }
 
         public Unit? SelectedUnit { get; set; }
 
