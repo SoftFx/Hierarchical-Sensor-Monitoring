@@ -12,30 +12,30 @@ namespace HSMDataCollector.Alerts
 
         public AlertProperty Property { get; internal set; }
 
-        static public AlertConditionTemplate Build(AlertTargetTemplate target, AlertCombination combination, AlertOperation operation, AlertProperty property)
-        {
-            return new AlertConditionTemplate()
+
+        public static AlertConditionTemplate Build(AlertTargetTemplate target, AlertCombination combination, AlertOperation operation, AlertProperty property) =>
+            new AlertConditionTemplate()
             {
                 Target = target,
                 Combination = combination,
                 Operation = operation,
                 Property = property
             };
-        }
     }
+
 
     public sealed class AlertTargetTemplate
     {
         public TargetType Type { get; internal set; }
 
         public string Value { get; internal set; }
-        static public AlertTargetTemplate Build(TargetType type, string value)
-        {
-            return new AlertTargetTemplate()
+
+
+        public static AlertTargetTemplate Build(TargetType type, string value) =>
+            new AlertTargetTemplate()
             {
                 Type = type,
                 Value = value
             };
-        }
     }
 }
