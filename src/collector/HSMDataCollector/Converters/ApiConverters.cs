@@ -57,6 +57,7 @@ namespace HSMDataCollector.Converters
             {
                 Conditions = alert.Conditions?.Select(u => u.ToApi()).ToList(),
 
+                Sensitivity = alert.Sensitivity?.Ticks,
                 Template = alert.Template,
                 Status = alert.Status,
                 Icon = alert.Icon,
