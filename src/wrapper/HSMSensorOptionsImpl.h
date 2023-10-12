@@ -63,33 +63,25 @@ namespace hsm_wrapper
 		template <class T, class A>
 		friend void CopyActionToAlert(T ptemplate, A pimpl);
 
-		//friend void hsm_wrapper::BuildAlertTemplate(std::shared_ptr<IHSMAlertActionImpl> pimpl, HSMInstantAlertTemplate& alert);
-		//friend void hsm_wrapper::BuildAlertTemplate(std::shared_ptr<IHSMAlertActionImpl> pimpl, HSMBarAlertTemplate& alert);
-		//friend void hsm_wrapper::BuildAlertTemplate(std::shared_ptr<HSMAlertActionImpl> pimpl, HSMSpecialAlertTemplate& alert);
-
 		void AndSendNotification(std::string notification_template) override
 		{
 			template_ = gcnew System::String(notification_template.c_str());
 		}
-
 
 		void AndSetIcon(std::wstring icon) override
 		{
 			icon_ = gcnew System::String(icon.c_str()); 
 		}
 
-
 		void AndSetIcon(HSMAlertIcon icon) override
 		{
-			//icon_ = HSMDataCollector::Extensions::IconExtensions::ToUtf8(static_cast<AlertIcon>(static_cast<int>(icon)));
+			icon_ = HSMDataCollector::Extensions::IconExtensions::ToUtf8(static_cast<AlertIcon>(static_cast<int>(icon)));
 		}
-
 
 		void AndSetSensorError() override
 		{
 			status_ = HSMSensorDataObjects::SensorStatus::Error;
 		}
-
 
 		void BuildAndDisable() override
 		{
