@@ -18,7 +18,9 @@ namespace HSMServer.Notifications
         public NotificationsCenter(ITelegramChatsManager telegramChats, IFolderManager folderManager, ITreeValuesCache cache, IServerConfig config)
         {
             _telegramChatsManager = telegramChats;
-            _telegramChatsManager.ConnectChatToFolder += folderManager.AddChatToFolder;
+            _folderManager = folderManager;
+
+            _telegramChatsManager.ConnectChatToFolder += _folderManager.AddChatToFolder;
 
             TelegramBot = new(telegramChats, folderManager, cache, config.Telegram);
         }
