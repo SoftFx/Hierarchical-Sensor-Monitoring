@@ -66,6 +66,8 @@ namespace HSMServer.Core.Sensitivity
                                 alertResults.TryDequeue(out _, out _);
                                 thrownAlerts.Add(alertResult);
                             }
+                            else
+                                break;
                         }
 
                         if (alertResults.IsEmpty)
