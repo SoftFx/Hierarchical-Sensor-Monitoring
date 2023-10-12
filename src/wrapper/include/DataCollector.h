@@ -12,6 +12,7 @@
 #include "HSMLastValueSensor.h"
 #include "HSMParamsFuncSensor.h"
 #include "HSMNoParamsFuncSensor.h"
+#include "HSMSensorOptions.h"
 
 namespace hsm_wrapper
 {
@@ -35,15 +36,21 @@ namespace hsm_wrapper
 		void SendFileAsync(const std::string& sensor_path, const std::string& file_path, HSMSensorStatus status = HSMSensorStatus::Ok, const std::string& description = {});
 
 		HSMSensor<bool> CreateBoolSensor(const std::string& path, const std::string& description = "");
+		HSMSensor<bool> CreateBoolSensor(const std::string& path, const HSMInstantSensorOptions& options);
 		HSMSensor<int> CreateIntSensor(const std::string& path, const std::string& description = "");
+		HSMSensor<int> CreateIntSensor(const std::string& path, const HSMInstantSensorOptions& options);
 		HSMSensor<double> CreateDoubleSensor(const std::string& path, const std::string& description = "");
+		HSMSensor<double> CreateDoubleSensor(const std::string& path, const HSMInstantSensorOptions& options);
 		HSMSensor<std::string> CreateStringSensor(const std::string& path, const std::string& description = "");
+		HSMSensor<std::string> CreateStringSensor(const std::string& path, const HSMInstantSensorOptions& options);
 		HSMLastValueSensor<bool> CreateLastValueBoolSensor(const std::string& path, bool default_value, const std::string& description = "");
 		HSMLastValueSensor<int> CreateLastValueIntSensor(const std::string& path, int default_value, const std::string& description = "");
 		HSMLastValueSensor<double> CreateLastValueDoubleSensor(const std::string& path, double default_value, const std::string& description = "");
 		HSMLastValueSensor<std::string> CreateLastValueStringSensor(const std::string& path, const std::string& default_value, const std::string& description = "");
 		HSMBarSensor<int> CreateIntBarSensor(const std::string& path, int timeout = 300000, int small_period = 15000, const std::string& description = "");
+		HSMBarSensor<int> CreateIntBarSensor(const std::string& path, const HSMBarSensorOptions& options);
 		HSMBarSensor<double> CreateDoubleBarSensor(const std::string& path, int timeout = 300000, int small_period = 15000, int precision = 2, const std::string& description = "");
+		HSMBarSensor<double> CreateDoubleBarSensor(const std::string& path, const HSMBarSensorOptions& options);
 
 		template<class T>
 		std::shared_ptr<HSMNoParamsFuncSensorImplWrapper<T>> CreateNoParamsFuncSensor(const std::string& path, const std::string& description, std::function<T()> function, const std::chrono::milliseconds& interval);
@@ -73,15 +80,21 @@ namespace hsm_wrapper
 		void SendFileAsync(const std::string& sensor_path, const std::string& file_path, HSMSensorStatus status = HSMSensorStatus::Ok, const std::string& description = {});
 
 		BoolSensor CreateBoolSensor(const std::string& path, const std::string& description = {});
+		BoolSensor CreateBoolSensor(const std::string& path, const HSMInstantSensorOptions& options);
 		IntSensor CreateIntSensor(const std::string& path, const std::string& description = {});
+		IntSensor CreateIntSensor(const std::string& path, const HSMInstantSensorOptions& options);
 		DoubleSensor CreateDoubleSensor(const std::string& path, const std::string& description = {});
+		DoubleSensor CreateDoubleSensor(const std::string& path, const HSMInstantSensorOptions& options);
 		StringSensor CreateStringSensor(const std::string& path, const std::string& description = {});
+		StringSensor CreateStringSensor(const std::string& path, const HSMInstantSensorOptions& options);
 		BoolLastValueSensor CreateLastValueBoolSensor(const std::string& path, bool default_value, const std::string& description = {});
 		IntLastValueSensor CreateLastValueIntSensor(const std::string& path, int default_value, const std::string& description = {});
 		DoubleLastValueSensor CreateLastValueDoubleSensor(const std::string& path, double default_value, const std::string& description = {});
 		StringLastValueSensor CreateLastValueStringSensor(const std::string& path, const std::string& default_value, const std::string& description = {});
 		IntBarSensor CreateIntBarSensor(const std::string& path, int timeout = 300000, int small_period = 15000, const std::string& description = {});
+		IntBarSensor CreateIntBarSensor(const std::string& path, const HSMBarSensorOptions& options);
 		DoubleBarSensor CreateDoubleBarSensor(const std::string& path, int timeout = 300000, int small_period = 15000, int precision = 2, const std::string& description = {});
+		DoubleBarSensor CreateDoubleBarSensor(const std::string& path, const HSMBarSensorOptions& options);
 
 		template<class T>
 		HSMNoParamsFuncSensor<T> CreateNoParamsFuncSensor(const std::string& path, const std::string& description, std::function<T()> func, const std::chrono::milliseconds& interval)
