@@ -74,7 +74,7 @@ namespace HSMServer.Core.Model
         public TimeIntervalModel(TimeInterval interval, long ticks)
         {
             Interval = interval;
-            Ticks = ticks;
+            Ticks = Interval is TimeInterval.None ? long.MaxValue : ticks;
         }
 
 
@@ -96,6 +96,8 @@ namespace HSMServer.Core.Model
             _ => throw new NotImplementedException(),
         };
 
+
+        public TimeIntervalModel ToFromFolderModel() => new(TimeInterval.FromFolder, Ticks);
 
         public TimeIntervalEntity ToEntity() => new((long)Interval, Ticks);
 
