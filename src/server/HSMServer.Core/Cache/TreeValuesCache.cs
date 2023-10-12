@@ -339,6 +339,8 @@ namespace HSMServer.Core.Cache
             if (!_sensors.TryRemove(sensorId, out var sensor))
                 return;
 
+            RemoveSensorPolicies(sensor); // should be before removing from parent
+
             if (sensor.Parent is not null && _tree.TryGetValue(sensor.Parent.Id, out var parent))
             {
                 parent.RemoveSensor(sensorId);
@@ -352,8 +354,6 @@ namespace HSMServer.Core.Cache
             }
             else
                 _journalService.RemoveRecords(sensorId);
-
-            RemoveSensorPolicies(sensor);
 
             _database.RemoveSensorWithMetadata(sensorId.ToString());
             _snapshot.Sensors.Remove(sensorId);
@@ -602,15 +602,15 @@ namespace HSMServer.Core.Cache
 
         private void RemoveSensorPolicies(BaseSensorModel sensor)
         {
+            foreach (var policyId in sensor.Policies.Select(u => u.Id))
+                sensor.Policies.RemovePolicy(policyId);
+
             sensor.Policies.SensorExpired -= SetExpiredSnapshot;
             sensor.Policies.Uploaded -= UpdatePolicy;
 
             sensor.UpdateFromParentSettings -= _database.UpdateSensor;
 
             RemoveBaseNodeSubscription(sensor);
-
-            foreach (var policyId in sensor.Policies.Select(u => u.Id))
-                _database.RemovePolicy(policyId);
         }
 
         private void UpdatesQueueNewItemsHandler(IEnumerable<StoreInfo> storeInfos)

@@ -30,6 +30,8 @@ namespace HSMServer.Core.Model.Policies
 
         internal abstract bool TryUpdate(List<PolicyUpdate> updates, InitiatorInfo initiator, out string error);
 
+        internal abstract void RemovePolicy(Guid policyId, InitiatorInfo initiator = null);
+
 
         internal void Reset()
         {
@@ -156,6 +158,17 @@ namespace HSMServer.Core.Model.Policies
                 _storage.TryAdd(policy.Id, typedPolicy);
         }
 
+        internal override void RemovePolicy(Guid policyId, InitiatorInfo initiator = null)
+        {
+            if (_storage.TryRemove(policyId, out var oldPolicy))
+            {
+                Uploaded?.Invoke(ActionType.Delete, oldPolicy);
+
+                if (initiator is not null)
+                    CallJournal(policyId, oldPolicy.ToString(), string.Empty, initiator);
+            }
+        }
+
         internal override bool TryUpdate(List<PolicyUpdate> updatesList, InitiatorInfo initiator, out string error)
         {
             var updates = updatesList.Where(u => u.Id != Guid.Empty).ToDictionary(u => u.Id);
@@ -176,11 +189,8 @@ namespace HSMServer.Core.Model.Policies
                         else
                             errors.AppendLine(err);
                     }
-                    else if (_storage.TryRemove(id, out var oldPolicy))
-                    {
-                        CallJournal(id, oldPolicy.ToString(), string.Empty, initiator);
-                        Uploaded?.Invoke(ActionType.Delete, oldPolicy);
-                    }
+                    else
+                        RemovePolicy(id, initiator);
                 }
 
             foreach (var update in updatesList)
