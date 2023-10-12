@@ -36,7 +36,7 @@ namespace HSMServer.Core.Cache
         private readonly CGuidDict<bool> _fileHistoryLocks = new(); // TODO: get file history should be fixed without this crutch
 
         private readonly Logger _logger = LogManager.GetLogger(CommonConstants.InfrastructureLoggerName);
-        private readonly SensitivityStorage _sensativityStorage = new();
+        private readonly SensitivityStorage _sensitivityStorage = new();
 
         private readonly ITreeStateSnapshot _snapshot;
         private readonly IUpdatesQueue _updatesQueue;
@@ -59,7 +59,7 @@ namespace HSMServer.Core.Cache
             _journalService = journalService;
 
             _updatesQueue.NewItemsEvent += UpdatesQueueNewItemsHandler;
-            _sensativityStorage.ThrowAlertResultsEvent += ThrowAlertResults;
+            _sensitivityStorage.ThrowAlertResultsEvent += ThrowAlertResults;
 
             Initialize();
         }
@@ -74,7 +74,7 @@ namespace HSMServer.Core.Cache
 
         public void Dispose()
         {
-            _sensativityStorage.ThrowAlertResultsEvent -= ThrowAlertResults;
+            _sensitivityStorage.ThrowAlertResultsEvent -= ThrowAlertResults;
             _updatesQueue.NewItemsEvent -= UpdatesQueueNewItemsHandler;
 
             _updatesQueue.Dispose();
@@ -640,7 +640,7 @@ namespace HSMServer.Core.Cache
             if (sensor.TryAddValue(value) && sensor.LastDbValue != null)
                 SaveSensorValueToDb(sensor.LastDbValue, sensor.Id);
 
-            _sensativityStorage.SaveOrSendPolicies(sensor.PolicyResult);
+            _sensitivityStorage.SaveOrSendPolicies(sensor.PolicyResult);
 
             SensorUpdateView(sensor);
         }
@@ -1049,7 +1049,7 @@ namespace HSMServer.Core.Cache
 
         public void UpdateCacheState()
         {
-            _sensativityStorage.FlushStorage();
+            _sensitivityStorage.FlushStorage();
 
             foreach (var sensor in GetSensors())
                 sensor.CheckTimeout();
@@ -1080,7 +1080,7 @@ namespace HSMServer.Core.Cache
                         SaveSensorValueToDb(value, sensor.Id);
                 }
 
-                _sensativityStorage.SaveOrSendPolicies(timeout ? ttl.PolicyResult : ttl.Ok);
+                _sensitivityStorage.SaveOrSendPolicies(timeout ? ttl.PolicyResult : ttl.Ok);
             }
 
             SensorUpdateView(sensor);
