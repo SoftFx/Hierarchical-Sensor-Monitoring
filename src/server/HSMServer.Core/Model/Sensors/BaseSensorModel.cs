@@ -142,7 +142,7 @@ namespace HSMServer.Core.Model
         internal abstract BaseValue Convert(byte[] bytes);
 
 
-        internal bool TryUpdate(SensorUpdate update, out string error) // TODO: out error parameter should be added for this method (to show error message in DataCollector)
+        internal bool TryUpdate(SensorUpdate update, out string error)
         {
             Update(update);
 

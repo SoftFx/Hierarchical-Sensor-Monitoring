@@ -7,6 +7,7 @@ Sensitivity is set in TimeSpan format (0.00:00:00 or 00:00:00). When sensitivity
 * **Sensativity** has been added for alerts
 * Lists of string are deserialized into one line
 * Exporting have been fixed for removed sensors
+* Sorting by name has been added for **Sensors** list
 
 ## Sensors
 * Rounding by seconds for instant **Singleton** sensors have been added
