@@ -51,7 +51,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests.ModelTests
             var updating = SensorModelFactory.BuildSensorUpdate();
             var sensor = SensorModelFactory.Build(EntitiesFactory.BuildSensorEntity());
 
-            sensor.Update(updating);
+            sensor.TryUpdate(updating, out _);
 
             ModelsTester.TestSensorModel(updating, sensor);
         }
