@@ -85,23 +85,9 @@
                                         </a>
                                     </li>
                                     <li>
-                                        <a>Send test message</a> @*TODO: should be realized for private and group chats*@
-                                        @*@if (chat.IsUserChat)
-                                        {
-                                            <a class="dropdown-item text-decoration-none fw-normal" asp-action="@nameof(NotificationsController.SendTestTelegramMessage)"
-                                                asp-route-chatId="@chat.ChatId">
-                                                Send test message
-                                            </a>
-                                        }
-                                        else
-                                        {
-                                            <a class="dropdown-item text-decoration-none fw-normal" asp-controller="@ViewConstants.NotificationsController"
-                                                asp-action="@nameof(NotificationsController.SendTestTelegramMessage)"
-                                                asp-route-entityId="@Model.EntityId"
-                                                asp-route-chatId="@chat.ChatId">
-                                                Send test message
-                                            </a>
-                                        }*@
+                                        <a id="sendMessage_@chat.Id" name="@chat.ChatId" class='dropdown-item text-decoration-none fw-normal' style="cursor: pointer;">
+                                            Send test message
+                                        </a'>
                                     </li>
                                 </ul>
                             </div>
@@ -158,5 +144,16 @@
 
         $(`#row_chat_${chatId}`).remove();
         $(`#folder_chat_${chatId}`).val('@Guid.Empty');
+    });
+
+    $('[id^=sendMessage_]').on('click', function () {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+
+        let chatId = this.name;
+
+        $.ajax({
+            url: `@Url.Action(nameof(NotificationsController.SendTestTelegramMessage), ViewConstants.NotificationsController)?chatId=${chatId}`
+        });
     });
 </script>

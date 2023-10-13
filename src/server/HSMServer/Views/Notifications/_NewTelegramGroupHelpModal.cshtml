@@ -53,7 +53,7 @@
     function getGroupStartCommand() {
         $.ajax({
             type: 'GET',
-            url: `@Html.Raw(Url.Action(nameof(NotificationsController.CopyStartCommandForGroup), ViewConstants.NotificationsController))?folderId=@Model`,
+            url: `@Html.Raw(Url.Action(nameof(NotificationsController.GetGroupInvitation), ViewConstants.NotificationsController))?folderId=@Model`,
             dataType: 'html',
             contentType: 'application/json',
             cache: false,
