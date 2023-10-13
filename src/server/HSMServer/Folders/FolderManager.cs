@@ -91,8 +91,16 @@ namespace HSMServer.Folders
         {
             var result = TryGetValue(update.Id, out var folder);
 
-            var addedTelegramChats = update.TelegramChats.Except(folder.TelegramChats).ToList();
-            var removedTelegramChats = folder.TelegramChats.Except(update.TelegramChats).ToList();
+
+            var addedTelegramChats = new List<Guid>(1 << 2);
+            var removedTelegramChats = new List<Guid>(1 << 2);
+
+            if (update.TelegramChats is not null)
+            {
+                addedTelegramChats.AddRange(update.TelegramChats?.Except(folder.TelegramChats));
+                removedTelegramChats.AddRange(folder.TelegramChats.Except(update.TelegramChats));
+            }
+
 
             result &= await base.TryUpdate(update);
 

@@ -21,7 +21,7 @@
 
     <div id="chatsSelect" class="selectpicker">
         <select class="selectpicker" asp-for="NewChats" multiple
-    data-width="100%" data-live-search="true" data-placeholder="Choose chats to add">
+                data-width="100%" data-live-search="true" data-placeholder="Choose chats to add">
             <option disabled>Groups</option>
             @foreach (var chat in Model.ChatsToAdd.GetGroups())
             {
@@ -129,6 +129,10 @@
 
 
 <script>
+    $(document).ready(function () {
+        $("select[name='NewChats']").selectpicker();
+    });
+
     $(document).on("submit", "#folderTelegramChats_form", function (event) {
         event.preventDefault();
         event.stopImmediatePropagation();

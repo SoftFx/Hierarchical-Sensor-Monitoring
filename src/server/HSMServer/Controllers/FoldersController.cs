@@ -88,7 +88,7 @@ namespace HSMServer.Controllers
 
             await _folderManager.TryAdd(editFolder.ToFolderAdd(CurrentUser, CurrentInitiator, _tree), out var newFolder);
 
-            return View(nameof(EditFolder), BuildEditFolder(newFolder.Id));
+            return RedirectToAction(nameof(EditFolder), new { folderId = newFolder.Id });
         }
 
         [HttpPost]
