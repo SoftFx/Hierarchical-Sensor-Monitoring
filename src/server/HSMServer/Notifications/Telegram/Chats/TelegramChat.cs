@@ -1,6 +1,7 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.ConcurrentStorage;
 using System;
+using System.Collections.Generic;
 using Telegram.Bot.Types;
 
 namespace HSMServer.Notifications
@@ -17,6 +18,8 @@ namespace HSMServer.Notifications
         private const bool DefaultSendMessages = true;
         private const int DefaultMessagesAggregationTimeSec = 60;
 
+
+        internal HashSet<Guid> Folders { get; } = new();
 
         internal MessageBuilder MessageBuilder { get; } = new();
 

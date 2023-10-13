@@ -20,7 +20,7 @@ namespace HSMServer.Notifications
             _telegramChatsManager = telegramChats;
             _folderManager = folderManager;
 
-            _telegramChatsManager.ConnectChatToFolder += _folderManager.AddChatToFolder;
+            ConnectFoldersAndChats();
 
             TelegramBot = new(telegramChats, folderManager, cache, config.Telegram);
         }
@@ -31,14 +31,27 @@ namespace HSMServer.Notifications
         public ValueTask DisposeAsync()
         {
             _telegramChatsManager.ConnectChatToFolder -= _folderManager.AddChatToFolder;
+            _telegramChatsManager.Removed -= _folderManager.RemoveChatHandler;
+            _folderManager.Removed -= _telegramChatsManager.RemoveFolderHandler;
 
             return TelegramBot.DisposeAsync();
         }
 
-
         internal void CheckState()
         {
             _telegramChatsManager.TokenManager.RemoveOldTokens();
+        }
+
+        private void ConnectFoldersAndChats()
+        {
+            _telegramChatsManager.ConnectChatToFolder += _folderManager.AddChatToFolder;
+            _telegramChatsManager.Removed += _folderManager.RemoveChatHandler;
+            _folderManager.Removed += _telegramChatsManager.RemoveFolderHandler;
+
+            foreach (var folder in _folderManager.GetValues())
+                foreach (var chatId in folder.TelegramChats)
+                    if (_telegramChatsManager.TryGetValue(chatId, out var chat))
+                        chat.Folders.Add(folder.Id);
         }
     }
 }

@@ -4,6 +4,7 @@ using HSMServer.Core.TableOfChanges;
 using HSMServer.Model.Authentication;
 using HSMServer.Model.Folders;
 using HSMServer.Model.TreeViewModel;
+using HSMServer.Notifications;
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
@@ -23,6 +24,8 @@ namespace HSMServer.Folders
         Task RemoveProductFromFolder(Guid productId, Guid folderId, InitiatorInfo initiator);
 
         Task<string> AddChatToFolder(Guid chatId, Guid folderId, string userName);
+
+        void RemoveChatHandler(TelegramChat chat);
 
         List<FolderModel> GetUserFolders(User user);
     }

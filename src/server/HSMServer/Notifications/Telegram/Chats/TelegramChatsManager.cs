@@ -61,33 +61,6 @@ namespace HSMServer.Notifications
         public void Dispose() { }
 
 
-        public async Task<string> TryConnect(Message message, InvitationToken token)
-        {
-            var isChatExist = _telegramChatIds.TryGetValue(message.Chat, out var chatModel);
-
-            if (!isChatExist)
-            {
-                bool isUserChat = message?.Chat?.Type == ChatType.Private;
-
-                chatModel = new TelegramChat()
-                {
-                    ChatId = message.Chat,
-                    AuthorId = token.User.Id,
-                    Author = token.User.Name,
-                    AuthorizationTime = DateTime.UtcNow,
-                    Name = isUserChat ? message.From.Username : message.Chat.Title,
-                    Type = isUserChat ? ConnectedChatType.TelegramPrivate : ConnectedChatType.TelegramGroup,
-                };
-            }
-
-            var folderName = await ConnectChatToFolder?.Invoke(chatModel.Id, token.FolderId, token.User.Name);
-
-            if (!string.IsNullOrEmpty(folderName) && !isChatExist)
-                await TryAdd(chatModel);
-
-            return folderName;
-        }
-
         public async override Task<bool> TryAdd(TelegramChat model)
         {
             var result = await base.TryAdd(model);
@@ -124,6 +97,50 @@ namespace HSMServer.Notifications
 
         public string GetGroupInvitation(Guid folderId, User user) =>
             $"{TelegramBotCommands.Start}@{BotName} {TokenManager.BuildInvitationToken(folderId, user)}";
+
+        public async Task<string> TryConnect(Message message, InvitationToken token)
+        {
+            var isChatExist = _telegramChatIds.TryGetValue(message.Chat, out var chat);
+
+            if (!isChatExist)
+            {
+                bool isUserChat = message?.Chat?.Type == ChatType.Private;
+
+                chat = new TelegramChat()
+                {
+                    ChatId = message.Chat,
+                    AuthorId = token.User.Id,
+                    Author = token.User.Name,
+                    AuthorizationTime = DateTime.UtcNow,
+                    Name = isUserChat ? message.From.Username : message.Chat.Title,
+                    Type = isUserChat ? ConnectedChatType.TelegramPrivate : ConnectedChatType.TelegramGroup,
+                };
+            }
+
+            var folderName = await ConnectChatToFolder?.Invoke(chat.Id, token.FolderId, token.User.Name);
+
+            if (!string.IsNullOrEmpty(folderName))
+            {
+                if (!isChatExist)
+                    await TryAdd(chat);
+
+                chat.Folders.Add(token.FolderId);
+            }
+
+            return folderName;
+        }
+
+        public void RemoveFolderHandler(FolderModel folder)
+        {
+            foreach (var chatId in folder.TelegramChats)
+                if (TryGetValue(chatId, out var chat))
+                {
+                    chat.Folders.Remove(chatId);
+
+                    if (chat.Folders.Count == 0)
+                        _ = TryRemove(chatId);
+                }
+        }
 
 
         protected override TelegramChat FromEntity(TelegramChatEntity entity) => new(entity);

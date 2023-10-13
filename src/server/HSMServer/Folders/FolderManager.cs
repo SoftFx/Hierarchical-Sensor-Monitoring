@@ -12,6 +12,7 @@ using HSMServer.Model;
 using HSMServer.Model.Authentication;
 using HSMServer.Model.Folders;
 using HSMServer.Model.TreeViewModel;
+using HSMServer.Notifications;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -156,6 +157,25 @@ namespace HSMServer.Folders
             }
 
             return folder?.Name;
+        }
+
+        public void RemoveChatHandler(TelegramChat chat)
+        {
+            foreach (var (folderId, folder) in this)
+                if (folder.TelegramChats.Contains(chat.Id))
+                {
+                    var chats = new HashSet<Guid>(folder.TelegramChats);
+                    chats.Remove(chat.Id);
+
+                    var update = new FolderUpdate()
+                    {
+                        Id = folderId,
+                        TelegramChats = chats,
+                        Initiator = InitiatorInfo.AsSystemForce()
+                    };
+
+                    _ = TryUpdate(update);
+                }
         }
 
         public List<FolderModel> GetUserFolders(User user)

@@ -40,7 +40,7 @@ namespace HSMServer.Core.TableOfChanges
         }
 
 
-        public static InitiatorInfo AsSystemForce() => new(InitiatorType.System, isForce: true); // TODO: should be removed after telegram chats migration
+        public static InitiatorInfo AsSystemForce() => new(InitiatorType.System, isForce: true);
 
         public static InitiatorInfo AsUser(string username) => new(InitiatorType.User, username);
 

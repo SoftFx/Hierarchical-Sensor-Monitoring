@@ -1,5 +1,6 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.ConcurrentStorage;
+using HSMServer.Model.Folders;
 using HSMServer.Notifications.Telegram.Tokens;
 using System;
 using System.Threading.Tasks;
@@ -15,10 +16,12 @@ namespace HSMServer.Notifications
         event Func<Guid, Guid, string, Task<string>> ConnectChatToFolder;
 
 
-        Task<string> TryConnect(Message message, InvitationToken token);
-
         string GetInvitationLink(Guid folderId, User user);
 
         string GetGroupInvitation(Guid folderId, User user);
+
+        Task<string> TryConnect(Message message, InvitationToken token);
+
+        void RemoveFolderHandler(FolderModel folder);
     }
 }
