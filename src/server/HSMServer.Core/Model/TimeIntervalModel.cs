@@ -93,7 +93,7 @@ namespace HSMServer.Core.Model
             TimeInterval.Ticks or TimeInterval.FromFolder => time.AddTicks(Ticks * coef),
             TimeInterval.None => DateTime.MaxValue,
 
-            _ => throw new NotImplementedException(),
+            _ => throw new NotImplementedException($"{Interval} is not implemented for ShiftTime function"),
         };
 
 

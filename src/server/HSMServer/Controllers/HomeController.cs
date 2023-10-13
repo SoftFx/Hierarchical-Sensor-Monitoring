@@ -312,7 +312,7 @@ namespace HSMServer.Controllers
                     };
 
                     toastViewModel.AddItem(sensor);
-                    _treeValuesCache.UpdateSensor(update);
+                    _treeValuesCache.TryUpdateSensor(update, out _);
                 }
             }
 
@@ -379,7 +379,7 @@ namespace HSMServer.Controllers
                     Initiator = CurrentInitiator
                 };
 
-                _treeValuesCache.UpdateSensor(update);
+                _treeValuesCache.TryUpdateSensor(update, out _);
             }
         }
 
@@ -557,7 +557,7 @@ namespace HSMServer.Controllers
                 Initiator = CurrentInitiator
             };
 
-            _treeValuesCache.UpdateSensor(update);
+            _treeValuesCache.TryUpdateSensor(update, out _);
 
             return PartialView("_MetaInfo", new SensorInfoViewModel(sensor));
         }
@@ -827,9 +827,7 @@ namespace HSMServer.Controllers
                             Initiator = CurrentInitiator,
                         };
 
-                        _treeValuesCache.UpdateSensorPolicies(update, out var error);
-
-                        if (!string.IsNullOrEmpty(error))
+                        if (!_treeValuesCache.TryUpdateSensor(update, out var error))
                             toastViewModel.AddError(error, _treeViewModel.Sensors[sensorId].Name);
                     }
                 }

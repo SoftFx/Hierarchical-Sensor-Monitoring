@@ -1,4 +1,5 @@
 ﻿using HSMCommon.Collections;
+using HSMCommon.Extensions;
 using HSMServer.Core.Model.Policies;
 using HSMServer.Extensions;
 using HSMServer.Notifications.Telegram.AddressBook.MessageBuilder;

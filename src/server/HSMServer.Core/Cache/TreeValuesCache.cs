@@ -264,14 +264,17 @@ namespace HSMServer.Core.Cache
         public List<AccessKeyModel> GetMasterKeys() => GetAccessKeys().Where(x => x.IsMaster).ToList();
 
 
-        public void AddOrUpdateSensor(SensorAddOrUpdateRequestModel request)
+        public bool TryAddOrUpdateSensor(SensorAddOrUpdateRequestModel request, out string error)
         {
             var update = request.Update;
 
             if (update.Id == Guid.Empty)
             {
                 if (!TryGetProductByKey(request, out var product, out _))
-                    return;
+                {
+                    error = $"Product with this key {request.KeyGuid} doesn't exists";
+                    return false;
+                }
 
                 var parentProduct = AddNonExistingProductsAndGetParentProduct(product, request);
                 var sensor = AddSensor(request, request.Type, parentProduct, request.Update.DefaultAlertsOptions);
@@ -279,32 +282,23 @@ namespace HSMServer.Core.Cache
                 update = update with { Id = sensor.Id };
             }
 
-            UpdateSensor(update);
+            return TryUpdateSensor(update, out error);
         }
 
-        public void UpdateSensor(SensorUpdate update)
-        {
-            if (!_sensors.TryGetValue(update.Id, out var sensor))
-                return;
-
-            sensor.Update(update);
-            _database.UpdateSensor(sensor.ToEntity());
-
-            SensorUpdateView(sensor);
-        }
-
-        public void UpdateSensorPolicies(SensorUpdate update, out string error)
+        public bool TryUpdateSensor(SensorUpdate update, out string error)
         {
             if (!_sensors.TryGetValue(update.Id, out var sensor))
             {
                 error = "Sensor doesn't exist";
-                return;
+                return false;
             }
 
-            sensor.TryUpdatePolicies(update, out error);
+            sensor.TryUpdate(update, out error);
             _database.UpdateSensor(sensor.ToEntity());
 
             SensorUpdateView(sensor);
+
+            return true;
         }
 
         public void UpdateSensorValue(UpdateSensorValueRequestModel request)
@@ -367,13 +361,13 @@ namespace HSMServer.Core.Cache
                 return;
 
             if (sensor.EndOfMuting != endOfMuting)
-                UpdateSensor(new SensorUpdate
+                TryUpdateSensor(new SensorUpdate
                 {
                     Id = sensorId,
                     State = endOfMuting is null ? SensorState.Available : SensorState.Muted,
                     EndOfMutingPeriod = endOfMuting,
                     Initiator = initiator
-                });
+                }, out _);
         }
 
         public void ClearNodeHistory(ClearHistoryRequest request)
