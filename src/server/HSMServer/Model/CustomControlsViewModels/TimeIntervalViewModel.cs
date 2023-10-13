@@ -126,6 +126,9 @@ namespace HSMServer.Model
         internal TimeIntervalViewModel(TimeIntervalEntity entity, HashSet<TimeInterval> intervals) : this(intervals)
         {
             FromModel(new TimeIntervalModel(entity), intervals);
+
+            if (!HasParentValue)
+                IntervalItems.RemoveAt(0);
         }
 
 
