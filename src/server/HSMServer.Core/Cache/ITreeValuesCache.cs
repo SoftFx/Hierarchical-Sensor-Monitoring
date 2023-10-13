@@ -66,9 +66,5 @@ namespace HSMServer.Core.Cache
         void UpdateCacheState();
 
         void SaveLastStateToDb();
-
-        void AddNewChat(Guid chatId, string name, string productName); // TODO: should be removed after reworking with allchats in alerts
-
-        void RemoveChat(Guid chatId, string productName); // TODO: should be removed after reworking with allchats in alerts
     }
 }

@@ -517,54 +517,6 @@ namespace HSMServer.Core.Cache
             }
         }
 
-
-        public void AddNewChat(Guid chatId, string name, string productName)
-        {
-            foreach (var (_, sensor) in _sensors)
-                if (productName is null || sensor.RootProductName == productName)
-                {
-                    foreach (var policy in sensor.Policies)
-                        if (policy.Destination.AllChats && !policy.Destination.Chats.ContainsKey(chatId))
-                        {
-                            policy.Destination.Chats.Add(chatId, name);
-                            policy.RebuildState();
-
-                            UpdatePolicy(ActionType.Update, policy);
-                        }
-
-                    if (sensor.Policies.TimeToLive.AddChat(chatId, name))
-                        UpdatePolicy(ActionType.Update, sensor.Policies.TimeToLive);
-                }
-
-            foreach (var (_, product) in _tree)
-                if (productName is null || product.RootProductName == productName)
-                    if (product.Policies.TimeToLive.AddChat(chatId, name))
-                        UpdatePolicy(ActionType.Update, product.Policies.TimeToLive);
-        }
-
-        public void RemoveChat(Guid chatId, string productName)
-        {
-            foreach (var (_, sensor) in _sensors)
-                if (productName is null || sensor.RootProductName == productName)
-                {
-                    foreach (var policy in sensor.Policies)
-                        if (policy.Destination.Chats.Remove(chatId))
-                        {
-                            policy.RebuildState();
-
-                            UpdatePolicy(ActionType.Update, policy);
-                        }
-
-                    if (sensor.Policies.TimeToLive.RemoveChat(chatId))
-                        UpdatePolicy(ActionType.Update, sensor.Policies.TimeToLive);
-                }
-
-            foreach (var (_, product) in _tree)
-                if (productName is null || product.RootProductName == productName)
-                    if (product.Policies.TimeToLive.RemoveChat(chatId))
-                        UpdatePolicy(ActionType.Update, product.Policies.TimeToLive);
-        }
-
         private void UpdatePolicy(ActionType type, Policy policy)
         {
             switch (type)
