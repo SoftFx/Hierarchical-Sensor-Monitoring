@@ -13,6 +13,11 @@ namespace HSMServer.Folders
 {
     public interface IFolderManager : IConcurrentStorageNames<FolderModel, FolderEntity, FolderUpdate>
     {
+        event Func<Guid, List<Guid>, Task> RemoveFolderFromChats;
+
+        event Action<Guid, List<Guid>> AddFolderToChats;
+
+
         Task<bool> TryAdd(FolderAdd folderAdd, out FolderModel folder);
 
         Task<bool> TryRemove(Guid folderId, InitiatorInfo initiator);

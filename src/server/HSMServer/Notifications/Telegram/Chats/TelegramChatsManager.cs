@@ -130,17 +130,26 @@ namespace HSMServer.Notifications
             return folderName;
         }
 
-        public void RemoveFolderHandler(FolderModel folder)
+        public void AddFolderToChats(Guid folderId, List<Guid> chats)
         {
-            foreach (var chatId in folder.TelegramChats)
+            foreach (var chatId in chats)
+                if (TryGetValue(chatId, out var chat))
+                    chat.Folders.Add(folderId);
+        }
+
+        public async Task RemoveFolderFromChats(Guid folderId, List<Guid> chats)
+        {
+            foreach (var chatId in chats)
                 if (TryGetValue(chatId, out var chat))
                 {
-                    chat.Folders.Remove(chatId);
+                    chat.Folders.Remove(folderId);
 
                     if (chat.Folders.Count == 0)
-                        _ = TryRemove(chatId);
+                        await TryRemove(chatId);
                 }
         }
+
+        public void RemoveFolderHandler(FolderModel folder) => _ = RemoveFolderFromChats(folder.Id, folder.TelegramChats.ToList());
 
 
         protected override TelegramChat FromEntity(TelegramChatEntity entity) => new(entity);

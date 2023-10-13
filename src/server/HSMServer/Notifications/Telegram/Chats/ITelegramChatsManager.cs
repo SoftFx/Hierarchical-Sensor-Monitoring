@@ -3,6 +3,7 @@ using HSMServer.ConcurrentStorage;
 using HSMServer.Model.Folders;
 using HSMServer.Notifications.Telegram.Tokens;
 using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using Telegram.Bot.Types;
 using User = HSMServer.Model.Authentication.User;
@@ -21,6 +22,10 @@ namespace HSMServer.Notifications
         string GetGroupInvitation(Guid folderId, User user);
 
         Task<string> TryConnect(Message message, InvitationToken token);
+
+        void AddFolderToChats(Guid folderId, List<Guid> chats);
+
+        Task RemoveFolderFromChats(Guid folderId, List<Guid> chats);
 
         void RemoveFolderHandler(FolderModel folder);
     }

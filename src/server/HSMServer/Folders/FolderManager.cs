@@ -24,8 +24,8 @@ namespace HSMServer.Folders
     {
         private readonly ITreeValuesCache _cache;
         private readonly IUserManager _userManager;
-        private readonly IJournalService _journalService;
         private readonly IDatabaseCore _databaseCore;
+        private readonly IJournalService _journalService;
 
 
         protected override Action<FolderEntity> AddToDb => _databaseCore.AddFolder;
@@ -35,6 +35,11 @@ namespace HSMServer.Folders
         protected override Action<FolderModel> RemoveFromDb => folder => _databaseCore.RemoveFolder(folder.Id.ToString());
 
         protected override Func<List<FolderEntity>> GetFromDb => _databaseCore.GetAllFolders;
+
+
+        public event Func<Guid, List<Guid>, Task> RemoveFolderFromChats;
+
+        public event Action<Guid, List<Guid>> AddFolderToChats;
 
 
         public FolderManager(IDatabaseCore databaseCore, ITreeValuesCache cache, IUserManager userManager, IJournalService journalService)
@@ -84,11 +89,22 @@ namespace HSMServer.Folders
 
         public async override Task<bool> TryUpdate(FolderUpdate update)
         {
-            var result = TryGetValue(update.Id, out var folder) && await base.TryUpdate(update);
+            var result = TryGetValue(update.Id, out var folder);
 
-            if (result && (update.TTL != null || update.KeepHistory != null || update.SelfDestroy != null))
-                foreach (var productId in folder.Products.Keys)
-                    TryUpdateProductInFolder(productId, folder, update.Initiator);
+            var addedTelegramChats = update.TelegramChats.Except(folder.TelegramChats).ToList();
+            var removedTelegramChats = folder.TelegramChats.Except(update.TelegramChats).ToList();
+
+            result &= await base.TryUpdate(update);
+
+            if (result)
+            {
+                AddFolderToChats?.Invoke(folder.Id, addedTelegramChats);
+                await RemoveFolderFromChats?.Invoke(folder.Id, removedTelegramChats);
+
+                if (update.TTL != null || update.KeepHistory != null || update.SelfDestroy != null)
+                    foreach (var productId in folder.Products.Keys)
+                        TryUpdateProductInFolder(productId, folder, update.Initiator);
+            }
 
             return result;
         }

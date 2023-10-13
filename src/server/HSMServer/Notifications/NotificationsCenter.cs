@@ -32,6 +32,9 @@ namespace HSMServer.Notifications
         {
             _telegramChatsManager.ConnectChatToFolder -= _folderManager.AddChatToFolder;
             _telegramChatsManager.Removed -= _folderManager.RemoveChatHandler;
+
+            _folderManager.RemoveFolderFromChats -= _telegramChatsManager.RemoveFolderFromChats;
+            _folderManager.AddFolderToChats -= _telegramChatsManager.AddFolderToChats;
             _folderManager.Removed -= _telegramChatsManager.RemoveFolderHandler;
 
             return TelegramBot.DisposeAsync();
@@ -46,6 +49,9 @@ namespace HSMServer.Notifications
         {
             _telegramChatsManager.ConnectChatToFolder += _folderManager.AddChatToFolder;
             _telegramChatsManager.Removed += _folderManager.RemoveChatHandler;
+
+            _folderManager.RemoveFolderFromChats += _telegramChatsManager.RemoveFolderFromChats;
+            _folderManager.AddFolderToChats += _telegramChatsManager.AddFolderToChats;
             _folderManager.Removed += _telegramChatsManager.RemoveFolderHandler;
 
             foreach (var folder in _folderManager.GetValues())

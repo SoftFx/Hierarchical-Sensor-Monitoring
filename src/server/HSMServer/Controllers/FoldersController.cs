@@ -118,20 +118,20 @@ namespace HSMServer.Controllers
         [HttpPost]
         public async Task<IActionResult> UpdateTelegram(FolderTelegramViewModel viewModel)
         {
-            var chats = viewModel.ConnectedChatIds?.Where(ch => ch != Guid.Empty).ToList() ?? new();
+            var connectedChats = viewModel.ConnectedChatIds?.Where(ch => ch != Guid.Empty).ToList() ?? new();
             if (viewModel.NewChats is not null)
-                chats.AddRange(viewModel.NewChats);
+                connectedChats.AddRange(viewModel.NewChats);
 
             var update = new FolderUpdate()
             {
                 Id = viewModel.FolderId,
-                TelegramChats = new HashSet<Guid>(chats),
+                TelegramChats = new HashSet<Guid>(connectedChats),
                 Initiator = CurrentInitiator
             };
 
             await _folderManager.TryUpdate(update);
 
-            return PartialView("_TelegramChats", BuildFolderTelegram(_folderManager[update.Id]));
+            return PartialView("_TelegramChats", BuildFolderTelegram(_folderManager[viewModel.FolderId]));
         }
 
 
