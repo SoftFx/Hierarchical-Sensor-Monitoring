@@ -7,6 +7,7 @@
 #include "HSMLastValueSensorImpl.h"
 #include "HSMBaseParamsFuncSensor.h"
 #include "HSMParamsFuncSensorImpl.h"
+#include "HSMSensorOptionsImpl.h"
 
 #include "msclr/auto_gcroot.h"
 #include "msclr/marshal_cppstd.h"
@@ -16,6 +17,8 @@ using namespace HSMDataCollector::Core;
 using namespace HSMDataCollector::PublicInterface;
 using namespace HSMDataCollector::Logging;
 using namespace HSMDataCollector::Options;
+using namespace HSMDataCollector::Alerts;
+using namespace HSMSensorDataObjects::SensorRequests;
 using HSMSensorDataObjects::SensorStatus;
 using System::String;
 using System::Func;
@@ -57,25 +60,52 @@ void DataCollectorImpl::Stop()
 
 void hsm_wrapper::DataCollectorImpl::InitializeSystemMonitoring(bool is_cpu, bool is_free_ram)
 {
-	BarSensorOptions^ options = gcnew BarSensorOptions();
-	if (is_cpu) data_collector->Windows->AddTotalCpu(options);
-	if (is_free_ram) data_collector->Windows->AddFreeRamMemory(options);
+	if (is_cpu) data_collector->Windows->AddTotalCpu();
+	if (is_free_ram) data_collector->Windows->AddFreeRamMemory();
+}
+
+void DataCollectorImpl::InitializeDiskMonitoring(const string& target, bool is_free_space, bool is_free_space_prediction, bool is_active_time, bool is_queue_lenght)
+{
+	auto disk_options = gcnew HSMDataCollector::Options::DiskSensorOptions();
+	disk_options->TargetPath = gcnew System::String(target.c_str());
+
+	if (is_free_space) data_collector->Windows->AddFreeDiskSpace(disk_options);
+	if (is_free_space_prediction) data_collector->Windows->AddFreeDisksSpacePrediction(disk_options);
+
+	auto disk_bar_options = gcnew HSMDataCollector::Options::DiskBarSensorOptions();
+	disk_bar_options->TargetPath = gcnew System::String(target.c_str());
+
+	if (is_active_time) data_collector->Windows->AddActiveDisksTime(disk_bar_options);
+	if (is_queue_lenght) data_collector->Windows->AddDisksQueueLength(disk_bar_options);
+}
+
+void hsm_wrapper::DataCollectorImpl::InitializeAllDisksMonitoring(bool is_free_space, bool is_free_space_prediction, bool is_active_time, bool is_queue_lenght)
+{
+	if (is_free_space) data_collector->Windows->AddFreeDisksSpace();
+	if (is_free_space_prediction) data_collector->Windows->AddFreeDisksSpacePrediction();
+	if (is_active_time) data_collector->Windows->AddActiveDisksTime();
+	if (is_queue_lenght) data_collector->Windows->AddDisksQueueLength();
 }
 
 void hsm_wrapper::DataCollectorImpl::InitializeProcessMonitoring(bool is_cpu, bool is_memory, bool is_threads)
 {
-	BarSensorOptions^ options = gcnew BarSensorOptions();
-	if (is_cpu) data_collector->Windows->AddProcessCpu(options);
-	if (is_memory) data_collector->Windows->AddProcessMemory(options);
-	if (is_threads) data_collector->Windows->AddProcessThreadCount(options);
+	if (is_cpu) data_collector->Windows->AddProcessCpu();
+	if (is_memory) data_collector->Windows->AddProcessMemory();
+	if (is_threads) data_collector->Windows->AddProcessThreadCount();
 }
 
-void hsm_wrapper::DataCollectorImpl::InitializeOsMonitoring(bool last_update, bool last_restart)
+void hsm_wrapper::DataCollectorImpl::InitializeOsMonitoring(bool is_last_update, bool is_last_restart)
 {
-	WindowsInfoSensorOptions^ options = gcnew WindowsInfoSensorOptions();
- 	if (last_update) data_collector->Windows->AddWindowsLastRestart(options);
- 	if (last_restart) data_collector->Windows->AddWindowsLastUpdate(options);
+ 	if (is_last_update) data_collector->Windows->AddWindowsLastUpdate();
+ 	if (is_last_restart) data_collector->Windows->AddWindowsLastRestart();
 }
+
+void hsm_wrapper::DataCollectorImpl::InitializeOsLogsMonitoring(bool is_warnig, bool is_error)
+{
+	if (is_warnig) data_collector->Windows->AddWarningWindowsLogs();
+	if (is_error) data_collector->Windows->AddErrorWindowsLogs();
+}
+
 
 void hsm_wrapper::DataCollectorImpl::InitializeProductVersion(const std::string& version)
 {
@@ -86,16 +116,13 @@ void hsm_wrapper::DataCollectorImpl::InitializeProductVersion(const std::string&
 
 void hsm_wrapper::DataCollectorImpl::InitializeCollectorMonitoring(bool is_alive, bool version)
 {
-	CollectorMonitoringInfoOptions^ options = gcnew CollectorMonitoringInfoOptions();
-	if (is_alive) data_collector->Windows->AddCollectorAlive(options);
+	if (is_alive) data_collector->Windows->AddCollectorAlive();
 	if (version) data_collector->Windows->AddCollectorVersion();
 }
 
 void hsm_wrapper::DataCollectorImpl::AddServiceStateMonitoring(const std::string& service_name)
 {
-	ServiceSensorOptions^ options = gcnew ServiceSensorOptions();
-	options->ServiceName = gcnew String(service_name.c_str());
-	data_collector->Windows->SubscribeToWindowsServiceStatus(options);
+	data_collector->Windows->SubscribeToWindowsServiceStatus(gcnew String(service_name.c_str()));
 }
 
 void hsm_wrapper::DataCollectorImpl::SendFileAsync(const std::string& sensor_path, const std::string& file_path, HSMSensorStatus status /*= HSMSensorStatus::Ok*/, const std::string& description /*= {}*/)
@@ -103,9 +130,57 @@ void hsm_wrapper::DataCollectorImpl::SendFileAsync(const std::string& sensor_pat
 	auto task = data_collector->SendFileAsync(gcnew String(sensor_path.c_str()), gcnew String(file_path.c_str()), SensorStatus{ status }, gcnew String(description.c_str()));
 }
 
+namespace {
+
+	template <class T, class A>
+	T^ ConvertAlert(const A& alert)
+	{
+		auto hsm_alert = alert.Impl()->GetAlert<T>();
+		return hsm_alert;
+	}
+
+	template <class T, class A>
+	List<T^>^ ConvertAlerts(const vector<A>& alerts)
+	{
+		auto hsm_alerts = gcnew List<T^>();
+
+		for (auto& alert : alerts)
+		{
+			auto hsm_alert = ConvertAlert<T>(alert);
+			hsm_alerts->Add(hsm_alert);
+		}
+		return hsm_alerts;
+	}
+
+	HSMDataCollector::Options::InstantSensorOptions^ ConvertInstantOptions(const hsm_wrapper::HSMInstantSensorOptions& options)
+	{
+		auto hsm_options = gcnew InstantSensorOptions();
+		hsm_options->Description = gcnew String(options.description.c_str());
+		hsm_options->Alerts = ConvertAlerts<InstantAlertTemplate>(options.alerts);
+		return hsm_options;
+	}
+
+	HSMDataCollector::Options::BarSensorOptions^ ConvertBarOptions(const hsm_wrapper::HSMBarSensorOptions& options)
+	{
+		auto hsm_options = gcnew HSMDataCollector::Options::BarSensorOptions();
+		hsm_options->Description = gcnew String(options.description.c_str());
+		hsm_options->BarPeriod = TimeSpan::FromMilliseconds(options.bar_period);
+		hsm_options->PostDataPeriod = TimeSpan::FromMilliseconds(options.post_data_period);
+		hsm_options->Precision = options.precision;
+		hsm_options->Alerts = ConvertAlerts<BarAlertTemplate>(options.alerts);
+		return hsm_options;
+	}
+}
+
 HSMSensor<bool> DataCollectorImpl::CreateBoolSensor(const std::string& path, const std::string& description)
 {
 	auto bool_sensor = data_collector->CreateBoolSensor(gcnew String(path.c_str()), gcnew String(description.c_str()));
+	return HSMSensor<bool>{std::make_shared<HSMSensorImpl<bool>>(bool_sensor)};
+}
+
+HSMSensor<bool> DataCollectorImpl::CreateBoolSensor(const std::string& path, const HSMInstantSensorOptions& options)
+{
+	auto bool_sensor = data_collector->CreateBoolSensor(gcnew String(path.c_str()), ConvertInstantOptions(options));
 	return HSMSensor<bool>{std::make_shared<HSMSensorImpl<bool>>(bool_sensor)};
 }
 
@@ -115,9 +190,21 @@ HSMSensor<int> DataCollectorImpl::CreateIntSensor(const std::string& path, const
 	return HSMSensor<int>{std::make_shared<HSMSensorImpl<int>>(int_sensor)};
 }
 
+HSMSensor<int> DataCollectorImpl::CreateIntSensor(const std::string& path, const hsm_wrapper::HSMInstantSensorOptions& options)
+{
+	auto int_sensor = data_collector->CreateIntSensor(gcnew String(path.c_str()), ConvertInstantOptions(options));
+	return HSMSensor<int>{std::make_shared<HSMSensorImpl<int>>(int_sensor)};
+}
+
 HSMSensor<double> DataCollectorImpl::CreateDoubleSensor(const std::string& path, const std::string& description)
 {
 	auto double_sensor = data_collector->CreateDoubleSensor(gcnew String(path.c_str()), gcnew String(description.c_str()));
+	return HSMSensor<double>{std::make_shared<HSMSensorImpl<double>>(double_sensor)};
+}
+
+HSMSensor<double> DataCollectorImpl::CreateDoubleSensor(const std::string& path, const hsm_wrapper::HSMInstantSensorOptions& options)
+{
+	auto double_sensor = data_collector->CreateDoubleSensor(gcnew String(path.c_str()), ConvertInstantOptions(options));
 	return HSMSensor<double>{std::make_shared<HSMSensorImpl<double>>(double_sensor)};
 }
 
@@ -127,6 +214,13 @@ HSMSensor<string> DataCollectorImpl::CreateStringSensor(const std::string& path,
 	return HSMSensor<string>{std::make_shared<HSMSensorImpl<string>>(string_sensor)};
 }
 
+HSMSensor<string> DataCollectorImpl::CreateStringSensor(const std::string& path, const hsm_wrapper::HSMInstantSensorOptions& options)
+{
+	auto string_sensor = data_collector->CreateStringSensor(gcnew String(path.c_str()), ConvertInstantOptions(options));
+	return HSMSensor<string>{std::make_shared<HSMSensorImpl<string>>(string_sensor)};
+}
+
+#ifdef ENABLE_OBSOLETE
 HSMLastValueSensor<bool> DataCollectorImpl::CreateLastValueBoolSensor(const std::string& path, bool default_value, const std::string& description)
 {
 	auto int_default_sensor = data_collector->CreateLastValueBoolSensor(gcnew String(path.c_str()), default_value, gcnew String(description.c_str()));
@@ -150,10 +244,17 @@ HSMLastValueSensor<std::string> DataCollectorImpl::CreateLastValueStringSensor(c
 	auto int_default_sensor = data_collector->CreateLastValueStringSensor(gcnew String(path.c_str()), gcnew String(default_value.c_str()), gcnew String(description.c_str()));
 	return HSMLastValueSensor<string>{std::make_shared<HSMLastValueSensorImpl<std::string>>(int_default_sensor)};
 }
+#endif
 
 HSMBarSensor<int> DataCollectorImpl::CreateIntBarSensor(const std::string& path, int timeout, int small_period, const std::string& description)
 {
 	auto int_bar_sensor = data_collector->CreateIntBarSensor(gcnew String(path.c_str()), timeout, small_period, gcnew String(description.c_str()));
+	return HSMBarSensor<int>{std::make_shared<HSMBarSensorImpl<int>>(int_bar_sensor)};
+}
+
+HSMBarSensor<int> DataCollectorImpl::CreateIntBarSensor(const std::string& path, const HSMBarSensorOptions& options)
+{
+	auto int_bar_sensor = data_collector->CreateIntBarSensor(gcnew String(path.c_str()), ConvertBarOptions(options));
 	return HSMBarSensor<int>{std::make_shared<HSMBarSensorImpl<int>>(int_bar_sensor)};
 }
 
@@ -163,6 +264,11 @@ HSMBarSensor<double> DataCollectorImpl::CreateDoubleBarSensor(const std::string&
 	return HSMBarSensor<double>{std::make_shared<HSMBarSensorImpl<double>>(double_bar_sensor)};
 }
 
+HSMBarSensor<double> DataCollectorImpl::CreateDoubleBarSensor(const std::string& path, const HSMBarSensorOptions& options)
+{
+	auto double_bar_sensor = data_collector->CreateDoubleBarSensor(gcnew String(path.c_str()), ConvertBarOptions(options));
+	return HSMBarSensor<double>{std::make_shared<HSMBarSensorImpl<double>>(double_bar_sensor)};
+}
 
 
 
@@ -247,11 +353,23 @@ void hsm_wrapper::DataCollectorImplWrapper::InitializeProcessMonitoring(bool is_
 	}
 }
 
-void hsm_wrapper::DataCollectorImplWrapper::InitializeOsMonitoring(bool is_updated, bool last_update, bool last_restart)
+void hsm_wrapper::DataCollectorImplWrapper::InitializeOsMonitoring(bool is_last_update, bool is_last_restart)
 {
 	try
 	{
-		impl->InitializeOsMonitoring(last_update, last_restart);
+		impl->InitializeOsMonitoring(is_last_update, is_last_restart);
+	}
+	catch (System::Exception^ ex)
+	{
+		throw std::exception(msclr::interop::marshal_as<std::string>(ex->Message).c_str());
+	}
+}
+
+void DataCollectorImplWrapper::InitializeOsLogsMonitoring(bool is_warnig, bool is_error)
+{
+	try
+	{
+		impl->InitializeOsLogsMonitoring(is_warnig, is_error);
 	}
 	catch (System::Exception^ ex)
 	{
@@ -264,6 +382,30 @@ void hsm_wrapper::DataCollectorImplWrapper::AddServiceStateMonitoring(const std:
 	try
 	{
 		impl->AddServiceStateMonitoring(service_name);
+	}
+	catch (System::Exception^ ex)
+	{
+		throw std::exception(msclr::interop::marshal_as<std::string>(ex->Message).c_str());
+	}
+}
+
+void DataCollectorImplWrapper::InitializeDiskMonitoring(const string& target, bool is_free_space, bool is_free_space_prediction, bool is_active_time, bool is_queue_lenght)
+{
+	try
+	{
+		impl->InitializeDiskMonitoring(target, is_free_space, is_free_space_prediction, is_active_time, is_queue_lenght);
+	}
+	catch (System::Exception^ ex)
+	{
+		throw std::exception(msclr::interop::marshal_as<std::string>(ex->Message).c_str());
+	}
+}
+
+void DataCollectorImplWrapper::InitializeAllDisksMonitoring(bool is_free_space, bool is_free_space_prediction, bool is_active_time, bool is_queue_lenght)
+{
+	try
+	{
+		impl->InitializeAllDisksMonitoring(is_free_space, is_free_space_prediction, is_active_time, is_queue_lenght);
 	}
 	catch (System::Exception^ ex)
 	{
@@ -307,6 +449,18 @@ HSMSensor<bool> DataCollectorImplWrapper::CreateBoolSensor(const std::string& pa
 	}
 }
 
+hsm_wrapper::HSMSensor<bool> DataCollectorImplWrapper::CreateBoolSensor(const std::string& path, const HSMInstantSensorOptions& options)
+{
+	try
+	{
+		return impl->CreateBoolSensor(path, options);
+	}
+	catch (System::Exception^ ex)
+	{
+		throw std::exception(msclr::interop::marshal_as<std::string>(ex->Message).c_str());
+	}
+}
+
 HSMSensor<double> DataCollectorImplWrapper::CreateDoubleSensor(const std::string& path, const std::string& description)
 {
 	try
@@ -318,6 +472,19 @@ HSMSensor<double> DataCollectorImplWrapper::CreateDoubleSensor(const std::string
 		throw std::exception(msclr::interop::marshal_as<std::string>(ex->Message).c_str());
 	}
 }
+
+hsm_wrapper::HSMSensor<double> DataCollectorImplWrapper::CreateDoubleSensor(const std::string& path, const HSMInstantSensorOptions& options)
+{
+	try
+	{
+		return impl->CreateDoubleSensor(path, options);
+	}
+	catch (System::Exception^ ex)
+	{
+		throw std::exception(msclr::interop::marshal_as<std::string>(ex->Message).c_str());
+	}
+}
+
 
 HSMSensor<int> DataCollectorImplWrapper::CreateIntSensor(const std::string& path, const std::string& description)
 {
@@ -331,6 +498,19 @@ HSMSensor<int> DataCollectorImplWrapper::CreateIntSensor(const std::string& path
 	}
 }
 
+hsm_wrapper::HSMSensor<int> DataCollectorImplWrapper::CreateIntSensor(const std::string& path, const HSMInstantSensorOptions& options)
+{
+	try
+	{
+		return impl->CreateIntSensor(path, options);
+	}
+	catch (System::Exception^ ex)
+	{
+		throw std::exception(msclr::interop::marshal_as<std::string>(ex->Message).c_str());
+	}
+}
+
+
 HSMSensor<std::string> DataCollectorImplWrapper::CreateStringSensor(const std::string& path, const std::string& description)
 {
 	try
@@ -343,6 +523,19 @@ HSMSensor<std::string> DataCollectorImplWrapper::CreateStringSensor(const std::s
 	}
 }
 
+hsm_wrapper::HSMSensor<std::string> DataCollectorImplWrapper::CreateStringSensor(const std::string& path, const HSMInstantSensorOptions& options)
+{
+	try
+	{
+		return impl->CreateStringSensor(path, options);
+	}
+	catch (System::Exception^ ex)
+	{
+		throw std::exception(msclr::interop::marshal_as<std::string>(ex->Message).c_str());
+	}
+}
+
+#ifdef ENABLE_OBSOLETE
 HSMLastValueSensor<bool> DataCollectorImplWrapper::CreateLastValueBoolSensor(const std::string& path, bool default_value, const std::string& description)
 {
 	try
@@ -390,7 +583,7 @@ HSMLastValueSensor<int> DataCollectorImplWrapper::CreateLastValueIntSensor(const
 		throw std::exception(msclr::interop::marshal_as<std::string>(ex->Message).c_str());
 	}
 }
-
+#endif
 HSMBarSensor<int> DataCollectorImplWrapper::CreateIntBarSensor(const std::string& path, int timeout, int small_period, const std::string& description)
 {
 	try
@@ -402,6 +595,20 @@ HSMBarSensor<int> DataCollectorImplWrapper::CreateIntBarSensor(const std::string
 		throw std::exception(msclr::interop::marshal_as<std::string>(ex->Message).c_str());
 	}
 }
+
+
+hsm_wrapper::HSMBarSensor<int> DataCollectorImplWrapper::CreateIntBarSensor(const std::string& path, const HSMBarSensorOptions& options)
+{
+	try
+	{
+		return impl->CreateIntBarSensor(path, options);
+	}
+	catch (System::Exception^ ex)
+	{
+		throw std::exception(msclr::interop::marshal_as<std::string>(ex->Message).c_str());
+	}
+}
+
 
 HSMBarSensor<double> DataCollectorImplWrapper::CreateDoubleBarSensor(const std::string& path, int timeout, int small_period, int precision, const std::string& description)
 {
@@ -415,6 +622,18 @@ HSMBarSensor<double> DataCollectorImplWrapper::CreateDoubleBarSensor(const std::
 	}
 }
 
+HSMBarSensor<double> DataCollectorImplWrapper::CreateDoubleBarSensor(const std::string& path, const HSMBarSensorOptions& options)
+{
+	try
+	{
+		return impl->CreateDoubleBarSensor(path, options);
+	}
+	catch (System::Exception^ ex)
+	{
+		throw std::exception(msclr::interop::marshal_as<std::string>(ex->Message).c_str());
+	}
+}
+#ifdef ENABLE_OBSOLETE
 template<class T>
 std::shared_ptr<HSMNoParamsFuncSensorImplWrapper<T>> DataCollectorImplWrapper::CreateNoParamsFuncSensor(const std::string& path, const std::string& description, 
 	std::function<T()> function, const std::chrono::milliseconds& interval)
@@ -442,7 +661,7 @@ shared_ptr<HSMParamsFuncSensorImplWrapper<T, U>> DataCollectorImplWrapper::Creat
 		throw std::exception(msclr::interop::marshal_as<std::string>(ex->Message).c_str());
 	}
 }
-
+#endif
 
 hsm_wrapper::DataCollectorProxy::DataCollectorProxy(const std::string& product_key, const std::string& address, int port, const std::string& module) 
 	: impl_wrapper(std::make_shared<DataCollectorImplWrapper>(product_key, address, port, module))
@@ -469,14 +688,29 @@ void hsm_wrapper::DataCollectorProxy::InitializeSystemMonitoring(bool is_cpu, bo
 	impl_wrapper->InitializeSystemMonitoring(is_cpu, is_free_ram);
 }
 
+void DataCollectorProxy::InitializeDiskMonitoring(const string& target, bool is_free_space, bool is_free_space_prediction, bool is_active_time, bool is_queue_lenght)
+{
+	impl_wrapper->InitializeDiskMonitoring(target, is_free_space, is_free_space_prediction, is_active_time, is_queue_lenght);
+}
+
+void hsm_wrapper::DataCollectorProxy::InitializeAllDisksMonitoring(bool is_free_space, bool is_free_space_prediction, bool is_active_time, bool is_queue_lenght)
+{
+	impl_wrapper->InitializeAllDisksMonitoring(is_free_space, is_free_space_prediction, is_active_time, is_queue_lenght);
+}
+
 void hsm_wrapper::DataCollectorProxy::InitializeProcessMonitoring(bool is_cpu, bool is_memory, bool is_threads)
 {
 	impl_wrapper->InitializeProcessMonitoring(is_cpu, is_memory, is_threads);
 }
 
-void hsm_wrapper::DataCollectorProxy::InitializeOsMonitoring(bool is_updated, bool last_update, bool last_restart)
+void hsm_wrapper::DataCollectorProxy::InitializeOsMonitoring(bool is_last_update, bool is_last_restart)
 {
-	impl_wrapper->InitializeOsMonitoring(is_updated, last_update, last_restart);
+	impl_wrapper->InitializeOsMonitoring(is_last_update, is_last_restart);
+}
+
+void DataCollectorProxy::InitializeOsLogsMonitoring(bool is_warnig, bool is_error)
+{
+	impl_wrapper->InitializeOsLogsMonitoring(is_warnig, is_error);
 }
 
 void hsm_wrapper::DataCollectorProxy::AddServiceStateMonitoring(const std::string& service_name)
@@ -504,9 +738,19 @@ BoolSensor DataCollectorProxy::CreateBoolSensor(const std::string& path, const s
 	return impl_wrapper->CreateBoolSensor(path, description);
 }
 
+BoolSensor DataCollectorProxy::CreateBoolSensor(const std::string& path, const HSMInstantSensorOptions& options)
+{
+	return impl_wrapper->CreateBoolSensor(path, options);
+}
+
 IntSensor DataCollectorProxy::CreateIntSensor(const std::string& path, const std::string& description)
 {
 	return impl_wrapper->CreateIntSensor(path, description);
+}
+
+IntSensor DataCollectorProxy::CreateIntSensor(const std::string& path, const HSMInstantSensorOptions& options)
+{
+	return impl_wrapper->CreateIntSensor(path, options);
 }
 
 DoubleSensor DataCollectorProxy::CreateDoubleSensor(const std::string& path, const std::string& description)
@@ -514,11 +758,22 @@ DoubleSensor DataCollectorProxy::CreateDoubleSensor(const std::string& path, con
 	return impl_wrapper->CreateDoubleSensor(path, description);
 }
 
+DoubleSensor DataCollectorProxy::CreateDoubleSensor(const std::string& path, const HSMInstantSensorOptions& options)
+{
+	return impl_wrapper->CreateDoubleSensor(path, options);
+}
+
 StringSensor DataCollectorProxy::CreateStringSensor(const std::string& path, const std::string& description)
 {
 	return impl_wrapper->CreateStringSensor(path, description);
 }
 
+StringSensor DataCollectorProxy::CreateStringSensor(const std::string& path, const HSMInstantSensorOptions& options)
+{
+	return impl_wrapper->CreateStringSensor(path, options);
+}
+
+#ifdef ENABLE_OBSOLETE
 BoolLastValueSensor DataCollectorProxy::CreateLastValueBoolSensor(const std::string& path, bool default_value, const std::string& description)
 {
 	return impl_wrapper->CreateLastValueBoolSensor(path, default_value, description);
@@ -538,17 +793,30 @@ StringLastValueSensor DataCollectorProxy::CreateLastValueStringSensor(const std:
 {
 	return impl_wrapper->CreateLastValueStringSensor(path, default_value, description);
 }
+#endif
 
 IntBarSensor DataCollectorProxy::CreateIntBarSensor(const std::string& path, int timeout, int small_period, const std::string& description)
 {
 	return impl_wrapper->CreateIntBarSensor(path, timeout, small_period, description);
 }
 
+hsm_wrapper::IntBarSensor DataCollectorProxy::CreateIntBarSensor(const std::string& path, const HSMBarSensorOptions& options)
+{
+	return impl_wrapper->CreateIntBarSensor(path, options);
+}
+
+
 DoubleBarSensor DataCollectorProxy::CreateDoubleBarSensor(const std::string& path, int timeout, int small_period, int precision, const std::string& description)
 {
 	return impl_wrapper->CreateDoubleBarSensor(path, timeout, small_period, precision, description);
 }
 
+DoubleBarSensor DataCollectorProxy::CreateDoubleBarSensor(const std::string& path, const HSMBarSensorOptions& options)
+{
+	return impl_wrapper->CreateDoubleBarSensor(path, options);
+}
+
+#ifdef ENABLE_OBSOLETE
 
 #define InstantiateOneParamTemplates(X)\
 template shared_ptr<HSMNoParamsFuncSensorImplWrapper<X>> DataCollectorImpl::CreateNoParamsFuncSensor<X>\
@@ -586,3 +854,5 @@ InstantiateTwoParamTemplates(string, int)
 InstantiateTwoParamTemplates(string, double)
 InstantiateTwoParamTemplates(string, bool)
 InstantiateTwoParamTemplates(string, string)
+
+#endif

@@ -20,8 +20,8 @@ namespace HSMServer.Core.Sensitivity
         {
             try
             {
+                var newAlerts = new Dictionary<Guid, AlertResult>(policyResult.Alerts);
                 var sensorId = policyResult.SensorId;
-                var newAlerts = policyResult.Alerts;
                 var branch = _tree[sensorId];
 
                 foreach (var (storedAlertId, _) in branch)
@@ -35,12 +35,12 @@ namespace HSMServer.Core.Sensitivity
                     if (alert.Sensativity is not null)
                     {
                         branch[alertId].Enqueue(alert, DateTime.UtcNow);
-                        policyResult.RemoveAlert(alert);
+                        newAlerts.Remove(alertId);
                     }
                 }
 
-                if (!policyResult.IsEmpty)
-                    ThrowAlertResultsEvent?.Invoke(sensorId, policyResult.ToList());
+                if (newAlerts.Count > 0)
+                    ThrowAlertResultsEvent?.Invoke(sensorId, newAlerts.Values.ToList());
             }
             catch (Exception ex)
             {
@@ -66,6 +66,8 @@ namespace HSMServer.Core.Sensitivity
                                 alertResults.TryDequeue(out _, out _);
                                 thrownAlerts.Add(alertResult);
                             }
+                            else
+                                break;
                         }
 
                         if (alertResults.IsEmpty)

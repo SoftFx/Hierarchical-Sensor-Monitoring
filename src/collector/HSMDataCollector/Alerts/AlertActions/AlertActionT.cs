@@ -1,5 +1,6 @@
 ﻿using HSMDataCollector.Extensions;
 using HSMSensorDataObjects;
+using System;
 using System.Collections.Generic;
 
 namespace HSMDataCollector.Alerts
@@ -24,6 +25,9 @@ namespace HSMDataCollector.Alerts
         private readonly List<AlertConditionTemplate> _conditions;
 
 
+        public TimeSpan? Sensitivity { get; }
+
+
         public SensorStatus Status { get; private set; } = SensorStatus.Ok;
 
         public string Template { get; private set; }
@@ -34,9 +38,11 @@ namespace HSMDataCollector.Alerts
         public bool IsDisabled { get; private set; }
 
 
-        internal AlertAction(List<AlertConditionTemplate> conditions)
+        internal AlertAction(List<AlertConditionTemplate> conditions, TimeSpan? sensitivity)
         {
             _conditions = conditions;
+
+            Sensitivity = sensitivity;
         }
 
 
@@ -79,6 +85,7 @@ namespace HSMDataCollector.Alerts
         {
             Conditions = _conditions,
 
+            Sensitivity = Sensitivity,
             Template = Template,
             Status = Status,
             Icon = Icon,

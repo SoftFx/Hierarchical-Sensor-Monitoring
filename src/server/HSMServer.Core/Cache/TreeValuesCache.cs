@@ -36,7 +36,7 @@ namespace HSMServer.Core.Cache
         private readonly CGuidDict<bool> _fileHistoryLocks = new(); // TODO: get file history should be fixed without this crutch
 
         private readonly Logger _logger = LogManager.GetLogger(CommonConstants.InfrastructureLoggerName);
-        private readonly SensitivityStorage _sensativityStorage = new();
+        private readonly SensitivityStorage _sensitivityStorage = new();
 
         private readonly ITreeStateSnapshot _snapshot;
         private readonly IUpdatesQueue _updatesQueue;
@@ -59,7 +59,7 @@ namespace HSMServer.Core.Cache
             _journalService = journalService;
 
             _updatesQueue.NewItemsEvent += UpdatesQueueNewItemsHandler;
-            _sensativityStorage.ThrowAlertResultsEvent += ThrowAlertResults;
+            _sensitivityStorage.ThrowAlertResultsEvent += ThrowAlertResults;
 
             Initialize();
         }
@@ -74,7 +74,7 @@ namespace HSMServer.Core.Cache
 
         public void Dispose()
         {
-            _sensativityStorage.ThrowAlertResultsEvent -= ThrowAlertResults;
+            _sensitivityStorage.ThrowAlertResultsEvent -= ThrowAlertResults;
             _updatesQueue.NewItemsEvent -= UpdatesQueueNewItemsHandler;
 
             _updatesQueue.Dispose();
@@ -339,6 +339,8 @@ namespace HSMServer.Core.Cache
             if (!_sensors.TryRemove(sensorId, out var sensor))
                 return;
 
+            RemoveSensorPolicies(sensor); // should be before removing from parent
+
             if (sensor.Parent is not null && _tree.TryGetValue(sensor.Parent.Id, out var parent))
             {
                 parent.RemoveSensor(sensorId);
@@ -352,8 +354,6 @@ namespace HSMServer.Core.Cache
             }
             else
                 _journalService.RemoveRecords(sensorId);
-
-            RemoveSensorPolicies(sensor);
 
             _database.RemoveSensorWithMetadata(sensorId.ToString());
             _snapshot.Sensors.Remove(sensorId);
@@ -607,15 +607,15 @@ namespace HSMServer.Core.Cache
 
         private void RemoveSensorPolicies(BaseSensorModel sensor)
         {
+            foreach (var policyId in sensor.Policies.Select(u => u.Id))
+                sensor.Policies.RemovePolicy(policyId);
+
             sensor.Policies.SensorExpired -= SetExpiredSnapshot;
             sensor.Policies.Uploaded -= UpdatePolicy;
 
             sensor.UpdateFromParentSettings -= _database.UpdateSensor;
 
             RemoveBaseNodeSubscription(sensor);
-
-            foreach (var policyId in sensor.Policies.Select(u => u.Id))
-                _database.RemovePolicy(policyId);
         }
 
         private void UpdatesQueueNewItemsHandler(IEnumerable<StoreInfo> storeInfos)
@@ -645,7 +645,7 @@ namespace HSMServer.Core.Cache
             if (sensor.TryAddValue(value) && sensor.LastDbValue != null)
                 SaveSensorValueToDb(sensor.LastDbValue, sensor.Id);
 
-            _sensativityStorage.SaveOrSendPolicies(sensor.PolicyResult);
+            _sensitivityStorage.SaveOrSendPolicies(sensor.PolicyResult);
 
             SensorUpdateView(sensor);
         }
@@ -1053,7 +1053,7 @@ namespace HSMServer.Core.Cache
 
         public void UpdateCacheState()
         {
-            _sensativityStorage.FlushStorage();
+            _sensitivityStorage.FlushStorage();
 
             foreach (var sensor in GetSensors())
                 sensor.CheckTimeout();
@@ -1084,7 +1084,7 @@ namespace HSMServer.Core.Cache
                         SaveSensorValueToDb(value, sensor.Id);
                 }
 
-                _sensativityStorage.SaveOrSendPolicies(timeout ? ttl.PolicyResult : ttl.Ok);
+                _sensitivityStorage.SaveOrSendPolicies(timeout ? ttl.PolicyResult : ttl.Ok);
             }
 
             SensorUpdateView(sensor);

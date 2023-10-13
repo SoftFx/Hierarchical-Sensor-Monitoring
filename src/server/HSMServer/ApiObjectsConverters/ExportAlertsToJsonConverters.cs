@@ -1,5 +1,4 @@
-﻿using HSMServer.Model.DataAlerts;
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -13,7 +12,7 @@ namespace HSMServer.ApiObjectsConverters
     {
         public override T Read(ref Utf8JsonReader reader, Type typeToConvert, JsonSerializerOptions options)
         {
-            return JsonSerializer.Deserialize<T>(ref reader, options);
+            throw new NotSupportedException();
         }
 
         public override void Write(Utf8JsonWriter writer, T value, JsonSerializerOptions _)
