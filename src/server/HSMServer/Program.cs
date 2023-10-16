@@ -64,7 +64,6 @@ builder.Services.AddMvc()
                 .AddJsonOptions(options =>
                 {
                     options.JsonSerializerOptions.NumberHandling = JsonNumberHandling.AllowReadingFromString | JsonNumberHandling.AllowNamedFloatingPointLiterals;
-                    options.JsonSerializerOptions.Converters.Add(new JsonStringEnumConverter());
                 });
 
 builder.Services.AddFluentValidationAutoValidation()
