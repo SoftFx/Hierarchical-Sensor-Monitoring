@@ -10,7 +10,7 @@ namespace HSMPingModule.PingServices;
 
 internal class PingService : BackgroundService
 {
-    private const int PingAttemnpCount = 10;
+    private const int PingAttemptCount = 10;
 
     private readonly ConcurrentQueue<(ResourceSensor resource, Task<PingResponse> request)> _pingRequests = new();
 
@@ -178,7 +178,7 @@ internal class PingService : BackgroundService
 
         _logger.Info($"Run pinging round");
 
-        while (cnt++ < PingAttemnpCount)
+        while (cnt++ < PingAttemptCount)
         {
             _pingRequests.Clear();
 
