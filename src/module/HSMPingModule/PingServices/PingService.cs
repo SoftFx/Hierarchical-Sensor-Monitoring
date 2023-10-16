@@ -10,7 +10,7 @@ namespace HSMPingModule.PingServices;
 
 internal class PingService : BackgroundService
 {
-    private const int PingAttemnpCount = 5;
+    private const int PingAttemnpCount = 10;
 
     private readonly ConcurrentQueue<(ResourceSensor resource, Task<PingResponse> request)> _pingRequests = new();
 
@@ -192,7 +192,7 @@ internal class PingService : BackgroundService
             foreach ((var resource, var request) in _pingRequests)
                 results[resource.SensorPath].Add(request.Result);
 
-            await Task.Delay(TimeSpan.FromSeconds(1));
+            await Task.Delay(TimeSpan.FromSeconds(2));
         }
 
         _logger.Info($"Stop pinging round");
