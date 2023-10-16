@@ -511,6 +511,94 @@ namespace HSMServer.Core.Cache
             }
         }
 
+        public void RemoveChatsFromPolicies(Guid folderId, List<Guid> chats)
+        {
+            if (chats.Count == 0)
+                return;
+
+            var chatsHash = new HashSet<Guid>(chats);
+
+            foreach (var product in GetProducts().Where(p => p.FolderId == folderId))
+                RemoveChatsFromPolicies(product, chatsHash);
+        }
+
+        private void RemoveChatsFromPolicies(ProductModel product, HashSet<Guid> chats)
+        {
+            var productTtl = product.Policies.TimeToLive.Destination;
+            if (!productTtl.AllChats && productTtl.Chats.Any(pair => chats.Contains(pair.Key)))
+            {
+                var destinationUpdate = new PolicyDestinationUpdate(productTtl.Chats.ExceptBy(chats, ch => ch.Key).ToDictionary(k => k.Key, v => v.Value));
+
+                var update = new ProductUpdate()
+                {
+                    Id = product.Id,
+                    TTLPolicy = BuildPolicyUpdate(product.Policies.TimeToLive, destinationUpdate),
+                    Initiator = InitiatorInfo.AsSystemForce(),
+                };
+
+                UpdateProduct(update);
+            }
+
+            foreach (var (_, sensor) in product.Sensors)
+            {
+                PolicyUpdate ttlUpdate = null;
+                List<PolicyUpdate> policiesUpdate = null;
+
+                var sensorTtl = sensor.Policies.TimeToLive.Destination;
+                if (!sensorTtl.AllChats && sensorTtl.Chats.Any(pair => chats.Contains(pair.Key)))
+                {
+                    var destinationUpdate = new PolicyDestinationUpdate(sensorTtl.Chats.ExceptBy(chats, ch => ch.Key).ToDictionary(k => k.Key, v => v.Value));
+                    ttlUpdate = BuildPolicyUpdate(sensor.Policies.TimeToLive, destinationUpdate);
+                }
+
+                if (sensor.Policies.Any(p => !p.Destination.AllChats && p.Destination.Chats.Any(pair => chats.Contains(pair.Key))))
+                {
+                    policiesUpdate = new(1 << 2);
+
+                    foreach (var policy in sensor.Policies)
+                    {
+                        if (!policy.Destination.AllChats && policy.Destination.Chats.Any(pair => chats.Contains(pair.Key)))
+                        {
+                            var destinationUpdate = new PolicyDestinationUpdate(policy.Destination.Chats.ExceptBy(chats, ch => ch.Key).ToDictionary(k => k.Key, v => v.Value));
+                            policiesUpdate.Add(BuildPolicyUpdate(policy, destinationUpdate));
+                        }
+                        else
+                            policiesUpdate.Add(BuildPolicyUpdate(policy, new(policy.Destination.Chats, policy.Destination.AllChats)));
+                    }
+                }
+
+                if (policiesUpdate is not null || ttlUpdate is not null)
+                {
+                    var update = new SensorUpdate()
+                    {
+                        Id = sensor.Id,
+                        Policies = policiesUpdate,
+                        TTLPolicy = ttlUpdate,
+                        Initiator = InitiatorInfo.AsSystemForce(),
+                    };
+
+                    TryUpdateSensor(update, out _);
+                }
+            }
+
+            foreach (var (_, subProduct) in product.SubProducts)
+                RemoveChatsFromPolicies(subProduct, chats);
+        }
+
+        private static PolicyUpdate BuildPolicyUpdate(Policy policy, PolicyDestinationUpdate destination) =>
+            new()
+            {
+                Id = policy.Id,
+                Conditions = policy.Conditions.Select(c => new PolicyConditionUpdate(c.Operation, c.Property, c.Target, c.Combination)).ToList(),
+                Sensitivity = policy.Sensitivity,
+                Status = policy.Status,
+                Template = policy.Template,
+                Icon = policy.Icon,
+                IsDisabled = policy.IsDisabled,
+                Destination = destination,
+                Initiator = InitiatorInfo.AsSystemForce(),
+            };
+
         private void UpdatePolicy(ActionType type, Policy policy)
         {
             switch (type)

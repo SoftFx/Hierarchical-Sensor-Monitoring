@@ -149,7 +149,7 @@ namespace HSMServer.Notifications
                         await TryRemove(chatId);
                 }
 
-            _cache.RemoveChats(folderId, chats);
+            _cache.RemoveChatsFromPolicies(folderId, chats);
         }
 
         public void RemoveFolderHandler(FolderModel folder) => _ = RemoveFolderFromChats(folder.Id, folder.TelegramChats.ToList());
@@ -308,17 +308,18 @@ namespace HSMServer.Notifications
             foreach (var user in usersToResave)
                 await _userManager.UpdateUser(user);
 
-            foreach (var product in _cache.GetProducts())
-            {
-                var update = new ProductUpdate()
+            if (chatsToResave.Count > 0)
+                foreach (var product in _cache.GetProducts())
                 {
-                    Id = product.Id,
-                    NotificationSettings = new() { TelegramSettings = null },
-                    Initiator = InitiatorInfo.AsSystemForce(),
-                };
+                    var update = new ProductUpdate()
+                    {
+                        Id = product.Id,
+                        NotificationSettings = new() { TelegramSettings = null },
+                        Initiator = InitiatorInfo.AsSystemForce(),
+                    };
 
-                _cache.UpdateProduct(update);
-            }
+                    _cache.UpdateProduct(update);
+                }
 
             foreach (var sensorId in sensorsToRemove)
                 _cache.RemoveSensor(sensorId);
