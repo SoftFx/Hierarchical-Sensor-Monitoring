@@ -8,6 +8,7 @@ using HSMServer.Core.Model.Policies;
 using HSMServer.Core.TableOfChanges;
 using HSMServer.Folders;
 using HSMServer.Model.Folders;
+using HSMServer.Model.TreeViewModel;
 using HSMServer.Notifications.Telegram.Tokens;
 using HSMServer.ServerConfiguration;
 using System;
@@ -48,7 +49,7 @@ namespace HSMServer.Notifications
         public event Func<Guid, Guid, string, Task<string>> ConnectChatToFolder;
 
 
-        public TelegramChatsManager(IDatabaseCore database, ITreeValuesCache cache, IUserManager userManager, IFolderManager folderManager, IServerConfig config)
+        public TelegramChatsManager(IDatabaseCore database, ITreeValuesCache cache, IUserManager userManager, IFolderManager folderManager, IServerConfig config, TreeViewModel _) // TODO: remove TreeViewModel after telegram chats migration. this module is for filling folder.Products
         {
             _cache = cache;
             _database = database;
@@ -147,6 +148,8 @@ namespace HSMServer.Notifications
                     if (chat.Folders.Count == 0)
                         await TryRemove(chatId);
                 }
+
+            _cache.RemoveChats(folderId, chats);
         }
 
         public void RemoveFolderHandler(FolderModel folder) => _ = RemoveFolderFromChats(folder.Id, folder.TelegramChats.ToList());
@@ -297,7 +300,7 @@ namespace HSMServer.Notifications
             }
 
             foreach (var update in sensorsToResave)
-                _cache.UpdateSensor(update);
+                _cache.TryUpdateSensor(update, out _);
 
             foreach (var update in nodesToResave)
                 _cache.UpdateProduct(update);

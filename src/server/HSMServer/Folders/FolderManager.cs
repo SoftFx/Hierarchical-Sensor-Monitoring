@@ -97,8 +97,8 @@ namespace HSMServer.Folders
 
             if (update.TelegramChats is not null)
             {
-                addedTelegramChats.AddRange(update.TelegramChats?.Except(folder.TelegramChats));
-                removedTelegramChats.AddRange(folder.TelegramChats.Except(update.TelegramChats));
+                addedTelegramChats.AddRange(update.TelegramChats.Except(folder.TelegramChats ?? new())); // TODO: remove null check after telegram chats migration
+                removedTelegramChats.AddRange(folder.TelegramChats?.Except(update.TelegramChats) ?? new List<Guid>()); // TODO: remove null check after telegram chats migration
             }
 
 
@@ -107,7 +107,7 @@ namespace HSMServer.Folders
             if (result)
             {
                 AddFolderToChats?.Invoke(folder.Id, addedTelegramChats);
-                await RemoveFolderFromChats?.Invoke(folder.Id, removedTelegramChats);
+                await (RemoveFolderFromChats?.Invoke(folder.Id, removedTelegramChats) ?? Task.CompletedTask);
 
                 if (update.TTL != null || update.KeepHistory != null || update.SelfDestroy != null)
                     foreach (var productId in folder.Products.Keys)
