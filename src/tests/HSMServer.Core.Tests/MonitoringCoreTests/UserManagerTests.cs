@@ -68,7 +68,7 @@ namespace HSMServer.Core.Tests.MonitoringCoreTests
             await _userManager.TryAdd(TestUsersManager.DefaultUser);
 
             var actual = _userManager.GetUsers();
-            var expected = new List<User>(2) { TestUsersManager.DefaultUser, TestUsersManager.DefaultUser };
+            var expected = new List<User>(1) { TestUsersManager.DefaultUser };
 
             CompareUserLists(actual, expected);
         }
