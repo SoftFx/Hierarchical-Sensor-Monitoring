@@ -7,7 +7,7 @@ namespace HSMDataCollector.Alerts
     public abstract class AlertConditionBase<T> where T : AlertBaseTemplate, new()
     {
         private readonly List<AlertConditionTemplate> _conditions = new List<AlertConditionTemplate>();
-        private protected TimeSpan? _sensitivity;
+        private protected TimeSpan? _confirmationPeriod;
 
 
         public AlertAction<T> ThenSendNotification(string template) => BuildAlertAction().AndSendNotification(template);
@@ -19,7 +19,7 @@ namespace HSMDataCollector.Alerts
         public AlertAction<T> ThenSetSensorError() => BuildAlertAction().AndSetSensorError();
 
 
-        protected virtual AlertAction<T> BuildAlertAction() => new AlertAction<T>(_conditions, _sensitivity);
+        protected virtual AlertAction<T> BuildAlertAction() => new AlertAction<T>(_conditions, _confirmationPeriod);
 
         protected void BuildConstCondition(AlertProperty property, AlertOperation operation, string value) =>
             BuildCondition(property, operation, TargetType.Const, value);
@@ -75,9 +75,9 @@ namespace HSMDataCollector.Alerts
         }
 
 
-        public DataAlertCondition<T> AndSensitivity(TimeSpan sensitivity)
+        public DataAlertCondition<T> AndConfirmationPeriod(TimeSpan period)
         {
-            _sensitivity = sensitivity;
+            _confirmationPeriod = period;
 
             return this;
         }
