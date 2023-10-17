@@ -50,16 +50,16 @@ namespace HSMServer.Model.DataAlerts
         internal PolicyUpdate ToUpdate(Dictionary<Guid, string> availavleChats)
         {
             List<PolicyConditionUpdate> conditions = new(Conditions.Count);
-            Core.Model.TimeIntervalModel sensitivity = null;
+            Core.Model.TimeIntervalModel confirmationPeriod = null;
 
             foreach (var condition in Conditions)
             {
                 if (condition.Property == AlertProperty.TimeToLive)
                     continue;
 
-                if (condition.Property == AlertProperty.Sensitivity)
+                if (condition.Property == AlertProperty.ConfirmationPeriod)
                 {
-                    sensitivity = condition.Sensitivity.ToModel();
+                    confirmationPeriod = condition.ConfirmationPeriod.ToModel();
                     continue;
                 }
 
@@ -76,7 +76,7 @@ namespace HSMServer.Model.DataAlerts
             {
                 Id = Id,
                 Conditions = conditions,
-                Sensitivity = sensitivity,
+                ConfirmationPeriod = confirmationPeriod?.Ticks,
                 Status = status.ToCore(),
                 Template = comment,
                 Icon = icon,
@@ -207,15 +207,18 @@ namespace HSMServer.Model.DataAlerts
                 Conditions.Add(viewModel);
             }
 
-            if (policy.Sensitivity != null)
+            if (policy.ConfirmationPeriod != null)
             {
                 var condition = CreateCondition(false);
 
-                condition.Property = AlertProperty.Sensitivity;
-                condition.Sensitivity = new TimeIntervalViewModel(PredefinedIntervals.ForRestore)
+                condition.Property = AlertProperty.ConfirmationPeriod;
+                condition.ConfirmationPeriod = new TimeIntervalViewModel(PredefinedIntervals.ForRestore)
                 {
                     IsAlertBlock = true,
-                }.FromModel(policy.Sensitivity, PredefinedIntervals.ForRestore);
+                };
+
+                if (policy.ConfirmationPeriod.HasValue)
+                    condition.ConfirmationPeriod.FromModel(new Core.Model.TimeIntervalModel(policy.ConfirmationPeriod.Value), PredefinedIntervals.ForRestore);
 
                 Conditions.Add(condition);
             }

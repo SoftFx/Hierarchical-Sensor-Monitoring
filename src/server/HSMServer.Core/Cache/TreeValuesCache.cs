@@ -8,7 +8,7 @@ using HSMServer.Core.Journal;
 using HSMServer.Core.Model;
 using HSMServer.Core.Model.Policies;
 using HSMServer.Core.Model.Requests;
-using HSMServer.Core.Sensitivity;
+using HSMServer.Core.Confirmation;
 using HSMServer.Core.SensorsUpdatesQueue;
 using HSMServer.Core.TableOfChanges;
 using HSMServer.Core.TreeStateSnapshot;
@@ -36,7 +36,7 @@ namespace HSMServer.Core.Cache
         private readonly CGuidDict<bool> _fileHistoryLocks = new(); // TODO: get file history should be fixed without this crutch
 
         private readonly Logger _logger = LogManager.GetLogger(CommonConstants.InfrastructureLoggerName);
-        private readonly SensitivityStorage _sensitivityStorage = new();
+        private readonly ConfirmationManager _confirmationManager = new();
 
         private readonly ITreeStateSnapshot _snapshot;
         private readonly IUpdatesQueue _updatesQueue;
@@ -59,7 +59,7 @@ namespace HSMServer.Core.Cache
             _journalService = journalService;
 
             _updatesQueue.NewItemsEvent += UpdatesQueueNewItemsHandler;
-            _sensitivityStorage.ThrowAlertResultsEvent += ThrowAlertResults;
+            _confirmationManager.ThrowAlertResultsEvent += ThrowAlertResults;
 
             Initialize();
         }
@@ -74,7 +74,7 @@ namespace HSMServer.Core.Cache
 
         public void Dispose()
         {
-            _sensitivityStorage.ThrowAlertResultsEvent -= ThrowAlertResults;
+            _confirmationManager.ThrowAlertResultsEvent -= ThrowAlertResults;
             _updatesQueue.NewItemsEvent -= UpdatesQueueNewItemsHandler;
 
             _updatesQueue.Dispose();
@@ -634,7 +634,7 @@ namespace HSMServer.Core.Cache
             if (sensor.TryAddValue(value) && sensor.LastDbValue != null)
                 SaveSensorValueToDb(sensor.LastDbValue, sensor.Id);
 
-            _sensitivityStorage.SaveOrSendPolicies(sensor.PolicyResult);
+            _confirmationManager.SaveOrSendPolicies(sensor.PolicyResult);
 
             SensorUpdateView(sensor);
         }
@@ -1043,7 +1043,7 @@ namespace HSMServer.Core.Cache
 
         public void UpdateCacheState()
         {
-            _sensitivityStorage.FlushStorage();
+            _confirmationManager.FlushStorage();
 
             foreach (var sensor in GetSensors())
                 sensor.CheckTimeout();
@@ -1074,7 +1074,7 @@ namespace HSMServer.Core.Cache
                         SaveSensorValueToDb(value, sensor.Id);
                 }
 
-                _sensitivityStorage.SaveOrSendPolicies(timeout ? ttl.PolicyResult : ttl.Ok);
+                _confirmationManager.SaveOrSendPolicies(timeout ? ttl.PolicyResult : ttl.Ok);
             }
 
             SensorUpdateView(sensor);

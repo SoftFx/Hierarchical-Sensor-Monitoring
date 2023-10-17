@@ -6,9 +6,9 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace HSMServer.Core.Sensitivity
+namespace HSMServer.Core.Confirmation
 {
-    internal sealed class SensitivityStorage
+    internal sealed class ConfirmationManager
     {
         private readonly CGuidDict<CGuidDict<CPriorityQueue<AlertResult, DateTime>>> _tree = new(); //sensorId -> alertId -> alertResult
         private readonly Logger _logger = LogManager.GetCurrentClassLogger();
@@ -32,7 +32,7 @@ namespace HSMServer.Core.Sensitivity
                 {
                     var alert = newAlerts[alertId];
 
-                    if (alert.Sensitivity is not null)
+                    if (alert.ConfirmationPeriod is not null)
                     {
                         branch[alertId].Enqueue(alert, DateTime.UtcNow);
                         newAlerts.Remove(alertId);
@@ -61,7 +61,7 @@ namespace HSMServer.Core.Sensitivity
                     {
                         while (alertResults.TryPeek(out var alertResult, out var stateTime))
                         {
-                            if ((DateTime.UtcNow - stateTime).Ticks > alertResult.Sensitivity.Ticks)
+                            if ((DateTime.UtcNow - stateTime).Ticks > alertResult.ConfirmationPeriod.Value)
                             {
                                 alertResults.TryDequeue(out _, out _);
                                 thrownAlerts.Add(alertResult);

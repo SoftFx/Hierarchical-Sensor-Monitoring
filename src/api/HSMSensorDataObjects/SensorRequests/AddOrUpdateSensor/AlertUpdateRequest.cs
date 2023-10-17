@@ -72,7 +72,7 @@ namespace HSMSensorDataObjects.SensorRequests
         public string Icon { get; set; }
 
 
-        public long? Sensitivity { get; set; }
+        public long? ConfirmationPeriod { get; set; }
 
         public bool IsDisabled { get; set; }
     }
