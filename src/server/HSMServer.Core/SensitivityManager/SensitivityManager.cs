@@ -32,7 +32,7 @@ namespace HSMServer.Core.Sensitivity
                 {
                     var alert = newAlerts[alertId];
 
-                    if (alert.Sensativity is not null)
+                    if (alert.Sensitivity is not null)
                     {
                         branch[alertId].Enqueue(alert, DateTime.UtcNow);
                         newAlerts.Remove(alertId);
@@ -61,7 +61,7 @@ namespace HSMServer.Core.Sensitivity
                     {
                         while (alertResults.TryPeek(out var alertResult, out var stateTime))
                         {
-                            if ((DateTime.UtcNow - stateTime).Ticks > alertResult.Sensativity.Ticks)
+                            if ((DateTime.UtcNow - stateTime).Ticks > alertResult.Sensitivity.Ticks)
                             {
                                 alertResults.TryDequeue(out _, out _);
                                 thrownAlerts.Add(alertResult);

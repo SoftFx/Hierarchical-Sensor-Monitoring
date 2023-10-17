@@ -215,7 +215,7 @@ namespace HSMServer.Core.Model.Policies
                 SensorTimeout(valueT);
             }
 
-            error = errors.ToString();
+            error = errors.Length > 0 ? errors.ToString() : null;
 
             return string.IsNullOrEmpty(error);
         }
