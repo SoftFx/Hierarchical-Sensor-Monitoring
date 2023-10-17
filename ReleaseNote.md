@@ -46,6 +46,10 @@ Alert confirmation period is TimeSpan (format 0.00:00:00 or 00:00:00). When aler
 * Double '/' has been fixed for path with Module settings
 * Path building for File sensors has been fixed
 
+# HSM DataObjects
+## v. 3.1.0
+* **Sensitivity** for alert request has been renamed to **ConfirmationPeriod**
+
 # HSM Pinger
 
 ## v. 0.0.4
