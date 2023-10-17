@@ -6,7 +6,7 @@ namespace HSMServer.Core.Model.Policies
 {
     public sealed record AlertResult
     {
-        public TimeIntervalModel Sensativity { get; }
+        public TimeIntervalModel Sensitivity { get; }
 
         public AlertDestination Destination { get; }
 
@@ -31,7 +31,7 @@ namespace HSMServer.Core.Model.Policies
         internal AlertResult(Policy policy)
         {
             Destination = new(policy.Destination.AllChats, new HashSet<Guid>(policy.Destination.Chats.Keys));
-            Sensativity = policy.Sensitivity;
+            Sensitivity = policy.Sensitivity;
             Template = policy.Template;
             PolicyId = policy.Id;
             Icon = policy.Icon;
