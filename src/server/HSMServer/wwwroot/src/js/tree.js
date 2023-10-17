@@ -52,46 +52,12 @@ window.initializeTree = function () {
         updateSelectedNodeDataTimeoutId = setTimeout(updateSelectedNodeData, interval);
     }).on('open_node.jstree', function (e, data){
         collapseButton.reset();
-    })
-        .on('search.jstree', function (nodes, str){
-            console.log('after search')
-            console.log(nodes)
-            console.log(str)
-        });
+    });
 
     $("#search_tree").on('click', function () {
-        $('#jstree').jstree(true).refresh(true);
-        
-        // let value = $('#search_field').val();
-        //
-        // $.ajax({
-        //     url: searchNode + '?str=' + value,
-        //     type: 'GET',
-        //     cache: false
-        // }).done(function (response){
-        //     let ids = [];
-        //     response.forEach(function (x){
-        //         ids.push(x.split('/'))
-        //     })
-        //    
-        //     ids.forEach(function (x){
-        //         let i = 0;
-        //         openNode(x[i], getCallBack)
-        //
-        //         function getCallBack(){
-        //             i++;
-        //             if (i === x.length)
-        //                 return () => {};
-        //            
-        //             return openNode(x[i], getCallBack);
-        //         }
-        //     })
-        //    
-        //     function openNode(id, callBack){
-        //         $('#jstree').jstree('open_node', id, callBack);
-        //     }
-        //    
-        //})
+        $('#search_field').val($('#search_input').val()).change(function (){
+            $('#jstree').jstree(true).refresh(true);
+        })
     });
 
     initializeActivateNodeTree();

@@ -120,39 +120,6 @@ namespace HSMServer.Controllers
                 ? PartialView("_TreeNode", CurrentUser.Tree.LoadNode(node))
                 : NotFound();
 
-        [HttpGet]
-        public ActionResult<HashSet<string>> SearchNode([FromQuery(Name = "str")] string searchNamePattern)
-        {
-            var idsPath = new HashSet<string>();
-
-            foreach (var (_, value) in _treeViewModel.Sensors.Where(x => x.Value.Name.Contains(searchNamePattern, StringComparison.OrdinalIgnoreCase)))
-                GenerateIdPath(value);
-
-            foreach (var (_, value) in _treeViewModel.Nodes.Where(x => x.Value.Name.Contains(searchNamePattern, StringComparison.OrdinalIgnoreCase)))
-               GenerateIdPath(value);
-
-
-            void GenerateIdPath(NodeViewModel model)
-            {
-                var idPath = new List<Guid>(1 << 4);
-                var current = model.Parent as NodeViewModel;
-                while (current is not null)
-                {
-                    idPath.Add(current.Id);
-                    CurrentUser.Tree.AddOpenedNode(current.Id);
-                    Console.Write(current.Name);
-                    Console.Write("/");
-                    current = current.Parent as NodeViewModel;
-                }
-                
-                Console.WriteLine();
-                idPath.Reverse();
-                idsPath.Add(string.Join("/", idPath));
-            }
-            
-            return idsPath;
-        }
-
         [HttpPut]
         public void RemoveRenderingNode(params Guid[] nodeIds) => CurrentUser.Tree.RemoveOpenedNode(nodeIds);
 
