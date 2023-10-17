@@ -576,3 +576,14 @@ img .tree-png-icon {
     min-width: 98%; 
     max-width: 98%
 }
+
+.no-border {
+    border:none;
+    background-image:none;
+    background-color:transparent;
+    box-shadow: none;
+}
+
+.no-border:focus{
+    outline: none;
+}
