@@ -579,9 +579,6 @@ img .tree-png-icon {
 
 .no-border {
     border:none;
-    background-image:none;
-    background-color:transparent;
-    box-shadow: none;
 }
 
 .no-border:focus{

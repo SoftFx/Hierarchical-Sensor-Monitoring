@@ -111,13 +111,13 @@
                     <i id="currentSort" class="@(user?.TreeFilter.TreeSortType == TreeSortType.ByTime ? "fas fa-sort-numeric-down-alt" : "fas fa-sort-alpha-down")"></i>
                 </div>
                 <div class="input-group border-1 d-flex rounded-1" style="border-style: solid; border-width: 1px; width: auto">
-                    <div class="form-outline d-flex">
-                        <input id="search_input" type="text" class="no-border ms-1" style="width: 8rem;"/>
+                    <form id="searchForm" class="form-outline d-flex">
+                        <input id="search_input" minlength="3" type="text" class="no-border ms-1" style="width: 8rem;"/>
                         <input class="d-none" id="search_field"/>
                         <button id="search_tree" type="button" class="btn no-border">
                             <i class="fas fa-search"></i>
                         </button>
-                    </div>
+                    </form>
                 </div>
                 <div class="flex-fill align-self-center ms-3">
                     <i id="collapseIcon" onclick="collapseButton.collapseOnClick()" class="fa-regular fa-square-minus tree-collapse-button" title="Save and close tree"></i>
@@ -163,6 +163,11 @@
 
     $(document).ready(() => {
         $('#updateTime').empty().append('Update Time: ' + new Date().toUTCString());
+        
+        $('#search_input').on('input', function (){
+            if ($(this).val().length < 3)
+                $('#searchForm')[0].reportValidity();
+        })
     })
 
     $(window).on('load', function () {
