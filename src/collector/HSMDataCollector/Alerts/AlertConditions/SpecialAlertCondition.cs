@@ -18,7 +18,7 @@ namespace HSMDataCollector.Alerts
 
 
         protected override AlertAction<SpecialAlertTemplate> BuildAlertAction() =>
-            new SpecialAlertAction(_confirmationPeriod)
+            new SpecialAlertAction()
             {
                 TtlValue = TtlValue,
             };
