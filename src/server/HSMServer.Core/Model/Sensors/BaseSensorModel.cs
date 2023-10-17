@@ -18,6 +18,7 @@ namespace HSMServer.Core.Model
     [Flags]
     public enum Integration : int
     {
+        None = 0,
         Grafana = 1,
     }
 
@@ -97,6 +98,8 @@ namespace HSMServer.Core.Model
 
         public bool ShouldDestroy => Settings.SelfDestroy.Value?.TimeIsUp(LastUpdate) ?? false;
 
+        public bool CanSendNotifications => State is SensorState.Available && (!Status?.IsOfftime ?? true);
+
 
         public DateTime LastUpdate => Storage.LastValue?.LastUpdateTime ?? DateTime.MinValue;
 
@@ -139,9 +142,9 @@ namespace HSMServer.Core.Model
         internal abstract BaseValue Convert(byte[] bytes);
 
 
-        internal void Update(SensorUpdate update) // TODO: out error parameter should be added for this method (to show error message in DataCollector)
+        internal bool TryUpdate(SensorUpdate update, out string error)
         {
-            base.Update(update);
+            Update(update);
 
             Integration = UpdateProperty(Integration, update.Integration ?? Integration, update.Initiator);
             OriginalUnit = UpdateProperty(OriginalUnit, update.SelectedUnit ?? OriginalUnit, update.Initiator, "Unit");
@@ -154,11 +157,6 @@ namespace HSMServer.Core.Model
             if (State == SensorState.Available)
                 EndOfMuting = null;
 
-            TryUpdatePolicies(update, out _);
-        }
-
-        internal bool TryUpdatePolicies(SensorUpdate update, out string error)
-        {
             error = null;
 
             if (update.Policies != null)

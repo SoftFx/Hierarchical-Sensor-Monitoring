@@ -14,7 +14,7 @@ namespace HSMServer.Core.Model.Policies
                 PolicyOperation.GreaterThanOrEqual => (T src, T target) => src >= target,
                 PolicyOperation.Equal => (T src, T target) => src == target,
                 PolicyOperation.NotEqual => (T src, T target) => src != target,
-                _ => throw new NotImplementedException()
+                _ => throw new NotImplementedException($"{action} is not valid for number properties")
             };
 
 
@@ -27,7 +27,7 @@ namespace HSMServer.Core.Model.Policies
                 PolicyOperation.GreaterThanOrEqual => (TimeSpan src, TimeSpan target) => src >= target,
                 PolicyOperation.Equal => (TimeSpan src, TimeSpan target) => src == target,
                 PolicyOperation.NotEqual => (TimeSpan src, TimeSpan target) => src != target,
-                _ => throw new NotImplementedException()
+                _ => throw new NotImplementedException($"{action} is not valid for TimeSpan {nameof(PolicyProperty.Value)} property")
             };
 
 
@@ -40,14 +40,13 @@ namespace HSMServer.Core.Model.Policies
                 PolicyOperation.GreaterThanOrEqual => (Version src, Version target) => src >= target,
                 PolicyOperation.Equal => (Version src, Version target) => src == target,
                 PolicyOperation.NotEqual => (Version src, Version target) => src != target,
-                _ => throw new NotImplementedException()
+                _ => throw new NotImplementedException($"{action} is not valid for Version {nameof(PolicyProperty.Value)} property")
             };
 
 
         internal static Func<string, string, bool> GetStringOperation(PolicyOperation? action)
         {
             static bool IsSuitableString(string target, Func<bool?> method) => target is null || (method() ?? false);
-
 
             return action switch
             {
@@ -57,7 +56,7 @@ namespace HSMServer.Core.Model.Policies
                 PolicyOperation.Contains => (string src, string target) => IsSuitableString(target, () => src?.Contains(target)),
                 PolicyOperation.StartsWith => (string src, string target) => IsSuitableString(target, () => src?.StartsWith(target)),
                 PolicyOperation.EndsWith => (string src, string target) => IsSuitableString(target, () => src?.EndsWith(target)),
-                _ => throw new NotImplementedException()
+                _ => throw new NotImplementedException($"{action} is not valid for string {nameof(PolicyProperty.Value)} or {nameof(PolicyProperty.Comment)} properties")
             };
         }
 
@@ -70,7 +69,7 @@ namespace HSMServer.Core.Model.Policies
                 PolicyOperation.IsError => (SensorStatus? newVal, SensorStatus? _) => newVal == SensorStatus.Error,
                 PolicyOperation.IsChangedToError => (SensorStatus? newVal, SensorStatus? oldVal) => IsChangedStatus(newVal, oldVal) && newVal == SensorStatus.Error,
                 PolicyOperation.IsChangedToOk => (SensorStatus? newVal, SensorStatus? oldVal) => IsChangedStatus(newVal, oldVal) && newVal == SensorStatus.Ok,
-                _ => throw new NotImplementedException()
+                _ => throw new NotImplementedException($"{action} is not valid for {nameof(PolicyProperty.Status)} property")
             };
 
 

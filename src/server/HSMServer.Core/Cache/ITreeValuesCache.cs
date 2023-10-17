@@ -1,6 +1,7 @@
 ﻿using HSMSensorDataObjects.HistoryRequests;
 using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Model;
+using HSMServer.Core.Model.Policies;
 using HSMServer.Core.Model.Requests;
 using HSMServer.Core.TableOfChanges;
 using System;
@@ -23,7 +24,7 @@ namespace HSMServer.Core.Cache
         event Action<BaseSensorModel, ActionType> ChangeSensorEvent;
         event Action<AccessKeyModel, ActionType> ChangeAccessKeyEvent;
 
-        event Action<PolicyResult> ChangePolicyResultEvent;
+        event Action<List<AlertResult>> ThrowAlertResultsEvent;
 
         List<BaseSensorModel> GetSensors();
         List<AccessKeyModel> GetAccessKeys();
@@ -47,9 +48,8 @@ namespace HSMServer.Core.Cache
         AccessKeyModel GetAccessKey(Guid id);
         List<AccessKeyModel> GetMasterKeys();
 
-        void AddOrUpdateSensor(SensorAddOrUpdateRequestModel update);
-        void UpdateSensor(SensorUpdate updatedSensor);
-        void UpdateSensorPolicies(SensorUpdate update, out string error);
+        bool TryAddOrUpdateSensor(SensorAddOrUpdateRequestModel update, out string error);
+        bool TryUpdateSensor(SensorUpdate updatedSensor, out string error);
         void UpdateSensorValue(UpdateSensorValueRequestModel request);
         void RemoveSensor(Guid sensorId, InitiatorInfo initiator = null);
         void UpdateMutedSensorState(Guid sensorId, InitiatorInfo initiator, DateTime? endOfMuting = null);

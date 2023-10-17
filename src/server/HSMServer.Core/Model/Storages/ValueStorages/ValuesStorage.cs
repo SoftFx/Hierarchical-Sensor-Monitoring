@@ -1,4 +1,5 @@
-﻿using HSMServer.Core.Extensions;
+﻿using HSMCommon.Extensions;
+using HSMServer.Core.Extensions;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -40,8 +41,12 @@ namespace HSMServer.Core.Model
     public abstract class ValuesStorage<T> : ValuesStorage where T : BaseValue, new()
     {
         private readonly ConcurrentQueue<T> _cache = new();
+        private readonly TimeSpan _singletonTimePrecision = TimeSpan.FromSeconds(1);
 
         private T _lastValue, _lastTimeout;
+
+
+        private bool IsLastEmptyOrTimeout => LastValue is null || LastTimeout?.ReceivingTime > LastValue.ReceivingTime;
 
 
         internal override T LastDbValue => _cache.LastOrDefault();
@@ -95,7 +100,7 @@ namespace HSMServer.Core.Model
 
         internal bool TryAggregateValue(T value)
         {
-            if (LastValue is null || LastTimeout?.ReceivingTime > LastValue.ReceivingTime || !LastValue.TryAggregateValue(value))
+            if (IsLastEmptyOrTimeout || !LastValue.TryAggregateValue(value))
             {
                 AddValue(value);
                 return false;
@@ -106,7 +111,7 @@ namespace HSMServer.Core.Model
 
         internal bool TryAddAsSingleton(T value)
         {
-            if (LastValue is null || LastTimeout?.ReceivingTime > LastValue.ReceivingTime || LastValue.Time <= value.Time)
+            if (IsLastEmptyOrTimeout || LastValue.Time.Floor(_singletonTimePrecision) <= value.Time.Floor(_singletonTimePrecision))
             {
                 AddValue(value);
                 return true;

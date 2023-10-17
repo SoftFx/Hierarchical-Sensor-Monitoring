@@ -3,8 +3,6 @@ using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Journal;
 using HSMServer.Core.TableOfChanges;
 using System;
-using System.Collections;
-using System.Collections.Generic;
 
 namespace HSMServer.Core.Model.Policies
 {

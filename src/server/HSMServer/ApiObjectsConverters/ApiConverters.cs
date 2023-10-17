@@ -237,7 +237,7 @@ namespace HSMServer.ApiObjectsConverters
                 IsSingleton = request.IsSingletonSensor,
                 AggregateValues = request.AggregateData,
                 SelectedUnit = request.OriginalUnit?.Convert(),
-                Integration = request.EnableGrafana.HasValue && request.EnableGrafana.Value ? Integration.Grafana : null,
+                Integration = request.EnableGrafana.HasValue ? request.EnableGrafana.Value ? Integration.Grafana : Integration.None : null,
                 KeepHistory = request.KeepHistory.ToTimeInterval(),
                 SelfDestroy = request.SelfDestroy.ToTimeInterval(),
                 TTL = request.TTL.ToTimeInterval(),

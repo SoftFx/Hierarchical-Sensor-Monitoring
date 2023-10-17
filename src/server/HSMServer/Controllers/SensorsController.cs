@@ -482,8 +482,8 @@ namespace HSMServer.Controllers
 
                 if (TryBuildSensorUpdate(sensorUpdate, keyName, out var update, out var message))
                 {
-                    _cache.AddOrUpdateSensor(update);
-                    return Ok(sensorUpdate);
+                    _cache.TryAddOrUpdateSensor(update, out var error);
+                    return Ok(error);
                 }
 
                 return StatusCode(406, message);
@@ -520,15 +520,16 @@ namespace HSMServer.Controllers
                     if (command is AddOrUpdateSensorRequest sensorUpdate)
                     {
                         if (TryBuildSensorUpdate(sensorUpdate, keyName, out var update, out var message))
-                            _cache.AddOrUpdateSensor(update);
-                        else
+                            _cache.TryAddOrUpdateSensor(update, out message);
+
+                        if (!string.IsNullOrEmpty(message))
                             result[sensorUpdate.Path] = message;
                     }
                     else
                         result[command.Path] = $"This type of command is not supported now";
                 }
 
-                return result.Count == 0 ? Ok(result) : StatusCode(406, result);
+                return Ok(result);
             }
             catch (Exception e)
             {

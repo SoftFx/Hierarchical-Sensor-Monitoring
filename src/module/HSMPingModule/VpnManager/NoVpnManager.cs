@@ -15,7 +15,7 @@ namespace HSMPingModule.VpnManager
             }));
 
 
-        internal override Task<TaskResult> Connect() => TaskResult.OkTask;
+        internal override Task<TaskResult<string>> Connect() => Task.FromResult(TaskResult<string>.GetOk(string.Empty));
 
         internal override Task<TaskResult> Disconnect() => TaskResult.OkTask;
     }

@@ -1,84 +1,49 @@
-# HSM Ping module
-New module for HSM server has been added. This module uses [**NordVPN**](https://nordvpn.com/) and allows you to check the availability of sites from different countries of the world. The module is currently running in test mode.
-
 # HSM Server
 
-## Import/Export alerts logic have been added
-You can import all alerts from one node and export them to another node. Copy depth is 1 level.  
-Imported/Exported alert object contains the next properties:
-1. **Sensors** - list of sensor names, that have this alert
-2. **Conditions** - list of alert conditions. Condition has:
-    - **Property**: "Status", "Comment", "Value", "Min", "Max", "Mean", "Count", "LastValue", "Length", "OriginalSize", "NewSensorData"
-    - **Operation**: "LessThanOrEqual", "LessThan", "GreaterThan", "GreaterThanOrEqual", "Equal", "NotEqual", "IsChanged", "IsError", "IsOk", "IsChangedToError", "IsChangedToOk", "Contains", "StartsWith", "EndsWith", "ReceivedNewValue"
-    - **Target**: null for "IsChanged", "IsError", "IsOk", "IsChangedToError", "IsChangedToOk", "ReceivedNewValue" operations and some value for other
-3. **Template** - notification template for connected chats
-4. **Icon** - alert icon
-5. **Status** - "Ok" or "Error". Final state of the sensor after the alert is triggered
-6. **Chats** - list of chats to send alert or null if destination is all chats
-7. **IsDisabled** - enable/disable alert (true/false)
+## New setting for Alerts - **Sensativity** has been added
+Sensitivity is set in TimeSpan format (0.00:00:00 or 00:00:00). When sensitivity is set, notifications are sent with a set delay. Notifications aren't sent if new data has arrived that didn't trigger the alert.
 
-## Alert constructor
-* **Value** for **Version** sensor has been added (with operations <, >, <=, >=, =, ≠)
-* **New data** operation has been added. Alert sends message every new data on a sensor.
-* **Value** for **String** sensor has been added (with operations ==, ≠, contains, startsWith, endsWith)
-* **Length** peroperty for **String** sensor has been added (<, >, <=, >=, =, ≠)
-* **Size** property for **File** sensor has been added (<, >, <=, >=, =, ≠)
-* New operations for **Comment** have been added (=, ≠, contains, startsWith, endsWith)
-* Operations = and ≠ have been added for all number properties
+## Import/export alerts
+* **Sensativity** has been added for alerts
+* Lists of string are deserialized into one line
+* Exporting have been fixed for removed sensors
+* Sorting by name has been added for **Sensors** list
+
+## Sensors
+* Rounding by seconds for instant **Singleton** sensors have been added
+* **Singleton** reset after sensors update has been fixed
 
 ## Tree
-* **Sensors count** view has been improved
-* **Errors count** view has been added
-* Filters for **Sensors count** and **Errors count** have been added
-* **Alerts -> Import/Export** items in context menu have been added
+* Alert icons have been hidden if sensor has **OffTime** status
+* Opening of nodes has been fixed if you select a node in the grid
 
-## Sensor
-* New setting **IsSingleton** has been added. If several Datacolelctors send data to the same path, only first value stored
+## Notifications
+* Notifications with OffTime status have been fixed (Notifications with OffTime status shouldn't be sent)
 
-## Charts
-* **Reset** button has been restored on Plotly bar
-* Label cheking for Bar properties has been added
-* Green color for original **Service alive** chart has been restored 
-* Red points have been added for instant values with Status = Error
+## File sensor
+* Journal message for empty file has been fixed
+* View for empty file has been fixed
+* Realtime update for the last value has been fixed
 
-## Users
-* Ability to **change password** has been added in Users tab
-* Removing/editing user with specific chars in name has been fixed 
+## History
+* Date columns size has been fixed
+* Pagination lock has been fixed (The lock was left only for file sensors)
+* TTL records have been added for Export history
+* All hidden column have been added for Export history (if hidden columns are enabled)
+* Persistance for hidden columns for paging has been added
 
-## Other
-* History synchronization for requests to the same sensor has been added
-* Message for removed alerts has been improved for Journal tab
-* TimeSpan value view has been improved for notifications
+## Swagger
+* All **Enums** have been changed from int to string
 
 ## Bugfixing
-* Server crush after reading sensor with set AggregatedValues setting if history is empty has been fixed
-* Y/X scaling for TimeSpan sensors have been fixed
-* Searching path for **Service Alive** background chart has been fixed
-* Double request for **File Preview** has been fixed
-* Null ref for history compressor has been fixed
-
+* Null value for Version sensor data has been fixed
+* **TTL** and **Keep sensor(s) setting** have been fixed for product moving between folders
+* **Enable for Grafana** is false has been fixed for **/addOrUpdate** endpoint
+* Output for alert errors has been added for **/addOrUpdate** endpoint
 
 # HSM DataCollector 
 
-## v. 3.2.1
-* New extension method for readable Timespan value has been added
-* New module **Computer name** has been added. Current module contains only global machine sensors like Total CPU, Free RAM, Disks monitoring and etc.
-* All default sensors have been splitted into 2 parts: computer and module sensors
-* Default process (CPU, RAM, Thread count) sensors have been moved to node with main **process name**
-* New setting **IsSingleton** for sensors has been added
-
-## v. 3.2.2
-* Count synchronization for PublicBar sensor have been fixed
-* All server alerts have been removed for default sensors
-* **Version** and **Time** instant sensors have been added
-* **OriginalSize** and **Lenght** alert properties have been added to Alert builder
-* **Target** for string properies (String value, Comment) has been added
-* [**WindowsLogs**](https://github.com/SoftFx/Hierarchical-Sensor-Monitoring/wiki/DefaultSensor.-Windows-logs) New default sensor for computer module has been added. Sends information about Windows errors and warning events
-* [**DiskQueueLength**](https://github.com/SoftFx/Hierarchical-Sensor-Monitoring/wiki/DefaultSensor.-DiskQueueLength). New default sensor for computer module has been added
-
-
-# HSM SensorDataObjects
-
-## v. 3.0.4
-* Alert operations for **String values**, **Comment** and **Receive new data** have been added
-* Time units like **ticks**, **milliseconds**, **seconds**, **minutes** have been added
+## v. 3.2.3
+* **PostDataPeriod** for **WindowsInfoSensorOptions** have been fixed to 12 hours
+* **WithSensativity** block has been added for Alert API
+* Double / has been fixed for path with Module settings

@@ -72,7 +72,13 @@ namespace HSMDataCollector.Options
     }
 
 
-    public sealed class WindowsInfoSensorOptions : MonitoringInstantSensorOptions { }
+    public sealed class WindowsInfoSensorOptions : MonitoringInstantSensorOptions
+    {
+        public WindowsInfoSensorOptions()
+        {
+            PostDataPeriod = TimeSpan.FromHours(12);
+        }
+    }
 
     public sealed class CollectorMonitoringInfoOptions : MonitoringInstantSensorOptions { }
 }
