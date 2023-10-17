@@ -7,7 +7,7 @@ namespace HSMServer.ConcurrentStorage
 {
     public interface IConcurrentStorage<ModelType, EntityType, UpdateType> : IDisposable
         where ModelType : class, IServerModel<EntityType, UpdateType>
-        where UpdateType : IUpdateModel
+        where UpdateType : IUpdateRequest
     {
         ModelType this[Guid id] { get; }
 
@@ -24,7 +24,7 @@ namespace HSMServer.ConcurrentStorage
 
         Task<bool> TryUpdate(ModelType value);
 
-        Task<bool> TryRemove(RemoveModel remove);
+        Task<bool> TryRemove(RemoveRequest remove);
 
         bool TryGetValue(Guid id, out ModelType model);
 

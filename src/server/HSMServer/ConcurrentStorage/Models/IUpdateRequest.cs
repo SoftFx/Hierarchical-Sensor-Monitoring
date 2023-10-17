@@ -2,7 +2,7 @@
 
 namespace HSMServer.ConcurrentStorage
 {
-    public interface IUpdateModel
+    public interface IUpdateRequest
     {
         Guid Id { get; }
 

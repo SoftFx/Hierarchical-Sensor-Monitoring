@@ -6,7 +6,7 @@ namespace HSMServer.ConcurrentStorage
 {
     public abstract class ConcurrentStorageNames<ModelType, EntityType, UpdateType> : ConcurrentStorage<ModelType, EntityType, UpdateType>
         where ModelType : class, IServerModel<EntityType, UpdateType>
-        where UpdateType : IUpdateModel
+        where UpdateType : IUpdateRequest
     {
         private readonly ConcurrentDictionary<string, Guid> _modelNames = new();
 
@@ -39,7 +39,7 @@ namespace HSMServer.ConcurrentStorage
             return result;
         }
 
-        public override Task<bool> TryRemove(RemoveModel remove)=>
+        public override Task<bool> TryRemove(RemoveRequest remove)=>
             TryGetValue(remove.Id, out var model) && _modelNames.TryRemove(model.Name, out _)
                 ? base.TryRemove(remove)
                 : Task.FromResult(false);

@@ -2,7 +2,6 @@
 using HSMServer.Attributes;
 using HSMServer.Authentication;
 using HSMServer.Constants;
-using HSMServer.Core.TableOfChanges;
 using HSMServer.Extensions;
 using HSMServer.Filters;
 using HSMServer.Model.Authentication;
@@ -152,14 +151,7 @@ namespace HSMServer.Controllers
         }
 
         [HttpPost]
-        public Task RemoveUser(Guid id)
-        {
-            return _userManager.TryRemove(new()
-            {
-                Id = id,
-                Initiator = InitiatorInfo.AsUser(CurrentUser.Name)
-            });
-        }
+        public Task RemoveUser(Guid id) => _userManager.TryRemove(new(id, CurrentInitiator));
 
         [HttpPost]
         public async Task CreateUser([FromBody] UserViewModel model)

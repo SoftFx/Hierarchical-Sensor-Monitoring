@@ -37,7 +37,7 @@ namespace HSMServer.Folders
         protected override Func<List<FolderEntity>> GetFromDb => _databaseCore.GetAllFolders;
 
 
-        public event Func<Guid, InitiatorInfo, List<Guid>, Task> RemoveFolderFromChats;
+        public event Func<Guid, List<Guid>, InitiatorInfo, Task> RemoveFolderFromChats;
 
         public event Action<Guid, List<Guid>> AddFolderToChats;
 
@@ -107,7 +107,7 @@ namespace HSMServer.Folders
             if (result)
             {
                 AddFolderToChats?.Invoke(folder.Id, addedTelegramChats);
-                await (RemoveFolderFromChats?.Invoke(folder.Id, update.Initiator, removedTelegramChats) ?? Task.CompletedTask);
+                await (RemoveFolderFromChats?.Invoke(folder.Id, removedTelegramChats, update.Initiator) ?? Task.CompletedTask);
 
                 if (update.TTL != null || update.KeepHistory != null || update.SelfDestroy != null)
                     foreach (var productId in folder.Products.Keys)
@@ -117,7 +117,7 @@ namespace HSMServer.Folders
             return result;
         }
 
-        public override async Task<bool> TryRemove(RemoveModel remove)
+        public override async Task<bool> TryRemove(RemoveRequest remove)
         {
             var result = TryGetValue(remove.Id, out var folder);
 

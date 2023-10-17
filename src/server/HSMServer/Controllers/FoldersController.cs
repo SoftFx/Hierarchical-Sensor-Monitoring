@@ -93,7 +93,7 @@ namespace HSMServer.Controllers
 
         [HttpPost]
         [FolderRoleFilterByFolderId(nameof(folderId), ProductRoleEnum.ProductManager)]
-        public Task RemoveFolder(Guid folderId) => _folderManager.TryRemove(new() { Id = folderId, Initiator = CurrentInitiator });
+        public Task RemoveFolder(Guid folderId) => _folderManager.TryRemove(new(folderId, CurrentInitiator));
 
 
         [HttpPost]

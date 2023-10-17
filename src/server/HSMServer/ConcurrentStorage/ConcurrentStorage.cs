@@ -9,7 +9,7 @@ namespace HSMServer.ConcurrentStorage
 {
     public abstract class ConcurrentStorage<ModelType, EntityType, UpdateType> : ConcurrentDictionary<Guid, ModelType>
         where ModelType : class, IServerModel<EntityType, UpdateType>
-        where UpdateType : IUpdateModel
+        where UpdateType : IUpdateRequest
     {
         protected abstract Action<EntityType> AddToDb { get; }
 
@@ -87,7 +87,7 @@ namespace HSMServer.ConcurrentStorage
             return Task.FromResult(result);
         }
 
-        public virtual Task<bool> TryRemove(RemoveModel remove)
+        public virtual Task<bool> TryRemove(RemoveRequest remove)
         {
             var result = TryRemove(remove.Id, out var model);
 
