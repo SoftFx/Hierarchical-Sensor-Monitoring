@@ -2,6 +2,7 @@
 using HSMServer.Attributes;
 using HSMServer.Authentication;
 using HSMServer.Constants;
+using HSMServer.Core.TableOfChanges;
 using HSMServer.Extensions;
 using HSMServer.Filters;
 using HSMServer.Model.Authentication;
@@ -22,17 +23,16 @@ namespace HSMServer.Controllers
 {
     [Authorize]
     [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
-    public class AccountController : Controller
+    public class AccountController : BaseController
     {
-        private readonly IUserManager _userManager;
         private readonly TreeViewModel _treeViewModel;
 
 
-        public AccountController(IUserManager userManager, TreeViewModel treeViewModel)
+        public AccountController(IUserManager userManager, TreeViewModel treeViewModel) : base(userManager)
         {
-            _userManager = userManager;
             _treeViewModel = treeViewModel;
         }
+
 
         #region Login
 
@@ -152,9 +152,13 @@ namespace HSMServer.Controllers
         }
 
         [HttpPost]
-        public Task RemoveUser([FromBody] UserViewModel model)
+        public Task RemoveUser(Guid id)
         {
-            return _userManager.RemoveUser(model.Username);
+            return _userManager.TryRemove(new()
+            {
+                Id = id,
+                Initiator = InitiatorInfo.AsUser(CurrentUser.Name)
+            });
         }
 
         [HttpPost]

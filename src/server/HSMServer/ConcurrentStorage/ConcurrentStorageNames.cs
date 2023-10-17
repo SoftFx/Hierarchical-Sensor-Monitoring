@@ -39,12 +39,12 @@ namespace HSMServer.ConcurrentStorage
             return result;
         }
 
-        public override Task<bool> TryRemove(Guid id)
+        public override Task<bool> TryRemove(RemoveModel remove)
         {
-            var result = TryGetValue(id, out var model);
+            var result = TryGetValue(remove.Id, out var model);
 
             return _modelNames.TryRemove(model.Name, out _)
-                ? base.TryRemove(id)
+                ? base.TryRemove(remove)
                 : Task.FromResult(result);
         }
     }

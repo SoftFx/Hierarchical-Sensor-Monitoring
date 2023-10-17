@@ -1,4 +1,5 @@
-﻿using System;
+﻿using HSMServer.Core.TableOfChanges;
+using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 
@@ -16,14 +17,14 @@ namespace HSMServer.ConcurrentStorage
 
         event Action<ModelType> Added;
         event Action<ModelType> Updated;
-        event Action<ModelType> Removed;
+        event Action<ModelType, InitiatorInfo> Removed;
 
 
         Task<bool> TryUpdate(UpdateType update);
 
         Task<bool> TryUpdate(ModelType value);
 
-        Task<bool> TryRemove(Guid id);
+        Task<bool> TryRemove(RemoveModel remove);
 
         bool TryGetValue(Guid id, out ModelType model);
 

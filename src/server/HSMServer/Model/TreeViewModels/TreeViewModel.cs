@@ -2,6 +2,7 @@
 using HSMServer.Core.Cache;
 using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Model;
+using HSMServer.Core.TableOfChanges;
 using HSMServer.Folders;
 using HSMServer.Model.AccessKeysViewModels;
 using HSMServer.Model.Authentication;
@@ -259,7 +260,7 @@ namespace HSMServer.Model.TreeViewModel
 
         private void AddUserHandler(User user) => user.Tree.GetUserProducts += GetUserProducts;
 
-        private void RemoveUserHandler(User user) => user.Tree.GetUserProducts -= GetUserProducts;
+        private void RemoveUserHandler(User user, InitiatorInfo _) => user.Tree.GetUserProducts -= GetUserProducts;
 
         private bool TryGetParentProduct(ProductModel product, out ProductNodeViewModel parent)
         {

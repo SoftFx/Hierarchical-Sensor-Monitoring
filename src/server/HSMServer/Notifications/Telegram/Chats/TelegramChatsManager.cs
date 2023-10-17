@@ -69,9 +69,9 @@ namespace HSMServer.Notifications
             return result ? _telegramChatIds.TryAdd(model.ChatId, model) : result;
         }
 
-        public async override Task<bool> TryRemove(Guid id)
+        public async override Task<bool> TryRemove(RemoveModel remove)
         {
-            var result = TryGetValue(id, out var chat) && await base.TryRemove(id);
+            var result = TryGetValue(remove.Id, out var chat) && await base.TryRemove(remove);
 
             return result ? _telegramChatIds.TryRemove(chat.ChatId, out _) : result;
         }
@@ -138,7 +138,7 @@ namespace HSMServer.Notifications
                     chat.Folders.Add(folderId);
         }
 
-        public async Task RemoveFolderFromChats(Guid folderId, List<Guid> chats)
+        public async Task RemoveFolderFromChats(Guid folderId, InitiatorInfo initiator, List<Guid> chats)
         {
             foreach (var chatId in chats)
                 if (TryGetValue(chatId, out var chat))
@@ -146,13 +146,14 @@ namespace HSMServer.Notifications
                     chat.Folders.Remove(folderId);
 
                     if (chat.Folders.Count == 0)
-                        await TryRemove(chatId);
+                        await TryRemove(new() { Id = chatId, Initiator = initiator });
                 }
 
             _cache.RemoveChatsFromPolicies(folderId, chats);
         }
 
-        public void RemoveFolderHandler(FolderModel folder) => _ = RemoveFolderFromChats(folder.Id, folder.TelegramChats.ToList());
+        public void RemoveFolderHandler(FolderModel folder, InitiatorInfo initiator) =>
+            _ = RemoveFolderFromChats(folder.Id, initiator, folder.TelegramChats.ToList());
 
 
         protected override TelegramChat FromEntity(TelegramChatEntity entity) => new(entity);

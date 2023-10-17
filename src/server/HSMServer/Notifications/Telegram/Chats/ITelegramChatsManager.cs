@@ -1,5 +1,6 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities;
 using HSMServer.ConcurrentStorage;
+using HSMServer.Core.TableOfChanges;
 using HSMServer.Model.Folders;
 using HSMServer.Notifications.Telegram.Tokens;
 using System;
@@ -25,8 +26,8 @@ namespace HSMServer.Notifications
 
         void AddFolderToChats(Guid folderId, List<Guid> chats);
 
-        Task RemoveFolderFromChats(Guid folderId, List<Guid> chats);
+        Task RemoveFolderFromChats(Guid folderId, InitiatorInfo initiator, List<Guid> chats);
 
-        void RemoveFolderHandler(FolderModel folder);
+        void RemoveFolderHandler(FolderModel folder, InitiatorInfo initiator);
     }
 }

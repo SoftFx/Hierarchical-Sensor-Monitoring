@@ -64,14 +64,6 @@ namespace HSMServer.Authentication
         public Task<bool> UpdateUser(User user) =>
             ContainsKey(user.Id) ? TryUpdate(user) : TryAdd(user);
 
-        public async Task RemoveUser(string userName)
-        {
-            if (TryGetIdByName(userName, out var userId))
-                await TryRemove(userId);
-            else
-                _logger.LogWarning($"There are no users with name={userName} to remove");
-        }
-
         public bool TryAuthenticate(string login, string password)
         {
             var passwordHash = HashComputer.ComputePasswordHash(password);

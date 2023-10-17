@@ -24,12 +24,6 @@ namespace HSMServer.Authentication
         /// <param name="user">User object (password field must be password hash).</param>
         Task<bool> UpdateUser(User user);
 
-        /// <summary>
-        /// Remove user with the specified userName
-        /// </summary>
-        /// <param name="userName">Name of the user to remove.</param>
-        Task RemoveUser(string userName);
-
         bool TryAuthenticate(string login, string password);
 
         bool TryGetIdByName(string name, out Guid id);
