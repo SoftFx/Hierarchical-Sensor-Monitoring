@@ -47,3 +47,12 @@ Sensitivity is set in TimeSpan format (0.00:00:00 or 00:00:00). When sensitivity
 * **PostDataPeriod** for **WindowsInfoSensorOptions** have been fixed to 12 hours
 * **WithSensativity** block has been added for Alert API
 * Double / has been fixed for path with Module settings
+* Path building for File sensors has been fixed
+
+# HSM Pinger
+
+## v. 0.0.4
+* Master countries (for checking VPN access) has been added
+* 10 request aggregated into statistic 1 record
+* Description and alerts for sensors have been added
+* Country switching and request attempts have been improved
