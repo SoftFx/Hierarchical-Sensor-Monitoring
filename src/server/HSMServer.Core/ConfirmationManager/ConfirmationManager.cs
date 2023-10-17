@@ -6,9 +6,9 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-namespace HSMServer.Core.Sensitivity
+namespace HSMServer.Core.Confirmation
 {
-    internal sealed class SensitivityStorage
+    internal sealed class ConfirmationManager
     {
         private readonly CGuidDict<CGuidDict<CPriorityQueue<AlertResult, DateTime>>> _tree = new(); //sensorId -> alertId -> alertResult
         private readonly Logger _logger = LogManager.GetCurrentClassLogger();
