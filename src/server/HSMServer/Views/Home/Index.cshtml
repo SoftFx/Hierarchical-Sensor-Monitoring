@@ -96,9 +96,9 @@
     <div>
         <div class="d-flex pt-3 pb-1">
             <div class="d-flex flex-fill me-auto">
-                <button id="show" type="button" class="btn btn-sm btn-outline-primary ms-3 position-relative" style="height: 2.5rem">
+                <button id="show" type="button" class="btn btn-sm btn-outline-primary ms-3 position-relative text-nowrap" style="height: 2.5rem">
                     <i class="fa-solid fa-filter"></i>
-                    Filters
+                    <span>Filters</span>
                     @if (user?.TreeFilter.EnabledFiltersCount > 0)
                     {
                         <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger">
@@ -110,23 +110,32 @@
                 <div class="mx-3 my-2">
                     <i id="currentSort" class="@(user?.TreeFilter.TreeSortType == TreeSortType.ByTime ? "fas fa-sort-numeric-down-alt" : "fas fa-sort-alpha-down")"></i>
                 </div>
-                @if (user?.TreeFilter.EnabledFiltersCount > 0)
-                {
-                    <span class="enabled-filters-message text-break">@user.TreeFilter.EnabledFiltersMessage</span>
-                }
+                <div class="input-group">
+                    <div class="form-outline">
+                                            <input id="search_input" type="search" class="form-control"/>
+                                            <input class="d-none" id="search_field"/>
+                                        </div>
+                    <button id="search_tree" type="button" class="btn">
+                        <i class="fas fa-search"></i>
+                    </button>
+
+                </div>
+                
                 <div class="flex-fill align-self-center text-end">
                     <i id="collapseIcon" onclick="collapseButton.collapseOnClick()" class="fa-regular fa-square-minus tree-collapse-button" title="Save and close tree"></i>
                 </div>
             </div>
         </div>
+        <div class="d-flex ms-3">
+            @if (user?.TreeFilter.EnabledFiltersCount > 0)
+            {
+                <span class="enabled-filters-message text-break">@user.TreeFilter.EnabledFiltersMessage</span>
+            }
+        </div>
         <div class="d-flex justify-content-center tree-wrapper reserved-scroll-y overflow-y-auto">
+            
             <div class="d-flex me-auto">
                 <div class="ms-2 mb-1"> @await Html.PartialAsync("_TreeFilter.cshtml", new UserFilterViewModel(user.TreeFilter)) </div>
-                <div>
-                    <button id="search_tree">Search</button>
-                    <input id="search_input"/>
-                    <input class="d-none" id="search_field"/>
-                </div>
                 <div class="row justify-content-start mw-100 me-1">
                     <div class="tree-height-weight-parameters col-auto ms-2 pe-0">
                         <div class="col-md-auto">
