@@ -25,7 +25,8 @@ namespace HSMServer.Model.DataAlerts
         OriginalSize,
         [Display(Name = "New data")]
         NewSensorData,
-        Sensitivity,
+        [Display(Name = "Alert confirmation period")]
+        ConfirmationPeriod,
         [Display(Name = "Inactivity period")]
         TimeToLive,
     }
@@ -36,7 +37,7 @@ namespace HSMServer.Model.DataAlerts
         public AlertProperty Property { get; set; }
 
 
-        public TimeIntervalViewModel Sensitivity { get; set; }
+        public TimeIntervalViewModel ConfirmationPeriod { get; set; }
 
         public TimeIntervalViewModel TimeToLive { get; set; }
 
@@ -61,13 +62,13 @@ namespace HSMServer.Model.DataAlerts
         {
             IsMain = isMain;
 
-            Sensitivity = new TimeIntervalViewModel(PredefinedIntervals.ForRestore) { IsAlertBlock = true };
+            ConfirmationPeriod = new TimeIntervalViewModel(PredefinedIntervals.ForRestore) { IsAlertBlock = true };
             TimeToLive = new TimeIntervalViewModel(PredefinedIntervals.ForTimeout) { IsAlertBlock = true };
 
             PropertiesItems = Properties.ToSelectedItems(k => k.GetDisplayName());
 
             if (!isMain)
-                PropertiesItems.Add(new SelectListItem(AlertProperty.Sensitivity.GetDisplayName(), nameof(AlertProperty.Sensitivity)));
+                PropertiesItems.Add(new SelectListItem(AlertProperty.ConfirmationPeriod.GetDisplayName(), nameof(AlertProperty.ConfirmationPeriod)));
 
             Property = Enum.Parse<AlertProperty>(PropertiesItems.FirstOrDefault()?.Value);
         }

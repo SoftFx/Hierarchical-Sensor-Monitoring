@@ -654,7 +654,7 @@ namespace HSMServer.Controllers
             {
                 AlertProperty.NewSensorData => PartialView("~/Views/Home/Alerts/ConditionOperations/_NewDataOperation.cshtml"),
 
-                AlertProperty.TimeToLive or AlertProperty.Sensitivity =>
+                AlertProperty.TimeToLive or AlertProperty.ConfirmationPeriod =>
                     PartialView("~/Views/Home/Alerts/ConditionOperations/_IntervalOperation.cshtml", condition.GetIntervalOperations(property)),
 
                 _ => PartialView("~/Views/Home/Alerts/ConditionOperations/_SimpleOperation.cshtml", condition.GetOperations(property)),

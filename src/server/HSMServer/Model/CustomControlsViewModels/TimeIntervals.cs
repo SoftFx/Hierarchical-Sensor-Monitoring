@@ -89,7 +89,6 @@ namespace HSMServer.Model
                 TimeInterval.FiveMinutes,
                 TimeInterval.TenMinutes,
                 TimeInterval.Hour,
-                TimeInterval.Day,
                 TimeInterval.Custom
             };
 

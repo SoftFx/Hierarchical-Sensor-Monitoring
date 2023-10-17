@@ -230,7 +230,7 @@ namespace HSMServer.Core.Model.Policies
                 actions.Add($"change status to = {Status}");
 
             if (ConfirmationPeriod is not null)
-                actions.Add($"after sensitivity={ConfirmationPeriod}");
+                actions.Add($"after confirmation period={ConfirmationPeriod}");
 
             sb.Append($" then {string.Join(", ", actions)}");
 
