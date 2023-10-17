@@ -512,7 +512,7 @@ namespace HSMServer.Core.Cache
         }
 
 
-        public void RemoveChatsFromPolicies(Guid folderId, List<Guid> chats)
+        public void RemoveChatsFromPolicies(Guid folderId, InitiatorInfo initiator, List<Guid> chats)
         {
             if (chats.Count == 0)
                 return;
@@ -520,18 +520,18 @@ namespace HSMServer.Core.Cache
             var chatsHash = new HashSet<Guid>(chats);
 
             foreach (var product in GetProducts().Where(p => p.FolderId == folderId))
-                RemoveChatsFromPolicies(product, chatsHash);
+                RemoveChatsFromPolicies(product, initiator, chatsHash);
         }
 
-        private void RemoveChatsFromPolicies(ProductModel product, HashSet<Guid> chats)
+        private void RemoveChatsFromPolicies(ProductModel product, InitiatorInfo initiator, HashSet<Guid> chats)
         {
-            if (TryGetPolicyUpdate(product.Policies.TimeToLive, chats, out var productTtlUpdate))
+            if (TryGetPolicyUpdate(product.Policies.TimeToLive, initiator, chats, out var productTtlUpdate))
             {
                 var update = new ProductUpdate()
                 {
                     Id = product.Id,
                     TTLPolicy = productTtlUpdate,
-                    Initiator = InitiatorInfo.AsSystemForce(),
+                    Initiator = initiator,
                 };
 
                 UpdateProduct(update);
@@ -539,7 +539,7 @@ namespace HSMServer.Core.Cache
 
             foreach (var (_, sensor) in product.Sensors)
             {
-                TryGetPolicyUpdate(sensor.Policies.TimeToLive, chats, out var sensorTtlUpdate);
+                TryGetPolicyUpdate(sensor.Policies.TimeToLive, initiator, chats, out var sensorTtlUpdate);
 
                 List<PolicyUpdate> policiesUpdate = null;
                 if (sensor.Policies.Any(p => CanRemoveChatsFromPolicy(p.Destination, chats)))
@@ -548,8 +548,8 @@ namespace HSMServer.Core.Cache
 
                     foreach (var policy in sensor.Policies)
                     {
-                        if (!TryGetPolicyUpdate(policy, chats, out var policyUpdate))
-                            policyUpdate = BuildPolicyUpdate(policy, new(policy.Destination.Chats, policy.Destination.AllChats));
+                        if (!TryGetPolicyUpdate(policy, initiator, chats, out var policyUpdate))
+                            policyUpdate = BuildPolicyUpdate(policy, initiator, new(policy.Destination.Chats, policy.Destination.AllChats));
 
                         policiesUpdate.Add(policyUpdate);
                     }
@@ -562,7 +562,7 @@ namespace HSMServer.Core.Cache
                         Id = sensor.Id,
                         Policies = policiesUpdate,
                         TTLPolicy = sensorTtlUpdate,
-                        Initiator = InitiatorInfo.AsSystemForce(),
+                        Initiator = initiator,
                     };
 
                     TryUpdateSensor(update, out _);
@@ -570,10 +570,10 @@ namespace HSMServer.Core.Cache
             }
 
             foreach (var (_, subProduct) in product.SubProducts)
-                RemoveChatsFromPolicies(subProduct, chats);
+                RemoveChatsFromPolicies(subProduct, initiator, chats);
         }
 
-        private static bool TryGetPolicyUpdate(Policy policy, HashSet<Guid> chats, out PolicyUpdate update)
+        private static bool TryGetPolicyUpdate(Policy policy, InitiatorInfo initiator, HashSet<Guid> chats, out PolicyUpdate update)
         {
             update = null;
 
@@ -582,7 +582,7 @@ namespace HSMServer.Core.Cache
             {
                 var destinationUpdate = new PolicyDestinationUpdate(destination.Chats.ExceptBy(chats, ch => ch.Key).ToDictionary(k => k.Key, v => v.Value));
 
-                update = BuildPolicyUpdate(policy, destinationUpdate);
+                update = BuildPolicyUpdate(policy, initiator, destinationUpdate);
             }
 
             return update is not null;
@@ -591,7 +591,7 @@ namespace HSMServer.Core.Cache
         private static bool CanRemoveChatsFromPolicy(PolicyDestination destination, HashSet<Guid> chats) =>
             !destination.AllChats && destination.Chats.Any(pair => chats.Contains(pair.Key));
 
-        private static PolicyUpdate BuildPolicyUpdate(Policy policy, PolicyDestinationUpdate destination) =>
+        private static PolicyUpdate BuildPolicyUpdate(Policy policy, InitiatorInfo initiator, PolicyDestinationUpdate destination) =>
             new()
             {
                 Id = policy.Id,
@@ -602,7 +602,7 @@ namespace HSMServer.Core.Cache
                 Icon = policy.Icon,
                 IsDisabled = policy.IsDisabled,
                 Destination = destination,
-                Initiator = InitiatorInfo.AsSystemForce(),
+                Initiator = initiator,
             };
 
 

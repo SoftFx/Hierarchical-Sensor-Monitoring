@@ -62,19 +62,11 @@ namespace HSMServer.Notifications
         public void Dispose() { }
 
 
-        public async override Task<bool> TryAdd(TelegramChat model)
-        {
-            var result = await base.TryAdd(model);
+        public async override Task<bool> TryAdd(TelegramChat model) =>
+            await base.TryAdd(model) && _telegramChatIds.TryAdd(model.ChatId, model);
 
-            return result ? _telegramChatIds.TryAdd(model.ChatId, model) : result;
-        }
-
-        public async override Task<bool> TryRemove(RemoveModel remove)
-        {
-            var result = TryGetValue(remove.Id, out var chat) && await base.TryRemove(remove);
-
-            return result ? _telegramChatIds.TryRemove(chat.ChatId, out _) : result;
-        }
+        public async override Task<bool> TryRemove(RemoveModel remove) =>
+            TryGetValue(remove.Id, out var chat) && await base.TryRemove(remove) && _telegramChatIds.TryRemove(chat.ChatId, out _);
 
 
         public override async Task Initialize()
@@ -149,7 +141,7 @@ namespace HSMServer.Notifications
                         await TryRemove(new() { Id = chatId, Initiator = initiator });
                 }
 
-            _cache.RemoveChatsFromPolicies(folderId, chats);
+            _cache.RemoveChatsFromPolicies(folderId, initiator, chats);
         }
 
         public void RemoveFolderHandler(FolderModel folder, InitiatorInfo initiator) =>

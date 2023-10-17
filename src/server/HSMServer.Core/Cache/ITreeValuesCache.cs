@@ -66,6 +66,6 @@ namespace HSMServer.Core.Cache
 
         void SaveLastStateToDb();
 
-        void RemoveChatsFromPolicies(Guid folderId, List<Guid> chats);
+        void RemoveChatsFromPolicies(Guid folderId, InitiatorInfo initiator, List<Guid> chats);
     }
 }
