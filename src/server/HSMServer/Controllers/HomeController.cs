@@ -586,20 +586,13 @@ namespace HSMServer.Controllers
             return PartialView("~/Views/Home/Alerts/_DataAlert.cshtml", viewModel);
         }
 
-        public IActionResult AddAlertCondition(Guid sensorId) =>
-            _treeViewModel.Sensors.TryGetValue(sensorId, out var sensor)
-                ? PartialView("~/Views/Home/Alerts/_ConditionBlock.cshtml", BuildAlertCondition(sensor))
-                : _emptyResult;
+        public IActionResult AddAlertCondition(Guid sensorId) => _treeViewModel.Sensors.TryGetValue(sensorId, out var sensor)
+            ? PartialView("~/Views/Home/Alerts/_ConditionBlock.cshtml", BuildAlertCondition(sensor))
+            : _emptyResult;
 
-        public IActionResult AddAlertAction(Guid entityId)
-        {
-            if (!TryGetSelectedNode(entityId, out var entity))
-                return _emptyResult;
-
-            entity.TryGetChats(out var availableChats);
-
-            return PartialView("~/Views/Home/Alerts/_ActionBlock.cshtml", new ActionViewModel(false, availableChats));
-        }
+        public IActionResult AddAlertAction(Guid entityId) => TryGetSelectedNode(entityId, out var entity)
+            ? PartialView("~/Views/Home/Alerts/_ActionBlock.cshtml", new ActionViewModel(false, entity))
+            : _emptyResult;
 
         public IActionResult GetOperation(Guid sensorId, AlertProperty property)
         {

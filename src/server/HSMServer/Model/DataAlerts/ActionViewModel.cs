@@ -45,18 +45,18 @@ namespace HSMServer.Model.DataAlerts
         };
 
 
-        public HashSet<Guid> AvailableChats { get; }
-
         public List<SelectListItem> Actions { get; }
+
+        public NodeViewModel Node { get; }
 
         public bool IsMain { get; }
 
 
-        public ActionViewModel(bool isMain, HashSet<Guid> availableChats)
+        public ActionViewModel(bool isMain, NodeViewModel node)
         {
             IsMain = isMain;
             Actions = _actions.ToSelectedItems(k => k.Value, v => v.Key.ToString());
-            AvailableChats = availableChats;
+            Node = node;
 
             Action = ActionType.SendNotification;
         }

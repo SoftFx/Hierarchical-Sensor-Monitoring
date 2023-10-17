@@ -146,9 +146,7 @@ namespace HSMServer.Model.DataAlerts
 
             IsDisabled = policy.IsDisabled;
 
-            node.TryGetChats(out var availableChats);
-
-            Actions.Add(new ActionViewModel(true, availableChats)
+            Actions.Add(new ActionViewModel(true, node)
             {
                 Action = ActionType.SendNotification,
                 Comment = policy.Template,
@@ -159,10 +157,10 @@ namespace HSMServer.Model.DataAlerts
             });
 
             if (!string.IsNullOrEmpty(policy.Icon))
-                Actions.Add(new ActionViewModel(false, availableChats) { Action = ActionType.ShowIcon, Icon = policy.Icon });
+                Actions.Add(new ActionViewModel(false, node) { Action = ActionType.ShowIcon, Icon = policy.Icon });
 
             if (policy.Status == Core.Model.SensorStatus.Error)
-                Actions.Add(new ActionViewModel(false, availableChats) { Action = ActionType.SetStatus });
+                Actions.Add(new ActionViewModel(false, node) { Action = ActionType.SetStatus });
         }
 
         public DataAlertViewModel(NodeViewModel node)
@@ -172,10 +170,8 @@ namespace HSMServer.Model.DataAlerts
 
             Conditions.Add(CreateCondition(true));
 
-            node.TryGetChats(out var availableChats);
-
-            Actions.Add(new ActionViewModel(true, availableChats) { Comment = DefaultCommentTemplate });
-            Actions.Add(new ActionViewModel(false, availableChats) { Action = ActionType.ShowIcon, Icon = DefaultIcon });
+            Actions.Add(new ActionViewModel(true, node) { Comment = DefaultCommentTemplate });
+            Actions.Add(new ActionViewModel(false, node) { Action = ActionType.ShowIcon, Icon = DefaultIcon });
         }
 
 

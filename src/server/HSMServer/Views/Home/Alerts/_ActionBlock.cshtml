@@ -17,12 +17,13 @@
 
     var isSecondaryCondition = !Model.IsMain;
 
-    var availableChats = new List<TelegramChat>();
-    foreach (var chat in ChatsManager.GetValues())
-    {
-        if (Model.AvailableChats.Contains(chat.Id))
-            availableChats.Add(chat);
-    }
+    var chats = new List<TelegramChat>();
+    if (Model.Node.TryGetChats(out var availableChats))
+        foreach (var chat in ChatsManager.GetValues())
+        {
+            if (availableChats.Contains(chat.Id))
+                chats.Add(chat);
+        }
 }
 
 
@@ -40,14 +41,14 @@
 
             <option data-divider="true"></option>
             <option disabled>Groups</option>
-            @foreach (var chat in availableChats.GetGroups())
+            @foreach (var chat in chats.GetGroups())
             {
                 <option value="@chat.Id" selected="@Model.ChatIsSelected(chat)">@chat.Name</option>
             }
 
             <option data-divider="true"></option>
             <option disabled>Users</option>
-            @foreach (var chat in availableChats.GetPrivates())
+            @foreach (var chat in chats.GetPrivates())
             {
                 <option value="@chat.Id" selected="@Model.ChatIsSelected(chat)">@chat.Name</option>
             }
