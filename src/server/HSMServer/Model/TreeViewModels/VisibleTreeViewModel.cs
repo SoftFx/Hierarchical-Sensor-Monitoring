@@ -44,6 +44,14 @@ public sealed class VisibleTreeViewModel
         }
     }
 
+    public void ClearOpenedNodes()
+    {
+        lock (_user)
+        {
+            _openedNodes.Clear();
+        }
+    }
+
     public List<BaseShallowModel> GetUserTree()
     {
         _allTree.Clear();
@@ -83,6 +91,48 @@ public sealed class VisibleTreeViewModel
         return folderTree;
     }
 
+    public List<BaseShallowModel> GetUserTree(string searchParameter)
+    {
+        _allTree.Clear();
+        ClearOpenedNodes();
+        // products should be updated before folders because folders should contain updated products
+        var products = GetUserProducts?.Invoke(_user).GetOrdered(_user);
+        var folders = GetFolders?.Invoke().GetOrdered(_user).ToDictionary(k => k.Id, v => new FolderShallowModel(v, _user));
+
+        var folderTree = new List<BaseShallowModel>(1 << 4);
+        var tree = new List<BaseShallowModel>(1 << 4);
+
+
+        foreach (var product in products)
+        {
+            var toRender = false;
+            var node = FilterNodes(product, searchParameter, ref toRender);
+
+            if (IsVisibleNode(node) && toRender)
+            {
+                AddOpenedNode(node.Id);
+                var folderId = node.Data.FolderId;
+
+                if (folderId.HasValue && folders.TryGetValue(folderId.Value, out var folder))
+                    folder.AddChild(node, _user);
+                else
+                    tree.Add(node);
+            }
+        }
+
+        foreach (var folder in folders.Values)
+        {
+            var viewEmptyFolder = _user.IsFolderAvailable(folder.Id) && _user.TreeFilter.ByVisibility.Empty.Value;
+
+            if (!folder.IsEmpty || viewEmptyFolder)
+                folderTree.Add(folder);
+        }
+
+        folderTree.AddRange(tree);
+
+        return folderTree;
+    }
+
     public NodeShallowModel LoadNode(ProductNodeViewModel globalModel)
     {
         var id = globalModel.Id;
@@ -91,6 +141,43 @@ public sealed class VisibleTreeViewModel
         {
             node.LoadRenderingNodes();
             AddOpenedNode(id);
+        }
+
+        return node;
+    }
+
+    private NodeShallowModel FilterNodes(ProductNodeViewModel product, string searchParameter, ref bool toRender)
+    {
+        var node = new NodeShallowModel(product, _user, IsVisibleNode, IsVisibleSensor);
+
+        _allTree.TryAdd(product.Id, node);
+
+        foreach (var nodeModel in product.Nodes.Values.GetOrdered(_user))
+        {
+            var currentNodeToRender = false;
+            var subNode = FilterNodes(nodeModel, searchParameter, ref currentNodeToRender);
+
+            node.AddChild(subNode);
+
+            if (subNode.Data.Name.Contains(searchParameter, StringComparison.OrdinalIgnoreCase) || currentNodeToRender)
+            {
+                AddOpenedNode(subNode.Id);
+                toRender = true;
+                node.ToRenderNode(subNode.Id);
+            }
+        }
+
+        foreach (var sensorModel in product.Sensors.Values.GetOrdered(_user))
+        {
+            var sensor = new SensorShallowModel(sensorModel, _user);
+
+            node.AddChild(sensor, _user);
+
+            if (sensor.Data.Name.Contains(searchParameter, StringComparison.OrdinalIgnoreCase))
+            {
+                toRender = true;
+                node.ToRenderNode(sensor.Id);
+            }
         }
 
         return node;

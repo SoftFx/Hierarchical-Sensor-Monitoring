@@ -173,8 +173,11 @@ namespace HSMServer.Controllers
         }
 
         [HttpGet]
-        public IActionResult RefreshTree()
+        public IActionResult RefreshTree(string searchParameter)
         {
+            if (!string.IsNullOrEmpty(searchParameter) && searchParameter.Length >= 3)
+                return PartialView("_Tree", CurrentUser.Tree.GetUserTree(searchParameter));
+
             return PartialView("_Tree", CurrentUser.Tree.GetUserTree());
         }
 

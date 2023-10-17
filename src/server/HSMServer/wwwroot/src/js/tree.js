@@ -25,7 +25,10 @@ window.initializeTree = function () {
                     return getNode;
                 },
                 data: function (node) {
-                    return { 'id' : node.id };
+                    return { 
+                        'id' : node.id,
+                        'searchParameter': $('#search_field').val()
+                    }
                 }
             }
         },
@@ -57,36 +60,38 @@ window.initializeTree = function () {
         });
 
     $("#search_tree").on('click', function () {
-        let value = $('#search_field').val();
+        $('#jstree').jstree(true).refresh(true);
         
-        $.ajax({
-            url: searchNode + '?str=' + value,
-            type: 'GET',
-            cache: false
-        }).done(function (response){
-            let ids = [];
-            response.forEach(function (x){
-                ids.push(x.split('/'))
-            })
-            
-            ids.forEach(function (x){
-                let i = 0;
-                openNode(x[i], getCallBack)
-
-                function getCallBack(){
-                    i++;
-                    if (i === x.length)
-                        return () => {};
-                    
-                    return openNode(x[i], getCallBack);
-                }
-            })
-            
-            function openNode(id, callBack){
-                $('#jstree').jstree('open_node', id, callBack);
-            }
-            
-        })
+        // let value = $('#search_field').val();
+        //
+        // $.ajax({
+        //     url: searchNode + '?str=' + value,
+        //     type: 'GET',
+        //     cache: false
+        // }).done(function (response){
+        //     let ids = [];
+        //     response.forEach(function (x){
+        //         ids.push(x.split('/'))
+        //     })
+        //    
+        //     ids.forEach(function (x){
+        //         let i = 0;
+        //         openNode(x[i], getCallBack)
+        //
+        //         function getCallBack(){
+        //             i++;
+        //             if (i === x.length)
+        //                 return () => {};
+        //            
+        //             return openNode(x[i], getCallBack);
+        //         }
+        //     })
+        //    
+        //     function openNode(id, callBack){
+        //         $('#jstree').jstree('open_node', id, callBack);
+        //     }
+        //    
+        //})
     });
 
     initializeActivateNodeTree();
