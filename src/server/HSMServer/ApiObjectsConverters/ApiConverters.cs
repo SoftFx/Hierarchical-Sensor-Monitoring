@@ -253,13 +253,13 @@ namespace HSMServer.ApiObjectsConverters
         {
             Conditions = request.Conditions?.Select(c => c.Convert()).ToList(),
             Destination = new PolicyDestinationUpdate(true, allChats),
-            Sensitivity = request.Sensitivity.ToTimeInterval(),
 
             Id = Guid.Empty,
             Status = request.Status.Convert(),
             Template = request.Template,
             Icon = request.Icon,
             IsDisabled = request.IsDisabled,
+            ConfirmationPeriod = request.ConfirmationPeriod,
             Initiator = initiator,
         };
 

@@ -37,7 +37,7 @@ namespace HSMServer.Core.Cache.UpdateEntities
 
         public PolicyDestinationUpdate Destination { get; init; }
 
-        public TimeIntervalModel Sensitivity { get; init; }
+        public long? ConfirmationPeriod { get; init; }
 
 
         public Guid Id { get; init; }

@@ -30,9 +30,9 @@ namespace HSMServer.Core.Model.Policies
         public BaseSensorModel Sensor { get; private set; }
 
 
-        public TimeIntervalModel Sensitivity { get; private set; }
-
         public SensorStatus Status { get; private set; }
+
+        public long? ConfirmationPeriod { get; private set; }
 
         public bool IsDisabled { get; private set; }
 
@@ -115,7 +115,7 @@ namespace HSMServer.Core.Model.Policies
                 Sensor ??= sensor;
 
                 Destination.Update(update.Destination);
-                Sensitivity = update.Sensitivity;
+                ConfirmationPeriod = update.ConfirmationPeriod;
                 IsDisabled = update.IsDisabled;
                 Template = update.Template;
                 Status = update.Status;
@@ -140,14 +140,12 @@ namespace HSMServer.Core.Model.Policies
             Id = new Guid(entity.Id);
             Status = entity.SensorStatus.ToStatus();
 
+            ConfirmationPeriod = entity.ConfirmationPeriod;
             IsDisabled = entity.IsDisabled;
             Template = entity.Template;
             Icon = entity.Icon;
 
             Destination = new PolicyDestination(entity.Destination);
-
-            if (entity.Sensitivity is not null)
-                Sensitivity = new TimeIntervalModel(entity.Sensitivity);
 
             UpdateConditions(entity.Conditions, Update);
         }
@@ -158,7 +156,7 @@ namespace HSMServer.Core.Model.Policies
 
             Conditions = Conditions?.Select(u => u.ToEntity()).ToList(),
 
-            Sensitivity = Sensitivity?.ToEntity(),
+            ConfirmationPeriod = ConfirmationPeriod,
             Destination = Destination.ToEntity(),
             SensorStatus = (byte)Status,
             IsDisabled = IsDisabled,
@@ -231,8 +229,8 @@ namespace HSMServer.Core.Model.Policies
             if (!Status.IsOk())
                 actions.Add($"change status to = {Status}");
 
-            if (Sensitivity is not null)
-                actions.Add($"after sensitivity={Sensitivity}");
+            if (ConfirmationPeriod is not null)
+                actions.Add($"after sensitivity={ConfirmationPeriod}");
 
             sb.Append($" then {string.Join(", ", actions)}");
 

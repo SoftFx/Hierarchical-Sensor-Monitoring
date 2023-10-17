@@ -76,7 +76,7 @@ namespace HSMServer.Model.DataAlerts
             {
                 Id = Id,
                 Conditions = conditions,
-                Sensitivity = sensitivity,
+                ConfirmationPeriod = sensitivity?.Ticks,
                 Status = status.ToCore(),
                 Template = comment,
                 Icon = icon,
@@ -207,7 +207,7 @@ namespace HSMServer.Model.DataAlerts
                 Conditions.Add(viewModel);
             }
 
-            if (policy.Sensitivity != null)
+            if (policy.ConfirmationPeriod != null)
             {
                 var condition = CreateCondition(false);
 
@@ -215,7 +215,10 @@ namespace HSMServer.Model.DataAlerts
                 condition.Sensitivity = new TimeIntervalViewModel(PredefinedIntervals.ForRestore)
                 {
                     IsAlertBlock = true,
-                }.FromModel(policy.Sensitivity, PredefinedIntervals.ForRestore);
+                };
+
+                if (policy.ConfirmationPeriod.HasValue)
+                    condition.Sensitivity.FromModel(new Core.Model.TimeIntervalModel(policy.ConfirmationPeriod.Value), PredefinedIntervals.ForRestore);
 
                 Conditions.Add(condition);
             }
