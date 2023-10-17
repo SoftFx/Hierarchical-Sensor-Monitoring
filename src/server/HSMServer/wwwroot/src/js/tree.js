@@ -370,6 +370,8 @@ function buildContextMenu(node) {
                     $('#modalDeleteLabel').append(`Remove ${getKeyByValue(curType)}`);
                     $('#modalDeleteBody').empty();
 
+                    let parent = node.parent;
+                    
                     $.when(getFullPathAction(node.id)).done((path) => {
                         $('#modalDeleteBody').append(`Do you really want to remove ${path}?`);
                         modal.show();
@@ -388,12 +390,21 @@ function buildContextMenu(node) {
                                 contentType: "application/json"
                             })
                             .done(() => {
+                                selectParentAfterRefresh();
+                                
                                 updateTreeTimer();
                                 showToast(`${getKeyByValue(curType)} has been removed`);
-
-                                $(`#${node.parents[0]}_anchor`).trigger('click');
                             });
                     });
+                    
+                    function selectParentAfterRefresh(){
+                        setTimeout(function (){
+                            if (!isRefreshing)
+                                $(`#${parent}_anchor`).trigger('click');
+                            else 
+                                selectParentAfterRefresh();
+                        }, 50)
+                    }
 
                     $('#closeDeleteButton').off('click').on('click', () => modal.hide());
                 }
