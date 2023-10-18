@@ -250,9 +250,9 @@ namespace HSMServer.Folders
 
         private static TimeIntervalModel GetCorePolicy(TimeIntervalModel model, TimeIntervalViewModel folder, ActionType action)
         {
-            var childInterval = action is ActionType.Delete ? Core.Model.TimeInterval.Ticks : Core.Model.TimeInterval.FromFolder;
+            var folderModel = folder.ToModel();
 
-            return model.IsFromFolder ? new TimeIntervalModel(childInterval, folder.CustomSpan.Ticks) : null;
+            return model.IsFromFolder ? action is ActionType.Delete ? folderModel : folderModel.ToFromFolderModel() : null;
         }
 
         private void ResetServerPolicyForFolderProducts()

@@ -286,7 +286,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
 
             _valuesCache.ChangeSensorEvent += UpdateSensorEventHandler;
 
-            _valuesCache.UpdateSensor(sensorUpdate);
+            _valuesCache.TryUpdateSensor(sensorUpdate, out _);
 
             _valuesCache.ChangeSensorEvent -= UpdateSensorEventHandler;
 
@@ -316,7 +316,7 @@ namespace HSMServer.Core.Tests.TreeValuesCacheTests
             _valuesCache.ChangeSensorEvent += UpdateSensorEventHandler;
 
             foreach (var (_, sensorUpdate) in sensorUpdates)
-                _valuesCache.UpdateSensor(sensorUpdate);
+                _valuesCache.TryUpdateSensor(sensorUpdate, out _);
 
             _valuesCache.ChangeSensorEvent -= UpdateSensorEventHandler;
 

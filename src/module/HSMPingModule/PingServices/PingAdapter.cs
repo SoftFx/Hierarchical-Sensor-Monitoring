@@ -1,4 +1,3 @@
-using HSMPingModule.Settings;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
 

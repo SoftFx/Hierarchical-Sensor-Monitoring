@@ -20,7 +20,7 @@ try
     builder.Configuration.SetBasePath(ServiceConfig.ConfigPath)
                          .AddJsonFile(ServiceConfig.ConfigName, true);
 
-    var config = new ServiceConfig(builder.Configuration, logger);
+    var config = new ServiceConfig(builder.Configuration);
 
     builder.Services.AddSingleton(config)
                     .AddSingleton(VpnFactory.GetVpn(config.PingSettings))
@@ -40,6 +40,5 @@ catch (Exception exception)
 }
 finally
 {
-    await ConsoleExecutor.Stop();
     LogManager.Shutdown();
 }

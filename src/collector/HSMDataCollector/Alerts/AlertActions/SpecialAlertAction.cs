@@ -7,7 +7,7 @@ namespace HSMDataCollector.Alerts
         public TimeSpan? TtlValue { get; internal set; }
 
 
-        internal SpecialAlertAction() : base(null) { }
+        internal SpecialAlertAction() : base(null, null) { }
 
 
         public override SpecialAlertTemplate Build()

@@ -59,7 +59,7 @@ namespace HSMServer.Core.Model
     {
         public override SensorType Type => SensorType.Version;
 
-        public override string ShortInfo => Value.Revision == 0 ? Value.ToString(3) : Value.ToString();
+        public override string ShortInfo => Value?.Revision == 0 ? Value?.ToString(3) : Value?.ToString();
 
 
         public override bool TryParseValue(string value, out Version parsedValue) => Version.TryParse(value, out parsedValue);

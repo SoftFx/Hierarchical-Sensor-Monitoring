@@ -43,6 +43,6 @@ namespace HSMDataCollector.Prototypes
                 path,
             });
 
-        internal static string BuildPath(params string[] parts) => string.Join(PathSeparator, parts.Where(u => !string.IsNullOrEmpty(u)));
+        internal static string BuildPath(params string[] parts) => string.Join(PathSeparator, parts.Select(u => u?.Trim('/')).Where(u => !string.IsNullOrEmpty(u)));
     }
 }

@@ -1,4 +1,5 @@
 using HSMPingModule.Settings;
+using NLog;
 using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -8,36 +9,44 @@ namespace HSMPingModule.Config;
 internal sealed class ServiceConfig
 {
 #if RELEASE
+    //private static readonly string _environmentDirectory = Environment.CurrentDirectory;
+    private static readonly string _environmentDirectory = Path.Combine(Environment.CurrentDirectory, Assembly.GetExecutingAssembly().GetName().Name);
     public const string ConfigName = "appsettings.json";
 #else
-    public const string ConfigName = "appsettings.Development.json";
+        private static readonly string _environmentDirectory = Environment.CurrentDirectory;
+        public const string ConfigName = "appsettings.Development.json";
 #endif
+
+    //private static readonly string _environmentDirectory = Environment.CurrentDirectory;
+    //public const string ConfigName = "appsettings.json";
 
     private static readonly JsonSerializerOptions _options = new()
     {
         WriteIndented = true,
+        //Converters = { new WebSitesJsonConverter() }
     };
+
+    private static readonly Logger _logger = LogManager.GetCurrentClassLogger();
 
     private readonly string _fullFilePath = Path.Combine(ConfigPath, ConfigName);
     private readonly FileSystemWatcher _watcher;
     private readonly IConfigurationRoot _root;
-    private readonly NLog.ILogger _logger;
 
     private bool _reloadIsFired;
 
 
     [JsonIgnore]
-    internal static string ConfigPath { get; } = Path.Combine(Environment.CurrentDirectory, "Config");
+    internal static string ConfigPath { get; } = Path.Combine(_environmentDirectory, "Config");
 
     [JsonIgnore]
     internal static Version Version { get; }
 
 
-    public CollectorSettings HSMDataCollectorSettings { get; private set; } = new();
+    public CollectorSettings HSMDataCollectorSettings { get; set; } = new();
 
-    public PingSettings PingSettings { get; private set; } = new();
+    public PingSettings PingSettings { get; set; } = new();
 
-    public ResourceSettings ResourceSettings { get; private set; } = new();
+    public ResourceSettings ResourceSettings { get; set; } = new();
 
 
     internal event Action OnChanged;
@@ -53,15 +62,11 @@ internal sealed class ServiceConfig
             Directory.CreateDirectory(ConfigPath);
     }
 
-    internal ServiceConfig(IConfigurationRoot configuration, NLog.ILogger logger)
+    public ServiceConfig() { }
+
+    internal ServiceConfig(IConfigurationRoot configuration)
     {
         _root = configuration;
-        _logger = logger;
-
-        if (!File.Exists(_fullFilePath))
-            SaveDefaultConfig();
-
-        Init();
 
         _watcher = new FileSystemWatcher(ConfigPath, ConfigName)
         {
@@ -69,23 +74,30 @@ internal sealed class ServiceConfig
             EnableRaisingEvents = true
         };
 
-        _watcher.Changed += Reload;
+        //_watcher.Changed += Reload;
+
+        if (!File.Exists(_fullFilePath))
+            SaveOrCreate();
+
+        Init();
     }
 
 
     private void Init()
     {
-        T Read<T>(string sectionName) where T : class, new() => _root.GetSection(sectionName).Get<T>() ?? new T();
+        var deserializedConfig = JsonSerializer.Deserialize<ServiceConfig>(File.ReadAllText(_fullFilePath), _options);
 
-        HSMDataCollectorSettings = Read<CollectorSettings>(nameof(HSMDataCollectorSettings));
-        ResourceSettings = Read<ResourceSettings>(nameof(ResourceSettings)).ApplyDefaultSettings();
-        PingSettings = Read<PingSettings>(nameof(PingSettings));
+        HSMDataCollectorSettings = deserializedConfig.HSMDataCollectorSettings;
+        ResourceSettings = deserializedConfig.ResourceSettings.ApplyDefaultSettings();
+        PingSettings = deserializedConfig.PingSettings;
 
         _logger.Info("Read collector key: {key}", HSMDataCollectorSettings.Key);
         _logger.Info("Read collector port: {port}", HSMDataCollectorSettings.Port);
         _logger.Info("Read server address: {adress}", HSMDataCollectorSettings.ServerAddress);
 
         OnChanged?.Invoke();
+
+        SaveOrCreate();
     }
 
     private void Reload(object sender, FileSystemEventArgs e)
@@ -114,9 +126,13 @@ internal sealed class ServiceConfig
         }
     }
 
-    private void SaveDefaultConfig()
+    private void SaveOrCreate()
     {
-        using var file = File.Open(_fullFilePath, FileMode.Create);
+        _watcher.EnableRaisingEvents = false;
+
+        using var file = File.Open(_fullFilePath, FileMode.OpenOrCreate);
         file.Write(JsonSerializer.SerializeToUtf8Bytes(this, _options));
+
+        _watcher.EnableRaisingEvents = true;
     }
 }

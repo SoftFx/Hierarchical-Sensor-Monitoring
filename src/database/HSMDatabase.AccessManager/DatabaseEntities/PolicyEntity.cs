@@ -31,7 +31,6 @@ namespace HSMDatabase.AccessManager.DatabaseEntities
 
         public PolicyDestinationEntity Destination { get; init; }
 
-        public TimeIntervalEntity Sensitivity { get; init; }
 
         public byte[] Id { get; init; }
 
@@ -42,5 +41,7 @@ namespace HSMDatabase.AccessManager.DatabaseEntities
         public string Template { get; init; }
 
         public string Icon { get; init; }
+
+        public long? ConfirmationPeriod { get; init; }
     }
 }

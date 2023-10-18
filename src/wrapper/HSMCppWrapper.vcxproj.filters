@@ -25,28 +25,13 @@
     <ClInclude Include="include\HSMCppWrapper.h">
       <Filter>Interface</Filter>
     </ClInclude>
-    <ClInclude Include="include\SensorStatus.h">
-      <Filter>Core</Filter>
-    </ClInclude>
     <ClInclude Include="include\DataCollector.h">
       <Filter>Core</Filter>
-    </ClInclude>
-    <ClInclude Include="include\HSMBarSensor.h">
-      <Filter>Sensors</Filter>
-    </ClInclude>
-    <ClInclude Include="include\HSMSensor.h">
-      <Filter>Sensors</Filter>
-    </ClInclude>
-    <ClInclude Include="include\HSMLastValueSensor.h">
-      <Filter>Sensors</Filter>
     </ClInclude>
     <ClInclude Include="HSMLastValueSensorImpl.h">
       <Filter>Sensors</Filter>
     </ClInclude>
     <ClInclude Include="HSMParamsFuncSensorImpl.h">
-      <Filter>Sensors</Filter>
-    </ClInclude>
-    <ClInclude Include="include\HSMParamsFuncSensor.h">
       <Filter>Sensors</Filter>
     </ClInclude>
     <ClInclude Include="DataCollectorImpl.h">
@@ -55,13 +40,34 @@
     <ClInclude Include="HSMNoParamsFuncSensorImpl.h">
       <Filter>Sensors</Filter>
     </ClInclude>
+    <ClInclude Include="include\HSMEnums.h">
+      <Filter>Interface</Filter>
+    </ClInclude>
+    <ClInclude Include="include\HSMSensorOptions.h">
+      <Filter>Interface</Filter>
+    </ClInclude>
+    <ClInclude Include="include\HSMBarSensor.h">
+      <Filter>Interface</Filter>
+    </ClInclude>
+    <ClInclude Include="include\HSMSensor.h">
+      <Filter>Interface</Filter>
+    </ClInclude>
+    <ClInclude Include="include\HSMLastValueSensor.h">
+      <Filter>Interface</Filter>
+    </ClInclude>
     <ClInclude Include="HSMBaseParamsFuncSensor.h">
-      <Filter>Sensors</Filter>
+      <Filter>Interface</Filter>
     </ClInclude>
     <ClInclude Include="HSMBaseNoParamsFuncSensor.h">
-      <Filter>Sensors</Filter>
+      <Filter>Interface</Filter>
+    </ClInclude>
+    <ClInclude Include="include\HSMParamsFuncSensor.h">
+      <Filter>Interface</Filter>
     </ClInclude>
     <ClInclude Include="include\HSMNoParamsFuncSensor.h">
+      <Filter>Interface</Filter>
+    </ClInclude>
+    <ClInclude Include="HSMSensorOptionsImpl.h">
       <Filter>Sensors</Filter>
     </ClInclude>
   </ItemGroup>
@@ -91,6 +97,9 @@
       <Filter>Sensors</Filter>
     </ClCompile>
     <ClCompile Include="HSMBaseNoParamsFuncSensor.cpp">
+      <Filter>Sensors</Filter>
+    </ClCompile>
+    <ClCompile Include="HSMSensorOptions.cpp">
       <Filter>Sensors</Filter>
     </ClCompile>
   </ItemGroup>

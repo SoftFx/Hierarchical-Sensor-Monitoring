@@ -73,7 +73,7 @@ namespace HSMServer.Extensions
         public static IntervalOperationViewModel GetIntervalOperations(this ConditionViewModel condition, AlertProperty property) =>
             property switch
             {
-                AlertProperty.Sensitivity => new SensitivityOperation(condition.Sensitivity),
+                AlertProperty.ConfirmationPeriod => new ConfirmationPeriodOperation(condition.ConfirmationPeriod),
                 AlertProperty.TimeToLive => new TimeToLiveOperation(condition.TimeToLive),
                 _ => throw new NotSupportedException(),
             };

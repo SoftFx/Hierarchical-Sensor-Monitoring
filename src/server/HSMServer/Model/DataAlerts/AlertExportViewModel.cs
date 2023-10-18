@@ -20,6 +20,8 @@ namespace HSMServer.Model.DataAlerts
 
         public SensorStatus Status { get; set; }
 
+        public TimeSpan? ConfirmationPeriod { get; set; }
+
         public List<string> Chats { get; set; }
 
         public bool IsDisabled { get; set; }
@@ -29,13 +31,14 @@ namespace HSMServer.Model.DataAlerts
 
         internal AlertExportViewModel(PolicyGroup group)
         {
-            Sensors = group.Policies.Select(p => p.Value.Sensor.DisplayName).ToList();
+            Sensors = group.Policies.Select(p => p.Value.Sensor.DisplayName).OrderBy(u => u).ToList();
 
             var policy = group.Policies.First().Value;
 
             Icon = policy.Icon;
             Status = policy.Status;
             Template = policy.Template;
+            ConfirmationPeriod = policy.ConfirmationPeriod.HasValue ? new TimeSpan(policy.ConfirmationPeriod.Value) : null;
             IsDisabled = policy.IsDisabled;
 
             if (!policy.Destination.AllChats)
@@ -58,6 +61,7 @@ namespace HSMServer.Model.DataAlerts
                         Status = Status,
                         Template = Template,
                         IsDisabled = IsDisabled,
+                        ConfirmationPeriod = ConfirmationPeriod?.Ticks,
                         Conditions = Conditions.Select(c => c.ToUpdate(sensorId)).ToList(),
                         Destination = Chats is null
                             ? new PolicyDestinationUpdate(true, availableChats.ToDictionary(k => k.Value, v => v.Key))

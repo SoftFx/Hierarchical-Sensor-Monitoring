@@ -27,13 +27,13 @@
     }
 
 
-    public sealed class SensitivityOperation : IntervalOperationViewModel
+    public sealed class ConfirmationPeriodOperation : IntervalOperationViewModel
     {
-        public override string TargetName { get; } = nameof(AlertConditionBase.Sensitivity);
+        public override string TargetName { get; } = nameof(AlertConditionBase.ConfirmationPeriod);
 
         public override string Operation { get; } = "is more than";
 
 
-        internal SensitivityOperation(TimeIntervalViewModel interval) : base(interval) { }
+        internal ConfirmationPeriodOperation(TimeIntervalViewModel interval) : base(interval) { }
     }
 }

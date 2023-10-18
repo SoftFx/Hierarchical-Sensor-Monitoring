@@ -30,6 +30,8 @@ namespace HSMServer.Core.Model.Policies
 
         internal abstract bool TryUpdate(List<PolicyUpdate> updates, InitiatorInfo initiator, out string error);
 
+        internal abstract void RemovePolicy(Guid policyId, InitiatorInfo initiator = null);
+
 
         internal void Reset()
         {
@@ -131,11 +133,11 @@ namespace HSMServer.Core.Model.Policies
 
         protected override bool CalculateStorageResult(ValueType value, bool updateStatus = true)
         {
+            SensorResult = SensorResult.Ok;
+            PolicyResult = new(_sensor.Id);
+
             if (!value.Status.IsOfftime())
             {
-                SensorResult = SensorResult.Ok;
-                PolicyResult = new(_sensor.Id);
-
                 foreach (var policy in _storage.Values)
                     if (!policy.IsDisabled && !policy.Validate(value))
                     {
@@ -154,6 +156,17 @@ namespace HSMServer.Core.Model.Policies
         {
             if (policy is PolicyType typedPolicy)
                 _storage.TryAdd(policy.Id, typedPolicy);
+        }
+
+        internal override void RemovePolicy(Guid policyId, InitiatorInfo initiator = null)
+        {
+            if (_storage.TryRemove(policyId, out var oldPolicy))
+            {
+                Uploaded?.Invoke(ActionType.Delete, oldPolicy);
+
+                if (initiator is not null)
+                    CallJournal(policyId, oldPolicy.ToString(), string.Empty, initiator);
+            }
         }
 
         internal override bool TryUpdate(List<PolicyUpdate> updatesList, InitiatorInfo initiator, out string error)
@@ -176,11 +189,8 @@ namespace HSMServer.Core.Model.Policies
                         else
                             errors.AppendLine(err);
                     }
-                    else if (_storage.TryRemove(id, out var oldPolicy))
-                    {
-                        CallJournal(id, oldPolicy.ToString(), string.Empty, initiator);
-                        Uploaded?.Invoke(ActionType.Delete, oldPolicy);
-                    }
+                    else
+                        RemovePolicy(id, initiator);
                 }
 
             foreach (var update in updatesList)
@@ -205,7 +215,7 @@ namespace HSMServer.Core.Model.Policies
                 SensorTimeout(valueT);
             }
 
-            error = errors.ToString();
+            error = errors.Length > 0 ? errors.ToString() : null;
 
             return string.IsNullOrEmpty(error);
         }

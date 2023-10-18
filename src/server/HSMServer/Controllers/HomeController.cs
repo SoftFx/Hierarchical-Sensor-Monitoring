@@ -1,4 +1,5 @@
 using HSMCommon.Collections;
+using HSMServer.ApiObjectsConverters;
 using HSMServer.Authentication;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Cache.UpdateEntities;
@@ -40,20 +41,29 @@ namespace HSMServer.Controllers
     [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
     public class HomeController : BaseController
     {
-        private static readonly JsonSerializerOptions _alertsSerializationOptions = new()
+        private static readonly JsonSerializerOptions _alertSerializeJsonOptions = new()
         {
-            WriteIndented = true
+            WriteIndented = true,
         };
 
+        public static readonly JsonSerializerOptions _alertDeserializeJsonOptions = new()
+        {
+            AllowTrailingCommas = true,
+        };
+
+
         private readonly ITreeValuesCache _treeValuesCache;
+        private readonly IJournalService _journalService;
         private readonly IFolderManager _folderManager;
         private readonly TreeViewModel _treeViewModel;
-        private readonly IJournalService _journalService;
 
 
         static HomeController()
         {
-            _alertsSerializationOptions.Converters.Add(new JsonStringEnumConverter());
+            _alertDeserializeJsonOptions.Converters.Add(new JsonStringEnumConverter());
+
+            _alertSerializeJsonOptions.Converters.Add(new ListAsJsonStringConverter());
+            _alertSerializeJsonOptions.Converters.Add(new JsonStringEnumConverter());
         }
 
         public HomeController(ITreeValuesCache treeValuesCache, IFolderManager folderManager, TreeViewModel treeViewModel,
@@ -111,7 +121,7 @@ namespace HSMServer.Controllers
                 : NotFound();
 
         [HttpPut]
-        public void RemoveRenderingNode(Guid nodeId) => CurrentUser.Tree.RemoveOpenedNode(nodeId);
+        public void RemoveRenderingNode(params Guid[] nodeIds) => CurrentUser.Tree.RemoveOpenedNode(nodeIds);
 
         [HttpGet]
         public IActionResult GetGrid(ChildrenPageRequest pageRequest)
@@ -307,7 +317,7 @@ namespace HSMServer.Controllers
                     };
 
                     toastViewModel.AddItem(sensor);
-                    _treeValuesCache.UpdateSensor(update);
+                    _treeValuesCache.TryUpdateSensor(update, out _);
                 }
             }
 
@@ -384,7 +394,7 @@ namespace HSMServer.Controllers
                     Initiator = CurrentInitiator
                 };
 
-                _treeValuesCache.UpdateSensor(update);
+                _treeValuesCache.TryUpdateSensor(update, out _);
             }
         }
 
@@ -542,7 +552,7 @@ namespace HSMServer.Controllers
             var request = new GetSensorHistoryModel()
             {
                 EncodedId = encodedId,
-                BarsCount = -20,
+                Count = -20,
             };
 
             await StoredUser.History.Reload(_treeValuesCache, request);
@@ -589,13 +599,12 @@ namespace HSMServer.Controllers
                 KeepHistory = newModel.SavedHistoryPeriod.ToModel(),
                 SelfDestroy = newModel.SelfDestroyPeriod.ToModel(),
                 Policies = policyUpdates,
-                IsSingleton = newModel.IsSingleton,
                 SelectedUnit = newModel.SelectedUnit,
                 AggregateValues = newModel.AggregateValues,
                 Initiator = CurrentInitiator
             };
 
-            _treeValuesCache.UpdateSensor(update);
+            _treeValuesCache.TryUpdateSensor(update, out _);
 
             return PartialView("_MetaInfo", new SensorInfoViewModel(sensor));
         }
@@ -645,7 +654,7 @@ namespace HSMServer.Controllers
             {
                 AlertProperty.NewSensorData => PartialView("~/Views/Home/Alerts/ConditionOperations/_NewDataOperation.cshtml"),
 
-                AlertProperty.TimeToLive or AlertProperty.Sensitivity =>
+                AlertProperty.TimeToLive or AlertProperty.ConfirmationPeriod =>
                     PartialView("~/Views/Home/Alerts/ConditionOperations/_IntervalOperation.cshtml", condition.GetIntervalOperations(property)),
 
                 _ => PartialView("~/Views/Home/Alerts/ConditionOperations/_SimpleOperation.cshtml", condition.GetOperations(property)),
@@ -819,7 +828,7 @@ namespace HSMServer.Controllers
                 return _emptyResult;
 
 
-            var policies = JsonSerializer.Serialize(node.Policies.GroupedPolicies.Select(p => new AlertExportViewModel(p)), _alertsSerializationOptions);
+            var policies = JsonSerializer.Serialize(node.Policies.GroupedPolicies.Select(p => new AlertExportViewModel(p)), _alertSerializeJsonOptions);
 
             var fileName = $"{node.FullPath.Replace('/', '_')}-alerts.json";
             Response.Headers.Add("Content-Disposition", $"attachment;filename={fileName}");
@@ -836,7 +845,7 @@ namespace HSMServer.Controllers
             {
                 try
                 {
-                    var alerts = JsonSerializer.Deserialize<List<AlertExportViewModel>>(model.FileContent, _alertsSerializationOptions);
+                    var alerts = JsonSerializer.Deserialize<List<AlertExportViewModel>>(model.FileContent, _alertDeserializeJsonOptions);
 
                     var availableSensors = node.Sensors.ToDictionary(k => k.Value.Name, v => v.Key);
                     var availableChats = node.GetAllChats().ToDictionary(k => k.Name, v => v.SystemId);
@@ -860,9 +869,7 @@ namespace HSMServer.Controllers
                             Initiator = CurrentInitiator,
                         };
 
-                        _treeValuesCache.UpdateSensorPolicies(update, out var error);
-
-                        if (!string.IsNullOrEmpty(error))
+                        if (!_treeValuesCache.TryUpdateSensor(update, out var error))
                             toastViewModel.AddError(error, _treeViewModel.Sensors[sensorId].Name);
                     }
                 }

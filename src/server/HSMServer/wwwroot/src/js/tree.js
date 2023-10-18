@@ -36,14 +36,19 @@ window.initializeTree = function () {
     }).on("state_ready.jstree", function () {
         selectNodeAjax($(this).jstree('get_selected')[0]);
     }).on('close_node.jstree', function (e, data) {
+        if (collapseButton.isTriggered)
+            return;
+
         $.ajax({
             type: 'put',
-            url: `${closeNode}?nodeId=${data.node.id}`,
+            url: `${closeNode}?nodeIds=${data.node.id}`,
             cache: false
         })
     }).on('refresh.jstree', function (e, data){
         refreshTreeTimeoutId = setTimeout(updateTreeTimer, interval);
         updateSelectedNodeDataTimeoutId = setTimeout(updateSelectedNodeData, interval);
+    }).on('open_node.jstree', function (e, data){
+        collapseButton.reset();
     });
 
     initializeActivateNodeTree();
@@ -53,6 +58,7 @@ window.activateNode = function (currentNodeId, nodeIdToActivate) {
     needToActivateListTab = $(`#list_${currentNodeId}`).hasClass('active');
 
     $('#jstree').jstree('activate_node', nodeIdToActivate);
+    $('#jstree').jstree('open_node', nodeIdToActivate);
 
     if (currentSelectedNodeId != nodeIdToActivate) {
         selectNodeAjax(nodeIdToActivate);

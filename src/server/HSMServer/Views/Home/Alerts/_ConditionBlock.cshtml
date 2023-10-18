@@ -20,7 +20,7 @@
     <select class="alert-block alert-select property-select" asp-for="Property" asp-items="@Model.PropertiesItems"></select>
 
     <div class="flex-row align-items-center operation">
-        @if (condition is AlertProperty.TimeToLive or AlertProperty.Sensitivity)
+        @if (condition is AlertProperty.TimeToLive or AlertProperty.ConfirmationPeriod)
         {
             @await Html.PartialAsync("~/Views/Home/Alerts/ConditionOperations/_IntervalOperation.cshtml", Model.GetIntervalOperations())
         }

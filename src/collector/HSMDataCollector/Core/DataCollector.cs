@@ -8,6 +8,7 @@ using HSMDataCollector.Extensions;
 using HSMDataCollector.InstantValue;
 using HSMDataCollector.Logging;
 using HSMDataCollector.Options;
+using HSMDataCollector.Prototypes;
 using HSMDataCollector.PublicInterface;
 using HSMDataCollector.SyncQueue;
 using HSMSensorDataObjects;
@@ -399,6 +400,8 @@ namespace HSMDataCollector.Core
         [Obsolete]
         public IInstantValueSensor<string> CreateFileSensor(string path, string fileName, string extension = "txt", string description = "")
         {
+            path = DefaultPrototype.BuildPath(_options.ComputerName, _options.Module, path);
+
             var existingSensor = GetExistingSensor(path);
             if (existingSensor is IInstantValueSensor<string> instantValueSensor)
                 return instantValueSensor;
@@ -438,7 +441,7 @@ namespace HSMDataCollector.Core
 
             var value = new FileSensorValue()
             {
-                Path = sensorPath,
+                Path = DefaultPrototype.BuildPath(_options.ComputerName, _options.Module, sensorPath),
                 Comment = comment,
                 Status = status,
                 Extension = fileInfo.Extension.TrimStart('.'),

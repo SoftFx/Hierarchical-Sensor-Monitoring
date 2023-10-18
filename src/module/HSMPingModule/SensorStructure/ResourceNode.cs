@@ -9,10 +9,10 @@ namespace HSMPingModule.SensorStructure
         public string HostName { get; }
 
 
-        internal ResourceNode(KeyValuePair<string, NodeSettings> settings)
+        internal ResourceNode(KeyValuePair<string, NodeSettings> settings, TimeSpan requestPeriod)
         {
             HostName = settings.Key;
-            Countries = settings.Value.Countries.Select(u => new ResourceSensor(HostName, u, settings.Value)).ToList();
+            Countries = settings.Value.Countries.Select(u => new ResourceSensor(HostName, u, settings.Value, requestPeriod)).ToList();
         }
 
 

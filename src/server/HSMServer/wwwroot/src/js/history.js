@@ -175,7 +175,7 @@ function exportCsv() {
         if (Object.keys(types).length === 0)
             return;
 
-        window.location.href = exportHistoryAction + "?EncodedId=" + encodedId + "&Type=" + types.realType + "&From=" + from + "&To=" + to;
+        window.location.href = exportHistoryAction + "?EncodedId=" + encodedId + "&Type=" + types.realType + "&addHiddenColumns=" + hiddenColumns.isVisible + "&From=" + from + "&To=" + to;
     })
 }
 
@@ -191,8 +191,6 @@ function initializeTable(encodedId, tableAction, type, body, needFillFromTo = fa
     }).done(function (data) {
         $("#newValuesCount").empty();
         $("#tableHistoryRefreshButton").addClass("d-none");
-        $('#allColumnsButton').removeClass('d-none');
-        $('#allColumnsButton')[0].innerText = 'Show all columns';
 
         $(`#values_${encodedId}`).html(data);
 

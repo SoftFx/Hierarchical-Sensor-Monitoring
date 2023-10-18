@@ -45,6 +45,20 @@ namespace HSMCommon.Extensions
             return $"{timeSpan.Days}.{timeSpan.Hours}:{timeSpan.Minutes}:{timeSpan.Seconds}";
         }
 
+        public static DateTime Ceil(this DateTime time, TimeSpan span)
+        {
+            var roundTicks = span.Ticks;
+
+            return roundTicks == 0 ? time : new DateTime(time.Ticks / roundTicks * roundTicks + roundTicks, DateTimeKind.Utc);
+        }
+
+        public static DateTime Floor(this DateTime time, TimeSpan span)
+        {
+            var roundTicks = span.Ticks;
+
+            return new DateTime(time.Ticks / roundTicks * roundTicks, DateTimeKind.Utc);
+        }
+
         public static bool TryParse(this string interval, out long ticks)
         {
             var ddString = interval.Split(".");

@@ -1,6 +1,6 @@
 ﻿using HSMDatabase.AccessManager.DatabaseEntities;
-using System;
 using HSMServer.Core.Extensions;
+using System;
 
 namespace HSMServer.Core.Model
 {
@@ -74,7 +74,7 @@ namespace HSMServer.Core.Model
         public TimeIntervalModel(TimeInterval interval, long ticks)
         {
             Interval = interval;
-            Ticks = ticks;
+            Ticks = Interval is TimeInterval.None ? long.MaxValue : ticks;
         }
 
 
@@ -93,12 +93,17 @@ namespace HSMServer.Core.Model
             TimeInterval.Ticks or TimeInterval.FromFolder => time.AddTicks(Ticks * coef),
             TimeInterval.None => DateTime.MaxValue,
 
-            _ => throw new NotImplementedException(),
+            _ => throw new NotImplementedException($"{Interval} is not implemented for ShiftTime function"),
         };
+
+
+        public TimeIntervalModel ToFromFolderModel() => new(TimeInterval.FromFolder, Ticks);
 
         public TimeIntervalEntity ToEntity() => new((long)Interval, Ticks);
 
+        public TimeSpan ToTimeSpan() => new(Ticks);
 
-        public override string ToString() => UseTicks ? $"{Interval}({new TimeSpan(Ticks)})" : $"{Interval.ToDisplay()}";
+
+        public override string ToString() => UseTicks ? $"{Interval}({ToTimeSpan()})" : $"{Interval.ToDisplay()}";
     }
 }

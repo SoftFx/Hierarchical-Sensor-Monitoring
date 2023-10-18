@@ -9,7 +9,7 @@ namespace HSMPingModule.VpnManager
         internal abstract string VpnDescription { get; }
 
 
-        internal abstract Task<TaskResult> Connect();
+        internal abstract Task<TaskResult<string>> Connect();
 
         internal abstract Task<TaskResult> Disconnect();
 

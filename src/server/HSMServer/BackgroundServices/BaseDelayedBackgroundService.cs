@@ -1,4 +1,5 @@
-﻿using HSMServer.Extensions;
+﻿using HSMCommon.Extensions;
+using HSMServer.Extensions;
 using Microsoft.Extensions.Hosting;
 using NLog;
 using System;
