@@ -41,24 +41,25 @@ namespace HSMServer.Notifications
 
         public async Task HandleUpdateAsync(ITelegramBotClient botClient, Update update, CancellationToken cToken)
         {
-            if (update?.Type == UpdateType.Message)
+            try
             {
-                var message = update?.Message;
-                var msgText = message?.Text?.ToLowerInvariant();
-                var parts = msgText?.Split(' ');
-
-                if (parts == null || parts.Length == 0)
+                if (update is null || update.Message is null || update.Message.Chat is null || string.IsNullOrEmpty(update.Message.Text) || update.Type is not UpdateType.Message)
                     return;
 
-                if (message?.Chat?.Type != ChatType.Private)
+                var message = update.Message;
+                var msgText = message.Text.ToLowerInvariant();
+                var parts = msgText.Split(' ');
+                var command = parts[0];
+
+                if (!message.FromPrivateChat())
                 {
-                    if (!parts[0].Contains(BotName))
+                    if (!command.Contains(BotName))
                         return;
 
-                    parts[0] = parts[0].Replace(BotName, string.Empty);
+                    command = command.Replace(BotName, string.Empty); // for group chats commands colled as command@botsname
                 }
 
-                var response = parts[0] switch
+                var response = command switch
                 {
                     TelegramBotCommands.Start => await StartBot(parts, message),
                     TelegramBotCommands.Info => EntitiesInfo(message.Chat),
@@ -71,6 +72,10 @@ namespace HSMServer.Notifications
                     await botClient.SendTextMessageAsync(message.Chat, response, null, ParseMode.MarkdownV2, cancellationToken: cToken);
                 else
                     _logger.Warn($"There is some invalid update message: {msgText}");
+            }
+            catch (Exception ex)
+            {
+                _logger.Error($"Invalid message has been received: {update?.Type} - {update?.Message}. Exception: {ex}");
             }
         }
 
@@ -98,11 +103,7 @@ namespace HSMServer.Notifications
                     if (string.IsNullOrEmpty(folderName))
                         response.Append("Sorry, your token is invalid or folder doesn't exsist.");
                     else
-                    {
-                        var isUserChat = message?.Chat?.Type == ChatType.Private;
-
-                        response.Append($"Folder '{folderName}' is successfully added to {(isUserChat ? "direct" : $"group by {token.User.Name}")}.");
-                    }
+                        response.Append($"Folder '{folderName}' is successfully added to {(message.FromPrivateChat() ? "direct" : $"group by {token.User.Name}")}.");
                 }
                 else
                     response.Append("Sorry, your invitation token is expired.");
