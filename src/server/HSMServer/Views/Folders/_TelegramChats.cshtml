@@ -54,16 +54,9 @@
                 {
                     <tr id="row_chat_@chat.Id">
                         <td class="text-break">
-                            @if (chat.Type == ConnectedChatType.TelegramPrivate)
-                            {
-                                <span>@chat.Name</span>
-                            }
-                            else
-                            {
-                                <a target="_blank" asp-controller="@ViewConstants.NotificationsController" asp-action="@nameof(NotificationsController.OpenTelegramGroup)" asp-route-chatId="@chat.ChatId">
-                                    @chat.Name
-                                </a>
-                            }
+                            <a> @*asp-controller="Product" asp-action="EditProduct" asp-route-Product="@product.EncodedId">*@
+                                @chat.Name
+                            </a>
                         </td>
                         <td class="text-center">@(chat.Type == ConnectedChatType.TelegramPrivate ? "Direct" : "Group")</td>
                         <td class="text-break text-center">
@@ -80,15 +73,29 @@
                                 </button>
                                 <ul class='dropdown-menu overflow-auto' aria-labelledby="dropdownMenuButton">
                                     <li>
+                                        <a class='dropdown-item text-decoration-none fw-normal' style="cursor: pointer;">
+                                            View/Edit
+                                        </a>
+                                    </li>
+                                    <li>
                                         <a id='remove_@chat.Id' class='dropdown-item text-decoration-none fw-normal' style="cursor: pointer;">
-                                            Remove
+                                            Remove from folder
                                         </a>
                                     </li>
                                     <li>
                                         <a id="sendMessage_@chat.Id" name="@chat.ChatId" class='dropdown-item text-decoration-none fw-normal' style="cursor: pointer;">
                                             Send test message
-                                        </a'>
+                                        </a>
                                     </li>
+                                    @if (chat.Type == ConnectedChatType.TelegramGroup)
+                                    {
+                                        <li>
+                                            <a class='dropdown-item text-decoration-none fw-normal' style="cursor: pointer;" target="_blank"
+                                               asp-controller="@ViewConstants.NotificationsController" asp-action="@nameof(NotificationsController.OpenTelegramGroup)" asp-route-chatId="@chat.ChatId">
+                                                Go to chat
+                                            </a>
+                                        </li>
+                                    }
                                 </ul>
                             </div>
                         </td>
