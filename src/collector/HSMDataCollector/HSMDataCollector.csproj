@@ -26,7 +26,6 @@
     </Content>
   </ItemGroup>
   <ItemGroup>
-    <PackageReference Include="HSMDataCollector.HSMSensorDataObjects" Version="3.0.4" />
     <PackageReference Include="Microsoft.CSharp" Version="4.7.0" />
     <PackageReference Include="Microsoft.Win32.Registry" Version="5.0.0" />
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
@@ -34,5 +33,8 @@
     <PackageReference Include="System.Diagnostics.PerformanceCounter" Version="6.0.1" />
     <PackageReference Include="System.Net.Http" Version="4.3.4" />
     <PackageReference Include="System.ServiceProcess.ServiceController" Version="7.0.1" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\api\HSMSensorDataObjects\HSMSensorDataObjects.csproj" />
   </ItemGroup>
 </Project>

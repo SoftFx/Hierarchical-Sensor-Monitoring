@@ -1,10 +1,10 @@
 # HSM Server
 
-## New setting for Alerts - **Sensitivity** has been added
-Sensitivity is TimeSpan (format 0.00:00:00 or 00:00:00). When sensitivity is set, notifications are sent with selected delay. Notifications aren't sent if new data has arrived that didn't trigger the alert.
+## New setting for Alerts - **Alert confirmation period** has been added
+Alert confirmation period is TimeSpan (format 0.00:00:00 or 00:00:00). When alert confirmation period is set, notifications are sent with selected delay. Notifications aren't sent if new data has arrived that didn't trigger the alert.
 
 ## Import/export alerts
-* **Sensitivity** has been added for alerts
+* **Alert confirmation period*** has been added for alerts
 * Lists of strings are serialized into one line
 * Exporting have been fixed for removed sensors
 * Sorting by name has been added for **Sensors** list
@@ -42,9 +42,13 @@ Sensitivity is TimeSpan (format 0.00:00:00 or 00:00:00). When sensitivity is set
 
 ## v. 3.2.3
 * **PostDataPeriod** for **WindowsInfoSensorOptions** have been fixed to 12 hours
-* **AndSensitivity** block has been added for Alert API
+* **AndConfirmationPeriod*** block has been added for Alert API
 * Double '/' has been fixed for path with Module settings
 * Path building for File sensors has been fixed
+
+# HSM DataObjects
+## v. 3.1.0
+* **Sensitivity** for alert request has been renamed to **ConfirmationPeriod**
 
 # HSM Pinger
 

@@ -111,7 +111,7 @@ namespace HSMServer.Core.Model
 
         internal bool TryAddAsSingleton(T value)
         {
-            if (IsLastEmptyOrTimeout || LastValue.Time.Floor(_singletonTimePrecision) <= value.Time.Floor(_singletonTimePrecision))
+            if (IsLastEmptyOrTimeout || LastValue.Time.Floor(_singletonTimePrecision) < value.Time.Floor(_singletonTimePrecision))
             {
                 AddValue(value);
                 return true;

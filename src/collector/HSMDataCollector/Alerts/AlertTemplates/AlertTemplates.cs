@@ -23,7 +23,7 @@ namespace HSMDataCollector.Alerts
         public SensorStatus Status { get; set; }
 
 
-        public TimeSpan? Sensitivity { get; set; }
+        public TimeSpan? ConfirmationPeriod { get; set; }
 
         public string Template { get; set; }
 
