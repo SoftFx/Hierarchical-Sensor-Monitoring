@@ -13,7 +13,7 @@ namespace HSMServer.Notifications
 {
     public interface ITelegramChatsManager : IConcurrentStorage<TelegramChat, TelegramChatEntity, TelegramChatUpdate>
     {
-        TokenManager TokenManager { get; }
+        TokensManager TokenManager { get; }
 
         event Func<Guid, Guid, string, Task<string>> ConnectChatToFolder;
 

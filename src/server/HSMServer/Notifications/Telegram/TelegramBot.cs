@@ -46,7 +46,7 @@ namespace HSMServer.Notifications
             _config = config;
             _cache = cache;
 
-            _cache.ThrowAlertResultsEvent += SendMessage;
+            _cache.ThrowAlertResultsEvent += StoreMessage;
 
             _updateHandler = new(_chatsManager, _cache, _folderManager, config);
         }
@@ -102,7 +102,6 @@ namespace HSMServer.Notifications
             await ChatNamesSynchronization();
 
             _bot.StartReceiving(_updateHandler, _options, _tokenSource.Token);
-            ThreadPool.QueueUserWorkItem(async _ => await MessageReceiver());
 
             return string.Empty;
         }
@@ -118,8 +117,8 @@ namespace HSMServer.Notifications
             {
                 try
                 {
-                    await bot?.DeleteWebhookAsync();
-                    await bot?.CloseAsync();
+                    await bot.DeleteWebhookAsync();
+                    await bot.CloseAsync();
                 }
                 catch (Exception ex)
                 {
@@ -130,7 +129,7 @@ namespace HSMServer.Notifications
             return string.Empty;
         }
 
-        private void SendMessage(List<AlertResult> result, Guid folderId)
+        private void StoreMessage(List<AlertResult> result, Guid folderId)
         {
             try
             {
@@ -155,9 +154,9 @@ namespace HSMServer.Notifications
             }
         }
 
-        private async Task MessageReceiver()
+        internal void SendMessages()
         {
-            while (IsBotRunning)
+            if (IsBotRunning)
             {
                 try
                 {
@@ -171,6 +170,9 @@ namespace HSMServer.Notifications
                             {
                                 var message = chat.MessageBuilder.GetAggregateMessage(messagesDelay);
 
+                                if (_tokenSource.IsCancellationRequested)
+                                    break;
+
                                 SendMessage(chat.ChatId, message);
                             }
                         }
@@ -179,11 +181,6 @@ namespace HSMServer.Notifications
                             _logger.Error($"Error getting message: {chat.Name} - {ex}");
                         }
                     }
-
-                    if (_tokenSource.IsCancellationRequested)
-                        break;
-
-                    await Task.Delay(500, _tokenSource.Token);
                 }
                 catch (Exception ex)
                 {

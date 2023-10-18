@@ -40,7 +40,13 @@ namespace HSMServer.Notifications
             return TelegramBot.DisposeAsync();
         }
 
-        internal void CheckState()
+
+        internal void SendAllMessages()
+        {
+            TelegramBot.SendMessages();
+        }
+
+        internal void RecalculateState()
         {
             _telegramChatsManager.TokenManager.RemoveOldTokens();
         }
