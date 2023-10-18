@@ -132,11 +132,7 @@ namespace HSMServer.ApiObjectsConverters
                     var jsonPropertyName = column.GetPropertyName(value);
                     var propValue = properties.GetProperty(jsonPropertyName).ToString();
 
-                    if (column.PropertyName != nameof(BaseValue.Comment) && DateTime.TryParse(propValue, out var dateTime))
-                        propValue = dateTime.ToDefaultFormat();
-
-                    if (value.IsTimeout && !_validProperties.TryGetValue(column.PropertyName, out _))
-                        propValue = string.Empty;
+                    TransformValue(column, value, ref propValue);
 
                     rowValues.Add(propValue);
                 }
@@ -146,6 +142,18 @@ namespace HSMServer.ApiObjectsConverters
             }
 
             return content.ToString();
+
+            static void TransformValue(Header column, BaseValue value, ref string propValue)
+            {
+                if (column.PropertyName != nameof(BaseValue.Comment) && DateTime.TryParse(propValue, out var dateTime)) 
+                    propValue = dateTime.ToDefaultFormat();
+
+                if (value.IsTimeout && !_validProperties.TryGetValue(column.PropertyName, out _))
+                    propValue = string.Empty;
+
+                if (column.PropertyName == nameof(BaseValue.Status) && Enum.TryParse<SensorStatus>(propValue, out var status))
+                    propValue = status.ToString();
+            }
         }
 
         private static List<Header> GetHeader(this List<BaseValue> values, ExportOptions options)
