@@ -323,7 +323,7 @@ namespace HSMServer.Notifications
             {
                 Id = policy.Id,
                 Conditions = policy.Conditions.Select(c => new PolicyConditionUpdate(c.Operation, c.Property, c.Target, c.Combination)).ToList(),
-                Sensitivity = policy.Sensitivity,
+                ConfirmationPeriod = policy.ConfirmationPeriod,
                 Status = policy.Status,
                 Template = policy.Template,
                 Icon = policy.Icon,

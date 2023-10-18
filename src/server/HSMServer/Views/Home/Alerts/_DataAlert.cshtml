@@ -33,11 +33,11 @@
             <span>
                 @if (condition.Property == AlertProperty.TimeToLive)
                 {
-                    <b>Inactivity period is @condition.TimeToLive.DisplayValue</b>
+                    <b>@AlertProperty.TimeToLive.GetDisplayName() is @condition.TimeToLive.DisplayValue</b>
                 }
-                else if (condition.Property == AlertProperty.Sensitivity)
+                else if (condition.Property == AlertProperty.ConfirmationPeriod)
                 {
-                    <b>Sensitivity is more than @condition.Sensitivity.DisplayValue</b>
+                    <b>@AlertProperty.ConfirmationPeriod.GetDisplayName() is more than @condition.ConfirmationPeriod.DisplayValue</b>
                 }
                 else
                 {
