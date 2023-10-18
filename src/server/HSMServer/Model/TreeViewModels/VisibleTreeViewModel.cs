@@ -88,8 +88,7 @@ public sealed class VisibleTreeViewModel
 
         foreach (var product in products)
         {
-            var toRender = false;
-            var node = FilterNodes(product, searchParameter, out toRender);
+            var node = FilterNodes(product, searchParameter, out var toRender);
 
             if (IsVisibleNode(node) && toRender)
             {
@@ -103,13 +102,9 @@ public sealed class VisibleTreeViewModel
             }
         }
 
-        foreach (var folder in folders.Values)
-        {
-            var viewEmptyFolder = _user.IsFolderAvailable(folder.Id) && _user.TreeFilter.ByVisibility.Empty.Value;
-
-            if (!folder.IsEmpty || viewEmptyFolder)
-                folderTree.Add(folder);
-        }
+        folderTree.AddRange(folders.Values.Where(x =>
+            (x.Data.Name.Contains(searchParameter) || !x.IsEmpty) &&
+            _user.IsFolderAvailable(x.Id) && _user.TreeFilter.ByVisibility.Empty.Value));
 
         folderTree.AddRange(tree);
 
