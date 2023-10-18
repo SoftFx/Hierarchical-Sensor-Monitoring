@@ -62,19 +62,11 @@ namespace HSMServer.Notifications
         public void Dispose() { }
 
 
-        public async override Task<bool> TryAdd(TelegramChat model)
-        {
-            var result = await base.TryAdd(model);
+        public async override Task<bool> TryAdd(TelegramChat model) =>
+            await base.TryAdd(model) && _telegramChatIds.TryAdd(model.ChatId, model);
 
-            return result ? _telegramChatIds.TryAdd(model.ChatId, model) : result;
-        }
-
-        public async override Task<bool> TryRemove(Guid id)
-        {
-            var result = TryGetValue(id, out var chat) && await base.TryRemove(id);
-
-            return result ? _telegramChatIds.TryRemove(chat.ChatId, out _) : result;
-        }
+        public async override Task<bool> TryRemove(RemoveRequest remove) =>
+            TryGetValue(remove.Id, out var chat) && await base.TryRemove(remove) && _telegramChatIds.TryRemove(chat.ChatId, out _);
 
 
         public override async Task Initialize()
@@ -138,7 +130,7 @@ namespace HSMServer.Notifications
                     chat.Folders.Add(folderId);
         }
 
-        public async Task RemoveFolderFromChats(Guid folderId, List<Guid> chats)
+        public async Task RemoveFolderFromChats(Guid folderId, List<Guid> chats, InitiatorInfo initiator)
         {
             foreach (var chatId in chats)
                 if (TryGetValue(chatId, out var chat))
@@ -146,13 +138,14 @@ namespace HSMServer.Notifications
                     chat.Folders.Remove(folderId);
 
                     if (chat.Folders.Count == 0)
-                        await TryRemove(chatId);
+                        await TryRemove(new(chatId, initiator));
                 }
 
-            _cache.RemoveChatsFromPolicies(folderId, chats);
+            _cache.RemoveChatsFromPolicies(folderId, chats, initiator);
         }
 
-        public void RemoveFolderHandler(FolderModel folder) => _ = RemoveFolderFromChats(folder.Id, folder.TelegramChats.ToList());
+        public void RemoveFolderHandler(FolderModel folder, InitiatorInfo initiator) =>
+            _ = RemoveFolderFromChats(folder.Id, folder.TelegramChats.ToList(), initiator);
 
 
         protected override TelegramChat FromEntity(TelegramChatEntity entity) => new(entity);

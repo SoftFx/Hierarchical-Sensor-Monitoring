@@ -1,4 +1,5 @@
-﻿using System;
+﻿using HSMServer.Core.TableOfChanges;
+using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
@@ -8,7 +9,7 @@ namespace HSMServer.ConcurrentStorage
 {
     public abstract class ConcurrentStorage<ModelType, EntityType, UpdateType> : ConcurrentDictionary<Guid, ModelType>
         where ModelType : class, IServerModel<EntityType, UpdateType>
-        where UpdateType : IUpdateModel
+        where UpdateType : IUpdateRequest
     {
         protected abstract Action<EntityType> AddToDb { get; }
 
@@ -26,7 +27,7 @@ namespace HSMServer.ConcurrentStorage
 
         public event Action<ModelType> Added;
         public event Action<ModelType> Updated;
-        public event Action<ModelType> Removed;
+        public event Action<ModelType, InitiatorInfo> Removed;
 
 
         protected abstract ModelType FromEntity(EntityType entity);
@@ -86,14 +87,14 @@ namespace HSMServer.ConcurrentStorage
             return Task.FromResult(result);
         }
 
-        public virtual Task<bool> TryRemove(Guid id)
+        public virtual Task<bool> TryRemove(RemoveRequest remove)
         {
-            var result = TryRemove(id, out var model);
+            var result = TryRemove(remove.Id, out var model);
 
             if (result)
             {
                 RemoveFromDb(model);
-                Removed?.Invoke(model);
+                Removed?.Invoke(model, remove.Initiator);
             }
 
             return Task.FromResult(result);

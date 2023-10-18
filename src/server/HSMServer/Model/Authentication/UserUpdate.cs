@@ -3,7 +3,7 @@ using System;
 
 namespace HSMServer.Model.Authentication
 {
-    public record UserUpdate : IUpdateModel
+    public record UserUpdate : IUpdateRequest
     {
         public required Guid Id { get; init; }
 

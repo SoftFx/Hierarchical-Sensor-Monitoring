@@ -37,7 +37,7 @@ namespace HSMServer.Folders
         protected override Func<List<FolderEntity>> GetFromDb => _databaseCore.GetAllFolders;
 
 
-        public event Func<Guid, List<Guid>, Task> RemoveFolderFromChats;
+        public event Func<Guid, List<Guid>, InitiatorInfo, Task> RemoveFolderFromChats;
 
         public event Action<Guid, List<Guid>> AddFolderToChats;
 
@@ -107,7 +107,7 @@ namespace HSMServer.Folders
             if (result)
             {
                 AddFolderToChats?.Invoke(folder.Id, addedTelegramChats);
-                await (RemoveFolderFromChats?.Invoke(folder.Id, removedTelegramChats) ?? Task.CompletedTask);
+                await (RemoveFolderFromChats?.Invoke(folder.Id, removedTelegramChats, update.Initiator) ?? Task.CompletedTask);
 
                 if (update.TTL != null || update.KeepHistory != null || update.SelfDestroy != null)
                     foreach (var productId in folder.Products.Keys)
@@ -117,25 +117,23 @@ namespace HSMServer.Folders
             return result;
         }
 
-        public override Task<bool> TryRemove(Guid folderId) => TryRemove(folderId, InitiatorInfo.System); //TODO initiator should be added in ConcurrentStorage
-
-        public async Task<bool> TryRemove(Guid folderId, InitiatorInfo initiator)
+        public override async Task<bool> TryRemove(RemoveRequest remove)
         {
-            var result = TryGetValue(folderId, out var folder);
+            var result = TryGetValue(remove.Id, out var folder);
 
             if (result)
             {
                 foreach (var productId in folder.Products.Keys)
-                    await RemoveProductFromFolder(productId, folderId, initiator);
+                    await RemoveProductFromFolder(productId, remove.Id, remove.Initiator);
 
                 foreach (var user in folder.UserRoles.Keys)
                 {
-                    user.FoldersRoles.Remove(folderId);
+                    user.FoldersRoles.Remove(remove.Id);
 
                     await _userManager.UpdateUser(user);
                 }
 
-                result &= await base.TryRemove(folderId);
+                result &= await base.TryRemove(remove);
             }
 
             return result;
@@ -183,7 +181,7 @@ namespace HSMServer.Folders
             return folder?.Name;
         }
 
-        public void RemoveChatHandler(TelegramChat chat)
+        public void RemoveChatHandler(TelegramChat chat, InitiatorInfo initiator)
         {
             foreach (var (folderId, folder) in this)
                 if (folder.TelegramChats.Contains(chat.Id))
@@ -195,7 +193,7 @@ namespace HSMServer.Folders
                     {
                         Id = folderId,
                         TelegramChats = chats,
-                        Initiator = InitiatorInfo.AsSystemForce()
+                        Initiator = initiator,
                     };
 
                     _ = TryUpdate(update);
@@ -293,7 +291,7 @@ namespace HSMServer.Folders
 
         private void AddUserHandler(User user) => user.Tree.GetFolders += GetFolders;
 
-        private void RemoveUserHandler(User user)
+        private void RemoveUserHandler(User user, InitiatorInfo _)
         {
             foreach (var folderId in user.FoldersRoles.Keys)
                 if (TryGetValue(folderId, out var folder))

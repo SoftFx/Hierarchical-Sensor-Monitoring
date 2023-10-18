@@ -6,7 +6,7 @@ using System.Drawing;
 
 namespace HSMServer.Model.Folders
 {
-    public record FolderUpdate : IUpdateModel
+    public record FolderUpdate : IUpdateRequest
     {
         public required Guid Id { get; init; }
 
