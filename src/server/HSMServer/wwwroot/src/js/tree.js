@@ -5,6 +5,7 @@ window.currentSelectedNodeId = "";
 
 window.initializeTree = function () {
     var sortingType = $("input[name='TreeSortType']:checked");
+    var searchRefresh = false;
     
     if (window.localStorage.jstree) {
         let initOpened = JSON.parse(window.localStorage.jstree).state.core.open.length;
@@ -50,6 +51,12 @@ window.initializeTree = function () {
     }).on('refresh.jstree', function (e, data){
         refreshTreeTimeoutId = setTimeout(updateTreeTimer, interval);
         updateSelectedNodeDataTimeoutId = setTimeout(updateSelectedNodeData, interval);
+
+        if (searchRefresh) {
+            $('#jstreeSpinner').addClass('d-none');
+            $('#jstree').show();
+            searchRefresh = false;
+        }
     }).on('open_node.jstree', function (e, data){
         collapseButton.reset();
     });
@@ -58,6 +65,10 @@ window.initializeTree = function () {
         $('#search_field').val($('#search_input').val()).change(function (){
             $('#jstree').jstree(true).refresh(true);
         })
+
+        searchRefresh = true;
+        $('#jstreeSpinner').removeClass('d-none')
+        $('#jstree').hide();
     });
 
     initializeActivateNodeTree();

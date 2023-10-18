@@ -130,8 +130,10 @@
                 <span class="enabled-filters-message text-break">@user.TreeFilter.EnabledFiltersMessage</span>
             }
         </div>
+        <div class="d-flex d-none justify-content-center mt-2" id="jstreeSpinner">
+            <div class="spinner-border normal_spinner text-secondary" role="status"></div>
+        </div>
         <div class="d-flex justify-content-center tree-wrapper reserved-scroll-y overflow-y-auto mt-2">
-
             <div class="d-flex me-auto">
                 <div class="ms-2 mb-1"> @await Html.PartialAsync("_TreeFilter.cshtml", new UserFilterViewModel(user.TreeFilter)) </div>
                 <div class="row justify-content-start mw-100 me-1">
