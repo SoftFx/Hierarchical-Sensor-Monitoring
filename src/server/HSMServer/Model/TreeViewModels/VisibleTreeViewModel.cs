@@ -89,7 +89,7 @@ public sealed class VisibleTreeViewModel
         foreach (var product in products)
         {
             var toRender = false;
-            var node = FilterNodes(product, searchParameter, ref toRender);
+            var node = FilterNodes(product, searchParameter, out toRender);
 
             if (IsVisibleNode(node) && toRender)
             {
@@ -129,16 +129,16 @@ public sealed class VisibleTreeViewModel
         return node;
     }
 
-    private NodeShallowModel FilterNodes(ProductNodeViewModel product, string searchParameter, ref bool toRender)
+    private NodeShallowModel FilterNodes(ProductNodeViewModel product, string searchParameter, out bool toRender)
     {
         var node = new NodeShallowModel(product, _user, IsVisibleNode, IsVisibleSensor);
 
+        toRender = false;
         _allTree.TryAdd(product.Id, node);
 
         foreach (var nodeModel in product.Nodes.Values.GetOrdered(_user))
         {
-            var currentNodeToRender = false;
-            var subNode = FilterNodes(nodeModel, searchParameter, ref currentNodeToRender);
+            var subNode = FilterNodes(nodeModel, searchParameter, out var currentNodeToRender);
 
             node.AddChild(subNode);
 
