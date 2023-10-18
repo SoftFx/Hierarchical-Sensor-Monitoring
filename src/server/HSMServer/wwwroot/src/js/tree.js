@@ -53,8 +53,8 @@ window.initializeTree = function () {
         updateSelectedNodeDataTimeoutId = setTimeout(updateSelectedNodeData, interval);
 
         if (searchRefresh) {
+            $('#jstree').jstree('open_all').show();
             $('#jstreeSpinner').addClass('d-none');
-            $('#jstree').show();
             searchRefresh = false;
         }
     }).on('open_node.jstree', function (e, data){
