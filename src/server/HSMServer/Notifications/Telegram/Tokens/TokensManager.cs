@@ -3,7 +3,7 @@ using System.Collections.Concurrent;
 
 namespace HSMServer.Notifications.Telegram.Tokens
 {
-    public sealed class TokenManager
+    public sealed class TokensManager
     {
         private readonly ConcurrentDictionary<Guid, InvitationToken> _tokens = new();
 

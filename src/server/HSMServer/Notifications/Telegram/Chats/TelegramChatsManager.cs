@@ -32,7 +32,7 @@ namespace HSMServer.Notifications
         private readonly IUserManager _userManager;
         private readonly IFolderManager _folderManager;
 
-        public TokenManager TokenManager { get; } = new();
+        public TokensManager TokenManager { get; } = new();
 
         internal string BotName => _config.BotName;
 
