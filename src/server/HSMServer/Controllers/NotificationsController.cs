@@ -1,4 +1,5 @@
 ﻿using HSMServer.Authentication;
+using HSMServer.Model.Notifications;
 using HSMServer.Notifications;
 using Microsoft.AspNetCore.Mvc;
 using System;
@@ -21,6 +22,20 @@ namespace HSMServer.Controllers
             _telegramBot = notifications.TelegramBot;
         }
 
+
+        [HttpGet]
+        public IActionResult EditChat(Guid id) => _chatsManager.TryGetValue(id, out var chat)
+            ? View(new TelegramChatViewModel(chat))
+            : _emptyResult;
+
+        public async Task<IActionResult> EditChat(TelegramChatViewModel chat)
+        {
+            await _chatsManager.TryUpdate(chat.ToUpdate());
+
+            return View(new TelegramChatViewModel(_chatsManager[chat.Id]));
+        }
+
+        public async Task RemoveChat(Guid id) => await _chatsManager.TryRemove(new(id));
 
         public RedirectResult OpenInvitationLink(Guid folderId) =>
             Redirect(_chatsManager.GetInvitationLink(folderId, CurrentUser));

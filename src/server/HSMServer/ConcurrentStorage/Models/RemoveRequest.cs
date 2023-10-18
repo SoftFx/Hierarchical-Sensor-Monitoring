@@ -15,9 +15,7 @@ namespace HSMServer.ConcurrentStorage
         public RemoveRequest(Guid id, InitiatorInfo initiator = null)
         {
             Id = id;
-
-            if (initiator is not null)
-                Initiator = initiator;
+            Initiator = initiator ?? Initiator;
         }
     }
 }

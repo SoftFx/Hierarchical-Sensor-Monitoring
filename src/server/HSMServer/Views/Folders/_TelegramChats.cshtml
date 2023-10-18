@@ -54,7 +54,7 @@
                 {
                     <tr id="row_chat_@chat.Id">
                         <td class="text-break">
-                            <a> @*asp-controller="Product" asp-action="EditProduct" asp-route-Product="@product.EncodedId">*@
+                            <a asp-controller="@ViewConstants.NotificationsController" asp-action="@nameof(NotificationsController.EditChat)" asp-route-id="@chat.Id">
                                 @chat.Name
                             </a>
                         </td>
@@ -73,7 +73,8 @@
                                 </button>
                                 <ul class='dropdown-menu overflow-auto' aria-labelledby="dropdownMenuButton">
                                     <li>
-                                        <a class='dropdown-item text-decoration-none fw-normal' style="cursor: pointer;">
+                                        <a class='dropdown-item text-decoration-none fw-normal' style="cursor: pointer;"
+                                           asp-controller="@ViewConstants.NotificationsController" asp-action="@nameof(NotificationsController.EditChat)" asp-route-id="@chat.Id">
                                             View/Edit
                                         </a>
                                     </li>

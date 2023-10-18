@@ -184,9 +184,7 @@ namespace HSMServer.Notifications
                                         ChatId = oldChat.ChatId,
                                         Type = ConnectedChatType.TelegramGroup,
                                         Name = oldChat.Name,
-                                        SendMessages = true,
                                         AuthorizationTime = oldChat.AuthorizationTime,
-                                        MessagesAggregationTimeSec = 60,
                                     };
 
                                     chatsToResave.Add(id, chat);
@@ -214,9 +212,7 @@ namespace HSMServer.Notifications
                                     ChatId = oldChat.ChatId,
                                     Type = ConnectedChatType.TelegramPrivate,
                                     Name = oldChat.Name,
-                                    SendMessages = true,
                                     AuthorizationTime = oldChat.AuthorizationTime,
-                                    MessagesAggregationTimeSec = 60,
                                 };
 
                                 chatsToResave.Add(id, chat);

@@ -38,12 +38,12 @@ namespace HSMServer.Notifications
         public bool IsUserChat { get; init; }
 
 
-        public bool SendMessages { get; init; }
+        public bool SendMessages { get; private set; }
 
-        public int MessagesAggregationTimeSec { get; init; }
+        public string Description { get; private set; }
 
+        public int MessagesAggregationTimeSec { get; private set; }
 
-        public string Description { get; init; }
 
         public string Author { get; set; }
 
@@ -83,7 +83,9 @@ namespace HSMServer.Notifications
 
         public void Update(TelegramChatUpdate update)
         {
-            throw new NotImplementedException();
+            Description = update.Description ?? Description; 
+            SendMessages = update.SendMessages ?? SendMessages;
+            MessagesAggregationTimeSec = update.MessagesAggregationTimeSec ?? MessagesAggregationTimeSec;
         }
 
         public TelegramChatEntity ToEntity() =>
