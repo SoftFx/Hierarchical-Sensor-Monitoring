@@ -132,9 +132,7 @@ namespace HSMServer.ApiObjectsConverters
                     var jsonPropertyName = column.GetPropertyName(value);
                     var propValue = properties.GetProperty(jsonPropertyName).ToString();
 
-                    TransformValue(column, value, ref propValue);
-
-                    rowValues.Add(propValue);
+                    rowValues.Add(GetTransformedValue(column, value, propValue));
                 }
 
                 content.AppendLine(rowValues.BuildRow());
@@ -143,16 +141,19 @@ namespace HSMServer.ApiObjectsConverters
 
             return content.ToString();
 
-            static void TransformValue(Header column, BaseValue value, ref string propValue)
+            static string GetTransformedValue(Header column, BaseValue value, string propValue)
             {
                 if (column.PropertyName != nameof(BaseValue.Comment) && DateTime.TryParse(propValue, out var dateTime)) 
-                    propValue = dateTime.ToDefaultFormat();
+                    return dateTime.ToDefaultFormat();
 
                 if (value.IsTimeout && !_validProperties.TryGetValue(column.PropertyName, out _))
-                    propValue = string.Empty;
+                    return string.Empty;
 
+                //TODO: should be removed after removing SensorStatusJsonConverter
                 if (column.PropertyName == nameof(BaseValue.Status) && Enum.TryParse<SensorStatus>(propValue, out var status))
-                    propValue = status.ToString();
+                    return status.ToString();
+
+                return propValue;
             }
         }
 
