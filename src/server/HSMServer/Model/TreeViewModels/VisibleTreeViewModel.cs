@@ -7,13 +7,14 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Linq;
+using HSMCommon.Collections;
 
 namespace HSMServer.Model.TreeViewModels;
 
 public sealed class VisibleTreeViewModel
 {
     private readonly ConcurrentDictionary<Guid, NodeShallowModel> _allTree = new();
-    private readonly HashSet<Guid> _openedNodes = new();
+    private readonly CHash<Guid> _openedNodes = new();
 
     private readonly User _user;
 
@@ -27,30 +28,12 @@ public sealed class VisibleTreeViewModel
     }
 
 
-    public void AddOpenedNode(Guid id)
-    {
-        lock (_user)
-        {
-            _openedNodes.Add(id);
-        }
-    }
+    public void AddOpenedNode(Guid id) => _openedNodes.Add(id);
 
-    public void RemoveOpenedNode(params Guid[] ids)
-    {
-        lock (_user)
-        {
-            foreach (var id in ids)
-                _openedNodes.Remove(id);
-        }
-    }
+    public void RemoveOpenedNode(params Guid[] ids) => _openedNodes.Remove(ids);
 
-    public void ClearOpenedNodes()
-    {
-        lock (_user)
-        {
-            _openedNodes.Clear();
-        }
-    }
+    public void ClearOpenedNodes() => _openedNodes.Clear();
+
 
     public List<BaseShallowModel> GetUserTree()
     {
