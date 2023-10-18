@@ -68,7 +68,7 @@ namespace HSMServer.Notifications
                 };
 
                 if (!string.IsNullOrEmpty(response))
-                    await botClient.SendTextMessageAsync(message.Chat, response, ParseMode.MarkdownV2, cancellationToken: cToken);
+                    await botClient.SendTextMessageAsync(message.Chat, response, null, ParseMode.MarkdownV2, cancellationToken: cToken);
                 else
                     _logger.Warn($"There is some invalid update message: {msgText}");
             }
