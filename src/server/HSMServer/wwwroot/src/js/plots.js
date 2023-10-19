@@ -114,9 +114,19 @@ export class Plot {
 
     addCustomData(value, compareFunc = null, customField = 'value') {
         if (this.checkTtl(value))
+        {
             this.customdata.push(value.comment);
-        else
-            this.customdata.push(compareFunc === null ? value[customField] : compareFunc(value));
+            return;
+        }
+
+        let customValue = compareFunc === null ? value[customField] : compareFunc(value);
+        if (this.checkError(value))
+        {
+            this.customdata.push(customValue + '<br>' + value.comment);
+            return;
+        }
+        
+        this.customdata.push(customValue);
     }
 
     markerColorCompareFunc(value) {
@@ -267,7 +277,7 @@ export class IntegerPlot extends ErrorColorPlot {
 export class DoublePlot extends ErrorColorPlot {
     constructor(data, name, field = 'value', unitType = undefined) {
         super(data, unitType);
-        console.log(this)
+
         this.type = 'scatter';
         this.name = name;
         this.marker = {
