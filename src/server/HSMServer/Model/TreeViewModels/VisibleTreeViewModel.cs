@@ -90,7 +90,7 @@ public sealed class VisibleTreeViewModel
         {
             var node = FilterNodes(product, searchParameter, out var toRender);
 
-            if (IsVisibleNode(node) && toRender)
+            if (IsVisibleNode(node) && toRender || node.Data.Name.Contains(searchParameter))
             {
                 AddOpenedNode(node.Id);
                 var folderId = node.Data.FolderId;
