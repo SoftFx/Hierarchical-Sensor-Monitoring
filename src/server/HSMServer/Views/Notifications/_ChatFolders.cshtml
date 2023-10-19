@@ -1,4 +1,7 @@
 ﻿@using HSMServer.Model.Notifications
+@using HSMServer.Model.Authentication
+@using HSMServer.Controllers
+@using HSMServer.Constants
 
 @model ChatFoldersViewModel
 
@@ -19,13 +22,13 @@ else
 {
     <div class="d-flex justify-content-end">
         <button type="button" class="col-auto btn btn-link p-0" onclick="addFolders()">
-            <i class="fa-solid fa-plus"></i> Add product(s)
+            <i class="fa-solid fa-plus"></i> Add folder(s)
         </button>
     </div>
 }
 
 <div id="foldersSelect" class="selectpicker @(noFolders ? "" : "d-none")">
-    <select class="selectpicker" asp-for="SelectedFolders" asp-items="@Model.AvailableFolders" data-live-search="true" data-width="100%" title="Choose products to add" multiple></select>
+    <select class="selectpicker" asp-for="SelectedFolders" asp-items="@Model.AvailableFolders" data-live-search="true" data-width="100%" title="Choose folders to add" multiple></select>
 </div>
 
 @if (!noFolders)
@@ -42,14 +45,24 @@ else
             @foreach (var folder in Model.DisplayFolders)
             {
                 <tr id="row_folder_@folder.Id">
-                    <td class="text-break">@Html.Raw(folder.Name)</td>
-                    <td> --- </td>
+                    <td class="text-break">
+                        <a asp-controller="@ViewConstants.FoldersController" asp-action="@nameof(FoldersController.EditFolder)" asp-route-folderId="@folder.Id">
+                            @Html.Raw(folder.Name)
+                        </a>
+                    </td>
+                    <td class="text-break">@string.Join(", ", folder.UserRoles.Where(ur => ur.Value is ProductRoleEnum.ProductManager).Select(ur => ur.Key.Name))</td>
                     <td nowrap class="text-center w-10">
                         <div class='btn-group'>
                             <button id="actionButton" class="btn" data-bs-toggle="dropdown" data-bs-auto-close="true" aria-haspopup="true" aria-expanded="false">
                                 <i class="fa-solid fa-ellipsis-vertical" style="cursor: pointer"></i>
                             </button>
                             <ul class='dropdown-menu overflow-auto' aria-labelledby="dropdownMenuButton">
+                                <li>
+                                    <a class='dropdown-item text-decoration-none fw-normal' style="cursor: pointer;"
+                                       asp-controller="@ViewConstants.FoldersController" asp-action="@nameof(FoldersController.EditFolder)" asp-route-folderId="@folder.Id">
+                                        Edit
+                                    </a>
+                                </li>
                                 <li>
                                     <a id='exclude_@folder.Id' class='dropdown-item text-decoration-none fw-normal' style="cursor: pointer;">
                                         Exclude from chat

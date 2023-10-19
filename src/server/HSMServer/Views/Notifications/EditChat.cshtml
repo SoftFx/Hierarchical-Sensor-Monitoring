@@ -59,7 +59,7 @@
             <partial name="_ChatFolders" for="Folders" />
 
             <div class="d-flex justify-content-end my-2">
-                <button type="submit" class="btn btn-primary my-1">Save</button>
+                <button type="submit" class="btn btn-primary independentSizeButton my-1">Save</button>
             </div>
         </form>
     </div>
@@ -81,7 +81,7 @@
                     cache: false,
                     async: true,
                     success: function () {
-                        history.back();
+                        window.location.href = `@Url.Action(nameof(ProductController.Index), ViewConstants.ProductController)`;
                     }
                 });
             }

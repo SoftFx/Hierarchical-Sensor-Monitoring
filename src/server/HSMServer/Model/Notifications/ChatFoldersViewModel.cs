@@ -13,7 +13,7 @@ namespace HSMServer.Model.Notifications
 
         public List<SelectListItem> AvailableFolders { get; }
 
-        public List<string> SelectedFolders { get; set; } = new();
+        public List<Guid> SelectedFolders { get; set; } = new();
 
         public List<Guid> Folders { get; set; } = new();
 
