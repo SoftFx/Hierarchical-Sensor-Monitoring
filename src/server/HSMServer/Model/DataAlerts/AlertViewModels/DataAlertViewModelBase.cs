@@ -113,10 +113,12 @@ namespace HSMServer.Model.DataAlerts
             {
                 if (action.Action == ActionType.SendNotification)
                 {
-                    bool allChats = action.Chats?.ContainsKey(ActionViewModel.AllChatsId) ?? false;
-                    Dictionary<Guid, string> chats = allChats ? availavleChats : action.Chats ?? new(0);
+                    bool allChats = action.Chats?.Contains(ActionViewModel.AllChatsId) ?? false;
+                    Dictionary<Guid, string> chats = allChats
+                        ? new(0)
+                        : action.Chats?.ToDictionary(k => k, v => availavleChats[v]) ?? new(0);
 
-                    destination = new PolicyDestinationUpdate(allChats, chats);
+                    destination = new PolicyDestinationUpdate(chats, allChats);
                     comment = action.Comment;
                 }
                 else if (action.Action == ActionType.ShowIcon)
@@ -144,30 +146,21 @@ namespace HSMServer.Model.DataAlerts
 
             IsDisabled = policy.IsDisabled;
 
-            var availableChats = node.GetAllChats();
-
-            Dictionary<Guid, string> policyChats = new();
-            if ((policy.Destination?.Chats?.Count ?? 0) > 0)
-            {
-                var availableChatsDict = availableChats.ToDictionary(k => k.SystemId, v => v.Name);
-
-                foreach (var (chatId, name) in policy.Destination.Chats)
-                    policyChats.Add(chatId, string.IsNullOrEmpty(name) && availableChatsDict.TryGetValue(chatId, out var chatName) ? chatName : name);
-            }
-
-            Actions.Add(new ActionViewModel(true, availableChats)
+            Actions.Add(new ActionViewModel(true, node)
             {
                 Action = ActionType.SendNotification,
                 Comment = policy.Template,
-                Chats = policy.Destination.AllChats ? new Dictionary<Guid, string>(1) { { ActionViewModel.AllChatsId, null } } : policyChats,
-                DisplayComment = node is SensorNodeViewModel ? policy.RebuildState() : policy.Template
+                DisplayComment = node is SensorNodeViewModel ? policy.RebuildState() : policy.Template,
+                Chats = policy.Destination.AllChats
+                    ? new HashSet<Guid>() { ActionViewModel.AllChatsId }
+                    : new HashSet<Guid>(policy.Destination.Chats.Keys),
             });
 
             if (!string.IsNullOrEmpty(policy.Icon))
-                Actions.Add(new ActionViewModel(false, availableChats) { Action = ActionType.ShowIcon, Icon = policy.Icon });
+                Actions.Add(new ActionViewModel(false, node) { Action = ActionType.ShowIcon, Icon = policy.Icon });
 
             if (policy.Status == Core.Model.SensorStatus.Error)
-                Actions.Add(new ActionViewModel(false, availableChats) { Action = ActionType.SetStatus });
+                Actions.Add(new ActionViewModel(false, node) { Action = ActionType.SetStatus });
         }
 
         public DataAlertViewModel(NodeViewModel node)
@@ -177,10 +170,8 @@ namespace HSMServer.Model.DataAlerts
 
             Conditions.Add(CreateCondition(true));
 
-            var availableChats = node.GetAllChats();
-
-            Actions.Add(new ActionViewModel(true, availableChats) { Comment = DefaultCommentTemplate });
-            Actions.Add(new ActionViewModel(false, availableChats) { Action = ActionType.ShowIcon, Icon = DefaultIcon });
+            Actions.Add(new ActionViewModel(true, node) { Comment = DefaultCommentTemplate });
+            Actions.Add(new ActionViewModel(false, node) { Action = ActionType.ShowIcon, Icon = DefaultIcon });
         }
 
 

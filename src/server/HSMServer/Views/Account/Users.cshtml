@@ -187,6 +187,7 @@
 
     //delete action
     $('[id^=delete_]').on('click', function () {
+        userId = this.id.substring('delete_'.length, this.id.length);
         username = this.name;
 
         $('#modalDeleteBody').empty();
@@ -199,12 +200,9 @@
         $('#confirmDeleteButton').on('click', function () {
             modal.hide();
             
-            let data = createData(username)
-            
-            $.ajax({//AccountController -> RemoveUser
+            $.ajax({
                 type: 'POST',
-                url: deleteAction,
-                data: JSON.stringify(data),
+                url: `${deleteAction}?id=${userId}`,
                 contentType: 'application/json',
                 cache: false,
                 async: true,

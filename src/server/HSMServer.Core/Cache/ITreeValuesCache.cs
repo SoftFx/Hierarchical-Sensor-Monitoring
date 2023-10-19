@@ -24,7 +24,7 @@ namespace HSMServer.Core.Cache
         event Action<BaseSensorModel, ActionType> ChangeSensorEvent;
         event Action<AccessKeyModel, ActionType> ChangeAccessKeyEvent;
 
-        event Action<List<AlertResult>> ThrowAlertResultsEvent;
+        event Action<List<AlertResult>, Guid> ThrowAlertResultsEvent;
 
         List<BaseSensorModel> GetSensors();
         List<AccessKeyModel> GetAccessKeys();
@@ -36,10 +36,11 @@ namespace HSMServer.Core.Cache
         ProductModel GetProductByName(string name);
         string GetProductNameById(Guid id);
         List<ProductModel> GetProducts();
+        List<ProductModel> GetAllNodes();
 
         bool TryCheckKeyWritePermissions(BaseRequestModel request, out string message);
         bool TryCheckKeyReadPermissions(BaseRequestModel request, out string message);
-        bool TryCheckSensorUpdateKeyPermission(BaseRequestModel request, out ProductModel product, out Guid sensorId, out string message);
+        bool TryCheckSensorUpdateKeyPermission(BaseRequestModel request, out Guid sensorId, out string message);
 
         AccessKeyModel AddAccessKey(AccessKeyModel key);
         AccessKeyModel RemoveAccessKey(Guid id);
@@ -65,8 +66,6 @@ namespace HSMServer.Core.Cache
 
         void SaveLastStateToDb();
 
-        void AddNewChat(Guid chatId, string name, string productName);
-
-        void RemoveChat(Guid chatId, string productName);
+        void RemoveChatsFromPolicies(Guid folderId, List<Guid> chats, InitiatorInfo initiator);
     }
 }

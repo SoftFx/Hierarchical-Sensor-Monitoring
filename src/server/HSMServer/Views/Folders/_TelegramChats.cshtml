@@ -1,0 +1,159 @@
+﻿@using HSMServer.Extensions
+@using HSMServer.Notifications
+@using HSMServer.Controllers
+@using HSMServer.Constants
+@using HSMServer.Model.Folders.ViewModels
+
+@model FolderTelegramViewModel
+
+@addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
+
+
+@if (Model is not null)
+{
+    @await Html.PartialAsync("~/Views/Notifications/_NewTelegramGroupHelpModal.cshtml", Model.FolderId)
+
+    <div class="my-2" align="right">
+        <a href="javascript:showAddTelegramGroupHelpModal();" class="btn btn-link p-0">
+            <i class="fa-solid fa-plus"></i> Add new chat
+        </a>
+    </div>
+
+    <div id="chatsSelect" class="selectpicker">
+        <select class="selectpicker" asp-for="NewChats" multiple
+                data-width="100%" data-live-search="true" data-placeholder="Choose chats to add">
+            <option disabled>Groups</option>
+            @foreach (var chat in Model.ChatsToAdd.GetGroups())
+            {
+                <option value="@chat.Id">@chat.Name</option>
+            }
+
+            <option data-divider="true"></option>
+            <option disabled>Users</option>
+            @foreach (var chat in Model.ChatsToAdd.GetPrivates())
+            {
+                <option value="@chat.Id">@chat.Name</option>
+            }
+        </select>
+    </div>
+
+    @if (Model.ConnectedChats.Count > 0)
+    {
+        <table class="table table-striped">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th class="text-center">Type</th>
+                    <th class="text-center">Send messages</th>
+                    <th class="text-center">Messages aggregation time (sec)</th>
+                    <th class="text-center">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var chat in Model.ConnectedChats)
+                {
+                    <tr id="row_chat_@chat.Id">
+                        <td class="text-break">
+                            @if (chat.Type == ConnectedChatType.TelegramPrivate)
+                            {
+                                <span>@chat.Name</span>
+                            }
+                            else
+                            {
+                                <a target="_blank" asp-controller="@ViewConstants.NotificationsController" asp-action="@nameof(NotificationsController.OpenTelegramGroup)" asp-route-chatId="@chat.ChatId">
+                                    @chat.Name
+                                </a>
+                            }
+                        </td>
+                        <td class="text-center">@(chat.Type == ConnectedChatType.TelegramPrivate ? "Direct" : "Group")</td>
+                        <td class="text-break text-center">
+                            @if (chat.SendMessages)
+                            {
+                                <i class="fa-solid fa-check fa-xl"></i>
+                            }
+                        </td>
+                        <td class="text-break text-center">@chat.MessagesAggregationTimeSec</td>
+                        <td nowrap class="text-center w-10">
+                            <div class='btn-group'>
+                                <button id="actionButton" class="btn" data-bs-toggle="dropdown" data-bs-auto-close="true" aria-haspopup="true" aria-expanded="false">
+                                    <i class="fa-solid fa-ellipsis-vertical" style="cursor: pointer"></i>
+                                </button>
+                                <ul class='dropdown-menu overflow-auto' aria-labelledby="dropdownMenuButton">
+                                    <li>
+                                        <a id='remove_@chat.Id' class='dropdown-item text-decoration-none fw-normal' style="cursor: pointer;">
+                                            Remove
+                                        </a>
+                                    </li>
+                                    <li>
+                                        <a id="sendMessage_@chat.Id" name="@chat.ChatId" class='dropdown-item text-decoration-none fw-normal' style="cursor: pointer;">
+                                            Send test message
+                                        </a'>
+                                    </li>
+                                </ul>
+                            </div>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+
+    <div class="d-flex justify-content-end my-2">
+        <button type="submit" class="btn btn-secondary independentSizeButton">Save</button>
+    </div>
+
+    @*There is info about chats for FormData*@
+    <div style="display:none">
+        @for (int i = 0; i < Model.ConnectedChatIds.Count; i++)
+        {
+            <input id="folder_chat_@Model.ConnectedChatIds[i]" asp-for="ConnectedChatIds[i]" value="@Model.ConnectedChatIds[i]" />
+        }
+    </div>
+
+    <input asp-for="FolderId" value="@Model.FolderId" style="display: none" />
+}
+
+
+<script>
+    $(document).ready(function () {
+        $("select[name='NewChats']").selectpicker();
+    });
+
+    $(document).on("submit", "#folderTelegramChats_form", function (event) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+
+        $.ajax({
+            url: $("#folderTelegramChats_form").attr("action"),
+            type: 'POST',
+            data: new FormData(this),
+            datatype: 'html',
+            processData: false,
+            contentType: false,
+            cache: false,
+            async: true,
+            success: function (viewData) {
+                $("#folderTelegramChats_form").html(viewData);
+                showToast("Folder telegram chats have been succesfully saved!");
+            }
+        });
+    });
+
+    $('[id^=remove_]').on('click', function () {
+        var chatId = this.id.substring("remove_".length, this.id.length);
+
+        $(`#row_chat_${chatId}`).remove();
+        $(`#folder_chat_${chatId}`).val('@Guid.Empty');
+    });
+
+    $('[id^=sendMessage_]').on('click', function () {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+
+        let chatId = this.name;
+
+        $.ajax({
+            url: `@Url.Action(nameof(NotificationsController.SendTestTelegramMessage), ViewConstants.NotificationsController)?chatId=${chatId}`
+        });
+    });
+</script>

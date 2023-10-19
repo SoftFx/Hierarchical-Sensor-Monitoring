@@ -11,7 +11,6 @@ namespace HSMServer.UserFilters
     {
         ByStatus = 1,
         ByVisibility = 2,
-        Notifications = 4,
         ByState = 8,
         Integrations = 16,
     }
@@ -28,17 +27,15 @@ namespace HSMServer.UserFilters
         private const int DefaultInterval = 5;
 
         private UserFilterGroupBase[] Groups =>
-            new UserFilterGroupBase[] { ByStatus, ByVisibility, ByNotifications, ByState, ByIntegrations};
+            new UserFilterGroupBase[] { ByStatus, ByVisibility, ByState, ByIntegrations };
 
 
         public GroupByStatus ByStatus { get; init; } = new();
 
         public GroupByVisibility ByVisibility { get; init; } = new();
 
-        public GroupByNotifications ByNotifications { get; init; } = new();
-
         public GroupByState ByState { get; init; } = new();
-        
+
         public GroupByIntegrations ByIntegrations { get; init; } = new();
 
 
@@ -71,7 +68,7 @@ namespace HSMServer.UserFilters
 
             return this;
         }
-        
+
         public FilterGroupType ToMask()
         {
             FilterGroupType selectedFiltersMask = 0;
@@ -101,15 +98,15 @@ namespace HSMServer.UserFilters
             var specificFilters = new List<string>(1 << 2);
             foreach (var group in Groups)
             {
-                if (!group.HasAnyEnabledFilters) 
+                if (!group.HasAnyEnabledFilters)
                     continue;
-                
+
                 specificFilters.AddRange(group.Properties.Where(property => property.Value).Select(property => property.Name));
-                
-                filters.AppendLine($"{group.Type}: {string.Join(", ",specificFilters)}");
+
+                filters.AppendLine($"{group.Type}: {string.Join(", ", specificFilters)}");
                 specificFilters.Clear();
             }
-                
+
             return $"{filters}";
         }
     }

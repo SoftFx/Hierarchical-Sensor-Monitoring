@@ -2,12 +2,11 @@
 using HSMServer.Core.Cache;
 using HSMServer.Core.Cache.UpdateEntities;
 using HSMServer.Core.Model;
+using HSMServer.Core.TableOfChanges;
 using HSMServer.Folders;
 using HSMServer.Model.AccessKeysViewModels;
 using HSMServer.Model.Authentication;
 using HSMServer.Model.Folders;
-using HSMServer.Notification.Settings;
-using HSMServer.Notifications.Telegram;
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
@@ -32,7 +31,6 @@ namespace HSMServer.Model.TreeViewModel
         public TreeViewModel(ITreeValuesCache cache, IFolderManager folderManager, IUserManager userManager)
         {
             _folderManager = folderManager;
-            _folderManager.ResetProductTelegramInheritance += ResetProductTelegramInheritanceHandler;
 
             _userManager = userManager;
             _cache = cache;
@@ -106,7 +104,7 @@ namespace HSMServer.Model.TreeViewModel
 
             if (sensor is null)
                 return sensorId;
-            
+
             var name = isStatusService ? "Service status" : "Service alive";
 
             var splittedPath = sensor.FullPath.Split('/');
@@ -142,7 +140,6 @@ namespace HSMServer.Model.TreeViewModel
             var update = new ProductUpdate
             {
                 Id = product.Id,
-                NotificationSettings = product.Notifications.ToEntity(),
             };
 
             _cache.UpdateProduct(update);
@@ -156,7 +153,6 @@ namespace HSMServer.Model.TreeViewModel
 
             var node = new ProductNodeViewModel(product, parent, folder);
 
-            node.GetAllUserChats += GetAvailableUserChats; // GetAllUserChats subscribing should be before update node settings
             node.Update(product);
 
             Nodes.TryAdd(node.Id, node);
@@ -212,13 +208,9 @@ namespace HSMServer.Model.TreeViewModel
                     break;
 
                 case ActionType.Delete:
-                    if (Nodes.TryRemove(model.Id, out var node))
-                    {
-                        node.GetAllUserChats -= GetAvailableUserChats;
-
+                    if (Nodes.TryRemove(model.Id, out _))
                         if (model.Parent != null && Nodes.TryGetValue(model.Parent.Id, out var parentProduct))
                             parentProduct.Nodes.TryRemove(model.Id, out var _);
-                    }
 
                     break;
             }
@@ -230,16 +222,7 @@ namespace HSMServer.Model.TreeViewModel
             {
                 case ActionType.Add:
                     if (Nodes.TryGetValue(model.Parent.Id, out var parent))
-                    {
                         AddNewSensorViewModel(model, parent);
-
-                        //var root = parent.RootProduct;
-                        //if (!root.Notifications.Telegram.Chats.IsEmpty && root.Notifications.AutoSubscription)
-                        //{
-                        //    root.Notifications.Enable(model.Id);
-                        //    UpdateProductNotificationSettings(root);
-                        //}
-                    }
                     break;
 
                 case ActionType.Update:
@@ -248,13 +231,8 @@ namespace HSMServer.Model.TreeViewModel
                     break;
 
                 case ActionType.Delete:
-                    if (Sensors.TryRemove(model.Id, out var removedSensor) && Nodes.TryGetValue(model.Parent.Id, out var parentProduct))
-                    {
+                    if (Sensors.TryRemove(model.Id, out _) && Nodes.TryGetValue(model.Parent.Id, out var parentProduct))
                         parentProduct.Sensors.TryRemove(model.Id, out var _);
-
-                        if (removedSensor.RootProduct.Notifications.RemoveSensor(model.Id))
-                            UpdateProductNotificationSettings(removedSensor.RootProduct);
-                    }
                     break;
             }
         }
@@ -282,17 +260,7 @@ namespace HSMServer.Model.TreeViewModel
 
         private void AddUserHandler(User user) => user.Tree.GetUserProducts += GetUserProducts;
 
-        private void RemoveUserHandler(User user) => user.Tree.GetUserProducts -= GetUserProducts;
-
-        private void ResetProductTelegramInheritanceHandler(Guid productId)
-        {
-            if (Nodes.TryGetValue(productId, out var product))
-            {
-                product.Notifications.Telegram.Update(new TelegramMessagesSettingsUpdate() { Inheritance = (byte)InheritedSettings.Custom });
-
-                UpdateProductNotificationSettings(product);
-            }
-        }
+        private void RemoveUserHandler(User user, InitiatorInfo _) => user.Tree.GetUserProducts -= GetUserProducts;
 
         private bool TryGetParentProduct(ProductModel product, out ProductNodeViewModel parent)
         {
@@ -303,17 +271,5 @@ namespace HSMServer.Model.TreeViewModel
 
         private bool TryGetParentFolder(ProductModel product, out FolderModel parent) =>
             _folderManager.TryGetValueById(product.FolderId, out parent);
-
-        private Dictionary<Telegram.Bot.Types.ChatId, TelegramChat> GetAvailableUserChats()
-        {
-            var chats = new Dictionary<Telegram.Bot.Types.ChatId, TelegramChat>();
-
-            foreach (var user in _userManager.GetUsers())
-                foreach (var (chatId, chat) in user.Notifications.Telegram.Chats)
-                    if (!chats.ContainsKey(chatId))
-                        chats.TryAdd(chatId, chat);
-
-            return chats;
-        }
     }
 }

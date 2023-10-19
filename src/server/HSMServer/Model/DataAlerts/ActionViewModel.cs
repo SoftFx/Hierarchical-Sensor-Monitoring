@@ -1,11 +1,10 @@
 ﻿using HSMCommon.Extensions;
 using HSMServer.Extensions;
 using HSMServer.Model.TreeViewModel;
-using HSMServer.Notifications.Telegram;
+using HSMServer.Notifications;
 using Microsoft.AspNetCore.Mvc.Rendering;
 using System;
 using System.Collections.Generic;
-using System.Linq;
 
 namespace HSMServer.Model.DataAlerts
 {
@@ -22,7 +21,7 @@ namespace HSMServer.Model.DataAlerts
         public ActionType Action { get; set; }
 
 
-        public Dictionary<Guid, string> Chats { get; set; } = new();
+        public HashSet<Guid> Chats { get; set; } = new();
 
         public string Comment { get; set; }
 
@@ -46,25 +45,23 @@ namespace HSMServer.Model.DataAlerts
         };
 
 
-        public List<TelegramChat> AvailableChats { get; }
-
         public List<SelectListItem> Actions { get; }
+
+        public NodeViewModel Node { get; }
 
         public bool IsMain { get; }
 
 
-        public ActionViewModel(bool isMain, List<TelegramChat> availableChats)
+        public ActionViewModel(bool isMain, NodeViewModel node)
         {
             IsMain = isMain;
             Actions = _actions.ToSelectedItems(k => k.Value, v => v.Key.ToString());
-            AvailableChats = availableChats;
+            Node = node;
 
             Action = ActionType.SendNotification;
         }
 
 
-        public List<TelegramChat> GetChats(bool isUser) => AvailableChats.Where(ch => ch.IsUserChat == isUser).ToList();
-
-        public bool ChatIsSelected(TelegramChat chat) => Chats?.ContainsKey(chat.SystemId) ?? false;
+        public bool ChatIsSelected(TelegramChat chat) => Chats?.Contains(chat.Id) ?? false;
     }
 }

@@ -3,6 +3,7 @@ using HSMCommon.Constants;
 using HSMServer.Authentication;
 using HSMServer.Folders;
 using HSMServer.Middleware;
+using HSMServer.Notifications;
 using HSMServer.ServerConfiguration;
 using HSMServer.ServiceExtensions;
 using Microsoft.AspNetCore.Authentication.Cookies;
@@ -85,6 +86,7 @@ try
 
     await app.Services.GetRequiredService<IUserManager>().Initialize();
     await app.Services.GetRequiredService<IFolderManager>().Initialize();
+    await app.Services.GetRequiredService<ITelegramChatsManager>().Initialize();
 
     app.ConfigureMiddleware(app.Environment.IsDevelopment());
 

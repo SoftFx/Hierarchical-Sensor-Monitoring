@@ -12,7 +12,7 @@ using HSMServer.Model;
 using HSMServer.Model.Authentication;
 using HSMServer.Model.Folders;
 using HSMServer.Model.TreeViewModel;
-using HSMServer.Notification.Settings;
+using HSMServer.Notifications;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -20,15 +20,12 @@ using System.Threading.Tasks;
 
 namespace HSMServer.Folders
 {
-    public sealed class FolderManager : ConcurrentStorage<FolderModel, FolderEntity, FolderUpdate>, IFolderManager
+    public sealed class FolderManager : ConcurrentStorageNames<FolderModel, FolderEntity, FolderUpdate>, IFolderManager
     {
         private readonly ITreeValuesCache _cache;
         private readonly IUserManager _userManager;
-        private readonly IJournalService _journalService;
         private readonly IDatabaseCore _databaseCore;
-
-
-        public event Action<Guid> ResetProductTelegramInheritance;
+        private readonly IJournalService _journalService;
 
 
         protected override Action<FolderEntity> AddToDb => _databaseCore.AddFolder;
@@ -38,6 +35,11 @@ namespace HSMServer.Folders
         protected override Action<FolderModel> RemoveFromDb => folder => _databaseCore.RemoveFolder(folder.Id.ToString());
 
         protected override Func<List<FolderEntity>> GetFromDb => _databaseCore.GetAllFolders;
+
+
+        public event Func<Guid, List<Guid>, InitiatorInfo, Task> RemoveFolderFromChats;
+
+        public event Action<Guid, List<Guid>> AddFolderToChats;
 
 
         public FolderManager(IDatabaseCore databaseCore, ITreeValuesCache cache, IUserManager userManager, IJournalService journalService)
@@ -87,34 +89,51 @@ namespace HSMServer.Folders
 
         public async override Task<bool> TryUpdate(FolderUpdate update)
         {
-            var result = TryGetValue(update.Id, out var folder) && await base.TryUpdate(update);
+            var result = TryGetValue(update.Id, out var folder);
 
-            if (result && (update.TTL != null || update.KeepHistory != null || update.SelfDestroy != null))
-                foreach (var productId in folder.Products.Keys)
-                    TryUpdateProductInFolder(productId, folder, update.Initiator);
+
+            var addedTelegramChats = new List<Guid>(1 << 2);
+            var removedTelegramChats = new List<Guid>(1 << 2);
+
+            if (update.TelegramChats is not null)
+            {
+                addedTelegramChats.AddRange(update.TelegramChats.Except(folder.TelegramChats ?? new())); // TODO: remove null check after telegram chats migration
+                removedTelegramChats.AddRange(folder.TelegramChats?.Except(update.TelegramChats) ?? new List<Guid>()); // TODO: remove null check after telegram chats migration
+            }
+
+
+            result &= await base.TryUpdate(update);
+
+            if (result)
+            {
+                AddFolderToChats?.Invoke(folder.Id, addedTelegramChats);
+                await (RemoveFolderFromChats?.Invoke(folder.Id, removedTelegramChats, update.Initiator) ?? Task.CompletedTask);
+
+                if (update.TTL != null || update.KeepHistory != null || update.SelfDestroy != null)
+                    foreach (var productId in folder.Products.Keys)
+                        TryUpdateProductInFolder(productId, folder, update.Initiator);
+            }
 
             return result;
         }
 
-        public override Task<bool> TryRemove(Guid folderId) => TryRemove(folderId, InitiatorInfo.System); //TODO initiator should be added in ConcurrentStorage
-
-        public async Task<bool> TryRemove(Guid folderId, InitiatorInfo initiator)
+        public override async Task<bool> TryRemove(RemoveRequest remove)
         {
-            var result = TryGetValue(folderId, out var folder);
+            var result = TryGetValue(remove.Id, out var folder);
 
             if (result)
             {
                 foreach (var productId in folder.Products.Keys)
-                    await RemoveProductFromFolder(productId, folderId, initiator);
+                    await RemoveProductFromFolder(productId, remove.Id, remove.Initiator);
 
                 foreach (var user in folder.UserRoles.Keys)
                 {
-                    user.FoldersRoles.Remove(folderId);
+                    user.FoldersRoles.Remove(remove.Id);
 
                     await _userManager.UpdateUser(user);
                 }
 
-                result &= await base.TryRemove(folderId);
+                result &= await base.TryRemove(remove);
             }
 
             return result;
@@ -142,6 +161,43 @@ namespace HSMServer.Folders
             }
 
             ResetServerPolicyForFolderProducts();
+        }
+
+
+        public async Task<string> AddChatToFolder(Guid chatId, Guid folderId, string userName)
+        {
+            if (TryGetValue(folderId, out var folder) && !folder.TelegramChats.Contains(chatId))
+            {
+                var update = new FolderUpdate()
+                {
+                    Id = folderId,
+                    TelegramChats = new HashSet<Guid>(folder.TelegramChats) { chatId },
+                    Initiator = InitiatorInfo.AsUser(userName),
+                };
+
+                await TryUpdate(update);
+            }
+
+            return folder?.Name;
+        }
+
+        public void RemoveChatHandler(TelegramChat chat, InitiatorInfo initiator)
+        {
+            foreach (var (folderId, folder) in this)
+                if (folder.TelegramChats.Contains(chat.Id))
+                {
+                    var chats = new HashSet<Guid>(folder.TelegramChats);
+                    chats.Remove(chat.Id);
+
+                    var update = new FolderUpdate()
+                    {
+                        Id = folderId,
+                        TelegramChats = chats,
+                        Initiator = initiator,
+                    };
+
+                    _ = TryUpdate(update);
+                }
         }
 
         public List<FolderModel> GetUserFolders(User user)
@@ -189,9 +245,6 @@ namespace HSMServer.Folders
         {
             if (TryGetValue(folderId, out var folder) && TryUpdateProductInFolder(productId, folder, initiator, ActionType.Delete))
             {
-                if (_cache.GetProduct(productId).NotificationsSettings?.TelegramSettings?.Inheritance == (byte)InheritedSettings.FromParent)
-                    ResetProductTelegramInheritance?.Invoke(productId);
-
                 foreach (var (user, role) in folder.UserRoles)
                     if (user.ProductsRoles.Remove((productId, role)))
                         await _userManager.UpdateUser(user);
@@ -238,7 +291,7 @@ namespace HSMServer.Folders
 
         private void AddUserHandler(User user) => user.Tree.GetFolders += GetFolders;
 
-        private void RemoveUserHandler(User user)
+        private void RemoveUserHandler(User user, InitiatorInfo _)
         {
             foreach (var folderId in user.FoldersRoles.Keys)
                 if (TryGetValue(folderId, out var folder))

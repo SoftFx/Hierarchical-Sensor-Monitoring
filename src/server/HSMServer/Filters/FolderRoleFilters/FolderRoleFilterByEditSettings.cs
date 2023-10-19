@@ -5,12 +5,12 @@ using System;
 
 namespace HSMServer.Filters.FolderRoleFilters
 {
-    public sealed class FolderRoleFilterByEditAlerts : FolderRoleFilterBase
+    public sealed class FolderRoleFilterByEditSettings : FolderRoleFilterBase
     {
-        public FolderRoleFilterByEditAlerts(string argumentName, params ProductRoleEnum[] roles) : base(argumentName, roles) { }
+        public FolderRoleFilterByEditSettings(string argumentName, params ProductRoleEnum[] roles) : base(argumentName, roles) { }
 
 
         protected override Guid? GetEntityId(object arg, ActionExecutingContext context = null) =>
-            arg is FolderAlertsViewModel folderAlerts ? folderAlerts.Id : null;
+            arg is FolderSettingsViewModel folderSettings ? folderSettings.Id : null;
     }
 }

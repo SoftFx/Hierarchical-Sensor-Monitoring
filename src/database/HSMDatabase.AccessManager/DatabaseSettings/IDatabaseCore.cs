@@ -86,6 +86,16 @@ namespace HSMServer.Core.DataLayer
 
         #endregion
 
+        #region Telegram chat
+
+        void AddTelegramChat(TelegramChatEntity chat);
+        void UpdateTelegramChat(TelegramChatEntity chat);
+        void RemoveTelegramChat(byte[] chatId);
+        TelegramChatEntity GetTelegramChat(byte[] chatId);
+        List<TelegramChatEntity> GetTelegramChats();
+
+        #endregion
+
         #region Journal
 
         void AddJournalValue(JournalKey journalKey, JournalRecordEntity value);

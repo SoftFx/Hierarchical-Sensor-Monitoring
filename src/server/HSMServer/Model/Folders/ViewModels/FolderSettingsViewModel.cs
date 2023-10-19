@@ -2,7 +2,7 @@
 
 namespace HSMServer.Model.Folders.ViewModels
 {
-    public sealed class FolderCleanupViewModel
+    public sealed class FolderSettingsViewModel
     {
         public Guid Id { get; set; }
 
@@ -10,12 +10,15 @@ namespace HSMServer.Model.Folders.ViewModels
 
         public TimeIntervalViewModel SavedHistoryPeriod { get; set; }
 
+        public TimeIntervalViewModel ExpectedUpdateInterval { get; set; }
 
-        public FolderCleanupViewModel() { }
 
-        internal FolderCleanupViewModel(FolderModel folder)
+        public FolderSettingsViewModel() { }
+
+        internal FolderSettingsViewModel(FolderModel folder)
         {
             Id = folder.Id;
+            ExpectedUpdateInterval = folder.TTL;
             SelfDestoryPeriod = folder.SelfDestroy;
             SavedHistoryPeriod = folder.KeepHistory;
         }

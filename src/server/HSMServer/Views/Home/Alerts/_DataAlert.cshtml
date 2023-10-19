@@ -3,11 +3,18 @@
 @using HSMCommon.Extensions
 @using HSMServer.Controllers
 @using HSMServer.Constants
+@using HSMServer.Notifications
 @using Microsoft.AspNetCore.Html
 
 @model DataAlertViewModelBase
 
+@inject ITelegramChatsManager ChatsManager
+
 @addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
+
+@{
+    var telegramChats = ChatsManager.GetValues().ToDictionary(k => k.Id, v => v.Name);
+}
 
 
 <div id="alertLabel_@Model.Id" class="ms-3 @(Model.IsModify ? "d-none" : string.Empty) @(Model.IsDisabled ? "disabledAlertLabel" : string.Empty)">
@@ -48,7 +55,13 @@
         {
             @if (action.Action == ActionType.SendNotification && action.Chats.Count > 0)
             {
-                actions.Add(new HtmlString($"<span>send notification <i>{action.DisplayComment}</i> to </span><span style='color: #0366d6;'>{(action.Chats.ContainsKey(ActionViewModel.AllChatsId) ? "all chats" : string.Join(", ", action.Chats.Values))}</span>"));
+                string chats = null;
+                if (action.Chats.Contains(ActionViewModel.AllChatsId))
+                    chats = "all chats";
+                else
+                    chats = string.Join(", ", action.Chats.Select(ch => telegramChats[ch]));
+
+                actions.Add(new HtmlString($"<span>send notification <i>{action.DisplayComment}</i> to </span><span style='color: #0366d6;'>{chats}</span>"));
             }
             else if (action.Action == ActionType.ShowIcon)
             {

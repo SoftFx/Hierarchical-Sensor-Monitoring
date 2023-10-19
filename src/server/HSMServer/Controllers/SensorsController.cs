@@ -18,7 +18,6 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Net.Mime;
 using System.Text;
 using System.Text.Json;
@@ -43,8 +42,7 @@ namespace HSMServer.Controllers
         protected static readonly EmptyResult _emptyResult = new();
 
 
-        public SensorsController(IUpdatesQueue updatesQueue, DataCollectorWrapper dataCollector,
-            ILogger<SensorsController> logger, ITreeValuesCache cache)
+        public SensorsController(IUpdatesQueue updatesQueue, DataCollectorWrapper dataCollector, ILogger<SensorsController> logger, ITreeValuesCache cache)
         {
             _updatesQueue = updatesQueue;
             _dataCollector = dataCollector;
@@ -578,7 +576,7 @@ namespace HSMServer.Controllers
             requestModel = new SensorAddOrUpdateRequestModel(GetKey(request), request.Path);
 
             if (requestModel.TryCheckRequest(out message) &&
-                _cache.TryCheckSensorUpdateKeyPermission(requestModel, out var product, out var sensorId, out message))
+                _cache.TryCheckSensorUpdateKeyPermission(requestModel, out var sensorId, out message))
             {
                 if (sensorId == Guid.Empty && request.SensorType is null)
                 {
@@ -586,9 +584,7 @@ namespace HSMServer.Controllers
                     return false;
                 }
 
-                var productChats = product.NotificationsSettings?.TelegramSettings?.Chats?.ToDictionary(k => new Guid(k.SystemId), v => v.Name) ?? new();
-
-                requestModel.Update = request.Convert(sensorId, productChats, keyName);
+                requestModel.Update = request.Convert(sensorId, keyName);
 
                 if (request.SensorType.HasValue)
                     requestModel.Type = request.SensorType.Value.Convert();
