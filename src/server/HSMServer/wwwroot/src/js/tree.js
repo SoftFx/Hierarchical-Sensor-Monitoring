@@ -62,6 +62,16 @@ window.initializeTree = function () {
     });
 
     $("#search_tree").on('click', function () {
+        search();
+    });
+    
+    $('#search_input').on('keyup', function (e){
+        if (e.keyCode == 13){
+            search(); 
+        }
+    })
+
+    function search(){
         $('#search_field').val($('#search_input').val()).change(function (){
             $('#jstree').jstree(true).refresh(true);
         })
@@ -69,7 +79,7 @@ window.initializeTree = function () {
         searchRefresh = true;
         $('#jstreeSpinner').removeClass('d-none')
         $('#jstree').hide();
-    });
+    }
 
     initializeActivateNodeTree();
 }
