@@ -15,8 +15,6 @@ namespace HSMServer.Model.Notifications
         [Display(Name = "Authorizarion date")]
         public DateTime AuthorizationTime { get; }
 
-        public string ChatType => Type == ConnectedChatType.TelegramPrivate ? "direct" : "group";
-
 
         public Guid Id { get; set; }
 

@@ -1,6 +1,7 @@
 ﻿@using HSMServer.Constants
 @using HSMServer.Controllers
 @using HSMServer.Extensions
+@using HSMCommon.Extensions
 @using HSMServer.Model.Notifications
 
 @model TelegramChatViewModel
@@ -15,7 +16,7 @@
 <div class="container">
     <div class="row w-100 justify-content-center">
         <div class="d-flex justify-content-between my-3 p-0">
-            <h5 class="text-break">Edit @Model.ChatType '@Model.Name'</h5>
+            <h5 class="text-break">Edit @Model.Type.GetDisplayName() '@Model.Name'</h5>
 
             <a href="javascript:removeChat();">
                 <i class='fas fa-trash-alt'></i> Remove

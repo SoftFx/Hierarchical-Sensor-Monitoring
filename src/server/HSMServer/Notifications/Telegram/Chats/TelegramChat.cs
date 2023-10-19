@@ -2,13 +2,16 @@
 using HSMServer.ConcurrentStorage;
 using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations;
 using Telegram.Bot.Types;
 
 namespace HSMServer.Notifications
 {
     public enum ConnectedChatType : byte
     {
+        [Display(Name = "direct")]
         TelegramPrivate = 0,
+        [Display(Name = "group")]
         TelegramGroup = 1,
     }
 
@@ -83,7 +86,7 @@ namespace HSMServer.Notifications
 
         public void Update(TelegramChatUpdate update)
         {
-            Description = update.Description ?? Description; 
+            Description = update.Description ?? Description;
             SendMessages = update.SendMessages ?? SendMessages;
             MessagesAggregationTimeSec = update.MessagesAggregationTimeSec ?? MessagesAggregationTimeSec;
         }
