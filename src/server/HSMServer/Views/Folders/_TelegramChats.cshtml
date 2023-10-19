@@ -11,7 +11,7 @@
 
 @if (Model is not null)
 {
-    @await Html.PartialAsync("~/Views/Notifications/_NewTelegramGroupHelpModal.cshtml", Model.FolderId)
+    @await Html.PartialAsync("~/Views/Notifications/_NewTelegramChatHelpModal.cshtml", Model.FolderId)
 
     <div class="my-2" align="right">
         <a href="javascript:showAddTelegramGroupHelpModal();" class="btn btn-link p-0">

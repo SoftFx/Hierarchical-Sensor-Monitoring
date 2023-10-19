@@ -28,11 +28,13 @@ namespace HSMServer.Model.Notifications
         [Display(Name = "Enable messages")]
         public bool EnableMessages { get; set; }
 
+        public ChatFoldersViewModel Folders { get; set; }
+
 
         // public constructor without parameters for action Notifications/EditChat
         public TelegramChatViewModel() { }
 
-        public TelegramChatViewModel(TelegramChat chat)
+        public TelegramChatViewModel(TelegramChat chat, ChatFoldersViewModel folders)
         {
             Id = chat.Id;
             Name = chat.Name;
@@ -43,6 +45,7 @@ namespace HSMServer.Model.Notifications
             Description = chat.Description;
             EnableMessages = chat.SendMessages;
             MessagesDelay = chat.MessagesAggregationTimeSec;
+            Folders = folders;
         }
 
         internal TelegramChatUpdate ToUpdate() =>
