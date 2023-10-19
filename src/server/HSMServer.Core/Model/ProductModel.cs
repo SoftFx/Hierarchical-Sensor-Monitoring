@@ -31,6 +31,7 @@ namespace HSMServer.Core.Model
         public Guid? FolderId { get; private set; }
 
 
+        [Obsolete("Should be removed after telegram chats migration")]
         public NotificationSettingsEntity NotificationsSettings { get; private set; }
 
 

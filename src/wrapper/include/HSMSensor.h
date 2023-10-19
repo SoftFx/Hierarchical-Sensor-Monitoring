@@ -1,6 +1,6 @@
 #pragma once
 
-#include "SensorStatus.h"
+#include "HSMEnums.h"
 
 namespace hsm_wrapper
 {

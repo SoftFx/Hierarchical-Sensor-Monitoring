@@ -6,7 +6,7 @@ namespace HSMPingModule.VpnManager
 {
     internal sealed class NordVpnManager : BaseVpnManager
     {
-        private const int MaxAttemptsCnt = 5;
+        private const int MaxAttemptsCnt = 10;
 
         private const string ServiceName = "nordvpn";
         private const string ErrorAnswer = "Whoops!";
@@ -28,12 +28,7 @@ namespace HSMPingModule.VpnManager
         internal override string VpnDescription => _description;
 
 
-        internal override async Task<TaskResult> Connect()
-        {
-            var result = await RepeatingRun(ConnectCommand);
-
-            return result.IsOk ? TaskResult.Ok : new TaskResult(result.Error);
-        }
+        internal override Task<TaskResult<string>> Connect() => RepeatingRun(ConnectCommand);
 
         internal override async Task<TaskResult> Disconnect()
         {

@@ -38,7 +38,7 @@ namespace HSMServer.Model
 
         public string Id { get; } = $"{_id++}";
 
-        public bool UseCustomInputTemplate { get; }
+        public bool UseCustomInputTemplate { get; } = true;
 
         public bool IsAlertBlock { get; init; }
 
@@ -103,12 +103,15 @@ namespace HSMServer.Model
             _parentRequest = parentRequest;
         }
 
-        internal TimeIntervalViewModel(HashSet<TimeInterval> intervals, ParentRequest request = null, bool useCustomTemplate = true) : this(request)
+        internal TimeIntervalViewModel(HashSet<TimeInterval> intervals, bool useCustomTemplate = true)
         {
-            string KeyBuilder(TimeInterval interval) => interval.IsParent() ? interval.ToFromParentDisplay(GetUsedValue(ParentValue)) : interval.GetDisplayName();
-
-            IntervalItems = intervals.ToSelectedItems(KeyBuilder);
+            IntervalItems = BuildSelectedList(intervals);
             UseCustomInputTemplate = useCustomTemplate;
+        }
+
+        internal TimeIntervalViewModel(HashSet<TimeInterval> intervals, ParentRequest request) : this(request)
+        {
+            IntervalItems = BuildSelectedList(intervals);
 
             if (!HasParentValue)
                 IntervalItems.RemoveAt(0);
@@ -123,6 +126,9 @@ namespace HSMServer.Model
         internal TimeIntervalViewModel(TimeIntervalEntity entity, HashSet<TimeInterval> intervals) : this(intervals)
         {
             FromModel(new TimeIntervalModel(entity), intervals);
+
+            if (!HasParentValue)
+                IntervalItems.RemoveAt(0);
         }
 
 
@@ -166,6 +172,13 @@ namespace HSMServer.Model
 
         internal TimeIntervalEntity ToEntity() => ToModel().ToEntity();
 
+
+        private List<SelectListItem> BuildSelectedList(HashSet<TimeInterval> intervals)
+        {
+            string KeyBuilder(TimeInterval interval) => interval.IsParent() ? interval.ToFromParentDisplay(GetUsedValue(ParentValue)) : interval.GetDisplayName();
+
+            return intervals.ToSelectedItems(KeyBuilder);
+        }
 
         private static string GetUsedValue(TimeIntervalViewModel model) =>
             model?.Interval switch

@@ -1,4 +1,5 @@
 using HSMCommon.Collections;
+using HSMServer.ApiObjectsConverters;
 using HSMServer.Authentication;
 using HSMServer.Core.Cache;
 using HSMServer.Core.Cache.UpdateEntities;
@@ -20,7 +21,7 @@ using HSMServer.Model.MultiToastViewModels;
 using HSMServer.Model.TreeViewModel;
 using HSMServer.Model.TreeViewModels;
 using HSMServer.Model.ViewModel;
-using HSMServer.Notification.Settings;
+using HSMServer.Notifications;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System;
@@ -40,29 +41,39 @@ namespace HSMServer.Controllers
     [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
     public class HomeController : BaseController
     {
-        private static readonly JsonSerializerOptions _alertsSerializationOptions = new()
+        private static readonly JsonSerializerOptions _alertSerializeJsonOptions = new()
         {
-            WriteIndented = true
+            WriteIndented = true,
         };
 
+        public static readonly JsonSerializerOptions _alertDeserializeJsonOptions = new()
+        {
+            AllowTrailingCommas = true,
+        };
+
+        private readonly ITelegramChatsManager _telegramChatsManager;
         private readonly ITreeValuesCache _treeValuesCache;
+        private readonly IJournalService _journalService;
         private readonly IFolderManager _folderManager;
         private readonly TreeViewModel _treeViewModel;
-        private readonly IJournalService _journalService;
 
 
         static HomeController()
         {
-            _alertsSerializationOptions.Converters.Add(new JsonStringEnumConverter());
+            _alertDeserializeJsonOptions.Converters.Add(new JsonStringEnumConverter());
+
+            _alertSerializeJsonOptions.Converters.Add(new ListAsJsonStringConverter());
+            _alertSerializeJsonOptions.Converters.Add(new JsonStringEnumConverter());
         }
 
         public HomeController(ITreeValuesCache treeValuesCache, IFolderManager folderManager, TreeViewModel treeViewModel,
-                              IUserManager userManager, IJournalService journalService) : base(userManager)
+                              IUserManager userManager, IJournalService journalService, ITelegramChatsManager telegramChatsManager) : base(userManager)
         {
             _treeValuesCache = treeValuesCache;
             _treeViewModel = treeViewModel;
             _folderManager = folderManager;
             _journalService = journalService;
+            _telegramChatsManager = telegramChatsManager;
         }
 
 
@@ -111,7 +122,7 @@ namespace HSMServer.Controllers
                 : NotFound();
 
         [HttpPut]
-        public void RemoveRenderingNode(Guid nodeId) => CurrentUser.Tree.RemoveOpenedNode(nodeId);
+        public void RemoveRenderingNode(params Guid[] nodeIds) => CurrentUser.Tree.RemoveOpenedNode(nodeIds);
 
         [HttpGet]
         public IActionResult GetGrid(ChildrenPageRequest pageRequest)
@@ -160,9 +171,6 @@ namespace HSMServer.Controllers
                 if (_treeViewModel.Sensors.TryGetValue(decodedId, out var sensor))
                     _treeValuesCache.UpdateMutedSensorState(sensor.Id, CurrentInitiator, newMutingPeriod);
             }
-
-            UpdateUserNotificationSettings(decodedId, (s, g) => s.Ignore(g, model.EndOfIgnorePeriod));
-            UpdateGroupNotificationSettings(decodedId, (s, g) => s.Ignore(g, model.EndOfIgnorePeriod));
         }
 
         [HttpPost]
@@ -180,9 +188,6 @@ namespace HSMServer.Controllers
                 if (_treeViewModel.Sensors.TryGetValue(decodedId, out var sensor))
                     _treeValuesCache.UpdateMutedSensorState(sensor.Id, CurrentInitiator);
             }
-
-            UpdateUserNotificationSettings(decodedId, (s, g) => s.RemoveIgnore(g));
-            UpdateGroupNotificationSettings(decodedId, (s, g) => s.RemoveIgnore(g));
         }
 
         [HttpPost]
@@ -307,7 +312,7 @@ namespace HSMServer.Controllers
                     };
 
                     toastViewModel.AddItem(sensor);
-                    _treeValuesCache.UpdateSensor(update);
+                    _treeValuesCache.TryUpdateSensor(update, out _);
                 }
             }
 
@@ -328,31 +333,21 @@ namespace HSMServer.Controllers
         }
 
         [HttpGet]
-        public IActionResult IgnoreNotifications(string selectedId, NotificationsTarget target, bool isOffTimeModal, long? chat)
+        public IActionResult MuteSensors(string selectedId)
         {
             var decodedId = SensorPathHelper.DecodeGuid(selectedId);
 
             IgnoreNotificationsViewModel viewModel = null;
 
             if (_treeViewModel.Nodes.TryGetValue(decodedId, out var node))
-                viewModel = new IgnoreNotificationsViewModel(node, target, isOffTimeModal);
+                viewModel = new IgnoreNotificationsViewModel(node);
             else if (_treeViewModel.Sensors.TryGetValue(decodedId, out var sensor))
-                viewModel = new IgnoreNotificationsViewModel(sensor, target, isOffTimeModal);
+                viewModel = new IgnoreNotificationsViewModel(sensor);
             else if (_folderManager.TryGetValue(decodedId, out var folder))
-                viewModel = new IgnoreNotificationsViewModel(folder, target, isOffTimeModal);
-
-            viewModel.Chat = chat;
+                viewModel = new IgnoreNotificationsViewModel(folder);
 
             return PartialView("_IgnoreNotificationsModal", viewModel);
         }
-
-        [HttpPost]
-        public void EnableNotifications(string selectedId, NotificationsTarget target, long? chat) =>
-            GetHandler(target)(SensorPathHelper.DecodeGuid(selectedId), (s, g) => s.Enable(g, chat));
-
-        [HttpPost]
-        public void IgnoreNotifications(IgnoreNotificationsViewModel model) =>
-            GetHandler(model.NotificationsTarget)(SensorPathHelper.DecodeGuid(model.EncodedId), (s, g) => s.Ignore(g, model.EndOfIgnorePeriod, model.Chat));
 
         [HttpPost]
         public string GetNodePath([FromQuery] string selectedId, [FromQuery] bool isFullPath = false)
@@ -384,40 +379,8 @@ namespace HSMServer.Controllers
                     Initiator = CurrentInitiator
                 };
 
-                _treeValuesCache.UpdateSensor(update);
+                _treeValuesCache.TryUpdateSensor(update, out _);
             }
-        }
-
-        private Action<Guid, Action<ClientNotifications, Guid>> GetHandler(NotificationsTarget actionType) => actionType switch
-        {
-            NotificationsTarget.Groups => UpdateGroupNotificationSettings,
-            NotificationsTarget.Accounts => UpdateUserNotificationSettings
-        };
-
-        private void UpdateUserNotificationSettings(Guid selectedNode, Action<ClientNotifications, Guid> updateSettings)
-        {
-            foreach (var sensorId in GetNodeSensors(selectedNode))
-            {
-                updateSettings?.Invoke(StoredUser.Notifications, sensorId);
-            }
-
-            _userManager.UpdateUser(StoredUser);
-        }
-
-        private void UpdateGroupNotificationSettings(Guid selectedNode, Action<ClientNotifications, Guid> updateSettings)
-        {
-            var updatedProducts = new HashSet<ProductNodeViewModel>();
-
-            foreach (var sensorId in GetNodeSensors(selectedNode))
-                if (_treeViewModel.Sensors.TryGetValue(sensorId, out var sensor) && sensor.RootProduct != null)
-                {
-                    updateSettings?.Invoke(sensor.RootProduct.Notifications, sensorId);
-
-                    updatedProducts.Add(sensor.RootProduct);
-                }
-
-            foreach (var product in updatedProducts)
-                _treeViewModel.UpdateProductNotificationSettings(product);
         }
 
         private List<Guid> GetNodeSensors(Guid id) => _treeViewModel.GetAllNodeSensors(id);
@@ -542,7 +505,7 @@ namespace HSMServer.Controllers
             var request = new GetSensorHistoryModel()
             {
                 EncodedId = encodedId,
-                BarsCount = -20,
+                Count = -20,
             };
 
             await StoredUser.History.Reload(_treeValuesCache, request);
@@ -575,7 +538,7 @@ namespace HSMServer.Controllers
             if (!ModelState.IsValid)
                 return PartialView("_MetaInfo", new SensorInfoViewModel(sensor));
 
-            var availableChats = sensor.RootProduct.GetAvailableChats();
+            var availableChats = sensor.GetAvailableChats(_telegramChatsManager);
 
             var ttl = newModel.DataAlerts.TryGetValue(TimeToLiveAlertViewModel.AlertKey, out var alerts) && alerts.Count > 0 ? alerts[0] : null;
             var policyUpdates = newModel.DataAlerts.TryGetValue((byte)sensor.Type, out var list) ? list.Select(a => a.ToUpdate(availableChats)).ToList() : new();
@@ -589,13 +552,12 @@ namespace HSMServer.Controllers
                 KeepHistory = newModel.SavedHistoryPeriod.ToModel(),
                 SelfDestroy = newModel.SelfDestroyPeriod.ToModel(),
                 Policies = policyUpdates,
-                IsSingleton = newModel.IsSingleton,
                 SelectedUnit = newModel.SelectedUnit,
                 AggregateValues = newModel.AggregateValues,
                 Initiator = CurrentInitiator
             };
 
-            _treeValuesCache.UpdateSensor(update);
+            _treeValuesCache.TryUpdateSensor(update, out _);
 
             return PartialView("_MetaInfo", new SensorInfoViewModel(sensor));
         }
@@ -624,15 +586,13 @@ namespace HSMServer.Controllers
             return PartialView("~/Views/Home/Alerts/_DataAlert.cshtml", viewModel);
         }
 
-        public IActionResult AddAlertCondition(Guid sensorId) =>
-            _treeViewModel.Sensors.TryGetValue(sensorId, out var sensor)
-                ? PartialView("~/Views/Home/Alerts/_ConditionBlock.cshtml", BuildAlertCondition(sensor))
-                : _emptyResult;
+        public IActionResult AddAlertCondition(Guid sensorId) => _treeViewModel.Sensors.TryGetValue(sensorId, out var sensor)
+            ? PartialView("~/Views/Home/Alerts/_ConditionBlock.cshtml", BuildAlertCondition(sensor))
+            : _emptyResult;
 
-        public IActionResult AddAlertAction(Guid entityId) =>
-            TryGetSelectedNode(entityId, out var entity)
-                ? PartialView("~/Views/Home/Alerts/_ActionBlock.cshtml", new ActionViewModel(false, entity.GetAllChats()))
-                : _emptyResult;
+        public IActionResult AddAlertAction(Guid entityId) => TryGetSelectedNode(entityId, out var entity)
+            ? PartialView("~/Views/Home/Alerts/_ActionBlock.cshtml", new ActionViewModel(false, entity))
+            : _emptyResult;
 
         public IActionResult GetOperation(Guid sensorId, AlertProperty property)
         {
@@ -645,7 +605,7 @@ namespace HSMServer.Controllers
             {
                 AlertProperty.NewSensorData => PartialView("~/Views/Home/Alerts/ConditionOperations/_NewDataOperation.cshtml"),
 
-                AlertProperty.TimeToLive or AlertProperty.Sensitivity =>
+                AlertProperty.TimeToLive or AlertProperty.ConfirmationPeriod =>
                     PartialView("~/Views/Home/Alerts/ConditionOperations/_IntervalOperation.cshtml", condition.GetIntervalOperations(property)),
 
                 _ => PartialView("~/Views/Home/Alerts/ConditionOperations/_SimpleOperation.cshtml", condition.GetOperations(property)),
@@ -760,7 +720,7 @@ namespace HSMServer.Controllers
             if (!ModelState.IsValid)
                 return PartialView("_MetaInfo", new ProductInfoViewModel(product));
 
-            var availableChats = product.RootProduct.GetAvailableChats();
+            var availableChats = product.GetAvailableChats(_telegramChatsManager);
             var ttl = newModel.DataAlerts.TryGetValue(TimeToLiveAlertViewModel.AlertKey, out var alerts) && alerts.Count > 0 ? alerts[0] : null;
 
             var update = new ProductUpdate
@@ -819,7 +779,7 @@ namespace HSMServer.Controllers
                 return _emptyResult;
 
 
-            var policies = JsonSerializer.Serialize(node.Policies.GroupedPolicies.Select(p => new AlertExportViewModel(p)), _alertsSerializationOptions);
+            var policies = JsonSerializer.Serialize(node.Policies.GroupedPolicies.Select(p => new AlertExportViewModel(p)), _alertSerializeJsonOptions);
 
             var fileName = $"{node.FullPath.Replace('/', '_')}-alerts.json";
             Response.Headers.Add("Content-Disposition", $"attachment;filename={fileName}");
@@ -836,10 +796,10 @@ namespace HSMServer.Controllers
             {
                 try
                 {
-                    var alerts = JsonSerializer.Deserialize<List<AlertExportViewModel>>(model.FileContent, _alertsSerializationOptions);
+                    var alerts = JsonSerializer.Deserialize<List<AlertExportViewModel>>(model.FileContent, _alertDeserializeJsonOptions);
 
                     var availableSensors = node.Sensors.ToDictionary(k => k.Value.Name, v => v.Key);
-                    var availableChats = node.GetAllChats().ToDictionary(k => k.Name, v => v.SystemId);
+                    var availableChats = node.GetAvailableChats(_telegramChatsManager).ToDictionary(k => k.Value, v => v.Key);
 
                     var sensorAlerts = new CGuidDict<List<PolicyUpdate>>();
 
@@ -860,9 +820,7 @@ namespace HSMServer.Controllers
                             Initiator = CurrentInitiator,
                         };
 
-                        _treeValuesCache.UpdateSensorPolicies(update, out var error);
-
-                        if (!string.IsNullOrEmpty(error))
+                        if (!_treeValuesCache.TryUpdateSensor(update, out var error))
                             toastViewModel.AddError(error, _treeViewModel.Sensors[sensorId].Name);
                     }
                 }

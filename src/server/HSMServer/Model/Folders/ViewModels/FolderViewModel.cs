@@ -15,6 +15,8 @@ namespace HSMServer.Model.Folders.ViewModels
 
         public List<ProductViewModel> Products { get; }
 
+        public HashSet<Guid> TelegramChats { get; }
+
         public Guid? Id { get; }
 
         public string Description { get; } = WithoutFolderDescription;
@@ -37,6 +39,7 @@ namespace HSMServer.Model.Folders.ViewModels
 
         public FolderViewModel(FolderModel folder, IEnumerable<ProductViewModel> products) : this(products)
         {
+            TelegramChats = folder.TelegramChats;
             Description = folder.Description;
             BackgroundColor = folder.Color;
             Name = folder.Name;

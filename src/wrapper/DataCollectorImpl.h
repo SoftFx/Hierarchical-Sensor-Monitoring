@@ -28,8 +28,11 @@ namespace hsm_wrapper
 		void Start();
 		void Stop();
 		void InitializeSystemMonitoring(bool is_cpu, bool is_free_ram);
+		void InitializeDiskMonitoring(const std::string& target, bool is_free_space, bool is_free_space_prediction, bool is_active_time, bool is_queue_lenght);
+		void InitializeAllDisksMonitoring(bool is_free_space, bool is_free_space_prediction, bool is_active_time, bool is_queue_lenght);
 		void InitializeProcessMonitoring(bool is_cpu, bool is_memory, bool is_threads);
-		void InitializeOsMonitoring(bool last_update, bool last_restart);
+		void InitializeOsMonitoring(bool is_last_update, bool is_last_restart);
+		void InitializeOsLogsMonitoring(bool is_warnig, bool is_error);
 		void InitializeProductVersion(const std::string& version);
 		void InitializeCollectorMonitoring(bool is_alive, bool version);
 		void AddServiceStateMonitoring(const std::string& service_name);
@@ -37,15 +40,23 @@ namespace hsm_wrapper
 		void SendFileAsync(const std::string& sensor_path, const std::string& file_path, HSMSensorStatus status = HSMSensorStatus::Ok, const std::string& description = {});
 
 		HSMSensor<bool> CreateBoolSensor(const std::string& path, const std::string& description = "");
+		HSMSensor<bool> CreateBoolSensor(const std::string& path, const HSMInstantSensorOptions& options);
 		HSMSensor<int> CreateIntSensor(const std::string& path, const std::string& description = "");
+		HSMSensor<int> CreateIntSensor(const std::string& path, const HSMInstantSensorOptions& options);
 		HSMSensor<double> CreateDoubleSensor(const std::string& path, const std::string& description = "");
+		HSMSensor<double> CreateDoubleSensor(const std::string& path, const HSMInstantSensorOptions& options);
 		HSMSensor<std::string> CreateStringSensor(const std::string& path, const std::string& description = "");
+		HSMSensor<std::string> CreateStringSensor(const std::string& path, const HSMInstantSensorOptions& options);
+		HSMBarSensor<int> CreateIntBarSensor(const std::string& path, int timeout = 300000, int small_period = 15000, const std::string& description = "");
+		HSMBarSensor<int> CreateIntBarSensor(const std::string& path, const HSMBarSensorOptions& options);
+		HSMBarSensor<double> CreateDoubleBarSensor(const std::string& path, int timeout = 300000, int small_period = 15000, int precision = 2, const std::string& description = "");
+		HSMBarSensor<double> CreateDoubleBarSensor(const std::string& path, const HSMBarSensorOptions& options);
+
+#ifdef ENABLE_OBSOLETE
 		HSMLastValueSensor<bool> CreateLastValueBoolSensor(const std::string& path, bool default_value, const std::string& description = "");
 		HSMLastValueSensor<int> CreateLastValueIntSensor(const std::string& path, int default_value, const std::string& description = "");
 		HSMLastValueSensor<double> CreateLastValueDoubleSensor(const std::string& path, double default_value, const std::string& description = "");
 		HSMLastValueSensor<std::string> CreateLastValueStringSensor(const std::string& path, const std::string& default_value, const std::string& description = "");
-		HSMBarSensor<int> CreateIntBarSensor(const std::string& path, int timeout = 300000, int small_period = 15000, const std::string& description = "");
-		HSMBarSensor<double> CreateDoubleBarSensor(const std::string& path, int timeout = 300000, int small_period = 15000, int precision = 2, const std::string& description = "");
 
 		template<class T>
 		typename std::conditional<std::is_arithmetic_v<T>, std::shared_ptr<HSMNoParamsFuncSensorImplWrapper<T>>, std::shared_ptr<HSMNoParamsFuncSensorImplWrapper<std::string>>>::type
@@ -77,14 +88,10 @@ namespace hsm_wrapper
 			params_func_sensor_impl->SetParamsFuncSensor(params_func_sensor);
 			return std::make_shared<HSMParamsFuncSensorImplWrapper<T, U>>(params_func_sensor_impl);
 		}
-
-
-
+#endif
 
 	private:
 		msclr::auto_gcroot<IDataCollector^> data_collector;
 	};
-
-
 
 }

@@ -12,17 +12,12 @@ namespace HSMServer.Model.ViewModel
         private readonly List<UserViewModel> _usedUsers;
 
 
+
         public List<AccessKeyViewModel> AccessKeys { get; }
 
         public List<(UserViewModel, ProductRoleEnum)> UsersRights { get; }
 
         public HashSet<UserViewModel> NotAdminUsers { get; }
-
-        public TelegramSettingsViewModel Telegram { get; }
-
-        public bool NotificationsAutoSubscribe { get; }
-
-        public bool IsNotificationsInherited { get; }
 
         public string EncodedProductId { get; }
 
@@ -30,23 +25,17 @@ namespace HSMServer.Model.ViewModel
 
         public Guid ProductId { get; }
 
-        public bool HasFolder { get; }
-
 
         public EditProductViewModel(ProductNodeViewModel product,
                                     List<(User, ProductRoleEnum)> usersRights,
                                     List<User> notAdminUsers)
         {
-            ProductName = product.Name;
             ProductId = product.Id;
+            ProductName = product.Name;
             EncodedProductId = product.EncodedId;
-            HasFolder = product.FolderId.HasValue;
 
             UsersRights = usersRights.Select(x => (new UserViewModel(x.Item1), x.Item2)).ToList();
             AccessKeys = product.GetAccessKeys();
-            Telegram = new(product.Notifications.UsedTelegram, ProductId);
-            IsNotificationsInherited = !product.Notifications.IsCustom;
-            NotificationsAutoSubscribe = product.Notifications.AutoSubscription;
 
             _usedUsers = UsersRights.Select(ur => ur.Item1).ToList();
             NotAdminUsers = notAdminUsers.Select(x => new UserViewModel(x)).ToHashSet();

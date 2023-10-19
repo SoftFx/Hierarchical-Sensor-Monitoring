@@ -22,10 +22,6 @@ namespace HSMServer.Extensions
             {
                 var filteredSensor = new FilteredSensor()
                 {
-                    IsAccountNotificationsEnabled = user.Notifications.IsSensorEnabled(sensor.Id),
-                    IsGroupNotificationsEnabled = sensor.RootProduct.Notifications.IsSensorEnabled(sensor.Id),
-                    IsAccountNotificationsIgnored = user.Notifications.IsSensorIgnored(sensor.Id),
-                    IsGroupNotificationsIgnored = sensor.RootProduct.Notifications.IsSensorIgnored(sensor.Id),
                     IsGrafanaEnabled = sensor.Integration.HasFlag(Integration.Grafana),
                     HasData = sensor.HasData,
                     Status = sensor.Status.ToCore(),
@@ -49,7 +45,7 @@ namespace HSMServer.Extensions
             if (filterMask != 0 && (filterMask & DefaultNodeMask) == filterMask)
             {
                 var isProductVisible = true;
-                
+
                 if (filterMask.HasFlag(FilterGroupType.ByVisibility))
                     isProductVisible &= filter.ByVisibility.Empty.Value;
 
@@ -66,16 +62,12 @@ namespace HSMServer.Extensions
         {
             var sensorStateMask = DefaultNodeMask;
 
-            if (user.Notifications.IsSensorEnabled(sensor.Id) || user.Notifications.IsSensorIgnored(sensor.Id) ||
-                sensor.RootProduct.Notifications.IsSensorEnabled(sensor.Id) || sensor.RootProduct.Notifications.IsSensorIgnored(sensor.Id))
-                sensorStateMask |= FilterGroupType.Notifications;
-            
             if (sensor.State == SensorState.Muted)
                 sensorStateMask |= FilterGroupType.ByState;
 
             if (sensor.Integration.HasFlag(Integration.Grafana))
                 sensorStateMask |= FilterGroupType.Integrations;
-            
+
             return sensorStateMask;
         }
     }

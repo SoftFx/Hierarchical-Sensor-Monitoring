@@ -1,19 +1,14 @@
-﻿using HSMServer.Authentication;
-using HSMServer.Core.Cache;
-using HSMServer.Core.Model;
-using HSMServer.Model.TreeViewModel;
-using HSMServer.Notification.Settings;
+﻿using HSMServer.Core.Cache;
+using HSMServer.Core.Model.Policies;
+using HSMServer.Folders;
 using HSMServer.ServerConfiguration;
 using System;
-using System.Collections.Concurrent;
-using System.Linq;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using Telegram.Bot;
-using Telegram.Bot.Exceptions;
 using Telegram.Bot.Polling;
 using Telegram.Bot.Types;
-using User = HSMServer.Model.Authentication.User;
 
 namespace HSMServer.Notifications
 {
@@ -23,75 +18,49 @@ namespace HSMServer.Notifications
 
         private readonly NLog.Logger _logger = NLog.LogManager.GetCurrentClassLogger();
 
-        private readonly AddressBook _addressBook = new();
         private readonly ReceiverOptions _options = new()
         {
             AllowedUpdates = { }, // receive all update types
         };
 
         private readonly TelegramUpdateHandler _updateHandler;
-        private readonly IUserManager _userManager;
+        private readonly ITelegramChatsManager _chatsManager;
+        private readonly IFolderManager _folderManager;
         private readonly ITreeValuesCache _cache;
         private readonly TelegramConfig _config;
-        private readonly TreeViewModel _tree;
 
         private CancellationTokenSource _tokenSource = new();
         private TelegramBotClient _bot;
 
-
-        internal string BotName => _config.BotName;
 
         private string BotToken => _config.BotToken;
 
         private bool IsBotRunning => _bot is not null;
 
 
-        internal TelegramBot(IUserManager userManager, ITreeValuesCache cache, TreeViewModel tree, TelegramConfig config)
+        internal TelegramBot(ITelegramChatsManager chatsManager, IFolderManager folderManager, ITreeValuesCache cache, TelegramConfig config)
         {
-            _userManager = userManager;
-            _userManager.Removed += _addressBook.RemoveAllChats;
+            _folderManager = folderManager;
+            _chatsManager = chatsManager;
 
             _config = config;
             _cache = cache;
-            _tree = tree;
 
-            _cache.ChangeProductEvent += RemoveProductEventHandler;
-            _cache.ChangePolicyResultEvent += SendMessage;
+            _cache.ThrowAlertResultsEvent += StoreMessage;
 
-            _updateHandler = new(_addressBook, _userManager, _tree, _cache, config);
-
-            FillAddressBook();
+            _updateHandler = new(_chatsManager, _cache, _folderManager, config);
         }
 
         public async ValueTask DisposeAsync()
         {
-            _userManager.Removed -= _addressBook.RemoveAllChats;
-
             await StopBot();
         }
-
-        internal string GetInvitationLink(User user) =>
-            $"https://t.me/{BotName}?start={_addressBook.BuildInvitationToken(user)}";
-
-        internal string GetStartCommandForGroup(ProductNodeViewModel product) =>
-            $"{TelegramBotCommands.Start}@{BotName} {_addressBook.BuildInvitationToken(product)}";
 
         internal async Task<string> GetChatLink(long chatId)
         {
             var link = await _bot.CreateChatInviteLinkAsync(new ChatId(chatId), cancellationToken: _tokenSource.Token);
 
             return link.InviteLink;
-        }
-
-        internal void RemoveOldInvitationTokens() => _addressBook.RemoveOldTokens();
-
-        internal void RemoveChat(INotificatable entity, long chatId)
-        {
-            var removedChat = _addressBook.RemoveChat(entity, new ChatId(chatId));
-            entity.UpdateEntity(_userManager, _tree);
-
-            if (removedChat is not null)
-                _cache.RemoveChat(removedChat.SystemId, removedChat.IsUserChat ? null : entity.Name);
         }
 
         internal void SendTestMessage(ChatId chatId, string message)
@@ -133,7 +102,6 @@ namespace HSMServer.Notifications
             await ChatNamesSynchronization();
 
             _bot.StartReceiving(_updateHandler, _options, _tokenSource.Token);
-            ThreadPool.QueueUserWorkItem(async _ => await MessageReceiver());
 
             return string.Empty;
         }
@@ -149,8 +117,8 @@ namespace HSMServer.Notifications
             {
                 try
                 {
-                    await bot?.DeleteWebhookAsync();
-                    await bot?.CloseAsync();
+                    await bot.DeleteWebhookAsync();
+                    await bot.CloseAsync();
                 }
                 catch (Exception ex)
                 {
@@ -161,46 +129,24 @@ namespace HSMServer.Notifications
             return string.Empty;
         }
 
-        private void FillAddressBook()
-        {
-            foreach (var user in _userManager.GetUsers())
-                foreach (var (_, chat) in user.Notifications.Telegram.Chats)
-                    _addressBook.RegisterChat(user, chat);
-
-            foreach (var product in _tree.GetRootProducts())
-                foreach (var (_, chat) in product.Notifications.Telegram.Chats)
-                    _addressBook.RegisterChat(product, chat);
-        }
-
-        private void SendMessage(PolicyResult result)
+        private void StoreMessage(List<AlertResult> result, Guid folderId)
         {
             try
             {
-                if (IsBotRunning && _config.IsRunning)
-                {
-                    var uniqueChats = new ConcurrentDictionary<Guid, ChatSettings>();
-
-                    foreach (var (entity, chats) in _addressBook.ServerBook)
+                if (IsBotRunning && _config.IsRunning && _folderManager.TryGetValue(folderId, out var folder))
+                    foreach (var alert in result)
                     {
-                        foreach (var (_, chat) in chats)
-                            uniqueChats.TryAdd(chat.SystemId, chat);
-                    }
+                        var chatIds = alert.Destination.AllChats ? folder.TelegramChats : alert.Destination.Chats;
 
-                    foreach (var (_, chat) in uniqueChats)
-                    //if (entity.CanSendData(result.SensorId, chat.ChatId))
-                    {
-                        var isInstant = false; //entity.Notifications.UsedTelegram.MessagesDelaySec == 0;
-
-                        foreach (var alert in result)
-                            if (chat is not null && (alert.Destination?.Chats?.Contains(chat.SystemId) ?? false))
+                        foreach (var chatId in chatIds)
+                            if (_chatsManager.TryGetValue(chatId, out var chat) && chat.SendMessages)
                             {
-                                if (isInstant)
+                                if (chat.MessagesAggregationTimeSec == 0)
                                     SendMessage(chat.ChatId, alert.ToString());
                                 else
                                     chat.MessageBuilder.AddMessage(alert);
                             }
                     }
-                }
             }
             catch (Exception ex)
             {
@@ -208,43 +154,33 @@ namespace HSMServer.Notifications
             }
         }
 
-        private async Task MessageReceiver()
+        internal void SendMessages()
         {
-            while (IsBotRunning)
+            if (IsBotRunning)
             {
                 try
                 {
-                    var uniqueChats = new ConcurrentDictionary<Guid, ChatSettings>();
-
-                    foreach (var (entity, chats) in _addressBook.ServerBook)
-                    {
-                        foreach (var (_, chat) in chats)
-                            uniqueChats.TryAdd(chat.SystemId, chat);
-                    }
-
-                    foreach (var (_, chat) in uniqueChats)
+                    foreach (var chat in _chatsManager.GetValues())
                     {
                         try
                         {
-                            var messagesDelay = 60; //entity.Notifications.UsedTelegram.MessagesDelaySec;
+                            var messagesDelay = chat.MessagesAggregationTimeSec;
 
                             if (messagesDelay > 0 && chat.MessageBuilder.ExpectedSendingTime <= DateTime.UtcNow)
                             {
                                 var message = chat.MessageBuilder.GetAggregateMessage(messagesDelay);
+
+                                if (_tokenSource.IsCancellationRequested)
+                                    break;
 
                                 SendMessage(chat.ChatId, message);
                             }
                         }
                         catch (Exception ex)
                         {
-                            _logger.Error($"Error getting message: {chat.Chat.Name} - {ex}");
+                            _logger.Error($"Error getting message: {chat.Name} - {ex}");
                         }
                     }
-
-                    if (_tokenSource.IsCancellationRequested)
-                        break;
-
-                    await Task.Delay(500, _tokenSource.Token);
                 }
                 catch (Exception ex)
                 {
@@ -263,40 +199,25 @@ namespace HSMServer.Notifications
                 _bot?.SendTextMessageAsync(chat, message, cancellationToken: _tokenSource.Token);
         }
 
-        private void RemoveProductEventHandler(ProductModel model, ActionType transaction)
-        {
-            if (transaction == ActionType.Delete)
-            {
-                var product = _addressBook.ServerBook.Keys.FirstOrDefault(e => e.Id == model.Id);
-
-                if (product != null)
-                    _addressBook.RemoveAllChats(product);
-            }
-        }
-
         private async Task ChatNamesSynchronization()
         {
-            foreach (var (entity, chats) in _addressBook.ServerBook)
+            foreach (var chat in _chatsManager.GetValues())
             {
-                foreach (var (chatId, chatSetting) in chats)
+                try
                 {
-                    try
-                    {
-                        var chat = await _bot?.GetChatAsync(chatId, _tokenSource.Token);
-                        var chatName = chatSetting.Chat.IsUserChat ? chat.Username : chat.Title;
+                    var telegramChat = await _bot?.GetChatAsync(chat.ChatId, _tokenSource.Token);
+                    var chatName = chat.Type is ConnectedChatType.TelegramPrivate ? telegramChat.Username : telegramChat.Title;
 
-                        if (chatSetting.Chat.Name != chatName)
-                        {
-                            chatSetting.Chat.Name = chatName;
-                            entity.Chats[chatId].Name = chatName;
-
-                            entity.UpdateEntity(_userManager, _tree);
-                        }
-                    }
-                    catch (Exception ex)
+                    if (chat.Name != chatName)
                     {
-                        _logger.Error($"Telegram chat name '{chatSetting.Chat.Name}' updating is failed - {ex}");
+                        chat.Name = chatName;
+
+                        await _chatsManager.TryUpdate(chat);
                     }
+                }
+                catch (Exception ex)
+                {
+                    _logger.Error($"Telegram chat name '{chat.Name}' updating is failed - {ex}");
                 }
             }
         }

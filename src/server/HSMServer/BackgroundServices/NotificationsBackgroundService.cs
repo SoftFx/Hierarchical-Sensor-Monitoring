@@ -7,13 +7,16 @@ namespace HSMServer.BackgroundServices
 {
     public class NotificationsBackgroundService : BaseDelayedBackgroundService
     {
+        private const int CenterRecalculationPeriodSec = 30;
+
         private readonly NotificationsCenter _center;
+        private DateTime _lastCenterRecalculation = DateTime.MinValue;
 
 
-        public override TimeSpan Delay { get; } = TimeSpan.FromSeconds(10);
+        public override TimeSpan Delay { get; } = TimeSpan.FromSeconds(1);
 
 
-        public NotificationsBackgroundService(NotificationsCenter center) 
+        public NotificationsBackgroundService(NotificationsCenter center)
         {
             _center = center;
         }
@@ -26,7 +29,13 @@ namespace HSMServer.BackgroundServices
 
         protected override Task ServiceAction()
         {
-            _center.CheckState();
+            _center.SendAllMessages();
+
+            if ((DateTime.UtcNow - _lastCenterRecalculation).TotalSeconds >= CenterRecalculationPeriodSec)
+            {
+                _lastCenterRecalculation = DateTime.UtcNow;
+                _center.RecalculateState();
+            }
 
             return Task.CompletedTask;
         }

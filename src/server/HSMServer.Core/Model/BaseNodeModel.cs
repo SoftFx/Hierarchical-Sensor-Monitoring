@@ -95,7 +95,7 @@ namespace HSMServer.Core.Model
             return this;
         }
 
-        protected internal void Update(BaseNodeUpdate update)
+        protected void Update(BaseNodeUpdate update)
         {
             Description = UpdateProperty(Description, update.Description ?? Description, update.Initiator);
 

@@ -14,7 +14,7 @@ using System.Text.Json;
 
 namespace HSMServer.Model.Authentication
 {
-    public class User : ClaimsPrincipal, IServerModel<UserEntity, UserUpdate>, INotificatable
+    public class User : ClaimsPrincipal, IServerModel<UserEntity, UserUpdate>
     {
         public Guid Id { get; init; }
 
@@ -24,7 +24,8 @@ namespace HSMServer.Model.Authentication
 
         public string Password { get; set; }
 
-        public ClientNotifications Notifications { get; init; }
+        [Obsolete("Should be removed after telegram chats migration")]
+        public ClientNotifications Notifications { get; set; }
 
         public List<(Guid, ProductRoleEnum)> ProductsRoles { get; set; } = new();
 
@@ -49,7 +50,6 @@ namespace HSMServer.Model.Authentication
         public User()
         {
             Id = Guid.NewGuid();
-            Notifications = new();
             TreeFilter = new();
             Tree = new VisibleTreeViewModel(this);
         }
@@ -94,7 +94,6 @@ namespace HSMServer.Model.Authentication
                 IsAdmin = IsAdmin,
                 FolderRoles = FoldersRoles.ToDictionary(f => f.Key.ToString(), f => (byte)f.Value),
                 ProductsRoles = ProductsRoles.Select(r => new KeyValuePair<string, byte>(r.Item1.ToString(), (byte)r.Item2)).ToList(),
-                NotificationSettings = Notifications.ToEntity(),
                 TreeFilter = TreeFilter,
             };
 

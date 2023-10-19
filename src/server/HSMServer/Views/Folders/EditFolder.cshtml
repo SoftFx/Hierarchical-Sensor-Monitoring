@@ -32,10 +32,10 @@
                 <button class="nav-link active" id="general-tab" data-bs-toggle="tab" data-bs-target="#general" type="button" role="tab" aria-controls="general" aria-selected="true">General</button>
             </li>
             <li class="nav-item" role="presentation">
-                <button class="nav-link @disabledTab" id="cleanup-tab" data-bs-toggle="tab" data-bs-target="#cleanup" type="button" role="tab" aria-controls="cleanup" aria-selected="false">Cleanup</button>
+                <button class="nav-link @disabledTab" id="settings-tab" data-bs-toggle="tab" data-bs-target="#settings" type="button" role="tab" aria-controls="settings" aria-selected="false">Settings</button>
             </li>
             <li class="nav-item" role="presentation">
-                <button class="nav-link @disabledTab" id="alerts-tab" data-bs-toggle="tab" data-bs-target="#alerts" type="button" role="tab" aria-controls="alerts" aria-selected="false">Alerts</button>
+                <button class="nav-link @disabledTab" id="telegram-tab" data-bs-toggle="tab" data-bs-target="#telegram" type="button" role="tab" aria-controls="telegram" aria-selected="false">Telegram</button>
             </li>
             <li class="nav-item" role="presentation">
                 <button class="nav-link @disabledTab" id="users-tab" data-bs-toggle="tab" data-bs-target="#users" type="button" role="tab" aria-controls="users" aria-selected="false">Users</button>
@@ -48,15 +48,15 @@
                 </form>
             </div>
 
-            <div class="tab-pane fade" id="cleanup" role="tabpanel" aria-labelledby="cleanup-tab">
-                <form id="folderCleanup_form" method="post" asp-action="@nameof(FoldersController.EditCleanup)">
-                    @await Html.PartialAsync("_Cleanup", Model.Cleanup)
+            <div class="tab-pane fade" id="settings" role="tabpanel" aria-labelledby="settings-tab">
+                <form id="folderSettings_form" method="post" asp-action="@nameof(FoldersController.EditSettings)">
+                    @await Html.PartialAsync("_Settings", Model.Settings)
                 </form>
             </div>
 
-            <div class="tab-pane fade" id="alerts" role="tabpanel" aria-labelledby="alerts-tab">
-                <form id="folderAlerts_form" method="post" asp-action="@nameof(FoldersController.EditAlerts)">
-                    @await Html.PartialAsync("_Alerts", Model.Alerts)
+            <div class="tab-pane fade" id="telegram" role="tabpanel" aria-labelledby="telegram-tab">
+                <form id="folderTelegramChats_form" asp-action="@nameof(FoldersController.UpdateTelegram)">
+                    @await Html.PartialAsync("_TelegramChats", Model.Telegram)
                 </form>
             </div>
 
@@ -90,24 +90,4 @@
             }
         );
     }
-
-    $(document).on("submit", "#telegramMessagesSettings_form", function (event) {
-        event.preventDefault();
-        event.stopImmediatePropagation();
-
-        $.ajax({
-            url: $("#telegramMessagesSettings_form").attr("action"),
-            type: 'POST',
-            data: new FormData(this),
-            datatype: 'html',
-            processData: false,
-            contentType: false,
-            cache: false,
-            async: true,
-            success: function (viewData) {
-                $("#notificationSettings").html(viewData);
-                showToast("Folder notifications settings have been succesfully saved!");
-            }
-        });
-    });
 </script>

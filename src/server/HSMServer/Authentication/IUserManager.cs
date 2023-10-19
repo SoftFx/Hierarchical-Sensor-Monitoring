@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 
 namespace HSMServer.Authentication
 {
-    public interface IUserManager : IConcurrentStorage<User, UserEntity, UserUpdate>
+    public interface IUserManager : IConcurrentStorageNames<User, UserEntity, UserUpdate>
     {
         /// <summary>
         /// Add new user with the specified parameters
@@ -23,12 +23,6 @@ namespace HSMServer.Authentication
         /// </summary>
         /// <param name="user">User object (password field must be password hash).</param>
         Task<bool> UpdateUser(User user);
-
-        /// <summary>
-        /// Remove user with the specified userName
-        /// </summary>
-        /// <param name="userName">Name of the user to remove.</param>
-        Task RemoveUser(string userName);
 
         bool TryAuthenticate(string login, string password);
 

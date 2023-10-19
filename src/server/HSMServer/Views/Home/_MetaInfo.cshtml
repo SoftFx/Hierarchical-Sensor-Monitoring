@@ -216,12 +216,17 @@
     }
 
     function setFormDataAlertsSendNotificationChats(formData, type, i, j, block) {
+        let chats = [];
+
         block.find("select[name='Chats']:first option").each(function () {
             if ($(this).is(':selected')) {
-                let chatId = $(this).val();
-                formData.append(`DataAlerts[${type}][${i}].Actions[${j}].Chats[${chatId}]`, $(this).text());
+                chats.push($(this).val());
             }
         })
+
+        for (let k = 0; k < chats.length; ++k){
+            formData.append(`DataAlerts[${type}][${i}].Actions[${j}].Chats[${k}]`, chats[k]);
+        }
     }
 
     function collapseChangeTextContent() {

@@ -36,14 +36,19 @@ window.initializeTree = function () {
     }).on("state_ready.jstree", function () {
         selectNodeAjax($(this).jstree('get_selected')[0]);
     }).on('close_node.jstree', function (e, data) {
+        if (collapseButton.isTriggered)
+            return;
+
         $.ajax({
             type: 'put',
-            url: `${closeNode}?nodeId=${data.node.id}`,
+            url: `${closeNode}?nodeIds=${data.node.id}`,
             cache: false
         })
     }).on('refresh.jstree', function (e, data){
         refreshTreeTimeoutId = setTimeout(updateTreeTimer, interval);
         updateSelectedNodeDataTimeoutId = setTimeout(updateSelectedNodeData, interval);
+    }).on('open_node.jstree', function (e, data){
+        collapseButton.reset();
     });
 
     initializeActivateNodeTree();
@@ -53,6 +58,7 @@ window.activateNode = function (currentNodeId, nodeIdToActivate) {
     needToActivateListTab = $(`#list_${currentNodeId}`).hasClass('active');
 
     $('#jstree').jstree('activate_node', nodeIdToActivate);
+    $('#jstree').jstree('open_node', nodeIdToActivate);
 
     if (currentSelectedNodeId != nodeIdToActivate) {
         selectNodeAjax(nodeIdToActivate);
@@ -192,7 +198,6 @@ function selectNodeInfoTab(tab, selectedId) {
         tabLink.click();
 }
 
-const TelegramTarget = { Groups: 0, Accounts: 1 };
 window.NodeType = { Folder: 0, Product: 1, Node: 2, Sensor: 3, Disabled: 4 };
 
 const AjaxPost = {
@@ -327,7 +332,7 @@ function buildContextMenu(node) {
                     "label": `Mute ${getKeyByValue(curType)} for...`,
                     "separator_after": true,
                     "separator_before": true,
-                    "action": _ => ignoreNotificationsRequest(node, TelegramTarget.Groups, 'true')
+                    "action": _ => muteRequest(node)
                 }
             }
             else {
@@ -364,6 +369,8 @@ function buildContextMenu(node) {
                     $('#modalDeleteLabel').append(`Remove ${getKeyByValue(curType)}`);
                     $('#modalDeleteBody').empty();
 
+                    let parent = node.parent;
+                    
                     $.when(getFullPathAction(node.id)).done((path) => {
                         $('#modalDeleteBody').append(`Do you really want to remove ${path}?`);
                         modal.show();
@@ -382,12 +389,21 @@ function buildContextMenu(node) {
                                 contentType: "application/json"
                             })
                             .done(() => {
+                                selectParentAfterRefresh();
+                                
                                 updateTreeTimer();
                                 showToast(`${getKeyByValue(curType)} has been removed`);
-
-                                $(`#${node.parents[0]}_anchor`).trigger('click');
                             });
                     });
+                    
+                    function selectParentAfterRefresh(){
+                        setTimeout(function (){
+                            if (!isRefreshing)
+                                $(`#${parent}_anchor`).trigger('click');
+                            else 
+                                selectParentAfterRefresh();
+                        }, 50)
+                    }
 
                     $('#closeDeleteButton').off('click').on('click', () => modal.hide());
                 }
@@ -482,60 +498,8 @@ function buildContextMenu(node) {
             };
         }
     }
-
-    notificationSubmenu = {}
-    isAccEnabled = node.data.jstree.isAccountsEnable === "True";
-
-    if (isAccEnabled) {
-        notificationSubmenu["Accounts ignore"] = {
-            "label": "Ignore for accounts...",
-            "icon": "fab fa-telegram",
-            "action": _ => ignoreNotificationsRequest(node, TelegramTarget.Accounts),
-        }
-    }
-    else {
-        notificationSubmenu["Accounts enable"] = {
-            "label": "Enable for accounts...",
-            "icon": "fab fa-telegram",
-            "action": _ => enableNotificationsRequest(node, TelegramTarget.Accounts),
-        }
-    }
-
-    if (isManager) {
-        let groups = node.data.jstree.groups;
-
-        for (let chatId in groups) {
-            let group = groups[chatId].Name;
-
-            if (groups[chatId].IsEnabled && !groups[chatId].IsIgnored) {
-                notificationSubmenu[`Groups ignore ${chatId}`] = {
-                    "label": `Ignore for '${group}'...`,
-                    "icon": "fab fa-telegram",
-                    "action": _ => ignoreNotificationsRequest(node, TelegramTarget.Groups, false, chatId),
-                }
-            }
-            else {
-                notificationSubmenu[`Groups enable ${chatId}`] = {
-                    "label": `Enable for '${group}'...`,
-                    "icon": "fab fa-telegram",
-                    "action": _ => enableNotificationsRequest(node, TelegramTarget.Groups, chatId),
-                }
-            }
-        }
-    }
-
-    //if ((curType === NodeType.Folder && node.children.length != 0) || (isMutedState !== '' && isMutedState !== undefined))
-    //    contextMenu["Notifications"] = {
-    //        "label": "Notifications",
-    //        "separator_before": true,
-    //        "submenu": notificationSubmenu,
-    //    };
     
     return contextMenu;
-}
-
-function enableNotificationsRequest(node, target, chat = null) {
-    return $.ajax(`${enableNotificationsAction}?selectedId=${node.id}&target=${target}&chat=${chat}`, AjaxPost).done(updateTreeTimer);
 }
 
 function unmuteRequest(node){
@@ -545,8 +509,8 @@ function unmuteRequest(node){
     });
 }
 
-function ignoreNotificationsRequest(node, target, isOffTimeModal = 'false', chat = null) {
-    return $.ajax(`${ignoreNotificationsAction}?selectedId=${node.id}&target=${target}&isOffTimeModal=${isOffTimeModal}&chat=${chat}`, {
+function muteRequest(node) {
+    return $.ajax(`${muteAction}?selectedId=${node.id}`, {
         cache: false,
         success: (v) => $("#ignoreNotificatios_partial").html(v),
     }).done(() => $('#ignoreNotifications_modal').modal('show'))

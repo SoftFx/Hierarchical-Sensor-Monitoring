@@ -1,7 +1,8 @@
 using HSMServer.Model.Authentication;
+using HSMServer.Model.Folders;
 using HSMServer.Model.TreeViewModel;
 using HSMServer.Model.ViewModel;
-using HSMServer.Notifications.Telegram;
+using HSMServer.Notifications;
 using HSMServer.UserFilters;
 using Microsoft.AspNetCore.Html;
 using System;
@@ -17,16 +18,35 @@ namespace HSMServer.Extensions
         private const int IconSize = 3;
 
 
-        internal static List<TelegramChat> GetAllChats(this NodeViewModel node)
+        internal static Dictionary<Guid, string> GetAvailableChats(this NodeViewModel node, ITelegramChatsManager chatsManager)
         {
-            var availableGroups = node.RootProduct.Notifications.Telegram.Chats.Values;
-            var availableUsers = node.RootProduct.GetAllUserChats().Values;
+            node.TryGetChats(out var folderChats);
 
-            return availableGroups.Union(availableUsers).OrderBy(chat => chat.IsUserChat).ThenBy(chat => chat.Name).ToList();
+            return GetAvailableChats(folderChats, chatsManager);
         }
 
-        internal static Dictionary<Guid, string> GetAvailableChats(this NodeViewModel node) =>
-            node.GetAllChats().ToDictionary(k => k.SystemId, v => v.Name);
+        internal static Dictionary<Guid, string> GetAvailableChats(this HashSet<Guid> folderChats, ITelegramChatsManager chatsManager)
+        {
+            var availableChats = new Dictionary<Guid, string>(1 << 3);
+
+            foreach (var chat in chatsManager.GetValues())
+                if (folderChats.Contains(chat.Id))
+                    availableChats.Add(chat.Id, chat.Name);
+
+            return availableChats;
+        }
+
+        internal static bool TryGetChats(this NodeViewModel node, out HashSet<Guid> chats)
+        {
+            if (node.RootProduct.Parent is FolderModel folder)
+            {
+                chats = folder.TelegramChats;
+                return true;
+            }
+
+            chats = new();
+            return false;
+        }
 
 
         internal static string ToCssIconClass(this SensorStatus status) =>

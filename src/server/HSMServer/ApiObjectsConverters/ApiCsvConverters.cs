@@ -23,75 +23,86 @@ namespace HSMServer.ApiObjectsConverters
 
     internal sealed record Header
     {
-        private readonly string _propertyName;
         private readonly Func<BaseValue, string> _getPropertyName;
 
 
         public string DisplayName { get; }
 
+        public string PropertyName { get; }
+
 
         public Header(string displayName, string propertyName, Func<BaseValue, string> getPropFunc = null)
         {
-            _propertyName = propertyName;
             _getPropertyName = getPropFunc;
+            PropertyName = propertyName;
             DisplayName = displayName;
         }
 
         public Header(string name)
         {
-            _propertyName = name;
+            PropertyName = name;
             DisplayName = name;
         }
 
 
-        public string GetPropertyName(BaseValue value) => _getPropertyName?.Invoke(value) ?? _propertyName;
+        public string GetPropertyName(BaseValue value) => _getPropertyName?.Invoke(value) ?? PropertyName;
     }
 
 
     internal static class ApiCsvConverters
     {
         private static readonly string _columnSeparator = CultureInfo.CurrentUICulture.TextInfo.ListSeparator;
+
         private static readonly JsonSerializerOptions _serializerOptions = new()
-        { 
-            NumberHandling = JsonNumberHandling.AllowNamedFloatingPointLiterals 
+        {
+            NumberHandling = JsonNumberHandling.AllowNamedFloatingPointLiterals
         };
 
         private static readonly Func<BaseValue, string> _baseLastUpdateLambda = value => value.LastReceivingTime is null ? nameof(BaseValue.ReceivingTime) : nameof(BaseValue.LastReceivingTime);
 
         private static readonly Dictionary<Header, ExportOptions> _simpleSensorHeader = new()
         {
-            { new ("Date", nameof(SensorValueBase.Time)), ExportOptions.Simple },
-            { new ("Last update time", nameof(BaseValue.LastUpdateTime),value => _baseLastUpdateLambda(value)), ExportOptions.Aggregated},
-            { new("Receiving time",nameof(BaseValue.ReceivingTime)), ExportOptions.Hidden },
-            { new ("Aggregated values count", nameof(BaseValue.AggregatedValuesCount)), ExportOptions.Aggregated},
-            { new (nameof(BoolSensorValue.Value)), ExportOptions.Simple },
-            { new (nameof(SensorValueBase.Status)), ExportOptions.Simple },
-            { new (nameof(SensorValueBase.Comment)), ExportOptions.Simple }
+            { new("Date", nameof(SensorValueBase.Time)), ExportOptions.Simple },
+            { new("Last update time", nameof(BaseValue.LastUpdateTime), value => _baseLastUpdateLambda(value)), ExportOptions.Aggregated },
+            { new("Receiving time", nameof(BaseValue.ReceivingTime)), ExportOptions.Hidden },
+            { new("Aggregated values count", nameof(BaseValue.AggregatedValuesCount)), ExportOptions.Aggregated },
+            { new(nameof(BoolSensorValue.Value)), ExportOptions.Simple },
+            { new(nameof(SensorValueBase.Status)), ExportOptions.Simple },
+            { new(nameof(SensorValueBase.Comment)), ExportOptions.Simple }
         };
 
         private static readonly Dictionary<Header, ExportOptions> _barSensorHeader = new()
         {
-            { new ("Open time", nameof(IntBarSensorValue.OpenTime)), ExportOptions.Simple },
-            { new ("Last update time" ,nameof(DoubleBarValue.Time)), ExportOptions.Hidden },
-            { new ("Close time", nameof(DoubleBarValue.CloseTime)), ExportOptions.Hidden },
-            { new("Receiving time",nameof(BaseValue.ReceivingTime)), ExportOptions.Hidden },
-            { new (nameof(IntBarSensorValue.Min)), ExportOptions.Simple },
-            { new (nameof(IntBarSensorValue.Mean)), ExportOptions.Simple },
-            { new (nameof(IntBarSensorValue.Max)), ExportOptions.Simple },
+            { new("Open time", nameof(IntBarSensorValue.OpenTime)), ExportOptions.Simple },
+            { new("Last update time", nameof(DoubleBarValue.Time)), ExportOptions.Hidden },
+            { new("Close time", nameof(DoubleBarValue.CloseTime)), ExportOptions.Hidden },
+            { new("Receiving time", nameof(BaseValue.ReceivingTime)), ExportOptions.Hidden },
+            { new(nameof(IntBarSensorValue.Min)), ExportOptions.Simple },
+            { new(nameof(IntBarSensorValue.Mean)), ExportOptions.Simple },
+            { new(nameof(IntBarSensorValue.Max)), ExportOptions.Simple },
             { new(nameof(IntBarSensorValue.Count)), ExportOptions.Simple },
-            { new ("Last value", nameof(IntBarSensorValue.LastValue)), ExportOptions.Simple },
-            { new (nameof(SensorValueBase.Status)), ExportOptions.Simple },
-            { new (nameof(SensorValueBase.Comment)), ExportOptions.Simple },
+            { new("Last value", nameof(IntBarSensorValue.LastValue)), ExportOptions.Simple },
+            { new(nameof(SensorValueBase.Status)), ExportOptions.Simple },
+            { new(nameof(SensorValueBase.Comment)), ExportOptions.Simple },
         };
 
         private static readonly List<Header> _fileSensorHeader = new()
         {
-            new (nameof(SensorValueBase.Time)),
-            new ( nameof(FileSensorValue.Value)),
-            new (nameof(FileSensorValue.Name)),
-            new (nameof(FileSensorValue.Extension)),
-            new (nameof(SensorValueBase.Status)),
-            new (nameof(SensorValueBase.Comment)),
+            new(nameof(SensorValueBase.Time)),
+            new(nameof(FileSensorValue.Value)),
+            new(nameof(FileSensorValue.Name)),
+            new(nameof(FileSensorValue.Extension)),
+            new(nameof(SensorValueBase.Status)),
+            new(nameof(SensorValueBase.Comment)),
+        };
+
+        private static readonly HashSet<string> _validProperties = new()
+        {
+            nameof(DoubleBarValue.Time),
+            nameof(IntBarSensorValue.OpenTime),
+            nameof(DoubleBarValue.CloseTime),
+            nameof(BaseValue.ReceivingTime),
+            nameof(BaseValue.Comment),
         };
 
         static ApiCsvConverters()
@@ -117,7 +128,18 @@ namespace HSMServer.ApiObjectsConverters
                 var properties = JsonSerializer.SerializeToElement<object>(rowValue, _serializerOptions);
 
                 foreach (var column in header)
-                    rowValues.Add(properties.GetProperty(column.GetPropertyName(value)).ToString());
+                {
+                    var jsonPropertyName = column.GetPropertyName(value);
+                    var propValue = properties.GetProperty(jsonPropertyName).ToString();
+
+                    if (column.PropertyName != nameof(BaseValue.Comment) && DateTime.TryParse(propValue, out var dateTime))
+                        propValue = dateTime.ToDefaultFormat();
+
+                    if (value.IsTimeout && !_validProperties.TryGetValue(column.PropertyName, out _))
+                        propValue = string.Empty;
+
+                    rowValues.Add(propValue);
+                }
 
                 content.AppendLine(rowValues.BuildRow());
                 rowValues.Clear();
@@ -130,9 +152,9 @@ namespace HSMServer.ApiObjectsConverters
         {
             return values[0] switch
             {
-                BooleanValue or IntegerValue or DoubleValue or StringValue or VersionValue or TimeSpanValue => 
+                BooleanValue or IntegerValue or DoubleValue or StringValue or VersionValue or TimeSpanValue =>
                     _simpleSensorHeader.Where(x => x.Value <= options).Select(x => x.Key).ToList(),
-                IntegerBarValue or DoubleBarValue => 
+                IntegerBarValue or DoubleBarValue =>
                     _barSensorHeader.Where(x => x.Value <= options).Select(x => x.Key).ToList(),
                 FileValue => _fileSensorHeader,
                 _ => new List<Header>()

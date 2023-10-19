@@ -11,6 +11,16 @@ namespace HSMDataCollector.Alerts
         public AlertOperation Operation { get; internal set; }
 
         public AlertProperty Property { get; internal set; }
+
+
+        public static AlertConditionTemplate Build(AlertTargetTemplate target, AlertCombination combination, AlertOperation operation, AlertProperty property) =>
+            new AlertConditionTemplate()
+            {
+                Target = target,
+                Combination = combination,
+                Operation = operation,
+                Property = property
+            };
     }
 
 
@@ -19,5 +29,13 @@ namespace HSMDataCollector.Alerts
         public TargetType Type { get; internal set; }
 
         public string Value { get; internal set; }
+
+
+        public static AlertTargetTemplate Build(TargetType type, string value) =>
+            new AlertTargetTemplate()
+            {
+                Type = type,
+                Value = value
+            };
     }
 }

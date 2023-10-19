@@ -1,6 +1,6 @@
 ﻿using HSMCommon.Collections;
+using HSMCommon.Extensions;
 using HSMServer.Core.Model.Policies;
-using HSMServer.Extensions;
 using HSMServer.Notifications.Telegram.AddressBook.MessageBuilder;
 using System;
 using System.Collections.Concurrent;
@@ -11,7 +11,7 @@ namespace HSMServer.Notifications
     internal sealed class MessageBuilder
     {
         private readonly CDict<CDict<ConcurrentDictionary<Guid, AlertResult>>> _alertsTree = new(); //template -> policyId -> Message as string -> AlertResult
-        private readonly AlertsCompressor _compressor = new();
+        private readonly AlertsGrouper _grouper = new();
 
         internal DateTime ExpectedSendingTime { get; private set; } = DateTime.UtcNow;
 
@@ -33,7 +33,7 @@ namespace HSMServer.Notifications
                 foreach (var (_, alerts) in sensorAlerts)
                 {
                     foreach (var (_, aggrAlert) in alerts)
-                        _compressor.ApplyToGroup(aggrAlert);
+                        _grouper.ApplyToGroup(aggrAlert);
 
                     alerts.Clear();
                 }
@@ -45,7 +45,7 @@ namespace HSMServer.Notifications
 
             var builder = new StringBuilder(1 << 10);
 
-            foreach (var line in _compressor.GetGroups())
+            foreach (var line in _grouper.GetGroups())
                 builder.AppendLine(line);
 
             ExpectedSendingTime = DateTime.UtcNow.Ceil(TimeSpan.FromSeconds(delay));
