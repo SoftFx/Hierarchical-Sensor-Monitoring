@@ -48,9 +48,7 @@ namespace HSMServer.Extensions
         {
             var viewModel = condition.GetOperations(condition.Property);
 
-            viewModel.SetData(condition.Operation, condition.Target);
-
-            return viewModel;
+            return viewModel.SetData(condition.Operation, condition.Target);
         }
 
         public static OperationViewModel GetOperations(this ConditionViewModel condition, AlertProperty property) =>
